@@ -9,6 +9,7 @@ import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
+import fs from 'fs';
 import {
   installCertificateVerification,
   installLocalNodeHttpsBlock,
@@ -197,10 +198,18 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10): 
       // Instance 1: P2P=62392, API=62491  … and so on.
       const p2pPort = DEFAULT_P2P_PORT + instanceIndex;
       const apiPort = DEFAULT_API_PORT + instanceIndex;
+
+      // All instances share one SQLite database in a fixed directory under
+      // appData (the common parent of all per-instance userData paths).
+      const sharedDbDir = path.join(app.getPath('appData'), 'qortal-shared');
+      fs.mkdirSync(sharedDbDir, { recursive: true });
+      const sharedDbPath = path.join(sharedDbDir, 'chat.db');
+
       const p2pOptions = {
         port: p2pPort,
         apiPort,
         initialPeers: ['qortal.home.ro:62391'],
+        dbPath: sharedDbPath,
       };
       // Persist the options so the settings toggle can restart with the same config.
       setLastP2POptions(p2pOptions);
@@ -213,9 +222,8 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10): 
       attachPresenceListeners(pm);
       loggerLog('[Presence] Manager auto-started.');
 
-      // Start the chat manager, wired to the P2P network.
-      const chatDataDir = path.join(app.getPath('userData'), 'p2p-chat');
-      const cm = await startChatManager(p2pNetwork, chatDataDir);
+      // Start the chat manager backed by the shared SQLite database.
+      const cm = await startChatManager(p2pNetwork, sharedDbPath);
       attachChatListeners(cm);
       loggerLog('[Chat] Manager auto-started.');
     } catch (err) {

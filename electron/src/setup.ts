@@ -1360,10 +1360,10 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     stopPresenceManager();
     const pm = startPresenceManager(network);
     attachPresenceListeners(pm);
-    // (Re-)start the chat manager wired to the new network instance.
+    // (Re-)start the chat manager backed by the shared SQLite database.
     stopChatManager();
-    const chatDataDir = path.join(app.getPath('userData'), 'p2p-chat');
-    const cm = await startChatManager(network, chatDataDir);
+    const sharedDbPath = join(app.getPath('appData'), 'qortal-shared', 'chat.db');
+    const cm = await startChatManager(network, sharedDbPath);
     attachChatListeners(cm);
     // Notify renderers that P2P / presence is live again.
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});

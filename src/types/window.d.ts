@@ -191,6 +191,32 @@ declare global {
     signature: string;
   }
 
+  interface RenderedMessage {
+    /** id of the original 'message' event */
+    id: string;
+    chatId: string;
+    authorAddress: string;
+    authorPublicKey: string;
+    seq: number;
+    timestamp: number;
+    /** Current content — mutated by edits, cleared by delete. */
+    content: string;
+    isEdited: boolean;
+    isDeleted: boolean;
+    /** Timestamp of the most recent edit, if any. */
+    editedAt?: number;
+    /** id of the parent message this replies to. */
+    replyTo?: string;
+    /**
+     * emoji → list of authorAddresses who have that reaction active.
+     * Toggle semantics: each reaction event from the same author with the same
+     * emoji flips the state (add if absent, remove if present).
+     */
+    reactions: Record<string, string[]>;
+    /** The raw original 'message' event, for reference. */
+    originalEvent: P2PChatEvent;
+  }
+
   // ── Presence shared types ──────────────────────────────────────────────────
 
   /** User-selectable presence status. All three values mean "present in the network". */

@@ -3,13 +3,16 @@ import * as tls from 'tls';
 import * as http from 'http';
 import * as crypto from 'crypto';
 import * as os from 'os';
+import * as fs from 'fs';
+import * as path from 'path';
 import { EventEmitter } from 'events';
 import { generate as generateCert } from 'selfsigned';
 import { log as loggerLog, error as loggerError } from './logger';
+import Database, { type Database as DB, type Statement } from 'better-sqlite3';
 
 export const DEFAULT_P2P_PORT = 62391;
 export const DEFAULT_MAX_PEERS = 16;
-export const DEFAULT_API_PORT = 62390;
+export const DEFAULT_API_PORT = 62490;
 
 const MAX_RELAY_HOPS = 4;
 const SEEN_MESSAGE_TTL_MS = 60_000;
@@ -60,6 +63,10 @@ export interface P2PNetworkOptions {
   apiPort?: number;
   maxPeers?: number;
   initialPeers?: string[];
+  /** Path to the shared SQLite database (appData/qortal-shared/chat.db).
+   *  When provided, discovered peers are loaded on startup and persisted on
+   *  discovery so all Electron instances share the same peer pool. */
+  dbPath?: string;
 }
 
 // ── Internal peer record ─────────────────────────────────────────────────────
@@ -163,6 +170,9 @@ export class P2PNetwork extends EventEmitter {
   readonly nodeId: string;
   /** All IP strings assigned to this machine's network interfaces. */
   private readonly selfAddresses: Set<string>;
+  /** Optional shared SQLite DB handle for persisting discovered peers. */
+  private peerDb: DB | null = null;
+  private stmtInsertPeer: Statement | null = null;
 
   constructor(options: P2PNetworkOptions = {}) {
     super();
@@ -172,6 +182,33 @@ export class P2PNetwork extends EventEmitter {
     this.initialPeers = options.initialPeers ?? [];
     this.nodeId = crypto.randomUUID();
     this.selfAddresses = buildSelfAddresses();
+
+    if (options.dbPath) {
+      try {
+        fs.mkdirSync(path.dirname(options.dbPath), { recursive: true });
+        this.peerDb = new Database(options.dbPath);
+        this.peerDb.pragma('journal_mode = WAL');
+        this.peerDb.pragma('busy_timeout = 5000');
+        this.peerDb.pragma('synchronous = NORMAL');
+        // Ensure the table exists (chat-db.ts may not have run yet on this instance)
+        this.peerDb.exec(`
+          CREATE TABLE IF NOT EXISTS discovered_peers (
+            address       TEXT PRIMARY KEY,
+            discovered_at INTEGER NOT NULL,
+            source        TEXT NOT NULL
+          )
+        `);
+        this.stmtInsertPeer = this.peerDb.prepare(`
+          INSERT OR IGNORE INTO discovered_peers (address, discovered_at, source)
+          VALUES (?, ?, ?)
+        `);
+        loggerLog('[P2P] Shared peer DB opened for discovered-peer persistence.');
+      } catch (err) {
+        loggerError('[P2P] Failed to open shared peer DB:', err);
+        this.peerDb = null;
+        this.stmtInsertPeer = null;
+      }
+    }
   }
 
   /** Returns true if `addr` ("host:port") resolves to this node. */
@@ -211,6 +248,11 @@ export class P2PNetwork extends EventEmitter {
     this.scheduleSeenCleanup();
     this.schedulePing();
     this.startApiServer();
+
+    // Load previously-discovered peers from the shared DB before seeding so
+    // all instances share the same bootstrap pool.
+    this.loadDiscoveredPeersFromDb();
+
     for (const addr of this.initialPeers) {
       // Seed the discovery registry with the bootstrap list.
       const [rawHost, portStr] = addr.split(':');
@@ -224,6 +266,7 @@ export class P2PNetwork extends EventEmitter {
             discoveredAt: Date.now(),
             source: 'seed',
           });
+          this.persistDiscoveredPeer(normalizedAddr, Date.now(), 'seed');
         }
       }
       this.connectToPeer(addr);
@@ -257,6 +300,13 @@ export class P2PNetwork extends EventEmitter {
     this.apiServer?.closeAllConnections();
     this.apiServer?.close();
     this.apiServer = null;
+
+    // Close shared peer DB handle (best-effort)
+    if (this.peerDb) {
+      try { this.peerDb.close(); } catch { /* ignore */ }
+      this.peerDb = null;
+      this.stmtInsertPeer = null;
+    }
 
     // Best-effort UPnP teardown — unmap the port so we don't leave a stale
     // mapping on the router.  Fire-and-forget (stop() stays synchronous).
@@ -885,6 +935,7 @@ export class P2PNetwork extends EventEmitter {
           discoveredAt: Date.now(),
           source: msg.from,
         });
+        this.persistDiscoveredPeer(normalizedAddr, Date.now(), msg.from);
       }
 
       // connectToPeer already deduplicates — but skip early if obviously known.
@@ -902,6 +953,50 @@ export class P2PNetwork extends EventEmitter {
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
+
+  // ── Peer DB helpers ───────────────────────────────────────────────────────
+
+  /** Load all rows from discovered_peers into the in-memory Map on startup. */
+  private loadDiscoveredPeersFromDb(): void {
+    if (!this.peerDb) return;
+    try {
+      const rows = this.peerDb
+        .prepare('SELECT address, discovered_at, source FROM discovered_peers')
+        .all() as { address: string; discovered_at: number; source: string }[];
+      let loaded = 0;
+      for (const row of rows) {
+        if (!this.discoveredPeers.has(row.address)) {
+          this.discoveredPeers.set(row.address, {
+            address: row.address,
+            discoveredAt: row.discovered_at,
+            source: row.source,
+          });
+          loaded++;
+        }
+      }
+      if (loaded > 0) {
+        loggerLog(`[P2P] Loaded ${loaded} discovered peers from shared DB.`);
+      }
+    } catch (err) {
+      loggerError('[P2P] Failed to load discovered peers from DB:', err);
+    }
+  }
+
+  /**
+   * Persist a newly-discovered peer address to the shared DB.
+   * Uses INSERT OR IGNORE so the first-discovered record wins across instances.
+   * Called off the hot path via setImmediate.
+   */
+  private persistDiscoveredPeer(address: string, discoveredAt: number, source: string): void {
+    if (!this.stmtInsertPeer) return;
+    setImmediate(() => {
+      try {
+        this.stmtInsertPeer!.run(address, discoveredAt, source);
+      } catch (err) {
+        loggerError('[P2P] Failed to persist discovered peer:', err);
+      }
+    });
+  }
 
   private sendHandshake(peer: PeerRecord): void {
     this.writeToSocket(peer, {

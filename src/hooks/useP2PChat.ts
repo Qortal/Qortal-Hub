@@ -5,7 +5,9 @@
  *   - Subscribes to the channel and loads history on mount.
  *   - Streams incoming events via window.chat.onEvent.
  *   - Handles typing indicators (incoming display + outgoing debounce).
- *   - Provides sendMessage() which builds, signs, and dispatches a ChatEvent.
+ *   - Folds the raw event log into RenderedMessage[] so edits, deletes,
+ *     reactions, and replies are reflected automatically in the UI.
+ *   - Provides sendMessage / sendEdit / sendDelete / sendReaction / sendReply.
  *   - Cleans up subscriptions on unmount.
  *
  * Signing reuses the 'signPresenceMessage' background case, which performs:
@@ -29,7 +31,7 @@ const TYPING_DEBOUNCE_MS = 3_000;
 /** Maximum messages to request when loading history. */
 const HISTORY_LIMIT = 200;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Pure helpers ──────────────────────────────────────────────────────────────
 
 /**
  * Signs a set of fields using the local user's Ed25519 key.
@@ -52,19 +54,151 @@ async function signChatFields(
   return result.signature as string;
 }
 
+/**
+ * Applies a single non-message event onto an already-constructed RenderedMessage,
+ * mutating a shallow clone to keep renders correct.
+ *
+ * Author-ownership is enforced here (not server-side) because in P2P the
+ * target message may not have arrived yet during validation.
+ */
+function applyEventToMessage(
+  msg: RenderedMessage,
+  event: P2PChatEvent
+): RenderedMessage {
+  // Clone shallowly so React detects the changed reference.
+  const next: RenderedMessage = {
+    ...msg,
+    reactions: { ...msg.reactions },
+  };
+
+  if (event.eventType === 'edit') {
+    // Only the original author may edit their own message.
+    if (event.authorAddress !== msg.authorAddress) return msg;
+    next.content = event.content;
+    next.isEdited = true;
+    next.editedAt = event.timestamp;
+  } else if (event.eventType === 'delete') {
+    // Only the original author may delete their own message.
+    if (event.authorAddress !== msg.authorAddress) return msg;
+    next.isDeleted = true;
+    next.content = '';
+  } else if (event.eventType === 'reaction') {
+    const emoji = event.content;
+    const existing = next.reactions[emoji] ?? [];
+    const idx = existing.indexOf(event.authorAddress);
+    if (idx === -1) {
+      // Add reaction.
+      next.reactions[emoji] = [...existing, event.authorAddress];
+    } else {
+      // Toggle off — remove this author's reaction.
+      const trimmed = existing.filter((_, i) => i !== idx);
+      if (trimmed.length === 0) {
+        delete next.reactions[emoji];
+      } else {
+        next.reactions[emoji] = trimmed;
+      }
+    }
+  }
+
+  return next;
+}
+
+/**
+ * Reduces an unordered raw event log into a sorted RenderedMessage[].
+ *
+ * Algorithm:
+ *  1. Sort all events by (timestamp, seq) ascending.
+ *  2. First pass — process message events into a Map<id, RenderedMessage> and
+ *     buffer non-message events whose targetId is not yet in the map (handles
+ *     P2P out-of-order delivery).
+ *  3. When a message event is processed, drain any pending events buffered for
+ *     its id immediately.
+ *  4. Events still in the pending buffer after the first pass are silently
+ *     dropped (their target message never arrived — rare race condition).
+ *  5. Return the map values sorted oldest-first.
+ */
+function foldEvents(rawEvents: P2PChatEvent[]): RenderedMessage[] {
+  const sorted = [...rawEvents].sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    return a.seq - b.seq;
+  });
+
+  const rendered = new Map<string, RenderedMessage>();
+  // Non-message events whose target hasn't been seen yet.
+  const pending = new Map<string, P2PChatEvent[]>();
+
+  for (const event of sorted) {
+    if (event.eventType === 'message') {
+      const msg: RenderedMessage = {
+        id: event.id,
+        chatId: event.chatId,
+        authorAddress: event.authorAddress,
+        authorPublicKey: event.authorPublicKey,
+        seq: event.seq,
+        timestamp: event.timestamp,
+        content: event.content,
+        isEdited: false,
+        isDeleted: false,
+        replyTo: event.replyTo,
+        reactions: {},
+        originalEvent: event,
+      };
+      rendered.set(event.id, msg);
+
+      // Drain any buffered events that referenced this message.
+      const buffered = pending.get(event.id);
+      if (buffered) {
+        let current = msg;
+        for (const bufferedEvent of buffered) {
+          current = applyEventToMessage(current, bufferedEvent);
+        }
+        rendered.set(event.id, current);
+        pending.delete(event.id);
+      }
+    } else {
+      // edit / delete / reaction — needs a targetId.
+      const targetId = event.targetId;
+      if (!targetId) continue;
+
+      const target = rendered.get(targetId);
+      if (target) {
+        rendered.set(targetId, applyEventToMessage(target, event));
+      } else {
+        // Target not seen yet — buffer and apply once it arrives.
+        const buf = pending.get(targetId) ?? [];
+        buf.push(event);
+        pending.set(targetId, buf);
+      }
+    }
+  }
+
+  return [...rendered.values()].sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    return a.seq - b.seq;
+  });
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export interface UseP2PChatReturn {
-  /** Messages for this chat, sorted oldest-first. */
-  messages: P2PChatEvent[];
+  /** Rendered messages for this chat, sorted oldest-first. */
+  messages: RenderedMessage[];
   /** True while a send is in-flight. */
   isSending: boolean;
   /** Addresses that are currently typing (excluding the local user). */
   typingUsers: Set<string>;
   /** True once history is loaded and the channel is subscribed. */
   isReady: boolean;
-  /** Send a plain-text message. Resolves when the IPC call completes. */
+  /** Send a plain-text message. */
   sendMessage: (text: string) => Promise<void>;
+  /** Edit the content of a previously sent message (author-only). */
+  sendEdit: (targetId: string, newContent: string) => Promise<void>;
+  /** Delete a previously sent message (author-only). */
+  sendDelete: (targetId: string) => Promise<void>;
+  /** Toggle an emoji reaction on any message. */
+  sendReaction: (targetId: string, emoji: string) => Promise<void>;
+  /** Reply to a parent message. */
+  sendReply: (parentId: string, text: string) => Promise<void>;
   /** Call on every keystroke; internally debounced to avoid flooding the network. */
   notifyTyping: () => void;
 }
@@ -77,10 +211,13 @@ export interface UseP2PChatReturn {
 export function useP2PChat(chatId: string): UseP2PChatReturn {
   const userInfo = useAtomValue(userInfoAtom);
 
-  const [messages, setMessages] = useState<P2PChatEvent[]>([]);
+  const [messages, setMessages] = useState<RenderedMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [isReady, setIsReady] = useState(false);
+
+  /** Full unfolded event log — source of truth for re-folding. */
+  const rawEventsRef = useRef<P2PChatEvent[]>([]);
 
   /** Per-author monotonic sequence counter for messages this session sends. */
   const nextSeqRef = useRef(1);
@@ -105,7 +242,7 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         // Subscribe — announces to peers and requests a sync of missed events.
         await window.chat!.subscribe(chatId);
 
-        // Pull full history.
+        // Pull full history (all event types).
         const history = await window.chat!.getHistory(chatId, HISTORY_LIMIT);
         if (cancelled) return;
 
@@ -118,20 +255,16 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         }
         nextSeqRef.current = maxSeq + 1;
 
-        setMessages(history);
+        rawEventsRef.current = history;
+        setMessages(foldEvents(history));
 
-        // Live event stream.
+        // Live event stream — append new events and re-fold.
         unsubEvent = window.chat!.onEvent(({ event }) => {
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === event.id)) return prev; // dedup
-            const next = [...prev, event];
-            next.sort((a, b) => {
-              if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-              return a.seq - b.seq;
-            });
-            return next;
-          });
-          // Keep local seq in sync if we receive our own echoed message.
+          if (!rawEventsRef.current.some((e) => e.id === event.id)) {
+            rawEventsRef.current = [...rawEventsRef.current, event];
+          }
+          setMessages(foldEvents(rawEventsRef.current));
+
           if (
             event.authorAddress === userInfo.address &&
             event.seq >= nextSeqRef.current
@@ -142,7 +275,7 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
 
         // Typing indicators.
         unsubTyping = window.chat!.onTyping(({ authorAddress, active }) => {
-          if (authorAddress === userInfo.address) return; // skip own indicator
+          if (authorAddress === userInfo.address) return;
           setTypingUsers((prev) => {
             const next = new Set(prev);
             if (active) next.add(authorAddress);
@@ -161,10 +294,43 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
       cancelled = true;
       unsubEvent?.();
       unsubTyping?.();
-      // Unsubscribe when component unmounts (e.g., window closed).
       window.chat?.unsubscribe(chatId).catch(() => {});
     };
   }, [chatId, userInfo?.address, userInfo?.publicKey]);
+
+  // ── Internal helper: build, sign, and dispatch any chat event ────────────
+
+  const dispatchEvent = useCallback(
+    async (
+      fields: Omit<P2PChatEvent, 'signature'>
+    ): Promise<void> => {
+      const signedFields: Record<string, unknown> = {
+        authorAddress: fields.authorAddress,
+        authorPublicKey: fields.authorPublicKey,
+        chatId: fields.chatId,
+        content: fields.content,
+        eventType: fields.eventType,
+        id: fields.id,
+        seq: fields.seq,
+        timestamp: fields.timestamp,
+      };
+      // Include optional fields in the signed payload only when present, so
+      // they match what buildChatSignedData() in electron/src/chat.ts produces.
+      if (fields.targetId !== undefined) signedFields.targetId = fields.targetId;
+      if (fields.replyTo !== undefined) signedFields.replyTo = fields.replyTo;
+
+      const signature = await signChatFields(signedFields);
+      const event: P2PChatEvent = { ...fields, signature };
+
+      const result = await window.chat!.sendEvent({ type: 'CHAT_EVENT', event });
+      if (!result.success) {
+        console.error('[useP2PChat] sendEvent rejected:', result.error);
+      }
+    },
+    // chatId is not a dep here — callers pass it explicitly via `fields`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // ── sendMessage ───────────────────────────────────────────────────────────
 
@@ -179,62 +345,161 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
 
       setIsSending(true);
       try {
-        const eventId = crypto.randomUUID();
         const seq = nextSeqRef.current;
-        const timestamp = Date.now();
-
-        // The fields that are signed — keys must match what electron/src/chat.ts
-        // includes in buildChatSignedData() so the validator accepts the message.
-        const signedFields: Record<string, unknown> = {
-          authorAddress: userInfo.address,
-          authorPublicKey: userInfo.publicKey,
-          chatId,
-          content: trimmed,
-          eventType: 'message',
-          id: eventId,
-          seq,
-          timestamp,
-        };
-
-        const signature = await signChatFields(signedFields);
-
-        // Optimistically bump the local counter before the round-trip completes.
         nextSeqRef.current = seq + 1;
 
-        const event: P2PChatEvent = {
-          id: eventId,
+        await dispatchEvent({
+          id: crypto.randomUUID(),
           chatId,
           eventType: 'message',
           authorAddress: userInfo.address,
           authorPublicKey: userInfo.publicKey,
           seq,
-          timestamp,
+          timestamp: Date.now(),
           content: trimmed,
-          signature,
-        };
-
-        const result = await window.chat!.sendEvent({
-          type: 'CHAT_EVENT',
-          event,
         });
-
-        if (!result.success) {
-          console.error('[useP2PChat] sendEvent rejected:', result.error);
-        }
       } catch (err) {
         console.error('[useP2PChat] sendMessage error:', err);
       } finally {
         setIsSending(false);
       }
     },
-    [chatId, userInfo?.address, userInfo?.publicKey]
+    [chatId, userInfo?.address, userInfo?.publicKey, dispatchEvent]
+  );
+
+  // ── sendEdit ──────────────────────────────────────────────────────────────
+
+  const sendEdit = useCallback(
+    async (targetId: string, newContent: string): Promise<void> => {
+      const trimmed = newContent.trim();
+      if (!trimmed || !window.chat || !userInfo?.address || !userInfo?.publicKey)
+        return;
+
+      setIsSending(true);
+      try {
+        const seq = nextSeqRef.current;
+        nextSeqRef.current = seq + 1;
+
+        await dispatchEvent({
+          id: crypto.randomUUID(),
+          chatId,
+          eventType: 'edit',
+          authorAddress: userInfo.address,
+          authorPublicKey: userInfo.publicKey,
+          seq,
+          timestamp: Date.now(),
+          content: trimmed,
+          targetId,
+        });
+      } catch (err) {
+        console.error('[useP2PChat] sendEdit error:', err);
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [chatId, userInfo?.address, userInfo?.publicKey, dispatchEvent]
+  );
+
+  // ── sendDelete ────────────────────────────────────────────────────────────
+
+  const sendDelete = useCallback(
+    async (targetId: string): Promise<void> => {
+      if (!window.chat || !userInfo?.address || !userInfo?.publicKey) return;
+
+      setIsSending(true);
+      try {
+        const seq = nextSeqRef.current;
+        nextSeqRef.current = seq + 1;
+
+        await dispatchEvent({
+          id: crypto.randomUUID(),
+          chatId,
+          eventType: 'delete',
+          authorAddress: userInfo.address,
+          authorPublicKey: userInfo.publicKey,
+          seq,
+          timestamp: Date.now(),
+          content: '',
+          targetId,
+        });
+      } catch (err) {
+        console.error('[useP2PChat] sendDelete error:', err);
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [chatId, userInfo?.address, userInfo?.publicKey, dispatchEvent]
+  );
+
+  // ── sendReaction ──────────────────────────────────────────────────────────
+
+  const sendReaction = useCallback(
+    async (targetId: string, emoji: string): Promise<void> => {
+      if (!emoji || !window.chat || !userInfo?.address || !userInfo?.publicKey)
+        return;
+
+      setIsSending(true);
+      try {
+        const seq = nextSeqRef.current;
+        nextSeqRef.current = seq + 1;
+
+        await dispatchEvent({
+          id: crypto.randomUUID(),
+          chatId,
+          eventType: 'reaction',
+          authorAddress: userInfo.address,
+          authorPublicKey: userInfo.publicKey,
+          seq,
+          timestamp: Date.now(),
+          content: emoji,
+          targetId,
+        });
+      } catch (err) {
+        console.error('[useP2PChat] sendReaction error:', err);
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [chatId, userInfo?.address, userInfo?.publicKey, dispatchEvent]
+  );
+
+  // ── sendReply ─────────────────────────────────────────────────────────────
+
+  const sendReply = useCallback(
+    async (parentId: string, text: string): Promise<void> => {
+      const trimmed = text.trim();
+      if (!trimmed || !window.chat || !userInfo?.address || !userInfo?.publicKey)
+        return;
+
+      setIsSending(true);
+      try {
+        const seq = nextSeqRef.current;
+        nextSeqRef.current = seq + 1;
+
+        await dispatchEvent({
+          id: crypto.randomUUID(),
+          chatId,
+          eventType: 'message',
+          authorAddress: userInfo.address,
+          authorPublicKey: userInfo.publicKey,
+          seq,
+          timestamp: Date.now(),
+          content: trimmed,
+          replyTo: parentId,
+        });
+      } catch (err) {
+        console.error('[useP2PChat] sendReply error:', err);
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [chatId, userInfo?.address, userInfo?.publicKey, dispatchEvent]
   );
 
   // ── notifyTyping ──────────────────────────────────────────────────────────
 
   const notifyTyping = useCallback(() => {
     if (!window.chat || !userInfo?.address) return;
-    // Only send once per TYPING_DEBOUNCE_MS burst to avoid network flooding.
     if (typingTimerRef.current !== null) return;
     window.chat.sendTyping(chatId, userInfo.address).catch(() => {});
     typingTimerRef.current = setTimeout(() => {
@@ -242,5 +507,16 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
     }, TYPING_DEBOUNCE_MS);
   }, [chatId, userInfo?.address]);
 
-  return { messages, isSending, typingUsers, isReady, sendMessage, notifyTyping };
+  return {
+    messages,
+    isSending,
+    typingUsers,
+    isReady,
+    sendMessage,
+    sendEdit,
+    sendDelete,
+    sendReaction,
+    sendReply,
+    notifyTyping,
+  };
 }

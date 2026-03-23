@@ -25,8 +25,6 @@
  */
 
 import * as nodeCrypto from 'crypto';
-import * as pathMod from 'path';
-import * as fs from 'fs';
 import { EventEmitter } from 'events';
 import nacl from 'tweetnacl';
 import { log as loggerLog, error as loggerError } from './logger';
@@ -36,20 +34,12 @@ import {
   base58Decode,
 } from './presence';
 import type { P2PNetwork } from './p2p-network';
+import { ChatDatabase } from './chat-db';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/** Maximum events kept in memory and on disk per chat. Oldest trimmed. */
-const CHAT_MAX_EVENTS_PER_CHAT = 1_000;
-
 /** Maximum UTF-8 bytes for the content field. */
 const CHAT_MAX_CONTENT_BYTES = 10_000;
-
-/** Maximum events returned in a single CHAT_SYNC_RESPONSE. */
-const CHAT_MAX_SYNC_EVENTS = 200;
-
-/** Debounce window before flushing a chat file to disk. */
-const CHAT_WRITE_DEBOUNCE_MS = 2_000;
 
 /** Reject events dated this far into the future. */
 const CHAT_MAX_FUTURE_SKEW_MS = 60_000;
@@ -301,6 +291,33 @@ function validateChatEvent(event: ChatEvent, now: number): ValidationResult {
     return { ok: false, reason: `unknown eventType: ${event.eventType}` };
   }
 
+  // 2a. edit / delete / reaction must reference a target event
+  if (
+    (event.eventType === 'edit' ||
+      event.eventType === 'delete' ||
+      event.eventType === 'reaction') &&
+    (typeof event.targetId !== 'string' || !event.targetId)
+  ) {
+    return { ok: false, reason: `${event.eventType} event requires targetId` };
+  }
+
+  // 2b. Reaction content must be a small emoji/string, not a full message body
+  if (event.eventType === 'reaction') {
+    const reactionBytes = Buffer.byteLength(event.content, 'utf8');
+    if (reactionBytes === 0 || reactionBytes > 64) {
+      return { ok: false, reason: 'reaction content must be 1–64 bytes' };
+    }
+  }
+
+  // 2c. replyTo, when present, must be a non-empty string
+  if (
+    event.eventType === 'message' &&
+    event.replyTo !== undefined &&
+    (typeof event.replyTo !== 'string' || !event.replyTo)
+  ) {
+    return { ok: false, reason: 'replyTo must be a non-empty string when present' };
+  }
+
   // 3. chatId format
   const chatIdResult = validateChatId(event.chatId);
   if (!chatIdResult.ok) return chatIdResult;
@@ -350,317 +367,10 @@ function validateChatEvent(event: ChatEvent, now: number): ValidationResult {
   return { ok: true };
 }
 
-// ── ChatStore ─────────────────────────────────────────────────────────────────
-
-interface PersistedChatFile {
-  chatId: string;
-  events: ChatEvent[];
-  updatedAt: number;
-}
-
-/**
- * Manages in-memory chat event storage with async persistence to JSON files.
- * One file per chatId, stored in `dataDir`.
- * Writes are debounced (2 s) and use write-file-atomic for safety.
- */
-export class ChatStore {
-  /** chatId → events sorted by (timestamp, seq) ascending */
-  private events = new Map<string, ChatEvent[]>();
-  /** chatId → authorAddress → highest accepted seq */
-  private syncState = new Map<string, Map<string, number>>();
-  /**
-   * chatId → read watermark timestamp.
-   * All events with timestamp ≤ watermark are considered read.
-   */
-  private readWatermarks = new Map<string, number>();
-
-  private dataDir: string;
-  private writeTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private writeFileAtomic: any;
-
-  constructor(dataDir: string) {
-    this.dataDir = dataDir;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    this.writeFileAtomic = require('write-file-atomic');
-  }
-
-  /** Loads all persisted chat files from disk into memory. */
-  async loadFromDisk(): Promise<void> {
-    try {
-      await fs.promises.mkdir(this.dataDir, { recursive: true });
-      const files = await fs.promises.readdir(this.dataDir);
-      for (const file of files) {
-        if (!file.startsWith('chat-') || !file.endsWith('.json')) continue;
-        try {
-          const raw = await fs.promises.readFile(
-            pathMod.join(this.dataDir, file),
-            'utf-8'
-          );
-          const data = JSON.parse(raw) as PersistedChatFile;
-          if (!data.chatId || !Array.isArray(data.events)) continue;
-          this.events.set(data.chatId, data.events);
-          // Compute sync state in one pass over all loaded events.
-          this.recomputeSyncStateForChat(data.chatId);
-          loggerLog(
-            `[Chat] Loaded ${data.events.length} events for chat ${data.chatId}`
-          );
-        } catch (err) {
-          loggerError(`[Chat] Failed to load ${file}:`, err);
-        }
-      }
-    } catch (err) {
-      loggerError('[Chat] Failed to load chat store:', err);
-    }
-  }
-
-  /**
-   * Inserts a ChatEvent.
-   * Returns `true` if the event was new and inserted, `false` if it was a duplicate.
-   */
-  insert(event: ChatEvent): boolean {
-    let chatEvents = this.events.get(event.chatId);
-    if (!chatEvents) {
-      chatEvents = [];
-      this.events.set(event.chatId, chatEvents);
-    }
-    // Dedup by event id
-    if (chatEvents.some((e) => e.id === event.id)) return false;
-
-    chatEvents.push(event);
-
-    // Keep sorted by timestamp; use seq as tiebreaker for same-timestamp events.
-    chatEvents.sort((a, b) =>
-      a.timestamp !== b.timestamp ? a.timestamp - b.timestamp : a.seq - b.seq
-    );
-
-    // Trim to cap
-    if (chatEvents.length > CHAT_MAX_EVENTS_PER_CHAT) {
-      chatEvents.splice(0, chatEvents.length - CHAT_MAX_EVENTS_PER_CHAT);
-    }
-
-    this.updateSyncState(event.chatId, event.authorAddress);
-    this.scheduleDiskWrite(event.chatId);
-    return true;
-  }
-
-  /**
-   * Returns up to `limit` events for a chat, ordered newest-last.
-   * Optionally filters to events strictly before `beforeTimestamp`.
-   */
-  getEvents(chatId: string, limit = 50, beforeTimestamp?: number): ChatEvent[] {
-    const all = this.events.get(chatId) ?? [];
-    const filtered =
-      beforeTimestamp != null
-        ? all.filter((e) => e.timestamp < beforeTimestamp)
-        : all;
-    // Return the last `limit` entries (most recent)
-    return filtered.length > limit
-      ? filtered.slice(filtered.length - limit)
-      : filtered.slice();
-  }
-
-  /**
-   * Returns the sync state for a chat: authorAddress → highest known seq.
-   * Used to exchange with peers during the sync handshake.
-   */
-  getSyncState(chatId: string): Record<string, number> {
-    const m = this.syncState.get(chatId);
-    return m ? Object.fromEntries(m.entries()) : {};
-  }
-
-  /** Returns all chatIds that have at least one stored event. */
-  getKnownChatIds(): string[] {
-    return Array.from(this.events.keys());
-  }
-
-  /**
-   * Returns a summary for every known chat, sorted by most recently updated.
-   */
-  getChatSummaries(): ChatSummary[] {
-    const result: ChatSummary[] = [];
-    for (const [chatId, events] of this.events.entries()) {
-      const lastEvent = events.length > 0 ? events[events.length - 1] : null;
-      const watermark = this.readWatermarks.get(chatId) ?? 0;
-      const unreadCount = events.filter((e) => e.timestamp > watermark).length;
-      result.push({
-        chatId,
-        lastEvent,
-        unreadCount,
-        updatedAt: lastEvent?.timestamp ?? 0,
-      });
-    }
-    return result.sort((a, b) => b.updatedAt - a.updatedAt);
-  }
-
-  /**
-   * Computes events this node has that the requester does not.
-   * Uses the requester's known seq map to find gaps.
-   * Capped at CHAT_MAX_SYNC_EVENTS to avoid flooding.
-   */
-  getMissingEvents(
-    chatId: string,
-    theirSeqs: Record<string, number>
-  ): ChatEvent[] {
-    const all = this.events.get(chatId) ?? [];
-    const missing: ChatEvent[] = [];
-    for (const ev of all) {
-      const theirSeq = theirSeqs[ev.authorAddress] ?? 0;
-      if (ev.seq > theirSeq) {
-        missing.push(ev);
-        if (missing.length >= CHAT_MAX_SYNC_EVENTS) break;
-      }
-    }
-    return missing;
-  }
-
-  /**
-   * Advances the read watermark for a chat.
-   * Events at or before `upToTimestamp` are considered read.
-   */
-  markRead(chatId: string, upToTimestamp: number): void {
-    const current = this.readWatermarks.get(chatId) ?? 0;
-    if (upToTimestamp > current) {
-      this.readWatermarks.set(chatId, upToTimestamp);
-    }
-  }
-
-  /**
-   * Recomputes the highest *contiguous* seq for `authorAddress` in `chatId`
-   * by scanning the events that are currently stored.
-   *
-   * "Contiguous" means we have every message from seq 1 (or the earliest
-   * stored seq if older events were trimmed) up to N without any gaps.
-   * Reporting the contiguous value — rather than the raw maximum — ensures
-   * that a peer who has seq 1,2,4,5 (missing 3) tells other peers
-   * "I have up to 2", so they will send seq 3,4,5 and fill the gap.
-   *
-   * Trim handling: if the earliest stored seq for this author is M > 1 we
-   * assume seq 1…M-1 were trimmed (not missed), so we start the contiguous
-   * count at M-1.  This prevents a trimmed node from endlessly requesting
-   * old events that every peer has also discarded.
-   */
-  private updateSyncState(chatId: string, authorAddress: string): void {
-    const seqs = (this.events.get(chatId) ?? [])
-      .filter(e => e.authorAddress === authorAddress)
-      .map(e => e.seq)
-      .sort((a, b) => a - b);
-
-    // Start just below the earliest seq we hold, treating anything before
-    // it as already known (handles the trim-from-front case).
-    let contiguous = seqs.length > 0 ? seqs[0] - 1 : 0;
-    for (const s of seqs) {
-      if (s === contiguous + 1) {
-        contiguous = s;
-      } else {
-        break; // gap found — stop here
-      }
-    }
-
-    let m = this.syncState.get(chatId);
-    if (!m) {
-      m = new Map<string, number>();
-      this.syncState.set(chatId, m);
-    }
-    m.set(authorAddress, contiguous);
-  }
-
-  /**
-   * Recomputes the contiguous sync state for *all* authors in a chat in a
-   * single pass.  Used at load time instead of calling updateSyncState
-   * once per event (which would be O(n²)).
-   */
-  private recomputeSyncStateForChat(chatId: string): void {
-    const chatEvents = this.events.get(chatId) ?? [];
-
-    // Group seqs by author address.
-    const seqsByAuthor = new Map<string, number[]>();
-    for (const ev of chatEvents) {
-      let seqs = seqsByAuthor.get(ev.authorAddress);
-      if (!seqs) {
-        seqs = [];
-        seqsByAuthor.set(ev.authorAddress, seqs);
-      }
-      seqs.push(ev.seq);
-    }
-
-    let m = this.syncState.get(chatId);
-    if (!m) {
-      m = new Map<string, number>();
-      this.syncState.set(chatId, m);
-    }
-
-    for (const [authorAddress, seqs] of seqsByAuthor) {
-      seqs.sort((a, b) => a - b);
-      let contiguous = seqs[0] - 1; // treat anything before earliest as known
-      for (const s of seqs) {
-        if (s === contiguous + 1) {
-          contiguous = s;
-        } else {
-          break;
-        }
-      }
-      m.set(authorAddress, contiguous);
-    }
-  }
-
-  private scheduleDiskWrite(chatId: string): void {
-    const existing = this.writeTimers.get(chatId);
-    if (existing) clearTimeout(existing);
-    const timer = setTimeout(() => {
-      this.writeTimers.delete(chatId);
-      this.flushToDisk(chatId).catch((err) =>
-        loggerError(`[Chat] Flush error for ${chatId}:`, err)
-      );
-    }, CHAT_WRITE_DEBOUNCE_MS);
-    timer.unref?.();
-    this.writeTimers.set(chatId, timer);
-  }
-
-  private async flushToDisk(chatId: string): Promise<void> {
-    const events = this.events.get(chatId);
-    if (!events) return;
-    const safeName = chatId.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filePath = pathMod.join(this.dataDir, `chat-${safeName}.json`);
-    const data: PersistedChatFile = { chatId, events, updatedAt: Date.now() };
-    await this.writeFileAtomic(filePath, JSON.stringify(data, null, 2), {
-      encoding: 'utf8',
-    });
-  }
-
-  /** Cancel all pending timers and flush all dirty chats synchronously.
-   *  Called on application shutdown. */
-  flushAllSync(): void {
-    for (const [chatId, timer] of this.writeTimers.entries()) {
-      clearTimeout(timer);
-      this.writeTimers.delete(chatId);
-      const events = this.events.get(chatId);
-      if (!events) continue;
-      try {
-        const safeName = chatId.replace(/[^a-zA-Z0-9_-]/g, '_');
-        const filePath = pathMod.join(this.dataDir, `chat-${safeName}.json`);
-        const data: PersistedChatFile = {
-          chatId,
-          events,
-          updatedAt: Date.now(),
-        };
-        this.writeFileAtomic.sync(
-          filePath,
-          JSON.stringify(data, null, 2),
-          { encoding: 'utf8' }
-        );
-      } catch (err) {
-        loggerError(`[Chat] Sync flush error for ${chatId}:`, err);
-      }
-    }
-  }
-
-  /** Cancel pending write timers (call during stop, before flushAllSync). */
-  stopAllTimers(): void {
-    for (const timer of this.writeTimers.values()) clearTimeout(timer);
-    this.writeTimers.clear();
-  }
-}
+// ── ChatStore (replaced by ChatDatabase) ──────────────────────────────────────
+//
+// ChatStore has been removed. ChatDatabase (./chat-db.ts) is the drop-in
+// replacement backed by a shared SQLite database in WAL mode.
 
 // ── ChatManager ───────────────────────────────────────────────────────────────
 
@@ -679,7 +389,7 @@ export class ChatStore {
  *   'chat:typingStopped' { chatId, authorAddress }      — typing indicator cleared
  */
 export class ChatManager extends EventEmitter {
-  readonly store: ChatStore;
+  readonly store: ChatDatabase;
   private p2p: P2PNetwork;
 
   /** chatIds the local user is actively participating in. */
@@ -697,7 +407,7 @@ export class ChatManager extends EventEmitter {
   /** "chatId:authorAddress" → clearTimeout handle for typing indicators. */
   private typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-  constructor(p2p: P2PNetwork, store: ChatStore) {
+  constructor(p2p: P2PNetwork, store: ChatDatabase) {
     super();
     this.p2p = p2p;
     this.store = store;
@@ -1122,19 +832,20 @@ export function getChatManager(): ChatManager | null {
 }
 
 /**
- * Creates and starts the ChatManager.
- * `dataDir` should be a per-instance directory (e.g. path.join(userData, 'p2p-chat')).
+ * Creates and starts the ChatManager backed by the shared SQLite database.
+ * `dbPath` must point to the shared DB file (e.g. appData/qortal-shared/chat.db).
+ * All Electron instances pass the same path so they share one message store.
  * Must be called after `startP2PNetwork`.
  */
 export async function startChatManager(
   p2p: P2PNetwork,
-  dataDir: string
+  dbPath: string
 ): Promise<ChatManager> {
   if (chatManager) {
     chatManager.stop();
     chatManager = null;
   }
-  const store = new ChatStore(dataDir);
+  const store = new ChatDatabase(dbPath);
   await store.loadFromDisk();
   chatManager = new ChatManager(p2p, store);
   chatManager.start();
