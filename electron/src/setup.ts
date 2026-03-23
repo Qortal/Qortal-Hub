@@ -1522,6 +1522,7 @@ ipcMain.on('presence:unsubscribe', (event) => {
 
 const chatEventSubscribers = new Set<Electron.WebContents>();
 const chatTypingSubscribers = new Set<Electron.WebContents>();
+const chatReadSubscribers = new Set<Electron.WebContents>();
 
 export function attachChatListeners(
   manager: ReturnType<typeof getChatManager>
@@ -1538,6 +1539,10 @@ export function attachChatListeners(
 
   manager.on('chat:typingStopped', (payload: unknown) =>
     broadcastToSet(chatTypingSubscribers, 'chat:typingStopped', payload)
+  );
+
+  manager.on('chat:read', (payload: unknown) =>
+    broadcastToSet(chatReadSubscribers, 'chat:read', payload)
   );
 }
 
@@ -1665,4 +1670,54 @@ ipcMain.on('chat:typing:subscribe', (event) => {
 });
 ipcMain.on('chat:typing:unsubscribe', (event) => {
   chatTypingSubscribers.delete(event.sender);
+});
+
+/**
+ * Persist and broadcast a batch of read receipts.
+ * `eventIds` are the IDs of events the local user has seen.
+ */
+ipcMain.handle(
+  'chat:sendReadReceipt',
+  async (
+    _event,
+    chatId: string,
+    eventIds: string[],
+    readerAddress: string
+  ) => {
+    const cm = getChatManager();
+    if (!cm) return { success: false, error: 'Chat manager is not running' };
+    if (
+      typeof chatId !== 'string' ||
+      !Array.isArray(eventIds) ||
+      typeof readerAddress !== 'string'
+    ) {
+      return { success: false, error: 'Invalid arguments' };
+    }
+    cm.sendReadReceipt(chatId, eventIds, readerAddress);
+    return { success: true };
+  }
+);
+
+/**
+ * Query-scoped receipt loading.
+ * Returns receipts only for the provided event IDs — callers pass the IDs
+ * currently held in renderer memory so the result is bounded by the
+ * history page size rather than the total message count.
+ * Returns Record<eventId, readerAddress[]>.
+ */
+ipcMain.handle(
+  'chat:getReadReceipts',
+  async (_event, chatId: string, eventIds: string[]) => {
+    const cm = getChatManager();
+    if (!cm) return {};
+    if (typeof chatId !== 'string' || !Array.isArray(eventIds)) return {};
+    return cm.store.getReadReceiptsForEvents(eventIds);
+  }
+);
+
+ipcMain.on('chat:read:subscribe', (event) => {
+  chatReadSubscribers.add(event.sender);
+});
+ipcMain.on('chat:read:unsubscribe', (event) => {
+  chatReadSubscribers.delete(event.sender);
 });

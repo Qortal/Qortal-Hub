@@ -63,6 +63,9 @@ const CHAT_TYPING_TTL_MS = 8_000;
 /** Max relay hops at the chat layer (independent of P2P hop counter). */
 const CHAT_DEFAULT_HOPS = 4;
 
+/** Maximum number of event IDs in a single CHAT_READ batch. */
+const READ_RECEIPT_MAX_BATCH = 200;
+
 // ── Wire-level type discriminators ───────────────────────────────────────────
 
 export type ChatNetworkType =
@@ -71,7 +74,8 @@ export type ChatNetworkType =
   | 'CHAT_UNSUBSCRIBE'
   | 'CHAT_SYNC_STATE'
   | 'CHAT_SYNC_RESPONSE'
-  | 'CHAT_TYPING';
+  | 'CHAT_TYPING'
+  | 'CHAT_READ';
 
 export const CHAT_MESSAGE_TYPES = new Set<string>([
   'CHAT_EVENT',
@@ -80,6 +84,7 @@ export const CHAT_MESSAGE_TYPES = new Set<string>([
   'CHAT_SYNC_STATE',
   'CHAT_SYNC_RESPONSE',
   'CHAT_TYPING',
+  'CHAT_READ',
 ]);
 
 // ── Core event types ─────────────────────────────────────────────────────────
@@ -164,13 +169,29 @@ export interface ChatTypingEnvelope {
   timestamp: number;
 }
 
+/**
+ * Read receipt — ephemeral metadata, not a signed ChatEvent.
+ * Broadcasted to known subscribers only (no gossip), persisted in the
+ * read_receipts table so it survives the sender going offline.
+ */
+export interface ChatReadEnvelope {
+  type: 'CHAT_READ';
+  chatId: string;
+  /** Address that has seen the listed events. */
+  readerAddress: string;
+  /** IDs of the events that were seen, capped at READ_RECEIPT_MAX_BATCH. */
+  eventIds: string[];
+  timestamp: number;
+}
+
 export type ChatWireEnvelope =
   | ChatEventEnvelope
   | ChatSubscribeEnvelope
   | ChatUnsubscribeEnvelope
   | ChatSyncStateEnvelope
   | ChatSyncResponseEnvelope
-  | ChatTypingEnvelope;
+  | ChatTypingEnvelope
+  | ChatReadEnvelope;
 
 // ── Renderer-facing summary types ─────────────────────────────────────────────
 
@@ -503,6 +524,11 @@ export class ChatManager extends EventEmitter {
       this.emit('chat:event', { event });
     }
 
+    // Clear any lingering typing indicator for the local sender.
+    if (event.eventType === 'message' || event.eventType === 'edit') {
+      this.clearTypingIndicator(event.chatId, event.authorAddress);
+    }
+
     // Broadcast via hybrid routing: targeted to subscribers + fallback gossip.
     // hopsRemaining starts at CHAT_DEFAULT_HOPS and is decremented on each re-relay.
     this.broadcastChatEvent(event.chatId, { ...env, hopsRemaining: CHAT_DEFAULT_HOPS });
@@ -566,6 +592,48 @@ export class ChatManager extends EventEmitter {
     this.p2p.send(null, env);
   }
 
+  /**
+   * Record that `readerAddress` has seen `eventIds` in `chatId`, then
+   * broadcast a CHAT_READ envelope to all known subscribers.
+   *
+   * Read receipts are sent to subscribers only — no gossip fallback needed
+   * since they carry no content and missing one is not critical.
+   */
+  sendReadReceipt(
+    chatId: string,
+    eventIds: string[],
+    readerAddress: string
+  ): void {
+    if (!readerAddress || !chatId) return;
+    if (!this.localSubscriptions.has(chatId)) return;
+    if (eventIds.length === 0) return;
+
+    const capped = eventIds.slice(0, READ_RECEIPT_MAX_BATCH);
+    const now = Date.now();
+
+    // Persist locally first.
+    for (const id of capped) {
+      this.store.upsertReadReceipt(chatId, id, readerAddress, now);
+    }
+
+    // Broadcast to known subscribers (targeted delivery, no gossip).
+    const env: ChatReadEnvelope = {
+      type: 'CHAT_READ',
+      chatId,
+      readerAddress,
+      eventIds: capped,
+      timestamp: now,
+    };
+    for (const [nodeId, subs] of this.peerSubscriptions) {
+      if (subs.has(chatId)) {
+        this.p2p.send(nodeId, env);
+      }
+    }
+
+    // Emit to the local renderer immediately.
+    this.emit('chat:read', { chatId, readerAddress, eventIds: capped });
+  }
+
   /** Returns up to `limit` events for a chat, paginated by `beforeTimestamp`. */
   getHistory(chatId: string, limit = 50, beforeTimestamp?: number): ChatEvent[] {
     return this.store.getEvents(chatId, limit, beforeTimestamp);
@@ -617,6 +685,24 @@ export class ChatManager extends EventEmitter {
         knownSeqs: this.store.getSyncState(chatId),
       } as ChatSyncStateEnvelope);
     }
+
+    // Replay read receipts: for each subscribed chat, send a CHAT_READ
+    // envelope covering all events we've already seen from our local address.
+    // This delivers receipts that the connecting peer missed while offline.
+    for (const localAddr of this.localAddresses) {
+      for (const chatId of this.localSubscriptions) {
+        const readIds = this.store.getReadReceiptsByReader(chatId, localAddr);
+        if (readIds.length === 0) continue;
+        const env: ChatReadEnvelope = {
+          type: 'CHAT_READ',
+          chatId,
+          readerAddress: localAddr,
+          eventIds: readIds.slice(0, READ_RECEIPT_MAX_BATCH),
+          timestamp: Date.now(),
+        };
+        this.p2p.send(id, env);
+      }
+    }
   };
 
   private onPeerDisconnected = ({ id }: { id: string }): void => {
@@ -648,6 +734,9 @@ export class ChatManager extends EventEmitter {
         break;
       case 'CHAT_TYPING':
         this.handleTyping(envelope);
+        break;
+      case 'CHAT_READ':
+        this.handleRead(envelope);
         break;
     }
   }
@@ -705,6 +794,13 @@ export class ChatManager extends EventEmitter {
     if (!this.store.insert(event)) return;
 
     this.emit('chat:event', { event });
+
+    // A real message or edit means the author is no longer typing — clear any
+    // pending typing indicator for them immediately rather than waiting for the
+    // 8-second TTL to expire.
+    if (event.eventType === 'message' || event.eventType === 'edit') {
+      this.clearTypingIndicator(event.chatId, event.authorAddress);
+    }
 
     // Re-relay to other subscribers we know about, decrementing the hop counter.
     // excludeNodeId = fromNodeId prevents echoing back to the sender.
@@ -802,6 +898,67 @@ export class ChatManager extends EventEmitter {
       loggerLog(
         `[Chat] Sync: stored ${stored} recovered events for ${chatId}`
       );
+    }
+  }
+
+  /**
+   * Immediately clear the typing indicator for `authorAddress` in `chatId`.
+   * Cancels the auto-expire timer and emits `chat:typingStopped` so the
+   * renderer removes the indicator without waiting for the TTL to expire.
+   */
+  private clearTypingIndicator(chatId: string, authorAddress: string): void {
+    const key = `${chatId}:${authorAddress}`;
+    const timer = this.typingTimers.get(key);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.typingTimers.delete(key);
+    this.emit('chat:typingStopped', { chatId, authorAddress });
+  }
+
+  /**
+   * Handle an incoming CHAT_READ envelope.
+   *
+   * Validates the reader is a legitimate participant for the chat type,
+   * verifies each event ID exists in local storage (prevents phantom-receipt
+   * spam), persists the receipts, and emits 'chat:read' to the renderer.
+   */
+  private handleRead(envelope: ChatReadEnvelope): void {
+    const { chatId, readerAddress, eventIds, timestamp } = envelope;
+    if (!chatId || !readerAddress || !Array.isArray(eventIds) || eventIds.length === 0) return;
+    if (!this.shouldAccept(chatId)) return;
+
+    // Participant validation per chat type.
+    if (chatId.startsWith('support:') && chatId !== 'support:queue') {
+      const userAddr = chatId.slice(8);
+      if (
+        readerAddress !== userAddr &&
+        !SUPPORT_AGENT_ADDRESSES.has(readerAddress)
+      ) return;
+    } else if (!chatId.startsWith('group:') && !chatId.startsWith('support:')) {
+      // DM: readerAddress must be one of the two participants.
+      const colonIdx = chatId.indexOf(':');
+      if (colonIdx > 0) {
+        const addrA = chatId.slice(0, colonIdx);
+        const addrB = chatId.slice(colonIdx + 1);
+        if (readerAddress !== addrA && readerAddress !== addrB) return;
+      }
+    }
+    // Group chats: open membership — no per-participant check needed.
+
+    const capped = eventIds.slice(0, READ_RECEIPT_MAX_BATCH);
+    const readAt = typeof timestamp === 'number' ? timestamp : Date.now();
+
+    // Persist only receipts for events we actually have, to prevent spam.
+    const valid: string[] = [];
+    for (const id of capped) {
+      if (typeof id !== 'string' || !id) continue;
+      if (!this.store.hasEvent(id)) continue;
+      this.store.upsertReadReceipt(chatId, id, readerAddress, readAt);
+      valid.push(id);
+    }
+
+    if (valid.length > 0) {
+      this.emit('chat:read', { chatId, readerAddress, eventIds: valid });
     }
   }
 

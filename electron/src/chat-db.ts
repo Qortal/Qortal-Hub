@@ -15,6 +15,11 @@
  * • Trim runs inside the same transaction as the triggering insert so the
  *   table never exceeds CHAT_MAX_EVENTS_PER_CHAT rows per chat.
  * • Bulk inserts (CHAT_SYNC_RESPONSE) use db.transaction() — one fsync.
+ * • read_receipts rows are deleted in the same trim transaction as their
+ *   parent chat_events rows — no orphaned receipts, no separate cleanup.
+ * • getReadReceiptsForEvents uses query-scoped loading: receipts are fetched
+ *   only for the event IDs currently held in renderer memory (bounded by
+ *   viewport/history page size, not total message count).
  */
 
 import Database, { type Database as DB, type Statement } from 'better-sqlite3';
@@ -86,6 +91,12 @@ export class ChatDatabase {
   private stmtInsert: Statement;
   private stmtCountForChat: Statement;
   private stmtTrimOldest: Statement;
+  /**
+   * Cascade-trim: deletes read_receipts whose event_id no longer exists in
+   * chat_events for the given chat.  Run in the same transaction as
+   * stmtTrimOldest so receipts are never orphaned.
+   */
+  private stmtTrimReceipts: Statement;
   private stmtGetEvents: Statement;
   private stmtGetEventsBefore: Statement;
   private stmtGetKnownChats: Statement;
@@ -97,6 +108,9 @@ export class ChatDatabase {
   private stmtLoadSeqsForRebuild: Statement;
   /** Loads just event IDs for the seenEventIds Set — no content columns. */
   private stmtLoadEventIds: Statement;
+  private stmtUpsertReceipt: Statement;
+  private stmtGetReceiptsByReader: Statement;
+  private stmtHasEvent: Statement;
 
   constructor(dbPath: string) {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -133,6 +147,13 @@ export class ChatDatabase {
           ORDER BY timestamp DESC, seq DESC
           LIMIT ${CHAT_MAX_EVENTS_PER_CHAT}
         )
+    `);
+    // Cascade-trim receipts for events that were just purged from chat_events.
+    // Runs in the same transaction as stmtTrimOldest.
+    this.stmtTrimReceipts = this.db.prepare(`
+      DELETE FROM read_receipts
+      WHERE chat_id = ?
+        AND event_id NOT IN (SELECT id FROM chat_events WHERE chat_id = ?)
     `);
     this.stmtGetEvents = this.db.prepare(`
       SELECT * FROM chat_events
@@ -187,6 +208,17 @@ export class ChatDatabase {
     `);
     // Load just IDs for the per-instance dedup set — no content columns.
     this.stmtLoadEventIds = this.db.prepare('SELECT id FROM chat_events');
+    this.stmtUpsertReceipt = this.db.prepare(`
+      INSERT OR IGNORE INTO read_receipts (chat_id, event_id, reader_address, read_at)
+      VALUES (?, ?, ?, ?)
+    `);
+    this.stmtGetReceiptsByReader = this.db.prepare(`
+      SELECT event_id FROM read_receipts
+      WHERE chat_id = ? AND reader_address = ?
+    `);
+    this.stmtHasEvent = this.db.prepare(
+      'SELECT 1 FROM chat_events WHERE id = ? LIMIT 1'
+    );
   }
 
   private initSchema(): void {
@@ -217,6 +249,24 @@ export class ChatDatabase {
         chat_id   TEXT PRIMARY KEY,
         watermark INTEGER NOT NULL
       );
+
+      -- Per-message read receipts: who has seen which event.
+      -- Trimmed in the same transaction as the parent chat_events rows.
+      CREATE TABLE IF NOT EXISTS read_receipts (
+        chat_id        TEXT    NOT NULL,
+        event_id       TEXT    NOT NULL,
+        reader_address TEXT    NOT NULL,
+        read_at        INTEGER NOT NULL,
+        PRIMARY KEY (chat_id, event_id, reader_address)
+      );
+
+      -- Query-scoped loading: WHERE event_id IN (...)
+      CREATE INDEX IF NOT EXISTS idx_read_receipts_event
+        ON read_receipts(event_id);
+
+      -- Reconnect replay: all events read by a specific address in a chat
+      CREATE INDEX IF NOT EXISTS idx_read_receipts_chat_reader
+        ON read_receipts(chat_id, reader_address);
 
       -- Discovered peers — written by p2p-network.ts, schema defined here
       -- so the table exists whether or not p2p-network opens the DB first.
@@ -332,6 +382,8 @@ export class ChatDatabase {
         };
         if (cnt > CHAT_MAX_EVENTS_PER_CHAT) {
           this.stmtTrimOldest.run(event.chatId, event.chatId);
+          // Cascade: remove receipts for events that were just purged.
+          this.stmtTrimReceipts.run(event.chatId, event.chatId);
         }
       }
     });
@@ -379,6 +431,8 @@ export class ChatDatabase {
         const { cnt } = this.stmtCountForChat.get(chatId) as { cnt: number };
         if (cnt > CHAT_MAX_EVENTS_PER_CHAT) {
           this.stmtTrimOldest.run(chatId, chatId);
+          // Cascade: remove receipts for events that were just purged.
+          this.stmtTrimReceipts.run(chatId, chatId);
         }
       }
     });
@@ -500,6 +554,68 @@ export class ChatDatabase {
     if (upToTimestamp <= current) return;
     this.readWatermarks.set(chatId, upToTimestamp);
     this.stmtUpsertWatermark.run(chatId, upToTimestamp);
+  }
+
+  /**
+   * Record that `readerAddress` has seen `eventId` in `chatId`.
+   * Idempotent — INSERT OR IGNORE means first read wins.
+   */
+  upsertReadReceipt(
+    chatId: string,
+    eventId: string,
+    readerAddress: string,
+    readAt: number
+  ): void {
+    this.stmtUpsertReceipt.run(chatId, eventId, readerAddress, readAt);
+  }
+
+  /**
+   * Query-scoped receipt loading.
+   *
+   * Returns receipts only for the event IDs supplied — callers pass exactly
+   * the IDs currently held in renderer memory (e.g. one history page), so
+   * the result set is bounded by the viewport, not the total message count.
+   *
+   * Uses idx_read_receipts_event for an O(k log n) lookup.
+   */
+  getReadReceiptsForEvents(
+    eventIds: string[]
+  ): Record<string, string[]> {
+    if (eventIds.length === 0) return {};
+    const placeholders = eventIds.map(() => '?').join(', ');
+    const rows = this.db
+      .prepare(
+        `SELECT event_id, reader_address FROM read_receipts WHERE event_id IN (${placeholders})`
+      )
+      .all(...eventIds) as { event_id: string; reader_address: string }[];
+
+    const out: Record<string, string[]> = {};
+    for (const r of rows) {
+      if (!out[r.event_id]) out[r.event_id] = [];
+      out[r.event_id].push(r.reader_address);
+    }
+    return out;
+  }
+
+  /**
+   * Returns all event IDs in `chatId` that `readerAddress` has read.
+   * Used for reconnect replay: after a peer reconnects, resend a CHAT_READ
+   * envelope for events they authored that we've already seen.
+   */
+  getReadReceiptsByReader(chatId: string, readerAddress: string): string[] {
+    const rows = this.stmtGetReceiptsByReader.all(
+      chatId,
+      readerAddress
+    ) as { event_id: string }[];
+    return rows.map((r) => r.event_id);
+  }
+
+  /**
+   * Returns true when the event `id` exists in the local store.
+   * Used to validate incoming CHAT_READ envelopes before persisting them.
+   */
+  hasEvent(id: string): boolean {
+    return !!this.stmtHasEvent.get(id);
   }
 
   /**

@@ -8,6 +8,9 @@
  *   - Folds the raw event log into RenderedMessage[] so edits, deletes,
  *     reactions, and replies are reflected automatically in the UI.
  *   - Provides sendMessage / sendEdit / sendDelete / sendReaction / sendReply.
+ *   - Tracks per-message read receipts via query-scoped loading: receipts are
+ *     fetched only for the event IDs currently in memory (one history page),
+ *     so the result set is bounded by the viewport, not the total message count.
  *   - Cleans up subscriptions on unmount.
  *
  * Signing reuses the 'signPresenceMessage' background case, which performs:
@@ -189,6 +192,12 @@ export interface UseP2PChatReturn {
   typingUsers: Set<string>;
   /** True once history is loaded and the channel is subscribed. */
   isReady: boolean;
+  /**
+   * Per-message read receipts: eventId → Set of reader addresses.
+   * Populated via query-scoped loading (only for currently-loaded event IDs)
+   * and updated live via incoming CHAT_READ envelopes.
+   */
+  readReceipts: Map<string, Set<string>>;
   /** Send a plain-text message. */
   sendMessage: (text: string) => Promise<void>;
   /** Edit the content of a previously sent message (author-only). */
@@ -201,6 +210,12 @@ export interface UseP2PChatReturn {
   sendReply: (parentId: string, text: string) => Promise<void>;
   /** Call on every keystroke; internally debounced to avoid flooding the network. */
   notifyTyping: () => void;
+  /**
+   * Record that the local user has read the given event IDs.
+   * Persists receipts locally, broadcasts them to peers, and applies an
+   * optimistic update to `readReceipts` state immediately.
+   */
+  markMessagesRead: (eventIds: string[]) => void;
 }
 
 /**
@@ -215,6 +230,9 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
   const [isSending, setIsSending] = useState(false);
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [isReady, setIsReady] = useState(false);
+  const [readReceipts, setReadReceipts] = useState<Map<string, Set<string>>>(
+    new Map()
+  );
 
   /** Full unfolded event log — source of truth for re-folding. */
   const rawEventsRef = useRef<P2PChatEvent[]>([]);
@@ -225,6 +243,13 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
   /** Debounce handle — prevents flooding the network with typing events. */
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  /**
+   * Tracks which event IDs have already had their receipts fetched so we
+   * only query the DB for genuinely new IDs (history page or live event).
+   * Reset when the chatId or user changes (effect teardown clears it).
+   */
+  const loadedEventIdsRef = useRef<Set<string>>(new Set());
+
   // ── Subscribe, load history, and wire live listeners ──────────────────────
 
   useEffect(() => {
@@ -233,6 +258,43 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
     let cancelled = false;
     let unsubEvent: (() => void) | null = null;
     let unsubTyping: (() => void) | null = null;
+    let unsubRead: (() => void) | null = null;
+
+    // Reset per-channel state on each setup run.
+    loadedEventIdsRef.current = new Set();
+
+    /** Merges a Record<eventId, readerAddress[]> into readReceipts state. */
+    const mergeReceipts = (data: Record<string, string[]>) => {
+      if (Object.keys(data).length === 0) return;
+      setReadReceipts((prev) => {
+        const next = new Map(prev);
+        for (const [eventId, readers] of Object.entries(data)) {
+          const s = new Set(next.get(eventId) ?? []);
+          for (const r of readers) s.add(r);
+          next.set(eventId, s);
+        }
+        return next;
+      });
+    };
+
+    /**
+     * Fetches receipts for any event IDs not yet loaded.
+     * Query-scoped: only the supplied IDs are queried in the DB, keeping
+     * the result set bounded by history page size rather than total messages.
+     */
+    const loadReceiptsForNewIds = async (eventIds: string[]) => {
+      const newIds = eventIds.filter(
+        (id) => !loadedEventIdsRef.current.has(id)
+      );
+      if (newIds.length === 0) return;
+      for (const id of newIds) loadedEventIdsRef.current.add(id);
+      try {
+        const data = await window.chat!.getReadReceipts(chatId, newIds);
+        if (!cancelled) mergeReceipts(data as Record<string, string[]>);
+      } catch {
+        // Non-fatal — receipts will arrive via live onRead when the peer reconnects.
+      }
+    };
 
     (async () => {
       try {
@@ -258,6 +320,10 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         rawEventsRef.current = history;
         setMessages(foldEvents(history));
 
+        // Load receipts for the initial history page (query-scoped).
+        await loadReceiptsForNewIds(history.map((e) => e.id));
+        if (cancelled) return;
+
         // Live event stream — append new events and re-fold.
         unsubEvent = window.chat!.onEvent(({ event }) => {
           // Ignore events for other channels — each useP2PChat instance is
@@ -274,6 +340,9 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
           ) {
             nextSeqRef.current = event.seq + 1;
           }
+
+          // Load receipts for the new event ID (query-scoped, 1 ID at a time).
+          loadReceiptsForNewIds([event.id]);
         });
 
         // Typing indicators.
@@ -287,6 +356,22 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
           });
         });
 
+        // Live read receipts.
+        unsubRead = window.chat!.onRead(
+          ({ chatId: cId, readerAddress, eventIds }) => {
+            if (cId !== chatId) return;
+            setReadReceipts((prev) => {
+              const next = new Map(prev);
+              for (const id of eventIds) {
+                const s = new Set(next.get(id) ?? []);
+                s.add(readerAddress);
+                next.set(id, s);
+              }
+              return next;
+            });
+          }
+        );
+
         if (!cancelled) setIsReady(true);
       } catch (err) {
         console.error('[useP2PChat] Setup failed:', err);
@@ -297,6 +382,7 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
       cancelled = true;
       unsubEvent?.();
       unsubTyping?.();
+      unsubRead?.();
       window.chat?.unsubscribe(chatId).catch(() => {});
     };
   }, [chatId, userInfo?.address, userInfo?.publicKey]);
@@ -510,16 +596,43 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
     }, TYPING_DEBOUNCE_MS);
   }, [chatId, userInfo?.address]);
 
+  // ── markMessagesRead ──────────────────────────────────────────────────────
+
+  const markMessagesRead = useCallback(
+    (eventIds: string[]) => {
+      if (!window.chat || !userInfo?.address || eventIds.length === 0) return;
+
+      // Optimistic update — renderer reflects the read state immediately
+      // without waiting for the IPC round-trip.
+      setReadReceipts((prev) => {
+        const next = new Map(prev);
+        for (const id of eventIds) {
+          const s = new Set(next.get(id) ?? []);
+          s.add(userInfo.address);
+          next.set(id, s);
+        }
+        return next;
+      });
+
+      window.chat
+        .sendReadReceipt(chatId, eventIds, userInfo.address)
+        .catch(() => {});
+    },
+    [chatId, userInfo?.address]
+  );
+
   return {
     messages,
     isSending,
     typingUsers,
     isReady,
+    readReceipts,
     sendMessage,
     sendEdit,
     sendDelete,
     sendReaction,
     sendReply,
     notifyTyping,
+    markMessagesRead,
   };
 }

@@ -59,6 +59,10 @@ export interface UseAgentSupportChatReturn {
   isReady: boolean;
   isSending: boolean;
   typingUsers: Set<string>;
+  /** eventId → set of reader addresses (query-scoped, from useP2PChat). */
+  readReceipts: Map<string, Set<string>>;
+  /** Mark a list of event IDs as read by the current agent address. */
+  markMessagesRead: (eventIds: string[]) => void;
   sendMessage: (text: string) => Promise<void>;
   sendEdit: (targetId: string, newContent: string) => Promise<void>;
   sendDelete: (targetId: string) => Promise<void>;
@@ -425,6 +429,8 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
     isReady: inner.isReady,
     isSending: inner.isSending,
     typingUsers: inner.typingUsers,
+    readReceipts: inner.readReceipts,
+    markMessagesRead: inner.markMessagesRead,
     sendMessage,
     sendEdit,
     sendDelete: inner.sendDelete,

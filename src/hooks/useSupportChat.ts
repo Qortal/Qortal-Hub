@@ -35,7 +35,7 @@
  *     cycle (~25 s), regardless of when other agents last received one.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { userInfoAtom } from '../atoms/global';
 import { useP2PChat, UseP2PChatReturn } from './useP2PChat';
@@ -114,6 +114,8 @@ export interface UseSupportChatReturn extends UseP2PChatReturn {
    * this to false (since their timestamp becomes the latest activity).
    */
   isClosed: boolean;
+  /** True when at least one support agent is currently online. */
+  isAgentOnline: boolean;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -182,6 +184,12 @@ export function useSupportChat(): UseSupportChatReturn {
   // ── Presence-based re-knock ───────────────────────────────────────────────
 
   const onlineAddresses = useOnlineAddresses();
+
+  /** True when at least one support agent is currently online. */
+  const isAgentOnline = useMemo(
+    () => SUPPORT_ADDRESSES.some((addr) => onlineAddresses.has(addr)),
+    [onlineAddresses]
+  );
 
   /** Posts a signed "support-request" message to the public queue channel. */
   const postQueueKnock = useCallback(
@@ -459,6 +467,7 @@ export function useSupportChat(): UseSupportChatReturn {
     ...inner,
     messages: decryptedMessages,
     isClosed,
+    isAgentOnline,
     sendMessage,
     sendEdit,
     sendReply,

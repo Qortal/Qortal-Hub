@@ -439,6 +439,52 @@ try {
         ipcRenderer.send('chat:typing:unsubscribe');
       };
     },
+
+    /**
+     * Persist and broadcast read receipts for a batch of event IDs.
+     * Call when the local user has seen events authored by others.
+     */
+    sendReadReceipt: async (
+      chatId: string,
+      eventIds: string[],
+      readerAddress: string
+    ) =>
+      ipcRenderer.invoke(
+        'chat:sendReadReceipt',
+        chatId,
+        eventIds,
+        readerAddress
+      ),
+
+    /**
+     * Query-scoped receipt loading.
+     * Pass exactly the event IDs currently held in renderer memory;
+     * the backend returns receipts only for those IDs.
+     * Returns Record<eventId, readerAddress[]>.
+     */
+    getReadReceipts: async (chatId: string, eventIds: string[]) =>
+      ipcRenderer.invoke('chat:getReadReceipts', chatId, eventIds),
+
+    /**
+     * Subscribe to incoming read receipt events.
+     * `cb` receives `{ chatId, readerAddress, eventIds }`.
+     * Returns an unsubscribe function.
+     */
+    onRead: (
+      cb: (payload: {
+        chatId: string;
+        readerAddress: string;
+        eventIds: string[];
+      }) => void
+    ) => {
+      const handler = (_e: unknown, payload: unknown) => cb(payload as any);
+      ipcRenderer.on('chat:read', handler);
+      ipcRenderer.send('chat:read:subscribe');
+      return () => {
+        ipcRenderer.removeListener('chat:read', handler);
+        ipcRenderer.send('chat:read:unsubscribe');
+      };
+    },
   });
 } catch (error) {
   loggerError('error', error);

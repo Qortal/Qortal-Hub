@@ -11,12 +11,14 @@
 
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { useAtomValue } from 'jotai';
+import { useMessageReadObserver } from '../../hooks/useMessageReadObserver';
 import {
   Box,
   CircularProgress,
@@ -324,23 +326,40 @@ function MessageBubble({
   isMine,
   findMessage,
   myAddress,
+  readBy,
+  ticketUserAddress,
   onReply,
   onEdit,
   onDelete,
   onReaction,
+  register,
+  unregister,
 }: {
   msg: RenderedMessage;
   isMine: boolean;
   findMessage: (id: string) => RenderedMessage | undefined;
   myAddress: string;
+  readBy: Set<string>;
+  ticketUserAddress: string;
   onReply: (msg: RenderedMessage) => void;
   onEdit: (msg: RenderedMessage) => void;
   onDelete: (id: string) => void;
   onReaction: (targetId: string, emoji: string) => void;
+  register: (msgId: string, el: HTMLElement) => void;
+  unregister: (msgId: string, el: HTMLElement) => void;
 }) {
   const theme = useTheme();
   const color = addrColor(msg.authorAddress);
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
+
+  // Intersection-based read: observe this element only for messages from others.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || isMine || msg.isDeleted) return;
+    register(msg.id, el);
+    return () => unregister(msg.id, el);
+  }, [msg.id, isMine, msg.isDeleted, register, unregister]);
 
   const actionBar = (
     <Box
@@ -393,13 +412,8 @@ function MessageBubble({
 
   return (
     <Box
+      ref={rootRef}
       sx={{
-        display: 'flex',
-        alignItems: 'flex-end',
-        flexDirection: isMine ? 'row-reverse' : 'row',
-        mb: 0.75,
-        px: 1,
-        '&:hover .chat-actions': { opacity: 1 },
       }}
     >
       {actionBar}
@@ -479,6 +493,11 @@ function MessageBubble({
               edited
             </Typography>
           )}
+          {isMine && ticketUserAddress && readBy.has(ticketUserAddress) && (
+            <Typography variant="caption" sx={{ opacity: 0.45, fontSize: 10 }}>
+              Seen
+            </Typography>
+          )}
         </Box>
       </Box>
       <EmojiPicker
@@ -525,6 +544,8 @@ export function AgentSupportDashboard() {
     isReady,
     isSending,
     typingUsers,
+    readReceipts,
+    markMessagesRead,
     sendMessage,
     sendEdit,
     sendDelete,
@@ -547,6 +568,7 @@ export function AgentSupportDashboard() {
   const [showBlocked, setShowBlocked] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const theme = useTheme();
 
@@ -562,6 +584,15 @@ export function AgentSupportDashboard() {
   useLayoutEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingUsers]);
+
+  // Intersection-based read receipts: mark messages as read only when they
+  // actually enter the visible scroll area (true "eyes-on" confirmation).
+  const { register: registerRead, unregister: unregisterRead } = useMessageReadObserver(
+    myAddress,
+    readReceipts,
+    markMessagesRead,
+    scrollContainerRef
+  );
 
   // ── Compose helpers ───────────────────────────────────────────────────────
 
@@ -952,6 +983,7 @@ export function AgentSupportDashboard() {
 
         {/* Message list */}
         <Box
+          ref={scrollContainerRef}
           sx={{
             flex: 1,
             overflowY: 'auto',
@@ -1035,10 +1067,14 @@ export function AgentSupportDashboard() {
               isMine={msg.authorAddress === myAddress}
               findMessage={findMessage}
               myAddress={myAddress}
+              readBy={readReceipts.get(msg.id) ?? new Set<string>()}
+              ticketUserAddress={activeTicket?.userAddress ?? ''}
               onReply={handleStartReply}
               onEdit={handleStartEdit}
               onDelete={handleDelete}
               onReaction={handleReaction}
+              register={registerRead}
+              unregister={unregisterRead}
             />
           ))}
 

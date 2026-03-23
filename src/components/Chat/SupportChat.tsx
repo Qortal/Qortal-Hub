@@ -10,7 +10,8 @@
  *                 QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs
  */
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMessageReadObserver } from '../../hooks/useMessageReadObserver';
 import { useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -314,6 +315,9 @@ function MessageBubble({
   onEdit,
   onDelete,
   onReaction,
+  readBy,
+  register,
+  unregister,
 }: {
   msg: RenderedMessage;
   isMine: boolean;
@@ -323,10 +327,23 @@ function MessageBubble({
   onEdit: (msg: RenderedMessage) => void;
   onDelete: (id: string) => void;
   onReaction: (targetId: string, emoji: string) => void;
+  /** Addresses that have read this message. */
+  readBy: Set<string>;
+  register: (msgId: string, el: HTMLElement) => void;
+  unregister: (msgId: string, el: HTMLElement) => void;
 }) {
   const theme = useTheme();
   const color = addrColor(msg.authorAddress);
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
+
+  // Intersection-based read: observe this element only for messages from others.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || isMine || msg.isDeleted) return;
+    register(msg.id, el);
+    return () => unregister(msg.id, el);
+  }, [msg.id, isMine, msg.isDeleted, register, unregister]);
 
   const actionBar = (
     <Box
@@ -383,6 +400,7 @@ function MessageBubble({
 
   return (
     <Box
+      ref={rootRef}
       sx={{
         display: 'flex',
         alignItems: 'flex-end',
@@ -494,6 +512,14 @@ function MessageBubble({
               edited
             </Typography>
           )}
+          {isMine && SUPPORT_ADDRESSES.some((a) => readBy.has(a)) && (
+            <Typography
+              variant="caption"
+              sx={{ opacity: 0.45, fontSize: 10 }}
+            >
+              Seen
+            </Typography>
+          )}
         </Box>
       </Box>
 
@@ -540,6 +566,9 @@ export function SupportChat() {
     typingUsers,
     isReady,
     isClosed,
+    isAgentOnline,
+    readReceipts,
+    markMessagesRead,
     sendMessage,
     sendEdit,
     sendDelete,
@@ -553,6 +582,7 @@ export function SupportChat() {
   const [editTarget, setEditTarget] = useState<RenderedMessage | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const theme = useTheme();
 
@@ -575,6 +605,15 @@ export function SupportChat() {
   useLayoutEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingUsers]);
+
+  // Intersection-based read receipts: mark messages as read only when they
+  // actually enter the visible scroll area (true "eyes-on" confirmation).
+  const { register: registerRead, unregister: unregisterRead } = useMessageReadObserver(
+    myAddress,
+    readReceipts,
+    markMessagesRead,
+    scrollContainerRef
+  );
 
   // ── Compose mode helpers ────────────────────────────────────────────────────
 
@@ -603,7 +642,7 @@ export function SupportChat() {
 
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
-    if (!text || isSending) return;
+    if (!text || isSending || !isAgentOnline) return;
 
     // Capture and clear compose state before the async call so the UI resets immediately.
     const et = editTarget;
@@ -622,6 +661,7 @@ export function SupportChat() {
   }, [
     inputText,
     isSending,
+    isAgentOnline,
     editTarget,
     replyTarget,
     sendMessage,
@@ -765,6 +805,7 @@ export function SupportChat() {
 
       {/* ── Message list ────────────────────────────────────────────────── */}
       <Box
+        ref={scrollContainerRef}
         sx={{
           flex: 1,
           overflowY: 'auto',
@@ -844,6 +885,9 @@ export function SupportChat() {
             onEdit={handleStartEdit}
             onDelete={handleDelete}
             onReaction={handleReaction}
+            readBy={readReceipts.get(msg.id) ?? new Set<string>()}
+            register={registerRead}
+            unregister={unregisterRead}
           />
         ))}
 
@@ -914,6 +958,33 @@ export function SupportChat() {
       )}
 
       {/* ── Input row ───────────────────────────────────────────────────── */}
+      {isReady && !isAgentOnline && (
+        <Box
+          sx={{
+            px: 1.5,
+            py: 0.6,
+            borderTop: `1px solid ${borderColor}`,
+            backgroundColor: isDark
+              ? 'rgba(239,68,68,0.12)'
+              : 'rgba(239,68,68,0.08)',
+            flexShrink: 0,
+          }}
+        >
+          <Typography
+            variant="caption"
+            sx={{
+              display: 'block',
+              textAlign: 'center',
+              color: 'error.main',
+              fontWeight: 500,
+              lineHeight: 1.4,
+            }}
+          >
+            No support agents are online. Messaging is unavailable.
+          </Typography>
+        </Box>
+      )}
+
       <Box
         sx={{
           px: 1.5,
@@ -932,15 +1003,17 @@ export function SupportChat() {
           placeholder={
             !isReady
               ? 'Connecting…'
-              : editTarget
-                ? 'Edit message…'
-                : replyTarget
-                  ? `Reply to ${shortAddr(replyTarget.authorAddress)}…`
-                  : isClosed
-                    ? 'Send a message to re-open…'
-                    : 'Type a message…'
+              : !isAgentOnline
+                ? 'No agents online…'
+                : editTarget
+                  ? 'Edit message…'
+                  : replyTarget
+                    ? `Reply to ${shortAddr(replyTarget.authorAddress)}…`
+                    : isClosed
+                      ? 'Send a message to re-open…'
+                      : 'Type a message…'
           }
-          disabled={!isReady || !window.chat}
+          disabled={!isReady || !window.chat || !isAgentOnline}
           value={inputText}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
@@ -961,7 +1034,7 @@ export function SupportChat() {
         <IconButton
           size="small"
           onClick={handleSend}
-          disabled={!isReady || !inputText.trim() || isSending || !window.chat}
+          disabled={!isReady || !inputText.trim() || isSending || !window.chat || !isAgentOnline}
           color={editTarget ? 'warning' : 'primary'}
           sx={{ mb: 0.25, '&:disabled': { opacity: 0.35 } }}
         >
