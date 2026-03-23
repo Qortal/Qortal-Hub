@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type React from 'react';
 import { useAtomValue } from 'jotai';
 import { useMessageReadObserver } from '../../hooks/useMessageReadObserver';
 import {
@@ -46,6 +47,7 @@ import {
   SupportTicket,
 } from '../../hooks/useAgentSupportChat';
 import { useIsOnline } from '../../hooks/usePresence';
+import { decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -319,6 +321,106 @@ function EmojiPicker({
   );
 }
 
+// ── AttachmentImage ───────────────────────────────────────────────────────────
+
+function AttachmentImage({
+  eventId,
+  attachmentData,
+  senderPublicKey,
+  mimeType,
+  width,
+  height,
+  decryptCache,
+}: {
+  eventId: string;
+  attachmentData?: string;
+  senderPublicKey: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  decryptCache: React.MutableRefObject<Map<string, string>>;
+}) {
+  const [dataUri, setDataUri] = useState<string | null>(
+    decryptCache.current.get(eventId) ?? null
+  );
+  const [loading, setLoading] = useState(!decryptCache.current.has(eventId));
+
+  useEffect(() => {
+    if (decryptCache.current.has(eventId)) {
+      setDataUri(decryptCache.current.get(eventId)!);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const raw = attachmentData ?? (await window.chat?.getAttachment(eventId)) ?? null;
+        if (!raw || cancelled) { setLoading(false); return; }
+
+        // isAgent=true: agent decrypts messages sent by users
+        const decrypted = await decryptAttachmentFromSupport(raw, senderPublicKey, true);
+        if (!decrypted || cancelled) { setLoading(false); return; }
+
+        const uri = `data:${mimeType};base64,${decrypted}`;
+        decryptCache.current.set(eventId, uri);
+        if (!cancelled) setDataUri(uri);
+      } catch (err) {
+        console.error('[AttachmentImage] decrypt error', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  const aspectRatio = width && height ? `${width} / ${height}` : undefined;
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 240,
+          aspectRatio: aspectRatio ?? '4 / 3',
+          borderRadius: 1.5,
+          backgroundColor: 'rgba(128,128,128,0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          mt: 0.5,
+        }}
+      >
+        <CircularProgress size={20} />
+      </Box>
+    );
+  }
+
+  if (!dataUri) return null;
+
+  return (
+    <Box
+      component="img"
+      src={dataUri}
+      alt="attachment"
+      sx={{
+        display: 'block',
+        maxWidth: 240,
+        maxHeight: 320,
+        width: '100%',
+        borderRadius: 1.5,
+        mt: 0.5,
+        cursor: 'pointer',
+        objectFit: 'contain',
+      }}
+      onClick={() => window.open(dataUri, '_blank')}
+    />
+  );
+}
+
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({
@@ -334,6 +436,7 @@ function MessageBubble({
   onReaction,
   register,
   unregister,
+  decryptCache,
 }: {
   msg: RenderedMessage;
   isMine: boolean;
@@ -347,6 +450,7 @@ function MessageBubble({
   onReaction: (targetId: string, emoji: string) => void;
   register: (msgId: string, el: HTMLElement) => void;
   unregister: (msgId: string, el: HTMLElement) => void;
+  decryptCache: React.MutableRefObject<Map<string, string>>;
 }) {
   const theme = useTheme();
   const color = addrColor(msg.authorAddress);
@@ -470,6 +574,19 @@ function MessageBubble({
               {msg.content}
             </Typography>
           )}
+
+          {/* Attachment image */}
+          {!msg.isDeleted && msg.attachmentMeta && (
+            <AttachmentImage
+              eventId={msg.id}
+              attachmentData={msg.originalEvent?.attachmentData}
+              senderPublicKey={msg.authorPublicKey}
+              mimeType={msg.attachmentMeta.mimeType}
+              width={msg.attachmentMeta.width}
+              height={msg.attachmentMeta.height}
+              decryptCache={decryptCache}
+            />
+          )}
         </Box>
         <Box sx={{ px: 0.5 }}>
           <ReactionChips
@@ -570,6 +687,7 @@ export function AgentSupportDashboard() {
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const decryptCache = useRef<Map<string, string>>(new Map());
   const theme = useTheme();
 
   const messageMap = useMemo(
@@ -1075,6 +1193,7 @@ export function AgentSupportDashboard() {
               onReaction={handleReaction}
               register={registerRead}
               unregister={unregisterRead}
+              decryptCache={decryptCache}
             />
           ))}
 

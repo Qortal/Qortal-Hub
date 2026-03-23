@@ -466,6 +466,15 @@ try {
       ipcRenderer.invoke('chat:getReadReceipts', chatId, eventIds),
 
     /**
+     * Fetch the encrypted attachment blob for an event.
+     * Returns the base64 ciphertext string, or null if not locally available.
+     * Used for lazy-loading history images that were not included in
+     * getHistory results (attachment data is kept in a separate table).
+     */
+    getAttachment: async (eventId: string) =>
+      ipcRenderer.invoke('chat:getAttachment', eventId),
+
+    /**
      * Subscribe to incoming read receipt events.
      * `cb` receives `{ chatId, readerAddress, eventIds }`.
      * Returns an unsubscribe function.

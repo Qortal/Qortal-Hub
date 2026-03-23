@@ -168,6 +168,10 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
       const chatId = `support:${authorAddress}`;
 
       // Dedup: ignore if we already have a ticket for this user.
+      // Check the ref directly — it is updated eagerly below so that
+      // multiple knock events arriving synchronously (e.g. during a
+      // history replay) all see the correct, up-to-date list rather
+      // than a stale snapshot that hasn't been re-rendered yet.
       if (ticketsRef.current.some((t) => t.userAddress === authorAddress)) return;
 
       // Subscribe to the user's private channel so events accumulate.
@@ -182,7 +186,11 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
         isBlocked: false,
       };
 
-      setTickets((prev) => [...prev, ticket]);
+      // Eagerly update the ref so the dedup check above is correct for
+      // any subsequent events that fire synchronously in this same task
+      // (before React has had a chance to re-render and sync the ref).
+      ticketsRef.current = [...ticketsRef.current, ticket];
+      setTickets(ticketsRef.current);
 
       // Auto-select the first ticket if none is active.
       setActiveTicket((prev) => prev ?? chatId);
@@ -291,6 +299,16 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
           // Always use the ticket user's public key as the key anchor —
           // NOT msg.authorPublicKey — because the shared secret is keyed to
           // the user, not whichever account sent a given message.
+
+          // Image-only messages have an empty content field — skip decryption.
+          if (!msg.content && msg.attachmentMeta) {
+            const reactions = await decryptReactions(msg.reactions);
+            if (cancelled) return;
+            cache.set(cacheKey, '');
+            results.push({ ...msg, content: '', reactions });
+            continue;
+          }
+
           const decrypted = await decryptFromUser(msg.content, userPubKey);
           if (cancelled) return;
 

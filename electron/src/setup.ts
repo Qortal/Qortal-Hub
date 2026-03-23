@@ -1721,3 +1721,15 @@ ipcMain.on('chat:read:subscribe', (event) => {
 ipcMain.on('chat:read:unsubscribe', (event) => {
   chatReadSubscribers.delete(event.sender);
 });
+
+/**
+ * Fetch the encrypted attachment blob for a given event.
+ * Returns the base64 ciphertext string, or null when the attachment is not
+ * present locally (event was received via sync without attachment data).
+ */
+ipcMain.handle('chat:getAttachment', async (_event, eventId: string) => {
+  const cm = getChatManager();
+  if (!cm) return null;
+  if (typeof eventId !== 'string' || !eventId) return null;
+  return cm.store.getAttachment(eventId);
+});

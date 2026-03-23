@@ -69,6 +69,8 @@ import {
   signPresenceMessageCase,
   encryptSupportMessageCase,
   decryptSupportMessageCase,
+  encryptSupportAttachmentCase,
+  decryptSupportAttachmentCase,
   getTempPublishCase,
   getThreadActivityCase,
   getTimestampEnterChatCase,
@@ -3377,6 +3379,12 @@ function setupMessageListener() {
         break;
       case 'decryptSupportMessage':
         decryptSupportMessageCase(request, event);
+        break;
+      case 'encryptSupportAttachment':
+        encryptSupportAttachmentCase(request, event);
+        break;
+      case 'decryptSupportAttachment':
+        decryptSupportAttachmentCase(request, event);
         break;
       case 'removeRewardShare':
         removeRewardShareCase(request, event);

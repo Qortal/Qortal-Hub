@@ -41,6 +41,9 @@ import { ChatDatabase } from './chat-db';
 /** Maximum UTF-8 bytes for the content field. */
 const CHAT_MAX_CONTENT_BYTES = 10_000;
 
+/** Maximum byte size for an encrypted image attachment. */
+const CHAT_MAX_ATTACHMENT_BYTES = 512 * 1024;
+
 /**
  * Qortal addresses of all authorised support agents.
  * Must be kept in sync with the renderer-side constant in SupportChat.tsx.
@@ -92,6 +95,23 @@ export const CHAT_MESSAGE_TYPES = new Set<string>([
 export type ChatEventType = 'message' | 'edit' | 'delete' | 'reaction';
 
 /**
+ * Cleartext metadata for an image attachment.
+ * Included in the event signature so recipients can verify it was not tampered with.
+ */
+export interface AttachmentMeta {
+  /** MIME type of the compressed image, e.g. "image/webp" or "image/gif". */
+  mimeType: string;
+  /** Original filename, if available. */
+  filename?: string;
+  /** Image width in pixels. */
+  width?: number;
+  /** Image height in pixels. */
+  height?: number;
+  /** Byte length of the encrypted attachment data. */
+  sizeBytes: number;
+}
+
+/**
  * An immutable, signed chat event — the atomic unit of the protocol.
  * Everything in the chat system (messages, edits, deletes, reactions) is a
  * ChatEvent. Events are never mutated; edit/delete/reaction produce new events
@@ -124,6 +144,25 @@ export interface ChatEvent {
   replyTo?: string;
   /** For edit / delete / reaction: id of the target ChatEvent. */
   targetId?: string;
+  /**
+   * Cleartext image attachment metadata.
+   * Present on message events that carry an image.
+   * Included in the event signature.
+   */
+  attachmentMeta?: AttachmentMeta;
+  /**
+   * SHA-256 hex digest of the encrypted attachment bytes.
+   * Included in the event signature so the attachment blob can be verified
+   * without signing the entire (potentially large) base64 string.
+   */
+  attachmentDataHash?: string;
+  /**
+   * Base64-encoded nacl.secretbox ciphertext of the compressed image.
+   * Wire format: base64(nonce[24] || secretbox_output).
+   * NOT included in the event signature — covered by attachmentDataHash.
+   * Absent when events are loaded from history (kept in chat_attachments table).
+   */
+  attachmentData?: string;
   /** Base58-encoded Ed25519 detached signature of the canonical signed data. */
   signature: string;
 }
@@ -234,6 +273,8 @@ function buildChatSignedData(event: ChatEvent): Record<string, unknown> {
   };
   if (event.replyTo !== undefined) base['replyTo'] = event.replyTo;
   if (event.targetId !== undefined) base['targetId'] = event.targetId;
+  if (event.attachmentMeta !== undefined) base['attachmentMeta'] = event.attachmentMeta;
+  if (event.attachmentDataHash !== undefined) base['attachmentDataHash'] = event.attachmentDataHash;
   return base;
 }
 
@@ -375,6 +416,41 @@ function validateChatEvent(event: ChatEvent, now: number): ValidationResult {
   // 5. Content size
   if (Buffer.byteLength(event.content, 'utf8') > CHAT_MAX_CONTENT_BYTES) {
     return { ok: false, reason: 'content exceeds 10 KB limit' };
+  }
+
+  // 5a. Attachment validation (when present)
+  if (event.attachmentMeta !== undefined || event.attachmentData !== undefined || event.attachmentDataHash !== undefined) {
+    // All three must be present together (or all absent).
+    if (!event.attachmentMeta || !event.attachmentDataHash) {
+      return { ok: false, reason: 'partial attachment fields: attachmentMeta and attachmentDataHash required together' };
+    }
+    // sizeBytes must be within limit.
+    if (
+      typeof event.attachmentMeta.sizeBytes !== 'number' ||
+      event.attachmentMeta.sizeBytes <= 0 ||
+      event.attachmentMeta.sizeBytes > CHAT_MAX_ATTACHMENT_BYTES
+    ) {
+      return { ok: false, reason: `attachment sizeBytes exceeds ${CHAT_MAX_ATTACHMENT_BYTES} byte limit` };
+    }
+    // mimeType must be a non-empty string.
+    if (typeof event.attachmentMeta.mimeType !== 'string' || !event.attachmentMeta.mimeType) {
+      return { ok: false, reason: 'attachment mimeType missing' };
+    }
+    // attachmentDataHash must be a 64-char hex string (SHA-256).
+    if (typeof event.attachmentDataHash !== 'string' || !/^[0-9a-f]{64}$/.test(event.attachmentDataHash)) {
+      return { ok: false, reason: 'attachmentDataHash must be a 64-char hex SHA-256' };
+    }
+    // If attachmentData is present, verify its hash matches attachmentDataHash.
+    if (event.attachmentData !== undefined) {
+      if (typeof event.attachmentData !== 'string' || !event.attachmentData) {
+        return { ok: false, reason: 'attachmentData must be a non-empty string' };
+      }
+      const dataBytes = Buffer.from(event.attachmentData, 'base64');
+      const hashHex = nodeCrypto.createHash('sha256').update(dataBytes).digest('hex');
+      if (hashHex !== event.attachmentDataHash) {
+        return { ok: false, reason: 'attachmentData SHA-256 does not match attachmentDataHash' };
+      }
+    }
   }
 
   // 6. For DMs: author must be one of the two participants.

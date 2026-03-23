@@ -91,6 +91,37 @@ async function encryptForSupport(
   return result.encryptedData as string;
 }
 
+async function encryptAttachmentForSupport(
+  data: string,
+  recipientPublicKey?: string
+): Promise<string> {
+  const result = await (window as any).sendMessage(
+    'encryptSupportAttachment',
+    { data, ...(recipientPublicKey ? { recipientPublicKey } : {}) },
+    30_000
+  );
+  if (result?.error) throw new Error(String(result.error));
+  if (typeof result?.encryptedData !== 'string') {
+    throw new Error('encryptSupportAttachment returned no encryptedData');
+  }
+  return result.encryptedData as string;
+}
+
+export async function decryptAttachmentFromSupport(
+  data: string,
+  senderPublicKey: string,
+  isAgent?: boolean
+): Promise<string | null> {
+  const result = await (window as any).sendMessage(
+    'decryptSupportAttachment',
+    { data, senderPublicKey, ...(isAgent ? { isAgent } : {}) },
+    30_000
+  );
+  if (result?.error) return null;
+  if (typeof result?.decryptedData !== 'string') return null;
+  return result.decryptedData as string;
+}
+
 async function decryptFromSupport(
   encryptedData: string,
   senderPublicKey: string
@@ -116,6 +147,11 @@ export interface UseSupportChatReturn extends UseP2PChatReturn {
   isClosed: boolean;
   /** True when at least one support agent is currently online. */
   isAgentOnline: boolean;
+  /**
+   * Compress, encrypt, and send an image file as an attachment.
+   * Handles Compressor.js compression, encryption, SHA-256 hash, and dispatch.
+   */
+  sendImage: (file: File, caption?: string) => Promise<void>;
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
@@ -364,6 +400,17 @@ export function useSupportChat(): UseSupportChatReturn {
 
         // Decrypt fresh.
         try {
+          // Image-only messages have an empty content field (no encrypted caption).
+          // Skip decryption to avoid the '[encrypted]' fallback.
+          if (!msg.content && msg.attachmentMeta) {
+            const reactions = await decryptReactions(msg.reactions);
+            if (cancelled) return;
+            cache.set(cacheKey, '');
+            if (msg.timestamp > lastActivityAt) lastActivityAt = msg.timestamp;
+            results.push({ ...msg, content: '', reactions });
+            continue;
+          }
+
           const decrypted = await decryptFromSupport(
             msg.content,
             msg.authorPublicKey
@@ -463,6 +510,83 @@ export function useSupportChat(): UseSupportChatReturn {
     [inner.sendReaction]
   );
 
+  const sendImage = useCallback(
+    async (file: File, caption?: string): Promise<void> => {
+      // Step 1: compress using Compressor.js (same settings as ImageUploader).
+      let compressedFile: File;
+      if (file.type === 'image/gif') {
+        if (file.size > 512 * 1024) {
+          console.error('[useSupportChat] GIF exceeds 512 KB limit');
+          return;
+        }
+        compressedFile = file;
+      } else {
+        const Compressor = (await import('compressorjs')).default;
+        compressedFile = await new Promise<File>((resolve, reject) => {
+          new Compressor(file, {
+            quality: 0.6,
+            maxWidth: 1200,
+            mimeType: 'image/webp',
+            success(result) {
+              resolve(new File([result], file.name, { type: 'image/webp' }));
+            },
+            error: reject,
+          });
+        });
+      }
+
+      // Step 2: read dimensions and raw bytes.
+      const [arrayBuffer, dimensions] = await Promise.all([
+        compressedFile.arrayBuffer(),
+        new Promise<{ width: number; height: number }>((resolve) => {
+          const url = URL.createObjectURL(compressedFile);
+          const img = new Image();
+          img.onload = () => {
+            URL.revokeObjectURL(url);
+            resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          };
+          img.onerror = () => {
+            URL.revokeObjectURL(url);
+            resolve({ width: 0, height: 0 });
+          };
+          img.src = url;
+        }),
+      ]);
+
+      // Step 3: base64-encode raw image bytes.
+      const rawBytes = new Uint8Array(arrayBuffer);
+      let rawBinary = '';
+      for (let i = 0; i < rawBytes.length; i++) {
+        rawBinary += String.fromCharCode(rawBytes[i]);
+      }
+      const rawBase64 = btoa(rawBinary);
+
+      // Step 4: encrypt via the support attachment case.
+      const encryptedData = await encryptAttachmentForSupport(rawBase64);
+
+      // Step 5: SHA-256 hash of the encrypted bytes for signature integrity.
+      const encBytes = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0));
+      const hashBuf = await crypto.subtle.digest('SHA-256', encBytes);
+      const hashArray = Array.from(new Uint8Array(hashBuf));
+      const attachmentDataHash = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+
+      // Step 6: dispatch via the underlying useP2PChat sendImageData.
+      await inner.sendImageData({
+        attachmentData: encryptedData,
+        attachmentDataHash,
+        attachmentMeta: {
+          mimeType: compressedFile.type,
+          filename: file.name,
+          width: dimensions.width,
+          height: dimensions.height,
+          sizeBytes: encBytes.length,
+        },
+        caption,
+      });
+    },
+    [inner.sendImageData]
+  );
+
   return {
     ...inner,
     messages: decryptedMessages,
@@ -472,5 +596,6 @@ export function useSupportChat(): UseSupportChatReturn {
     sendEdit,
     sendReply,
     sendReaction,
+    sendImage,
   };
 }

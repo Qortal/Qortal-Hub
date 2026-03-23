@@ -125,6 +125,13 @@ declare global {
       getSubscriptions: () => Promise<string[]>;
 
       /**
+       * Fetch the encrypted attachment blob for an event.
+       * Returns the base64 ciphertext string, or null if not available locally.
+       * Use for lazy-loading images in history that did not travel with the event.
+       */
+      getAttachment: (eventId: string) => Promise<string | null>;
+
+      /**
        * Subscribe to incoming chat events.
        * Returns an unsubscribe function.
        */
@@ -174,6 +181,18 @@ declare global {
 
   // ── P2P Chat shared types ──────────────────────────────────────────────────
 
+  /**
+   * Cleartext metadata for an image attachment.
+   * Mirrors electron/src/chat.ts AttachmentMeta.
+   */
+  interface AttachmentMeta {
+    mimeType: string;
+    filename?: string;
+    width?: number;
+    height?: number;
+    sizeBytes: number;
+  }
+
   interface P2PChatEvent {
     /** UUID, assigned by the renderer and included in the signature. */
     id: string;
@@ -194,6 +213,16 @@ declare global {
     content: string;
     replyTo?: string;
     targetId?: string;
+    /** Cleartext image attachment metadata — included in the signature. */
+    attachmentMeta?: AttachmentMeta;
+    /** SHA-256 hex digest of the encrypted attachment bytes — included in the signature. */
+    attachmentDataHash?: string;
+    /**
+     * Base64-encoded encrypted attachment blob.
+     * Present on live events received from the network.
+     * Absent on history events (fetched on demand via window.chat.getAttachment).
+     */
+    attachmentData?: string;
     /** Base58 Ed25519 detached signature. */
     signature: string;
   }
@@ -222,6 +251,8 @@ declare global {
     reactions: Record<string, string[]>;
     /** The raw original 'message' event, for reference. */
     originalEvent: P2PChatEvent;
+    /** Attachment metadata when this message carries an image. */
+    attachmentMeta?: AttachmentMeta;
   }
 
   // ── Presence shared types ──────────────────────────────────────────────────

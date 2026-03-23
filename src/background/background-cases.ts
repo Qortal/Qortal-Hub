@@ -2393,3 +2393,159 @@ export async function decryptSupportMessageCase(request, event) {
     );
   }
 }
+
+// ── Support Chat attachment encryption ────────────────────────────────────────
+//
+// Same ECDH key-derivation and nacl.secretbox scheme as the support message
+// cases above, but operates on raw binary data (base64-encoded image bytes)
+// rather than UTF-8 text.  This allows the same shared key to protect both
+// text messages and image attachments without any key management overhead.
+
+/**
+ * Encrypts a raw image attachment for the support channel.
+ *
+ * User mode (isAgent not set):
+ *   sharedKey = ECDH( userPrivKey, SUPPORT_PUBLIC_KEY )
+ *
+ * Agent mode (isAgent: true AND recipientPublicKey provided):
+ *   sharedKey = ECDH( SUPPORT_PRIVATE_KEY, recipientPublicKey )
+ *
+ * Wire format: base64( nonce[24] || nacl.secretbox_ciphertext )
+ *
+ * Expected request.payload:
+ *   { data: string (base64-encoded raw image bytes), isAgent?, recipientPublicKey? }
+ *
+ * Returns: { encryptedData: string (base64 ciphertext) }
+ */
+export async function encryptSupportAttachmentCase(request, event) {
+  try {
+    const { data, isAgent, recipientPublicKey } = request.payload as {
+      data: string;
+      isAgent?: boolean;
+      recipientPublicKey?: string;
+    };
+
+    let encKey: Uint8Array;
+
+    if (isAgent && recipientPublicKey) {
+      const supportPrivBytes = Base58.decode(SUPPORT_PRIVATE_KEY);
+      const recipientPubBytes = Base58.decode(recipientPublicKey);
+      encKey = deriveSupportSharedKey(supportPrivBytes, recipientPubBytes);
+    } else {
+      const resKeyPair = await getKeyPair();
+      const userPrivBytes = Base58.decode(resKeyPair.privateKey);
+      const supportPubBytes = Base58.decode(SUPPORT_PUBLIC_KEY);
+      encKey = deriveSupportSharedKey(userPrivBytes, supportPubBytes);
+    }
+
+    // Decode the base64 image bytes to raw bytes for encryption.
+    const decoded = atob(data);
+    const imageBytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < decoded.length; i++) {
+      imageBytes[i] = decoded.charCodeAt(i);
+    }
+
+    const nonce = nacl.randomBytes(24);
+    const ciphertext = nacl.secretbox(imageBytes, nonce, encKey);
+
+    const combined = new Uint8Array(24 + ciphertext.length);
+    combined.set(nonce, 0);
+    combined.set(ciphertext, 24);
+    const encryptedData = uint8ToBase64(combined);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'encryptSupportAttachment',
+        payload: { encryptedData },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'encryptSupportAttachment',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+/**
+ * Decrypts an encrypted support-channel attachment.
+ *
+ * User mode (isAgent not set):
+ *   sharedKey = ECDH( userPrivKey, SUPPORT_PUBLIC_KEY )
+ *
+ * Agent mode (isAgent: true):
+ *   sharedKey = ECDH( SUPPORT_PRIVATE_KEY, senderPublicKey )
+ *
+ * Expected request.payload:
+ *   { data: string (base64 ciphertext), senderPublicKey: string, isAgent?: boolean }
+ *
+ * Returns: { decryptedData: string (base64-encoded raw image bytes) }
+ */
+export async function decryptSupportAttachmentCase(request, event) {
+  try {
+    const { data, senderPublicKey, isAgent } = request.payload as {
+      data: string;
+      senderPublicKey: string;
+      isAgent?: boolean;
+    };
+
+    let encKey: Uint8Array;
+
+    if (isAgent) {
+      const supportPrivBytes = Base58.decode(SUPPORT_PRIVATE_KEY);
+      const senderPubBytes = Base58.decode(senderPublicKey);
+      encKey = deriveSupportSharedKey(supportPrivBytes, senderPubBytes);
+    } else {
+      const resKeyPair = await getKeyPair();
+      const userPrivBytes = Base58.decode(resKeyPair.privateKey);
+      const supportPubBytes = Base58.decode(SUPPORT_PUBLIC_KEY);
+      encKey = deriveSupportSharedKey(userPrivBytes, supportPubBytes);
+    }
+
+    // Decode wire format: nonce[0:24] || ciphertext[24:]
+    const decoded = atob(data);
+    const bytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < decoded.length; i++) {
+      bytes[i] = decoded.charCodeAt(i);
+    }
+
+    const nonce = bytes.slice(0, 24);
+    const ciphertext = bytes.slice(24);
+
+    const decryptedBytes = nacl.secretbox.open(ciphertext, nonce, encKey);
+    if (!decryptedBytes) {
+      throw new Error('Decryption failed: authentication tag mismatch');
+    }
+
+    // Return decrypted image bytes as base64 so the renderer can build a data URI.
+    const decryptedData = uint8ToBase64(decryptedBytes);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptSupportAttachment',
+        payload: { decryptedData },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptSupportAttachment',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}

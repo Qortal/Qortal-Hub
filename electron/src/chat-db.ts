@@ -47,6 +47,8 @@ interface EventRow {
   reply_to: string | null;
   target_id: string | null;
   signature: string;
+  attachment_meta: string | null;
+  attachment_data_hash: string | null;
 }
 
 function rowToEvent(r: EventRow): ChatEvent {
@@ -63,6 +65,16 @@ function rowToEvent(r: EventRow): ChatEvent {
   };
   if (r.reply_to != null) ev.replyTo = r.reply_to;
   if (r.target_id != null) ev.targetId = r.target_id;
+  if (r.attachment_meta != null) {
+    try {
+      ev.attachmentMeta = JSON.parse(r.attachment_meta);
+    } catch {
+      // Malformed JSON — skip gracefully
+    }
+  }
+  if (r.attachment_data_hash != null) ev.attachmentDataHash = r.attachment_data_hash;
+  // attachmentData is intentionally NOT populated from history rows —
+  // it lives in the chat_attachments table and is fetched on demand.
   return ev;
 }
 
@@ -111,6 +123,9 @@ export class ChatDatabase {
   private stmtUpsertReceipt: Statement;
   private stmtGetReceiptsByReader: Statement;
   private stmtHasEvent: Statement;
+  private stmtInsertAttachment: Statement;
+  private stmtGetAttachment: Statement;
+  private stmtTrimAttachments: Statement;
 
   constructor(dbPath: string) {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -128,10 +143,12 @@ export class ChatDatabase {
     this.stmtInsert = this.db.prepare(`
       INSERT OR IGNORE INTO chat_events
         (id, chat_id, event_type, author_address, author_pub_key,
-         seq, timestamp, content, reply_to, target_id, signature)
+         seq, timestamp, content, reply_to, target_id, signature,
+         attachment_meta, attachment_data_hash)
       VALUES
         (@id, @chat_id, @event_type, @author_address, @author_pub_key,
-         @seq, @timestamp, @content, @reply_to, @target_id, @signature)
+         @seq, @timestamp, @content, @reply_to, @target_id, @signature,
+         @attachment_meta, @attachment_data_hash)
     `);
     this.stmtCountForChat = this.db.prepare(
       'SELECT COUNT(*) AS cnt FROM chat_events WHERE chat_id = ?'
@@ -219,22 +236,38 @@ export class ChatDatabase {
     this.stmtHasEvent = this.db.prepare(
       'SELECT 1 FROM chat_events WHERE id = ? LIMIT 1'
     );
+    this.stmtInsertAttachment = this.db.prepare(`
+      INSERT OR IGNORE INTO chat_attachments (event_id, chat_id, data)
+      VALUES (?, ?, ?)
+    `);
+    this.stmtGetAttachment = this.db.prepare(
+      'SELECT data FROM chat_attachments WHERE event_id = ? LIMIT 1'
+    );
+    // Cascade-trim: removes attachment blobs for events purged from chat_events.
+    // Runs in the same transaction as stmtTrimOldest so no orphaned blobs remain.
+    this.stmtTrimAttachments = this.db.prepare(`
+      DELETE FROM chat_attachments
+      WHERE chat_id = ?
+        AND event_id NOT IN (SELECT id FROM chat_events WHERE chat_id = ?)
+    `);
   }
 
   private initSchema(): void {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS chat_events (
-        id             TEXT PRIMARY KEY,
-        chat_id        TEXT NOT NULL,
-        event_type     TEXT NOT NULL,
-        author_address TEXT NOT NULL,
-        author_pub_key TEXT NOT NULL,
-        seq            INTEGER NOT NULL,
-        timestamp      INTEGER NOT NULL,
-        content        TEXT NOT NULL,
-        reply_to       TEXT,
-        target_id      TEXT,
-        signature      TEXT NOT NULL
+        id                  TEXT PRIMARY KEY,
+        chat_id             TEXT NOT NULL,
+        event_type          TEXT NOT NULL,
+        author_address      TEXT NOT NULL,
+        author_pub_key      TEXT NOT NULL,
+        seq                 INTEGER NOT NULL,
+        timestamp           INTEGER NOT NULL,
+        content             TEXT NOT NULL,
+        reply_to            TEXT,
+        target_id           TEXT,
+        signature           TEXT NOT NULL,
+        attachment_meta     TEXT,
+        attachment_data_hash TEXT
       );
 
       -- Primary read path: getEvents(chatId, limit, beforeTimestamp)
@@ -268,6 +301,18 @@ export class ChatDatabase {
       CREATE INDEX IF NOT EXISTS idx_read_receipts_chat_reader
         ON read_receipts(chat_id, reader_address);
 
+      -- Image attachment blobs stored separately from events so that all
+      -- event queries remain lean (no accidental large blob loads).
+      -- Trimmed in the same transaction as chat_events rows.
+      CREATE TABLE IF NOT EXISTS chat_attachments (
+        event_id TEXT PRIMARY KEY,
+        chat_id  TEXT NOT NULL,
+        data     TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_attachments_chat
+        ON chat_attachments(chat_id);
+
       -- Discovered peers — written by p2p-network.ts, schema defined here
       -- so the table exists whether or not p2p-network opens the DB first.
       CREATE TABLE IF NOT EXISTS discovered_peers (
@@ -276,6 +321,23 @@ export class ChatDatabase {
         source        TEXT NOT NULL
       );
     `);
+
+    // Migration: add attachment columns to pre-existing databases that were
+    // created before this schema version.
+    this.runMigrations();
+  }
+
+  private runMigrations(): void {
+    const existingCols = (
+      this.db.prepare('PRAGMA table_info(chat_events)').all() as { name: string }[]
+    ).map((r) => r.name);
+
+    if (!existingCols.includes('attachment_meta')) {
+      this.db.exec('ALTER TABLE chat_events ADD COLUMN attachment_meta TEXT');
+    }
+    if (!existingCols.includes('attachment_data_hash')) {
+      this.db.exec('ALTER TABLE chat_events ADD COLUMN attachment_data_hash TEXT');
+    }
   }
 
   /**
@@ -370,6 +432,8 @@ export class ChatDatabase {
       reply_to: event.replyTo ?? null,
       target_id: event.targetId ?? null,
       signature: event.signature,
+      attachment_meta: event.attachmentMeta ? JSON.stringify(event.attachmentMeta) : null,
+      attachment_data_hash: event.attachmentDataHash ?? null,
     };
 
     // Persist idempotently. Trim only when this instance is the first to write
@@ -377,13 +441,18 @@ export class ChatDatabase {
     const insertAndTrim = this.db.transaction(() => {
       const info = this.stmtInsert.run(row);
       if (info.changes > 0) {
+        // Store attachment blob in the separate table if present.
+        if (event.attachmentData) {
+          this.stmtInsertAttachment.run(event.id, event.chatId, event.attachmentData);
+        }
         const { cnt } = this.stmtCountForChat.get(event.chatId) as {
           cnt: number;
         };
         if (cnt > CHAT_MAX_EVENTS_PER_CHAT) {
           this.stmtTrimOldest.run(event.chatId, event.chatId);
-          // Cascade: remove receipts for events that were just purged.
+          // Cascade: remove receipts and attachments for events that were just purged.
           this.stmtTrimReceipts.run(event.chatId, event.chatId);
+          this.stmtTrimAttachments.run(event.chatId, event.chatId);
         }
       }
     });
@@ -421,8 +490,13 @@ export class ChatDatabase {
           reply_to: event.replyTo ?? null,
           target_id: event.targetId ?? null,
           signature: event.signature,
+          attachment_meta: event.attachmentMeta ? JSON.stringify(event.attachmentMeta) : null,
+          attachment_data_hash: event.attachmentDataHash ?? null,
         };
         this.stmtInsert.run(row); // idempotent INSERT OR IGNORE
+        if (event.attachmentData) {
+          this.stmtInsertAttachment.run(event.id, event.chatId, event.attachmentData);
+        }
         this.updateSyncStateIncremental(event.chatId, event.authorAddress, event.seq);
       }
       // Trim all affected chats once at the end
@@ -431,8 +505,9 @@ export class ChatDatabase {
         const { cnt } = this.stmtCountForChat.get(chatId) as { cnt: number };
         if (cnt > CHAT_MAX_EVENTS_PER_CHAT) {
           this.stmtTrimOldest.run(chatId, chatId);
-          // Cascade: remove receipts for events that were just purged.
+          // Cascade: remove receipts and attachments for events that were just purged.
           this.stmtTrimReceipts.run(chatId, chatId);
+          this.stmtTrimAttachments.run(chatId, chatId);
         }
       }
     });
@@ -616,6 +691,26 @@ export class ChatDatabase {
    */
   hasEvent(id: string): boolean {
     return !!this.stmtHasEvent.get(id);
+  }
+
+  /**
+   * Store an encrypted attachment blob for a given event.
+   * Idempotent — INSERT OR IGNORE means first write wins.
+   * Called from insert() / insertBatch() for events that carry attachmentData.
+   * Also callable directly for deferred attachment storage.
+   */
+  insertAttachment(eventId: string, chatId: string, data: string): void {
+    this.stmtInsertAttachment.run(eventId, chatId, data);
+  }
+
+  /**
+   * Fetch the encrypted attachment blob for an event.
+   * Returns null when no attachment exists (history event without data,
+   * or the blob was never received).
+   */
+  getAttachment(eventId: string): string | null {
+    const row = this.stmtGetAttachment.get(eventId) as { data: string } | undefined;
+    return row?.data ?? null;
   }
 
   /**

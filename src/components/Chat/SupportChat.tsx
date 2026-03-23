@@ -31,9 +31,11 @@ import EmojiEmotionsRoundedIcon from '@mui/icons-material/EmojiEmotionsRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import AttachFileRoundedIcon from '@mui/icons-material/AttachFileRounded';
 import { userInfoAtom } from '../../atoms/global';
-import { useSupportChat, SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
+import { useSupportChat, SUPPORT_ADDRESSES, decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
 import { useIsOnline } from '../../hooks/usePresence';
+import ImageUploader from '../../common/ImageUploader';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -304,6 +306,114 @@ function EmojiPicker({
   );
 }
 
+// ── AttachmentImage ───────────────────────────────────────────────────────────
+
+/**
+ * Renders an encrypted image attachment.
+ *
+ * Live messages: attachmentData is present on the event — decrypt immediately.
+ * History messages: fetch via window.chat.getAttachment(), then decrypt.
+ * Results are cached in a shared ref so re-renders never re-decrypt.
+ */
+function AttachmentImage({
+  eventId,
+  attachmentData,
+  senderPublicKey,
+  mimeType,
+  width,
+  height,
+  isAgent,
+  decryptCache,
+}: {
+  eventId: string;
+  attachmentData?: string;
+  senderPublicKey: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  isAgent?: boolean;
+  decryptCache: React.MutableRefObject<Map<string, string>>;
+}) {
+  const [dataUri, setDataUri] = useState<string | null>(
+    decryptCache.current.get(eventId) ?? null
+  );
+  const [loading, setLoading] = useState(!decryptCache.current.has(eventId));
+
+  useEffect(() => {
+    if (decryptCache.current.has(eventId)) {
+      setDataUri(decryptCache.current.get(eventId)!);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const raw = attachmentData ?? (await window.chat?.getAttachment(eventId)) ?? null;
+        if (!raw || cancelled) { setLoading(false); return; }
+
+        const decrypted = await decryptAttachmentFromSupport(raw, senderPublicKey, isAgent);
+        if (!decrypted || cancelled) { setLoading(false); return; }
+
+        const uri = `data:${mimeType};base64,${decrypted}`;
+        decryptCache.current.set(eventId, uri);
+        if (!cancelled) setDataUri(uri);
+      } catch (err) {
+        console.error('[AttachmentImage] decrypt error', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
+
+  const aspectRatio = width && height ? `${width} / ${height}` : undefined;
+
+  if (loading) {
+    return (
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: 240,
+          aspectRatio: aspectRatio ?? '4 / 3',
+          borderRadius: 1.5,
+          backgroundColor: 'rgba(128,128,128,0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          mt: 0.5,
+        }}
+      >
+        <CircularProgress size={20} />
+      </Box>
+    );
+  }
+
+  if (!dataUri) return null;
+
+  return (
+    <Box
+      component="img"
+      src={dataUri}
+      alt="attachment"
+      sx={{
+        display: 'block',
+        maxWidth: 240,
+        maxHeight: 320,
+        width: '100%',
+        borderRadius: 1.5,
+        mt: 0.5,
+        cursor: 'pointer',
+        objectFit: 'contain',
+      }}
+      onClick={() => window.open(dataUri, '_blank')}
+    />
+  );
+}
+
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({
@@ -318,6 +428,8 @@ function MessageBubble({
   readBy,
   register,
   unregister,
+  isAgent,
+  decryptCache,
 }: {
   msg: RenderedMessage;
   isMine: boolean;
@@ -331,6 +443,8 @@ function MessageBubble({
   readBy: Set<string>;
   register: (msgId: string, el: HTMLElement) => void;
   unregister: (msgId: string, el: HTMLElement) => void;
+  isAgent: boolean;
+  decryptCache: React.MutableRefObject<Map<string, string>>;
 }) {
   const theme = useTheme();
   const color = addrColor(msg.authorAddress);
@@ -479,6 +593,20 @@ function MessageBubble({
               {msg.content}
             </Typography>
           )}
+
+          {/* Attachment image */}
+          {!msg.isDeleted && msg.attachmentMeta && (
+            <AttachmentImage
+              eventId={msg.id}
+              attachmentData={msg.originalEvent.attachmentData}
+              senderPublicKey={msg.authorPublicKey}
+              mimeType={msg.attachmentMeta.mimeType}
+              width={msg.attachmentMeta.width}
+              height={msg.attachmentMeta.height}
+              isAgent={isAgent}
+              decryptCache={decryptCache}
+            />
+          )}
         </Box>
 
         {/* Reactions row */}
@@ -575,7 +703,13 @@ export function SupportChat() {
     sendReaction,
     sendReply,
     notifyTyping,
+    sendImage,
   } = useSupportChat();
+
+  const isAgent = SUPPORT_ADDRESSES.includes(myAddress as typeof SUPPORT_ADDRESSES[number]);
+
+  /** Decrypted data URI cache: eventId → data URI. Prevents re-decryption on re-renders. */
+  const decryptCache = useRef<Map<string, string>>(new Map());
 
   const [inputText, setInputText] = useState('');
   const [replyTarget, setReplyTarget] = useState<RenderedMessage | null>(null);
@@ -888,6 +1022,8 @@ export function SupportChat() {
             readBy={readReceipts.get(msg.id) ?? new Set<string>()}
             register={registerRead}
             unregister={unregisterRead}
+            isAgent={isAgent}
+            decryptCache={decryptCache}
           />
         ))}
 
@@ -1044,6 +1180,30 @@ export function SupportChat() {
             <SendRoundedIcon fontSize="small" />
           )}
         </IconButton>
+
+        {/* Image attachment button — hidden in edit mode since edits are text-only */}
+        {!editTarget && (
+          <Tooltip title="Send image">
+            <span>
+              <ImageUploader
+                onPick={(file) => {
+                  if (!isReady || !isAgentOnline || isSending) return;
+                  sendImage(file).catch((err) =>
+                    console.error('[SupportChat] sendImage error', err)
+                  );
+                }}
+              >
+                <IconButton
+                  size="small"
+                  disabled={!isReady || isSending || !window.chat || !isAgentOnline}
+                  sx={{ mb: 0.25, '&:disabled': { opacity: 0.35 } }}
+                >
+                  <AttachFileRoundedIcon fontSize="small" />
+                </IconButton>
+              </ImageUploader>
+            </span>
+          </Tooltip>
+        )}
       </Box>
     </Paper>
   );
