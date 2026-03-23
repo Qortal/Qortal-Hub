@@ -260,6 +260,9 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
 
         // Live event stream — append new events and re-fold.
         unsubEvent = window.chat!.onEvent(({ event }) => {
+          // Ignore events for other channels — each useP2PChat instance is
+          // scoped to exactly one chatId.
+          if (event.chatId !== chatId) return;
           if (!rawEventsRef.current.some((e) => e.id === event.id)) {
             rawEventsRef.current = [...rawEventsRef.current, event];
           }

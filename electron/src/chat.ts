@@ -41,6 +41,16 @@ import { ChatDatabase } from './chat-db';
 /** Maximum UTF-8 bytes for the content field. */
 const CHAT_MAX_CONTENT_BYTES = 10_000;
 
+/**
+ * Qortal addresses of all authorised support agents.
+ * Must be kept in sync with the renderer-side constant in SupportChat.tsx.
+ * Only these addresses may write to any "support:<userAddress>" channel.
+ */
+export const SUPPORT_AGENT_ADDRESSES = new Set<string>([
+  'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP',
+  'QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs',
+]);
+
 /** Reject events dated this far into the future. */
 const CHAT_MAX_FUTURE_SKEW_MS = 60_000;
 
@@ -237,6 +247,17 @@ export function validateChatId(chatId: string): ValidationResult {
     }
     return { ok: true };
   }
+
+  // Support channels:
+  //   "support:queue"         — public queue where users post a knock.
+  //   "support:<userAddress>" — private per-user encrypted channel.
+  if (chatId === 'support:queue') return { ok: true };
+  if (chatId.startsWith('support:')) {
+    const addr = chatId.slice(8);
+    if (!addr) return { ok: false, reason: 'support chatId missing address' };
+    return { ok: true };
+  }
+
   // DM: exactly two address segments separated by a single colon.
   const colonIdx = chatId.indexOf(':');
   if (colonIdx <= 0 || colonIdx === chatId.length - 1) {
@@ -335,8 +356,10 @@ function validateChatEvent(event: ChatEvent, now: number): ValidationResult {
     return { ok: false, reason: 'content exceeds 10 KB limit' };
   }
 
-  // 6. For DMs: author must be one of the two participants
-  if (!event.chatId.startsWith('group:')) {
+  // 6. For DMs: author must be one of the two participants.
+  // support: chatIds look like "support:QAddr" and share the colon format but
+  // are NOT DMs — participant enforcement for them lives in ChatManager.handleChatEvent.
+  if (!event.chatId.startsWith('group:') && !event.chatId.startsWith('support:')) {
     const colonIdx = event.chatId.indexOf(':');
     const addrA = event.chatId.slice(0, colonIdx);
     const addrB = event.chatId.slice(colonIdx + 1);
@@ -406,6 +429,14 @@ export class ChatManager extends EventEmitter {
 
   /** "chatId:authorAddress" → clearTimeout handle for typing indicators. */
   private typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /**
+   * Per-address timestamp of the most-recent accepted "support:queue" knock.
+   * Used to enforce a cooldown per address on the queue channel to prevent spam.
+   * In-memory only — resets on restart, which is acceptable for a real-time P2P node.
+   */
+  private queueRateLimit = new Map<string, number>();
+  private readonly QUEUE_COOLDOWN_MS = 5 * 60 * 1_000; // 5 minutes
 
   constructor(p2p: P2PNetwork, store: ChatDatabase) {
     super();
@@ -509,6 +540,15 @@ export class ChatManager extends EventEmitter {
       if (peer.connected) this.p2p.send(peer.id, env);
     }
     loggerLog(`[Chat] Unsubscribed from chat: ${chatId}`);
+  }
+
+  /**
+   * Clear the support-queue rate-limit map.
+   * Should be called when an agent logs out so that users who re-knock after
+   * the agent re-logs in are not silently dropped by the stale cooldown.
+   */
+  clearQueueRateLimit(): void {
+    this.queueRateLimit.clear();
   }
 
   /**
@@ -626,8 +666,37 @@ export class ChatManager extends EventEmitter {
     // Accept if subscribed or if this is a DM addressed to a local user.
     if (!this.shouldAccept(event.chatId)) return;
 
+    // ── Support-channel enforcement ──────────────────────────────────────────
+
+    // Rate-limit "support:queue" knocks: one accepted knock per address per 24 h.
+    // This prevents mass-spam from many accounts flooding the agent queue.
+    if (event.chatId === 'support:queue') {
+      const last = this.queueRateLimit.get(event.authorAddress) ?? 0;
+      if (Date.now() - last < this.QUEUE_COOLDOWN_MS) return; // silently drop
+      this.queueRateLimit.set(event.authorAddress, Date.now());
+    }
+
+    // Participant check for private support channels: only the user whose address
+    // appears in the chatId, or a known support agent, may write here.
+    if (event.chatId.startsWith('support:') && event.chatId !== 'support:queue') {
+      const userAddr = event.chatId.slice(8);
+      if (
+        event.authorAddress !== userAddr &&
+        !SUPPORT_AGENT_ADDRESSES.has(event.authorAddress)
+      ) {
+        return; // silently drop unauthorised write
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Auto-subscribe DMs for local addresses so future events are delivered.
-    if (!event.chatId.startsWith('group:') && !this.localSubscriptions.has(event.chatId)) {
+    // Exclude support: channels — they are subscribed explicitly by useSupportChat.
+    if (
+      !event.chatId.startsWith('group:') &&
+      !event.chatId.startsWith('support:') &&
+      !this.localSubscriptions.has(event.chatId)
+    ) {
       this.localSubscriptions.add(event.chatId);
     }
 
@@ -708,6 +777,22 @@ export class ChatManager extends EventEmitter {
       if (event.chatId !== chatId) continue;
       const result = validateChatEvent(event, now);
       if (!result.ok) continue;
+
+      // Apply the same support participant check as handleChatEvent so that
+      // malicious peers cannot inject unauthorised events via the sync path.
+      if (
+        event.chatId.startsWith('support:') &&
+        event.chatId !== 'support:queue'
+      ) {
+        const userAddr = event.chatId.slice(8);
+        if (
+          event.authorAddress !== userAddr &&
+          !SUPPORT_AGENT_ADDRESSES.has(event.authorAddress)
+        ) {
+          continue;
+        }
+      }
+
       if (this.store.insert(event)) {
         stored++;
         this.emit('chat:event', { event });
@@ -792,11 +877,18 @@ export class ChatManager extends EventEmitter {
    * Returns true if we should accept and store an event for this chatId.
    *   - Always true for explicitly subscribed chats.
    *   - True for DMs where one of the participants is a local address.
-   *   - False for group chats where we haven't subscribed.
+   *   - True for the user's own support private channel ("support:<localAddress>").
+   *   - False for group chats or support chats where we haven't subscribed.
    */
   private shouldAccept(chatId: string): boolean {
     if (this.localSubscriptions.has(chatId)) return true;
-    if (!chatId.startsWith('group:') && this.localAddresses.size > 0) {
+
+    // DM: "addrA:addrB" — accept if either address is local.
+    if (
+      !chatId.startsWith('group:') &&
+      !chatId.startsWith('support:') &&
+      this.localAddresses.size > 0
+    ) {
       const colonIdx = chatId.indexOf(':');
       if (colonIdx > 0) {
         const addrA = chatId.slice(0, colonIdx);
@@ -804,6 +896,13 @@ export class ChatManager extends EventEmitter {
         return this.localAddresses.has(addrA) || this.localAddresses.has(addrB);
       }
     }
+
+    // Support private channel: accept if the address in the chatId is ours.
+    if (chatId.startsWith('support:') && chatId !== 'support:queue') {
+      const addr = chatId.slice(8);
+      return this.localAddresses.has(addr);
+    }
+
     return false;
   }
 

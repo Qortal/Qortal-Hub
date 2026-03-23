@@ -174,6 +174,15 @@ export class P2PNetwork extends EventEmitter {
   private peerDb: DB | null = null;
   private stmtInsertPeer: Statement | null = null;
 
+  /**
+   * Per-IP inbound connection counter for sliding-window rate limiting.
+   * Limits how many new TLS connections a single IP can open per minute,
+   * defending against connection-flood spam at the socket level.
+   */
+  private ipConnCount = new Map<string, { count: number; windowStart: number }>();
+  private readonly MAX_INBOUND_PER_IP = 5;
+  private readonly IP_WINDOW_MS = 60_000;
+
   constructor(options: P2PNetworkOptions = {}) {
     super();
     this.port = options.port ?? DEFAULT_P2P_PORT;
@@ -530,6 +539,24 @@ export class P2PNetwork extends EventEmitter {
     if (this.connectedCount() >= this.maxPeers) {
       socket.destroy();
       return;
+    }
+
+    // IP-level sliding-window rate limit: reject IPs that open too many
+    // connections in a short window before any P2P/chat logic runs.
+    const ip = normalizeHost(socket.remoteAddress ?? '');
+    if (ip) {
+      const entry = this.ipConnCount.get(ip) ?? { count: 0, windowStart: Date.now() };
+      if (Date.now() - entry.windowStart > this.IP_WINDOW_MS) {
+        entry.count = 0;
+        entry.windowStart = Date.now();
+      }
+      entry.count++;
+      this.ipConnCount.set(ip, entry);
+      if (entry.count > this.MAX_INBOUND_PER_IP) {
+        loggerLog(`[P2P] Rate-limited inbound from ${ip} (${entry.count} connections in window)`);
+        socket.destroy();
+        return;
+      }
     }
 
     const tempId = `inbound:${socket.remoteAddress}:${socket.remotePort}`;

@@ -1636,6 +1636,17 @@ ipcMain.handle('chat:setLocalAddresses', async (_event, addresses: string[]) => 
   return { success: true };
 });
 
+/**
+ * Clear the support-queue rate-limit map.
+ * Called when an agent logs out so re-knocks are not silently dropped
+ * when the agent logs back in.
+ */
+ipcMain.handle('chat:clearQueueRateLimit', async () => {
+  const cm = getChatManager();
+  if (cm) cm.clearQueueRateLimit();
+  return { success: true };
+});
+
 /** Returns the list of chatIds the local node is currently subscribed to. */
 ipcMain.handle('chat:getSubscriptions', async () => {
   const cm = getChatManager();

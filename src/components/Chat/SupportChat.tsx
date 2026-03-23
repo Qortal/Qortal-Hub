@@ -10,13 +10,7 @@
  *                 QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs
  */
 
-import {
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -37,17 +31,12 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import { userInfoAtom } from '../../atoms/global';
-import { useP2PChat } from '../../hooks/useP2PChat';
+import { useSupportChat, SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
 import { useIsOnline } from '../../hooks/usePresence';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SUPPORT_CHAT_ID = 'group:9999';
-
-const SUPPORT_ADDRESSES = [
-  'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP',
-  'QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs',
-] as const;
+export { SUPPORT_ADDRESSES };
 
 const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
 
@@ -154,8 +143,8 @@ function ReplyQuoteBar({
     ? parent.isDeleted
       ? 'Message deleted'
       : parent.content.length > 80
-      ? `${parent.content.slice(0, 80)}…`
-      : parent.content
+        ? `${parent.content.slice(0, 80)}…`
+        : parent.content
     : '(message not found)';
 
   return (
@@ -169,8 +158,8 @@ function ReplyQuoteBar({
         backgroundColor: isMine
           ? 'rgba(0,0,0,0.18)'
           : isDark
-          ? 'rgba(255,255,255,0.08)'
-          : 'rgba(0,0,0,0.07)',
+            ? 'rgba(255,255,255,0.08)'
+            : 'rgba(0,0,0,0.07)',
         maxWidth: '100%',
       }}
     >
@@ -247,10 +236,10 @@ function ReactionChips({
                 cursor: 'pointer',
                 userSelect: 'none',
                 border: '1px solid',
-                borderColor: iReacted ? 'primary.main' : 'rgba(128,128,128,0.35)',
-                backgroundColor: iReacted
+                borderColor: iReacted
                   ? 'primary.main'
-                  : 'transparent',
+                  : 'rgba(128,128,128,0.35)',
+                backgroundColor: iReacted ? 'primary.main' : 'transparent',
                 color: iReacted ? 'primary.contrastText' : 'text.primary',
                 transition: 'opacity 0.15s',
                 '&:hover': { opacity: 0.8 },
@@ -437,14 +426,12 @@ function MessageBubble({
           sx={{
             px: 1.5,
             py: 0.75,
-            borderRadius: isMine
-              ? '14px 14px 4px 14px'
-              : '14px 14px 14px 4px',
+            borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
             backgroundColor: isMine
               ? theme.palette.primary.main
               : theme.palette.mode === 'dark'
-              ? 'rgba(255,255,255,0.1)'
-              : 'rgba(0,0,0,0.07)',
+                ? 'rgba(255,255,255,0.1)'
+                : 'rgba(0,0,0,0.07)',
             color: isMine
               ? theme.palette.primary.contrastText
               : theme.palette.text.primary,
@@ -552,13 +539,14 @@ export function SupportChat() {
     isSending,
     typingUsers,
     isReady,
+    isClosed,
     sendMessage,
     sendEdit,
     sendDelete,
     sendReaction,
     sendReply,
     notifyTyping,
-  } = useP2PChat(SUPPORT_CHAT_ID);
+  } = useSupportChat();
 
   const [inputText, setInputText] = useState('');
   const [replyTarget, setReplyTarget] = useState<RenderedMessage | null>(null);
@@ -719,13 +707,33 @@ export function SupportChat() {
             Support Chat
           </Typography>
 
+          {isClosed && (
+            <Typography
+              variant="caption"
+              sx={{
+                px: 0.75,
+                py: 0.2,
+                borderRadius: 1,
+                backgroundColor: 'success.main',
+                color: 'success.contrastText',
+                fontWeight: 600,
+                fontSize: 10,
+                letterSpacing: 0.5,
+                mr: 1,
+                flexShrink: 0,
+              }}
+            >
+              RESOLVED
+            </Typography>
+          )}
+
           <Tooltip
             title={
               !window.chat
                 ? 'P2P not available'
                 : isReady
-                ? 'Connected'
-                : 'Connecting…'
+                  ? 'Connected'
+                  : 'Connecting…'
             }
           >
             <Box
@@ -736,8 +744,8 @@ export function SupportChat() {
                 backgroundColor: !window.chat
                   ? '#ef4444'
                   : isReady
-                  ? '#44b700'
-                  : '#f59e0b',
+                    ? '#44b700'
+                    : '#f59e0b',
                 ml: 1,
               }}
             />
@@ -785,7 +793,11 @@ export function SupportChat() {
               textAlign: 'center',
             }}
           >
-            <Typography variant="body2">No messages yet. Say hello!</Typography>
+            <Typography variant="body2">
+              {isClosed
+                ? 'This chat was resolved. Send a message to re-open.'
+                : 'No messages yet. Say hello!'}
+            </Typography>
           </Box>
         )}
 
@@ -921,10 +933,12 @@ export function SupportChat() {
             !isReady
               ? 'Connecting…'
               : editTarget
-              ? 'Edit message…'
-              : replyTarget
-              ? `Reply to ${shortAddr(replyTarget.authorAddress)}…`
-              : 'Type a message…'
+                ? 'Edit message…'
+                : replyTarget
+                  ? `Reply to ${shortAddr(replyTarget.authorAddress)}…`
+                  : isClosed
+                    ? 'Send a message to re-open…'
+                    : 'Type a message…'
           }
           disabled={!isReady || !window.chat}
           value={inputText}

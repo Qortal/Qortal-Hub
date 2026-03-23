@@ -385,6 +385,14 @@ try {
     setLocalAddresses: async (addresses: string[]) =>
       ipcRenderer.invoke('chat:setLocalAddresses', addresses),
 
+    /**
+     * Clear the support-queue rate-limit map.
+     * Call when an agent logs out so re-knocks from users are not silently
+     * dropped when the agent logs back in.
+     */
+    clearQueueRateLimit: async () =>
+      ipcRenderer.invoke('chat:clearQueueRateLimit'),
+
     /** Returns the chatIds the local node is currently subscribed to. */
     getSubscriptions: async () => ipcRenderer.invoke('chat:getSubscriptions'),
 

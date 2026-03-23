@@ -43,7 +43,8 @@ import {
 } from './components/App';
 
 import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
-import { SupportChat } from './components/Chat/SupportChat';
+import { SupportChat, SUPPORT_ADDRESSES } from './components/Chat/SupportChat';
+import { AgentSupportDashboard } from './components/Chat/AgentSupportDashboard';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
@@ -1054,8 +1055,12 @@ function App() {
           </Suspense>
         )}
 
-        {/* P2P support chat test window — fixed bottom-right, always visible */}
-        {extState === 'authenticated' && isMainWindow && <SupportChat />}
+        {/* P2P support chat — agents see the dashboard, regular users see SupportChat */}
+        {extState === 'authenticated' && isMainWindow && (
+          SUPPORT_ADDRESSES.includes(userInfo?.address as any)
+            ? <AgentSupportDashboard />
+            : <SupportChat />
+        )}
 
         {isOpenSendQort && isMainWindow && (
           <SendQortOverlay

@@ -114,6 +114,13 @@ declare global {
        */
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
 
+      /**
+       * Clear the support-queue rate-limit map.
+       * Call when an agent logs out so re-knocks from users are accepted
+       * immediately after the agent logs back in.
+       */
+      clearQueueRateLimit: () => Promise<{ success: boolean }>;
+
       /** Returns currently subscribed chatIds. */
       getSubscriptions: () => Promise<string[]>;
 

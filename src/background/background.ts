@@ -67,6 +67,8 @@ import {
   getGroupNotificationTimestampCase,
   getRewardSharePrivateKeyCase,
   signPresenceMessageCase,
+  encryptSupportMessageCase,
+  decryptSupportMessageCase,
   getTempPublishCase,
   getThreadActivityCase,
   getTimestampEnterChatCase,
@@ -3369,6 +3371,12 @@ function setupMessageListener() {
         break;
       case 'signPresenceMessage':
         signPresenceMessageCase(request, event);
+        break;
+      case 'encryptSupportMessage':
+        encryptSupportMessageCase(request, event);
+        break;
+      case 'decryptSupportMessage':
+        decryptSupportMessageCase(request, event);
         break;
       case 'removeRewardShare':
         removeRewardShareCase(request, event);
