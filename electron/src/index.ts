@@ -24,11 +24,13 @@ import {
   attachP2PListeners,
   attachPresenceListeners,
   attachChatListeners,
+  attachCallListeners,
   setLastP2POptions,
 } from './setup';
 import { startP2PNetwork, DEFAULT_P2P_PORT, DEFAULT_API_PORT } from './p2p-network';
 import { startPresenceManager } from './presence';
 import { startChatManager, flushChatStore } from './chat';
+import { startCallManager } from './call';
 import { readAppSettings } from './setup';
 
 import * as net from 'net';
@@ -226,6 +228,11 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10): 
       const cm = await startChatManager(p2pNetwork, sharedDbPath);
       attachChatListeners(cm);
       loggerLog('[Chat] Manager auto-started.');
+
+      // Start the call manager wired to the network and presence manager.
+      const callMgr = startCallManager(p2pNetwork, pm);
+      attachCallListeners(callMgr);
+      loggerLog('[Call] Manager auto-started.');
     } catch (err) {
       loggerError('[P2P] Auto-start failed:', err);
     }

@@ -31,7 +31,12 @@ export type P2PMessageType =
   | 'relay'
   | 'ping'
   | 'pong'
-  | 'peers';
+  | 'peers'
+  /** Ask a directly-connected peer to echo back the public IP:port they see
+   *  for this socket.  Handled at transport layer only — never gossiped. */
+  | 'call-whoami'
+  /** Response to call-whoami.  Carries { ip, port, reqId } in data field. */
+  | 'call-youare';
 
 export interface P2PMessage {
   /** Unique ID used for deduplication and correlation. */
@@ -126,6 +131,35 @@ function isPrivateIP(host: string): boolean {
     if (second >= 16 && second <= 31) return true;
   }
   return false;
+}
+
+/**
+ * Given a list of { ip, port } responses from call-whoami peers, return the
+ * most-frequently-seen address (majority vote).  Ties broken by first seen.
+ */
+function majorityVoteAddr(
+  responses: { ip: string; port: number }[]
+): { ip: string; port: number } | null {
+  if (responses.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const r of responses) {
+    const key = `${r.ip}:${r.port}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let best = '';
+  let bestCount = 0;
+  for (const [key, count] of counts) {
+    if (count > bestCount) {
+      best = key;
+      bestCount = count;
+    }
+  }
+  if (!best) return null;
+  const lastColon = best.lastIndexOf(':');
+  return {
+    ip: best.slice(0, lastColon),
+    port: parseInt(best.slice(lastColon + 1), 10),
+  };
 }
 
 // ── P2PNetwork ───────────────────────────────────────────────────────────────
@@ -410,6 +444,78 @@ export class P2PNetwork extends EventEmitter {
     let n = 0;
     for (const p of this.peers.values()) if (p.connected) n++;
     return n;
+  }
+
+  /**
+   * Returns connected peers whose listen port is reachable from the internet
+   * (canAcceptInbound === true and non-private IP).  Used by the call system
+   * to find potential relay candidates.
+   */
+  getPublicIpPeers(): P2PPeerInfo[] {
+    return Array.from(this.peers.values())
+      .filter(
+        (p) => p.connected && p.canAcceptInbound && !isPrivateIP(p.host)
+      )
+      .map(({ id, host, port, connected, outbound, canAcceptInbound }) => ({
+        id,
+        host,
+        port,
+        connected,
+        outbound,
+        canAcceptInbound,
+      }));
+  }
+
+  /**
+   * Decentralized STUN: ask up to 3 directly-connected peers to echo back
+   * the public IP:port they see for this socket.  Returns the most-commonly
+   * reported address (majority vote), or null if no peers are reachable or
+   * all time out within 3 seconds.
+   */
+  askWhoAmI(): Promise<{ ip: string; port: number } | null> {
+    return new Promise((resolve) => {
+      const peersToAsk: PeerRecord[] = [];
+      for (const peer of this.peers.values()) {
+        if (!peer.connected) continue;
+        peersToAsk.push(peer);
+        if (peersToAsk.length >= 3) break;
+      }
+
+      if (peersToAsk.length === 0) {
+        resolve(null);
+        return;
+      }
+
+      const responses: { ip: string; port: number }[] = [];
+
+      const finish = (): void => {
+        clearTimeout(timer);
+        this.off('call-youare', handler);
+        resolve(majorityVoteAddr(responses));
+      };
+
+      const timer = setTimeout(finish, 3_000);
+
+      const handler = ({ data }: { from: string; data: unknown }): void => {
+        const d = data as Record<string, unknown> | null;
+        if (d && typeof d.ip === 'string' && typeof d.port === 'number') {
+          responses.push({ ip: d.ip, port: d.port });
+        }
+        if (responses.length >= peersToAsk.length) finish();
+      };
+
+      this.on('call-youare', handler);
+
+      for (const peer of peersToAsk) {
+        this.writeToSocket(peer, {
+          id: crypto.randomUUID(),
+          type: 'call-whoami',
+          from: this.nodeId,
+          hops: 0,
+          timestamp: Date.now(),
+        });
+      }
+    });
   }
 
   /** Returns true if this node has ever successfully accepted an inbound
@@ -755,6 +861,30 @@ export class P2PNetwork extends EventEmitter {
       case 'data':
       case 'relay':
         this.handlePayload(peer, msg);
+        break;
+      case 'call-whoami':
+        // Reply with the public IP:port we observe on this socket.
+        if (peer.connected) {
+          this.writeToSocket(peer, {
+            id: crypto.randomUUID(),
+            type: 'call-youare',
+            from: this.nodeId,
+            to: msg.from,
+            data: {
+              ip: normalizeHost(peer.socket.remoteAddress ?? ''),
+              port: peer.socket.remotePort ?? 0,
+              reqId: msg.id,
+            },
+            hops: 0,
+            timestamp: Date.now(),
+          });
+        }
+        break;
+      case 'call-youare':
+        // Deliver to local awaiter only — never relay.
+        if (!msg.to || msg.to === this.nodeId) {
+          this.emit('call-youare', { from: msg.from, data: msg.data });
+        }
         break;
     }
   }

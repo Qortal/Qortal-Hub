@@ -70,6 +70,11 @@ import {
   getChatManager,
   flushChatStore,
 } from './chat';
+import {
+  startCallManager,
+  stopCallManager,
+  getCallManager,
+} from './call';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -220,6 +225,14 @@ export class ElectronCapacitorApp {
       },
     });
     this.mainWindowState.manage(this.MainWindow);
+
+    // Allow microphone access for WebRTC voice calls.
+    this.MainWindow.webContents.session.setPermissionRequestHandler(
+      (_webContents, permission, callback) => {
+        if (permission === 'media') return callback(true);
+        callback(false);
+      }
+    );
 
     if (this.CapacitorFileConfig.backgroundColor) {
       this.MainWindow.setBackgroundColor(
@@ -1365,6 +1378,10 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     const sharedDbPath = join(app.getPath('appData'), 'qortal-shared', 'chat.db');
     const cm = await startChatManager(network, sharedDbPath);
     attachChatListeners(cm);
+    // (Re-)start the call manager wired to the network + presence manager.
+    stopCallManager();
+    const callMgr = startCallManager(network, pm);
+    attachCallListeners(callMgr);
     // Notify renderers that P2P / presence is live again.
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
     return { success: true, port: network.getPort(), peerId: network.getPeerId() };
@@ -1380,6 +1397,7 @@ ipcMain.handle('p2p:stop', async () => {
     broadcastToSet(presenceUpdateSubscribers, 'presence:cleared', {});
     stopPresenceManager();
     stopChatManager();
+    stopCallManager();
     return { success: true };
   } catch (err) {
     loggerError('[P2P] Failed to stop:', err);
@@ -1732,4 +1750,117 @@ ipcMain.handle('chat:getAttachment', async (_event, eventId: string) => {
   if (!cm) return null;
   if (typeof eventId !== 'string' || !eventId) return null;
   return cm.store.getAttachment(eventId);
+});
+
+// ── Call IPC Handlers ─────────────────────────────────────────────────────────
+
+const callSubscribers = new Set<Electron.WebContents>();
+
+export function attachCallListeners(
+  manager: ReturnType<typeof getCallManager>
+): void {
+  if (!manager) return;
+
+  const forward = (channel: string) => (payload: unknown) =>
+    broadcastToSet(callSubscribers, channel, payload);
+
+  manager.on('call:incoming', forward('call:incoming'));
+  manager.on('call:accepted', forward('call:accepted'));
+  manager.on('call:rejected', forward('call:rejected'));
+  manager.on('call:signal',   forward('call:signal'));
+  manager.on('call:hangup',   forward('call:hangup'));
+  manager.on('call:audio',    forward('call:audio'));
+}
+
+ipcMain.handle(
+  'call:initiate',
+  async (
+    _event,
+    targetAddress: string,
+    chatId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    callId: string,
+    timestamp: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    const resultCallId = mgr.initiateCall(
+      targetAddress,
+      chatId,
+      localAddress,
+      signature,
+      publicKey,
+      callId,
+      timestamp
+    );
+    return resultCallId ? { success: true, callId: resultCallId } : { success: false, error: 'Target offline' };
+  }
+);
+
+ipcMain.handle('call:accept', async (_event, callId: string, signature: string, publicKey: string, timestamp: number) => {
+  const mgr = getCallManager();
+  if (!mgr) return { success: false, error: 'Call manager not running' };
+  mgr.acceptCall(callId, signature, publicKey, timestamp);
+  return { success: true };
+});
+
+ipcMain.handle('call:reject', async (_event, callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) => {
+  const mgr = getCallManager();
+  if (!mgr) return { success: false, error: 'Call manager not running' };
+  mgr.rejectCall(callId, reason, signature, publicKey, timestamp);
+  return { success: true };
+});
+
+ipcMain.handle('call:hangup', async (_event, callId: string, signature: string, publicKey: string, timestamp: number) => {
+  const mgr = getCallManager();
+  if (!mgr) return { success: false, error: 'Call manager not running' };
+  mgr.hangUp(callId, signature, publicKey, timestamp);
+  return { success: true };
+});
+
+ipcMain.handle(
+  'call:sendSignal',
+  async (_event, callId: string, type: 'offer' | 'answer' | 'ice', data: unknown, signature?: string, publicKey?: string, timestamp?: number) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.sendSignal(callId, type, data, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'call:sendAudio',
+  async (_event, callId: string, seq: number, data: string) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.sendAudioChunk(callId, seq, data);
+    return { success: true };
+  }
+);
+
+ipcMain.handle('call:getPublicIpPeers', async () => {
+  const network = getP2PNetwork();
+  return network ? network.getPublicIpPeers() : [];
+});
+
+ipcMain.handle('call:whoami', async () => {
+  const network = getP2PNetwork();
+  if (!network) return null;
+  return network.askWhoAmI();
+});
+
+ipcMain.handle('call:setLocalAddresses', async (_event, addresses: string[]) => {
+  const mgr = getCallManager();
+  if (!mgr) return { success: false, error: 'Call manager not running' };
+  mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+  return { success: true };
+});
+
+ipcMain.on('call:subscribe', (event) => {
+  callSubscribers.add(event.sender);
+});
+ipcMain.on('call:unsubscribe', (event) => {
+  callSubscribers.delete(event.sender);
 });

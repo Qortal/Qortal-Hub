@@ -48,12 +48,17 @@ import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import DoneAllRoundedIcon from '@mui/icons-material/DoneAllRounded';
 import HeadsetMicRoundedIcon from '@mui/icons-material/HeadsetMicRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import CallRoundedIcon from '@mui/icons-material/CallRounded';
+import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
+import MicRoundedIcon from '@mui/icons-material/MicRounded';
+import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
 import {
   useAgentSupportChat,
   SupportTicket,
 } from '../../hooks/useAgentSupportChat';
 import { useIsOnline } from '../../hooks/usePresence';
 import { decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
+import { useVoiceCall } from '../../hooks/useVoiceCall';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -930,6 +935,26 @@ export function AgentSupportDashboard() {
 
   const activeTicket = tickets.find((t) => t.chatId === activeTicketChatId) ?? null;
 
+  // ── Voice call ─────────────────────────────────────────────────────────────
+
+  const {
+    callState,
+    audioMode,
+    isMuted,
+    callDuration,
+    incomingCall,
+    acceptCall,
+    rejectCall,
+    hangUp,
+    toggleMute,
+  } = useVoiceCall();
+
+  const fmtDuration = (secs: number): string => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
   const [inputText, setInputText] = useState('');
   const [replyTarget, setReplyTarget] = useState<RenderedMessage | null>(null);
   const [editTarget, setEditTarget] = useState<RenderedMessage | null>(null);
@@ -1427,6 +1452,45 @@ export function AgentSupportDashboard() {
           )}
         </Box>
 
+        {/* Incoming call banner */}
+        {callState === 'ringing' && incomingCall && (
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              borderBottom: `1px solid ${borderColor}`,
+              backgroundColor: isDark ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.10)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexShrink: 0,
+            }}
+          >
+            <CallRoundedIcon sx={{ fontSize: 18, color: 'success.main', flexShrink: 0 }} />
+            <Typography variant="body2" sx={{ flex: 1, fontWeight: 600, color: 'success.main' }}>
+              Incoming call from {incomingCall.fromAddress.slice(0, 6)}…{incomingCall.fromAddress.slice(-4)}
+            </Typography>
+            <Tooltip title="Accept">
+              <IconButton
+                size="small"
+                onClick={acceptCall}
+                sx={{ color: '#fff', backgroundColor: 'success.main', '&:hover': { backgroundColor: 'success.dark' }, p: 0.75 }}
+              >
+                <CallRoundedIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Reject">
+              <IconButton
+                size="small"
+                onClick={rejectCall}
+                sx={{ color: '#fff', backgroundColor: 'error.main', '&:hover': { backgroundColor: 'error.dark' }, p: 0.75 }}
+              >
+                <CallEndRoundedIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
+
         {/* Message list */}
         <Box
           ref={scrollContainerRef}
@@ -1594,6 +1658,58 @@ export function AgentSupportDashboard() {
                 sx={{ opacity: 0.6, flexShrink: 0 }}
               >
                 <CloseRoundedIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
+
+        {/* In-call status bar */}
+        {callState === 'connected' && (
+          <Box
+            sx={{
+              px: 1.5,
+              py: 0.75,
+              borderTop: `1px solid ${borderColor}`,
+              backgroundColor: isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexShrink: 0,
+            }}
+          >
+            <CallRoundedIcon sx={{ fontSize: 15, color: 'primary.main', flexShrink: 0 }} />
+            <Typography variant="caption" sx={{ flex: 1, fontWeight: 600, color: 'primary.main' }}>
+              {fmtDuration(callDuration)}
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                px: 0.75,
+                py: 0.15,
+                borderRadius: 1,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+                fontWeight: 600,
+                fontSize: 10,
+                letterSpacing: 0.4,
+                color: 'text.secondary',
+              }}
+            >
+              {audioMode === 'media' ? 'WebRTC' : audioMode === 'datachannel' ? 'DataCh' : 'Relay'}
+            </Typography>
+            <Tooltip title={isMuted ? 'Unmute' : 'Mute'}>
+              <IconButton size="small" onClick={toggleMute} sx={{ p: 0.5 }}>
+                {isMuted
+                  ? <MicOffRoundedIcon sx={{ fontSize: 16, color: 'error.main' }} />
+                  : <MicRoundedIcon sx={{ fontSize: 16 }} />}
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Hang up">
+              <IconButton
+                size="small"
+                onClick={hangUp}
+                sx={{ color: '#fff', backgroundColor: 'error.main', '&:hover': { backgroundColor: 'error.dark' }, p: 0.5 }}
+              >
+                <CallEndRoundedIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </Tooltip>
           </Box>

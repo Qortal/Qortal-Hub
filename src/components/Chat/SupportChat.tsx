@@ -37,12 +37,17 @@ import RemoveCircleOutlineRoundedIcon from '@mui/icons-material/RemoveCircleOutl
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import AttachFileRoundedIcon from '@mui/icons-material/AttachFileRounded';
 import HeadsetMicRoundedIcon from '@mui/icons-material/HeadsetMicRounded';
+import CallRoundedIcon from '@mui/icons-material/CallRounded';
+import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
+import MicRoundedIcon from '@mui/icons-material/MicRounded';
+import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
 import DoneAllRoundedIcon from '@mui/icons-material/DoneAllRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import { supportChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, SUPPORT_ADDRESSES, decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
 import { useIsOnline } from '../../hooks/usePresence';
 import ImageUploader from '../../common/ImageUploader';
+import { useVoiceCall } from '../../hooks/useVoiceCall';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -896,6 +901,63 @@ export function SupportChat() {
   /** Decrypted data URI cache: eventId → data URI. Prevents re-decryption on re-renders. */
   const decryptCache = useRef<Map<string, string>>(new Map());
 
+  // ── Voice call ─────────────────────────────────────────────────────────────
+
+  // Track online status for each support agent (hooks must be called at top level).
+  const agent0Online = useIsOnline(SUPPORT_ADDRESSES[0]);
+  const agent1Online = useIsOnline(SUPPORT_ADDRESSES[1]);
+  const onlineAgent =
+    agent0Online
+      ? SUPPORT_ADDRESSES[0]
+      : agent1Online
+        ? SUPPORT_ADDRESSES[1]
+        : null;
+
+  const {
+    callState,
+    audioMode,
+    isMuted,
+    callDuration,
+    incomingCall,
+    initiateCall: initiateVoiceCall,
+    acceptCall,
+    rejectCall,
+    hangUp,
+    toggleMute,
+  } = useVoiceCall();
+
+  const fmtDuration = (secs: number): string => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  /** Sign the CALL_REQUEST fields via the Qortal wallet. */
+  const signCallRequest = useCallback(
+    async (fields: Record<string, unknown>) => {
+      // Reuses the existing 'signPresenceMessage' background case which performs
+      // Ed25519 signing over canonicalized (alphabetically sorted) JSON fields.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const res = await (window as any).sendMessage(
+        'signPresenceMessage',
+        fields,
+        10_000
+      );
+      return {
+        signature: res?.signature ?? '',
+        publicKey: userInfo?.publicKey ?? '',
+      };
+    },
+    [userInfo?.publicKey]
+  );
+
+  const handleStartCall = useCallback(() => {
+    const target = onlineAgent ?? SUPPORT_ADDRESSES[0];
+    if (!target || callState !== 'idle') return;
+    const chatId = `support:${[myAddress, ...SUPPORT_ADDRESSES].sort().join(':')}`;
+    initiateVoiceCall(target, chatId, signCallRequest);
+  }, [callState, initiateVoiceCall, myAddress, onlineAgent, signCallRequest]);
+
   const [inputText, setInputText] = useState('');
   const [replyTarget, setReplyTarget] = useState<RenderedMessage | null>(null);
   const [editTarget, setEditTarget] = useState<RenderedMessage | null>(null);
@@ -1269,10 +1331,114 @@ export function SupportChat() {
           </Box>
         </Tooltip>
 
+        {/* Call button */}
+        {isReady && !isAgent && (
+          <Tooltip
+            title={
+              callState === 'connected'
+                ? 'In call'
+                : callState !== 'idle'
+                  ? ''
+                  : !isAgentOnline
+                    ? 'No agents online'
+                    : 'Start voice call'
+            }
+          >
+            <span>
+              <IconButton
+                size="small"
+                disabled={callState !== 'idle' && callState !== 'connected'}
+                onClick={callState === 'connected' ? hangUp : handleStartCall}
+                sx={{
+                  color: callState === 'connected' ? '#ef4444' : 'text.secondary',
+                  '&:hover': {
+                    color: callState === 'connected' ? '#dc2626' : 'text.primary',
+                  },
+                }}
+              >
+                {callState === 'connected' ? (
+                  <CallEndRoundedIcon fontSize="small" />
+                ) : (
+                  <CallRoundedIcon fontSize="small" />
+                )}
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+
         <IconButton size="small" onClick={() => setIsOpen(false)} sx={{ ml: 0.25 }}>
           <CloseRoundedIcon fontSize="small" />
         </IconButton>
       </Box>
+
+      {/* ── Incoming call banner ────────────────────────────────────────── */}
+      {callState === 'ringing' && incomingCall && (
+        <Box
+          sx={{
+            px: 2,
+            py: 1.25,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            backgroundColor: 'primary.dark',
+          }}
+        >
+          <CallRoundedIcon sx={{ color: '#fff', animation: 'pulse 1s infinite', fontSize: 20 }} />
+          <Typography variant="body2" sx={{ color: '#fff', flex: 1, fontWeight: 600, fontSize: 12 }}>
+            Incoming call from {shortAddr(incomingCall.fromAddress)}
+          </Typography>
+          <IconButton
+            size="small"
+            onClick={acceptCall}
+            sx={{
+              backgroundColor: '#22c55e',
+              color: '#fff',
+              '&:hover': { backgroundColor: '#16a34a' },
+              width: 30,
+              height: 30,
+            }}
+          >
+            <CallRoundedIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={rejectCall}
+            sx={{
+              backgroundColor: '#ef4444',
+              color: '#fff',
+              '&:hover': { backgroundColor: '#dc2626' },
+              width: 30,
+              height: 30,
+            }}
+          >
+            <CallEndRoundedIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
+
+      {/* ── "Calling…" banner ───────────────────────────────────────────── */}
+      {callState === 'calling' && (
+        <Box
+          sx={{
+            px: 2,
+            py: 1,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            backgroundColor: 'action.selected',
+          }}
+        >
+          <CircularProgress size={14} thickness={5} />
+          <Typography variant="body2" sx={{ flex: 1, fontWeight: 600, fontSize: 12 }}>
+            Calling…
+          </Typography>
+          <IconButton size="small" onClick={hangUp} sx={{ color: '#ef4444' }}>
+            <CallEndRoundedIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
 
       {/* ── Message list ────────────────────────────────────────────────── */}
       <Box
@@ -1445,6 +1611,116 @@ export function SupportChat() {
       )}
 
       {/* ── Input row ───────────────────────────────────────────────────── */}
+
+      {/* In-call status bar */}
+      {callState === 'connected' && (
+        <Box
+          sx={{
+            px: 2,
+            py: 0.75,
+            mx: 1.5,
+            mb: 0.5,
+            borderRadius: 1.5,
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            backgroundColor: isDark ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.08)',
+          }}
+        >
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: '#22c55e',
+              flexShrink: 0,
+            }}
+          />
+          <Typography variant="caption" sx={{ flex: 1, fontWeight: 600, color: 'success.main', fontSize: 11 }}>
+            In call — {fmtDuration(callDuration)}
+          </Typography>
+
+          {/* Transport mode badge */}
+          {audioMode === 'media' && (
+            <Typography
+              variant="caption"
+              sx={{
+                px: 0.75,
+                py: 0.2,
+                borderRadius: 1,
+                backgroundColor: '#22c55e',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: 10,
+                letterSpacing: 0.3,
+              }}
+            >
+              WebRTC
+            </Typography>
+          )}
+          {audioMode === 'datachannel' && (
+            <Typography
+              variant="caption"
+              sx={{
+                px: 0.75,
+                py: 0.2,
+                borderRadius: 1,
+                backgroundColor: 'primary.main',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: 10,
+                letterSpacing: 0.3,
+              }}
+            >
+              DataChannel
+            </Typography>
+          )}
+          {audioMode === 'relay' && (
+            <Typography
+              variant="caption"
+              sx={{
+                px: 0.75,
+                py: 0.2,
+                borderRadius: 1,
+                backgroundColor: '#f59e0b',
+                color: '#fff',
+                fontWeight: 600,
+                fontSize: 10,
+                letterSpacing: 0.3,
+              }}
+            >
+              Relay
+            </Typography>
+          )}
+
+          <IconButton
+            size="small"
+            onClick={toggleMute}
+            sx={{
+              width: 26,
+              height: 26,
+              color: isMuted ? 'error.main' : 'text.secondary',
+            }}
+          >
+            {isMuted ? <MicOffRoundedIcon sx={{ fontSize: 15 }} /> : <MicRoundedIcon sx={{ fontSize: 15 }} />}
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={hangUp}
+            sx={{
+              width: 26,
+              height: 26,
+              backgroundColor: '#ef4444',
+              color: '#fff',
+              '&:hover': { backgroundColor: '#dc2626' },
+            }}
+          >
+            <CallEndRoundedIcon sx={{ fontSize: 15 }} />
+          </IconButton>
+        </Box>
+      )}
+
       {isReady && !isAgentOnline && (
         <Box
           sx={{

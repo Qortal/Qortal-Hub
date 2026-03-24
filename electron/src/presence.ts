@@ -630,6 +630,22 @@ export class PresenceManager extends EventEmitter {
     return Array.from(addresses);
   }
 
+  /**
+   * Returns the P2P nodeId (originNodeId) of the most-recently-seen live
+   * session for a given Qortal address, or null if the address is offline or
+   * unknown.  Used by the call system to route signaling messages.
+   */
+  getNodeIdForAddress(address: string): string | null {
+    const now = Date.now();
+    let best: PresenceSession | null = null;
+    for (const session of this.sessions.values()) {
+      if (session.address !== address) continue;
+      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
+      if (!best || session.lastSeen > best.lastSeen) best = session;
+    }
+    return best?.originNodeId ?? null;
+  }
+
   /** Returns the most-recently-seen active status for an address, or null. */
   getAddressStatus(address: string): UserStatus | null {
     const now = Date.now();

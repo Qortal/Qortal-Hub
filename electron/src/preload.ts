@@ -495,6 +495,126 @@ try {
       };
     },
   });
+
+  // ── Call API ─────────────────────────────────────────────────────────────────
+  //
+  // Renderer responsibilities for initiating a call:
+  //   1. Build canonical signed-data:
+  //        { callId, chatId, fromAddress, fromPublicKey, timestamp, type: 'CALL_REQUEST' }
+  //        (keys sorted alphabetically)
+  //   2. Sign with nacl.sign.detached(canonicalBytes, privateKeyBytes).
+  //   3. Base58-encode the signature.
+  //   4. Call window.call.initiate(targetAddress, chatId, localAddress, sig, pubKey).
+  contextBridge.exposeInMainWorld('call', {
+    /**
+     * Initiate an outbound call to `targetAddress`.
+     * The renderer must pre-sign the request before calling this.
+     * Returns { success, callId? }.
+     */
+    initiate: async (
+      targetAddress: string,
+      chatId: string,
+      localAddress: string,
+      signature: string,
+      publicKey: string,
+      callId: string,
+      timestamp: number
+    ) =>
+      ipcRenderer.invoke(
+        'call:initiate',
+        targetAddress,
+        chatId,
+        localAddress,
+        signature,
+        publicKey,
+        callId,
+        timestamp
+      ),
+
+    /** Accept an incoming call identified by callId. */
+    accept: async (callId: string, signature: string, publicKey: string, timestamp: number) =>
+      ipcRenderer.invoke('call:accept', callId, signature, publicKey, timestamp),
+
+    /** Reject an incoming call. */
+    reject: async (callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) =>
+      ipcRenderer.invoke('call:reject', callId, reason, signature, publicKey, timestamp),
+
+    /** Hang up an active or pending call. */
+    hangup: async (callId: string, signature: string, publicKey: string, timestamp: number) =>
+      ipcRenderer.invoke('call:hangup', callId, signature, publicKey, timestamp),
+
+    /**
+     * Forward a WebRTC signal to the remote peer.
+     * `type` must be 'offer', 'answer', or 'ice'.
+     * `data` is the SDP string (offer/answer) or RTCIceCandidateInit (ice).
+     * For 'offer' and 'answer', signature/publicKey/timestamp are required.
+     */
+    sendSignal: async (
+      callId: string,
+      type: 'offer' | 'answer' | 'ice',
+      data: unknown,
+      signature?: string,
+      publicKey?: string,
+      timestamp?: number
+    ) => ipcRenderer.invoke('call:sendSignal', callId, type, data, signature, publicKey, timestamp),
+
+    /**
+     * Send a Tier-3 audio chunk over the P2P relay.
+     * `data` is a base64-encoded Opus frame.
+     */
+    sendAudio: async (callId: string, seq: number, data: string) =>
+      ipcRenderer.invoke('call:sendAudio', callId, seq, data),
+
+    /** Returns peers with public IPs that can serve as relay candidates. */
+    getPublicIpPeers: async () =>
+      ipcRenderer.invoke('call:getPublicIpPeers'),
+
+    /**
+     * Ask directly-connected P2P peers for this node's public IP:port.
+     * Returns { ip, port } or null if no peers respond within 3 s.
+     */
+    whoami: async (): Promise<{ ip: string; port: number } | null> =>
+      ipcRenderer.invoke('call:whoami'),
+
+    /** Register the local user's address with the call manager. */
+    setLocalAddresses: async (addresses: string[]) =>
+      ipcRenderer.invoke('call:setLocalAddresses', addresses),
+
+    /**
+     * Subscribe to all call events.
+     * `cb` receives typed payloads keyed by event name.
+     * Returns an unsubscribe function.
+     */
+    onEvent: (
+      cb: (event: string, payload: unknown) => void
+    ) => {
+      const channels = [
+        'call:incoming',
+        'call:accepted',
+        'call:rejected',
+        'call:signal',
+        'call:hangup',
+        'call:audio',
+      ] as const;
+
+      const handlers: Map<string, (...args: unknown[]) => void> = new Map();
+
+      for (const channel of channels) {
+        const handler = (_e: unknown, payload: unknown) => cb(channel, payload);
+        handlers.set(channel, handler);
+        ipcRenderer.on(channel, handler);
+      }
+
+      ipcRenderer.send('call:subscribe');
+
+      return () => {
+        ipcRenderer.send('call:unsubscribe');
+        for (const [channel, handler] of handlers) {
+          ipcRenderer.removeListener(channel, handler);
+        }
+      };
+    },
+  });
 } catch (error) {
   loggerError('error', error);
 }
