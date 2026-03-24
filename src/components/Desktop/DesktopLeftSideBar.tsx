@@ -1,4 +1,4 @@
-import { Box, ButtonBase, useTheme } from '@mui/material';
+import { Box, ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { Save } from '../Save/Save';
 import { IconWrapper } from './DesktopFooter';
@@ -6,6 +6,7 @@ import {
   enabledDevModeAtom,
   hasUnreadGroupsAtom,
   isNewTabWindowAtom,
+  supportChatOpenAtom,
 } from '../../atoms/global';
 import { useAtom, useAtomValue } from 'jotai';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
@@ -18,6 +19,7 @@ import { AppsNavBarDesktop } from '../Apps/AppsNavBarDesktop';
 import { AppsDevModeNavBar } from '../Apps/AppsDevModeNavBar';
 import { executeEvent } from '../../utils/events';
 import { appHeighOffsetPx } from './CustomTitleBar';
+import HeadsetMicRoundedIcon from '@mui/icons-material/HeadsetMicRounded';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -37,6 +39,7 @@ export const DesktopSideBar = ({
   const [isNewTabWindow] = useAtom(isNewTabWindowAtom);
   const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
+  const [isSupportChatOpen, setIsSupportChatOpen] = useAtom(supportChatOpenAtom);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -229,6 +232,37 @@ export const DesktopSideBar = ({
           width: 'auto',
         }}
       >
+        <Box sx={{ alignSelf: 'center', mb: 1 }}>
+          <Tooltip
+            title="Support Chat"
+            placement="right"
+          >
+            <ButtonBase
+              sx={{
+                borderRadius: '8px',
+                height: '44px',
+                width: '44px',
+                ...(isSupportChatOpen && {
+                  backgroundColor: theme.palette.action.selected,
+                }),
+                '&:hover': {
+                  backgroundColor: theme.palette.action.hover,
+                },
+              }}
+              onClick={() => setIsSupportChatOpen((v) => !v)}
+            >
+              <HeadsetMicRoundedIcon
+                sx={{
+                  color: isSupportChatOpen
+                    ? theme.palette.text.primary
+                    : theme.palette.text.secondary,
+                  fontSize: 26,
+                }}
+              />
+            </ButtonBase>
+          </Tooltip>
+        </Box>
+
         <Box sx={{ alignSelf: 'left' }}>
           <LanguageSelector />
         </Box>

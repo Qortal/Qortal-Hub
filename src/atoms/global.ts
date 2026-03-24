@@ -581,3 +581,6 @@ export function useGetResourceStatus() {
     return resources?.[id];
   });
 }
+
+/** Controls visibility of the support chat panel (toggled via sidebar icon). */
+export const supportChatOpenAtom = atom(false);

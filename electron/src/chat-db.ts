@@ -617,7 +617,23 @@ export class ChatDatabase {
       }
     }
 
+    this.enrichWithAttachments(missing);
     return missing;
+  }
+
+  /**
+   * For each event in the list that declares an attachment but has no blob yet,
+   * look up the blob from chat_attachments and attach it inline.
+   * Used so that P2P sync responses carry the full attachment data, allowing
+   * offline peers to receive image blobs they missed during live broadcast.
+   */
+  private enrichWithAttachments(events: ChatEvent[]): void {
+    for (const event of events) {
+      if (event.attachmentMeta && !event.attachmentData) {
+        const blob = this.getAttachment(event.id);
+        if (blob) event.attachmentData = blob;
+      }
+    }
   }
 
   /**

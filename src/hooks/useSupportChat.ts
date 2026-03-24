@@ -156,7 +156,7 @@ export interface UseSupportChatReturn extends UseP2PChatReturn {
 
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useSupportChat(): UseSupportChatReturn {
+export function useSupportChat(hasStarted = false): UseSupportChatReturn {
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress = userInfo?.address ?? '';
 
@@ -261,6 +261,7 @@ export function useSupportChat(): UseSupportChatReturn {
   // Also seeds agentKnockTimesRef for every agent that is already online so
   // the presence re-knock effect does not send a duplicate immediately after.
   useEffect(() => {
+    if (!hasStarted) return;
     if (!myAddress || !userInfo?.publicKey || !window.chat) return;
     if (lastKnockAtRef.current !== 0) return;
 
@@ -281,7 +282,7 @@ export function useSupportChat(): UseSupportChatReturn {
       lastKnockAtRef.current = 0;
       agentKnockTimesRef.current.clear();
     });
-  }, [myAddress, userInfo?.publicKey, postQueueKnock, onlineAddresses]);
+  }, [hasStarted, myAddress, userInfo?.publicKey, postQueueKnock, onlineAddresses]);
 
   // Re-knock on a per-agent basis whenever onlineAddresses changes (~25 s heartbeat).
   //
@@ -294,6 +295,7 @@ export function useSupportChat(): UseSupportChatReturn {
   // One knock is sent even if multiple agents need one — the knock goes to
   // support:queue which all subscribed agents receive simultaneously.
   useEffect(() => {
+    if (!hasStarted) return;
     if (!myAddress || !userInfo?.publicKey) return;
     if (isClosed) return;
     if (lastKnockAtRef.current === 0) return; // initial knock effect handles first knock
@@ -324,7 +326,7 @@ export function useSupportChat(): UseSupportChatReturn {
     }
 
     postQueueKnock(myAddress, userInfo!.publicKey).catch(() => {});
-  }, [onlineAddresses, myAddress, userInfo?.publicKey, isClosed, postQueueKnock]);
+  }, [hasStarted, onlineAddresses, myAddress, userInfo?.publicKey, isClosed, postQueueKnock]);
 
   // ── Decrypt incoming messages ─────────────────────────────────────────────
 

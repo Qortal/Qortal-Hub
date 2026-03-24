@@ -9,7 +9,7 @@
  * of SUPPORT_ADDRESSES.  Regular users never see this component.
  */
 
-import {
+import React, {
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -17,10 +17,11 @@ import {
   useRef,
   useState,
 } from 'react';
-import type React from 'react';
-import { useAtomValue } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { useMessageReadObserver } from '../../hooks/useMessageReadObserver';
+import { supportChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import {
+  Avatar,
   Box,
   CircularProgress,
   IconButton,
@@ -31,17 +32,20 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import ReplyRoundedIcon from '@mui/icons-material/ReplyRounded';
-import EmojiEmotionsRoundedIcon from '@mui/icons-material/EmojiEmotionsRounded';
-import EditRoundedIcon from '@mui/icons-material/EditRounded';
-import DeleteRoundedIcon from '@mui/icons-material/DeleteRounded';
+import AddReactionRoundedIcon from '@mui/icons-material/AddReactionRounded';
+import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
+import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import RemoveCircleOutlineRoundedIcon from '@mui/icons-material/RemoveCircleOutlineRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import BlockRoundedIcon from '@mui/icons-material/BlockRounded';
 import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
-import { userInfoAtom } from '../../atoms/global';
+import DoneAllRoundedIcon from '@mui/icons-material/DoneAllRounded';
+import HeadsetMicRoundedIcon from '@mui/icons-material/HeadsetMicRounded';
 import {
   useAgentSupportChat,
   SupportTicket,
@@ -60,12 +64,12 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-function addrColor(addr: string): string {
+function addrColor(addr: string, isDark = false): string {
   let h = 0;
   for (let i = 0; i < addr.length; i++) {
     h = (h * 31 + addr.charCodeAt(i)) & 0xffff;
   }
-  return `hsl(${h % 360}, 55%, 45%)`;
+  return `hsl(${h % 360}, 60%, ${isDark ? 68 : 40}%)`;
 }
 
 function fmtTime(ts: number): string {
@@ -89,7 +93,7 @@ function TicketRow({
   const online = useIsOnline(ticket.userAddress);
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const color = addrColor(ticket.userAddress);
+  const color = addrColor(ticket.userAddress, isDark);
 
   return (
     <Box
@@ -114,40 +118,61 @@ function TicketRow({
         transition: 'background-color 0.12s',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.2 }}>
-        {/* Online dot */}
-        <Box
-          sx={{
-            width: 6,
-            height: 6,
-            borderRadius: '50%',
-            backgroundColor: online ? '#44b700' : '#78909c',
-            flexShrink: 0,
-          }}
-        />
-        <Typography
-          variant="caption"
-          sx={{
-            fontFamily: 'monospace',
-            color,
-            fontWeight: 600,
-            lineHeight: 1.2,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {shortAddr(ticket.userAddress)}
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+        {/* User avatar with online dot */}
+        <Box sx={{ position: 'relative', flexShrink: 0 }}>
+          <Avatar
+            sx={{
+              width: 28,
+              height: 28,
+              fontSize: 11,
+              fontWeight: 700,
+              backgroundColor: color,
+            }}
+          >
+            {ticket.userAddress[0]}
+          </Avatar>
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              backgroundColor: online ? '#44b700' : '#78909c',
+              border: '1.5px solid',
+              borderColor: 'background.paper',
+            }}
+          />
+        </Box>
+
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography
+            variant="caption"
+            sx={{
+              fontFamily: 'monospace',
+              color,
+              fontWeight: 600,
+              lineHeight: 1.2,
+              display: 'block',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {shortAddr(ticket.userAddress)}
+          </Typography>
+          {ticket.isResolved && (
+            <Typography
+              variant="caption"
+              sx={{ fontSize: 9, opacity: 0.55, letterSpacing: 0.4 }}
+            >
+              RESOLVED
+            </Typography>
+          )}
+        </Box>
       </Box>
-      {ticket.isResolved && (
-        <Typography
-          variant="caption"
-          sx={{ fontSize: 9, opacity: 0.55, letterSpacing: 0.4 }}
-        >
-          RESOLVED
-        </Typography>
-      )}
     </Box>
   );
 }
@@ -163,52 +188,69 @@ function ReplyQuoteBar({
   findMessage: (id: string) => RenderedMessage | undefined;
   isMine: boolean;
 }) {
+  const parent = findMessage(parentId);
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const parent = findMessage(parentId);
-  const authorColor = parent ? addrColor(parent.authorAddress) : '#78909c';
+  const authorColor = parent ? addrColor(parent.authorAddress, isDark) : '#78909c';
   const preview = parent
     ? parent.isDeleted
       ? 'Message deleted'
-      : parent.content.length > 80
-        ? `${parent.content.slice(0, 80)}…`
+      : parent.content.length > 120
+        ? `${parent.content.slice(0, 120)}…`
         : parent.content
     : '(message not found)';
 
   return (
     <Box
       sx={{
-        mb: 0.6,
+        mb: 0.75,
         px: 1,
-        py: 0.4,
-        borderRadius: 1,
+        py: 0.5,
+        borderRadius: 1.5,
         borderLeft: `3px solid ${authorColor}`,
         backgroundColor: isMine
-          ? 'rgba(0,0,0,0.18)'
-          : isDark
-            ? 'rgba(255,255,255,0.08)'
-            : 'rgba(0,0,0,0.07)',
+          ? 'rgba(0,0,0,0.2)'
+          : `${authorColor}22`,
         maxWidth: '100%',
       }}
     >
       {parent && (
-        <Typography
-          variant="caption"
-          sx={{ display: 'block', color: authorColor, fontWeight: 600, lineHeight: 1.3 }}
-        >
-          {shortAddr(parent.authorAddress)}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.25 }}>
+          <Box
+            sx={{
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              backgroundColor: authorColor,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 8,
+              fontWeight: 700,
+              color: '#fff',
+              flexShrink: 0,
+            }}
+          >
+            {parent.authorAddress[0]}
+          </Box>
+          <Typography
+            variant="caption"
+            sx={{ color: authorColor, fontWeight: 600, fontSize: 11, lineHeight: 1 }}
+          >
+            {shortAddr(parent.authorAddress)}
+          </Typography>
+        </Box>
       )}
       <Typography
         variant="caption"
         sx={{
-          display: 'block',
-          opacity: 0.75,
-          lineHeight: 1.3,
-          fontStyle: parent?.isDeleted ? 'italic' : 'normal',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          opacity: 0.75,
+          lineHeight: 1.4,
+          fontStyle: parent?.isDeleted ? 'italic' : 'normal',
         }}
       >
         {preview}
@@ -224,17 +266,31 @@ function ReactionChips({
   targetId,
   myAddress,
   onReaction,
+  isMine,
 }: {
   reactions: Record<string, string[]>;
   targetId: string;
   myAddress: string;
   onReaction: (targetId: string, emoji: string) => void;
+  isMine: boolean;
 }) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  const primaryColor = theme.palette.primary.main;
   const entries = Object.entries(reactions);
   if (entries.length === 0) return null;
 
   return (
-    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.4, mt: 0.5 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 0.4,
+        mt: -0.75,
+        px: 0.5,
+        alignSelf: isMine ? 'flex-end' : 'flex-start',
+      }}
+    >
       {entries.map(([emoji, addresses]) => {
         const iReacted = addresses.includes(myAddress);
         return (
@@ -252,22 +308,28 @@ function ReactionChips({
               sx={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 0.3,
-                px: 0.7,
-                py: 0.2,
-                borderRadius: 3,
+                gap: 0.35,
+                px: 1,
+                py: 0.4,
+                borderRadius: '20px',
                 cursor: 'pointer',
                 userSelect: 'none',
-                border: '1px solid',
-                borderColor: iReacted ? 'primary.main' : 'rgba(128,128,128,0.35)',
-                backgroundColor: iReacted ? 'primary.main' : 'transparent',
-                color: iReacted ? 'primary.contrastText' : 'text.primary',
-                transition: 'opacity 0.15s',
-                '&:hover': { opacity: 0.8 },
+                backdropFilter: 'blur(8px)',
+                backgroundColor: iReacted
+                  ? alpha(primaryColor, 0.85)
+                  : isDark ? 'rgba(40,44,52,0.88)' : 'rgba(255,255,255,0.88)',
+                border: `1px solid ${iReacted ? primaryColor : (isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)')}`,
+                color: iReacted ? theme.palette.primary.contrastText : theme.palette.text.primary,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+                transition: 'transform 0.1s ease, box-shadow 0.1s ease',
+                '&:hover': {
+                  transform: 'scale(1.08)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                },
               }}
             >
-              <span style={{ fontSize: 13, lineHeight: 1 }}>{emoji}</span>
-              <Typography component="span" sx={{ fontSize: 11, lineHeight: 1 }}>
+              <span style={{ fontSize: 14, lineHeight: 1 }}>{emoji}</span>
+              <Typography component="span" sx={{ fontSize: 11, lineHeight: 1, fontWeight: 600 }}>
                 {addresses.length}
               </Typography>
             </Box>
@@ -421,6 +483,37 @@ function AttachmentImage({
   );
 }
 
+// ── DateSeparator ─────────────────────────────────────────────────────────────
+
+function DateSeparator({ timestamp }: { timestamp: number }) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  const borderColor = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
+  const label = new Date(timestamp).toLocaleDateString([], {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+  });
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.5 }}>
+      <Box sx={{ flex: 1, height: '1px', backgroundColor: borderColor }} />
+      <Typography
+        variant="caption"
+        sx={{
+          opacity: 0.4,
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: 0.5,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </Typography>
+      <Box sx={{ flex: 1, height: '1px', backgroundColor: borderColor }} />
+    </Box>
+  );
+}
+
 // ── MessageBubble ─────────────────────────────────────────────────────────────
 
 function MessageBubble({
@@ -437,6 +530,7 @@ function MessageBubble({
   register,
   unregister,
   decryptCache,
+  isGrouped,
 }: {
   msg: RenderedMessage;
   isMine: boolean;
@@ -451,10 +545,15 @@ function MessageBubble({
   register: (msgId: string, el: HTMLElement) => void;
   unregister: (msgId: string, el: HTMLElement) => void;
   decryptCache: React.MutableRefObject<Map<string, string>>;
+  isGrouped?: boolean;
 }) {
   const theme = useTheme();
-  const color = addrColor(msg.authorAddress);
+  const isDark = theme.palette.mode === 'dark';
+  const color = addrColor(msg.authorAddress, isDark);
   const [emojiAnchor, setEmojiAnchor] = useState<HTMLElement | null>(null);
+
+  const borderColor = isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.10)';
+  const seenByUser = ticketUserAddress && readBy.has(ticketUserAddress);
 
   // Intersection-based read: observe this element only for messages from others.
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -465,89 +564,80 @@ function MessageBubble({
     return () => unregister(msg.id, el);
   }, [msg.id, isMine, msg.isDeleted, register, unregister]);
 
-  const actionBar = (
-    <Box
-      className="chat-actions"
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 0.25,
-        opacity: 0,
-        transition: 'opacity 0.15s',
-        mx: 0.25,
-        flexShrink: 0,
-      }}
-    >
-      <Tooltip title="Reply" placement={isMine ? 'left' : 'right'}>
-        <IconButton size="small" sx={{ p: 0.35 }} onClick={() => onReply(msg)}>
-          <ReplyRoundedIcon sx={{ fontSize: 14 }} />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title="React" placement={isMine ? 'left' : 'right'}>
-        <IconButton
-          size="small"
-          sx={{ p: 0.35 }}
-          onClick={(e) => setEmojiAnchor(e.currentTarget)}
-        >
-          <EmojiEmotionsRoundedIcon sx={{ fontSize: 14 }} />
-        </IconButton>
-      </Tooltip>
-      {isMine && !msg.isDeleted && (
-        <>
-          <Tooltip title="Edit" placement="left">
-            <IconButton size="small" sx={{ p: 0.35 }} onClick={() => onEdit(msg)}>
-              <EditRoundedIcon sx={{ fontSize: 14 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete" placement="left">
-            <IconButton
-              size="small"
-              sx={{ p: 0.35, color: 'error.main' }}
-              onClick={() => onDelete(msg.id)}
-            >
-              <DeleteRoundedIcon sx={{ fontSize: 14 }} />
-            </IconButton>
-          </Tooltip>
-        </>
-      )}
-    </Box>
-  );
-
   return (
     <Box
       ref={rootRef}
       sx={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        flexDirection: isMine ? 'row-reverse' : 'row',
+        mb: isGrouped ? 0.35 : 1.25,
+        px: 1.5,
+        gap: 0.5,
+        '&:hover .chat-actions': { opacity: 1 },
       }}
     >
-      {actionBar}
+      {/* Avatar or spacer */}
+      {!isMine ? (
+        isGrouped ? (
+          <Box sx={{ width: 32, flexShrink: 0 }} />
+        ) : (
+          <Tooltip title={msg.authorAddress} placement="left">
+            <Avatar
+              sx={{
+                width: 32,
+                height: 32,
+                fontSize: 12,
+                fontWeight: 700,
+                backgroundColor: color,
+                flexShrink: 0,
+                mt: 0.5,
+              }}
+            >
+              {msg.authorAddress[0]}
+            </Avatar>
+          </Tooltip>
+        )
+      ) : null}
+
+      {/* Bubble column */}
       <Box
         sx={{
           display: 'flex',
           flexDirection: 'column',
           alignItems: isMine ? 'flex-end' : 'flex-start',
-          maxWidth: '80%',
+          maxWidth: '72%',
           minWidth: 0,
         }}
       >
-        {!isMine && (
+        {/* Sender label (hidden when grouped) */}
+        {!isMine && !isGrouped && (
           <Typography
             variant="caption"
-            sx={{ fontFamily: 'monospace', color, mb: 0.25, ml: 0.5, opacity: 0.9 }}
+            sx={{ fontFamily: 'monospace', color, mb: 0.3, ml: 0.5, fontSize: 11, fontWeight: 600 }}
           >
             {shortAddr(msg.authorAddress)}
           </Typography>
         )}
+
+        {/* Bubble */}
         <Box
           sx={{
-            px: 1.5,
-            py: 0.75,
-            borderRadius: isMine ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+            px: 1.75,
+            py: 1,
+            borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+            background: isMine
+              ? `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark ?? theme.palette.primary.main})`
+              : undefined,
             backgroundColor: isMine
-              ? theme.palette.primary.main
-              : theme.palette.mode === 'dark'
-                ? 'rgba(255,255,255,0.1)'
-                : 'rgba(0,0,0,0.07)',
+              ? undefined
+              : isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.055)',
+            border: isMine
+              ? undefined
+              : `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)'}`,
+            boxShadow: isMine
+              ? '0 2px 8px rgba(0,0,0,0.22)'
+              : '0 1px 3px rgba(0,0,0,0.08)',
             color: isMine
               ? theme.palette.primary.contrastText
               : theme.palette.text.primary,
@@ -562,20 +652,20 @@ function MessageBubble({
               isMine={isMine}
             />
           )}
+
           {msg.isDeleted ? (
-            <Typography
-              variant="body2"
-              sx={{ lineHeight: 1.45, fontStyle: 'italic', opacity: 0.5 }}
-            >
-              Message deleted
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, opacity: isMine ? 0.55 : 0.45 }}>
+              <RemoveCircleOutlineRoundedIcon sx={{ fontSize: 15 }} />
+              <Typography variant="body2" sx={{ fontStyle: 'italic', fontSize: 13 }}>
+                This message was deleted
+              </Typography>
+            </Box>
           ) : (
-            <Typography variant="body2" sx={{ lineHeight: 1.45 }}>
+            <Typography variant="body2" sx={{ lineHeight: 1.5, fontSize: 14 }}>
               {msg.content}
             </Typography>
           )}
 
-          {/* Attachment image */}
           {!msg.isDeleted && msg.attachmentMeta && (
             <AttachmentImage
               eventId={msg.id}
@@ -587,36 +677,155 @@ function MessageBubble({
               decryptCache={decryptCache}
             />
           )}
-        </Box>
-        <Box sx={{ px: 0.5 }}>
-          <ReactionChips
-            reactions={msg.reactions}
-            targetId={msg.id}
-            myAddress={myAddress}
-            onReaction={onReaction}
-          />
-        </Box>
-        <Box
-          sx={{ display: 'flex', gap: 0.5, mt: 0.2, mx: 0.5, alignItems: 'center' }}
-        >
-          <Typography variant="caption" sx={{ opacity: 0.4, fontSize: 10 }}>
-            {fmtTime(msg.timestamp)}
-          </Typography>
-          {msg.isEdited && (
+
+          {/* Timestamp + seen tick inside bubble */}
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              gap: 0.4,
+              mt: 0.75,
+              mx: -0.25,
+            }}
+          >
+            {msg.isEdited && (
+              <Typography
+                sx={{
+                  fontSize: 10,
+                  fontStyle: 'italic',
+                  color: isMine ? 'rgba(255,255,255,0.55)' : 'text.disabled',
+                }}
+              >
+                edited
+              </Typography>
+            )}
             <Typography
-              variant="caption"
-              sx={{ opacity: 0.35, fontSize: 10, fontStyle: 'italic' }}
+              sx={{
+                fontSize: 10,
+                color: isMine ? 'rgba(255,255,255,0.6)' : 'text.disabled',
+              }}
             >
-              edited
+              {fmtTime(msg.timestamp)}
             </Typography>
-          )}
-          {isMine && ticketUserAddress && readBy.has(ticketUserAddress) && (
-            <Typography variant="caption" sx={{ opacity: 0.45, fontSize: 10 }}>
-              Seen
-            </Typography>
-          )}
+            {isMine && (
+              <Tooltip title={seenByUser ? 'Seen by user' : 'Sent'}>
+                <DoneAllRoundedIcon
+                  sx={{
+                    fontSize: 14,
+                    color: seenByUser
+                      ? 'rgba(255,255,255,0.95)'
+                      : 'rgba(255,255,255,0.45)',
+                  }}
+                />
+              </Tooltip>
+            )}
+          </Box>
         </Box>
+
+        {/* Reactions */}
+        <ReactionChips
+          reactions={msg.reactions}
+          targetId={msg.id}
+          myAddress={myAddress}
+          onReaction={onReaction}
+          isMine={isMine}
+        />
       </Box>
+
+      {/* ── Action pill — sibling to bubble column so it never overlaps text ── */}
+      <Box
+        className="chat-actions"
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 0.25,
+          opacity: 0,
+          transition: 'opacity 0.18s ease',
+          alignSelf: 'center',
+          flexShrink: 0,
+          backgroundColor: isDark ? '#23272e' : '#ffffff',
+          borderRadius: '24px',
+          boxShadow: isDark
+            ? '0 4px 16px rgba(0,0,0,0.45)'
+            : '0 4px 16px rgba(0,0,0,0.15)',
+          border: `1px solid ${borderColor}`,
+          px: 0.75,
+          py: 0.5,
+        }}
+      >
+        <Tooltip title="Reply">
+          <IconButton
+            size="small"
+            sx={{
+              borderRadius: '50%',
+              p: 0.6,
+              '&:hover': {
+                color: 'primary.main',
+                backgroundColor: alpha(theme.palette.primary.main, 0.12),
+              },
+            }}
+            onClick={() => onReply(msg)}
+          >
+            <ReplyRoundedIcon sx={{ fontSize: 17 }} />
+          </IconButton>
+        </Tooltip>
+
+        <Tooltip title="React">
+          <IconButton
+            size="small"
+            sx={{
+              borderRadius: '50%',
+              p: 0.6,
+              '&:hover': {
+                color: '#f59e0b',
+                backgroundColor: 'rgba(245,158,11,0.12)',
+              },
+            }}
+            onClick={(e) => setEmojiAnchor(e.currentTarget)}
+          >
+            <AddReactionRoundedIcon sx={{ fontSize: 17 }} />
+          </IconButton>
+        </Tooltip>
+
+        {isMine && !msg.isDeleted && (
+          <>
+            <Box sx={{ width: '1px', height: 18, backgroundColor: borderColor, mx: 0.25 }} />
+            <Tooltip title="Edit">
+              <IconButton
+                size="small"
+                sx={{
+                  borderRadius: '50%',
+                  p: 0.6,
+                  '&:hover': {
+                    color: 'warning.main',
+                    backgroundColor: alpha(theme.palette.warning.main, 0.12),
+                  },
+                }}
+                onClick={() => onEdit(msg)}
+              >
+                <DriveFileRenameOutlineRoundedIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete">
+              <IconButton
+                size="small"
+                sx={{
+                  borderRadius: '50%',
+                  p: 0.6,
+                  color: 'error.main',
+                  '&:hover': { backgroundColor: alpha(theme.palette.error.main, 0.12) },
+                }}
+                onClick={() => onDelete(msg.id)}
+              >
+                <DeleteOutlineRoundedIcon sx={{ fontSize: 17 }} />
+              </IconButton>
+            </Tooltip>
+          </>
+        )}
+      </Box>
+
       <EmojiPicker
         anchor={emojiAnchor}
         onClose={() => setEmojiAnchor(null)}
@@ -652,6 +861,7 @@ function TypingRow({ addresses }: { addresses: Set<string> }) {
 export function AgentSupportDashboard() {
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress: string = userInfo?.address ?? '';
+  const [isOpen, setIsOpen] = useAtom(supportChatOpenAtom);
 
   const {
     tickets,
@@ -818,6 +1028,8 @@ export function AgentSupportDashboard() {
 
   if (!myAddress) return null;
 
+  if (!isOpen) return null;
+
   const isDark = theme.palette.mode === 'dark';
   const bgColor = isDark ? '#1a1d23' : '#ffffff';
   const borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.12)';
@@ -827,16 +1039,16 @@ export function AgentSupportDashboard() {
 
   return (
     <Paper
-      elevation={8}
+      elevation={12}
       sx={{
         position: 'fixed',
         bottom: 24,
         right: 24,
-        width: 520,
-        height: 520,
+        width: 640,
+        height: 600,
         display: 'flex',
         flexDirection: 'row',
-        borderRadius: 2.5,
+        borderRadius: 3,
         overflow: 'hidden',
         border: `1px solid ${borderColor}`,
         backgroundColor: bgColor,
@@ -846,7 +1058,7 @@ export function AgentSupportDashboard() {
       {/* ── Left: ticket list ──────────────────────────────────────────────── */}
       <Box
         sx={{
-          width: 140,
+          width: 180,
           flexShrink: 0,
           borderRight: `1px solid ${dividerColor}`,
           display: 'flex',
@@ -864,27 +1076,41 @@ export function AgentSupportDashboard() {
             flexShrink: 0,
           }}
         >
-          <Typography variant="caption" sx={{ fontWeight: 700, opacity: 0.7, letterSpacing: 0.4 }}>
-            QUEUE
-          </Typography>
-          {tickets.filter((t) => !t.isBlocked).length > 0 && (
-            <Typography
-              variant="caption"
-              sx={{
-                ml: 0.75,
-                px: 0.6,
-                py: 0.1,
-                borderRadius: 1,
-                backgroundColor: 'primary.main',
-                color: 'primary.contrastText',
-                fontSize: 10,
-                fontWeight: 700,
-                lineHeight: 1.6,
-              }}
-            >
-              {tickets.filter((t) => !t.isBlocked && !t.isResolved).length}
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+            <HeadsetMicRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', mr: 0.5 }} />
+            <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.2, flex: 1, fontSize: 12 }}>
+              Support
             </Typography>
-          )}
+            <IconButton
+              size="small"
+              sx={{ p: 0.25 }}
+              onClick={() => setIsOpen(false)}
+            >
+              <CloseRoundedIcon sx={{ fontSize: 14 }} />
+            </IconButton>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, opacity: 0.55, letterSpacing: 0.4, fontSize: 10 }}>
+              QUEUE
+            </Typography>
+            {tickets.filter((t) => !t.isBlocked).length > 0 && (
+              <Typography
+                variant="caption"
+                sx={{
+                  px: 0.6,
+                  py: 0.1,
+                  borderRadius: 1,
+                  backgroundColor: 'primary.main',
+                  color: 'primary.contrastText',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  lineHeight: 1.6,
+                }}
+              >
+                {tickets.filter((t) => !t.isBlocked && !t.isResolved).length}
+              </Typography>
+            )}
+          </Box>
         </Box>
 
         {/* Ticket rows */}
@@ -987,9 +1213,8 @@ export function AgentSupportDashboard() {
         {/* Conversation header */}
         <Box
           sx={{
-            px: 1.5,
-            pt: 1.5,
-            pb: 1,
+            px: 2,
+            py: 1.25,
             borderBottom: `1px solid ${borderColor}`,
             flexShrink: 0,
             display: 'flex',
@@ -997,26 +1222,59 @@ export function AgentSupportDashboard() {
             gap: 1,
           }}
         >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: 0.3 }}>
+          {/* User avatar + info */}
+          {activeTicket ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
+              <Box sx={{ position: 'relative', flexShrink: 0 }}>
+                <Avatar
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    backgroundColor: addrColor(activeTicket.userAddress, isDark),
+                  }}
+                >
+                  {activeTicket.userAddress[0]}
+                </Avatar>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0,
+                    width: 9,
+                    height: 9,
+                    borderRadius: '50%',
+                    backgroundColor: '#44b700',
+                    border: '1.5px solid',
+                    borderColor: 'background.paper',
+                  }}
+                />
+              </Box>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    fontFamily: 'monospace',
+                    fontWeight: 600,
+                    letterSpacing: 0.2,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {shortAddr(activeTicket.userAddress)}
+                </Typography>
+                <Typography variant="caption" sx={{ opacity: 0.5, display: 'block', fontSize: 10 }}>
+                  {activeTicket.isResolved ? 'Resolved' : 'Active session'}
+                </Typography>
+              </Box>
+            </Box>
+          ) : (
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1 }}>
               Support Agents
             </Typography>
-            {activeTicket && (
-              <Typography
-                variant="caption"
-                sx={{
-                  fontFamily: 'monospace',
-                  opacity: 0.6,
-                  display: 'block',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {activeTicket.userAddress}
-              </Typography>
-            )}
-          </Box>
+          )}
 
           {/* Connection dot */}
           <Tooltip
@@ -1178,24 +1436,33 @@ export function AgentSupportDashboard() {
             </Box>
           )}
 
-          {messages.map((msg) => (
-            <MessageBubble
-              key={msg.id}
-              msg={msg}
-              isMine={msg.authorAddress === myAddress}
-              findMessage={findMessage}
-              myAddress={myAddress}
-              readBy={readReceipts.get(msg.id) ?? new Set<string>()}
-              ticketUserAddress={activeTicket?.userAddress ?? ''}
-              onReply={handleStartReply}
-              onEdit={handleStartEdit}
-              onDelete={handleDelete}
-              onReaction={handleReaction}
-              register={registerRead}
-              unregister={unregisterRead}
-              decryptCache={decryptCache}
-            />
-          ))}
+          {messages.map((msg, idx) => {
+            const prev = idx > 0 ? messages[idx - 1] : null;
+            const isGrouped = prev !== null && prev.authorAddress === msg.authorAddress;
+            const showDateSep = prev !== null &&
+              new Date(msg.timestamp).toDateString() !== new Date(prev.timestamp).toDateString();
+            return (
+              <React.Fragment key={msg.id}>
+                {showDateSep && <DateSeparator timestamp={msg.timestamp} />}
+                <MessageBubble
+                  msg={msg}
+                  isMine={msg.authorAddress === myAddress}
+                  findMessage={findMessage}
+                  myAddress={myAddress}
+                  readBy={readReceipts.get(msg.id) ?? new Set<string>()}
+                  ticketUserAddress={activeTicket?.userAddress ?? ''}
+                  onReply={handleStartReply}
+                  onEdit={handleStartEdit}
+                  onDelete={handleDelete}
+                  onReaction={handleReaction}
+                  register={registerRead}
+                  unregister={unregisterRead}
+                  decryptCache={decryptCache}
+                  isGrouped={isGrouped}
+                />
+              </React.Fragment>
+            );
+          })}
 
           <TypingRow addresses={typingUsers} />
           <div ref={messagesEndRef} />
@@ -1277,7 +1544,7 @@ export function AgentSupportDashboard() {
           <InputBase
             inputRef={inputRef}
             multiline
-            maxRows={4}
+            maxRows={5}
             placeholder={
               !hasActiveTicket
                 ? 'Select a ticket…'
@@ -1297,8 +1564,8 @@ export function AgentSupportDashboard() {
               flex: 1,
               fontSize: 14,
               px: 1.5,
-              py: 0.75,
-              borderRadius: 2,
+              py: 1,
+              borderRadius: 2.5,
               backgroundColor: isDark
                 ? 'rgba(255,255,255,0.06)'
                 : 'rgba(0,0,0,0.04)',
@@ -1307,16 +1574,16 @@ export function AgentSupportDashboard() {
             }}
           />
           <IconButton
-            size="small"
+            size="medium"
             onClick={handleSend}
             disabled={!hasActiveTicket || !isReady || !inputText.trim() || isSending || !window.chat}
             color={editTarget ? 'warning' : 'primary'}
             sx={{ mb: 0.25, '&:disabled': { opacity: 0.35 } }}
           >
             {isSending ? (
-              <CircularProgress size={18} />
+              <CircularProgress size={20} />
             ) : (
-              <SendRoundedIcon fontSize="small" />
+              <SendRoundedIcon />
             )}
           </IconButton>
         </Box>
