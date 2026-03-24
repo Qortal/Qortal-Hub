@@ -78,9 +78,10 @@ const OPUS_FRAME_SAMPLES = (OPUS_SAMPLE_RATE * OPUS_FRAME_DURATION_MS) / 1000; /
 const JITTER_BUFFER_SIZE = 4;        // ~80ms buffer
 const JITTER_DRAIN_INTERVAL_MS = 20; // drain every 20ms (one Opus frame)
 
-const FORWARDER_TIMEOUT_MS = 3_000;  // miss 3 heartbeats → dead
-const TOPOLOGY_HEARTBEAT_MS = 1_000; // forwarder sends GC_TOPOLOGY heartbeat
+const FORWARDER_TIMEOUT_MS = 4_500;  // miss 3 heartbeats → dead
+const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
 const PROMOTION_COOLDOWN_MS = 2_000; // standby waits before promoting
+const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 
 const CLUSTER_SIZE = 10;
 const MAX_ACTIVE_SPEAKERS_LOCAL = 2;
@@ -92,7 +93,7 @@ const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 const RELAY_MIN_INTERVAL_MS = 200;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
-const PERF_LOG_INTERVAL_MS = 5_000;
+const PERF_LOG_INTERVAL_MS = 10_000;
 const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 
 const HEADER_LEN_OFFSET = 0;
@@ -346,11 +347,17 @@ class JitterBuffer {
 
   push(seq: number, opusFrame: Uint8Array): void {
     if (seq <= this.lastPlayedSeq) return; // already played or older
-    if (this.entries.some((e) => e.seq === seq)) return; // duplicate
-    this.entries.push({ seq, opusFrame, receivedAt: performance.now() });
-    this.entries.sort((a, b) => a.seq - b.seq);
-    if (this.entries.length > JITTER_BUFFER_SIZE * 2) {
-      this.entries = this.entries.slice(-JITTER_BUFFER_SIZE * 2);
+    let insertAt = this.entries.length;
+    while (insertAt > 0) {
+      const prev = this.entries[insertAt - 1];
+      if (prev.seq === seq) return; // duplicate
+      if (prev.seq < seq) break;
+      insertAt--;
+    }
+    this.entries.splice(insertAt, 0, { seq, opusFrame, receivedAt: performance.now() });
+    const maxEntries = JITTER_BUFFER_SIZE * 2;
+    if (this.entries.length > maxEntries) {
+      this.entries.splice(0, this.entries.length - maxEntries);
     }
   }
 
@@ -361,6 +368,10 @@ class JitterBuffer {
     if (!entry) return null;
     this.lastPlayedSeq = entry.seq;
     return entry.opusFrame;
+  }
+
+  hasReadyFrame(): boolean {
+    return this.entries.length >= JITTER_BUFFER_SIZE;
   }
 
   clear(): void {
@@ -381,12 +392,16 @@ interface PeerConnection {
 
 // ── Main hook ──────────────────────────────────────────────────────────────────
 
-export function useGroupVoiceCall() {
+export function useGroupVoiceCall(uiActive = false) {
   const userInfo = useAtomValue(userInfoAtom);
 
   // ── Room state ──────────────────────────────────────────────────────────────
 
   const [roomState, setRoomState] = useState<RoomState>('idle');
+  /** Mirrors roomState for callbacks that must not depend on roomState (avoids spurious cleanup). */
+  const roomStateRef = useRef<RoomState>(roomState);
+  roomStateRef.current = roomState;
+
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<MyRole>('participant');
   const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
@@ -449,12 +464,14 @@ export function useGroupVoiceCall() {
   const lastRootHeartbeatRef = useRef<number>(Date.now());
   // Forwarder-timeout polling interval (runs every 500ms)
   const forwarderTimeoutCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const uiActiveRef = useRef(uiActive);
 
   // IPC unsubscribe function
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   // Jitter drain timer
   const jitterDrainTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeJitterSourcesRef = useRef<Set<string>>(new Set());
 
   // Per-peer timestamp of last P2P relay send, used to rate-limit relay during DC negotiation
   const relayLastSentRef = useRef<Map<string, number>>(new Map());
@@ -462,6 +479,7 @@ export function useGroupVoiceCall() {
   // Off-thread audio packet decryption worker
   const decryptWorkerRef = useRef<Worker | null>(null);
   const decryptIdRef = useRef<number>(0);
+  const encryptIdRef = useRef<number>(0);
   const metricsRef = useRef(new GroupCallPerformanceTracker());
   const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -507,25 +525,27 @@ export function useGroupVoiceCall() {
   const flushMetrics = useCallback(() => {
     updateMetricResourceCounts();
     const snapshot = metricsRef.current.getSnapshot();
-    setMetrics((prev) => {
-      const unchanged =
-        prev.role === snapshot.role &&
-        prev.packetsReceived === snapshot.packetsReceived &&
-        prev.packetsForwarded === snapshot.packetsForwarded &&
-        prev.packetsDecoded === snapshot.packetsDecoded &&
-        prev.packetsDropped === snapshot.packetsDropped &&
-        prev.relayPacketsSent === snapshot.relayPacketsSent &&
-        prev.relayPacketsReceived === snapshot.relayPacketsReceived &&
-        prev.decoderCount === snapshot.decoderCount &&
-        prev.playbackNodeCount === snapshot.playbackNodeCount &&
-        prev.jitterBufferCount === snapshot.jitterBufferCount &&
-        prev.avgIncomingPacketMs === snapshot.avgIncomingPacketMs &&
-        prev.maxIncomingPacketMs === snapshot.maxIncomingPacketMs &&
-        prev.avgJitterTickMs === snapshot.avgJitterTickMs &&
-        prev.maxJitterTickMs === snapshot.maxJitterTickMs &&
-        prev.lastUpdatedAt === snapshot.lastUpdatedAt;
-      return unchanged ? prev : snapshot;
-    });
+    if (uiActiveRef.current || roomStateRef.current !== 'idle') {
+      setMetrics((prev) => {
+        const unchanged =
+          prev.role === snapshot.role &&
+          prev.packetsReceived === snapshot.packetsReceived &&
+          prev.packetsForwarded === snapshot.packetsForwarded &&
+          prev.packetsDecoded === snapshot.packetsDecoded &&
+          prev.packetsDropped === snapshot.packetsDropped &&
+          prev.relayPacketsSent === snapshot.relayPacketsSent &&
+          prev.relayPacketsReceived === snapshot.relayPacketsReceived &&
+          prev.decoderCount === snapshot.decoderCount &&
+          prev.playbackNodeCount === snapshot.playbackNodeCount &&
+          prev.jitterBufferCount === snapshot.jitterBufferCount &&
+          prev.avgIncomingPacketMs === snapshot.avgIncomingPacketMs &&
+          prev.maxIncomingPacketMs === snapshot.maxIncomingPacketMs &&
+          prev.avgJitterTickMs === snapshot.avgJitterTickMs &&
+          prev.maxJitterTickMs === snapshot.maxJitterTickMs &&
+          prev.lastUpdatedAt === snapshot.lastUpdatedAt;
+        return unchanged ? prev : snapshot;
+      });
+    }
     if (isGroupCallDebugEnabled()) {
       debugLog('[GCall] metrics', snapshot);
     }
@@ -541,6 +561,13 @@ export function useGroupVoiceCall() {
     clearInterval(metricsFlushTimerRef.current);
     metricsFlushTimerRef.current = null;
   }, []);
+
+  useEffect(() => {
+    uiActiveRef.current = uiActive;
+    if (uiActive) {
+      flushMetrics();
+    }
+  }, [flushMetrics, uiActive]);
 
   const syncDecryptWorkerRoomKey = useCallback((roomKey: Uint8Array | null) => {
     if (!decryptWorkerRef.current) return;
@@ -1116,20 +1143,8 @@ export function useGroupVoiceCall() {
     await playbackWorkletModulePromiseRef.current;
   }, []);
 
-  const sendEncodedFrame = useCallback((opusFrame: Uint8Array) => {
-    if (!roomKeyRef.current || !userInfo?.address) return;
-    if (mutedRef.current) return; // mic is muted — drop frame
-    if (seqRef.current === 0) {
-      debugLog('[GCall] First encoded frame ready to send — role:', myRoleRef.current, 'upstreamDC:', upstreamDCRef.current?.readyState ?? 'none');
-    }
-
-    const seq = seqRef.current++ & 0xffff;
-    const timestampMs = Date.now() - callEpochRef.current;
-    const packet = encodePacket(
-      userInfo.address, isSpeakingRef.current, seq, timestampMs,
-      opusFrame, roomKeyRef.current
-    );
-
+  const dispatchEncodedPacket = useCallback((packet: Uint8Array) => {
+    if (!userInfo?.address || !roomIdRef.current || !roomKeyRef.current) return;
     if (upstreamDCRef.current?.readyState === 'open') {
       // Non-root: send to assigned forwarder
       upstreamDCRef.current.send(packet.buffer as ArrayBuffer);
@@ -1178,6 +1193,48 @@ export function useGroupVoiceCall() {
       }
     }
   }, [userInfo?.address]);
+
+  const sendEncodedFrame = useCallback((opusFrame: Uint8Array) => {
+    if (!roomKeyRef.current || !userInfo?.address) return;
+    if (mutedRef.current) return; // mic is muted — drop frame
+    if (seqRef.current === 0) {
+      debugLog('[GCall] First encoded frame ready to send — role:', myRoleRef.current, 'upstreamDC:', upstreamDCRef.current?.readyState ?? 'none');
+    }
+
+    const seq = seqRef.current++ & 0xffff;
+    const timestampMs = Date.now() - callEpochRef.current;
+
+    if (decryptWorkerRef.current) {
+      const frameBuffer =
+        opusFrame.byteOffset === 0 && opusFrame.byteLength === opusFrame.buffer.byteLength
+          ? opusFrame.buffer
+          : opusFrame.slice().buffer;
+      decryptWorkerRef.current.postMessage(
+        {
+          type: 'encrypt',
+          id: encryptIdRef.current++,
+          sourceAddr: userInfo.address,
+          vad: isSpeakingRef.current,
+          seq,
+          timestampMs,
+          opusFrame: frameBuffer,
+        },
+        [frameBuffer]
+      );
+      return;
+    }
+
+    dispatchEncodedPacket(
+      encodePacket(
+        userInfo.address,
+        isSpeakingRef.current,
+        seq,
+        timestampMs,
+        opusFrame,
+        roomKeyRef.current
+      )
+    );
+  }, [dispatchEncodedPacket, userInfo?.address]);
 
   // ── Audio decode ──────────────────────────────────────────────────────────
 
@@ -1339,6 +1396,9 @@ export function useGroupVoiceCall() {
         updateMetricResourceCounts();
       }
       jb.push(decoded.seq, decoded.opusFrame);
+      if (jb.hasReadyFrame()) {
+        activeJitterSourcesRef.current.add(decoded.sourceAddr);
+      }
     }
     metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
   }, [sendPacketToPeer, updateMetricResourceCounts, userInfo?.address]);
@@ -1350,7 +1410,12 @@ export function useGroupVoiceCall() {
     let firstDrainLogged = false;
     jitterDrainTimerRef.current = setInterval(() => {
       const tickStartedAt = performance.now();
-      for (const [addr, jb] of jitterMapRef.current) {
+      for (const addr of [...activeJitterSourcesRef.current]) {
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb || !jb.hasReadyFrame()) {
+          activeJitterSourcesRef.current.delete(addr);
+          continue;
+        }
         const frame = jb.pop();
         if (frame) {
           if (!firstDrainLogged) {
@@ -1378,6 +1443,9 @@ export function useGroupVoiceCall() {
           } else if (!decoder) {
             debugWarn('[GCall] getOrCreateDecoder returned null for', addr.slice(0, 12));
           }
+        }
+        if (!jb.hasReadyFrame()) {
+          activeJitterSourcesRef.current.delete(addr);
         }
       }
 
@@ -1483,19 +1551,27 @@ export function useGroupVoiceCall() {
     const worker = new AudioDecryptWorker();
     decryptWorkerRef.current = worker;
     decryptIdRef.current = 0;
+    encryptIdRef.current = 0;
     syncDecryptWorkerRoomKey(roomKeyRef.current);
 
     worker.onmessage = (e: MessageEvent<{
-      type: 'result';
+      type: 'result' | 'encryptResult';
       id: number;
-      decoded: {
+      decoded?: {
         sourceAddr: string;
         vad: boolean;
         seq: number;
         timestampMs: number;
         opusFrame: ArrayBuffer;
       } | null;
+      packet?: ArrayBuffer | null;
     }>) => {
+      if (e.data.type === 'encryptResult') {
+        if (e.data.packet) {
+          dispatchEncodedPacket(new Uint8Array(e.data.packet));
+        }
+        return;
+      }
       if (e.data.type !== 'result' || !e.data.decoded) return;
       const { sourceAddr, seq, opusFrame } = e.data.decoded;
       let jb = jitterMapRef.current.get(sourceAddr);
@@ -1505,13 +1581,16 @@ export function useGroupVoiceCall() {
         updateMetricResourceCounts();
       }
       jb.push(seq, new Uint8Array(opusFrame));
+      if (jb.hasReadyFrame()) {
+        activeJitterSourcesRef.current.add(sourceAddr);
+      }
       metricsRef.current.recordPacketDecoded();
     };
 
     worker.onerror = (err) => {
       console.error('[GCall] AudioDecryptWorker error:', err);
     };
-  }, [syncDecryptWorkerRoomKey, updateMetricResourceCounts]);
+  }, [dispatchEncodedPacket, syncDecryptWorkerRoomKey, updateMetricResourceCounts]);
 
   // ── Join / Leave ──────────────────────────────────────────────────────────
 
@@ -1588,12 +1667,13 @@ export function useGroupVoiceCall() {
 
   const startForwarderTimeoutCheck = useCallback(() => {
     if (forwarderTimeoutCheckRef.current) clearInterval(forwarderTimeoutCheckRef.current);
-    forwarderTimeoutCheckRef.current = setInterval(checkForwarderTimeout, 500);
+    forwarderTimeoutCheckRef.current = setInterval(checkForwarderTimeout, FORWARDER_TIMEOUT_CHECK_MS);
   }, [checkForwarderTimeout]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
   const cleanup = useCallback(() => {
+    window.groupCall?.setLocalAddresses([]).catch(() => {});
     if (jitterDrainTimerRef.current) { clearInterval(jitterDrainTimerRef.current); jitterDrainTimerRef.current = null; }
     if (topologyHeartbeatTimerRef.current) { clearInterval(topologyHeartbeatTimerRef.current); topologyHeartbeatTimerRef.current = null; }
     if (promotionTimerRef.current) { clearTimeout(promotionTimerRef.current); promotionTimerRef.current = null; }
@@ -1629,6 +1709,7 @@ export function useGroupVoiceCall() {
     }
     decoderMapRef.current.clear();
     jitterMapRef.current.clear();
+    activeJitterSourcesRef.current.clear();
     lastRecvAtRef.current.clear();
 
     // Close peer connections
@@ -1652,6 +1733,8 @@ export function useGroupVoiceCall() {
     roomKeyRef.current = null;
     topologyRef.current = null;
     localEpochRef.current = 0;
+    roomIdRef.current = '';
+    chatIdRef.current = '';
     participantsRef.current = new Map();
     seqRef.current = 0;
     localSpeakersRef.current.clear();
@@ -1668,7 +1751,12 @@ export function useGroupVoiceCall() {
   // ── IPC event subscription ─────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!window.groupCall) return;
+    const shouldSubscribe = Boolean(window.groupCall) && (uiActive || roomState !== 'idle');
+    if (!shouldSubscribe || !window.groupCall) {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+      return;
+    }
 
     const unsub = window.groupCall.onEvent((event: string, payload: any) => {
       if (event === 'gcall:participant-joined') {
@@ -1813,10 +1901,19 @@ export function useGroupVoiceCall() {
 
     unsubscribeRef.current = unsub;
     return () => { unsub(); unsubscribeRef.current = null; };
-  }, [applyTopology, closePeerConnection, disposeParticipantAudio, distributeRoomKey, handleIncomingAudioPacket, handleRoomKey, handleRtcSignal, startTopologyHeartbeat, userInfo?.address]);
+  }, [applyTopology, closePeerConnection, disposeParticipantAudio, distributeRoomKey, handleIncomingAudioPacket, handleRoomKey, handleRtcSignal, roomState, uiActive, userInfo?.address]);
 
-  // Cleanup on unmount
-  useEffect(() => () => { cleanup(); }, [cleanup]);
+  // Cleanup only on real unmount. Do NOT key this on `cleanup` — when `cleanup`'s identity
+  // changes (e.g. flushMetrics used to depend on roomState), React would run the previous
+  // teardown and call cleanup() mid-session, clearing groupCall local addresses and killing the call.
+  const cleanupRef = useRef(cleanup);
+  cleanupRef.current = cleanup;
+  useEffect(
+    () => () => {
+      cleanupRef.current();
+    },
+    []
+  );
 
   return {
     roomState,

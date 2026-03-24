@@ -10,9 +10,10 @@
 
 import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
-import nacl from 'tweetnacl';
 import { log as loggerLog, error as loggerError } from './logger';
 import type { P2PNetwork } from './p2p-network';
+import { runEd25519VerifySync } from './ed25519-verify-common';
+import { VerifyWorkerPool } from './verify-worker-pool';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -144,6 +145,14 @@ export interface PresenceStatusResult {
   online: boolean;
   lastSeen: number | null;
   sessions: PresenceSession[];
+}
+
+interface PresenceAddressAggregate {
+  liveSessionCount: number;
+  lastSeen: number | null;
+  status: UserStatus | null;
+  originNodeId: string | null;
+  nextExpiryAt: number | null;
 }
 
 // ── Utility: Base58 (ported from src/encryption/Base58.ts) ───────────────────
@@ -317,9 +326,15 @@ export function canonicalizeForSigning(data: Record<string, unknown>): Uint8Arra
 }
 
 /**
- * Builds the signed-data object from a presence envelope.
+ * Fields covered by the presence envelope detached signature (for workers / verify).
  * Only the security-relevant fields are signed.
  */
+export function buildPresenceSignedFields(
+  envelope: PresenceEnvelope
+): Record<string, unknown> {
+  return buildSignedData(envelope);
+}
+
 function buildSignedData(envelope: PresenceEnvelope): Record<string, unknown> {
   const p = envelope.payload as unknown as Record<string, unknown>;
   const base: Record<string, unknown> = {
@@ -341,20 +356,15 @@ function buildSignedData(envelope: PresenceEnvelope): Record<string, unknown> {
 
 // ── Signature verification ────────────────────────────────────────────────────
 
-/**
- * Verifies the detached Ed25519 signature on a presence envelope.
- * Returns true if the signature is valid.
- */
+/** Synchronous verify (e.g. tests); hot path uses VerifyWorkerPool. */
 export function verifyPresenceSignature(envelope: PresenceEnvelope): boolean {
-  try {
-    const publicKeyBase58 = (envelope.payload as PresenceAnnouncePayload).publicKey;
-    const publicKeyBytes = base58Decode(publicKeyBase58);
-    const signatureBytes = base58Decode(envelope.signature);
-    const message = canonicalizeForSigning(buildSignedData(envelope));
-    return nacl.sign.detached.verify(message, signatureBytes, publicKeyBytes);
-  } catch {
-    return false;
-  }
+  const publicKeyBase58 = (envelope.payload as PresenceAnnouncePayload).publicKey;
+  return runEd25519VerifySync({
+    kind: 'presence',
+    signedFields: buildPresenceSignedFields(envelope),
+    signature: envelope.signature,
+    publicKeyBase58,
+  });
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -378,7 +388,8 @@ type ValidationResult =
   | { ok: true }
   | { ok: false; reason: string };
 
-function validateEnvelope(
+/** Validates everything except Ed25519 (signature verified off-thread). */
+function validateEnvelopeSansSignature(
   envelope: PresenceEnvelope,
   now: number
 ): ValidationResult {
@@ -439,19 +450,23 @@ function validateEnvelope(
     };
   }
 
-  // 6. Signature verification
-  if (!verifyPresenceSignature(envelope)) {
-    return { ok: false, reason: 'invalid signature' };
-  }
-
   return { ok: true };
 }
+
+const PRESENCE_VERIFY_WORKER_COUNT = 2;
+const PRESENCE_MAX_PENDING_VERIFY = 1024;
 
 // ── Presence Manager ──────────────────────────────────────────────────────────
 
 export class PresenceManager extends EventEmitter {
   /** Key: `${address}:${sessionId}` */
   private sessions = new Map<string, PresenceSession>();
+
+  /** address -> session keys, so queries only touch one address. */
+  private sessionKeysByAddress = new Map<string, Set<string>>();
+
+  /** Derived per-address state used by hot-path lookups and emits. */
+  private addressAggregates = new Map<string, PresenceAddressAggregate>();
 
   /**
    * Tracks the latest accepted timestamp per (address, sessionId, type).
@@ -468,6 +483,20 @@ export class PresenceManager extends EventEmitter {
   private lastLocalEnvelope: PresenceEnvelope | null = null;
 
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+  private verifyPool = new VerifyWorkerPool(
+    'presence',
+    PRESENCE_VERIFY_WORKER_COUNT,
+    PRESENCE_MAX_PENDING_VERIFY
+  );
+
+  startVerifyPool(): void {
+    this.verifyPool.start();
+  }
+
+  stopVerifyPool(): void {
+    this.verifyPool.stop();
+  }
 
   startCleanup(): void {
     this.cleanupTimer = setInterval(
@@ -502,24 +531,51 @@ export class PresenceManager extends EventEmitter {
    * us. For direct peers these are the same value; for relayed peers they
    * differ. Use 'local' for both when called by the renderer directly.
    */
-  handleEnvelope(
+  async handleEnvelope(
     raw: unknown,
     originNodeId: string,
     viaPeerId: string = originNodeId
-  ): boolean {
+  ): Promise<boolean> {
     const envelope = raw as PresenceEnvelope;
     const now = Date.now();
 
-    const result = validateEnvelope(envelope, now);
+    const result = validateEnvelopeSansSignature(envelope, now);
     if (result.ok === false) {
       loggerLog(`[Presence] Rejected envelope ${envelope?.id}: ${result.reason}`);
       return false;
     }
 
     const p = envelope.payload as PresenceAnnouncePayload;
+    const publicKeyBase58 = p.publicKey;
+    const sigOk = await this.verifyPool.verify({
+      kind: 'presence',
+      signedFields: buildPresenceSignedFields(envelope),
+      signature: envelope.signature,
+      publicKeyBase58,
+    });
+    if (!sigOk) {
+      loggerLog(`[Presence] Rejected envelope ${envelope?.id}: invalid signature`);
+      return false;
+    }
+
+    return this.applyVerifiedPresenceEnvelope(
+      envelope,
+      originNodeId,
+      viaPeerId,
+      now
+    );
+  }
+
+  /** After signature verify: monotonic timestamp + session mutation. */
+  private applyVerifiedPresenceEnvelope(
+    envelope: PresenceEnvelope,
+    originNodeId: string,
+    viaPeerId: string,
+    now: number
+  ): boolean {
+    const p = envelope.payload as PresenceAnnouncePayload;
     const { address, publicKey, sessionId } = p;
 
-    // Monotonic timestamp check (replay protection within freshness window)
     const tsKey = `${address}:${sessionId}:${envelope.type}`;
     const prevTs = this.latestTimestamp.get(tsKey) ?? 0;
     if (envelope.timestamp <= prevTs) {
@@ -527,11 +583,8 @@ export class PresenceManager extends EventEmitter {
     }
     this.latestTimestamp.set(tsKey, envelope.timestamp);
 
-    // Apply to store
     if (envelope.type === 'PRESENCE_OFFLINE') {
       this.removeSession(address, sessionId);
-      // Clear the local bootstrap cache so newly connected peers don't receive
-      // a stale ANNOUNCE from a user who has explicitly appeared offline.
       if (originNodeId === 'local') this.lastLocalEnvelope = null;
     } else {
       const key = `${address}:${sessionId}`;
@@ -551,18 +604,12 @@ export class PresenceManager extends EventEmitter {
         status: (p as PresenceAnnouncePayload).status as UserStatus ?? 'online',
         signatureValid: true,
       });
-      // Cache the envelope so we can bootstrap newly connected peers
-      // (originNodeId is 'local' when it came from our own renderer).
+      this.addSessionKey(address, key);
       if (originNodeId === 'local') {
         this.lastLocalEnvelope = envelope as PresenceEnvelope;
       }
+      this.emitPresenceUpdate(address, now);
     }
-
-    this.emit('presence-updated', {
-      address,
-      online: this.isAddressOnline(address),
-      status: this.getAddressStatus(address),
-    });
 
     return true;
   }
@@ -570,50 +617,46 @@ export class PresenceManager extends EventEmitter {
   // ── Queries ─────────────────────────────────────────────────────────────────
 
   isAddressOnline(address: string): boolean {
-    const now = Date.now();
-    for (const session of this.sessions.values()) {
-      if (
-        session.address === address &&
-        now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return this.getAddressAggregate(address).liveSessionCount > 0;
   }
 
   getStatus(address: string): PresenceStatusResult {
     const now = Date.now();
     const active: PresenceSession[] = [];
-    let mostRecentSeen: number | null = null;
+    const keys = this.sessionKeysByAddress.get(address);
 
-    for (const session of this.sessions.values()) {
-      if (session.address !== address) continue;
-      if (now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS) {
-        active.push(session);
-      }
-      if (mostRecentSeen === null || session.lastSeen > mostRecentSeen) {
-        mostRecentSeen = session.lastSeen;
+    if (keys) {
+      for (const key of keys) {
+        const session = this.sessions.get(key);
+        if (!session) continue;
+        if (now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS) {
+          active.push(session);
+        }
       }
     }
 
+    const aggregate = this.getAddressAggregate(address, now);
+
     return {
-      online: active.length > 0,
-      lastSeen: mostRecentSeen,
+      online: aggregate.liveSessionCount > 0,
+      lastSeen: aggregate.lastSeen,
       sessions: active,
     };
   }
 
   getAllOnline(): PresenceSession[] {
     const now = Date.now();
-    const seen = new Set<string>();
     const result: PresenceSession[] = [];
-    for (const session of this.sessions.values()) {
-      if (now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS) {
-        if (!seen.has(session.address)) {
-          seen.add(session.address);
+    for (const [address, keys] of this.sessionKeysByAddress.entries()) {
+      if (this.getAddressAggregate(address, now).liveSessionCount === 0) continue;
+      for (const key of keys) {
+        const session = this.sessions.get(key);
+        if (
+          session &&
+          now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS
+        ) {
+          result.push(session);
         }
-        result.push(session);
       }
     }
     return result;
@@ -621,13 +664,13 @@ export class PresenceManager extends EventEmitter {
 
   getOnlineAddresses(): string[] {
     const now = Date.now();
-    const addresses = new Set<string>();
-    for (const session of this.sessions.values()) {
-      if (now - session.lastSeen <= PRESENCE_SESSION_TIMEOUT_MS) {
-        addresses.add(session.address);
+    const addresses: string[] = [];
+    for (const address of this.sessionKeysByAddress.keys()) {
+      if (this.getAddressAggregate(address, now).liveSessionCount > 0) {
+        addresses.push(address);
       }
     }
-    return Array.from(addresses);
+    return addresses;
   }
 
   /**
@@ -636,26 +679,12 @@ export class PresenceManager extends EventEmitter {
    * unknown.  Used by the call system to route signaling messages.
    */
   getNodeIdForAddress(address: string): string | null {
-    const now = Date.now();
-    let best: PresenceSession | null = null;
-    for (const session of this.sessions.values()) {
-      if (session.address !== address) continue;
-      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
-      if (!best || session.lastSeen > best.lastSeen) best = session;
-    }
-    return best?.originNodeId ?? null;
+    return this.getAddressAggregate(address).originNodeId;
   }
 
   /** Returns the most-recently-seen active status for an address, or null. */
   getAddressStatus(address: string): UserStatus | null {
-    const now = Date.now();
-    let best: PresenceSession | null = null;
-    for (const session of this.sessions.values()) {
-      if (session.address !== address) continue;
-      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
-      if (!best || session.lastSeen > best.lastSeen) best = session;
-    }
-    return best?.status ?? null;
+    return this.getAddressAggregate(address).status;
   }
 
   // ── Cleanup ──────────────────────────────────────────────────────────────────
@@ -667,6 +696,7 @@ export class PresenceManager extends EventEmitter {
     for (const [key, session] of this.sessions.entries()) {
       if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) {
         this.sessions.delete(key);
+        this.removeSessionKey(session.address, key);
         changedAddresses.add(session.address);
       }
     }
@@ -679,11 +709,7 @@ export class PresenceManager extends EventEmitter {
     }
 
     for (const address of changedAddresses) {
-      this.emit('presence-updated', {
-        address,
-        online: this.isAddressOnline(address),
-        status: this.getAddressStatus(address),
-      });
+      this.emitPresenceUpdate(address, now);
     }
   }
 
@@ -701,24 +727,106 @@ export class PresenceManager extends EventEmitter {
         continue;
       }
       this.sessions.delete(key);
+      this.removeSessionKey(session.address, key);
       changedAddresses.add(session.address);
     }
 
     for (const address of changedAddresses) {
-      this.emit('presence-updated', {
-        address,
-        online: this.isAddressOnline(address),
-        status: this.getAddressStatus(address),
-      });
+      this.emitPresenceUpdate(address);
     }
   }
 
   private removeSession(address: string, sessionId: string): void {
-    this.sessions.delete(`${address}:${sessionId}`);
+    const key = `${address}:${sessionId}`;
+    this.sessions.delete(key);
+    this.removeSessionKey(address, key);
+    this.emitPresenceUpdate(address);
+  }
+
+  private addSessionKey(address: string, key: string): void {
+    let keys = this.sessionKeysByAddress.get(address);
+    if (!keys) {
+      keys = new Set<string>();
+      this.sessionKeysByAddress.set(address, keys);
+    }
+    keys.add(key);
+    this.addressAggregates.delete(address);
+  }
+
+  private removeSessionKey(address: string, key: string): void {
+    const keys = this.sessionKeysByAddress.get(address);
+    if (!keys) return;
+    keys.delete(key);
+    if (keys.size === 0) {
+      this.sessionKeysByAddress.delete(address);
+    }
+    this.addressAggregates.delete(address);
+  }
+
+  private getAddressAggregate(
+    address: string,
+    now: number = Date.now()
+  ): PresenceAddressAggregate {
+    const cached = this.addressAggregates.get(address);
+    if (
+      cached &&
+      (cached.nextExpiryAt === null || now < cached.nextExpiryAt)
+    ) {
+      return cached;
+    }
+
+    const keys = this.sessionKeysByAddress.get(address);
+    let liveSessionCount = 0;
+    let lastSeen: number | null = null;
+    let latestLiveSession: PresenceSession | null = null;
+    let nextExpiryAt: number | null = null;
+
+    if (keys) {
+      for (const key of keys) {
+        const session = this.sessions.get(key);
+        if (!session) continue;
+        if (lastSeen === null || session.lastSeen > lastSeen) {
+          lastSeen = session.lastSeen;
+        }
+        const expiryAt = session.lastSeen + PRESENCE_SESSION_TIMEOUT_MS;
+        if (now > expiryAt) continue;
+
+        liveSessionCount++;
+        if (nextExpiryAt === null || expiryAt < nextExpiryAt) {
+          nextExpiryAt = expiryAt;
+        }
+        if (
+          !latestLiveSession ||
+          session.lastSeen > latestLiveSession.lastSeen
+        ) {
+          latestLiveSession = session;
+        }
+      }
+    }
+
+    const aggregate: PresenceAddressAggregate = {
+      liveSessionCount,
+      lastSeen,
+      status: latestLiveSession?.status ?? null,
+      originNodeId: latestLiveSession?.originNodeId ?? null,
+      nextExpiryAt,
+    };
+
+    if (keys && keys.size > 0) {
+      this.addressAggregates.set(address, aggregate);
+    } else {
+      this.addressAggregates.delete(address);
+    }
+
+    return aggregate;
+  }
+
+  private emitPresenceUpdate(address: string, now: number = Date.now()): void {
+    const aggregate = this.getAddressAggregate(address, now);
     this.emit('presence-updated', {
       address,
-      online: this.isAddressOnline(address),
-      status: this.getAddressStatus(address),
+      online: aggregate.liveSessionCount > 0,
+      status: aggregate.status,
     });
   }
 }
@@ -788,7 +896,7 @@ export function startPresenceManager(p2p: P2PNetwork): PresenceManager {
       typeof data === 'object' &&
       PRESENCE_MESSAGE_TYPES.has((data as PresenceEnvelope).type)
     ) {
-      presenceManager?.handleEnvelope(data, from, via ?? from);
+      void presenceManager?.handleEnvelope(data, from, via ?? from);
     }
   });
 
@@ -811,6 +919,7 @@ export function startPresenceManager(p2p: P2PNetwork): PresenceManager {
 
 export function stopPresenceManager(): void {
   if (presenceManager) {
+    presenceManager.stopVerifyPool();
     presenceManager.stopCleanup();
     presenceManager.removeAllListeners();
     presenceManager = null;

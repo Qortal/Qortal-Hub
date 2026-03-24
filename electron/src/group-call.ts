@@ -18,18 +18,15 @@
  *   GC_RTC_OFFER/ANSWER/ICE  — WebRTC DataChannel signaling
  *
  * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_KEY carry Ed25519 signatures.
+ * When this node has no local state for a room, JOIN/LEAVE/TOPOLOGY are relayed
+ * without signature verification (cheap path); in-room peers still verify before use.
  */
 
 import { EventEmitter } from 'events';
-import nacl from 'tweetnacl';
 import { log as loggerLog, error as loggerError } from './logger';
-import {
-  deriveAddressFromPublicKey,
-  canonicalizeForSigning,
-  base58Decode,
-} from './presence';
 import type { P2PNetwork } from './p2p-network';
 import type { PresenceManager } from './presence';
+import { VerifyWorkerPool } from './verify-worker-pool';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -195,24 +192,6 @@ interface GroupRoom {
 
 // ── Signature helpers ─────────────────────────────────────────────────────────
 
-function verifySigned(
-  fields: Record<string, unknown>,
-  signature: string,
-  fromPublicKey: string,
-  fromAddress: string
-): boolean {
-  try {
-    const derived = deriveAddressFromPublicKey(fromPublicKey);
-    if (derived !== fromAddress) return false;
-    const pkBytes = base58Decode(fromPublicKey);
-    const sigBytes = base58Decode(signature);
-    const msgBytes = canonicalizeForSigning(fields);
-    return nacl.sign.detached.verify(msgBytes, sigBytes, pkBytes);
-  } catch {
-    return false;
-  }
-}
-
 function buildTopologySignature(env: Pick<
   GcTopologyEnvelope,
   'topologyEpoch' | 'rootForwarder' | 'standbyForwarder' | 'clusters'
@@ -224,6 +203,61 @@ function buildTopologySignature(env: Pick<
     clusters: env.clusters,
   });
 }
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0;
+}
+
+/** Shape-only checks for disinterested relay (no Ed25519). */
+function isCheapRelayJoinShape(env: GcJoinEnvelope): boolean {
+  return (
+    isNonEmptyString(env.roomId) &&
+    isNonEmptyString(env.chatId) &&
+    isNonEmptyString(env.fromAddress) &&
+    isNonEmptyString(env.fromPublicKey) &&
+    typeof env.signature === 'string' &&
+    typeof env.timestamp === 'number' &&
+    Number.isFinite(env.timestamp)
+  );
+}
+
+function isCheapRelayLeaveShape(env: GcLeaveEnvelope): boolean {
+  return (
+    isNonEmptyString(env.roomId) &&
+    isNonEmptyString(env.fromAddress) &&
+    isNonEmptyString(env.fromPublicKey) &&
+    typeof env.signature === 'string' &&
+    typeof env.timestamp === 'number' &&
+    Number.isFinite(env.timestamp)
+  );
+}
+
+function isCheapRelayTopologyShape(env: GcTopologyEnvelope): boolean {
+  return (
+    isNonEmptyString(env.roomId) &&
+    isNonEmptyString(env.fromAddress) &&
+    isNonEmptyString(env.fromPublicKey) &&
+    typeof env.signature === 'string' &&
+    typeof env.timestamp === 'number' &&
+    Number.isFinite(env.timestamp) &&
+    typeof env.topologyEpoch === 'number' &&
+    Number.isFinite(env.topologyEpoch) &&
+    typeof env.rootForwarder === 'string' &&
+    typeof env.standbyForwarder === 'string' &&
+    typeof env.lastSeen === 'number' &&
+    Number.isFinite(env.lastSeen) &&
+    Array.isArray(env.clusters)
+  );
+}
+
+/** Jobs waiting on off-thread Ed25519 verification */
+type GcVerifyPending =
+  | { kind: 'join'; env: GcJoinEnvelope; fromNodeId?: string }
+  | { kind: 'leave'; env: GcLeaveEnvelope }
+  | { kind: 'topology'; env: GcTopologyEnvelope };
+
+const GC_VERIFY_WORKER_COUNT = 3;
+const GC_MAX_PENDING_VERIFY = 2048;
 
 // ── GroupCallManager ──────────────────────────────────────────────────────────
 
@@ -265,6 +299,12 @@ export class GroupCallManager extends EventEmitter {
   private onPresenceUpdated: (({ address, online }: { address: string; online: boolean }) => void) | null = null;
   private presenceEvictionTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private static readonly PRESENCE_EVICTION_GRACE_MS = 30_000;
+
+  private verifyPool = new VerifyWorkerPool(
+    'gcall',
+    GC_VERIFY_WORKER_COUNT,
+    GC_MAX_PENDING_VERIFY
+  );
 
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
     super();
@@ -312,12 +352,67 @@ export class GroupCallManager extends EventEmitter {
       }, GroupCallManager.PRESENCE_EVICTION_GRACE_MS);
       this.presenceEvictionTimers.set(address, timer);
     };
+
+  }
+
+  private logVerifyFailure(job: GcVerifyPending): void {
+    if (job.kind === 'join') {
+      loggerLog(`[GCall] Dropped GC_JOIN: invalid signature from ${job.env.fromAddress}`);
+    } else if (job.kind === 'leave') {
+      loggerLog(`[GCall] Dropped GC_LEAVE: invalid signature from ${job.env.fromAddress}`);
+    } else {
+      loggerLog(`[GCall] Dropped GC_TOPOLOGY: invalid signature from ${job.env.fromAddress}`);
+    }
+  }
+
+  private enqueueVerify(
+    fields: Record<string, unknown>,
+    signature: string,
+    fromPublicKey: string,
+    fromAddress: string,
+    job: GcVerifyPending
+  ): void {
+    const payload = {
+      kind: 'gc' as const,
+      fields,
+      signature,
+      fromPublicKey,
+      fromAddress,
+    };
+    void this.verifyPool.verify(payload).then((ok) => {
+      if (!ok) {
+        this.logVerifyFailure(job);
+        return;
+      }
+      try {
+        this.applyVerifiedJobSync(job);
+      } catch (err) {
+        loggerError('[GCall] Error applying verified message:', err);
+      }
+    });
+  }
+
+  private applyVerifiedJobSync(job: GcVerifyPending): void {
+    switch (job.kind) {
+      case 'join':
+        this.applyVerifiedJoin(job.env, job.fromNodeId);
+        break;
+      case 'leave':
+        this.applyVerifiedLeave(job.env);
+        break;
+      case 'topology':
+        this.applyVerifiedTopology(job.env);
+        break;
+    }
   }
 
   start(): void {
-    // Listen for P2P messages
+    // Register P2P listener before verify workers so a worker spawn failure
+    // never leaves the manager deaf to GC_* traffic.
     this.onP2PMessage = this.onP2PMessage.bind(this);
     this.p2p.on('message', this.onP2PMessage);
+
+    this.verifyPool.start();
 
     // Hook into presence-updated to detect abrupt disconnects (with grace period)
     // Store reference so stop() can properly remove it.
@@ -346,6 +441,8 @@ export class GroupCallManager extends EventEmitter {
   }
 
   stop(): void {
+    this.verifyPool.stop();
+
     if (this.onP2PMessage) this.p2p.off('message', this.onP2PMessage);
     if (this.onPresenceUpdated) this.presence.off('presence-updated', this.onPresenceUpdated);
     for (const timer of this.presenceEvictionTimers.values()) clearTimeout(timer);
@@ -359,6 +456,24 @@ export class GroupCallManager extends EventEmitter {
   setLocalAddresses(addresses: string[]): void {
     this.localAddresses = new Set(addresses);
     loggerLog(`[GCall] Local addresses set: ${[...addresses].join(', ')}`);
+  }
+
+  private hasLocalRoomInterest(roomId: string): boolean {
+    return this.rooms.has(roomId);
+  }
+
+  /**
+   * Forward JOIN/LEAVE/TOPOLOGY for rooms we are not in, without Ed25519 verify.
+   * Matches interested-node behavior for expired GC_JOIN (no relay).
+   */
+  private relayDisinterestedSignedControl(
+    env: GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope
+  ): void {
+    if ((env.hopsRemaining ?? 0) <= 0) return;
+    this.p2p.send(null, {
+      ...env,
+      hopsRemaining: (env.hopsRemaining ?? 1) - 1,
+    });
   }
 
   // ── Outbound ──────────────────────────────────────────────────────────────
@@ -571,16 +686,33 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private handleJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
-    const ok = verifySigned(
-      { type: env.type, roomId: env.roomId, chatId: env.chatId,
-        fromAddress: env.fromAddress, fromPublicKey: env.fromPublicKey, timestamp: env.timestamp },
-      env.signature, env.fromPublicKey, env.fromAddress
-    );
-    if (!ok) {
-      loggerLog(`[GCall] Dropped GC_JOIN: invalid signature from ${env.fromAddress}`);
+    if (!this.hasLocalRoomInterest(env.roomId)) {
+      if (
+        isCheapRelayJoinShape(env) &&
+        Date.now() - env.timestamp <= GC_JOIN_TTL_MS
+      ) {
+        this.relayDisinterestedSignedControl(env);
+      }
       return;
     }
 
+    this.enqueueVerify(
+      {
+        type: env.type,
+        roomId: env.roomId,
+        chatId: env.chatId,
+        fromAddress: env.fromAddress,
+        fromPublicKey: env.fromPublicKey,
+        timestamp: env.timestamp,
+      },
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      { kind: 'join', env, fromNodeId }
+    );
+  }
+
+  private applyVerifiedJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
     const now = Date.now();
     if (now - env.timestamp > GC_JOIN_TTL_MS) {
       loggerLog(`[GCall] Dropped GC_JOIN: expired from ${env.fromAddress}`);
@@ -605,8 +737,8 @@ export class GroupCallManager extends EventEmitter {
       }
     }
 
-    // Forward to renderer if the local user is a target / in the room, or we are an agent
-    for (const localAddr of this.localAddresses) {
+    // Only notify the renderer when the local client is actively in this room.
+    if (this.hasLocalRoomInterest(env.roomId)) {
       this.emit('gcall:participant-joined', {
         roomId: env.roomId,
         chatId: env.chatId,
@@ -614,7 +746,6 @@ export class GroupCallManager extends EventEmitter {
         publicKey: env.fromPublicKey,
         timestamp: env.timestamp,
       });
-      break;
     }
 
     // Relay
@@ -624,16 +755,29 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private handleLeaveEnvelope(env: GcLeaveEnvelope): void {
-    const ok = verifySigned(
-      { type: env.type, roomId: env.roomId,
-        fromAddress: env.fromAddress, fromPublicKey: env.fromPublicKey, timestamp: env.timestamp },
-      env.signature, env.fromPublicKey, env.fromAddress
-    );
-    if (!ok) {
-      loggerLog(`[GCall] Dropped GC_LEAVE: invalid signature from ${env.fromAddress}`);
+    if (!this.hasLocalRoomInterest(env.roomId)) {
+      if (isCheapRelayLeaveShape(env)) {
+        this.relayDisinterestedSignedControl(env);
+      }
       return;
     }
 
+    this.enqueueVerify(
+      {
+        type: env.type,
+        roomId: env.roomId,
+        fromAddress: env.fromAddress,
+        fromPublicKey: env.fromPublicKey,
+        timestamp: env.timestamp,
+      },
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      { kind: 'leave', env }
+    );
+  }
+
+  private applyVerifiedLeave(env: GcLeaveEnvelope): void {
     this.handleLeave(env.roomId, env.fromAddress, false);
 
     if ((env.hopsRemaining ?? 0) > 0) {
@@ -643,25 +787,43 @@ export class GroupCallManager extends EventEmitter {
 
   private handleLeave(roomId: string, address: string, isAbrupt: boolean): void {
     const room = this.rooms.get(roomId);
+    const hadLocalInterest = Boolean(room);
     if (room) {
       room.participants.delete(address);
     }
     this.participantNodeIds.delete(address);
-    this.emit('gcall:participant-left', { roomId, address, isAbrupt });
+    if (hadLocalInterest) {
+      this.emit('gcall:participant-left', { roomId, address, isAbrupt });
+    }
   }
 
   private handleTopology(env: GcTopologyEnvelope): void {
-    const ok = verifySigned(
-      { type: env.type, roomId: env.roomId, topologyEpoch: env.topologyEpoch,
-        rootForwarder: env.rootForwarder, standbyForwarder: env.standbyForwarder,
-        fromAddress: env.fromAddress, fromPublicKey: env.fromPublicKey, timestamp: env.timestamp },
-      env.signature, env.fromPublicKey, env.fromAddress
-    );
-    if (!ok) {
-      loggerLog(`[GCall] Dropped GC_TOPOLOGY: invalid signature from ${env.fromAddress}`);
+    if (!this.hasLocalRoomInterest(env.roomId)) {
+      if (isCheapRelayTopologyShape(env)) {
+        this.relayDisinterestedSignedControl(env);
+      }
       return;
     }
 
+    this.enqueueVerify(
+      {
+        type: env.type,
+        roomId: env.roomId,
+        topologyEpoch: env.topologyEpoch,
+        rootForwarder: env.rootForwarder,
+        standbyForwarder: env.standbyForwarder,
+        fromAddress: env.fromAddress,
+        fromPublicKey: env.fromPublicKey,
+        timestamp: env.timestamp,
+      },
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      { kind: 'topology', env }
+    );
+  }
+
+  private applyVerifiedTopology(env: GcTopologyEnvelope): void {
     // Update local epoch tracking
     const room = this.rooms.get(env.roomId);
     const topologySignature = buildTopologySignature(env);
@@ -669,6 +831,9 @@ export class GroupCallManager extends EventEmitter {
     if (room) {
       if (env.topologyEpoch < room.topologyEpoch) {
         loggerLog(`[GCall] Dropped stale GC_TOPOLOGY epoch ${env.topologyEpoch} < ${room.topologyEpoch}`);
+        if ((env.hopsRemaining ?? 0) > 0) {
+          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+        }
         return;
       }
       emitFullTopology =
@@ -678,7 +843,7 @@ export class GroupCallManager extends EventEmitter {
       room.topologySignature = topologySignature;
     }
 
-    if (emitFullTopology) {
+    if (room && emitFullTopology) {
       this.emit('gcall:topology', {
         roomId: env.roomId,
         topologyEpoch: env.topologyEpoch,
@@ -687,7 +852,7 @@ export class GroupCallManager extends EventEmitter {
         clusters: env.clusters,
         lastSeen: env.lastSeen,
       });
-    } else {
+    } else if (room) {
       this.emit('gcall:heartbeat', {
         roomId: env.roomId,
         lastSeen: env.lastSeen,

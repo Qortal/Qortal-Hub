@@ -426,20 +426,35 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
       setStatusMap(statusMap);
     });
 
-    const unsubscribe = window.presence.onUpdate(({ address, online, status }) => {
+    const applyPresenceUpdates = (
+      updates: Array<{ address: string; online: boolean; status: UserStatus | null }>
+    ) => {
+      if (updates.length === 0) return;
       unstable_batchedUpdates(() => {
         setOnlineAddresses((prev) => {
           const next = new Set(prev);
-          if (online) { next.add(address); } else { next.delete(address); }
+          for (const { address, online } of updates) {
+            if (online) next.add(address);
+            else next.delete(address);
+          }
           return next;
         });
         setStatusMap((prev) => {
           const next = new Map(prev);
-          if (online && status) { next.set(address, status); } else { next.delete(address); }
+          for (const { address, online, status } of updates) {
+            if (online && status) next.set(address, status);
+            else next.delete(address);
+          }
           return next;
         });
       });
-    });
+    };
+
+    const unsubscribe = window.presence.onUpdateBatch
+      ? window.presence.onUpdateBatch(applyPresenceUpdates)
+      : window.presence.onUpdate((payload) => {
+          applyPresenceUpdates([payload]);
+        });
 
     const unsubscribeCleared = window.presence.onCleared?.(() => {
       unstable_batchedUpdates(() => {

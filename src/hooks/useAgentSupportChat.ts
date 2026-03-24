@@ -156,9 +156,7 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
 
     window.chat.subscribe(SUPPORT_QUEUE_ID).catch(() => {});
 
-    const unsub = window.chat.onEvent(({ event }) => {
-      if (event.chatId !== SUPPORT_QUEUE_ID) return;
-
+    const unsub = window.chat.onEventForChat(SUPPORT_QUEUE_ID, ({ event }) => {
       const { authorAddress, authorPublicKey, timestamp } = event;
       if (!authorAddress || !authorPublicKey) return;
 
@@ -232,10 +230,14 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
    */
   const reactionDecryptCacheRef = useRef(new Map<string, string>());
 
+  /** Cache of fully processed rendered messages keyed by message fingerprint. */
+  const renderedMessageCacheRef = useRef(new Map<string, RenderedMessage | null>());
+
   // Clear both caches when the active ticket changes.
   useEffect(() => {
     decryptCacheRef.current = new Map();
     reactionDecryptCacheRef.current = new Map();
+    renderedMessageCacheRef.current = new Map();
   }, [activeTicketChatId]);
 
   useEffect(() => {
@@ -250,6 +252,7 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
     const processMessages = async () => {
       const cache = decryptCacheRef.current;
       const reactionCache = reactionDecryptCacheRef.current;
+      const renderedCache = renderedMessageCacheRef.current;
       const results: RenderedMessage[] = [];
 
       /**
@@ -276,10 +279,29 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
       };
 
       for (const msg of inner.messages) {
+        const reactionsFingerprint = Object.entries(msg.reactions)
+          .map(([key, addresses]) => `${key}:${addresses.join(',')}`)
+          .join('|');
+        const messageFingerprint = [
+          msg.id,
+          msg.editedAt ?? 0,
+          msg.isDeleted ? 1 : 0,
+          reactionsFingerprint,
+          msg.content,
+          msg.attachmentMeta ? 'attachment' : 'text',
+        ].join(':');
+        const cachedRendered = renderedCache.get(messageFingerprint);
+        if (cachedRendered !== undefined) {
+          if (cachedRendered) results.push(cachedRendered);
+          continue;
+        }
+
         if (msg.isDeleted) {
           const reactions = await decryptReactions(msg.reactions);
           if (cancelled) return;
-          results.push({ ...msg, reactions });
+          const rendered = { ...msg, reactions };
+          renderedCache.set(messageFingerprint, rendered);
+          results.push(rendered);
           continue;
         }
 
@@ -290,7 +312,11 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
           if (cached !== '__support-close__') {
             const reactions = await decryptReactions(msg.reactions);
             if (cancelled) return;
-            results.push({ ...msg, content: cached, reactions });
+            const rendered = { ...msg, content: cached, reactions };
+            renderedCache.set(messageFingerprint, rendered);
+            results.push(rendered);
+          } else {
+            renderedCache.set(messageFingerprint, null);
           }
           continue;
         }
@@ -318,6 +344,7 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
               const parsed = JSON.parse(decrypted);
               if (parsed.__type === SUPPORT_CLOSE_TYPE) {
                 cache.set(cacheKey, '__support-close__');
+                renderedCache.set(messageFingerprint, null);
                 continue;
               }
             } catch {
@@ -326,16 +353,22 @@ export function useAgentSupportChat(): UseAgentSupportChatReturn {
             const reactions = await decryptReactions(msg.reactions);
             if (cancelled) return;
             cache.set(cacheKey, decrypted);
-            results.push({ ...msg, content: decrypted, reactions });
+            const rendered = { ...msg, content: decrypted, reactions };
+            renderedCache.set(messageFingerprint, rendered);
+            results.push(rendered);
           } else {
             const reactions = await decryptReactions(msg.reactions);
             if (cancelled) return;
             cache.set(cacheKey, '[encrypted]');
-            results.push({ ...msg, content: '[encrypted]', reactions });
+            const rendered = { ...msg, content: '[encrypted]', reactions };
+            renderedCache.set(messageFingerprint, rendered);
+            results.push(rendered);
           }
         } catch {
           if (cancelled) return;
-          results.push({ ...msg, content: '[encrypted]' });
+          const rendered = { ...msg, content: '[encrypted]' };
+          renderedCache.set(messageFingerprint, rendered);
+          results.push(rendered);
         }
       }
 

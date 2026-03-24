@@ -21,18 +21,14 @@
  *   5. Content size — ≤ 10 KB.
  *   6. DM participant check — authorAddress must be one of the two DM parties.
  *   7. Address derivation — authorPublicKey must derive to authorAddress.
- *   8. Signature — valid Ed25519 detached signature over canonical fields.
+ *   8. Signature — Ed25519 detached signature verified off the main thread (worker pool).
  */
 
 import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
-import nacl from 'tweetnacl';
 import { log as loggerLog, error as loggerError } from './logger';
-import {
-  deriveAddressFromPublicKey,
-  canonicalizeForSigning,
-  base58Decode,
-} from './presence';
+import { deriveAddressFromPublicKey } from './presence';
+import { VerifyWorkerPool } from './verify-worker-pool';
 import type { P2PNetwork } from './p2p-network';
 import { ChatDatabase } from './chat-db';
 
@@ -260,7 +256,8 @@ function cachedDeriveAddress(pubKeyBase58: string): string {
  * Only security-relevant fields are signed; keys are sorted alphabetically
  * so both renderer and Node produce identical bytes.
  */
-function buildChatSignedData(event: ChatEvent): Record<string, unknown> {
+/** Canonical signed payload for Ed25519 verification (renderer and workers must match). */
+export function buildChatSignedData(event: ChatEvent): Record<string, unknown> {
   const base: Record<string, unknown> = {
     authorAddress: event.authorAddress,
     authorPublicKey: event.authorPublicKey,
@@ -276,17 +273,6 @@ function buildChatSignedData(event: ChatEvent): Record<string, unknown> {
   if (event.attachmentMeta !== undefined) base['attachmentMeta'] = event.attachmentMeta;
   if (event.attachmentDataHash !== undefined) base['attachmentDataHash'] = event.attachmentDataHash;
   return base;
-}
-
-function verifyChatEventSignature(event: ChatEvent): boolean {
-  try {
-    const pubKeyBytes = base58Decode(event.authorPublicKey);
-    const sigBytes = base58Decode(event.signature);
-    const msg = canonicalizeForSigning(buildChatSignedData(event));
-    return nacl.sign.detached.verify(msg, sigBytes, pubKeyBytes);
-  } catch {
-    return false;
-  }
 }
 
 // ── Validation ────────────────────────────────────────────────────────────────
@@ -353,7 +339,10 @@ export function buildGroupChatId(groupId: number): string {
   return `group:${groupId}`;
 }
 
-function validateChatEvent(event: ChatEvent, now: number): ValidationResult {
+/**
+ * Full validation except Ed25519 (runs on main thread). Signature verified via VerifyWorkerPool.
+ */
+function validateChatEventSansSignature(event: ChatEvent, now: number): ValidationResult {
   // 1. Required field types
   if (
     typeof event.id !== 'string' || !event.id ||
@@ -479,11 +468,6 @@ function validateChatEvent(event: ChatEvent, now: number): ValidationResult {
     };
   }
 
-  // 8. Signature
-  if (!verifyChatEventSignature(event)) {
-    return { ok: false, reason: 'invalid signature' };
-  }
-
   return { ok: true };
 }
 
@@ -508,9 +492,17 @@ function validateChatEvent(event: ChatEvent, now: number): ValidationResult {
  *   'chat:typing'       { chatId, authorAddress }       — someone is typing
  *   'chat:typingStopped' { chatId, authorAddress }      — typing indicator cleared
  */
+const CHAT_VERIFY_WORKER_COUNT = 3;
+const CHAT_MAX_PENDING_VERIFY = 2048;
+
 export class ChatManager extends EventEmitter {
   readonly store: ChatDatabase;
   private p2p: P2PNetwork;
+  private verifyPool = new VerifyWorkerPool(
+    'chat',
+    CHAT_VERIFY_WORKER_COUNT,
+    CHAT_MAX_PENDING_VERIFY
+  );
 
   /** chatIds the local user is actively participating in. */
   private localSubscriptions = new Set<string>();
@@ -550,11 +542,13 @@ export class ChatManager extends EventEmitter {
     for (const chatId of this.store.getKnownChatIds()) {
       this.localSubscriptions.add(chatId);
     }
+    this.verifyPool.start();
     loggerLog('[Chat] Manager started.');
   }
 
   /** Remove P2P listeners and cancel all timers. */
   stop(): void {
+    this.verifyPool.stop();
     this.p2p.off('message', this.onP2PMessage);
     this.p2p.off('peer-connected', this.onPeerConnected);
     this.p2p.off('peer-disconnected', this.onPeerDisconnected);
@@ -580,16 +574,27 @@ export class ChatManager extends EventEmitter {
    * Validates the event, stores it, and broadcasts it to the network.
    * Returns `false` if validation fails.
    */
-  handleLocalEvent(envelope: unknown): boolean {
+  async handleLocalEvent(envelope: unknown): Promise<boolean> {
     const env = envelope as ChatEventEnvelope;
     if (!env || env.type !== 'CHAT_EVENT' || !env.event) {
       return false;
     }
     const event = env.event;
     const now = Date.now();
-    const result = validateChatEvent(event, now);
+    const result = validateChatEventSansSignature(event, now);
     if (result.ok === false) {
       loggerLog(`[Chat] Rejected local event ${event?.id}: ${result.reason}`);
+      return false;
+    }
+    const sigOk = await this.verifyPool.verify({
+      kind: 'chat',
+      signedFields: buildChatSignedData(event),
+      signature: event.signature,
+      authorPublicKey: event.authorPublicKey,
+      authorAddress: event.authorAddress,
+    });
+    if (!sigOk) {
+      loggerLog(`[Chat] Rejected local event ${event?.id}: invalid signature`);
       return false;
     }
     // Ensure we're subscribed — we're the sender, so we're definitely a participant.
@@ -762,23 +767,17 @@ export class ChatManager extends EventEmitter {
       } as ChatSyncStateEnvelope);
     }
 
-    // Replay read receipts: for each subscribed chat, send a CHAT_READ
-    // envelope covering all events we've already seen from our local address.
-    // This delivers receipts that the connecting peer missed while offline.
-    for (const localAddr of this.localAddresses) {
-      for (const chatId of this.localSubscriptions) {
-        const readIds = this.store.getReadReceiptsByReader(chatId, localAddr);
-        if (readIds.length === 0) continue;
-        const env: ChatReadEnvelope = {
-          type: 'CHAT_READ',
-          chatId,
-          readerAddress: localAddr,
-          eventIds: readIds.slice(0, READ_RECEIPT_MAX_BATCH),
-          timestamp: Date.now(),
-        };
-        this.p2p.send(id, env);
+    // Replay read receipts shortly after the initial sync handshake so the
+    // reconnect hot path prioritizes message delivery over receipt fan-out.
+    const replayTimer = setTimeout(() => {
+      for (const peer of this.p2p.getPeers()) {
+        if (peer.id === id && peer.connected) {
+          this.replayReadReceiptsToPeer(id);
+          break;
+        }
       }
-    }
+    }, 150);
+    replayTimer.unref?.();
   };
 
   private onPeerDisconnected = ({ id }: { id: string }): void => {
@@ -822,7 +821,7 @@ export class ChatManager extends EventEmitter {
     if (!event || typeof event !== 'object') return;
 
     const now = Date.now();
-    const result = validateChatEvent(event, now);
+    const result = validateChatEventSansSignature(event, now);
     if (result.ok === false) {
       loggerLog(`[Chat] Rejected remote event ${event?.id}: ${result.reason}`);
       return;
@@ -833,30 +832,49 @@ export class ChatManager extends EventEmitter {
 
     // ── Support-channel enforcement ──────────────────────────────────────────
 
-    // Rate-limit "support:queue" knocks: one accepted knock per address per 24 h.
-    // This prevents mass-spam from many accounts flooding the agent queue.
     if (event.chatId === 'support:queue') {
       const last = this.queueRateLimit.get(event.authorAddress) ?? 0;
-      if (Date.now() - last < this.QUEUE_COOLDOWN_MS) return; // silently drop
+      if (Date.now() - last < this.QUEUE_COOLDOWN_MS) return;
       this.queueRateLimit.set(event.authorAddress, Date.now());
     }
 
-    // Participant check for private support channels: only the user whose address
-    // appears in the chatId, or a known support agent, may write here.
     if (event.chatId.startsWith('support:') && event.chatId !== 'support:queue') {
       const userAddr = event.chatId.slice(8);
       if (
         event.authorAddress !== userAddr &&
         !SUPPORT_AGENT_ADDRESSES.has(event.authorAddress)
       ) {
-        return; // silently drop unauthorised write
+        return;
       }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    void this.verifyPool
+      .verify({
+        kind: 'chat',
+        signedFields: buildChatSignedData(event),
+        signature: event.signature,
+        authorPublicKey: event.authorPublicKey,
+        authorAddress: event.authorAddress,
+      })
+      .then((sigOk) => {
+        if (!sigOk) {
+          loggerLog(`[Chat] Rejected remote event ${event?.id}: invalid signature`);
+          return;
+        }
+        try {
+          this.finishVerifiedChatEvent(fromNodeId, envelope, event);
+        } catch (err) {
+          loggerError('[Chat] Error applying verified event:', err);
+        }
+      });
+  }
 
-    // Auto-subscribe DMs for local addresses so future events are delivered.
-    // Exclude support: channels — they are subscribed explicitly by useSupportChat.
+  /** After Ed25519 verify: persist, emit, relay (same ordering as legacy path). */
+  private finishVerifiedChatEvent(
+    fromNodeId: string,
+    envelope: ChatEventEnvelope,
+    event: ChatEvent
+  ): void {
     if (
       !event.chatId.startsWith('group:') &&
       !event.chatId.startsWith('support:') &&
@@ -865,21 +883,14 @@ export class ChatManager extends EventEmitter {
       this.localSubscriptions.add(event.chatId);
     }
 
-    // store.insert returns false for duplicates — use it as the dedup gate for
-    // re-relay too, so each event is only forwarded once per node.
     if (!this.store.insert(event)) return;
 
     this.emit('chat:event', { event });
 
-    // A real message or edit means the author is no longer typing — clear any
-    // pending typing indicator for them immediately rather than waiting for the
-    // 8-second TTL to expire.
     if (event.eventType === 'message' || event.eventType === 'edit') {
       this.clearTypingIndicator(event.chatId, event.authorAddress);
     }
 
-    // Re-relay to other subscribers we know about, decrementing the hop counter.
-    // excludeNodeId = fromNodeId prevents echoing back to the sender.
     const hops = envelope.hopsRemaining ?? CHAT_DEFAULT_HOPS;
     if (hops > 0) {
       this.broadcastChatEvent(
@@ -941,17 +952,14 @@ export class ChatManager extends EventEmitter {
     if (typeof chatId !== 'string' || !chatId || !Array.isArray(events)) return;
     if (!this.localSubscriptions.has(chatId)) return;
 
-    let stored = 0;
     const now = Date.now();
+    const tasks: Promise<boolean>[] = [];
     for (const event of events) {
       if (!event || typeof event !== 'object') continue;
-      // Safety: chatId in the event must match the declared chatId.
       if (event.chatId !== chatId) continue;
-      const result = validateChatEvent(event, now);
+      const result = validateChatEventSansSignature(event, now);
       if (!result.ok) continue;
 
-      // Apply the same support participant check as handleChatEvent so that
-      // malicious peers cannot inject unauthorised events via the sync path.
       if (
         event.chatId.startsWith('support:') &&
         event.chatId !== 'support:queue'
@@ -965,16 +973,33 @@ export class ChatManager extends EventEmitter {
         }
       }
 
-      if (this.store.insert(event)) {
-        stored++;
-        this.emit('chat:event', { event });
-      }
-    }
-    if (stored > 0) {
-      loggerLog(
-        `[Chat] Sync: stored ${stored} recovered events for ${chatId}`
+      tasks.push(
+        this.verifyPool
+          .verify({
+            kind: 'chat',
+            signedFields: buildChatSignedData(event),
+            signature: event.signature,
+            authorPublicKey: event.authorPublicKey,
+            authorAddress: event.authorAddress,
+          })
+          .then((sigOk) => {
+            if (!sigOk) return false;
+            if (this.store.insert(event)) {
+              this.emit('chat:event', { event });
+              return true;
+            }
+            return false;
+          })
       );
     }
+    void Promise.all(tasks).then((results) => {
+      const stored = results.filter(Boolean).length;
+      if (stored > 0) {
+        loggerLog(
+          `[Chat] Sync: stored ${stored} recovered events for ${chatId}`
+        );
+      }
+    });
   }
 
   /**
@@ -1094,12 +1119,7 @@ export class ChatManager extends EventEmitter {
     const nonSubscribers = allPeers.filter(
       p => p.id !== excludeNodeId && !subscriberIds.has(p.id)
     );
-    // Fisher-Yates shuffle for unbiased random selection
-    for (let i = nonSubscribers.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [nonSubscribers[i], nonSubscribers[j]] = [nonSubscribers[j], nonSubscribers[i]];
-    }
-    for (const peer of nonSubscribers.slice(0, 2)) {
+    for (const peer of this.pickRandomPeers(nonSubscribers, 2)) {
       this.p2p.send(peer.id, env);
     }
   }
@@ -1152,6 +1172,35 @@ export class ChatManager extends EventEmitter {
       this.p2p.send(peer.id, subEnv);
       this.p2p.send(peer.id, syncEnv);
     }
+  }
+
+  private replayReadReceiptsToPeer(peerId: string): void {
+    for (const localAddr of this.localAddresses) {
+      for (const chatId of this.localSubscriptions) {
+        const readIds = this.store.getReadReceiptsByReader(chatId, localAddr);
+        if (readIds.length === 0) continue;
+        const env: ChatReadEnvelope = {
+          type: 'CHAT_READ',
+          chatId,
+          readerAddress: localAddr,
+          eventIds: readIds.slice(0, READ_RECEIPT_MAX_BATCH),
+          timestamp: Date.now(),
+        };
+        this.p2p.send(peerId, env);
+      }
+    }
+  }
+
+  private pickRandomPeers<T>(peers: T[], count: number): T[] {
+    if (peers.length <= count) return peers;
+    const pool = [...peers];
+    const result: T[] = [];
+    for (let i = 0; i < count && pool.length > 0; i++) {
+      const index = Math.floor(Math.random() * pool.length);
+      const [picked] = pool.splice(index, 1);
+      result.push(picked);
+    }
+    return result;
   }
 }
 

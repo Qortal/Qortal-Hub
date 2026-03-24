@@ -98,6 +98,7 @@ export class ChatDatabase {
    * seen the event and SHOULD emit it to the renderer.
    */
   private seenEventIds = new Set<string>();
+  private seenEventIdToChatId = new Map<string, string>();
 
   // ── Prepared statements (compiled once, reused on every call) ─────────────
   private stmtInsert: Statement;
@@ -120,12 +121,15 @@ export class ChatDatabase {
   private stmtLoadSeqsForRebuild: Statement;
   /** Loads just event IDs for the seenEventIds Set — no content columns. */
   private stmtLoadEventIds: Statement;
+  private stmtLoadEventIdsForChat: Statement;
   private stmtUpsertReceipt: Statement;
   private stmtGetReceiptsByReader: Statement;
   private stmtHasEvent: Statement;
+  private stmtHasSeq: Statement;
   private stmtInsertAttachment: Statement;
   private stmtGetAttachment: Statement;
   private stmtTrimAttachments: Statement;
+  private receiptLookupStatements = new Map<number, Statement>();
 
   constructor(dbPath: string) {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -223,8 +227,13 @@ export class ChatDatabase {
       FROM chat_events
       ORDER BY chat_id, author_address, seq
     `);
-    // Load just IDs for the per-instance dedup set — no content columns.
-    this.stmtLoadEventIds = this.db.prepare('SELECT id FROM chat_events');
+    // Load IDs + chatIds so the in-memory dedup set can be trimmed with history.
+    this.stmtLoadEventIds = this.db.prepare(
+      'SELECT id, chat_id FROM chat_events'
+    );
+    this.stmtLoadEventIdsForChat = this.db.prepare(
+      'SELECT id FROM chat_events WHERE chat_id = ?'
+    );
     this.stmtUpsertReceipt = this.db.prepare(`
       INSERT OR IGNORE INTO read_receipts (chat_id, event_id, reader_address, read_at)
       VALUES (?, ?, ?, ?)
@@ -235,6 +244,9 @@ export class ChatDatabase {
     `);
     this.stmtHasEvent = this.db.prepare(
       'SELECT 1 FROM chat_events WHERE id = ? LIMIT 1'
+    );
+    this.stmtHasSeq = this.db.prepare(
+      'SELECT 1 FROM chat_events WHERE chat_id = ? AND author_address = ? AND seq = ? LIMIT 1'
     );
     this.stmtInsertAttachment = this.db.prepare(`
       INSERT OR IGNORE INTO chat_attachments (event_id, chat_id, data)
@@ -395,8 +407,14 @@ export class ChatDatabase {
       // Populate the per-instance dedup set from all existing IDs so that
       // events already in the DB (from this or any other instance) are not
       // re-emitted as "new" when they arrive again via P2P sync.
-      const idRows = this.stmtLoadEventIds.all() as { id: string }[];
-      for (const r of idRows) this.seenEventIds.add(r.id);
+      const idRows = this.stmtLoadEventIds.all() as {
+        id: string;
+        chat_id: string;
+      }[];
+      for (const r of idRows) {
+        this.seenEventIds.add(r.id);
+        this.seenEventIdToChatId.set(r.id, r.chat_id);
+      }
       loggerLog(`[ChatDB] Seeded ${idRows.length} event IDs into dedup set.`);
     } catch (err) {
       loggerError('[ChatDB] Failed to rebuild caches:', err);
@@ -419,6 +437,7 @@ export class ChatDatabase {
     // Per-instance dedup: if we've already processed this event ID, skip.
     if (this.seenEventIds.has(event.id)) return false;
     this.seenEventIds.add(event.id);
+    this.seenEventIdToChatId.set(event.id, event.chatId);
 
     const row = {
       id: event.id,
@@ -453,6 +472,7 @@ export class ChatDatabase {
           // Cascade: remove receipts and attachments for events that were just purged.
           this.stmtTrimReceipts.run(event.chatId, event.chatId);
           this.stmtTrimAttachments.run(event.chatId, event.chatId);
+          this.refreshSeenEventIdsForChat(event.chatId);
         }
       }
     });
@@ -474,7 +494,10 @@ export class ChatDatabase {
     if (newEvents.length === 0) return 0;
 
     // Mark all as seen before the DB work to prevent any race re-entry.
-    for (const e of newEvents) this.seenEventIds.add(e.id);
+    for (const e of newEvents) {
+      this.seenEventIds.add(e.id);
+      this.seenEventIdToChatId.set(e.id, e.chatId);
+    }
 
     const batchInsert = this.db.transaction(() => {
       for (const event of newEvents) {
@@ -508,6 +531,7 @@ export class ChatDatabase {
           // Cascade: remove receipts and attachments for events that were just purged.
           this.stmtTrimReceipts.run(chatId, chatId);
           this.stmtTrimAttachments.run(chatId, chatId);
+          this.refreshSeenEventIdsForChat(chatId);
         }
       }
     });
@@ -673,12 +697,9 @@ export class ChatDatabase {
     eventIds: string[]
   ): Record<string, string[]> {
     if (eventIds.length === 0) return {};
-    const placeholders = eventIds.map(() => '?').join(', ');
-    const rows = this.db
-      .prepare(
-        `SELECT event_id, reader_address FROM read_receipts WHERE event_id IN (${placeholders})`
-      )
-      .all(...eventIds) as { event_id: string; reader_address: string }[];
+    const rows = this.getReceiptLookupStatement(eventIds.length).all(
+      ...eventIds
+    ) as { event_id: string; reader_address: string }[];
 
     const out: Record<string, string[]> = {};
     for (const r of rows) {
@@ -785,12 +806,41 @@ export class ChatDatabase {
     chatMap: Map<string, number>
   ): void {
     let next = from + 1;
-    const stmtHas = this.db.prepare(
-      'SELECT 1 FROM chat_events WHERE chat_id = ? AND author_address = ? AND seq = ? LIMIT 1'
-    );
-    while (stmtHas.get(chatId, authorAddress, next)) {
+    while (this.stmtHasSeq.get(chatId, authorAddress, next)) {
       chatMap.set(authorAddress, next);
       next++;
+    }
+  }
+
+  private getReceiptLookupStatement(eventCount: number): Statement {
+    let stmt = this.receiptLookupStatements.get(eventCount);
+    if (stmt) return stmt;
+
+    const placeholders = Array.from({ length: eventCount }, () => '?').join(', ');
+    stmt = this.db.prepare(
+      `SELECT event_id, reader_address FROM read_receipts WHERE event_id IN (${placeholders})`
+    );
+    this.receiptLookupStatements.set(eventCount, stmt);
+    return stmt;
+  }
+
+  private refreshSeenEventIdsForChat(chatId: string): void {
+    const retainedIds = new Set(
+      (
+        this.stmtLoadEventIdsForChat.all(chatId) as { id: string }[]
+      ).map((row) => row.id)
+    );
+
+    for (const [eventId, mappedChatId] of this.seenEventIdToChatId.entries()) {
+      if (mappedChatId !== chatId) continue;
+      if (retainedIds.has(eventId)) continue;
+      this.seenEventIdToChatId.delete(eventId);
+      this.seenEventIds.delete(eventId);
+    }
+
+    for (const eventId of retainedIds) {
+      this.seenEventIdToChatId.set(eventId, chatId);
+      this.seenEventIds.add(eventId);
     }
   }
 }

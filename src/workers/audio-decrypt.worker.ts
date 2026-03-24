@@ -30,6 +30,38 @@ export interface DecryptResult {
   opusFrame: ArrayBuffer; // transferred back to main thread
 }
 
+function encodePacket(
+  sourceAddr: string,
+  vad: boolean,
+  seq: number,
+  timestampMs: number,
+  opusFrame: Uint8Array,
+  roomKey: Uint8Array
+): ArrayBuffer {
+  const addrBytes = new TextEncoder().encode(sourceAddr);
+  const nonce = nacl.randomBytes(24);
+  const ciphertext = (nacl as any).secretbox(opusFrame, nonce, roomKey);
+  const total = 1 + addrBytes.length + 1 + 2 + 4 + 24 + ciphertext.length;
+  const buf = new Uint8Array(total);
+  let off = 0;
+
+  buf[off++] = addrBytes.length;
+  buf.set(addrBytes, off);
+  off += addrBytes.length;
+  buf[off++] = vad ? 1 : 0;
+  buf[off++] = (seq >> 8) & 0xff;
+  buf[off++] = seq & 0xff;
+  buf[off++] = (timestampMs >>> 24) & 0xff;
+  buf[off++] = (timestampMs >>> 16) & 0xff;
+  buf[off++] = (timestampMs >>> 8) & 0xff;
+  buf[off++] = timestampMs & 0xff;
+  buf.set(nonce, off);
+  off += 24;
+  buf.set(ciphertext, off);
+
+  return buf.buffer;
+}
+
 /** Decode an encrypted audio packet. Returns null if decryption fails. */
 function decodePacket(
   buf: Uint8Array,
@@ -67,6 +99,15 @@ self.onmessage = (
     | { type: 'setRoomKey'; roomKey: ArrayBuffer }
     | { type: 'clearRoomKey' }
     | { type: 'decrypt'; id: number; buffer: ArrayBuffer }
+    | {
+      type: 'encrypt';
+      id: number;
+      sourceAddr: string;
+      vad: boolean;
+      seq: number;
+      timestampMs: number;
+      opusFrame: ArrayBuffer;
+    }
   >
 ) => {
   const data = e.data;
@@ -80,7 +121,24 @@ self.onmessage = (
     return;
   }
 
-  if (data.type !== 'decrypt' || !roomKeyBytes) {
+  if (!roomKeyBytes) {
+    return;
+  }
+
+  if (data.type === 'encrypt') {
+    const packet = encodePacket(
+      data.sourceAddr,
+      data.vad,
+      data.seq,
+      data.timestampMs,
+      new Uint8Array(data.opusFrame),
+      roomKeyBytes
+    );
+    self.postMessage({ type: 'encryptResult', id: data.id, packet }, [packet]);
+    return;
+  }
+
+  if (data.type !== 'decrypt') {
     return;
   }
 

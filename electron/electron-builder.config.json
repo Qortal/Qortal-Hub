@@ -6,6 +6,7 @@
   "afterPack": "scripts/afterPack.js",
 
   "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],
+  "asarUnpack": ["build/src/ed25519-verify.worker.js"],
   "nsis": {
     "allowElevation": true,
     "oneClick": false,

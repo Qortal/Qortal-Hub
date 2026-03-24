@@ -12,6 +12,7 @@
     "app/**/*",
     "scripts/**/*"
   ],
+  "asarUnpack": ["build/src/ed25519-verify.worker.js"],
   "linux": {
     "target": ["AppImage", "deb", "snap", "rpm"],
     "category": "Network",

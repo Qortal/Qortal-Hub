@@ -9,7 +9,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   Avatar,
-  Badge,
   Box,
   Chip,
   CircularProgress,
@@ -140,6 +139,48 @@ function ParticipantRow({
 
 export function GroupAgentDashboard() {
   const [isOpen, setIsOpen] = useAtom(groupChatOpenAtom);
+  const [keepMounted, setKeepMounted] = useState(false);
+
+  if (!isOpen && !keepMounted) {
+    return (
+      <Tooltip title="Group Call Dashboard" placement="left">
+        <Box
+          onClick={() => setIsOpen(true)}
+          sx={{
+            position: 'fixed', bottom: 24, right: 24, zIndex: 1400,
+            width: 52, height: 52, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+            color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
+            transition: 'box-shadow 0.3s',
+          }}
+        >
+          <Groups2RoundedIcon fontSize="medium" />
+        </Box>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <GroupAgentDashboardPanel
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      setKeepMounted={setKeepMounted}
+    />
+  );
+}
+
+function GroupAgentDashboardPanel({
+  isOpen,
+  setIsOpen,
+  setKeepMounted,
+}: {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  setKeepMounted: (active: boolean) => void;
+}) {
   const userInfo = useAtomValue(userInfoAtom);
 
   const { messages, sendMessage, isSending } = useSupportChat();
@@ -147,7 +188,7 @@ export function GroupAgentDashboard() {
   const {
     roomState, participants, myRole, activeSpeakers, topologyLabel,
     joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
-  } = useGroupVoiceCall();
+  } = useGroupVoiceCall(isOpen);
 
   const [inputValue, setInputValue] = useState('');
   const [muted, setMuted] = useState(false);
@@ -175,34 +216,9 @@ export function GroupAgentDashboard() {
   const inCall = roomState === 'connected' || roomState === 'joining';
   const isForwarder = myRole !== 'participant';
 
-  if (!isOpen) {
-    return (
-      <Tooltip title="Group Call Dashboard" placement="left">
-        <Box
-          onClick={() => setIsOpen(true)}
-          sx={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 1400,
-            width: 52, height: 52, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-            color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer',
-            boxShadow: inCall ? '0 0 0 4px rgba(99,102,241,0.35), 0 4px 20px rgba(99,102,241,0.5)'
-                               : '0 4px 20px rgba(99,102,241,0.5)',
-            transition: 'box-shadow 0.3s',
-          }}
-        >
-          <Badge
-            badgeContent={inCall ? participants.length : 0}
-            color="success"
-            sx={{ '& .MuiBadge-badge': { fontSize: 9 } }}
-          >
-            <Groups2RoundedIcon fontSize="medium" />
-          </Badge>
-        </Box>
-      </Tooltip>
-    );
-  }
+  useEffect(() => {
+    setKeepMounted(inCall);
+  }, [inCall, setKeepMounted]);
 
   return (
     <Paper

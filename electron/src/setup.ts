@@ -1394,6 +1394,7 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     const gcallMgr = startGroupCallManager(network, pm);
     attachGroupCallListeners(gcallMgr);
     // Notify renderers that P2P / presence is live again.
+    flushPresenceUpdates();
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
     return { success: true, port: network.getPort(), peerId: network.getPeerId() };
   } catch (err) {
@@ -1405,6 +1406,8 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
 ipcMain.handle('p2p:stop', async () => {
   try {
     stopP2PNetwork();
+    queuedPresenceUpdates.clear();
+    flushPresenceUpdates();
     broadcastToSet(presenceUpdateSubscribers, 'presence:cleared', {});
     stopPresenceManager();
     stopChatManager();
@@ -1468,9 +1471,44 @@ ipcMain.on('p2p:peerChange:unsubscribe', (event) => {
 // ── Presence IPC Handlers ────────────────────────────────────────────────────
 
 const presenceUpdateSubscribers = new Set<Electron.WebContents>();
+const queuedPresenceUpdates = new Map<string, unknown>();
+let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function flushPresenceUpdates(): void {
+  if (presenceUpdateFlushTimer) {
+    clearTimeout(presenceUpdateFlushTimer);
+    presenceUpdateFlushTimer = null;
+  }
+  if (queuedPresenceUpdates.size === 0) return;
+
+  const payloads = Array.from(queuedPresenceUpdates.values());
+  queuedPresenceUpdates.clear();
+  broadcastToSet(presenceUpdateSubscribers, 'presence:update-batch', payloads);
+}
+
+function queuePresenceUpdate(payload: unknown): void {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    typeof (payload as { address?: unknown }).address === 'string'
+  ) {
+    queuedPresenceUpdates.set(
+      (payload as { address: string }).address,
+      payload
+    );
+  } else {
+    queuedPresenceUpdates.set(`${Date.now()}:${queuedPresenceUpdates.size}`, payload);
+  }
+
+  if (presenceUpdateFlushTimer) return;
+  presenceUpdateFlushTimer = setTimeout(() => {
+    flushPresenceUpdates();
+  }, 16);
+  presenceUpdateFlushTimer.unref?.();
+}
 
 function broadcastPresenceUpdate(payload: unknown): void {
-  broadcastToSet(presenceUpdateSubscribers, 'presence:update', payload);
+  queuePresenceUpdate(payload);
 }
 
 export function attachPresenceListeners(
@@ -1481,12 +1519,12 @@ export function attachPresenceListeners(
 }
 
 /** Validates a renderer-supplied envelope, applies it locally, then relays. */
-function handleLocalPresenceEnvelope(envelope: unknown): boolean {
+async function handleLocalPresenceEnvelope(envelope: unknown): Promise<boolean> {
   const pm = getPresenceManager();
   const p2p = getP2PNetwork();
   if (!pm || !p2p) return false;
 
-  const accepted = pm.handleEnvelope(envelope, 'local');
+  const accepted = await pm.handleEnvelope(envelope, 'local');
   if (accepted) {
     // Broadcast to connected peers. p2p.send() creates a new P2P message
     // (new ID) which gossips the presence envelope once across the network.
@@ -1497,7 +1535,7 @@ function handleLocalPresenceEnvelope(envelope: unknown): boolean {
 
 ipcMain.handle('presence:announce', async (_event, envelope: unknown) => {
   try {
-    const ok = handleLocalPresenceEnvelope(envelope);
+    const ok = await handleLocalPresenceEnvelope(envelope);
     return { success: ok };
   } catch (err) {
     loggerError('[Presence] announce error:', err);
@@ -1507,7 +1545,7 @@ ipcMain.handle('presence:announce', async (_event, envelope: unknown) => {
 
 ipcMain.handle('presence:heartbeat', async (_event, envelope: unknown) => {
   try {
-    const ok = handleLocalPresenceEnvelope(envelope);
+    const ok = await handleLocalPresenceEnvelope(envelope);
     return { success: ok };
   } catch (err) {
     loggerError('[Presence] heartbeat error:', err);
@@ -1517,7 +1555,7 @@ ipcMain.handle('presence:heartbeat', async (_event, envelope: unknown) => {
 
 ipcMain.handle('presence:offline', async (_event, envelope: unknown) => {
   try {
-    const ok = handleLocalPresenceEnvelope(envelope);
+    const ok = await handleLocalPresenceEnvelope(envelope);
     return { success: ok };
   } catch (err) {
     loggerError('[Presence] offline error:', err);
@@ -1584,7 +1622,7 @@ ipcMain.handle('chat:sendEvent', async (_event, envelope: unknown) => {
   const cm = getChatManager();
   if (!cm) return { success: false, error: 'Chat manager is not running' };
   try {
-    const ok = cm.handleLocalEvent(envelope);
+    const ok = await cm.handleLocalEvent(envelope);
     return { success: ok };
   } catch (err) {
     loggerError('[Chat] sendEvent error:', err);

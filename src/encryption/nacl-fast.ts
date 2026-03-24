@@ -2390,28 +2390,32 @@ nacl.setPRNG = function(fn) {
 (function() {
   // Initialize PRNG if environment provides CSPRNG.
   // If not, methods calling randombytes will throw.
-  var crypto;
+  var cryptoObj;
   if (typeof window !== 'undefined') {
-    // Browser.
+    // Browser (main thread).
     if (window.crypto && window.crypto.getRandomValues) {
-      crypto = window.crypto; // Standard
+      cryptoObj = window.crypto; // Standard
     } else if (window.msCrypto && window.msCrypto.getRandomValues) {
-      crypto = window.msCrypto; // Internet Explorer 11+
+      cryptoObj = window.msCrypto; // Internet Explorer 11+
     }
-    if (crypto) {
-      nacl.setPRNG(function(x, n) {
-        var i, v = new Uint8Array(n);
-        crypto.getRandomValues(v);
-        for (i = 0; i < n; i++) x[i] = v[i];
-        cleanup(v);
-      });
-    }
+  }
+  // Web Workers: no `window`, but `globalThis.crypto` / `self.crypto` is standard.
+  if (!cryptoObj && typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.getRandomValues) {
+    cryptoObj = globalThis.crypto;
+  }
+  if (cryptoObj) {
+    nacl.setPRNG(function(x, n) {
+      var i, v = new Uint8Array(n);
+      cryptoObj.getRandomValues(v);
+      for (i = 0; i < n; i++) x[i] = v[i];
+      cleanup(v);
+    });
   } else if (typeof require !== 'undefined') {
-    // Node.js.
-    crypto = require('crypto');
-    if (crypto) {
+    // Node.js (main process / tests).
+    var nodeCrypto = require('crypto');
+    if (nodeCrypto) {
       nacl.setPRNG(function(x, n) {
-        var i, v = crypto.randomBytes(n);
+        var i, v = nodeCrypto.randomBytes(n);
         for (i = 0; i < n; i++) x[i] = v[i];
         cleanup(v);
       });

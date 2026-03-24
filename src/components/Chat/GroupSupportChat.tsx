@@ -100,6 +100,46 @@ function ParticipantAvatar({ address, speaking }: { address: string; speaking: b
 
 export function GroupSupportChat() {
   const [isOpen, setIsOpen] = useAtom(groupChatOpenAtom);
+  const [keepMounted, setKeepMounted] = useState(false);
+
+  if (!isOpen && !keepMounted) {
+    return (
+      <Tooltip title="Group Support Call" placement="left">
+        <Box
+          onClick={() => setIsOpen(true)}
+          sx={{
+            position: 'fixed', bottom: 24, right: 24, zIndex: 1400,
+            width: 52, height: 52, borderRadius: '50%',
+            bgcolor: '#6366f1', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
+            transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.1)' },
+          }}
+        >
+          <Groups2RoundedIcon fontSize="medium" />
+        </Box>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <GroupSupportChatPanel
+      isOpen={isOpen}
+      setIsOpen={setIsOpen}
+      setKeepMounted={setKeepMounted}
+    />
+  );
+}
+
+function GroupSupportChatPanel({
+  isOpen,
+  setIsOpen,
+  setKeepMounted,
+}: {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+  setKeepMounted: (active: boolean) => void;
+}) {
   const userInfo = useAtomValue(userInfoAtom);
 
   // Text chat
@@ -109,7 +149,7 @@ export function GroupSupportChat() {
   const {
     roomState, participants, myRole, activeSpeakers, topologyLabel,
     joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
-  } = useGroupVoiceCall();
+  } = useGroupVoiceCall(isOpen);
 
   const [inputValue, setInputValue] = useState('');
   const [muted, setMuted] = useState(false);
@@ -136,25 +176,9 @@ export function GroupSupportChat() {
 
   const inCall = roomState === 'connected' || roomState === 'joining';
 
-  if (!isOpen) {
-    return (
-      <Tooltip title="Group Support Call" placement="left">
-        <Box
-          onClick={() => setIsOpen(true)}
-          sx={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 1400,
-            width: 52, height: 52, borderRadius: '50%',
-            bgcolor: '#6366f1', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', boxShadow: '0 4px 20px rgba(99,102,241,0.5)',
-            transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.1)' },
-          }}
-        >
-          <Groups2RoundedIcon fontSize="medium" />
-        </Box>
-      </Tooltip>
-    );
-  }
+  useEffect(() => {
+    setKeepMounted(inCall);
+  }, [inCall, setKeepMounted]);
 
   return (
     <Paper

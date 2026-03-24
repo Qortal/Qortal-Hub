@@ -182,6 +182,14 @@ function foldEvents(rawEvents: P2PChatEvent[]): RenderedMessage[] {
   });
 }
 
+function compareEventOrder(
+  a: Pick<P2PChatEvent, 'timestamp' | 'seq'>,
+  b: Pick<P2PChatEvent, 'timestamp' | 'seq'>
+): number {
+  if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+  return a.seq - b.seq;
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 export interface UseP2PChatReturn {
@@ -249,11 +257,18 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
   /** Full unfolded event log — source of truth for re-folding. */
   const rawEventsRef = useRef<P2PChatEvent[]>([]);
 
+  /** Current folded messages so live events can patch incrementally. */
+  const messagesRef = useRef<RenderedMessage[]>([]);
+
   /** O(1) duplicate guard for live events — avoids scanning rawEventsRef. */
   const seenEventIdsRef = useRef<Set<string>>(new Set());
 
   /** Debounce handle — coalesces burst incoming events into a single foldEvents call. */
   const foldDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Short-window receipt batching avoids one IPC call per event. */
+  const receiptDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queuedReceiptIdsRef = useRef<Set<string>>(new Set());
 
   /** Per-author monotonic sequence counter for messages this session sends. */
   const nextSeqRef = useRef(1);
@@ -268,10 +283,27 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
    */
   const loadedEventIdsRef = useRef<Set<string>>(new Set());
 
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
   // ── Subscribe, load history, and wire live listeners ──────────────────────
 
   useEffect(() => {
-    if (!window.chat || !userInfo?.address || !userInfo?.publicKey) return;
+    if (
+      !window.chat ||
+      !userInfo?.address ||
+      !userInfo?.publicKey ||
+      chatId === 'support:__placeholder__'
+    ) {
+      setMessages([]);
+      setReadReceipts(new Map());
+      setTypingUsers(new Set());
+      setIsReady(false);
+      rawEventsRef.current = [];
+      messagesRef.current = [];
+      return;
+    }
 
     let cancelled = false;
     let unsubEvent: (() => void) | null = null;
@@ -281,6 +313,11 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
     // Reset per-channel state on each setup run.
     loadedEventIdsRef.current = new Set();
     seenEventIdsRef.current = new Set();
+    queuedReceiptIdsRef.current = new Set();
+    setMessages([]);
+    setReadReceipts(new Map());
+    setTypingUsers(new Set());
+    setIsReady(false);
 
     /** Merges a Record<eventId, readerAddress[]> into readReceipts state. */
     const mergeReceipts = (data: Record<string, string[]>) => {
@@ -315,6 +352,91 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
       }
     };
 
+    const flushQueuedReceiptIds = async () => {
+      if (receiptDebounceRef.current) {
+        clearTimeout(receiptDebounceRef.current);
+        receiptDebounceRef.current = null;
+      }
+      const ids = Array.from(queuedReceiptIdsRef.current);
+      queuedReceiptIdsRef.current.clear();
+      if (ids.length === 0) return;
+      await loadReceiptsForNewIds(ids);
+    };
+
+    const queueReceiptLoad = (eventIds: string[]) => {
+      for (const id of eventIds) queuedReceiptIdsRef.current.add(id);
+      if (receiptDebounceRef.current) return;
+      receiptDebounceRef.current = setTimeout(() => {
+        flushQueuedReceiptIds().catch(() => {});
+      }, 50);
+    };
+
+    const scheduleFold = () => {
+      if (foldDebounceRef.current) clearTimeout(foldDebounceRef.current);
+      foldDebounceRef.current = setTimeout(() => {
+        foldDebounceRef.current = null;
+        const nextMessages = foldEvents(rawEventsRef.current);
+        messagesRef.current = nextMessages;
+        setMessages(nextMessages);
+      }, 50);
+    };
+
+    const appendEventToRawLog = (event: P2PChatEvent): boolean => {
+      const rawEvents = rawEventsRef.current;
+      const last = rawEvents[rawEvents.length - 1];
+      if (!last || compareEventOrder(last, event) <= 0) {
+        rawEvents.push(event);
+        return true;
+      }
+      rawEvents.push(event);
+      return false;
+    };
+
+    const tryApplyIncrementally = (event: P2PChatEvent): boolean => {
+      const rawEvents = rawEventsRef.current;
+      const previousEvent = rawEvents[rawEvents.length - 2];
+      if (previousEvent && compareEventOrder(previousEvent, event) > 0) {
+        return false;
+      }
+
+      if (event.eventType === 'message') {
+        const nextMessage: RenderedMessage = {
+          id: event.id,
+          chatId: event.chatId,
+          authorAddress: event.authorAddress,
+          authorPublicKey: event.authorPublicKey,
+          seq: event.seq,
+          timestamp: event.timestamp,
+          content: event.content,
+          isEdited: false,
+          isDeleted: false,
+          replyTo: event.replyTo,
+          reactions: {},
+          originalEvent: event,
+          attachmentMeta: event.attachmentMeta,
+        };
+        const nextMessages = [...messagesRef.current, nextMessage];
+        messagesRef.current = nextMessages;
+        setMessages(nextMessages);
+        return true;
+      }
+
+      const targetId = event.targetId;
+      if (!targetId) return false;
+      const index = messagesRef.current.findIndex((msg) => msg.id === targetId);
+      if (index === -1) return false;
+
+      const current = messagesRef.current[index];
+      const next = applyEventToMessage(current, event);
+      if (next === current) return true;
+
+      const nextMessages = [...messagesRef.current];
+      nextMessages[index] = next;
+      messagesRef.current = nextMessages;
+      setMessages(nextMessages);
+      return true;
+    };
+
     (async () => {
       try {
         // Register our address so DMs addressed to us are auto-accepted.
@@ -337,32 +459,25 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         nextSeqRef.current = maxSeq + 1;
 
         rawEventsRef.current = history;
+        messagesRef.current = foldEvents(history);
         // Pre-populate seenEventIdsRef so live events from history don't duplicate.
         for (const ev of history) seenEventIdsRef.current.add(ev.id);
-        setMessages(foldEvents(history));
+        setMessages(messagesRef.current);
 
         // Load receipts for the initial history page (query-scoped).
         await loadReceiptsForNewIds(history.map((e) => e.id));
         if (cancelled) return;
 
-        // Live event stream — append new events and re-fold.
-        unsubEvent = window.chat!.onEvent(({ event }) => {
-          // Ignore events for other channels — each useP2PChat instance is
-          // scoped to exactly one chatId.
-          if (event.chatId !== chatId) return;
-
+        // Live event stream — scoped in preload, so this hook only sees one chat.
+        unsubEvent = window.chat!.onEventForChat(chatId, ({ event }) => {
           // O(1) dedup guard (replaces the O(n) .some() scan).
           if (!seenEventIdsRef.current.has(event.id)) {
             seenEventIdsRef.current.add(event.id);
-            rawEventsRef.current = [...rawEventsRef.current, event];
+            const isInOrderAppend = appendEventToRawLog(event);
+            if (!isInOrderAppend || !tryApplyIncrementally(event)) {
+              scheduleFold();
+            }
           }
-
-          // Debounce: coalesce burst events into a single foldEvents call.
-          if (foldDebounceRef.current) clearTimeout(foldDebounceRef.current);
-          foldDebounceRef.current = setTimeout(() => {
-            foldDebounceRef.current = null;
-            setMessages(foldEvents(rawEventsRef.current));
-          }, 50);
 
           if (
             event.authorAddress === userInfo.address &&
@@ -371,12 +486,11 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
             nextSeqRef.current = event.seq + 1;
           }
 
-          // Load receipts for the new event ID (query-scoped, 1 ID at a time).
-          loadReceiptsForNewIds([event.id]);
+          queueReceiptLoad([event.id]);
         });
 
         // Typing indicators.
-        unsubTyping = window.chat!.onTyping(({ authorAddress, active }) => {
+        unsubTyping = window.chat!.onTypingForChat(chatId, ({ authorAddress, active }) => {
           if (authorAddress === userInfo.address) return;
           setTypingUsers((prev) => {
             const next = new Set(prev);
@@ -387,7 +501,8 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         });
 
         // Live read receipts.
-        unsubRead = window.chat!.onRead(
+        unsubRead = window.chat!.onReadForChat(
+          chatId,
           ({ chatId: cId, readerAddress, eventIds }) => {
             if (cId !== chatId) return;
             setReadReceipts((prev) => {
@@ -413,6 +528,10 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
       if (foldDebounceRef.current) {
         clearTimeout(foldDebounceRef.current);
         foldDebounceRef.current = null;
+      }
+      if (receiptDebounceRef.current) {
+        clearTimeout(receiptDebounceRef.current);
+        receiptDebounceRef.current = null;
       }
       unsubEvent?.();
       unsubTyping?.();

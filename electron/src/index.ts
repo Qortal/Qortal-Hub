@@ -28,7 +28,11 @@ import {
   attachGroupCallListeners,
   setLastP2POptions,
 } from './setup';
-import { startP2PNetwork, DEFAULT_P2P_PORT, DEFAULT_API_PORT } from './p2p-network';
+import {
+  startP2PNetwork,
+  DEFAULT_P2P_PORT,
+  DEFAULT_API_PORT,
+} from './p2p-network';
 import { startPresenceManager } from './presence';
 import { startChatManager, flushChatStore } from './chat';
 import { startCallManager } from './call';
@@ -149,7 +153,10 @@ async function isPortTaken(port: number): Promise<boolean> {
   });
 }
 
-async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10): Promise<number> {
+async function setupMultiInstanceUserData(
+  basePort = 55000,
+  maxInstances = 10
+): Promise<number> {
   for (let i = 0; i < maxInstances; i++) {
     const port = basePort + i;
     if (!(await isPortTaken(port))) {

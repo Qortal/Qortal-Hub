@@ -26,13 +26,9 @@
 
 import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
-import nacl from 'tweetnacl';
 import { log as loggerLog, error as loggerError } from './logger';
-import {
-  deriveAddressFromPublicKey,
-  canonicalizeForSigning,
-  base58Decode,
-} from './presence';
+import { deriveAddressFromPublicKey } from './presence';
+import { VerifyWorkerPool } from './verify-worker-pool';
 import type { P2PNetwork } from './p2p-network';
 import type { PresenceManager } from './presence';
 
@@ -200,52 +196,8 @@ interface CallRecord {
   cleanupTimer?: ReturnType<typeof setTimeout>;
 }
 
-// ── Signature verification ────────────────────────────────────────────────────
-
-function verifyCallRequestSignature(env: CallRequestEnvelope): boolean {
-  try {
-    const msgBytes = canonicalizeForSigning({
-      type: env.type,
-      callId: env.callId,
-      chatId: env.chatId,
-      fromAddress: env.fromAddress,
-      fromPublicKey: env.fromPublicKey,
-      timestamp: env.timestamp,
-    });
-    const sigBytes = base58Decode(env.signature) as Uint8Array;
-    const keyBytes = base58Decode(env.fromPublicKey) as Uint8Array;
-    return nacl.sign.detached.verify(msgBytes, sigBytes, keyBytes);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Verify a signed signaling message (ACCEPT/REJECT/HANGUP/OFFER/ANSWER).
- * Signed fields: { callId, timestamp, type } — alphabetically canonical.
- * Also checks timestamp freshness and that fromPublicKey derives to expectedAddress.
- */
-function verifySignedEnvelope(
-  type: string,
-  callId: string,
-  timestamp: number,
-  fromPublicKey: string,
-  signature: string,
-  expectedAddress: string
-): boolean {
-  try {
-    const skew = Date.now() - timestamp;
-    if (skew > 30_000 || skew < -10_000) return false;
-    const derived = deriveAddressFromPublicKey(fromPublicKey);
-    if (derived !== expectedAddress) return false;
-    const msgBytes = canonicalizeForSigning({ callId, timestamp, type });
-    const sigBytes = base58Decode(signature) as Uint8Array;
-    const keyBytes = base58Decode(fromPublicKey) as Uint8Array;
-    return nacl.sign.detached.verify(msgBytes, sigBytes, keyBytes);
-  } catch {
-    return false;
-  }
-}
+const CALL_VERIFY_WORKER_COUNT = 2;
+const CALL_MAX_PENDING_VERIFY = 512;
 
 // ── Audio relay load tracking ─────────────────────────────────────────────────
 
@@ -274,6 +226,11 @@ export class CallManager extends EventEmitter {
   private presence: PresenceManager;
   private activeCalls = new Map<string, CallRecord>();
   private localAddresses = new Set<string>();
+  private verifyPool = new VerifyWorkerPool(
+    'call',
+    CALL_VERIFY_WORKER_COUNT,
+    CALL_MAX_PENDING_VERIFY
+  );
 
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
     super();
@@ -282,11 +239,13 @@ export class CallManager extends EventEmitter {
   }
 
   start(): void {
+    this.verifyPool.start();
     this.p2p.on('message', this.onP2PMessage);
     loggerLog('[Call] Manager started.');
   }
 
   stop(): void {
+    this.verifyPool.stop();
     this.p2p.off('message', this.onP2PMessage);
     for (const call of this.activeCalls.values()) {
       if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
@@ -528,10 +487,8 @@ export class CallManager extends EventEmitter {
   // ── Incoming message handlers ─────────────────────────────────────────────
 
   private handleRequest(fromNodeId: string, env: CallRequestEnvelope): void {
-    // Drop if not addressed to a local user
     if (this.localAddresses.size === 0) return;
 
-    // Basic field validation
     if (
       typeof env.callId !== 'string' ||
       typeof env.fromAddress !== 'string' ||
@@ -544,14 +501,12 @@ export class CallManager extends EventEmitter {
       return;
     }
 
-    // Timestamp freshness: reject if older than 30s or future by more than 10s
     const skew = Date.now() - env.timestamp;
     if (skew > 30_000 || skew < -10_000) {
       loggerLog('[Call] Dropped CALL_REQUEST: stale timestamp');
       return;
     }
 
-    // Signature verification
     let derivedAddr: string;
     try {
       derivedAddr = deriveAddressFromPublicKey(env.fromPublicKey);
@@ -563,17 +518,43 @@ export class CallManager extends EventEmitter {
       loggerLog('[Call] Dropped CALL_REQUEST: address mismatch');
       return;
     }
-    if (!verifyCallRequestSignature(env)) {
-      loggerLog('[Call] Dropped CALL_REQUEST: invalid signature');
-      return;
-    }
 
-    // Deduplicate
+    void this.verifyPool
+      .verify({
+        kind: 'call_request',
+        fields: {
+          type: env.type,
+          callId: env.callId,
+          chatId: env.chatId,
+          fromAddress: env.fromAddress,
+          fromPublicKey: env.fromPublicKey,
+          timestamp: env.timestamp,
+        },
+        signature: env.signature,
+        fromPublicKey: env.fromPublicKey,
+      })
+      .then((ok) => {
+        if (!ok) {
+          loggerLog('[Call] Dropped CALL_REQUEST: invalid signature');
+          return;
+        }
+        try {
+          this.applyVerifiedIncomingRequest(fromNodeId, env);
+        } catch (err) {
+          loggerError('[Call] Error applying CALL_REQUEST:', err);
+        }
+      });
+  }
+
+  private applyVerifiedIncomingRequest(
+    fromNodeId: string,
+    env: CallRequestEnvelope
+  ): void {
     if (this.activeCalls.has(env.callId)) return;
 
     const record: CallRecord = {
       callId: env.callId,
-      localAddress: '', // filled when accepted
+      localAddress: '',
       remoteAddress: env.fromAddress,
       remoteNodeId: fromNodeId,
       chatId: env.chatId,
@@ -597,7 +578,6 @@ export class CallManager extends EventEmitter {
       chatId: env.chatId,
     });
 
-    // Re-relay to other local addresses (support: multi-agent)
     if ((env.hopsRemaining ?? 0) > 0) {
       this.p2p.send(null, {
         ...env,
@@ -622,19 +602,30 @@ export class CallManager extends EventEmitter {
       loggerLog('[Call] Dropped CALL_ACCEPT: missing auth fields');
       return;
     }
-    if (!verifySignedEnvelope(
-      env.type, env.callId, env.timestamp,
-      env.fromPublicKey, env.signature,
-      call.remoteAddress
-    )) {
-      loggerLog('[Call] Dropped CALL_ACCEPT: invalid signature');
-      return;
-    }
 
-    if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
-    call.state = 'active';
-    this.emit('call:accepted', { callId: env.callId });
-    loggerLog(`[Call] Call ${env.callId.slice(0, 8)}… accepted.`);
+    const expectedAddress = call.remoteAddress;
+    void this.verifyPool
+      .verify({
+        kind: 'call_signed',
+        wireType: env.type,
+        callId: env.callId,
+        timestamp: env.timestamp,
+        signature: env.signature,
+        fromPublicKey: env.fromPublicKey,
+        expectedAddress,
+      })
+      .then((ok) => {
+        if (!ok) {
+          loggerLog('[Call] Dropped CALL_ACCEPT: invalid signature');
+          return;
+        }
+        const c = this.activeCalls.get(env.callId);
+        if (!c || c.direction !== 'outbound') return;
+        if (c.cleanupTimer) clearTimeout(c.cleanupTimer);
+        c.state = 'active';
+        this.emit('call:accepted', { callId: env.callId });
+        loggerLog(`[Call] Call ${env.callId.slice(0, 8)}… accepted.`);
+      });
   }
 
   private handleReject(env: CallRejectEnvelope): void {
@@ -649,20 +640,31 @@ export class CallManager extends EventEmitter {
       loggerLog('[Call] Dropped CALL_REJECT: missing auth fields');
       return;
     }
-    if (!verifySignedEnvelope(
-      env.type, env.callId, env.timestamp,
-      env.fromPublicKey, env.signature,
-      call.remoteAddress
-    )) {
-      loggerLog('[Call] Dropped CALL_REJECT: invalid signature');
-      return;
-    }
 
-    if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
-    call.state = 'ended';
-    this.activeCalls.delete(env.callId);
-    this.emit('call:rejected', { callId: env.callId, reason: env.reason });
-    loggerLog(`[Call] Call ${env.callId.slice(0, 8)}… rejected.`);
+    const expectedAddress = call.remoteAddress;
+    void this.verifyPool
+      .verify({
+        kind: 'call_signed',
+        wireType: env.type,
+        callId: env.callId,
+        timestamp: env.timestamp,
+        signature: env.signature,
+        fromPublicKey: env.fromPublicKey,
+        expectedAddress,
+      })
+      .then((ok) => {
+        if (!ok) {
+          loggerLog('[Call] Dropped CALL_REJECT: invalid signature');
+          return;
+        }
+        const c = this.activeCalls.get(env.callId);
+        if (!c) return;
+        if (c.cleanupTimer) clearTimeout(c.cleanupTimer);
+        c.state = 'ended';
+        this.activeCalls.delete(env.callId);
+        this.emit('call:rejected', { callId: env.callId, reason: env.reason });
+        loggerLog(`[Call] Call ${env.callId.slice(0, 8)}… rejected.`);
+      });
   }
 
   private handleSignal(
@@ -671,39 +673,46 @@ export class CallManager extends EventEmitter {
     const call = this.activeCalls.get(env.callId);
     if (!call || call.state === 'ended') return;
 
-    if (env.type === 'CALL_OFFER' || env.type === 'CALL_ANSWER') {
-      if (
-        typeof env.fromPublicKey !== 'string' ||
-        typeof env.signature !== 'string' ||
-        typeof env.timestamp !== 'number'
-      ) {
-        loggerLog(`[Call] Dropped ${env.type}: missing auth fields`);
-        return;
-      }
-      if (!verifySignedEnvelope(
-        env.type, env.callId, env.timestamp,
-        env.fromPublicKey, env.signature,
-        call.remoteAddress
-      )) {
-        loggerLog(`[Call] Dropped ${env.type}: invalid signature`);
-        return;
-      }
+    if (env.type === 'CALL_ICE') {
+      this.emit('call:signal', {
+        callId: env.callId,
+        type: 'ice',
+        data: env.candidate,
+      });
+      return;
     }
 
-    let type: 'offer' | 'answer' | 'ice';
-    let data: unknown;
-    if (env.type === 'CALL_OFFER') {
-      type = 'offer';
-      data = env.sdp;
-    } else if (env.type === 'CALL_ANSWER') {
-      type = 'answer';
-      data = env.sdp;
-    } else {
-      type = 'ice';
-      data = env.candidate;
+    if (
+      typeof env.fromPublicKey !== 'string' ||
+      typeof env.signature !== 'string' ||
+      typeof env.timestamp !== 'number'
+    ) {
+      loggerLog(`[Call] Dropped ${env.type}: missing auth fields`);
+      return;
     }
 
-    this.emit('call:signal', { callId: env.callId, type, data });
+    const expectedAddress = call.remoteAddress;
+    void this.verifyPool
+      .verify({
+        kind: 'call_signed',
+        wireType: env.type,
+        callId: env.callId,
+        timestamp: env.timestamp,
+        signature: env.signature,
+        fromPublicKey: env.fromPublicKey,
+        expectedAddress,
+      })
+      .then((ok) => {
+        if (!ok) {
+          loggerLog(`[Call] Dropped ${env.type}: invalid signature`);
+          return;
+        }
+        const c = this.activeCalls.get(env.callId);
+        if (!c || c.state === 'ended') return;
+        const type = env.type === 'CALL_OFFER' ? 'offer' : 'answer';
+        const data = env.sdp;
+        this.emit('call:signal', { callId: env.callId, type, data });
+      });
   }
 
   private handleHangup(env: CallHangupEnvelope): void {
@@ -718,21 +727,32 @@ export class CallManager extends EventEmitter {
       loggerLog('[Call] Dropped CALL_HANGUP: missing auth fields');
       return;
     }
-    if (!verifySignedEnvelope(
-      env.type, env.callId, env.timestamp,
-      env.fromPublicKey, env.signature,
-      call.remoteAddress
-    )) {
-      loggerLog('[Call] Dropped CALL_HANGUP: invalid signature');
-      return;
-    }
 
-    if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
-    call.state = 'ended';
-    this.activeCalls.delete(env.callId);
-    activeAudioRelayStreams.delete(env.callId);
-    this.emit('call:hangup', { callId: env.callId });
-    loggerLog(`[Call] Remote hung up call ${env.callId.slice(0, 8)}…`);
+    const expectedAddress = call.remoteAddress;
+    void this.verifyPool
+      .verify({
+        kind: 'call_signed',
+        wireType: env.type,
+        callId: env.callId,
+        timestamp: env.timestamp,
+        signature: env.signature,
+        fromPublicKey: env.fromPublicKey,
+        expectedAddress,
+      })
+      .then((ok) => {
+        if (!ok) {
+          loggerLog('[Call] Dropped CALL_HANGUP: invalid signature');
+          return;
+        }
+        const c = this.activeCalls.get(env.callId);
+        if (!c) return;
+        if (c.cleanupTimer) clearTimeout(c.cleanupTimer);
+        c.state = 'ended';
+        this.activeCalls.delete(env.callId);
+        activeAudioRelayStreams.delete(env.callId);
+        this.emit('call:hangup', { callId: env.callId });
+        loggerLog(`[Call] Remote hung up call ${env.callId.slice(0, 8)}…`);
+      });
   }
 
   private handleAudio(env: CallAudioEnvelope): void {

@@ -27,7 +27,7 @@
     "entitlements": "buildmac/entitlements.mac.plist",
     "entitlementsInherit": "buildmac/entitlements.mac.plist",
     "category": "public.app-category.utilities",
-    "asarUnpack": ["**/*.node"],
+    "asarUnpack": ["**/*.node", "build/src/ed25519-verify.worker.js"],
     "target": ["dmg", "pkg"]
   },
 

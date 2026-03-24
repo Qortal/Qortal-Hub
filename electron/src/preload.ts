@@ -5,6 +5,226 @@ import { log as loggerLog, error as loggerError } from './logger';
 loggerLog('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
 
+type PresenceUpdatePayload = {
+  address: string;
+  online: boolean;
+  status: 'online' | 'away' | 'busy' | 'idle' | null;
+};
+
+type ChatEventPayload = { event: { chatId: string } };
+type ChatTypingPayload = {
+  chatId: string;
+  authorAddress: string;
+  active: boolean;
+};
+type ChatReadPayload = {
+  chatId: string;
+  readerAddress: string;
+  eventIds: string[];
+};
+
+const presenceUpdateSubscribers = new Set<
+  (payload: PresenceUpdatePayload) => void
+>();
+const presenceUpdateBatchSubscribers = new Set<
+  (payloads: PresenceUpdatePayload[]) => void
+>();
+let presenceSubscribed = false;
+let queuedPresenceUpdates = new Map<string, PresenceUpdatePayload>();
+let presenceFlushTimer: ReturnType<typeof setTimeout> | null = null;
+
+const flushQueuedPresenceUpdates = () => {
+  if (presenceFlushTimer) {
+    clearTimeout(presenceFlushTimer);
+    presenceFlushTimer = null;
+  }
+  if (queuedPresenceUpdates.size === 0) return;
+
+  const payloads = Array.from(queuedPresenceUpdates.values());
+  queuedPresenceUpdates = new Map();
+  for (const cb of presenceUpdateBatchSubscribers) cb(payloads);
+  for (const payload of payloads) {
+    for (const cb of presenceUpdateSubscribers) cb(payload);
+  }
+};
+
+const handlePresenceUpdateBatch = (_e: unknown, payload: unknown) => {
+  if (!Array.isArray(payload)) return;
+  for (const item of payload) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof (item as PresenceUpdatePayload).address === 'string'
+    ) {
+      queuedPresenceUpdates.set(
+        (item as PresenceUpdatePayload).address,
+        item as PresenceUpdatePayload
+      );
+    }
+  }
+
+  if (presenceFlushTimer) return;
+  presenceFlushTimer = setTimeout(() => flushQueuedPresenceUpdates(), 16);
+};
+
+const ensurePresenceSubscribed = () => {
+  if (presenceSubscribed) return;
+  presenceSubscribed = true;
+  ipcRenderer.on('presence:update-batch', handlePresenceUpdateBatch);
+  ipcRenderer.send('presence:subscribe');
+};
+
+const maybeUnsubscribePresence = () => {
+  if (
+    presenceUpdateSubscribers.size > 0 ||
+    presenceUpdateBatchSubscribers.size > 0
+  ) {
+    return;
+  }
+  if (presenceFlushTimer) {
+    clearTimeout(presenceFlushTimer);
+    presenceFlushTimer = null;
+  }
+  queuedPresenceUpdates.clear();
+  if (!presenceSubscribed) return;
+  presenceSubscribed = false;
+  ipcRenderer.removeListener('presence:update-batch', handlePresenceUpdateBatch);
+  ipcRenderer.send('presence:unsubscribe');
+};
+
+const chatEventSubscribers = new Set<(payload: ChatEventPayload) => void>();
+const chatEventSubscribersByChatId = new Map<
+  string,
+  Set<(payload: ChatEventPayload) => void>
+>();
+let chatEventSubscribed = false;
+
+const handleChatEvent = (_e: unknown, payload: unknown) => {
+  const eventPayload = payload as ChatEventPayload;
+  for (const cb of chatEventSubscribers) cb(eventPayload);
+  const chatId = eventPayload?.event?.chatId;
+  if (typeof chatId !== 'string') return;
+  for (const cb of chatEventSubscribersByChatId.get(chatId) ?? []) cb(eventPayload);
+};
+
+const ensureChatEventSubscribed = () => {
+  if (chatEventSubscribed) return;
+  chatEventSubscribed = true;
+  ipcRenderer.on('chat:event', handleChatEvent);
+  ipcRenderer.send('chat:event:subscribe');
+};
+
+const maybeUnsubscribeChatEvent = () => {
+  if (
+    chatEventSubscribers.size > 0 ||
+    chatEventSubscribersByChatId.size > 0
+  ) {
+    return;
+  }
+  if (!chatEventSubscribed) return;
+  chatEventSubscribed = false;
+  ipcRenderer.removeListener('chat:event', handleChatEvent);
+  ipcRenderer.send('chat:event:unsubscribe');
+};
+
+const chatTypingSubscribers = new Set<(payload: ChatTypingPayload) => void>();
+const chatTypingSubscribersByChatId = new Map<
+  string,
+  Set<(payload: ChatTypingPayload) => void>
+>();
+let chatTypingSubscribed = false;
+
+const dispatchChatTyping = (payload: ChatTypingPayload) => {
+  for (const cb of chatTypingSubscribers) cb(payload);
+  for (const cb of chatTypingSubscribersByChatId.get(payload.chatId) ?? []) cb(payload);
+};
+
+const handleChatTypingStart = (_e: unknown, payload: unknown) => {
+  dispatchChatTyping({ ...(payload as Record<string, unknown>), active: true } as ChatTypingPayload);
+};
+
+const handleChatTypingStop = (_e: unknown, payload: unknown) => {
+  dispatchChatTyping({ ...(payload as Record<string, unknown>), active: false } as ChatTypingPayload);
+};
+
+const ensureChatTypingSubscribed = () => {
+  if (chatTypingSubscribed) return;
+  chatTypingSubscribed = true;
+  ipcRenderer.on('chat:typing', handleChatTypingStart);
+  ipcRenderer.on('chat:typingStopped', handleChatTypingStop);
+  ipcRenderer.send('chat:typing:subscribe');
+};
+
+const maybeUnsubscribeChatTyping = () => {
+  if (
+    chatTypingSubscribers.size > 0 ||
+    chatTypingSubscribersByChatId.size > 0
+  ) {
+    return;
+  }
+  if (!chatTypingSubscribed) return;
+  chatTypingSubscribed = false;
+  ipcRenderer.removeListener('chat:typing', handleChatTypingStart);
+  ipcRenderer.removeListener('chat:typingStopped', handleChatTypingStop);
+  ipcRenderer.send('chat:typing:unsubscribe');
+};
+
+const chatReadSubscribers = new Set<(payload: ChatReadPayload) => void>();
+const chatReadSubscribersByChatId = new Map<
+  string,
+  Set<(payload: ChatReadPayload) => void>
+>();
+let chatReadSubscribed = false;
+
+const handleChatRead = (_e: unknown, payload: unknown) => {
+  const readPayload = payload as ChatReadPayload;
+  for (const cb of chatReadSubscribers) cb(readPayload);
+  const chatId = readPayload?.chatId;
+  if (typeof chatId !== 'string') return;
+  for (const cb of chatReadSubscribersByChatId.get(chatId) ?? []) cb(readPayload);
+};
+
+const ensureChatReadSubscribed = () => {
+  if (chatReadSubscribed) return;
+  chatReadSubscribed = true;
+  ipcRenderer.on('chat:read', handleChatRead);
+  ipcRenderer.send('chat:read:subscribe');
+};
+
+const maybeUnsubscribeChatRead = () => {
+  if (
+    chatReadSubscribers.size > 0 ||
+    chatReadSubscribersByChatId.size > 0
+  ) {
+    return;
+  }
+  if (!chatReadSubscribed) return;
+  chatReadSubscribed = false;
+  ipcRenderer.removeListener('chat:read', handleChatRead);
+  ipcRenderer.send('chat:read:unsubscribe');
+};
+
+function addChatScopedSubscriber<T>(
+  subscribersByChatId: Map<string, Set<(payload: T) => void>>,
+  chatId: string,
+  cb: (payload: T) => void
+): () => void {
+  let scoped = subscribersByChatId.get(chatId);
+  if (!scoped) {
+    scoped = new Set<(payload: T) => void>();
+    subscribersByChatId.set(chatId, scoped);
+  }
+  scoped.add(cb);
+  return () => {
+    const current = subscribersByChatId.get(chatId);
+    if (!current) return;
+    current.delete(cb);
+    if (current.size === 0) {
+      subscribersByChatId.delete(chatId);
+    }
+  };
+}
+
 try {
   // Expose Electron API
   contextBridge.exposeInMainWorld('electronAPI', {
@@ -283,12 +503,33 @@ try {
      * Returns an unsubscribe function.
      */
     onUpdate: (cb: (payload: { address: string; online: boolean; status: 'online' | 'away' | 'busy' | 'idle' | null }) => void) => {
-      const handler = (_e: unknown, payload: unknown) => cb(payload as any);
-      ipcRenderer.on('presence:update', handler);
-      ipcRenderer.send('presence:subscribe');
+      ensurePresenceSubscribed();
+      presenceUpdateSubscribers.add(cb as (payload: PresenceUpdatePayload) => void);
       return () => {
-        ipcRenderer.removeListener('presence:update', handler);
-        ipcRenderer.send('presence:unsubscribe');
+        presenceUpdateSubscribers.delete(cb as (payload: PresenceUpdatePayload) => void);
+        maybeUnsubscribePresence();
+      };
+    },
+
+    /** Subscribe to coalesced presence updates. */
+    onUpdateBatch: (
+      cb: (
+        payloads: Array<{
+          address: string;
+          online: boolean;
+          status: 'online' | 'away' | 'busy' | 'idle' | null;
+        }>
+      ) => void
+    ) => {
+      ensurePresenceSubscribed();
+      presenceUpdateBatchSubscribers.add(
+        cb as (payloads: PresenceUpdatePayload[]) => void
+      );
+      return () => {
+        presenceUpdateBatchSubscribers.delete(
+          cb as (payloads: PresenceUpdatePayload[]) => void
+        );
+        maybeUnsubscribePresence();
       };
     },
 
@@ -402,12 +643,28 @@ try {
      * Returns an unsubscribe function.
      */
     onEvent: (cb: (payload: { event: unknown }) => void) => {
-      const handler = (_e: unknown, payload: unknown) => cb(payload as any);
-      ipcRenderer.on('chat:event', handler);
-      ipcRenderer.send('chat:event:subscribe');
+      ensureChatEventSubscribed();
+      chatEventSubscribers.add(cb as (payload: ChatEventPayload) => void);
       return () => {
-        ipcRenderer.removeListener('chat:event', handler);
-        ipcRenderer.send('chat:event:unsubscribe');
+        chatEventSubscribers.delete(cb as (payload: ChatEventPayload) => void);
+        maybeUnsubscribeChatEvent();
+      };
+    },
+
+    /** Subscribe to incoming chat events for one chatId only. */
+    onEventForChat: (
+      chatId: string,
+      cb: (payload: { event: unknown }) => void
+    ) => {
+      ensureChatEventSubscribed();
+      const unsubscribeScoped = addChatScopedSubscriber(
+        chatEventSubscribersByChatId,
+        chatId,
+        cb as (payload: ChatEventPayload) => void
+      );
+      return () => {
+        unsubscribeScoped();
+        maybeUnsubscribeChatEvent();
       };
     },
 
@@ -425,18 +682,32 @@ try {
         active: boolean;
       }) => void
     ) => {
-      const startHandler = (_e: unknown, payload: unknown) =>
-        cb({ ...(payload as any), active: true });
-      const stopHandler = (_e: unknown, payload: unknown) =>
-        cb({ ...(payload as any), active: false });
-
-      ipcRenderer.on('chat:typing', startHandler);
-      ipcRenderer.on('chat:typingStopped', stopHandler);
-      ipcRenderer.send('chat:typing:subscribe');
+      ensureChatTypingSubscribed();
+      chatTypingSubscribers.add(cb as (payload: ChatTypingPayload) => void);
       return () => {
-        ipcRenderer.removeListener('chat:typing', startHandler);
-        ipcRenderer.removeListener('chat:typingStopped', stopHandler);
-        ipcRenderer.send('chat:typing:unsubscribe');
+        chatTypingSubscribers.delete(cb as (payload: ChatTypingPayload) => void);
+        maybeUnsubscribeChatTyping();
+      };
+    },
+
+    /** Subscribe to typing indicators for one chatId only. */
+    onTypingForChat: (
+      chatId: string,
+      cb: (payload: {
+        chatId: string;
+        authorAddress: string;
+        active: boolean;
+      }) => void
+    ) => {
+      ensureChatTypingSubscribed();
+      const unsubscribeScoped = addChatScopedSubscriber(
+        chatTypingSubscribersByChatId,
+        chatId,
+        cb as (payload: ChatTypingPayload) => void
+      );
+      return () => {
+        unsubscribeScoped();
+        maybeUnsubscribeChatTyping();
       };
     },
 
@@ -486,12 +757,32 @@ try {
         eventIds: string[];
       }) => void
     ) => {
-      const handler = (_e: unknown, payload: unknown) => cb(payload as any);
-      ipcRenderer.on('chat:read', handler);
-      ipcRenderer.send('chat:read:subscribe');
+      ensureChatReadSubscribed();
+      chatReadSubscribers.add(cb as (payload: ChatReadPayload) => void);
       return () => {
-        ipcRenderer.removeListener('chat:read', handler);
-        ipcRenderer.send('chat:read:unsubscribe');
+        chatReadSubscribers.delete(cb as (payload: ChatReadPayload) => void);
+        maybeUnsubscribeChatRead();
+      };
+    },
+
+    /** Subscribe to read receipts for one chatId only. */
+    onReadForChat: (
+      chatId: string,
+      cb: (payload: {
+        chatId: string;
+        readerAddress: string;
+        eventIds: string[];
+      }) => void
+    ) => {
+      ensureChatReadSubscribed();
+      const unsubscribeScoped = addChatScopedSubscriber(
+        chatReadSubscribersByChatId,
+        chatId,
+        cb as (payload: ChatReadPayload) => void
+      );
+      return () => {
+        unsubscribeScoped();
+        maybeUnsubscribeChatRead();
       };
     },
   });

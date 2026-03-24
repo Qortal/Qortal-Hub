@@ -137,6 +137,12 @@ declare global {
        */
       onEvent: (cb: (payload: { event: P2PChatEvent }) => void) => () => void;
 
+      /** Subscribe to chat events for one chatId only. */
+      onEventForChat: (
+        chatId: string,
+        cb: (payload: { event: P2PChatEvent }) => void
+      ) => () => void;
+
       /**
        * Subscribe to typing indicators.
        * `active: true` = started typing, `active: false` = stopped.
@@ -144,6 +150,26 @@ declare global {
        */
       onTyping: (
         cb: (payload: { chatId: string; authorAddress: string; active: boolean }) => void
+      ) => () => void;
+
+      /** Subscribe to typing events for one chatId only. */
+      onTypingForChat: (
+        chatId: string,
+        cb: (payload: { chatId: string; authorAddress: string; active: boolean }) => void
+      ) => () => void;
+
+      /**
+       * Subscribe to incoming read receipt events.
+       * Returns an unsubscribe function.
+       */
+      onRead: (
+        cb: (payload: { chatId: string; readerAddress: string; eventIds: string[] }) => void
+      ) => () => void;
+
+      /** Subscribe to read receipt events for one chatId only. */
+      onReadForChat: (
+        chatId: string,
+        cb: (payload: { chatId: string; readerAddress: string; eventIds: string[] }) => void
       ) => () => void;
     };
 
@@ -171,6 +197,16 @@ declare global {
        */
       onUpdate: (
         cb: (payload: { address: string; online: boolean; status: UserStatus | null }) => void
+      ) => () => void;
+      /** Subscribe to coalesced presence updates. */
+      onUpdateBatch: (
+        cb: (
+          payloads: Array<{
+            address: string;
+            online: boolean;
+            status: UserStatus | null;
+          }>
+        ) => void
       ) => () => void;
       /** Subscribe to the "all presence cleared" event (fired when P2P is disabled). */
       onCleared: (cb: () => void) => () => void;
