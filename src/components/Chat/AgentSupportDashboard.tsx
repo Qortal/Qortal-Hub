@@ -24,6 +24,7 @@ import {
   Avatar,
   Box,
   CircularProgress,
+  Dialog,
   IconButton,
   InputBase,
   Paper,
@@ -46,6 +47,7 @@ import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import DoneAllRoundedIcon from '@mui/icons-material/DoneAllRounded';
 import HeadsetMicRoundedIcon from '@mui/icons-material/HeadsetMicRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import {
   useAgentSupportChat,
   SupportTicket,
@@ -55,7 +57,7 @@ import { decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+const QUICK_REACTIONS = ['👍', '✅', '❤️', '🙏', '🤔', '😮', '😅', '😂', '👀', '🔥'] as const;
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -406,6 +408,7 @@ function AttachmentImage({
     decryptCache.current.get(eventId) ?? null
   );
   const [loading, setLoading] = useState(!decryptCache.current.has(eventId));
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (decryptCache.current.has(eventId)) {
@@ -464,22 +467,62 @@ function AttachmentImage({
   if (!dataUri) return null;
 
   return (
-    <Box
-      component="img"
-      src={dataUri}
-      alt="attachment"
-      sx={{
-        display: 'block',
-        maxWidth: 240,
-        maxHeight: 320,
-        width: '100%',
-        borderRadius: 1.5,
-        mt: 0.5,
-        cursor: 'pointer',
-        objectFit: 'contain',
-      }}
-      onClick={() => window.open(dataUri, '_blank')}
-    />
+    <>
+      <Box
+        component="img"
+        src={dataUri}
+        alt="attachment"
+        sx={{
+          display: 'block',
+          maxWidth: 240,
+          maxHeight: 320,
+          width: '100%',
+          borderRadius: 1.5,
+          mt: 0.5,
+          cursor: 'zoom-in',
+          objectFit: 'contain',
+        }}
+        onClick={() => setLightboxOpen(true)}
+      />
+      <Dialog
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            backgroundColor: 'rgba(0,0,0,0.92)',
+            boxShadow: 'none',
+            m: 1,
+            borderRadius: 2,
+            overflow: 'hidden',
+          },
+        }}
+      >
+        <Box sx={{ position: 'relative' }}>
+          <IconButton
+            onClick={() => setLightboxOpen(false)}
+            size="small"
+            sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 1,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              color: '#fff',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
+            }}
+          >
+            <CloseRoundedIcon fontSize="small" />
+          </IconButton>
+          <Box
+            component="img"
+            src={dataUri}
+            alt="attachment"
+            sx={{ display: 'block', maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }}
+          />
+        </Box>
+      </Dialog>
+    </>
   );
 }
 
@@ -893,6 +936,7 @@ export function AgentSupportDashboard() {
   const [resolving, setResolving] = useState(false);
   const [blocking, setBlocking] = useState(false);
   const [showBlocked, setShowBlocked] = useState(false);
+  const [addrCopied, setAddrCopied] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -1252,19 +1296,45 @@ export function AgentSupportDashboard() {
                 />
               </Box>
               <Box sx={{ minWidth: 0, flex: 1 }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{
-                    fontFamily: 'monospace',
-                    fontWeight: 600,
-                    letterSpacing: 0.2,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {shortAddr(activeTicket.userAddress)}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontWeight: 600,
+                      letterSpacing: 0.2,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {shortAddr(activeTicket.userAddress)}
+                  </Typography>
+                  <Tooltip
+                    title={addrCopied ? 'Copied!' : 'Copy full address'}
+                    placement="top"
+                    arrow
+                  >
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        navigator.clipboard.writeText(activeTicket.userAddress);
+                        setAddrCopied(true);
+                        setTimeout(() => setAddrCopied(false), 2000);
+                      }}
+                      sx={{
+                        flexShrink: 0,
+                        color: addrCopied ? 'success.main' : 'action.active',
+                        transition: 'color 0.2s',
+                        p: 0.4,
+                      }}
+                    >
+                      {addrCopied
+                        ? <CheckCircleOutlineRoundedIcon sx={{ fontSize: 15 }} />
+                        : <ContentCopyRoundedIcon sx={{ fontSize: 15 }} />}
+                    </IconButton>
+                  </Tooltip>
+                </Box>
                 <Typography variant="caption" sx={{ opacity: 0.5, display: 'block', fontSize: 10 }}>
                   {activeTicket.isResolved ? 'Resolved' : 'Active session'}
                 </Typography>

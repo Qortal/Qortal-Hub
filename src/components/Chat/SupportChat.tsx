@@ -18,6 +18,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
   IconButton,
   InputBase,
   Paper,
@@ -47,7 +48,7 @@ import ImageUploader from '../../common/ImageUploader';
 
 export { SUPPORT_ADDRESSES };
 
-const QUICK_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'] as const;
+const QUICK_REACTIONS = ['👍', '✅', '❤️', '🙏', '🤔', '😮', '😅', '😂', '👀', '🔥'] as const;
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -312,6 +313,7 @@ function AttachmentImage({
     decryptCache.current.get(eventId) ?? null
   );
   const [loading, setLoading] = useState(!decryptCache.current.has(eventId));
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     if (decryptCache.current.has(eventId)) {
@@ -369,22 +371,62 @@ function AttachmentImage({
   if (!dataUri) return null;
 
   return (
-    <Box
-      component="img"
-      src={dataUri}
-      alt="attachment"
-      sx={{
-        display: 'block',
-        maxWidth: 240,
-        maxHeight: 320,
-        width: '100%',
-        borderRadius: 1.5,
-        mt: 0.5,
-        cursor: 'pointer',
-        objectFit: 'contain',
-      }}
-      onClick={() => window.open(dataUri, '_blank')}
-    />
+    <>
+      <Box
+        component="img"
+        src={dataUri}
+        alt="attachment"
+        sx={{
+          display: 'block',
+          maxWidth: 240,
+          maxHeight: 320,
+          width: '100%',
+          borderRadius: 1.5,
+          mt: 0.5,
+          cursor: 'zoom-in',
+          objectFit: 'contain',
+        }}
+        onClick={() => setLightboxOpen(true)}
+      />
+      <Dialog
+        open={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            backgroundColor: 'rgba(0,0,0,0.92)',
+            boxShadow: 'none',
+            m: 1,
+            borderRadius: 2,
+            overflow: 'hidden',
+          },
+        }}
+      >
+        <Box sx={{ position: 'relative' }}>
+          <IconButton
+            onClick={() => setLightboxOpen(false)}
+            size="small"
+            sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 1,
+              backgroundColor: 'rgba(0,0,0,0.55)',
+              color: '#fff',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.8)' },
+            }}
+          >
+            <CloseRoundedIcon fontSize="small" />
+          </IconButton>
+          <Box
+            component="img"
+            src={dataUri}
+            alt="attachment"
+            sx={{ display: 'block', maxWidth: '90vw', maxHeight: '90vh', objectFit: 'contain' }}
+          />
+        </Box>
+      </Dialog>
+    </>
   );
 }
 
@@ -857,6 +899,10 @@ export function SupportChat() {
   const [inputText, setInputText] = useState('');
   const [replyTarget, setReplyTarget] = useState<RenderedMessage | null>(null);
   const [editTarget, setEditTarget] = useState<RenderedMessage | null>(null);
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    file: File;
+    previewUrl: string;
+  } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -903,16 +949,43 @@ export function SupportChat() {
     setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
 
+  const clearPendingAttachment = useCallback(() => {
+    setPendingAttachment((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+  }, []);
+
   const handleCancelCompose = useCallback(() => {
     setReplyTarget(null);
     setEditTarget(null);
     setInputText('');
-  }, []);
+    clearPendingAttachment();
+  }, [clearPendingAttachment]);
 
   // ── Send ────────────────────────────────────────────────────────────────────
 
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
+
+    // If there's a pending attachment, send it (with optional caption text) first.
+    if (pendingAttachment && !editTarget) {
+      if (isSending || !isAgentOnline) return;
+      const { file } = pendingAttachment;
+      clearPendingAttachment();
+      const rt = replyTarget;
+      setInputText('');
+      setReplyTarget(null);
+      // Caption is the typed text (may be empty).
+      await sendImage(file, text || undefined).catch((err) =>
+        console.error('[SupportChat] sendImage error', err)
+      );
+      // TODO: reply-with-attachment is not yet supported by the hook; for now
+      // the reply context is discarded when sending an image.
+      void rt;
+      return;
+    }
+
     if (!text || isSending || !isAgentOnline) return;
 
     // Capture and clear compose state before the async call so the UI resets immediately.
@@ -935,9 +1008,12 @@ export function SupportChat() {
     isAgentOnline,
     editTarget,
     replyTarget,
+    pendingAttachment,
+    clearPendingAttachment,
     sendMessage,
     sendEdit,
     sendReply,
+    sendImage,
   ]);
 
   const handleDelete = useCallback(
@@ -1398,6 +1474,52 @@ export function SupportChat() {
         </Box>
       )}
 
+      {/* Pending attachment preview strip */}
+      {pendingAttachment && (
+        <Box
+          sx={{
+            px: 2,
+            pt: 1,
+            pb: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            borderTop: `1px solid ${borderColor}`,
+            backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+            flexShrink: 0,
+          }}
+        >
+          <Box sx={{ position: 'relative', flexShrink: 0 }}>
+            <Box
+              component="img"
+              src={pendingAttachment.previewUrl}
+              alt="preview"
+              sx={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 1.5, display: 'block' }}
+            />
+            <IconButton
+              size="small"
+              onClick={clearPendingAttachment}
+              sx={{
+                position: 'absolute',
+                top: -7,
+                right: -7,
+                width: 20,
+                height: 20,
+                backgroundColor: 'error.main',
+                color: '#fff',
+                '&:hover': { backgroundColor: 'error.dark' },
+                p: 0,
+              }}
+            >
+              <CloseRoundedIcon sx={{ fontSize: 13 }} />
+            </IconButton>
+          </Box>
+          <Typography variant="caption" sx={{ opacity: 0.55 }}>
+            {pendingAttachment.file.name} — add a caption or press send
+          </Typography>
+        </Box>
+      )}
+
       <Box
         sx={{
           px: 1.5,
@@ -1430,6 +1552,17 @@ export function SupportChat() {
           value={inputText}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
+          onPaste={(e: React.ClipboardEvent) => {
+            const items = Array.from(e.clipboardData.items);
+            const imageItem = items.find((item) => item.type.startsWith('image/'));
+            if (!imageItem) return;
+            e.preventDefault();
+            const file = imageItem.getAsFile();
+            if (!file || !isReady || !isAgentOnline || isSending) return;
+            clearPendingAttachment();
+            const previewUrl = URL.createObjectURL(file);
+            setPendingAttachment({ file, previewUrl });
+          }}
           sx={{
             flex: 1,
             fontSize: 14,
@@ -1447,7 +1580,7 @@ export function SupportChat() {
         <IconButton
           size="medium"
           onClick={handleSend}
-          disabled={!isReady || !inputText.trim() || isSending || !window.chat || !isAgentOnline}
+          disabled={!isReady || (!inputText.trim() && !pendingAttachment) || isSending || !window.chat || !isAgentOnline}
           color={editTarget ? 'warning' : 'primary'}
           sx={{ mb: 0.25, '&:disabled': { opacity: 0.35 } }}
         >
@@ -1465,9 +1598,10 @@ export function SupportChat() {
               <ImageUploader
                 onPick={(file) => {
                   if (!isReady || !isAgentOnline || isSending) return;
-                  sendImage(file).catch((err) =>
-                    console.error('[SupportChat] sendImage error', err)
-                  );
+                  clearPendingAttachment();
+                  const previewUrl = URL.createObjectURL(file);
+                  setPendingAttachment({ file, previewUrl });
+                  setTimeout(() => inputRef.current?.focus(), 0);
                 }}
               >
                 <IconButton

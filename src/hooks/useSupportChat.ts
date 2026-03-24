@@ -583,7 +583,7 @@ export function useSupportChat(hasStarted = false): UseSupportChatReturn {
           height: dimensions.height,
           sizeBytes: encBytes.length,
         },
-        caption,
+        caption: caption ? await encryptForSupport(caption) : undefined,
       });
     },
     [inner.sendImageData]
