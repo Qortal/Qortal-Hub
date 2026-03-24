@@ -615,6 +615,116 @@ try {
       };
     },
   });
+  // ── Group Call API ────────────────────────────────────────────────────────────
+  contextBridge.exposeInMainWorld('groupCall', {
+    /**
+     * Join a group call room.
+     * The renderer must pre-sign the join envelope before calling this.
+     */
+    join: async (
+      roomId: string,
+      chatId: string,
+      localAddress: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) => ipcRenderer.invoke('gcall:join', roomId, chatId, localAddress, signature, publicKey, timestamp),
+
+    /** Leave a group call room. */
+    leave: async (
+      roomId: string,
+      localAddress: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) => ipcRenderer.invoke('gcall:leave', roomId, localAddress, signature, publicKey, timestamp),
+
+    /** Broadcast topology (root forwarder only). */
+    broadcastTopology: async (
+      roomId: string,
+      topology: unknown,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) => ipcRenderer.invoke('gcall:broadcastTopology', roomId, topology, signature, publicKey, timestamp),
+
+    /** Send a P2P-relay audio packet to a specific participant. */
+    sendAudio: async (roomId: string, toAddress: string, data: string) =>
+      ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
+
+    /** Send room media key (nacl.box encrypted) to a participant. */
+    sendKey: async (
+      roomId: string,
+      toAddress: string,
+      encryptedKey: string,
+      fromAddress: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) => ipcRenderer.invoke('gcall:sendKey', roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp),
+
+    /** Send rotated room media keys to all participants. */
+    sendKeyRotate: async (
+      roomId: string,
+      encryptedKeys: Record<string, string>,
+      fromAddress: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) => ipcRenderer.invoke('gcall:sendKeyRotate', roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp),
+
+    /** Send a WebRTC signal (offer/answer/ice) to a specific participant. */
+    sendRtcSignal: async (
+      roomId: string,
+      fromAddress: string,
+      toAddress: string,
+      type: 'offer' | 'answer' | 'ice',
+      data: unknown,
+      connId: string,
+      signature?: string,
+      publicKey?: string,
+      timestamp?: number
+    ) => ipcRenderer.invoke('gcall:sendRtcSignal', roomId, fromAddress, toAddress, type, data, connId, signature, publicKey, timestamp),
+
+    /** Register the local user's address with the group call manager. */
+    setLocalAddresses: async (addresses: string[]) =>
+      ipcRenderer.invoke('gcall:setLocalAddresses', addresses),
+
+    /** Get current participants in a room. */
+    getRoomParticipants: async (roomId: string) =>
+      ipcRenderer.invoke('gcall:getRoomParticipants', roomId),
+
+    /**
+     * Subscribe to all group call events.
+     * Returns an unsubscribe function.
+     */
+    onEvent: (cb: (event: string, payload: unknown) => void) => {
+      const channels = [
+        'gcall:participant-joined',
+        'gcall:participant-left',
+        'gcall:topology',
+        'gcall:audio',
+        'gcall:key',
+        'gcall:rtc-signal',
+      ] as const;
+
+      const handlers: Map<string, (...args: unknown[]) => void> = new Map();
+      for (const channel of channels) {
+        const handler = (_e: unknown, payload: unknown) => cb(channel, payload);
+        handlers.set(channel, handler);
+        ipcRenderer.on(channel, handler);
+      }
+      ipcRenderer.send('gcall:subscribe');
+
+      return () => {
+        ipcRenderer.send('gcall:unsubscribe');
+        for (const [channel, handler] of handlers) {
+          ipcRenderer.removeListener(channel, handler);
+        }
+      };
+    },
+  });
+
 } catch (error) {
   loggerError('error', error);
 }

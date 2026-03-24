@@ -177,6 +177,34 @@ declare global {
       /** Subscribe to the "P2P started" event (fired when P2P is re-enabled). */
       onStarted: (cb: () => void) => () => void;
     };
+
+    // ── Call (1v1) ────────────────────────────────────────────────────────────
+    call?: {
+      initiate: (targetAddress: string, chatId: string, localAddress: string, signature: string, publicKey: string, callId: string, timestamp: number) => Promise<{ success: boolean; callId?: string; error?: string }>;
+      accept: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      reject: (callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
+      hangup: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      sendSignal: (callId: string, type: 'offer' | 'answer' | 'ice', data: unknown, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
+      sendAudio: (callId: string, seq: number, data: string) => Promise<{ success: boolean }>;
+      getPublicIpPeers: () => Promise<Array<{ id: string; ip: string; port: number }>>;
+      whoami: () => Promise<{ ip: string; port: number } | null>;
+      setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+      onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
+    };
+
+    // ── Group Call ────────────────────────────────────────────────────────────
+    groupCall?: {
+      join: (roomId: string, chatId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean; error?: string }>;
+      leave: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      broadcastTopology: (roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      sendAudio: (roomId: string, toAddress: string, data: string) => Promise<{ success: boolean }>;
+      sendKey: (roomId: string, toAddress: string, encryptedKey: string, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      sendKeyRotate: (roomId: string, encryptedKeys: Record<string, string>, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
+      setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+      getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
+      onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
+    };
   }
 
   // ── P2P Chat shared types ──────────────────────────────────────────────────

@@ -75,6 +75,13 @@ import {
   stopCallManager,
   getCallManager,
 } from './call';
+import {
+  startGroupCallManager,
+  stopGroupCallManager,
+  getGroupCallManager,
+  GC_MESSAGE_TYPES,
+} from './group-call';
+import type { GcEnvelope } from './group-call';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -1382,6 +1389,10 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     stopCallManager();
     const callMgr = startCallManager(network, pm);
     attachCallListeners(callMgr);
+    // (Re-)start the group call manager.
+    stopGroupCallManager();
+    const gcallMgr = startGroupCallManager(network, pm);
+    attachGroupCallListeners(gcallMgr);
     // Notify renderers that P2P / presence is live again.
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
     return { success: true, port: network.getPort(), peerId: network.getPeerId() };
@@ -1398,6 +1409,7 @@ ipcMain.handle('p2p:stop', async () => {
     stopPresenceManager();
     stopChatManager();
     stopCallManager();
+    stopGroupCallManager();
     return { success: true };
   } catch (err) {
     loggerError('[P2P] Failed to stop:', err);
@@ -1863,4 +1875,157 @@ ipcMain.on('call:subscribe', (event) => {
 });
 ipcMain.on('call:unsubscribe', (event) => {
   callSubscribers.delete(event.sender);
+});
+
+// ── Group Call IPC Handlers ───────────────────────────────────────────────────
+
+const gcallSubscribers = new Set<Electron.WebContents>();
+
+export function attachGroupCallListeners(
+  manager: ReturnType<typeof getGroupCallManager>
+): void {
+  if (!manager) return;
+
+  const forward = (channel: string) => (payload: unknown) =>
+    broadcastToSet(gcallSubscribers, channel, payload);
+
+  manager.on('gcall:participant-joined', forward('gcall:participant-joined'));
+  manager.on('gcall:participant-left',   forward('gcall:participant-left'));
+  manager.on('gcall:topology',           forward('gcall:topology'));
+  manager.on('gcall:audio',              forward('gcall:audio'));
+  manager.on('gcall:key',                forward('gcall:key'));
+  manager.on('gcall:rtc-signal',         forward('gcall:rtc-signal'));
+}
+
+ipcMain.handle(
+  'gcall:join',
+  async (
+    _event,
+    roomId: string,
+    chatId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.joinRoom(roomId, chatId, localAddress, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:leave',
+  async (
+    _event,
+    roomId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.leaveRoom(roomId, localAddress, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:broadcastTopology',
+  async (_event, roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.broadcastTopology(roomId, topology as any, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendAudio',
+  async (_event, roomId: string, toAddress: string, data: string) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendAudio(roomId, toAddress, data);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendKey',
+  async (
+    _event,
+    roomId: string,
+    toAddress: string,
+    encryptedKey: string,
+    fromAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendKey(roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendKeyRotate',
+  async (
+    _event,
+    roomId: string,
+    encryptedKeys: Record<string, string>,
+    fromAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendKeyRotate(roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendRtcSignal',
+  async (
+    _event,
+    roomId: string,
+    fromAddress: string,
+    toAddress: string,
+    type: 'offer' | 'answer' | 'ice',
+    data: unknown,
+    connId: string,
+    signature?: string,
+    publicKey?: string,
+    timestamp?: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendRtcSignal(roomId, fromAddress, toAddress, type, data, connId, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle('gcall:setLocalAddresses', async (_event, addresses: string[]) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+  mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+  return { success: true };
+});
+
+ipcMain.handle('gcall:getRoomParticipants', async (_event, roomId: string) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return [];
+  return mgr.getRoomParticipants(roomId);
+});
+
+ipcMain.on('gcall:subscribe', (event) => {
+  gcallSubscribers.add(event.sender);
+});
+ipcMain.on('gcall:unsubscribe', (event) => {
+  gcallSubscribers.delete(event.sender);
 });

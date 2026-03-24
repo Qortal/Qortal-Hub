@@ -53,6 +53,16 @@ export const SUPPORT_ADDRESSES = [
   'QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs',
 ] as const;
 
+/**
+ * Addresses for the group call test environment.
+ * These same addresses are agents in the group call test.
+ * For production, this list should be expanded.
+ */
+export const GROUP_SUPPORT_ADDRESSES = [
+  'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP',
+  'QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs',
+] as const;
+
 const SUPPORT_QUEUE_ID = 'support:queue';
 
 /** JSON marker sent by an agent to signal that the support ticket is resolved. */

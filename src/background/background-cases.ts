@@ -2203,6 +2203,55 @@ export async function signPresenceMessageCase(request, event) {
   }
 }
 
+/**
+ * Decrypts a nacl.box-encrypted payload using the local user's Curve25519
+ * private key (derived from their Ed25519 key via ed2curve).
+ *
+ * Expected request.payload shape:
+ *   { ephemeralPublicKey: string, nonce: string, ciphertext: string }
+ *   — all Base64-encoded.
+ *
+ * Wire format matches distributeRoomKey in useGroupVoiceCall.ts:
+ *   [ephemeralPK (32 bytes)] + [nonce (24 bytes)] + [ciphertext]
+ */
+export async function decryptBoxWithMyKeyCase(request, event) {
+  try {
+    const { ephemeralPublicKey, nonce, ciphertext } = request.payload;
+    const resKeyPair = await getKeyPair();
+    const privateKeyBytes = Base58.decode(resKeyPair.privateKey);
+
+    const myCurve25519SK = ed2curve.convertSecretKey(privateKeyBytes);
+    const ephemeralPK  = Uint8Array.from(atob(ephemeralPublicKey), (c) => c.charCodeAt(0));
+    const nonceBytes   = Uint8Array.from(atob(nonce),              (c) => c.charCodeAt(0));
+    const cipherBytes  = Uint8Array.from(atob(ciphertext),         (c) => c.charCodeAt(0));
+
+    const sharedKey = nacl.box.before(ephemeralPK, myCurve25519SK);
+    const plaintext = nacl.box.open.after(cipherBytes, nonceBytes, sharedKey);
+    if (!plaintext) throw new Error('Decryption failed');
+
+    const decryptedKey = btoa(String.fromCharCode(...plaintext));
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptBoxWithMyKey',
+        payload: { decryptedKey },
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'decryptBoxWithMyKey',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
 // ── Support Chat encryption ───────────────────────────────────────────────────
 //
 // One shared support keypair drives the encryption for the support chat.

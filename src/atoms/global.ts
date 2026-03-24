@@ -584,3 +584,6 @@ export function useGetResourceStatus() {
 
 /** Controls visibility of the support chat panel (toggled via sidebar icon). */
 export const supportChatOpenAtom = atom(false);
+
+/** Controls visibility of the group call panel (separate from 1v1 support chat). */
+export const groupChatOpenAtom = atom(false);

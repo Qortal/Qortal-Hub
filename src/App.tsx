@@ -45,6 +45,8 @@ import {
 import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
 import { SupportChat, SUPPORT_ADDRESSES } from './components/Chat/SupportChat';
 import { AgentSupportDashboard } from './components/Chat/AgentSupportDashboard';
+import { GroupSupportChat, GROUP_SUPPORT_ADDRESSES } from './components/Chat/GroupSupportChat';
+import { GroupAgentDashboard } from './components/Chat/GroupAgentDashboard';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
@@ -1060,6 +1062,13 @@ function App() {
           SUPPORT_ADDRESSES.includes(userInfo?.address as any)
             ? <AgentSupportDashboard />
             : <SupportChat />
+        )}
+
+        {/* Group voice call — parallel system using GROUP_SUPPORT_ADDRESSES */}
+        {extState === 'authenticated' && isMainWindow && (
+          GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any)
+            ? <GroupAgentDashboard />
+            : <GroupSupportChat />
         )}
 
         {isOpenSendQort && isMainWindow && (
