@@ -703,6 +703,7 @@ try {
         'gcall:participant-joined',
         'gcall:participant-left',
         'gcall:topology',
+        'gcall:heartbeat',
         'gcall:audio',
         'gcall:key',
         'gcall:rtc-signal',

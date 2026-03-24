@@ -1892,6 +1892,7 @@ export function attachGroupCallListeners(
   manager.on('gcall:participant-joined', forward('gcall:participant-joined'));
   manager.on('gcall:participant-left',   forward('gcall:participant-left'));
   manager.on('gcall:topology',           forward('gcall:topology'));
+  manager.on('gcall:heartbeat',          forward('gcall:heartbeat'));
   manager.on('gcall:audio',              forward('gcall:audio'));
   manager.on('gcall:key',                forward('gcall:key'));
   manager.on('gcall:rtc-signal',         forward('gcall:rtc-signal'));

@@ -29,6 +29,17 @@ import { userInfoAtom } from '../atoms/global';
 import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
+import {
+  GroupCallPerformanceTracker,
+  collectActiveSpeakers,
+  disposeParticipantAudioState,
+  evaluateActiveSpeaker,
+  forwardPacketForRole,
+  reconcileParticipantSpeaking,
+  sameAddressList,
+} from '../lib/group-call/router';
+
+const naclApi = nacl as any;
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -79,6 +90,10 @@ const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
  *  is still negotiating.  Caps relay IPC at ~5 frames/s instead of 50 Hz so the
  *  renderer is not flooded during the 1–5 s WebRTC negotiation window. */
 const RELAY_MIN_INTERVAL_MS = 200;
+const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
+const SPEAKER_GATE_WINDOW_MS = 3_000;
+const PERF_LOG_INTERVAL_MS = 5_000;
+const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 
 const HEADER_LEN_OFFSET = 0;
 const HEADER_ADDR_OFFSET = 1;
@@ -104,6 +119,22 @@ function base64ToUint8(b64: string): Uint8Array {
   const out = new Uint8Array(s.length);
   for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
   return out;
+}
+
+function isGroupCallDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function debugLog(...args: unknown[]): void {
+  if (isGroupCallDebugEnabled()) console.log(...args);
+}
+
+function debugWarn(...args: unknown[]): void {
+  if (isGroupCallDebugEnabled()) console.warn(...args);
 }
 
 /** Parse the plaintext header of an audio packet without performing crypto.
@@ -233,8 +264,8 @@ function encodePacket(
   const addrBytes = new TextEncoder().encode(sourceAddr);
   const addrLen = addrBytes.length;
 
-  const nonce = nacl.randomBytes(24);
-  const ciphertext = nacl.secretbox(opusFrame, nonce, roomKey);
+  const nonce = naclApi.randomBytes(24);
+  const ciphertext = naclApi.secretbox(opusFrame, nonce, roomKey);
 
   const total = 1 + addrLen + 1 + 2 + 4 + 24 + ciphertext.length;
   const buf = new Uint8Array(total);
@@ -269,7 +300,7 @@ function decodePacket(
     const timestampMs = (buf[off++] << 24) | (buf[off++] << 16) | (buf[off++] << 8) | buf[off++];
     const nonce = buf.slice(off, off + 24); off += 24;
     const ciphertext = buf.slice(off);
-    const plaintext = nacl.secretbox.open(ciphertext, nonce, roomKey);
+    const plaintext = naclApi.secretbox.open(ciphertext, nonce, roomKey);
     if (!plaintext) return null;
     return { sourceAddr, vad, seq, timestampMs, opusFrame: plaintext };
   } catch {
@@ -360,6 +391,7 @@ export function useGroupVoiceCall() {
   const [myRole, setMyRole] = useState<MyRole>('participant');
   const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
   const [topologyLabel, setTopologyLabel] = useState<TopologyLabel>('SFU');
+  const [metrics, setMetrics] = useState(() => new GroupCallPerformanceTracker().getSnapshot());
 
   // ── Refs ────────────────────────────────────────────────────────────────────
 
@@ -382,6 +414,7 @@ export function useGroupVoiceCall() {
   const micStreamRef = useRef<MediaStream | null>(null);
   const captureWorkletRef = useRef<AudioWorkletNode | null>(null);
   const playbackWorkletsRef = useRef<Map<string, AudioWorkletNode>>(new Map());
+  const playbackWorkletModulePromiseRef = useRef<Promise<void> | null>(null);
   const encoderRef = useRef<AudioEncoder | null>(null);
 
   // VAD speaking flag — set from the capture worklet's port message
@@ -399,7 +432,6 @@ export function useGroupVoiceCall() {
 
   // Speaker tracking (for VAD-based active speaker selection)
   const localSpeakersRef = useRef<Map<string, number>>(new Map()); // addr → lastVadTime
-  const speakerDrainTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // WebRTC peer connections
   const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
@@ -430,14 +462,113 @@ export function useGroupVoiceCall() {
   // Off-thread audio packet decryption worker
   const decryptWorkerRef = useRef<Worker | null>(null);
   const decryptIdRef = useRef<number>(0);
+  const metricsRef = useRef(new GroupCallPerformanceTracker());
+  const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Election ──────────────────────────────────────────────────────────────
 
-  const recomputeTopology = useCallback(async (addresses: string[], existingEpoch?: number) => {
-    const sorted = await computeElectionOrder(addresses, roomIdRef.current);
-    const epoch = existingEpoch !== undefined ? existingEpoch : (topologyRef.current?.topologyEpoch ?? 0);
-    const newTopology = buildTopology(sorted, epoch + 1);
-    return { sorted, newTopology };
+  const getConnIdTimestamp = useCallback((connId: string): number | null => {
+    const lastDash = connId.lastIndexOf('-');
+    if (lastDash === -1) return null;
+    const ts = Number(connId.slice(lastDash + 1));
+    return Number.isFinite(ts) ? ts : null;
+  }, []);
+
+  const isPeerConnectionInactive = useCallback((entry?: PeerConnection) => {
+    const state = entry?.pc.connectionState;
+    return !entry || state === 'failed' || state === 'closed' || state === 'disconnected';
+  }, []);
+
+  const closePeerConnection = useCallback((peerAddress: string, expectedConnId?: string) => {
+    const entry = peerConnectionsRef.current.get(peerAddress);
+    if (!entry) return;
+    if (expectedConnId && entry.connId !== expectedConnId) return;
+
+    peerConnectionsRef.current.delete(peerAddress);
+    relayLastSentRef.current.delete(peerAddress);
+
+    if (entry.dc) {
+      if (upstreamDCRef.current === entry.dc) upstreamDCRef.current = null;
+      if (standbyDCRef.current === entry.dc) standbyDCRef.current = null;
+      try { entry.dc.close(); } catch { /* ignore */ }
+    }
+
+    try { entry.pc.close(); } catch { /* ignore */ }
+  }, []);
+
+  const updateMetricResourceCounts = useCallback(() => {
+    metricsRef.current.setResourceCounts({
+      decoders: decoderMapRef.current.size,
+      playbackNodes: playbackWorkletsRef.current.size,
+      jitterBuffers: jitterMapRef.current.size,
+    });
+  }, []);
+
+  const flushMetrics = useCallback(() => {
+    updateMetricResourceCounts();
+    const snapshot = metricsRef.current.getSnapshot();
+    setMetrics((prev) => {
+      const unchanged =
+        prev.role === snapshot.role &&
+        prev.packetsReceived === snapshot.packetsReceived &&
+        prev.packetsForwarded === snapshot.packetsForwarded &&
+        prev.packetsDecoded === snapshot.packetsDecoded &&
+        prev.packetsDropped === snapshot.packetsDropped &&
+        prev.relayPacketsSent === snapshot.relayPacketsSent &&
+        prev.relayPacketsReceived === snapshot.relayPacketsReceived &&
+        prev.decoderCount === snapshot.decoderCount &&
+        prev.playbackNodeCount === snapshot.playbackNodeCount &&
+        prev.jitterBufferCount === snapshot.jitterBufferCount &&
+        prev.avgIncomingPacketMs === snapshot.avgIncomingPacketMs &&
+        prev.maxIncomingPacketMs === snapshot.maxIncomingPacketMs &&
+        prev.avgJitterTickMs === snapshot.avgJitterTickMs &&
+        prev.maxJitterTickMs === snapshot.maxJitterTickMs &&
+        prev.lastUpdatedAt === snapshot.lastUpdatedAt;
+      return unchanged ? prev : snapshot;
+    });
+    if (isGroupCallDebugEnabled()) {
+      debugLog('[GCall] metrics', snapshot);
+    }
+  }, [updateMetricResourceCounts]);
+
+  const startMetricsFlushLoop = useCallback(() => {
+    if (metricsFlushTimerRef.current) return;
+    metricsFlushTimerRef.current = setInterval(flushMetrics, PERF_LOG_INTERVAL_MS);
+  }, [flushMetrics]);
+
+  const stopMetricsFlushLoop = useCallback(() => {
+    if (!metricsFlushTimerRef.current) return;
+    clearInterval(metricsFlushTimerRef.current);
+    metricsFlushTimerRef.current = null;
+  }, []);
+
+  const syncDecryptWorkerRoomKey = useCallback((roomKey: Uint8Array | null) => {
+    if (!decryptWorkerRef.current) return;
+    if (!roomKey) {
+      decryptWorkerRef.current.postMessage({ type: 'clearRoomKey' });
+      return;
+    }
+    const roomKeyCopy = roomKey.slice().buffer;
+    decryptWorkerRef.current.postMessage({ type: 'setRoomKey', roomKey: roomKeyCopy }, [roomKeyCopy]);
+  }, []);
+
+  const disposeParticipantAudio = useCallback((address: string) => {
+    disposeParticipantAudioState(
+      address,
+      decoderMapRef.current,
+      playbackWorkletsRef.current,
+      jitterMapRef.current as Map<string, { clear?: () => void }>,
+      lastRecvAtRef.current,
+      localSpeakersRef.current
+    );
+    updateMetricResourceCounts();
+  }, [updateMetricResourceCounts]);
+
+  const sendPacketToPeer = useCallback((address: string, data: ArrayBuffer): boolean => {
+    const pcEntry = peerConnectionsRef.current.get(address);
+    if (pcEntry?.dc?.readyState !== 'open') return false;
+    pcEntry.dc.send(data);
+    return true;
   }, []);
 
   const applyTopology = useCallback((topology: GroupTopology) => {
@@ -465,6 +596,7 @@ export function useGroupVoiceCall() {
     const myAddress = userInfo?.address ?? '';
     const role = computeMyRole(myAddress, topology);
     myRoleRef.current = role;
+    metricsRef.current.setRole(role);
 
     // Only trigger re-renders when values actually change
     setMyRole((prev) => (prev !== role ? role : prev));
@@ -500,8 +632,7 @@ export function useGroupVoiceCall() {
       const assignedFwd = findAssignedForwarder(myAddress, topology);
       if (rootAddr && rootAddr !== myAddress && rootAddr !== assignedFwd) {
         const existing = peerConnectionsRef.current.get(rootAddr);
-        const state = existing?.pc.connectionState;
-        if (!existing || state === 'failed' || state === 'closed' || state === 'disconnected') {
+        if (isPeerConnectionInactive(existing)) {
           connectStandbyChannels(topology);
         }
       }
@@ -513,8 +644,7 @@ export function useGroupVoiceCall() {
       const assignedForwarder = findAssignedForwarder(myAddress, topology);
       if (assignedForwarder && assignedForwarder !== myAddress) {
         const existing = peerConnectionsRef.current.get(assignedForwarder);
-        const state = existing?.pc.connectionState;
-        if (!existing || state === 'failed' || state === 'closed' || state === 'disconnected') {
+        if (isPeerConnectionInactive(existing)) {
           connectUpstream(assignedForwarder);
         }
       }
@@ -526,8 +656,7 @@ export function useGroupVoiceCall() {
       const rootAddr = topology.rootForwarder;
       if (rootAddr && rootAddr !== myAddress) {
         const existing = peerConnectionsRef.current.get(rootAddr);
-        const state = existing?.pc.connectionState;
-        if (!existing || state === 'failed' || state === 'closed' || state === 'disconnected') {
+        if (isPeerConnectionInactive(existing)) {
           connectUpstream(rootAddr);
         }
       }
@@ -540,8 +669,7 @@ export function useGroupVoiceCall() {
           for (const member of cluster.members) {
             if (member !== myAddress) {
               const existing = peerConnectionsRef.current.get(member);
-              const state = existing?.pc.connectionState;
-              if (!existing || state === 'failed' || state === 'closed' || state === 'disconnected') {
+              if (isPeerConnectionInactive(existing)) {
                 setupDownstreamChannel(member);
               }
             }
@@ -671,10 +799,7 @@ export function useGroupVoiceCall() {
   const createPeerConnection = useCallback(
     (peerAddress: string, connId: string, role: 'upstream' | 'downstream' | 'backbone'): RTCPeerConnection => {
       const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
-      const existing = peerConnectionsRef.current.get(peerAddress);
-      if (existing) {
-        existing.pc.close();
-      }
+      closePeerConnection(peerAddress);
       peerConnectionsRef.current.set(peerAddress, { pc, dc: null, address: peerAddress, connId, role });
 
       pc.onicecandidate = (e) => {
@@ -686,22 +811,22 @@ export function useGroupVoiceCall() {
         }
       };
 
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-          peerConnectionsRef.current.delete(peerAddress);
+      pc.addEventListener('connectionstatechange', () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') {
+          closePeerConnection(peerAddress, connId);
         }
-      };
+      });
 
       return pc;
     },
-    [userInfo?.address]
+    [closePeerConnection, userInfo?.address]
   );
 
   /** Connect upstream (as participant/cluster-forwarder, send to forwarder). */
   const connectUpstream = useCallback(
     async (forwarderAddress: string) => {
       if (!userInfo?.address) return;
-      console.log('[GCall] connectUpstream →', forwarderAddress);
+      debugLog('[GCall] connectUpstream →', forwarderAddress);
       const connId = `up-${userInfo.address}-${forwarderAddress}-${Date.now()}`;
       const pc = createPeerConnection(forwarderAddress, connId, 'upstream');
       const dc = pc.createDataChannel('audio', { ordered: false, maxRetransmits: 0 });
@@ -711,7 +836,8 @@ export function useGroupVoiceCall() {
       if (pcEntry) pcEntry.dc = dc;
 
       dc.onopen = () => {
-        console.log('[GCall] Upstream DC opened to', forwarderAddress);
+        if (peerConnectionsRef.current.get(forwarderAddress)?.connId !== connId) return;
+        debugLog('[GCall] Upstream DC opened to', forwarderAddress);
         upstreamDCRef.current = dc;
         // DC is now open — clear the relay rate-limiter entry so the relay is
         // available immediately if this DC closes later.
@@ -719,19 +845,20 @@ export function useGroupVoiceCall() {
       };
 
       dc.onclose = () => {
-        console.log('[GCall] Upstream DC closed to', forwarderAddress);
+        debugLog('[GCall] Upstream DC closed to', forwarderAddress);
+        if (upstreamDCRef.current === dc) upstreamDCRef.current = null;
       };
 
       pc.onconnectionstatechange = () => {
-        console.log('[GCall] PC state (upstream →', forwarderAddress, '):', pc.connectionState);
+        debugLog('[GCall] PC state (upstream →', forwarderAddress, '):', pc.connectionState);
       };
 
       pc.onicegatheringstatechange = () => {
-        console.log('[GCall] ICE gathering (upstream →', forwarderAddress, '):', pc.iceGatheringState);
+        debugLog('[GCall] ICE gathering (upstream →', forwarderAddress, '):', pc.iceGatheringState);
       };
 
       pc.oniceconnectionstatechange = () => {
-        console.log('[GCall] ICE connection (upstream →', forwarderAddress, '):', pc.iceConnectionState);
+        debugLog('[GCall] ICE connection (upstream →', forwarderAddress, '):', pc.iceConnectionState);
       };
 
       // DataChannels are bidirectional: the forwarder sends audio (e.g. other
@@ -769,6 +896,8 @@ export function useGroupVoiceCall() {
         const connId = `standby-${userInfo.address}-${rootAddr}-${Date.now()}`;
         const pc = createPeerConnection(rootAddr, connId, 'backbone');
         const dc = pc.createDataChannel('standby-audio', { ordered: false, maxRetransmits: 0 });
+        const pcEntry = peerConnectionsRef.current.get(rootAddr);
+        if (pcEntry?.connId === connId) pcEntry.dc = dc;
         standbyDCRef.current = dc;
 
         const offer = await pc.createOffer();
@@ -803,36 +932,46 @@ export function useGroupVoiceCall() {
     async (payload: any) => {
       const { type, fromAddress, connId, sdp, candidate } = payload;
       if (!userInfo?.address) return;
-      console.log('[GCall] handleRtcSignal type:', type, 'from:', fromAddress);
+      debugLog('[GCall] handleRtcSignal type:', type, 'from:', fromAddress);
 
       if (type === 'offer') {
+        const existing = peerConnectionsRef.current.get(fromAddress);
+        if (existing && existing.connId !== connId && !isPeerConnectionInactive(existing)) {
+          const existingTs = getConnIdTimestamp(existing.connId);
+          const incomingTs = getConnIdTimestamp(connId);
+          if (existingTs !== null && incomingTs !== null && incomingTs < existingTs) {
+            debugLog('[GCall] Ignoring stale RTC offer from', fromAddress, 'connId:', connId, 'current:', existing.connId);
+            return;
+          }
+        }
+
         // Create PC to accept the offer (downstream connection from member)
         const pc = createPeerConnection(fromAddress, connId, 'downstream');
 
         pc.onconnectionstatechange = () => {
-          console.log('[GCall] PC state (downstream ←', fromAddress, '):', pc.connectionState);
+          debugLog('[GCall] PC state (downstream ←', fromAddress, '):', pc.connectionState);
         };
 
         pc.oniceconnectionstatechange = () => {
-          console.log('[GCall] ICE connection (downstream ←', fromAddress, '):', pc.iceConnectionState);
+          debugLog('[GCall] ICE connection (downstream ←', fromAddress, '):', pc.iceConnectionState);
         };
 
         pc.ondatachannel = (e) => {
           const dc = e.channel;
           dc.binaryType = 'arraybuffer';
-          console.log('[GCall] Downstream DC received from', fromAddress, '— channel:', dc.label);
+          debugLog('[GCall] Downstream DC received from', fromAddress, '— channel:', dc.label);
           dc.onopen = () => {
-            console.log('[GCall] Downstream DC opened from', fromAddress);
+            debugLog('[GCall] Downstream DC opened from', fromAddress);
             // Clear relay rate-limiter so the relay path is immediately available
             // if this DC closes again later.
             relayLastSentRef.current.delete(fromAddress);
           };
-          dc.onclose = () => console.log('[GCall] Downstream DC closed from', fromAddress);
+          dc.onclose = () => debugLog('[GCall] Downstream DC closed from', fromAddress);
           dc.onmessage = (ev) => {
             handleIncomingAudioPacket(ev.data as ArrayBuffer, fromAddress);
           };
           const pcEntry = peerConnectionsRef.current.get(fromAddress);
-          if (pcEntry) pcEntry.dc = dc;
+          if (pcEntry?.connId === connId) pcEntry.dc = dc;
         };
 
         await pc.setRemoteDescription({ type: 'offer', sdp });
@@ -852,17 +991,25 @@ export function useGroupVoiceCall() {
         );
       } else if (type === 'answer') {
         const pcEntry = peerConnectionsRef.current.get(fromAddress);
+        if (!pcEntry || pcEntry.connId !== connId) {
+          debugLog('[GCall] Ignoring stale RTC answer from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
+          return;
+        }
         if (pcEntry) {
           await pcEntry.pc.setRemoteDescription({ type: 'answer', sdp });
         }
       } else if (type === 'ice') {
         const pcEntry = peerConnectionsRef.current.get(fromAddress);
+        if (!pcEntry || pcEntry.connId !== connId) {
+          debugLog('[GCall] Ignoring stale RTC ICE from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
+          return;
+        }
         if (pcEntry && candidate) {
           try { await pcEntry.pc.addIceCandidate(candidate); } catch { /* ignore */ }
         }
       }
     },
-    [createPeerConnection, userInfo]
+    [createPeerConnection, getConnIdTimestamp, isPeerConnectionInactive, userInfo]
   );
 
   // ── Audio encode ──────────────────────────────────────────────────────────
@@ -870,9 +1017,9 @@ export function useGroupVoiceCall() {
   const callEpochRef = useRef<number>(0);
 
   const startAudioCapture = useCallback(async () => {
-    console.log('[GCall] startAudioCapture called — roomKey:', !!roomKeyRef.current, 'address:', userInfo?.address ?? '(none)');
+    debugLog('[GCall] startAudioCapture called — roomKey:', !!roomKeyRef.current, 'address:', userInfo?.address ?? '(none)');
     if (!userInfo?.address || !roomKeyRef.current) {
-      console.warn('[GCall] startAudioCapture guard failed — roomKey:', !!roomKeyRef.current, 'address:', userInfo?.address ?? '(none)');
+      debugWarn('[GCall] startAudioCapture guard failed — roomKey:', !!roomKeyRef.current, 'address:', userInfo?.address ?? '(none)');
       return;
     }
     callEpochRef.current = Date.now();
@@ -883,6 +1030,7 @@ export function useGroupVoiceCall() {
 
       const ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
       audioContextRef.current = ctx;
+      playbackWorkletModulePromiseRef.current = null;
       const source = ctx.createMediaStreamSource(stream);
 
       // Set up Opus encoder (runs on main thread but is fast — just packetizes)
@@ -905,9 +1053,10 @@ export function useGroupVoiceCall() {
       encoderRef.current = encoder;
 
       // Load and instantiate the capture worklet (runs on the audio worklet thread)
-      console.log('[GCall] Loading capture worklet…');
+      debugLog('[GCall] Loading capture worklet…');
       await ctx.audioWorklet.addModule('/worklets/capture-processor.js');
-      console.log('[GCall] Capture worklet loaded, AudioContext state:', ctx.state);
+      debugLog('[GCall] Capture worklet loaded, AudioContext state:', ctx.state);
+      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/playback-processor.js');
       const captureNode = new AudioWorkletNode(ctx, 'capture-processor');
       captureWorkletRef.current = captureNode;
 
@@ -951,18 +1100,27 @@ export function useGroupVoiceCall() {
       source.connect(captureNode);
       source.connect(keepAliveGain);
       keepAliveGain.connect(ctx.destination);
-      console.log('[GCall] Audio capture started — AudioContext state:', ctx.state);
+      debugLog('[GCall] Audio capture started — AudioContext state:', ctx.state);
 
     } catch (err) {
       console.error('[GCall] Audio capture failed:', err);
     }
   }, [userInfo?.address]);
 
+  const ensurePlaybackWorkletLoaded = useCallback(async (): Promise<void> => {
+    const ctx = audioContextRef.current;
+    if (!ctx) return;
+    if (!playbackWorkletModulePromiseRef.current) {
+      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/playback-processor.js');
+    }
+    await playbackWorkletModulePromiseRef.current;
+  }, []);
+
   const sendEncodedFrame = useCallback((opusFrame: Uint8Array) => {
     if (!roomKeyRef.current || !userInfo?.address) return;
     if (mutedRef.current) return; // mic is muted — drop frame
     if (seqRef.current === 0) {
-      console.log('[GCall] First encoded frame ready to send — role:', myRoleRef.current, 'upstreamDC:', upstreamDCRef.current?.readyState ?? 'none');
+      debugLog('[GCall] First encoded frame ready to send — role:', myRoleRef.current, 'upstreamDC:', upstreamDCRef.current?.readyState ?? 'none');
     }
 
     const seq = seqRef.current++ & 0xffff;
@@ -995,6 +1153,7 @@ export function useGroupVoiceCall() {
                 if (now - (relayLastSentRef.current.get(member) ?? 0) >= RELAY_MIN_INTERVAL_MS) {
                   relayLastSentRef.current.set(member, now);
                   // Pass raw bytes over IPC; base64 conversion happens in the main process.
+                  metricsRef.current.recordRelaySent();
                   window.groupCall.sendAudio(roomIdRef.current, member, packet).catch(() => {});
                 }
               }
@@ -1013,6 +1172,7 @@ export function useGroupVoiceCall() {
         if (now - (relayLastSentRef.current.get(target) ?? 0) >= RELAY_MIN_INTERVAL_MS) {
           relayLastSentRef.current.set(target, now);
           // Pass raw bytes over IPC; base64 conversion happens in the main process.
+          metricsRef.current.recordRelaySent();
           window.groupCall.sendAudio(roomIdRef.current, target, packet).catch(() => {});
         }
       }
@@ -1024,18 +1184,19 @@ export function useGroupVoiceCall() {
   const getOrCreateDecoder = useCallback((sourceAddr: string): AudioDecoder | null => {
     if (decoderMapRef.current.has(sourceAddr)) return decoderMapRef.current.get(sourceAddr)!;
     if (!audioContextRef.current) return null;
-    console.log('[GCall] Creating decoder + playback worklet for', sourceAddr.slice(0, 12));
+    debugLog('[GCall] Creating decoder + playback worklet for', sourceAddr.slice(0, 12));
 
     const ctx = audioContextRef.current;
 
     const setupPlayback = async (): Promise<AudioWorkletNode> => {
-      console.log('[GCall] Loading playback worklet for', sourceAddr.slice(0, 12));
+      debugLog('[GCall] Loading playback worklet for', sourceAddr.slice(0, 12));
       try {
-        await ctx.audioWorklet.addModule('/worklets/playback-processor.js');
+        await ensurePlaybackWorkletLoaded();
         const playNode = new AudioWorkletNode(ctx, 'playback-processor');
         playNode.connect(ctx.destination);
         playbackWorkletsRef.current.set(sourceAddr, playNode);
-        console.log('[GCall] Playback worklet ready for', sourceAddr.slice(0, 12), '— ctx state:', ctx.state);
+        updateMetricResourceCounts();
+        debugLog('[GCall] Playback worklet ready for', sourceAddr.slice(0, 12), '— ctx state:', ctx.state);
         return playNode;
       } catch (err) {
         console.error('[GCall] Playback worklet FAILED for', sourceAddr.slice(0, 12), err);
@@ -1050,7 +1211,7 @@ export function useGroupVoiceCall() {
       output: (audioData: any) => {
         pcmCount++;
         if (pcmCount <= 3) {
-          console.log('[GCall] AudioDecoder output PCM', pcmCount, 'frames:', audioData.numberOfFrames, 'for', sourceAddr.slice(0, 12));
+          debugLog('[GCall] AudioDecoder output PCM', pcmCount, 'frames:', audioData.numberOfFrames, 'for', sourceAddr.slice(0, 12));
         }
         const pcm = new Float32Array(audioData.numberOfFrames);
         audioData.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
@@ -1069,13 +1230,16 @@ export function useGroupVoiceCall() {
 
     decoder.configure({ codec: 'opus', sampleRate: OPUS_SAMPLE_RATE, numberOfChannels: OPUS_CHANNELS });
     decoderMapRef.current.set(sourceAddr, decoder);
+    updateMetricResourceCounts();
     return decoder;
-  }, []);
+  }, [ensurePlaybackWorkletLoaded, updateMetricResourceCounts]);
 
   // ── Incoming audio packet processing ──────────────────────────────────────
 
   const handleIncomingAudioPacket = useCallback((data: ArrayBuffer, _fromAddress: string) => {
     if (!roomKeyRef.current) return;
+    const startedAt = performance.now();
+    metricsRef.current.recordPacketReceived();
 
     const buf = new Uint8Array(data);
 
@@ -1083,7 +1247,9 @@ export function useGroupVoiceCall() {
     // tracking can happen immediately without waiting for crypto.
     const header = parsePacketHeader(buf);
     if (!header) {
-      console.warn('[GCall] parsePacketHeader returned null — malformed packet, size:', buf.byteLength);
+      metricsRef.current.recordPacketDropped();
+      metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
+      debugWarn('[GCall] parsePacketHeader returned null — malformed packet, size:', buf.byteLength);
       return;
     }
 
@@ -1093,26 +1259,27 @@ export function useGroupVoiceCall() {
     // Log first few packets per source so we can confirm the receive path works
     const jbExisting = jitterMapRef.current.get(sourceAddr);
     if (!jbExisting) {
-      console.log('[GCall] First packet from', sourceAddr.slice(0, 12), '— seq:', seq, 'vad:', vad);
+      debugLog('[GCall] First packet from', sourceAddr.slice(0, 12), '— seq:', seq, 'vad:', vad);
     }
 
     // ── Active-speaker tracking ─────────────────────────────────────────────
     // Count currently-active speakers BEFORE adding sourceAddr so the gate
     // is based on the pre-existing set, not a set that was just mutated.
-    const speakingCount = [...localSpeakersRef.current.entries()]
-      .filter(([, t]) => Date.now() - t < 3000).length;
+    const now = Date.now();
     const maxSpeakers = myRoleRef.current === 'root-forwarder'
       ? MAX_ACTIVE_SPEAKERS_GLOBAL
       : MAX_ACTIVE_SPEAKERS_LOCAL;
-    // A frame is "active" only when VAD is set AND this source is already a
-    // known speaker OR there is room for one more.
-    const isActiveSpeaker = vad && (
-      localSpeakersRef.current.has(sourceAddr) ||
-      speakingCount < maxSpeakers
+    const isActiveSpeaker = evaluateActiveSpeaker(
+      localSpeakersRef.current,
+      sourceAddr,
+      vad,
+      now,
+      maxSpeakers,
+      SPEAKER_GATE_WINDOW_MS
     );
 
     if (vad) {
-      localSpeakersRef.current.set(sourceAddr, Date.now());
+      localSpeakersRef.current.set(sourceAddr, now);
       lastRecvAtRef.current.set(sourceAddr, performance.now());
     }
 
@@ -1123,45 +1290,15 @@ export function useGroupVoiceCall() {
     if ((role === 'cluster-forwarder' || role === 'root-forwarder') && topo) {
       // Forward active speakers only (isActiveSpeaker computed above)
       if (isActiveSpeaker) {
-        if (role === 'root-forwarder') {
-          // SFU mode: fan out to all members of our cluster (skipping source and self).
-          // Hierarchical mode: also relay to every other cluster's forwarder.
-          for (const cluster of topo.clusters) {
-            if (cluster.forwarder === myAddress) {
-              // Our cluster — send directly to each member
-              for (const member of cluster.members) {
-                if (member !== sourceAddr && member !== myAddress) {
-                  const pcEntry = peerConnectionsRef.current.get(member);
-                  if (pcEntry?.dc?.readyState === 'open') pcEntry.dc.send(data);
-                }
-              }
-            } else {
-              // Another cluster (hierarchical) — send to that cluster's forwarder
-              const pcEntry = peerConnectionsRef.current.get(cluster.forwarder);
-              if (pcEntry?.dc?.readyState === 'open') pcEntry.dc.send(data);
-            }
-          }
-        } else {
-          // Cluster forwarder: forward to root
-          const rootPc = peerConnectionsRef.current.get(topo.rootForwarder);
-          if (rootPc?.dc?.readyState === 'open') {
-            rootPc.dc.send(data);
-          }
-          // Also fan out to cluster members
-          for (const cluster of topo.clusters) {
-            if (cluster.forwarder === myAddress) {
-              for (const member of cluster.members) {
-                if (member !== myAddress && member !== sourceAddr) {
-                  const pcEntry = peerConnectionsRef.current.get(member);
-                  if (pcEntry?.dc?.readyState === 'open') {
-                    pcEntry.dc.send(data);
-                  }
-                }
-              }
-              break;
-            }
-          }
-        }
+        const forwarded = forwardPacketForRole(
+          role,
+          topo,
+          myAddress,
+          sourceAddr,
+          data,
+          sendPacketToPeer
+        );
+        if (forwarded > 0) metricsRef.current.recordPacketForwarded(forwarded);
       }
       // Fall through to local playback — the root/cluster forwarder is also a
       // participant in the call and must hear other speakers.  Forwarding and
@@ -1169,7 +1306,10 @@ export function useGroupVoiceCall() {
     }
 
     // Don't decrypt or play own audio.
-    if (sourceAddr === myAddress) return;
+    if (sourceAddr === myAddress) {
+      metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
+      return;
+    }
 
     // ── Off-thread decryption ───────────────────────────────────────────────
     // Post the packet to the Worker for nacl.secretbox.open so the main thread
@@ -1179,26 +1319,29 @@ export function useGroupVoiceCall() {
       // Copy the buffer — the original `data` may still be in use by DataChannel
       // forwarding above, and ArrayBuffer transfer would detach it.
       const bufCopy = buf.slice().buffer;
-      const roomKeyCopy = roomKeyRef.current.slice().buffer;
       decryptWorkerRef.current.postMessage(
-        { type: 'decrypt', id: decryptIdRef.current++, buffer: bufCopy, roomKey: roomKeyCopy },
-        [bufCopy, roomKeyCopy]
+        { type: 'decrypt', id: decryptIdRef.current++, buffer: bufCopy },
+        [bufCopy]
       );
     } else {
       // Fallback: synchronous decryption on main thread when worker is unavailable.
       const decoded = decodePacket(buf, roomKeyRef.current);
       if (!decoded) {
-        console.warn('[GCall] decodePacket (sync fallback) failed — size:', buf.byteLength);
+        metricsRef.current.recordPacketDropped();
+        metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
+        debugWarn('[GCall] decodePacket (sync fallback) failed — size:', buf.byteLength);
         return;
       }
       let jb = jitterMapRef.current.get(decoded.sourceAddr);
       if (!jb) {
         jb = new JitterBuffer();
         jitterMapRef.current.set(decoded.sourceAddr, jb);
+        updateMetricResourceCounts();
       }
       jb.push(decoded.seq, decoded.opusFrame);
     }
-  }, [userInfo?.address]);
+    metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
+  }, [sendPacketToPeer, updateMetricResourceCounts, userInfo?.address]);
 
   /** Start jitter drain loop. */
   const startJitterDrain = useCallback(() => {
@@ -1206,13 +1349,14 @@ export function useGroupVoiceCall() {
     let tickCount = 0;
     let firstDrainLogged = false;
     jitterDrainTimerRef.current = setInterval(() => {
+      const tickStartedAt = performance.now();
       for (const [addr, jb] of jitterMapRef.current) {
         const frame = jb.pop();
         if (frame) {
           if (!firstDrainLogged) {
             firstDrainLogged = true;
-            console.log('[GCall] Jitter drain first pop for', addr.slice(0, 12), '— frame bytes:', frame.byteLength);
-            console.log('[GCall] Decoder input frame view for', addr.slice(0, 12), {
+            debugLog('[GCall] Jitter drain first pop for', addr.slice(0, 12), '— frame bytes:', frame.byteLength);
+            debugLog('[GCall] Decoder input frame view for', addr.slice(0, 12), {
               byteOffset: frame.byteOffset,
               byteLength: frame.byteLength,
               bufferByteLength: frame.buffer.byteLength,
@@ -1228,10 +1372,11 @@ export function useGroupVoiceCall() {
               });
               decoder.decode(chunk);
             } catch (e) {
-              console.warn('[GCall] decoder.decode threw:', e);
+              metricsRef.current.recordPacketDropped();
+              debugWarn('[GCall] decoder.decode threw:', e);
             }
           } else if (!decoder) {
-            console.warn('[GCall] getOrCreateDecoder returned null for', addr.slice(0, 12));
+            debugWarn('[GCall] getOrCreateDecoder returned null for', addr.slice(0, 12));
           }
         }
       }
@@ -1242,19 +1387,16 @@ export function useGroupVoiceCall() {
       if (tickCount % 10 === 0) {
         tickCount = 0;
         const now = Date.now();
-        const speakers = [...localSpeakersRef.current.entries()]
-          .filter(([, t]) => now - t < 2000)
-          .map(([a]) => a)
-          .slice(0, MAX_ACTIVE_SPEAKERS_GLOBAL);
-        setActiveSpeakers(speakers);
-
-        setParticipants((prev) =>
-          prev.map((p) => ({
-            ...p,
-            speaking: speakers.includes(p.address),
-          }))
+        const speakers = collectActiveSpeakers(
+          localSpeakersRef.current,
+          now,
+          ACTIVE_SPEAKER_WINDOW_MS,
+          MAX_ACTIVE_SPEAKERS_GLOBAL
         );
+        setActiveSpeakers((prev) => (sameAddressList(prev, speakers) ? prev : speakers));
+        setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
       }
+      metricsRef.current.recordJitterTickDuration(performance.now() - tickStartedAt);
     }, JITTER_DRAIN_INTERVAL_MS);
   }, [getOrCreateDecoder]);
 
@@ -1263,7 +1405,7 @@ export function useGroupVoiceCall() {
   const distributeRoomKey = useCallback(async (key: Uint8Array) => {
     if (!userInfo?.address) return;
     const myAddr = userInfo.address;
-    console.log('[GCall] distributeRoomKey — recipients:', [...participantsRef.current.keys()].filter(a => a !== myAddr));
+    debugLog('[GCall] distributeRoomKey — recipients:', [...participantsRef.current.keys()].filter(a => a !== myAddr));
 
     for (const [addr, { publicKey }] of participantsRef.current) {
       if (addr === myAddr) continue;
@@ -1274,10 +1416,10 @@ export function useGroupVoiceCall() {
       try {
         const recipientPkBytes = base58DecodeRenderer(publicKey);
         const recipientCurve25519PK = ed2curve.convertPublicKey(recipientPkBytes);
-        const ephemeralKP = nacl.box.keyPair();
-        const sharedKey = nacl.box.before(recipientCurve25519PK, ephemeralKP.secretKey);
-        const nonce = nacl.randomBytes(24);
-        const ciphertext = nacl.box.after(key, nonce, sharedKey);
+        const ephemeralKP = naclApi.box.keyPair();
+        const sharedKey = naclApi.box.before(recipientCurve25519PK, ephemeralKP.secretKey);
+        const nonce = naclApi.randomBytes(24);
+        const ciphertext = naclApi.box.after(key, nonce, sharedKey);
 
         // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
         const combined = new Uint8Array(32 + 24 + ciphertext.length);
@@ -1292,19 +1434,19 @@ export function useGroupVoiceCall() {
           toAddress: addr, fromAddress: myAddr,
           fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
       ).catch(() => '');
-        if (!sig) { console.warn(`[GCall] Signing failed for GC_KEY to ${addr}`); continue; }
+        if (!sig) { debugWarn(`[GCall] Signing failed for GC_KEY to ${addr}`); continue; }
         await window.groupCall.sendKey(
           roomIdRef.current, addr, b64, myAddr, sig, userInfo.publicKey ?? '', ts
         );
       } catch (e) {
-        console.warn(`[GCall] Failed to encrypt key for ${addr}:`, e);
+        debugWarn(`[GCall] Failed to encrypt key for ${addr}:`, e);
       }
     }
   }, [userInfo]);
 
   /** Handle incoming room key. */
   const handleRoomKey = useCallback(async (payload: { encryptedKey: string }) => {
-    console.log('[GCall] handleRoomKey called — encryptedKey length:', payload.encryptedKey?.length ?? 0);
+    debugLog('[GCall] handleRoomKey called — encryptedKey length:', payload.encryptedKey?.length ?? 0);
     try {
       // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
       const combined = base64ToUint8(payload.encryptedKey);
@@ -1317,19 +1459,20 @@ export function useGroupVoiceCall() {
         { ephemeralPublicKey: ephemeralPKb64, nonce: nonceb64, ciphertext: ciphertextb64 },
         10_000
       );
-      console.log('[GCall] decryptBoxWithMyKey result ok:', !!result?.decryptedKey);
+      debugLog('[GCall] decryptBoxWithMyKey result ok:', !!result?.decryptedKey);
       if (result?.decryptedKey) {
         roomKeyRef.current = Uint8Array.from(atob(result.decryptedKey), (c) => c.charCodeAt(0));
-        console.log('[GCall] Room key set (', roomKeyRef.current.length, 'bytes), captureWorklet exists:', !!captureWorkletRef.current);
+        syncDecryptWorkerRoomKey(roomKeyRef.current);
+        debugLog('[GCall] Room key set (', roomKeyRef.current.length, 'bytes), captureWorklet exists:', !!captureWorkletRef.current);
         // Non-root-forwarder: start audio now that we have the shared key
         if (!captureWorkletRef.current) {
           startAudioCapture();
         }
       }
     } catch (e) {
-      console.warn('[GCall] Failed to decrypt room key:', e);
+      debugWarn('[GCall] Failed to decrypt room key:', e);
     }
-  }, [startAudioCapture]);
+  }, [startAudioCapture, syncDecryptWorkerRoomKey]);
 
   // ── Decrypt Worker lifecycle ──────────────────────────────────────────────
 
@@ -1340,6 +1483,7 @@ export function useGroupVoiceCall() {
     const worker = new AudioDecryptWorker();
     decryptWorkerRef.current = worker;
     decryptIdRef.current = 0;
+    syncDecryptWorkerRoomKey(roomKeyRef.current);
 
     worker.onmessage = (e: MessageEvent<{
       type: 'result';
@@ -1358,25 +1502,30 @@ export function useGroupVoiceCall() {
       if (!jb) {
         jb = new JitterBuffer();
         jitterMapRef.current.set(sourceAddr, jb);
+        updateMetricResourceCounts();
       }
       jb.push(seq, new Uint8Array(opusFrame));
+      metricsRef.current.recordPacketDecoded();
     };
 
     worker.onerror = (err) => {
       console.error('[GCall] AudioDecryptWorker error:', err);
     };
-  }, []);
+  }, [syncDecryptWorkerRoomKey, updateMetricResourceCounts]);
 
   // ── Join / Leave ──────────────────────────────────────────────────────────
 
   const joinGroupCall = useCallback(async (roomId: string, chatId: string) => {
     if (!userInfo?.address || !userInfo.publicKey) return;
     if (roomState !== 'idle') return;
-    console.log('[GCall] joinGroupCall — roomId:', roomId, 'address:', userInfo.address);
+    debugLog('[GCall] joinGroupCall — roomId:', roomId, 'address:', userInfo.address);
 
     roomIdRef.current = roomId;
     chatIdRef.current = chatId;
     setRoomState('joining');
+    metricsRef.current.reset();
+    metricsRef.current.setRole('participant');
+    flushMetrics();
 
     // Register local address with main process
     await window.groupCall.setLocalAddresses([userInfo.address]);
@@ -1389,7 +1538,7 @@ export function useGroupVoiceCall() {
         fromPublicKey: userInfo.publicKey, timestamp: ts }
     ).catch(() => '');
     if (!sig) {
-      console.warn('[GCall] Signing failed for GC_JOIN — aborting join');
+      debugWarn('[GCall] Signing failed for GC_JOIN — aborting join');
       setRoomState('idle');
       return;
     }
@@ -1413,7 +1562,8 @@ export function useGroupVoiceCall() {
     setupDecryptWorker();
     startJitterDrain();
     startForwarderTimeoutCheck();
-  }, [userInfo, roomState, setupDecryptWorker, startJitterDrain]);
+    startMetricsFlushLoop();
+  }, [flushMetrics, roomState, setupDecryptWorker, startJitterDrain, startMetricsFlushLoop, userInfo]);
 
   const leaveGroupCall = useCallback(async () => {
     if (!userInfo?.address || roomState === 'idle') return;
@@ -1448,6 +1598,7 @@ export function useGroupVoiceCall() {
     if (topologyHeartbeatTimerRef.current) { clearInterval(topologyHeartbeatTimerRef.current); topologyHeartbeatTimerRef.current = null; }
     if (promotionTimerRef.current) { clearTimeout(promotionTimerRef.current); promotionTimerRef.current = null; }
     if (forwarderTimeoutCheckRef.current) { clearInterval(forwarderTimeoutCheckRef.current); forwarderTimeoutCheckRef.current = null; }
+    stopMetricsFlushLoop();
 
     // Stop audio
     if (captureWorkletRef.current) {
@@ -1458,6 +1609,7 @@ export function useGroupVoiceCall() {
       node.disconnect();
     }
     playbackWorkletsRef.current.clear();
+    playbackWorkletModulePromiseRef.current = null;
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
@@ -1477,12 +1629,12 @@ export function useGroupVoiceCall() {
     }
     decoderMapRef.current.clear();
     jitterMapRef.current.clear();
+    lastRecvAtRef.current.clear();
 
     // Close peer connections
-    for (const [, entry] of peerConnectionsRef.current) {
-      try { entry.pc.close(); } catch { /* ignore */ }
+    for (const peerAddress of [...peerConnectionsRef.current.keys()]) {
+      closePeerConnection(peerAddress);
     }
-    peerConnectionsRef.current.clear();
 
     upstreamDCRef.current = null;
     standbyDCRef.current = null;
@@ -1490,6 +1642,7 @@ export function useGroupVoiceCall() {
 
     // Terminate the decrypt Worker
     if (decryptWorkerRef.current) {
+      syncDecryptWorkerRoomKey(null);
       decryptWorkerRef.current.terminate();
       decryptWorkerRef.current = null;
     }
@@ -1499,17 +1652,18 @@ export function useGroupVoiceCall() {
     roomKeyRef.current = null;
     topologyRef.current = null;
     localEpochRef.current = 0;
-    participantsRef.current.clear();
+    participantsRef.current = new Map();
     seqRef.current = 0;
     localSpeakersRef.current.clear();
+    metricsRef.current.reset();
+    metricsRef.current.setRole('participant');
 
     setRoomState('idle');
     setParticipants([]);
     setMyRole('participant');
     setActiveSpeakers([]);
-
-    if (unsubscribeRef.current) { unsubscribeRef.current(); unsubscribeRef.current = null; }
-  }, []);
+    flushMetrics();
+  }, [closePeerConnection, flushMetrics, stopMetricsFlushLoop, syncDecryptWorkerRoomKey]);
 
   // ── IPC event subscription ─────────────────────────────────────────────────
 
@@ -1556,26 +1710,36 @@ export function useGroupVoiceCall() {
             // Only the elected root-forwarder is the key authority.
             // This is deterministic: all peers agree on sorted[0].
             isInitiatorRef.current = myAddress === newTopo.rootForwarder;
-            console.log('[GCall] Election result — me:', myAddress, 'rootForwarder:', newTopo.rootForwarder, 'isInitiator:', isInitiatorRef.current, 'hasKey:', !!roomKeyRef.current);
+            debugLog('[GCall] Election result — me:', myAddress, 'rootForwarder:', newTopo.rootForwarder, 'isInitiator:', isInitiatorRef.current, 'hasKey:', !!roomKeyRef.current);
 
             if (isInitiatorRef.current && !roomKeyRef.current) {
               // I am the key authority — generate key, start audio, distribute
-              console.log('[GCall] Generating room key and starting audio capture');
-              const newKey = nacl.randomBytes(32);
+              debugLog('[GCall] Generating room key and starting audio capture');
+              const newKey = naclApi.randomBytes(32);
               roomKeyRef.current = newKey;
+              syncDecryptWorkerRoomKey(newKey);
               startAudioCapture();
               const origParticipants = participantsRef.current;
-              participantsRef.current = new Map([[address, { publicKey }]]);
+              const tempMap = new Map([[address, { publicKey }]]);
+              participantsRef.current = tempMap;
               distributeRoomKey(newKey).finally(() => {
-                participantsRef.current = origParticipants;
+                // Only restore if cleanup hasn't replaced participantsRef with a new Map.
+                // If the call ended while distribution was in flight, participantsRef.current
+                // is a different object (set by cleanup) and we must NOT overwrite it.
+                if (participantsRef.current === tempMap) {
+                  participantsRef.current = origParticipants;
+                }
               });
             } else if (isInitiatorRef.current && roomKeyRef.current) {
               // Already have key (subsequent participant joining) — distribute only
-              console.log('[GCall] Already have key — distributing to new participant', address);
+              debugLog('[GCall] Already have key — distributing to new participant', address);
               const origParticipants = participantsRef.current;
-              participantsRef.current = new Map([[address, { publicKey }]]);
+              const tempMap = new Map([[address, { publicKey }]]);
+              participantsRef.current = tempMap;
               distributeRoomKey(roomKeyRef.current).finally(() => {
-                participantsRef.current = origParticipants;
+                if (participantsRef.current === tempMap) {
+                  participantsRef.current = origParticipants;
+                }
               });
             } else if (!isInitiatorRef.current) {
               // I am not the key authority — discard any self-generated key so
@@ -1589,7 +1753,10 @@ export function useGroupVoiceCall() {
       if (event === 'gcall:participant-left') {
         const { roomId, address } = payload;
         if (roomId !== roomIdRef.current) return;
+        closePeerConnection(address);
+        disposeParticipantAudio(address);
         participantsRef.current.delete(address);
+        setActiveSpeakers((prev) => prev.filter((speaker) => speaker !== address));
         setParticipants((prev) => prev.filter((p) => p.address !== address));
 
         // Recompute topology
@@ -1603,8 +1770,9 @@ export function useGroupVoiceCall() {
 
         // Rotate room key on leave
         if (isInitiatorRef.current && roomKeyRef.current) {
-          const newKey = nacl.randomBytes(32);
+          const newKey = naclApi.randomBytes(32);
           roomKeyRef.current = newKey;
+          syncDecryptWorkerRoomKey(newKey);
           distributeRoomKey(newKey);
         }
       }
@@ -1616,11 +1784,22 @@ export function useGroupVoiceCall() {
         applyTopology(topo);
       }
 
+      if (event === 'gcall:heartbeat') {
+        const { roomId } = payload as { roomId: string };
+        if (roomId !== roomIdRef.current) return;
+        lastRootHeartbeatRef.current = Date.now();
+      }
+
       if (event === 'gcall:audio') {
         const { data } = payload as { data: Uint8Array };
         // P2P relay fallback — main process already decoded base64 to binary Buffer,
         // which arrives here as a Uint8Array via structured clone. No atob needed.
-        handleIncomingAudioPacket(data.buffer, '');
+        metricsRef.current.recordRelayReceived();
+        const relayBuffer =
+          data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
+            ? data.buffer
+            : data.slice().buffer;
+        handleIncomingAudioPacket(relayBuffer as ArrayBuffer, '');
       }
 
       if (event === 'gcall:key') {
@@ -1634,7 +1813,7 @@ export function useGroupVoiceCall() {
 
     unsubscribeRef.current = unsub;
     return () => { unsub(); unsubscribeRef.current = null; };
-  }, [applyTopology, distributeRoomKey, handleIncomingAudioPacket, handleRoomKey, handleRtcSignal, startTopologyHeartbeat, userInfo?.address]);
+  }, [applyTopology, closePeerConnection, disposeParticipantAudio, distributeRoomKey, handleIncomingAudioPacket, handleRoomKey, handleRtcSignal, startTopologyHeartbeat, userInfo?.address]);
 
   // Cleanup on unmount
   useEffect(() => () => { cleanup(); }, [cleanup]);
@@ -1644,6 +1823,7 @@ export function useGroupVoiceCall() {
     participants,
     myRole,
     activeSpeakers,
+    metrics,
     topologyLabel,
     joinGroupCall,
     leaveGroupCall,

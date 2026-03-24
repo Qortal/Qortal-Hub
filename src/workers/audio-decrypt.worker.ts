@@ -7,9 +7,12 @@
  * with 5+ concurrent participants.
  *
  * Message protocol (main → worker):
- *   { type: 'decrypt', id: number, buffer: ArrayBuffer, roomKey: ArrayBuffer }
+ *   { type: 'setRoomKey', roomKey: ArrayBuffer }
+ *   { type: 'clearRoomKey' }
+ *   { type: 'decrypt', id: number, buffer: ArrayBuffer }
  *   - buffer: transferred (zero-copy) packet bytes
- *   - roomKey: copied 32-byte symmetric key
+ *   - roomKey is cached in the worker so the main thread doesn't clone it
+ *     for every 20 ms packet.
  *
  * Message protocol (worker → main):
  *   { type: 'result', id: number, decoded: DecryptResult | null }
@@ -57,23 +60,36 @@ function decodePacket(
   }
 }
 
-self.onmessage = (
-  e: MessageEvent<{
-    type: 'decrypt';
-    id: number;
-    buffer: ArrayBuffer;
-    roomKey: ArrayBuffer;
-  }>
-) => {
-  const { type, id, buffer, roomKey } = e.data;
-  if (type !== 'decrypt') return;
+let roomKeyBytes: Uint8Array | null = null;
 
-  const decoded = decodePacket(new Uint8Array(buffer), new Uint8Array(roomKey));
+self.onmessage = (
+  e: MessageEvent<
+    | { type: 'setRoomKey'; roomKey: ArrayBuffer }
+    | { type: 'clearRoomKey' }
+    | { type: 'decrypt'; id: number; buffer: ArrayBuffer }
+  >
+) => {
+  const data = e.data;
+  if (data.type === 'setRoomKey') {
+    roomKeyBytes = new Uint8Array(data.roomKey);
+    return;
+  }
+
+  if (data.type === 'clearRoomKey') {
+    roomKeyBytes = null;
+    return;
+  }
+
+  if (data.type !== 'decrypt' || !roomKeyBytes) {
+    return;
+  }
+
+  const decoded = decodePacket(new Uint8Array(data.buffer), roomKeyBytes);
 
   if (decoded) {
     // Transfer the decoded Opus frame back to the main thread without copying.
-    self.postMessage({ type: 'result', id, decoded }, [decoded.opusFrame]);
+    self.postMessage({ type: 'result', id: data.id, decoded }, [decoded.opusFrame]);
   } else {
-    self.postMessage({ type: 'result', id, decoded: null });
+    self.postMessage({ type: 'result', id: data.id, decoded: null });
   }
 };

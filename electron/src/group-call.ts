@@ -189,6 +189,7 @@ interface GroupRoom {
   chatId: string;
   participants: Map<string, RoomParticipant>;
   topologyEpoch: number;
+  topologySignature?: string;
   joinTimestamp?: number;
 }
 
@@ -210,6 +211,18 @@ function verifySigned(
   } catch {
     return false;
   }
+}
+
+function buildTopologySignature(env: Pick<
+  GcTopologyEnvelope,
+  'topologyEpoch' | 'rootForwarder' | 'standbyForwarder' | 'clusters'
+>): string {
+  return JSON.stringify({
+    topologyEpoch: env.topologyEpoch,
+    rootForwarder: env.rootForwarder,
+    standbyForwarder: env.standbyForwarder,
+    clusters: env.clusters,
+  });
 }
 
 // ── GroupCallManager ──────────────────────────────────────────────────────────
@@ -651,22 +664,36 @@ export class GroupCallManager extends EventEmitter {
 
     // Update local epoch tracking
     const room = this.rooms.get(env.roomId);
+    const topologySignature = buildTopologySignature(env);
+    let emitFullTopology = true;
     if (room) {
       if (env.topologyEpoch < room.topologyEpoch) {
         loggerLog(`[GCall] Dropped stale GC_TOPOLOGY epoch ${env.topologyEpoch} < ${room.topologyEpoch}`);
         return;
       }
+      emitFullTopology =
+        env.topologyEpoch !== room.topologyEpoch ||
+        topologySignature !== room.topologySignature;
       room.topologyEpoch = env.topologyEpoch;
+      room.topologySignature = topologySignature;
     }
 
-    this.emit('gcall:topology', {
-      roomId: env.roomId,
-      topologyEpoch: env.topologyEpoch,
-      rootForwarder: env.rootForwarder,
-      standbyForwarder: env.standbyForwarder,
-      clusters: env.clusters,
-      lastSeen: env.lastSeen,
-    });
+    if (emitFullTopology) {
+      this.emit('gcall:topology', {
+        roomId: env.roomId,
+        topologyEpoch: env.topologyEpoch,
+        rootForwarder: env.rootForwarder,
+        standbyForwarder: env.standbyForwarder,
+        clusters: env.clusters,
+        lastSeen: env.lastSeen,
+      });
+    } else {
+      this.emit('gcall:heartbeat', {
+        roomId: env.roomId,
+        lastSeen: env.lastSeen,
+        rootForwarder: env.rootForwarder,
+      });
+    }
 
     if ((env.hopsRemaining ?? 0) > 0) {
       this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });

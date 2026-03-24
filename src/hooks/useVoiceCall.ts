@@ -26,6 +26,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { userInfoAtom } from '../atoms/global';
+import {
+  enqueueBufferedCallSignal,
+  takeDrainableBufferedCallSignals,
+  type BufferedCallSignal,
+  type BufferedCallSignalType,
+} from '../lib/call/signalQueue';
 
 // ── ICE server configuration ──────────────────────────────────────────────────
 
@@ -142,6 +148,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   // ── Refs (do not re-render on change) ──────────────────────────────────────
   const callIdRef = useRef<string | null>(null);
+  const callStateRef = useRef<CallState>('idle');
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -153,6 +160,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const relaySeqRef = useRef(0);
   // Jitter buffer: Map<seq, { ts: number; data: Uint8Array }>
   const jitterBufferRef = useRef<Map<number, { ts: number; data: Uint8Array }>>(new Map());
+  const incomingCallRef = useRef<IncomingCall | null>(null);
+  const pendingSignalsRef = useRef<BufferedCallSignal[]>([]);
+  const outboundSetupCallIdRef = useRef<string | null>(null);
+  const inboundSetupCallIdRef = useRef<string | null>(null);
 
   // Stable ref for the local public key — avoids re-creating sign-dependent
   // callbacks whenever userInfo updates.
@@ -160,6 +171,16 @@ export function useVoiceCall(): UseVoiceCallReturn {
   useEffect(() => {
     publicKeyRef.current = userInfo?.publicKey ?? '';
   }, [userInfo?.publicKey]);
+
+  const updateCallState = useCallback((nextState: CallState) => {
+    callStateRef.current = nextState;
+    setCallState(nextState);
+  }, []);
+
+  const updateIncomingCall = useCallback((nextIncomingCall: IncomingCall | null) => {
+    incomingCallRef.current = nextIncomingCall;
+    setIncomingCall(nextIncomingCall);
+  }, []);
 
   /**
    * Sign a small set of fields via the wallet's Ed25519 key.
@@ -197,6 +218,12 @@ export function useVoiceCall(): UseVoiceCallReturn {
     }
   }, []);
 
+  const resetPendingSignals = useCallback(() => {
+    pendingSignalsRef.current = [];
+    outboundSetupCallIdRef.current = null;
+    inboundSetupCallIdRef.current = null;
+  }, []);
+
   const teardownRTC = useCallback(() => {
     dcRef.current?.close();
     dcRef.current = null;
@@ -208,7 +235,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
     audioCtxRef.current = null;
     jitterBufferRef.current.clear();
     relaySeqRef.current = 0;
-  }, []);
+    resetPendingSignals();
+  }, [resetPendingSignals]);
 
   const endCall = useCallback(
     (sendHangup = false) => {
@@ -225,14 +253,15 @@ export function useVoiceCall(): UseVoiceCallReturn {
       }
       callIdRef.current = null;
       audioModeRef.current = null;
-      setCallState('ended');
+      updateCallState('ended');
       setAudioMode(null);
       setCallDuration(0);
       setIsMuted(false);
+      updateIncomingCall(null);
       // Reset to idle after a brief moment so UI can show "ended" state
-      setTimeout(() => setCallState('idle'), 1_500);
+      setTimeout(() => updateCallState('idle'), 1_500);
     },
-    [clearTimers, teardownRTC, signFields]
+    [clearTimers, signFields, teardownRTC, updateCallState, updateIncomingCall]
   );
 
   // ── Duration timer ─────────────────────────────────────────────────────────
@@ -347,6 +376,81 @@ export function useVoiceCall(): UseVoiceCallReturn {
     },
     [startDataChannelCapture, playPcmFrame]
   );
+
+  const applyBufferedSignal = useCallback(
+    async (
+      pc: RTCPeerConnection,
+      signal: BufferedCallSignal
+    ) => {
+      if (signal.type === 'offer') {
+        await pc.setRemoteDescription(
+          new RTCSessionDescription({ type: 'offer', sdp: signal.data as string })
+        );
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        const answerTs = Date.now();
+        const { signature: ansSig, publicKey: ansKey } = await signFields({
+          type: 'CALL_ANSWER', callId: signal.callId, timestamp: answerTs,
+        });
+        await (window as any).call?.sendSignal(
+          signal.callId,
+          'answer',
+          answer.sdp,
+          ansSig,
+          ansKey,
+          answerTs
+        );
+        return;
+      }
+
+      if (signal.type === 'answer') {
+        await pc.setRemoteDescription(
+          new RTCSessionDescription({ type: 'answer', sdp: signal.data as string })
+        );
+        return;
+      }
+
+      if (signal.data) {
+        await pc
+          .addIceCandidate(new RTCIceCandidate(signal.data as RTCIceCandidateInit))
+          .catch(() => {});
+      }
+    },
+    [signFields]
+  );
+
+  const drainPendingSignals = useCallback(async () => {
+    const pc = pcRef.current;
+    const activeCallId = callIdRef.current;
+    if (!pc || !activeCallId || pendingSignalsRef.current.length === 0) return;
+
+    let remaining = pendingSignalsRef.current.filter(
+      (signal) => signal.callId === activeCallId
+    );
+    const otherCalls = pendingSignalsRef.current.filter(
+      (signal) => signal.callId !== activeCallId
+    );
+
+    let guard = 0;
+    while (remaining.length > 0 && guard < 10) {
+      guard++;
+      const hasRemoteDescription = Boolean(
+        pc.remoteDescription || pc.pendingRemoteDescription
+      );
+      const nextBatch = takeDrainableBufferedCallSignals(
+        remaining,
+        hasRemoteDescription
+      );
+      if (nextBatch.ready.length === 0) break;
+      remaining = nextBatch.remaining;
+      for (const signal of nextBatch.ready) {
+        if (signal.callId !== callIdRef.current) return;
+        await applyBufferedSignal(pc, signal);
+      }
+    }
+
+    pendingSignalsRef.current = [...otherCalls, ...remaining];
+  }, [applyBufferedSignal]);
 
   // ── RTCPeerConnection factory ──────────────────────────────────────────────
 
@@ -468,7 +572,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       const stream = await getUserAudio();
       if (!stream) {
         endCall();
-        return;
+        return false;
       }
 
       const pc = createPeerConnection();
@@ -507,8 +611,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
         type: 'CALL_OFFER', callId, timestamp: offerTs,
       });
       await (window as any).call?.sendSignal(callId, 'offer', offer.sdp, offerSig, offerKey, offerTs);
+      await drainPendingSignals();
+      return true;
     },
-    [createPeerConnection, endCall, getUserAudio, setupDataChannel, startRelayCapture, signFields]
+    [createPeerConnection, drainPendingSignals, endCall, getUserAudio, setupDataChannel, startRelayCapture, signFields]
   );
 
   // ── Inbound call setup ─────────────────────────────────────────────────────
@@ -523,7 +629,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
         });
         await (window as any).call?.reject(callId, 'media unavailable', rSig, rKey, rejectTs);
         endCall();
-        return;
+        return false;
       }
 
       const pc = createPeerConnection();
@@ -548,6 +654,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
           startRelayCapture();
         }
       }, ICE_FAILURE_TIMEOUT_MS);
+      return true;
     },
     [createPeerConnection, endCall, getUserAudio, setupDataChannel, startRelayCapture, signFields]
   );
@@ -563,25 +670,33 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
       switch (event) {
         case 'call:incoming': {
-          if (callState !== 'idle') break; // already in a call
-          setIncomingCall({
+          if (callStateRef.current !== 'idle') break; // already in a call
+          updateIncomingCall({
             callId: p.callId as string,
             fromAddress: p.fromAddress as string,
             chatId: p.chatId as string,
           });
-          setCallState('ringing');
+          updateCallState('ringing');
           break;
         }
 
         case 'call:accepted': {
           if (
             callIdRef.current !== p.callId ||
-            callState !== 'calling'
+            callStateRef.current !== 'calling' ||
+            outboundSetupCallIdRef.current === p.callId
           )
             break;
-          setCallState('connected');
+          outboundSetupCallIdRef.current = p.callId as string;
+          updateCallState('connected');
           startDurationTimer();
-          await setupOutboundCall(p.callId as string);
+          try {
+            await setupOutboundCall(p.callId as string);
+          } finally {
+            if (outboundSetupCallIdRef.current === p.callId) {
+              outboundSetupCallIdRef.current = null;
+            }
+          }
           break;
         }
 
@@ -593,38 +708,15 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
         case 'call:signal': {
           if (callIdRef.current !== p.callId) break;
-          const pc = pcRef.current;
-          if (!pc) break;
-
-          if (p.type === 'offer') {
-            await pc.setRemoteDescription(
-              new RTCSessionDescription({ type: 'offer', sdp: p.data as string })
-            );
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            const answerTs = Date.now();
-            const { signature: ansSig, publicKey: ansKey } = await signFields({
-              type: 'CALL_ANSWER', callId: p.callId, timestamp: answerTs,
-            });
-            await (window as any).call?.sendSignal(
-              p.callId,
-              'answer',
-              answer.sdp,
-              ansSig,
-              ansKey,
-              answerTs
-            );
-          } else if (p.type === 'answer') {
-            await pc.setRemoteDescription(
-              new RTCSessionDescription({ type: 'answer', sdp: p.data as string })
-            );
-          } else if (p.type === 'ice') {
-            if (p.data) {
-              await pc
-                .addIceCandidate(new RTCIceCandidate(p.data as RTCIceCandidateInit))
-                .catch(() => {});
+          pendingSignalsRef.current = enqueueBufferedCallSignal(
+            pendingSignalsRef.current,
+            {
+              callId: p.callId as string,
+              type: p.type as BufferedCallSignalType,
+              data: p.data,
             }
-          }
+          );
+          await drainPendingSignals();
           break;
         }
 
@@ -661,12 +753,13 @@ export function useVoiceCall(): UseVoiceCallReturn {
     const unsubscribe = callAPI.onEvent(handleEvent);
     return unsubscribe;
   }, [
-    callState,
+    drainPendingSignals,
     endCall,
     playPcmFrame,
     setupOutboundCall,
-    signFields,
     startDurationTimer,
+    updateCallState,
+    updateIncomingCall,
   ]);
 
   // ── Register local address with call manager ───────────────────────────────
@@ -689,7 +782,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
         fields: Record<string, unknown>
       ) => Promise<{ signature: string; publicKey: string }>
     ) => {
-      if (callState !== 'idle') return;
+      if (callStateRef.current !== 'idle') return;
       const localAddress = userInfo?.address;
       if (!localAddress) return;
 
@@ -707,7 +800,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       });
 
       callIdRef.current = callId;
-      setCallState('calling');
+      updateCallState('calling');
 
       const result = await (window as any).call?.initiate(
         targetAddress,
@@ -721,41 +814,55 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
       if (!result?.success) {
         callIdRef.current = null;
-        setCallState('idle');
+        resetPendingSignals();
+        updateCallState('idle');
       }
     },
-    [callState, userInfo?.address, userInfo?.publicKey]
+    [resetPendingSignals, updateCallState, userInfo?.address, userInfo?.publicKey]
   );
 
   const acceptCall = useCallback(async () => {
-    const incoming = incomingCall;
-    if (!incoming || callState !== 'ringing') return;
+    const incoming = incomingCallRef.current;
+    if (!incoming || callStateRef.current !== 'ringing') return;
+    if (inboundSetupCallIdRef.current === incoming.callId) return;
 
+    inboundSetupCallIdRef.current = incoming.callId;
     callIdRef.current = incoming.callId;
-    setIncomingCall(null);
-    setCallState('connected');
-    startDurationTimer();
+    updateIncomingCall(null);
 
-    const acceptTs = Date.now();
-    const { signature, publicKey } = await signFields({
-      type: 'CALL_ACCEPT', callId: incoming.callId, timestamp: acceptTs,
-    });
-    await (window as any).call?.accept(incoming.callId, signature, publicKey, acceptTs);
-    await setupInboundCall(incoming.callId);
-  }, [callState, incomingCall, setupInboundCall, signFields, startDurationTimer]);
+    try {
+      const setupOk = await setupInboundCall(incoming.callId);
+      if (!setupOk) return;
+
+      updateCallState('connected');
+      startDurationTimer();
+
+      const acceptTs = Date.now();
+      const { signature, publicKey } = await signFields({
+        type: 'CALL_ACCEPT', callId: incoming.callId, timestamp: acceptTs,
+      });
+      await (window as any).call?.accept(incoming.callId, signature, publicKey, acceptTs);
+      await drainPendingSignals();
+    } finally {
+      if (inboundSetupCallIdRef.current === incoming.callId) {
+        inboundSetupCallIdRef.current = null;
+      }
+    }
+  }, [drainPendingSignals, setupInboundCall, signFields, startDurationTimer, updateCallState, updateIncomingCall]);
 
   const rejectCall = useCallback(async () => {
-    const incoming = incomingCall;
+    const incoming = incomingCallRef.current;
     if (!incoming) return;
-    setIncomingCall(null);
-    setCallState('idle');
+    updateIncomingCall(null);
+    resetPendingSignals();
+    updateCallState('idle');
 
     const rejectTs = Date.now();
     const { signature, publicKey } = await signFields({
       type: 'CALL_REJECT', callId: incoming.callId, timestamp: rejectTs,
     });
     await (window as any).call?.reject(incoming.callId, 'rejected', signature, publicKey, rejectTs);
-  }, [incomingCall, signFields]);
+  }, [resetPendingSignals, signFields, updateCallState, updateIncomingCall]);
 
   const hangUp = useCallback(() => {
     endCall(true);
