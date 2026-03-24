@@ -14,6 +14,7 @@ import CreateIcon from '@mui/icons-material/Create';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
 import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
 import { useTranslation } from 'react-i18next';
+import React from 'react';
 import { useAtomValue } from 'jotai';
 import {
   groupChatHasUnreadAtom,
@@ -25,9 +26,46 @@ import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { formatEmailDate } from './qmailUtils';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
-import { useOnlineAddresses, statusDotColor } from '../../hooks/usePresence';
-import { useAtomValue } from 'jotai';
-import { statusMapAtom } from '../../atoms/presence';
+import { statusDotColor } from '../../hooks/usePresence';
+import { isOnlineAtomFamily, statusAtomFamily } from '../../atoms/presence';
+
+/** Renders only the presence badge for a single DM address.
+ * Subscribes to per-address atoms so a change to any other peer
+ * does NOT trigger a re-render of this component.
+ */
+const DirectsPresenceBadge = React.memo(
+  ({
+    address,
+    children,
+  }: {
+    address: string;
+    children: React.ReactNode;
+  }) => {
+    const theme = useTheme();
+    const isOnline = useAtomValue(isOnlineAtomFamily(address));
+    const status = useAtomValue(statusAtomFamily(address));
+    return (
+      <Badge
+        overlap="circular"
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        variant="dot"
+        invisible={!isOnline}
+        sx={{
+          '& .MuiBadge-dot': {
+            backgroundColor: statusDotColor(status ?? null),
+            border: `2px solid ${theme.palette.background.paper}`,
+            borderRadius: '50%',
+            height: 10,
+            minWidth: 10,
+            width: 10,
+          },
+        }}
+      >
+        {children}
+      </Badge>
+    );
+  }
+);
 
 export interface DirectsSidebarProps {
   setDesktopSideView: (view: 'groups' | 'directs') => void;
@@ -82,8 +120,6 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
 
   const theme = useTheme();
   const { t } = useTranslation();
-  const onlineAddresses = useOnlineAddresses();
-  const statusMap = useAtomValue(statusMapAtom);
 
   return (
     <Box
@@ -365,22 +401,7 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                   }}
                 >
                   <ListItemAvatar sx={{ minWidth: 44, marginRight: 0 }}>
-                    <Badge
-                      overlap="circular"
-                      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                      variant="dot"
-                      invisible={!onlineAddresses.has(direct?.address)}
-                      sx={{
-                        '& .MuiBadge-dot': {
-                          backgroundColor: statusDotColor(statusMap.get(direct?.address) ?? null),
-                          border: `2px solid ${theme.palette.background.paper}`,
-                          borderRadius: '50%',
-                          height: 10,
-                          minWidth: 10,
-                          width: 10,
-                        },
-                      }}
-                    >
+                    <DirectsPresenceBadge address={direct?.address}>
                       <Avatar
                         sx={{
                           height: 40,
@@ -425,7 +446,7 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                       >
                         {(direct?.name || direct?.address)?.charAt(0)}
                       </Avatar>
-                    </Badge>
+                    </DirectsPresenceBadge>
                   </ListItemAvatar>
 
                   <ListItemText

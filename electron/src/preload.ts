@@ -649,7 +649,7 @@ try {
     ) => ipcRenderer.invoke('gcall:broadcastTopology', roomId, topology, signature, publicKey, timestamp),
 
     /** Send a P2P-relay audio packet to a specific participant. */
-    sendAudio: async (roomId: string, toAddress: string, data: string) =>
+    sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
       ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
 
     /** Send room media key (nacl.box encrypted) to a participant. */

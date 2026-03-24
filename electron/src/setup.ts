@@ -1944,10 +1944,13 @@ ipcMain.handle(
 
 ipcMain.handle(
   'gcall:sendAudio',
-  async (_event, roomId: string, toAddress: string, data: string) => {
+  async (_event, roomId: string, toAddress: string, data: Buffer | Uint8Array) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.sendAudio(roomId, toAddress, data);
+    // Convert binary received over IPC to base64 for the P2P wire (JSON transport).
+    // Node's Buffer.toString('base64') is ~10× faster than the JS btoa loop in the renderer.
+    const b64 = Buffer.from(data).toString('base64');
+    mgr.sendAudio(roomId, toAddress, b64);
     return { success: true };
   }
 );

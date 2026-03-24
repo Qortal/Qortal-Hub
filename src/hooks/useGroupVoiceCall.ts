@@ -28,6 +28,7 @@ import { useAtomValue } from 'jotai';
 import { userInfoAtom } from '../atoms/global';
 import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
+import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -74,11 +75,62 @@ const CLUSTER_SIZE = 10;
 const MAX_ACTIVE_SPEAKERS_LOCAL = 2;
 const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 
+/** Minimum ms between P2P relay sends to the same peer while their DataChannel
+ *  is still negotiating.  Caps relay IPC at ~5 frames/s instead of 50 Hz so the
+ *  renderer is not flooded during the 1–5 s WebRTC negotiation window. */
+const RELAY_MIN_INTERVAL_MS = 200;
+
 const HEADER_LEN_OFFSET = 0;
 const HEADER_ADDR_OFFSET = 1;
 // After addr: [1 byte VAD][2 bytes seq][4 bytes timestamp][variable nacl.secretbox payload]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+/** Encode a Uint8Array to base64 without spreading into function arguments.
+ *  btoa(String.fromCharCode(...bytes)) is O(n) on the call stack and causes
+ *  excessive GC pressure at 50 Hz; this loop avoids the spread entirely. */
+function uint8ToBase64(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+/** Decode a base64 string to a Uint8Array without Uint8Array.from + callback.
+ *  Uint8Array.from(atob(b64), c => c.charCodeAt(0)) allocates an intermediate
+ *  decoded string and iterates character-by-character via a closure; this loop
+ *  reuses the pre-decoded string directly. */
+function base64ToUint8(b64: string): Uint8Array {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+/** Parse the plaintext header of an audio packet without performing crypto.
+ *  Used to extract routing metadata (sourceAddr, vad, seq) for forwarding
+ *  decisions before the packet is handed to the decrypt Worker.
+ *  Format: [1B addrLen][addrBytes][1B vad][2B seq][4B ts][...rest] */
+function parsePacketHeader(buf: Uint8Array): {
+  sourceAddr: string;
+  vad: boolean;
+  seq: number;
+  timestampMs: number;
+} | null {
+  try {
+    let off = 0;
+    const addrLen = buf[off++];
+    if (addrLen === 0 || addrLen > 100) return null;
+    const sourceAddr = new TextDecoder().decode(buf.slice(off, off + addrLen));
+    off += addrLen;
+    const vad = buf[off++] === 1;
+    const seq = (buf[off++] << 8) | buf[off++];
+    const timestampMs =
+      (buf[off++] << 24) | (buf[off++] << 16) | (buf[off++] << 8) | buf[off++];
+    return { sourceAddr, vad, seq, timestampMs };
+  } catch {
+    return null;
+  }
+}
 
 /** sha256 → Uint8Array. Used for deterministic election. */
 async function sha256Bytes(input: string): Promise<Uint8Array> {
@@ -372,6 +424,13 @@ export function useGroupVoiceCall() {
   // Jitter drain timer
   const jitterDrainTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Per-peer timestamp of last P2P relay send, used to rate-limit relay during DC negotiation
+  const relayLastSentRef = useRef<Map<string, number>>(new Map());
+
+  // Off-thread audio packet decryption worker
+  const decryptWorkerRef = useRef<Worker | null>(null);
+  const decryptIdRef = useRef<number>(0);
+
   // ── Election ──────────────────────────────────────────────────────────────
 
   const recomputeTopology = useCallback(async (addresses: string[], existingEpoch?: number) => {
@@ -654,6 +713,9 @@ export function useGroupVoiceCall() {
       dc.onopen = () => {
         console.log('[GCall] Upstream DC opened to', forwarderAddress);
         upstreamDCRef.current = dc;
+        // DC is now open — clear the relay rate-limiter entry so the relay is
+        // available immediately if this DC closes later.
+        relayLastSentRef.current.delete(forwarderAddress);
       };
 
       dc.onclose = () => {
@@ -759,7 +821,12 @@ export function useGroupVoiceCall() {
           const dc = e.channel;
           dc.binaryType = 'arraybuffer';
           console.log('[GCall] Downstream DC received from', fromAddress, '— channel:', dc.label);
-          dc.onopen = () => console.log('[GCall] Downstream DC opened from', fromAddress);
+          dc.onopen = () => {
+            console.log('[GCall] Downstream DC opened from', fromAddress);
+            // Clear relay rate-limiter so the relay path is immediately available
+            // if this DC closes again later.
+            relayLastSentRef.current.delete(fromAddress);
+          };
           dc.onclose = () => console.log('[GCall] Downstream DC closed from', fromAddress);
           dc.onmessage = (ev) => {
             handleIncomingAudioPacket(ev.data as ArrayBuffer, fromAddress);
@@ -921,9 +988,15 @@ export function useGroupVoiceCall() {
               if (pcEntry?.dc?.readyState === 'open') {
                 pcEntry.dc.send(packet.buffer as ArrayBuffer);
               } else if (roomIdRef.current) {
-                // DC not open yet — relay via P2P until WebRTC establishes
-                const b64 = btoa(String.fromCharCode(...packet));
-                window.groupCall.sendAudio(roomIdRef.current, member, b64).catch(() => {});
+                // DC not open yet — relay via P2P until WebRTC establishes.
+                // Rate-limit to RELAY_MIN_INTERVAL_MS per peer to avoid flooding IPC
+                // at 50 Hz during the 1–5 s negotiation window.
+                const now = Date.now();
+                if (now - (relayLastSentRef.current.get(member) ?? 0) >= RELAY_MIN_INTERVAL_MS) {
+                  relayLastSentRef.current.set(member, now);
+                  // Pass raw bytes over IPC; base64 conversion happens in the main process.
+                  window.groupCall.sendAudio(roomIdRef.current, member, packet).catch(() => {});
+                }
               }
             }
           }
@@ -934,8 +1007,14 @@ export function useGroupVoiceCall() {
       const topo = topologyRef.current;
       const target = topo ? findAssignedForwarder(userInfo.address, topo) : null;
       if (target && roomIdRef.current) {
-        const b64 = btoa(String.fromCharCode(...packet));
-        window.groupCall.sendAudio(roomIdRef.current, target, b64).catch(() => {});
+        // Rate-limit to RELAY_MIN_INTERVAL_MS per peer to avoid flooding IPC
+        // at 50 Hz during the 1–5 s WebRTC negotiation window.
+        const now = Date.now();
+        if (now - (relayLastSentRef.current.get(target) ?? 0) >= RELAY_MIN_INTERVAL_MS) {
+          relayLastSentRef.current.set(target, now);
+          // Pass raw bytes over IPC; base64 conversion happens in the main process.
+          window.groupCall.sendAudio(roomIdRef.current, target, packet).catch(() => {});
+        }
       }
     }
   }, [userInfo?.address]);
@@ -999,19 +1078,22 @@ export function useGroupVoiceCall() {
     if (!roomKeyRef.current) return;
 
     const buf = new Uint8Array(data);
-    const decoded = decodePacket(buf, roomKeyRef.current);
-    if (!decoded) {
-      console.warn('[GCall] decodePacket returned null — key mismatch or corrupt packet, size:', buf.byteLength);
+
+    // Parse the plaintext header synchronously so forwarding and speaker
+    // tracking can happen immediately without waiting for crypto.
+    const header = parsePacketHeader(buf);
+    if (!header) {
+      console.warn('[GCall] parsePacketHeader returned null — malformed packet, size:', buf.byteLength);
       return;
     }
 
-    const { sourceAddr, vad, seq, opusFrame } = decoded;
+    const { sourceAddr, vad, seq } = header;
     const myAddress = userInfo?.address ?? '';
 
     // Log first few packets per source so we can confirm the receive path works
     const jbExisting = jitterMapRef.current.get(sourceAddr);
     if (!jbExisting) {
-      console.log('[GCall] First packet from', sourceAddr.slice(0, 12), '— seq:', seq, 'vad:', vad, 'opusBytes:', opusFrame.byteLength);
+      console.log('[GCall] First packet from', sourceAddr.slice(0, 12), '— seq:', seq, 'vad:', vad);
     }
 
     // ── Active-speaker tracking ─────────────────────────────────────────────
@@ -1086,15 +1168,36 @@ export function useGroupVoiceCall() {
       // local decoding are independent operations.
     }
 
-    // Decode and play locally (applies to both regular participants and forwarders).
-    if (sourceAddr === myAddress) return; // don't play own audio
+    // Don't decrypt or play own audio.
+    if (sourceAddr === myAddress) return;
 
-    let jb = jitterMapRef.current.get(sourceAddr);
-    if (!jb) {
-      jb = new JitterBuffer();
-      jitterMapRef.current.set(sourceAddr, jb);
+    // ── Off-thread decryption ───────────────────────────────────────────────
+    // Post the packet to the Worker for nacl.secretbox.open so the main thread
+    // is not blocked by crypto at 50 Hz × N peers.  The Worker posts back the
+    // decrypted opusFrame which is then pushed to the jitter buffer.
+    if (decryptWorkerRef.current) {
+      // Copy the buffer — the original `data` may still be in use by DataChannel
+      // forwarding above, and ArrayBuffer transfer would detach it.
+      const bufCopy = buf.slice().buffer;
+      const roomKeyCopy = roomKeyRef.current.slice().buffer;
+      decryptWorkerRef.current.postMessage(
+        { type: 'decrypt', id: decryptIdRef.current++, buffer: bufCopy, roomKey: roomKeyCopy },
+        [bufCopy, roomKeyCopy]
+      );
+    } else {
+      // Fallback: synchronous decryption on main thread when worker is unavailable.
+      const decoded = decodePacket(buf, roomKeyRef.current);
+      if (!decoded) {
+        console.warn('[GCall] decodePacket (sync fallback) failed — size:', buf.byteLength);
+        return;
+      }
+      let jb = jitterMapRef.current.get(decoded.sourceAddr);
+      if (!jb) {
+        jb = new JitterBuffer();
+        jitterMapRef.current.set(decoded.sourceAddr, jb);
+      }
+      jb.push(decoded.seq, decoded.opusFrame);
     }
-    jb.push(seq, opusFrame);
   }, [userInfo?.address]);
 
   /** Start jitter drain loop. */
@@ -1182,7 +1285,7 @@ export function useGroupVoiceCall() {
         combined.set(nonce, 32);
         combined.set(ciphertext, 56);
 
-        const b64 = btoa(String.fromCharCode(...combined));
+        const b64 = uint8ToBase64(combined);
         const ts = Date.now();
       const sig = await signGroupCallFields(
         { type: 'GC_KEY', roomId: roomIdRef.current,
@@ -1204,10 +1307,10 @@ export function useGroupVoiceCall() {
     console.log('[GCall] handleRoomKey called — encryptedKey length:', payload.encryptedKey?.length ?? 0);
     try {
       // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
-      const combined = Uint8Array.from(atob(payload.encryptedKey), (c) => c.charCodeAt(0));
-      const ephemeralPKb64  = btoa(String.fromCharCode(...combined.slice(0, 32)));
-      const nonceb64        = btoa(String.fromCharCode(...combined.slice(32, 56)));
-      const ciphertextb64   = btoa(String.fromCharCode(...combined.slice(56)));
+      const combined = base64ToUint8(payload.encryptedKey);
+      const ephemeralPKb64  = uint8ToBase64(combined.slice(0, 32));
+      const nonceb64        = uint8ToBase64(combined.slice(32, 56));
+      const ciphertextb64   = uint8ToBase64(combined.slice(56));
 
       const result = await (window as any).sendMessage(
         'decryptBoxWithMyKey',
@@ -1227,6 +1330,42 @@ export function useGroupVoiceCall() {
       console.warn('[GCall] Failed to decrypt room key:', e);
     }
   }, [startAudioCapture]);
+
+  // ── Decrypt Worker lifecycle ──────────────────────────────────────────────
+
+  /** Create the off-thread decrypt Worker and attach its message handler.
+   *  Called at join time; the Worker is terminated in cleanup(). */
+  const setupDecryptWorker = useCallback(() => {
+    if (decryptWorkerRef.current) return; // already running
+    const worker = new AudioDecryptWorker();
+    decryptWorkerRef.current = worker;
+    decryptIdRef.current = 0;
+
+    worker.onmessage = (e: MessageEvent<{
+      type: 'result';
+      id: number;
+      decoded: {
+        sourceAddr: string;
+        vad: boolean;
+        seq: number;
+        timestampMs: number;
+        opusFrame: ArrayBuffer;
+      } | null;
+    }>) => {
+      if (e.data.type !== 'result' || !e.data.decoded) return;
+      const { sourceAddr, seq, opusFrame } = e.data.decoded;
+      let jb = jitterMapRef.current.get(sourceAddr);
+      if (!jb) {
+        jb = new JitterBuffer();
+        jitterMapRef.current.set(sourceAddr, jb);
+      }
+      jb.push(seq, new Uint8Array(opusFrame));
+    };
+
+    worker.onerror = (err) => {
+      console.error('[GCall] AudioDecryptWorker error:', err);
+    };
+  }, []);
 
   // ── Join / Leave ──────────────────────────────────────────────────────────
 
@@ -1271,9 +1410,10 @@ export function useGroupVoiceCall() {
     // Room key and audio capture are deferred until the first topology is
     // computed (in participant-joined).  Only the elected root-forwarder
     // generates and distributes the key; others wait for GC_KEY.
+    setupDecryptWorker();
     startJitterDrain();
     startForwarderTimeoutCheck();
-  }, [userInfo, roomState, startJitterDrain]);
+  }, [userInfo, roomState, setupDecryptWorker, startJitterDrain]);
 
   const leaveGroupCall = useCallback(async () => {
     if (!userInfo?.address || roomState === 'idle') return;
@@ -1346,6 +1486,14 @@ export function useGroupVoiceCall() {
 
     upstreamDCRef.current = null;
     standbyDCRef.current = null;
+    relayLastSentRef.current.clear();
+
+    // Terminate the decrypt Worker
+    if (decryptWorkerRef.current) {
+      decryptWorkerRef.current.terminate();
+      decryptWorkerRef.current = null;
+    }
+    decryptIdRef.current = 0;
 
     // Reset state
     roomKeyRef.current = null;
@@ -1469,10 +1617,10 @@ export function useGroupVoiceCall() {
       }
 
       if (event === 'gcall:audio') {
-        const { data } = payload as { data: string };
-        // P2P relay fallback — decode base64 and process
-        const raw = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-        handleIncomingAudioPacket(raw.buffer, '');
+        const { data } = payload as { data: Uint8Array };
+        // P2P relay fallback — main process already decoded base64 to binary Buffer,
+        // which arrives here as a Uint8Array via structured clone. No atob needed.
+        handleIncomingAudioPacket(data.buffer, '');
       }
 
       if (event === 'gcall:key') {

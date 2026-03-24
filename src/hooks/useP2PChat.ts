@@ -249,6 +249,12 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
   /** Full unfolded event log — source of truth for re-folding. */
   const rawEventsRef = useRef<P2PChatEvent[]>([]);
 
+  /** O(1) duplicate guard for live events — avoids scanning rawEventsRef. */
+  const seenEventIdsRef = useRef<Set<string>>(new Set());
+
+  /** Debounce handle — coalesces burst incoming events into a single foldEvents call. */
+  const foldDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   /** Per-author monotonic sequence counter for messages this session sends. */
   const nextSeqRef = useRef(1);
 
@@ -274,6 +280,7 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
 
     // Reset per-channel state on each setup run.
     loadedEventIdsRef.current = new Set();
+    seenEventIdsRef.current = new Set();
 
     /** Merges a Record<eventId, readerAddress[]> into readReceipts state. */
     const mergeReceipts = (data: Record<string, string[]>) => {
@@ -330,6 +337,8 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
         nextSeqRef.current = maxSeq + 1;
 
         rawEventsRef.current = history;
+        // Pre-populate seenEventIdsRef so live events from history don't duplicate.
+        for (const ev of history) seenEventIdsRef.current.add(ev.id);
         setMessages(foldEvents(history));
 
         // Load receipts for the initial history page (query-scoped).
@@ -341,10 +350,19 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
           // Ignore events for other channels — each useP2PChat instance is
           // scoped to exactly one chatId.
           if (event.chatId !== chatId) return;
-          if (!rawEventsRef.current.some((e) => e.id === event.id)) {
+
+          // O(1) dedup guard (replaces the O(n) .some() scan).
+          if (!seenEventIdsRef.current.has(event.id)) {
+            seenEventIdsRef.current.add(event.id);
             rawEventsRef.current = [...rawEventsRef.current, event];
           }
-          setMessages(foldEvents(rawEventsRef.current));
+
+          // Debounce: coalesce burst events into a single foldEvents call.
+          if (foldDebounceRef.current) clearTimeout(foldDebounceRef.current);
+          foldDebounceRef.current = setTimeout(() => {
+            foldDebounceRef.current = null;
+            setMessages(foldEvents(rawEventsRef.current));
+          }, 50);
 
           if (
             event.authorAddress === userInfo.address &&
@@ -392,6 +410,10 @@ export function useP2PChat(chatId: string): UseP2PChatReturn {
 
     return () => {
       cancelled = true;
+      if (foldDebounceRef.current) {
+        clearTimeout(foldDebounceRef.current);
+        foldDebounceRef.current = null;
+      }
       unsubEvent?.();
       unsubTyping?.();
       unsubRead?.();

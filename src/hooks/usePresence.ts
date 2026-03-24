@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { unstable_batchedUpdates } from 'react-dom';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { extStateAtom, userInfoAtom } from '../atoms/global';
 import {
@@ -426,22 +427,26 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
     });
 
     const unsubscribe = window.presence.onUpdate(({ address, online, status }) => {
-      setOnlineAddresses((prev) => {
-        const next = new Set(prev);
-        if (online) { next.add(address); } else { next.delete(address); }
-        return next;
-      });
-      setStatusMap((prev) => {
-        const next = new Map(prev);
-        if (online && status) { next.set(address, status); } else { next.delete(address); }
-        return next;
+      unstable_batchedUpdates(() => {
+        setOnlineAddresses((prev) => {
+          const next = new Set(prev);
+          if (online) { next.add(address); } else { next.delete(address); }
+          return next;
+        });
+        setStatusMap((prev) => {
+          const next = new Map(prev);
+          if (online && status) { next.set(address, status); } else { next.delete(address); }
+          return next;
+        });
       });
     });
 
     const unsubscribeCleared = window.presence.onCleared?.(() => {
-      setOnlineAddresses(new Set());
-      setStatusMap(new Map());
-      setP2pEnabled(false);
+      unstable_batchedUpdates(() => {
+        setOnlineAddresses(new Set());
+        setStatusMap(new Map());
+        setP2pEnabled(false);
+      });
     });
 
     const unsubscribeStarted = window.presence.onStarted?.(() => {

@@ -244,6 +244,9 @@ export class GroupCallManager extends EventEmitter {
   private seenMsgIds = new Set<string>();
   private seenMsgIdTimer: ReturnType<typeof setInterval> | null = null;
 
+  /** Cache address → nodeId learned from GC_JOIN, used as fallback in sendAudio */
+  private participantNodeIds = new Map<string, string>();
+
   private presenceExpiredHandler: (address: string) => void;
   private onP2PMessage!: (payload: { id: string; from: string; data: unknown }) => void;
   private onPresenceUpdated: (({ address, online }: { address: string; online: boolean }) => void) | null = null;
@@ -255,14 +258,14 @@ export class GroupCallManager extends EventEmitter {
     this.p2p = p2p;
     this.presence = presence;
 
-    this.onP2PMessage = ({ id, data }: { id: string; from: string; data: unknown }) => {
+    this.onP2PMessage = ({ id, from, data }: { id: string; from: string; data: unknown }) => {
       if (!data || typeof data !== 'object') return;
       const msg = data as Record<string, unknown>;
       if (!GC_MESSAGE_TYPES.has(msg.type as string)) return;
       if (id && this.seenMsgIds.has(id)) return;
       if (id) this.seenMsgIds.add(id);
       try {
-        this.handleIncoming(msg as unknown as GcEnvelope);
+        this.handleIncoming(msg as unknown as GcEnvelope, from);
       } catch (err) {
         loggerError('[GCall] Error handling message:', err);
       }
@@ -335,6 +338,7 @@ export class GroupCallManager extends EventEmitter {
     for (const timer of this.presenceEvictionTimers.values()) clearTimeout(timer);
     this.presenceEvictionTimers.clear();
     if (this.seenMsgIdTimer) { clearInterval(this.seenMsgIdTimer); this.seenMsgIdTimer = null; }
+    this.participantNodeIds.clear();
     this.rooms.clear();
     loggerLog('[GCall] GroupCallManager stopped.');
   }
@@ -429,7 +433,9 @@ export class GroupCallManager extends EventEmitter {
       data,
       hopsRemaining: GC_AUDIO_MAX_HOPS,
     };
-    const nodeId = this.presence.getNodeIdForAddress(toAddress);
+    const nodeId = this.presence.getNodeIdForAddress(toAddress)
+      ?? this.participantNodeIds.get(toAddress)
+      ?? null;
     if (nodeId) {
       this.p2p.send(nodeId, env);
     } else {
@@ -535,11 +541,11 @@ export class GroupCallManager extends EventEmitter {
 
   // ── Inbound ───────────────────────────────────────────────────────────────
 
-  handleIncoming(env: GcEnvelope): void {
+  handleIncoming(env: GcEnvelope, fromNodeId?: string): void {
     if (!GC_MESSAGE_TYPES.has(env.type)) return;
 
     switch (env.type) {
-      case 'GC_JOIN':      return this.handleJoin(env);
+      case 'GC_JOIN':      return this.handleJoin(env, fromNodeId);
       case 'GC_LEAVE':     return this.handleLeaveEnvelope(env);
       case 'GC_TOPOLOGY':  return this.handleTopology(env);
       case 'GC_AUDIO':     return this.handleAudio(env);
@@ -551,7 +557,7 @@ export class GroupCallManager extends EventEmitter {
     }
   }
 
-  private handleJoin(env: GcJoinEnvelope): void {
+  private handleJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
     const ok = verifySigned(
       { type: env.type, roomId: env.roomId, chatId: env.chatId,
         fromAddress: env.fromAddress, fromPublicKey: env.fromPublicKey, timestamp: env.timestamp },
@@ -566,6 +572,11 @@ export class GroupCallManager extends EventEmitter {
     if (now - env.timestamp > GC_JOIN_TTL_MS) {
       loggerLog(`[GCall] Dropped GC_JOIN: expired from ${env.fromAddress}`);
       return;
+    }
+
+    // Cache the address → nodeId mapping for targeted audio delivery.
+    if (fromNodeId) {
+      this.participantNodeIds.set(env.fromAddress, fromNodeId);
     }
 
     // Update room state if we are in this room
@@ -622,6 +633,7 @@ export class GroupCallManager extends EventEmitter {
     if (room) {
       room.participants.delete(address);
     }
+    this.participantNodeIds.delete(address);
     this.emit('gcall:participant-left', { roomId, address, isAbrupt });
   }
 
@@ -673,7 +685,10 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
-    this.emit('gcall:audio', { roomId: env.roomId, data: env.data });
+    // Decode base64 → Buffer in the main process (Node Buffer.from is fast) so the
+    // renderer receives raw binary over IPC instead of a base64 string, eliminating
+    // atob + charCodeAt work from the renderer's main thread.
+    this.emit('gcall:audio', { roomId: env.roomId, data: Buffer.from(env.data, 'base64') });
   }
 
   private handleKey(env: GcKeyEnvelope): void {
