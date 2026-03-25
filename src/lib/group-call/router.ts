@@ -32,6 +32,8 @@ export interface GroupCallMetricsSnapshot {
   packetsDropped: number;
   relayPacketsSent: number;
   relayPacketsReceived: number;
+  /** Wall time (ms) of last mesh GC_AUDIO send or receive; 0 = none this session. */
+  lastRelayActivityAtMs: number;
   jitterUnderruns: number;
   missingFrames: number;
   concealmentTicks: number;
@@ -47,6 +49,116 @@ export interface GroupCallMetricsSnapshot {
   /** Fraction of playout metric ticks where |bufferedMs - target| > band (tuning KPI). */
   playoutOutsideTargetFraction: number;
   lastUpdatedAt: number;
+  /** Present-tense: DataChannels needed for this role are open (set in useGroupVoiceCall flush). */
+  dcTransportReady?: boolean;
+}
+
+/** Mesh relay must be this recent (ms) to show "P2P relay" instead of Data channel. */
+export const GROUP_CALL_RELAY_INDICATOR_STALE_MS = 2_500;
+
+/** Compare-only fingerprint: normalize cluster/member order so duplicate topology heartbeats match. */
+export function groupCallTopologyStructureFingerprint(topology: RouterTopology): string {
+  const normClusters = topology.clusters
+    .map((c) => ({
+      forwarder: c.forwarder,
+      standby: c.standby,
+      members: [...c.members].sort(),
+    }))
+    .sort((a, b) => a.forwarder.localeCompare(b.forwarder));
+  return JSON.stringify({
+    topologyEpoch: topology.topologyEpoch,
+    rootForwarder: topology.rootForwarder,
+    standbyForwarder: topology.standbyForwarder,
+    clusters: normClusters,
+  });
+}
+
+/**
+ * Same local epoch and same structure as previous topology → skip redundant React state updates
+ * but still run WebRTC ensure on each root heartbeat.
+ */
+export function isGroupCallTopologyDuplicateHeartbeat(
+  prev: RouterTopology | null,
+  incoming: RouterTopology,
+  localEpoch: number
+): boolean {
+  return (
+    prev !== null &&
+    incoming.topologyEpoch === localEpoch &&
+    groupCallTopologyStructureFingerprint(incoming) === groupCallTopologyStructureFingerprint(prev)
+  );
+}
+
+/** True when the hook should open a new RTCPeerConnection (no PC or terminal ICE state). */
+export function isGroupCallWebRtcPeerInactive(connectionState: string | undefined): boolean {
+  return connectionState === undefined || connectionState === 'failed' || connectionState === 'closed';
+}
+
+/**
+ * Whether required WebRTC DataChannels are open for the current role (upload path for non-root;
+ * all downstream peers for root forwarder).
+ */
+export function computeGroupCallDcTransportReady(
+  role: RouterRole,
+  myAddress: string,
+  topology: RouterTopology | null,
+  peerDcOpen: (address: string) => boolean,
+  upstreamDcOpen: boolean
+): boolean {
+  if (!topology) return false;
+  if (role === 'root-forwarder') {
+    for (const cluster of topology.clusters) {
+      if (cluster.forwarder !== myAddress) continue;
+      for (const member of cluster.members) {
+        if (member === myAddress) continue;
+        if (!peerDcOpen(member)) return false;
+      }
+    }
+    return true;
+  }
+  return upstreamDcOpen;
+}
+
+export type GroupCallTransportMode = 'datachannel' | 'relay' | 'connecting';
+
+/**
+ * Live transport indicator: mesh relay if GC_AUDIO was used recently, else DataChannels if ready,
+ * else connecting/negotiating.
+ */
+export function getGroupCallTransportSummary(
+  m: Pick<
+    GroupCallMetricsSnapshot,
+    'relayPacketsSent' | 'relayPacketsReceived' | 'lastRelayActivityAtMs'
+  > & { dcTransportReady?: boolean },
+  now: number = Date.now()
+): { mode: GroupCallTransportMode; label: string; tooltip: string } {
+  const staleMs = GROUP_CALL_RELAY_INDICATOR_STALE_MS;
+  const recentRelay =
+    m.lastRelayActivityAtMs > 0 && now - m.lastRelayActivityAtMs <= staleMs;
+  const dcReady = m.dcTransportReady === true;
+
+  if (recentRelay) {
+    return {
+      mode: 'relay',
+      label: 'P2P relay',
+      tooltip:
+        'Audio is using the P2P mesh (GC_AUDIO) fallback — typically while WebRTC DataChannels connect or recover.',
+    };
+  }
+  if (dcReady) {
+    return {
+      mode: 'datachannel',
+      label: 'Data channel',
+      tooltip:
+        'WebRTC DataChannels are up for this role. No mesh relay activity in the last few seconds.',
+    };
+  }
+  return {
+    mode: 'connecting',
+    label: 'Connecting…',
+    tooltip:
+      'WebRTC DataChannels are not all open yet; mesh relay may be used briefly when you speak.',
+  };
 }
 
 interface ResourceCounts {
@@ -68,6 +180,7 @@ export class GroupCallPerformanceTracker {
     packetsDropped: 0,
     relayPacketsSent: 0,
     relayPacketsReceived: 0,
+    lastRelayActivityAtMs: 0,
     jitterUnderruns: 0,
     missingFrames: 0,
     concealmentTicks: 0,
@@ -120,11 +233,13 @@ export class GroupCallPerformanceTracker {
 
   recordRelaySent(count = 1): void {
     this.snapshot.relayPacketsSent += count;
+    this.snapshot.lastRelayActivityAtMs = Date.now();
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
   recordRelayReceived(count = 1): void {
     this.snapshot.relayPacketsReceived += count;
+    this.snapshot.lastRelayActivityAtMs = Date.now();
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -199,6 +314,7 @@ export class GroupCallPerformanceTracker {
       packetsDropped: 0,
       relayPacketsSent: 0,
       relayPacketsReceived: 0,
+      lastRelayActivityAtMs: 0,
       jitterUnderruns: 0,
       missingFrames: 0,
       concealmentTicks: 0,

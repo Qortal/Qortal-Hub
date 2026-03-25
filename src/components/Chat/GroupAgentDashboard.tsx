@@ -5,7 +5,7 @@
  * can join/leave the shared group call room.  Uses useGroupVoiceCall.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -30,6 +30,7 @@ import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
 import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
+import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import type { MyRole } from '../../hooks/useGroupVoiceCall';
 
@@ -187,9 +188,22 @@ function GroupAgentDashboardPanel({
   const { messages, sendMessage, isSending } = useSupportChat();
 
   const {
-    roomState, participants, myRole, activeSpeakers, topologyLabel,
+    roomState, participants, myRole, activeSpeakers, topologyLabel, metrics,
     joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
   } = useGroupVoiceCall(isOpen);
+
+  const inCall = roomState === 'connected' || roomState === 'joining';
+
+  const [transportTick, bumpTransport] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!inCall) return;
+    const id = setInterval(bumpTransport, 700);
+    return () => clearInterval(id);
+  }, [inCall]);
+  const transport = useMemo(
+    () => getGroupCallTransportSummary(metrics, Date.now()),
+    [metrics, transportTick]
+  );
 
   const [inputValue, setInputValue] = useState('');
   const [muted, setMuted] = useState(false);
@@ -213,8 +227,6 @@ function GroupAgentDashboardPanel({
   const handleJoinCall = useCallback(async () => {
     await joinGroupCall(GROUP_ROOM_ID, GROUP_CHAT_ID);
   }, [joinGroupCall]);
-
-  const inCall = roomState === 'connected' || roomState === 'joining';
   const isForwarder = myRole !== 'participant';
 
   useEffect(() => {
@@ -250,6 +262,26 @@ function GroupAgentDashboardPanel({
             size="small"
             sx={{ height: 18, fontSize: 9, fontWeight: 700, bgcolor: alpha('#fff', 0.2), color: '#fff' }}
           />
+        )}
+
+        {inCall && (
+          <Tooltip title={transport.tooltip} placement="bottom">
+            <Chip
+              label={transport.label}
+              size="small"
+              sx={{
+                height: 18, fontSize: 9, fontWeight: 700,
+                maxWidth: 120,
+                bgcolor:
+                  transport.mode === 'relay'
+                    ? alpha('#f59e0b', 0.35)
+                    : transport.mode === 'connecting'
+                      ? alpha('#94a3b8', 0.35)
+                      : alpha('#22c55e', 0.35),
+                color: '#fff',
+              }}
+            />
+          </Tooltip>
         )}
 
         {isForwarder && (

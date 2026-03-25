@@ -6,7 +6,7 @@
  * for the audio layer.  Text chat re-uses useSupportChat.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -30,6 +30,7 @@ import RecordVoiceOverRoundedIcon from '@mui/icons-material/RecordVoiceOverRound
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
 import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
+import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 
 export { GROUP_SUPPORT_ADDRESSES };
@@ -148,9 +149,22 @@ function GroupSupportChatPanel({
 
   // Group voice call
   const {
-    roomState, participants, myRole, activeSpeakers, topologyLabel,
+    roomState, participants, myRole, activeSpeakers, topologyLabel, metrics,
     joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
   } = useGroupVoiceCall(isOpen);
+
+  const inCall = roomState === 'connected' || roomState === 'joining';
+
+  const [transportTick, bumpTransport] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!inCall) return;
+    const id = setInterval(bumpTransport, 700);
+    return () => clearInterval(id);
+  }, [inCall]);
+  const transport = useMemo(
+    () => getGroupCallTransportSummary(metrics, Date.now()),
+    [metrics, transportTick]
+  );
 
   const [inputValue, setInputValue] = useState('');
   const [muted, setMuted] = useState(false);
@@ -174,8 +188,6 @@ function GroupSupportChatPanel({
   const handleJoinCall = useCallback(async () => {
     await joinGroupCall(GROUP_ROOM_ID, GROUP_CHAT_ID);
   }, [joinGroupCall]);
-
-  const inCall = roomState === 'connected' || roomState === 'joining';
 
   useEffect(() => {
     setKeepMounted(inCall);
@@ -214,6 +226,26 @@ function GroupSupportChatPanel({
               bgcolor: alpha('#fff', 0.2), color: '#fff',
             }}
           />
+        )}
+
+        {inCall && (
+          <Tooltip title={transport.tooltip} placement="bottom">
+            <Chip
+              label={transport.label}
+              size="small"
+              sx={{
+                height: 18, fontSize: 9, fontWeight: 700,
+                maxWidth: 120,
+                bgcolor:
+                  transport.mode === 'relay'
+                    ? alpha('#f59e0b', 0.35)
+                    : transport.mode === 'connecting'
+                      ? alpha('#94a3b8', 0.35)
+                      : alpha('#22c55e', 0.35),
+                color: '#fff',
+              }}
+            />
+          </Tooltip>
         )}
 
         {/* My role badge */}

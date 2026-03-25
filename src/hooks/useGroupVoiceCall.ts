@@ -38,9 +38,12 @@ import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import {
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
+  computeGroupCallDcTransportReady,
   disposeParticipantAudioState,
   evaluateActiveSpeaker,
   forwardPacketForRole,
+  isGroupCallTopologyDuplicateHeartbeat,
+  isGroupCallWebRtcPeerInactive,
   reconcileParticipantSpeaking,
   sameAddressList,
 } from '../lib/group-call/router';
@@ -111,6 +114,8 @@ const FORWARD_VAD_HANGOVER_MS = 200;
 
 const FORWARDER_TIMEOUT_MS = 4_500;  // miss 3 heartbeats → dead
 const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
+/** Before closing PC on ICE `disconnected`, wait this long for recovery (connId-scoped timer). */
+const WEBRTC_DISCONNECT_GRACE_MS = 12_000;
 const PROMOTION_COOLDOWN_MS = 2_000; // standby waits before promoting
 const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 
@@ -260,23 +265,6 @@ function buildTopology(
   return { topologyEpoch, rootForwarder, standbyForwarder, clusters };
 }
 
-/** Compare-only fingerprint: normalize cluster/member order so duplicate applies short-circuit safely. */
-function topologyStructureFingerprint(topology: GroupTopology): string {
-  const normClusters = topology.clusters
-    .map((c) => ({
-      forwarder: c.forwarder,
-      standby: c.standby,
-      members: [...c.members].sort(),
-    }))
-    .sort((a, b) => a.forwarder.localeCompare(b.forwarder));
-  return JSON.stringify({
-    topologyEpoch: topology.topologyEpoch,
-    rootForwarder: topology.rootForwarder,
-    standbyForwarder: topology.standbyForwarder,
-    clusters: normClusters,
-  });
-}
-
 /** Determine this node's role given a topology. */
 function computeMyRole(myAddress: string, topology: GroupTopology): MyRole {
   if (myAddress === topology.rootForwarder) return 'root-forwarder';
@@ -390,6 +378,7 @@ interface PeerConnection {
   address: string;
   connId: string;
   role: 'upstream' | 'downstream' | 'backbone';
+  disconnectGraceTimer?: ReturnType<typeof setTimeout>;
 }
 
 // ── Main hook ──────────────────────────────────────────────────────────────────
@@ -466,6 +455,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // WebRTC peer connections
   const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
+  /** Latest ensureGroupCallWebRtcConnections; assigned each render after the callback exists. */
+  const ensureGroupCallWebRtcRef = useRef<(topology: GroupTopology) => void>(() => {});
   const gcallIceServersRef = useRef<RTCIceServer[]>(
     getInitialIceServersFromHub().map((s) => ({ urls: s.urls }))
   );
@@ -527,6 +518,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
   const metricsRef = useRef(new GroupCallPerformanceTracker());
   const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Batches UI updates when mesh relay fires at high rate. */
+  const relayMetricsFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Election ──────────────────────────────────────────────────────────────
 
@@ -538,14 +531,18 @@ export function useGroupVoiceCall(uiActive = false) {
   }, []);
 
   const isPeerConnectionInactive = useCallback((entry?: PeerConnection) => {
-    const state = entry?.pc.connectionState;
-    return !entry || state === 'failed' || state === 'closed' || state === 'disconnected';
+    return isGroupCallWebRtcPeerInactive(entry?.pc.connectionState);
   }, []);
 
   const closePeerConnection = useCallback((peerAddress: string, expectedConnId?: string) => {
     const entry = peerConnectionsRef.current.get(peerAddress);
     if (!entry) return;
     if (expectedConnId && entry.connId !== expectedConnId) return;
+
+    if (entry.disconnectGraceTimer) {
+      clearTimeout(entry.disconnectGraceTimer);
+      entry.disconnectGraceTimer = undefined;
+    }
 
     peerConnectionsRef.current.delete(peerAddress);
     relayLastSentRef.current.delete(peerAddress);
@@ -632,7 +629,16 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const flushMetrics = useCallback(() => {
     updateMetricResourceCounts();
-    const snapshot = metricsRef.current.getSnapshot();
+    const base = metricsRef.current.getSnapshot();
+    const myAddress = userInfo?.address ?? '';
+    const dcTransportReady = computeGroupCallDcTransportReady(
+      base.role,
+      myAddress,
+      topologyRef.current,
+      (addr) => peerConnectionsRef.current.get(addr)?.dc?.readyState === 'open',
+      upstreamDCRef.current?.readyState === 'open'
+    );
+    const snapshot = { ...base, dcTransportReady };
     if (uiActiveRef.current || roomStateRef.current !== 'idle') {
       setMetrics((prev) => {
         const unchanged =
@@ -643,6 +649,7 @@ export function useGroupVoiceCall(uiActive = false) {
           prev.packetsDropped === snapshot.packetsDropped &&
           prev.relayPacketsSent === snapshot.relayPacketsSent &&
           prev.relayPacketsReceived === snapshot.relayPacketsReceived &&
+          prev.lastRelayActivityAtMs === snapshot.lastRelayActivityAtMs &&
           prev.jitterUnderruns === snapshot.jitterUnderruns &&
           prev.missingFrames === snapshot.missingFrames &&
           prev.concealmentTicks === snapshot.concealmentTicks &&
@@ -655,14 +662,31 @@ export function useGroupVoiceCall(uiActive = false) {
           prev.maxJitterTickMs === snapshot.maxJitterTickMs &&
           prev.avgPcmBufferedMs === snapshot.avgPcmBufferedMs &&
           prev.playoutOutsideTargetFraction === snapshot.playoutOutsideTargetFraction &&
-          prev.lastUpdatedAt === snapshot.lastUpdatedAt;
+          prev.lastUpdatedAt === snapshot.lastUpdatedAt &&
+          prev.dcTransportReady === snapshot.dcTransportReady;
         return unchanged ? prev : snapshot;
       });
     }
     if (isGroupCallDebugEnabled()) {
       debugLog('[GCall] metrics', snapshot);
     }
-  }, [updateMetricResourceCounts]);
+  }, [updateMetricResourceCounts, userInfo?.address]);
+
+  const scheduleRelayMetricsFlush = useCallback(() => {
+    if (relayMetricsFlushTimerRef.current) return;
+    relayMetricsFlushTimerRef.current = setTimeout(() => {
+      relayMetricsFlushTimerRef.current = null;
+      flushMetrics();
+    }, 200);
+  }, [flushMetrics]);
+
+  /** After ICE-driven PC teardown only; not from participant-left. Uses refs for latest ensure. */
+  const scheduleEnsureAfterIceTeardown = useCallback(() => {
+    queueMicrotask(() => {
+      if (!roomIdRef.current || !topologyRef.current) return;
+      ensureGroupCallWebRtcRef.current(topologyRef.current);
+    });
+  }, []);
 
   const startMetricsFlushLoop = useCallback(() => {
     if (metricsFlushTimerRef.current) return;
@@ -846,233 +870,6 @@ export function useGroupVoiceCall(uiActive = false) {
     [flushPendingDecryptMap]
   );
 
-  const applyTopology = useCallback((topology: GroupTopology) => {
-    if (topology.topologyEpoch < localEpochRef.current) return; // stale
-    // Tie-break equal epochs: if we already have a topology at this epoch and
-    // the incoming one names a DIFFERENT root, reject it.  The first topology
-    // applied at each epoch is authoritative; this prevents the two-peer race
-    // where both sides independently compute epoch=1 with themselves as root
-    // and oscillate each other's topology on every heartbeat exchange.
-    if (
-      topology.topologyEpoch === localEpochRef.current &&
-      topologyRef.current !== null &&
-      topology.rootForwarder !== topologyRef.current.rootForwarder
-    ) return;
-
-    const prevTopo = topologyRef.current;
-    if (
-      prevTopo &&
-      topology.topologyEpoch === localEpochRef.current &&
-      topologyStructureFingerprint(topology) === topologyStructureFingerprint(prevTopo)
-    ) {
-      return;
-    }
-
-    // A topology naming someone else as root is evidence that peer is alive;
-    // reset the heartbeat ref so standby promotion doesn't misfire.
-    if (topology.rootForwarder && topology.rootForwarder !== (userInfo?.address ?? '')) {
-      lastRootHeartbeatRef.current = Date.now();
-    }
-
-    localEpochRef.current = topology.topologyEpoch;
-    topologyRef.current = topology;
-
-    const myAddress = userInfo?.address ?? '';
-    const role = computeMyRole(myAddress, topology);
-    myRoleRef.current = role;
-    metricsRef.current.setRole(role);
-
-    // Only trigger re-renders when values actually change
-    setMyRole((prev) => (prev !== role ? role : prev));
-    const newLabel: TopologyLabel = topology.clusters.length > 1 ? 'Hierarchical' : 'SFU';
-    setTopologyLabel((prev) => (prev !== newLabel ? newLabel : prev));
-
-    // Recompute participant roles only if any role changed
-    setParticipants((prev) => {
-      const newRoles = new Map(
-        prev.map((p) => [p.address, computeMyRole(p.address, topology)])
-      );
-      const anyChange = prev.some((p) => p.role !== newRoles.get(p.address));
-      if (!anyChange) return prev;
-      return prev.map((p) => ({ ...p, role: newRoles.get(p.address) ?? p.role }));
-    });
-
-    // Set up forwarder heartbeat if I'm root forwarder
-    if (topologyHeartbeatTimerRef.current) {
-      clearInterval(topologyHeartbeatTimerRef.current);
-      topologyHeartbeatTimerRef.current = null;
-    }
-    if (role === 'root-forwarder') {
-      startTopologyHeartbeat(topology);
-    }
-
-    // Pre-connect standby backbone DataChannel — only when the root is a different
-    // address than the upstream forwarder (hierarchical mode). In SFU mode both
-    // point to the same root: connectUpstream below creates that one connection,
-    // so calling connectStandbyChannels on the same address would immediately
-    // close it via createPeerConnection.
-    if (role === 'standby-forwarder') {
-      const rootAddr = topology.rootForwarder;
-      const assignedFwd = findAssignedForwarder(myAddress, topology);
-      if (rootAddr && rootAddr !== myAddress && rootAddr !== assignedFwd) {
-        const existing = peerConnectionsRef.current.get(rootAddr);
-        if (isPeerConnectionInactive(existing)) {
-          connectStandbyChannels(topology);
-        }
-      }
-    }
-
-    // Connect upstream DataChannel for all non-root roles.
-    // standby-forwarder must also upload their own audio just like any other member.
-    if (role === 'participant' || role === 'cluster-forwarder' || role === 'standby-forwarder') {
-      const assignedForwarder = findAssignedForwarder(myAddress, topology);
-      if (assignedForwarder && assignedForwarder !== myAddress) {
-        const existing = peerConnectionsRef.current.get(assignedForwarder);
-        if (isPeerConnectionInactive(existing)) {
-          connectUpstream(assignedForwarder);
-        }
-      }
-    }
-
-    // Cluster-forwarder: also open a backbone upstream connection to the root
-    // so it can relay frames to root (and root can fan-out back).
-    if (role === 'cluster-forwarder') {
-      const rootAddr = topology.rootForwarder;
-      if (rootAddr && rootAddr !== myAddress) {
-        const existing = peerConnectionsRef.current.get(rootAddr);
-        if (isPeerConnectionInactive(existing)) {
-          connectUpstream(rootAddr);
-        }
-      }
-    }
-
-    // Forwarder: set up downstream DataChannels for cluster members — only if not already connected
-    if (role === 'cluster-forwarder' || role === 'root-forwarder') {
-      for (const cluster of topology.clusters) {
-        if (cluster.forwarder === myAddress) {
-          for (const member of cluster.members) {
-            if (member !== myAddress) {
-              const existing = peerConnectionsRef.current.get(member);
-              if (isPeerConnectionInactive(existing)) {
-                setupDownstreamChannel(member);
-              }
-            }
-          }
-        }
-      }
-    }
-  }, [userInfo?.address]);
-
-  // ── Forwarder heartbeat ────────────────────────────────────────────────────
-
-  const startTopologyHeartbeat = useCallback((topology: GroupTopology) => {
-    if (!userInfo?.address) return;
-    // Always clear any existing heartbeat timer before starting a new one
-    // to prevent leaked intervals from accumulating.
-    if (topologyHeartbeatTimerRef.current) {
-      clearInterval(topologyHeartbeatTimerRef.current);
-      topologyHeartbeatTimerRef.current = null;
-    }
-    const sendHeartbeat = async () => {
-      const ts = Date.now();
-      const sig = await signGroupCallFields(
-        { type: 'GC_TOPOLOGY', roomId: roomIdRef.current,
-          topologyEpoch: topology.topologyEpoch,
-          rootForwarder: topology.rootForwarder,
-          standbyForwarder: topology.standbyForwarder,
-          fromAddress: userInfo.address,
-          fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
-      ).catch(() => '');
-      if (!sig) return; // signing failed — skip this heartbeat, retry next interval
-      await window.groupCall.broadcastTopology(
-        roomIdRef.current,
-        {
-          topologyEpoch: topology.topologyEpoch,
-          rootForwarder: topology.rootForwarder,
-          standbyForwarder: topology.standbyForwarder,
-          clusters: topology.clusters,
-          lastSeen: ts,
-          fromAddress: userInfo.address,
-          fromPublicKey: userInfo.publicKey ?? '',
-        },
-        sig,
-        userInfo.publicKey ?? '',
-        ts
-      );
-    };
-    sendHeartbeat();
-    topologyHeartbeatTimerRef.current = setInterval(sendHeartbeat, TOPOLOGY_HEARTBEAT_MS);
-  }, [userInfo]);
-
-  // ── Standby promotion ─────────────────────────────────────────────────────
-
-  const checkForwarderTimeout = useCallback(() => {
-    const myAddress = userInfo?.address ?? '';
-    if (myRoleRef.current !== 'standby-forwarder') return;
-    if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS) return;
-
-    // Root looks dead — start cooldown before promoting
-    if (promotionTimerRef.current) return; // already counting down
-    promotionTimerRef.current = setTimeout(async () => {
-      promotionTimerRef.current = null;
-      // Check again — root might have recovered
-      if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS) return;
-
-      const currentTopo = topologyRef.current;
-      if (!currentTopo) return;
-
-      const newEpoch = localEpochRef.current + 1;
-      const addrs = [...participantsRef.current.keys()];
-      const sorted = await computeElectionOrder(addrs, roomIdRef.current);
-      const promotedTopo = buildTopology(sorted, newEpoch);
-
-      // Override root with myself: the dead root may still be in participantsRef
-      // (grace timer hasn't expired), so deterministic election would re-elect it.
-      // Force this peer to be root/standby AND remap any cluster that still names
-      // the dead root as its forwarder.
-      if (currentTopo.standbyForwarder === myAddress) {
-        const deadRoot = currentTopo.rootForwarder;
-        const overriddenStandby = sorted.find((a) => a !== myAddress) ?? '';
-        const overriddenClusters = promotedTopo.clusters.map((c) => ({
-          ...c,
-          forwarder: c.forwarder === deadRoot ? myAddress : c.forwarder,
-          standby:   c.standby   === deadRoot ? overriddenStandby : c.standby,
-        }));
-        const overriddenTopo: GroupTopology = {
-          ...promotedTopo,
-          rootForwarder: myAddress,
-          standbyForwarder: overriddenStandby,
-          clusters: overriddenClusters,
-        };
-        applyTopology(overriddenTopo);
-        // Broadcast the new topology
-        const ts = Date.now();
-        const sig = await signGroupCallFields(
-          { type: 'GC_TOPOLOGY', roomId: roomIdRef.current, topologyEpoch: newEpoch,
-            rootForwarder: overriddenTopo.rootForwarder,
-            standbyForwarder: overriddenTopo.standbyForwarder,
-            fromAddress: myAddress, fromPublicKey: userInfo?.publicKey ?? '', timestamp: ts }
-        ).catch(() => '');
-        if (!sig) return; // signing failed — abort promotion broadcast
-        await window.groupCall.broadcastTopology(
-          roomIdRef.current,
-          {
-            topologyEpoch: newEpoch,
-            rootForwarder: overriddenTopo.rootForwarder,
-            standbyForwarder: overriddenTopo.standbyForwarder,
-            clusters: overriddenTopo.clusters,
-            lastSeen: ts,
-            fromAddress: myAddress,
-            fromPublicKey: userInfo?.publicKey ?? '',
-          },
-          sig,
-          userInfo?.publicKey ?? '',
-          ts
-        );
-      }
-    }, PROMOTION_COOLDOWN_MS);
-  }, [applyTopology, userInfo]);
-
   // ── WebRTC DataChannel connections ─────────────────────────────────────────
 
   useEffect(() => {
@@ -1117,14 +914,42 @@ export function useGroupVoiceCall(uiActive = false) {
       });
 
       pc.addEventListener('connectionstatechange', () => {
-        if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') {
+        const state = pc.connectionState;
+        const entry = peerConnectionsRef.current.get(peerAddress);
+
+        if (state === 'failed' || state === 'closed') {
           closePeerConnection(peerAddress, connId);
+          scheduleEnsureAfterIceTeardown();
+          return;
+        }
+
+        if (state === 'connected') {
+          if (entry?.connId === connId && entry.disconnectGraceTimer) {
+            clearTimeout(entry.disconnectGraceTimer);
+            entry.disconnectGraceTimer = undefined;
+          }
+          return;
+        }
+
+        if (state === 'disconnected') {
+          if (!entry || entry.connId !== connId) return;
+          if (entry.disconnectGraceTimer) return;
+          entry.disconnectGraceTimer = setTimeout(() => {
+            const ent = peerConnectionsRef.current.get(peerAddress);
+            if (!ent || ent.connId !== connId) return;
+            ent.disconnectGraceTimer = undefined;
+            const st = ent.pc.connectionState;
+            if (st === 'connected') return;
+            if (st !== 'disconnected' && st !== 'failed') return;
+            closePeerConnection(peerAddress, connId);
+            scheduleEnsureAfterIceTeardown();
+          }, WEBRTC_DISCONNECT_GRACE_MS);
         }
       });
 
       return pc;
     },
-    [closePeerConnection, userInfo?.address]
+    [closePeerConnection, scheduleEnsureAfterIceTeardown, userInfo?.address]
   );
 
   /** Connect upstream (as participant/cluster-forwarder, send to forwarder). */
@@ -1147,11 +972,13 @@ export function useGroupVoiceCall(uiActive = false) {
         // DC is now open — clear the relay rate-limiter entry so the relay is
         // available immediately if this DC closes later.
         relayLastSentRef.current.delete(forwarderAddress);
+        flushMetrics();
       };
 
       dc.onclose = () => {
         debugLog('[GCall] Upstream DC closed to', forwarderAddress);
         if (upstreamDCRef.current === dc) upstreamDCRef.current = null;
+        flushMetrics();
       };
 
       pc.onconnectionstatechange = () => {
@@ -1188,7 +1015,7 @@ export function useGroupVoiceCall(uiActive = false) {
         'offer', offer.sdp, connId, sig, userInfo.publicKey ?? '', ts
       );
     },
-    [createPeerConnection, userInfo]
+    [createPeerConnection, flushMetrics, userInfo]
   );
 
   /** Connect standby channels (as standby-forwarder, pre-established but idle). */
@@ -1270,8 +1097,12 @@ export function useGroupVoiceCall(uiActive = false) {
             // Clear relay rate-limiter so the relay path is immediately available
             // if this DC closes again later.
             relayLastSentRef.current.delete(fromAddress);
+            flushMetrics();
           };
-          dc.onclose = () => debugLog('[GCall] Downstream DC closed from', fromAddress);
+          dc.onclose = () => {
+            debugLog('[GCall] Downstream DC closed from', fromAddress);
+            flushMetrics();
+          };
           dc.onmessage = (ev) => {
             handleIncomingAudioPacket(ev.data as ArrayBuffer, fromAddress);
           };
@@ -1314,8 +1145,236 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     },
-    [createPeerConnection, getConnIdTimestamp, isPeerConnectionInactive, userInfo]
+    [createPeerConnection, flushMetrics, getConnIdTimestamp, isPeerConnectionInactive, userInfo]
   );
+
+  /** WebRTC connection ensure — runs on every topology apply, including duplicate heartbeats. */
+  const ensureGroupCallWebRtcConnections = useCallback(
+    (topology: GroupTopology) => {
+      const myAddress = userInfo?.address ?? '';
+      const role = computeMyRole(myAddress, topology);
+
+      if (role === 'standby-forwarder') {
+        const rootAddr = topology.rootForwarder;
+        const assignedFwd = findAssignedForwarder(myAddress, topology);
+        if (rootAddr && rootAddr !== myAddress && rootAddr !== assignedFwd) {
+          const existing = peerConnectionsRef.current.get(rootAddr);
+          if (isPeerConnectionInactive(existing)) {
+            void connectStandbyChannels(topology);
+          }
+        }
+      }
+
+      if (role === 'participant' || role === 'cluster-forwarder' || role === 'standby-forwarder') {
+        const assignedForwarder = findAssignedForwarder(myAddress, topology);
+        if (assignedForwarder && assignedForwarder !== myAddress) {
+          const existing = peerConnectionsRef.current.get(assignedForwarder);
+          if (isPeerConnectionInactive(existing)) {
+            void connectUpstream(assignedForwarder);
+          }
+        }
+      }
+
+      if (role === 'cluster-forwarder') {
+        const rootAddr = topology.rootForwarder;
+        if (rootAddr && rootAddr !== myAddress) {
+          const existing = peerConnectionsRef.current.get(rootAddr);
+          if (isPeerConnectionInactive(existing)) {
+            void connectUpstream(rootAddr);
+          }
+        }
+      }
+
+      if (role === 'cluster-forwarder' || role === 'root-forwarder') {
+        for (const cluster of topology.clusters) {
+          if (cluster.forwarder === myAddress) {
+            for (const member of cluster.members) {
+              if (member !== myAddress) {
+                const existing = peerConnectionsRef.current.get(member);
+                if (isPeerConnectionInactive(existing)) {
+                  void setupDownstreamChannel(member);
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    [
+      connectStandbyChannels,
+      connectUpstream,
+      isPeerConnectionInactive,
+      setupDownstreamChannel,
+      userInfo?.address,
+    ]
+  );
+
+  ensureGroupCallWebRtcRef.current = ensureGroupCallWebRtcConnections;
+
+  // ── Forwarder heartbeat ────────────────────────────────────────────────────
+
+  const startTopologyHeartbeat = useCallback((topology: GroupTopology) => {
+    if (!userInfo?.address) return;
+    if (topologyHeartbeatTimerRef.current) {
+      clearInterval(topologyHeartbeatTimerRef.current);
+      topologyHeartbeatTimerRef.current = null;
+    }
+    const sendHeartbeat = async () => {
+      const ts = Date.now();
+      const sig = await signGroupCallFields(
+        { type: 'GC_TOPOLOGY', roomId: roomIdRef.current,
+          topologyEpoch: topology.topologyEpoch,
+          rootForwarder: topology.rootForwarder,
+          standbyForwarder: topology.standbyForwarder,
+          fromAddress: userInfo.address,
+          fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
+      ).catch(() => '');
+      if (!sig) return;
+      await window.groupCall.broadcastTopology(
+        roomIdRef.current,
+        {
+          topologyEpoch: topology.topologyEpoch,
+          rootForwarder: topology.rootForwarder,
+          standbyForwarder: topology.standbyForwarder,
+          clusters: topology.clusters,
+          lastSeen: ts,
+          fromAddress: userInfo.address,
+          fromPublicKey: userInfo.publicKey ?? '',
+        },
+        sig,
+        userInfo.publicKey ?? '',
+        ts
+      );
+    };
+    sendHeartbeat();
+    topologyHeartbeatTimerRef.current = setInterval(sendHeartbeat, TOPOLOGY_HEARTBEAT_MS);
+  }, [userInfo]);
+
+  const applyTopology = useCallback(
+    (topology: GroupTopology) => {
+      if (topology.topologyEpoch < localEpochRef.current) return;
+
+      if (
+        topology.topologyEpoch === localEpochRef.current &&
+        topologyRef.current !== null &&
+        topology.rootForwarder !== topologyRef.current.rootForwarder
+      ) {
+        return;
+      }
+
+      const prevTopo = topologyRef.current;
+      const duplicateStructure = isGroupCallTopologyDuplicateHeartbeat(
+        prevTopo,
+        topology,
+        localEpochRef.current
+      );
+
+      if (duplicateStructure) {
+        ensureGroupCallWebRtcConnections(topology);
+        flushMetrics();
+        return;
+      }
+
+      if (topology.rootForwarder && topology.rootForwarder !== (userInfo?.address ?? '')) {
+        lastRootHeartbeatRef.current = Date.now();
+      }
+
+      localEpochRef.current = topology.topologyEpoch;
+      topologyRef.current = topology;
+
+      const myAddress = userInfo?.address ?? '';
+      const role = computeMyRole(myAddress, topology);
+      myRoleRef.current = role;
+      metricsRef.current.setRole(role);
+
+      setMyRole((prev) => (prev !== role ? role : prev));
+      const newLabel: TopologyLabel = topology.clusters.length > 1 ? 'Hierarchical' : 'SFU';
+      setTopologyLabel((prev) => (prev !== newLabel ? newLabel : prev));
+
+      setParticipants((prev) => {
+        const newRoles = new Map(
+          prev.map((p) => [p.address, computeMyRole(p.address, topology)])
+        );
+        const anyChange = prev.some((p) => p.role !== newRoles.get(p.address));
+        if (!anyChange) return prev;
+        return prev.map((p) => ({ ...p, role: newRoles.get(p.address) ?? p.role }));
+      });
+
+      if (topologyHeartbeatTimerRef.current) {
+        clearInterval(topologyHeartbeatTimerRef.current);
+        topologyHeartbeatTimerRef.current = null;
+      }
+      if (role === 'root-forwarder') {
+        startTopologyHeartbeat(topology);
+      }
+
+      ensureGroupCallWebRtcConnections(topology);
+      flushMetrics();
+    },
+    [ensureGroupCallWebRtcConnections, flushMetrics, startTopologyHeartbeat, userInfo?.address]
+  );
+
+  // ── Standby promotion ─────────────────────────────────────────────────────
+
+  const checkForwarderTimeout = useCallback(() => {
+    const myAddress = userInfo?.address ?? '';
+    if (myRoleRef.current !== 'standby-forwarder') return;
+    if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS) return;
+
+    if (promotionTimerRef.current) return;
+    promotionTimerRef.current = setTimeout(async () => {
+      promotionTimerRef.current = null;
+      if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS) return;
+
+      const currentTopo = topologyRef.current;
+      if (!currentTopo) return;
+
+      const newEpoch = localEpochRef.current + 1;
+      const addrs = [...participantsRef.current.keys()];
+      const sorted = await computeElectionOrder(addrs, roomIdRef.current);
+      const promotedTopo = buildTopology(sorted, newEpoch);
+
+      if (currentTopo.standbyForwarder === myAddress) {
+        const deadRoot = currentTopo.rootForwarder;
+        const overriddenStandby = sorted.find((a) => a !== myAddress) ?? '';
+        const overriddenClusters = promotedTopo.clusters.map((c) => ({
+          ...c,
+          forwarder: c.forwarder === deadRoot ? myAddress : c.forwarder,
+          standby: c.standby === deadRoot ? overriddenStandby : c.standby,
+        }));
+        const overriddenTopo: GroupTopology = {
+          ...promotedTopo,
+          rootForwarder: myAddress,
+          standbyForwarder: overriddenStandby,
+          clusters: overriddenClusters,
+        };
+        applyTopology(overriddenTopo);
+        const ts = Date.now();
+        const sig = await signGroupCallFields(
+          { type: 'GC_TOPOLOGY', roomId: roomIdRef.current, topologyEpoch: newEpoch,
+            rootForwarder: overriddenTopo.rootForwarder,
+            standbyForwarder: overriddenTopo.standbyForwarder,
+            fromAddress: myAddress, fromPublicKey: userInfo?.publicKey ?? '', timestamp: ts }
+        ).catch(() => '');
+        if (!sig) return;
+        await window.groupCall.broadcastTopology(
+          roomIdRef.current,
+          {
+            topologyEpoch: newEpoch,
+            rootForwarder: overriddenTopo.rootForwarder,
+            standbyForwarder: overriddenTopo.standbyForwarder,
+            clusters: overriddenTopo.clusters,
+            lastSeen: ts,
+            fromAddress: myAddress,
+            fromPublicKey: userInfo?.publicKey ?? '',
+          },
+          sig,
+          userInfo?.publicKey ?? '',
+          ts
+        );
+      }
+    }, PROMOTION_COOLDOWN_MS);
+  }, [applyTopology, userInfo]);
 
   // ── Audio encode ──────────────────────────────────────────────────────────
 
@@ -1572,6 +1631,7 @@ export function useGroupVoiceCall(uiActive = false) {
                   relayLastSentRef.current.set(member, now);
                   // Pass raw bytes over IPC; base64 conversion happens in the main process.
                   metricsRef.current.recordRelaySent();
+                  scheduleRelayMetricsFlush();
                   window.groupCall.sendAudio(roomIdRef.current, member, packet).catch(() => {});
                 }
               }
@@ -1591,11 +1651,12 @@ export function useGroupVoiceCall(uiActive = false) {
           relayLastSentRef.current.set(target, now);
           // Pass raw bytes over IPC; base64 conversion happens in the main process.
           metricsRef.current.recordRelaySent();
+          scheduleRelayMetricsFlush();
           window.groupCall.sendAudio(roomIdRef.current, target, packet).catch(() => {});
         }
       }
     }
-  }, [userInfo?.address]);
+  }, [scheduleRelayMetricsFlush, userInfo?.address]);
 
   const sendEncodedFrame = useCallback((opusFrame: Uint8Array) => {
     if (!roomKeyRef.current || !userInfo?.address) return;
@@ -2115,6 +2176,10 @@ export function useGroupVoiceCall(uiActive = false) {
     if (promotionTimerRef.current) { clearTimeout(promotionTimerRef.current); promotionTimerRef.current = null; }
     if (forwarderTimeoutCheckRef.current) { clearInterval(forwarderTimeoutCheckRef.current); forwarderTimeoutCheckRef.current = null; }
     stopMetricsFlushLoop();
+    if (relayMetricsFlushTimerRef.current) {
+      clearTimeout(relayMetricsFlushTimerRef.current);
+      relayMetricsFlushTimerRef.current = null;
+    }
 
     groupInputSwapSeededRef.current = false;
     groupPrevInputPrefRef.current = undefined;
@@ -2167,7 +2232,13 @@ export function useGroupVoiceCall(uiActive = false) {
     activeJitterSourcesRef.current.clear();
     lastRecvAtRef.current.clear();
 
-    // Close peer connections
+    // Close peer connections (clear ICE disconnect grace timers first so callbacks cannot fire after teardown)
+    for (const [, entry] of peerConnectionsRef.current) {
+      if (entry.disconnectGraceTimer) {
+        clearTimeout(entry.disconnectGraceTimer);
+        entry.disconnectGraceTimer = undefined;
+      }
+    }
     for (const peerAddress of [...peerConnectionsRef.current.keys()]) {
       closePeerConnection(peerAddress);
     }
@@ -2422,6 +2493,7 @@ export function useGroupVoiceCall(uiActive = false) {
         // P2P relay fallback — main process already decoded base64 to binary Buffer,
         // which arrives here as a Uint8Array via structured clone. No atob needed.
         metricsRef.current.recordRelayReceived();
+        scheduleRelayMetricsFlush();
         const relayBuffer =
           data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
             ? data.buffer
@@ -2446,6 +2518,10 @@ export function useGroupVoiceCall(uiActive = false) {
         clearTimeout(topologyDebounceTimerRef.current);
         topologyDebounceTimerRef.current = null;
       }
+      if (relayMetricsFlushTimerRef.current) {
+        clearTimeout(relayMetricsFlushTimerRef.current);
+        relayMetricsFlushTimerRef.current = null;
+      }
     };
   }, [
     applyTopology,
@@ -2456,6 +2532,7 @@ export function useGroupVoiceCall(uiActive = false) {
     handleRoomKey,
     handleRtcSignal,
     roomState,
+    scheduleRelayMetricsFlush,
     startAudioCapture,
     syncDecryptWorkerRoomKey,
     uiActive,

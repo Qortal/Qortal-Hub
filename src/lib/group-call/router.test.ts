@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
+  computeGroupCallDcTransportReady,
   disposeParticipantAudioState,
   evaluateActiveSpeaker,
   forwardPacketForRole,
+  getGroupCallTransportSummary,
+  groupCallTopologyStructureFingerprint,
+  isGroupCallTopologyDuplicateHeartbeat,
+  isGroupCallWebRtcPeerInactive,
   reconcileParticipantSpeaking,
   sameAddressList,
 } from './router';
@@ -137,6 +142,7 @@ describe('group-call router helpers', () => {
       packetsDecoded: 2,
       relayPacketsSent: 1,
       relayPacketsReceived: 1,
+      lastRelayActivityAtMs: expect.any(Number),
       jitterUnderruns: 2,
       missingFrames: 2,
       concealmentTicks: 1,
@@ -148,5 +154,102 @@ describe('group-call router helpers', () => {
       avgPcmBufferedMs: 100,
       playoutOutsideTargetFraction: 0.5,
     });
+  });
+
+  it('getGroupCallTransportSummary: DC when channels ready and no recent relay', () => {
+    expect(
+      getGroupCallTransportSummary(
+        {
+          relayPacketsSent: 5,
+          relayPacketsReceived: 0,
+          lastRelayActivityAtMs: 1_000,
+          dcTransportReady: true,
+        },
+        5_000
+      )
+    ).toMatchObject({
+      mode: 'datachannel',
+      label: 'Data channel',
+    });
+  });
+
+  it('getGroupCallTransportSummary: relay when mesh activity recent', () => {
+    expect(
+      getGroupCallTransportSummary(
+        {
+          relayPacketsSent: 1,
+          relayPacketsReceived: 0,
+          lastRelayActivityAtMs: 4_000,
+          dcTransportReady: true,
+        },
+        5_000
+      )
+    ).toMatchObject({
+      mode: 'relay',
+      label: 'P2P relay',
+    });
+  });
+
+  it('getGroupCallTransportSummary: connecting when not ready and relay stale', () => {
+    expect(
+      getGroupCallTransportSummary(
+        {
+          relayPacketsSent: 0,
+          relayPacketsReceived: 0,
+          lastRelayActivityAtMs: 0,
+          dcTransportReady: false,
+        },
+        5_000
+      )
+    ).toMatchObject({
+      mode: 'connecting',
+      label: 'Connecting…',
+    });
+  });
+
+  it('computeGroupCallDcTransportReady: root requires downstream DC to each member', () => {
+    const topo = {
+      topologyEpoch: 1,
+      rootForwarder: 'root',
+      standbyForwarder: 'b',
+      clusters: [{ members: ['root', 'a', 'b'], forwarder: 'root', standby: 'b' }],
+    };
+    expect(
+      computeGroupCallDcTransportReady('root-forwarder', 'root', topo, () => false, false)
+    ).toBe(false);
+    expect(
+      computeGroupCallDcTransportReady('root-forwarder', 'root', topo, (addr) => addr === 'a' || addr === 'b', false)
+    ).toBe(true);
+    expect(computeGroupCallDcTransportReady('participant', 'a', topo, () => false, false)).toBe(false);
+    expect(computeGroupCallDcTransportReady('participant', 'a', topo, () => false, true)).toBe(true);
+  });
+
+  it('isGroupCallWebRtcPeerInactive: disconnected/connecting are not inactive', () => {
+    expect(isGroupCallWebRtcPeerInactive(undefined)).toBe(true);
+    expect(isGroupCallWebRtcPeerInactive('failed')).toBe(true);
+    expect(isGroupCallWebRtcPeerInactive('closed')).toBe(true);
+    expect(isGroupCallWebRtcPeerInactive('disconnected')).toBe(false);
+    expect(isGroupCallWebRtcPeerInactive('connecting')).toBe(false);
+    expect(isGroupCallWebRtcPeerInactive('connected')).toBe(false);
+    expect(isGroupCallWebRtcPeerInactive('new')).toBe(false);
+  });
+
+  it('duplicate topology heartbeat: same epoch+structure despite member order', () => {
+    const a = {
+      topologyEpoch: 3,
+      rootForwarder: 'r',
+      standbyForwarder: 's',
+      clusters: [{ members: ['b', 'a', 'r'], forwarder: 'r', standby: 's' }],
+    };
+    const b = {
+      topologyEpoch: 3,
+      rootForwarder: 'r',
+      standbyForwarder: 's',
+      clusters: [{ members: ['r', 'a', 'b'], forwarder: 'r', standby: 's' }],
+    };
+    expect(groupCallTopologyStructureFingerprint(a)).toBe(groupCallTopologyStructureFingerprint(b));
+    expect(isGroupCallTopologyDuplicateHeartbeat(a, b, 3)).toBe(true);
+    expect(isGroupCallTopologyDuplicateHeartbeat(null, b, 3)).toBe(false);
+    expect(isGroupCallTopologyDuplicateHeartbeat(a, { ...b, topologyEpoch: 4 }, 3)).toBe(false);
   });
 });
