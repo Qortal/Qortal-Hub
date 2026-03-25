@@ -37,6 +37,7 @@ import {
   type BufferedCallSignal,
   type BufferedCallSignalType,
 } from '../lib/call/signalQueue';
+import { scheduleLogIceServerSourcesForPeer } from '../lib/webrtc/iceCandidateStats';
 import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
 
 // ── ICE server configuration ──────────────────────────────────────────────────
@@ -574,6 +575,9 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
     pc.onicegatheringstatechange = () => {
       console.log('[ICE] gathering state →', pc.iceGatheringState);
+      if (pc.iceGatheringState === 'complete') {
+        scheduleLogIceServerSourcesForPeer(pc, '[ICE]');
+      }
     };
 
     // Tier 1: remote audio track arrived.

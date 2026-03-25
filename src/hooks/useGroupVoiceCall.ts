@@ -49,6 +49,7 @@ import {
   encodeAudioPacketV2,
   type DecodedAudioPacket,
 } from '../lib/group-call/audioPacketCodec';
+import { scheduleLogIceServerSourcesForPeer } from '../lib/webrtc/iceCandidateStats';
 import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
 
 const naclApi = nacl as any;
@@ -1105,6 +1106,15 @@ export function useGroupVoiceCall(uiActive = false) {
           );
         }
       };
+
+      pc.addEventListener('icegatheringstatechange', () => {
+        if (pc.iceGatheringState === 'complete') {
+          scheduleLogIceServerSourcesForPeer(
+            pc,
+            `[GCall ICE] ${role} → ${peerAddress} (${connId})`
+          );
+        }
+      });
 
       pc.addEventListener('connectionstatechange', () => {
         if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') {
