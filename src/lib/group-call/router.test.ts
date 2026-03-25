@@ -173,7 +173,7 @@ describe('group-call router helpers', () => {
     });
   });
 
-  it('getGroupCallTransportSummary: relay when mesh activity recent', () => {
+  it('getGroupCallTransportSummary: DC wins when ready even if relay was recent', () => {
     expect(
       getGroupCallTransportSummary(
         {
@@ -185,8 +185,8 @@ describe('group-call router helpers', () => {
         5_000
       )
     ).toMatchObject({
-      mode: 'relay',
-      label: 'P2P relay',
+      mode: 'datachannel',
+      label: 'Data channel',
     });
   });
 

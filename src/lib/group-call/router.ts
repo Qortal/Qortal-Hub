@@ -122,8 +122,8 @@ export function computeGroupCallDcTransportReady(
 export type GroupCallTransportMode = 'datachannel' | 'relay' | 'connecting';
 
 /**
- * Live transport indicator: mesh relay if GC_AUDIO was used recently, else DataChannels if ready,
- * else connecting/negotiating.
+ * Live transport indicator: DataChannels when role-required DCs are ready; else recent mesh relay;
+ * else connecting. dcTransportReady wins over a brief relay burst during reconnect.
  */
 export function getGroupCallTransportSummary(
   m: Pick<
@@ -137,20 +137,20 @@ export function getGroupCallTransportSummary(
     m.lastRelayActivityAtMs > 0 && now - m.lastRelayActivityAtMs <= staleMs;
   const dcReady = m.dcTransportReady === true;
 
+  if (dcReady) {
+    return {
+      mode: 'datachannel',
+      label: 'Data channel',
+      tooltip:
+        'WebRTC DataChannels are up for this role. Mesh relay may still be used briefly for other legs during recovery.',
+    };
+  }
   if (recentRelay) {
     return {
       mode: 'relay',
       label: 'P2P relay',
       tooltip:
         'Audio is using the P2P mesh (GC_AUDIO) fallback — typically while WebRTC DataChannels connect or recover.',
-    };
-  }
-  if (dcReady) {
-    return {
-      mode: 'datachannel',
-      label: 'Data channel',
-      tooltip:
-        'WebRTC DataChannels are up for this role. No mesh relay activity in the last few seconds.',
     };
   }
   return {

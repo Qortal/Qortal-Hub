@@ -74,6 +74,8 @@ export interface GroupTopology {
   rootForwarder: string;
   standbyForwarder: string;
   clusters: ClusterDef[];
+  /** Present on IPC `gcall:topology`; used to resolve same-epoch root disagreements vs local election. */
+  lastSeen?: number;
 }
 
 export interface Participant {
@@ -377,7 +379,7 @@ interface PeerConnection {
   dc: RTCDataChannel | null;
   address: string;
   connId: string;
-  role: 'upstream' | 'downstream' | 'backbone';
+  role: 'upstream' | 'downstream';
   disconnectGraceTimer?: ReturnType<typeof setTimeout>;
 }
 
@@ -385,6 +387,10 @@ interface PeerConnection {
 
 export function useGroupVoiceCall(uiActive = false) {
   const userInfo = useAtomValue(userInfoAtom);
+  /** Latest identity for async paths (RTC signal queue, ICE); do not use stale hook closure. */
+  const userInfoRef = useRef(userInfo);
+  userInfoRef.current = userInfo;
+
   const callAudioDevices = useAtomValue(callAudioDevicesAtom);
   const setCallAudioDevices = useSetAtom(callAudioDevicesAtom);
   const callAudioPrefsRef = useRef(callAudioDevices);
@@ -455,6 +461,10 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // WebRTC peer connections
   const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
+  /** Serialized handleRtcSignal work per remote `fromAddress` (avoids overlapping offers / double PC). */
+  const rtcSignalChainsRef = useRef<Map<string, Promise<void>>>(new Map());
+  /** Latest packet handler — `handleRtcSignal` is declared above `handleIncomingAudioPacket`. */
+  const handleIncomingAudioPacketRef = useRef<(data: ArrayBuffer, fromAddress: string) => void>(() => {});
   /** Latest ensureGroupCallWebRtcConnections; assigned each render after the callback exists. */
   const ensureGroupCallWebRtcRef = useRef<(topology: GroupTopology) => void>(() => {});
   const gcallIceServersRef = useRef<RTCIceServer[]>(
@@ -463,8 +473,6 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // Upstream DC to assigned forwarder
   const upstreamDCRef = useRef<RTCDataChannel | null>(null);
-  // Standby DC (pre-connected)
-  const standbyDCRef = useRef<RTCDataChannel | null>(null);
 
   // Forwarder heartbeat timer (for sending topology heartbeats)
   const topologyHeartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -549,7 +557,6 @@ export function useGroupVoiceCall(uiActive = false) {
 
     if (entry.dc) {
       if (upstreamDCRef.current === entry.dc) upstreamDCRef.current = null;
-      if (standbyDCRef.current === entry.dc) standbyDCRef.current = null;
       try { entry.dc.close(); } catch { /* ignore */ }
     }
 
@@ -890,15 +897,16 @@ export function useGroupVoiceCall(uiActive = false) {
   }, []);
 
   const createPeerConnection = useCallback(
-    (peerAddress: string, connId: string, role: 'upstream' | 'downstream' | 'backbone'): RTCPeerConnection => {
+    (peerAddress: string, connId: string, role: 'upstream' | 'downstream'): RTCPeerConnection => {
       const pc = new RTCPeerConnection({ iceServers: gcallIceServersRef.current });
       closePeerConnection(peerAddress);
       peerConnectionsRef.current.set(peerAddress, { pc, dc: null, address: peerAddress, connId, role });
 
       pc.onicecandidate = (e) => {
-        if (e.candidate && userInfo?.address) {
+        const u = userInfoRef.current;
+        if (e.candidate && u?.address) {
           window.groupCall.sendRtcSignal(
-            roomIdRef.current, userInfo.address, peerAddress,
+            roomIdRef.current, u.address, peerAddress,
             'ice', e.candidate.toJSON(), connId
           );
         }
@@ -949,7 +957,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
       return pc;
     },
-    [closePeerConnection, scheduleEnsureAfterIceTeardown, userInfo?.address]
+    [closePeerConnection, scheduleEnsureAfterIceTeardown]
   );
 
   /** Connect upstream (as participant/cluster-forwarder, send to forwarder). */
@@ -1018,39 +1026,6 @@ export function useGroupVoiceCall(uiActive = false) {
     [createPeerConnection, flushMetrics, userInfo]
   );
 
-  /** Connect standby channels (as standby-forwarder, pre-established but idle). */
-  const connectStandbyChannels = useCallback(
-    async (topology: GroupTopology) => {
-      if (!userInfo?.address) return;
-      // Connect to root forwarder's backbone channel
-      const rootAddr = topology.rootForwarder;
-      if (rootAddr && rootAddr !== userInfo.address) {
-        const connId = `standby-${userInfo.address}-${rootAddr}-${Date.now()}`;
-        const pc = createPeerConnection(rootAddr, connId, 'backbone');
-        const dc = pc.createDataChannel('standby-audio', { ordered: false, maxRetransmits: 0 });
-        const pcEntry = peerConnectionsRef.current.get(rootAddr);
-        if (pcEntry?.connId === connId) pcEntry.dc = dc;
-        standbyDCRef.current = dc;
-
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        const ts = Date.now();
-        const sig = await signGroupCallFields(
-          { type: 'GC_RTC_OFFER', roomId: roomIdRef.current, fromAddress: userInfo.address,
-            toAddress: rootAddr, connId, fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
-        ).catch(() => '');
-        if (!sig) return; // signing failed — don't send unsigned RTC offer
-
-        await window.groupCall.sendRtcSignal(
-          roomIdRef.current, userInfo.address, rootAddr,
-          'offer', offer.sdp, connId, sig, userInfo.publicKey ?? '', ts
-        );
-      }
-    },
-    [createPeerConnection, userInfo]
-  );
-
   /** Forwarder: set up to accept incoming upstream connections from member. */
   const setupDownstreamChannel = useCallback(
     async (memberAddress: string) => {
@@ -1059,93 +1034,99 @@ export function useGroupVoiceCall(uiActive = false) {
     []
   );
 
-  /** Handle incoming RTC signal (offer/answer/ice). */
+  /** Handle incoming RTC signal (offer/answer/ice). Serialized per `fromAddress` to avoid overlapping offers. */
   const handleRtcSignal = useCallback(
-    async (payload: any) => {
-      const { type, fromAddress, connId, sdp, candidate } = payload;
-      if (!userInfo?.address) return;
-      debugLog('[GCall] handleRtcSignal type:', type, 'from:', fromAddress);
+    (payload: any) => {
+      const fromAddress = payload?.fromAddress;
+      if (typeof fromAddress !== 'string' || !fromAddress) return;
 
-      if (type === 'offer') {
-        const existing = peerConnectionsRef.current.get(fromAddress);
-        if (existing && existing.connId !== connId && !isPeerConnectionInactive(existing)) {
-          const existingTs = getConnIdTimestamp(existing.connId);
-          const incomingTs = getConnIdTimestamp(connId);
-          if (existingTs !== null && incomingTs !== null && incomingTs < existingTs) {
-            debugLog('[GCall] Ignoring stale RTC offer from', fromAddress, 'connId:', connId, 'current:', existing.connId);
+      const map = rtcSignalChainsRef.current;
+      const prev = map.get(fromAddress) ?? Promise.resolve();
+      const next = prev.then(async () => {
+        const { type, connId, sdp, candidate } = payload;
+        const ui = userInfoRef.current;
+        if (!ui?.address) return;
+        debugLog('[GCall] handleRtcSignal type:', type, 'from:', fromAddress);
+
+        if (type === 'offer') {
+          const existing = peerConnectionsRef.current.get(fromAddress);
+          if (existing && existing.connId !== connId && !isPeerConnectionInactive(existing)) {
+            const existingTs = getConnIdTimestamp(existing.connId);
+            const incomingTs = getConnIdTimestamp(connId);
+            if (existingTs !== null && incomingTs !== null && incomingTs < existingTs) {
+              debugLog('[GCall] Ignoring stale RTC offer from', fromAddress, 'connId:', connId, 'current:', existing.connId);
+              return;
+            }
+          }
+
+          const pc = createPeerConnection(fromAddress, connId, 'downstream');
+
+          pc.onconnectionstatechange = () => {
+            debugLog('[GCall] PC state (downstream ←', fromAddress, '):', pc.connectionState);
+          };
+
+          pc.oniceconnectionstatechange = () => {
+            debugLog('[GCall] ICE connection (downstream ←', fromAddress, '):', pc.iceConnectionState);
+          };
+
+          pc.ondatachannel = (e) => {
+            const dc = e.channel;
+            dc.binaryType = 'arraybuffer';
+            debugLog('[GCall] Downstream DC received from', fromAddress, '— channel:', dc.label);
+            dc.onopen = () => {
+              debugLog('[GCall] Downstream DC opened from', fromAddress);
+              relayLastSentRef.current.delete(fromAddress);
+              flushMetrics();
+            };
+            dc.onclose = () => {
+              debugLog('[GCall] Downstream DC closed from', fromAddress);
+              flushMetrics();
+            };
+            dc.onmessage = (ev) => {
+              handleIncomingAudioPacketRef.current(ev.data as ArrayBuffer, fromAddress);
+            };
+            const pcEntry = peerConnectionsRef.current.get(fromAddress);
+            if (pcEntry?.connId === connId) pcEntry.dc = dc;
+          };
+
+          await pc.setRemoteDescription({ type: 'offer', sdp });
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          const ts = Date.now();
+          const sig = await signGroupCallFields(
+            { type: 'GC_RTC_ANSWER', roomId: roomIdRef.current, fromAddress: ui.address,
+              toAddress: fromAddress, connId, fromPublicKey: ui.publicKey ?? '', timestamp: ts }
+          ).catch(() => '');
+          if (!sig) return;
+
+          await window.groupCall.sendRtcSignal(
+            roomIdRef.current, ui.address, fromAddress,
+            'answer', answer.sdp, connId, sig, ui.publicKey ?? '', ts
+          );
+        } else if (type === 'answer') {
+          const pcEntry = peerConnectionsRef.current.get(fromAddress);
+          if (!pcEntry || pcEntry.connId !== connId) {
+            debugLog('[GCall] Ignoring stale RTC answer from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
             return;
           }
-        }
-
-        // Create PC to accept the offer (downstream connection from member)
-        const pc = createPeerConnection(fromAddress, connId, 'downstream');
-
-        pc.onconnectionstatechange = () => {
-          debugLog('[GCall] PC state (downstream ←', fromAddress, '):', pc.connectionState);
-        };
-
-        pc.oniceconnectionstatechange = () => {
-          debugLog('[GCall] ICE connection (downstream ←', fromAddress, '):', pc.iceConnectionState);
-        };
-
-        pc.ondatachannel = (e) => {
-          const dc = e.channel;
-          dc.binaryType = 'arraybuffer';
-          debugLog('[GCall] Downstream DC received from', fromAddress, '— channel:', dc.label);
-          dc.onopen = () => {
-            debugLog('[GCall] Downstream DC opened from', fromAddress);
-            // Clear relay rate-limiter so the relay path is immediately available
-            // if this DC closes again later.
-            relayLastSentRef.current.delete(fromAddress);
-            flushMetrics();
-          };
-          dc.onclose = () => {
-            debugLog('[GCall] Downstream DC closed from', fromAddress);
-            flushMetrics();
-          };
-          dc.onmessage = (ev) => {
-            handleIncomingAudioPacket(ev.data as ArrayBuffer, fromAddress);
-          };
-          const pcEntry = peerConnectionsRef.current.get(fromAddress);
-          if (pcEntry?.connId === connId) pcEntry.dc = dc;
-        };
-
-        await pc.setRemoteDescription({ type: 'offer', sdp });
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-
-        const ts = Date.now();
-        const sig = await signGroupCallFields(
-          { type: 'GC_RTC_ANSWER', roomId: roomIdRef.current, fromAddress: userInfo.address,
-            toAddress: fromAddress, connId, fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
-        ).catch(() => '');
-        if (!sig) return; // signing failed — don't send unsigned RTC answer
-
-        await window.groupCall.sendRtcSignal(
-          roomIdRef.current, userInfo.address, fromAddress,
-          'answer', answer.sdp, connId, sig, userInfo.publicKey ?? '', ts
-        );
-      } else if (type === 'answer') {
-        const pcEntry = peerConnectionsRef.current.get(fromAddress);
-        if (!pcEntry || pcEntry.connId !== connId) {
-          debugLog('[GCall] Ignoring stale RTC answer from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
-          return;
-        }
-        if (pcEntry) {
           await pcEntry.pc.setRemoteDescription({ type: 'answer', sdp });
+        } else if (type === 'ice') {
+          const pcEntry = peerConnectionsRef.current.get(fromAddress);
+          if (!pcEntry || pcEntry.connId !== connId) {
+            debugLog('[GCall] Ignoring stale RTC ICE from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
+            return;
+          }
+          if (candidate) {
+            try { await pcEntry.pc.addIceCandidate(candidate); } catch { /* ignore */ }
+          }
         }
-      } else if (type === 'ice') {
-        const pcEntry = peerConnectionsRef.current.get(fromAddress);
-        if (!pcEntry || pcEntry.connId !== connId) {
-          debugLog('[GCall] Ignoring stale RTC ICE from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
-          return;
-        }
-        if (pcEntry && candidate) {
-          try { await pcEntry.pc.addIceCandidate(candidate); } catch { /* ignore */ }
-        }
-      }
+      });
+      map.set(fromAddress, next.catch(() => {}));
     },
-    [createPeerConnection, flushMetrics, getConnIdTimestamp, isPeerConnectionInactive, userInfo]
+    // Do not add userInfo — queued work uses userInfoRef.current. Callback may still recreate when
+    // createPeerConnection identity changes.
+    [createPeerConnection, flushMetrics, getConnIdTimestamp, isPeerConnectionInactive]
   );
 
   /** WebRTC connection ensure — runs on every topology apply, including duplicate heartbeats. */
@@ -1153,17 +1134,6 @@ export function useGroupVoiceCall(uiActive = false) {
     (topology: GroupTopology) => {
       const myAddress = userInfo?.address ?? '';
       const role = computeMyRole(myAddress, topology);
-
-      if (role === 'standby-forwarder') {
-        const rootAddr = topology.rootForwarder;
-        const assignedFwd = findAssignedForwarder(myAddress, topology);
-        if (rootAddr && rootAddr !== myAddress && rootAddr !== assignedFwd) {
-          const existing = peerConnectionsRef.current.get(rootAddr);
-          if (isPeerConnectionInactive(existing)) {
-            void connectStandbyChannels(topology);
-          }
-        }
-      }
 
       if (role === 'participant' || role === 'cluster-forwarder' || role === 'standby-forwarder') {
         const assignedForwarder = findAssignedForwarder(myAddress, topology);
@@ -1200,13 +1170,7 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     },
-    [
-      connectStandbyChannels,
-      connectUpstream,
-      isPeerConnectionInactive,
-      setupDownstreamChannel,
-      userInfo?.address,
-    ]
+    [connectUpstream, isPeerConnectionInactive, setupDownstreamChannel, userInfo?.address]
   );
 
   ensureGroupCallWebRtcRef.current = ensureGroupCallWebRtcConnections;
@@ -1254,12 +1218,20 @@ export function useGroupVoiceCall(uiActive = false) {
     (topology: GroupTopology) => {
       if (topology.topologyEpoch < localEpochRef.current) return;
 
+      // Same epoch + different root: do not lock to first-seen root (stale forwarder after mesh
+      // disagreement). If both views carry lastSeen (IPC), drop only strictly older messages.
+      // Local election / self-promotion often omit lastSeen; a later IPC heartbeat with lastSeen wins.
       if (
         topology.topologyEpoch === localEpochRef.current &&
         topologyRef.current !== null &&
         topology.rootForwarder !== topologyRef.current.rootForwarder
       ) {
-        return;
+        const prev = topologyRef.current;
+        const inSeen = topology.lastSeen;
+        const prevSeen = prev.lastSeen;
+        if (inSeen != null && prevSeen != null && inSeen < prevSeen) {
+          return;
+        }
       }
 
       const prevTopo = topologyRef.current;
@@ -1815,6 +1787,8 @@ export function useGroupVoiceCall(uiActive = false) {
     ]
   );
 
+  handleIncomingAudioPacketRef.current = handleIncomingAudioPacket;
+
   /** One drain step: invoked from gcall-jitter-scheduler AudioWorklet (~20ms audio clock).
    *  postMessage timing can still jitter on the main thread; deeper jitter buffer + playback
    *  ring absorb variance. */
@@ -2244,8 +2218,8 @@ export function useGroupVoiceCall(uiActive = false) {
     }
 
     upstreamDCRef.current = null;
-    standbyDCRef.current = null;
     relayLastSentRef.current.clear();
+    rtcSignalChainsRef.current.clear();
 
     // Terminate the decrypt Worker (sync clears pending + worker key)
     if (decryptWorkerRef.current) {
