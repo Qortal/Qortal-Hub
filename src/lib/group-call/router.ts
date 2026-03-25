@@ -32,6 +32,9 @@ export interface GroupCallMetricsSnapshot {
   packetsDropped: number;
   relayPacketsSent: number;
   relayPacketsReceived: number;
+  jitterUnderruns: number;
+  missingFrames: number;
+  concealmentTicks: number;
   decoderCount: number;
   playbackNodeCount: number;
   jitterBufferCount: number;
@@ -39,6 +42,10 @@ export interface GroupCallMetricsSnapshot {
   maxIncomingPacketMs: number;
   avgJitterTickMs: number;
   maxJitterTickMs: number;
+  /** Rolling avg PCM depth (ms) from group playout worklets. */
+  avgPcmBufferedMs: number;
+  /** Fraction of playout metric ticks where |bufferedMs - target| > band (tuning KPI). */
+  playoutOutsideTargetFraction: number;
   lastUpdatedAt: number;
 }
 
@@ -61,6 +68,9 @@ export class GroupCallPerformanceTracker {
     packetsDropped: 0,
     relayPacketsSent: 0,
     relayPacketsReceived: 0,
+    jitterUnderruns: 0,
+    missingFrames: 0,
+    concealmentTicks: 0,
     decoderCount: 0,
     playbackNodeCount: 0,
     jitterBufferCount: 0,
@@ -68,6 +78,8 @@ export class GroupCallPerformanceTracker {
     maxIncomingPacketMs: 0,
     avgJitterTickMs: 0,
     maxJitterTickMs: 0,
+    avgPcmBufferedMs: 0,
+    playoutOutsideTargetFraction: 0,
     lastUpdatedAt: 0,
   };
 
@@ -75,6 +87,11 @@ export class GroupCallPerformanceTracker {
   private incomingPacketTotalMs = 0;
   private jitterTickSamples = 0;
   private jitterTickTotalMs = 0;
+
+  private playoutMetricTicks = 0;
+  private playoutOutsideTicks = 0;
+  private playoutBufferedMsSum = 0;
+  private playoutBufferedMsSamples = 0;
 
   setRole(role: RouterRole): void {
     this.snapshot.role = role;
@@ -108,6 +125,37 @@ export class GroupCallPerformanceTracker {
 
   recordRelayReceived(count = 1): void {
     this.snapshot.relayPacketsReceived += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordJitterUnderrun(count = 1): void {
+    this.snapshot.jitterUnderruns += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordMissingFrames(count = 1): void {
+    if (count <= 0) return;
+    this.snapshot.missingFrames += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordConcealmentTick(count = 1): void {
+    this.snapshot.concealmentTicks += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /** One periodic sample from group-playout-processor (every ~100ms audio per source). */
+  recordPlayoutMetricTick(bufferedMs: number, outsideTargetBand: boolean): void {
+    this.playoutMetricTicks++;
+    if (outsideTargetBand) this.playoutOutsideTicks++;
+    this.playoutBufferedMsSum += bufferedMs;
+    this.playoutBufferedMsSamples++;
+    this.snapshot.avgPcmBufferedMs = roundMetric(
+      this.playoutBufferedMsSum / Math.max(1, this.playoutBufferedMsSamples)
+    );
+    this.snapshot.playoutOutsideTargetFraction = roundMetric(
+      this.playoutOutsideTicks / Math.max(1, this.playoutMetricTicks)
+    );
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -151,6 +199,9 @@ export class GroupCallPerformanceTracker {
       packetsDropped: 0,
       relayPacketsSent: 0,
       relayPacketsReceived: 0,
+      jitterUnderruns: 0,
+      missingFrames: 0,
+      concealmentTicks: 0,
       decoderCount: 0,
       playbackNodeCount: 0,
       jitterBufferCount: 0,
@@ -158,12 +209,18 @@ export class GroupCallPerformanceTracker {
       maxIncomingPacketMs: 0,
       avgJitterTickMs: 0,
       maxJitterTickMs: 0,
+      avgPcmBufferedMs: 0,
+      playoutOutsideTargetFraction: 0,
       lastUpdatedAt: Date.now(),
     };
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;
     this.jitterTickSamples = 0;
     this.jitterTickTotalMs = 0;
+    this.playoutMetricTicks = 0;
+    this.playoutOutsideTicks = 0;
+    this.playoutBufferedMsSum = 0;
+    this.playoutBufferedMsSamples = 0;
   }
 
   getSnapshot(): GroupCallMetricsSnapshot {

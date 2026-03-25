@@ -6,7 +6,7 @@
  *
  * Architecture (handled entirely in the renderer):
  *   - Adaptive topology: ≤10 members → single forwarder, 11-50 → hierarchical
- *   - WebRTC DataChannel for audio transport (Opus 20 kbps)
+ *   - WebRTC DataChannel for audio transport (Opus ~24 kbps)
  *   - P2P GC_AUDIO relay as last-resort fallback
  *   - End-to-end encryption via nacl.secretbox with rotating room media key
  *

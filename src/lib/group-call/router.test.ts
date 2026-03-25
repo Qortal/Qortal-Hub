@@ -123,6 +123,11 @@ describe('group-call router helpers', () => {
     tracker.recordRelayReceived();
     tracker.recordIncomingPacketDuration(4);
     tracker.recordJitterTickDuration(2);
+    tracker.recordJitterUnderrun(2);
+    tracker.recordMissingFrames(2);
+    tracker.recordConcealmentTick(1);
+    tracker.recordPlayoutMetricTick(100, true);
+    tracker.recordPlayoutMetricTick(100, false);
     tracker.setResourceCounts({ decoders: 2, playbackNodes: 1, jitterBuffers: 3 });
 
     expect(tracker.getSnapshot()).toMatchObject({
@@ -132,11 +137,16 @@ describe('group-call router helpers', () => {
       packetsDecoded: 2,
       relayPacketsSent: 1,
       relayPacketsReceived: 1,
+      jitterUnderruns: 2,
+      missingFrames: 2,
+      concealmentTicks: 1,
       decoderCount: 2,
       playbackNodeCount: 1,
       jitterBufferCount: 3,
       avgIncomingPacketMs: 4,
       avgJitterTickMs: 2,
+      avgPcmBufferedMs: 100,
+      playoutOutsideTargetFraction: 0.5,
     });
   });
 });

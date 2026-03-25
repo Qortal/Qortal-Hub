@@ -7,11 +7,16 @@
  *
  * Audio pipeline:
  *   Microphone → CaptureWorkletNode (audio-worklet thread, VAD + 960-sample framing)
- *   → port.postMessage { frame, vad } → AudioEncoder (Opus 20kbps, main thread)
+ *   → port.postMessage { frame, vad } → AudioEncoder (Opus ~24kbps, main thread)
  *   → packet framing (addr+seq+vad+ts+nacl.secretbox) → DataChannel to forwarder
  *   Forwarder → decrypt-reencrypt skipped; forwarder routes encrypted bytes only
- *   Receiver → DataChannel ← forwarder → jitter buffer (20ms drain) → AudioDecoder (Opus)
+ *   Receiver → DataChannel ← forwarder → jitter buffer (depth below) → drain tick from
+ *   gcall-jitter-scheduler AudioWorklet (~20ms audio clock) → AudioDecoder (Opus)
  *   → PlaybackWorkletNode per speaker (audio-worklet thread, ring-buffer playback)
+ *
+ * Jitter: JITTER_BUFFER_SIZE frames @ 20ms each adds end-to-end latency but absorbs
+ * network burstiness, decrypt-worker delay, and main-thread variance after postMessage
+ * from the scheduler worklet.
  *
  * Forwarder election (deterministic, same result on all peers):
  *   Sort participants by sha256(address + roomId) → lowest = root, 2nd = standby
@@ -71,12 +76,30 @@ export interface Participant {
 
 const OPUS_SAMPLE_RATE = 48000;
 const OPUS_CHANNELS = 1;
-const OPUS_BITRATE = 20_000;
+const OPUS_BITRATE = 24_000;
 const OPUS_FRAME_DURATION_MS = 20;
 const OPUS_FRAME_SAMPLES = (OPUS_SAMPLE_RATE * OPUS_FRAME_DURATION_MS) / 1000; // 960
 
-const JITTER_BUFFER_SIZE = 4;        // ~80ms buffer
-const JITTER_DRAIN_INTERVAL_MS = 20; // drain every 20ms (one Opus frame)
+/** Minimum Opus frames queued before decode drain starts (20ms per frame). Playout also gates on PCM depth in worklet. */
+const JITTER_BUFFER_SIZE = 6; // ~120ms — deeper buffer vs ~80ms@4; trades latency for smoothness
+
+/** Max Opus frames decoded per remote source per jitter scheduler tick (burst catch-up). */
+const JITTER_DECODE_BURST_MAX = 3;
+
+/** Adaptive playout target (main thread → group-playout-processor). */
+const ADAPTIVE_BASE_TARGET_MS = 60;
+const ADAPTIVE_MIN_TARGET_MS = 80;
+const ADAPTIVE_MAX_TARGET_MS = 180;
+const ADAPTIVE_JITTER_K = 2.5;
+const ADAPTIVE_ALPHA_UP = 0.35;
+const ADAPTIVE_ALPHA_DOWN = 0.08;
+const ADAPTIVE_TARGET_POST_MIN_MS = 75;
+const ADAPTIVE_TARGET_MIN_DELTA_MS = 5;
+const INTER_ARRIVAL_MAX_SAMPLES = 40;
+const ADAPTIVE_LOSS_MS_CAP = 20;
+
+/** After VAD goes false, keep forwarding through forwarder for this long (word gaps / breath). */
+const FORWARD_VAD_HANGOVER_MS = 200;
 
 const FORWARDER_TIMEOUT_MS = 4_500;  // miss 3 heartbeats → dead
 const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
@@ -344,6 +367,14 @@ interface JitterEntry {
 class JitterBuffer {
   private entries: JitterEntry[] = [];
   private lastPlayedSeq = -1;
+  private pendingMissedSeq = 0;
+
+  /** Pop-side gap detection: call after pop; returns missed frame count since last pop. */
+  consumePendingMissedFrames(): number {
+    const m = this.pendingMissedSeq;
+    this.pendingMissedSeq = 0;
+    return m;
+  }
 
   push(seq: number, opusFrame: Uint8Array): void {
     if (seq <= this.lastPlayedSeq) return; // already played or older
@@ -366,6 +397,11 @@ class JitterBuffer {
     if (this.entries.length < JITTER_BUFFER_SIZE) return null;
     const entry = this.entries.shift();
     if (!entry) return null;
+    if (this.lastPlayedSeq >= 0) {
+      const expected = (this.lastPlayedSeq + 1) & 0xffff;
+      const gap = (entry.seq - expected + 65536) % 65536;
+      if (gap > 0 && gap <= 48) this.pendingMissedSeq += gap;
+    }
     this.lastPlayedSeq = entry.seq;
     return entry.opusFrame;
   }
@@ -377,6 +413,7 @@ class JitterBuffer {
   clear(): void {
     this.entries = [];
     this.lastPlayedSeq = -1;
+    this.pendingMissedSeq = 0;
   }
 }
 
@@ -448,6 +485,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // Speaker tracking (for VAD-based active speaker selection)
   const localSpeakersRef = useRef<Map<string, number>>(new Map()); // addr → lastVadTime
+  /** Last wall time we saw vad true per source (for forwarder hangover after speech). */
+  const lastVadTrueAtRef = useRef<Map<string, number>>(new Map());
 
   // WebRTC peer connections
   const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
@@ -470,9 +509,21 @@ export function useGroupVoiceCall(uiActive = false) {
   // IPC unsubscribe function
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Jitter drain timer
-  const jitterDrainTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Drives jitter-buffer drain on the audio render clock (see gcall-jitter-scheduler worklet). */
+  const jitterSchedulerNodeRef = useRef<AudioWorkletNode | null>(null);
+  const runJitterDrainTickRef = useRef<() => void>(() => {});
+  const jitterDrainReactTickCountRef = useRef(0);
+  const jitterFirstDrainLoggedRef = useRef(false);
   const activeJitterSourcesRef = useRef<Set<string>>(new Set());
+
+  /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
+  const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
+  const interArrivalSamplesRef = useRef<Map<string, number[]>>(new Map());
+  const smoothedPlayoutTargetRef = useRef<Map<string, number>>(new Map());
+  const lastSentPlayoutTargetRef = useRef<Map<string, number>>(new Map());
+  const lastPlayoutTargetPostAtRef = useRef<Map<string, number>>(new Map());
+  /** Seq-gap count accumulated during last drain tick per source (feeds loss term). */
+  const lastDrainMissedRef = useRef<Map<string, number>>(new Map());
 
   // Per-peer timestamp of last P2P relay send, used to rate-limit relay during DC negotiation
   const relayLastSentRef = useRef<Map<string, number>>(new Map());
@@ -523,6 +574,69 @@ export function useGroupVoiceCall(uiActive = false) {
     });
   }, []);
 
+  const recordInterArrivalForPlayout = useCallback((sourceAddr: string) => {
+    const now = performance.now();
+    const last = lastPacketArrivalAtRef.current.get(sourceAddr);
+    lastPacketArrivalAtRef.current.set(sourceAddr, now);
+    if (last === undefined) return;
+    const delta = now - last;
+    if (delta <= 0 || delta > 2000) return;
+    let arr = interArrivalSamplesRef.current.get(sourceAddr);
+    if (!arr) {
+      arr = [];
+      interArrivalSamplesRef.current.set(sourceAddr, arr);
+    }
+    arr.push(delta);
+    while (arr.length > INTER_ARRIVAL_MAX_SAMPLES) arr.shift();
+  }, []);
+
+  const tickAdaptivePlayoutTargets = useCallback(() => {
+    const now = performance.now();
+    for (const addr of activeJitterSourcesRef.current) {
+      const node = playbackWorkletsRef.current.get(addr);
+      if (!node) continue;
+
+      const samples = interArrivalSamplesRef.current.get(addr);
+      let jitterMs = 0;
+      if (samples && samples.length >= 3) {
+        const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+        let varSum = 0;
+        for (const d of samples) varSum += (d - mean) * (d - mean);
+        jitterMs = Math.sqrt(Math.max(0, varSum / samples.length));
+      }
+
+      const missed = lastDrainMissedRef.current.get(addr) ?? 0;
+      lastDrainMissedRef.current.set(addr, 0);
+      const lossPenalty = Math.min(ADAPTIVE_LOSS_MS_CAP, missed * 2);
+
+      let ideal =
+        ADAPTIVE_BASE_TARGET_MS + ADAPTIVE_JITTER_K * jitterMs + lossPenalty;
+      ideal = Math.max(ADAPTIVE_MIN_TARGET_MS, Math.min(ADAPTIVE_MAX_TARGET_MS, ideal));
+
+      let smooth = smoothedPlayoutTargetRef.current.get(addr);
+      if (smooth === undefined) smooth = ideal;
+      if (ideal > smooth) {
+        smooth += ADAPTIVE_ALPHA_UP * (ideal - smooth);
+      } else {
+        smooth += ADAPTIVE_ALPHA_DOWN * (ideal - smooth);
+      }
+      smoothedPlayoutTargetRef.current.set(addr, smooth);
+
+      const lastSent = lastSentPlayoutTargetRef.current.get(addr);
+      const lastPost = lastPlayoutTargetPostAtRef.current.get(addr) ?? 0;
+      if (lastSent !== undefined && Math.abs(smooth - lastSent) <= ADAPTIVE_TARGET_MIN_DELTA_MS) {
+        continue;
+      }
+      if (lastSent !== undefined && now - lastPost < ADAPTIVE_TARGET_POST_MIN_MS) {
+        continue;
+      }
+
+      node.port.postMessage({ type: 'target', targetPlayoutMs: smooth });
+      lastSentPlayoutTargetRef.current.set(addr, smooth);
+      lastPlayoutTargetPostAtRef.current.set(addr, now);
+    }
+  }, []);
+
   const flushMetrics = useCallback(() => {
     updateMetricResourceCounts();
     const snapshot = metricsRef.current.getSnapshot();
@@ -536,6 +650,9 @@ export function useGroupVoiceCall(uiActive = false) {
           prev.packetsDropped === snapshot.packetsDropped &&
           prev.relayPacketsSent === snapshot.relayPacketsSent &&
           prev.relayPacketsReceived === snapshot.relayPacketsReceived &&
+          prev.jitterUnderruns === snapshot.jitterUnderruns &&
+          prev.missingFrames === snapshot.missingFrames &&
+          prev.concealmentTicks === snapshot.concealmentTicks &&
           prev.decoderCount === snapshot.decoderCount &&
           prev.playbackNodeCount === snapshot.playbackNodeCount &&
           prev.jitterBufferCount === snapshot.jitterBufferCount &&
@@ -543,6 +660,8 @@ export function useGroupVoiceCall(uiActive = false) {
           prev.maxIncomingPacketMs === snapshot.maxIncomingPacketMs &&
           prev.avgJitterTickMs === snapshot.avgJitterTickMs &&
           prev.maxJitterTickMs === snapshot.maxJitterTickMs &&
+          prev.avgPcmBufferedMs === snapshot.avgPcmBufferedMs &&
+          prev.playoutOutsideTargetFraction === snapshot.playoutOutsideTargetFraction &&
           prev.lastUpdatedAt === snapshot.lastUpdatedAt;
         return unchanged ? prev : snapshot;
       });
@@ -589,6 +708,13 @@ export function useGroupVoiceCall(uiActive = false) {
       lastRecvAtRef.current,
       localSpeakersRef.current
     );
+    lastVadTrueAtRef.current.delete(address);
+    lastPacketArrivalAtRef.current.delete(address);
+    interArrivalSamplesRef.current.delete(address);
+    smoothedPlayoutTargetRef.current.delete(address);
+    lastSentPlayoutTargetRef.current.delete(address);
+    lastPlayoutTargetPostAtRef.current.delete(address);
+    lastDrainMissedRef.current.delete(address);
     updateMetricResourceCounts();
   }, [updateMetricResourceCounts]);
 
@@ -1083,8 +1209,9 @@ export function useGroupVoiceCall(uiActive = false) {
       // Load and instantiate the capture worklet (runs on the audio worklet thread)
       debugLog('[GCall] Loading capture worklet…');
       await ctx.audioWorklet.addModule('/worklets/capture-processor.js');
+      await ctx.audioWorklet.addModule('/worklets/gcall-jitter-scheduler.js');
       debugLog('[GCall] Capture worklet loaded, AudioContext state:', ctx.state);
-      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/playback-processor.js');
+      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/group-playout-processor.js');
       const captureNode = new AudioWorkletNode(ctx, 'capture-processor');
       captureWorkletRef.current = captureNode;
 
@@ -1128,6 +1255,21 @@ export function useGroupVoiceCall(uiActive = false) {
       source.connect(captureNode);
       source.connect(keepAliveGain);
       keepAliveGain.connect(ctx.destination);
+
+      // Jitter drain cadence tied to audio render clock (not setInterval).
+      if (!jitterSchedulerNodeRef.current) {
+        const jitterSched = new AudioWorkletNode(ctx, 'gcall-jitter-scheduler');
+        jitterSched.port.onmessage = (ev: MessageEvent<{ type?: string }>) => {
+          if (ev.data?.type !== 'tick') return;
+          runJitterDrainTickRef.current();
+        };
+        const jitterSchedGain = ctx.createGain();
+        jitterSchedGain.gain.value = 0.0001;
+        jitterSched.connect(jitterSchedGain);
+        jitterSchedGain.connect(ctx.destination);
+        jitterSchedulerNodeRef.current = jitterSched;
+      }
+
       debugLog('[GCall] Audio capture started — AudioContext state:', ctx.state);
 
     } catch (err) {
@@ -1139,7 +1281,7 @@ export function useGroupVoiceCall(uiActive = false) {
     const ctx = audioContextRef.current;
     if (!ctx) return;
     if (!playbackWorkletModulePromiseRef.current) {
-      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/playback-processor.js');
+      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/group-playout-processor.js');
     }
     await playbackWorkletModulePromiseRef.current;
   }, []);
@@ -1250,7 +1392,21 @@ export function useGroupVoiceCall(uiActive = false) {
       debugLog('[GCall] Loading playback worklet for', sourceAddr.slice(0, 12));
       try {
         await ensurePlaybackWorkletLoaded();
-        const playNode = new AudioWorkletNode(ctx, 'playback-processor');
+        const playNode = new AudioWorkletNode(ctx, 'group-playout-processor', {
+          processorOptions: { sourceAddr },
+        } as AudioWorkletNodeOptions);
+        playNode.port.onmessage = (e: MessageEvent) => {
+          const d = e.data as {
+            type?: string;
+            bufferedMs?: number;
+            outsideBand?: boolean;
+            concealmentUsed?: boolean;
+          };
+          if (d?.type !== 'gcallPlayoutMetrics') return;
+          if (typeof d.bufferedMs !== 'number') return;
+          metricsRef.current.recordPlayoutMetricTick(d.bufferedMs, !!d.outsideBand);
+          if (d.concealmentUsed) metricsRef.current.recordConcealmentTick(1);
+        };
         playNode.connect(ctx.destination);
         playbackWorkletsRef.current.set(sourceAddr, playNode);
         updateMetricResourceCounts();
@@ -1327,26 +1483,32 @@ export function useGroupVoiceCall(uiActive = false) {
     const maxSpeakers = myRoleRef.current === 'root-forwarder'
       ? MAX_ACTIVE_SPEAKERS_GLOBAL
       : MAX_ACTIVE_SPEAKERS_LOCAL;
+
+    if (vad) {
+      lastVadTrueAtRef.current.set(sourceAddr, now);
+      localSpeakersRef.current.set(sourceAddr, now);
+      lastRecvAtRef.current.set(sourceAddr, performance.now());
+    }
+
+    const lastVadTrueAt = lastVadTrueAtRef.current.get(sourceAddr) ?? 0;
+    const inForwardHangover =
+      !vad && lastVadTrueAt > 0 && now - lastVadTrueAt < FORWARD_VAD_HANGOVER_MS;
+    const effectiveVadForForward = vad || inForwardHangover;
     const isActiveSpeaker = evaluateActiveSpeaker(
       localSpeakersRef.current,
       sourceAddr,
-      vad,
+      effectiveVadForForward,
       now,
       maxSpeakers,
       SPEAKER_GATE_WINDOW_MS
     );
-
-    if (vad) {
-      localSpeakersRef.current.set(sourceAddr, now);
-      lastRecvAtRef.current.set(sourceAddr, performance.now());
-    }
 
     // If I'm a forwarder, forward to cluster members / root
     const role = myRoleRef.current;
     const topo = topologyRef.current;
 
     if ((role === 'cluster-forwarder' || role === 'root-forwarder') && topo) {
-      // Forward active speakers only (isActiveSpeaker computed above)
+      // Forward when admission allows, including VAD hangover (brief gaps between words).
       if (isActiveSpeaker) {
         const forwarded = forwardPacketForRole(
           role,
@@ -1397,77 +1559,88 @@ export function useGroupVoiceCall(uiActive = false) {
         updateMetricResourceCounts();
       }
       jb.push(decoded.seq, decoded.opusFrame);
+      recordInterArrivalForPlayout(decoded.sourceAddr);
       if (jb.hasReadyFrame()) {
         activeJitterSourcesRef.current.add(decoded.sourceAddr);
       }
     }
     metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
-  }, [sendPacketToPeer, updateMetricResourceCounts, userInfo?.address]);
+  }, [recordInterArrivalForPlayout, sendPacketToPeer, updateMetricResourceCounts, userInfo?.address]);
 
-  /** Start jitter drain loop. */
-  const startJitterDrain = useCallback(() => {
-    if (jitterDrainTimerRef.current) return;
-    let tickCount = 0;
-    let firstDrainLogged = false;
-    jitterDrainTimerRef.current = setInterval(() => {
-      const tickStartedAt = performance.now();
-      for (const addr of [...activeJitterSourcesRef.current]) {
-        const jb = jitterMapRef.current.get(addr);
-        if (!jb || !jb.hasReadyFrame()) {
-          activeJitterSourcesRef.current.delete(addr);
-          continue;
-        }
+  /** One drain step: invoked from gcall-jitter-scheduler AudioWorklet (~20ms audio clock).
+   *  postMessage timing can still jitter on the main thread; deeper jitter buffer + playback
+   *  ring absorb variance. */
+  const runJitterDrainTick = useCallback(() => {
+    const tickStartedAt = performance.now();
+    for (const addr of [...activeJitterSourcesRef.current]) {
+      const jb = jitterMapRef.current.get(addr);
+      if (!jb || !jb.hasReadyFrame()) {
+        if (jb) metricsRef.current.recordJitterUnderrun();
+        activeJitterSourcesRef.current.delete(addr);
+        continue;
+      }
+      let missedThisTick = 0;
+      let burst = 0;
+      while (burst < JITTER_DECODE_BURST_MAX && jb.hasReadyFrame()) {
         const frame = jb.pop();
-        if (frame) {
-          if (!firstDrainLogged) {
-            firstDrainLogged = true;
-            debugLog('[GCall] Jitter drain first pop for', addr.slice(0, 12), '— frame bytes:', frame.byteLength);
-            debugLog('[GCall] Decoder input frame view for', addr.slice(0, 12), {
-              byteOffset: frame.byteOffset,
-              byteLength: frame.byteLength,
-              bufferByteLength: frame.buffer.byteLength,
+        if (!frame) break;
+        missedThisTick += jb.consumePendingMissedFrames();
+        burst++;
+        if (!jitterFirstDrainLoggedRef.current) {
+          jitterFirstDrainLoggedRef.current = true;
+          debugLog('[GCall] Jitter drain first pop for', addr.slice(0, 12), '— frame bytes:', frame.byteLength);
+          debugLog('[GCall] Decoder input frame view for', addr.slice(0, 12), {
+            byteOffset: frame.byteOffset,
+            byteLength: frame.byteLength,
+            bufferByteLength: frame.buffer.byteLength,
+          });
+        }
+        const decoder = getOrCreateDecoder(addr);
+        if (decoder && decoder.state !== 'closed') {
+          try {
+            const chunk = new (window as any).EncodedAudioChunk({
+              type: 'key',
+              timestamp: performance.now() * 1000,
+              data: frame,
             });
+            decoder.decode(chunk);
+          } catch (e) {
+            metricsRef.current.recordPacketDropped();
+            debugWarn('[GCall] decoder.decode threw:', e);
           }
-          const decoder = getOrCreateDecoder(addr);
-          if (decoder && decoder.state !== 'closed') {
-            try {
-              const chunk = new (window as any).EncodedAudioChunk({
-                type: 'key',
-                timestamp: performance.now() * 1000,
-                data: frame,
-              });
-              decoder.decode(chunk);
-            } catch (e) {
-              metricsRef.current.recordPacketDropped();
-              debugWarn('[GCall] decoder.decode threw:', e);
-            }
-          } else if (!decoder) {
-            debugWarn('[GCall] getOrCreateDecoder returned null for', addr.slice(0, 12));
-          }
-        }
-        if (!jb.hasReadyFrame()) {
-          activeJitterSourcesRef.current.delete(addr);
+        } else if (!decoder) {
+          debugWarn('[GCall] getOrCreateDecoder returned null for', addr.slice(0, 12));
         }
       }
+      if (missedThisTick > 0) {
+        metricsRef.current.recordMissingFrames(missedThisTick);
+        lastDrainMissedRef.current.set(addr, (lastDrainMissedRef.current.get(addr) ?? 0) + missedThisTick);
+      }
+      if (!jb.hasReadyFrame()) {
+        activeJitterSourcesRef.current.delete(addr);
+      }
+    }
 
-      // Throttle React state updates to every ~200ms (10 × 20ms ticks) so we
-      // don't trigger a render on every decoded frame.
-      tickCount++;
-      if (tickCount % 10 === 0) {
-        tickCount = 0;
-        const now = Date.now();
-        const speakers = collectActiveSpeakers(
-          localSpeakersRef.current,
-          now,
-          ACTIVE_SPEAKER_WINDOW_MS,
-          MAX_ACTIVE_SPEAKERS_GLOBAL
-        );
-        setActiveSpeakers((prev) => (sameAddressList(prev, speakers) ? prev : speakers));
-        setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
-      }
-      metricsRef.current.recordJitterTickDuration(performance.now() - tickStartedAt);
-    }, JITTER_DRAIN_INTERVAL_MS);
-  }, [getOrCreateDecoder]);
+    tickAdaptivePlayoutTargets();
+
+    // Throttle React state updates to ~200ms (10 scheduler ticks ≈ 10 × 20ms).
+    jitterDrainReactTickCountRef.current++;
+    if (jitterDrainReactTickCountRef.current >= 10) {
+      jitterDrainReactTickCountRef.current = 0;
+      const tickNow = Date.now();
+      const speakers = collectActiveSpeakers(
+        localSpeakersRef.current,
+        tickNow,
+        ACTIVE_SPEAKER_WINDOW_MS,
+        MAX_ACTIVE_SPEAKERS_GLOBAL
+      );
+      setActiveSpeakers((prev) => (sameAddressList(prev, speakers) ? prev : speakers));
+      setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
+    }
+    metricsRef.current.recordJitterTickDuration(performance.now() - tickStartedAt);
+  }, [getOrCreateDecoder, tickAdaptivePlayoutTargets]);
+
+  runJitterDrainTickRef.current = runJitterDrainTick;
 
   // ── Room key distribution ─────────────────────────────────────────────────
 
@@ -1586,6 +1759,7 @@ export function useGroupVoiceCall(uiActive = false) {
         updateMetricResourceCounts();
       }
       jb.push(seq, new Uint8Array(opusFrame));
+      recordInterArrivalForPlayout(sourceAddr);
       if (jb.hasReadyFrame()) {
         activeJitterSourcesRef.current.add(sourceAddr);
       }
@@ -1595,7 +1769,7 @@ export function useGroupVoiceCall(uiActive = false) {
     worker.onerror = (err) => {
       console.error('[GCall] AudioDecryptWorker error:', err);
     };
-  }, [dispatchEncodedPacket, syncDecryptWorkerRoomKey, updateMetricResourceCounts]);
+  }, [dispatchEncodedPacket, recordInterArrivalForPlayout, syncDecryptWorkerRoomKey, updateMetricResourceCounts]);
 
   // ── Join / Leave ──────────────────────────────────────────────────────────
 
@@ -1647,10 +1821,9 @@ export function useGroupVoiceCall(uiActive = false) {
     // computed (in participant-joined).  Only the elected root-forwarder
     // generates and distributes the key; others wait for GC_KEY.
     setupDecryptWorker();
-    startJitterDrain();
     startForwarderTimeoutCheck();
     startMetricsFlushLoop();
-  }, [flushMetrics, roomState, setupDecryptWorker, startJitterDrain, startMetricsFlushLoop, userInfo]);
+  }, [flushMetrics, roomState, setupDecryptWorker, startMetricsFlushLoop, userInfo]);
 
   const leaveGroupCall = useCallback(async () => {
     if (!userInfo?.address || roomState === 'idle') return;
@@ -1682,7 +1855,18 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const cleanup = useCallback(() => {
     window.groupCall?.setLocalAddresses([]).catch(() => {});
-    if (jitterDrainTimerRef.current) { clearInterval(jitterDrainTimerRef.current); jitterDrainTimerRef.current = null; }
+    if (jitterSchedulerNodeRef.current) {
+      try {
+        jitterSchedulerNodeRef.current.port.onmessage = null;
+        jitterSchedulerNodeRef.current.disconnect();
+      } catch {
+        /* ignore */
+      }
+      jitterSchedulerNodeRef.current = null;
+    }
+    jitterDrainReactTickCountRef.current = 0;
+    jitterFirstDrainLoggedRef.current = false;
+    lastVadTrueAtRef.current.clear();
     if (topologyHeartbeatTimerRef.current) { clearInterval(topologyHeartbeatTimerRef.current); topologyHeartbeatTimerRef.current = null; }
     if (promotionTimerRef.current) { clearTimeout(promotionTimerRef.current); promotionTimerRef.current = null; }
     if (forwarderTimeoutCheckRef.current) { clearInterval(forwarderTimeoutCheckRef.current); forwarderTimeoutCheckRef.current = null; }
