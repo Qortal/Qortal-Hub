@@ -258,6 +258,10 @@ type GcVerifyPending =
 
 const GC_VERIFY_WORKER_COUNT = 3;
 const GC_MAX_PENDING_VERIFY = 2048;
+/** Same signed GC_* envelope may arrive on many P2P outer ids; skip re-verify after first success. */
+const GC_VERIFIED_SIGNATURE_CACHE_MAX = 4096;
+/** Rate-limit stale topology logs (hot path under mesh relay). */
+const GC_STALE_TOPOLOGY_LOG_MIN_MS = 5_000;
 
 // ── GroupCallManager ──────────────────────────────────────────────────────────
 
@@ -305,6 +309,10 @@ export class GroupCallManager extends EventEmitter {
     GC_VERIFY_WORKER_COUNT,
     GC_MAX_PENDING_VERIFY
   );
+
+  /** Verified Ed25519 signatures for GC_JOIN / GC_LEAVE / GC_TOPOLOGY (LRU by insertion order). */
+  private verifiedGcSignatures = new Map<string, true>();
+  private lastStaleTopologyLogAt = 0;
 
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
     super();
@@ -365,6 +373,24 @@ export class GroupCallManager extends EventEmitter {
     }
   }
 
+  private gcSignatureCacheKey(type: string, signature: string): string {
+    return `${type}:${signature}`;
+  }
+
+  /** Remember after a successful verify; LRU-evict when over cap. */
+  private rememberVerifiedGcSignature(type: string, signature: string): void {
+    const key = this.gcSignatureCacheKey(type, signature);
+    if (this.verifiedGcSignatures.has(key)) {
+      this.verifiedGcSignatures.delete(key);
+    }
+    while (this.verifiedGcSignatures.size >= GC_VERIFIED_SIGNATURE_CACHE_MAX) {
+      const first = this.verifiedGcSignatures.keys().next().value as string | undefined;
+      if (first === undefined) break;
+      this.verifiedGcSignatures.delete(first);
+    }
+    this.verifiedGcSignatures.set(key, true);
+  }
+
   private enqueueVerify(
     fields: Record<string, unknown>,
     signature: string,
@@ -372,6 +398,11 @@ export class GroupCallManager extends EventEmitter {
     fromAddress: string,
     job: GcVerifyPending
   ): void {
+    const env = job.env;
+    if (this.verifiedGcSignatures.has(this.gcSignatureCacheKey(env.type, env.signature))) {
+      return;
+    }
+
     const payload = {
       kind: 'gc' as const,
       fields,
@@ -384,6 +415,7 @@ export class GroupCallManager extends EventEmitter {
         this.logVerifyFailure(job);
         return;
       }
+      this.rememberVerifiedGcSignature(env.type, env.signature);
       try {
         this.applyVerifiedJobSync(job);
       } catch (err) {
@@ -450,6 +482,8 @@ export class GroupCallManager extends EventEmitter {
     if (this.seenMsgIdTimer) { clearInterval(this.seenMsgIdTimer); this.seenMsgIdTimer = null; }
     this.participantNodeIds.clear();
     this.rooms.clear();
+    this.verifiedGcSignatures.clear();
+    this.lastStaleTopologyLogAt = 0;
     loggerLog('[GCall] GroupCallManager stopped.');
   }
 
@@ -830,7 +864,11 @@ export class GroupCallManager extends EventEmitter {
     let emitFullTopology = true;
     if (room) {
       if (env.topologyEpoch < room.topologyEpoch) {
-        loggerLog(`[GCall] Dropped stale GC_TOPOLOGY epoch ${env.topologyEpoch} < ${room.topologyEpoch}`);
+        const now = Date.now();
+        if (now - this.lastStaleTopologyLogAt >= GC_STALE_TOPOLOGY_LOG_MIN_MS) {
+          this.lastStaleTopologyLogAt = now;
+          loggerLog(`[GCall] Dropped stale GC_TOPOLOGY epoch ${env.topologyEpoch} < ${room.topologyEpoch}`);
+        }
         if ((env.hopsRemaining ?? 0) > 0) {
           this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
         }

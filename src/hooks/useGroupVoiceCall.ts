@@ -254,6 +254,23 @@ function buildTopology(
   return { topologyEpoch, rootForwarder, standbyForwarder, clusters };
 }
 
+/** Compare-only fingerprint: normalize cluster/member order so duplicate applies short-circuit safely. */
+function topologyStructureFingerprint(topology: GroupTopology): string {
+  const normClusters = topology.clusters
+    .map((c) => ({
+      forwarder: c.forwarder,
+      standby: c.standby,
+      members: [...c.members].sort(),
+    }))
+    .sort((a, b) => a.forwarder.localeCompare(b.forwarder));
+  return JSON.stringify({
+    topologyEpoch: topology.topologyEpoch,
+    rootForwarder: topology.rootForwarder,
+    standbyForwarder: topology.standbyForwarder,
+    clusters: normClusters,
+  });
+}
+
 /** Determine this node's role given a topology. */
 function computeMyRole(myAddress: string, topology: GroupTopology): MyRole {
   if (myAddress === topology.rootForwarder) return 'root-forwarder';
@@ -515,6 +532,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const jitterDrainReactTickCountRef = useRef(0);
   const jitterFirstDrainLoggedRef = useRef(false);
   const activeJitterSourcesRef = useRef<Set<string>>(new Set());
+  /** Bumps on each gcall:participant-left so stale computeElectionOrder .then callbacks no-op. */
+  const postLeaveElectionGenRef = useRef(0);
 
   /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
@@ -737,6 +756,15 @@ export function useGroupVoiceCall(uiActive = false) {
       topologyRef.current !== null &&
       topology.rootForwarder !== topologyRef.current.rootForwarder
     ) return;
+
+    const prevTopo = topologyRef.current;
+    if (
+      prevTopo &&
+      topology.topologyEpoch === localEpochRef.current &&
+      topologyStructureFingerprint(topology) === topologyStructureFingerprint(prevTopo)
+    ) {
+      return;
+    }
 
     // A topology naming someone else as root is evidence that peer is alive;
     // reset the heartbeat ref so standby promotion doesn't misfire.
@@ -1929,6 +1957,7 @@ export function useGroupVoiceCall(uiActive = false) {
     chatIdRef.current = '';
     participantsRef.current = new Map();
     seqRef.current = 0;
+    postLeaveElectionGenRef.current = 0;
     localSpeakersRef.current.clear();
     metricsRef.current.reset();
     metricsRef.current.setRole('participant');
@@ -2056,10 +2085,15 @@ export function useGroupVoiceCall(uiActive = false) {
         setActiveSpeakers((prev) => prev.filter((speaker) => speaker !== address));
         setParticipants((prev) => prev.filter((p) => p.address !== address));
 
-        // Recompute topology
+        // Recompute topology (coalesce overlapping elections: only latest leave burst applies)
         const addrs = [...participantsRef.current.keys()];
         if (addrs.length > 0) {
+          postLeaveElectionGenRef.current += 1;
+          const gen = postLeaveElectionGenRef.current;
           computeElectionOrder(addrs, roomIdRef.current).then((sorted) => {
+            if (gen !== postLeaveElectionGenRef.current) return;
+            const addrsNow = [...participantsRef.current.keys()];
+            if (addrsNow.length === 0) return;
             const newTopo = buildTopology(sorted, localEpochRef.current + 1);
             applyTopology(newTopo);
           });
