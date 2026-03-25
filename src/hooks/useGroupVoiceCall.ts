@@ -106,6 +106,11 @@ const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
 const PROMOTION_COOLDOWN_MS = 2_000; // standby waits before promoting
 const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 
+/** Coalesce burst participant-joined/left into one topology election + key pass. */
+const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
+/** Min time between mesh GC_JOIN re-announces (same joinGeneration, new timestamp). */
+const MESH_REANNOUNCE_MIN_INTERVAL_MS = 2_000;
+
 const CLUSTER_SIZE = 10;
 const MAX_ACTIVE_SPEAKERS_LOCAL = 2;
 const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
@@ -538,6 +543,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const activeJitterSourcesRef = useRef<Set<string>>(new Set());
   /** Bumps before each async topology election (join or leave); stale continuations no-op after await. */
   const topologyAsyncGenRef = useRef(0);
+  const topologyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastMeshReannounceAtRef = useRef(0);
 
   /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
@@ -1983,6 +1990,11 @@ export function useGroupVoiceCall(uiActive = false) {
     participantsRef.current = new Map();
     seqRef.current = 0;
     topologyAsyncGenRef.current = 0;
+    if (topologyDebounceTimerRef.current) {
+      clearTimeout(topologyDebounceTimerRef.current);
+      topologyDebounceTimerRef.current = null;
+    }
+    lastMeshReannounceAtRef.current = 0;
     joinGenerationRef.current = null;
     localSpeakersRef.current.clear();
     metricsRef.current.reset();
@@ -2004,6 +2016,60 @@ export function useGroupVoiceCall(uiActive = false) {
       unsubscribeRef.current = null;
       return;
     }
+
+    const scheduleTopologyElectionFlush = () => {
+      if (topologyDebounceTimerRef.current) {
+        clearTimeout(topologyDebounceTimerRef.current);
+        topologyDebounceTimerRef.current = null;
+      }
+      topologyDebounceTimerRef.current = setTimeout(() => {
+        topologyDebounceTimerRef.current = null;
+        const myGen = ++topologyAsyncGenRef.current;
+        void (async () => {
+          const fresh = [...participantsRef.current.keys()];
+          if (fresh.length === 0) return;
+          const sorted = await computeElectionOrder(fresh, roomIdRef.current);
+          if (myGen !== topologyAsyncGenRef.current) return;
+          const newTopo = buildTopology(sorted, localEpochRef.current + 1);
+          const prevRoot = topologyRef.current?.rootForwarder;
+          applyTopology(newTopo);
+
+          const myAddress = userInfo?.address ?? '';
+          isInitiatorRef.current = myAddress === newTopo.rootForwarder;
+          debugLog(
+            '[GCall] Election result — me:',
+            myAddress,
+            'rootForwarder:',
+            newTopo.rootForwarder,
+            'isInitiator:',
+            isInitiatorRef.current,
+            'hasKey:',
+            !!roomKeyRef.current
+          );
+
+          if (
+            !isInitiatorRef.current &&
+            prevRoot !== undefined &&
+            prevRoot !== newTopo.rootForwarder
+          ) {
+            roomKeyRef.current = null;
+            syncDecryptWorkerRoomKey(null);
+          }
+
+          if (isInitiatorRef.current && !roomKeyRef.current) {
+            debugLog('[GCall] Generating room key and starting audio capture');
+            const newKey = naclApi.randomBytes(32);
+            roomKeyRef.current = newKey;
+            syncDecryptWorkerRoomKey(newKey);
+            startAudioCapture();
+            void distributeRoomKey(newKey);
+          } else if (isInitiatorRef.current && roomKeyRef.current) {
+            debugLog('[GCall] Already have key — distributing to full roster after election');
+            void distributeRoomKey(roomKeyRef.current);
+          }
+        })();
+      }, TOPOLOGY_ELECTION_DEBOUNCE_MS);
+    };
 
     const unsub = window.groupCall.onEvent((event: string, payload: any) => {
       if (event === 'gcall:participant-joined') {
@@ -2082,83 +2148,42 @@ export function useGroupVoiceCall(uiActive = false) {
 
         // Re-announce ourselves to the newly discovered peer so they learn about us.
         // Peers who joined before the flood may have missed our GC_JOIN; re-sends fix that.
+        // Throttled to limit signed GC_JOIN / verify load during mesh bursts.
         if (address !== userInfo?.address && userInfo?.address && userInfo?.publicKey) {
           const jg = joinGenerationRef.current;
           if (jg !== null) {
-            const rts = Date.now();
-            signGroupCallFields({
-              type: 'GC_JOIN',
-              roomId,
-              chatId: chatIdRef.current,
-              fromAddress: userInfo.address,
-              fromPublicKey: userInfo.publicKey,
-              timestamp: rts,
-              joinGeneration: jg,
-            })
-              .then((rsig) => {
-                if (rsig) {
-                  window.groupCall.join(
-                    roomId,
-                    chatIdRef.current,
-                    userInfo.address,
-                    rsig,
-                    userInfo.publicKey!,
-                    rts,
-                    jg
-                  );
-                }
+            const throttleNow = Date.now();
+            if (throttleNow - lastMeshReannounceAtRef.current >= MESH_REANNOUNCE_MIN_INTERVAL_MS) {
+              lastMeshReannounceAtRef.current = throttleNow;
+              const rts = Date.now();
+              signGroupCallFields({
+                type: 'GC_JOIN',
+                roomId,
+                chatId: chatIdRef.current,
+                fromAddress: userInfo.address,
+                fromPublicKey: userInfo.publicKey,
+                timestamp: rts,
+                joinGeneration: jg,
               })
-              .catch(() => {});
+                .then((rsig) => {
+                  if (rsig) {
+                    window.groupCall.join(
+                      roomId,
+                      chatIdRef.current,
+                      userInfo.address,
+                      rsig,
+                      userInfo.publicKey!,
+                      rts,
+                      jg
+                    );
+                  }
+                })
+                .catch(() => {});
+            }
           }
         }
 
-        const myGen = ++topologyAsyncGenRef.current;
-        void (async () => {
-          const fresh = [...participantsRef.current.keys()];
-          if (fresh.length === 0) return;
-          const sorted = await computeElectionOrder(fresh, roomIdRef.current);
-          if (myGen !== topologyAsyncGenRef.current) return;
-          const newTopo = buildTopology(sorted, localEpochRef.current + 1);
-          const prevRoot = topologyRef.current?.rootForwarder;
-          applyTopology(newTopo);
-
-          const myAddress = userInfo?.address ?? '';
-          // Only the elected root-forwarder is the key authority.
-          isInitiatorRef.current = myAddress === newTopo.rootForwarder;
-          debugLog(
-            '[GCall] Election result — me:',
-            myAddress,
-            'rootForwarder:',
-            newTopo.rootForwarder,
-            'isInitiator:',
-            isInitiatorRef.current,
-            'hasKey:',
-            !!roomKeyRef.current
-          );
-
-          // Root handoff: drop media key so handleRoomKey accepts the new root's GC_KEY.
-          // Stable non-root + unchanged root: keep key (avoids racing participant-joined vs GC_KEY).
-          if (
-            !isInitiatorRef.current &&
-            prevRoot !== undefined &&
-            prevRoot !== newTopo.rootForwarder
-          ) {
-            roomKeyRef.current = null;
-            syncDecryptWorkerRoomKey(null);
-          }
-
-          if (isInitiatorRef.current && !roomKeyRef.current) {
-            debugLog('[GCall] Generating room key and starting audio capture');
-            const newKey = naclApi.randomBytes(32);
-            roomKeyRef.current = newKey;
-            syncDecryptWorkerRoomKey(newKey);
-            startAudioCapture();
-            void distributeRoomKey(newKey);
-          } else if (isInitiatorRef.current && roomKeyRef.current) {
-            debugLog('[GCall] Already have key — distributing to full roster after election');
-            void distributeRoomKey(roomKeyRef.current);
-          }
-        })();
+        scheduleTopologyElectionFlush();
       }
 
       if (event === 'gcall:participant-left') {
@@ -2173,24 +2198,7 @@ export function useGroupVoiceCall(uiActive = false) {
         const addrs = [...participantsRef.current.keys()];
         if (addrs.length === 0) return;
 
-        const myGen = ++topologyAsyncGenRef.current;
-        void (async () => {
-          const fresh = [...participantsRef.current.keys()];
-          if (fresh.length === 0) return;
-          const sorted = await computeElectionOrder(fresh, roomIdRef.current);
-          if (myGen !== topologyAsyncGenRef.current) return;
-          const newTopo = buildTopology(sorted, localEpochRef.current + 1);
-          applyTopology(newTopo);
-
-          const myAddress = userInfo?.address ?? '';
-          isInitiatorRef.current = myAddress === newTopo.rootForwarder;
-          if (isInitiatorRef.current && roomKeyRef.current) {
-            const newKey = naclApi.randomBytes(32);
-            roomKeyRef.current = newKey;
-            syncDecryptWorkerRoomKey(newKey);
-            void distributeRoomKey(newKey);
-          }
-        })();
+        scheduleTopologyElectionFlush();
       }
 
       if (event === 'gcall:topology') {
@@ -2228,7 +2236,14 @@ export function useGroupVoiceCall(uiActive = false) {
     });
 
     unsubscribeRef.current = unsub;
-    return () => { unsub(); unsubscribeRef.current = null; };
+    return () => {
+      unsub();
+      unsubscribeRef.current = null;
+      if (topologyDebounceTimerRef.current) {
+        clearTimeout(topologyDebounceTimerRef.current);
+        topologyDebounceTimerRef.current = null;
+      }
+    };
   }, [
     applyTopology,
     closePeerConnection,

@@ -258,8 +258,8 @@ type GcVerifyPending =
   | { kind: 'leave'; env: GcLeaveEnvelope }
   | { kind: 'topology'; env: GcTopologyEnvelope };
 
-const GC_VERIFY_WORKER_COUNT = 3;
-const GC_MAX_PENDING_VERIFY = 2048;
+const GC_VERIFY_WORKER_COUNT = 6;
+const GC_MAX_PENDING_VERIFY = 4096;
 /** Same signed GC_* envelope may arrive on many P2P outer ids; skip re-verify after first success. */
 const GC_VERIFIED_SIGNATURE_CACHE_MAX = 4096;
 /** Rate-limit stale topology logs (hot path under mesh relay). */
@@ -314,6 +314,8 @@ export class GroupCallManager extends EventEmitter {
 
   /** Verified Ed25519 signatures for GC_JOIN / GC_LEAVE / GC_TOPOLOGY (LRU by insertion order). */
   private verifiedGcSignatures = new Map<string, true>();
+  /** In-flight verify promises keyed by type+signature — coalesce duplicate envelopes before cache is warm. */
+  private inFlightGcVerify = new Map<string, Promise<void>>();
   private lastStaleTopologyLogAt = 0;
 
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
@@ -401,7 +403,11 @@ export class GroupCallManager extends EventEmitter {
     job: GcVerifyPending
   ): void {
     const env = job.env;
-    if (this.verifiedGcSignatures.has(this.gcSignatureCacheKey(env.type, env.signature))) {
+    const cacheKey = this.gcSignatureCacheKey(env.type, env.signature);
+    if (this.verifiedGcSignatures.has(cacheKey)) {
+      return;
+    }
+    if (this.inFlightGcVerify.has(cacheKey)) {
       return;
     }
 
@@ -412,18 +418,24 @@ export class GroupCallManager extends EventEmitter {
       fromPublicKey,
       fromAddress,
     };
-    void this.verifyPool.verify(payload).then((ok) => {
-      if (!ok) {
-        this.logVerifyFailure(job);
-        return;
-      }
-      this.rememberVerifiedGcSignature(env.type, env.signature);
-      try {
-        this.applyVerifiedJobSync(job);
-      } catch (err) {
-        loggerError('[GCall] Error applying verified message:', err);
-      }
-    });
+    const p = this.verifyPool
+      .verify(payload)
+      .then((ok) => {
+        if (!ok) {
+          this.logVerifyFailure(job);
+          return;
+        }
+        this.rememberVerifiedGcSignature(env.type, env.signature);
+        try {
+          this.applyVerifiedJobSync(job);
+        } catch (err) {
+          loggerError('[GCall] Error applying verified message:', err);
+        }
+      })
+      .finally(() => {
+        this.inFlightGcVerify.delete(cacheKey);
+      });
+    this.inFlightGcVerify.set(cacheKey, p);
   }
 
   private applyVerifiedJobSync(job: GcVerifyPending): void {
@@ -485,6 +497,7 @@ export class GroupCallManager extends EventEmitter {
     this.participantNodeIds.clear();
     this.rooms.clear();
     this.verifiedGcSignatures.clear();
+    this.inFlightGcVerify.clear();
     this.lastStaleTopologyLogAt = 0;
     loggerLog('[GCall] GroupCallManager stopped.');
   }
@@ -731,6 +744,12 @@ export class GroupCallManager extends EventEmitter {
       ) {
         this.relayDisinterestedSignedControl(env);
       }
+      return;
+    }
+
+    const now = Date.now();
+    if (now - env.timestamp > GC_JOIN_TTL_MS) {
+      loggerLog(`[GCall] Dropped GC_JOIN: expired from ${env.fromAddress} (pre-verify)`);
       return;
     }
 
