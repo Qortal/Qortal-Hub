@@ -422,7 +422,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const topologyRef = useRef<GroupTopology | null>(null);
   const localEpochRef = useRef<number>(0);
   const myRoleRef = useRef<MyRole>('participant');
-  const participantsRef = useRef<Map<string, { publicKey: string }>>(new Map());
+  /** lastJoinTs = latest seen GC_JOIN timestamp for this address (rejoin detection). */
+  const participantsRef = useRef<Map<string, { publicKey: string; lastJoinTs: number }>>(new Map());
 
   // Audio
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -1470,12 +1471,16 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Room key distribution ─────────────────────────────────────────────────
 
-  const distributeRoomKey = useCallback(async (key: Uint8Array) => {
+  const distributeRoomKey = useCallback(async (
+    key: Uint8Array,
+    recipients?: ReadonlyMap<string, { publicKey: string }>,
+  ) => {
     if (!userInfo?.address) return;
     const myAddr = userInfo.address;
-    debugLog('[GCall] distributeRoomKey — recipients:', [...participantsRef.current.keys()].filter(a => a !== myAddr));
+    const roster = recipients ?? participantsRef.current;
+    debugLog('[GCall] distributeRoomKey — recipients:', [...roster.keys()].filter((a) => a !== myAddr));
 
-    for (const [addr, { publicKey }] of participantsRef.current) {
+    for (const [addr, { publicKey }] of roster) {
       if (addr === myAddr) continue;
 
       // Encrypt key for this participant using their Ed25519 public key.
@@ -1623,7 +1628,10 @@ export function useGroupVoiceCall(uiActive = false) {
     }
 
     // Add self to participant list
-    participantsRef.current.set(userInfo.address, { publicKey: userInfo.publicKey });
+    participantsRef.current.set(userInfo.address, {
+      publicKey: userInfo.publicKey,
+      lastJoinTs: ts,
+    });
     setParticipants([{ address: userInfo.address, publicKey: userInfo.publicKey, speaking: false, role: 'participant' }]);
 
     // Send join to network
@@ -1761,81 +1769,98 @@ export function useGroupVoiceCall(uiActive = false) {
     const unsub = window.groupCall.onEvent((event: string, payload: any) => {
       if (event === 'gcall:participant-joined') {
         const { roomId, address, publicKey } = payload;
+        const joinTs = Number(payload.timestamp);
         if (roomId !== roomIdRef.current) return;
-        if (!participantsRef.current.has(address)) {
-          participantsRef.current.set(address, { publicKey });
+        if (!Number.isFinite(joinTs)) return;
+        // Self is already in the roster from joinGroupCall; relayed GC_JOIN must not run rejoin teardown.
+        if (address === userInfo?.address) return;
+
+        const existing = participantsRef.current.get(address);
+        // Same or older GC_JOIN (relay duplicate) — ignore to avoid topology churn.
+        if (existing && joinTs <= existing.lastJoinTs) return;
+
+        // Newer timestamp + same publicKey = normal mesh re-announce (every GC_JOIN uses Date.now()),
+        // not leave/reconnect. Updating lastJoinTs only — do not tear down WebRTC or bump topology.
+        if (existing && joinTs > existing.lastJoinTs && publicKey === existing.publicKey) {
+          participantsRef.current.set(address, { publicKey, lastJoinTs: joinTs });
+          return;
+        }
+
+        const isNew = !existing;
+        // Same address, different key (rare): recycle media/RTC state.
+        const publicKeyRotated = Boolean(existing && publicKey !== existing.publicKey);
+
+        if (isNew) {
+          participantsRef.current.set(address, { publicKey, lastJoinTs: joinTs });
           setParticipants((prev) => {
             if (prev.some((p) => p.address === address)) return prev;
             return [...prev, { address, publicKey, speaking: false, role: 'participant' }];
           });
-
-          // Re-announce ourselves to the newly discovered peer so they learn about us.
-          // Peers who joined the room before the newcomer already sent their GC_JOIN as a
-          // flood; by the time the newcomer subscribes that flood is gone.  Re-sending a
-          // fresh GC_JOIN ensures the other side fires gcall:participant-joined for us.
-          if (address !== userInfo?.address && userInfo?.address && userInfo?.publicKey) {
-            const rts = Date.now();
-            signGroupCallFields({
-              type: 'GC_JOIN', roomId, chatId: chatIdRef.current,
-              fromAddress: userInfo.address,
-              fromPublicKey: userInfo.publicKey, timestamp: rts,
-            }).then((rsig) => {
-              if (rsig) window.groupCall.join(
-                roomId, chatIdRef.current, userInfo.address, rsig, userInfo.publicKey!, rts
-              );
-            }).catch(() => {});
-          }
-
-          // Recompute topology only when a genuinely new participant arrives.
-          // Keeping this inside the guard prevents duplicate P2P relay deliveries
-          // from incrementing the epoch multiple times.
-          const addrs = [...participantsRef.current.keys()];
-          computeElectionOrder(addrs, roomIdRef.current).then((sorted) => {
-            const newTopo = buildTopology(sorted, localEpochRef.current + 1);
-            applyTopology(newTopo);
-
-            const myAddress = userInfo?.address ?? '';
-            // Only the elected root-forwarder is the key authority.
-            // This is deterministic: all peers agree on sorted[0].
-            isInitiatorRef.current = myAddress === newTopo.rootForwarder;
-            debugLog('[GCall] Election result — me:', myAddress, 'rootForwarder:', newTopo.rootForwarder, 'isInitiator:', isInitiatorRef.current, 'hasKey:', !!roomKeyRef.current);
-
-            if (isInitiatorRef.current && !roomKeyRef.current) {
-              // I am the key authority — generate key, start audio, distribute
-              debugLog('[GCall] Generating room key and starting audio capture');
-              const newKey = naclApi.randomBytes(32);
-              roomKeyRef.current = newKey;
-              syncDecryptWorkerRoomKey(newKey);
-              startAudioCapture();
-              const origParticipants = participantsRef.current;
-              const tempMap = new Map([[address, { publicKey }]]);
-              participantsRef.current = tempMap;
-              distributeRoomKey(newKey).finally(() => {
-                // Only restore if cleanup hasn't replaced participantsRef with a new Map.
-                // If the call ended while distribution was in flight, participantsRef.current
-                // is a different object (set by cleanup) and we must NOT overwrite it.
-                if (participantsRef.current === tempMap) {
-                  participantsRef.current = origParticipants;
-                }
-              });
-            } else if (isInitiatorRef.current && roomKeyRef.current) {
-              // Already have key (subsequent participant joining) — distribute only
-              debugLog('[GCall] Already have key — distributing to new participant', address);
-              const origParticipants = participantsRef.current;
-              const tempMap = new Map([[address, { publicKey }]]);
-              participantsRef.current = tempMap;
-              distributeRoomKey(roomKeyRef.current).finally(() => {
-                if (participantsRef.current === tempMap) {
-                  participantsRef.current = origParticipants;
-                }
-              });
-            } else if (!isInitiatorRef.current) {
-              // I am not the key authority — discard any self-generated key so
-              // handleRoomKey will accept the real key from the root-forwarder
-              roomKeyRef.current = null;
+        } else if (publicKeyRotated) {
+          participantsRef.current.set(address, { publicKey, lastJoinTs: joinTs });
+          closePeerConnection(address);
+          disposeParticipantAudio(address);
+          setParticipants((prev) => {
+            const i = prev.findIndex((p) => p.address === address);
+            if (i === -1) {
+              return [...prev, { address, publicKey, speaking: false, role: 'participant' }];
             }
+            return prev.map((p) => (p.address === address ? { ...p, publicKey } : p));
           });
         }
+
+        // Re-announce ourselves to the newly discovered peer so they learn about us.
+        // Peers who joined before the flood may have missed our GC_JOIN; re-sends fix that.
+        if (address !== userInfo?.address && userInfo?.address && userInfo?.publicKey) {
+          const rts = Date.now();
+          signGroupCallFields({
+            type: 'GC_JOIN', roomId, chatId: chatIdRef.current,
+            fromAddress: userInfo.address,
+            fromPublicKey: userInfo.publicKey, timestamp: rts,
+          }).then((rsig) => {
+            if (rsig) window.groupCall.join(
+              roomId, chatIdRef.current, userInfo.address, rsig, userInfo.publicKey!, rts
+            );
+          }).catch(() => {});
+        }
+
+        const addrs = [...participantsRef.current.keys()];
+        computeElectionOrder(addrs, roomIdRef.current).then((sorted) => {
+          const newTopo = buildTopology(sorted, localEpochRef.current + 1);
+          const prevRoot = topologyRef.current?.rootForwarder;
+          applyTopology(newTopo);
+
+          const myAddress = userInfo?.address ?? '';
+          // Only the elected root-forwarder is the key authority.
+          isInitiatorRef.current = myAddress === newTopo.rootForwarder;
+          debugLog('[GCall] Election result — me:', myAddress, 'rootForwarder:', newTopo.rootForwarder, 'isInitiator:', isInitiatorRef.current, 'hasKey:', !!roomKeyRef.current);
+
+          // Root handoff: drop media key so handleRoomKey accepts the new root's GC_KEY.
+          // Stable non-root + unchanged root: keep key (avoids racing participant-joined vs GC_KEY).
+          if (
+            !isInitiatorRef.current &&
+            prevRoot !== undefined &&
+            prevRoot !== newTopo.rootForwarder
+          ) {
+            roomKeyRef.current = null;
+            syncDecryptWorkerRoomKey(null);
+          }
+
+          if (isInitiatorRef.current && !roomKeyRef.current) {
+            debugLog('[GCall] Generating room key and starting audio capture');
+            const newKey = naclApi.randomBytes(32);
+            roomKeyRef.current = newKey;
+            syncDecryptWorkerRoomKey(newKey);
+            startAudioCapture();
+            void distributeRoomKey(newKey);
+          } else if (isInitiatorRef.current && roomKeyRef.current) {
+            debugLog('[GCall] Already have key — distributing to participant', address);
+            void distributeRoomKey(
+              roomKeyRef.current,
+              new Map([[address, { publicKey }]]),
+            );
+          }
+        });
       }
 
       if (event === 'gcall:participant-left') {
@@ -1901,7 +1926,20 @@ export function useGroupVoiceCall(uiActive = false) {
 
     unsubscribeRef.current = unsub;
     return () => { unsub(); unsubscribeRef.current = null; };
-  }, [applyTopology, closePeerConnection, disposeParticipantAudio, distributeRoomKey, handleIncomingAudioPacket, handleRoomKey, handleRtcSignal, roomState, uiActive, userInfo?.address]);
+  }, [
+    applyTopology,
+    closePeerConnection,
+    disposeParticipantAudio,
+    distributeRoomKey,
+    handleIncomingAudioPacket,
+    handleRoomKey,
+    handleRtcSignal,
+    roomState,
+    startAudioCapture,
+    syncDecryptWorkerRoomKey,
+    uiActive,
+    userInfo?.address,
+  ]);
 
   // Cleanup only on real unmount. Do NOT key this on `cleanup` — when `cleanup`'s identity
   // changes (e.g. flushMetrics used to depend on roomState), React would run the previous
