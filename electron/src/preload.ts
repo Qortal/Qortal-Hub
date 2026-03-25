@@ -918,8 +918,19 @@ try {
       localAddress: string,
       signature: string,
       publicKey: string,
-      timestamp: number
-    ) => ipcRenderer.invoke('gcall:join', roomId, chatId, localAddress, signature, publicKey, timestamp),
+      timestamp: number,
+      joinGeneration?: number
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:join',
+        roomId,
+        chatId,
+        localAddress,
+        signature,
+        publicKey,
+        timestamp,
+        joinGeneration
+      ),
 
     /** Leave a group call room. */
     leave: async (

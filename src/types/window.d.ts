@@ -230,7 +230,15 @@ declare global {
 
     // ── Group Call ────────────────────────────────────────────────────────────
     groupCall?: {
-      join: (roomId: string, chatId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean; error?: string }>;
+      join: (
+        roomId: string,
+        chatId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number,
+        joinGeneration?: number
+      ) => Promise<{ success: boolean; error?: string }>;
       leave: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       broadcastTopology: (roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       sendAudio: (roomId: string, toAddress: string, data: Uint8Array) => Promise<{ success: boolean }>;

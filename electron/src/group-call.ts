@@ -62,6 +62,8 @@ export interface GcJoinEnvelope {
   fromPublicKey: string;
   signature: string;
   timestamp: number;
+  /** Per logical join session; stable across mesh re-announces from the same client. */
+  joinGeneration?: number;
   hopsRemaining?: number;
 }
 
@@ -518,7 +520,8 @@ export class GroupCallManager extends EventEmitter {
     localAddress: string,
     signature: string,
     publicKey: string,
-    timestamp: number
+    timestamp: number,
+    joinGeneration?: number
   ): void {
     let room = this.rooms.get(roomId);
     if (!room) {
@@ -540,6 +543,7 @@ export class GroupCallManager extends EventEmitter {
       fromPublicKey: publicKey,
       signature,
       timestamp,
+      ...(joinGeneration !== undefined ? { joinGeneration } : {}),
       hopsRemaining: GC_MAX_HOPS,
     };
     this.p2p.send(null, env);
@@ -738,6 +742,9 @@ export class GroupCallManager extends EventEmitter {
         fromAddress: env.fromAddress,
         fromPublicKey: env.fromPublicKey,
         timestamp: env.timestamp,
+        ...(typeof env.joinGeneration === 'number' && Number.isFinite(env.joinGeneration)
+          ? { joinGeneration: env.joinGeneration }
+          : {}),
       },
       env.signature,
       env.fromPublicKey,
@@ -779,6 +786,9 @@ export class GroupCallManager extends EventEmitter {
         address: env.fromAddress,
         publicKey: env.fromPublicKey,
         timestamp: env.timestamp,
+        ...(typeof env.joinGeneration === 'number' && Number.isFinite(env.joinGeneration)
+          ? { joinGeneration: env.joinGeneration }
+          : {}),
       });
     }
 

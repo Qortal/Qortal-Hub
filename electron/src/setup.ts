@@ -1945,11 +1945,12 @@ ipcMain.handle(
     localAddress: string,
     signature: string,
     publicKey: string,
-    timestamp: number
+    timestamp: number,
+    joinGeneration?: number
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.joinRoom(roomId, chatId, localAddress, signature, publicKey, timestamp);
+    mgr.joinRoom(roomId, chatId, localAddress, signature, publicKey, timestamp, joinGeneration);
     return { success: true };
   }
 );

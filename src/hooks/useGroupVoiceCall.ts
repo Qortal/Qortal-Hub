@@ -476,8 +476,12 @@ export function useGroupVoiceCall(uiActive = false) {
   const topologyRef = useRef<GroupTopology | null>(null);
   const localEpochRef = useRef<number>(0);
   const myRoleRef = useRef<MyRole>('participant');
-  /** lastJoinTs = latest seen GC_JOIN timestamp for this address (rejoin detection). */
-  const participantsRef = useRef<Map<string, { publicKey: string; lastJoinTs: number }>>(new Map());
+  /** lastJoinTs / joinGeneration = latest seen GC_JOIN for this address (rejoin detection). */
+  const participantsRef = useRef<
+    Map<string, { publicKey: string; lastJoinTs: number; joinGeneration?: number }>
+  >(new Map());
+  /** Stable per logical call session; same value on mesh re-announces until cleanup. */
+  const joinGenerationRef = useRef<number | null>(null);
 
   // Audio
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -532,8 +536,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const jitterDrainReactTickCountRef = useRef(0);
   const jitterFirstDrainLoggedRef = useRef(false);
   const activeJitterSourcesRef = useRef<Set<string>>(new Set());
-  /** Bumps on each gcall:participant-left so stale computeElectionOrder .then callbacks no-op. */
-  const postLeaveElectionGenRef = useRef(0);
+  /** Bumps before each async topology election (join or leave); stale continuations no-op after await. */
+  const topologyAsyncGenRef = useRef(0);
 
   /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
@@ -1816,15 +1820,27 @@ export function useGroupVoiceCall(uiActive = false) {
     // Register local address with main process
     await window.groupCall.setLocalAddresses([userInfo.address]);
 
+    const jbuf = new Uint32Array(1);
+    crypto.getRandomValues(jbuf);
+    const joinGeneration = jbuf[0]! >>> 0;
+    joinGenerationRef.current = joinGeneration;
+
     // Sign join envelope
     const ts = Date.now();
     const sig = await signGroupCallFields(
-      { type: 'GC_JOIN', roomId, chatId,
+      {
+        type: 'GC_JOIN',
+        roomId,
+        chatId,
         fromAddress: userInfo.address,
-        fromPublicKey: userInfo.publicKey, timestamp: ts }
+        fromPublicKey: userInfo.publicKey,
+        timestamp: ts,
+        joinGeneration,
+      }
     ).catch(() => '');
     if (!sig) {
       debugWarn('[GCall] Signing failed for GC_JOIN — aborting join');
+      joinGenerationRef.current = null;
       setRoomState('idle');
       return;
     }
@@ -1833,11 +1849,20 @@ export function useGroupVoiceCall(uiActive = false) {
     participantsRef.current.set(userInfo.address, {
       publicKey: userInfo.publicKey,
       lastJoinTs: ts,
+      joinGeneration,
     });
     setParticipants([{ address: userInfo.address, publicKey: userInfo.publicKey, speaking: false, role: 'participant' }]);
 
     // Send join to network
-    await window.groupCall.join(roomId, chatId, userInfo.address, sig, userInfo.publicKey, ts);
+    await window.groupCall.join(
+      roomId,
+      chatId,
+      userInfo.address,
+      sig,
+      userInfo.publicKey,
+      ts,
+      joinGeneration
+    );
 
     setRoomState('connected');
 
@@ -1957,7 +1982,8 @@ export function useGroupVoiceCall(uiActive = false) {
     chatIdRef.current = '';
     participantsRef.current = new Map();
     seqRef.current = 0;
-    postLeaveElectionGenRef.current = 0;
+    topologyAsyncGenRef.current = 0;
+    joinGenerationRef.current = null;
     localSpeakersRef.current.clear();
     metricsRef.current.reset();
     metricsRef.current.setRole('participant');
@@ -1983,34 +2009,66 @@ export function useGroupVoiceCall(uiActive = false) {
       if (event === 'gcall:participant-joined') {
         const { roomId, address, publicKey } = payload;
         const joinTs = Number(payload.timestamp);
+        const incomingGen =
+          typeof payload.joinGeneration === 'number' && Number.isFinite(payload.joinGeneration)
+            ? payload.joinGeneration
+            : undefined;
         if (roomId !== roomIdRef.current) return;
         if (!Number.isFinite(joinTs)) return;
         // Self is already in the roster from joinGroupCall; relayed GC_JOIN must not run rejoin teardown.
         if (address === userInfo?.address) return;
 
+        const wasExisting = participantsRef.current.has(address);
         const existing = participantsRef.current.get(address);
         // Same or older GC_JOIN (relay duplicate) — ignore to avoid topology churn.
         if (existing && joinTs <= existing.lastJoinTs) return;
 
-        // Newer timestamp + same publicKey = normal mesh re-announce (every GC_JOIN uses Date.now()),
-        // not leave/reconnect. Updating lastJoinTs only — do not tear down WebRTC or bump topology.
+        // Same session mesh re-announce: newer ts, same publicKey, compatible joinGeneration.
         if (existing && joinTs > existing.lastJoinTs && publicKey === existing.publicKey) {
-          participantsRef.current.set(address, { publicKey, lastJoinTs: joinTs });
-          return;
-        }
-
-        const isNew = !existing;
-        // Same address, different key (rare): recycle media/RTC state.
-        const publicKeyRotated = Boolean(existing && publicKey !== existing.publicKey);
-
-        if (isNew) {
-          participantsRef.current.set(address, { publicKey, lastJoinTs: joinTs });
+          const genMismatch =
+            existing.joinGeneration !== undefined &&
+            incomingGen !== undefined &&
+            incomingGen !== existing.joinGeneration;
+          if (!genMismatch) {
+            participantsRef.current.set(address, {
+              publicKey,
+              lastJoinTs: joinTs,
+              ...(incomingGen !== undefined || existing.joinGeneration !== undefined
+                ? { joinGeneration: incomingGen ?? existing.joinGeneration }
+                : {}),
+            });
+            return;
+          }
+          participantsRef.current.set(address, {
+            publicKey,
+            lastJoinTs: joinTs,
+            joinGeneration: incomingGen,
+          });
+          closePeerConnection(address);
+          disposeParticipantAudio(address);
+          setParticipants((prev) => {
+            const i = prev.findIndex((p) => p.address === address);
+            if (i === -1) {
+              return [...prev, { address, publicKey, speaking: false, role: 'participant' }];
+            }
+            return prev.map((p) => (p.address === address ? { ...p, publicKey } : p));
+          });
+        } else if (!wasExisting) {
+          participantsRef.current.set(address, {
+            publicKey,
+            lastJoinTs: joinTs,
+            ...(incomingGen !== undefined ? { joinGeneration: incomingGen } : {}),
+          });
           setParticipants((prev) => {
             if (prev.some((p) => p.address === address)) return prev;
             return [...prev, { address, publicKey, speaking: false, role: 'participant' }];
           });
-        } else if (publicKeyRotated) {
-          participantsRef.current.set(address, { publicKey, lastJoinTs: joinTs });
+        } else if (existing && publicKey !== existing.publicKey) {
+          participantsRef.current.set(address, {
+            publicKey,
+            lastJoinTs: joinTs,
+            ...(incomingGen !== undefined ? { joinGeneration: incomingGen } : {}),
+          });
           closePeerConnection(address);
           disposeParticipantAudio(address);
           setParticipants((prev) => {
@@ -2025,20 +2083,41 @@ export function useGroupVoiceCall(uiActive = false) {
         // Re-announce ourselves to the newly discovered peer so they learn about us.
         // Peers who joined before the flood may have missed our GC_JOIN; re-sends fix that.
         if (address !== userInfo?.address && userInfo?.address && userInfo?.publicKey) {
-          const rts = Date.now();
-          signGroupCallFields({
-            type: 'GC_JOIN', roomId, chatId: chatIdRef.current,
-            fromAddress: userInfo.address,
-            fromPublicKey: userInfo.publicKey, timestamp: rts,
-          }).then((rsig) => {
-            if (rsig) window.groupCall.join(
-              roomId, chatIdRef.current, userInfo.address, rsig, userInfo.publicKey!, rts
-            );
-          }).catch(() => {});
+          const jg = joinGenerationRef.current;
+          if (jg !== null) {
+            const rts = Date.now();
+            signGroupCallFields({
+              type: 'GC_JOIN',
+              roomId,
+              chatId: chatIdRef.current,
+              fromAddress: userInfo.address,
+              fromPublicKey: userInfo.publicKey,
+              timestamp: rts,
+              joinGeneration: jg,
+            })
+              .then((rsig) => {
+                if (rsig) {
+                  window.groupCall.join(
+                    roomId,
+                    chatIdRef.current,
+                    userInfo.address,
+                    rsig,
+                    userInfo.publicKey!,
+                    rts,
+                    jg
+                  );
+                }
+              })
+              .catch(() => {});
+          }
         }
 
-        const addrs = [...participantsRef.current.keys()];
-        computeElectionOrder(addrs, roomIdRef.current).then((sorted) => {
+        const myGen = ++topologyAsyncGenRef.current;
+        void (async () => {
+          const fresh = [...participantsRef.current.keys()];
+          if (fresh.length === 0) return;
+          const sorted = await computeElectionOrder(fresh, roomIdRef.current);
+          if (myGen !== topologyAsyncGenRef.current) return;
           const newTopo = buildTopology(sorted, localEpochRef.current + 1);
           const prevRoot = topologyRef.current?.rootForwarder;
           applyTopology(newTopo);
@@ -2046,7 +2125,16 @@ export function useGroupVoiceCall(uiActive = false) {
           const myAddress = userInfo?.address ?? '';
           // Only the elected root-forwarder is the key authority.
           isInitiatorRef.current = myAddress === newTopo.rootForwarder;
-          debugLog('[GCall] Election result — me:', myAddress, 'rootForwarder:', newTopo.rootForwarder, 'isInitiator:', isInitiatorRef.current, 'hasKey:', !!roomKeyRef.current);
+          debugLog(
+            '[GCall] Election result — me:',
+            myAddress,
+            'rootForwarder:',
+            newTopo.rootForwarder,
+            'isInitiator:',
+            isInitiatorRef.current,
+            'hasKey:',
+            !!roomKeyRef.current
+          );
 
           // Root handoff: drop media key so handleRoomKey accepts the new root's GC_KEY.
           // Stable non-root + unchanged root: keep key (avoids racing participant-joined vs GC_KEY).
@@ -2067,13 +2155,10 @@ export function useGroupVoiceCall(uiActive = false) {
             startAudioCapture();
             void distributeRoomKey(newKey);
           } else if (isInitiatorRef.current && roomKeyRef.current) {
-            debugLog('[GCall] Already have key — distributing to participant', address);
-            void distributeRoomKey(
-              roomKeyRef.current,
-              new Map([[address, { publicKey }]]),
-            );
+            debugLog('[GCall] Already have key — distributing to full roster after election');
+            void distributeRoomKey(roomKeyRef.current);
           }
-        });
+        })();
       }
 
       if (event === 'gcall:participant-left') {
@@ -2085,27 +2170,27 @@ export function useGroupVoiceCall(uiActive = false) {
         setActiveSpeakers((prev) => prev.filter((speaker) => speaker !== address));
         setParticipants((prev) => prev.filter((p) => p.address !== address));
 
-        // Recompute topology (coalesce overlapping elections: only latest leave burst applies)
         const addrs = [...participantsRef.current.keys()];
-        if (addrs.length > 0) {
-          postLeaveElectionGenRef.current += 1;
-          const gen = postLeaveElectionGenRef.current;
-          computeElectionOrder(addrs, roomIdRef.current).then((sorted) => {
-            if (gen !== postLeaveElectionGenRef.current) return;
-            const addrsNow = [...participantsRef.current.keys()];
-            if (addrsNow.length === 0) return;
-            const newTopo = buildTopology(sorted, localEpochRef.current + 1);
-            applyTopology(newTopo);
-          });
-        }
+        if (addrs.length === 0) return;
 
-        // Rotate room key on leave
-        if (isInitiatorRef.current && roomKeyRef.current) {
-          const newKey = naclApi.randomBytes(32);
-          roomKeyRef.current = newKey;
-          syncDecryptWorkerRoomKey(newKey);
-          distributeRoomKey(newKey);
-        }
+        const myGen = ++topologyAsyncGenRef.current;
+        void (async () => {
+          const fresh = [...participantsRef.current.keys()];
+          if (fresh.length === 0) return;
+          const sorted = await computeElectionOrder(fresh, roomIdRef.current);
+          if (myGen !== topologyAsyncGenRef.current) return;
+          const newTopo = buildTopology(sorted, localEpochRef.current + 1);
+          applyTopology(newTopo);
+
+          const myAddress = userInfo?.address ?? '';
+          isInitiatorRef.current = myAddress === newTopo.rootForwarder;
+          if (isInitiatorRef.current && roomKeyRef.current) {
+            const newKey = naclApi.randomBytes(32);
+            roomKeyRef.current = newKey;
+            syncDecryptWorkerRoomKey(newKey);
+            void distributeRoomKey(newKey);
+          }
+        })();
       }
 
       if (event === 'gcall:topology') {
