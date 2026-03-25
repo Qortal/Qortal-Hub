@@ -8,7 +8,7 @@
  *   - Adaptive topology: ≤10 members → single forwarder, 11-50 → hierarchical
  *   - WebRTC DataChannel for audio transport (Opus ~24 kbps)
  *   - P2P GC_AUDIO relay as last-resort fallback
- *   - End-to-end encryption via nacl.secretbox with rotating room media key
+ *   - End-to-end encryption: v2 wire nonce||secretbox(metadata+Opus); v1 decode fallback in renderer
  *
  * This module handles only the signaling layer:
  *   GC_JOIN / GC_LEAVE       — room membership
@@ -103,7 +103,7 @@ export interface GcAudioEnvelope {
   type: 'GC_AUDIO';
   roomId: string;
   toAddress: string;
-  /** Base64-encoded encrypted Opus packet */
+  /** Base64-encoded encrypted audio packet (v2 or v1 wire, see renderer audioPacketCodec) */
   data: string;
   hopsRemaining?: number;
 }

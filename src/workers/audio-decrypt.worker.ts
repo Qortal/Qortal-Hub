@@ -1,95 +1,31 @@
 /**
- * audio-decrypt.worker.ts — Web Worker for off-thread audio packet decryption.
+ * audio-decrypt.worker.ts — Web Worker for off-thread audio packet decrypt/encrypt.
  *
- * Offloads nacl.secretbox.open from the renderer's main JS thread.
- * The main thread runs React reconciliation and the 20ms jitter-drain loop;
- * keeping heavy crypto off it eliminates the primary source of lag during calls
- * with 5+ concurrent participants.
+ * Offloads nacl.secretbox from the renderer's main JS thread.
+ * Packet format: shared codec in ../lib/group-call/audioPacketCodec (v2 + v1 decode).
  *
  * Message protocol (main → worker):
  *   { type: 'setRoomKey', roomKey: ArrayBuffer }
  *   { type: 'clearRoomKey' }
- *   { type: 'decrypt', id: number, buffer: ArrayBuffer }
- *   - buffer: transferred (zero-copy) packet bytes
- *   - roomKey is cached in the worker so the main thread doesn't clone it
- *     for every 20 ms packet.
+ *   { type: 'decrypt', id: number, buffer: ArrayBuffer } — buffer transferred
+ *   { type: 'encrypt', id, sourceAddr, vad, seq, timestampMs, opusFrame } — opusFrame transferred
  *
  * Message protocol (worker → main):
  *   { type: 'result', id: number, decoded: DecryptResult | null }
- *
- * The `id` field allows the main thread to correlate out-of-order results.
+ *   { type: 'encryptResult', id: number, packet: ArrayBuffer }
  */
 
-import nacl from '../encryption/nacl-fast';
+import {
+  decodeAudioPacket,
+  encodeAudioPacketV2,
+} from '../lib/group-call/audioPacketCodec';
 
 export interface DecryptResult {
   sourceAddr: string;
   vad: boolean;
   seq: number;
   timestampMs: number;
-  opusFrame: ArrayBuffer; // transferred back to main thread
-}
-
-function encodePacket(
-  sourceAddr: string,
-  vad: boolean,
-  seq: number,
-  timestampMs: number,
-  opusFrame: Uint8Array,
-  roomKey: Uint8Array
-): ArrayBuffer {
-  const addrBytes = new TextEncoder().encode(sourceAddr);
-  const nonce = nacl.randomBytes(24);
-  const ciphertext = (nacl as any).secretbox(opusFrame, nonce, roomKey);
-  const total = 1 + addrBytes.length + 1 + 2 + 4 + 24 + ciphertext.length;
-  const buf = new Uint8Array(total);
-  let off = 0;
-
-  buf[off++] = addrBytes.length;
-  buf.set(addrBytes, off);
-  off += addrBytes.length;
-  buf[off++] = vad ? 1 : 0;
-  buf[off++] = (seq >> 8) & 0xff;
-  buf[off++] = seq & 0xff;
-  buf[off++] = (timestampMs >>> 24) & 0xff;
-  buf[off++] = (timestampMs >>> 16) & 0xff;
-  buf[off++] = (timestampMs >>> 8) & 0xff;
-  buf[off++] = timestampMs & 0xff;
-  buf.set(nonce, off);
-  off += 24;
-  buf.set(ciphertext, off);
-
-  return buf.buffer;
-}
-
-/** Decode an encrypted audio packet. Returns null if decryption fails. */
-function decodePacket(
-  buf: Uint8Array,
-  roomKey: Uint8Array
-): DecryptResult | null {
-  try {
-    let off = 0;
-    const addrLen = buf[off++];
-    const sourceAddr = new TextDecoder().decode(buf.slice(off, off + addrLen));
-    off += addrLen;
-    const vad = buf[off++] === 1;
-    const seq = (buf[off++] << 8) | buf[off++];
-    const timestampMs =
-      (buf[off++] << 24) | (buf[off++] << 16) | (buf[off++] << 8) | buf[off++];
-    const nonce = buf.slice(off, off + 24);
-    off += 24;
-    const ciphertext = buf.slice(off);
-    const plaintext = (nacl as any).secretbox.open(ciphertext, nonce, roomKey);
-    if (!plaintext) return null;
-
-    // Copy the Opus frame into its own buffer so we can transfer it back.
-    const opusFrame = new ArrayBuffer(plaintext.length);
-    new Uint8Array(opusFrame).set(plaintext);
-
-    return { sourceAddr, vad, seq, timestampMs, opusFrame };
-  } catch {
-    return null;
-  }
+  opusFrame: ArrayBuffer;
 }
 
 let roomKeyBytes: Uint8Array | null = null;
@@ -100,14 +36,14 @@ self.onmessage = (
     | { type: 'clearRoomKey' }
     | { type: 'decrypt'; id: number; buffer: ArrayBuffer }
     | {
-      type: 'encrypt';
-      id: number;
-      sourceAddr: string;
-      vad: boolean;
-      seq: number;
-      timestampMs: number;
-      opusFrame: ArrayBuffer;
-    }
+        type: 'encrypt';
+        id: number;
+        sourceAddr: string;
+        vad: boolean;
+        seq: number;
+        timestampMs: number;
+        opusFrame: ArrayBuffer;
+      }
   >
 ) => {
   const data = e.data;
@@ -126,7 +62,7 @@ self.onmessage = (
   }
 
   if (data.type === 'encrypt') {
-    const packet = encodePacket(
+    const u8 = encodeAudioPacketV2(
       data.sourceAddr,
       data.vad,
       data.seq,
@@ -134,7 +70,8 @@ self.onmessage = (
       new Uint8Array(data.opusFrame),
       roomKeyBytes
     );
-    self.postMessage({ type: 'encryptResult', id: data.id, packet }, [packet]);
+    // encodeAudioPacketV2 uses new Uint8Array(total) → byteOffset === 0; whole buffer transferable.
+    self.postMessage({ type: 'encryptResult', id: data.id, packet: u8.buffer }, [u8.buffer]);
     return;
   }
 
@@ -142,11 +79,25 @@ self.onmessage = (
     return;
   }
 
-  const decoded = decodePacket(new Uint8Array(data.buffer), roomKeyBytes);
+  const decoded = decodeAudioPacket(new Uint8Array(data.buffer), roomKeyBytes);
 
   if (decoded) {
-    // Transfer the decoded Opus frame back to the main thread without copying.
-    self.postMessage({ type: 'result', id: data.id, decoded }, [decoded.opusFrame]);
+    const opusFrame = new ArrayBuffer(decoded.opusFrame.length);
+    new Uint8Array(opusFrame).set(decoded.opusFrame);
+    self.postMessage(
+      {
+        type: 'result',
+        id: data.id,
+        decoded: {
+          sourceAddr: decoded.sourceAddr,
+          vad: decoded.vad,
+          seq: decoded.seq,
+          timestampMs: decoded.timestampMs,
+          opusFrame,
+        },
+      },
+      [opusFrame]
+    );
   } else {
     self.postMessage({ type: 'result', id: data.id, decoded: null });
   }
