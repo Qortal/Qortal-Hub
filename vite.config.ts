@@ -23,6 +23,8 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'electron/src/**/*.test.ts'],
+    environmentMatchGlobs: [['electron/**', 'node']],
   },
   assetsInclude: ['**/*.wasm'],
   plugins: [

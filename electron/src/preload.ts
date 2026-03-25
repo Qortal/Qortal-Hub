@@ -4,6 +4,29 @@ require('./rt/electron-rt');
 import { log as loggerLog, error as loggerError } from './logger';
 loggerLog('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
+import { buildBootstrapIceServers } from './stun-bootstrap';
+
+function parseHubBootstrapSeedsFromArgv(): string[] {
+  const prefix = '--hub-p2p-seeds=';
+  for (const arg of process.argv) {
+    if (!arg.startsWith(prefix)) continue;
+    try {
+      const raw = Buffer.from(arg.slice(prefix.length), 'base64').toString(
+        'utf8'
+      );
+      const j = JSON.parse(raw) as { seeds?: unknown };
+      if (!Array.isArray(j.seeds)) return [];
+      return j.seeds.filter((s): s is string => typeof s === 'string');
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+const hubP2pBootstrapIceServers = buildBootstrapIceServers(
+  parseHubBootstrapSeedsFromArgv()
+);
 
 type PresenceUpdatePayload = {
   address: string;
@@ -250,6 +273,7 @@ try {
     setAppSettings: (settings: {
       closeAction?: 'ask' | 'minimizeToTray' | 'quit';
       p2pEnabled?: boolean;
+      legacyPublicStunFallback?: boolean;
     }) => ipcRenderer.invoke('appSettings:set', settings),
   });
 
@@ -785,6 +809,14 @@ try {
         maybeUnsubscribeChatRead();
       };
     },
+  });
+
+  contextBridge.exposeInMainWorld('hub', {
+    getBootstrapIceServers: () => hubP2pBootstrapIceServers,
+    getIceServers: () =>
+      ipcRenderer.invoke('hub:getIceServers') as Promise<{ urls: string }[]>,
+    reportStunCallOutcome: (stunUrls: string[], success: boolean) =>
+      ipcRenderer.invoke('hub:reportStunCallOutcome', stunUrls, success),
   });
 
   // ── Call API ─────────────────────────────────────────────────────────────────

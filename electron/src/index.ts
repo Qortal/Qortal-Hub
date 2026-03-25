@@ -27,6 +27,7 @@ import {
   attachCallListeners,
   attachGroupCallListeners,
   setLastP2POptions,
+  startDecentralizedStunAfterP2P,
 } from './setup';
 import {
   startP2PNetwork,
@@ -119,6 +120,9 @@ export const myCapacitorApp = new ElectronCapacitorApp(
   appMenuBarMenuTemplate
 );
 
+/** Default P2P seed peers (2–4 replaceable via settings / p2p:start). */
+const HUB_P2P_BOOTSTRAP_SEEDS = ['qortal.home.ro:62391'];
+
 // If deeplinking is enabled then we will set it up here.
 if (capacitorFileConfig.electron?.deepLinkingEnabled) {
   setupElectronDeepLinking(myCapacitorApp, {
@@ -197,7 +201,7 @@ async function setupMultiInstanceUserData(
   // Apply persisted local node CA (if any) so first request has the CA and Chromium doesn't cache a failure.
   loadPersistedLocalNodeCa();
 
-  await myCapacitorApp.init();
+  await myCapacitorApp.init(HUB_P2P_BOOTSTRAP_SEEDS);
 
   // Auto-start the P2P network unless the user has disabled it in settings.
   const appSettings = await readAppSettings();
@@ -219,13 +223,14 @@ async function setupMultiInstanceUserData(
       const p2pOptions = {
         port: p2pPort,
         apiPort,
-        initialPeers: ['qortal.home.ro:62391'],
+        initialPeers: [...HUB_P2P_BOOTSTRAP_SEEDS],
         dbPath: sharedDbPath,
       };
       // Persist the options so the settings toggle can restart with the same config.
       setLastP2POptions(p2pOptions);
       const p2pNetwork = await startP2PNetwork(p2pOptions);
       attachP2PListeners(p2pNetwork);
+      await startDecentralizedStunAfterP2P(p2pNetwork, p2pOptions);
       loggerLog(`[P2P] Auto-started on port ${p2pPort}`);
 
       // Start the presence manager, wired to the P2P network.
@@ -285,7 +290,7 @@ app.on('activate', async function () {
   let mainWindow = myCapacitorApp.getMainWindow();
 
   if (mainWindow.isDestroyed()) {
-    await myCapacitorApp.init();
+    await myCapacitorApp.init(HUB_P2P_BOOTSTRAP_SEEDS);
     mainWindow = myCapacitorApp.getMainWindow();
     if (mainWindow) {
       installCertificateVerification(mainWindow.webContents.session);

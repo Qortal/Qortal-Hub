@@ -20,7 +20,7 @@ import {
 import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { log as loggerLog, error as loggerError, warn as loggerWarn } from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
@@ -57,6 +57,11 @@ import {
   getP2PNetwork,
   type P2PNetworkOptions,
 } from './p2p-network';
+import {
+  startStunCoordinator,
+  getStunCoordinator,
+  GET_ICE_SERVERS_DEADLINE_MS,
+} from './stun-coordinator';
 import {
   startPresenceManager,
   stopPresenceManager,
@@ -202,7 +207,7 @@ export class ElectronCapacitorApp {
     return this.customScheme;
   }
 
-  async init(): Promise<void> {
+  async init(p2pBootstrapSeeds?: string[]): Promise<void> {
     const icon = nativeImage.createFromPath(
       join(
         app.getAppPath(),
@@ -216,6 +221,11 @@ export class ElectronCapacitorApp {
     });
     // Setup preload script path and construct our main window.
     const preloadPath = join(app.getAppPath(), 'build', 'src', 'preload.js');
+    const seedsPayload = JSON.stringify({
+      v: 1,
+      seeds: Array.isArray(p2pBootstrapSeeds) ? p2pBootstrapSeeds : [],
+    });
+    const seedsB64 = Buffer.from(seedsPayload, 'utf8').toString('base64');
     this.MainWindow = new BrowserWindow({
       icon,
       show: false,
@@ -229,6 +239,7 @@ export class ElectronCapacitorApp {
         nodeIntegration: true,
         contextIsolation: true,
         preload: preloadPath,
+        additionalArguments: [`--hub-p2p-seeds=${seedsB64}`],
       },
     });
     this.mainWindowState.manage(this.MainWindow);
@@ -706,6 +717,11 @@ export interface AppSettings {
   closeAction?: CloseAction;
   /** Whether the Hub P2P network auto-starts on launch (default true). */
   p2pEnabled?: boolean;
+  /**
+   * When true, append public Google/Cloudflare STUN URLs to ICE (rollback / lab).
+   * Default false — use decentralized peer STUN + bootstrap.
+   */
+  legacyPublicStunFallback?: boolean;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = { closeAction: 'ask', p2pEnabled: true };
@@ -725,6 +741,7 @@ export async function readAppSettings(): Promise<AppSettings> {
           ? (parsed.closeAction as CloseAction)
           : DEFAULT_APP_SETTINGS.closeAction,
       p2pEnabled: parsed.p2pEnabled === false ? false : true,
+      legacyPublicStunFallback: parsed.legacyPublicStunFallback === true,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -902,7 +919,55 @@ ipcMain.handle(
     const current = await readAppSettings();
     const next: AppSettings = { ...current, ...partial };
     await writeAppSettings(next);
+    getStunCoordinator()?.setLegacyPublicStunFallback(
+      next.legacyPublicStunFallback === true
+    );
     return next;
+  }
+);
+
+ipcMain.handle('hub:getIceServers', async () => {
+  const c = getStunCoordinator();
+  if (!c) return [];
+  return await new Promise<{ urls: string }[]>((resolve, reject) => {
+    const slots: { immediate?: ReturnType<typeof setImmediate> } = {};
+    const timeoutId = setTimeout(() => {
+      const im = slots.immediate;
+      if (im !== undefined) {
+        clearImmediate(im);
+      }
+      loggerLog(
+        '[STUN][telemetry] getIceServers ipc deadline — returning last snapshot'
+      );
+      resolve(c.peekLastServedIceServers());
+    }, GET_ICE_SERVERS_DEADLINE_MS);
+
+    slots.immediate = setImmediate(() => {
+      try {
+        const list = c.getIceServersForRenderer();
+        clearTimeout(timeoutId);
+        resolve(list);
+      } catch (err) {
+        clearTimeout(timeoutId);
+        reject(err);
+      }
+    });
+  });
+});
+
+ipcMain.handle(
+  'hub:reportStunCallOutcome',
+  async (_event, urls: unknown, success: unknown) => {
+    const c = getStunCoordinator();
+    if (!c) return { ok: false };
+    if (!Array.isArray(urls)) return { ok: false };
+    const u = urls.filter((x): x is string => typeof x === 'string');
+    c.recordCallStunBundleOutcome(u, success === true);
+    loggerLog('[STUN][telemetry] call bundle outcome', {
+      urls: u.length,
+      success: success === true,
+    });
+    return { ok: true };
   }
 );
 
@@ -1387,6 +1452,25 @@ export function attachP2PListeners(network: ReturnType<typeof getP2PNetwork>): v
   );
 }
 
+/** Start decentralized STUN (UDP server, probes, cache) after P2P is up. */
+export async function startDecentralizedStunAfterP2P(
+  network: NonNullable<ReturnType<typeof getP2PNetwork>>,
+  opts: P2PNetworkOptions
+): Promise<void> {
+  const chatDb =
+    opts.dbPath ?? join(app.getPath('appData'), 'qortal-shared', 'chat.db');
+  const stunPath = join(dirname(chatDb), 'stun-cache.db');
+  const settings = await readAppSettings();
+  await startStunCoordinator(network, {
+    initialPeers: opts.initialPeers ?? [],
+    stunCacheDbPath: stunPath,
+    legacyPublicStunFallback: settings.legacyPublicStunFallback === true,
+  });
+  if (getStunCoordinator()?.didBindStunUdp()) {
+    await network.mapOwnedStunUdpIfPossible();
+  }
+}
+
 ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
   try {
     // Re-use the last known options if none supplied (e.g. from the settings toggle).
@@ -1394,6 +1478,7 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     lastP2POptions = opts;
     const network = await startP2PNetwork(opts);
     attachP2PListeners(network);
+    await startDecentralizedStunAfterP2P(network, opts);
     // (Re-)start the presence manager wired to the new network instance.
     stopPresenceManager();
     const pm = startPresenceManager(network);

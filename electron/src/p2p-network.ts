@@ -9,6 +9,10 @@ import { EventEmitter } from 'events';
 import { generate as generateCert } from 'selfsigned';
 import { log as loggerLog, error as loggerError } from './logger';
 import Database, { type Database as DB, type Statement } from 'better-sqlite3';
+import {
+  STUN_FIXED_UDP_PORT,
+  STUN_WIRE_VERSION,
+} from './stun-bootstrap';
 
 export const DEFAULT_P2P_PORT = 62391;
 export const DEFAULT_MAX_PEERS = 16;
@@ -61,6 +65,8 @@ export interface P2PPeerInfo {
   /** True if the remote peer has at least one active inbound connection,
    *  meaning their port is reachable from the internet. */
   canAcceptInbound: boolean;
+  /** Peer's STUN UDP port from handshake, if advertised (decentralized STUN). */
+  remoteStunUdpPort?: number;
 }
 
 export interface P2PNetworkOptions {
@@ -191,6 +197,8 @@ export class P2PNetwork extends EventEmitter {
   private everHadInbound = false;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private upnpClient: any = null;
+  /** True only if this process mapped STUN UDP via UPnP (must unmap on stop). */
+  private ownsStunUdpMapping = false;
   /** Set to true in stop() so a concurrent setupUPnP() knows to tear down immediately. */
   private upnpStopped = false;
   private stopped = false;
@@ -355,8 +363,11 @@ export class P2PNetwork extends EventEmitter {
     // mapping on the router.  Fire-and-forget (stop() stays synchronous).
     if (this.upnpClient) {
       const client = this.upnpClient;
+      const unmapStun = this.ownsStunUdpMapping;
+      const stunPort = STUN_FIXED_UDP_PORT;
       this.upnpClient = null;
-      client
+      this.ownsStunUdpMapping = false;
+      const chain = client
         .unmap({
           publicPort: this.port,
           privatePort: this.port,
@@ -364,8 +375,23 @@ export class P2PNetwork extends EventEmitter {
         })
         .catch(() => {
           /* best-effort */
-        })
-        .finally(() => client.destroy().catch(() => {}));
+        });
+      if (unmapStun) {
+        chain
+          .then(() =>
+            client.unmap({
+              publicPort: stunPort,
+              privatePort: stunPort,
+              protocol: 'UDP',
+            })
+          )
+          .catch(() => {
+            /* best-effort */
+          })
+          .finally(() => client.destroy().catch(() => {}));
+      } else {
+        chain.finally(() => client.destroy().catch(() => {}));
+      }
     }
 
     loggerLog('[P2P] Stopped.');
@@ -412,19 +438,61 @@ export class P2PNetwork extends EventEmitter {
 
   getPeers(): P2PPeerInfo[] {
     return Array.from(this.peers.values()).map(
-      ({ id, host, port, connected, outbound, canAcceptInbound }) => ({
+      ({
         id,
         host,
         port,
         connected,
         outbound,
         canAcceptInbound,
+        remoteStunUdpPort,
+      }) => ({
+        id,
+        host,
+        port,
+        connected,
+        outbound,
+        canAcceptInbound,
+        remoteStunUdpPort,
       })
     );
   }
 
   getPort(): number {
     return this.port;
+  }
+
+  /**
+   * Map fixed STUN UDP on the existing UPnP client (same gateway as P2P TCP).
+   * Call only after this process bound the local STUN UDP socket.
+   */
+  async mapOwnedStunUdpIfPossible(): Promise<void> {
+    if (this.upnpStopped) return;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const coord = require('./stun-coordinator').getStunCoordinator() as {
+      didBindStunUdp(): boolean;
+    } | null;
+    if (!coord?.didBindStunUdp()) return;
+    if (!this.upnpClient) return;
+    try {
+      const udpRes = await this.upnpClient.map({
+        publicPort: STUN_FIXED_UDP_PORT,
+        privatePort: STUN_FIXED_UDP_PORT,
+        protocol: 'UDP',
+        ttl: 7200,
+        description: 'Qortal Hub STUN',
+      });
+      if (this.upnpStopped) return;
+      if (udpRes !== false) {
+        this.ownsStunUdpMapping = true;
+        loggerLog(
+          `[P2P] UPnP: port ${STUN_FIXED_UDP_PORT}/UDP mapped successfully.`
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      loggerLog(`[P2P] UPnP: STUN UDP map failed (${msg}).`);
+    }
   }
 
   getNodeId(): string {
@@ -587,6 +655,9 @@ export class P2PNetwork extends EventEmitter {
 
       this.upnpClient = client;
       loggerLog(`[P2P] UPnP: port ${this.port}/TCP mapped successfully.`);
+      // STUN UDP (fixed port): mapOwnedStunUdpIfPossible() is also called from setup after coordinator bind;
+      // this await covers the common case where TCP map completes after that early attempt (no client yet).
+      await this.mapOwnedStunUdpIfPossible();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       loggerLog(
@@ -901,6 +972,14 @@ export class P2PNetwork extends EventEmitter {
         ? handshakeData.port
         : undefined;
     const advertisedCanAcceptInbound = handshakeData?.canAcceptInbound === true;
+    const rawStun = handshakeData?.stunUdpPort;
+    const advertisedStunUdp =
+      typeof rawStun === 'number' &&
+      Number.isInteger(rawStun) &&
+      rawStun >= 1 &&
+      rawStun <= 65535
+        ? rawStun
+        : undefined;
 
     // Reject self-connections: same nodeId means we somehow connected to
     // ourselves (shouldn't happen, but guard it anyway).
@@ -972,6 +1051,7 @@ export class P2PNetwork extends EventEmitter {
     peer.id = remoteNodeId;
     peer.connected = true;
     peer.canAcceptInbound = advertisedCanAcceptInbound;
+    peer.remoteStunUdpPort = advertisedStunUdp;
     peer.connectedAt = Date.now();
     // Latch: once we've successfully accepted an inbound connection our port
     // is proven reachable — remember it for the rest of this session.
@@ -1163,6 +1243,8 @@ export class P2PNetwork extends EventEmitter {
       data: {
         port: this.port,
         canAcceptInbound: this.hasInboundPeer(),
+        stunUdpPort: STUN_FIXED_UDP_PORT,
+        stunWireVersion: STUN_WIRE_VERSION,
       },
       hops: 0,
       timestamp: Date.now(),
@@ -1362,6 +1444,12 @@ export async function startP2PNetwork(
 }
 
 export function stopP2PNetwork(): void {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('./stun-coordinator').stopStunCoordinator();
+  } catch {
+    /* ignore */
+  }
   instance?.stop();
   instance = null;
 }

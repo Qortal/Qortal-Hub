@@ -118,6 +118,11 @@ describe('useVoiceCall', () => {
     };
 
     Object.assign(window as any, {
+      hub: {
+        getBootstrapIceServers: () => [{ urls: 'stun:mock:3478' }],
+        getIceServers: vi.fn(async () => [{ urls: 'stun:mock:3478' }]),
+        reportStunCallOutcome: vi.fn(async () => ({})),
+      },
       call: callApi,
       sendMessage: vi.fn(async () => ({ signature: 'sig' })),
     });

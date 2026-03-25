@@ -49,6 +49,7 @@ import {
   encodeAudioPacketV2,
   type DecodedAudioPacket,
 } from '../lib/group-call/audioPacketCodec';
+import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
 
 const naclApi = nacl as any;
 
@@ -464,6 +465,9 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // WebRTC peer connections
   const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
+  const gcallIceServersRef = useRef<RTCIceServer[]>(
+    getInitialIceServersFromHub().map((s) => ({ urls: s.urls }))
+  );
 
   // Upstream DC to assigned forwarder
   const upstreamDCRef = useRef<RTCDataChannel | null>(null);
@@ -1070,14 +1074,26 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── WebRTC DataChannel connections ─────────────────────────────────────────
 
-  const STUN_SERVERS: RTCIceServer[] = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ];
+  useEffect(() => {
+    const w = window as Window & {
+      hub?: { getIceServers?: () => Promise<{ urls: string }[]> };
+    };
+    if (!w.hub?.getIceServers) return;
+    const pull = (): void => {
+      w.hub?.getIceServers?.()?.then((list) => {
+        if (Array.isArray(list) && list.length > 0) {
+          gcallIceServersRef.current = list.map((s) => ({ urls: s.urls }));
+        }
+      }).catch(() => {});
+    };
+    pull();
+    const id = setInterval(pull, 120_000);
+    return () => clearInterval(id);
+  }, []);
 
   const createPeerConnection = useCallback(
     (peerAddress: string, connId: string, role: 'upstream' | 'downstream' | 'backbone'): RTCPeerConnection => {
-      const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+      const pc = new RTCPeerConnection({ iceServers: gcallIceServersRef.current });
       closePeerConnection(peerAddress);
       peerConnectionsRef.current.set(peerAddress, { pc, dc: null, address: peerAddress, connId, role });
 

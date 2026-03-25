@@ -14,7 +14,8 @@
  *
  *   Tier 3 — P2P TCP relay (CALL_AUDIO)
  *     Completely independent of WebRTC.
- *     Activated 8 s after call acceptance if ICE never reaches 'connected'.
+ *     Activated 8 s after call acceptance if ICE never reaches 'connected'
+ *     (decentralized peer STUN may slow ICE gather; Tier 3 remains the reliability floor).
  *     Opus frames → base64 → window.call.sendAudio → P2P relay.
  *
  * Signaling (CALL_REQUEST / OFFER / ANSWER / ICE / HANGUP) always flows
@@ -36,14 +37,14 @@ import {
   type BufferedCallSignal,
   type BufferedCallSignalType,
 } from '../lib/call/signalQueue';
+import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
 
 // ── ICE server configuration ──────────────────────────────────────────────────
+// Electron: sync bootstrap from window.hub (preload), refined via hub.getIceServers().
 
-const STUN_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
-];
+function initialIceServersFromEnvironment(): RTCIceServer[] {
+  return getInitialIceServersFromHub().map((s) => ({ urls: s.urls }));
+}
 
 // ── Timing constants ──────────────────────────────────────────────────────────
 
@@ -177,6 +178,11 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const outboundSetupCallIdRef = useRef<string | null>(null);
   const inboundSetupCallIdRef = useRef<string | null>(null);
 
+  /** ICE servers for RTCPeerConnection (decentralized STUN + bootstrap); refined via IPC. */
+  const iceServersRef = useRef<RTCIceServer[]>(initialIceServersFromEnvironment());
+  /** STUN `urls` strings used for last PC — reported to main for score feedback. */
+  const lastStunBundleRef = useRef<string[]>([]);
+
   /** Tier 2/3 mic capture graph (ScriptProcessor) — torn down on mic swap / teardown. */
   const tier23CaptureRef = useRef<{
     source: MediaStreamAudioSourceNode;
@@ -196,6 +202,23 @@ export function useVoiceCall(): UseVoiceCallReturn {
   useEffect(() => {
     publicKeyRef.current = userInfo?.publicKey ?? '';
   }, [userInfo?.publicKey]);
+
+  useEffect(() => {
+    const w = window as Window & {
+      hub?: { getIceServers?: () => Promise<{ urls: string }[]> };
+    };
+    if (!w.hub?.getIceServers) return;
+    const pull = (): void => {
+      w.hub?.getIceServers?.()?.then((list) => {
+        if (Array.isArray(list) && list.length > 0) {
+          iceServersRef.current = list.map((s) => ({ urls: s.urls }));
+        }
+      }).catch(() => {});
+    };
+    pull();
+    const id = setInterval(pull, 120_000);
+    return () => clearInterval(id);
+  }, []);
 
   const updateCallState = useCallback((nextState: CallState) => {
     callStateRef.current = nextState;
@@ -280,6 +303,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const endCall = useCallback(
     (sendHangup = false) => {
       const id = callIdRef.current;
+      if (id) {
+        const w = window as Window & {
+          hub?: {
+            reportStunCallOutcome?: (u: string[], s: boolean) => Promise<unknown>;
+          };
+        };
+        const urls = lastStunBundleRef.current;
+        const mode = audioModeRef.current;
+        const stunHelped = mode === 'media' || mode === 'datachannel';
+        if (w.hub?.reportStunCallOutcome && urls.length > 0) {
+          void w.hub.reportStunCallOutcome(urls, stunHelped);
+        }
+      }
       clearTimers();
       teardownRTC();
       if (sendHangup && id) {
@@ -508,7 +544,11 @@ export function useVoiceCall(): UseVoiceCallReturn {
   // ── RTCPeerConnection factory ──────────────────────────────────────────────
 
   const createPeerConnection = useCallback((): RTCPeerConnection => {
-    const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+    const servers = iceServersRef.current;
+    lastStunBundleRef.current = servers
+      .map((s) => (typeof s.urls === 'string' ? s.urls : s.urls[0]))
+      .filter((u): u is string => typeof u === 'string' && u.length > 0);
+    const pc = new RTCPeerConnection({ iceServers: servers });
 
     // ICE candidates → send via signaling
     pc.onicecandidate = (e) => {

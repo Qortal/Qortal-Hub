@@ -20,8 +20,20 @@ declare global {
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
       getPlatform?: () => Promise<string>;
       showAppMenu?: (x?: number, y?: number) => void;
-      getAppSettings?: () => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit'; p2pEnabled?: boolean }>;
-      setAppSettings?: (settings: { closeAction?: 'ask' | 'minimizeToTray' | 'quit'; p2pEnabled?: boolean }) => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit'; p2pEnabled?: boolean }>;
+      getAppSettings?: () => Promise<{
+        closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        p2pEnabled?: boolean;
+        legacyPublicStunFallback?: boolean;
+      }>;
+      setAppSettings?: (settings: {
+        closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        p2pEnabled?: boolean;
+        legacyPublicStunFallback?: boolean;
+      }) => Promise<{
+        closeAction?: 'ask' | 'minimizeToTray' | 'quit';
+        p2pEnabled?: boolean;
+        legacyPublicStunFallback?: boolean;
+      }>;
     };
     videoServer?: {
       start: (port?: number) => Promise<{ success: boolean; port?: number; error?: string }>;
@@ -49,6 +61,7 @@ declare global {
           port: number;
           connected: boolean;
           outbound: boolean;
+          remoteStunUdpPort?: number;
         }>
       >;
       getStatus: () => Promise<{
@@ -212,6 +225,16 @@ declare global {
       onCleared: (cb: () => void) => () => void;
       /** Subscribe to the "P2P started" event (fired when P2P is re-enabled). */
       onStarted: (cb: () => void) => () => void;
+    };
+
+    /** Decentralized STUN bootstrap + ICE server list (Electron preload + main). */
+    hub?: {
+      getBootstrapIceServers: () => { urls: string }[];
+      getIceServers: () => Promise<{ urls: string }[]>;
+      reportStunCallOutcome: (
+        stunUrls: string[],
+        success: boolean
+      ) => Promise<{ ok?: boolean }>;
     };
 
     // ── Call (1v1) ────────────────────────────────────────────────────────────
