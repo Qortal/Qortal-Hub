@@ -129,6 +129,18 @@ export const customWebsocketSubscriptionsByAddressAtom = atomWithStorage<
   electronStorage as any
 );
 
+/** Persisted: default microphone / speaker for 1v1 and group voice calls (`null` = OS default). */
+export const CALL_AUDIO_DEVICES_STORAGE_KEY = 'qortal_call_audio_devices';
+export type CallAudioDevicePrefs = {
+  inputDeviceId: string | null;
+  outputDeviceId: string | null;
+};
+export const callAudioDevicesAtom = atomWithStorage<CallAudioDevicePrefs>(
+  CALL_AUDIO_DEVICES_STORAGE_KEY,
+  { inputDeviceId: null, outputDeviceId: null },
+  electronStorage as any
+);
+
 /** Persisted: keys of notifications already "seen in app" (excluded from unread count), by address then notification key. Keys older than this are pruned. */
 export const NOTIFICATION_SEEN_IN_APP_STORAGE_KEY =
   'qortal_notification_seen_in_app';

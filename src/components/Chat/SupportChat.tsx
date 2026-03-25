@@ -48,6 +48,7 @@ import { useSupportChat, SUPPORT_ADDRESSES, decryptAttachmentFromSupport } from 
 import { useIsOnline } from '../../hooks/usePresence';
 import ImageUploader from '../../common/ImageUploader';
 import { useVoiceCall } from '../../hooks/useVoiceCall';
+import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1624,6 +1625,7 @@ export function SupportChat() {
             flexShrink: 0,
             display: 'flex',
             alignItems: 'center',
+            flexWrap: 'wrap',
             gap: 1,
             backgroundColor: isDark ? 'rgba(34,197,94,0.12)' : 'rgba(34,197,94,0.08)',
           }}
@@ -1693,6 +1695,8 @@ export function SupportChat() {
               Relay
             </Typography>
           )}
+
+          <CallAudioSettingsButton />
 
           <IconButton
             size="small"

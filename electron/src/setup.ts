@@ -21,7 +21,7 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { join } from 'path';
-import { log as loggerLog, error as loggerError } from './logger';
+import { log as loggerLog, error as loggerError, warn as loggerWarn } from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -234,9 +234,27 @@ export class ElectronCapacitorApp {
     this.mainWindowState.manage(this.MainWindow);
 
     // Allow microphone access for WebRTC voice calls.
+    const summarizeMediaPermissionDetails = (details: unknown): Record<string, unknown> => {
+      if (!details || typeof details !== 'object') return {};
+      const d = details as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      if (typeof d.requestingUrl === 'string') out.requestingUrl = d.requestingUrl;
+      if (typeof d.isMainFrame === 'boolean') out.isMainFrame = d.isMainFrame;
+      if (Array.isArray(d.mediaTypes)) out.mediaTypes = d.mediaTypes;
+      if (typeof d.securityOrigin === 'string') out.securityOrigin = d.securityOrigin;
+      return out;
+    };
     this.MainWindow.webContents.session.setPermissionRequestHandler(
-      (_webContents, permission, callback) => {
-        if (permission === 'media') return callback(true);
+      (_webContents, permission, callback, details) => {
+        const summary = summarizeMediaPermissionDetails(details);
+        const granted = permission === 'media';
+        loggerLog('[GCall][perm] request', { permission, granted, ...summary });
+        if (granted) return callback(true);
+        loggerWarn(
+          '[GCall][perm] denied — handler only auto-allows "media"; got:',
+          permission,
+          summary
+        );
         callback(false);
       }
     );

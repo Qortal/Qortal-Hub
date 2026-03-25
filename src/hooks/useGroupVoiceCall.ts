@@ -29,8 +29,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAtomValue } from 'jotai';
-import { userInfoAtom } from '../atoms/global';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { callAudioDevicesAtom, userInfoAtom } from '../atoms/global';
+import { applyCallAudioOutput, getUserAudioStreamForCall } from '../lib/call/audioDevices';
 import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
@@ -123,6 +124,8 @@ const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
 const PERF_LOG_INTERVAL_MS = 10_000;
 const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
+/** Set to "1" in localStorage for verbose mic/capture logs (or enable qortal:gcall-debug). */
+const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
 
 const HEADER_LEN_OFFSET = 0;
 const HEADER_ADDR_OFFSET = 1;
@@ -156,6 +159,22 @@ function isGroupCallDebugEnabled(): boolean {
   } catch {
     return false;
   }
+}
+
+function isMicCaptureDebugEnabled(): boolean {
+  try {
+    return (
+      localStorage.getItem(GCALL_MIC_DEBUG_STORAGE_KEY) === '1' ||
+      localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Verbose mic pipeline logs when qortal:gcall-mic-debug=1 or qortal:gcall-debug=1 */
+function micDebugLog(...args: unknown[]): void {
+  if (isMicCaptureDebugEnabled()) console.info('[GCall][mic]', ...args);
 }
 
 function debugLog(...args: unknown[]): void {
@@ -453,10 +472,15 @@ interface PeerConnection {
 
 export function useGroupVoiceCall(uiActive = false) {
   const userInfo = useAtomValue(userInfoAtom);
+  const callAudioDevices = useAtomValue(callAudioDevicesAtom);
+  const setCallAudioDevices = useSetAtom(callAudioDevicesAtom);
+  const callAudioPrefsRef = useRef(callAudioDevices);
+  callAudioPrefsRef.current = callAudioDevices;
 
   // ── Room state ──────────────────────────────────────────────────────────────
 
   const [roomState, setRoomState] = useState<RoomState>('idle');
+  const [groupCallAudioNonce, setGroupCallAudioNonce] = useState(0);
   /** Mirrors roomState for callbacks that must not depend on roomState (avoids spurious cleanup). */
   const roomStateRef = useRef<RoomState>(roomState);
   roomStateRef.current = roomState;
@@ -491,6 +515,8 @@ export function useGroupVoiceCall(uiActive = false) {
   // Audio
   const audioContextRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const keepAliveGainRef = useRef<GainNode | null>(null);
   const captureWorkletRef = useRef<AudioWorkletNode | null>(null);
   const playbackWorkletsRef = useRef<Map<string, AudioWorkletNode>>(new Map());
   const playbackWorkletModulePromiseRef = useRef<Promise<void> | null>(null);
@@ -534,6 +560,10 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // IPC unsubscribe function
   const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  /** Skip first group input-device effect after capture starts (stream already matches prefs). */
+  const groupInputSwapSeededRef = useRef(false);
+  const groupPrevInputPrefRef = useRef<string | null | undefined>(undefined);
 
   /** Drives jitter-buffer drain on the audio render clock (see gcall-jitter-scheduler worklet). */
   const jitterSchedulerNodeRef = useRef<AudioWorkletNode | null>(null);
@@ -1209,6 +1239,46 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const callEpochRef = useRef<number>(0);
 
+  const swapGroupCallMicInput = useCallback(
+    async (deviceId: string | null) => {
+      const ctx = audioContextRef.current;
+      const captureNode = captureWorkletRef.current;
+      const keepAlive = keepAliveGainRef.current;
+      if (!ctx || !captureNode || !keepAlive || !roomKeyRef.current) return;
+
+      const curTrack = micStreamRef.current?.getAudioTracks()[0];
+      const curId = curTrack?.getSettings?.().deviceId;
+      if (deviceId != null && curId === deviceId) return;
+
+      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(deviceId);
+      if (clearedStaleInputDevice) {
+        setCallAudioDevices((p) => ({ ...p, inputDeviceId: null }));
+      }
+      if (!stream) return;
+
+      const newTrack = stream.getAudioTracks()[0];
+      if (!newTrack) return;
+      newTrack.enabled = !mutedRef.current;
+
+      try {
+        micSourceNodeRef.current?.disconnect();
+      } catch {
+        /* ignore */
+      }
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+
+      micStreamRef.current = stream;
+
+      const newSource = ctx.createMediaStreamSource(stream);
+      newSource.connect(captureNode);
+      newSource.connect(keepAlive);
+      micSourceNodeRef.current = newSource;
+
+      captureNode.port.postMessage({ type: 'mute', muted: mutedRef.current });
+    },
+    [setCallAudioDevices]
+  );
+
   const startAudioCapture = useCallback(async () => {
     debugLog('[GCall] startAudioCapture called — roomKey:', !!roomKeyRef.current, 'address:', userInfo?.address ?? '(none)');
     if (!userInfo?.address || !roomKeyRef.current) {
@@ -1218,11 +1288,52 @@ export function useGroupVoiceCall(uiActive = false) {
     callEpochRef.current = Date.now();
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      micDebugLog('getUserMedia starting…');
+      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(
+        callAudioPrefsRef.current.inputDeviceId
+      );
+      if (clearedStaleInputDevice) {
+        setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
+      }
+      if (!stream) {
+        console.error('[GCall] getUserMedia returned null');
+        return;
+      }
       micStreamRef.current = stream;
+
+      if (isMicCaptureDebugEnabled()) {
+        const tracks = stream.getAudioTracks();
+        console.info('[GCall][mic] getUserMedia ok — audio tracks:', tracks.length);
+        for (const t of tracks) {
+          console.info('[GCall][mic] track snapshot', {
+            id: t.id,
+            label: t.label,
+            enabled: t.enabled,
+            muted: t.muted,
+            readyState: t.readyState,
+            settings: typeof t.getSettings === 'function' ? t.getSettings() : {},
+          });
+          t.onmute = () => console.warn('[GCall][mic] MediaStreamTrack mute event', t.id);
+          t.onunmute = () => console.info('[GCall][mic] MediaStreamTrack unmute event', t.id);
+        }
+      }
 
       const ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
       audioContextRef.current = ctx;
+      const outApply = await applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
+        audioContext: ctx,
+      });
+      if (outApply.clearPersistedOutput) {
+        setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
+      }
+      micDebugLog(
+        'AudioContext created — state:',
+        ctx.state,
+        'sampleRate:',
+        ctx.sampleRate,
+        'baseLatency:',
+        typeof ctx.baseLatency === 'number' ? ctx.baseLatency : '(n/a)'
+      );
       playbackWorkletModulePromiseRef.current = null;
       const source = ctx.createMediaStreamSource(stream);
 
@@ -1257,9 +1368,21 @@ export function useGroupVoiceCall(uiActive = false) {
       // Apply current mute state to the freshly created worklet
       captureNode.port.postMessage({ type: 'mute', muted: mutedRef.current });
 
+      let micDebugWorkletSamples = 0;
       // Receive complete 960-sample Opus frames + VAD flag from the worklet thread
       captureNode.port.onmessage = (e) => {
         const { frame, vad } = e.data as { frame: Float32Array; vad: boolean };
+        if (isMicCaptureDebugEnabled() && micDebugWorkletSamples < 8) {
+          micDebugWorkletSamples++;
+          let sumSq = 0;
+          for (let i = 0; i < frame.length; i++) sumSq += frame[i] * frame[i];
+          const rms = Math.sqrt(sumSq / frame.length);
+          console.info('[GCall][mic] worklet frame', micDebugWorkletSamples, {
+            rms: Number(rms.toExponential(4)),
+            vad,
+            samples: frame.length,
+          });
+        }
         isSpeakingRef.current = vad;
         if (!encoderRef.current) return;
         const i16 = float32ToInt16(frame);
@@ -1291,6 +1414,8 @@ export function useGroupVoiceCall(uiActive = false) {
       // physically inaudible but prevents that parameter-level zero optimisation.
       const keepAliveGain = ctx.createGain();
       keepAliveGain.gain.value = 0.0001;
+      keepAliveGainRef.current = keepAliveGain;
+      micSourceNodeRef.current = source;
       source.connect(captureNode);
       source.connect(keepAliveGain);
       keepAliveGain.connect(ctx.destination);
@@ -1309,12 +1434,26 @@ export function useGroupVoiceCall(uiActive = false) {
         jitterSchedulerNodeRef.current = jitterSched;
       }
 
+      if (ctx.state !== 'running') {
+        micDebugLog(
+          'AudioContext not running after wiring graph — state:',
+          ctx.state,
+          '(capture may be silent until running / resume())'
+        );
+      }
       debugLog('[GCall] Audio capture started — AudioContext state:', ctx.state);
+      micDebugLog('capture graph wired — ctx.state:', ctx.state);
+      setGroupCallAudioNonce((n) => n + 1);
 
     } catch (err) {
       console.error('[GCall] Audio capture failed:', err);
+      if (isMicCaptureDebugEnabled()) {
+        const name = err && typeof err === 'object' && 'name' in err ? String((err as Error).name) : '';
+        const message = err && typeof err === 'object' && 'message' in err ? String((err as Error).message) : String(err);
+        console.error('[GCall][mic] getUserMedia / capture stack detail:', name, message);
+      }
     }
-  }, [userInfo?.address]);
+  }, [setCallAudioDevices, userInfo?.address]);
 
   const ensurePlaybackWorkletLoaded = useCallback(async (): Promise<void> => {
     const ctx = audioContextRef.current;
@@ -1381,6 +1520,16 @@ export function useGroupVoiceCall(uiActive = false) {
     if (mutedRef.current) return; // mic is muted — drop frame
     if (seqRef.current === 0) {
       debugLog('[GCall] First encoded frame ready to send — role:', myRoleRef.current, 'upstreamDC:', upstreamDCRef.current?.readyState ?? 'none');
+      micDebugLog(
+        'first Opus frame from encoder — bytes:',
+        opusFrame.byteLength,
+        'role:',
+        myRoleRef.current,
+        'upstreamDC:',
+        upstreamDCRef.current?.readyState ?? 'none',
+        'vad:',
+        isSpeakingRef.current
+      );
     }
 
     const seq = seqRef.current++ & 0xffff;
@@ -1681,6 +1830,36 @@ export function useGroupVoiceCall(uiActive = false) {
 
   runJitterDrainTickRef.current = runJitterDrainTick;
 
+  useEffect(() => {
+    if (roomState !== 'connected') {
+      groupInputSwapSeededRef.current = false;
+      groupPrevInputPrefRef.current = undefined;
+      return;
+    }
+    if (!captureWorkletRef.current || !audioContextRef.current) return;
+    const want = callAudioDevices.inputDeviceId;
+    if (!groupInputSwapSeededRef.current) {
+      groupInputSwapSeededRef.current = true;
+      groupPrevInputPrefRef.current = want;
+      return;
+    }
+    if (groupPrevInputPrefRef.current === want) return;
+    groupPrevInputPrefRef.current = want;
+    void swapGroupCallMicInput(want);
+  }, [callAudioDevices.inputDeviceId, groupCallAudioNonce, roomState, swapGroupCallMicInput]);
+
+  useEffect(() => {
+    const ctx = audioContextRef.current;
+    if (!ctx || roomState === 'idle') return;
+    void applyCallAudioOutput(callAudioDevices.outputDeviceId, { audioContext: ctx }).then(
+      ({ clearPersistedOutput }) => {
+        if (clearPersistedOutput) {
+          setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
+        }
+      }
+    );
+  }, [callAudioDevices.outputDeviceId, groupCallAudioNonce, roomState, setCallAudioDevices]);
+
   // ── Room key distribution ─────────────────────────────────────────────────
 
   const distributeRoomKey = useCallback(async (
@@ -1932,7 +2111,26 @@ export function useGroupVoiceCall(uiActive = false) {
     if (forwarderTimeoutCheckRef.current) { clearInterval(forwarderTimeoutCheckRef.current); forwarderTimeoutCheckRef.current = null; }
     stopMetricsFlushLoop();
 
+    groupInputSwapSeededRef.current = false;
+    groupPrevInputPrefRef.current = undefined;
+
     // Stop audio
+    if (micSourceNodeRef.current) {
+      try {
+        micSourceNodeRef.current.disconnect();
+      } catch {
+        /* ignore */
+      }
+      micSourceNodeRef.current = null;
+    }
+    if (keepAliveGainRef.current) {
+      try {
+        keepAliveGainRef.current.disconnect();
+      } catch {
+        /* ignore */
+      }
+      keepAliveGainRef.current = null;
+    }
     if (captureWorkletRef.current) {
       captureWorkletRef.current.disconnect();
       captureWorkletRef.current = null;

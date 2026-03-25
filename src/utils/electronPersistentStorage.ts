@@ -48,6 +48,8 @@ export const ELECTRON_PERSISTENT_ATOM_KEYS = {
   customWsSubscriptionsByAddress: 'qortal_custom_ws_subscriptions',
   notificationSeenInApp: 'qortal_notification_seen_in_app',
   seenAllNotificationsByAddress: 'qortal_seen_all_notifications',
+  /** Call mic/speaker prefs (see callAudioDevicesAtom). */
+  callAudioDevices: 'qortal_call_audio_devices',
 } as const;
 
 /** Populate in-memory cache from appStorage (call once when app mounts in Electron). */

@@ -24,8 +24,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAtomValue } from 'jotai';
-import { userInfoAtom } from '../atoms/global';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { callAudioDevicesAtom, userInfoAtom } from '../atoms/global';
+import {
+  applyCallAudioOutput,
+  getUserAudioStreamForCall,
+} from '../lib/call/audioDevices';
 import {
   enqueueBufferedCallSignal,
   takeDrainableBufferedCallSignals,
@@ -145,6 +149,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const [isMuted, setIsMuted] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [callAudioWireNonce, setCallAudioWireNonce] = useState(0);
+
+  const callAudioDevices = useAtomValue(callAudioDevicesAtom);
+  const setCallAudioDevices = useSetAtom(callAudioDevicesAtom);
+  const callAudioPrefsRef = useRef(callAudioDevices);
+  callAudioPrefsRef.current = callAudioDevices;
+  const setCallAudioDevicesRef = useRef(setCallAudioDevices);
+  setCallAudioDevicesRef.current = setCallAudioDevices;
 
   // ── Refs (do not re-render on change) ──────────────────────────────────────
   const callIdRef = useRef<string | null>(null);
@@ -164,6 +176,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const pendingSignalsRef = useRef<BufferedCallSignal[]>([]);
   const outboundSetupCallIdRef = useRef<string | null>(null);
   const inboundSetupCallIdRef = useRef<string | null>(null);
+
+  /** Tier 2/3 mic capture graph (ScriptProcessor) — torn down on mic swap / teardown. */
+  const tier23CaptureRef = useRef<{
+    source: MediaStreamAudioSourceNode;
+    processor: ScriptProcessorNode;
+  } | null>(null);
+
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
+
+  /** Skip the first input-device effect after connect (stream already matches prefs from setup). */
+  const inputSwapSeededRef = useRef(false);
+  const prevInputPrefRef = useRef<string | null | undefined>(undefined);
 
   // Stable ref for the local public key — avoids re-creating sign-dependent
   // callbacks whenever userInfo updates.
@@ -224,7 +249,21 @@ export function useVoiceCall(): UseVoiceCallReturn {
     inboundSetupCallIdRef.current = null;
   }, []);
 
+  const stopTier23Capture = useCallback(() => {
+    const g = tier23CaptureRef.current;
+    if (g) {
+      try {
+        g.source.disconnect();
+        g.processor.disconnect();
+      } catch {
+        /* ignore */
+      }
+      tier23CaptureRef.current = null;
+    }
+  }, []);
+
   const teardownRTC = useCallback(() => {
+    stopTier23Capture();
     dcRef.current?.close();
     dcRef.current = null;
     pcRef.current?.close();
@@ -236,7 +275,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     jitterBufferRef.current.clear();
     relaySeqRef.current = 0;
     resetPendingSignals();
-  }, [resetPendingSignals]);
+  }, [resetPendingSignals, stopTier23Capture]);
 
   const endCall = useCallback(
     (sendHangup = false) => {
@@ -258,6 +297,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
       setCallDuration(0);
       setIsMuted(false);
       updateIncomingCall(null);
+      inputSwapSeededRef.current = false;
+      prevInputPrefRef.current = undefined;
       // Reset to idle after a brief moment so UI can show "ended" state
       setTimeout(() => updateCallState('idle'), 1_500);
     },
@@ -278,7 +319,15 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const ensureAudioContext = useCallback((): AudioContext => {
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-      audioCtxRef.current = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+      const ctx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+      audioCtxRef.current = ctx;
+      void applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
+        audioContext: ctx,
+      }).then(({ clearPersistedOutput }) => {
+        if (clearPersistedOutput) {
+          setCallAudioDevicesRef.current((p) => ({ ...p, outputDeviceId: null }));
+        }
+      });
     }
     return audioCtxRef.current;
   }, []);
@@ -301,6 +350,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const startDataChannelCapture = useCallback(() => {
     if (!localStreamRef.current || !dcRef.current) return;
 
+    stopTier23Capture();
     const ctx = ensureAudioContext();
     const src = ctx.createMediaStreamSource(localStreamRef.current);
     const frameSize = Math.floor((DC_FRAME_MS / 1000) * AUDIO_SAMPLE_RATE);
@@ -316,13 +366,15 @@ export function useVoiceCall(): UseVoiceCallReturn {
     };
     src.connect(processor);
     processor.connect(ctx.destination);
-  }, [ensureAudioContext]);
+    tier23CaptureRef.current = { source: src, processor };
+  }, [ensureAudioContext, stopTier23Capture]);
 
   // ── TCP relay audio capture (Tier 3) ──────────────────────────────────────
 
   const startRelayCapture = useCallback(() => {
     if (!localStreamRef.current) return;
 
+    stopTier23Capture();
     const ctx = ensureAudioContext();
     const src = ctx.createMediaStreamSource(localStreamRef.current);
     // Use a larger frame at the relay sample rate to reduce relay message rate.
@@ -347,7 +399,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
     };
     src.connect(processor);
     processor.connect(ctx.destination);
-  }, [ensureAudioContext]);
+    tier23CaptureRef.current = { source: src, processor };
+  }, [ensureAudioContext, stopTier23Capture]);
 
   // ── DataChannel setup ──────────────────────────────────────────────────────
 
@@ -508,6 +561,13 @@ export function useVoiceCall(): UseVoiceCallReturn {
         document.body.appendChild(audio);
       }
       audio.srcObject = e.streams[0] ?? null;
+      void applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
+        audioElement: audio,
+      }).then(({ clearPersistedOutput }) => {
+        if (clearPersistedOutput) {
+          setCallAudioDevicesRef.current((p) => ({ ...p, outputDeviceId: null }));
+        }
+      });
     };
 
     pc.onconnectionstatechange = () => {
@@ -552,18 +612,76 @@ export function useVoiceCall(): UseVoiceCallReturn {
   // ── User media ─────────────────────────────────────────────────────────────
 
   const getUserAudio = useCallback(async (): Promise<MediaStream | null> => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-      localStreamRef.current = stream;
-      return stream;
-    } catch (err) {
-      console.error('[Call] getUserMedia failed:', err);
-      return null;
+    const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(
+      callAudioPrefsRef.current.inputDeviceId
+    );
+    if (clearedStaleInputDevice) {
+      setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
     }
-  }, []);
+    if (stream) {
+      localStreamRef.current = stream;
+    } else {
+      console.error('[Call] getUserMedia failed');
+    }
+    return stream;
+  }, [setCallAudioDevices]);
+
+  const swapVoiceCallInput = useCallback(
+    async (deviceId: string | null) => {
+      if (callStateRef.current !== 'connected') return;
+      if (!localStreamRef.current) return;
+
+      const curTrack = localStreamRef.current.getAudioTracks()[0];
+      const curId = curTrack?.getSettings?.().deviceId;
+      if (deviceId != null && curId === deviceId) return;
+
+      const mode = audioModeRef.current;
+      const pc = pcRef.current;
+
+      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(deviceId);
+      if (clearedStaleInputDevice) {
+        setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
+      }
+      if (!stream) return;
+
+      const newTrack = stream.getAudioTracks()[0];
+      if (!newTrack) return;
+
+      newTrack.enabled = !isMutedRef.current;
+
+      if (mode === 'media' && pc) {
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'audio');
+        if (sender) {
+          await sender.replaceTrack(newTrack);
+        }
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = stream;
+        return;
+      }
+
+      if (mode === 'datachannel' || mode === 'relay') {
+        stopTier23Capture();
+        localStreamRef.current.getTracks().forEach((t) => t.stop());
+        localStreamRef.current = stream;
+        if (mode === 'datachannel') {
+          startDataChannelCapture();
+        } else {
+          startRelayCapture();
+        }
+        return;
+      }
+
+      // Connected but audio tier not chosen yet — keep localStreamRef aligned for the upcoming tier.
+      localStreamRef.current.getTracks().forEach((t) => t.stop());
+      localStreamRef.current = stream;
+    },
+    [
+      setCallAudioDevices,
+      startDataChannelCapture,
+      startRelayCapture,
+      stopTier23Capture,
+    ]
+  );
 
   // ── Outbound call setup ────────────────────────────────────────────────────
 
@@ -612,6 +730,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       });
       await (window as any).call?.sendSignal(callId, 'offer', offer.sdp, offerSig, offerKey, offerTs);
       await drainPendingSignals();
+      setCallAudioWireNonce((n) => n + 1);
       return true;
     },
     [createPeerConnection, drainPendingSignals, endCall, getUserAudio, setupDataChannel, startRelayCapture, signFields]
@@ -874,6 +993,38 @@ export function useVoiceCall(): UseVoiceCallReturn {
     });
     setIsMuted((m) => !m);
   }, []);
+
+  useEffect(() => {
+    if (callState !== 'connected') {
+      inputSwapSeededRef.current = false;
+      prevInputPrefRef.current = undefined;
+      return;
+    }
+    if (!localStreamRef.current) return;
+    const want = callAudioDevices.inputDeviceId;
+    if (!inputSwapSeededRef.current) {
+      inputSwapSeededRef.current = true;
+      prevInputPrefRef.current = want;
+      return;
+    }
+    if (prevInputPrefRef.current === want) return;
+    prevInputPrefRef.current = want;
+    void swapVoiceCallInput(want);
+  }, [callState, callAudioDevices.inputDeviceId, callAudioWireNonce, swapVoiceCallInput]);
+
+  useEffect(() => {
+    if (callState !== 'connected') return;
+    void (async () => {
+      const out = callAudioDevices.outputDeviceId;
+      const r = await applyCallAudioOutput(out, {
+        audioContext: audioCtxRef.current,
+        audioElement: document.getElementById('__qortal_call_audio__') as HTMLAudioElement | null,
+      });
+      if (r.clearPersistedOutput) {
+        setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
+      }
+    })();
+  }, [callState, callAudioDevices.outputDeviceId, callAudioWireNonce, setCallAudioDevices]);
 
   // ── Cleanup on unmount ─────────────────────────────────────────────────────
 

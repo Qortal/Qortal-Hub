@@ -30,6 +30,7 @@ import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
 import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
+import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import type { MyRole } from '../../hooks/useGroupVoiceCall';
 
 export { GROUP_SUPPORT_ADDRESSES };
@@ -303,7 +304,8 @@ function GroupAgentDashboardPanel({
             )}
 
             {/* Controls */}
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <CallAudioSettingsButton />
               <Tooltip title={muted ? 'Unmute' : 'Mute'}>
                 <IconButton
                   size="small"

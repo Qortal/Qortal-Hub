@@ -86,6 +86,7 @@ describe('useVoiceCall', () => {
     Object.defineProperty(globalThis.navigator, 'mediaDevices', {
       configurable: true,
       value: {
+        enumerateDevices: vi.fn(async () => [] as MediaDeviceInfo[]),
         getUserMedia: vi.fn(async () => {
           order.push('getUserMedia');
           return mediaDeferred.promise;

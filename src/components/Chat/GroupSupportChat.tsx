@@ -30,6 +30,7 @@ import RecordVoiceOverRoundedIcon from '@mui/icons-material/RecordVoiceOverRound
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
 import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
+import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 
 export { GROUP_SUPPORT_ADDRESSES };
 
@@ -266,7 +267,8 @@ function GroupSupportChatPanel({
           )}
 
           {/* Call controls */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+            <CallAudioSettingsButton />
             <Tooltip title={muted ? 'Unmute' : 'Mute'}>
               <IconButton
                 size="small"

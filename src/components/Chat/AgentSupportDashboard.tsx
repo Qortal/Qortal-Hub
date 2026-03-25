@@ -59,6 +59,7 @@ import {
 import { useIsOnline } from '../../hooks/usePresence';
 import { decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
 import { useVoiceCall } from '../../hooks/useVoiceCall';
+import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -1673,6 +1674,7 @@ export function AgentSupportDashboard() {
               backgroundColor: isDark ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.08)',
               display: 'flex',
               alignItems: 'center',
+              flexWrap: 'wrap',
               gap: 1,
               flexShrink: 0,
             }}
@@ -1696,6 +1698,7 @@ export function AgentSupportDashboard() {
             >
               {audioMode === 'media' ? 'WebRTC' : audioMode === 'datachannel' ? 'DataCh' : 'Relay'}
             </Typography>
+            <CallAudioSettingsButton />
             <Tooltip title={isMuted ? 'Unmute' : 'Mute'}>
               <IconButton size="small" onClick={toggleMute} sx={{ p: 0.5 }}>
                 {isMuted
