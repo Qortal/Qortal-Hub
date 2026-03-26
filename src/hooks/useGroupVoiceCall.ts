@@ -132,6 +132,8 @@ const WEBRTC_DISCONNECT_GRACE_MS = 12_000;
 const ICE_RESTART_MIN_INTERVAL_MS = 6_000;
 const ICE_RESTART_RECOVERY_GRACE_MS = 5_000;
 const ICE_RESTART_MAX_ATTEMPTS = 2;
+/** Max wait for remote answer after upstream ICE-restart offer (`iceRestartInFlight`). */
+const ICE_RESTART_ANSWER_BUDGET_MS = 20_000;
 const PROMOTION_COOLDOWN_MS = 2_000; // standby waits before promoting
 const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 /** Periodic self-healing sweep: reopen any upstream DC whose offer was lost or whose
@@ -511,8 +513,22 @@ interface PeerConnection {
   iceRestartAttempts: number;
   lastIceRestartAtMs: number;
   iceRestartInFlight: boolean;
+  /** Failsafe: clear when answer applied (`stable`), `connected`, close, or catch. */
+  iceRestartAnswerBudgetTimer?: ReturnType<typeof setTimeout>;
   softRecoveryAttempts: number;
   lastSoftRecoveryAtMs: number;
+}
+
+function clearIceRestartAnswerBudgetTimerField(entry: PeerConnection): void {
+  if (entry.iceRestartAnswerBudgetTimer !== undefined) {
+    clearTimeout(entry.iceRestartAnswerBudgetTimer);
+    entry.iceRestartAnswerBudgetTimer = undefined;
+  }
+}
+
+function releaseUpstreamIceRestartAnswerGuard(entry: PeerConnection): void {
+  clearIceRestartAnswerBudgetTimerField(entry);
+  entry.iceRestartInFlight = false;
 }
 
 // ── Main hook ──────────────────────────────────────────────────────────────────
@@ -733,7 +749,19 @@ export function useGroupVoiceCall(uiActive = false) {
       const dcState = entry.dc?.readyState;
       if (dcState === 'open') return false;
 
+      if (entry.role === 'upstream' && entry.iceRestartInFlight) return false;
+
       if (state === 'new' || state === 'connecting') {
+        if (
+          entry.role === 'upstream' &&
+          state === 'connecting' &&
+          entry.pc.signalingState === 'have-local-offer' &&
+          entry.iceRestartAttempts > 0 &&
+          entry.pc.iceConnectionState !== 'failed' &&
+          now - entry.lastIceRestartAtMs < ICE_RESTART_ANSWER_BUDGET_MS
+        ) {
+          return false;
+        }
         const age = now - entry.createdAtMs;
         if (
           entry.role === 'upstream' &&
@@ -834,6 +862,7 @@ export function useGroupVoiceCall(uiActive = false) {
         clearTimeout(entry.disconnectGraceTimer);
         entry.disconnectGraceTimer = undefined;
       }
+      clearIceRestartAnswerBudgetTimerField(entry);
 
       peerConnectionsRef.current.delete(peerAddress);
       relayLastSentRef.current.delete(peerAddress);
@@ -1490,6 +1519,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (now - entry.lastIceRestartAtMs < ICE_RESTART_MIN_INTERVAL_MS) return false;
       if (entry.pc.signalingState === 'closed') return false;
 
+      clearIceRestartAnswerBudgetTimerField(entry);
       entry.iceRestartInFlight = true;
       entry.iceRestartAttempts++;
       entry.lastIceRestartAtMs = now;
@@ -1517,7 +1547,13 @@ export function useGroupVoiceCall(uiActive = false) {
           fromPublicKey: ui.publicKey ?? '',
           timestamp: ts,
         }).catch(() => '');
-        if (!sig) return false;
+        if (!sig) {
+          const latest = peerConnectionsRef.current.get(peerAddress);
+          if (latest?.connId === connId) {
+            releaseUpstreamIceRestartAnswerGuard(latest);
+          }
+          return false;
+        }
         await window.groupCall.sendRtcSignal(
           roomIdRef.current,
           ui.address,
@@ -1533,6 +1569,16 @@ export function useGroupVoiceCall(uiActive = false) {
           peerAddress,
           connId,
         });
+        const latestAfterSend = peerConnectionsRef.current.get(peerAddress);
+        if (latestAfterSend?.connId === connId) {
+          clearIceRestartAnswerBudgetTimerField(latestAfterSend);
+          latestAfterSend.iceRestartAnswerBudgetTimer = setTimeout(() => {
+            const cur = peerConnectionsRef.current.get(peerAddress);
+            if (cur?.connId !== connId) return;
+            cur.iceRestartAnswerBudgetTimer = undefined;
+            cur.iceRestartInFlight = false;
+          }, ICE_RESTART_ANSWER_BUDGET_MS) as ReturnType<typeof setTimeout>;
+        }
         return true;
       } catch (error) {
         debugWarn('[GCall] Upstream ICE restart failed', {
@@ -1540,12 +1586,11 @@ export function useGroupVoiceCall(uiActive = false) {
           connId,
           error,
         });
-        return false;
-      } finally {
         const latest = peerConnectionsRef.current.get(peerAddress);
         if (latest?.connId === connId) {
-          latest.iceRestartInFlight = false;
+          releaseUpstreamIceRestartAnswerGuard(latest);
         }
+        return false;
       }
     },
     [markPeerUnstable, refreshGroupCallIceServers]
@@ -1736,6 +1781,13 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       });
 
+      pc.addEventListener('signalingstatechange', () => {
+        const ent = peerConnectionsRef.current.get(peerAddress);
+        if (!ent || ent.connId !== connId) return;
+        if (pc.signalingState !== 'stable') return;
+        releaseUpstreamIceRestartAnswerGuard(ent);
+      });
+
       pc.addEventListener('connectionstatechange', () => {
         const state = pc.connectionState;
         logRtcNego(`pcConn:${state}`);
@@ -1755,6 +1807,7 @@ export function useGroupVoiceCall(uiActive = false) {
             clearTimeout(entry.disconnectGraceTimer);
             entry.disconnectGraceTimer = undefined;
           }
+          clearIceRestartAnswerBudgetTimerField(entry);
           if (entry.disconnectStartedAtMs) {
             const recoveryMs = Date.now() - entry.disconnectStartedAtMs;
             metricsRef.current.recordRecoveryDuration(recoveryMs);
