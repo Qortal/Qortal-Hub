@@ -120,6 +120,9 @@ const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
 const WEBRTC_DISCONNECT_GRACE_MS = 12_000;
 const PROMOTION_COOLDOWN_MS = 2_000; // standby waits before promoting
 const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
+/** Periodic self-healing sweep: reopen any upstream DC whose offer was lost or whose
+ *  ICE connection failed without triggering a teardown callback. */
+const WEBRTC_ENSURE_INTERVAL_MS = 5_000;
 
 /** Coalesce burst participant-joined/left into one topology election + key pass. */
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
@@ -473,6 +476,16 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // Upstream DC to assigned forwarder
   const upstreamDCRef = useRef<RTCDataChannel | null>(null);
+  /** True only while this node generated the current roomKey (as root-forwarder initiator).
+   *  Cleared when root is lost so a re-promoted node never redistributes a foreign key. */
+  const isOurKeyRef = useRef(false);
+  /** Highest topology epoch seen in the current/last room. NOT reset in cleanup so a
+   *  rejoining node always uses an epoch floor ≥ the room's current epoch. Reset to 0
+   *  in joinGroupCall when joining a different room (detected via lastRoomIdRef). */
+  const lastObservedEpochRef = useRef(0);
+  /** Room ID from the most recent session. NOT reset in cleanup; used by joinGroupCall
+   *  to detect cross-room joins so lastObservedEpochRef can be scoped correctly. */
+  const lastRoomIdRef = useRef('');
 
   // Forwarder heartbeat timer (for sending topology heartbeats)
   const topologyHeartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -482,6 +495,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastRootHeartbeatRef = useRef<number>(Date.now());
   // Forwarder-timeout polling interval (runs every 500ms)
   const forwarderTimeoutCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Periodic self-healing WebRTC ensure loop
+  const webRtcEnsureTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const uiActiveRef = useRef(uiActive);
 
   // IPC unsubscribe function
@@ -554,6 +569,9 @@ export function useGroupVoiceCall(uiActive = false) {
 
     peerConnectionsRef.current.delete(peerAddress);
     relayLastSentRef.current.delete(peerAddress);
+    // Clear the per-peer RTC signal chain so a rejoining peer's offers/answers
+    // are not queued behind the stale tail of the old session's promise chain.
+    rtcSignalChainsRef.current.delete(peerAddress);
 
     if (entry.dc) {
       if (upstreamDCRef.current === entry.dc) upstreamDCRef.current = null;
@@ -704,6 +722,20 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!metricsFlushTimerRef.current) return;
     clearInterval(metricsFlushTimerRef.current);
     metricsFlushTimerRef.current = null;
+  }, []);
+
+  const startWebRtcEnsureLoop = useCallback(() => {
+    if (webRtcEnsureTimerRef.current) return;
+    webRtcEnsureTimerRef.current = setInterval(() => {
+      const topo = topologyRef.current;
+      if (topo) ensureGroupCallWebRtcRef.current(topo);
+    }, WEBRTC_ENSURE_INTERVAL_MS);
+  }, []);
+
+  const stopWebRtcEnsureLoop = useCallback(() => {
+    if (!webRtcEnsureTimerRef.current) return;
+    clearInterval(webRtcEnsureTimerRef.current);
+    webRtcEnsureTimerRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -1135,6 +1167,26 @@ export function useGroupVoiceCall(uiActive = false) {
       const myAddress = userInfo?.address ?? '';
       const role = computeMyRole(myAddress, topology);
 
+      // Compute the set of addresses that should have upstream connections for
+      // this role. Any existing upstream PCs not in this set are stale (the
+      // forwarder was demoted) and must be closed so upstreamDCRef stops
+      // pointing at the wrong peer and the relay fallback takes over until the
+      // new forwarder's DC opens.
+      const validUpstreamTargets = new Set<string>();
+      if (role === 'participant' || role === 'cluster-forwarder' || role === 'standby-forwarder') {
+        const af = findAssignedForwarder(myAddress, topology);
+        if (af && af !== myAddress) validUpstreamTargets.add(af);
+      }
+      if (role === 'cluster-forwarder') {
+        const rf = topology.rootForwarder;
+        if (rf && rf !== myAddress) validUpstreamTargets.add(rf);
+      }
+      for (const [addr, entry] of peerConnectionsRef.current) {
+        if (entry.role === 'upstream' && !validUpstreamTargets.has(addr)) {
+          closePeerConnection(addr); // also nulls upstreamDCRef if it pointed here
+        }
+      }
+
       if (role === 'participant' || role === 'cluster-forwarder' || role === 'standby-forwarder') {
         const assignedForwarder = findAssignedForwarder(myAddress, topology);
         if (assignedForwarder && assignedForwarder !== myAddress) {
@@ -1170,7 +1222,7 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     },
-    [connectUpstream, isPeerConnectionInactive, setupDownstreamChannel, userInfo?.address]
+    [closePeerConnection, connectUpstream, isPeerConnectionInactive, setupDownstreamChannel, userInfo?.address]
   );
 
   ensureGroupCallWebRtcRef.current = ensureGroupCallWebRtcConnections;
@@ -1252,6 +1304,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       localEpochRef.current = topology.topologyEpoch;
+      lastObservedEpochRef.current = Math.max(lastObservedEpochRef.current, topology.topologyEpoch);
       topologyRef.current = topology;
 
       const myAddress = userInfo?.address ?? '';
@@ -1301,7 +1354,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const currentTopo = topologyRef.current;
       if (!currentTopo) return;
 
-      const newEpoch = localEpochRef.current + 1;
+      const newEpoch = Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
       const addrs = [...participantsRef.current.keys()];
       const sorted = await computeElectionOrder(addrs, roomIdRef.current);
       const promotedTopo = buildTopology(sorted, newEpoch);
@@ -1960,6 +2013,7 @@ export function useGroupVoiceCall(uiActive = false) {
       debugLog('[GCall] decryptBoxWithMyKey result ok:', !!result?.decryptedKey);
       if (result?.decryptedKey) {
         roomKeyRef.current = Uint8Array.from(atob(result.decryptedKey), (c) => c.charCodeAt(0));
+        isOurKeyRef.current = false; // key came from the new root; we don't own it
         syncDecryptWorkerRoomKey(roomKeyRef.current);
         debugLog('[GCall] Room key set (', roomKeyRef.current.length, 'bytes), captureWorklet exists:', !!captureWorkletRef.current);
         // Non-root-forwarder: start audio now that we have the shared key
@@ -2038,6 +2092,11 @@ export function useGroupVoiceCall(uiActive = false) {
 
     roomIdRef.current = roomId;
     chatIdRef.current = chatId;
+    // Reset epoch floor when joining a different room; keep it for same-room rejoin
+    // so the rejoining node broadcasts an epoch ≥ the room's current epoch.
+    if (roomId !== lastRoomIdRef.current) {
+      lastObservedEpochRef.current = 0;
+    }
     setRoomState('joining');
     metricsRef.current.reset();
     metricsRef.current.setRole('participant');
@@ -2102,7 +2161,8 @@ export function useGroupVoiceCall(uiActive = false) {
     setupDecryptWorker();
     startForwarderTimeoutCheck();
     startMetricsFlushLoop();
-  }, [flushMetrics, roomState, setupDecryptWorker, startMetricsFlushLoop, userInfo]);
+    startWebRtcEnsureLoop();
+  }, [flushMetrics, roomState, setupDecryptWorker, startMetricsFlushLoop, startWebRtcEnsureLoop, userInfo]);
 
   const leaveGroupCall = useCallback(async () => {
     if (!userInfo?.address || roomState === 'idle') return;
@@ -2150,6 +2210,7 @@ export function useGroupVoiceCall(uiActive = false) {
     if (promotionTimerRef.current) { clearTimeout(promotionTimerRef.current); promotionTimerRef.current = null; }
     if (forwarderTimeoutCheckRef.current) { clearInterval(forwarderTimeoutCheckRef.current); forwarderTimeoutCheckRef.current = null; }
     stopMetricsFlushLoop();
+    stopWebRtcEnsureLoop();
     if (relayMetricsFlushTimerRef.current) {
       clearTimeout(relayMetricsFlushTimerRef.current);
       relayMetricsFlushTimerRef.current = null;
@@ -2231,9 +2292,12 @@ export function useGroupVoiceCall(uiActive = false) {
 
     // Reset state
     roomKeyRef.current = null;
+    isOurKeyRef.current = false;
     topologyRef.current = null;
     localEpochRef.current = 0;
+    lastRoomIdRef.current = roomIdRef.current; // save before clearing for cross-room epoch scoping
     roomIdRef.current = '';
+    // lastObservedEpochRef intentionally not reset here — survives for same-room rejoin
     chatIdRef.current = '';
     participantsRef.current = new Map();
     seqRef.current = 0;
@@ -2253,7 +2317,7 @@ export function useGroupVoiceCall(uiActive = false) {
     setMyRole('participant');
     setActiveSpeakers([]);
     flushMetrics();
-  }, [closePeerConnection, flushMetrics, stopMetricsFlushLoop, syncDecryptWorkerRoomKey]);
+  }, [closePeerConnection, flushMetrics, stopMetricsFlushLoop, stopWebRtcEnsureLoop, syncDecryptWorkerRoomKey]);
 
   // ── IPC event subscription ─────────────────────────────────────────────────
 
@@ -2278,7 +2342,12 @@ export function useGroupVoiceCall(uiActive = false) {
           if (fresh.length === 0) return;
           const sorted = await computeElectionOrder(fresh, roomIdRef.current);
           if (myGen !== topologyAsyncGenRef.current) return;
-          const newTopo = buildTopology(sorted, localEpochRef.current + 1);
+          // Use the highest epoch seen in this room as the floor so a rejoining
+          // node never broadcasts a stale epoch that peers would reject.
+          const newTopo = buildTopology(
+            sorted,
+            Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1
+          );
           const prevRoot = topologyRef.current?.rootForwarder;
           applyTopology(newTopo);
 
@@ -2300,21 +2369,32 @@ export function useGroupVoiceCall(uiActive = false) {
             prevRoot !== undefined &&
             prevRoot !== newTopo.rootForwarder
           ) {
-            roomKeyRef.current = null;
-            syncDecryptWorkerRoomKey(null);
+            // Lost root (or never had it): relinquish key ownership so a
+            // re-promoted node never redistributes a stale foreign key.
+            // roomKeyRef is intentionally kept alive for audio continuity —
+            // handleRoomKey will atomically replace it when the new root
+            // distributes their fresh key.
+            isOurKeyRef.current = false;
           }
 
-          if (isInitiatorRef.current && !roomKeyRef.current) {
-            debugLog('[GCall] Generating room key and starting audio capture');
-            const newKey = naclApi.randomBytes(32);
-            roomKeyRef.current = newKey;
-            syncDecryptWorkerRoomKey(newKey);
-            startAudioCapture();
-            void distributeRoomKey(newKey);
-          } else if (isInitiatorRef.current && roomKeyRef.current) {
-            debugLog('[GCall] Already have key — distributing to full roster after election');
-            void distributeRoomKey(roomKeyRef.current);
+          if (isInitiatorRef.current) {
+            if (roomKeyRef.current && isOurKeyRef.current) {
+              // Still root, still our key — redistribute to updated roster.
+              debugLog('[GCall] Already have key — distributing to full roster after election');
+              void distributeRoomKey(roomKeyRef.current);
+            } else {
+              // Becoming root for first time, OR hold a key from a previous
+              // root — always generate a fresh key to prevent foreign-key reuse.
+              debugLog('[GCall] Generating room key and starting audio capture');
+              const newKey = naclApi.randomBytes(32);
+              roomKeyRef.current = newKey;
+              isOurKeyRef.current = true;
+              syncDecryptWorkerRoomKey(newKey);
+              startAudioCapture();
+              void distributeRoomKey(newKey);
+            }
           }
+          // Non-initiator: keep old key active; handleRoomKey will replace it.
         })();
       }, TOPOLOGY_ELECTION_DEBOUNCE_MS);
     };
