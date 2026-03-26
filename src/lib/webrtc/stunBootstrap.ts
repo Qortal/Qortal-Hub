@@ -17,9 +17,9 @@ export interface StunIceServerShape {
 
 /** Small public fallback used only when the legacy toggle is enabled. */
 export const LEGACY_PUBLIC_STUN_FALLBACK: { urls: string }[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
+  // { urls: 'stun:stun.l.google.com:19302' },
+  // { urls: 'stun:stun1.l.google.com:19302' },
+  // { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
 /** Sync ICE list from preload bootstrap (Electron); empty if hub missing and legacy off. */
@@ -47,7 +47,8 @@ export function buildBootstrapIceServers(
     if (idx <= 0) continue;
     const host = addr.slice(0, idx).trim();
     const tlsPort = parseInt(addr.slice(idx + 1), 10);
-    if (!host || Number.isNaN(tlsPort) || tlsPort < 1 || tlsPort > 65535) continue;
+    if (!host || Number.isNaN(tlsPort) || tlsPort < 1 || tlsPort > 65535)
+      continue;
     const url = `stun:${host}:${STUN_FIXED_UDP_PORT}`;
     if (seen.has(url)) continue;
     seen.add(url);

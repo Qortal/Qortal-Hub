@@ -198,7 +198,7 @@ const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
  * no `ensureGroupCallWebRtcConnections`. Receiving peers may still use DC unless they flip this too.
  * Keep `false` in committed code.
  */
-const isTestingRelay = true;
+const isTestingRelay = false;
 
 /** Max queued decrypt jobs awaiting worker result; oldest dropped under pressure. */
 const PENDING_DECRYPT_MAX = 96;

@@ -25,9 +25,9 @@ const PREWARM_JITTER_MAX_MS = 15_000;
 
 // Small public fallback used only when the legacy toggle is enabled.
 const LEGACY_PUBLIC_STUN: { urls: string }[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
+  // { urls: 'stun:stun.l.google.com:19302' },
+  // { urls: 'stun:stun1.l.google.com:19302' },
+  // { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
 function dedupeUrls(servers: { urls: string }[]): { urls: string }[] {
@@ -90,7 +90,10 @@ export class StunCoordinator {
     return this.localStunUdpBound;
   }
 
-  async start(network: P2PNetwork, opts: StunCoordinatorOptions): Promise<void> {
+  async start(
+    network: P2PNetwork,
+    opts: StunCoordinatorOptions
+  ): Promise<void> {
     this.stop();
     this.running = true;
     this.network = network;
@@ -166,7 +169,10 @@ export class StunCoordinator {
     const urlsKey = out.map((s) => s.urls).join('|');
     if (urlsKey !== this.lastLoggedIceUrlsKey) {
       this.lastLoggedIceUrlsKey = urlsKey;
-      loggerLog('[STUN] ICE URLs for renderer (capped)', out.map((s) => s.urls));
+      loggerLog(
+        '[STUN] ICE URLs for renderer (capped)',
+        out.map((s) => s.urls)
+      );
       loggerLog(
         '[STUN][debug] ranked candidates',
         this.cache.describeSelection(ICE_STUN_SERVER_CAP)
