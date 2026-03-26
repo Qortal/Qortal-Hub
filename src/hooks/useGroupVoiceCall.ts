@@ -53,6 +53,11 @@ import {
   sameAddressList,
 } from '../lib/group-call/router';
 import {
+  clearPendingRemoteIceSession,
+  drainPendingRemoteIceSession,
+  pushPendingRemoteIceCandidate,
+} from '../lib/group-call/pendingRemoteIce';
+import {
   decodeAudioPacket,
   encodeAudioPacketV2,
   type DecodedAudioPacket,
@@ -621,6 +626,13 @@ export function useGroupVoiceCall(uiActive = false) {
   const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
   /** Serialized handleRtcSignal work per remote `fromAddress` (avoids overlapping offers / double PC). */
   const rtcSignalChainsRef = useRef<Map<string, Promise<void>>>(new Map());
+  /**
+   * Trickle ICE keyed by `pendingRemoteIceKey`; survives until drain or session close.
+   * Superseded no-PC keys are inert until `leaveGroupCall` clears the map.
+   */
+  const pendingRemoteIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(
+    new Map()
+  );
   /** Latest packet handler — `handleRtcSignal` is declared above `handleIncomingAudioPacket`. */
   const handleIncomingAudioPacketRef = useRef<
     (data: ArrayBuffer, fromAddress: string) => void
@@ -864,6 +876,12 @@ export function useGroupVoiceCall(uiActive = false) {
         entry.disconnectGraceTimer = undefined;
       }
       clearIceRestartAnswerBudgetTimerField(entry);
+
+      clearPendingRemoteIceSession(
+        pendingRemoteIceRef.current,
+        peerAddress,
+        entry.connId
+      );
 
       peerConnectionsRef.current.delete(peerAddress);
       relayLastSentRef.current.delete(peerAddress);
@@ -2205,6 +2223,12 @@ export function useGroupVoiceCall(uiActive = false) {
           };
 
           await pc.setRemoteDescription({ type: 'offer', sdp });
+          await drainPendingRemoteIceSession(
+            pc,
+            pendingRemoteIceRef.current,
+            fromAddress,
+            connId
+          );
           {
             const ent = peerConnectionsRef.current.get(fromAddress);
             if (ent?.connId === connId) {
@@ -2277,6 +2301,12 @@ export function useGroupVoiceCall(uiActive = false) {
             return;
           }
           await pcEntry.pc.setRemoteDescription({ type: 'answer', sdp });
+          await drainPendingRemoteIceSession(
+            pcEntry.pc,
+            pendingRemoteIceRef.current,
+            fromAddress,
+            connId
+          );
           debugLog('[GCall] Applied RTC answer', {
             fromAddress,
             connId,
@@ -2296,25 +2326,57 @@ export function useGroupVoiceCall(uiActive = false) {
             dc: pcEntry.dc?.readyState ?? null,
           });
         } else if (type === 'ice') {
+          if (typeof connId !== 'string' || !connId || !candidate) return;
+
           const pcEntry = peerConnectionsRef.current.get(fromAddress);
-          if (!pcEntry || pcEntry.connId !== connId) {
-            debugLog(
-              '[GCall] Ignoring stale RTC ICE from',
+          if (!pcEntry) {
+            pushPendingRemoteIceCandidate(
+              pendingRemoteIceRef.current,
               fromAddress,
-              'connId:',
               connId,
-              'current:',
-              pcEntry?.connId ?? '(none)'
+              candidate
             );
-            void reconnectExpectedUpstreamPeer(fromAddress, connId);
             return;
           }
-          if (candidate) {
-            try {
-              await pcEntry.pc.addIceCandidate(candidate);
-            } catch {
-              /* ignore */
+          if (pcEntry.connId !== connId) {
+            const curTs = getConnIdTimestamp(pcEntry.connId);
+            const inTs = getConnIdTimestamp(connId);
+            if (
+              curTs !== null &&
+              inTs !== null &&
+              inTs < curTs
+            ) {
+              debugLog(
+                '[GCall] Discarding RTC ICE for older connId from',
+                fromAddress,
+                'connId:',
+                connId,
+                'current:',
+                pcEntry.connId
+              );
+              return;
             }
+            pushPendingRemoteIceCandidate(
+              pendingRemoteIceRef.current,
+              fromAddress,
+              connId,
+              candidate
+            );
+            return;
+          }
+          if (!pcEntry.pc.remoteDescription) {
+            pushPendingRemoteIceCandidate(
+              pendingRemoteIceRef.current,
+              fromAddress,
+              connId,
+              candidate
+            );
+            return;
+          }
+          try {
+            await pcEntry.pc.addIceCandidate(candidate);
+          } catch {
+            /* ignore */
           }
         }
       });
@@ -4066,6 +4128,7 @@ export function useGroupVoiceCall(uiActive = false) {
     relayLastSentRef.current.clear();
     rtcReconnectHintLastSentAtRef.current.clear();
     rtcSignalChainsRef.current.clear();
+    pendingRemoteIceRef.current.clear();
     dcSendBackoffUntilRef.current.clear();
     dcSendBackoffStreakRef.current.clear();
     peerRecoveryProfileRef.current.clear();
