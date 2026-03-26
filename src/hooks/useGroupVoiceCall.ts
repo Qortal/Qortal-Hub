@@ -233,6 +233,51 @@ function debugWarn(...args: unknown[]): void {
   console.warn(...args);
 }
 
+/** Best-effort succeeded candidate-pair line from getStats (helps spot relay vs host/srflx). */
+function debugLogIceSucceededPair(
+  pc: RTCPeerConnection,
+  base: Record<string, string | number | boolean | null | undefined>
+): void {
+  void pc
+    .getStats()
+    .then((report) => {
+      let pair: RTCIceCandidatePairStats | undefined;
+      for (const s of report.values()) {
+        if (
+          s.type === 'candidate-pair' &&
+          (s as RTCIceCandidatePairStats).state === 'succeeded'
+        ) {
+          pair = s as RTCIceCandidatePairStats;
+          break;
+        }
+      }
+      if (!pair) {
+        debugLog('[GCall] ICE pair stats', { ...base, note: 'no_succeeded_pair' });
+        return;
+      }
+      const loc = pair.localCandidateId
+        ? report.get(pair.localCandidateId)
+        : undefined;
+      const rem = pair.remoteCandidateId
+        ? report.get(pair.remoteCandidateId)
+        : undefined;
+      const localType =
+        loc && loc.type === 'local-candidate'
+          ? (loc as { candidateType?: string }).candidateType
+          : undefined;
+      const remoteType =
+        rem && rem.type === 'remote-candidate'
+          ? (rem as { candidateType?: string }).candidateType
+          : undefined;
+      debugLog('[GCall] ICE pair stats', {
+        ...base,
+        localCandidateType: localType,
+        remoteCandidateType: remoteType,
+      });
+    })
+    .catch(() => {});
+}
+
 export function shouldStartGroupCallAudioCapture(opts: {
   pipelineActive: boolean;
   startupInFlight: boolean;
@@ -1627,6 +1672,24 @@ export function useGroupVoiceCall(uiActive = false) {
         lastSoftRecoveryAtMs: 0,
       });
 
+      const logRtcNego = (tag: string) => {
+        const ent = peerConnectionsRef.current.get(peerAddress);
+        const match = ent?.connId === connId;
+        debugLog('[GCall] rtcNego', {
+          tag,
+          role,
+          peerAddress,
+          connId,
+          mapEntryMatch: match,
+          ageMs: match && ent ? Date.now() - ent.createdAtMs : null,
+          ice: pc.iceConnectionState,
+          pcConn: pc.connectionState,
+          signaling: pc.signalingState,
+          iceGather: pc.iceGatheringState,
+          dc: match && ent ? (ent.dc?.readyState ?? null) : null,
+        });
+      };
+
       pc.onicecandidate = (e) => {
         const u = userInfoRef.current;
         if (e.candidate && u?.address) {
@@ -1638,10 +1701,29 @@ export function useGroupVoiceCall(uiActive = false) {
             e.candidate.toJSON(),
             connId
           );
+        } else if (!e.candidate) {
+          logRtcNego('ice:end-of-candidates');
         }
       };
 
+      pc.addEventListener('iceconnectionstatechange', () => {
+        logRtcNego(`iceConn:${pc.iceConnectionState}`);
+        const ent = peerConnectionsRef.current.get(peerAddress);
+        if (
+          ent?.connId === connId &&
+          (pc.iceConnectionState === 'connected' ||
+            pc.iceConnectionState === 'completed')
+        ) {
+          debugLogIceSucceededPair(pc, {
+            role,
+            peerAddress,
+            connId,
+          });
+        }
+      });
+
       pc.addEventListener('icegatheringstatechange', () => {
+        logRtcNego(`iceGather:${pc.iceGatheringState}`);
         if (pc.iceGatheringState === 'complete') {
           const label = `[GCall ICE] ${role} → ${peerAddress} (${connId})`;
           scheduleLogIceServerSourcesForPeer(
@@ -1656,6 +1738,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
       pc.addEventListener('connectionstatechange', () => {
         const state = pc.connectionState;
+        logRtcNego(`pcConn:${state}`);
         const entry = peerConnectionsRef.current.get(peerAddress);
         metricsRef.current.recordPcConnectionStateTransition(state);
 
@@ -1732,6 +1815,13 @@ export function useGroupVoiceCall(uiActive = false) {
       );
       dc.binaryType = 'arraybuffer';
 
+      debugLog('[GCall] Upstream DC created', {
+        forwarderAddress,
+        connId,
+        dcLabel: dc.label,
+        dcReadyState: dc.readyState,
+      });
+
       const pcEntry = peerConnectionsRef.current.get(forwarderAddress);
       if (pcEntry) {
         pcEntry.dc = dc;
@@ -1744,7 +1834,12 @@ export function useGroupVoiceCall(uiActive = false) {
         latest.lastDcStateChangeAtMs = Date.now();
         latest.softRecoveryAttempts = 0;
         latest.lastSoftRecoveryAtMs = 0;
-        debugLog('[GCall] Upstream DC opened to', forwarderAddress, 'connId:', connId);
+        debugLog('[GCall] Upstream DC opened to', forwarderAddress, {
+          connId,
+          ageSincePcCreatedMs: Date.now() - latest.createdAtMs,
+          ice: latest.pc.iceConnectionState,
+          pcConn: latest.pc.connectionState,
+        });
         upstreamDCRef.current = dc;
         upstreamAddressRef.current = forwarderAddress;
         metricsRef.current.recordDcOpen();
@@ -1761,7 +1856,7 @@ export function useGroupVoiceCall(uiActive = false) {
         if (latest?.connId === connId) {
           latest.lastDcStateChangeAtMs = Date.now();
         }
-        debugLog('[GCall] Upstream DC closed to', forwarderAddress);
+        debugLog('[GCall] Upstream DC closed to', forwarderAddress, { connId });
         metricsRef.current.recordDcClose();
         markPeerUnstable(forwarderAddress);
         if (upstreamDCRef.current === dc) {
@@ -1779,35 +1874,9 @@ export function useGroupVoiceCall(uiActive = false) {
         }
         metricsRef.current.recordDcError();
         markPeerUnstable(forwarderAddress);
+        debugLog('[GCall] Upstream DC error', { forwarderAddress, connId });
         flushMetrics();
         scheduleEnsureAfterIceTeardown();
-      };
-
-      pc.onconnectionstatechange = () => {
-        debugLog(
-          '[GCall] PC state (upstream →',
-          forwarderAddress,
-          '):',
-          pc.connectionState
-        );
-      };
-
-      pc.onicegatheringstatechange = () => {
-        debugLog(
-          '[GCall] ICE gathering (upstream →',
-          forwarderAddress,
-          '):',
-          pc.iceGatheringState
-        );
-      };
-
-      pc.oniceconnectionstatechange = () => {
-        debugLog(
-          '[GCall] ICE connection (upstream →',
-          forwarderAddress,
-          '):',
-          pc.iceConnectionState
-        );
       };
 
       // DataChannels are bidirectional: the forwarder sends audio (e.g. other
@@ -1917,6 +1986,22 @@ export function useGroupVoiceCall(uiActive = false) {
         return true;
       }
 
+      if (existing && (!hintedConnId || existing.connId === hintedConnId)) {
+        debugLog('[GCall] rtcNego', {
+          tag: 'reconnectExpectedUpstream',
+          role: existing.role,
+          peerAddress: address,
+          connId: existing.connId,
+          hintedConnId: hintedConnId ?? null,
+          ageMs: Date.now() - existing.createdAtMs,
+          ice: existing.pc.iceConnectionState,
+          pcConn: existing.pc.connectionState,
+          signaling: existing.pc.signalingState,
+          iceGather: existing.pc.iceGatheringState,
+          dc: existing.dc?.readyState ?? null,
+        });
+      }
+
       if (
         existing &&
         existing.role === 'upstream' &&
@@ -1999,46 +2084,33 @@ export function useGroupVoiceCall(uiActive = false) {
 
           const pc = createPeerConnection(fromAddress, connId, 'downstream');
 
-          pc.onconnectionstatechange = () => {
-            debugLog(
-              '[GCall] PC state (downstream ←',
-              fromAddress,
-              '):',
-              pc.connectionState
-            );
-          };
-
-          pc.oniceconnectionstatechange = () => {
-            debugLog(
-              '[GCall] ICE connection (downstream ←',
-              fromAddress,
-              '):',
-              pc.iceConnectionState
-            );
-          };
-
           pc.ondatachannel = (e) => {
             const dc = e.channel;
             dc.binaryType = 'arraybuffer';
             debugLog(
               '[GCall] Downstream DC received from',
               fromAddress,
-              '— channel:',
-              dc.label
+              {
+                connId,
+                channel: dc.label,
+                dcReadyState: dc.readyState,
+              }
             );
             dc.onopen = () => {
               const latest = peerConnectionsRef.current.get(fromAddress);
-              if (latest?.connId === connId) {
+              const match = latest?.connId === connId;
+              if (match && latest) {
                 latest.lastDcStateChangeAtMs = Date.now();
                 latest.softRecoveryAttempts = 0;
                 latest.lastSoftRecoveryAtMs = 0;
               }
-              debugLog(
-                '[GCall] Downstream DC opened from',
-                fromAddress,
-                'connId:',
-                connId
-              );
+              debugLog('[GCall] Downstream DC opened from', fromAddress, {
+                connId,
+                mapEntryMatch: match,
+                ageSincePcCreatedMs: match && latest ? Date.now() - latest.createdAtMs : null,
+                ice: match && latest ? latest.pc.iceConnectionState : null,
+                pcConn: match && latest ? latest.pc.connectionState : null,
+              });
               metricsRef.current.recordDcOpen();
               markPeerStable(fromAddress);
               relayLastSentRef.current.delete(fromAddress);
@@ -2050,7 +2122,7 @@ export function useGroupVoiceCall(uiActive = false) {
               if (latest?.connId === connId) {
                 latest.lastDcStateChangeAtMs = Date.now();
               }
-              debugLog('[GCall] Downstream DC closed from', fromAddress);
+              debugLog('[GCall] Downstream DC closed from', fromAddress, { connId });
               metricsRef.current.recordDcClose();
               markPeerUnstable(fromAddress);
               flushMetrics();
@@ -2062,6 +2134,7 @@ export function useGroupVoiceCall(uiActive = false) {
               }
               metricsRef.current.recordDcError();
               markPeerUnstable(fromAddress);
+              debugLog('[GCall] Downstream DC error', { fromAddress, connId });
               flushMetrics();
             };
             dc.onmessage = (ev) => {
@@ -2078,6 +2151,24 @@ export function useGroupVoiceCall(uiActive = false) {
           };
 
           await pc.setRemoteDescription({ type: 'offer', sdp });
+          {
+            const ent = peerConnectionsRef.current.get(fromAddress);
+            if (ent?.connId === connId) {
+              debugLog('[GCall] rtcNego', {
+                tag: 'afterRemoteOffer',
+                role: 'downstream',
+                peerAddress: fromAddress,
+                connId,
+                mapEntryMatch: true,
+                ageMs: Date.now() - ent.createdAtMs,
+                ice: pc.iceConnectionState,
+                pcConn: pc.connectionState,
+                signaling: pc.signalingState,
+                iceGather: pc.iceGatheringState,
+                dc: ent.dc?.readyState ?? null,
+              });
+            }
+          }
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
@@ -2136,6 +2227,19 @@ export function useGroupVoiceCall(uiActive = false) {
             fromAddress,
             connId,
             signalingState: pcEntry.pc.signalingState,
+          });
+          debugLog('[GCall] rtcNego', {
+            tag: 'afterRemoteAnswer',
+            role: pcEntry.role,
+            peerAddress: fromAddress,
+            connId,
+            mapEntryMatch: true,
+            ageMs: Date.now() - pcEntry.createdAtMs,
+            ice: pcEntry.pc.iceConnectionState,
+            pcConn: pcEntry.pc.connectionState,
+            signaling: pcEntry.pc.signalingState,
+            iceGather: pcEntry.pc.iceGatheringState,
+            dc: pcEntry.dc?.readyState ?? null,
           });
         } else if (type === 'ice') {
           const pcEntry = peerConnectionsRef.current.get(fromAddress);
