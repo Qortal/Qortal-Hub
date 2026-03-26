@@ -684,6 +684,10 @@ export function useGroupVoiceCall(uiActive = false) {
       // Clear the per-peer RTC signal chain so a rejoining peer's offers/answers
       // are not queued behind the stale tail of the old session's promise chain.
       rtcSignalChainsRef.current.delete(peerAddress);
+      // Reset per-peer instability state so a re-joined connection starts fresh
+      // and does not inherit the recovery DC profile from the previous session.
+      peerInstabilityScoreRef.current.delete(peerAddress);
+      peerRecoveryProfileRef.current.delete(peerAddress);
       if (reason === 'persistent-disconnect') {
         metricsRef.current.recordPersistentDisconnectTeardown();
       }
@@ -1012,6 +1016,38 @@ export function useGroupVoiceCall(uiActive = false) {
     [safeSendDataChannel]
   );
 
+  /**
+   * Like sendPacketToPeer but with a rate-limited relay fallback: when the peer's
+   * DC is not open or safeSendDataChannel fails (backpressure/backoff), audio is
+   * forwarded via the P2P mesh relay so re-joining members hear other speakers
+   * during the DC reconnection window.
+   */
+  const sendPacketToPeerWithRelay = useCallback(
+    (address: string, data: ArrayBuffer): boolean => {
+      const pcEntry = peerConnectionsRef.current.get(address);
+      if (pcEntry?.dc?.readyState === 'open') {
+        const sent = safeSendDataChannel(address, pcEntry.dc, data);
+        if (sent) return true;
+      }
+      // DC not open or send failed — fall back to relay (rate-limited to RELAY_MIN_INTERVAL_MS)
+      if (!roomIdRef.current) return false;
+      const now = Date.now();
+      if (
+        now - (relayLastSentRef.current.get(address) ?? 0) <
+        RELAY_MIN_INTERVAL_MS
+      )
+        return false;
+      relayLastSentRef.current.set(address, now);
+      metricsRef.current.recordRelaySent();
+      scheduleRelayMetricsFlush();
+      window.groupCall
+        .sendAudio(roomIdRef.current, address, new Uint8Array(data))
+        .catch(() => {});
+      return true;
+    },
+    [safeSendDataChannel, scheduleRelayMetricsFlush]
+  );
+
   const flushPendingDecryptMap = useCallback(() => {
     pendingDecryptsRef.current.clear();
   }, []);
@@ -1115,7 +1151,7 @@ export function useGroupVoiceCall(uiActive = false) {
             myAddress,
             sourceAddr,
             wireForForward,
-            sendPacketToPeer
+            sendPacketToPeerWithRelay
           );
           if (forwarded > 0)
             metricsRef.current.recordPacketForwarded(forwarded);
@@ -1147,7 +1183,7 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [
       recordInterArrivalForPlayout,
-      sendPacketToPeer,
+      sendPacketToPeerWithRelay,
       updateMetricResourceCounts,
       userInfo?.address,
     ]
@@ -2506,11 +2542,26 @@ export function useGroupVoiceCall(uiActive = false) {
         // Non-root: send to assigned forwarder
         const upstreamAddress = upstreamAddressRef.current;
         if (upstreamAddress) {
-          void safeSendDataChannel(
+          const sent = safeSendDataChannel(
             upstreamAddress,
             upstreamDCRef.current,
             packet.buffer as ArrayBuffer
           );
+          if (!sent && roomIdRef.current) {
+            // DC open but backpressured/in backoff — relay so audio is never silently dropped.
+            const now = Date.now();
+            if (
+              now - (relayLastSentRef.current.get(upstreamAddress) ?? 0) >=
+              RELAY_MIN_INTERVAL_MS
+            ) {
+              relayLastSentRef.current.set(upstreamAddress, now);
+              metricsRef.current.recordRelaySent();
+              scheduleRelayMetricsFlush();
+              window.groupCall
+                .sendAudio(roomIdRef.current, upstreamAddress, packet)
+                .catch(() => {});
+            }
+          }
         }
       } else if (
         myRoleRef.current === 'root-forwarder' &&
@@ -3538,7 +3589,12 @@ export function useGroupVoiceCall(uiActive = false) {
             lastJoinTs: joinTs,
             joinGeneration: incomingGen,
           });
-          closePeerConnection(address);
+          // Capture the stale connId BEFORE closing so that if handleRtcSignal
+          // already created a fresh PC for the re-joiner (race: offer arrived before
+          // this gcall:participant-joined event), we only close the old session's
+          // PC and leave the new one intact.
+          const staleConnId = peerConnectionsRef.current.get(address)?.connId;
+          closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);
@@ -3575,7 +3631,8 @@ export function useGroupVoiceCall(uiActive = false) {
               ? { joinGeneration: incomingGen }
               : {}),
           });
-          closePeerConnection(address);
+          const staleConnId = peerConnectionsRef.current.get(address)?.connId;
+          closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);

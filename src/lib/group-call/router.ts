@@ -114,6 +114,14 @@ export function isGroupCallWebRtcPeerInactive(connectionState: string | undefine
 }
 
 /**
+ * How many cluster members may be in the middle of a DC handshake (e.g. re-joining)
+ * before the root-forwarder's transport indicator downgrades to "relay".
+ * Setting this to 1 prevents a single reconnecting peer from keeping the whole
+ * transport mode stuck in relay while all other legs are healthy.
+ */
+export const DC_TRANSPORT_RECONNECT_TOLERANCE = 1;
+
+/**
  * Whether required WebRTC DataChannels are open for the current role (upload path for non-root;
  * all downstream peers for root forwarder).
  */
@@ -126,14 +134,18 @@ export function computeGroupCallDcTransportReady(
 ): boolean {
   if (!topology) return false;
   if (role === 'root-forwarder') {
+    // Tolerate up to DC_TRANSPORT_RECONNECT_TOLERANCE members mid-handshake so that
+    // a single re-joining peer does not keep the entire transport indicator in
+    // "relay" mode while the other legs are healthy.
+    let closedCount = 0;
     for (const cluster of topology.clusters) {
       if (cluster.forwarder !== myAddress) continue;
       for (const member of cluster.members) {
         if (member === myAddress) continue;
-        if (!peerDcOpen(member)) return false;
+        if (!peerDcOpen(member)) closedCount++;
       }
     }
-    return true;
+    return closedCount <= DC_TRANSPORT_RECONNECT_TOLERANCE;
   }
   return upstreamDcOpen;
 }
