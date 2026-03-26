@@ -104,6 +104,34 @@ export interface Participant {
   role: MyRole;
 }
 
+interface IncomingRoomKeyPayload {
+  roomId: string;
+  encryptedKey: string;
+  fromAddress: string;
+  fromPublicKey: string;
+  timestamp?: number;
+  keyMessageVersion?: number;
+  keyEpoch?: number;
+  topologyEpoch?: number;
+  verified?: boolean;
+}
+
+interface PendingVerifiedRoomKey extends IncomingRoomKeyPayload {
+  expiresAt: number;
+}
+
+interface IncomingKeyRequestPayload {
+  roomId: string;
+  toAddress: string;
+  fromAddress: string;
+  fromPublicKey: string;
+  requestedTopologyEpoch: number;
+  requestedKeyEpoch: number;
+  keyMessageVersion?: number;
+  timestamp?: number;
+  verified?: boolean;
+}
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const OPUS_SAMPLE_RATE = 48000;
@@ -208,6 +236,15 @@ const PENDING_DECRYPT_TTL_MS = 4000;
 const PREV_KEY_TTL_MS = 5_000;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
+const GCALL_KEY_MESSAGE_VERSION = 2;
+const PENDING_VERIFIED_KEY_TTL_MS = 5_000;
+const KEY_REQUEST_BATCH_WINDOW_MS = 150;
+const KEY_RECOVERY_SETTLE_DELAY_MS = 1_500;
+const KEY_RECOVERY_FAILURE_STREAK_THRESHOLD = 8;
+const KEY_RECOVERY_NO_DECODE_MS = 4_000;
+const KEY_RECOVERY_REQUEST_COOLDOWN_MS = 4_000;
+const KEY_RECOVERY_REFRESH_DELAY_MS = 3_000;
+const KEY_RECOVERY_REJOIN_DELAY_MS = 8_000;
 type DataChannelProfile = 'low-latency' | 'recovery';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -345,6 +382,32 @@ async function sha256Bytes(input: string): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
+async function sha256Hex(input: string): Promise<string> {
+  const bytes = await sha256Bytes(input);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function canonicalizeStringMap(map: Record<string, string>): string {
+  const sorted: Record<string, string> = {};
+  for (const key of Object.keys(map).sort()) {
+    sorted[key] = map[key]!;
+  }
+  return JSON.stringify(sorted);
+}
+
+async function buildGcKeyDigest(
+  toAddress: string,
+  encryptedKey: string
+): Promise<string> {
+  return sha256Hex(JSON.stringify({ encryptedKey, toAddress }));
+}
+
+async function buildGcKeyRotateDigest(
+  encryptedKeys: Record<string, string>
+): Promise<string> {
+  return sha256Hex(canonicalizeStringMap(encryptedKeys));
+}
+
 /** Compare two Uint8Arrays lexicographically. */
 function compareBytes(a: Uint8Array, b: Uint8Array): number {
   for (let i = 0; i < Math.min(a.length, b.length); i++) {
@@ -352,6 +415,31 @@ function compareBytes(a: Uint8Array, b: Uint8Array): number {
     if (a[i] > b[i]) return 1;
   }
   return a.length - b.length;
+}
+
+function chooseSameEpochTopologyWinner(
+  current: GroupTopology,
+  incoming: GroupTopology
+): { acceptIncoming: boolean; reason: string } {
+  const incomingSeen = incoming.lastSeen;
+  const currentSeen = current.lastSeen;
+  if (
+    typeof incomingSeen === 'number' &&
+    Number.isFinite(incomingSeen) &&
+    typeof currentSeen === 'number' &&
+    Number.isFinite(currentSeen) &&
+    incomingSeen !== currentSeen
+  ) {
+    return {
+      acceptIncoming: incomingSeen > currentSeen,
+      reason: 'lastSeen',
+    };
+  }
+  return {
+    acceptIncoming:
+      incoming.rootForwarder.localeCompare(current.rootForwarder) < 0,
+    reason: 'rootForwarder-lexical',
+  };
 }
 
 /** Compute election scores for all participants. Returns sorted list (lowest score first). */
@@ -764,11 +852,35 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Previous room key retained for PREV_KEY_TTL_MS after a rotation (sync-path fallback). */
   const prevRoomKeyRef = useRef<Uint8Array | null>(null);
   const prevKeyExpiresAtRef = useRef<number>(0);
+  /** Highest verified key epoch this client has applied or authored for the current room. */
+  const lastAppliedKeyEpochRef = useRef(0);
+  /** Verified key messages that arrived before topology root convergence caught up. */
+  const pendingVerifiedKeysRef = useRef<PendingVerifiedRoomKey[]>([]);
   /** True while a new key is being distributed; sendEncodedFrame drops frames during this window. */
   const keyDistributionPendingRef = useRef(false);
   /** Monotonic counter; each key distribution increments this so only the latest .finally()
    *  can release the gate (prevents an older distribution from clearing a newer one's gate). */
   const keyDistributionGenRef = useRef(0);
+  const lastRemoteDecodeAtRef = useRef(0);
+  const decryptFailureStreakRef = useRef(0);
+  const recoveryEligibleAfterRef = useRef(0);
+  const lastKeyRecoveryRequestAtRef = useRef(0);
+  const lastKeyRecoveryRefreshAtRef = useRef(0);
+  const lastKeyRecoveryReannounceAtRef = useRef(0);
+  const pendingKeyRequestRecipientsRef = useRef<
+    Map<string, { publicKey: string; requestedKeyEpoch: number }>
+  >(new Map());
+  const pendingKeyRequestFlushTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const keyRecoveryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const handleRoomKeyPayloadRef = useRef<
+    (payload: IncomingRoomKeyPayload, allowQueue?: boolean) => Promise<void>
+  >(async () => {});
+  const processPendingVerifiedKeysRef = useRef<() => void>(() => {});
+  const maybeRequestKeyRecoveryRef = useRef<(reason: string) => void>(() => {});
   const metricsRef = useRef(new GroupCallPerformanceTracker());
   const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null
@@ -1409,6 +1521,7 @@ export function useGroupVoiceCall(uiActive = false) {
       startedAt: number
     ) => {
       if (decodedList.length === 0) {
+        decryptFailureStreakRef.current += 1;
         metricsRef.current.recordPacketDropped();
         metricsRef.current.recordIncomingPacketDuration(
           performance.now() - startedAt
@@ -1417,6 +1530,7 @@ export function useGroupVoiceCall(uiActive = false) {
           '[GCall] decodeAudioPacket failed — size:',
           wireForForward.byteLength
         );
+        maybeRequestKeyRecoveryRef.current('decode-failure');
         return;
       }
 
@@ -1490,6 +1604,8 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         return;
       }
+      decryptFailureStreakRef.current = 0;
+      lastRemoteDecodeAtRef.current = Date.now();
 
       let jb = jitterMapRef.current.get(sourceAddr);
       if (!jb) {
@@ -1524,6 +1640,7 @@ export function useGroupVoiceCall(uiActive = false) {
       startedAt: number
     ) => {
       if (!decoded) {
+        decryptFailureStreakRef.current += 1;
         metricsRef.current.recordPacketDropped();
         metricsRef.current.recordIncomingPacketDuration(
           performance.now() - startedAt
@@ -1532,6 +1649,7 @@ export function useGroupVoiceCall(uiActive = false) {
           '[GCall] decodeAudioPacket failed — size:',
           wireForForward.byteLength
         );
+        maybeRequestKeyRecoveryRef.current('decode-failure');
         return;
       }
       applyPostDecryptList(wireForForward, [decoded], startedAt);
@@ -2794,18 +2912,24 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
 
-      // Same epoch + different root: do not lock to first-seen root (stale forwarder after mesh
-      // disagreement). If both views carry lastSeen (IPC), drop only strictly older messages.
-      // Local election / self-promotion often omit lastSeen; a later IPC heartbeat with lastSeen wins.
+      // Same epoch + different root: converge deterministically instead of last-writer-wins.
       if (
         topology.topologyEpoch === localEpochRef.current &&
         topologyRef.current !== null &&
         topology.rootForwarder !== topologyRef.current.rootForwarder
       ) {
         const prev = topologyRef.current;
-        const inSeen = topology.lastSeen;
-        const prevSeen = prev.lastSeen;
-        if (inSeen != null && prevSeen != null && inSeen < prevSeen) {
+        const decision = chooseSameEpochTopologyWinner(prev, topology);
+        debugLog('[GCall] same-epoch root disagreement', {
+          epoch: topology.topologyEpoch,
+          currentRoot: prev.rootForwarder,
+          incomingRoot: topology.rootForwarder,
+          currentLastSeen: prev.lastSeen ?? null,
+          incomingLastSeen: topology.lastSeen ?? null,
+          acceptedIncoming: decision.acceptIncoming,
+          reason: decision.reason,
+        });
+        if (!decision.acceptIncoming) {
           return;
         }
       }
@@ -2825,6 +2949,7 @@ export function useGroupVoiceCall(uiActive = false) {
             rootForwarder: topology.rootForwarder,
           }
         );
+        processPendingVerifiedKeysRef.current();
         ensureGroupCallWebRtcConnections(topology);
         flushMetrics();
         return;
@@ -2843,6 +2968,14 @@ export function useGroupVoiceCall(uiActive = false) {
         topology.topologyEpoch
       );
       topologyRef.current = topology;
+      if (
+        prevTopo?.rootForwarder !== topology.rootForwarder ||
+        prevTopo?.topologyEpoch !== topology.topologyEpoch
+      ) {
+        recoveryEligibleAfterRef.current =
+          Date.now() + KEY_RECOVERY_SETTLE_DELAY_MS;
+      }
+      processPendingVerifiedKeysRef.current();
 
       const myAddress = userInfo?.address ?? '';
       const role = computeMyRole(myAddress, topology);
@@ -2928,6 +3061,7 @@ export function useGroupVoiceCall(uiActive = false) {
           rootForwarder: myAddress,
           standbyForwarder: overriddenStandby,
           clusters: overriddenClusters,
+          lastSeen: Date.now(),
         };
         applyTopology(overriddenTopo);
         const ts = Date.now();
@@ -3932,26 +4066,25 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Room key distribution ─────────────────────────────────────────────────
 
-  const distributeRoomKey = useCallback(
-    async (
+  const encryptRoomKeyForRecipients = useCallback(
+    (
       key: Uint8Array,
-      recipients?: ReadonlyMap<string, { publicKey: string }>
-    ) => {
-      if (!userInfo?.address) return;
-      const myAddr = userInfo.address;
-      const roster = recipients ?? participantsRef.current;
-      const recipientAddrs = [...roster.keys()].filter((a) => a !== myAddr);
-      debugLog('[GCall] distributeRoomKey — recipients:', recipientAddrs);
-
-      // Build the full encrypted-keys map synchronously (nacl.box is sync).
-      // Then sign once and send a single GC_KEY_ROTATE broadcast instead of
-      // N sequential sign+IPC round-trips, compressing N×(sign+IPC) → 1×(sign+IPC).
+      roster: ReadonlyMap<string, { publicKey: string }>,
+      myAddr: string
+    ): {
+      encryptedKeys: Record<string, string>;
+      omittedAddresses: string[];
+      failedAddresses: string[];
+    } => {
       const encryptedKeys: Record<string, string> = {};
+      const omittedAddresses: string[] = [];
+      const failedAddresses: string[] = [];
       for (const [addr, { publicKey }] of roster) {
         if (addr === myAddr) continue;
-        // Encrypt key for this participant using their Ed25519 public key.
-        // Convert Ed25519 public key to Curve25519 for nacl.box, then use an
-        // ephemeral keypair so the recipient can compute the same shared secret.
+        if (!publicKey) {
+          omittedAddresses.push(addr);
+          continue;
+        }
         try {
           const recipientPkBytes = base58DecodeRenderer(publicKey);
           const recipientCurve25519PK =
@@ -3963,27 +4096,108 @@ export function useGroupVoiceCall(uiActive = false) {
           );
           const nonce = naclApi.randomBytes(24);
           const ciphertext = naclApi.box.after(key, nonce, sharedKey);
-
-          // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
           const combined = new Uint8Array(32 + 24 + ciphertext.length);
           combined.set(ephemeralKP.publicKey, 0);
           combined.set(nonce, 32);
           combined.set(ciphertext, 56);
-
           encryptedKeys[addr] = uint8ToBase64(combined);
         } catch (e) {
+          failedAddresses.push(addr);
           debugWarn(`[GCall] Failed to encrypt key for ${addr}:`, e);
         }
       }
+      return { encryptedKeys, omittedAddresses, failedAddresses };
+    },
+    []
+  );
 
-      if (Object.keys(encryptedKeys).length === 0) return;
+  const getAuthoritativeRotationRecipients = useCallback(
+    async (
+      extraRecipients?: ReadonlyMap<string, { publicKey: string }>
+    ): Promise<Map<string, { publicKey: string }>> => {
+      const merged = new Map<string, { publicKey: string }>();
+      const rendererRoster = participantsRef.current;
+      const mainRoster = await window.groupCall
+        .getRoomParticipants(roomIdRef.current)
+        .catch(() => []);
+      const mergeOne = (addr: string, publicKey: string, source: string) => {
+        const normalized = publicKey?.trim?.() ?? '';
+        const existing = merged.get(addr);
+        if (
+          existing?.publicKey &&
+          normalized &&
+          existing.publicKey !== normalized
+        ) {
+          debugWarn('[GCall] Key roster publicKey mismatch', {
+            address: addr,
+            previousSource: existing.publicKey,
+            source,
+          });
+        }
+        if (!existing || (!existing.publicKey && normalized)) {
+          merged.set(addr, { publicKey: normalized });
+        }
+      };
+      for (const [addr, value] of rendererRoster) {
+        mergeOne(addr, value.publicKey, 'renderer');
+      }
+      for (const participant of mainRoster) {
+        mergeOne(participant.address, participant.publicKey, 'main');
+      }
+      if (extraRecipients) {
+        for (const [addr, value] of extraRecipients) {
+          mergeOne(addr, value.publicKey, 'extra');
+        }
+      }
+      debugLog('[GCall] authoritative rotate roster', {
+        rendererRosterSize: rendererRoster.size,
+        mainRosterSize: mainRoster.length,
+        authoritativeRosterSize: merged.size,
+      });
+      return merged;
+    },
+    []
+  );
 
+  const distributeRoomKey = useCallback(
+    async (
+      key: Uint8Array,
+      recipients?: ReadonlyMap<string, { publicKey: string }>
+    ) => {
+      if (!userInfo?.address) return;
+      const myAddr = userInfo.address;
+      const roster = await getAuthoritativeRotationRecipients(recipients);
+      const { encryptedKeys, omittedAddresses, failedAddresses } =
+        encryptRoomKeyForRecipients(key, roster, myAddr);
+      const recipientAddrs = Object.keys(encryptedKeys);
+      debugLog('[GCall] distributeRoomKey — recipients:', {
+        recipients: recipientAddrs,
+        omittedAddresses,
+        failedAddresses,
+      });
+      if (omittedAddresses.length > 0 || failedAddresses.length > 0) {
+        debugWarn('[GCall] distributeRoomKey omissions detected', {
+          omittedAddresses,
+          failedAddresses,
+        });
+      }
+      if (recipientAddrs.length === 0) return;
+
+      const topologyEpoch =
+        topologyRef.current?.topologyEpoch ?? localEpochRef.current;
+      const keyEpoch = Math.max(lastAppliedKeyEpochRef.current, topologyEpoch);
+      lastAppliedKeyEpochRef.current = keyEpoch;
+      const encryptedKeysDigest = await buildGcKeyRotateDigest(encryptedKeys);
       const ts = Date.now();
       const sig = await signGroupCallFields({
         type: 'GC_KEY_ROTATE',
         roomId: roomIdRef.current,
         fromAddress: myAddr,
         fromPublicKey: userInfo.publicKey ?? '',
+        keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+        keyEpoch,
+        topologyEpoch,
+        encryptedKeysDigest,
         timestamp: ts,
       }).catch(() => '');
       if (!sig) {
@@ -3996,21 +4210,201 @@ export function useGroupVoiceCall(uiActive = false) {
         myAddr,
         sig,
         userInfo.publicKey ?? '',
-        ts
+        ts,
+        {
+          keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+          keyEpoch,
+          topologyEpoch,
+          encryptedKeysDigest,
+        }
       );
     },
-    [userInfo]
+    [
+      encryptRoomKeyForRecipients,
+      getAuthoritativeRotationRecipients,
+      userInfo,
+    ]
+  );
+
+  const sendTargetedRoomKeys = useCallback(
+    async (
+      key: Uint8Array,
+      recipients: ReadonlyMap<string, { publicKey: string }>,
+      reason: string
+    ) => {
+      if (!userInfo?.address) return;
+      const myAddr = userInfo.address;
+      const keyEpoch = Math.max(
+        lastAppliedKeyEpochRef.current,
+        topologyRef.current?.topologyEpoch ?? localEpochRef.current
+      );
+      const topologyEpoch =
+        topologyRef.current?.topologyEpoch ?? localEpochRef.current;
+      const { encryptedKeys, omittedAddresses, failedAddresses } =
+        encryptRoomKeyForRecipients(key, recipients, myAddr);
+      debugLog('[GCall] sendTargetedRoomKeys', {
+        reason,
+        recipients: Object.keys(encryptedKeys),
+        omittedAddresses,
+        failedAddresses,
+      });
+      if (omittedAddresses.length > 0 || failedAddresses.length > 0) {
+        debugWarn('[GCall] sendTargetedRoomKeys omissions detected', {
+          reason,
+          omittedAddresses,
+          failedAddresses,
+        });
+      }
+      for (const [addr, encryptedKey] of Object.entries(encryptedKeys)) {
+        const encryptedKeyDigest = await buildGcKeyDigest(addr, encryptedKey);
+        const ts = Date.now();
+        const sig = await signGroupCallFields({
+          type: 'GC_KEY',
+          roomId: roomIdRef.current,
+          toAddress: addr,
+          fromAddress: myAddr,
+          fromPublicKey: userInfo.publicKey ?? '',
+          keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+          keyEpoch,
+          topologyEpoch,
+          encryptedKeyDigest,
+          timestamp: ts,
+        }).catch(() => '');
+        if (!sig) {
+          debugWarn('[GCall] Signing failed for GC_KEY resend', {
+            toAddress: addr,
+            reason,
+          });
+          continue;
+        }
+        await window.groupCall.sendKey(
+          roomIdRef.current,
+          addr,
+          encryptedKey,
+          myAddr,
+          sig,
+          userInfo.publicKey ?? '',
+          ts,
+          {
+            keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+            keyEpoch,
+            topologyEpoch,
+            encryptedKeyDigest,
+          }
+        );
+      }
+    },
+    [encryptRoomKeyForRecipients, userInfo]
+  );
+
+  const queueVerifiedRoomKey = useCallback((payload: IncomingRoomKeyPayload) => {
+    const dedupeKey = [
+      payload.fromAddress,
+      payload.keyEpoch ?? 'legacy',
+      payload.timestamp ?? 0,
+      payload.encryptedKey,
+    ].join(':');
+    const now = Date.now();
+    const next = pendingVerifiedKeysRef.current.filter((entry) => {
+      if (entry.expiresAt <= now) return false;
+      const entryKey = [
+        entry.fromAddress,
+        entry.keyEpoch ?? 'legacy',
+        entry.timestamp ?? 0,
+        entry.encryptedKey,
+      ].join(':');
+      return entryKey !== dedupeKey;
+    });
+    next.push({ ...payload, expiresAt: now + PENDING_VERIFIED_KEY_TTL_MS });
+    pendingVerifiedKeysRef.current = next;
+    debugLog('[GCall] queued verified room key', {
+      fromAddress: payload.fromAddress,
+      keyEpoch: payload.keyEpoch ?? null,
+      queueDepth: next.length,
+    });
+  }, []);
+
+  const applyDecryptedRoomKey = useCallback(
+    (payload: IncomingRoomKeyPayload, decryptedKey: string) => {
+      roomKeyRef.current = Uint8Array.from(atob(decryptedKey), (c) =>
+        c.charCodeAt(0)
+      );
+      isOurKeyRef.current = false;
+      if (
+        typeof payload.keyEpoch === 'number' &&
+        Number.isFinite(payload.keyEpoch)
+      ) {
+        lastAppliedKeyEpochRef.current = Math.max(
+          lastAppliedKeyEpochRef.current,
+          payload.keyEpoch
+        );
+      }
+      decryptFailureStreakRef.current = 0;
+      lastRemoteDecodeAtRef.current = Date.now();
+      recoveryEligibleAfterRef.current =
+        Date.now() + KEY_RECOVERY_SETTLE_DELAY_MS;
+      syncDecryptWorkerRoomKey(roomKeyRef.current);
+      debugLog('[GCall] Room key set', {
+        fromAddress: payload.fromAddress,
+        keyEpoch: payload.keyEpoch ?? null,
+        topologyEpoch: payload.topologyEpoch ?? null,
+      });
+      ensureAudioCaptureStarted();
+    },
+    [ensureAudioCaptureStarted, syncDecryptWorkerRoomKey]
   );
 
   /** Handle incoming room key. */
   const handleRoomKey = useCallback(
-    async (payload: { encryptedKey: string }) => {
-      debugLog(
-        '[GCall] handleRoomKey called — encryptedKey length:',
-        payload.encryptedKey?.length ?? 0
-      );
+    async (payload: IncomingRoomKeyPayload, allowQueue = true) => {
+      if (!payload?.encryptedKey || payload.roomId !== roomIdRef.current) return;
+      const currentRoot = topologyRef.current?.rootForwarder ?? '';
+      const keyVersion = payload.keyMessageVersion ?? 1;
+      const keyEpoch =
+        typeof payload.keyEpoch === 'number' && Number.isFinite(payload.keyEpoch)
+          ? payload.keyEpoch
+          : 0;
+      const isVersioned = keyVersion >= GCALL_KEY_MESSAGE_VERSION;
+      debugLog('[GCall] handleRoomKey called', {
+        encryptedKeyLength: payload.encryptedKey.length,
+        fromAddress: payload.fromAddress,
+        keyVersion,
+        keyEpoch,
+        currentRoot,
+      });
+      if (payload.verified !== true) {
+        debugWarn('[GCall] Ignoring unverified key payload', payload);
+        return;
+      }
+      if (isVersioned) {
+        if (keyEpoch <= lastAppliedKeyEpochRef.current) {
+          debugLog('[GCall] Ignoring stale verified key', {
+            incoming: keyEpoch,
+            local: lastAppliedKeyEpochRef.current,
+            fromAddress: payload.fromAddress,
+          });
+          return;
+        }
+      } else if (lastAppliedKeyEpochRef.current > 0) {
+        debugLog('[GCall] Ignoring legacy key after versioned key apply', {
+          fromAddress: payload.fromAddress,
+          localKeyEpoch: lastAppliedKeyEpochRef.current,
+        });
+        return;
+      }
+      if (!currentRoot || payload.fromAddress !== currentRoot) {
+        if (allowQueue) {
+          queueVerifiedRoomKey(payload);
+        } else {
+          debugLog('[GCall] Dropping unauthorized key candidate', {
+            fromAddress: payload.fromAddress,
+            currentRoot,
+            keyEpoch,
+          });
+        }
+        return;
+      }
       try {
-        // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
         const combined = base64ToUint8(payload.encryptedKey);
         const ephemeralPKb64 = uint8ToBase64(combined.slice(0, 32));
         const nonceb64 = uint8ToBase64(combined.slice(32, 56));
@@ -4030,26 +4424,46 @@ export function useGroupVoiceCall(uiActive = false) {
           !!result?.decryptedKey
         );
         if (result?.decryptedKey) {
-          roomKeyRef.current = Uint8Array.from(atob(result.decryptedKey), (c) =>
-            c.charCodeAt(0)
-          );
-          isOurKeyRef.current = false; // key came from the new root; we don't own it
-          syncDecryptWorkerRoomKey(roomKeyRef.current);
-          debugLog(
-            '[GCall] Room key set (',
-            roomKeyRef.current.length,
-            'bytes), captureWorklet exists:',
-            !!captureWorkletRef.current
-          );
-          // Non-root-forwarder: start audio now that we have the shared key
-          ensureAudioCaptureStarted();
+          applyDecryptedRoomKey(payload, result.decryptedKey);
         }
       } catch (e) {
         debugWarn('[GCall] Failed to decrypt room key:', e);
       }
     },
-    [ensureAudioCaptureStarted, syncDecryptWorkerRoomKey]
+    [applyDecryptedRoomKey, queueVerifiedRoomKey]
   );
+  handleRoomKeyPayloadRef.current = handleRoomKey;
+
+  const processPendingVerifiedKeys = useCallback(() => {
+    const now = Date.now();
+    const currentRoot = topologyRef.current?.rootForwarder ?? '';
+    const keep: PendingVerifiedRoomKey[] = [];
+    for (const entry of pendingVerifiedKeysRef.current) {
+      if (entry.expiresAt <= now) {
+        debugWarn('[GCall] Dropped expired pending key handoff candidate', {
+          fromAddress: entry.fromAddress,
+          keyEpoch: entry.keyEpoch ?? null,
+        });
+        continue;
+      }
+      const keyEpoch =
+        typeof entry.keyEpoch === 'number' && Number.isFinite(entry.keyEpoch)
+          ? entry.keyEpoch
+          : 0;
+      const isVersioned =
+        (entry.keyMessageVersion ?? 1) >= GCALL_KEY_MESSAGE_VERSION;
+      if (isVersioned && keyEpoch <= lastAppliedKeyEpochRef.current) {
+        continue;
+      }
+      if (!currentRoot || entry.fromAddress !== currentRoot) {
+        keep.push(entry);
+        continue;
+      }
+      void handleRoomKeyPayloadRef.current(entry, false);
+    }
+    pendingVerifiedKeysRef.current = keep;
+  }, []);
+  processPendingVerifiedKeysRef.current = processPendingVerifiedKeys;
 
   // ── Decrypt Worker lifecycle ──────────────────────────────────────────────
 
@@ -4421,6 +4835,23 @@ export function useGroupVoiceCall(uiActive = false) {
     // Reset state
     roomKeyRef.current = null;
     isOurKeyRef.current = false;
+    lastAppliedKeyEpochRef.current = 0;
+    pendingVerifiedKeysRef.current = [];
+    decryptFailureStreakRef.current = 0;
+    lastRemoteDecodeAtRef.current = 0;
+    recoveryEligibleAfterRef.current = 0;
+    lastKeyRecoveryRequestAtRef.current = 0;
+    lastKeyRecoveryRefreshAtRef.current = 0;
+    lastKeyRecoveryReannounceAtRef.current = 0;
+    pendingKeyRequestRecipientsRef.current.clear();
+    if (pendingKeyRequestFlushTimerRef.current) {
+      clearTimeout(pendingKeyRequestFlushTimerRef.current);
+      pendingKeyRequestFlushTimerRef.current = null;
+    }
+    if (keyRecoveryRetryTimerRef.current) {
+      clearTimeout(keyRecoveryRetryTimerRef.current);
+      keyRecoveryRetryTimerRef.current = null;
+    }
     // Invalidate any in-flight key distribution so its .finally() cannot reopen the gate.
     ++keyDistributionGenRef.current;
     keyDistributionPendingRef.current = false;
@@ -4499,7 +4930,7 @@ export function useGroupVoiceCall(uiActive = false) {
             Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
           // Single-cluster: sticky root if prior root still in roster (after await so
           // topologyRef reflects any applyTopology during computeElectionOrder).
-          const newTopo =
+          const newTopoBase =
             fresh.length <= CLUSTER_SIZE
               ? (buildSingleClusterTopologyWithStickyRoot(
                   sorted,
@@ -4508,6 +4939,7 @@ export function useGroupVoiceCall(uiActive = false) {
                   CLUSTER_SIZE
                 ) ?? buildTopology(sorted, epoch))
               : buildTopology(sorted, epoch);
+          const newTopo = { ...newTopoBase, lastSeen: Date.now() };
           applyTopology(newTopo);
 
           const myAddress = userInfo?.address ?? '';
@@ -4575,6 +5007,158 @@ export function useGroupVoiceCall(uiActive = false) {
           // Non-initiator: keep old key active; handleRoomKey will replace it.
         })();
       }, TOPOLOGY_ELECTION_DEBOUNCE_MS);
+    };
+
+    const scheduleKeyRecoveryCheck = (delayMs: number) => {
+      const clamped = Math.max(0, delayMs);
+      if (keyRecoveryRetryTimerRef.current) {
+        clearTimeout(keyRecoveryRetryTimerRef.current);
+      }
+      keyRecoveryRetryTimerRef.current = setTimeout(() => {
+        keyRecoveryRetryTimerRef.current = null;
+        maybeRequestKeyRecoveryRef.current('scheduled-check');
+      }, clamped);
+    };
+
+    const reannounceLocalJoin = () => {
+      if (
+        !userInfo?.address ||
+        !userInfo.publicKey ||
+        !roomIdRef.current ||
+        !chatIdRef.current ||
+        joinGenerationRef.current == null
+      ) {
+        return;
+      }
+      const rts = Date.now();
+      const jg = joinGenerationRef.current;
+      void signGroupCallFields({
+        type: 'GC_JOIN',
+        roomId: roomIdRef.current,
+        chatId: chatIdRef.current,
+        fromAddress: userInfo.address,
+        fromPublicKey: userInfo.publicKey,
+        timestamp: rts,
+        joinGeneration: jg,
+      })
+        .then((rsig) => {
+          if (!rsig) return;
+          return window.groupCall.join(
+            roomIdRef.current,
+            chatIdRef.current,
+            userInfo.address,
+            rsig,
+            userInfo.publicKey!,
+            rts,
+            jg
+          );
+        })
+        .catch(() => {});
+    };
+
+    maybeRequestKeyRecoveryRef.current = (reason: string) => {
+      void (async () => {
+        if (
+          roomStateRef.current !== 'connected' ||
+          !userInfo?.address ||
+          !userInfo.publicKey
+        ) {
+          return;
+        }
+        const topology = topologyRef.current;
+        if (!topology?.rootForwarder || topology.rootForwarder === userInfo.address) {
+          return;
+        }
+        const now = Date.now();
+        if (now < recoveryEligibleAfterRef.current) {
+          scheduleKeyRecoveryCheck(recoveryEligibleAfterRef.current - now);
+          return;
+        }
+        const noKey = roomKeyRef.current === null;
+        const repeatedFailures =
+          decryptFailureStreakRef.current >=
+          KEY_RECOVERY_FAILURE_STREAK_THRESHOLD;
+        const lastRemoteDecodeAge =
+          lastRemoteDecodeAtRef.current > 0
+            ? now - lastRemoteDecodeAtRef.current
+            : Number.POSITIVE_INFINITY;
+        const noRecentDecode = lastRemoteDecodeAge >= KEY_RECOVERY_NO_DECODE_MS;
+        if (!noKey && !repeatedFailures && !noRecentDecode) {
+          return;
+        }
+        const elapsedSinceRequest =
+          lastKeyRecoveryRequestAtRef.current > 0
+            ? now - lastKeyRecoveryRequestAtRef.current
+            : Number.POSITIVE_INFINITY;
+        if (
+          lastKeyRecoveryRequestAtRef.current === 0 ||
+          now - lastKeyRecoveryRequestAtRef.current >=
+            KEY_RECOVERY_REQUEST_COOLDOWN_MS
+        ) {
+          const ts = Date.now();
+          const sig = await signGroupCallFields({
+            type: 'GC_KEY_REQUEST',
+            roomId: roomIdRef.current,
+            toAddress: topology.rootForwarder,
+            fromAddress: userInfo.address,
+            fromPublicKey: userInfo.publicKey,
+            requestedTopologyEpoch: topology.topologyEpoch,
+            requestedKeyEpoch: lastAppliedKeyEpochRef.current,
+            keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+            timestamp: ts,
+          }).catch(() => '');
+          if (!sig) return;
+          lastKeyRecoveryRequestAtRef.current = now;
+          debugWarn('[GCall] Requesting room key recovery', {
+            reason,
+            rootForwarder: topology.rootForwarder,
+            requestedTopologyEpoch: topology.topologyEpoch,
+            requestedKeyEpoch: lastAppliedKeyEpochRef.current,
+            noKey,
+            repeatedFailures,
+            noRecentDecode,
+          });
+          await window.groupCall.sendKeyRequest(
+            roomIdRef.current,
+            topology.rootForwarder,
+            userInfo.address,
+            sig,
+            userInfo.publicKey,
+            ts,
+            topology.topologyEpoch,
+            lastAppliedKeyEpochRef.current
+          );
+          scheduleKeyRecoveryCheck(KEY_RECOVERY_REFRESH_DELAY_MS);
+          return;
+        }
+        if (
+          elapsedSinceRequest >= KEY_RECOVERY_REFRESH_DELAY_MS &&
+          now - lastKeyRecoveryRefreshAtRef.current >=
+            KEY_RECOVERY_REQUEST_COOLDOWN_MS
+        ) {
+          lastKeyRecoveryRefreshAtRef.current = now;
+          debugWarn('[GCall] Escalating to topology refresh after key request', {
+            reason,
+            rootForwarder: topology.rootForwarder,
+          });
+          scheduleTopologyElectionFlush();
+          scheduleKeyRecoveryCheck(KEY_RECOVERY_REJOIN_DELAY_MS);
+          return;
+        }
+        if (
+          elapsedSinceRequest >= KEY_RECOVERY_REJOIN_DELAY_MS &&
+          now - lastKeyRecoveryReannounceAtRef.current >=
+            KEY_RECOVERY_REQUEST_COOLDOWN_MS
+        ) {
+          lastKeyRecoveryReannounceAtRef.current = now;
+          debugWarn('[GCall] Escalating to local reannounce after failed key recovery', {
+            reason,
+            rootForwarder: topology.rootForwarder,
+          });
+          reannounceLocalJoin();
+          scheduleKeyRecoveryCheck(KEY_RECOVERY_REJOIN_DELAY_MS);
+        }
+      })().catch(() => {});
     };
 
     const unsub = window.groupCall.onEvent((event: string, payload: any) => {
@@ -4794,6 +5378,7 @@ export function useGroupVoiceCall(uiActive = false) {
         if (topo.roomId !== roomIdRef.current) return;
         lastRootHeartbeatRef.current = Date.now();
         applyTopology(topo);
+        maybeRequestKeyRecoveryRef.current('topology-transition');
       }
 
       if (event === 'gcall:heartbeat') {
@@ -4817,6 +5402,69 @@ export function useGroupVoiceCall(uiActive = false) {
 
       if (event === 'gcall:key') {
         handleRoomKey(payload);
+      }
+
+      if (event === 'gcall:key-request') {
+        const request = payload as IncomingKeyRequestPayload;
+        if (
+          request.roomId !== roomIdRef.current ||
+          request.toAddress !== userInfo?.address ||
+          request.verified !== true
+        ) {
+          return;
+        }
+        const topology = topologyRef.current;
+        if (
+          !topology ||
+          topology.rootForwarder !== userInfo?.address ||
+          !roomKeyRef.current ||
+          !isOurKeyRef.current
+        ) {
+          return;
+        }
+        if (
+          request.requestedTopologyEpoch > topology.topologyEpoch ||
+          request.requestedKeyEpoch > lastAppliedKeyEpochRef.current
+        ) {
+          debugWarn('[GCall] Ignoring future GC_KEY_REQUEST', {
+            fromAddress: request.fromAddress,
+            requestedTopologyEpoch: request.requestedTopologyEpoch,
+            requestedKeyEpoch: request.requestedKeyEpoch,
+            localTopologyEpoch: topology.topologyEpoch,
+            localKeyEpoch: lastAppliedKeyEpochRef.current,
+          });
+          return;
+        }
+        pendingKeyRequestRecipientsRef.current.set(request.fromAddress, {
+          publicKey: request.fromPublicKey,
+          requestedKeyEpoch: request.requestedKeyEpoch,
+        });
+        if (!pendingKeyRequestFlushTimerRef.current) {
+          pendingKeyRequestFlushTimerRef.current = setTimeout(() => {
+            pendingKeyRequestFlushTimerRef.current = null;
+            if (
+              !roomKeyRef.current ||
+              !topologyRef.current ||
+              topologyRef.current.rootForwarder !== userInfo?.address
+            ) {
+              pendingKeyRequestRecipientsRef.current.clear();
+              return;
+            }
+            const recipients = new Map<string, { publicKey: string }>();
+            for (const [addr, value] of pendingKeyRequestRecipientsRef.current) {
+              if (value.publicKey) {
+                recipients.set(addr, { publicKey: value.publicKey });
+              }
+            }
+            pendingKeyRequestRecipientsRef.current.clear();
+            if (recipients.size === 0) return;
+            void sendTargetedRoomKeys(
+              roomKeyRef.current,
+              recipients,
+              'key-request'
+            );
+          }, KEY_REQUEST_BATCH_WINDOW_MS);
+        }
       }
 
       if (event === 'gcall:rtc-signal') {
@@ -4848,6 +5496,7 @@ export function useGroupVoiceCall(uiActive = false) {
     roomState,
     scheduleEnsureAfterIceTeardown,
     scheduleRelayMetricsFlush,
+    sendTargetedRoomKeys,
     ensureAudioCaptureStarted,
     syncDecryptWorkerRoomKey,
     uiActive,

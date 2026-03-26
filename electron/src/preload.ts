@@ -996,8 +996,14 @@ try {
       fromAddress: string,
       signature: string,
       publicKey: string,
-      timestamp: number
-    ) => ipcRenderer.invoke('gcall:sendKey', roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp),
+      timestamp: number,
+      meta?: {
+        keyMessageVersion?: number;
+        keyEpoch?: number;
+        topologyEpoch?: number;
+        encryptedKeyDigest?: string;
+      }
+    ) => ipcRenderer.invoke('gcall:sendKey', roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp, meta),
 
     /** Send rotated room media keys to all participants. */
     sendKeyRotate: async (
@@ -1006,8 +1012,35 @@ try {
       fromAddress: string,
       signature: string,
       publicKey: string,
-      timestamp: number
-    ) => ipcRenderer.invoke('gcall:sendKeyRotate', roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp),
+      timestamp: number,
+      meta?: {
+        keyMessageVersion?: number;
+        keyEpoch?: number;
+        topologyEpoch?: number;
+        encryptedKeysDigest?: string;
+      }
+    ) => ipcRenderer.invoke('gcall:sendKeyRotate', roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp, meta),
+
+    sendKeyRequest: async (
+      roomId: string,
+      toAddress: string,
+      fromAddress: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number,
+      requestedTopologyEpoch: number,
+      requestedKeyEpoch: number
+    ) => ipcRenderer.invoke(
+      'gcall:sendKeyRequest',
+      roomId,
+      toAddress,
+      fromAddress,
+      signature,
+      publicKey,
+      timestamp,
+      requestedTopologyEpoch,
+      requestedKeyEpoch
+    ),
 
     /** Send a WebRTC signal (offer/answer/ice/reconnect) to a specific participant. */
     sendRtcSignal: async (

@@ -272,8 +272,45 @@ declare global {
         toAddress: string,
         data: Uint8Array
       ) => Promise<{ success: boolean; error?: string }>;
-      sendKey: (roomId: string, toAddress: string, encryptedKey: string, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      sendKeyRotate: (roomId: string, encryptedKeys: Record<string, string>, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      sendKey: (
+        roomId: string,
+        toAddress: string,
+        encryptedKey: string,
+        fromAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number,
+        meta?: {
+          keyMessageVersion?: number;
+          keyEpoch?: number;
+          topologyEpoch?: number;
+          encryptedKeyDigest?: string;
+        }
+      ) => Promise<{ success: boolean }>;
+      sendKeyRotate: (
+        roomId: string,
+        encryptedKeys: Record<string, string>,
+        fromAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number,
+        meta?: {
+          keyMessageVersion?: number;
+          keyEpoch?: number;
+          topologyEpoch?: number;
+          encryptedKeysDigest?: string;
+        }
+      ) => Promise<{ success: boolean }>;
+      sendKeyRequest: (
+        roomId: string,
+        toAddress: string,
+        fromAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number,
+        requestedTopologyEpoch: number,
+        requestedKeyEpoch: number
+      ) => Promise<{ success: boolean }>;
       sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice' | 'reconnect', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;

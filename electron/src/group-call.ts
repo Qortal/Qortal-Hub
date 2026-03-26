@@ -18,11 +18,13 @@
  *   GC_RTC_OFFER/ANSWER/ICE  — WebRTC DataChannel signaling
  *   GC_RTC_RECONNECT         — forwarder asks member to re-offer immediately
  *
- * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_KEY carry Ed25519 signatures.
+ * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_KEY, GC_KEY_ROTATE, and
+ * GC_KEY_REQUEST carry Ed25519 signatures.
  * When this node has no local state for a room, JOIN/LEAVE/TOPOLOGY are relayed
  * without signature verification (cheap path); in-room peers still verify before use.
  */
 
+import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
 import { log as loggerLog, error as loggerError, warn as loggerWarn } from './logger';
 import type { P2PNetwork } from './p2p-network';
@@ -38,6 +40,7 @@ import {
 const GC_MAX_HOPS = 3;
 const GC_AUDIO_MAX_HOPS = 2;
 const GC_JOIN_TTL_MS = 120_000;
+const GC_KEY_MESSAGE_VERSION = 2;
 
 /** Max base64 length for `GC_AUDIO.data` (matches renderer wire + margin; rejects oversize before relay/emit). */
 const GC_AUDIO_MAX_BASE64_CHARS = 16_384;
@@ -70,6 +73,7 @@ export type GroupCallMsgType =
   | 'GC_AUDIO'
   | 'GC_KEY'
   | 'GC_KEY_ROTATE'
+  | 'GC_KEY_REQUEST'
   | 'GC_RTC_OFFER'
   | 'GC_RTC_ANSWER'
   | 'GC_RTC_ICE'
@@ -77,7 +81,7 @@ export type GroupCallMsgType =
 
 export const GC_MESSAGE_TYPES = new Set<string>([
   'GC_JOIN', 'GC_LEAVE', 'GC_TOPOLOGY', 'GC_AUDIO',
-  'GC_KEY', 'GC_KEY_ROTATE', 'GC_RTC_OFFER', 'GC_RTC_ANSWER', 'GC_RTC_ICE',
+  'GC_KEY', 'GC_KEY_ROTATE', 'GC_KEY_REQUEST', 'GC_RTC_OFFER', 'GC_RTC_ANSWER', 'GC_RTC_ICE',
   'GC_RTC_RECONNECT',
 ]);
 
@@ -145,6 +149,10 @@ export interface GcKeyEnvelope {
   fromPublicKey: string;
   /** Base64-encoded nacl.box-encrypted room media key */
   encryptedKey: string;
+  keyMessageVersion?: number;
+  keyEpoch?: number;
+  topologyEpoch?: number;
+  encryptedKeyDigest?: string;
   signature: string;
   timestamp: number;
   hopsRemaining?: number;
@@ -157,6 +165,24 @@ export interface GcKeyRotateEnvelope {
   fromPublicKey: string;
   /** Base64-encoded encrypted room media keys — map of address → encryptedKey */
   encryptedKeys: Record<string, string>;
+  keyMessageVersion?: number;
+  keyEpoch?: number;
+  topologyEpoch?: number;
+  encryptedKeysDigest?: string;
+  signature: string;
+  timestamp: number;
+  hopsRemaining?: number;
+}
+
+export interface GcKeyRequestEnvelope {
+  type: 'GC_KEY_REQUEST';
+  roomId: string;
+  toAddress: string;
+  fromAddress: string;
+  fromPublicKey: string;
+  requestedTopologyEpoch: number;
+  requestedKeyEpoch: number;
+  keyMessageVersion: number;
   signature: string;
   timestamp: number;
   hopsRemaining?: number;
@@ -211,7 +237,7 @@ export interface GcRtcReconnectEnvelope {
 
 export type GcEnvelope =
   | GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope
-  | GcAudioEnvelope | GcKeyEnvelope | GcKeyRotateEnvelope
+  | GcAudioEnvelope | GcKeyEnvelope | GcKeyRotateEnvelope | GcKeyRequestEnvelope
   | GcRtcOfferEnvelope | GcRtcAnswerEnvelope | GcRtcIceEnvelope
   | GcRtcReconnectEnvelope;
 
@@ -243,6 +269,95 @@ function buildTopologySignature(env: Pick<
     standbyForwarder: env.standbyForwarder,
     clusters: env.clusters,
   });
+}
+
+function sha256Hex(input: string): string {
+  return nodeCrypto.createHash('sha256').update(input).digest('hex');
+}
+
+function canonicalizeStringMap(map: Record<string, string>): string {
+  const sorted: Record<string, string> = {};
+  for (const key of Object.keys(map).sort()) {
+    sorted[key] = map[key]!;
+  }
+  return JSON.stringify(sorted);
+}
+
+function buildGcKeyDigest(toAddress: string, encryptedKey: string): string {
+  return sha256Hex(JSON.stringify({ encryptedKey, toAddress }));
+}
+
+function buildGcKeyRotateDigest(encryptedKeys: Record<string, string>): string {
+  return sha256Hex(canonicalizeStringMap(encryptedKeys));
+}
+
+function buildGcKeySignedFields(env: GcKeyEnvelope): Record<string, unknown> | null {
+  const base: Record<string, unknown> = {
+    type: env.type,
+    roomId: env.roomId,
+    toAddress: env.toAddress,
+    fromAddress: env.fromAddress,
+    fromPublicKey: env.fromPublicKey,
+    timestamp: env.timestamp,
+  };
+  if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
+    if (
+      typeof env.keyEpoch !== 'number' ||
+      !Number.isFinite(env.keyEpoch) ||
+      typeof env.topologyEpoch !== 'number' ||
+      !Number.isFinite(env.topologyEpoch) ||
+      !isNonEmptyString(env.encryptedKeyDigest)
+    ) {
+      return null;
+    }
+    base.keyMessageVersion = env.keyMessageVersion;
+    base.keyEpoch = env.keyEpoch;
+    base.topologyEpoch = env.topologyEpoch;
+    base.encryptedKeyDigest = env.encryptedKeyDigest;
+  }
+  return base;
+}
+
+function buildGcKeyRotateSignedFields(
+  env: GcKeyRotateEnvelope
+): Record<string, unknown> | null {
+  const base: Record<string, unknown> = {
+    type: env.type,
+    roomId: env.roomId,
+    fromAddress: env.fromAddress,
+    fromPublicKey: env.fromPublicKey,
+    timestamp: env.timestamp,
+  };
+  if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
+    if (
+      typeof env.keyEpoch !== 'number' ||
+      !Number.isFinite(env.keyEpoch) ||
+      typeof env.topologyEpoch !== 'number' ||
+      !Number.isFinite(env.topologyEpoch) ||
+      !isNonEmptyString(env.encryptedKeysDigest)
+    ) {
+      return null;
+    }
+    base.keyMessageVersion = env.keyMessageVersion;
+    base.keyEpoch = env.keyEpoch;
+    base.topologyEpoch = env.topologyEpoch;
+    base.encryptedKeysDigest = env.encryptedKeysDigest;
+  }
+  return base;
+}
+
+function buildGcKeyRequestSignedFields(env: GcKeyRequestEnvelope): Record<string, unknown> {
+  return {
+    type: env.type,
+    roomId: env.roomId,
+    toAddress: env.toAddress,
+    fromAddress: env.fromAddress,
+    fromPublicKey: env.fromPublicKey,
+    requestedTopologyEpoch: env.requestedTopologyEpoch,
+    requestedKeyEpoch: env.requestedKeyEpoch,
+    keyMessageVersion: env.keyMessageVersion,
+    timestamp: env.timestamp,
+  };
 }
 
 function isNonEmptyString(v: unknown): v is string {
@@ -295,7 +410,10 @@ function isCheapRelayTopologyShape(env: GcTopologyEnvelope): boolean {
 type GcVerifyPending =
   | { kind: 'join'; env: GcJoinEnvelope; fromNodeId?: string }
   | { kind: 'leave'; env: GcLeaveEnvelope }
-  | { kind: 'topology'; env: GcTopologyEnvelope };
+  | { kind: 'topology'; env: GcTopologyEnvelope }
+  | { kind: 'key'; env: GcKeyEnvelope }
+  | { kind: 'key_rotate'; env: GcKeyRotateEnvelope }
+  | { kind: 'key_request'; env: GcKeyRequestEnvelope };
 
 const GC_VERIFY_WORKER_COUNT = 6;
 const GC_MAX_PENDING_VERIFY = 4096;
@@ -360,7 +478,7 @@ export class GroupCallManager extends EventEmitter {
     GC_MAX_PENDING_VERIFY
   );
 
-  /** Verified Ed25519 signatures for GC_JOIN / GC_LEAVE / GC_TOPOLOGY (LRU by insertion order). */
+  /** Verified Ed25519 signatures for signed GC_* envelopes (LRU by insertion order). */
   private verifiedGcSignatures = new Map<string, true>();
   /** In-flight verify promises keyed by type+signature — coalesce duplicate envelopes before cache is warm. */
   private inFlightGcVerify = new Map<string, Promise<void>>();
@@ -434,8 +552,14 @@ export class GroupCallManager extends EventEmitter {
       loggerLog(`[GCall] Dropped GC_JOIN: invalid signature from ${job.env.fromAddress}`);
     } else if (job.kind === 'leave') {
       loggerLog(`[GCall] Dropped GC_LEAVE: invalid signature from ${job.env.fromAddress}`);
-    } else {
+    } else if (job.kind === 'topology') {
       loggerLog(`[GCall] Dropped GC_TOPOLOGY: invalid signature from ${job.env.fromAddress}`);
+    } else if (job.kind === 'key') {
+      loggerLog(`[GCall] Dropped GC_KEY: invalid signature from ${job.env.fromAddress}`);
+    } else if (job.kind === 'key_rotate') {
+      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: invalid signature from ${job.env.fromAddress}`);
+    } else {
+      loggerLog(`[GCall] Dropped GC_KEY_REQUEST: invalid signature from ${job.env.fromAddress}`);
     }
   }
 
@@ -510,6 +634,15 @@ export class GroupCallManager extends EventEmitter {
         break;
       case 'topology':
         this.applyVerifiedTopology(job.env);
+        break;
+      case 'key':
+        this.applyVerifiedKey(job.env);
+        break;
+      case 'key_rotate':
+        this.applyVerifiedKeyRotate(job.env);
+        break;
+      case 'key_request':
+        this.applyVerifiedKeyRequest(job.env);
         break;
     }
   }
@@ -762,7 +895,13 @@ export class GroupCallManager extends EventEmitter {
     fromAddress: string,
     signature: string,
     publicKey: string,
-    timestamp: number
+    timestamp: number,
+    meta?: {
+      keyMessageVersion?: number;
+      keyEpoch?: number;
+      topologyEpoch?: number;
+      encryptedKeyDigest?: string;
+    }
   ): void {
     const env: GcKeyEnvelope = {
       type: 'GC_KEY',
@@ -774,6 +913,7 @@ export class GroupCallManager extends EventEmitter {
       signature,
       timestamp,
       hopsRemaining: GC_MAX_HOPS,
+      ...(meta ?? {}),
     };
     const nodeId = this.presence.getNodeIdForAddress(toAddress);
     if (nodeId) {
@@ -789,7 +929,13 @@ export class GroupCallManager extends EventEmitter {
     fromAddress: string,
     signature: string,
     publicKey: string,
-    timestamp: number
+    timestamp: number,
+    meta?: {
+      keyMessageVersion?: number;
+      keyEpoch?: number;
+      topologyEpoch?: number;
+      encryptedKeysDigest?: string;
+    }
   ): void {
     const env: GcKeyRotateEnvelope = {
       type: 'GC_KEY_ROTATE',
@@ -800,8 +946,40 @@ export class GroupCallManager extends EventEmitter {
       signature,
       timestamp,
       hopsRemaining: GC_MAX_HOPS,
+      ...(meta ?? {}),
     };
     this.p2p.send(null, env);
+  }
+
+  sendKeyRequest(
+    roomId: string,
+    toAddress: string,
+    fromAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number,
+    requestedTopologyEpoch: number,
+    requestedKeyEpoch: number
+  ): void {
+    const env: GcKeyRequestEnvelope = {
+      type: 'GC_KEY_REQUEST',
+      roomId,
+      toAddress,
+      fromAddress,
+      fromPublicKey: publicKey,
+      requestedTopologyEpoch,
+      requestedKeyEpoch,
+      keyMessageVersion: GC_KEY_MESSAGE_VERSION,
+      signature,
+      timestamp,
+      hopsRemaining: GC_MAX_HOPS,
+    };
+    const nodeId = this.presence.getNodeIdForAddress(toAddress);
+    if (nodeId) {
+      this.p2p.send(nodeId, env);
+    } else {
+      this.p2p.send(null, env);
+    }
   }
 
   sendRtcSignal(
@@ -873,6 +1051,7 @@ export class GroupCallManager extends EventEmitter {
       case 'GC_AUDIO':     return this.handleAudio(env);
       case 'GC_KEY':       return this.handleKey(env);
       case 'GC_KEY_ROTATE': return this.handleKeyRotate(env);
+      case 'GC_KEY_REQUEST': return this.handleKeyRequest(env);
       case 'GC_RTC_OFFER': return this.handleRtcOffer(env);
       case 'GC_RTC_ANSWER': return this.handleRtcAnswer(env);
       case 'GC_RTC_ICE':   return this.handleRtcIce(env);
@@ -1162,30 +1341,146 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
+    if (env.keyMessageVersion != null && env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
+      loggerLog(`[GCall] Dropped GC_KEY: unsupported version ${env.keyMessageVersion}`);
+      return;
+    }
+    if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
+      if (env.encryptedKeyDigest !== buildGcKeyDigest(env.toAddress, env.encryptedKey)) {
+        loggerLog(`[GCall] Dropped GC_KEY: payload digest mismatch from ${env.fromAddress}`);
+        return;
+      }
+    }
+    const fields = buildGcKeySignedFields(env);
+    if (!fields) return;
+    this.enqueueVerify(
+      fields,
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      { kind: 'key', env }
+    );
+  }
+
+  private handleKeyRotate(env: GcKeyRotateEnvelope): void {
+    let hasLocalRecipient = false;
+    for (const localAddr of this.localAddresses) {
+      if (env.encryptedKeys[localAddr]) {
+        hasLocalRecipient = true;
+        break;
+      }
+    }
+    if (!hasLocalRecipient) {
+      if ((env.hopsRemaining ?? 0) > 0) {
+        this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+      }
+      return;
+    }
+    if (env.keyMessageVersion != null && env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
+      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: unsupported version ${env.keyMessageVersion}`);
+      return;
+    }
+    if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
+      if (env.encryptedKeysDigest !== buildGcKeyRotateDigest(env.encryptedKeys)) {
+        loggerLog(`[GCall] Dropped GC_KEY_ROTATE: payload digest mismatch from ${env.fromAddress}`);
+        return;
+      }
+    }
+    const fields = buildGcKeyRotateSignedFields(env);
+    if (!fields) return;
+    this.enqueueVerify(
+      fields,
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      { kind: 'key_rotate', env }
+    );
+  }
+
+  private handleKeyRequest(env: GcKeyRequestEnvelope): void {
+    if (!this.localAddresses.has(env.toAddress)) {
+      if ((env.hopsRemaining ?? 0) > 0) {
+        const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
+        if (nodeId) {
+          this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+        } else {
+          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+        }
+      }
+      return;
+    }
+    if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
+      loggerLog(`[GCall] Dropped GC_KEY_REQUEST: unsupported version ${env.keyMessageVersion}`);
+      return;
+    }
+    this.enqueueVerify(
+      buildGcKeyRequestSignedFields(env),
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      { kind: 'key_request', env }
+    );
+  }
+
+  private applyVerifiedKey(env: GcKeyEnvelope): void {
     this.emit('gcall:key', {
       roomId: env.roomId,
       fromAddress: env.fromAddress,
       fromPublicKey: env.fromPublicKey,
       encryptedKey: env.encryptedKey,
+      timestamp: env.timestamp,
+      keyMessageVersion: env.keyMessageVersion,
+      keyEpoch: env.keyEpoch,
+      topologyEpoch: env.topologyEpoch,
+      verified: true,
     });
   }
 
-  private handleKeyRotate(env: GcKeyRotateEnvelope): void {
-    // Find if any local address is in the encryptedKeys map
+  private applyVerifiedKeyRotate(env: GcKeyRotateEnvelope): void {
     for (const localAddr of this.localAddresses) {
-      if (env.encryptedKeys[localAddr]) {
-        this.emit('gcall:key', {
-          roomId: env.roomId,
-          fromAddress: env.fromAddress,
-          fromPublicKey: env.fromPublicKey,
-          encryptedKey: env.encryptedKeys[localAddr],
-        });
-      }
+      const encryptedKey = env.encryptedKeys[localAddr];
+      if (!encryptedKey) continue;
+      this.emit('gcall:key', {
+        roomId: env.roomId,
+        fromAddress: env.fromAddress,
+        fromPublicKey: env.fromPublicKey,
+        encryptedKey,
+        timestamp: env.timestamp,
+        keyMessageVersion: env.keyMessageVersion,
+        keyEpoch: env.keyEpoch,
+        topologyEpoch: env.topologyEpoch,
+        verified: true,
+      });
     }
-
     if ((env.hopsRemaining ?? 0) > 0) {
       this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
     }
+  }
+
+  private applyVerifiedKeyRequest(env: GcKeyRequestEnvelope): void {
+    this.emit('gcall:key-request', {
+      roomId: env.roomId,
+      toAddress: env.toAddress,
+      fromAddress: env.fromAddress,
+      fromPublicKey: env.fromPublicKey,
+      requestedTopologyEpoch: env.requestedTopologyEpoch,
+      requestedKeyEpoch: env.requestedKeyEpoch,
+      keyMessageVersion: env.keyMessageVersion,
+      timestamp: env.timestamp,
+      verified: true,
+    });
+  }
+
+  getKeyMessageVersion(): number {
+    return GC_KEY_MESSAGE_VERSION;
+  }
+
+  getKeyDigestForTarget(toAddress: string, encryptedKey: string): string {
+    return buildGcKeyDigest(toAddress, encryptedKey);
+  }
+
+  getKeyRotateDigest(encryptedKeys: Record<string, string>): string {
+    return buildGcKeyRotateDigest(encryptedKeys);
   }
 
   private handleRtcOffer(env: GcRtcOfferEnvelope): void {

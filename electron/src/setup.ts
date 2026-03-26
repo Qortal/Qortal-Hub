@@ -2119,11 +2119,17 @@ ipcMain.handle(
     fromAddress: string,
     signature: string,
     publicKey: string,
-    timestamp: number
+    timestamp: number,
+    meta?: {
+      keyMessageVersion?: number;
+      keyEpoch?: number;
+      topologyEpoch?: number;
+      encryptedKeyDigest?: string;
+    }
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.sendKey(roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp);
+    mgr.sendKey(roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp, meta);
     return { success: true };
   }
 );
@@ -2137,11 +2143,46 @@ ipcMain.handle(
     fromAddress: string,
     signature: string,
     publicKey: string,
-    timestamp: number
+    timestamp: number,
+    meta?: {
+      keyMessageVersion?: number;
+      keyEpoch?: number;
+      topologyEpoch?: number;
+      encryptedKeysDigest?: string;
+    }
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.sendKeyRotate(roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp);
+    mgr.sendKeyRotate(roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp, meta);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendKeyRequest',
+  async (
+    _event,
+    roomId: string,
+    toAddress: string,
+    fromAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number,
+    requestedTopologyEpoch: number,
+    requestedKeyEpoch: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendKeyRequest(
+      roomId,
+      toAddress,
+      fromAddress,
+      signature,
+      publicKey,
+      timestamp,
+      requestedTopologyEpoch,
+      requestedKeyEpoch
+    );
     return { success: true };
   }
 );
