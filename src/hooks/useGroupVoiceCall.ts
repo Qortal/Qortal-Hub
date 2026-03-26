@@ -31,7 +31,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { callAudioDevicesAtom, userInfoAtom } from '../atoms/global';
-import { applyCallAudioOutput, getUserAudioStreamForCall } from '../lib/call/audioDevices';
+import {
+  applyCallAudioOutput,
+  getUserAudioStreamForCall,
+} from '../lib/call/audioDevices';
 import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
@@ -60,7 +63,11 @@ const naclApi = nacl as any;
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type RoomState = 'idle' | 'joining' | 'connected' | 'ended';
-export type MyRole = 'participant' | 'cluster-forwarder' | 'root-forwarder' | 'standby-forwarder';
+export type MyRole =
+  | 'participant'
+  | 'cluster-forwarder'
+  | 'root-forwarder'
+  | 'standby-forwarder';
 export type TopologyLabel = 'SFU' | 'Hierarchical';
 
 export interface ClusterDef {
@@ -114,7 +121,7 @@ const ADAPTIVE_LOSS_MS_CAP = 20;
 /** After VAD goes false, keep forwarding through forwarder for this long (word gaps / breath). */
 const FORWARD_VAD_HANGOVER_MS = 200;
 
-const FORWARDER_TIMEOUT_MS = 4_500;  // miss 3 heartbeats → dead
+const FORWARDER_TIMEOUT_MS = 4_500; // miss 3 heartbeats → dead
 const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
 /** Before closing PC on ICE `disconnected`, wait this long for recovery (connId-scoped timer). */
 const WEBRTC_DISCONNECT_GRACE_MS = 12_000;
@@ -203,6 +210,40 @@ function debugWarn(...args: unknown[]): void {
   if (isGroupCallDebugEnabled()) console.warn(...args);
 }
 
+export function shouldStartGroupCallAudioCapture(opts: {
+  pipelineActive: boolean;
+  startupInFlight: boolean;
+}): boolean {
+  return !opts.pipelineActive && !opts.startupInFlight;
+}
+
+export function bumpGroupCallAudioSessionToken(token: number): number {
+  return token + 1;
+}
+
+export function isCurrentGroupCallAudioStartupToken(
+  expected: number,
+  current: number
+): boolean {
+  return expected === current;
+}
+
+export function clearAdaptiveGroupCallPlayoutMaps(maps: {
+  lastPacketArrivalAt: Map<string, number>;
+  interArrivalSamples: Map<string, number[]>;
+  smoothedPlayoutTarget: Map<string, number>;
+  lastSentPlayoutTarget: Map<string, number>;
+  lastPlayoutTargetPostAt: Map<string, number>;
+  lastDrainMissed: Map<string, number>;
+}): void {
+  maps.lastPacketArrivalAt.clear();
+  maps.interArrivalSamples.clear();
+  maps.smoothedPlayoutTarget.clear();
+  maps.lastSentPlayoutTarget.clear();
+  maps.lastPlayoutTargetPostAt.clear();
+  maps.lastDrainMissed.clear();
+}
+
 /** sha256 → Uint8Array. Used for deterministic election. */
 async function sha256Bytes(input: string): Promise<Uint8Array> {
   const enc = new TextEncoder();
@@ -220,7 +261,10 @@ function compareBytes(a: Uint8Array, b: Uint8Array): number {
 }
 
 /** Compute election scores for all participants. Returns sorted list (lowest score first). */
-async function computeElectionOrder(addresses: string[], roomId: string): Promise<string[]> {
+async function computeElectionOrder(
+  addresses: string[],
+  roomId: string
+): Promise<string[]> {
   const scores = await Promise.all(
     addresses.map(async (addr) => ({
       addr,
@@ -232,10 +276,7 @@ async function computeElectionOrder(addresses: string[], roomId: string): Promis
 }
 
 /** Build topology from a sorted participant list. */
-function buildTopology(
-  sorted: string[],
-  topologyEpoch: number
-): GroupTopology {
+function buildTopology(sorted: string[], topologyEpoch: number): GroupTopology {
   if (sorted.length <= CLUSTER_SIZE) {
     return {
       topologyEpoch,
@@ -281,7 +322,10 @@ function computeMyRole(myAddress: string, topology: GroupTopology): MyRole {
 }
 
 /** Find which cluster forwarder a participant should send to. */
-function findAssignedForwarder(myAddress: string, topology: GroupTopology): string {
+function findAssignedForwarder(
+  myAddress: string,
+  topology: GroupTopology
+): string {
   for (const cluster of topology.clusters) {
     if (cluster.members.includes(myAddress)) {
       return cluster.forwarder;
@@ -308,9 +352,14 @@ function float32ToInt16(f32: Float32Array): Int16Array {
 async function signGroupCallFields(
   fields: Record<string, unknown>
 ): Promise<string> {
-  const result = await (window as any).sendMessage('signPresenceMessage', fields, 10_000);
+  const result = await (window as any).sendMessage(
+    'signPresenceMessage',
+    fields,
+    10_000
+  );
   if (result?.error) throw new Error(String(result.error));
-  if (typeof result?.signature !== 'string') throw new Error('signPresenceMessage returned no signature');
+  if (typeof result?.signature !== 'string')
+    throw new Error('signPresenceMessage returned no signature');
   return result.signature as string;
 }
 
@@ -343,7 +392,11 @@ class JitterBuffer {
       if (prev.seq < seq) break;
       insertAt--;
     }
-    this.entries.splice(insertAt, 0, { seq, opusFrame, receivedAt: performance.now() });
+    this.entries.splice(insertAt, 0, {
+      seq,
+      opusFrame,
+      receivedAt: performance.now(),
+    });
     const maxEntries = JITTER_BUFFER_SIZE * 2;
     if (this.entries.length > maxEntries) {
       this.entries.splice(0, this.entries.length - maxEntries);
@@ -411,7 +464,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const [myRole, setMyRole] = useState<MyRole>('participant');
   const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
   const [topologyLabel, setTopologyLabel] = useState<TopologyLabel>('SFU');
-  const [metrics, setMetrics] = useState(() => new GroupCallPerformanceTracker().getSnapshot());
+  const [metrics, setMetrics] = useState(() =>
+    new GroupCallPerformanceTracker().getSnapshot()
+  );
 
   // ── Refs ────────────────────────────────────────────────────────────────────
 
@@ -429,7 +484,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const myRoleRef = useRef<MyRole>('participant');
   /** lastJoinTs / joinGeneration = latest seen GC_JOIN for this address (rejoin detection). */
   const participantsRef = useRef<
-    Map<string, { publicKey: string; lastJoinTs: number; joinGeneration?: number }>
+    Map<
+      string,
+      { publicKey: string; lastJoinTs: number; joinGeneration?: number }
+    >
   >(new Map());
   /** Stable per logical call session; same value on mesh re-announces until cleanup. */
   const joinGenerationRef = useRef<number | null>(null);
@@ -443,6 +501,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const playbackWorkletsRef = useRef<Map<string, AudioWorkletNode>>(new Map());
   const playbackWorkletModulePromiseRef = useRef<Promise<void> | null>(null);
   const encoderRef = useRef<AudioEncoder | null>(null);
+  /** Prevents concurrent async capture startups from key/topology bursts. */
+  const audioStartInFlightRef = useRef(false);
+  /** Monotonic token; cleanup bumps this so stale async startup continuations no-op. */
+  const audioSessionTokenRef = useRef(0);
 
   // VAD speaking flag — set from the capture worklet's port message
   const isSpeakingRef = useRef(false);
@@ -467,9 +529,13 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Serialized handleRtcSignal work per remote `fromAddress` (avoids overlapping offers / double PC). */
   const rtcSignalChainsRef = useRef<Map<string, Promise<void>>>(new Map());
   /** Latest packet handler — `handleRtcSignal` is declared above `handleIncomingAudioPacket`. */
-  const handleIncomingAudioPacketRef = useRef<(data: ArrayBuffer, fromAddress: string) => void>(() => {});
+  const handleIncomingAudioPacketRef = useRef<
+    (data: ArrayBuffer, fromAddress: string) => void
+  >(() => {});
   /** Latest ensureGroupCallWebRtcConnections; assigned each render after the callback exists. */
-  const ensureGroupCallWebRtcRef = useRef<(topology: GroupTopology) => void>(() => {});
+  const ensureGroupCallWebRtcRef = useRef<(topology: GroupTopology) => void>(
+    () => {}
+  );
   const gcallIceServersRef = useRef<RTCIceServer[]>(
     getInitialIceServersFromHub().map((s) => ({ urls: s.urls }))
   );
@@ -488,15 +554,21 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastRoomIdRef = useRef('');
 
   // Forwarder heartbeat timer (for sending topology heartbeats)
-  const topologyHeartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const topologyHeartbeatTimerRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
   // Standby promotion timer
   const promotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Last time we saw a topology heartbeat from root
   const lastRootHeartbeatRef = useRef<number>(Date.now());
   // Forwarder-timeout polling interval (runs every 500ms)
-  const forwarderTimeoutCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const forwarderTimeoutCheckRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
   // Periodic self-healing WebRTC ensure loop
-  const webRtcEnsureTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const webRtcEnsureTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
   const uiActiveRef = useRef(uiActive);
 
   // IPC unsubscribe function
@@ -514,7 +586,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const activeJitterSourcesRef = useRef<Set<string>>(new Set());
   /** Bumps before each async topology election (join or leave); stale continuations no-op after await. */
   const topologyAsyncGenRef = useRef(0);
-  const topologyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const topologyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const lastMeshReannounceAtRef = useRef(0);
 
   /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
@@ -540,9 +614,13 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Bytes last posted to worker — avoid redundant setRoomKey (would flush pending unnecessarily). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
   const metricsRef = useRef(new GroupCallPerformanceTracker());
-  const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
   /** Batches UI updates when mesh relay fires at high rate. */
-  const relayMetricsFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const relayMetricsFlushTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   // ── Election ──────────────────────────────────────────────────────────────
 
@@ -557,29 +635,40 @@ export function useGroupVoiceCall(uiActive = false) {
     return isGroupCallWebRtcPeerInactive(entry?.pc.connectionState);
   }, []);
 
-  const closePeerConnection = useCallback((peerAddress: string, expectedConnId?: string) => {
-    const entry = peerConnectionsRef.current.get(peerAddress);
-    if (!entry) return;
-    if (expectedConnId && entry.connId !== expectedConnId) return;
+  const closePeerConnection = useCallback(
+    (peerAddress: string, expectedConnId?: string) => {
+      const entry = peerConnectionsRef.current.get(peerAddress);
+      if (!entry) return;
+      if (expectedConnId && entry.connId !== expectedConnId) return;
 
-    if (entry.disconnectGraceTimer) {
-      clearTimeout(entry.disconnectGraceTimer);
-      entry.disconnectGraceTimer = undefined;
-    }
+      if (entry.disconnectGraceTimer) {
+        clearTimeout(entry.disconnectGraceTimer);
+        entry.disconnectGraceTimer = undefined;
+      }
 
-    peerConnectionsRef.current.delete(peerAddress);
-    relayLastSentRef.current.delete(peerAddress);
-    // Clear the per-peer RTC signal chain so a rejoining peer's offers/answers
-    // are not queued behind the stale tail of the old session's promise chain.
-    rtcSignalChainsRef.current.delete(peerAddress);
+      peerConnectionsRef.current.delete(peerAddress);
+      relayLastSentRef.current.delete(peerAddress);
+      // Clear the per-peer RTC signal chain so a rejoining peer's offers/answers
+      // are not queued behind the stale tail of the old session's promise chain.
+      rtcSignalChainsRef.current.delete(peerAddress);
 
-    if (entry.dc) {
-      if (upstreamDCRef.current === entry.dc) upstreamDCRef.current = null;
-      try { entry.dc.close(); } catch { /* ignore */ }
-    }
+      if (entry.dc) {
+        if (upstreamDCRef.current === entry.dc) upstreamDCRef.current = null;
+        try {
+          entry.dc.close();
+        } catch {
+          /* ignore */
+        }
+      }
 
-    try { entry.pc.close(); } catch { /* ignore */ }
-  }, []);
+      try {
+        entry.pc.close();
+      } catch {
+        /* ignore */
+      }
+    },
+    []
+  );
 
   const updateMetricResourceCounts = useCallback(() => {
     metricsRef.current.setResourceCounts({
@@ -626,7 +715,10 @@ export function useGroupVoiceCall(uiActive = false) {
 
       let ideal =
         ADAPTIVE_BASE_TARGET_MS + ADAPTIVE_JITTER_K * jitterMs + lossPenalty;
-      ideal = Math.max(ADAPTIVE_MIN_TARGET_MS, Math.min(ADAPTIVE_MAX_TARGET_MS, ideal));
+      ideal = Math.max(
+        ADAPTIVE_MIN_TARGET_MS,
+        Math.min(ADAPTIVE_MAX_TARGET_MS, ideal)
+      );
 
       let smooth = smoothedPlayoutTargetRef.current.get(addr);
       if (smooth === undefined) smooth = ideal;
@@ -639,10 +731,16 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const lastSent = lastSentPlayoutTargetRef.current.get(addr);
       const lastPost = lastPlayoutTargetPostAtRef.current.get(addr) ?? 0;
-      if (lastSent !== undefined && Math.abs(smooth - lastSent) <= ADAPTIVE_TARGET_MIN_DELTA_MS) {
+      if (
+        lastSent !== undefined &&
+        Math.abs(smooth - lastSent) <= ADAPTIVE_TARGET_MIN_DELTA_MS
+      ) {
         continue;
       }
-      if (lastSent !== undefined && now - lastPost < ADAPTIVE_TARGET_POST_MIN_MS) {
+      if (
+        lastSent !== undefined &&
+        now - lastPost < ADAPTIVE_TARGET_POST_MIN_MS
+      ) {
         continue;
       }
 
@@ -686,7 +784,8 @@ export function useGroupVoiceCall(uiActive = false) {
           prev.avgJitterTickMs === snapshot.avgJitterTickMs &&
           prev.maxJitterTickMs === snapshot.maxJitterTickMs &&
           prev.avgPcmBufferedMs === snapshot.avgPcmBufferedMs &&
-          prev.playoutOutsideTargetFraction === snapshot.playoutOutsideTargetFraction &&
+          prev.playoutOutsideTargetFraction ===
+            snapshot.playoutOutsideTargetFraction &&
           prev.lastUpdatedAt === snapshot.lastUpdatedAt &&
           prev.dcTransportReady === snapshot.dcTransportReady;
         return unchanged ? prev : snapshot;
@@ -715,7 +814,10 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const startMetricsFlushLoop = useCallback(() => {
     if (metricsFlushTimerRef.current) return;
-    metricsFlushTimerRef.current = setInterval(flushMetrics, PERF_LOG_INTERVAL_MS);
+    metricsFlushTimerRef.current = setInterval(
+      flushMetrics,
+      PERF_LOG_INTERVAL_MS
+    );
   }, [flushMetrics]);
 
   const stopMetricsFlushLoop = useCallback(() => {
@@ -745,31 +847,37 @@ export function useGroupVoiceCall(uiActive = false) {
     }
   }, [flushMetrics, uiActive]);
 
-  const disposeParticipantAudio = useCallback((address: string) => {
-    disposeParticipantAudioState(
-      address,
-      decoderMapRef.current,
-      playbackWorkletsRef.current,
-      jitterMapRef.current as Map<string, { clear?: () => void }>,
-      lastRecvAtRef.current,
-      localSpeakersRef.current
-    );
-    lastVadTrueAtRef.current.delete(address);
-    lastPacketArrivalAtRef.current.delete(address);
-    interArrivalSamplesRef.current.delete(address);
-    smoothedPlayoutTargetRef.current.delete(address);
-    lastSentPlayoutTargetRef.current.delete(address);
-    lastPlayoutTargetPostAtRef.current.delete(address);
-    lastDrainMissedRef.current.delete(address);
-    updateMetricResourceCounts();
-  }, [updateMetricResourceCounts]);
+  const disposeParticipantAudio = useCallback(
+    (address: string) => {
+      disposeParticipantAudioState(
+        address,
+        decoderMapRef.current,
+        playbackWorkletsRef.current,
+        jitterMapRef.current as Map<string, { clear?: () => void }>,
+        lastRecvAtRef.current,
+        localSpeakersRef.current
+      );
+      lastVadTrueAtRef.current.delete(address);
+      lastPacketArrivalAtRef.current.delete(address);
+      interArrivalSamplesRef.current.delete(address);
+      smoothedPlayoutTargetRef.current.delete(address);
+      lastSentPlayoutTargetRef.current.delete(address);
+      lastPlayoutTargetPostAtRef.current.delete(address);
+      lastDrainMissedRef.current.delete(address);
+      updateMetricResourceCounts();
+    },
+    [updateMetricResourceCounts]
+  );
 
-  const sendPacketToPeer = useCallback((address: string, data: ArrayBuffer): boolean => {
-    const pcEntry = peerConnectionsRef.current.get(address);
-    if (pcEntry?.dc?.readyState !== 'open') return false;
-    pcEntry.dc.send(data);
-    return true;
-  }, []);
+  const sendPacketToPeer = useCallback(
+    (address: string, data: ArrayBuffer): boolean => {
+      const pcEntry = peerConnectionsRef.current.get(address);
+      if (pcEntry?.dc?.readyState !== 'open') return false;
+      pcEntry.dc.send(data);
+      return true;
+    },
+    []
+  );
 
   const flushPendingDecryptMap = useCallback(() => {
     pendingDecryptsRef.current.clear();
@@ -804,11 +912,20 @@ export function useGroupVoiceCall(uiActive = false) {
 
   /** After decrypt (worker or sync): authenticated gating, forward opaque wire, jitter. */
   const applyPostDecrypt = useCallback(
-    (wireForForward: ArrayBuffer, decoded: DecodedAudioPacket | null, startedAt: number) => {
+    (
+      wireForForward: ArrayBuffer,
+      decoded: DecodedAudioPacket | null,
+      startedAt: number
+    ) => {
       if (!decoded) {
         metricsRef.current.recordPacketDropped();
-        metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
-        debugWarn('[GCall] decodeAudioPacket failed — size:', wireForForward.byteLength);
+        metricsRef.current.recordIncomingPacketDuration(
+          performance.now() - startedAt
+        );
+        debugWarn(
+          '[GCall] decodeAudioPacket failed — size:',
+          wireForForward.byteLength
+        );
         return;
       }
 
@@ -817,7 +934,14 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const jbExisting = jitterMapRef.current.get(sourceAddr);
       if (!jbExisting) {
-        debugLog('[GCall] First packet from', sourceAddr.slice(0, 12), '— seq:', seq, 'vad:', vad);
+        debugLog(
+          '[GCall] First packet from',
+          sourceAddr.slice(0, 12),
+          '— seq:',
+          seq,
+          'vad:',
+          vad
+        );
       }
 
       const now = Date.now();
@@ -834,7 +958,9 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const lastVadTrueAt = lastVadTrueAtRef.current.get(sourceAddr) ?? 0;
       const inForwardHangover =
-        !vad && lastVadTrueAt > 0 && now - lastVadTrueAt < FORWARD_VAD_HANGOVER_MS;
+        !vad &&
+        lastVadTrueAt > 0 &&
+        now - lastVadTrueAt < FORWARD_VAD_HANGOVER_MS;
       const effectiveVadForForward = vad || inForwardHangover;
       const isActiveSpeaker = evaluateActiveSpeaker(
         localSpeakersRef.current,
@@ -858,12 +984,15 @@ export function useGroupVoiceCall(uiActive = false) {
             wireForForward,
             sendPacketToPeer
           );
-          if (forwarded > 0) metricsRef.current.recordPacketForwarded(forwarded);
+          if (forwarded > 0)
+            metricsRef.current.recordPacketForwarded(forwarded);
         }
       }
 
       if (sourceAddr === myAddress) {
-        metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
+        metricsRef.current.recordIncomingPacketDuration(
+          performance.now() - startedAt
+        );
         return;
       }
 
@@ -879,9 +1008,16 @@ export function useGroupVoiceCall(uiActive = false) {
         activeJitterSourcesRef.current.add(sourceAddr);
       }
       metricsRef.current.recordPacketDecoded();
-      metricsRef.current.recordIncomingPacketDuration(performance.now() - startedAt);
+      metricsRef.current.recordIncomingPacketDuration(
+        performance.now() - startedAt
+      );
     },
-    [recordInterArrivalForPlayout, sendPacketToPeer, updateMetricResourceCounts, userInfo?.address]
+    [
+      recordInterArrivalForPlayout,
+      sendPacketToPeer,
+      updateMetricResourceCounts,
+      userInfo?.address,
+    ]
   );
 
   const syncDecryptWorkerRoomKey = useCallback(
@@ -904,7 +1040,10 @@ export function useGroupVoiceCall(uiActive = false) {
       flushPendingDecryptMap();
       lastWorkerRoomKeyRef.current = new Uint8Array(roomKey);
       const roomKeyCopy = roomKey.slice().buffer;
-      decryptWorkerRef.current.postMessage({ type: 'setRoomKey', roomKey: roomKeyCopy }, [roomKeyCopy]);
+      decryptWorkerRef.current.postMessage(
+        { type: 'setRoomKey', roomKey: roomKeyCopy },
+        [roomKeyCopy]
+      );
     },
     [flushPendingDecryptMap]
   );
@@ -917,11 +1056,14 @@ export function useGroupVoiceCall(uiActive = false) {
     };
     if (!w.hub?.getIceServers) return;
     const pull = (): void => {
-      w.hub?.getIceServers?.()?.then((list) => {
-        if (Array.isArray(list) && list.length > 0) {
-          gcallIceServersRef.current = list.map((s) => ({ urls: s.urls }));
-        }
-      }).catch(() => {});
+      w.hub
+        ?.getIceServers?.()
+        ?.then((list) => {
+          if (Array.isArray(list) && list.length > 0) {
+            gcallIceServersRef.current = list.map((s) => ({ urls: s.urls }));
+          }
+        })
+        .catch(() => {});
     };
     pull();
     const id = setInterval(pull, 120_000);
@@ -929,17 +1071,33 @@ export function useGroupVoiceCall(uiActive = false) {
   }, []);
 
   const createPeerConnection = useCallback(
-    (peerAddress: string, connId: string, role: 'upstream' | 'downstream'): RTCPeerConnection => {
-      const pc = new RTCPeerConnection({ iceServers: gcallIceServersRef.current });
+    (
+      peerAddress: string,
+      connId: string,
+      role: 'upstream' | 'downstream'
+    ): RTCPeerConnection => {
+      const pc = new RTCPeerConnection({
+        iceServers: gcallIceServersRef.current,
+      });
       closePeerConnection(peerAddress);
-      peerConnectionsRef.current.set(peerAddress, { pc, dc: null, address: peerAddress, connId, role });
+      peerConnectionsRef.current.set(peerAddress, {
+        pc,
+        dc: null,
+        address: peerAddress,
+        connId,
+        role,
+      });
 
       pc.onicecandidate = (e) => {
         const u = userInfoRef.current;
         if (e.candidate && u?.address) {
           window.groupCall.sendRtcSignal(
-            roomIdRef.current, u.address, peerAddress,
-            'ice', e.candidate.toJSON(), connId
+            roomIdRef.current,
+            u.address,
+            peerAddress,
+            'ice',
+            e.candidate.toJSON(),
+            connId
           );
         }
       };
@@ -999,14 +1157,18 @@ export function useGroupVoiceCall(uiActive = false) {
       debugLog('[GCall] connectUpstream →', forwarderAddress);
       const connId = `up-${userInfo.address}-${forwarderAddress}-${Date.now()}`;
       const pc = createPeerConnection(forwarderAddress, connId, 'upstream');
-      const dc = pc.createDataChannel('audio', { ordered: false, maxRetransmits: 0 });
+      const dc = pc.createDataChannel('audio', {
+        ordered: false,
+        maxRetransmits: 0,
+      });
       dc.binaryType = 'arraybuffer';
 
       const pcEntry = peerConnectionsRef.current.get(forwarderAddress);
       if (pcEntry) pcEntry.dc = dc;
 
       dc.onopen = () => {
-        if (peerConnectionsRef.current.get(forwarderAddress)?.connId !== connId) return;
+        if (peerConnectionsRef.current.get(forwarderAddress)?.connId !== connId)
+          return;
         debugLog('[GCall] Upstream DC opened to', forwarderAddress);
         upstreamDCRef.current = dc;
         // DC is now open — clear the relay rate-limiter entry so the relay is
@@ -1022,15 +1184,30 @@ export function useGroupVoiceCall(uiActive = false) {
       };
 
       pc.onconnectionstatechange = () => {
-        debugLog('[GCall] PC state (upstream →', forwarderAddress, '):', pc.connectionState);
+        debugLog(
+          '[GCall] PC state (upstream →',
+          forwarderAddress,
+          '):',
+          pc.connectionState
+        );
       };
 
       pc.onicegatheringstatechange = () => {
-        debugLog('[GCall] ICE gathering (upstream →', forwarderAddress, '):', pc.iceGatheringState);
+        debugLog(
+          '[GCall] ICE gathering (upstream →',
+          forwarderAddress,
+          '):',
+          pc.iceGatheringState
+        );
       };
 
       pc.oniceconnectionstatechange = () => {
-        debugLog('[GCall] ICE connection (upstream →', forwarderAddress, '):', pc.iceConnectionState);
+        debugLog(
+          '[GCall] ICE connection (upstream →',
+          forwarderAddress,
+          '):',
+          pc.iceConnectionState
+        );
       };
 
       // DataChannels are bidirectional: the forwarder sends audio (e.g. other
@@ -1044,27 +1221,36 @@ export function useGroupVoiceCall(uiActive = false) {
       await pc.setLocalDescription(offer);
 
       const ts = Date.now();
-      const sig = await signGroupCallFields(
-        { type: 'GC_RTC_OFFER', roomId: roomIdRef.current, fromAddress: userInfo.address,
-          toAddress: forwarderAddress, connId, fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
-      ).catch(() => '');
+      const sig = await signGroupCallFields({
+        type: 'GC_RTC_OFFER',
+        roomId: roomIdRef.current,
+        fromAddress: userInfo.address,
+        toAddress: forwarderAddress,
+        connId,
+        fromPublicKey: userInfo.publicKey ?? '',
+        timestamp: ts,
+      }).catch(() => '');
       if (!sig) return; // signing failed — don't send unsigned RTC offer
 
       await window.groupCall.sendRtcSignal(
-        roomIdRef.current, userInfo.address, forwarderAddress,
-        'offer', offer.sdp, connId, sig, userInfo.publicKey ?? '', ts
+        roomIdRef.current,
+        userInfo.address,
+        forwarderAddress,
+        'offer',
+        offer.sdp,
+        connId,
+        sig,
+        userInfo.publicKey ?? '',
+        ts
       );
     },
     [createPeerConnection, flushMetrics, userInfo]
   );
 
   /** Forwarder: set up to accept incoming upstream connections from member. */
-  const setupDownstreamChannel = useCallback(
-    async (memberAddress: string) => {
-      // We wait for the incoming offer via IPC event; handled in handleRtcSignal
-    },
-    []
-  );
+  const setupDownstreamChannel = useCallback(async (memberAddress: string) => {
+    // We wait for the incoming offer via IPC event; handled in handleRtcSignal
+  }, []);
 
   /** Handle incoming RTC signal (offer/answer/ice). Serialized per `fromAddress` to avoid overlapping offers. */
   const handleRtcSignal = useCallback(
@@ -1082,11 +1268,26 @@ export function useGroupVoiceCall(uiActive = false) {
 
         if (type === 'offer') {
           const existing = peerConnectionsRef.current.get(fromAddress);
-          if (existing && existing.connId !== connId && !isPeerConnectionInactive(existing)) {
+          if (
+            existing &&
+            existing.connId !== connId &&
+            !isPeerConnectionInactive(existing)
+          ) {
             const existingTs = getConnIdTimestamp(existing.connId);
             const incomingTs = getConnIdTimestamp(connId);
-            if (existingTs !== null && incomingTs !== null && incomingTs < existingTs) {
-              debugLog('[GCall] Ignoring stale RTC offer from', fromAddress, 'connId:', connId, 'current:', existing.connId);
+            if (
+              existingTs !== null &&
+              incomingTs !== null &&
+              incomingTs < existingTs
+            ) {
+              debugLog(
+                '[GCall] Ignoring stale RTC offer from',
+                fromAddress,
+                'connId:',
+                connId,
+                'current:',
+                existing.connId
+              );
               return;
             }
           }
@@ -1094,17 +1295,32 @@ export function useGroupVoiceCall(uiActive = false) {
           const pc = createPeerConnection(fromAddress, connId, 'downstream');
 
           pc.onconnectionstatechange = () => {
-            debugLog('[GCall] PC state (downstream ←', fromAddress, '):', pc.connectionState);
+            debugLog(
+              '[GCall] PC state (downstream ←',
+              fromAddress,
+              '):',
+              pc.connectionState
+            );
           };
 
           pc.oniceconnectionstatechange = () => {
-            debugLog('[GCall] ICE connection (downstream ←', fromAddress, '):', pc.iceConnectionState);
+            debugLog(
+              '[GCall] ICE connection (downstream ←',
+              fromAddress,
+              '):',
+              pc.iceConnectionState
+            );
           };
 
           pc.ondatachannel = (e) => {
             const dc = e.channel;
             dc.binaryType = 'arraybuffer';
-            debugLog('[GCall] Downstream DC received from', fromAddress, '— channel:', dc.label);
+            debugLog(
+              '[GCall] Downstream DC received from',
+              fromAddress,
+              '— channel:',
+              dc.label
+            );
             dc.onopen = () => {
               debugLog('[GCall] Downstream DC opened from', fromAddress);
               relayLastSentRef.current.delete(fromAddress);
@@ -1115,7 +1331,10 @@ export function useGroupVoiceCall(uiActive = false) {
               flushMetrics();
             };
             dc.onmessage = (ev) => {
-              handleIncomingAudioPacketRef.current(ev.data as ArrayBuffer, fromAddress);
+              handleIncomingAudioPacketRef.current(
+                ev.data as ArrayBuffer,
+                fromAddress
+              );
             };
             const pcEntry = peerConnectionsRef.current.get(fromAddress);
             if (pcEntry?.connId === connId) pcEntry.dc = dc;
@@ -1126,39 +1345,77 @@ export function useGroupVoiceCall(uiActive = false) {
           await pc.setLocalDescription(answer);
 
           const ts = Date.now();
-          const sig = await signGroupCallFields(
-            { type: 'GC_RTC_ANSWER', roomId: roomIdRef.current, fromAddress: ui.address,
-              toAddress: fromAddress, connId, fromPublicKey: ui.publicKey ?? '', timestamp: ts }
-          ).catch(() => '');
+          const sig = await signGroupCallFields({
+            type: 'GC_RTC_ANSWER',
+            roomId: roomIdRef.current,
+            fromAddress: ui.address,
+            toAddress: fromAddress,
+            connId,
+            fromPublicKey: ui.publicKey ?? '',
+            timestamp: ts,
+          }).catch(() => '');
           if (!sig) return;
 
           await window.groupCall.sendRtcSignal(
-            roomIdRef.current, ui.address, fromAddress,
-            'answer', answer.sdp, connId, sig, ui.publicKey ?? '', ts
+            roomIdRef.current,
+            ui.address,
+            fromAddress,
+            'answer',
+            answer.sdp,
+            connId,
+            sig,
+            ui.publicKey ?? '',
+            ts
           );
         } else if (type === 'answer') {
           const pcEntry = peerConnectionsRef.current.get(fromAddress);
           if (!pcEntry || pcEntry.connId !== connId) {
-            debugLog('[GCall] Ignoring stale RTC answer from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
+            debugLog(
+              '[GCall] Ignoring stale RTC answer from',
+              fromAddress,
+              'connId:',
+              connId,
+              'current:',
+              pcEntry?.connId ?? '(none)'
+            );
             return;
           }
           await pcEntry.pc.setRemoteDescription({ type: 'answer', sdp });
         } else if (type === 'ice') {
           const pcEntry = peerConnectionsRef.current.get(fromAddress);
           if (!pcEntry || pcEntry.connId !== connId) {
-            debugLog('[GCall] Ignoring stale RTC ICE from', fromAddress, 'connId:', connId, 'current:', pcEntry?.connId ?? '(none)');
+            debugLog(
+              '[GCall] Ignoring stale RTC ICE from',
+              fromAddress,
+              'connId:',
+              connId,
+              'current:',
+              pcEntry?.connId ?? '(none)'
+            );
             return;
           }
           if (candidate) {
-            try { await pcEntry.pc.addIceCandidate(candidate); } catch { /* ignore */ }
+            try {
+              await pcEntry.pc.addIceCandidate(candidate);
+            } catch {
+              /* ignore */
+            }
           }
         }
       });
-      map.set(fromAddress, next.catch(() => {}));
+      map.set(
+        fromAddress,
+        next.catch(() => {})
+      );
     },
     // Do not add userInfo — queued work uses userInfoRef.current. Callback may still recreate when
     // createPeerConnection identity changes.
-    [createPeerConnection, flushMetrics, getConnIdTimestamp, isPeerConnectionInactive]
+    [
+      createPeerConnection,
+      flushMetrics,
+      getConnIdTimestamp,
+      isPeerConnectionInactive,
+    ]
   );
 
   /** WebRTC connection ensure — runs on every topology apply, including duplicate heartbeats. */
@@ -1173,7 +1430,11 @@ export function useGroupVoiceCall(uiActive = false) {
       // pointing at the wrong peer and the relay fallback takes over until the
       // new forwarder's DC opens.
       const validUpstreamTargets = new Set<string>();
-      if (role === 'participant' || role === 'cluster-forwarder' || role === 'standby-forwarder') {
+      if (
+        role === 'participant' ||
+        role === 'cluster-forwarder' ||
+        role === 'standby-forwarder'
+      ) {
         const af = findAssignedForwarder(myAddress, topology);
         if (af && af !== myAddress) validUpstreamTargets.add(af);
       }
@@ -1187,7 +1448,11 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
 
-      if (role === 'participant' || role === 'cluster-forwarder' || role === 'standby-forwarder') {
+      if (
+        role === 'participant' ||
+        role === 'cluster-forwarder' ||
+        role === 'standby-forwarder'
+      ) {
         const assignedForwarder = findAssignedForwarder(myAddress, topology);
         if (assignedForwarder && assignedForwarder !== myAddress) {
           const existing = peerConnectionsRef.current.get(assignedForwarder);
@@ -1222,49 +1487,63 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     },
-    [closePeerConnection, connectUpstream, isPeerConnectionInactive, setupDownstreamChannel, userInfo?.address]
+    [
+      closePeerConnection,
+      connectUpstream,
+      isPeerConnectionInactive,
+      setupDownstreamChannel,
+      userInfo?.address,
+    ]
   );
 
   ensureGroupCallWebRtcRef.current = ensureGroupCallWebRtcConnections;
 
   // ── Forwarder heartbeat ────────────────────────────────────────────────────
 
-  const startTopologyHeartbeat = useCallback((topology: GroupTopology) => {
-    if (!userInfo?.address) return;
-    if (topologyHeartbeatTimerRef.current) {
-      clearInterval(topologyHeartbeatTimerRef.current);
-      topologyHeartbeatTimerRef.current = null;
-    }
-    const sendHeartbeat = async () => {
-      const ts = Date.now();
-      const sig = await signGroupCallFields(
-        { type: 'GC_TOPOLOGY', roomId: roomIdRef.current,
+  const startTopologyHeartbeat = useCallback(
+    (topology: GroupTopology) => {
+      if (!userInfo?.address) return;
+      if (topologyHeartbeatTimerRef.current) {
+        clearInterval(topologyHeartbeatTimerRef.current);
+        topologyHeartbeatTimerRef.current = null;
+      }
+      const sendHeartbeat = async () => {
+        const ts = Date.now();
+        const sig = await signGroupCallFields({
+          type: 'GC_TOPOLOGY',
+          roomId: roomIdRef.current,
           topologyEpoch: topology.topologyEpoch,
           rootForwarder: topology.rootForwarder,
           standbyForwarder: topology.standbyForwarder,
-          fromAddress: userInfo.address,
-          fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
-      ).catch(() => '');
-      if (!sig) return;
-      await window.groupCall.broadcastTopology(
-        roomIdRef.current,
-        {
-          topologyEpoch: topology.topologyEpoch,
-          rootForwarder: topology.rootForwarder,
-          standbyForwarder: topology.standbyForwarder,
-          clusters: topology.clusters,
-          lastSeen: ts,
           fromAddress: userInfo.address,
           fromPublicKey: userInfo.publicKey ?? '',
-        },
-        sig,
-        userInfo.publicKey ?? '',
-        ts
+          timestamp: ts,
+        }).catch(() => '');
+        if (!sig) return;
+        await window.groupCall.broadcastTopology(
+          roomIdRef.current,
+          {
+            topologyEpoch: topology.topologyEpoch,
+            rootForwarder: topology.rootForwarder,
+            standbyForwarder: topology.standbyForwarder,
+            clusters: topology.clusters,
+            lastSeen: ts,
+            fromAddress: userInfo.address,
+            fromPublicKey: userInfo.publicKey ?? '',
+          },
+          sig,
+          userInfo.publicKey ?? '',
+          ts
+        );
+      };
+      sendHeartbeat();
+      topologyHeartbeatTimerRef.current = setInterval(
+        sendHeartbeat,
+        TOPOLOGY_HEARTBEAT_MS
       );
-    };
-    sendHeartbeat();
-    topologyHeartbeatTimerRef.current = setInterval(sendHeartbeat, TOPOLOGY_HEARTBEAT_MS);
-  }, [userInfo]);
+    },
+    [userInfo]
+  );
 
   const applyTopology = useCallback(
     (topology: GroupTopology) => {
@@ -1299,12 +1578,18 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
 
-      if (topology.rootForwarder && topology.rootForwarder !== (userInfo?.address ?? '')) {
+      if (
+        topology.rootForwarder &&
+        topology.rootForwarder !== (userInfo?.address ?? '')
+      ) {
         lastRootHeartbeatRef.current = Date.now();
       }
 
       localEpochRef.current = topology.topologyEpoch;
-      lastObservedEpochRef.current = Math.max(lastObservedEpochRef.current, topology.topologyEpoch);
+      lastObservedEpochRef.current = Math.max(
+        lastObservedEpochRef.current,
+        topology.topologyEpoch
+      );
       topologyRef.current = topology;
 
       const myAddress = userInfo?.address ?? '';
@@ -1313,7 +1598,8 @@ export function useGroupVoiceCall(uiActive = false) {
       metricsRef.current.setRole(role);
 
       setMyRole((prev) => (prev !== role ? role : prev));
-      const newLabel: TopologyLabel = topology.clusters.length > 1 ? 'Hierarchical' : 'SFU';
+      const newLabel: TopologyLabel =
+        topology.clusters.length > 1 ? 'Hierarchical' : 'SFU';
       setTopologyLabel((prev) => (prev !== newLabel ? newLabel : prev));
 
       setParticipants((prev) => {
@@ -1322,7 +1608,10 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         const anyChange = prev.some((p) => p.role !== newRoles.get(p.address));
         if (!anyChange) return prev;
-        return prev.map((p) => ({ ...p, role: newRoles.get(p.address) ?? p.role }));
+        return prev.map((p) => ({
+          ...p,
+          role: newRoles.get(p.address) ?? p.role,
+        }));
       });
 
       if (topologyHeartbeatTimerRef.current) {
@@ -1336,7 +1625,12 @@ export function useGroupVoiceCall(uiActive = false) {
       ensureGroupCallWebRtcConnections(topology);
       flushMetrics();
     },
-    [ensureGroupCallWebRtcConnections, flushMetrics, startTopologyHeartbeat, userInfo?.address]
+    [
+      ensureGroupCallWebRtcConnections,
+      flushMetrics,
+      startTopologyHeartbeat,
+      userInfo?.address,
+    ]
   );
 
   // ── Standby promotion ─────────────────────────────────────────────────────
@@ -1344,17 +1638,20 @@ export function useGroupVoiceCall(uiActive = false) {
   const checkForwarderTimeout = useCallback(() => {
     const myAddress = userInfo?.address ?? '';
     if (myRoleRef.current !== 'standby-forwarder') return;
-    if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS) return;
+    if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS)
+      return;
 
     if (promotionTimerRef.current) return;
     promotionTimerRef.current = setTimeout(async () => {
       promotionTimerRef.current = null;
-      if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS) return;
+      if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS)
+        return;
 
       const currentTopo = topologyRef.current;
       if (!currentTopo) return;
 
-      const newEpoch = Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
+      const newEpoch =
+        Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
       const addrs = [...participantsRef.current.keys()];
       const sorted = await computeElectionOrder(addrs, roomIdRef.current);
       const promotedTopo = buildTopology(sorted, newEpoch);
@@ -1375,12 +1672,16 @@ export function useGroupVoiceCall(uiActive = false) {
         };
         applyTopology(overriddenTopo);
         const ts = Date.now();
-        const sig = await signGroupCallFields(
-          { type: 'GC_TOPOLOGY', roomId: roomIdRef.current, topologyEpoch: newEpoch,
-            rootForwarder: overriddenTopo.rootForwarder,
-            standbyForwarder: overriddenTopo.standbyForwarder,
-            fromAddress: myAddress, fromPublicKey: userInfo?.publicKey ?? '', timestamp: ts }
-        ).catch(() => '');
+        const sig = await signGroupCallFields({
+          type: 'GC_TOPOLOGY',
+          roomId: roomIdRef.current,
+          topologyEpoch: newEpoch,
+          rootForwarder: overriddenTopo.rootForwarder,
+          standbyForwarder: overriddenTopo.standbyForwarder,
+          fromAddress: myAddress,
+          fromPublicKey: userInfo?.publicKey ?? '',
+          timestamp: ts,
+        }).catch(() => '');
         if (!sig) return;
         await window.groupCall.broadcastTopology(
           roomIdRef.current,
@@ -1405,6 +1706,79 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const callEpochRef = useRef<number>(0);
 
+  const isAudioPipelineActive = useCallback((): boolean => {
+    const ctx = audioContextRef.current;
+    if (!ctx || ctx.state === 'closed') return false;
+    if (
+      !captureWorkletRef.current ||
+      !micSourceNodeRef.current ||
+      !keepAliveGainRef.current
+    ) {
+      return false;
+    }
+    const stream = micStreamRef.current;
+    if (!stream) return false;
+    const track = stream.getAudioTracks()[0];
+    if (!track || track.readyState === 'ended') return false;
+    const encoder = encoderRef.current;
+    if (!encoder || encoder.state === 'closed') return false;
+    return true;
+  }, []);
+
+  const teardownCapturePipelineRefs = useCallback(() => {
+    if (jitterSchedulerNodeRef.current) {
+      try {
+        jitterSchedulerNodeRef.current.port.onmessage = null;
+        jitterSchedulerNodeRef.current.disconnect();
+      } catch {
+        /* ignore */
+      }
+      jitterSchedulerNodeRef.current = null;
+    }
+    if (micSourceNodeRef.current) {
+      try {
+        micSourceNodeRef.current.disconnect();
+      } catch {
+        /* ignore */
+      }
+      micSourceNodeRef.current = null;
+    }
+    if (keepAliveGainRef.current) {
+      try {
+        keepAliveGainRef.current.disconnect();
+      } catch {
+        /* ignore */
+      }
+      keepAliveGainRef.current = null;
+    }
+    if (captureWorkletRef.current) {
+      try {
+        captureWorkletRef.current.port.onmessage = null;
+        captureWorkletRef.current.disconnect();
+      } catch {
+        /* ignore */
+      }
+      captureWorkletRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+    }
+    if (encoderRef.current && encoderRef.current.state !== 'closed') {
+      try {
+        encoderRef.current.close();
+      } catch {
+        /* ignore */
+      }
+      encoderRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      void audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    playbackWorkletModulePromiseRef.current = null;
+  }, []);
+
   const swapGroupCallMicInput = useCallback(
     async (deviceId: string | null) => {
       const ctx = audioContextRef.current;
@@ -1416,7 +1790,8 @@ export function useGroupVoiceCall(uiActive = false) {
       const curId = curTrack?.getSettings?.().deviceId;
       if (deviceId != null && curId === deviceId) return;
 
-      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(deviceId);
+      const { stream, clearedStaleInputDevice } =
+        await getUserAudioStreamForCall(deviceId);
       if (clearedStaleInputDevice) {
         setCallAudioDevices((p) => ({ ...p, inputDeviceId: null }));
       }
@@ -1445,364 +1820,635 @@ export function useGroupVoiceCall(uiActive = false) {
     [setCallAudioDevices]
   );
 
-  const startAudioCapture = useCallback(async () => {
-    debugLog('[GCall] startAudioCapture called — roomKey:', !!roomKeyRef.current, 'address:', userInfo?.address ?? '(none)');
-    if (!userInfo?.address || !roomKeyRef.current) {
-      debugWarn('[GCall] startAudioCapture guard failed — roomKey:', !!roomKeyRef.current, 'address:', userInfo?.address ?? '(none)');
-      return;
-    }
-    callEpochRef.current = Date.now();
-
-    try {
-      micDebugLog('getUserMedia starting…');
-      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(
-        callAudioPrefsRef.current.inputDeviceId
+  const startAudioCapture = useCallback(
+    async (token: number) => {
+      debugLog(
+        '[GCall] startAudioCapture called — roomKey:',
+        !!roomKeyRef.current,
+        'address:',
+        userInfo?.address ?? '(none)'
       );
-      if (clearedStaleInputDevice) {
-        setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
-      }
-      if (!stream) {
-        console.error('[GCall] getUserMedia returned null');
+      if (!userInfo?.address || !roomKeyRef.current) {
+        debugWarn(
+          '[GCall] startAudioCapture guard failed — roomKey:',
+          !!roomKeyRef.current,
+          'address:',
+          userInfo?.address ?? '(none)'
+        );
         return;
       }
-      micStreamRef.current = stream;
 
-      if (isMicCaptureDebugEnabled()) {
-        const tracks = stream.getAudioTracks();
-        console.info('[GCall][mic] getUserMedia ok — audio tracks:', tracks.length);
-        for (const t of tracks) {
-          console.info('[GCall][mic] track snapshot', {
-            id: t.id,
-            label: t.label,
-            enabled: t.enabled,
-            muted: t.muted,
-            readyState: t.readyState,
-            settings: typeof t.getSettings === 'function' ? t.getSettings() : {},
-          });
-          t.onmute = () => console.warn('[GCall][mic] MediaStreamTrack mute event', t.id);
-          t.onunmute = () => console.info('[GCall][mic] MediaStreamTrack unmute event', t.id);
-        }
-      }
-
-      const ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
-      audioContextRef.current = ctx;
-      const outApply = await applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
-        audioContext: ctx,
-      });
-      if (outApply.clearPersistedOutput) {
-        setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
-      }
-      micDebugLog(
-        'AudioContext created — state:',
-        ctx.state,
-        'sampleRate:',
-        ctx.sampleRate,
-        'baseLatency:',
-        typeof ctx.baseLatency === 'number' ? ctx.baseLatency : '(n/a)'
-      );
-      playbackWorkletModulePromiseRef.current = null;
-      const source = ctx.createMediaStreamSource(stream);
-
-      // Set up Opus encoder (runs on main thread but is fast — just packetizes)
-      const encoder = new (window as any).AudioEncoder({
-        output: (chunk: any) => {
-          const frame = new Uint8Array(chunk.byteLength);
-          chunk.copyTo(frame);
-          sendEncodedFrame(frame);
-        },
-        error: (e: any) => console.error('[GCall] AudioEncoder error:', e),
-      });
-
-      encoder.configure({
-        codec: 'opus',
-        sampleRate: OPUS_SAMPLE_RATE,
-        numberOfChannels: OPUS_CHANNELS,
-        bitrate: OPUS_BITRATE,
-      });
-
-      encoderRef.current = encoder;
-
-      // Load and instantiate the capture worklet (runs on the audio worklet thread)
-      debugLog('[GCall] Loading capture worklet…');
-      await ctx.audioWorklet.addModule('/worklets/capture-processor.js');
-      await ctx.audioWorklet.addModule('/worklets/gcall-jitter-scheduler.js');
-      debugLog('[GCall] Capture worklet loaded, AudioContext state:', ctx.state);
-      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/group-playout-processor.js');
-      const captureNode = new AudioWorkletNode(ctx, 'capture-processor');
-      captureWorkletRef.current = captureNode;
-
-      // Apply current mute state to the freshly created worklet
-      captureNode.port.postMessage({ type: 'mute', muted: mutedRef.current });
-
-      let micDebugWorkletSamples = 0;
-      // Receive complete 960-sample Opus frames + VAD flag from the worklet thread
-      captureNode.port.onmessage = (e) => {
-        const { frame, vad } = e.data as { frame: Float32Array; vad: boolean };
-        if (isMicCaptureDebugEnabled() && micDebugWorkletSamples < 8) {
-          micDebugWorkletSamples++;
-          let sumSq = 0;
-          for (let i = 0; i < frame.length; i++) sumSq += frame[i] * frame[i];
-          const rms = Math.sqrt(sumSq / frame.length);
-          console.info('[GCall][mic] worklet frame', micDebugWorkletSamples, {
-            rms: Number(rms.toExponential(4)),
-            vad,
-            samples: frame.length,
-          });
-        }
-        isSpeakingRef.current = vad;
-        if (!encoderRef.current) return;
-        const i16 = float32ToInt16(frame);
-        const audioData = new (window as any).AudioData({
-          format: 's16',
-          sampleRate: OPUS_SAMPLE_RATE,
-          numberOfFrames: OPUS_FRAME_SAMPLES,
-          numberOfChannels: OPUS_CHANNELS,
-          timestamp: performance.now() * 1000,
-          data: i16,
-        });
-        encoderRef.current.encode(audioData);
-        audioData.close();
-      };
-
-      // Connect source to captureNode for worklet processing, AND connect source
-      // directly to a keep-alive gain node → destination.  This puts the mic SOURCE
-      // itself inside the active rendering graph so Chrome delivers real microphone
-      // samples to every connected output, including captureNode's inputs.
-      //
-      // Why not route captureNode → gain → destination instead?
-      // captureNode never writes to outputs[0][0], so its output is all-zeros.
-      // Chrome's AudioParam planner sees a constant-zero output and can mark the
-      // entire upstream chain as "silent", stopping sample delivery to inputs[0][0].
-      //
-      // Why 0.0001 instead of 0?
-      // A literal gain=0 AudioParam can be detected at the planner level and treated
-      // as a "silent" path even before computing signal values.  0.0001 (-80 dB) is
-      // physically inaudible but prevents that parameter-level zero optimisation.
-      const keepAliveGain = ctx.createGain();
-      keepAliveGain.gain.value = 0.0001;
-      keepAliveGainRef.current = keepAliveGain;
-      micSourceNodeRef.current = source;
-      source.connect(captureNode);
-      source.connect(keepAliveGain);
-      keepAliveGain.connect(ctx.destination);
-
-      // Jitter drain cadence tied to audio render clock (not setInterval).
-      if (!jitterSchedulerNodeRef.current) {
-        const jitterSched = new AudioWorkletNode(ctx, 'gcall-jitter-scheduler');
-        jitterSched.port.onmessage = (ev: MessageEvent<{ type?: string }>) => {
-          if (ev.data?.type !== 'tick') return;
-          runJitterDrainTickRef.current();
-        };
-        const jitterSchedGain = ctx.createGain();
-        jitterSchedGain.gain.value = 0.0001;
-        jitterSched.connect(jitterSchedGain);
-        jitterSchedGain.connect(ctx.destination);
-        jitterSchedulerNodeRef.current = jitterSched;
-      }
-
-      if (ctx.state !== 'running') {
-        micDebugLog(
-          'AudioContext not running after wiring graph — state:',
-          ctx.state,
-          '(capture may be silent until running / resume())'
+      const tokenIsCurrent = () =>
+        isCurrentGroupCallAudioStartupToken(
+          token,
+          audioSessionTokenRef.current
         );
-      }
-      debugLog('[GCall] Audio capture started — AudioContext state:', ctx.state);
-      micDebugLog('capture graph wired — ctx.state:', ctx.state);
-      setGroupCallAudioNonce((n) => n + 1);
+      const stopStream = (stream: MediaStream | null) => {
+        stream?.getTracks().forEach((t) => t.stop());
+      };
+      const closeEncoder = (encoder: AudioEncoder | null) => {
+        if (encoder && encoder.state !== 'closed') {
+          try {
+            encoder.close();
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+      const closeContext = (ctx: AudioContext | null) => {
+        if (ctx && ctx.state !== 'closed') {
+          void ctx.close();
+        }
+      };
+      const disconnectNode = (
+        node: AudioWorkletNode | GainNode | MediaStreamAudioSourceNode | null
+      ) => {
+        if (!node) return;
+        try {
+          node.disconnect();
+        } catch {
+          /* ignore */
+        }
+      };
+      let stream: MediaStream | null = null;
+      let ctx: AudioContext | null = null;
+      let encoder: AudioEncoder | null = null;
+      let source: MediaStreamAudioSourceNode | null = null;
+      let keepAliveGain: GainNode | null = null;
+      let captureNode: AudioWorkletNode | null = null;
+      let localJitterSched: AudioWorkletNode | null = null;
+      let publishedToRefs = false;
 
-    } catch (err) {
-      console.error('[GCall] Audio capture failed:', err);
-      if (isMicCaptureDebugEnabled()) {
-        const name = err && typeof err === 'object' && 'name' in err ? String((err as Error).name) : '';
-        const message = err && typeof err === 'object' && 'message' in err ? String((err as Error).message) : String(err);
-        console.error('[GCall][mic] getUserMedia / capture stack detail:', name, message);
+      try {
+        micDebugLog('getUserMedia starting…');
+        const gum = await getUserAudioStreamForCall(
+          callAudioPrefsRef.current.inputDeviceId
+        );
+        stream = gum.stream;
+        const { clearedStaleInputDevice } = gum;
+        if (clearedStaleInputDevice) {
+          setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
+        }
+        if (!stream) {
+          console.error('[GCall] getUserMedia returned null');
+          return;
+        }
+        if (!tokenIsCurrent()) {
+          debugLog(
+            '[GCall] startAudioCapture stale token after getUserMedia — token:',
+            token
+          );
+          stopStream(stream);
+          return;
+        }
+
+        if (isMicCaptureDebugEnabled()) {
+          const tracks = stream.getAudioTracks();
+          console.info(
+            '[GCall][mic] getUserMedia ok — audio tracks:',
+            tracks.length
+          );
+          for (const t of tracks) {
+            console.info('[GCall][mic] track snapshot', {
+              id: t.id,
+              label: t.label,
+              enabled: t.enabled,
+              muted: t.muted,
+              readyState: t.readyState,
+              settings:
+                typeof t.getSettings === 'function' ? t.getSettings() : {},
+            });
+            t.onmute = () =>
+              console.warn('[GCall][mic] MediaStreamTrack mute event', t.id);
+            t.onunmute = () =>
+              console.info('[GCall][mic] MediaStreamTrack unmute event', t.id);
+          }
+        }
+
+        ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
+        const outApply = await applyCallAudioOutput(
+          callAudioPrefsRef.current.outputDeviceId,
+          {
+            audioContext: ctx,
+          }
+        );
+        if (!tokenIsCurrent()) {
+          debugLog(
+            '[GCall] startAudioCapture stale token after output apply — token:',
+            token
+          );
+          stopStream(stream);
+          closeContext(ctx);
+          return;
+        }
+        if (outApply.clearPersistedOutput) {
+          setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
+        }
+        micDebugLog(
+          'AudioContext created — state:',
+          ctx.state,
+          'sampleRate:',
+          ctx.sampleRate,
+          'baseLatency:',
+          typeof ctx.baseLatency === 'number' ? ctx.baseLatency : '(n/a)'
+        );
+        playbackWorkletModulePromiseRef.current = null;
+        source = ctx.createMediaStreamSource(stream);
+
+        // Set up Opus encoder (runs on main thread but is fast — just packetizes)
+        encoder = new (window as any).AudioEncoder({
+          output: (chunk: any) => {
+            const frame = new Uint8Array(chunk.byteLength);
+            chunk.copyTo(frame);
+            sendEncodedFrame(frame);
+          },
+          error: (e: any) => console.error('[GCall] AudioEncoder error:', e),
+        });
+
+        encoder.configure({
+          codec: 'opus',
+          sampleRate: OPUS_SAMPLE_RATE,
+          numberOfChannels: OPUS_CHANNELS,
+          bitrate: OPUS_BITRATE,
+        });
+
+        // Load and instantiate the capture worklet (runs on the audio worklet thread)
+        debugLog('[GCall] Loading capture worklet…');
+        await ctx.audioWorklet.addModule('/worklets/capture-processor.js');
+        if (!tokenIsCurrent()) {
+          debugLog(
+            '[GCall] startAudioCapture stale token after capture module — token:',
+            token
+          );
+          disconnectNode(source);
+          closeEncoder(encoder);
+          stopStream(stream);
+          closeContext(ctx);
+          return;
+        }
+        await ctx.audioWorklet.addModule('/worklets/gcall-jitter-scheduler.js');
+        if (!tokenIsCurrent()) {
+          debugLog(
+            '[GCall] startAudioCapture stale token after scheduler module — token:',
+            token
+          );
+          disconnectNode(source);
+          closeEncoder(encoder);
+          stopStream(stream);
+          closeContext(ctx);
+          return;
+        }
+        debugLog(
+          '[GCall] Capture worklet loaded, AudioContext state:',
+          ctx.state
+        );
+        const playbackModulePromise = ctx.audioWorklet.addModule(
+          '/worklets/group-playout-processor.js'
+        );
+        captureNode = new AudioWorkletNode(ctx, 'capture-processor');
+
+        // Apply current mute state to the freshly created worklet
+        captureNode.port.postMessage({ type: 'mute', muted: mutedRef.current });
+
+        let micDebugWorkletSamples = 0;
+        // Receive complete 960-sample Opus frames + VAD flag from the worklet thread
+        captureNode.port.onmessage = (e) => {
+          const { frame, vad } = e.data as {
+            frame: Float32Array;
+            vad: boolean;
+          };
+          if (isMicCaptureDebugEnabled() && micDebugWorkletSamples < 8) {
+            micDebugWorkletSamples++;
+            let sumSq = 0;
+            for (let i = 0; i < frame.length; i++) sumSq += frame[i] * frame[i];
+            const rms = Math.sqrt(sumSq / frame.length);
+            console.info('[GCall][mic] worklet frame', micDebugWorkletSamples, {
+              rms: Number(rms.toExponential(4)),
+              vad,
+              samples: frame.length,
+            });
+          }
+          isSpeakingRef.current = vad;
+          if (encoder.state === 'closed') return;
+          const i16 = float32ToInt16(frame);
+          const audioData = new (window as any).AudioData({
+            format: 's16',
+            sampleRate: OPUS_SAMPLE_RATE,
+            numberOfFrames: OPUS_FRAME_SAMPLES,
+            numberOfChannels: OPUS_CHANNELS,
+            timestamp: performance.now() * 1000,
+            data: i16,
+          });
+          encoder.encode(audioData);
+          audioData.close();
+        };
+
+        // Connect source to captureNode for worklet processing, AND connect source
+        // directly to a keep-alive gain node → destination.  This puts the mic SOURCE
+        // itself inside the active rendering graph so Chrome delivers real microphone
+        // samples to every connected output, including captureNode's inputs.
+        //
+        // Why not route captureNode → gain → destination instead?
+        // captureNode never writes to outputs[0][0], so its output is all-zeros.
+        // Chrome's AudioParam planner sees a constant-zero output and can mark the
+        // entire upstream chain as "silent", stopping sample delivery to inputs[0][0].
+        //
+        // Why 0.0001 instead of 0?
+        // A literal gain=0 AudioParam can be detected at the planner level and treated
+        // as a "silent" path even before computing signal values.  0.0001 (-80 dB) is
+        // physically inaudible but prevents that parameter-level zero optimisation.
+        keepAliveGain = ctx.createGain();
+        keepAliveGain.gain.value = 0.0001;
+        source.connect(captureNode);
+        source.connect(keepAliveGain);
+        keepAliveGain.connect(ctx.destination);
+
+        // Jitter drain cadence tied to audio render clock (not setInterval).
+        if (!jitterSchedulerNodeRef.current) {
+          const jitterSched = new AudioWorkletNode(
+            ctx,
+            'gcall-jitter-scheduler'
+          );
+          jitterSched.port.onmessage = (
+            ev: MessageEvent<{ type?: string }>
+          ) => {
+            if (ev.data?.type !== 'tick') return;
+            runJitterDrainTickRef.current();
+          };
+          const jitterSchedGain = ctx.createGain();
+          jitterSchedGain.gain.value = 0.0001;
+          jitterSched.connect(jitterSchedGain);
+          jitterSchedGain.connect(ctx.destination);
+          localJitterSched = jitterSched;
+        }
+
+        if (!tokenIsCurrent()) {
+          debugLog(
+            '[GCall] startAudioCapture stale token before publish — token:',
+            token
+          );
+          captureNode.port.onmessage = null;
+          disconnectNode(captureNode);
+          disconnectNode(keepAliveGain);
+          disconnectNode(source);
+          disconnectNode(localJitterSched);
+          closeEncoder(encoder);
+          stopStream(stream);
+          closeContext(ctx);
+          return;
+        }
+
+        // Replace any stale partial refs from earlier interrupted startup attempts.
+        teardownCapturePipelineRefs();
+
+        micStreamRef.current = stream;
+        audioContextRef.current = ctx;
+        playbackWorkletModulePromiseRef.current = playbackModulePromise;
+        encoderRef.current = encoder;
+        micSourceNodeRef.current = source;
+        keepAliveGainRef.current = keepAliveGain;
+        captureWorkletRef.current = captureNode;
+        if (localJitterSched) {
+          jitterSchedulerNodeRef.current = localJitterSched;
+        }
+        publishedToRefs = true;
+        callEpochRef.current = Date.now();
+
+        if (ctx.state !== 'running') {
+          micDebugLog(
+            'AudioContext not running after wiring graph — state:',
+            ctx.state,
+            '(capture may be silent until running / resume())'
+          );
+        }
+        debugLog(
+          '[GCall] Audio capture started — AudioContext state:',
+          ctx.state
+        );
+        micDebugLog('capture graph wired — ctx.state:', ctx.state);
+        setGroupCallAudioNonce((n) => n + 1);
+      } catch (err) {
+        if (!publishedToRefs) {
+          if (captureNode) {
+            captureNode.port.onmessage = null;
+          }
+          disconnectNode(captureNode);
+          disconnectNode(keepAliveGain);
+          disconnectNode(source);
+          disconnectNode(localJitterSched);
+          closeEncoder(encoder);
+          stopStream(stream);
+          closeContext(ctx);
+        }
+        console.error('[GCall] Audio capture failed:', err);
+        if (isMicCaptureDebugEnabled()) {
+          const name =
+            err && typeof err === 'object' && 'name' in err
+              ? String((err as Error).name)
+              : '';
+          const message =
+            err && typeof err === 'object' && 'message' in err
+              ? String((err as Error).message)
+              : String(err);
+          console.error(
+            '[GCall][mic] getUserMedia / capture stack detail:',
+            name,
+            message
+          );
+        }
       }
+    },
+    [setCallAudioDevices, teardownCapturePipelineRefs, userInfo?.address]
+  );
+
+  const ensureAudioCaptureStarted = useCallback(() => {
+    if (!userInfo?.address || !roomKeyRef.current) return;
+    const pipelineActive = isAudioPipelineActive();
+    if (pipelineActive) {
+      debugLog(
+        '[GCall] ensureAudioCaptureStarted skip — pipeline already active'
+      );
+      return;
     }
-  }, [setCallAudioDevices, userInfo?.address]);
+    const startupInFlight = audioStartInFlightRef.current;
+    if (startupInFlight) {
+      debugLog(
+        '[GCall] ensureAudioCaptureStarted skip — startup already in flight'
+      );
+      return;
+    }
+    if (!shouldStartGroupCallAudioCapture({ pipelineActive, startupInFlight }))
+      return;
+    const token = bumpGroupCallAudioSessionToken(audioSessionTokenRef.current);
+    audioSessionTokenRef.current = token;
+    audioStartInFlightRef.current = true;
+    if (isGroupCallDebugEnabled()) {
+      debugLog('[GCall] ensureAudioCaptureStarted begin — token:', token);
+    }
+    void startAudioCapture(token).finally(() => {
+      if (audioSessionTokenRef.current !== token) return;
+      audioStartInFlightRef.current = false;
+      if (isGroupCallDebugEnabled()) {
+        debugLog('[GCall] ensureAudioCaptureStarted done — token:', token);
+      }
+    });
+  }, [isAudioPipelineActive, startAudioCapture, userInfo?.address]);
 
   const ensurePlaybackWorkletLoaded = useCallback(async (): Promise<void> => {
     const ctx = audioContextRef.current;
     if (!ctx) return;
     if (!playbackWorkletModulePromiseRef.current) {
-      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule('/worklets/group-playout-processor.js');
+      playbackWorkletModulePromiseRef.current = ctx.audioWorklet.addModule(
+        '/worklets/group-playout-processor.js'
+      );
     }
     await playbackWorkletModulePromiseRef.current;
   }, []);
 
-  const dispatchEncodedPacket = useCallback((packet: Uint8Array) => {
-    if (!userInfo?.address || !roomIdRef.current || !roomKeyRef.current) return;
-    if (upstreamDCRef.current?.readyState === 'open') {
-      // Non-root: send to assigned forwarder
-      upstreamDCRef.current.send(packet.buffer as ArrayBuffer);
-    } else if (myRoleRef.current === 'root-forwarder' && topologyRef.current) {
-      // Root-forwarder: no upstream DC; send own audio directly to all cluster members.
-      // For members whose DC is not yet open, fall back to P2P relay so audio is never
-      // silently dropped during WebRTC negotiation.
-      const topo = topologyRef.current;
-      for (const cluster of topo.clusters) {
-        if (cluster.forwarder === userInfo.address) {
-          for (const member of cluster.members) {
-            if (member !== userInfo.address) {
-              const pcEntry = peerConnectionsRef.current.get(member);
-              if (pcEntry?.dc?.readyState === 'open') {
-                pcEntry.dc.send(packet.buffer as ArrayBuffer);
-              } else if (roomIdRef.current) {
-                // DC not open yet — relay via P2P until WebRTC establishes.
-                // Rate-limit to RELAY_MIN_INTERVAL_MS per peer to avoid flooding IPC
-                // at 50 Hz during the 1–5 s negotiation window.
-                const now = Date.now();
-                if (now - (relayLastSentRef.current.get(member) ?? 0) >= RELAY_MIN_INTERVAL_MS) {
-                  relayLastSentRef.current.set(member, now);
-                  // Pass raw bytes over IPC; base64 conversion happens in the main process.
-                  metricsRef.current.recordRelaySent();
-                  scheduleRelayMetricsFlush();
-                  window.groupCall.sendAudio(roomIdRef.current, member, packet).catch(() => {});
+  const dispatchEncodedPacket = useCallback(
+    (packet: Uint8Array) => {
+      if (!userInfo?.address || !roomIdRef.current || !roomKeyRef.current)
+        return;
+      if (upstreamDCRef.current?.readyState === 'open') {
+        // Non-root: send to assigned forwarder
+        upstreamDCRef.current.send(packet.buffer as ArrayBuffer);
+      } else if (
+        myRoleRef.current === 'root-forwarder' &&
+        topologyRef.current
+      ) {
+        // Root-forwarder: no upstream DC; send own audio directly to all cluster members.
+        // For members whose DC is not yet open, fall back to P2P relay so audio is never
+        // silently dropped during WebRTC negotiation.
+        const topo = topologyRef.current;
+        for (const cluster of topo.clusters) {
+          if (cluster.forwarder === userInfo.address) {
+            for (const member of cluster.members) {
+              if (member !== userInfo.address) {
+                const pcEntry = peerConnectionsRef.current.get(member);
+                if (pcEntry?.dc?.readyState === 'open') {
+                  pcEntry.dc.send(packet.buffer as ArrayBuffer);
+                } else if (roomIdRef.current) {
+                  // DC not open yet — relay via P2P until WebRTC establishes.
+                  // Rate-limit to RELAY_MIN_INTERVAL_MS per peer to avoid flooding IPC
+                  // at 50 Hz during the 1–5 s negotiation window.
+                  const now = Date.now();
+                  if (
+                    now - (relayLastSentRef.current.get(member) ?? 0) >=
+                    RELAY_MIN_INTERVAL_MS
+                  ) {
+                    relayLastSentRef.current.set(member, now);
+                    // Pass raw bytes over IPC; base64 conversion happens in the main process.
+                    metricsRef.current.recordRelaySent();
+                    scheduleRelayMetricsFlush();
+                    window.groupCall
+                      .sendAudio(roomIdRef.current, member, packet)
+                      .catch(() => {});
+                  }
                 }
               }
             }
           }
         }
-      }
-    } else {
-      // Non-root and upstream DC not open yet — fall back to P2P relay via main process
-      const topo = topologyRef.current;
-      const target = topo ? findAssignedForwarder(userInfo.address, topo) : null;
-      if (target && roomIdRef.current) {
-        // Rate-limit to RELAY_MIN_INTERVAL_MS per peer to avoid flooding IPC
-        // at 50 Hz during the 1–5 s WebRTC negotiation window.
-        const now = Date.now();
-        if (now - (relayLastSentRef.current.get(target) ?? 0) >= RELAY_MIN_INTERVAL_MS) {
-          relayLastSentRef.current.set(target, now);
-          // Pass raw bytes over IPC; base64 conversion happens in the main process.
-          metricsRef.current.recordRelaySent();
-          scheduleRelayMetricsFlush();
-          window.groupCall.sendAudio(roomIdRef.current, target, packet).catch(() => {});
+      } else {
+        // Non-root and upstream DC not open yet — fall back to P2P relay via main process
+        const topo = topologyRef.current;
+        const target = topo
+          ? findAssignedForwarder(userInfo.address, topo)
+          : null;
+        if (target && roomIdRef.current) {
+          // Rate-limit to RELAY_MIN_INTERVAL_MS per peer to avoid flooding IPC
+          // at 50 Hz during the 1–5 s WebRTC negotiation window.
+          const now = Date.now();
+          if (
+            now - (relayLastSentRef.current.get(target) ?? 0) >=
+            RELAY_MIN_INTERVAL_MS
+          ) {
+            relayLastSentRef.current.set(target, now);
+            // Pass raw bytes over IPC; base64 conversion happens in the main process.
+            metricsRef.current.recordRelaySent();
+            scheduleRelayMetricsFlush();
+            window.groupCall
+              .sendAudio(roomIdRef.current, target, packet)
+              .catch(() => {});
+          }
         }
       }
-    }
-  }, [scheduleRelayMetricsFlush, userInfo?.address]);
+    },
+    [scheduleRelayMetricsFlush, userInfo?.address]
+  );
 
-  const sendEncodedFrame = useCallback((opusFrame: Uint8Array) => {
-    if (!roomKeyRef.current || !userInfo?.address) return;
-    if (mutedRef.current) return; // mic is muted — drop frame
-    if (seqRef.current === 0) {
-      debugLog('[GCall] First encoded frame ready to send — role:', myRoleRef.current, 'upstreamDC:', upstreamDCRef.current?.readyState ?? 'none');
-      micDebugLog(
-        'first Opus frame from encoder — bytes:',
-        opusFrame.byteLength,
-        'role:',
-        myRoleRef.current,
-        'upstreamDC:',
-        upstreamDCRef.current?.readyState ?? 'none',
-        'vad:',
-        isSpeakingRef.current
-      );
-    }
+  const sendEncodedFrame = useCallback(
+    (opusFrame: Uint8Array) => {
+      if (!roomKeyRef.current || !userInfo?.address) return;
+      if (mutedRef.current) return; // mic is muted — drop frame
+      if (seqRef.current === 0) {
+        debugLog(
+          '[GCall] First encoded frame ready to send — role:',
+          myRoleRef.current,
+          'upstreamDC:',
+          upstreamDCRef.current?.readyState ?? 'none'
+        );
+        micDebugLog(
+          'first Opus frame from encoder — bytes:',
+          opusFrame.byteLength,
+          'role:',
+          myRoleRef.current,
+          'upstreamDC:',
+          upstreamDCRef.current?.readyState ?? 'none',
+          'vad:',
+          isSpeakingRef.current
+        );
+      }
 
-    const seq = seqRef.current++ & 0xffff;
-    const timestampMs = Date.now() - callEpochRef.current;
+      const seq = seqRef.current++ & 0xffff;
+      const timestampMs = Date.now() - callEpochRef.current;
 
-    if (decryptWorkerRef.current) {
-      const frameBuffer =
-        opusFrame.byteOffset === 0 && opusFrame.byteLength === opusFrame.buffer.byteLength
-          ? opusFrame.buffer
-          : opusFrame.slice().buffer;
-      decryptWorkerRef.current.postMessage(
-        {
-          type: 'encrypt',
-          id: encryptIdRef.current++,
-          sourceAddr: userInfo.address,
-          vad: isSpeakingRef.current,
+      if (decryptWorkerRef.current) {
+        const frameBuffer =
+          opusFrame.byteOffset === 0 &&
+          opusFrame.byteLength === opusFrame.buffer.byteLength
+            ? opusFrame.buffer
+            : opusFrame.slice().buffer;
+        decryptWorkerRef.current.postMessage(
+          {
+            type: 'encrypt',
+            id: encryptIdRef.current++,
+            sourceAddr: userInfo.address,
+            vad: isSpeakingRef.current,
+            seq,
+            timestampMs,
+            opusFrame: frameBuffer,
+          },
+          [frameBuffer]
+        );
+        return;
+      }
+
+      dispatchEncodedPacket(
+        encodeAudioPacketV2(
+          userInfo.address,
+          isSpeakingRef.current,
           seq,
           timestampMs,
-          opusFrame: frameBuffer,
-        },
-        [frameBuffer]
+          opusFrame,
+          roomKeyRef.current
+        )
       );
-      return;
-    }
-
-    dispatchEncodedPacket(
-      encodeAudioPacketV2(
-        userInfo.address,
-        isSpeakingRef.current,
-        seq,
-        timestampMs,
-        opusFrame,
-        roomKeyRef.current
-      )
-    );
-  }, [dispatchEncodedPacket, userInfo?.address]);
+    },
+    [dispatchEncodedPacket, userInfo?.address]
+  );
 
   // ── Audio decode ──────────────────────────────────────────────────────────
 
-  const getOrCreateDecoder = useCallback((sourceAddr: string): AudioDecoder | null => {
-    if (decoderMapRef.current.has(sourceAddr)) return decoderMapRef.current.get(sourceAddr)!;
-    if (!audioContextRef.current) return null;
-    debugLog('[GCall] Creating decoder + playback worklet for', sourceAddr.slice(0, 12));
+  const getOrCreateDecoder = useCallback(
+    (sourceAddr: string): AudioDecoder | null => {
+      if (decoderMapRef.current.has(sourceAddr))
+        return decoderMapRef.current.get(sourceAddr)!;
+      if (!audioContextRef.current) return null;
+      debugLog(
+        '[GCall] Creating decoder + playback worklet for',
+        sourceAddr.slice(0, 12)
+      );
 
-    const ctx = audioContextRef.current;
+      const ctx = audioContextRef.current;
 
-    const setupPlayback = async (): Promise<AudioWorkletNode> => {
-      debugLog('[GCall] Loading playback worklet for', sourceAddr.slice(0, 12));
-      try {
-        await ensurePlaybackWorkletLoaded();
-        const playNode = new AudioWorkletNode(ctx, 'group-playout-processor', {
-          processorOptions: { sourceAddr },
-        } as AudioWorkletNodeOptions);
-        playNode.port.onmessage = (e: MessageEvent) => {
-          const d = e.data as {
-            type?: string;
-            bufferedMs?: number;
-            outsideBand?: boolean;
-            concealmentUsed?: boolean;
+      const setupPlayback = async (): Promise<AudioWorkletNode> => {
+        debugLog(
+          '[GCall] Loading playback worklet for',
+          sourceAddr.slice(0, 12)
+        );
+        try {
+          await ensurePlaybackWorkletLoaded();
+          const playNode = new AudioWorkletNode(
+            ctx,
+            'group-playout-processor',
+            {
+              processorOptions: { sourceAddr },
+            } as AudioWorkletNodeOptions
+          );
+          playNode.port.onmessage = (e: MessageEvent) => {
+            const d = e.data as {
+              type?: string;
+              bufferedMs?: number;
+              outsideBand?: boolean;
+              concealmentUsed?: boolean;
+            };
+            if (d?.type !== 'gcallPlayoutMetrics') return;
+            if (typeof d.bufferedMs !== 'number') return;
+            metricsRef.current.recordPlayoutMetricTick(
+              d.bufferedMs,
+              !!d.outsideBand
+            );
+            if (d.concealmentUsed) metricsRef.current.recordConcealmentTick(1);
           };
-          if (d?.type !== 'gcallPlayoutMetrics') return;
-          if (typeof d.bufferedMs !== 'number') return;
-          metricsRef.current.recordPlayoutMetricTick(d.bufferedMs, !!d.outsideBand);
-          if (d.concealmentUsed) metricsRef.current.recordConcealmentTick(1);
-        };
-        playNode.connect(ctx.destination);
-        playbackWorkletsRef.current.set(sourceAddr, playNode);
-        updateMetricResourceCounts();
-        debugLog('[GCall] Playback worklet ready for', sourceAddr.slice(0, 12), '— ctx state:', ctx.state);
-        return playNode;
-      } catch (err) {
-        console.error('[GCall] Playback worklet FAILED for', sourceAddr.slice(0, 12), err);
-        throw err;
-      }
-    };
-
-    const playNodePromise = setupPlayback();
-
-    let pcmCount = 0;
-    const decoder = new (window as any).AudioDecoder({
-      output: (audioData: any) => {
-        pcmCount++;
-        if (pcmCount <= 3) {
-          debugLog('[GCall] AudioDecoder output PCM', pcmCount, 'frames:', audioData.numberOfFrames, 'for', sourceAddr.slice(0, 12));
+          playNode.connect(ctx.destination);
+          playbackWorkletsRef.current.set(sourceAddr, playNode);
+          updateMetricResourceCounts();
+          debugLog(
+            '[GCall] Playback worklet ready for',
+            sourceAddr.slice(0, 12),
+            '— ctx state:',
+            ctx.state
+          );
+          return playNode;
+        } catch (err) {
+          console.error(
+            '[GCall] Playback worklet FAILED for',
+            sourceAddr.slice(0, 12),
+            err
+          );
+          throw err;
         }
-        const pcm = new Float32Array(audioData.numberOfFrames);
-        audioData.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
-        audioData.close();
-        const existing = playbackWorkletsRef.current.get(sourceAddr);
-        if (existing) {
-          existing.port.postMessage({ pcm }, [pcm.buffer]);
-        } else {
-          playNodePromise.then((node) => {
-            node.port.postMessage({ pcm }, [pcm.buffer]);
-          }).catch(() => {});
-        }
-      },
-      error: (e: any) => console.error(`[GCall] AudioDecoder error for ${sourceAddr.slice(0, 12)}:`, e),
-    });
+      };
 
-    decoder.configure({ codec: 'opus', sampleRate: OPUS_SAMPLE_RATE, numberOfChannels: OPUS_CHANNELS });
-    decoderMapRef.current.set(sourceAddr, decoder);
-    updateMetricResourceCounts();
-    return decoder;
-  }, [ensurePlaybackWorkletLoaded, updateMetricResourceCounts]);
+      const playNodePromise = setupPlayback();
+
+      let pcmCount = 0;
+      const decoder = new (window as any).AudioDecoder({
+        output: (audioData: any) => {
+          pcmCount++;
+          if (pcmCount <= 3) {
+            debugLog(
+              '[GCall] AudioDecoder output PCM',
+              pcmCount,
+              'frames:',
+              audioData.numberOfFrames,
+              'for',
+              sourceAddr.slice(0, 12)
+            );
+          }
+          const pcm = new Float32Array(audioData.numberOfFrames);
+          audioData.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
+          audioData.close();
+          const existing = playbackWorkletsRef.current.get(sourceAddr);
+          if (existing) {
+            existing.port.postMessage({ pcm }, [pcm.buffer]);
+          } else {
+            playNodePromise
+              .then((node) => {
+                node.port.postMessage({ pcm }, [pcm.buffer]);
+              })
+              .catch(() => {});
+          }
+        },
+        error: (e: any) =>
+          console.error(
+            `[GCall] AudioDecoder error for ${sourceAddr.slice(0, 12)}:`,
+            e
+          ),
+      });
+
+      decoder.configure({
+        codec: 'opus',
+        sampleRate: OPUS_SAMPLE_RATE,
+        numberOfChannels: OPUS_CHANNELS,
+      });
+      decoderMapRef.current.set(sourceAddr, decoder);
+      updateMetricResourceCounts();
+      return decoder;
+    },
+    [ensurePlaybackWorkletLoaded, updateMetricResourceCounts]
+  );
 
   // ── Incoming audio packet processing ──────────────────────────────────────
 
@@ -1830,14 +2476,13 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       // Sync fallback: decrypt on main thread (same post-decrypt path as worker).
-      const decoded = decodeAudioPacket(new Uint8Array(data), roomKeyRef.current);
+      const decoded = decodeAudioPacket(
+        new Uint8Array(data),
+        roomKeyRef.current
+      );
       applyPostDecrypt(wireForForward, decoded, startedAt);
     },
-    [
-      applyPostDecrypt,
-      ensurePendingDecryptCap,
-      sweepStalePendingDecrypts,
-    ]
+    [applyPostDecrypt, ensurePendingDecryptCap, sweepStalePendingDecrypts]
   );
 
   handleIncomingAudioPacketRef.current = handleIncomingAudioPacket;
@@ -1863,7 +2508,12 @@ export function useGroupVoiceCall(uiActive = false) {
         burst++;
         if (!jitterFirstDrainLoggedRef.current) {
           jitterFirstDrainLoggedRef.current = true;
-          debugLog('[GCall] Jitter drain first pop for', addr.slice(0, 12), '— frame bytes:', frame.byteLength);
+          debugLog(
+            '[GCall] Jitter drain first pop for',
+            addr.slice(0, 12),
+            '— frame bytes:',
+            frame.byteLength
+          );
           debugLog('[GCall] Decoder input frame view for', addr.slice(0, 12), {
             byteOffset: frame.byteOffset,
             byteLength: frame.byteLength,
@@ -1884,12 +2534,18 @@ export function useGroupVoiceCall(uiActive = false) {
             debugWarn('[GCall] decoder.decode threw:', e);
           }
         } else if (!decoder) {
-          debugWarn('[GCall] getOrCreateDecoder returned null for', addr.slice(0, 12));
+          debugWarn(
+            '[GCall] getOrCreateDecoder returned null for',
+            addr.slice(0, 12)
+          );
         }
       }
       if (missedThisTick > 0) {
         metricsRef.current.recordMissingFrames(missedThisTick);
-        lastDrainMissedRef.current.set(addr, (lastDrainMissedRef.current.get(addr) ?? 0) + missedThisTick);
+        lastDrainMissedRef.current.set(
+          addr,
+          (lastDrainMissedRef.current.get(addr) ?? 0) + missedThisTick
+        );
       }
       if (!jb.hasReadyFrame()) {
         activeJitterSourcesRef.current.delete(addr);
@@ -1909,10 +2565,14 @@ export function useGroupVoiceCall(uiActive = false) {
         ACTIVE_SPEAKER_WINDOW_MS,
         MAX_ACTIVE_SPEAKERS_GLOBAL
       );
-      setActiveSpeakers((prev) => (sameAddressList(prev, speakers) ? prev : speakers));
+      setActiveSpeakers((prev) =>
+        sameAddressList(prev, speakers) ? prev : speakers
+      );
       setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
     }
-    metricsRef.current.recordJitterTickDuration(performance.now() - tickStartedAt);
+    metricsRef.current.recordJitterTickDuration(
+      performance.now() - tickStartedAt
+    );
   }, [getOrCreateDecoder, tickAdaptivePlayoutTargets]);
 
   runJitterDrainTickRef.current = runJitterDrainTick;
@@ -1933,98 +2593,148 @@ export function useGroupVoiceCall(uiActive = false) {
     if (groupPrevInputPrefRef.current === want) return;
     groupPrevInputPrefRef.current = want;
     void swapGroupCallMicInput(want);
-  }, [callAudioDevices.inputDeviceId, groupCallAudioNonce, roomState, swapGroupCallMicInput]);
+  }, [
+    callAudioDevices.inputDeviceId,
+    groupCallAudioNonce,
+    roomState,
+    swapGroupCallMicInput,
+  ]);
 
   useEffect(() => {
     const ctx = audioContextRef.current;
     if (!ctx || roomState === 'idle') return;
-    void applyCallAudioOutput(callAudioDevices.outputDeviceId, { audioContext: ctx }).then(
-      ({ clearPersistedOutput }) => {
-        if (clearPersistedOutput) {
-          setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
-        }
+    void applyCallAudioOutput(callAudioDevices.outputDeviceId, {
+      audioContext: ctx,
+    }).then(({ clearPersistedOutput }) => {
+      if (clearPersistedOutput) {
+        setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
       }
-    );
-  }, [callAudioDevices.outputDeviceId, groupCallAudioNonce, roomState, setCallAudioDevices]);
+    });
+  }, [
+    callAudioDevices.outputDeviceId,
+    groupCallAudioNonce,
+    roomState,
+    setCallAudioDevices,
+  ]);
 
   // ── Room key distribution ─────────────────────────────────────────────────
 
-  const distributeRoomKey = useCallback(async (
-    key: Uint8Array,
-    recipients?: ReadonlyMap<string, { publicKey: string }>,
-  ) => {
-    if (!userInfo?.address) return;
-    const myAddr = userInfo.address;
-    const roster = recipients ?? participantsRef.current;
-    debugLog('[GCall] distributeRoomKey — recipients:', [...roster.keys()].filter((a) => a !== myAddr));
-
-    for (const [addr, { publicKey }] of roster) {
-      if (addr === myAddr) continue;
-
-      // Encrypt key for this participant using their Ed25519 public key.
-      // Convert Ed25519 public key to Curve25519 for nacl.box, then use an
-      // ephemeral keypair so the recipient can compute the same shared secret.
-      try {
-        const recipientPkBytes = base58DecodeRenderer(publicKey);
-        const recipientCurve25519PK = ed2curve.convertPublicKey(recipientPkBytes);
-        const ephemeralKP = naclApi.box.keyPair();
-        const sharedKey = naclApi.box.before(recipientCurve25519PK, ephemeralKP.secretKey);
-        const nonce = naclApi.randomBytes(24);
-        const ciphertext = naclApi.box.after(key, nonce, sharedKey);
-
-        // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
-        const combined = new Uint8Array(32 + 24 + ciphertext.length);
-        combined.set(ephemeralKP.publicKey, 0);
-        combined.set(nonce, 32);
-        combined.set(ciphertext, 56);
-
-        const b64 = uint8ToBase64(combined);
-        const ts = Date.now();
-      const sig = await signGroupCallFields(
-        { type: 'GC_KEY', roomId: roomIdRef.current,
-          toAddress: addr, fromAddress: myAddr,
-          fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
-      ).catch(() => '');
-        if (!sig) { debugWarn(`[GCall] Signing failed for GC_KEY to ${addr}`); continue; }
-        await window.groupCall.sendKey(
-          roomIdRef.current, addr, b64, myAddr, sig, userInfo.publicKey ?? '', ts
-        );
-      } catch (e) {
-        debugWarn(`[GCall] Failed to encrypt key for ${addr}:`, e);
-      }
-    }
-  }, [userInfo]);
-
-  /** Handle incoming room key. */
-  const handleRoomKey = useCallback(async (payload: { encryptedKey: string }) => {
-    debugLog('[GCall] handleRoomKey called — encryptedKey length:', payload.encryptedKey?.length ?? 0);
-    try {
-      // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
-      const combined = base64ToUint8(payload.encryptedKey);
-      const ephemeralPKb64  = uint8ToBase64(combined.slice(0, 32));
-      const nonceb64        = uint8ToBase64(combined.slice(32, 56));
-      const ciphertextb64   = uint8ToBase64(combined.slice(56));
-
-      const result = await (window as any).sendMessage(
-        'decryptBoxWithMyKey',
-        { ephemeralPublicKey: ephemeralPKb64, nonce: nonceb64, ciphertext: ciphertextb64 },
-        10_000
+  const distributeRoomKey = useCallback(
+    async (
+      key: Uint8Array,
+      recipients?: ReadonlyMap<string, { publicKey: string }>
+    ) => {
+      if (!userInfo?.address) return;
+      const myAddr = userInfo.address;
+      const roster = recipients ?? participantsRef.current;
+      debugLog(
+        '[GCall] distributeRoomKey — recipients:',
+        [...roster.keys()].filter((a) => a !== myAddr)
       );
-      debugLog('[GCall] decryptBoxWithMyKey result ok:', !!result?.decryptedKey);
-      if (result?.decryptedKey) {
-        roomKeyRef.current = Uint8Array.from(atob(result.decryptedKey), (c) => c.charCodeAt(0));
-        isOurKeyRef.current = false; // key came from the new root; we don't own it
-        syncDecryptWorkerRoomKey(roomKeyRef.current);
-        debugLog('[GCall] Room key set (', roomKeyRef.current.length, 'bytes), captureWorklet exists:', !!captureWorkletRef.current);
-        // Non-root-forwarder: start audio now that we have the shared key
-        if (!captureWorkletRef.current) {
-          startAudioCapture();
+
+      for (const [addr, { publicKey }] of roster) {
+        if (addr === myAddr) continue;
+
+        // Encrypt key for this participant using their Ed25519 public key.
+        // Convert Ed25519 public key to Curve25519 for nacl.box, then use an
+        // ephemeral keypair so the recipient can compute the same shared secret.
+        try {
+          const recipientPkBytes = base58DecodeRenderer(publicKey);
+          const recipientCurve25519PK =
+            ed2curve.convertPublicKey(recipientPkBytes);
+          const ephemeralKP = naclApi.box.keyPair();
+          const sharedKey = naclApi.box.before(
+            recipientCurve25519PK,
+            ephemeralKP.secretKey
+          );
+          const nonce = naclApi.randomBytes(24);
+          const ciphertext = naclApi.box.after(key, nonce, sharedKey);
+
+          // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
+          const combined = new Uint8Array(32 + 24 + ciphertext.length);
+          combined.set(ephemeralKP.publicKey, 0);
+          combined.set(nonce, 32);
+          combined.set(ciphertext, 56);
+
+          const b64 = uint8ToBase64(combined);
+          const ts = Date.now();
+          const sig = await signGroupCallFields({
+            type: 'GC_KEY',
+            roomId: roomIdRef.current,
+            toAddress: addr,
+            fromAddress: myAddr,
+            fromPublicKey: userInfo.publicKey ?? '',
+            timestamp: ts,
+          }).catch(() => '');
+          if (!sig) {
+            debugWarn(`[GCall] Signing failed for GC_KEY to ${addr}`);
+            continue;
+          }
+          await window.groupCall.sendKey(
+            roomIdRef.current,
+            addr,
+            b64,
+            myAddr,
+            sig,
+            userInfo.publicKey ?? '',
+            ts
+          );
+        } catch (e) {
+          debugWarn(`[GCall] Failed to encrypt key for ${addr}:`, e);
         }
       }
-    } catch (e) {
-      debugWarn('[GCall] Failed to decrypt room key:', e);
-    }
-  }, [startAudioCapture, syncDecryptWorkerRoomKey]);
+    },
+    [userInfo]
+  );
+
+  /** Handle incoming room key. */
+  const handleRoomKey = useCallback(
+    async (payload: { encryptedKey: string }) => {
+      debugLog(
+        '[GCall] handleRoomKey called — encryptedKey length:',
+        payload.encryptedKey?.length ?? 0
+      );
+      try {
+        // Wire format: [ephemeralPK (32)] + [nonce (24)] + [ciphertext]
+        const combined = base64ToUint8(payload.encryptedKey);
+        const ephemeralPKb64 = uint8ToBase64(combined.slice(0, 32));
+        const nonceb64 = uint8ToBase64(combined.slice(32, 56));
+        const ciphertextb64 = uint8ToBase64(combined.slice(56));
+
+        const result = await (window as any).sendMessage(
+          'decryptBoxWithMyKey',
+          {
+            ephemeralPublicKey: ephemeralPKb64,
+            nonce: nonceb64,
+            ciphertext: ciphertextb64,
+          },
+          10_000
+        );
+        debugLog(
+          '[GCall] decryptBoxWithMyKey result ok:',
+          !!result?.decryptedKey
+        );
+        if (result?.decryptedKey) {
+          roomKeyRef.current = Uint8Array.from(atob(result.decryptedKey), (c) =>
+            c.charCodeAt(0)
+          );
+          isOurKeyRef.current = false; // key came from the new root; we don't own it
+          syncDecryptWorkerRoomKey(roomKeyRef.current);
+          debugLog(
+            '[GCall] Room key set (',
+            roomKeyRef.current.length,
+            'bytes), captureWorklet exists:',
+            !!captureWorkletRef.current
+          );
+          // Non-root-forwarder: start audio now that we have the shared key
+          ensureAudioCaptureStarted();
+        }
+      } catch (e) {
+        debugWarn('[GCall] Failed to decrypt room key:', e);
+      }
+    },
+    [ensureAudioCaptureStarted, syncDecryptWorkerRoomKey]
+  );
 
   // ── Decrypt Worker lifecycle ──────────────────────────────────────────────
 
@@ -2039,18 +2749,20 @@ export function useGroupVoiceCall(uiActive = false) {
     encryptIdRef.current = 0;
     syncDecryptWorkerRoomKey(roomKeyRef.current);
 
-    worker.onmessage = (e: MessageEvent<{
-      type: 'result' | 'encryptResult';
-      id: number;
-      decoded?: {
-        sourceAddr: string;
-        vad: boolean;
-        seq: number;
-        timestampMs: number;
-        opusFrame: ArrayBuffer;
-      } | null;
-      packet?: ArrayBuffer | null;
-    }>) => {
+    worker.onmessage = (
+      e: MessageEvent<{
+        type: 'result' | 'encryptResult';
+        id: number;
+        decoded?: {
+          sourceAddr: string;
+          vad: boolean;
+          seq: number;
+          timestampMs: number;
+          opusFrame: ArrayBuffer;
+        } | null;
+        packet?: ArrayBuffer | null;
+      }>
+    ) => {
       if (e.data.type === 'encryptResult') {
         if (e.data.packet) {
           dispatchEncodedPacket(new Uint8Array(e.data.packet as ArrayBuffer));
@@ -2085,35 +2797,40 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Join / Leave ──────────────────────────────────────────────────────────
 
-  const joinGroupCall = useCallback(async (roomId: string, chatId: string) => {
-    if (!userInfo?.address || !userInfo.publicKey) return;
-    if (roomState !== 'idle') return;
-    debugLog('[GCall] joinGroupCall — roomId:', roomId, 'address:', userInfo.address);
+  const joinGroupCall = useCallback(
+    async (roomId: string, chatId: string) => {
+      if (!userInfo?.address || !userInfo.publicKey) return;
+      if (roomState !== 'idle') return;
+      debugLog(
+        '[GCall] joinGroupCall — roomId:',
+        roomId,
+        'address:',
+        userInfo.address
+      );
 
-    roomIdRef.current = roomId;
-    chatIdRef.current = chatId;
-    // Reset epoch floor when joining a different room; keep it for same-room rejoin
-    // so the rejoining node broadcasts an epoch ≥ the room's current epoch.
-    if (roomId !== lastRoomIdRef.current) {
-      lastObservedEpochRef.current = 0;
-    }
-    setRoomState('joining');
-    metricsRef.current.reset();
-    metricsRef.current.setRole('participant');
-    flushMetrics();
+      roomIdRef.current = roomId;
+      chatIdRef.current = chatId;
+      // Reset epoch floor when joining a different room; keep it for same-room rejoin
+      // so the rejoining node broadcasts an epoch ≥ the room's current epoch.
+      if (roomId !== lastRoomIdRef.current) {
+        lastObservedEpochRef.current = 0;
+      }
+      setRoomState('joining');
+      metricsRef.current.reset();
+      metricsRef.current.setRole('participant');
+      flushMetrics();
 
-    // Register local address with main process
-    await window.groupCall.setLocalAddresses([userInfo.address]);
+      // Register local address with main process
+      await window.groupCall.setLocalAddresses([userInfo.address]);
 
-    const jbuf = new Uint32Array(1);
-    crypto.getRandomValues(jbuf);
-    const joinGeneration = jbuf[0]! >>> 0;
-    joinGenerationRef.current = joinGeneration;
+      const jbuf = new Uint32Array(1);
+      crypto.getRandomValues(jbuf);
+      const joinGeneration = jbuf[0]! >>> 0;
+      joinGenerationRef.current = joinGeneration;
 
-    // Sign join envelope
-    const ts = Date.now();
-    const sig = await signGroupCallFields(
-      {
+      // Sign join envelope
+      const ts = Date.now();
+      const sig = await signGroupCallFields({
         type: 'GC_JOIN',
         roomId,
         chatId,
@@ -2121,64 +2838,85 @@ export function useGroupVoiceCall(uiActive = false) {
         fromPublicKey: userInfo.publicKey,
         timestamp: ts,
         joinGeneration,
+      }).catch(() => '');
+      if (!sig) {
+        debugWarn('[GCall] Signing failed for GC_JOIN — aborting join');
+        joinGenerationRef.current = null;
+        setRoomState('idle');
+        return;
       }
-    ).catch(() => '');
-    if (!sig) {
-      debugWarn('[GCall] Signing failed for GC_JOIN — aborting join');
-      joinGenerationRef.current = null;
-      setRoomState('idle');
-      return;
-    }
 
-    // Add self to participant list
-    participantsRef.current.set(userInfo.address, {
-      publicKey: userInfo.publicKey,
-      lastJoinTs: ts,
-      joinGeneration,
-    });
-    setParticipants([{ address: userInfo.address, publicKey: userInfo.publicKey, speaking: false, role: 'participant' }]);
+      // Add self to participant list
+      participantsRef.current.set(userInfo.address, {
+        publicKey: userInfo.publicKey,
+        lastJoinTs: ts,
+        joinGeneration,
+      });
+      setParticipants([
+        {
+          address: userInfo.address,
+          publicKey: userInfo.publicKey,
+          speaking: false,
+          role: 'participant',
+        },
+      ]);
 
-    // Send join to network
-    await window.groupCall.join(
-      roomId,
-      chatId,
-      userInfo.address,
-      sig,
-      userInfo.publicKey,
-      ts,
-      joinGeneration
-    );
+      // Send join to network
+      await window.groupCall.join(
+        roomId,
+        chatId,
+        userInfo.address,
+        sig,
+        userInfo.publicKey,
+        ts,
+        joinGeneration
+      );
 
-    setRoomState('connected');
+      setRoomState('connected');
 
-    // Reset the root-heartbeat timestamp to now so the standby-forwarder timeout
-    // check doesn't misfire immediately if the hook was mounted long before joining.
-    lastRootHeartbeatRef.current = Date.now();
+      // Reset the root-heartbeat timestamp to now so the standby-forwarder timeout
+      // check doesn't misfire immediately if the hook was mounted long before joining.
+      lastRootHeartbeatRef.current = Date.now();
 
-    // Room key and audio capture are deferred until the first topology is
-    // computed (in participant-joined).  Only the elected root-forwarder
-    // generates and distributes the key; others wait for GC_KEY.
-    setupDecryptWorker();
-    startForwarderTimeoutCheck();
-    startMetricsFlushLoop();
-    startWebRtcEnsureLoop();
-  }, [flushMetrics, roomState, setupDecryptWorker, startMetricsFlushLoop, startWebRtcEnsureLoop, userInfo]);
+      // Room key and audio capture are deferred until the first topology is
+      // computed (in participant-joined).  Only the elected root-forwarder
+      // generates and distributes the key; others wait for GC_KEY.
+      setupDecryptWorker();
+      startForwarderTimeoutCheck();
+      startMetricsFlushLoop();
+      startWebRtcEnsureLoop();
+    },
+    [
+      flushMetrics,
+      roomState,
+      setupDecryptWorker,
+      startMetricsFlushLoop,
+      startWebRtcEnsureLoop,
+      userInfo,
+    ]
+  );
 
   const leaveGroupCall = useCallback(async () => {
     if (!userInfo?.address || roomState === 'idle') return;
 
     // Sign leave envelope
     const ts = Date.now();
-    const sig = await signGroupCallFields(
-      { type: 'GC_LEAVE', roomId: roomIdRef.current,
-        fromAddress: userInfo.address,
-        fromPublicKey: userInfo.publicKey ?? '', timestamp: ts }
-    ).catch(() => '');
+    const sig = await signGroupCallFields({
+      type: 'GC_LEAVE',
+      roomId: roomIdRef.current,
+      fromAddress: userInfo.address,
+      fromPublicKey: userInfo.publicKey ?? '',
+      timestamp: ts,
+    }).catch(() => '');
 
     // Always clean up locally; only broadcast if signing succeeded
     if (sig) {
       await window.groupCall.leave(
-        roomIdRef.current, userInfo.address, sig, userInfo.publicKey ?? '', ts
+        roomIdRef.current,
+        userInfo.address,
+        sig,
+        userInfo.publicKey ?? '',
+        ts
       );
     }
 
@@ -2186,29 +2924,51 @@ export function useGroupVoiceCall(uiActive = false) {
   }, [userInfo, roomState]);
 
   const startForwarderTimeoutCheck = useCallback(() => {
-    if (forwarderTimeoutCheckRef.current) clearInterval(forwarderTimeoutCheckRef.current);
-    forwarderTimeoutCheckRef.current = setInterval(checkForwarderTimeout, FORWARDER_TIMEOUT_CHECK_MS);
+    if (forwarderTimeoutCheckRef.current)
+      clearInterval(forwarderTimeoutCheckRef.current);
+    forwarderTimeoutCheckRef.current = setInterval(
+      checkForwarderTimeout,
+      FORWARDER_TIMEOUT_CHECK_MS
+    );
   }, [checkForwarderTimeout]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
   const cleanup = useCallback(() => {
-    window.groupCall?.setLocalAddresses([]).catch(() => {});
-    if (jitterSchedulerNodeRef.current) {
-      try {
-        jitterSchedulerNodeRef.current.port.onmessage = null;
-        jitterSchedulerNodeRef.current.disconnect();
-      } catch {
-        /* ignore */
-      }
-      jitterSchedulerNodeRef.current = null;
+    const nextAudioToken = bumpGroupCallAudioSessionToken(
+      audioSessionTokenRef.current
+    );
+    audioSessionTokenRef.current = nextAudioToken;
+    audioStartInFlightRef.current = false;
+    if (isGroupCallDebugEnabled()) {
+      debugLog(
+        '[GCall] cleanup start — invalidated audio token:',
+        nextAudioToken,
+        {
+          decoders: decoderMapRef.current.size,
+          playbackNodes: playbackWorkletsRef.current.size,
+          jitterBuffers: jitterMapRef.current.size,
+          interArrivalSources: interArrivalSamplesRef.current.size,
+          smoothedTargets: smoothedPlayoutTargetRef.current.size,
+        }
+      );
     }
+    window.groupCall?.setLocalAddresses([]).catch(() => {});
     jitterDrainReactTickCountRef.current = 0;
     jitterFirstDrainLoggedRef.current = false;
     lastVadTrueAtRef.current.clear();
-    if (topologyHeartbeatTimerRef.current) { clearInterval(topologyHeartbeatTimerRef.current); topologyHeartbeatTimerRef.current = null; }
-    if (promotionTimerRef.current) { clearTimeout(promotionTimerRef.current); promotionTimerRef.current = null; }
-    if (forwarderTimeoutCheckRef.current) { clearInterval(forwarderTimeoutCheckRef.current); forwarderTimeoutCheckRef.current = null; }
+    if (topologyHeartbeatTimerRef.current) {
+      clearInterval(topologyHeartbeatTimerRef.current);
+      topologyHeartbeatTimerRef.current = null;
+    }
+    if (promotionTimerRef.current) {
+      clearTimeout(promotionTimerRef.current);
+      promotionTimerRef.current = null;
+    }
+    if (forwarderTimeoutCheckRef.current) {
+      clearInterval(forwarderTimeoutCheckRef.current);
+      forwarderTimeoutCheckRef.current = null;
+    }
     stopMetricsFlushLoop();
     stopWebRtcEnsureLoop();
     if (relayMetricsFlushTimerRef.current) {
@@ -2219,53 +2979,34 @@ export function useGroupVoiceCall(uiActive = false) {
     groupInputSwapSeededRef.current = false;
     groupPrevInputPrefRef.current = undefined;
 
-    // Stop audio
-    if (micSourceNodeRef.current) {
-      try {
-        micSourceNodeRef.current.disconnect();
-      } catch {
-        /* ignore */
-      }
-      micSourceNodeRef.current = null;
-    }
-    if (keepAliveGainRef.current) {
-      try {
-        keepAliveGainRef.current.disconnect();
-      } catch {
-        /* ignore */
-      }
-      keepAliveGainRef.current = null;
-    }
-    if (captureWorkletRef.current) {
-      captureWorkletRef.current.disconnect();
-      captureWorkletRef.current = null;
-    }
+    // Stop local capture pipeline first; token invalidation above prevents stale
+    // async startAudioCapture continuations from reattaching closed resources.
+    teardownCapturePipelineRefs();
     for (const [, node] of playbackWorkletsRef.current) {
       node.disconnect();
     }
     playbackWorkletsRef.current.clear();
-    playbackWorkletModulePromiseRef.current = null;
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach((t) => t.stop());
-      micStreamRef.current = null;
-    }
-    if (encoderRef.current && encoderRef.current.state !== 'closed') {
-      encoderRef.current.close();
-      encoderRef.current = null;
-    }
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
 
     // Close decoders
     for (const [, dec] of decoderMapRef.current) {
-      try { if (dec.state !== 'closed') dec.close(); } catch { /* ignore */ }
+      try {
+        if (dec.state !== 'closed') dec.close();
+      } catch {
+        /* ignore */
+      }
     }
     decoderMapRef.current.clear();
     jitterMapRef.current.clear();
     activeJitterSourcesRef.current.clear();
     lastRecvAtRef.current.clear();
+    clearAdaptiveGroupCallPlayoutMaps({
+      lastPacketArrivalAt: lastPacketArrivalAtRef.current,
+      interArrivalSamples: interArrivalSamplesRef.current,
+      smoothedPlayoutTarget: smoothedPlayoutTargetRef.current,
+      lastSentPlayoutTarget: lastSentPlayoutTargetRef.current,
+      lastPlayoutTargetPostAt: lastPlayoutTargetPostAtRef.current,
+      lastDrainMissed: lastDrainMissedRef.current,
+    });
 
     // Close peer connections (clear ICE disconnect grace timers first so callbacks cannot fire after teardown)
     for (const [, entry] of peerConnectionsRef.current) {
@@ -2316,13 +3057,30 @@ export function useGroupVoiceCall(uiActive = false) {
     setParticipants([]);
     setMyRole('participant');
     setActiveSpeakers([]);
+    if (isGroupCallDebugEnabled()) {
+      debugLog('[GCall] cleanup done — remaining audio resources', {
+        decoders: decoderMapRef.current.size,
+        playbackNodes: playbackWorkletsRef.current.size,
+        jitterBuffers: jitterMapRef.current.size,
+        interArrivalSources: interArrivalSamplesRef.current.size,
+        smoothedTargets: smoothedPlayoutTargetRef.current.size,
+      });
+    }
     flushMetrics();
-  }, [closePeerConnection, flushMetrics, stopMetricsFlushLoop, stopWebRtcEnsureLoop, syncDecryptWorkerRoomKey]);
+  }, [
+    closePeerConnection,
+    flushMetrics,
+    stopMetricsFlushLoop,
+    stopWebRtcEnsureLoop,
+    syncDecryptWorkerRoomKey,
+    teardownCapturePipelineRefs,
+  ]);
 
   // ── IPC event subscription ─────────────────────────────────────────────────
 
   useEffect(() => {
-    const shouldSubscribe = Boolean(window.groupCall) && (uiActive || roomState !== 'idle');
+    const shouldSubscribe =
+      Boolean(window.groupCall) && (uiActive || roomState !== 'idle');
     if (!shouldSubscribe || !window.groupCall) {
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
@@ -2380,17 +3138,21 @@ export function useGroupVoiceCall(uiActive = false) {
           if (isInitiatorRef.current) {
             if (roomKeyRef.current && isOurKeyRef.current) {
               // Still root, still our key — redistribute to updated roster.
-              debugLog('[GCall] Already have key — distributing to full roster after election');
+              debugLog(
+                '[GCall] Already have key — distributing to full roster after election'
+              );
               void distributeRoomKey(roomKeyRef.current);
             } else {
               // Becoming root for first time, OR hold a key from a previous
               // root — always generate a fresh key to prevent foreign-key reuse.
-              debugLog('[GCall] Generating room key and starting audio capture');
+              debugLog(
+                '[GCall] Generating room key and starting audio capture'
+              );
               const newKey = naclApi.randomBytes(32);
               roomKeyRef.current = newKey;
               isOurKeyRef.current = true;
               syncDecryptWorkerRoomKey(newKey);
-              startAudioCapture();
+              ensureAudioCaptureStarted();
               void distributeRoomKey(newKey);
             }
           }
@@ -2404,7 +3166,8 @@ export function useGroupVoiceCall(uiActive = false) {
         const { roomId, address, publicKey } = payload;
         const joinTs = Number(payload.timestamp);
         const incomingGen =
-          typeof payload.joinGeneration === 'number' && Number.isFinite(payload.joinGeneration)
+          typeof payload.joinGeneration === 'number' &&
+          Number.isFinite(payload.joinGeneration)
             ? payload.joinGeneration
             : undefined;
         if (roomId !== roomIdRef.current) return;
@@ -2418,7 +3181,11 @@ export function useGroupVoiceCall(uiActive = false) {
         if (existing && joinTs <= existing.lastJoinTs) return;
 
         // Same session mesh re-announce: newer ts, same publicKey, compatible joinGeneration.
-        if (existing && joinTs > existing.lastJoinTs && publicKey === existing.publicKey) {
+        if (
+          existing &&
+          joinTs > existing.lastJoinTs &&
+          publicKey === existing.publicKey
+        ) {
           const genMismatch =
             existing.joinGeneration !== undefined &&
             incomingGen !== undefined &&
@@ -2427,7 +3194,8 @@ export function useGroupVoiceCall(uiActive = false) {
             participantsRef.current.set(address, {
               publicKey,
               lastJoinTs: joinTs,
-              ...(incomingGen !== undefined || existing.joinGeneration !== undefined
+              ...(incomingGen !== undefined ||
+              existing.joinGeneration !== undefined
                 ? { joinGeneration: incomingGen ?? existing.joinGeneration }
                 : {}),
             });
@@ -2443,45 +3211,69 @@ export function useGroupVoiceCall(uiActive = false) {
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);
             if (i === -1) {
-              return [...prev, { address, publicKey, speaking: false, role: 'participant' }];
+              return [
+                ...prev,
+                { address, publicKey, speaking: false, role: 'participant' },
+              ];
             }
-            return prev.map((p) => (p.address === address ? { ...p, publicKey } : p));
+            return prev.map((p) =>
+              p.address === address ? { ...p, publicKey } : p
+            );
           });
         } else if (!wasExisting) {
           participantsRef.current.set(address, {
             publicKey,
             lastJoinTs: joinTs,
-            ...(incomingGen !== undefined ? { joinGeneration: incomingGen } : {}),
+            ...(incomingGen !== undefined
+              ? { joinGeneration: incomingGen }
+              : {}),
           });
           setParticipants((prev) => {
             if (prev.some((p) => p.address === address)) return prev;
-            return [...prev, { address, publicKey, speaking: false, role: 'participant' }];
+            return [
+              ...prev,
+              { address, publicKey, speaking: false, role: 'participant' },
+            ];
           });
         } else if (existing && publicKey !== existing.publicKey) {
           participantsRef.current.set(address, {
             publicKey,
             lastJoinTs: joinTs,
-            ...(incomingGen !== undefined ? { joinGeneration: incomingGen } : {}),
+            ...(incomingGen !== undefined
+              ? { joinGeneration: incomingGen }
+              : {}),
           });
           closePeerConnection(address);
           disposeParticipantAudio(address);
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);
             if (i === -1) {
-              return [...prev, { address, publicKey, speaking: false, role: 'participant' }];
+              return [
+                ...prev,
+                { address, publicKey, speaking: false, role: 'participant' },
+              ];
             }
-            return prev.map((p) => (p.address === address ? { ...p, publicKey } : p));
+            return prev.map((p) =>
+              p.address === address ? { ...p, publicKey } : p
+            );
           });
         }
 
         // Re-announce ourselves to the newly discovered peer so they learn about us.
         // Peers who joined before the flood may have missed our GC_JOIN; re-sends fix that.
         // Throttled to limit signed GC_JOIN / verify load during mesh bursts.
-        if (address !== userInfo?.address && userInfo?.address && userInfo?.publicKey) {
+        if (
+          address !== userInfo?.address &&
+          userInfo?.address &&
+          userInfo?.publicKey
+        ) {
           const jg = joinGenerationRef.current;
           if (jg !== null) {
             const throttleNow = Date.now();
-            if (throttleNow - lastMeshReannounceAtRef.current >= MESH_REANNOUNCE_MIN_INTERVAL_MS) {
+            if (
+              throttleNow - lastMeshReannounceAtRef.current >=
+              MESH_REANNOUNCE_MIN_INTERVAL_MS
+            ) {
               lastMeshReannounceAtRef.current = throttleNow;
               const rts = Date.now();
               signGroupCallFields({
@@ -2520,7 +3312,9 @@ export function useGroupVoiceCall(uiActive = false) {
         closePeerConnection(address);
         disposeParticipantAudio(address);
         participantsRef.current.delete(address);
-        setActiveSpeakers((prev) => prev.filter((speaker) => speaker !== address));
+        setActiveSpeakers((prev) =>
+          prev.filter((speaker) => speaker !== address)
+        );
         setParticipants((prev) => prev.filter((p) => p.address !== address));
 
         const addrs = [...participantsRef.current.keys()];
@@ -2587,7 +3381,7 @@ export function useGroupVoiceCall(uiActive = false) {
     handleRtcSignal,
     roomState,
     scheduleRelayMetricsFlush,
-    startAudioCapture,
+    ensureAudioCaptureStarted,
     syncDecryptWorkerRoomKey,
     uiActive,
     userInfo?.address,
@@ -2635,6 +3429,7 @@ function base58DecodeRenderer(str: string): Uint8Array {
   }
   let hex = num.toString(16);
   if (hex.length % 2) hex = '0' + hex;
-  for (let i = 0; i < hex.length; i += 2) bytes.push(parseInt(hex.slice(i, i + 2), 16));
+  for (let i = 0; i < hex.length; i += 2)
+    bytes.push(parseInt(hex.slice(i, i + 2), 16));
   return new Uint8Array(bytes);
 }
