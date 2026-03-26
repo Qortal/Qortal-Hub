@@ -2142,7 +2142,7 @@ ipcMain.handle(
     roomId: string,
     fromAddress: string,
     toAddress: string,
-    type: 'offer' | 'answer' | 'ice',
+    type: 'offer' | 'answer' | 'ice' | 'reconnect',
     data: unknown,
     connId: string,
     signature?: string,

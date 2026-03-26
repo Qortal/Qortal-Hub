@@ -16,6 +16,7 @@
  *   GC_AUDIO                 — P2P audio relay fallback
  *   GC_KEY / GC_KEY_ROTATE   — room media key distribution
  *   GC_RTC_OFFER/ANSWER/ICE  — WebRTC DataChannel signaling
+ *   GC_RTC_RECONNECT         — forwarder asks member to re-offer immediately
  *
  * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_KEY carry Ed25519 signatures.
  * When this node has no local state for a room, JOIN/LEAVE/TOPOLOGY are relayed
@@ -23,7 +24,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { log as loggerLog, error as loggerError } from './logger';
+import { log as loggerLog, error as loggerError, warn as loggerWarn } from './logger';
 import type { P2PNetwork } from './p2p-network';
 import type { PresenceManager } from './presence';
 import { VerifyWorkerPool } from './verify-worker-pool';
@@ -45,11 +46,13 @@ export type GroupCallMsgType =
   | 'GC_KEY_ROTATE'
   | 'GC_RTC_OFFER'
   | 'GC_RTC_ANSWER'
-  | 'GC_RTC_ICE';
+  | 'GC_RTC_ICE'
+  | 'GC_RTC_RECONNECT';
 
 export const GC_MESSAGE_TYPES = new Set<string>([
   'GC_JOIN', 'GC_LEAVE', 'GC_TOPOLOGY', 'GC_AUDIO',
   'GC_KEY', 'GC_KEY_ROTATE', 'GC_RTC_OFFER', 'GC_RTC_ANSWER', 'GC_RTC_ICE',
+  'GC_RTC_RECONNECT',
 ]);
 
 // ── Envelope shapes ───────────────────────────────────────────────────────────
@@ -171,10 +174,20 @@ export interface GcRtcIceEnvelope {
   hopsRemaining?: number;
 }
 
+export interface GcRtcReconnectEnvelope {
+  type: 'GC_RTC_RECONNECT';
+  roomId: string;
+  fromAddress: string;
+  toAddress: string;
+  connId: string;
+  hopsRemaining?: number;
+}
+
 export type GcEnvelope =
   | GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope
   | GcAudioEnvelope | GcKeyEnvelope | GcKeyRotateEnvelope
-  | GcRtcOfferEnvelope | GcRtcAnswerEnvelope | GcRtcIceEnvelope;
+  | GcRtcOfferEnvelope | GcRtcAnswerEnvelope | GcRtcIceEnvelope
+  | GcRtcReconnectEnvelope;
 
 // ── Room state ────────────────────────────────────────────────────────────────
 
@@ -304,7 +317,7 @@ export class GroupCallManager extends EventEmitter {
   private onP2PMessage!: (payload: { id: string; from: string; data: unknown }) => void;
   private onPresenceUpdated: (({ address, online }: { address: string; online: boolean }) => void) | null = null;
   private presenceEvictionTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private static readonly PRESENCE_EVICTION_GRACE_MS = 30_000;
+  private static readonly PRESENCE_EVICTION_GRACE_MS = 12_000;
 
   private verifyPool = new VerifyWorkerPool(
     'gcall',
@@ -570,18 +583,29 @@ export class GroupCallManager extends EventEmitter {
     publicKey: string,
     timestamp: number
   ): void {
-    const env: GcLeaveEnvelope = {
-      type: 'GC_LEAVE',
-      roomId,
-      fromAddress: localAddress,
-      fromPublicKey: publicKey,
-      signature,
-      timestamp,
-      hopsRemaining: GC_MAX_HOPS,
-    };
-    this.p2p.send(null, env);
+    if (signature) {
+      const env: GcLeaveEnvelope = {
+        type: 'GC_LEAVE',
+        roomId,
+        fromAddress: localAddress,
+        fromPublicKey: publicKey,
+        signature,
+        timestamp,
+        hopsRemaining: GC_MAX_HOPS,
+      };
+      this.p2p.send(null, env);
+    } else {
+      loggerWarn(
+        `[GCall] Missing GC_LEAVE signature for ${localAddress} in ${roomId} — clearing local room only`
+      );
+      this.participantNodeIds.delete(localAddress);
+    }
     this.rooms.delete(roomId);
-    loggerLog(`[GCall] Sent GC_LEAVE for room ${roomId}`);
+    loggerLog(
+      signature
+        ? `[GCall] Sent GC_LEAVE for room ${roomId}`
+        : `[GCall] Cleared local room state for ${roomId} without broadcasting GC_LEAVE`
+    );
   }
 
   broadcastTopology(
@@ -675,7 +699,7 @@ export class GroupCallManager extends EventEmitter {
     roomId: string,
     fromAddress: string,
     toAddress: string,
-    type: 'offer' | 'answer' | 'ice',
+    type: 'offer' | 'answer' | 'ice' | 'reconnect',
     data: unknown,
     connId: string,
     signature?: string,
@@ -707,6 +731,16 @@ export class GroupCallManager extends EventEmitter {
         hopsRemaining: hops,
       };
       nodeId ? this.p2p.send(nodeId, env) : this.p2p.send(null, env);
+    } else if (type === 'reconnect') {
+      const env: GcRtcReconnectEnvelope = {
+        type: 'GC_RTC_RECONNECT',
+        roomId,
+        fromAddress,
+        toAddress,
+        connId,
+        hopsRemaining: hops,
+      };
+      nodeId ? this.p2p.send(nodeId, env) : this.p2p.send(null, env);
     } else {
       const env: GcRtcIceEnvelope = {
         type: 'GC_RTC_ICE',
@@ -733,6 +767,7 @@ export class GroupCallManager extends EventEmitter {
       case 'GC_RTC_OFFER': return this.handleRtcOffer(env);
       case 'GC_RTC_ANSWER': return this.handleRtcAnswer(env);
       case 'GC_RTC_ICE':   return this.handleRtcIce(env);
+      case 'GC_RTC_RECONNECT': return this.handleRtcReconnect(env);
     }
   }
 
@@ -1021,6 +1056,21 @@ export class GroupCallManager extends EventEmitter {
   private handleRtcIce(env: GcRtcIceEnvelope): void {
     if (this.localAddresses.has(env.toAddress)) {
       this.emit('gcall:rtc-signal', { ...env, type: 'ice' });
+      return;
+    }
+    if ((env.hopsRemaining ?? 0) > 0) {
+      const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
+      if (nodeId) {
+        this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+      } else {
+        this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+      }
+    }
+  }
+
+  private handleRtcReconnect(env: GcRtcReconnectEnvelope): void {
+    if (this.localAddresses.has(env.toAddress)) {
+      this.emit('gcall:rtc-signal', { ...env, type: 'reconnect' });
       return;
     }
     if ((env.hopsRemaining ?? 0) > 0) {

@@ -1007,12 +1007,12 @@ try {
       timestamp: number
     ) => ipcRenderer.invoke('gcall:sendKeyRotate', roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp),
 
-    /** Send a WebRTC signal (offer/answer/ice) to a specific participant. */
+    /** Send a WebRTC signal (offer/answer/ice/reconnect) to a specific participant. */
     sendRtcSignal: async (
       roomId: string,
       fromAddress: string,
       toAddress: string,
-      type: 'offer' | 'answer' | 'ice',
+      type: 'offer' | 'answer' | 'ice' | 'reconnect',
       data: unknown,
       connId: string,
       signature?: string,

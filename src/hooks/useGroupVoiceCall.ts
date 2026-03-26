@@ -154,6 +154,7 @@ const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
  *  is still negotiating.  Caps relay IPC at ~5 frames/s instead of 50 Hz so the
  *  renderer is not flooded during the 1–5 s WebRTC negotiation window. */
 const RELAY_MIN_INTERVAL_MS = 200;
+const RTC_RECONNECT_HINT_MIN_INTERVAL_MS = 1_500;
 const DC_BUFFERED_AMOUNT_HIGH_WATER = 256 * 1024;
 const DC_SEND_BACKOFF_BASE_MS = 120;
 const DC_SEND_BACKOFF_MAX_MS = 1_000;
@@ -637,6 +638,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // Per-peer timestamp of last P2P relay send, used to rate-limit relay during DC negotiation
   const relayLastSentRef = useRef<Map<string, number>>(new Map());
+  const rtcReconnectHintLastSentAtRef = useRef<Map<string, number>>(new Map());
 
   // Off-thread audio packet decryption worker
   const decryptWorkerRef = useRef<Worker | null>(null);
@@ -703,6 +705,22 @@ export function useGroupVoiceCall(uiActive = false) {
     [isPeerConnectionInactive]
   );
 
+  const isExpectedUpstreamPeer = useCallback(
+    (address: string, topology: GroupTopology | null = topologyRef.current): boolean => {
+      const myAddress = userInfoRef.current?.address ?? '';
+      if (!topology || !myAddress || !address || address === myAddress) return false;
+
+      const assignedForwarder = findAssignedForwarder(myAddress, topology);
+      if (assignedForwarder === address) return true;
+
+      return (
+        computeMyRole(myAddress, topology) === 'cluster-forwarder' &&
+        topology.rootForwarder === address
+      );
+    },
+    []
+  );
+
   const closePeerConnection = useCallback(
     (
       peerAddress: string,
@@ -720,6 +738,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
       peerConnectionsRef.current.delete(peerAddress);
       relayLastSentRef.current.delete(peerAddress);
+      rtcReconnectHintLastSentAtRef.current.delete(peerAddress);
       dcSendBackoffUntilRef.current.delete(peerAddress);
       dcSendBackoffStreakRef.current.delete(peerAddress);
       // Clear the per-peer RTC signal chain so a rejoining peer's offers/answers
@@ -1521,6 +1540,7 @@ export function useGroupVoiceCall(uiActive = false) {
         // DC is now open — clear the relay rate-limiter entry so the relay is
         // available immediately if this DC closes later.
         relayLastSentRef.current.delete(forwarderAddress);
+        rtcReconnectHintLastSentAtRef.current.delete(forwarderAddress);
         markPeerStable(forwarderAddress);
         flushMetrics();
       };
@@ -1624,12 +1644,82 @@ export function useGroupVoiceCall(uiActive = false) {
     ]
   );
 
-  /** Forwarder: set up to accept incoming upstream connections from member. */
-  const setupDownstreamChannel = useCallback(async (memberAddress: string) => {
-    // We wait for the incoming offer via IPC event; handled in handleRtcSignal
-  }, []);
+  const requestRtcReconnectHint = useCallback(
+    async (memberAddress: string, connId: string) => {
+      const ui = userInfoRef.current;
+      if (!ui?.address || !roomIdRef.current) return;
+      const now = Date.now();
+      const lastHint =
+        rtcReconnectHintLastSentAtRef.current.get(memberAddress) ?? 0;
+      if (now - lastHint < RTC_RECONNECT_HINT_MIN_INTERVAL_MS) return;
+      rtcReconnectHintLastSentAtRef.current.set(memberAddress, now);
+      debugLog('[GCall] Requesting immediate RTC reconnect from', memberAddress);
+      await window.groupCall
+        .sendRtcSignal(
+          roomIdRef.current,
+          ui.address,
+          memberAddress,
+          'reconnect',
+          null,
+          connId
+        )
+        .catch(() => {});
+    },
+    []
+  );
 
-  /** Handle incoming RTC signal (offer/answer/ice). Serialized per `fromAddress` to avoid overlapping offers. */
+  const reconnectExpectedUpstreamPeer = useCallback(
+    (address: string, hintedConnId?: string): boolean => {
+      if (!isExpectedUpstreamPeer(address)) return false;
+
+      const existing = peerConnectionsRef.current.get(address);
+      if (existing && hintedConnId && existing.connId !== hintedConnId) {
+        const existingTs = getConnIdTimestamp(existing.connId);
+        const hintedTs = getConnIdTimestamp(hintedConnId);
+        if (
+          existingTs !== null &&
+          hintedTs !== null &&
+          existingTs > hintedTs
+        ) {
+          debugLog(
+            '[GCall] Ignoring stale RTC reconnect hint from',
+            address,
+            'hint:',
+            hintedConnId,
+            'current:',
+            existing.connId
+          );
+          return false;
+        }
+      }
+
+      if (
+        existing?.dc?.readyState === 'open' &&
+        (!hintedConnId || existing.connId === hintedConnId)
+      ) {
+        return true;
+      }
+
+      if (existing) {
+        closePeerConnection(address, existing.connId);
+      }
+      void connectUpstream(address);
+      return true;
+    },
+    [closePeerConnection, connectUpstream, getConnIdTimestamp, isExpectedUpstreamPeer]
+  );
+
+  /** Forwarder: ask the member to re-offer immediately instead of waiting for the ensure loop. */
+  const setupDownstreamChannel = useCallback(
+    async (memberAddress: string, connId?: string) => {
+      const reconnectId =
+        connId ?? `reconnect-${memberAddress}-${Date.now()}`;
+      await requestRtcReconnectHint(memberAddress, reconnectId);
+    },
+    [requestRtcReconnectHint]
+  );
+
+  /** Handle incoming RTC signal (offer/answer/ice/reconnect). Serialized per `fromAddress`. */
   const handleRtcSignal = useCallback(
     (payload: any) => {
       const fromAddress = payload?.fromAddress;
@@ -1707,6 +1797,7 @@ export function useGroupVoiceCall(uiActive = false) {
               metricsRef.current.recordDcOpen();
               markPeerStable(fromAddress);
               relayLastSentRef.current.delete(fromAddress);
+              rtcReconnectHintLastSentAtRef.current.delete(fromAddress);
               flushMetrics();
             };
             dc.onclose = () => {
@@ -1768,6 +1859,15 @@ export function useGroupVoiceCall(uiActive = false) {
             ui.publicKey ?? '',
             ts
           );
+        } else if (type === 'reconnect') {
+          if (typeof connId !== 'string' || !connId) return;
+          debugLog(
+            '[GCall] RTC reconnect request from',
+            fromAddress,
+            'connId:',
+            connId
+          );
+          void reconnectExpectedUpstreamPeer(fromAddress, connId);
         } else if (type === 'answer') {
           const pcEntry = peerConnectionsRef.current.get(fromAddress);
           if (!pcEntry || pcEntry.connId !== connId) {
@@ -1779,6 +1879,7 @@ export function useGroupVoiceCall(uiActive = false) {
               'current:',
               pcEntry?.connId ?? '(none)'
             );
+            void reconnectExpectedUpstreamPeer(fromAddress, connId);
             return;
           }
           await pcEntry.pc.setRemoteDescription({ type: 'answer', sdp });
@@ -1793,6 +1894,7 @@ export function useGroupVoiceCall(uiActive = false) {
               'current:',
               pcEntry?.connId ?? '(none)'
             );
+            void reconnectExpectedUpstreamPeer(fromAddress, connId);
             return;
           }
           if (candidate) {
@@ -1818,6 +1920,7 @@ export function useGroupVoiceCall(uiActive = false) {
       isPeerConnectionInactive,
       markPeerStable,
       markPeerUnstable,
+      reconnectExpectedUpstreamPeer,
     ]
   );
 
@@ -1890,11 +1993,11 @@ export function useGroupVoiceCall(uiActive = false) {
                 const existing = peerConnectionsRef.current.get(member);
                 if (shouldReconnectRequiredPeer(existing, now)) {
                   // Forwarders do not originate downstream offers here; closing a
-                  // wedged leg forces the member side to re-offer on its next ensure pass.
+                  // wedged leg plus a reconnect hint prompts the member to re-offer immediately.
                   if (existing) {
                     closePeerConnection(member, existing.connId);
                   }
-                  void setupDownstreamChannel(member);
+                  void setupDownstreamChannel(member, existing?.connId);
                 }
               }
             }
@@ -3356,16 +3459,15 @@ export function useGroupVoiceCall(uiActive = false) {
       timestamp: ts,
     }).catch(() => '');
 
-    // Always clean up locally; only broadcast if signing succeeded
-    if (sig) {
-      await window.groupCall.leave(
-        roomIdRef.current,
-        userInfo.address,
-        sig,
-        userInfo.publicKey ?? '',
-        ts
-      );
-    }
+    // Always tell the main process we left so it clears local room state even if
+    // the signed GC_LEAVE broadcast could not be produced.
+    await window.groupCall.leave(
+      roomIdRef.current,
+      userInfo.address,
+      sig,
+      userInfo.publicKey ?? '',
+      ts
+    );
 
     cleanup();
   }, [userInfo, roomState]);
@@ -3483,6 +3585,7 @@ export function useGroupVoiceCall(uiActive = false) {
     upstreamDCRef.current = null;
     upstreamAddressRef.current = null;
     relayLastSentRef.current.clear();
+    rtcReconnectHintLastSentAtRef.current.clear();
     rtcSignalChainsRef.current.clear();
     dcSendBackoffUntilRef.current.clear();
     dcSendBackoffStreakRef.current.clear();

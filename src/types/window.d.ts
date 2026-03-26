@@ -267,7 +267,7 @@ declare global {
       sendAudio: (roomId: string, toAddress: string, data: Uint8Array) => Promise<{ success: boolean }>;
       sendKey: (roomId: string, toAddress: string, encryptedKey: string, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       sendKeyRotate: (roomId: string, encryptedKeys: Record<string, string>, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
+      sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice' | 'reconnect', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
