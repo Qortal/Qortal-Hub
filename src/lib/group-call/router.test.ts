@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildSingleClusterTopologyWithStickyRoot,
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
   computeGroupCallDcTransportReady,
@@ -13,6 +14,56 @@ import {
   reconcileParticipantSpeaking,
   sameAddressList,
 } from './router';
+
+describe('buildSingleClusterTopologyWithStickyRoot', () => {
+  const CLUSTER = 10;
+
+  it('keeps previous root when still in roster though not hash-min', () => {
+    const sorted = ['a', 'b', 'c'];
+    const topo = buildSingleClusterTopologyWithStickyRoot(sorted, 2, 'b', CLUSTER);
+    expect(topo).not.toBeNull();
+    expect(topo!.rootForwarder).toBe('b');
+    expect(topo!.standbyForwarder).toBe('a');
+    expect(topo!.clusters[0]).toEqual({
+      members: sorted,
+      forwarder: 'b',
+      standby: 'a',
+    });
+  });
+
+  it('falls back to hash-min when previous root left', () => {
+    const sorted = ['a', 'b'];
+    const topo = buildSingleClusterTopologyWithStickyRoot(sorted, 1, 'gone', CLUSTER);
+    expect(topo!.rootForwarder).toBe('a');
+    expect(topo!.standbyForwarder).toBe('b');
+  });
+
+  it('uses hash-min when no previous root', () => {
+    const sorted = ['x', 'y'];
+    const topo = buildSingleClusterTopologyWithStickyRoot(sorted, 1, undefined, CLUSTER);
+    expect(topo!.rootForwarder).toBe('x');
+    expect(topo!.standbyForwarder).toBe('y');
+  });
+
+  it('solo room: standby is empty string', () => {
+    const topo = buildSingleClusterTopologyWithStickyRoot(['alice'], 1, null, CLUSTER);
+    expect(topo!.rootForwarder).toBe('alice');
+    expect(topo!.standbyForwarder).toBe('');
+    expect(topo!.clusters[0].standby).toBe('');
+  });
+
+  it('returns null when over cluster size', () => {
+    const sorted = Array.from({ length: 11 }, (_, i) => `p${i}`);
+    expect(buildSingleClusterTopologyWithStickyRoot(sorted, 1, 'p0', CLUSTER)).toBeNull();
+  });
+
+  it('empty sorted matches flat topology shape', () => {
+    const topo = buildSingleClusterTopologyWithStickyRoot([], 3, null, CLUSTER);
+    expect(topo!.rootForwarder).toBe('');
+    expect(topo!.standbyForwarder).toBe('');
+    expect(topo!.clusters[0].members).toEqual([]);
+  });
+});
 
 describe('group-call router helpers', () => {
   it('keeps existing speakers active but caps new ones', () => {

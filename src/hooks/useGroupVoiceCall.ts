@@ -39,6 +39,7 @@ import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import {
+  buildSingleClusterTopologyWithStickyRoot,
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
   computeGroupCallDcTransportReady,
@@ -4152,11 +4153,20 @@ export function useGroupVoiceCall(uiActive = false) {
           if (myGen !== topologyAsyncGenRef.current) return;
           // Use the highest epoch seen in this room as the floor so a rejoining
           // node never broadcasts a stale epoch that peers would reject.
-          const newTopo = buildTopology(
-            sorted,
-            Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1
-          );
           const prevRoot = topologyRef.current?.rootForwarder;
+          const epoch =
+            Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
+          // Single-cluster: sticky root if prior root still in roster (after await so
+          // topologyRef reflects any applyTopology during computeElectionOrder).
+          const newTopo =
+            fresh.length <= CLUSTER_SIZE
+              ? (buildSingleClusterTopologyWithStickyRoot(
+                  sorted,
+                  epoch,
+                  prevRoot,
+                  CLUSTER_SIZE
+                ) ?? buildTopology(sorted, epoch))
+              : buildTopology(sorted, epoch);
           applyTopology(newTopo);
 
           const myAddress = userInfo?.address ?? '';

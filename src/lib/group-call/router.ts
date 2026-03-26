@@ -17,6 +17,45 @@ export interface RouterTopology {
   clusters: RouterClusterDef[];
 }
 
+/**
+ * Single-cluster election with sticky root: keep the previous root if still present
+ * (hash order is `sorted` ascending). Caller must only use when `sorted.length <= clusterSize`.
+ * Returns `null` if `sorted.length > clusterSize` (use hierarchical `buildTopology` instead).
+ */
+export function buildSingleClusterTopologyWithStickyRoot(
+  sorted: string[],
+  topologyEpoch: number,
+  previousRoot: string | null | undefined,
+  clusterSize: number
+): RouterTopology | null {
+  if (sorted.length > clusterSize) return null;
+  if (sorted.length === 0) {
+    return {
+      topologyEpoch,
+      rootForwarder: '',
+      standbyForwarder: '',
+      clusters: [{ members: [], forwarder: '', standby: '' }],
+    };
+  }
+
+  const root =
+    previousRoot && sorted.includes(previousRoot) ? previousRoot : (sorted[0] ?? '');
+  const standby = sorted.find((a) => a !== root) ?? '';
+
+  return {
+    topologyEpoch,
+    rootForwarder: root,
+    standbyForwarder: standby,
+    clusters: [
+      {
+        members: sorted,
+        forwarder: root,
+        standby,
+      },
+    ],
+  };
+}
+
 export interface RouterParticipant {
   address: string;
   publicKey: string;
