@@ -137,8 +137,13 @@ const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 /** Periodic self-healing sweep: reopen any upstream DC whose offer was lost or whose
  *  ICE connection failed without triggering a teardown callback. */
 const WEBRTC_ENSURE_INTERVAL_MS = 5_000;
-/** Recreate required peers quickly when signaling or ICE leaves them stuck before failure. */
-const WEBRTC_CONNECTING_STALE_MS = 4_000;
+/** Pre-SDP or downstream: max wait before treating `new`/`connecting` as wedged.
+ *  Set to two ensure sweeps + margin so the first periodic tick does not tear down normal ICE. */
+const WEBRTC_CONNECTING_STALE_MS =
+  WEBRTC_ENSURE_INTERVAL_MS * 2 + 2_000; // 12_000
+/** Upstream after offer/answer (`signalingState === 'stable'`) and ICE not `failed`:
+ *  silent wedge escape hatch (see shouldReconnectRequiredPeer). */
+const WEBRTC_UPSTREAM_STABLE_MAX_WAIT_MS = 30_000;
 /** Rejoin-driven relay fallback should not wait the full disconnect grace window. */
 const WEBRTC_FAST_DISCONNECTED_RECONNECT_MS = 2_500;
 /** After a required upstream DC closes, give it a short chance to recover before re-dialing. */
@@ -684,7 +689,15 @@ export function useGroupVoiceCall(uiActive = false) {
       if (dcState === 'open') return false;
 
       if (state === 'new' || state === 'connecting') {
-        return now - entry.createdAtMs >= WEBRTC_CONNECTING_STALE_MS;
+        const age = now - entry.createdAtMs;
+        if (
+          entry.role === 'upstream' &&
+          entry.pc.signalingState === 'stable' &&
+          entry.pc.iceConnectionState !== 'failed'
+        ) {
+          return age >= WEBRTC_UPSTREAM_STABLE_MAX_WAIT_MS;
+        }
+        return age >= WEBRTC_CONNECTING_STALE_MS;
       }
 
       if (state === 'disconnected') {
