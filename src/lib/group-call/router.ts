@@ -51,6 +51,25 @@ export interface GroupCallMetricsSnapshot {
   lastUpdatedAt: number;
   /** Present-tense: DataChannels needed for this role are open (set in useGroupVoiceCall flush). */
   dcTransportReady?: boolean;
+  pcConnectedTransitions: number;
+  pcDisconnectedTransitions: number;
+  pcFailedTransitions: number;
+  pcClosedTransitions: number;
+  dcOpenCount: number;
+  dcCloseCount: number;
+  dcErrorCount: number;
+  iceRestartAttempts: number;
+  iceRestartSuccesses: number;
+  reconnectAttempts: number;
+  persistentDisconnectTeardowns: number;
+  avgRecoveryMs: number;
+  maxRecoveryMs: number;
+  dcBackpressureDrops: number;
+  dcBackoffDrops: number;
+  dcSendErrorDrops: number;
+  relayDwellMs: number;
+  relayDwellFraction: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
 }
 
 /** Mesh relay must be this recent (ms) to show "P2P relay" instead of Data channel. */
@@ -194,6 +213,25 @@ export class GroupCallPerformanceTracker {
     avgPcmBufferedMs: 0,
     playoutOutsideTargetFraction: 0,
     lastUpdatedAt: 0,
+    pcConnectedTransitions: 0,
+    pcDisconnectedTransitions: 0,
+    pcFailedTransitions: 0,
+    pcClosedTransitions: 0,
+    dcOpenCount: 0,
+    dcCloseCount: 0,
+    dcErrorCount: 0,
+    iceRestartAttempts: 0,
+    iceRestartSuccesses: 0,
+    reconnectAttempts: 0,
+    persistentDisconnectTeardowns: 0,
+    avgRecoveryMs: 0,
+    maxRecoveryMs: 0,
+    dcBackpressureDrops: 0,
+    dcBackoffDrops: 0,
+    dcSendErrorDrops: 0,
+    relayDwellMs: 0,
+    relayDwellFraction: 0,
+    adaptiveNetworkMode: 'low-latency',
   };
 
   private incomingPacketSamples = 0;
@@ -205,6 +243,12 @@ export class GroupCallPerformanceTracker {
   private playoutOutsideTicks = 0;
   private playoutBufferedMsSum = 0;
   private playoutBufferedMsSamples = 0;
+  private recoverySamples = 0;
+  private recoveryTotalMs = 0;
+  private sessionStartedAtMs = Date.now();
+  private transportMode: GroupCallTransportMode = 'connecting';
+  private transportModeSinceMs = Date.now();
+  private relayDwellAccumulatedMs = 0;
 
   setRole(role: RouterRole): void {
     this.snapshot.role = role;
@@ -259,6 +303,89 @@ export class GroupCallPerformanceTracker {
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
+  recordPcConnectionStateTransition(state: RTCPeerConnectionState): void {
+    if (state === 'connected') this.snapshot.pcConnectedTransitions++;
+    else if (state === 'disconnected') this.snapshot.pcDisconnectedTransitions++;
+    else if (state === 'failed') this.snapshot.pcFailedTransitions++;
+    else if (state === 'closed') this.snapshot.pcClosedTransitions++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordDcOpen(): void {
+    this.snapshot.dcOpenCount++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordDcClose(): void {
+    this.snapshot.dcCloseCount++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordDcError(): void {
+    this.snapshot.dcErrorCount++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordIceRestartAttempt(): void {
+    this.snapshot.iceRestartAttempts++;
+    this.snapshot.reconnectAttempts++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordIceRestartSuccess(): void {
+    this.snapshot.iceRestartSuccesses++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordPersistentDisconnectTeardown(): void {
+    this.snapshot.persistentDisconnectTeardowns++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordRecoveryDuration(durationMs: number): void {
+    if (!Number.isFinite(durationMs) || durationMs <= 0) return;
+    this.recoverySamples++;
+    this.recoveryTotalMs += durationMs;
+    this.snapshot.avgRecoveryMs = roundMetric(
+      this.recoveryTotalMs / Math.max(1, this.recoverySamples)
+    );
+    this.snapshot.maxRecoveryMs = roundMetric(
+      Math.max(this.snapshot.maxRecoveryMs, durationMs)
+    );
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordDcBackpressureDrop(): void {
+    this.snapshot.dcBackpressureDrops++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordDcBackoffDrop(): void {
+    this.snapshot.dcBackoffDrops++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordDcSendErrorDrop(): void {
+    this.snapshot.dcSendErrorDrops++;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  setAdaptiveNetworkMode(mode: 'low-latency' | 'recovery'): void {
+    this.snapshot.adaptiveNetworkMode = mode;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordTransportMode(mode: GroupCallTransportMode, now = Date.now()): void {
+    if (mode !== this.transportMode) {
+      if (this.transportMode === 'relay') {
+        this.relayDwellAccumulatedMs += now - this.transportModeSinceMs;
+      }
+      this.transportMode = mode;
+      this.transportModeSinceMs = now;
+      this.snapshot.lastUpdatedAt = now;
+    }
+  }
+
   /** One periodic sample from group-playout-processor (every ~100ms audio per source). */
   recordPlayoutMetricTick(bufferedMs: number, outsideTargetBand: boolean): void {
     this.playoutMetricTicks++;
@@ -306,6 +433,7 @@ export class GroupCallPerformanceTracker {
   }
 
   reset(): void {
+    const now = Date.now();
     this.snapshot = {
       ...this.snapshot,
       packetsReceived: 0,
@@ -327,7 +455,26 @@ export class GroupCallPerformanceTracker {
       maxJitterTickMs: 0,
       avgPcmBufferedMs: 0,
       playoutOutsideTargetFraction: 0,
-      lastUpdatedAt: Date.now(),
+      lastUpdatedAt: now,
+      pcConnectedTransitions: 0,
+      pcDisconnectedTransitions: 0,
+      pcFailedTransitions: 0,
+      pcClosedTransitions: 0,
+      dcOpenCount: 0,
+      dcCloseCount: 0,
+      dcErrorCount: 0,
+      iceRestartAttempts: 0,
+      iceRestartSuccesses: 0,
+      reconnectAttempts: 0,
+      persistentDisconnectTeardowns: 0,
+      avgRecoveryMs: 0,
+      maxRecoveryMs: 0,
+      dcBackpressureDrops: 0,
+      dcBackoffDrops: 0,
+      dcSendErrorDrops: 0,
+      relayDwellMs: 0,
+      relayDwellFraction: 0,
+      adaptiveNetworkMode: 'low-latency',
     };
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;
@@ -337,10 +484,25 @@ export class GroupCallPerformanceTracker {
     this.playoutOutsideTicks = 0;
     this.playoutBufferedMsSum = 0;
     this.playoutBufferedMsSamples = 0;
+    this.recoverySamples = 0;
+    this.recoveryTotalMs = 0;
+    this.sessionStartedAtMs = now;
+    this.transportMode = 'connecting';
+    this.transportModeSinceMs = now;
+    this.relayDwellAccumulatedMs = 0;
   }
 
   getSnapshot(): GroupCallMetricsSnapshot {
-    return { ...this.snapshot };
+    const now = Date.now();
+    const relayDwellMs =
+      this.relayDwellAccumulatedMs +
+      (this.transportMode === 'relay' ? now - this.transportModeSinceMs : 0);
+    const elapsedMs = Math.max(1, now - this.sessionStartedAtMs);
+    return {
+      ...this.snapshot,
+      relayDwellMs: roundMetric(relayDwellMs),
+      relayDwellFraction: roundMetric(relayDwellMs / elapsedMs),
+    };
   }
 }
 
