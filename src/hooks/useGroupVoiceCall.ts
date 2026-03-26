@@ -134,6 +134,12 @@ const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 /** Periodic self-healing sweep: reopen any upstream DC whose offer was lost or whose
  *  ICE connection failed without triggering a teardown callback. */
 const WEBRTC_ENSURE_INTERVAL_MS = 5_000;
+/** Recreate required peers quickly when signaling or ICE leaves them stuck before failure. */
+const WEBRTC_CONNECTING_STALE_MS = 4_000;
+/** Rejoin-driven relay fallback should not wait the full disconnect grace window. */
+const WEBRTC_FAST_DISCONNECTED_RECONNECT_MS = 2_500;
+/** After a required upstream DC closes, give it a short chance to recover before re-dialing. */
+const WEBRTC_DC_RECOVERY_GRACE_MS = 1_500;
 
 /** Coalesce burst participant-joined/left into one topology election + key pass. */
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
@@ -449,6 +455,8 @@ interface PeerConnection {
   address: string;
   connId: string;
   role: 'upstream' | 'downstream';
+  createdAtMs: number;
+  lastDcStateChangeAtMs: number;
   disconnectGraceTimer?: ReturnType<typeof setTimeout>;
   disconnectStartedAtMs?: number;
   iceRestartAttempts: number;
@@ -661,6 +669,39 @@ export function useGroupVoiceCall(uiActive = false) {
   const isPeerConnectionInactive = useCallback((entry?: PeerConnection) => {
     return isGroupCallWebRtcPeerInactive(entry?.pc.connectionState);
   }, []);
+
+  const shouldReconnectRequiredPeer = useCallback(
+    (entry: PeerConnection | undefined, now = Date.now()): boolean => {
+      if (!entry) return true;
+      if (isPeerConnectionInactive(entry)) return true;
+
+      const state = entry.pc.connectionState;
+      const dcState = entry.dc?.readyState;
+      if (dcState === 'open') return false;
+
+      if (state === 'new' || state === 'connecting') {
+        return now - entry.createdAtMs >= WEBRTC_CONNECTING_STALE_MS;
+      }
+
+      if (state === 'disconnected') {
+        const disconnectedAt =
+          entry.disconnectStartedAtMs ?? entry.lastDcStateChangeAtMs ?? entry.createdAtMs;
+        return now - disconnectedAt >= WEBRTC_FAST_DISCONNECTED_RECONNECT_MS;
+      }
+
+      if (entry.role === 'upstream') {
+        if (dcState === 'closing' || dcState === 'closed') {
+          return now - entry.lastDcStateChangeAtMs >= WEBRTC_DC_RECOVERY_GRACE_MS;
+        }
+        if (state === 'connected') {
+          return now - entry.lastDcStateChangeAtMs >= WEBRTC_DC_RECOVERY_GRACE_MS;
+        }
+      }
+
+      return false;
+    },
+    [isPeerConnectionInactive]
+  );
 
   const closePeerConnection = useCallback(
     (
@@ -900,7 +941,7 @@ export function useGroupVoiceCall(uiActive = false) {
     }, 200);
   }, [flushMetrics]);
 
-  /** After ICE-driven PC teardown only; not from participant-left. Uses refs for latest ensure. */
+  /** Queue a fresh ensure pass after peer teardown or a recovery-worthy RTC transition. */
   const scheduleEnsureAfterIceTeardown = useCallback(() => {
     queueMicrotask(() => {
       if (!roomIdRef.current || !topologyRef.current) return;
@@ -1351,6 +1392,7 @@ export function useGroupVoiceCall(uiActive = false) {
       role: 'upstream' | 'downstream'
     ): RTCPeerConnection => {
       captureSessionStunBundleIfNeeded();
+      const createdAtMs = Date.now();
       const pc = new RTCPeerConnection({
         iceServers: gcallIceServersRef.current,
       });
@@ -1361,6 +1403,8 @@ export function useGroupVoiceCall(uiActive = false) {
         address: peerAddress,
         connId,
         role,
+        createdAtMs,
+        lastDcStateChangeAtMs: createdAtMs,
         disconnectStartedAtMs: undefined,
         iceRestartAttempts: 0,
         lastIceRestartAtMs: 0,
@@ -1461,11 +1505,15 @@ export function useGroupVoiceCall(uiActive = false) {
       dc.binaryType = 'arraybuffer';
 
       const pcEntry = peerConnectionsRef.current.get(forwarderAddress);
-      if (pcEntry) pcEntry.dc = dc;
+      if (pcEntry) {
+        pcEntry.dc = dc;
+        pcEntry.lastDcStateChangeAtMs = Date.now();
+      }
 
       dc.onopen = () => {
-        if (peerConnectionsRef.current.get(forwarderAddress)?.connId !== connId)
-          return;
+        const latest = peerConnectionsRef.current.get(forwarderAddress);
+        if (latest?.connId !== connId) return;
+        latest.lastDcStateChangeAtMs = Date.now();
         debugLog('[GCall] Upstream DC opened to', forwarderAddress);
         upstreamDCRef.current = dc;
         upstreamAddressRef.current = forwarderAddress;
@@ -1478,6 +1526,10 @@ export function useGroupVoiceCall(uiActive = false) {
       };
 
       dc.onclose = () => {
+        const latest = peerConnectionsRef.current.get(forwarderAddress);
+        if (latest?.connId === connId) {
+          latest.lastDcStateChangeAtMs = Date.now();
+        }
         debugLog('[GCall] Upstream DC closed to', forwarderAddress);
         metricsRef.current.recordDcClose();
         markPeerUnstable(forwarderAddress);
@@ -1486,12 +1538,18 @@ export function useGroupVoiceCall(uiActive = false) {
           upstreamAddressRef.current = null;
         }
         flushMetrics();
+        scheduleEnsureAfterIceTeardown();
       };
 
       dc.onerror = () => {
+        const latest = peerConnectionsRef.current.get(forwarderAddress);
+        if (latest?.connId === connId) {
+          latest.lastDcStateChangeAtMs = Date.now();
+        }
         metricsRef.current.recordDcError();
         markPeerUnstable(forwarderAddress);
         flushMetrics();
+        scheduleEnsureAfterIceTeardown();
       };
 
       pc.onconnectionstatechange = () => {
@@ -1561,6 +1619,7 @@ export function useGroupVoiceCall(uiActive = false) {
       getDataChannelOptionsForPeer,
       markPeerStable,
       markPeerUnstable,
+      scheduleEnsureAfterIceTeardown,
       userInfo,
     ]
   );
@@ -1640,6 +1699,10 @@ export function useGroupVoiceCall(uiActive = false) {
               dc.label
             );
             dc.onopen = () => {
+              const latest = peerConnectionsRef.current.get(fromAddress);
+              if (latest?.connId === connId) {
+                latest.lastDcStateChangeAtMs = Date.now();
+              }
               debugLog('[GCall] Downstream DC opened from', fromAddress);
               metricsRef.current.recordDcOpen();
               markPeerStable(fromAddress);
@@ -1647,12 +1710,20 @@ export function useGroupVoiceCall(uiActive = false) {
               flushMetrics();
             };
             dc.onclose = () => {
+              const latest = peerConnectionsRef.current.get(fromAddress);
+              if (latest?.connId === connId) {
+                latest.lastDcStateChangeAtMs = Date.now();
+              }
               debugLog('[GCall] Downstream DC closed from', fromAddress);
               metricsRef.current.recordDcClose();
               markPeerUnstable(fromAddress);
               flushMetrics();
             };
             dc.onerror = () => {
+              const latest = peerConnectionsRef.current.get(fromAddress);
+              if (latest?.connId === connId) {
+                latest.lastDcStateChangeAtMs = Date.now();
+              }
               metricsRef.current.recordDcError();
               markPeerUnstable(fromAddress);
               flushMetrics();
@@ -1664,7 +1735,10 @@ export function useGroupVoiceCall(uiActive = false) {
               );
             };
             const pcEntry = peerConnectionsRef.current.get(fromAddress);
-            if (pcEntry?.connId === connId) pcEntry.dc = dc;
+            if (pcEntry?.connId === connId) {
+              pcEntry.dc = dc;
+              pcEntry.lastDcStateChangeAtMs = Date.now();
+            }
           };
 
           await pc.setRemoteDescription({ type: 'offer', sdp });
@@ -1752,6 +1826,7 @@ export function useGroupVoiceCall(uiActive = false) {
     (topology: GroupTopology) => {
       const myAddress = userInfo?.address ?? '';
       const role = computeMyRole(myAddress, topology);
+      const now = Date.now();
 
       // Compute the set of addresses that should have upstream connections for
       // this role. Any existing upstream PCs not in this set are stale (the
@@ -1785,7 +1860,10 @@ export function useGroupVoiceCall(uiActive = false) {
         const assignedForwarder = findAssignedForwarder(myAddress, topology);
         if (assignedForwarder && assignedForwarder !== myAddress) {
           const existing = peerConnectionsRef.current.get(assignedForwarder);
-          if (isPeerConnectionInactive(existing)) {
+          if (shouldReconnectRequiredPeer(existing, now)) {
+            if (existing) {
+              closePeerConnection(assignedForwarder, existing.connId);
+            }
             void connectUpstream(assignedForwarder);
           }
         }
@@ -1795,7 +1873,10 @@ export function useGroupVoiceCall(uiActive = false) {
         const rootAddr = topology.rootForwarder;
         if (rootAddr && rootAddr !== myAddress) {
           const existing = peerConnectionsRef.current.get(rootAddr);
-          if (isPeerConnectionInactive(existing)) {
+          if (shouldReconnectRequiredPeer(existing, now)) {
+            if (existing) {
+              closePeerConnection(rootAddr, existing.connId);
+            }
             void connectUpstream(rootAddr);
           }
         }
@@ -1807,7 +1888,12 @@ export function useGroupVoiceCall(uiActive = false) {
             for (const member of cluster.members) {
               if (member !== myAddress) {
                 const existing = peerConnectionsRef.current.get(member);
-                if (isPeerConnectionInactive(existing)) {
+                if (shouldReconnectRequiredPeer(existing, now)) {
+                  // Forwarders do not originate downstream offers here; closing a
+                  // wedged leg forces the member side to re-offer on its next ensure pass.
+                  if (existing) {
+                    closePeerConnection(member, existing.connId);
+                  }
                   void setupDownstreamChannel(member);
                 }
               }
@@ -1819,8 +1905,8 @@ export function useGroupVoiceCall(uiActive = false) {
     [
       closePeerConnection,
       connectUpstream,
-      isPeerConnectionInactive,
       setupDownstreamChannel,
+      shouldReconnectRequiredPeer,
       userInfo?.address,
     ]
   );
@@ -3596,6 +3682,7 @@ export function useGroupVoiceCall(uiActive = false) {
           const staleConnId = peerConnectionsRef.current.get(address)?.connId;
           closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
+          scheduleEnsureAfterIceTeardown();
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);
             if (i === -1) {
@@ -3634,6 +3721,7 @@ export function useGroupVoiceCall(uiActive = false) {
           const staleConnId = peerConnectionsRef.current.get(address)?.connId;
           closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
+          scheduleEnsureAfterIceTeardown();
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);
             if (i === -1) {
@@ -3769,6 +3857,7 @@ export function useGroupVoiceCall(uiActive = false) {
     handleRoomKey,
     handleRtcSignal,
     roomState,
+    scheduleEnsureAfterIceTeardown,
     scheduleRelayMetricsFlush,
     ensureAudioCaptureStarted,
     syncDecryptWorkerRoomKey,
