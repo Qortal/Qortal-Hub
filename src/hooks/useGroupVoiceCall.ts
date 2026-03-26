@@ -204,6 +204,10 @@ const isTestingRelay = false;
 const PENDING_DECRYPT_MAX = 96;
 /** Drop pending decrypt entries older than this (worker stuck / lost result). */
 const PENDING_DECRYPT_TTL_MS = 4000;
+/** How long the previous room key is kept as a decrypt fallback after a rotation. */
+const PREV_KEY_TTL_MS = 5_000;
+/** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
+const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 type DataChannelProfile = 'low-latency' | 'recovery';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -754,8 +758,17 @@ export function useGroupVoiceCall(uiActive = false) {
   const pendingDecryptsRef = useRef(
     new Map<number, { wireForForward: ArrayBuffer; startedAt: number }>()
   );
-  /** Bytes last posted to worker — avoid redundant setRoomKey (would flush pending unnecessarily). */
+  /** Bytes last posted to worker — avoid redundant setRoomKey (also used as "last applied key"
+   *  source for the sync-path prev-key fallback; updated even when no worker is present). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
+  /** Previous room key retained for PREV_KEY_TTL_MS after a rotation (sync-path fallback). */
+  const prevRoomKeyRef = useRef<Uint8Array | null>(null);
+  const prevKeyExpiresAtRef = useRef<number>(0);
+  /** True while a new key is being distributed; sendEncodedFrame drops frames during this window. */
+  const keyDistributionPendingRef = useRef(false);
+  /** Monotonic counter; each key distribution increments this so only the latest .finally()
+   *  can release the gate (prevents an older distribution from clearing a newer one's gate). */
+  const keyDistributionGenRef = useRef(0);
   const metricsRef = useRef(new GroupCallPerformanceTracker());
   const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null
@@ -1528,23 +1541,36 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const syncDecryptWorkerRoomKey = useCallback(
     (roomKey: Uint8Array | null) => {
-      if (!decryptWorkerRef.current) return;
       if (!roomKey) {
-        flushPendingDecryptMap();
+        // Full clear: reset prev-key state for both sync and worker paths.
+        prevRoomKeyRef.current = null;
+        prevKeyExpiresAtRef.current = 0;
         lastWorkerRoomKeyRef.current = null;
-        decryptWorkerRef.current.postMessage({ type: 'clearRoomKey' });
+        if (decryptWorkerRef.current) {
+          flushPendingDecryptMap();
+          decryptWorkerRef.current.postMessage({ type: 'clearRoomKey' });
+        }
         return;
       }
+      // Duplicate-check and prev-key tracking run unconditionally so the
+      // main-thread sync fallback path also benefits when there is no worker.
       const prev = lastWorkerRoomKeyRef.current;
       if (
         prev &&
         prev.length === roomKey.length &&
         prev.every((b, i) => b === roomKey[i])
       ) {
-        return;
+        return; // same key — no-op
       }
-      flushPendingDecryptMap();
+      if (prev) {
+        prevRoomKeyRef.current = prev;
+        prevKeyExpiresAtRef.current = Date.now() + PREV_KEY_TTL_MS;
+      }
       lastWorkerRoomKeyRef.current = new Uint8Array(roomKey);
+      if (!decryptWorkerRef.current) return; // sync path served; no worker to notify
+      // Do NOT flush pendingDecryptsRef here: in-flight worker results for packets
+      // that arrived just before the rotation are still valid and should be processed.
+      // sweepStalePendingDecrypts() handles TTL-based cleanup.
       const roomKeyCopy = roomKey.slice().buffer;
       decryptWorkerRef.current.postMessage(
         { type: 'setRoomKey', roomKey: roomKeyCopy },
@@ -3516,6 +3542,7 @@ export function useGroupVoiceCall(uiActive = false) {
     (opusFrame: Uint8Array) => {
       if (!roomKeyRef.current || !userInfo?.address) return;
       if (mutedRef.current) return; // mic is muted — drop frame
+      if (keyDistributionPendingRef.current) return; // new key not yet delivered — hold frames
       if (seqRef.current === 0) {
         debugLog(
           '[GCall] First encoded frame ready to send — role:',
@@ -3757,7 +3784,15 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       // Sync fallback: decrypt on main thread (same post-decrypt path as worker).
-      const list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
+      // Try the current key first, then the previous key if still within its TTL.
+      let list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
+      if (
+        list.length === 0 &&
+        prevRoomKeyRef.current !== null &&
+        Date.now() < prevKeyExpiresAtRef.current
+      ) {
+        list = decodeAudioPackets(new Uint8Array(data), prevRoomKeyRef.current);
+      }
       applyPostDecryptList(wireForForward, list, startedAt);
     },
     [applyPostDecryptList, ensurePendingDecryptCap, sweepStalePendingDecrypts]
@@ -3905,14 +3940,15 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!userInfo?.address) return;
       const myAddr = userInfo.address;
       const roster = recipients ?? participantsRef.current;
-      debugLog(
-        '[GCall] distributeRoomKey — recipients:',
-        [...roster.keys()].filter((a) => a !== myAddr)
-      );
+      const recipientAddrs = [...roster.keys()].filter((a) => a !== myAddr);
+      debugLog('[GCall] distributeRoomKey — recipients:', recipientAddrs);
 
+      // Build the full encrypted-keys map synchronously (nacl.box is sync).
+      // Then sign once and send a single GC_KEY_ROTATE broadcast instead of
+      // N sequential sign+IPC round-trips, compressing N×(sign+IPC) → 1×(sign+IPC).
+      const encryptedKeys: Record<string, string> = {};
       for (const [addr, { publicKey }] of roster) {
         if (addr === myAddr) continue;
-
         // Encrypt key for this participant using their Ed25519 public key.
         // Convert Ed25519 public key to Curve25519 for nacl.box, then use an
         // ephemeral keypair so the recipient can compute the same shared secret.
@@ -3934,33 +3970,34 @@ export function useGroupVoiceCall(uiActive = false) {
           combined.set(nonce, 32);
           combined.set(ciphertext, 56);
 
-          const b64 = uint8ToBase64(combined);
-          const ts = Date.now();
-          const sig = await signGroupCallFields({
-            type: 'GC_KEY',
-            roomId: roomIdRef.current,
-            toAddress: addr,
-            fromAddress: myAddr,
-            fromPublicKey: userInfo.publicKey ?? '',
-            timestamp: ts,
-          }).catch(() => '');
-          if (!sig) {
-            debugWarn(`[GCall] Signing failed for GC_KEY to ${addr}`);
-            continue;
-          }
-          await window.groupCall.sendKey(
-            roomIdRef.current,
-            addr,
-            b64,
-            myAddr,
-            sig,
-            userInfo.publicKey ?? '',
-            ts
-          );
+          encryptedKeys[addr] = uint8ToBase64(combined);
         } catch (e) {
           debugWarn(`[GCall] Failed to encrypt key for ${addr}:`, e);
         }
       }
+
+      if (Object.keys(encryptedKeys).length === 0) return;
+
+      const ts = Date.now();
+      const sig = await signGroupCallFields({
+        type: 'GC_KEY_ROTATE',
+        roomId: roomIdRef.current,
+        fromAddress: myAddr,
+        fromPublicKey: userInfo.publicKey ?? '',
+        timestamp: ts,
+      }).catch(() => '');
+      if (!sig) {
+        debugWarn('[GCall] Signing failed for GC_KEY_ROTATE');
+        return;
+      }
+      await window.groupCall.sendKeyRotate(
+        roomIdRef.current,
+        encryptedKeys,
+        myAddr,
+        sig,
+        userInfo.publicKey ?? '',
+        ts
+      );
     },
     [userInfo]
   );
@@ -4384,6 +4421,9 @@ export function useGroupVoiceCall(uiActive = false) {
     // Reset state
     roomKeyRef.current = null;
     isOurKeyRef.current = false;
+    // Invalidate any in-flight key distribution so its .finally() cannot reopen the gate.
+    ++keyDistributionGenRef.current;
+    keyDistributionPendingRef.current = false;
     topologyRef.current = null;
     localEpochRef.current = 0;
     lastRoomIdRef.current = roomIdRef.current; // save before clearing for cross-room epoch scoping
@@ -4499,6 +4539,7 @@ export function useGroupVoiceCall(uiActive = false) {
           if (isInitiatorRef.current) {
             if (roomKeyRef.current && isOurKeyRef.current) {
               // Still root, still our key — redistribute to updated roster.
+              // No key change so no gate needed; just fire off the distribution.
               debugLog(
                 '[GCall] Already have key — distributing to full roster after election'
               );
@@ -4513,8 +4554,22 @@ export function useGroupVoiceCall(uiActive = false) {
               roomKeyRef.current = newKey;
               isOurKeyRef.current = true;
               syncDecryptWorkerRoomKey(newKey);
+              // Gate outgoing audio until all recipients have the new key.
+              // The mic pipeline starts now so it is warm when the gate opens.
+              const distGen = ++keyDistributionGenRef.current;
+              keyDistributionPendingRef.current = true;
               ensureAudioCaptureStarted();
-              void distributeRoomKey(newKey);
+              const gateReleaseTimer = setTimeout(() => {
+                if (keyDistributionGenRef.current === distGen) {
+                  keyDistributionPendingRef.current = false;
+                }
+              }, KEY_DIST_GATE_TIMEOUT_MS);
+              distributeRoomKey(newKey).finally(() => {
+                clearTimeout(gateReleaseTimer);
+                if (keyDistributionGenRef.current === distGen) {
+                  keyDistributionPendingRef.current = false;
+                }
+              });
             }
           }
           // Non-initiator: keep old key active; handleRoomKey will replace it.

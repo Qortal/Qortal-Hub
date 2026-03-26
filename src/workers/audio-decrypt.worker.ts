@@ -13,6 +13,10 @@
  * Message protocol (worker → main):
  *   { type: 'result', id: number, decoded: DecryptResult | null }
  *   { type: 'encryptResult', id: number, packet: ArrayBuffer }
+ *
+ * Key rotation: on setRoomKey the previous key is retained as a fallback for
+ * PREV_KEY_TTL_MS (5 s). This lets packets from senders who have not yet applied
+ * the new key continue to decode successfully during the transition window.
  */
 
 import {
@@ -29,6 +33,9 @@ export interface DecryptResult {
 }
 
 let roomKeyBytes: Uint8Array | null = null;
+let prevRoomKeyBytes: Uint8Array | null = null;
+let prevKeyExpiresAt = 0;
+const PREV_KEY_TTL_MS = 5_000;
 
 self.onmessage = (
   e: MessageEvent<
@@ -48,12 +55,19 @@ self.onmessage = (
 ) => {
   const data = e.data;
   if (data.type === 'setRoomKey') {
+    // Rotate: current key becomes the prev-key fallback for PREV_KEY_TTL_MS.
+    if (roomKeyBytes) {
+      prevRoomKeyBytes = roomKeyBytes;
+      prevKeyExpiresAt = Date.now() + PREV_KEY_TTL_MS;
+    }
     roomKeyBytes = new Uint8Array(data.roomKey);
     return;
   }
 
   if (data.type === 'clearRoomKey') {
     roomKeyBytes = null;
+    prevRoomKeyBytes = null;
+    prevKeyExpiresAt = 0;
     return;
   }
 
@@ -79,10 +93,22 @@ self.onmessage = (
     return;
   }
 
-  const decodedList = decodeAudioPackets(
+  // Try current key first; fall back to prev key if it is still within its TTL.
+  // This handles packets from senders who have not yet rotated to the new key.
+  let decodedList = decodeAudioPackets(
     new Uint8Array(data.buffer),
     roomKeyBytes
   );
+  if (
+    decodedList.length === 0 &&
+    prevRoomKeyBytes !== null &&
+    Date.now() < prevKeyExpiresAt
+  ) {
+    decodedList = decodeAudioPackets(
+      new Uint8Array(data.buffer),
+      prevRoomKeyBytes
+    );
+  }
 
   if (decodedList.length === 0) {
     self.postMessage({ type: 'result', id: data.id, decoded: null });
