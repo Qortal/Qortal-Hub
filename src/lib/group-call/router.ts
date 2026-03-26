@@ -109,6 +109,12 @@ export interface GroupCallMetricsSnapshot {
   relayDwellMs: number;
   relayDwellFraction: number;
   adaptiveNetworkMode: 'low-latency' | 'recovery';
+  /** Fallback relay throttled (RELAY_FALLBACK_MIN_INTERVAL_MS) — frame not sent yet. */
+  relayThrottleDrops: number;
+  /** Superseded pending relay payload (newest-frame-wins coalescing). */
+  relayCoalesceSuperseded: number;
+  /** IPC/main rejected send (e.g. relay token bucket) or invoke threw. */
+  relayIpcFailures: number;
 }
 
 /** Mesh relay must be this recent (ms) to show "P2P relay" instead of Data channel. */
@@ -283,6 +289,9 @@ export class GroupCallPerformanceTracker {
     relayDwellMs: 0,
     relayDwellFraction: 0,
     adaptiveNetworkMode: 'low-latency',
+    relayThrottleDrops: 0,
+    relayCoalesceSuperseded: 0,
+    relayIpcFailures: 0,
   };
 
   private incomingPacketSamples = 0;
@@ -335,6 +344,21 @@ export class GroupCallPerformanceTracker {
   recordRelayReceived(count = 1): void {
     this.snapshot.relayPacketsReceived += count;
     this.snapshot.lastRelayActivityAtMs = Date.now();
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordRelayThrottleDrop(count = 1): void {
+    this.snapshot.relayThrottleDrops += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordRelayCoalesceSuperseded(count = 1): void {
+    this.snapshot.relayCoalesceSuperseded += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordRelayIpcFailure(count = 1): void {
+    this.snapshot.relayIpcFailures += count;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -526,6 +550,9 @@ export class GroupCallPerformanceTracker {
       relayDwellMs: 0,
       relayDwellFraction: 0,
       adaptiveNetworkMode: 'low-latency',
+      relayThrottleDrops: 0,
+      relayCoalesceSuperseded: 0,
+      relayIpcFailures: 0,
     };
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;

@@ -8,7 +8,7 @@
  *   - Adaptive topology: ≤10 members → single forwarder, 11-50 → hierarchical
  *   - WebRTC DataChannel for audio transport (Opus ~24 kbps)
  *   - P2P GC_AUDIO relay as last-resort fallback
- *   - End-to-end encryption: v2 wire nonce||secretbox(metadata+Opus); v1 decode fallback in renderer
+ *   - End-to-end encryption: v2/v3 wire nonce||secretbox(inner); v1 decode fallback in renderer
  *
  * This module handles only the signaling layer:
  *   GC_JOIN / GC_LEAVE       — room membership
@@ -34,6 +34,24 @@ import { VerifyWorkerPool } from './verify-worker-pool';
 const GC_MAX_HOPS = 3;
 const GC_AUDIO_MAX_HOPS = 2;
 const GC_JOIN_TTL_MS = 120_000;
+
+/** Max base64 length for `GC_AUDIO.data` (matches renderer wire + margin; rejects oversize before relay/emit). */
+const GC_AUDIO_MAX_BASE64_CHARS = 16_384;
+/** After base64 decode; rejects absurd blobs before IPC to renderer. */
+const GC_AUDIO_MAX_BINARY_WIRE_BYTES = 12_288;
+
+/** Per-room token bucket: approx bytes (decoded wire) we will relay per wall-clock ms refill. */
+const GC_AUDIO_RELAY_BUCKET_MAX = 1_200_000;
+const GC_AUDIO_RELAY_REFILL_BYTES_PER_MS = 800;
+
+function isValidGcAudioBase64(data: unknown): data is string {
+  return typeof data === 'string' && data.length > 0 && data.length <= GC_AUDIO_MAX_BASE64_CHARS;
+}
+
+/** Approximate decoded byte cost for bucket accounting (upper bound from base64 length). */
+function gcAudioPayloadApproxBytes(base64: string): number {
+  return Math.min(GC_AUDIO_MAX_BASE64_CHARS * 3, Math.ceil((base64.length * 3) / 4));
+}
 
 // ── Wire types ────────────────────────────────────────────────────────────────
 
@@ -106,7 +124,7 @@ export interface GcAudioEnvelope {
   type: 'GC_AUDIO';
   roomId: string;
   toAddress: string;
-  /** Base64-encoded encrypted audio packet (v2 or v1 wire, see renderer audioPacketCodec) */
+  /** Base64-encoded encrypted audio packet (v2/v3 or v1 wire, see renderer audioPacketCodec) */
   data: string;
   hopsRemaining?: number;
 }
@@ -330,6 +348,12 @@ export class GroupCallManager extends EventEmitter {
   /** In-flight verify promises keyed by type+signature — coalesce duplicate envelopes before cache is warm. */
   private inFlightGcVerify = new Map<string, Promise<void>>();
   private lastStaleTopologyLogAt = 0;
+
+  /** Per-room mesh audio relay budget (outbound + forwarded GC_AUDIO). */
+  private relayByteBudgetByRoom = new Map<
+    string,
+    { tokens: number; lastMs: number }
+  >();
 
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
     super();
@@ -601,6 +625,7 @@ export class GroupCallManager extends EventEmitter {
       this.participantNodeIds.delete(localAddress);
     }
     this.rooms.delete(roomId);
+    this.relayByteBudgetByRoom.delete(roomId);
     loggerLog(
       signature
         ? `[GCall] Sent GC_LEAVE for room ${roomId}`
@@ -628,7 +653,19 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(`[GCall] Sent GC_TOPOLOGY for room ${roomId} epoch ${topology.topologyEpoch}`);
   }
 
-  sendAudio(roomId: string, toAddress: string, data: string): void {
+  /**
+   * Send local GC_AUDIO from IPC. Returns false if payload invalid or relay budget exhausted.
+   */
+  sendAudio(roomId: string, toAddress: string, data: string): boolean {
+    if (!isValidGcAudioBase64(data)) {
+      loggerWarn('[GCall] sendAudio dropped: invalid or oversize payload');
+      return false;
+    }
+    const cost = gcAudioPayloadApproxBytes(data);
+    if (!this.tryConsumeRelayBudget(roomId, cost)) {
+      loggerWarn(`[GCall] sendAudio dropped: relay budget exhausted for room ${roomId}`);
+      return false;
+    }
     const env: GcAudioEnvelope = {
       type: 'GC_AUDIO',
       roomId,
@@ -644,6 +681,26 @@ export class GroupCallManager extends EventEmitter {
     } else {
       this.p2p.send(null, env);
     }
+    return true;
+  }
+
+  private tryConsumeRelayBudget(roomId: string, byteCost: number): boolean {
+    if (byteCost <= 0) return true;
+    const now = Date.now();
+    let b = this.relayByteBudgetByRoom.get(roomId);
+    if (!b) {
+      b = { tokens: GC_AUDIO_RELAY_BUCKET_MAX, lastMs: now };
+      this.relayByteBudgetByRoom.set(roomId, b);
+    }
+    const dt = now - b.lastMs;
+    b.lastMs = now;
+    b.tokens = Math.min(
+      GC_AUDIO_RELAY_BUCKET_MAX,
+      b.tokens + dt * GC_AUDIO_RELAY_REFILL_BYTES_PER_MS
+    );
+    if (b.tokens < byteCost) return false;
+    b.tokens -= byteCost;
+    return true;
   }
 
   sendKey(
@@ -968,6 +1025,14 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private handleAudio(env: GcAudioEnvelope): void {
+    if (!isValidGcAudioBase64(env.data)) {
+      loggerWarn('[GCall] GC_AUDIO dropped: invalid or oversize payload');
+      return;
+    }
+    const cost = gcAudioPayloadApproxBytes(env.data);
+    if (!this.tryConsumeRelayBudget(env.roomId, cost)) {
+      return;
+    }
     // Only deliver if addressed to a local address
     if (!this.localAddresses.has(env.toAddress)) {
       // Relay if we have hops remaining
@@ -982,7 +1047,16 @@ export class GroupCallManager extends EventEmitter {
     // Decode base64 → Buffer in the main process (Node Buffer.from is fast) so the
     // renderer receives raw binary over IPC instead of a base64 string, eliminating
     // atob + charCodeAt work from the renderer's main thread.
-    this.emit('gcall:audio', { roomId: env.roomId, data: Buffer.from(env.data, 'base64') });
+    let raw: Buffer;
+    try {
+      raw = Buffer.from(env.data, 'base64');
+    } catch {
+      return;
+    }
+    if (raw.length > GC_AUDIO_MAX_BINARY_WIRE_BYTES) {
+      return;
+    }
+    this.emit('gcall:audio', { roomId: env.roomId, data: raw });
   }
 
   private handleKey(env: GcKeyEnvelope): void {

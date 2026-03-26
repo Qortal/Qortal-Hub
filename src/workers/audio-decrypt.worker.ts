@@ -16,7 +16,7 @@
  */
 
 import {
-  decodeAudioPacket,
+  decodeAudioPackets,
   encodeAudioPacketV2,
 } from '../lib/group-call/audioPacketCodec';
 
@@ -79,9 +79,18 @@ self.onmessage = (
     return;
   }
 
-  const decoded = decodeAudioPacket(new Uint8Array(data.buffer), roomKeyBytes);
+  const decodedList = decodeAudioPackets(
+    new Uint8Array(data.buffer),
+    roomKeyBytes
+  );
 
-  if (decoded) {
+  if (decodedList.length === 0) {
+    self.postMessage({ type: 'result', id: data.id, decoded: null });
+    return;
+  }
+
+  if (decodedList.length === 1) {
+    const decoded = decodedList[0]!;
     const opusFrame = new ArrayBuffer(decoded.opusFrame.length);
     new Uint8Array(opusFrame).set(decoded.opusFrame);
     self.postMessage(
@@ -98,7 +107,24 @@ self.onmessage = (
       },
       [opusFrame]
     );
-  } else {
-    self.postMessage({ type: 'result', id: data.id, decoded: null });
+    return;
   }
+
+  const transferables: ArrayBuffer[] = [];
+  const decodedMulti = decodedList.map((d) => {
+    const opusFrame = new ArrayBuffer(d.opusFrame.length);
+    new Uint8Array(opusFrame).set(d.opusFrame);
+    transferables.push(opusFrame);
+    return {
+      sourceAddr: d.sourceAddr,
+      vad: d.vad,
+      seq: d.seq,
+      timestampMs: d.timestampMs,
+      opusFrame,
+    };
+  });
+  self.postMessage(
+    { type: 'result', id: data.id, decodedMulti },
+    transferables
+  );
 };

@@ -267,7 +267,11 @@ declare global {
       ) => Promise<{ success: boolean; error?: string }>;
       leave: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       broadcastTopology: (roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      sendAudio: (roomId: string, toAddress: string, data: Uint8Array) => Promise<{ success: boolean }>;
+      sendAudio: (
+        roomId: string,
+        toAddress: string,
+        data: Uint8Array
+      ) => Promise<{ success: boolean; error?: string }>;
       sendKey: (roomId: string, toAddress: string, encryptedKey: string, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       sendKeyRotate: (roomId: string, encryptedKeys: Record<string, string>, fromAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice' | 'reconnect', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;

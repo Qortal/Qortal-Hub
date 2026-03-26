@@ -177,6 +177,9 @@ describe('group-call router helpers', () => {
     tracker.recordPacketDecoded(2);
     tracker.recordRelaySent();
     tracker.recordRelayReceived();
+    tracker.recordRelayThrottleDrop(2);
+    tracker.recordRelayCoalesceSuperseded(3);
+    tracker.recordRelayIpcFailure(1);
     tracker.recordIncomingPacketDuration(4);
     tracker.recordJitterTickDuration(2);
     tracker.recordJitterUnderrun(2);
@@ -193,6 +196,9 @@ describe('group-call router helpers', () => {
       packetsDecoded: 2,
       relayPacketsSent: 1,
       relayPacketsReceived: 1,
+      relayThrottleDrops: 2,
+      relayCoalesceSuperseded: 3,
+      relayIpcFailures: 1,
       lastRelayActivityAtMs: expect.any(Number),
       jitterUnderruns: 2,
       missingFrames: 2,

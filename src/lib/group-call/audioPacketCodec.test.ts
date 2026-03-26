@@ -3,8 +3,10 @@ import nacl from '../../encryption/nacl-fast';
 import {
   GCALL_AUDIO_PACKET_V2_VERSION,
   decodeAudioPacket,
+  decodeAudioPackets,
   encodeAudioPacketV1,
   encodeAudioPacketV2,
+  encodeAudioPacketV3,
 } from './audioPacketCodec';
 
 function randomKey(): Uint8Array {
@@ -81,5 +83,35 @@ describe('audioPacketCodec', () => {
     expect(() =>
       encodeAudioPacketV2(longAddr, true, 1, 2, new Uint8Array([1]), key)
     ).toThrow();
+  });
+
+  it('v3 multi-frame round-trip', () => {
+    const key = randomKey();
+    const addr = 'QtestAddress123456789012345678901';
+    const f0 = new Uint8Array([0x80, 1]);
+    const f1 = new Uint8Array([0x81, 2, 3]);
+    const pkt = encodeAudioPacketV3(addr, true, 0xff00, 0x11223344, [f0, f1], key);
+    const list = decodeAudioPackets(pkt, key);
+    expect(list).toHaveLength(2);
+    expect(list[0]!.sourceAddr).toBe(addr);
+    expect(list[0]!.seq).toBe(0xff00);
+    expect([...list[0]!.opusFrame]).toEqual([...f0]);
+    expect(list[1]!.seq).toBe(0xff01);
+    expect([...list[1]!.opusFrame]).toEqual([...f1]);
+  });
+
+  it('decodeAudioPacket returns first v3 frame only', () => {
+    const key = randomKey();
+    const pkt = encodeAudioPacketV3(
+      'Qa',
+      false,
+      5,
+      100,
+      [new Uint8Array([1]), new Uint8Array([2])],
+      key
+    );
+    const one = decodeAudioPacket(pkt, key);
+    expect(one?.seq).toBe(5);
+    expect([...one!.opusFrame]).toEqual([1]);
   });
 });
