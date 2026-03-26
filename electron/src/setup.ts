@@ -2104,10 +2104,7 @@ ipcMain.handle(
     if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
       return { success: false, error: 'payload-too-large' };
     }
-    // Convert binary received over IPC to base64 for the P2P wire (JSON transport).
-    // Node's Buffer.toString('base64') is ~10× faster than the JS btoa loop in the renderer.
-    const b64 = buf.toString('base64');
-    const ok = mgr.sendAudio(roomId, toAddress, b64);
+    const ok = mgr.sendAudio(roomId, toAddress, buf);
     return ok ? { success: true } : { success: false, error: 'relay-rejected' };
   }
 );

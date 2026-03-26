@@ -28,6 +28,10 @@ import { log as loggerLog, error as loggerError, warn as loggerWarn } from './lo
 import type { P2PNetwork } from './p2p-network';
 import type { PresenceManager } from './presence';
 import { VerifyWorkerPool } from './verify-worker-pool';
+import {
+  encodeGcAudioBinaryFrame,
+  GcAudioBinaryEncodeError,
+} from './gc-audio-binary-frame';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -46,6 +50,10 @@ const GC_AUDIO_RELAY_REFILL_BYTES_PER_MS = 800;
 
 function isValidGcAudioBase64(data: unknown): data is string {
   return typeof data === 'string' && data.length > 0 && data.length <= GC_AUDIO_MAX_BASE64_CHARS;
+}
+
+function isValidGcAudioBuffer(data: Buffer): boolean {
+  return data.length > 0 && data.length <= GC_AUDIO_MAX_BINARY_WIRE_BYTES;
 }
 
 /** Approximate decoded byte cost for bucket accounting (upper bound from base64 length). */
@@ -333,6 +341,15 @@ export class GroupCallManager extends EventEmitter {
 
   private presenceExpiredHandler: (address: string) => void;
   private onP2PMessage!: (payload: { id: string; from: string; data: unknown }) => void;
+  private onBinaryGcAudio!: (payload: {
+    fromNodeId: string;
+    via: string;
+    roomId: string;
+    toAddress: string;
+    ciphertext: Buffer;
+    gcHopsRemaining: number;
+    p2pHops: number;
+  }) => void;
   private onPresenceUpdated: (({ address, online }: { address: string; online: boolean }) => void) | null = null;
   private presenceEvictionTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private static readonly PRESENCE_EVICTION_GRACE_MS = 12_000;
@@ -370,6 +387,14 @@ export class GroupCallManager extends EventEmitter {
         this.handleIncoming(msg as unknown as GcEnvelope, from);
       } catch (err) {
         loggerError('[GCall] Error handling message:', err);
+      }
+    };
+
+    this.onBinaryGcAudio = (payload) => {
+      try {
+        this.handleBinaryGcAudioWire(payload);
+      } catch (err) {
+        loggerError('[GCall] Error handling binary GC_AUDIO:', err);
       }
     };
 
@@ -494,6 +519,7 @@ export class GroupCallManager extends EventEmitter {
     // never leaves the manager deaf to GC_* traffic.
     this.onP2PMessage = this.onP2PMessage.bind(this);
     this.p2p.on('message', this.onP2PMessage);
+    this.p2p.on('binary-gc-audio', this.onBinaryGcAudio);
 
     this.verifyPool.start();
 
@@ -527,6 +553,7 @@ export class GroupCallManager extends EventEmitter {
     this.verifyPool.stop();
 
     if (this.onP2PMessage) this.p2p.off('message', this.onP2PMessage);
+    if (this.onBinaryGcAudio) this.p2p.off('binary-gc-audio', this.onBinaryGcAudio);
     if (this.onPresenceUpdated) this.presence.off('presence-updated', this.onPresenceUpdated);
     for (const timer of this.presenceEvictionTimers.values()) clearTimeout(timer);
     this.presenceEvictionTimers.clear();
@@ -656,26 +683,51 @@ export class GroupCallManager extends EventEmitter {
   /**
    * Send local GC_AUDIO from IPC. Returns false if payload invalid or relay budget exhausted.
    */
-  sendAudio(roomId: string, toAddress: string, data: string): boolean {
-    if (!isValidGcAudioBase64(data)) {
+  sendAudio(roomId: string, toAddress: string, data: Buffer): boolean {
+    if (!isValidGcAudioBuffer(data)) {
       loggerWarn('[GCall] sendAudio dropped: invalid or oversize payload');
       return false;
     }
-    const cost = gcAudioPayloadApproxBytes(data);
+    const cost = data.length;
     if (!this.tryConsumeRelayBudget(roomId, cost)) {
       loggerWarn(`[GCall] sendAudio dropped: relay budget exhausted for room ${roomId}`);
       return false;
     }
+    const nodeId =
+      this.presence.getNodeIdForAddress(toAddress) ??
+      this.participantNodeIds.get(toAddress) ??
+      null;
+
+    if (nodeId && this.p2p.canSendBinaryGcAudio(nodeId)) {
+      try {
+        const wire = encodeGcAudioBinaryFrame({
+          p2pHops: 0,
+          toNodeId: nodeId,
+          fromNodeId: this.p2p.getNodeId(),
+          roomId,
+          toAddress,
+          gcHopsRemaining: GC_AUDIO_MAX_HOPS,
+          ciphertext: data,
+        });
+        if (this.p2p.writeGcAudioBinaryFrame(nodeId, wire)) {
+          return true;
+        }
+      } catch (err) {
+        if (err instanceof GcAudioBinaryEncodeError) {
+          loggerWarn(`[GCall] sendAudio binary encode failed: ${err.message}`);
+        } else {
+          loggerError('[GCall] sendAudio binary path error:', err);
+        }
+      }
+    }
+
     const env: GcAudioEnvelope = {
       type: 'GC_AUDIO',
       roomId,
       toAddress,
-      data,
+      data: data.toString('base64'),
       hopsRemaining: GC_AUDIO_MAX_HOPS,
     };
-    const nodeId = this.presence.getNodeIdForAddress(toAddress)
-      ?? this.participantNodeIds.get(toAddress)
-      ?? null;
     if (nodeId) {
       this.p2p.send(nodeId, env);
     } else {
@@ -1033,20 +1085,6 @@ export class GroupCallManager extends EventEmitter {
     if (!this.tryConsumeRelayBudget(env.roomId, cost)) {
       return;
     }
-    // Only deliver if addressed to a local address
-    if (!this.localAddresses.has(env.toAddress)) {
-      // Relay if we have hops remaining
-      if ((env.hopsRemaining ?? 0) > 0) {
-        const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
-        if (nodeId) {
-          this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-        }
-      }
-      return;
-    }
-    // Decode base64 → Buffer in the main process (Node Buffer.from is fast) so the
-    // renderer receives raw binary over IPC instead of a base64 string, eliminating
-    // atob + charCodeAt work from the renderer's main thread.
     let raw: Buffer;
     try {
       raw = Buffer.from(env.data, 'base64');
@@ -1056,7 +1094,60 @@ export class GroupCallManager extends EventEmitter {
     if (raw.length > GC_AUDIO_MAX_BINARY_WIRE_BYTES) {
       return;
     }
-    this.emit('gcall:audio', { roomId: env.roomId, data: raw });
+    this.deliverOrRelayGcAudio(
+      env.roomId,
+      env.toAddress,
+      raw,
+      env.hopsRemaining ?? 1
+    );
+  }
+
+  private handleBinaryGcAudioWire(payload: {
+    roomId: string;
+    toAddress: string;
+    ciphertext: Buffer;
+    gcHopsRemaining: number;
+  }): void {
+    const { roomId, toAddress, ciphertext } = payload;
+    if (ciphertext.length > GC_AUDIO_MAX_BINARY_WIRE_BYTES) {
+      return;
+    }
+    const cost = ciphertext.length;
+    if (!this.tryConsumeRelayBudget(roomId, cost)) {
+      return;
+    }
+    this.deliverOrRelayGcAudio(
+      roomId,
+      toAddress,
+      ciphertext,
+      payload.gcHopsRemaining ?? 1
+    );
+  }
+
+  /** After relay budget charged; relay uses JSON + base64. */
+  private deliverOrRelayGcAudio(
+    roomId: string,
+    toAddress: string,
+    raw: Buffer,
+    hopsRemaining: number
+  ): void {
+    if (!this.localAddresses.has(toAddress)) {
+      if ((hopsRemaining ?? 0) > 0) {
+        const nodeId = this.presence.getNodeIdForAddress(toAddress);
+        if (nodeId) {
+          const env: GcAudioEnvelope = {
+            type: 'GC_AUDIO',
+            roomId,
+            toAddress,
+            data: raw.toString('base64'),
+            hopsRemaining: (hopsRemaining ?? 1) - 1,
+          };
+          this.p2p.send(nodeId, env);
+        }
+      }
+      return;
+    }
+    this.emit('gcall:audio', { roomId, data: raw });
   }
 
   private handleKey(env: GcKeyEnvelope): void {
