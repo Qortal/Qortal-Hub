@@ -817,6 +817,8 @@ try {
       ipcRenderer.invoke('hub:getIceServers') as Promise<{ urls: string }[]>,
     reportStunCallOutcome: (stunUrls: string[], success: boolean) =>
       ipcRenderer.invoke('hub:reportStunCallOutcome', stunUrls, success),
+    reportObservedStunSources: (stunUrls: string[]) =>
+      ipcRenderer.invoke('hub:reportObservedStunSources', stunUrls),
   });
 
   // ── Call API ─────────────────────────────────────────────────────────────────

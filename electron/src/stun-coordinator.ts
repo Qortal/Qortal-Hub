@@ -23,11 +23,12 @@ const MAX_CONCURRENT_PROBES = 3;
 const PROBE_TICK_MS = 12_000;
 const PREWARM_JITTER_MAX_MS = 15_000;
 
-// Legacy public STUN disabled for now (re-enable when rolling back / testing).
-// { urls: 'stun:stun.l.google.com:19302' },
-// { urls: 'stun:stun1.l.google.com:19302' },
-// { urls: 'stun:stun.cloudflare.com:3478' },
-const LEGACY_PUBLIC_STUN: { urls: string }[] = [];
+// Small public fallback used only when the legacy toggle is enabled.
+const LEGACY_PUBLIC_STUN: { urls: string }[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
 
 function dedupeUrls(servers: { urls: string }[]): { urls: string }[] {
   const seen = new Set<string>();
@@ -41,9 +42,14 @@ function dedupeUrls(servers: { urls: string }[]): { urls: string }[] {
 }
 
 function stunKeyFromUrl(url: string): string | null {
-  const m = url.match(/^stun:([^:]+):(\d+)$/i);
-  if (!m) return null;
-  return `${m[1]}:${m[2]}`;
+  if (!/^stun:/i.test(url)) return null;
+  const withoutScheme = url.slice(5).trim();
+  const idx = withoutScheme.lastIndexOf(':');
+  if (idx <= 0) return null;
+  const host = withoutScheme.slice(0, idx).trim();
+  const port = withoutScheme.slice(idx + 1).trim();
+  if (!host || !/^\d+$/.test(port)) return null;
+  return `${host}:${port}`;
 }
 
 export interface StunCoordinatorOptions {
@@ -112,7 +118,6 @@ export class StunCoordinator {
       this.enqueuePeersFromNetwork();
     });
 
-    coordinatorInstance = this;
     loggerLog('[STUN] Coordinator started');
   }
 
@@ -162,6 +167,10 @@ export class StunCoordinator {
     if (urlsKey !== this.lastLoggedIceUrlsKey) {
       this.lastLoggedIceUrlsKey = urlsKey;
       loggerLog('[STUN] ICE URLs for renderer (capped)', out.map((s) => s.urls));
+      loggerLog(
+        '[STUN][debug] ranked candidates',
+        this.cache.describeSelection(ICE_STUN_SERVER_CAP)
+      );
     }
     return out;
   }
@@ -176,6 +185,18 @@ export class StunCoordinator {
       .map(stunKeyFromUrl)
       .filter((k): k is string => k != null);
     this.cache.recordCallBundleOutcome(keys, success);
+  }
+
+  recordObservedStunSources(stunUrls: string[]): void {
+    const keys = stunUrls
+      .map(stunKeyFromUrl)
+      .filter((k): k is string => k != null);
+    if (keys.length === 0) return;
+    this.cache.recordObservedSourceKeys(keys);
+    loggerLog('[STUN][telemetry] observed ICE source urls', {
+      urls: stunUrls.length,
+      matchedKeys: keys.length,
+    });
   }
 
   private refillProbeBudget(): void {
@@ -229,6 +250,12 @@ export class StunCoordinator {
       sendStunBindingProbe(t.host, t.stunPort, PROBE_TIMEOUT_MS)
         .then((res) => {
           this.cache.upsertProbeResult(t.host, t.stunPort, res.ok, res.rttMs);
+          loggerLog('[STUN][probe]', {
+            host: t.host,
+            stunPort: t.stunPort,
+            ok: res.ok,
+            rttMs: res.rttMs ?? null,
+          });
         })
         .finally(() => {
           this.activeProbes--;
@@ -244,6 +271,7 @@ export async function startStunCoordinator(
   stopStunCoordinator();
   const c = new StunCoordinator(opts.stunCacheDbPath);
   await c.start(network, opts);
+  coordinatorInstance = c;
   return c;
 }
 

@@ -15,11 +15,12 @@ export interface StunIceServerShape {
   urls: string;
 }
 
-/** Legacy public STUN disabled for now; keep export for callers that reference it. */
-// { urls: 'stun:stun.l.google.com:19302' },
-// { urls: 'stun:stun1.l.google.com:19302' },
-// { urls: 'stun:stun.cloudflare.com:3478' },
-export const LEGACY_PUBLIC_STUN_FALLBACK: { urls: string }[] = [];
+/** Small public fallback used only when the legacy toggle is enabled. */
+export const LEGACY_PUBLIC_STUN_FALLBACK: { urls: string }[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
 
 /** Sync ICE list from preload bootstrap (Electron); empty if hub missing and legacy off. */
 export function getInitialIceServersFromHub(): { urls: string }[] {

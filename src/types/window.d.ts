@@ -235,6 +235,9 @@ declare global {
         stunUrls: string[],
         success: boolean
       ) => Promise<{ ok?: boolean }>;
+      reportObservedStunSources: (
+        stunUrls: string[]
+      ) => Promise<{ ok?: boolean }>;
     };
 
     // ── Call (1v1) ────────────────────────────────────────────────────────────

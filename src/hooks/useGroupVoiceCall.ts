@@ -56,7 +56,10 @@ import {
   encodeAudioPacketV2,
   type DecodedAudioPacket,
 } from '../lib/group-call/audioPacketCodec';
-import { scheduleLogIceServerSourcesForPeer } from '../lib/webrtc/iceCandidateStats';
+import {
+  getIceServerSourceUrlsForPeer,
+  scheduleLogIceServerSourcesForPeer,
+} from '../lib/webrtc/iceCandidateStats';
 import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
 
 const naclApi = nacl as any;
@@ -140,6 +143,7 @@ const WEBRTC_CONNECTING_STALE_MS = 4_000;
 const WEBRTC_FAST_DISCONNECTED_RECONNECT_MS = 2_500;
 /** After a required upstream DC closes, give it a short chance to recover before re-dialing. */
 const WEBRTC_DC_RECOVERY_GRACE_MS = 1_500;
+const ICE_SERVER_REFRESH_MIN_INTERVAL_MS = 10_000;
 
 /** Coalesce burst participant-joined/left into one topology election + key pass. */
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
@@ -155,6 +159,7 @@ const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
  *  renderer is not flooded during the 1–5 s WebRTC negotiation window. */
 const RELAY_MIN_INTERVAL_MS = 200;
 const RTC_RECONNECT_HINT_MIN_INTERVAL_MS = 1_500;
+const DOWNSTREAM_SOFT_RECOVERY_MAX_ATTEMPTS = 2;
 const DC_BUFFERED_AMOUNT_HIGH_WATER = 256 * 1024;
 const DC_SEND_BACKOFF_BASE_MS = 120;
 const DC_SEND_BACKOFF_MAX_MS = 1_000;
@@ -166,6 +171,7 @@ const STUN_OUTCOME_MAX_RELAY_DWELL_FRACTION = 0.6;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
 const PERF_LOG_INTERVAL_MS = 10_000;
+/** Legacy: was used to gate `[GCall]` logs; group-call diagnostics are always on now. */
 const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 /** Set to "1" in localStorage for verbose mic/capture logs (or enable qortal:gcall-debug). */
 const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
@@ -198,14 +204,6 @@ function base64ToUint8(b64: string): Uint8Array {
   return out;
 }
 
-function isGroupCallDebugEnabled(): boolean {
-  try {
-    return localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
 function isMicCaptureDebugEnabled(): boolean {
   try {
     return (
@@ -223,11 +221,11 @@ function micDebugLog(...args: unknown[]): void {
 }
 
 function debugLog(...args: unknown[]): void {
-  if (isGroupCallDebugEnabled()) console.log(...args);
+  console.log(...args);
 }
 
 function debugWarn(...args: unknown[]): void {
-  if (isGroupCallDebugEnabled()) console.warn(...args);
+  console.warn(...args);
 }
 
 export function shouldStartGroupCallAudioCapture(opts: {
@@ -463,6 +461,8 @@ interface PeerConnection {
   iceRestartAttempts: number;
   lastIceRestartAtMs: number;
   iceRestartInFlight: boolean;
+  softRecoveryAttempts: number;
+  lastSoftRecoveryAtMs: number;
 }
 
 // ── Main hook ──────────────────────────────────────────────────────────────────
@@ -570,7 +570,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const upstreamDCRef = useRef<RTCDataChannel | null>(null);
   const upstreamAddressRef = useRef<string | null>(null);
   const sessionStunBundleRef = useRef<string[]>([]);
+  const sessionObservedStunUrlsRef = useRef<string[]>([]);
   const sessionStartedAtMsRef = useRef<number>(0);
+  const lastIceServerRefreshAtMsRef = useRef<number>(0);
   const dcSendBackoffUntilRef = useRef<Map<string, number>>(new Map());
   const dcSendBackoffStreakRef = useRef<Map<string, number>>(new Map());
   const peerRecoveryProfileRef = useRef<Map<string, 'low-latency' | 'recovery'>>(
@@ -688,6 +690,17 @@ export function useGroupVoiceCall(uiActive = false) {
       if (state === 'disconnected') {
         const disconnectedAt =
           entry.disconnectStartedAtMs ?? entry.lastDcStateChangeAtMs ?? entry.createdAtMs;
+        if (entry.role === 'upstream') {
+          if (entry.iceRestartInFlight) return false;
+          if (entry.disconnectStartedAtMs) {
+            const softRecoveryBudgetMs =
+              WEBRTC_DISCONNECT_GRACE_MS +
+              entry.iceRestartAttempts * ICE_RESTART_RECOVERY_GRACE_MS;
+            if (now - entry.disconnectStartedAtMs < softRecoveryBudgetMs) {
+              return false;
+            }
+          }
+        }
         return now - disconnectedAt >= WEBRTC_FAST_DISCONNECTED_RECONNECT_MS;
       }
 
@@ -728,8 +741,36 @@ export function useGroupVoiceCall(uiActive = false) {
       reason: 'normal' | 'persistent-disconnect' = 'normal'
     ) => {
       const entry = peerConnectionsRef.current.get(peerAddress);
-      if (!entry) return;
-      if (expectedConnId && entry.connId !== expectedConnId) return;
+      if (!entry) {
+        debugLog('[GCall] closePeerConnection skip — no peer entry', {
+          peerAddress,
+          expectedConnId: expectedConnId ?? null,
+          reason,
+        });
+        return;
+      }
+      if (expectedConnId && entry.connId !== expectedConnId) {
+        debugWarn('[GCall] closePeerConnection skip — connId mismatch', {
+          peerAddress,
+          expectedConnId,
+          activeConnId: entry.connId,
+          reason,
+        });
+        return;
+      }
+
+      debugLog('[GCall] closePeerConnection', {
+        peerAddress,
+        connId: entry.connId,
+        role: entry.role,
+        reason,
+        pcConnectionState: entry.pc.connectionState,
+        pcSignalingState: entry.pc.signalingState,
+        iceConnectionState: entry.pc.iceConnectionState,
+        dcReadyState: entry.dc?.readyState ?? null,
+        iceRestartInFlight: entry.iceRestartInFlight,
+        iceRestartAttempts: entry.iceRestartAttempts,
+      });
 
       if (entry.disconnectGraceTimer) {
         clearTimeout(entry.disconnectGraceTimer);
@@ -947,9 +988,7 @@ export function useGroupVoiceCall(uiActive = false) {
         return unchanged ? prev : (snapshot as typeof prev);
       });
     }
-    if (isGroupCallDebugEnabled()) {
-      debugLog('[GCall] metrics', snapshot);
-    }
+    debugLog('[GCall] metrics', snapshot);
   }, [recomputeAdaptiveNetworkMode, updateMetricResourceCounts, userInfo?.address]);
 
   const scheduleRelayMetricsFlush = useCallback(() => {
@@ -1279,26 +1318,6 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── WebRTC DataChannel connections ─────────────────────────────────────────
 
-  useEffect(() => {
-    const w = window as Window & {
-      hub?: { getIceServers?: () => Promise<{ urls: string }[]> };
-    };
-    if (!w.hub?.getIceServers) return;
-    const pull = (): void => {
-      w.hub
-        ?.getIceServers?.()
-        ?.then((list) => {
-          if (Array.isArray(list) && list.length > 0) {
-            gcallIceServersRef.current = list.map((s) => ({ urls: s.urls }));
-          }
-        })
-        .catch(() => {});
-    };
-    pull();
-    const id = setInterval(pull, 120_000);
-    return () => clearInterval(id);
-  }, []);
-
   const captureSessionStunBundleIfNeeded = useCallback(() => {
     if (sessionStunBundleRef.current.length > 0) return;
     const urls = gcallIceServersRef.current
@@ -1310,6 +1329,95 @@ export function useGroupVoiceCall(uiActive = false) {
       sessionStunBundleRef.current = [...new Set(urls)];
     }
   }, []);
+
+  const refreshGroupCallIceServers = useCallback(
+    async (
+      reason: string,
+      opts?: { force?: boolean; peerAddress?: string; connId?: string }
+    ): Promise<boolean> => {
+      const w = window as Window & {
+        hub?: { getIceServers?: () => Promise<{ urls: string }[]> };
+      };
+      if (!w.hub?.getIceServers) return false;
+      const now = Date.now();
+      if (
+        opts?.force !== true &&
+        now - lastIceServerRefreshAtMsRef.current < ICE_SERVER_REFRESH_MIN_INTERVAL_MS
+      ) {
+        return false;
+      }
+      lastIceServerRefreshAtMsRef.current = now;
+      try {
+        const list = await w.hub.getIceServers();
+        if (!Array.isArray(list) || list.length === 0) return false;
+        const nextIceServers = list.map((s) => ({ urls: s.urls }));
+        gcallIceServersRef.current = nextIceServers;
+        const urls = nextIceServers
+          .map((server) =>
+            typeof server.urls === 'string' ? server.urls : server.urls?.[0]
+          )
+          .filter((url): url is string => typeof url === 'string' && url.length > 0);
+        debugLog('[GCall] Refreshed ICE servers', {
+          reason,
+          peerAddress: opts?.peerAddress ?? null,
+          connId: opts?.connId ?? null,
+          urls,
+        });
+        if (opts?.peerAddress && opts?.connId) {
+          const entry = peerConnectionsRef.current.get(opts.peerAddress);
+          if (entry?.connId === opts.connId && entry.pc.signalingState !== 'closed') {
+            try {
+              entry.pc.setConfiguration({ iceServers: nextIceServers });
+            } catch (error) {
+              debugWarn('[GCall] Failed to apply refreshed ICE servers', {
+                reason,
+                peerAddress: opts.peerAddress,
+                connId: opts.connId,
+                error,
+              });
+            }
+          }
+        }
+        return true;
+      } catch (error) {
+        debugWarn('[GCall] Failed to refresh ICE servers', {
+          reason,
+          peerAddress: opts?.peerAddress ?? null,
+          connId: opts?.connId ?? null,
+          error,
+        });
+        return false;
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    void refreshGroupCallIceServers('initial-load', { force: true });
+    const id = setInterval(() => {
+      void refreshGroupCallIceServers('periodic-refresh');
+    }, 120_000);
+    return () => clearInterval(id);
+  }, [refreshGroupCallIceServers]);
+
+  const captureObservedIceServerSources = useCallback(
+    async (pc: RTCPeerConnection, label: string) => {
+      try {
+        const observedUrls = await getIceServerSourceUrlsForPeer(pc);
+        if (observedUrls.length === 0) return;
+        sessionObservedStunUrlsRef.current = [
+          ...new Set([...sessionObservedStunUrlsRef.current, ...observedUrls]),
+        ];
+        debugLog('[GCall] Observed ICE source urls', { label, urls: observedUrls });
+        if (window.hub?.reportObservedStunSources) {
+          void window.hub.reportObservedStunSources(observedUrls).catch(() => {});
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    []
+  );
 
   const attemptUpstreamIceRestart = useCallback(
     async (peerAddress: string, connId: string): Promise<boolean> => {
@@ -1329,7 +1437,16 @@ export function useGroupVoiceCall(uiActive = false) {
       entry.lastIceRestartAtMs = now;
       metricsRef.current.recordIceRestartAttempt();
       markPeerUnstable(peerAddress);
+      debugLog('[GCall] Attempting upstream ICE restart', {
+        peerAddress,
+        connId,
+        attempt: entry.iceRestartAttempts,
+      });
       try {
+        await refreshGroupCallIceServers('upstream-ice-restart', {
+          peerAddress,
+          connId,
+        });
         const offer = await entry.pc.createOffer({ iceRestart: true });
         await entry.pc.setLocalDescription(offer);
         const ts = Date.now();
@@ -1354,8 +1471,17 @@ export function useGroupVoiceCall(uiActive = false) {
           ui.publicKey ?? '',
           ts
         );
+        debugLog('[GCall] Upstream ICE restart offer sent', {
+          peerAddress,
+          connId,
+        });
         return true;
-      } catch {
+      } catch (error) {
+        debugWarn('[GCall] Upstream ICE restart failed', {
+          peerAddress,
+          connId,
+          error,
+        });
         return false;
       } finally {
         const latest = peerConnectionsRef.current.get(peerAddress);
@@ -1364,7 +1490,47 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     },
-    [markPeerUnstable]
+    [markPeerUnstable, refreshGroupCallIceServers]
+  );
+
+  const attemptDownstreamSoftRecovery = useCallback(
+    async (peerAddress: string, connId: string): Promise<boolean> => {
+      const entry = peerConnectionsRef.current.get(peerAddress);
+      if (!entry || entry.connId !== connId || entry.role !== 'downstream') return false;
+      const ui = userInfoRef.current;
+      if (!ui?.address || !roomIdRef.current) return false;
+      const now = Date.now();
+      if (entry.softRecoveryAttempts >= DOWNSTREAM_SOFT_RECOVERY_MAX_ATTEMPTS) {
+        return false;
+      }
+      if (now - entry.lastSoftRecoveryAtMs < ICE_RESTART_RECOVERY_GRACE_MS) {
+        return false;
+      }
+      const lastHint = rtcReconnectHintLastSentAtRef.current.get(peerAddress) ?? 0;
+      if (now - lastHint < RTC_RECONNECT_HINT_MIN_INTERVAL_MS) {
+        return false;
+      }
+      entry.softRecoveryAttempts++;
+      entry.lastSoftRecoveryAtMs = now;
+      rtcReconnectHintLastSentAtRef.current.set(peerAddress, now);
+      debugLog('[GCall] Requesting downstream soft recovery', {
+        peerAddress,
+        connId,
+        attempt: entry.softRecoveryAttempts,
+      });
+      await window.groupCall
+        .sendRtcSignal(
+          roomIdRef.current,
+          ui.address,
+          peerAddress,
+          'reconnect',
+          null,
+          connId
+        )
+        .catch(() => {});
+      return true;
+    },
+    []
   );
 
   const queuePeerRecoveryCheck = useCallback(
@@ -1393,11 +1559,22 @@ export function useGroupVoiceCall(uiActive = false) {
           });
           return;
         }
-        closePeerConnection(peerAddress, connId, 'persistent-disconnect');
-        scheduleEnsureAfterIceTeardown();
+        void attemptDownstreamSoftRecovery(peerAddress, connId).then((restarted) => {
+          if (restarted) {
+            queuePeerRecoveryCheck(
+              peerAddress,
+              connId,
+              ICE_RESTART_RECOVERY_GRACE_MS
+            );
+            return;
+          }
+          closePeerConnection(peerAddress, connId, 'persistent-disconnect');
+          scheduleEnsureAfterIceTeardown();
+        });
       }, delayMs);
     },
     [
+      attemptDownstreamSoftRecovery,
       attemptUpstreamIceRestart,
       closePeerConnection,
       scheduleEnsureAfterIceTeardown,
@@ -1412,6 +1589,11 @@ export function useGroupVoiceCall(uiActive = false) {
     ): RTCPeerConnection => {
       captureSessionStunBundleIfNeeded();
       const createdAtMs = Date.now();
+      debugLog('[GCall] createPeerConnection', {
+        peerAddress,
+        connId,
+        role,
+      });
       const pc = new RTCPeerConnection({
         iceServers: gcallIceServersRef.current,
       });
@@ -1428,6 +1610,8 @@ export function useGroupVoiceCall(uiActive = false) {
         iceRestartAttempts: 0,
         lastIceRestartAtMs: 0,
         iceRestartInFlight: false,
+        softRecoveryAttempts: 0,
+        lastSoftRecoveryAtMs: 0,
       });
 
       pc.onicecandidate = (e) => {
@@ -1446,10 +1630,14 @@ export function useGroupVoiceCall(uiActive = false) {
 
       pc.addEventListener('icegatheringstatechange', () => {
         if (pc.iceGatheringState === 'complete') {
+          const label = `[GCall ICE] ${role} → ${peerAddress} (${connId})`;
           scheduleLogIceServerSourcesForPeer(
             pc,
-            `[GCall ICE] ${role} → ${peerAddress} (${connId})`
+            label
           );
+          window.setTimeout(() => {
+            void captureObservedIceServerSources(pc, label);
+          }, 150);
         }
       });
 
@@ -1481,6 +1669,8 @@ export function useGroupVoiceCall(uiActive = false) {
           }
           entry.iceRestartAttempts = 0;
           entry.iceRestartInFlight = false;
+          entry.softRecoveryAttempts = 0;
+          entry.lastSoftRecoveryAtMs = 0;
           markPeerStable(peerAddress);
           return;
         }
@@ -1490,6 +1680,10 @@ export function useGroupVoiceCall(uiActive = false) {
           if (!entry.disconnectStartedAtMs) {
             entry.disconnectStartedAtMs = Date.now();
           }
+          void refreshGroupCallIceServers('connection-state-recovery', {
+            peerAddress,
+            connId,
+          });
           queuePeerRecoveryCheck(
             peerAddress,
             connId,
@@ -1502,10 +1696,12 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [
       captureSessionStunBundleIfNeeded,
+      captureObservedIceServerSources,
       closePeerConnection,
       markPeerStable,
       markPeerUnstable,
       queuePeerRecoveryCheck,
+      refreshGroupCallIceServers,
       scheduleEnsureAfterIceTeardown,
     ]
   );
@@ -1533,7 +1729,9 @@ export function useGroupVoiceCall(uiActive = false) {
         const latest = peerConnectionsRef.current.get(forwarderAddress);
         if (latest?.connId !== connId) return;
         latest.lastDcStateChangeAtMs = Date.now();
-        debugLog('[GCall] Upstream DC opened to', forwarderAddress);
+        latest.softRecoveryAttempts = 0;
+        latest.lastSoftRecoveryAtMs = 0;
+        debugLog('[GCall] Upstream DC opened to', forwarderAddress, 'connId:', connId);
         upstreamDCRef.current = dc;
         upstreamAddressRef.current = forwarderAddress;
         metricsRef.current.recordDcOpen();
@@ -1632,6 +1830,10 @@ export function useGroupVoiceCall(uiActive = false) {
         userInfo.publicKey ?? '',
         ts
       );
+      debugLog('[GCall] Sent upstream RTC offer', {
+        forwarderAddress,
+        connId,
+      });
     },
     [
       createPeerConnection,
@@ -1653,7 +1855,9 @@ export function useGroupVoiceCall(uiActive = false) {
         rtcReconnectHintLastSentAtRef.current.get(memberAddress) ?? 0;
       if (now - lastHint < RTC_RECONNECT_HINT_MIN_INTERVAL_MS) return;
       rtcReconnectHintLastSentAtRef.current.set(memberAddress, now);
-      debugLog('[GCall] Requesting immediate RTC reconnect from', memberAddress);
+      debugLog('[GCall] Requesting immediate RTC reconnect from', memberAddress, {
+        connId,
+      });
       await window.groupCall
         .sendRtcSignal(
           roomIdRef.current,
@@ -1669,7 +1873,7 @@ export function useGroupVoiceCall(uiActive = false) {
   );
 
   const reconnectExpectedUpstreamPeer = useCallback(
-    (address: string, hintedConnId?: string): boolean => {
+    async (address: string, hintedConnId?: string): Promise<boolean> => {
       if (!isExpectedUpstreamPeer(address)) return false;
 
       const existing = peerConnectionsRef.current.get(address);
@@ -1700,20 +1904,41 @@ export function useGroupVoiceCall(uiActive = false) {
         return true;
       }
 
+      if (
+        existing &&
+        existing.role === 'upstream' &&
+        (!hintedConnId || existing.connId === hintedConnId)
+      ) {
+        const restarted = await attemptUpstreamIceRestart(address, existing.connId);
+        if (restarted) {
+          return true;
+        }
+      }
+
       if (existing) {
         closePeerConnection(address, existing.connId);
       }
       void connectUpstream(address);
       return true;
     },
-    [closePeerConnection, connectUpstream, getConnIdTimestamp, isExpectedUpstreamPeer]
+    [
+      attemptUpstreamIceRestart,
+      closePeerConnection,
+      connectUpstream,
+      getConnIdTimestamp,
+      isExpectedUpstreamPeer,
+    ]
   );
 
-  /** Forwarder: ask the member to re-offer immediately instead of waiting for the ensure loop. */
+  /** Forwarder fallback: ask the member to recover upstream immediately. */
   const setupDownstreamChannel = useCallback(
     async (memberAddress: string, connId?: string) => {
       const reconnectId =
         connId ?? `reconnect-${memberAddress}-${Date.now()}`;
+      debugLog('[GCall] Requesting downstream hard reconnect', {
+        memberAddress,
+        connId: reconnectId,
+      });
       await requestRtcReconnectHint(memberAddress, reconnectId);
     },
     [requestRtcReconnectHint]
@@ -1792,8 +2017,15 @@ export function useGroupVoiceCall(uiActive = false) {
               const latest = peerConnectionsRef.current.get(fromAddress);
               if (latest?.connId === connId) {
                 latest.lastDcStateChangeAtMs = Date.now();
+                latest.softRecoveryAttempts = 0;
+                latest.lastSoftRecoveryAtMs = 0;
               }
-              debugLog('[GCall] Downstream DC opened from', fromAddress);
+              debugLog(
+                '[GCall] Downstream DC opened from',
+                fromAddress,
+                'connId:',
+                connId
+              );
               metricsRef.current.recordDcOpen();
               markPeerStable(fromAddress);
               relayLastSentRef.current.delete(fromAddress);
@@ -1859,6 +2091,10 @@ export function useGroupVoiceCall(uiActive = false) {
             ui.publicKey ?? '',
             ts
           );
+          debugLog('[GCall] Sent downstream RTC answer', {
+            fromAddress,
+            connId,
+          });
         } else if (type === 'reconnect') {
           if (typeof connId !== 'string' || !connId) return;
           debugLog(
@@ -1883,6 +2119,11 @@ export function useGroupVoiceCall(uiActive = false) {
             return;
           }
           await pcEntry.pc.setRemoteDescription({ type: 'answer', sdp });
+          debugLog('[GCall] Applied RTC answer', {
+            fromAddress,
+            connId,
+            signalingState: pcEntry.pc.signalingState,
+          });
         } else if (type === 'ice') {
           const pcEntry = peerConnectionsRef.current.get(fromAddress);
           if (!pcEntry || pcEntry.connId !== connId) {
@@ -1951,6 +2192,12 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       for (const [addr, entry] of peerConnectionsRef.current) {
         if (entry.role === 'upstream' && !validUpstreamTargets.has(addr)) {
+          debugLog('[GCall] ensureWebRtc: closing stale upstream (not in topology)', {
+            addr,
+            connId: entry.connId,
+            role,
+            validUpstreamTargets: [...validUpstreamTargets],
+          });
           closePeerConnection(addr); // also nulls upstreamDCRef if it pointed here
         }
       }
@@ -1964,6 +2211,13 @@ export function useGroupVoiceCall(uiActive = false) {
         if (assignedForwarder && assignedForwarder !== myAddress) {
           const existing = peerConnectionsRef.current.get(assignedForwarder);
           if (shouldReconnectRequiredPeer(existing, now)) {
+            debugLog('[GCall] ensureWebRtc: reconnect upstream → assigned forwarder', {
+              assignedForwarder,
+              hadExisting: !!existing,
+              existingConnId: existing?.connId ?? null,
+              existingPcState: existing?.pc.connectionState ?? null,
+              dcState: existing?.dc?.readyState ?? null,
+            });
             if (existing) {
               closePeerConnection(assignedForwarder, existing.connId);
             }
@@ -1977,6 +2231,11 @@ export function useGroupVoiceCall(uiActive = false) {
         if (rootAddr && rootAddr !== myAddress) {
           const existing = peerConnectionsRef.current.get(rootAddr);
           if (shouldReconnectRequiredPeer(existing, now)) {
+            debugLog('[GCall] ensureWebRtc: reconnect upstream → root forwarder', {
+              rootAddr,
+              hadExisting: !!existing,
+              existingConnId: existing?.connId ?? null,
+            });
             if (existing) {
               closePeerConnection(rootAddr, existing.connId);
             }
@@ -1992,12 +2251,36 @@ export function useGroupVoiceCall(uiActive = false) {
               if (member !== myAddress) {
                 const existing = peerConnectionsRef.current.get(member);
                 if (shouldReconnectRequiredPeer(existing, now)) {
-                  // Forwarders do not originate downstream offers here; closing a
-                  // wedged leg plus a reconnect hint prompts the member to re-offer immediately.
-                  if (existing) {
-                    closePeerConnection(member, existing.connId);
+                  if (!existing) {
+                    debugLog('[GCall] ensureWebRtc: downstream missing — request hard reconnect hint', {
+                      member,
+                    });
+                    void setupDownstreamChannel(member);
+                    continue;
                   }
-                  void setupDownstreamChannel(member, existing?.connId);
+                  const shouldHardReset =
+                    existing.softRecoveryAttempts >=
+                      DOWNSTREAM_SOFT_RECOVERY_MAX_ATTEMPTS &&
+                    now - existing.lastSoftRecoveryAtMs >=
+                      ICE_RESTART_RECOVERY_GRACE_MS;
+                  if (shouldHardReset) {
+                    debugLog('[GCall] Escalating downstream hard reconnect', {
+                      member,
+                      connId: existing.connId,
+                      softRecoveryAttempts: existing.softRecoveryAttempts,
+                    });
+                    closePeerConnection(member, existing.connId);
+                    void setupDownstreamChannel(member, existing.connId);
+                    continue;
+                  }
+                  debugLog('[GCall] ensureWebRtc: downstream wedged — soft recovery', {
+                    member,
+                    connId: existing.connId,
+                    softRecoveryAttempts: existing.softRecoveryAttempts,
+                    pcState: existing.pc.connectionState,
+                    dcState: existing.dc?.readyState ?? null,
+                  });
+                  void attemptDownstreamSoftRecovery(member, existing.connId);
                 }
               }
             }
@@ -2006,6 +2289,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
     },
     [
+      attemptDownstreamSoftRecovery,
       closePeerConnection,
       connectUpstream,
       setupDownstreamChannel,
@@ -2065,7 +2349,13 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const applyTopology = useCallback(
     (topology: GroupTopology) => {
-      if (topology.topologyEpoch < localEpochRef.current) return;
+      if (topology.topologyEpoch < localEpochRef.current) {
+        debugLog('[GCall] applyTopology skip — stale epoch', {
+          incoming: topology.topologyEpoch,
+          local: localEpochRef.current,
+        });
+        return;
+      }
 
       // Same epoch + different root: do not lock to first-seen root (stale forwarder after mesh
       // disagreement). If both views carry lastSeen (IPC), drop only strictly older messages.
@@ -2091,6 +2381,10 @@ export function useGroupVoiceCall(uiActive = false) {
       );
 
       if (duplicateStructure) {
+        debugLog('[GCall] applyTopology duplicate heartbeat — ensureWebRtc only', {
+          epoch: topology.topologyEpoch,
+          rootForwarder: topology.rootForwarder,
+        });
         ensureGroupCallWebRtcConnections(topology);
         flushMetrics();
         return;
@@ -2112,6 +2406,13 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const myAddress = userInfo?.address ?? '';
       const role = computeMyRole(myAddress, topology);
+      debugLog('[GCall] applyTopology', {
+        epoch: topology.topologyEpoch,
+        role,
+        rootForwarder: topology.rootForwarder,
+        prevEpoch: prevTopo?.topologyEpoch ?? null,
+        prevRoot: prevTopo?.rootForwarder ?? null,
+      });
       myRoleRef.current = role;
       metricsRef.current.setRole(role);
 
@@ -2700,15 +3001,11 @@ export function useGroupVoiceCall(uiActive = false) {
     const token = bumpGroupCallAudioSessionToken(audioSessionTokenRef.current);
     audioSessionTokenRef.current = token;
     audioStartInFlightRef.current = true;
-    if (isGroupCallDebugEnabled()) {
-      debugLog('[GCall] ensureAudioCaptureStarted begin — token:', token);
-    }
+    debugLog('[GCall] ensureAudioCaptureStarted begin — token:', token);
     void startAudioCapture(token).finally(() => {
       if (audioSessionTokenRef.current !== token) return;
       audioStartInFlightRef.current = false;
-      if (isGroupCallDebugEnabled()) {
-        debugLog('[GCall] ensureAudioCaptureStarted done — token:', token);
-      }
+      debugLog('[GCall] ensureAudioCaptureStarted done — token:', token);
     });
   }, [isAudioPipelineActive, startAudioCapture, userInfo?.address]);
 
@@ -3449,6 +3746,13 @@ export function useGroupVoiceCall(uiActive = false) {
   const leaveGroupCall = useCallback(async () => {
     if (!userInfo?.address || roomState === 'idle') return;
 
+    debugLog('[GCall] leaveGroupCall (local)', {
+      roomId: roomIdRef.current,
+      address: userInfo.address,
+      joinGeneration: joinGenerationRef.current,
+      peerConnectionPeers: [...peerConnectionsRef.current.keys()],
+    });
+
     // Sign leave envelope
     const ts = Date.now();
     const sig = await signGroupCallFields({
@@ -3485,6 +3789,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const cleanup = useCallback(() => {
     const stunUrls = sessionStunBundleRef.current;
+    const observedStunUrls = sessionObservedStunUrlsRef.current;
     const snap = metricsRef.current.getSnapshot();
     const sessionElapsedMs =
       sessionStartedAtMsRef.current > 0
@@ -3497,25 +3802,28 @@ export function useGroupVoiceCall(uiActive = false) {
     if (window.hub?.reportStunCallOutcome && stunUrls.length > 0) {
       void window.hub.reportStunCallOutcome(stunUrls, stunHelped).catch(() => {});
     }
+    debugLog('[GCall] STUN session summary', {
+      configuredUrls: stunUrls,
+      observedUrls: observedStunUrls,
+      stunHelped,
+    });
 
     const nextAudioToken = bumpGroupCallAudioSessionToken(
       audioSessionTokenRef.current
     );
     audioSessionTokenRef.current = nextAudioToken;
     audioStartInFlightRef.current = false;
-    if (isGroupCallDebugEnabled()) {
-      debugLog(
-        '[GCall] cleanup start — invalidated audio token:',
-        nextAudioToken,
-        {
-          decoders: decoderMapRef.current.size,
-          playbackNodes: playbackWorkletsRef.current.size,
-          jitterBuffers: jitterMapRef.current.size,
-          interArrivalSources: interArrivalSamplesRef.current.size,
-          smoothedTargets: smoothedPlayoutTargetRef.current.size,
-        }
-      );
-    }
+    debugLog(
+      '[GCall] cleanup start — invalidated audio token:',
+      nextAudioToken,
+      {
+        decoders: decoderMapRef.current.size,
+        playbackNodes: playbackWorkletsRef.current.size,
+        jitterBuffers: jitterMapRef.current.size,
+        interArrivalSources: interArrivalSamplesRef.current.size,
+        smoothedTargets: smoothedPlayoutTargetRef.current.size,
+      }
+    );
     window.groupCall?.setLocalAddresses([]).catch(() => {});
     jitterDrainReactTickCountRef.current = 0;
     jitterFirstDrainLoggedRef.current = false;
@@ -3621,7 +3929,9 @@ export function useGroupVoiceCall(uiActive = false) {
     joinGenerationRef.current = null;
     localSpeakersRef.current.clear();
     sessionStunBundleRef.current = [];
+    sessionObservedStunUrlsRef.current = [];
     sessionStartedAtMsRef.current = 0;
+    lastIceServerRefreshAtMsRef.current = 0;
     metricsRef.current.reset();
     metricsRef.current.setRole('participant');
 
@@ -3629,15 +3939,13 @@ export function useGroupVoiceCall(uiActive = false) {
     setParticipants([]);
     setMyRole('participant');
     setActiveSpeakers([]);
-    if (isGroupCallDebugEnabled()) {
-      debugLog('[GCall] cleanup done — remaining audio resources', {
-        decoders: decoderMapRef.current.size,
-        playbackNodes: playbackWorkletsRef.current.size,
-        jitterBuffers: jitterMapRef.current.size,
-        interArrivalSources: interArrivalSamplesRef.current.size,
-        smoothedTargets: smoothedPlayoutTargetRef.current.size,
-      });
-    }
+    debugLog('[GCall] cleanup done — remaining audio resources', {
+      decoders: decoderMapRef.current.size,
+      playbackNodes: playbackWorkletsRef.current.size,
+      jitterBuffers: jitterMapRef.current.size,
+      interArrivalSources: interArrivalSamplesRef.current.size,
+      smoothedTargets: smoothedPlayoutTargetRef.current.size,
+    });
     flushMetrics();
   }, [
     closePeerConnection,
@@ -3747,10 +4055,26 @@ export function useGroupVoiceCall(uiActive = false) {
         // Self is already in the roster from joinGroupCall; relayed GC_JOIN must not run rejoin teardown.
         if (address === userInfo?.address) return;
 
+        debugLog('[GCall] gcall:participant-joined', {
+          address,
+          joinTs,
+          incomingJoinGeneration: incomingGen ?? null,
+          wasExisting: participantsRef.current.has(address),
+          existingGen:
+            participantsRef.current.get(address)?.joinGeneration ?? null,
+        });
+
         const wasExisting = participantsRef.current.has(address);
         const existing = participantsRef.current.get(address);
         // Same or older GC_JOIN (relay duplicate) — ignore to avoid topology churn.
-        if (existing && joinTs <= existing.lastJoinTs) return;
+        if (existing && joinTs <= existing.lastJoinTs) {
+          debugLog('[GCall] gcall:participant-joined skip — duplicate or older joinTs', {
+            address,
+            joinTs,
+            existingLastJoinTs: existing.lastJoinTs,
+          });
+          return;
+        }
 
         // Same session mesh re-announce: newer ts, same publicKey, compatible joinGeneration.
         if (
@@ -3783,6 +4107,12 @@ export function useGroupVoiceCall(uiActive = false) {
           // this gcall:participant-joined event), we only close the old session's
           // PC and leave the new one intact.
           const staleConnId = peerConnectionsRef.current.get(address)?.connId;
+          debugLog('[GCall] gcall:participant-joined joinGeneration change — teardown peer WebRTC', {
+            address,
+            previousJoinGeneration: existing.joinGeneration ?? null,
+            incomingJoinGeneration: incomingGen ?? null,
+            staleConnId: staleConnId ?? null,
+          });
           closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
           scheduleEnsureAfterIceTeardown();
@@ -3822,6 +4152,13 @@ export function useGroupVoiceCall(uiActive = false) {
               : {}),
           });
           const staleConnId = peerConnectionsRef.current.get(address)?.connId;
+          debugLog(
+            '[GCall] gcall:participant-joined publicKey change — teardown peer WebRTC',
+            {
+              address,
+              staleConnId: staleConnId ?? null,
+            }
+          );
           closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
           scheduleEnsureAfterIceTeardown();
@@ -3889,6 +4226,13 @@ export function useGroupVoiceCall(uiActive = false) {
       if (event === 'gcall:participant-left') {
         const { roomId, address } = payload;
         if (roomId !== roomIdRef.current) return;
+        const leavingConnId = peerConnectionsRef.current.get(address)?.connId;
+        debugLog('[GCall] gcall:participant-left', {
+          roomId,
+          address,
+          closedConnId: leavingConnId ?? null,
+          hadPeerEntry: peerConnectionsRef.current.has(address),
+        });
         closePeerConnection(address);
         disposeParticipantAudio(address);
         participantsRef.current.delete(address);

@@ -971,6 +971,15 @@ ipcMain.handle(
   }
 );
 
+ipcMain.handle('hub:reportObservedStunSources', async (_event, urls: unknown) => {
+  const c = getStunCoordinator();
+  if (!c) return { ok: false };
+  if (!Array.isArray(urls)) return { ok: false };
+  const u = urls.filter((x): x is string => typeof x === 'string');
+  c.recordObservedStunSources(u);
+  return { ok: true };
+});
+
 // Handler for initiating a streaming file save
 ipcMain.handle(
   'file:startStreamSave',

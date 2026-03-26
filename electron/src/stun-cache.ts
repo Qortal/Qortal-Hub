@@ -37,10 +37,31 @@ export interface IceServerOut {
   urls: string;
 }
 
+export interface StunSelectionDebugRow {
+  stunKey: string;
+  host: string;
+  stunPort: number;
+  score: number;
+  callSuccessEvents: number;
+  callFailEvents: number;
+  observerConfirmations: number;
+  probeFailStreak: number;
+  recentProbeOk: boolean;
+}
+
 function ipv4Prefix24(host: string): string | null {
   const m = host.match(/^(\d+)\.(\d+)\.(\d+)\.\d+$/);
   if (!m) return null;
   return `${m[1]}.${m[2]}.${m[3]}`;
+}
+
+function parseStunEndpointKey(stunKey: string): { host: string; stunPort: number } | null {
+  const idx = stunKey.lastIndexOf(':');
+  if (idx <= 0) return null;
+  const host = stunKey.slice(0, idx).trim();
+  const stunPort = Number.parseInt(stunKey.slice(idx + 1), 10);
+  if (!host || Number.isNaN(stunPort) || stunPort < 1 || stunPort > 65535) return null;
+  return { host, stunPort };
 }
 
 export class StunCache {
@@ -113,6 +134,19 @@ export class StunCache {
       (r.observer_confirmations ?? 0) * W_OBSERVER -
       failTerm
     );
+  }
+
+  private ensureEndpointRow(stunKey: string, host: string, stunPort: number): void {
+    const db = this.requireDb();
+    const now = Date.now();
+    db.prepare(
+      `INSERT INTO stun_endpoints (
+        stun_key, host, stun_port, probe_success_at, probe_fail_at, probe_rtt_ewma,
+        probe_fail_streak, call_success_events, call_fail_events, observer_confirmations,
+        stun_server_capable, updated_at
+      ) VALUES (?, ?, ?, NULL, NULL, NULL, 0, 0, 0, 0, 0, ?)
+      ON CONFLICT(stun_key) DO NOTHING`
+    ).run(stunKey, host, stunPort, now);
   }
 
   upsertProbeResult(
@@ -214,12 +248,40 @@ export class StunCache {
     );
     for (const key of bundleKeys) {
       try {
+        const parsed = parseStunEndpointKey(key);
+        if (parsed) {
+          this.ensureEndpointRow(key, parsed.host, parsed.stunPort);
+        }
         if (success) stmtOk.run(now, key);
         else stmtFail.run(now, key);
       } catch {
         /* ignore */
       }
     }
+    this.pruneSoft();
+  }
+
+  recordObservedSourceKeys(stunKeys: string[]): void {
+    if (stunKeys.length === 0) return;
+    const db = this.requireDb();
+    const now = Date.now();
+    const stmt = db.prepare(
+      `UPDATE stun_endpoints SET
+        observer_confirmations = observer_confirmations + 1,
+        updated_at = ?
+      WHERE stun_key = ?`
+    );
+    for (const key of [...new Set(stunKeys)]) {
+      try {
+        const parsed = parseStunEndpointKey(key);
+        if (!parsed) continue;
+        this.ensureEndpointRow(key, parsed.host, parsed.stunPort);
+        stmt.run(now, key);
+      } catch {
+        /* ignore */
+      }
+    }
+    this.pruneSoft();
   }
 
   getAllRows(): StunEndpointRow[] {
@@ -268,6 +330,24 @@ export class StunCache {
       out.push({ urls: url });
     }
     return out.slice(0, maxOut);
+  }
+
+  describeSelection(maxOut: number): StunSelectionDebugRow[] {
+    const rows = this.getAllRows();
+    const scored = rows.map((r) => ({
+      stunKey: r.stun_key,
+      host: r.host,
+      stunPort: r.stun_port,
+      score: this.computeScore(r),
+      callSuccessEvents: r.call_success_events ?? 0,
+      callFailEvents: r.call_fail_events ?? 0,
+      observerConfirmations: r.observer_confirmations ?? 0,
+      probeFailStreak: r.probe_fail_streak ?? 0,
+      recentProbeOk:
+        !!r.probe_success_at && (!r.probe_fail_at || r.probe_success_at > r.probe_fail_at),
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, maxOut);
   }
 
   private pruneSoft(): void {
