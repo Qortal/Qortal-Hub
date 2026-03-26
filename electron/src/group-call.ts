@@ -40,7 +40,8 @@ import {
 const GC_MAX_HOPS = 3;
 const GC_AUDIO_MAX_HOPS = 2;
 const GC_JOIN_TTL_MS = 120_000;
-const GC_KEY_MESSAGE_VERSION = 2;
+/** v3: callSessionId + mediaSessionGeneration + keyCommitment (no topology/key epoch on wire). */
+const GC_KEY_MESSAGE_VERSION = 3;
 
 /** Max base64 length for `GC_AUDIO.data` (matches renderer wire + margin; rejects oversize before relay/emit). */
 const GC_AUDIO_MAX_BASE64_CHARS = 16_384;
@@ -149,10 +150,11 @@ export interface GcKeyEnvelope {
   fromPublicKey: string;
   /** Base64-encoded nacl.box-encrypted room media key */
   encryptedKey: string;
-  keyMessageVersion?: number;
-  keyEpoch?: number;
-  topologyEpoch?: number;
-  encryptedKeyDigest?: string;
+  keyMessageVersion: number;
+  callSessionId: string;
+  mediaSessionGeneration: number;
+  keyCommitment: string;
+  encryptedKeyDigest: string;
   signature: string;
   timestamp: number;
   hopsRemaining?: number;
@@ -165,10 +167,11 @@ export interface GcKeyRotateEnvelope {
   fromPublicKey: string;
   /** Base64-encoded encrypted room media keys — map of address → encryptedKey */
   encryptedKeys: Record<string, string>;
-  keyMessageVersion?: number;
-  keyEpoch?: number;
-  topologyEpoch?: number;
-  encryptedKeysDigest?: string;
+  keyMessageVersion: number;
+  callSessionId: string;
+  mediaSessionGeneration: number;
+  keyCommitment: string;
+  encryptedKeysDigest: string;
   signature: string;
   timestamp: number;
   hopsRemaining?: number;
@@ -180,8 +183,8 @@ export interface GcKeyRequestEnvelope {
   toAddress: string;
   fromAddress: string;
   fromPublicKey: string;
-  requestedTopologyEpoch: number;
-  requestedKeyEpoch: number;
+  callSessionId: string;
+  mediaSessionGeneration: number;
   keyMessageVersion: number;
   signature: string;
   timestamp: number;
@@ -255,6 +258,10 @@ interface GroupRoom {
   topologyEpoch: number;
   topologySignature?: string;
   joinTimestamp?: number;
+  /** Main-owned media session id; immutable until room is empty. */
+  callSessionId: string;
+  /** Bumped only on explicit session-break IPC. */
+  mediaSessionGeneration: number;
 }
 
 // ── Signature helpers ─────────────────────────────────────────────────────────
@@ -292,58 +299,56 @@ function buildGcKeyRotateDigest(encryptedKeys: Record<string, string>): string {
 }
 
 function buildGcKeySignedFields(env: GcKeyEnvelope): Record<string, unknown> | null {
-  const base: Record<string, unknown> = {
+  if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) return null;
+  if (
+    !isNonEmptyString(env.callSessionId) ||
+    typeof env.mediaSessionGeneration !== 'number' ||
+    !Number.isFinite(env.mediaSessionGeneration) ||
+    !isNonEmptyString(env.keyCommitment) ||
+    !isNonEmptyString(env.encryptedKeyDigest)
+  ) {
+    return null;
+  }
+  return {
     type: env.type,
     roomId: env.roomId,
     toAddress: env.toAddress,
     fromAddress: env.fromAddress,
     fromPublicKey: env.fromPublicKey,
     timestamp: env.timestamp,
+    keyMessageVersion: env.keyMessageVersion,
+    callSessionId: env.callSessionId,
+    mediaSessionGeneration: env.mediaSessionGeneration,
+    keyCommitment: env.keyCommitment,
+    encryptedKeyDigest: env.encryptedKeyDigest,
   };
-  if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
-    if (
-      typeof env.keyEpoch !== 'number' ||
-      !Number.isFinite(env.keyEpoch) ||
-      typeof env.topologyEpoch !== 'number' ||
-      !Number.isFinite(env.topologyEpoch) ||
-      !isNonEmptyString(env.encryptedKeyDigest)
-    ) {
-      return null;
-    }
-    base.keyMessageVersion = env.keyMessageVersion;
-    base.keyEpoch = env.keyEpoch;
-    base.topologyEpoch = env.topologyEpoch;
-    base.encryptedKeyDigest = env.encryptedKeyDigest;
-  }
-  return base;
 }
 
 function buildGcKeyRotateSignedFields(
   env: GcKeyRotateEnvelope
 ): Record<string, unknown> | null {
-  const base: Record<string, unknown> = {
+  if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) return null;
+  if (
+    !isNonEmptyString(env.callSessionId) ||
+    typeof env.mediaSessionGeneration !== 'number' ||
+    !Number.isFinite(env.mediaSessionGeneration) ||
+    !isNonEmptyString(env.keyCommitment) ||
+    !isNonEmptyString(env.encryptedKeysDigest)
+  ) {
+    return null;
+  }
+  return {
     type: env.type,
     roomId: env.roomId,
     fromAddress: env.fromAddress,
     fromPublicKey: env.fromPublicKey,
     timestamp: env.timestamp,
+    keyMessageVersion: env.keyMessageVersion,
+    callSessionId: env.callSessionId,
+    mediaSessionGeneration: env.mediaSessionGeneration,
+    keyCommitment: env.keyCommitment,
+    encryptedKeysDigest: env.encryptedKeysDigest,
   };
-  if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
-    if (
-      typeof env.keyEpoch !== 'number' ||
-      !Number.isFinite(env.keyEpoch) ||
-      typeof env.topologyEpoch !== 'number' ||
-      !Number.isFinite(env.topologyEpoch) ||
-      !isNonEmptyString(env.encryptedKeysDigest)
-    ) {
-      return null;
-    }
-    base.keyMessageVersion = env.keyMessageVersion;
-    base.keyEpoch = env.keyEpoch;
-    base.topologyEpoch = env.topologyEpoch;
-    base.encryptedKeysDigest = env.encryptedKeysDigest;
-  }
-  return base;
 }
 
 function buildGcKeyRequestSignedFields(env: GcKeyRequestEnvelope): Record<string, unknown> {
@@ -353,8 +358,8 @@ function buildGcKeyRequestSignedFields(env: GcKeyRequestEnvelope): Record<string
     toAddress: env.toAddress,
     fromAddress: env.fromAddress,
     fromPublicKey: env.fromPublicKey,
-    requestedTopologyEpoch: env.requestedTopologyEpoch,
-    requestedKeyEpoch: env.requestedKeyEpoch,
+    callSessionId: env.callSessionId,
+    mediaSessionGeneration: env.mediaSessionGeneration,
     keyMessageVersion: env.keyMessageVersion,
     timestamp: env.timestamp,
   };
@@ -732,14 +737,17 @@ export class GroupCallManager extends EventEmitter {
     publicKey: string,
     timestamp: number,
     joinGeneration?: number
-  ): void {
+  ): { callSessionId: string; mediaSessionGeneration: number } {
     let room = this.rooms.get(roomId);
     if (!room) {
       room = {
-        roomId, chatId,
+        roomId,
+        chatId,
         participants: new Map(),
         topologyEpoch: 0,
         joinTimestamp: timestamp,
+        callSessionId: nodeCrypto.randomUUID(),
+        mediaSessionGeneration: 1,
       };
       this.rooms.set(roomId, room);
     }
@@ -758,6 +766,10 @@ export class GroupCallManager extends EventEmitter {
     };
     this.p2p.send(null, env);
     loggerLog(`[GCall] Sent GC_JOIN for room ${roomId}`);
+    return {
+      callSessionId: room.callSessionId,
+      mediaSessionGeneration: room.mediaSessionGeneration,
+    };
   }
 
   leaveRoom(
@@ -896,11 +908,12 @@ export class GroupCallManager extends EventEmitter {
     signature: string,
     publicKey: string,
     timestamp: number,
-    meta?: {
-      keyMessageVersion?: number;
-      keyEpoch?: number;
-      topologyEpoch?: number;
-      encryptedKeyDigest?: string;
+    meta: {
+      keyMessageVersion: number;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+      keyCommitment: string;
+      encryptedKeyDigest: string;
     }
   ): void {
     const env: GcKeyEnvelope = {
@@ -913,7 +926,7 @@ export class GroupCallManager extends EventEmitter {
       signature,
       timestamp,
       hopsRemaining: GC_MAX_HOPS,
-      ...(meta ?? {}),
+      ...meta,
     };
     const nodeId = this.presence.getNodeIdForAddress(toAddress);
     if (nodeId) {
@@ -930,11 +943,12 @@ export class GroupCallManager extends EventEmitter {
     signature: string,
     publicKey: string,
     timestamp: number,
-    meta?: {
-      keyMessageVersion?: number;
-      keyEpoch?: number;
-      topologyEpoch?: number;
-      encryptedKeysDigest?: string;
+    meta: {
+      keyMessageVersion: number;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+      keyCommitment: string;
+      encryptedKeysDigest: string;
     }
   ): void {
     const env: GcKeyRotateEnvelope = {
@@ -946,7 +960,7 @@ export class GroupCallManager extends EventEmitter {
       signature,
       timestamp,
       hopsRemaining: GC_MAX_HOPS,
-      ...(meta ?? {}),
+      ...meta,
     };
     this.p2p.send(null, env);
   }
@@ -958,8 +972,8 @@ export class GroupCallManager extends EventEmitter {
     signature: string,
     publicKey: string,
     timestamp: number,
-    requestedTopologyEpoch: number,
-    requestedKeyEpoch: number
+    callSessionId: string,
+    mediaSessionGeneration: number
   ): void {
     const env: GcKeyRequestEnvelope = {
       type: 'GC_KEY_REQUEST',
@@ -967,8 +981,8 @@ export class GroupCallManager extends EventEmitter {
       toAddress,
       fromAddress,
       fromPublicKey: publicKey,
-      requestedTopologyEpoch,
-      requestedKeyEpoch,
+      callSessionId,
+      mediaSessionGeneration,
       keyMessageVersion: GC_KEY_MESSAGE_VERSION,
       signature,
       timestamp,
@@ -1176,6 +1190,10 @@ export class GroupCallManager extends EventEmitter {
     const hadLocalInterest = Boolean(room);
     if (room) {
       room.participants.delete(address);
+      if (room.participants.size === 0) {
+        this.rooms.delete(roomId);
+        this.relayByteBudgetByRoom.delete(roomId);
+      }
     }
     this.participantNodeIds.delete(address);
     if (hadLocalInterest) {
@@ -1341,15 +1359,35 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
-    if (env.keyMessageVersion != null && env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
+    if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
       loggerLog(`[GCall] Dropped GC_KEY: unsupported version ${env.keyMessageVersion}`);
       return;
     }
-    if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
-      if (env.encryptedKeyDigest !== buildGcKeyDigest(env.toAddress, env.encryptedKey)) {
-        loggerLog(`[GCall] Dropped GC_KEY: payload digest mismatch from ${env.fromAddress}`);
+    if (env.encryptedKeyDigest !== buildGcKeyDigest(env.toAddress, env.encryptedKey)) {
+      loggerLog(`[GCall] Dropped GC_KEY: payload digest mismatch from ${env.fromAddress}`);
+      return;
+    }
+    const room = this.rooms.get(env.roomId);
+    if (!room) {
+      loggerLog(`[GCall] Dropped GC_KEY: unknown room ${env.roomId}`);
+      return;
+    }
+    // Each Electron process allocates its own callSessionId UUID on first joinRoom.
+    // The root's UUID is the authoritative session identity; non-root peers adopt it
+    // from the first verified key message rather than from their own local UUID.
+    if (env.mediaSessionGeneration !== room.mediaSessionGeneration) {
+      if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
+        // Root has advanced the generation (session-break). Adopt the new session.
+        room.callSessionId = env.callSessionId;
+        room.mediaSessionGeneration = env.mediaSessionGeneration;
+        loggerLog(`[GCall] GC_KEY: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`);
+      } else {
+        loggerLog(`[GCall] Dropped GC_KEY: stale session generation from ${env.fromAddress}`);
         return;
       }
+    } else if (env.callSessionId !== room.callSessionId) {
+      // Same generation, different callSessionId — root's UUID wins; adopt it.
+      room.callSessionId = env.callSessionId;
     }
     const fields = buildGcKeySignedFields(env);
     if (!fields) return;
@@ -1376,15 +1414,31 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
-    if (env.keyMessageVersion != null && env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
+    if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
       loggerLog(`[GCall] Dropped GC_KEY_ROTATE: unsupported version ${env.keyMessageVersion}`);
       return;
     }
-    if (env.keyMessageVersion === GC_KEY_MESSAGE_VERSION) {
-      if (env.encryptedKeysDigest !== buildGcKeyRotateDigest(env.encryptedKeys)) {
-        loggerLog(`[GCall] Dropped GC_KEY_ROTATE: payload digest mismatch from ${env.fromAddress}`);
+    if (env.encryptedKeysDigest !== buildGcKeyRotateDigest(env.encryptedKeys)) {
+      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: payload digest mismatch from ${env.fromAddress}`);
+      return;
+    }
+    const room = this.rooms.get(env.roomId);
+    if (!room) {
+      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: unknown room ${env.roomId}`);
+      return;
+    }
+    // Same cross-process session adoption as handleKey: root's callSessionId wins.
+    if (env.mediaSessionGeneration !== room.mediaSessionGeneration) {
+      if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
+        room.callSessionId = env.callSessionId;
+        room.mediaSessionGeneration = env.mediaSessionGeneration;
+        loggerLog(`[GCall] GC_KEY_ROTATE: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`);
+      } else {
+        loggerLog(`[GCall] Dropped GC_KEY_ROTATE: stale session generation from ${env.fromAddress}`);
         return;
       }
+    } else if (env.callSessionId !== room.callSessionId) {
+      room.callSessionId = env.callSessionId;
     }
     const fields = buildGcKeyRotateSignedFields(env);
     if (!fields) return;
@@ -1413,6 +1467,15 @@ export class GroupCallManager extends EventEmitter {
       loggerLog(`[GCall] Dropped GC_KEY_REQUEST: unsupported version ${env.keyMessageVersion}`);
       return;
     }
+    const room = this.rooms.get(env.roomId);
+    if (!room) return;
+    // Key requesters haven't adopted the root's callSessionId yet — that's exactly
+    // why they are requesting the key. Only reject requests from a genuinely stale
+    // generation (indicates a leftover request from before a session-break).
+    if (env.mediaSessionGeneration < room.mediaSessionGeneration) {
+      loggerLog(`[GCall] Dropped GC_KEY_REQUEST: stale session generation`);
+      return;
+    }
     this.enqueueVerify(
       buildGcKeyRequestSignedFields(env),
       env.signature,
@@ -1420,6 +1483,36 @@ export class GroupCallManager extends EventEmitter {
       env.fromAddress,
       { kind: 'key_request', env }
     );
+  }
+
+  /**
+   * Last-resort session break: bump media session generation for all local subscribers.
+   */
+  requestSessionBreak(roomId: string): { ok: boolean; error?: string } {
+    const room = this.rooms.get(roomId);
+    if (!room || room.participants.size === 0) {
+      return { ok: false, error: 'no-room' };
+    }
+    let localInRoom = false;
+    for (const addr of this.localAddresses) {
+      if (room.participants.has(addr)) {
+        localInRoom = true;
+        break;
+      }
+    }
+    if (!localInRoom) {
+      return { ok: false, error: 'not-in-room' };
+    }
+    room.mediaSessionGeneration = (room.mediaSessionGeneration + 1) >>> 0;
+    if (room.mediaSessionGeneration === 0) {
+      room.mediaSessionGeneration = 1;
+    }
+    this.emit('gcall:session-updated', {
+      roomId,
+      callSessionId: room.callSessionId,
+      mediaSessionGeneration: room.mediaSessionGeneration,
+    });
+    return { ok: true };
   }
 
   private applyVerifiedKey(env: GcKeyEnvelope): void {
@@ -1430,8 +1523,9 @@ export class GroupCallManager extends EventEmitter {
       encryptedKey: env.encryptedKey,
       timestamp: env.timestamp,
       keyMessageVersion: env.keyMessageVersion,
-      keyEpoch: env.keyEpoch,
-      topologyEpoch: env.topologyEpoch,
+      callSessionId: env.callSessionId,
+      mediaSessionGeneration: env.mediaSessionGeneration,
+      keyCommitment: env.keyCommitment,
       verified: true,
     });
   }
@@ -1447,8 +1541,9 @@ export class GroupCallManager extends EventEmitter {
         encryptedKey,
         timestamp: env.timestamp,
         keyMessageVersion: env.keyMessageVersion,
-        keyEpoch: env.keyEpoch,
-        topologyEpoch: env.topologyEpoch,
+        callSessionId: env.callSessionId,
+        mediaSessionGeneration: env.mediaSessionGeneration,
+        keyCommitment: env.keyCommitment,
         verified: true,
       });
     }
@@ -1463,8 +1558,8 @@ export class GroupCallManager extends EventEmitter {
       toAddress: env.toAddress,
       fromAddress: env.fromAddress,
       fromPublicKey: env.fromPublicKey,
-      requestedTopologyEpoch: env.requestedTopologyEpoch,
-      requestedKeyEpoch: env.requestedKeyEpoch,
+      callSessionId: env.callSessionId,
+      mediaSessionGeneration: env.mediaSessionGeneration,
       keyMessageVersion: env.keyMessageVersion,
       timestamp: env.timestamp,
       verified: true,

@@ -2045,6 +2045,8 @@ export function attachGroupCallListeners(
   manager.on('gcall:heartbeat',          forward('gcall:heartbeat'));
   manager.on('gcall:audio',              forward('gcall:audio'));
   manager.on('gcall:key',                forward('gcall:key'));
+  manager.on('gcall:key-request',      forward('gcall:key-request'));
+  manager.on('gcall:session-updated',    forward('gcall:session-updated'));
   manager.on('gcall:rtc-signal',         forward('gcall:rtc-signal'));
 }
 
@@ -2062,8 +2064,20 @@ ipcMain.handle(
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.joinRoom(roomId, chatId, localAddress, signature, publicKey, timestamp, joinGeneration);
-    return { success: true };
+    const session = mgr.joinRoom(
+      roomId,
+      chatId,
+      localAddress,
+      signature,
+      publicKey,
+      timestamp,
+      joinGeneration
+    );
+    return {
+      success: true,
+      callSessionId: session.callSessionId,
+      mediaSessionGeneration: session.mediaSessionGeneration,
+    };
   }
 );
 
@@ -2120,11 +2134,12 @@ ipcMain.handle(
     signature: string,
     publicKey: string,
     timestamp: number,
-    meta?: {
-      keyMessageVersion?: number;
-      keyEpoch?: number;
-      topologyEpoch?: number;
-      encryptedKeyDigest?: string;
+    meta: {
+      keyMessageVersion: number;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+      keyCommitment: string;
+      encryptedKeyDigest: string;
     }
   ) => {
     const mgr = getGroupCallManager();
@@ -2144,11 +2159,12 @@ ipcMain.handle(
     signature: string,
     publicKey: string,
     timestamp: number,
-    meta?: {
-      keyMessageVersion?: number;
-      keyEpoch?: number;
-      topologyEpoch?: number;
-      encryptedKeysDigest?: string;
+    meta: {
+      keyMessageVersion: number;
+      callSessionId: string;
+      mediaSessionGeneration: number;
+      keyCommitment: string;
+      encryptedKeysDigest: string;
     }
   ) => {
     const mgr = getGroupCallManager();
@@ -2168,8 +2184,8 @@ ipcMain.handle(
     signature: string,
     publicKey: string,
     timestamp: number,
-    requestedTopologyEpoch: number,
-    requestedKeyEpoch: number
+    callSessionId: string,
+    mediaSessionGeneration: number
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
@@ -2180,12 +2196,19 @@ ipcMain.handle(
       signature,
       publicKey,
       timestamp,
-      requestedTopologyEpoch,
-      requestedKeyEpoch
+      callSessionId,
+      mediaSessionGeneration
     );
     return { success: true };
   }
 );
+
+ipcMain.handle('gcall:requestSessionBreak', async (_event, roomId: string) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+  const r = mgr.requestSessionBreak(roomId);
+  return r.ok ? { success: true } : { success: false, error: r.error ?? 'rejected' };
+});
 
 ipcMain.handle(
   'gcall:sendRtcSignal',

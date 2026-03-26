@@ -264,7 +264,12 @@ declare global {
         publicKey: string,
         timestamp: number,
         joinGeneration?: number
-      ) => Promise<{ success: boolean; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        callSessionId?: string;
+        mediaSessionGeneration?: number;
+      }>;
       leave: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       broadcastTopology: (roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       sendAudio: (
@@ -280,11 +285,12 @@ declare global {
         signature: string,
         publicKey: string,
         timestamp: number,
-        meta?: {
-          keyMessageVersion?: number;
-          keyEpoch?: number;
-          topologyEpoch?: number;
-          encryptedKeyDigest?: string;
+        meta: {
+          keyMessageVersion: number;
+          callSessionId: string;
+          mediaSessionGeneration: number;
+          keyCommitment: string;
+          encryptedKeyDigest: string;
         }
       ) => Promise<{ success: boolean }>;
       sendKeyRotate: (
@@ -294,11 +300,12 @@ declare global {
         signature: string,
         publicKey: string,
         timestamp: number,
-        meta?: {
-          keyMessageVersion?: number;
-          keyEpoch?: number;
-          topologyEpoch?: number;
-          encryptedKeysDigest?: string;
+        meta: {
+          keyMessageVersion: number;
+          callSessionId: string;
+          mediaSessionGeneration: number;
+          keyCommitment: string;
+          encryptedKeysDigest: string;
         }
       ) => Promise<{ success: boolean }>;
       sendKeyRequest: (
@@ -308,9 +315,10 @@ declare global {
         signature: string,
         publicKey: string,
         timestamp: number,
-        requestedTopologyEpoch: number,
-        requestedKeyEpoch: number
+        callSessionId: string,
+        mediaSessionGeneration: number
       ) => Promise<{ success: boolean }>;
+      requestSessionBreak: (roomId: string) => Promise<{ success: boolean; error?: string }>;
       sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice' | 'reconnect', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;

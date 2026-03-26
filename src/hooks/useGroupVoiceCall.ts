@@ -64,6 +64,7 @@ import {
   encodeAudioPacketV3,
   type DecodedAudioPacket,
 } from '../lib/group-call/audioPacketCodec';
+import { buildMediaKeyCommitmentHex } from '../lib/group-call/mediaKeyCommitment';
 import {
   getIceServerSourceUrlsForPeer,
   scheduleLogIceServerSourcesForPeer,
@@ -110,9 +111,10 @@ interface IncomingRoomKeyPayload {
   fromAddress: string;
   fromPublicKey: string;
   timestamp?: number;
-  keyMessageVersion?: number;
-  keyEpoch?: number;
-  topologyEpoch?: number;
+  keyMessageVersion: number;
+  callSessionId: string;
+  mediaSessionGeneration: number;
+  keyCommitment: string;
   verified?: boolean;
 }
 
@@ -125,9 +127,9 @@ interface IncomingKeyRequestPayload {
   toAddress: string;
   fromAddress: string;
   fromPublicKey: string;
-  requestedTopologyEpoch: number;
-  requestedKeyEpoch: number;
-  keyMessageVersion?: number;
+  callSessionId: string;
+  mediaSessionGeneration: number;
+  keyMessageVersion: number;
   timestamp?: number;
   verified?: boolean;
 }
@@ -232,11 +234,12 @@ const isTestingRelay = false;
 const PENDING_DECRYPT_MAX = 96;
 /** Drop pending decrypt entries older than this (worker stuck / lost result). */
 const PENDING_DECRYPT_TTL_MS = 4000;
-/** How long the previous room key is kept as a decrypt fallback after a rotation. */
-const PREV_KEY_TTL_MS = 5_000;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
-const GCALL_KEY_MESSAGE_VERSION = 2;
+/** v3: callSessionId + mediaSessionGeneration + keyCommitment (matches main process). */
+const GCALL_KEY_MESSAGE_VERSION = 3;
+/** After repeated key-recovery failure, ask main to bump media session generation. */
+const KEY_RECOVERY_SESSION_BREAK_COOLDOWN_MS = 45_000;
 const PENDING_VERIFIED_KEY_TTL_MS = 5_000;
 const KEY_REQUEST_BATCH_WINDOW_MS = 150;
 const KEY_RECOVERY_SETTLE_DELAY_MS = 1_500;
@@ -676,6 +679,14 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const roomIdRef = useRef<string>('');
   const chatIdRef = useRef<string>('');
+  /** Main-owned media session (from join IPC); read synchronously in election — no lazy fetch. */
+  const callSessionIdRef = useRef<string>('');
+  const mediaSessionGenerationRef = useRef<number>(1);
+  /** Hex SHA-256 commitment for the currently installed K (courier agreement, pre-decrypt checks). */
+  const currentKeyCommitmentRef = useRef<string | null>(null);
+  /** True until we hold K for current (callSessionId, mediaSessionGeneration). */
+  const needsSessionKeyRef = useRef(true);
+  const lastSessionBreakRequestAtRef = useRef(0);
 
   // Room key (32-byte symmetric key)
   const roomKeyRef = useRef<Uint8Array | null>(null);
@@ -846,14 +857,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const pendingDecryptsRef = useRef(
     new Map<number, { wireForForward: ArrayBuffer; startedAt: number }>()
   );
-  /** Bytes last posted to worker — avoid redundant setRoomKey (also used as "last applied key"
-   *  source for the sync-path prev-key fallback; updated even when no worker is present). */
+  /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
-  /** Previous room key retained for PREV_KEY_TTL_MS after a rotation (sync-path fallback). */
-  const prevRoomKeyRef = useRef<Uint8Array | null>(null);
-  const prevKeyExpiresAtRef = useRef<number>(0);
-  /** Highest verified key epoch this client has applied or authored for the current room. */
-  const lastAppliedKeyEpochRef = useRef(0);
   /** Verified key messages that arrived before topology root convergence caught up. */
   const pendingVerifiedKeysRef = useRef<PendingVerifiedRoomKey[]>([]);
   /** True while a new key is being distributed; sendEncodedFrame drops frames during this window. */
@@ -867,8 +872,17 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastKeyRecoveryRequestAtRef = useRef(0);
   const lastKeyRecoveryRefreshAtRef = useRef(0);
   const lastKeyRecoveryReannounceAtRef = useRef(0);
+  /** Rotates through `getOrderedKeyRequestTargets` for GC_KEY_REQUEST delivery. */
+  const keyRecoveryTargetCursorRef = useRef(0);
   const pendingKeyRequestRecipientsRef = useRef<
-    Map<string, { publicKey: string; requestedKeyEpoch: number }>
+    Map<
+      string,
+      {
+        publicKey: string;
+        callSessionId: string;
+        mediaSessionGeneration: number;
+      }
+    >
   >(new Map());
   const pendingKeyRequestFlushTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -876,6 +890,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const keyRecoveryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  /** If case-(c) root never receives K (simultaneous join), mint after this delay. */
+  const simultJoinKeyFallbackTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const handleRoomKeyPayloadRef = useRef<
     (payload: IncomingRoomKeyPayload, allowQueue?: boolean) => Promise<void>
   >(async () => {});
@@ -1660,9 +1678,6 @@ export function useGroupVoiceCall(uiActive = false) {
   const syncDecryptWorkerRoomKey = useCallback(
     (roomKey: Uint8Array | null) => {
       if (!roomKey) {
-        // Full clear: reset prev-key state for both sync and worker paths.
-        prevRoomKeyRef.current = null;
-        prevKeyExpiresAtRef.current = 0;
         lastWorkerRoomKeyRef.current = null;
         if (decryptWorkerRef.current) {
           flushPendingDecryptMap();
@@ -1670,8 +1685,6 @@ export function useGroupVoiceCall(uiActive = false) {
         }
         return;
       }
-      // Duplicate-check and prev-key tracking run unconditionally so the
-      // main-thread sync fallback path also benefits when there is no worker.
       const prev = lastWorkerRoomKeyRef.current;
       if (
         prev &&
@@ -1679,10 +1692,6 @@ export function useGroupVoiceCall(uiActive = false) {
         prev.every((b, i) => b === roomKey[i])
       ) {
         return; // same key — no-op
-      }
-      if (prev) {
-        prevRoomKeyRef.current = prev;
-        prevKeyExpiresAtRef.current = Date.now() + PREV_KEY_TTL_MS;
       }
       lastWorkerRoomKeyRef.current = new Uint8Array(roomKey);
       if (!decryptWorkerRef.current) return; // sync path served; no worker to notify
@@ -3583,6 +3592,27 @@ export function useGroupVoiceCall(uiActive = false) {
     });
   }, [isAudioPipelineActive, startAudioCapture, userInfo?.address]);
 
+  /** Root / key-holder: hold uplink until distribution finishes (or timeout). */
+  const armKeyDistributionGateAndRun = useCallback(
+    (runner: () => Promise<void>) => {
+      const distGen = ++keyDistributionGenRef.current;
+      keyDistributionPendingRef.current = true;
+      ensureAudioCaptureStarted();
+      const gateReleaseTimer = setTimeout(() => {
+        if (keyDistributionGenRef.current === distGen) {
+          keyDistributionPendingRef.current = false;
+        }
+      }, KEY_DIST_GATE_TIMEOUT_MS);
+      void runner().finally(() => {
+        clearTimeout(gateReleaseTimer);
+        if (keyDistributionGenRef.current === distGen) {
+          keyDistributionPendingRef.current = false;
+        }
+      });
+    },
+    [ensureAudioCaptureStarted]
+  );
+
   const ensurePlaybackWorkletLoaded = useCallback(async (): Promise<void> => {
     const ctx = audioContextRef.current;
     if (!ctx) return;
@@ -3677,6 +3707,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!roomKeyRef.current || !userInfo?.address) return;
       if (mutedRef.current) return; // mic is muted — drop frame
       if (keyDistributionPendingRef.current) return; // new key not yet delivered — hold frames
+      if (needsSessionKeyRef.current) return; // no K for current media session
       if (seqRef.current === 0) {
         debugLog(
           '[GCall] First encoded frame ready to send — role:',
@@ -3918,15 +3949,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       // Sync fallback: decrypt on main thread (same post-decrypt path as worker).
-      // Try the current key first, then the previous key if still within its TTL.
-      let list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
-      if (
-        list.length === 0 &&
-        prevRoomKeyRef.current !== null &&
-        Date.now() < prevKeyExpiresAtRef.current
-      ) {
-        list = decodeAudioPackets(new Uint8Array(data), prevRoomKeyRef.current);
-      }
+      const list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
       applyPostDecryptList(wireForForward, list, startedAt);
     },
     [applyPostDecryptList, ensurePendingDecryptCap, sweepStalePendingDecrypts]
@@ -4183,10 +4206,17 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       if (recipientAddrs.length === 0) return;
 
-      const topologyEpoch =
-        topologyRef.current?.topologyEpoch ?? localEpochRef.current;
-      const keyEpoch = Math.max(lastAppliedKeyEpochRef.current, topologyEpoch);
-      lastAppliedKeyEpochRef.current = keyEpoch;
+      const callSessionId = callSessionIdRef.current;
+      const mediaSessionGeneration = mediaSessionGenerationRef.current >>> 0;
+      if (!callSessionId) {
+        debugWarn('[GCall] distributeRoomKey — missing callSessionId');
+        return;
+      }
+      const keyCommitment = await buildMediaKeyCommitmentHex(
+        key,
+        callSessionId,
+        mediaSessionGeneration
+      );
       const encryptedKeysDigest = await buildGcKeyRotateDigest(encryptedKeys);
       const ts = Date.now();
       const sig = await signGroupCallFields({
@@ -4195,8 +4225,9 @@ export function useGroupVoiceCall(uiActive = false) {
         fromAddress: myAddr,
         fromPublicKey: userInfo.publicKey ?? '',
         keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
-        keyEpoch,
-        topologyEpoch,
+        callSessionId,
+        mediaSessionGeneration,
+        keyCommitment,
         encryptedKeysDigest,
         timestamp: ts,
       }).catch(() => '');
@@ -4213,8 +4244,9 @@ export function useGroupVoiceCall(uiActive = false) {
         ts,
         {
           keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
-          keyEpoch,
-          topologyEpoch,
+          callSessionId,
+          mediaSessionGeneration,
+          keyCommitment,
           encryptedKeysDigest,
         }
       );
@@ -4234,12 +4266,17 @@ export function useGroupVoiceCall(uiActive = false) {
     ) => {
       if (!userInfo?.address) return;
       const myAddr = userInfo.address;
-      const keyEpoch = Math.max(
-        lastAppliedKeyEpochRef.current,
-        topologyRef.current?.topologyEpoch ?? localEpochRef.current
+      const callSessionId = callSessionIdRef.current;
+      const mediaSessionGeneration = mediaSessionGenerationRef.current >>> 0;
+      if (!callSessionId) {
+        debugWarn('[GCall] sendTargetedRoomKeys — missing callSessionId');
+        return;
+      }
+      const keyCommitment = await buildMediaKeyCommitmentHex(
+        key,
+        callSessionId,
+        mediaSessionGeneration
       );
-      const topologyEpoch =
-        topologyRef.current?.topologyEpoch ?? localEpochRef.current;
       const { encryptedKeys, omittedAddresses, failedAddresses } =
         encryptRoomKeyForRecipients(key, recipients, myAddr);
       debugLog('[GCall] sendTargetedRoomKeys', {
@@ -4265,8 +4302,9 @@ export function useGroupVoiceCall(uiActive = false) {
           fromAddress: myAddr,
           fromPublicKey: userInfo.publicKey ?? '',
           keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
-          keyEpoch,
-          topologyEpoch,
+          callSessionId,
+          mediaSessionGeneration,
+          keyCommitment,
           encryptedKeyDigest,
           timestamp: ts,
         }).catch(() => '');
@@ -4287,8 +4325,9 @@ export function useGroupVoiceCall(uiActive = false) {
           ts,
           {
             keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
-            keyEpoch,
-            topologyEpoch,
+            callSessionId,
+            mediaSessionGeneration,
+            keyCommitment,
             encryptedKeyDigest,
           }
         );
@@ -4298,20 +4337,22 @@ export function useGroupVoiceCall(uiActive = false) {
   );
 
   const queueVerifiedRoomKey = useCallback((payload: IncomingRoomKeyPayload) => {
+    const digestSlot = payload.encryptedKey.slice(0, 48);
     const dedupeKey = [
+      payload.callSessionId,
+      payload.mediaSessionGeneration,
       payload.fromAddress,
-      payload.keyEpoch ?? 'legacy',
-      payload.timestamp ?? 0,
-      payload.encryptedKey,
+      digestSlot,
     ].join(':');
     const now = Date.now();
     const next = pendingVerifiedKeysRef.current.filter((entry) => {
       if (entry.expiresAt <= now) return false;
+      const slot = entry.encryptedKey.slice(0, 48);
       const entryKey = [
+        entry.callSessionId,
+        entry.mediaSessionGeneration,
         entry.fromAddress,
-        entry.keyEpoch ?? 'legacy',
-        entry.timestamp ?? 0,
-        entry.encryptedKey,
+        slot,
       ].join(':');
       return entryKey !== dedupeKey;
     });
@@ -4319,26 +4360,40 @@ export function useGroupVoiceCall(uiActive = false) {
     pendingVerifiedKeysRef.current = next;
     debugLog('[GCall] queued verified room key', {
       fromAddress: payload.fromAddress,
-      keyEpoch: payload.keyEpoch ?? null,
+      callSessionId: payload.callSessionId,
+      mediaSessionGeneration: payload.mediaSessionGeneration,
       queueDepth: next.length,
     });
   }, []);
 
   const applyDecryptedRoomKey = useCallback(
-    (payload: IncomingRoomKeyPayload, decryptedKey: string) => {
-      roomKeyRef.current = Uint8Array.from(atob(decryptedKey), (c) =>
+    async (payload: IncomingRoomKeyPayload, decryptedKey: string) => {
+      const bytes = Uint8Array.from(atob(decryptedKey), (c) =>
         c.charCodeAt(0)
       );
-      isOurKeyRef.current = false;
-      if (
-        typeof payload.keyEpoch === 'number' &&
-        Number.isFinite(payload.keyEpoch)
-      ) {
-        lastAppliedKeyEpochRef.current = Math.max(
-          lastAppliedKeyEpochRef.current,
-          payload.keyEpoch
-        );
+      const gen = payload.mediaSessionGeneration >>> 0;
+      const expectedCommitment = await buildMediaKeyCommitmentHex(
+        bytes,
+        payload.callSessionId,
+        gen
+      );
+      if (expectedCommitment !== payload.keyCommitment) {
+        debugWarn('[GCall] Room key commitment mismatch after decrypt', {
+          fromAddress: payload.fromAddress,
+        });
+        return;
       }
+      const caseCRootBecomeHolder =
+        isInitiatorRef.current && needsSessionKeyRef.current;
+      if (simultJoinKeyFallbackTimerRef.current) {
+        clearTimeout(simultJoinKeyFallbackTimerRef.current);
+        simultJoinKeyFallbackTimerRef.current = null;
+      }
+      roomKeyRef.current = bytes;
+      isOurKeyRef.current = caseCRootBecomeHolder;
+      currentKeyCommitmentRef.current = payload.keyCommitment;
+      needsSessionKeyRef.current = false;
+      keyDistributionPendingRef.current = false;
       decryptFailureStreakRef.current = 0;
       lastRemoteDecodeAtRef.current = Date.now();
       recoveryEligibleAfterRef.current =
@@ -4346,12 +4401,24 @@ export function useGroupVoiceCall(uiActive = false) {
       syncDecryptWorkerRoomKey(roomKeyRef.current);
       debugLog('[GCall] Room key set', {
         fromAddress: payload.fromAddress,
-        keyEpoch: payload.keyEpoch ?? null,
-        topologyEpoch: payload.topologyEpoch ?? null,
+        callSessionId: payload.callSessionId,
+        mediaSessionGeneration: payload.mediaSessionGeneration,
+        caseCRootBecomeHolder,
       });
       ensureAudioCaptureStarted();
+      if (caseCRootBecomeHolder && userInfo?.address && roomKeyRef.current) {
+        armKeyDistributionGateAndRun(() =>
+          distributeRoomKey(roomKeyRef.current!)
+        );
+      }
     },
-    [ensureAudioCaptureStarted, syncDecryptWorkerRoomKey]
+    [
+      armKeyDistributionGateAndRun,
+      distributeRoomKey,
+      ensureAudioCaptureStarted,
+      syncDecryptWorkerRoomKey,
+      userInfo?.address,
+    ]
   );
 
   /** Handle incoming room key. */
@@ -4359,47 +4426,63 @@ export function useGroupVoiceCall(uiActive = false) {
     async (payload: IncomingRoomKeyPayload, allowQueue = true) => {
       if (!payload?.encryptedKey || payload.roomId !== roomIdRef.current) return;
       const currentRoot = topologyRef.current?.rootForwarder ?? '';
-      const keyVersion = payload.keyMessageVersion ?? 1;
-      const keyEpoch =
-        typeof payload.keyEpoch === 'number' && Number.isFinite(payload.keyEpoch)
-          ? payload.keyEpoch
-          : 0;
-      const isVersioned = keyVersion >= GCALL_KEY_MESSAGE_VERSION;
       debugLog('[GCall] handleRoomKey called', {
         encryptedKeyLength: payload.encryptedKey.length,
         fromAddress: payload.fromAddress,
-        keyVersion,
-        keyEpoch,
         currentRoot,
       });
       if (payload.verified !== true) {
         debugWarn('[GCall] Ignoring unverified key payload', payload);
         return;
       }
-      if (isVersioned) {
-        if (keyEpoch <= lastAppliedKeyEpochRef.current) {
-          debugLog('[GCall] Ignoring stale verified key', {
-            incoming: keyEpoch,
-            local: lastAppliedKeyEpochRef.current,
+      // Session gate: enforce session match strictly only once K is installed.
+      // Before first install (roomKeyRef === null), adopt the root's session identity —
+      // each process has its own random callSessionId from joinRoom; the root's UUID
+      // becomes the authoritative session identity on first key receipt.
+      if (roomKeyRef.current !== null) {
+        if (
+          payload.callSessionId !== callSessionIdRef.current ||
+          payload.mediaSessionGeneration !== mediaSessionGenerationRef.current
+        ) {
+          debugLog('[GCall] Ignoring key — media session mismatch', {
             fromAddress: payload.fromAddress,
+            payloadSession: payload.callSessionId,
+            localSession: callSessionIdRef.current,
           });
           return;
         }
-      } else if (lastAppliedKeyEpochRef.current > 0) {
-        debugLog('[GCall] Ignoring legacy key after versioned key apply', {
+      } else if (payload.callSessionId && payload.mediaSessionGeneration) {
+        // First key: adopt the sender's (root's) session identity.
+        callSessionIdRef.current = payload.callSessionId;
+        mediaSessionGenerationRef.current = payload.mediaSessionGeneration;
+      }
+      if (
+        payload.keyMessageVersion !== GCALL_KEY_MESSAGE_VERSION ||
+        !payload.keyCommitment
+      ) {
+        debugWarn('[GCall] Ignoring key — missing v3 fields', payload);
+        return;
+      }
+      const rk = roomKeyRef.current;
+      if (
+        rk !== null &&
+        payload.keyCommitment !== currentKeyCommitmentRef.current
+      ) {
+        debugLog('[GCall] Ignoring key — keyCommitment mismatch with installed K', {
           fromAddress: payload.fromAddress,
-          localKeyEpoch: lastAppliedKeyEpochRef.current,
         });
         return;
       }
-      if (!currentRoot || payload.fromAddress !== currentRoot) {
-        if (allowQueue) {
+      const inRoster = participantsRef.current.has(payload.fromAddress);
+      const allowed =
+        (!!currentRoot && payload.fromAddress === currentRoot) || inRoster;
+      if (!allowed) {
+        if (allowQueue && !currentRoot) {
           queueVerifiedRoomKey(payload);
         } else {
-          debugLog('[GCall] Dropping unauthorized key candidate', {
+          debugLog('[GCall] Dropping key — sender not allowlisted', {
             fromAddress: payload.fromAddress,
             currentRoot,
-            keyEpoch,
           });
         }
         return;
@@ -4424,7 +4507,7 @@ export function useGroupVoiceCall(uiActive = false) {
           !!result?.decryptedKey
         );
         if (result?.decryptedKey) {
-          applyDecryptedRoomKey(payload, result.decryptedKey);
+          await applyDecryptedRoomKey(payload, result.decryptedKey);
         }
       } catch (e) {
         debugWarn('[GCall] Failed to decrypt room key:', e);
@@ -4437,26 +4520,27 @@ export function useGroupVoiceCall(uiActive = false) {
   const processPendingVerifiedKeys = useCallback(() => {
     const now = Date.now();
     const currentRoot = topologyRef.current?.rootForwarder ?? '';
+    const csid = callSessionIdRef.current;
+    const gen = mediaSessionGenerationRef.current;
     const keep: PendingVerifiedRoomKey[] = [];
     for (const entry of pendingVerifiedKeysRef.current) {
       if (entry.expiresAt <= now) {
         debugWarn('[GCall] Dropped expired pending key handoff candidate', {
           fromAddress: entry.fromAddress,
-          keyEpoch: entry.keyEpoch ?? null,
         });
         continue;
       }
-      const keyEpoch =
-        typeof entry.keyEpoch === 'number' && Number.isFinite(entry.keyEpoch)
-          ? entry.keyEpoch
-          : 0;
-      const isVersioned =
-        (entry.keyMessageVersion ?? 1) >= GCALL_KEY_MESSAGE_VERSION;
-      if (isVersioned && keyEpoch <= lastAppliedKeyEpochRef.current) {
+      if (
+        entry.callSessionId !== csid ||
+        entry.mediaSessionGeneration !== gen
+      ) {
         continue;
       }
-      if (!currentRoot || entry.fromAddress !== currentRoot) {
-        keep.push(entry);
+      const inRoster = participantsRef.current.has(entry.fromAddress);
+      const allowed =
+        (!!currentRoot && entry.fromAddress === currentRoot) || inRoster;
+      if (!allowed) {
+        if (!currentRoot) keep.push(entry);
         continue;
       }
       void handleRoomKeyPayloadRef.current(entry, false);
@@ -4620,8 +4704,8 @@ export function useGroupVoiceCall(uiActive = false) {
         },
       ]);
 
-      // Send join to network
-      await window.groupCall.join(
+      // Send join to network (main allocates stable callSessionId for this occupied room)
+      const joinRes = await window.groupCall.join(
         roomId,
         chatId,
         userInfo.address,
@@ -4630,6 +4714,28 @@ export function useGroupVoiceCall(uiActive = false) {
         ts,
         joinGeneration
       );
+      if (!joinRes.success) {
+        debugWarn('[GCall] join IPC failed', joinRes.error);
+        joinGenerationRef.current = null;
+        participantsRef.current.delete(userInfo.address);
+        setRoomState('idle');
+        setParticipants([]);
+        return;
+      }
+      const csid = joinRes.callSessionId ?? '';
+      const mediaGen = (joinRes.mediaSessionGeneration ?? 1) >>> 0;
+      if (!csid) {
+        debugWarn('[GCall] join missing callSessionId — aborting');
+        joinGenerationRef.current = null;
+        participantsRef.current.delete(userInfo.address);
+        setRoomState('idle');
+        setParticipants([]);
+        return;
+      }
+      callSessionIdRef.current = csid;
+      mediaSessionGenerationRef.current = mediaGen;
+      needsSessionKeyRef.current = true;
+      keyDistributionPendingRef.current = true;
 
       setRoomState('connected');
 
@@ -4835,7 +4941,11 @@ export function useGroupVoiceCall(uiActive = false) {
     // Reset state
     roomKeyRef.current = null;
     isOurKeyRef.current = false;
-    lastAppliedKeyEpochRef.current = 0;
+    callSessionIdRef.current = '';
+    mediaSessionGenerationRef.current = 1;
+    currentKeyCommitmentRef.current = null;
+    needsSessionKeyRef.current = true;
+    keyRecoveryTargetCursorRef.current = 0;
     pendingVerifiedKeysRef.current = [];
     decryptFailureStreakRef.current = 0;
     lastRemoteDecodeAtRef.current = 0;
@@ -4851,6 +4961,10 @@ export function useGroupVoiceCall(uiActive = false) {
     if (keyRecoveryRetryTimerRef.current) {
       clearTimeout(keyRecoveryRetryTimerRef.current);
       keyRecoveryRetryTimerRef.current = null;
+    }
+    if (simultJoinKeyFallbackTimerRef.current) {
+      clearTimeout(simultJoinKeyFallbackTimerRef.current);
+      simultJoinKeyFallbackTimerRef.current = null;
     }
     // Invalidate any in-flight key distribution so its .finally() cannot reopen the gate.
     ++keyDistributionGenRef.current;
@@ -4969,42 +5083,104 @@ export function useGroupVoiceCall(uiActive = false) {
           }
 
           if (isInitiatorRef.current) {
+            const others = fresh.filter((a) => a !== myAddress);
             if (roomKeyRef.current && isOurKeyRef.current) {
-              // Still root, still our key — redistribute to updated roster.
-              // No key change so no gate needed; just fire off the distribution.
               debugLog(
-                '[GCall] Already have key — distributing to full roster after election'
+                '[GCall] Election (a) — redistribute session key to roster'
               );
               void distributeRoomKey(roomKeyRef.current);
-            } else {
-              // Becoming root for first time, OR hold a key from a previous
-              // root — always generate a fresh key to prevent foreign-key reuse.
-              debugLog(
-                '[GCall] Generating room key and starting audio capture'
-              );
-              const newKey = naclApi.randomBytes(32);
-              roomKeyRef.current = newKey;
+            } else if (roomKeyRef.current && !isOurKeyRef.current) {
+              debugLog('[GCall] Election (b) — reclaim key and rotate');
               isOurKeyRef.current = true;
-              syncDecryptWorkerRoomKey(newKey);
-              // Gate outgoing audio until all recipients have the new key.
-              // The mic pipeline starts now so it is warm when the gate opens.
-              const distGen = ++keyDistributionGenRef.current;
-              keyDistributionPendingRef.current = true;
-              ensureAudioCaptureStarted();
-              const gateReleaseTimer = setTimeout(() => {
-                if (keyDistributionGenRef.current === distGen) {
-                  keyDistributionPendingRef.current = false;
+              needsSessionKeyRef.current = false;
+              armKeyDistributionGateAndRun(() =>
+                distributeRoomKey(roomKeyRef.current!)
+              );
+            } else if (!roomKeyRef.current) {
+              debugLog('[GCall] Election (c) — root without session key');
+              needsSessionKeyRef.current = true;
+              if (others.length === 0) {
+                debugLog('[GCall] Cold-start — mint session key (solo root)');
+                const newKey = naclApi.randomBytes(32);
+                roomKeyRef.current = newKey;
+                isOurKeyRef.current = true;
+                needsSessionKeyRef.current = false;
+                syncDecryptWorkerRoomKey(newKey);
+                armKeyDistributionGateAndRun(() =>
+                  distributeRoomKey(newKey)
+                );
+              } else {
+                if (simultJoinKeyFallbackTimerRef.current) {
+                  clearTimeout(simultJoinKeyFallbackTimerRef.current);
                 }
-              }, KEY_DIST_GATE_TIMEOUT_MS);
-              distributeRoomKey(newKey).finally(() => {
-                clearTimeout(gateReleaseTimer);
-                if (keyDistributionGenRef.current === distGen) {
-                  keyDistributionPendingRef.current = false;
-                }
-              });
+                keyRecoveryTargetCursorRef.current = 0;
+                const sendFirstKeyRequest = async () => {
+                  const topo = topologyRef.current;
+                  const standby = topo?.standbyForwarder ?? '';
+                  const targets: string[] = [];
+                  if (
+                    standby &&
+                    standby !== myAddress &&
+                    participantsRef.current.has(standby)
+                  ) {
+                    targets.push(standby);
+                  }
+                  const roster = [...participantsRef.current.keys()]
+                    .filter((a) => a !== myAddress)
+                    .sort((a, b) => a.localeCompare(b));
+                  for (const a of roster) {
+                    if (!targets.includes(a)) targets.push(a);
+                  }
+                  if (targets.length === 0 || !userInfo?.publicKey) return;
+                  const toAddress = targets[0]!;
+                  const ts = Date.now();
+                  const sig = await signGroupCallFields({
+                    type: 'GC_KEY_REQUEST',
+                    roomId: roomIdRef.current,
+                    toAddress,
+                    fromAddress: myAddress,
+                    fromPublicKey: userInfo.publicKey,
+                    callSessionId: callSessionIdRef.current,
+                    mediaSessionGeneration:
+                      mediaSessionGenerationRef.current >>> 0,
+                    keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+                    timestamp: ts,
+                  }).catch(() => '');
+                  if (!sig) return;
+                  await window.groupCall.sendKeyRequest(
+                    roomIdRef.current,
+                    toAddress,
+                    myAddress,
+                    sig,
+                    userInfo.publicKey,
+                    ts,
+                    callSessionIdRef.current,
+                    mediaSessionGenerationRef.current >>> 0
+                  );
+                };
+                void sendFirstKeyRequest();
+                simultJoinKeyFallbackTimerRef.current = setTimeout(() => {
+                  simultJoinKeyFallbackTimerRef.current = null;
+                  if (myGen !== topologyAsyncGenRef.current) return;
+                  if (!isInitiatorRef.current || roomKeyRef.current !== null) {
+                    return;
+                  }
+                  debugLog(
+                    '[GCall] Simultaneous-join fallback — minting session key'
+                  );
+                  const newKey = naclApi.randomBytes(32);
+                  roomKeyRef.current = newKey;
+                  isOurKeyRef.current = true;
+                  needsSessionKeyRef.current = false;
+                  syncDecryptWorkerRoomKey(newKey);
+                  armKeyDistributionGateAndRun(() =>
+                    distributeRoomKey(newKey)
+                  );
+                }, 3500);
+              }
             }
           }
-          // Non-initiator: keep old key active; handleRoomKey will replace it.
+          // Non-initiator: keep prior K for continuity; handleRoomKey applies new K when needed.
         })();
       }, TOPOLOGY_ELECTION_DEBOUNCE_MS);
     };
@@ -5043,15 +5219,23 @@ export function useGroupVoiceCall(uiActive = false) {
       })
         .then((rsig) => {
           if (!rsig) return;
-          return window.groupCall.join(
-            roomIdRef.current,
-            chatIdRef.current,
-            userInfo.address,
-            rsig,
-            userInfo.publicKey!,
-            rts,
-            jg
-          );
+          return window.groupCall
+            .join(
+              roomIdRef.current,
+              chatIdRef.current,
+              userInfo.address,
+              rsig,
+              userInfo.publicKey!,
+              rts,
+              jg
+            )
+            .then((res) => {
+              if (res?.success && res.callSessionId) {
+                callSessionIdRef.current = res.callSessionId;
+                mediaSessionGenerationRef.current =
+                  (res.mediaSessionGeneration ?? 1) >>> 0;
+              }
+            });
         })
         .catch(() => {});
     };
@@ -5095,15 +5279,37 @@ export function useGroupVoiceCall(uiActive = false) {
           now - lastKeyRecoveryRequestAtRef.current >=
             KEY_RECOVERY_REQUEST_COOLDOWN_MS
         ) {
+          const myAddr = userInfo.address;
+          const standby = topology.standbyForwarder ?? '';
+          const targets: string[] = [];
+          if (
+            standby &&
+            standby !== myAddr &&
+            participantsRef.current.has(standby)
+          ) {
+            targets.push(standby);
+          }
+          const roster = [...participantsRef.current.keys()]
+            .filter((a) => a !== myAddr)
+            .sort((a, b) => a.localeCompare(b));
+          for (const a of roster) {
+            if (!targets.includes(a)) targets.push(a);
+          }
+          if (targets.length === 0) return;
+          const ti = keyRecoveryTargetCursorRef.current % targets.length;
+          keyRecoveryTargetCursorRef.current = ti + 1;
+          const toAddress = targets[ti]!;
           const ts = Date.now();
+          const csid = callSessionIdRef.current;
+          const gen = mediaSessionGenerationRef.current >>> 0;
           const sig = await signGroupCallFields({
             type: 'GC_KEY_REQUEST',
             roomId: roomIdRef.current,
-            toAddress: topology.rootForwarder,
-            fromAddress: userInfo.address,
+            toAddress,
+            fromAddress: myAddr,
             fromPublicKey: userInfo.publicKey,
-            requestedTopologyEpoch: topology.topologyEpoch,
-            requestedKeyEpoch: lastAppliedKeyEpochRef.current,
+            callSessionId: csid,
+            mediaSessionGeneration: gen,
             keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
             timestamp: ts,
           }).catch(() => '');
@@ -5111,22 +5317,22 @@ export function useGroupVoiceCall(uiActive = false) {
           lastKeyRecoveryRequestAtRef.current = now;
           debugWarn('[GCall] Requesting room key recovery', {
             reason,
-            rootForwarder: topology.rootForwarder,
-            requestedTopologyEpoch: topology.topologyEpoch,
-            requestedKeyEpoch: lastAppliedKeyEpochRef.current,
+            toAddress,
+            callSessionId: csid,
+            mediaSessionGeneration: gen,
             noKey,
             repeatedFailures,
             noRecentDecode,
           });
           await window.groupCall.sendKeyRequest(
             roomIdRef.current,
-            topology.rootForwarder,
-            userInfo.address,
+            toAddress,
+            myAddr,
             sig,
             userInfo.publicKey,
             ts,
-            topology.topologyEpoch,
-            lastAppliedKeyEpochRef.current
+            csid,
+            gen
           );
           scheduleKeyRecoveryCheck(KEY_RECOVERY_REFRESH_DELAY_MS);
           return;
@@ -5156,6 +5362,19 @@ export function useGroupVoiceCall(uiActive = false) {
             rootForwarder: topology.rootForwarder,
           });
           reannounceLocalJoin();
+          scheduleKeyRecoveryCheck(KEY_RECOVERY_REJOIN_DELAY_MS);
+          return;
+        }
+        if (
+          elapsedSinceRequest >= KEY_RECOVERY_REJOIN_DELAY_MS * 2 &&
+          now - lastSessionBreakRequestAtRef.current >=
+            KEY_RECOVERY_SESSION_BREAK_COOLDOWN_MS
+        ) {
+          lastSessionBreakRequestAtRef.current = now;
+          debugWarn('[GCall] Key recovery exhausted — requesting session break', {
+            reason,
+          });
+          await window.groupCall.requestSessionBreak(roomIdRef.current);
           scheduleKeyRecoveryCheck(KEY_RECOVERY_REJOIN_DELAY_MS);
         }
       })().catch(() => {});
@@ -5330,15 +5549,23 @@ export function useGroupVoiceCall(uiActive = false) {
               })
                 .then((rsig) => {
                   if (rsig) {
-                    window.groupCall.join(
-                      roomId,
-                      chatIdRef.current,
-                      userInfo.address,
-                      rsig,
-                      userInfo.publicKey!,
-                      rts,
-                      jg
-                    );
+                    void window.groupCall
+                      .join(
+                        roomId,
+                        chatIdRef.current,
+                        userInfo.address,
+                        rsig,
+                        userInfo.publicKey!,
+                        rts,
+                        jg
+                      )
+                      .then((res) => {
+                        if (res?.success && res.callSessionId) {
+                          callSessionIdRef.current = res.callSessionId;
+                          mediaSessionGenerationRef.current =
+                            (res.mediaSessionGeneration ?? 1) >>> 0;
+                        }
+                      });
                   }
                 })
                 .catch(() => {});
@@ -5404,6 +5631,39 @@ export function useGroupVoiceCall(uiActive = false) {
         handleRoomKey(payload);
       }
 
+      if (event === 'gcall:session-updated') {
+        const p = payload as {
+          roomId: string;
+          callSessionId: string;
+          mediaSessionGeneration: number;
+        };
+        if (p.roomId !== roomIdRef.current) return;
+        if (simultJoinKeyFallbackTimerRef.current) {
+          clearTimeout(simultJoinKeyFallbackTimerRef.current);
+          simultJoinKeyFallbackTimerRef.current = null;
+        }
+        ++keyDistributionGenRef.current;
+        callSessionIdRef.current = p.callSessionId;
+        mediaSessionGenerationRef.current = (p.mediaSessionGeneration ?? 1) >>> 0;
+        roomKeyRef.current = null;
+        currentKeyCommitmentRef.current = null;
+        isOurKeyRef.current = false;
+        syncDecryptWorkerRoomKey(null);
+        needsSessionKeyRef.current = true;
+        keyDistributionPendingRef.current = true;
+        pendingVerifiedKeysRef.current = [];
+        const root = topologyRef.current?.rootForwarder ?? '';
+        const myAddr = userInfo?.address ?? '';
+        if (myAddr && root === myAddr) {
+          const newKey = naclApi.randomBytes(32);
+          roomKeyRef.current = newKey;
+          isOurKeyRef.current = true;
+          needsSessionKeyRef.current = false;
+          syncDecryptWorkerRoomKey(newKey);
+          armKeyDistributionGateAndRun(() => distributeRoomKey(newKey));
+        }
+      }
+
       if (event === 'gcall:key-request') {
         const request = payload as IncomingKeyRequestPayload;
         if (
@@ -5413,40 +5673,35 @@ export function useGroupVoiceCall(uiActive = false) {
         ) {
           return;
         }
-        const topology = topologyRef.current;
+        // Requesters use their own local callSessionId (not yet adopted from root),
+        // so only the generation is checked; a stale-generation request is genuinely
+        // from a prior session and should be ignored.
         if (
-          !topology ||
-          topology.rootForwarder !== userInfo?.address ||
-          !roomKeyRef.current ||
-          !isOurKeyRef.current
+          request.mediaSessionGeneration !== mediaSessionGenerationRef.current
         ) {
+          debugWarn('[GCall] Ignoring GC_KEY_REQUEST — generation mismatch', {
+            fromAddress: request.fromAddress,
+            requestGen: request.mediaSessionGeneration,
+            localGen: mediaSessionGenerationRef.current,
+          });
           return;
         }
         if (
-          request.requestedTopologyEpoch > topology.topologyEpoch ||
-          request.requestedKeyEpoch > lastAppliedKeyEpochRef.current
+          !roomKeyRef.current ||
+          !isOurKeyRef.current ||
+          !userInfo?.address
         ) {
-          debugWarn('[GCall] Ignoring future GC_KEY_REQUEST', {
-            fromAddress: request.fromAddress,
-            requestedTopologyEpoch: request.requestedTopologyEpoch,
-            requestedKeyEpoch: request.requestedKeyEpoch,
-            localTopologyEpoch: topology.topologyEpoch,
-            localKeyEpoch: lastAppliedKeyEpochRef.current,
-          });
           return;
         }
         pendingKeyRequestRecipientsRef.current.set(request.fromAddress, {
           publicKey: request.fromPublicKey,
-          requestedKeyEpoch: request.requestedKeyEpoch,
+          callSessionId: request.callSessionId,
+          mediaSessionGeneration: request.mediaSessionGeneration,
         });
         if (!pendingKeyRequestFlushTimerRef.current) {
           pendingKeyRequestFlushTimerRef.current = setTimeout(() => {
             pendingKeyRequestFlushTimerRef.current = null;
-            if (
-              !roomKeyRef.current ||
-              !topologyRef.current ||
-              topologyRef.current.rootForwarder !== userInfo?.address
-            ) {
+            if (!roomKeyRef.current || !isOurKeyRef.current) {
               pendingKeyRequestRecipientsRef.current.clear();
               return;
             }
@@ -5487,6 +5742,7 @@ export function useGroupVoiceCall(uiActive = false) {
     };
   }, [
     applyTopology,
+    armKeyDistributionGateAndRun,
     closePeerConnection,
     disposeParticipantAudio,
     distributeRoomKey,

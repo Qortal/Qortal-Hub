@@ -964,7 +964,12 @@ try {
         publicKey,
         timestamp,
         joinGeneration
-      ),
+      ) as Promise<{
+        success: boolean;
+        error?: string;
+        callSessionId?: string;
+        mediaSessionGeneration?: number;
+      }>,
 
     /** Leave a group call room. */
     leave: async (
@@ -997,11 +1002,12 @@ try {
       signature: string,
       publicKey: string,
       timestamp: number,
-      meta?: {
-        keyMessageVersion?: number;
-        keyEpoch?: number;
-        topologyEpoch?: number;
-        encryptedKeyDigest?: string;
+      meta: {
+        keyMessageVersion: number;
+        callSessionId: string;
+        mediaSessionGeneration: number;
+        keyCommitment: string;
+        encryptedKeyDigest: string;
       }
     ) => ipcRenderer.invoke('gcall:sendKey', roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp, meta),
 
@@ -1013,11 +1019,12 @@ try {
       signature: string,
       publicKey: string,
       timestamp: number,
-      meta?: {
-        keyMessageVersion?: number;
-        keyEpoch?: number;
-        topologyEpoch?: number;
-        encryptedKeysDigest?: string;
+      meta: {
+        keyMessageVersion: number;
+        callSessionId: string;
+        mediaSessionGeneration: number;
+        keyCommitment: string;
+        encryptedKeysDigest: string;
       }
     ) => ipcRenderer.invoke('gcall:sendKeyRotate', roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp, meta),
 
@@ -1028,8 +1035,8 @@ try {
       signature: string,
       publicKey: string,
       timestamp: number,
-      requestedTopologyEpoch: number,
-      requestedKeyEpoch: number
+      callSessionId: string,
+      mediaSessionGeneration: number
     ) => ipcRenderer.invoke(
       'gcall:sendKeyRequest',
       roomId,
@@ -1038,9 +1045,15 @@ try {
       signature,
       publicKey,
       timestamp,
-      requestedTopologyEpoch,
-      requestedKeyEpoch
+      callSessionId,
+      mediaSessionGeneration
     ),
+
+    requestSessionBreak: async (roomId: string) =>
+      ipcRenderer.invoke('gcall:requestSessionBreak', roomId) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
 
     /** Send a WebRTC signal (offer/answer/ice/reconnect) to a specific participant. */
     sendRtcSignal: async (
@@ -1075,6 +1088,8 @@ try {
         'gcall:heartbeat',
         'gcall:audio',
         'gcall:key',
+        'gcall:key-request',
+        'gcall:session-updated',
         'gcall:rtc-signal',
       ] as const;
 
