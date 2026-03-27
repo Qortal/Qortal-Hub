@@ -149,21 +149,33 @@ describe('group-call router helpers', () => {
   it('disposes participant audio resources safely', () => {
     const decoder = { state: 'configured', close: vi.fn() } as unknown as AudioDecoder;
     const node = { disconnect: vi.fn() } as unknown as AudioWorkletNode;
+    const gainNode = { disconnect: vi.fn() } as unknown as GainNode;
     const jitter = { clear: vi.fn() };
 
     const decoders = new Map([['alice', decoder]]);
     const playbackNodes = new Map([['alice', node]]);
+    const playbackGainNodes = new Map([['alice', gainNode]]);
     const jitterBuffers = new Map([['alice', jitter]]);
     const lastRecvAt = new Map([['alice', 1]]);
     const speakers = new Map([['alice', 2]]);
 
-    disposeParticipantAudioState('alice', decoders, playbackNodes, jitterBuffers, lastRecvAt, speakers);
+    disposeParticipantAudioState(
+      'alice',
+      decoders,
+      playbackNodes,
+      playbackGainNodes,
+      jitterBuffers,
+      lastRecvAt,
+      speakers
+    );
 
     expect((decoder.close as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
     expect((node.disconnect as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
+    expect((gainNode.disconnect as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
     expect((jitter.clear as unknown as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(1);
     expect(decoders.size).toBe(0);
     expect(playbackNodes.size).toBe(0);
+    expect(playbackGainNodes.size).toBe(0);
     expect(jitterBuffers.size).toBe(0);
     expect(lastRecvAt.size).toBe(0);
     expect(speakers.size).toBe(0);
@@ -187,6 +199,8 @@ describe('group-call router helpers', () => {
     tracker.recordConcealmentTick(1);
     tracker.recordPlayoutMetricTick(100, true);
     tracker.recordPlayoutMetricTick(100, false);
+    tracker.recordMixerState(4, 0.55);
+    tracker.recordMixerReductionSample(-3.2);
     tracker.setResourceCounts({ decoders: 2, playbackNodes: 1, jitterBuffers: 3 });
 
     expect(tracker.getSnapshot()).toMatchObject({
@@ -210,7 +224,79 @@ describe('group-call router helpers', () => {
       avgJitterTickMs: 2,
       avgPcmBufferedMs: 100,
       playoutOutsideTargetFraction: 0.5,
+      mixerActiveSpeakerEstimate: 4,
+      mixerMasterGain: 0.55,
+      mixerCurrentReductionDb: -3.2,
+      mixerOverloadEvents: 1,
     });
+  });
+
+  it('captures fixed-window metrics with per-source worst-leg detail', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const tracker = new GroupCallPerformanceTracker();
+    tracker.recordTransportMode('relay', 0);
+    tracker.recordJitterUnderrun(2, 'alice');
+    tracker.recordMissingFrames(3, 'alice');
+    tracker.recordConcealmentTick(1, 'alice');
+    tracker.recordPlayoutMetricTick(80, false, 'alice');
+    tracker.recordPlayoutMetricTick(120, true, 'alice');
+    tracker.recordAdaptiveTargetSample('alice', 110);
+    tracker.recordAdaptiveTargetSample('alice', 155);
+    tracker.recordOpusBufferedMetric('alice', 80);
+    tracker.recordOpusBufferedMetric('alice', 120);
+
+    tracker.recordAdaptiveTargetSample('bob', 95);
+    tracker.recordOpusBufferedMetric('bob', 40);
+
+    const window = tracker.captureWindowMetrics('me', 60_000);
+
+    expect(window.receivingPeer).toBe('me');
+    expect(window.relayDwellFraction).toBe(1);
+    expect(window.missingFrames).toBe(3);
+    expect(window.jitterUnderruns).toBe(2);
+    expect(window.avgPcmBufferedMs).toBe(100);
+    expect(window.playoutOutsideTargetFraction).toBe(0.5);
+    expect(window.worstSourceAddr).toBe('alice');
+    expect(window.worstAdaptiveTargetMs).toBe(155);
+    expect(window.sources).toEqual([
+      expect.objectContaining({
+        sourceAddr: 'alice',
+        missingFrames: 3,
+        jitterUnderruns: 2,
+        concealmentTicks: 1,
+        avgPcmBufferedMs: 100,
+        playoutOutsideTargetFraction: 0.5,
+        avgOpusBufferedMs: 100,
+        maxOpusBufferedMs: 120,
+        adaptiveTargetMedianMs: 110,
+        adaptiveTargetP95Ms: 155,
+        adaptiveTargetMaxMs: 155,
+      }),
+      expect.objectContaining({
+        sourceAddr: 'bob',
+        adaptiveTargetMaxMs: 95,
+      }),
+    ]);
+    vi.useRealTimers();
+  });
+
+  it('resets window-only ratios after capture', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const tracker = new GroupCallPerformanceTracker();
+    tracker.recordTransportMode('relay', 0);
+    tracker.recordPlayoutMetricTick(90, true, 'alice');
+
+    const first = tracker.captureWindowMetrics('me', 1_000);
+    expect(first.playoutOutsideTargetFraction).toBe(1);
+    expect(first.relayDwellFraction).toBe(1);
+
+    tracker.recordTransportMode('datachannel', 1_000);
+    const second = tracker.captureWindowMetrics('me', 2_000);
+    expect(second.playoutOutsideTargetFraction).toBe(0);
+    expect(second.relayDwellFraction).toBe(0);
+    vi.useRealTimers();
   });
 
   it('getGroupCallTransportSummary: DC when channels ready and no recent relay', () => {

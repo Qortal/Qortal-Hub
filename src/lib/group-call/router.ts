@@ -115,6 +115,51 @@ export interface GroupCallMetricsSnapshot {
   relayCoalesceSuperseded: number;
   /** IPC/main rejected send (e.g. relay token bucket) or invoke threw. */
   relayIpcFailures: number;
+  mixerActiveSpeakerEstimate: number;
+  mixerMasterGain: number;
+  mixerCurrentReductionDb: number;
+  mixerAvgReductionDb: number;
+  mixerOverloadEvents: number;
+  mixerHeavyReductionFraction: number;
+}
+
+export interface GroupCallSourceWindowMetrics {
+  sourceAddr: string;
+  jitterUnderruns: number;
+  missingFrames: number;
+  concealmentTicks: number;
+  avgPcmBufferedMs: number;
+  playoutOutsideTargetFraction: number;
+  avgOpusBufferedMs: number;
+  maxOpusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+  adaptiveTargetP95Ms: number;
+  adaptiveTargetMaxMs: number;
+}
+
+export interface GroupCallWindowMetrics {
+  receivingPeer: string;
+  startAt: number;
+  endAt: number;
+  durationMs: number;
+  jitterUnderruns: number;
+  missingFrames: number;
+  concealmentTicks: number;
+  dcBackpressureDrops: number;
+  dcBackoffDrops: number;
+  dcSendErrorDrops: number;
+  relayDwellMs: number;
+  relayDwellFraction: number;
+  avgPcmBufferedMs: number;
+  playoutOutsideTargetFraction: number;
+  avgOpusBufferedMs: number;
+  maxOpusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+  adaptiveTargetP95Ms: number;
+  adaptiveTargetMaxMs: number;
+  worstSourceAddr: string | null;
+  worstAdaptiveTargetMs: number;
+  sources: GroupCallSourceWindowMetrics[];
 }
 
 /** Mesh relay must be this recent (ms) to show "P2P relay" instead of Data channel. */
@@ -243,8 +288,52 @@ interface ResourceCounts {
   jitterBuffers: number;
 }
 
+interface WindowCounterSet {
+  jitterUnderruns: number;
+  missingFrames: number;
+  concealmentTicks: number;
+  dcBackpressureDrops: number;
+  dcBackoffDrops: number;
+  dcSendErrorDrops: number;
+}
+
+interface SourceWindowAccumulator {
+  jitterUnderruns: number;
+  missingFrames: number;
+  concealmentTicks: number;
+  playoutTicks: number;
+  playoutOutsideTicks: number;
+  playoutBufferedMsSum: number;
+  playoutBufferedMsSamples: number;
+  opusBufferedMsSum: number;
+  opusBufferedMsSamples: number;
+  opusBufferedMsMax: number;
+  adaptiveTargetSamples: number[];
+}
+
 function roundMetric(value: number): number {
   return Number(value.toFixed(3));
+}
+
+function percentile(samples: readonly number[], percentileRank: number): number {
+  if (samples.length === 0) return 0;
+  const sorted = [...samples].sort((a, b) => a - b);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(percentileRank * sorted.length) - 1)
+  );
+  return sorted[index] ?? 0;
+}
+
+function emptyWindowCounters(): WindowCounterSet {
+  return {
+    jitterUnderruns: 0,
+    missingFrames: 0,
+    concealmentTicks: 0,
+    dcBackpressureDrops: 0,
+    dcBackoffDrops: 0,
+    dcSendErrorDrops: 0,
+  };
 }
 
 export class GroupCallPerformanceTracker {
@@ -292,6 +381,12 @@ export class GroupCallPerformanceTracker {
     relayThrottleDrops: 0,
     relayCoalesceSuperseded: 0,
     relayIpcFailures: 0,
+    mixerActiveSpeakerEstimate: 0,
+    mixerMasterGain: 1,
+    mixerCurrentReductionDb: 0,
+    mixerAvgReductionDb: 0,
+    mixerOverloadEvents: 0,
+    mixerHeavyReductionFraction: 0,
   };
 
   private incomingPacketSamples = 0;
@@ -305,10 +400,64 @@ export class GroupCallPerformanceTracker {
   private playoutBufferedMsSamples = 0;
   private recoverySamples = 0;
   private recoveryTotalMs = 0;
+  private mixerReductionSamples = 0;
+  private mixerReductionTotalDb = 0;
+  private mixerHeavyReductionSamples = 0;
+  private mixerOverloaded = false;
   private sessionStartedAtMs = Date.now();
   private transportMode: GroupCallTransportMode = 'connecting';
   private transportModeSinceMs = Date.now();
   private relayDwellAccumulatedMs = 0;
+  private windowStartedAtMs = Date.now();
+  private windowTransportMode: GroupCallTransportMode = 'connecting';
+  private windowTransportModeSinceMs = Date.now();
+  private windowRelayDwellAccumulatedMs = 0;
+  private windowCounters: WindowCounterSet = emptyWindowCounters();
+  private windowPlayoutMetricTicks = 0;
+  private windowPlayoutOutsideTicks = 0;
+  private windowPlayoutBufferedMsSum = 0;
+  private windowPlayoutBufferedMsSamples = 0;
+  private windowOpusBufferedMsSum = 0;
+  private windowOpusBufferedMsSamples = 0;
+  private windowOpusBufferedMsMax = 0;
+  private sourceWindowStats = new Map<string, SourceWindowAccumulator>();
+
+  private getSourceWindowAccumulator(sourceAddr: string): SourceWindowAccumulator {
+    let current = this.sourceWindowStats.get(sourceAddr);
+    if (!current) {
+      current = {
+        jitterUnderruns: 0,
+        missingFrames: 0,
+        concealmentTicks: 0,
+        playoutTicks: 0,
+        playoutOutsideTicks: 0,
+        playoutBufferedMsSum: 0,
+        playoutBufferedMsSamples: 0,
+        opusBufferedMsSum: 0,
+        opusBufferedMsSamples: 0,
+        opusBufferedMsMax: 0,
+        adaptiveTargetSamples: [],
+      };
+      this.sourceWindowStats.set(sourceAddr, current);
+    }
+    return current;
+  }
+
+  private resetWindow(now = Date.now()): void {
+    this.windowStartedAtMs = now;
+    this.windowTransportMode = this.transportMode;
+    this.windowTransportModeSinceMs = now;
+    this.windowRelayDwellAccumulatedMs = 0;
+    this.windowCounters = emptyWindowCounters();
+    this.windowPlayoutMetricTicks = 0;
+    this.windowPlayoutOutsideTicks = 0;
+    this.windowPlayoutBufferedMsSum = 0;
+    this.windowPlayoutBufferedMsSamples = 0;
+    this.windowOpusBufferedMsSum = 0;
+    this.windowOpusBufferedMsSamples = 0;
+    this.windowOpusBufferedMsMax = 0;
+    this.sourceWindowStats.clear();
+  }
 
   setRole(role: RouterRole): void {
     this.snapshot.role = role;
@@ -362,19 +511,31 @@ export class GroupCallPerformanceTracker {
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
-  recordJitterUnderrun(count = 1): void {
+  recordJitterUnderrun(count = 1, sourceAddr?: string): void {
     this.snapshot.jitterUnderruns += count;
+    this.windowCounters.jitterUnderruns += count;
+    if (sourceAddr) {
+      this.getSourceWindowAccumulator(sourceAddr).jitterUnderruns += count;
+    }
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
-  recordMissingFrames(count = 1): void {
+  recordMissingFrames(count = 1, sourceAddr?: string): void {
     if (count <= 0) return;
     this.snapshot.missingFrames += count;
+    this.windowCounters.missingFrames += count;
+    if (sourceAddr) {
+      this.getSourceWindowAccumulator(sourceAddr).missingFrames += count;
+    }
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
-  recordConcealmentTick(count = 1): void {
+  recordConcealmentTick(count = 1, sourceAddr?: string): void {
     this.snapshot.concealmentTicks += count;
+    this.windowCounters.concealmentTicks += count;
+    if (sourceAddr) {
+      this.getSourceWindowAccumulator(sourceAddr).concealmentTicks += count;
+    }
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -432,16 +593,19 @@ export class GroupCallPerformanceTracker {
 
   recordDcBackpressureDrop(): void {
     this.snapshot.dcBackpressureDrops++;
+    this.windowCounters.dcBackpressureDrops++;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
   recordDcBackoffDrop(): void {
     this.snapshot.dcBackoffDrops++;
+    this.windowCounters.dcBackoffDrops++;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
   recordDcSendErrorDrop(): void {
     this.snapshot.dcSendErrorDrops++;
+    this.windowCounters.dcSendErrorDrops++;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -459,10 +623,21 @@ export class GroupCallPerformanceTracker {
       this.transportModeSinceMs = now;
       this.snapshot.lastUpdatedAt = now;
     }
+    if (mode !== this.windowTransportMode) {
+      if (this.windowTransportMode === 'relay') {
+        this.windowRelayDwellAccumulatedMs += now - this.windowTransportModeSinceMs;
+      }
+      this.windowTransportMode = mode;
+      this.windowTransportModeSinceMs = now;
+    }
   }
 
   /** One periodic sample from group-playout-processor (every ~100ms audio per source). */
-  recordPlayoutMetricTick(bufferedMs: number, outsideTargetBand: boolean): void {
+  recordPlayoutMetricTick(
+    bufferedMs: number,
+    outsideTargetBand: boolean,
+    sourceAddr?: string
+  ): void {
     this.playoutMetricTicks++;
     if (outsideTargetBand) this.playoutOutsideTicks++;
     this.playoutBufferedMsSum += bufferedMs;
@@ -473,6 +648,35 @@ export class GroupCallPerformanceTracker {
     this.snapshot.playoutOutsideTargetFraction = roundMetric(
       this.playoutOutsideTicks / Math.max(1, this.playoutMetricTicks)
     );
+    this.windowPlayoutMetricTicks++;
+    if (outsideTargetBand) this.windowPlayoutOutsideTicks++;
+    this.windowPlayoutBufferedMsSum += bufferedMs;
+    this.windowPlayoutBufferedMsSamples++;
+    if (sourceAddr) {
+      const source = this.getSourceWindowAccumulator(sourceAddr);
+      source.playoutTicks++;
+      if (outsideTargetBand) source.playoutOutsideTicks++;
+      source.playoutBufferedMsSum += bufferedMs;
+      source.playoutBufferedMsSamples++;
+    }
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordAdaptiveTargetSample(sourceAddr: string, targetMs: number): void {
+    if (!Number.isFinite(targetMs) || targetMs <= 0) return;
+    this.getSourceWindowAccumulator(sourceAddr).adaptiveTargetSamples.push(targetMs);
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordOpusBufferedMetric(sourceAddr: string, bufferedMs: number): void {
+    if (!Number.isFinite(bufferedMs) || bufferedMs < 0) return;
+    this.windowOpusBufferedMsSum += bufferedMs;
+    this.windowOpusBufferedMsSamples++;
+    this.windowOpusBufferedMsMax = Math.max(this.windowOpusBufferedMsMax, bufferedMs);
+    const source = this.getSourceWindowAccumulator(sourceAddr);
+    source.opusBufferedMsSum += bufferedMs;
+    source.opusBufferedMsSamples++;
+    source.opusBufferedMsMax = Math.max(source.opusBufferedMsMax, bufferedMs);
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -504,6 +708,41 @@ export class GroupCallPerformanceTracker {
     this.snapshot.decoderCount = counts.decoders;
     this.snapshot.playbackNodeCount = counts.playbackNodes;
     this.snapshot.jitterBufferCount = counts.jitterBuffers;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordMixerState(activeSpeakerEstimate: number, masterGain: number): void {
+    this.snapshot.mixerActiveSpeakerEstimate = Math.max(
+      0,
+      Math.round(activeSpeakerEstimate)
+    );
+    this.snapshot.mixerMasterGain = roundMetric(masterGain);
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordMixerReductionSample(
+    reductionDb: number,
+    overloadThresholdDb = -1.5,
+    heavyReductionThresholdDb = -3
+  ): void {
+    const reduction = Number.isFinite(reductionDb) ? Math.min(0, reductionDb) : 0;
+    this.snapshot.mixerCurrentReductionDb = roundMetric(reduction);
+    this.mixerReductionSamples++;
+    this.mixerReductionTotalDb += reduction;
+    this.snapshot.mixerAvgReductionDb = roundMetric(
+      this.mixerReductionTotalDb / Math.max(1, this.mixerReductionSamples)
+    );
+    if (reduction <= heavyReductionThresholdDb) {
+      this.mixerHeavyReductionSamples++;
+    }
+    this.snapshot.mixerHeavyReductionFraction = roundMetric(
+      this.mixerHeavyReductionSamples / Math.max(1, this.mixerReductionSamples)
+    );
+    const overloaded = reduction <= overloadThresholdDb;
+    if (overloaded && !this.mixerOverloaded) {
+      this.snapshot.mixerOverloadEvents++;
+    }
+    this.mixerOverloaded = overloaded;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -553,6 +792,12 @@ export class GroupCallPerformanceTracker {
       relayThrottleDrops: 0,
       relayCoalesceSuperseded: 0,
       relayIpcFailures: 0,
+      mixerActiveSpeakerEstimate: 0,
+      mixerMasterGain: 1,
+      mixerCurrentReductionDb: 0,
+      mixerAvgReductionDb: 0,
+      mixerOverloadEvents: 0,
+      mixerHeavyReductionFraction: 0,
     };
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;
@@ -564,10 +809,15 @@ export class GroupCallPerformanceTracker {
     this.playoutBufferedMsSamples = 0;
     this.recoverySamples = 0;
     this.recoveryTotalMs = 0;
+    this.mixerReductionSamples = 0;
+    this.mixerReductionTotalDb = 0;
+    this.mixerHeavyReductionSamples = 0;
+    this.mixerOverloaded = false;
     this.sessionStartedAtMs = now;
     this.transportMode = 'connecting';
     this.transportModeSinceMs = now;
     this.relayDwellAccumulatedMs = 0;
+    this.resetWindow(now);
   }
 
   getSnapshot(): GroupCallMetricsSnapshot {
@@ -581,6 +831,90 @@ export class GroupCallPerformanceTracker {
       relayDwellMs: roundMetric(relayDwellMs),
       relayDwellFraction: roundMetric(relayDwellMs / elapsedMs),
     };
+  }
+
+  captureWindowMetrics(receivingPeer: string, endAt = Date.now()): GroupCallWindowMetrics {
+    const relayDwellMs =
+      this.windowRelayDwellAccumulatedMs +
+      (this.windowTransportMode === 'relay'
+        ? endAt - this.windowTransportModeSinceMs
+        : 0);
+    const durationMs = Math.max(1, endAt - this.windowStartedAtMs);
+    const sources = [...this.sourceWindowStats.entries()]
+      .map(([sourceAddr, stats]) => {
+        const adaptiveTargetMaxMs = stats.adaptiveTargetSamples.reduce(
+          (max, value) => Math.max(max, value),
+          0
+        );
+        return {
+          sourceAddr,
+          jitterUnderruns: stats.jitterUnderruns,
+          missingFrames: stats.missingFrames,
+          concealmentTicks: stats.concealmentTicks,
+          avgPcmBufferedMs: roundMetric(
+            stats.playoutBufferedMsSum / Math.max(1, stats.playoutBufferedMsSamples)
+          ),
+          playoutOutsideTargetFraction: roundMetric(
+            stats.playoutOutsideTicks / Math.max(1, stats.playoutTicks)
+          ),
+          avgOpusBufferedMs: roundMetric(
+            stats.opusBufferedMsSum / Math.max(1, stats.opusBufferedMsSamples)
+          ),
+          maxOpusBufferedMs: roundMetric(stats.opusBufferedMsMax),
+          adaptiveTargetMedianMs: roundMetric(
+            percentile(stats.adaptiveTargetSamples, 0.5)
+          ),
+          adaptiveTargetP95Ms: roundMetric(
+            percentile(stats.adaptiveTargetSamples, 0.95)
+          ),
+          adaptiveTargetMaxMs: roundMetric(adaptiveTargetMaxMs),
+        };
+      })
+      .sort((a, b) => a.sourceAddr.localeCompare(b.sourceAddr));
+    const allAdaptiveSamples = sources.flatMap((source) =>
+      this.sourceWindowStats.get(source.sourceAddr)?.adaptiveTargetSamples ?? []
+    );
+    const worstSource = sources.reduce<GroupCallSourceWindowMetrics | null>(
+      (worst, current) =>
+        !worst || current.adaptiveTargetMaxMs > worst.adaptiveTargetMaxMs
+          ? current
+          : worst,
+      null
+    );
+    const result: GroupCallWindowMetrics = {
+      receivingPeer,
+      startAt: this.windowStartedAtMs,
+      endAt,
+      durationMs: roundMetric(durationMs),
+      jitterUnderruns: this.windowCounters.jitterUnderruns,
+      missingFrames: this.windowCounters.missingFrames,
+      concealmentTicks: this.windowCounters.concealmentTicks,
+      dcBackpressureDrops: this.windowCounters.dcBackpressureDrops,
+      dcBackoffDrops: this.windowCounters.dcBackoffDrops,
+      dcSendErrorDrops: this.windowCounters.dcSendErrorDrops,
+      relayDwellMs: roundMetric(relayDwellMs),
+      relayDwellFraction: roundMetric(relayDwellMs / durationMs),
+      avgPcmBufferedMs: roundMetric(
+        this.windowPlayoutBufferedMsSum / Math.max(1, this.windowPlayoutBufferedMsSamples)
+      ),
+      playoutOutsideTargetFraction: roundMetric(
+        this.windowPlayoutOutsideTicks / Math.max(1, this.windowPlayoutMetricTicks)
+      ),
+      avgOpusBufferedMs: roundMetric(
+        this.windowOpusBufferedMsSum / Math.max(1, this.windowOpusBufferedMsSamples)
+      ),
+      maxOpusBufferedMs: roundMetric(this.windowOpusBufferedMsMax),
+      adaptiveTargetMedianMs: roundMetric(percentile(allAdaptiveSamples, 0.5)),
+      adaptiveTargetP95Ms: roundMetric(percentile(allAdaptiveSamples, 0.95)),
+      adaptiveTargetMaxMs: roundMetric(
+        allAdaptiveSamples.reduce((max, value) => Math.max(max, value), 0)
+      ),
+      worstSourceAddr: worstSource?.sourceAddr ?? null,
+      worstAdaptiveTargetMs: roundMetric(worstSource?.adaptiveTargetMaxMs ?? 0),
+      sources,
+    };
+    this.resetWindow(endAt);
+    return result;
   }
 }
 
@@ -644,6 +978,7 @@ export function disposeParticipantAudioState(
   address: string,
   decoders: Map<string, AudioDecoder>,
   playbackNodes: Map<string, AudioWorkletNode>,
+  playbackGainNodes: Map<string, GainNode>,
   jitterBuffers: Map<string, { clear?: () => void }>,
   lastRecvAt: Map<string, number>,
   speakers: Map<string, number>
@@ -666,6 +1001,16 @@ export function disposeParticipantAudioState(
       /* ignore disconnect races */
     }
     playbackNodes.delete(address);
+  }
+
+  const gainNode = playbackGainNodes.get(address);
+  if (gainNode) {
+    try {
+      gainNode.disconnect();
+    } catch {
+      /* ignore disconnect races */
+    }
+    playbackGainNodes.delete(address);
   }
 
   const jitter = jitterBuffers.get(address);

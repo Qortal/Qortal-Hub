@@ -332,6 +332,27 @@ function GroupSupportChatPanel({
               {participants.length} in call
             </Typography>
           </Box>
+
+          <Box
+            sx={{
+              mt: 0.75,
+              px: 1,
+              py: 0.75,
+              borderRadius: 1,
+              bgcolor: alpha('#000', 0.16),
+              border: '1px solid rgba(255,255,255,0.05)',
+            }}
+          >
+            <Typography variant="caption" sx={{ display: 'block', fontSize: 10, color: alpha('#fff', 0.72) }}>
+              Mix load {metrics.mixerActiveSpeakerEstimate} | master {metrics.mixerMasterGain.toFixed(2)} | reduction {metrics.mixerCurrentReductionDb.toFixed(2)} dB
+            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', fontSize: 10, color: alpha('#fff', 0.72) }}>
+              Overloads {metrics.mixerOverloadEvents} | heavy frac {(metrics.mixerHeavyReductionFraction * 100).toFixed(1)}% | conceal {metrics.concealmentTicks}
+            </Typography>
+            <Typography variant="caption" sx={{ display: 'block', fontSize: 10, color: alpha('#fff', 0.72) }}>
+              Jitter underruns {metrics.jitterUnderruns} | missing {metrics.missingFrames} | transport {transport.label}
+            </Typography>
+          </Box>
         </Box>
       )}
 

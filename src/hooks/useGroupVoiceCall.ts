@@ -42,6 +42,7 @@ import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import {
   buildSingleClusterTopologyWithStickyRoot,
   GroupCallPerformanceTracker,
+  type GroupCallWindowMetrics,
   collectActiveSpeakers,
   computeGroupCallDcTransportReady,
   disposeParticipantAudioState,
@@ -58,6 +59,27 @@ import {
   drainPendingRemoteIceSession,
   pushPendingRemoteIceCandidate,
 } from '../lib/group-call/pendingRemoteIce';
+import {
+  ACTIVE_SPEAKER_GAIN,
+  GAIN_SMOOTHING_TIME_CONSTANT_S,
+  GAIN_UPDATE_CADENCE_MS,
+  HEAVY_REDUCTION_THRESHOLD_DB,
+  INACTIVE_SPEAKER_GAIN,
+  MASTER_GAIN_FLOOR,
+  MASTER_GAIN_NUMERATOR,
+  OVERLOAD_REDUCTION_THRESHOLD_DB,
+  RECENT_SPEAKER_WINDOW_MS,
+  SPEAKER_HANGOVER_MS,
+  computeMasterGainTarget,
+  computePerSpeakerGainTarget,
+  computeRecentSpeakerEstimate,
+  shouldUpdateAudioMix,
+} from '../lib/group-call/audioMix';
+import {
+  computeAdaptiveIdealTargetMs,
+  computeAdaptiveJitterMs,
+  stepSmoothedAdaptiveTargetMs,
+} from '../lib/group-call/adaptivePlayout';
 import {
   decodeAudioPackets,
   encodeAudioPacketV2,
@@ -141,22 +163,25 @@ const OPUS_CHANNELS = 1;
 const OPUS_BITRATE = 24_000;
 const OPUS_FRAME_DURATION_MS = 20;
 const OPUS_FRAME_SAMPLES = (OPUS_SAMPLE_RATE * OPUS_FRAME_DURATION_MS) / 1000; // 960
+const OPUS_EXPECTED_PACKETLOSS_PERCENT = 10;
 
 /** Minimum Opus frames queued before decode drain starts (20ms per frame). Playout also gates on PCM depth in worklet. */
-const JITTER_BUFFER_SIZE = 6; // ~120ms — deeper buffer vs ~80ms@4; trades latency for smoothness
+const JITTER_BUFFER_SIZE = 5; // ~100ms — paired with maxRetransmits:1 to reclaim headroom
+const JITTER_START_BUFFER_SIZE = 2;
+const JITTER_EMPTY_HYSTERESIS_TICKS = 3;
 
 /** Max Opus frames decoded per remote source per jitter scheduler tick (burst catch-up). */
-const JITTER_DECODE_BURST_MAX = 3;
+const JITTER_DECODE_BURST_MAX = 4;
 
 /** Adaptive playout target (main thread → group-playout-processor). */
-const ADAPTIVE_BASE_TARGET_MS = 60;
+const ADAPTIVE_BASE_TARGET_MS = 80;
 const ADAPTIVE_MIN_TARGET_MS = 80;
 const ADAPTIVE_MAX_TARGET_MS = 180;
-const ADAPTIVE_JITTER_K = 2.5;
-const ADAPTIVE_ALPHA_UP = 0.35;
-const ADAPTIVE_ALPHA_DOWN = 0.08;
-const ADAPTIVE_TARGET_POST_MIN_MS = 75;
-const ADAPTIVE_TARGET_MIN_DELTA_MS = 5;
+const ADAPTIVE_JITTER_K = 2.2;
+const ADAPTIVE_ALPHA_UP = 0.4;
+const ADAPTIVE_ALPHA_DOWN = 0.16;
+const ADAPTIVE_TARGET_POST_MIN_MS = 60;
+const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
 const ADAPTIVE_LOSS_MS_CAP = 20;
 
@@ -211,8 +236,8 @@ const DC_BUFFERED_AMOUNT_HIGH_WATER = 256 * 1024;
 const DC_SEND_BACKOFF_BASE_MS = 120;
 const DC_SEND_BACKOFF_MAX_MS = 1_000;
 const ADAPTIVE_RECOVERY_SCORE_THRESHOLD = 3;
-const ADAPTIVE_RECOVERY_COOLDOWN_MS = 25_000;
-const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 30;
+const ADAPTIVE_RECOVERY_COOLDOWN_MS = 12_000;
+const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 20;
 const STUN_OUTCOME_MIN_SESSION_MS = 15_000;
 const STUN_OUTCOME_MAX_RELAY_DWELL_FRACTION = 0.6;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
@@ -233,9 +258,11 @@ const isTestingRelay = false;
 /** Max queued decrypt jobs awaiting worker result; oldest dropped under pressure. */
 const PENDING_DECRYPT_MAX = 96;
 /** Drop pending decrypt entries older than this (worker stuck / lost result). */
-const PENDING_DECRYPT_TTL_MS = 4000;
+const PENDING_DECRYPT_TTL_MS = 500;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
+const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
+const WINDOW_METRICS_INTERVAL_MS = 60_000;
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (matches main process). */
 const GCALL_KEY_MESSAGE_VERSION = 3;
 /** After repeated key-recovery failure, ask main to bump media session generation. */
@@ -560,6 +587,7 @@ class JitterBuffer {
   private entries: JitterEntry[] = [];
   private lastPlayedSeq = -1;
   private pendingMissedSeq = 0;
+  private primed = false;
 
   /** Pop-side gap detection: call after pop; returns missed frame count since last pop. */
   consumePendingMissedFrames(): number {
@@ -590,26 +618,34 @@ class JitterBuffer {
 
   /** Returns next frame to play, or null if buffer not ready. */
   pop(): Uint8Array | null {
-    if (this.entries.length < JITTER_BUFFER_SIZE) return null;
+    const threshold = this.primed ? 1 : JITTER_START_BUFFER_SIZE;
+    if (this.entries.length < threshold) return null;
     const entry = this.entries.shift();
     if (!entry) return null;
+    this.primed = true;
     if (this.lastPlayedSeq >= 0) {
       const expected = (this.lastPlayedSeq + 1) & 0xffff;
       const gap = (entry.seq - expected + 65536) % 65536;
       if (gap > 0 && gap <= 48) this.pendingMissedSeq += gap;
     }
     this.lastPlayedSeq = entry.seq;
+    if (this.entries.length === 0) this.primed = false;
     return entry.opusFrame;
   }
 
   hasReadyFrame(): boolean {
-    return this.entries.length >= JITTER_BUFFER_SIZE;
+    return this.entries.length >= (this.primed ? 1 : JITTER_START_BUFFER_SIZE);
+  }
+
+  getBufferedFrames(): number {
+    return this.entries.length;
   }
 
   clear(): void {
     this.entries = [];
     this.lastPlayedSeq = -1;
     this.pendingMissedSeq = 0;
+    this.primed = false;
   }
 }
 
@@ -714,6 +750,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const keepAliveGainRef = useRef<GainNode | null>(null);
   const captureWorkletRef = useRef<AudioWorkletNode | null>(null);
   const playbackWorkletsRef = useRef<Map<string, AudioWorkletNode>>(new Map());
+  const playbackGainNodesRef = useRef<Map<string, GainNode>>(new Map());
+  const mixBusGainRef = useRef<GainNode | null>(null);
+  const masterCompressorRef = useRef<DynamicsCompressorNode | null>(null);
   const playbackWorkletModulePromiseRef = useRef<Promise<void> | null>(null);
   const encoderRef = useRef<AudioEncoder | null>(null);
   /** Prevents concurrent async capture startups from key/topology bursts. */
@@ -750,6 +789,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const pendingRemoteIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(
     new Map()
   );
+  const lastAudioMixUpdateAtRef = useRef(0);
+  const lastTuningSnapshotJsonRef = useRef('');
+  const opusInBandFecEnabledRef = useRef(false);
   /** Latest packet handler — `handleRtcSignal` is declared above `handleIncomingAudioPacket`. */
   const handleIncomingAudioPacketRef = useRef<
     (data: ArrayBuffer, fromAddress: string) => void
@@ -818,6 +860,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const jitterDrainReactTickCountRef = useRef(0);
   const jitterFirstDrainLoggedRef = useRef(false);
   const activeJitterSourcesRef = useRef<Set<string>>(new Set());
+  const emptyJitterDrainTicksRef = useRef<Map<string, number>>(new Map());
   /** Bumps before each async topology election (join or leave); stale continuations no-op after await. */
   const topologyAsyncGenRef = useRef(0);
   const topologyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -855,7 +898,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const encryptIdRef = useRef<number>(0);
   /** Decrypt worker result correlation; retains DC ArrayBuffer for opaque forward (never transfer). */
   const pendingDecryptsRef = useRef(
-    new Map<number, { wireForForward: ArrayBuffer; startedAt: number }>()
+    new Map<
+      number,
+      { wireForForward: ArrayBuffer; startedAt: number; receivedAt: number }
+    >()
   );
   /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
@@ -863,6 +909,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const pendingVerifiedKeysRef = useRef<PendingVerifiedRoomKey[]>([]);
   /** True while a new key is being distributed; sendEncodedFrame drops frames during this window. */
   const keyDistributionPendingRef = useRef(false);
+  const keyDistributionBufferedFramesRef = useRef<Uint8Array[]>([]);
   /** Monotonic counter; each key distribution increments this so only the latest .finally()
    *  can release the gate (prevents an older distribution from clearing a newer one's gate). */
   const keyDistributionGenRef = useRef(0);
@@ -903,10 +950,15 @@ export function useGroupVoiceCall(uiActive = false) {
   const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
+  const windowMetricsTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
+  const lastWindowMetricsRef = useRef<GroupCallWindowMetrics | null>(null);
   /** Batches UI updates when mesh relay fires at high rate. */
   const relayMetricsFlushTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  const sendEncodedFrameRef = useRef<(opusFrame: Uint8Array) => void>(() => {});
 
   // ── Election ──────────────────────────────────────────────────────────────
 
@@ -1151,9 +1203,9 @@ export function useGroupVoiceCall(uiActive = false) {
       const profile =
         peerRecoveryProfileRef.current.get(address) ?? 'low-latency';
       if (profile === 'recovery') {
-        return { ordered: false, maxRetransmits: 2 };
+        return { ordered: false, maxRetransmits: 3 };
       }
-      return { ordered: false, maxRetransmits: 0 };
+      return { ordered: false, maxRetransmits: 1 };
     },
     []
   );
@@ -1166,21 +1218,215 @@ export function useGroupVoiceCall(uiActive = false) {
     });
   }, []);
 
-  const recordInterArrivalForPlayout = useCallback((sourceAddr: string) => {
-    const now = performance.now();
-    const last = lastPacketArrivalAtRef.current.get(sourceAddr);
-    lastPacketArrivalAtRef.current.set(sourceAddr, now);
-    if (last === undefined) return;
-    const delta = now - last;
-    if (delta <= 0 || delta > 2000) return;
-    let arr = interArrivalSamplesRef.current.get(sourceAddr);
-    if (!arr) {
-      arr = [];
-      interArrivalSamplesRef.current.set(sourceAddr, arr);
+  const disconnectAudioNode = useCallback(
+    (node: AudioNode | null | undefined) => {
+      if (!node) return;
+      try {
+        node.disconnect();
+      } catch {
+        /* ignore */
+      }
+    },
+    []
+  );
+
+  const teardownPlaybackMixGraph = useCallback(() => {
+    for (const [, gainNode] of playbackGainNodesRef.current) {
+      disconnectAudioNode(gainNode);
     }
-    arr.push(delta);
-    while (arr.length > INTER_ARRIVAL_MAX_SAMPLES) arr.shift();
+    playbackGainNodesRef.current.clear();
+    disconnectAudioNode(mixBusGainRef.current);
+    mixBusGainRef.current = null;
+    disconnectAudioNode(masterCompressorRef.current);
+    masterCompressorRef.current = null;
+    lastAudioMixUpdateAtRef.current = 0;
+  }, [disconnectAudioNode]);
+
+  const ensurePlaybackMixGraph = useCallback(
+    (ctx: AudioContext) => {
+      if (
+        mixBusGainRef.current &&
+        mixBusGainRef.current.context !== ctx
+      ) {
+        teardownPlaybackMixGraph();
+      }
+
+      if (!masterCompressorRef.current) {
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.value = -3;
+        compressor.knee.value = 6;
+        compressor.ratio.value = 20;
+        compressor.attack.value = 0.001;
+        compressor.release.value = 0.1;
+        compressor.connect(ctx.destination);
+        masterCompressorRef.current = compressor;
+      }
+
+      if (!mixBusGainRef.current) {
+        const mixBus = ctx.createGain();
+        mixBus.gain.value = 1;
+        mixBus.connect(masterCompressorRef.current);
+        mixBusGainRef.current = mixBus;
+      }
+
+      return {
+        mixBus: mixBusGainRef.current,
+        compressor: masterCompressorRef.current,
+      };
+    },
+    [teardownPlaybackMixGraph]
+  );
+
+  const tickPlaybackMixTargets = useCallback(() => {
+    const ctx = audioContextRef.current;
+    const mixBus = mixBusGainRef.current;
+    const compressor = masterCompressorRef.current;
+    if (!ctx || !mixBus || !compressor) return;
+
+    const perfNow = performance.now();
+    if (
+      !shouldUpdateAudioMix(
+        lastAudioMixUpdateAtRef.current,
+        perfNow,
+        GAIN_UPDATE_CADENCE_MS
+      )
+    ) {
+      return;
+    }
+    lastAudioMixUpdateAtRef.current = perfNow;
+
+    const wallNow = Date.now();
+    const recentSpeakerEstimate = computeRecentSpeakerEstimate(
+      localSpeakersRef.current,
+      wallNow,
+      RECENT_SPEAKER_WINDOW_MS
+    );
+    const masterGainTarget = computeMasterGainTarget(
+      recentSpeakerEstimate,
+      MASTER_GAIN_NUMERATOR,
+      MASTER_GAIN_FLOOR
+    );
+    mixBus.gain.setTargetAtTime(
+      masterGainTarget,
+      ctx.currentTime,
+      GAIN_SMOOTHING_TIME_CONSTANT_S
+    );
+    metricsRef.current.recordMixerState(
+      recentSpeakerEstimate,
+      masterGainTarget
+    );
+
+    for (const [addr, gainNode] of playbackGainNodesRef.current) {
+      const target = computePerSpeakerGainTarget({
+        recentSpeakerEstimate,
+        lastVadAtMs:
+          lastVadTrueAtRef.current.get(addr) ?? localSpeakersRef.current.get(addr),
+        nowMs: wallNow,
+        speakerHangoverMs: SPEAKER_HANGOVER_MS,
+        activeSpeakerGain: ACTIVE_SPEAKER_GAIN,
+        inactiveSpeakerGain: INACTIVE_SPEAKER_GAIN,
+      });
+      gainNode.gain.setTargetAtTime(
+        target,
+        ctx.currentTime,
+        GAIN_SMOOTHING_TIME_CONSTANT_S
+      );
+    }
+
+    metricsRef.current.recordMixerReductionSample(
+      compressor.reduction,
+      OVERLOAD_REDUCTION_THRESHOLD_DB,
+      HEAVY_REDUCTION_THRESHOLD_DB
+    );
   }, []);
+
+  const recordInterArrivalForPlayout = useCallback(
+    (sourceAddr: string, receivedAt = performance.now()) => {
+      const last = lastPacketArrivalAtRef.current.get(sourceAddr);
+      lastPacketArrivalAtRef.current.set(sourceAddr, receivedAt);
+      if (last === undefined) return;
+      const delta = receivedAt - last;
+      if (delta <= 0 || delta > 2000) return;
+      let arr = interArrivalSamplesRef.current.get(sourceAddr);
+      if (!arr) {
+        arr = [];
+        interArrivalSamplesRef.current.set(sourceAddr, arr);
+      }
+      arr.push(delta);
+      while (arr.length > INTER_ARRIVAL_MAX_SAMPLES) arr.shift();
+    },
+    []
+  );
+
+  const buildGroupCallTuningSnapshot = useCallback(() => {
+    return {
+      dcProfiles: {
+        lowLatency: { ordered: false, maxRetransmits: 1 },
+        recovery: { ordered: false, maxRetransmits: 3 },
+      },
+      jitterBufferSize: JITTER_BUFFER_SIZE,
+      jitterStartBufferSize: JITTER_START_BUFFER_SIZE,
+      jitterEmptyHysteresisTicks: JITTER_EMPTY_HYSTERESIS_TICKS,
+      jitterDecodeBurstMax: JITTER_DECODE_BURST_MAX,
+      adaptive: {
+        baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
+        minTargetMs: ADAPTIVE_MIN_TARGET_MS,
+        maxTargetMs: ADAPTIVE_MAX_TARGET_MS,
+        jitterK: ADAPTIVE_JITTER_K,
+        alphaUp: ADAPTIVE_ALPHA_UP,
+        alphaDown: ADAPTIVE_ALPHA_DOWN,
+        targetPostMinMs: ADAPTIVE_TARGET_POST_MIN_MS,
+        targetMinDeltaMs: ADAPTIVE_TARGET_MIN_DELTA_MS,
+        lossMsCap: ADAPTIVE_LOSS_MS_CAP,
+        recoveryScoreThreshold: ADAPTIVE_RECOVERY_SCORE_THRESHOLD,
+        recoveryCooldownMs: ADAPTIVE_RECOVERY_COOLDOWN_MS,
+        recoveryPlayoutBoostMs: ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS,
+      },
+      worklet: {
+        initialGateMs: 100,
+        concealmentFadeSamples: 120,
+      },
+      opus: {
+        bitrate: OPUS_BITRATE,
+        frameDurationMs: OPUS_FRAME_DURATION_MS,
+        expectedPacketLossPercent: OPUS_EXPECTED_PACKETLOSS_PERCENT,
+        inBandFecEnabled: opusInBandFecEnabledRef.current,
+      },
+      pendingDecryptTtlMs: PENDING_DECRYPT_TTL_MS,
+      keyDistribution: {
+        timeoutMs: KEY_DIST_GATE_TIMEOUT_MS,
+        preEncryptOpusRingFrames: KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES,
+      },
+      estimatedPrerollFloorMs:
+        JITTER_BUFFER_SIZE * OPUS_FRAME_DURATION_MS + ADAPTIVE_MIN_TARGET_MS,
+      acceptOnlyRecoveryPath: true,
+      decoderPlcEnabled: false,
+    };
+  }, []);
+
+  const logTuningSnapshotIfChanged = useCallback(() => {
+    const snapshot = buildGroupCallTuningSnapshot();
+    const nextJson = JSON.stringify(snapshot);
+    if (nextJson !== lastTuningSnapshotJsonRef.current) {
+      lastTuningSnapshotJsonRef.current = nextJson;
+      console.info('[GCall] groupCallTuningSnapshot', snapshot);
+    }
+    return snapshot;
+  }, [buildGroupCallTuningSnapshot]);
+
+  const emitWindowMetrics = useCallback(
+    (reason: 'interval' | 'manual' = 'interval') => {
+      const receivingPeer = userInfo?.address ?? '';
+      const windowMetrics = metricsRef.current.captureWindowMetrics(receivingPeer);
+      lastWindowMetricsRef.current = windowMetrics;
+      console.info('[GCall] groupCallWindowMetrics', {
+        reason,
+        ...windowMetrics,
+      });
+      return windowMetrics;
+    },
+    [userInfo?.address]
+  );
 
   const tickAdaptivePlayoutTargets = useCallback(() => {
     const now = performance.now();
@@ -1188,14 +1434,8 @@ export function useGroupVoiceCall(uiActive = false) {
       const node = playbackWorkletsRef.current.get(addr);
       if (!node) continue;
 
-      const samples = interArrivalSamplesRef.current.get(addr);
-      let jitterMs = 0;
-      if (samples && samples.length >= 3) {
-        const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-        let varSum = 0;
-        for (const d of samples) varSum += (d - mean) * (d - mean);
-        jitterMs = Math.sqrt(Math.max(0, varSum / samples.length));
-      }
+      const samples = interArrivalSamplesRef.current.get(addr) ?? [];
+      const jitterMs = computeAdaptiveJitterMs(samples);
 
       const missed = lastDrainMissedRef.current.get(addr) ?? 0;
       lastDrainMissedRef.current.set(addr, 0);
@@ -1205,24 +1445,24 @@ export function useGroupVoiceCall(uiActive = false) {
         Date.now() < globalRecoveryUntilMsRef.current
           ? ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS
           : 0;
-      let ideal =
-        ADAPTIVE_BASE_TARGET_MS +
-        playoutBoostMs +
-        ADAPTIVE_JITTER_K * jitterMs +
-        lossPenalty;
-      ideal = Math.max(
-        ADAPTIVE_MIN_TARGET_MS,
-        Math.min(ADAPTIVE_MAX_TARGET_MS, ideal)
-      );
+      const ideal = computeAdaptiveIdealTargetMs({
+        baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
+        minTargetMs: ADAPTIVE_MIN_TARGET_MS,
+        maxTargetMs: ADAPTIVE_MAX_TARGET_MS,
+        jitterMultiplier: ADAPTIVE_JITTER_K,
+        jitterMs,
+        lossPenaltyMs: lossPenalty,
+        playoutBoostMs,
+      });
 
-      let smooth = smoothedPlayoutTargetRef.current.get(addr);
-      if (smooth === undefined) smooth = ideal;
-      if (ideal > smooth) {
-        smooth += ADAPTIVE_ALPHA_UP * (ideal - smooth);
-      } else {
-        smooth += ADAPTIVE_ALPHA_DOWN * (ideal - smooth);
-      }
+      const smooth = stepSmoothedAdaptiveTargetMs({
+        idealTargetMs: ideal,
+        previousTargetMs: smoothedPlayoutTargetRef.current.get(addr),
+        alphaUp: ADAPTIVE_ALPHA_UP,
+        alphaDown: ADAPTIVE_ALPHA_DOWN,
+      });
       smoothedPlayoutTargetRef.current.set(addr, smooth);
+      metricsRef.current.recordAdaptiveTargetSample(addr, smooth);
 
       const lastSent = lastSentPlayoutTargetRef.current.get(addr);
       const lastPost = lastPlayoutTargetPostAtRef.current.get(addr) ?? 0;
@@ -1248,6 +1488,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const flushMetrics = useCallback(() => {
     recomputeAdaptiveNetworkMode();
     updateMetricResourceCounts();
+    logTuningSnapshotIfChanged();
     const preMode = metricsRef.current.getSnapshot();
     const myAddress = userInfo?.address ?? '';
     const dcTransportReady = isTestingRelay
@@ -1280,6 +1521,7 @@ export function useGroupVoiceCall(uiActive = false) {
     }
     debugLog('[GCall] metrics', snapshot);
   }, [
+    logTuningSnapshotIfChanged,
     recomputeAdaptiveNetworkMode,
     updateMetricResourceCounts,
     userInfo?.address,
@@ -1315,6 +1557,19 @@ export function useGroupVoiceCall(uiActive = false) {
     metricsFlushTimerRef.current = null;
   }, []);
 
+  const startWindowMetricsLoop = useCallback(() => {
+    if (windowMetricsTimerRef.current) return;
+    windowMetricsTimerRef.current = setInterval(() => {
+      emitWindowMetrics('interval');
+    }, WINDOW_METRICS_INTERVAL_MS);
+  }, [emitWindowMetrics]);
+
+  const stopWindowMetricsLoop = useCallback(() => {
+    if (!windowMetricsTimerRef.current) return;
+    clearInterval(windowMetricsTimerRef.current);
+    windowMetricsTimerRef.current = null;
+  }, []);
+
   const startWebRtcEnsureLoop = useCallback(() => {
     if (webRtcEnsureTimerRef.current) return;
     webRtcEnsureTimerRef.current = setInterval(() => {
@@ -1342,6 +1597,7 @@ export function useGroupVoiceCall(uiActive = false) {
         address,
         decoderMapRef.current,
         playbackWorkletsRef.current,
+        playbackGainNodesRef.current,
         jitterMapRef.current as Map<string, { clear?: () => void }>,
         lastRecvAtRef.current,
         localSpeakersRef.current
@@ -1353,6 +1609,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSentPlayoutTargetRef.current.delete(address);
       lastPlayoutTargetPostAtRef.current.delete(address);
       lastDrainMissedRef.current.delete(address);
+      emptyJitterDrainTicksRef.current.delete(address);
       updateMetricResourceCounts();
     },
     [updateMetricResourceCounts]
@@ -1536,7 +1793,8 @@ export function useGroupVoiceCall(uiActive = false) {
     (
       wireForForward: ArrayBuffer,
       decodedList: DecodedAudioPacket[],
-      startedAt: number
+      startedAt: number,
+      receivedAt: number
     ) => {
       if (decodedList.length === 0) {
         decryptFailureStreakRef.current += 1;
@@ -1634,9 +1892,14 @@ export function useGroupVoiceCall(uiActive = false) {
       for (const decoded of decodedList) {
         jb.push(decoded.seq, decoded.opusFrame);
       }
-      recordInterArrivalForPlayout(sourceAddr);
+      recordInterArrivalForPlayout(sourceAddr, receivedAt);
+      metricsRef.current.recordOpusBufferedMetric(
+        sourceAddr,
+        jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+      );
       if (jb.hasReadyFrame()) {
         activeJitterSourcesRef.current.add(sourceAddr);
+        emptyJitterDrainTicksRef.current.set(sourceAddr, 0);
       }
       metricsRef.current.recordPacketDecoded(decodedList.length);
       metricsRef.current.recordIncomingPacketDuration(
@@ -1655,7 +1918,8 @@ export function useGroupVoiceCall(uiActive = false) {
     (
       wireForForward: ArrayBuffer,
       decoded: DecodedAudioPacket | null,
-      startedAt: number
+      startedAt: number,
+      receivedAt: number
     ) => {
       if (!decoded) {
         decryptFailureStreakRef.current += 1;
@@ -1670,7 +1934,7 @@ export function useGroupVoiceCall(uiActive = false) {
         maybeRequestKeyRecoveryRef.current('decode-failure');
         return;
       }
-      applyPostDecryptList(wireForForward, [decoded], startedAt);
+      applyPostDecryptList(wireForForward, [decoded], startedAt, receivedAt);
     },
     [applyPostDecryptList]
   );
@@ -3128,6 +3392,7 @@ export function useGroupVoiceCall(uiActive = false) {
   }, []);
 
   const teardownCapturePipelineRefs = useCallback(() => {
+    teardownPlaybackMixGraph();
     if (jitterSchedulerNodeRef.current) {
       try {
         jitterSchedulerNodeRef.current.port.onmessage = null;
@@ -3179,7 +3444,7 @@ export function useGroupVoiceCall(uiActive = false) {
       audioContextRef.current = null;
     }
     playbackWorkletModulePromiseRef.current = null;
-  }, []);
+  }, [teardownPlaybackMixGraph]);
 
   const swapGroupCallMicInput = useCallback(
     async (deviceId: string | null) => {
@@ -3367,12 +3632,41 @@ export function useGroupVoiceCall(uiActive = false) {
           error: (e: any) => console.error('[GCall] AudioEncoder error:', e),
         });
 
-        encoder.configure({
+        const baseEncoderConfig = {
           codec: 'opus',
           sampleRate: OPUS_SAMPLE_RATE,
           numberOfChannels: OPUS_CHANNELS,
           bitrate: OPUS_BITRATE,
-        });
+        };
+        const fecEncoderConfig = {
+          ...baseEncoderConfig,
+          opus: {
+            application: 'voip',
+            signal: 'voice',
+            frameDuration: OPUS_FRAME_DURATION_MS * 1000,
+            packetlossperc: OPUS_EXPECTED_PACKETLOSS_PERCENT,
+            useinbandfec: true,
+            usedtx: false,
+          },
+        };
+        let encoderConfig: Record<string, unknown> = baseEncoderConfig;
+        opusInBandFecEnabledRef.current = false;
+        try {
+          const supportResult = await (window as any).AudioEncoder?.isConfigSupported?.(
+            fecEncoderConfig
+          );
+          if (supportResult?.supported) {
+            encoderConfig = supportResult.config ?? fecEncoderConfig;
+            opusInBandFecEnabledRef.current =
+              (supportResult.config as any)?.opus?.useinbandfec === true ||
+              fecEncoderConfig.opus.useinbandfec;
+          } else {
+            encoderConfig = baseEncoderConfig;
+          }
+        } catch {
+          encoderConfig = baseEncoderConfig;
+        }
+        encoder.configure(encoderConfig as unknown as AudioEncoderConfig);
 
         // Load and instantiate the capture worklet (runs on the audio worklet thread)
         debugLog('[GCall] Loading capture worklet…');
@@ -3592,25 +3886,44 @@ export function useGroupVoiceCall(uiActive = false) {
     });
   }, [isAudioPipelineActive, startAudioCapture, userInfo?.address]);
 
+  const enqueueKeyDistributionBufferedFrame = useCallback((opusFrame: Uint8Array) => {
+    const buffered = keyDistributionBufferedFramesRef.current;
+    if (buffered.length >= KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES) {
+      buffered.shift();
+    }
+    buffered.push(new Uint8Array(opusFrame));
+  }, []);
+
+  const flushKeyDistributionBufferedFrames = useCallback(() => {
+    if (keyDistributionPendingRef.current) return;
+    const buffered = keyDistributionBufferedFramesRef.current.splice(0);
+    for (const frame of buffered) {
+      sendEncodedFrameRef.current(frame);
+    }
+  }, []);
+
   /** Root / key-holder: hold uplink until distribution finishes (or timeout). */
   const armKeyDistributionGateAndRun = useCallback(
     (runner: () => Promise<void>) => {
       const distGen = ++keyDistributionGenRef.current;
       keyDistributionPendingRef.current = true;
+      keyDistributionBufferedFramesRef.current = [];
       ensureAudioCaptureStarted();
       const gateReleaseTimer = setTimeout(() => {
         if (keyDistributionGenRef.current === distGen) {
           keyDistributionPendingRef.current = false;
+          keyDistributionBufferedFramesRef.current = [];
         }
       }, KEY_DIST_GATE_TIMEOUT_MS);
       void runner().finally(() => {
         clearTimeout(gateReleaseTimer);
         if (keyDistributionGenRef.current === distGen) {
           keyDistributionPendingRef.current = false;
+          flushKeyDistributionBufferedFrames();
         }
       });
     },
-    [ensureAudioCaptureStarted]
+    [ensureAudioCaptureStarted, flushKeyDistributionBufferedFrames]
   );
 
   const ensurePlaybackWorkletLoaded = useCallback(async (): Promise<void> => {
@@ -3706,7 +4019,10 @@ export function useGroupVoiceCall(uiActive = false) {
     (opusFrame: Uint8Array) => {
       if (!roomKeyRef.current || !userInfo?.address) return;
       if (mutedRef.current) return; // mic is muted — drop frame
-      if (keyDistributionPendingRef.current) return; // new key not yet delivered — hold frames
+      if (keyDistributionPendingRef.current) {
+        enqueueKeyDistributionBufferedFrame(opusFrame);
+        return;
+      }
       if (needsSessionKeyRef.current) return; // no K for current media session
       if (seqRef.current === 0) {
         debugLog(
@@ -3808,8 +4124,9 @@ export function useGroupVoiceCall(uiActive = false) {
         )
       );
     },
-    [dispatchEncodedPacket, userInfo?.address]
+    [dispatchEncodedPacket, enqueueKeyDistributionBufferedFrame, userInfo?.address]
   );
+  sendEncodedFrameRef.current = sendEncodedFrame;
 
   // ── Audio decode ──────────────────────────────────────────────────────────
 
@@ -3824,6 +4141,7 @@ export function useGroupVoiceCall(uiActive = false) {
       );
 
       const ctx = audioContextRef.current;
+      const expectedAudioToken = audioSessionTokenRef.current;
 
       const setupPlayback = async (): Promise<AudioWorkletNode> => {
         debugLog(
@@ -3832,6 +4150,20 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         try {
           await ensurePlaybackWorkletLoaded();
+          if (
+            audioContextRef.current !== ctx ||
+            ctx.state === 'closed' ||
+            audioSessionTokenRef.current !== expectedAudioToken
+          ) {
+            throw new Error('stale-group-playback-setup');
+          }
+          const { mixBus } = ensurePlaybackMixGraph(ctx);
+          const wallNow = Date.now();
+          const recentSpeakerEstimate = computeRecentSpeakerEstimate(
+            localSpeakersRef.current,
+            wallNow,
+            RECENT_SPEAKER_WINDOW_MS
+          );
           const playNode = new AudioWorkletNode(
             ctx,
             'group-playout-processor',
@@ -3839,10 +4171,23 @@ export function useGroupVoiceCall(uiActive = false) {
               processorOptions: { sourceAddr },
             } as AudioWorkletNodeOptions
           );
+          const speakerGain = ctx.createGain();
+          speakerGain.gain.value = computePerSpeakerGainTarget({
+            recentSpeakerEstimate,
+            lastVadAtMs:
+              lastVadTrueAtRef.current.get(sourceAddr) ??
+              localSpeakersRef.current.get(sourceAddr),
+            nowMs: wallNow,
+            speakerHangoverMs: SPEAKER_HANGOVER_MS,
+            activeSpeakerGain: ACTIVE_SPEAKER_GAIN,
+            inactiveSpeakerGain: INACTIVE_SPEAKER_GAIN,
+          });
           playNode.port.onmessage = (e: MessageEvent) => {
             const d = e.data as {
               type?: string;
+              sourceAddr?: string;
               bufferedMs?: number;
+              targetPlayoutMs?: number;
               outsideBand?: boolean;
               concealmentUsed?: boolean;
             };
@@ -3850,13 +4195,19 @@ export function useGroupVoiceCall(uiActive = false) {
             if (typeof d.bufferedMs !== 'number') return;
             metricsRef.current.recordPlayoutMetricTick(
               d.bufferedMs,
-              !!d.outsideBand
+              !!d.outsideBand,
+              sourceAddr
             );
-            if (d.concealmentUsed) metricsRef.current.recordConcealmentTick(1);
+            if (d.concealmentUsed) {
+              metricsRef.current.recordConcealmentTick(1, sourceAddr);
+            }
           };
-          playNode.connect(ctx.destination);
+          playNode.connect(speakerGain);
+          speakerGain.connect(mixBus);
           playbackWorkletsRef.current.set(sourceAddr, playNode);
+          playbackGainNodesRef.current.set(sourceAddr, speakerGain);
           updateMetricResourceCounts();
+          tickPlaybackMixTargets();
           debugLog(
             '[GCall] Playback worklet ready for',
             sourceAddr.slice(0, 12),
@@ -3920,7 +4271,12 @@ export function useGroupVoiceCall(uiActive = false) {
       updateMetricResourceCounts();
       return decoder;
     },
-    [ensurePlaybackWorkletLoaded, updateMetricResourceCounts]
+    [
+      ensurePlaybackMixGraph,
+      ensurePlaybackWorkletLoaded,
+      tickPlaybackMixTargets,
+      updateMetricResourceCounts,
+    ]
   );
 
   // ── Incoming audio packet processing ──────────────────────────────────────
@@ -3930,6 +4286,7 @@ export function useGroupVoiceCall(uiActive = false) {
     (data: ArrayBuffer, _fromAddress: string) => {
       if (!roomKeyRef.current) return;
       const startedAt = performance.now();
+      const receivedAt = startedAt;
       metricsRef.current.recordPacketReceived();
 
       // Retain DC buffer for opaque forward after decrypt; never transfer this reference.
@@ -3940,7 +4297,11 @@ export function useGroupVoiceCall(uiActive = false) {
         ensurePendingDecryptCap();
         const id = decryptIdRef.current++;
         const workerBuffer = data.slice(0);
-        pendingDecryptsRef.current.set(id, { wireForForward, startedAt });
+        pendingDecryptsRef.current.set(id, {
+          wireForForward,
+          startedAt,
+          receivedAt,
+        });
         decryptWorkerRef.current.postMessage(
           { type: 'decrypt', id, buffer: workerBuffer },
           [workerBuffer]
@@ -3950,7 +4311,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
       // Sync fallback: decrypt on main thread (same post-decrypt path as worker).
       const list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
-      applyPostDecryptList(wireForForward, list, startedAt);
+      applyPostDecryptList(wireForForward, list, startedAt, receivedAt);
     },
     [applyPostDecryptList, ensurePendingDecryptCap, sweepStalePendingDecrypts]
   );
@@ -3965,10 +4326,21 @@ export function useGroupVoiceCall(uiActive = false) {
     for (const addr of [...activeJitterSourcesRef.current]) {
       const jb = jitterMapRef.current.get(addr);
       if (!jb || !jb.hasReadyFrame()) {
-        if (jb) metricsRef.current.recordJitterUnderrun();
-        activeJitterSourcesRef.current.delete(addr);
+        if (jb) {
+          metricsRef.current.recordJitterUnderrun(1, addr);
+          metricsRef.current.recordOpusBufferedMetric(
+            addr,
+            jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+          );
+        }
+        const emptyTicks = (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
+        emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
+        if (!jb || emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+          activeJitterSourcesRef.current.delete(addr);
+        }
         continue;
       }
+      emptyJitterDrainTicksRef.current.set(addr, 0);
       let missedThisTick = 0;
       let burst = 0;
       while (burst < JITTER_DECODE_BURST_MAX && jb.hasReadyFrame()) {
@@ -4011,18 +4383,29 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
       if (missedThisTick > 0) {
-        metricsRef.current.recordMissingFrames(missedThisTick);
+        metricsRef.current.recordMissingFrames(missedThisTick, addr);
         lastDrainMissedRef.current.set(
           addr,
           (lastDrainMissedRef.current.get(addr) ?? 0) + missedThisTick
         );
       }
+      metricsRef.current.recordOpusBufferedMetric(
+        addr,
+        jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+      );
       if (!jb.hasReadyFrame()) {
-        activeJitterSourcesRef.current.delete(addr);
+        const emptyTicks = (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
+        emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
+        if (emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+          activeJitterSourcesRef.current.delete(addr);
+        }
+      } else {
+        emptyJitterDrainTicksRef.current.set(addr, 0);
       }
     }
 
     tickAdaptivePlayoutTargets();
+    tickPlaybackMixTargets();
 
     // Throttle React state updates to ~200ms (10 scheduler ticks ≈ 10 × 20ms).
     jitterDrainReactTickCountRef.current++;
@@ -4043,7 +4426,7 @@ export function useGroupVoiceCall(uiActive = false) {
     metricsRef.current.recordJitterTickDuration(
       performance.now() - tickStartedAt
     );
-  }, [getOrCreateDecoder, tickAdaptivePlayoutTargets]);
+  }, [getOrCreateDecoder, tickAdaptivePlayoutTargets, tickPlaybackMixTargets]);
 
   runJitterDrainTickRef.current = runJitterDrainTick;
 
@@ -4596,7 +4979,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!pending) {
         return;
       }
-      const { wireForForward, startedAt } = pending;
+      const { wireForForward, startedAt, receivedAt } = pending;
       const multi = e.data.decodedMulti;
       if (multi && multi.length > 0) {
         const list: DecodedAudioPacket[] = multi.map((raw) => ({
@@ -4606,7 +4989,7 @@ export function useGroupVoiceCall(uiActive = false) {
           timestampMs: raw.timestampMs,
           opusFrame: new Uint8Array(raw.opusFrame),
         }));
-        applyPostDecryptList(wireForForward, list, startedAt);
+        applyPostDecryptList(wireForForward, list, startedAt, receivedAt);
         return;
       }
       const raw = e.data.decoded;
@@ -4619,7 +5002,7 @@ export function useGroupVoiceCall(uiActive = false) {
             opusFrame: new Uint8Array(raw.opusFrame),
           }
         : null;
-      applyPostDecrypt(wireForForward, decoded, startedAt);
+      applyPostDecrypt(wireForForward, decoded, startedAt, receivedAt);
     };
 
     worker.onerror = (err) => {
@@ -4749,6 +5132,7 @@ export function useGroupVoiceCall(uiActive = false) {
       setupDecryptWorker();
       startForwarderTimeoutCheck();
       startMetricsFlushLoop();
+      startWindowMetricsLoop();
       startWebRtcEnsureLoop();
     },
     [
@@ -4756,6 +5140,7 @@ export function useGroupVoiceCall(uiActive = false) {
       roomState,
       setupDecryptWorker,
       startMetricsFlushLoop,
+      startWindowMetricsLoop,
       startWebRtcEnsureLoop,
       userInfo,
     ]
@@ -4863,6 +5248,7 @@ export function useGroupVoiceCall(uiActive = false) {
       forwarderTimeoutCheckRef.current = null;
     }
     stopMetricsFlushLoop();
+    stopWindowMetricsLoop();
     stopWebRtcEnsureLoop();
     if (relayMetricsFlushTimerRef.current) {
       clearTimeout(relayMetricsFlushTimerRef.current);
@@ -4891,6 +5277,7 @@ export function useGroupVoiceCall(uiActive = false) {
     decoderMapRef.current.clear();
     jitterMapRef.current.clear();
     activeJitterSourcesRef.current.clear();
+    emptyJitterDrainTicksRef.current.clear();
     lastRecvAtRef.current.clear();
     clearAdaptiveGroupCallPlayoutMaps({
       lastPacketArrivalAt: lastPacketArrivalAtRef.current,
@@ -4969,6 +5356,9 @@ export function useGroupVoiceCall(uiActive = false) {
     // Invalidate any in-flight key distribution so its .finally() cannot reopen the gate.
     ++keyDistributionGenRef.current;
     keyDistributionPendingRef.current = false;
+    keyDistributionBufferedFramesRef.current = [];
+    lastTuningSnapshotJsonRef.current = '';
+    lastWindowMetricsRef.current = null;
     topologyRef.current = null;
     localEpochRef.current = 0;
     lastRoomIdRef.current = roomIdRef.current; // save before clearing for cross-room epoch scoping
@@ -5008,6 +5398,7 @@ export function useGroupVoiceCall(uiActive = false) {
     closePeerConnection,
     flushMetrics,
     stopMetricsFlushLoop,
+    stopWindowMetricsLoop,
     stopWebRtcEnsureLoop,
     syncDecryptWorkerRoomKey,
     teardownCapturePipelineRefs,

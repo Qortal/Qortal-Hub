@@ -2,11 +2,11 @@
  * group-playout-processor — adaptive PCM playout for group voice (per remote speaker).
  *
  * PCM-only bufferedMs; fractional read with clamp + deadzone + EMA-smoothed rate (0.99–1.01).
- * Startup: silence until bufferedMs >= INITIAL_GATE_MS (~120). Concealment: short tail + fade.
+ * Startup: silence until bufferedMs >= INITIAL_GATE_MS (~100). Concealment: reuse short tail with gentler fade.
  * Posts { type:'gcallPlayoutMetrics', ... } periodically for main-thread metrics.
  */
 const RING_CAPACITY = 48000;
-const INITIAL_GATE_MS = 120;
+const INITIAL_GATE_MS = 100;
 const DEFAULT_TARGET_MS = 100;
 const ERROR_CLAMP_MS = 80;
 const DEADZONE_MS = 8;
@@ -96,8 +96,9 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     const output = outputs[0]?.[0];
     if (!output) return true;
 
+    const sampleRateHz = globalThis.sampleRate;
     const quantum = output.length;
-    const bufferedMs = (this._available / sampleRate) * 1000;
+    const bufferedMs = (this._available / sampleRateHz) * 1000;
 
     this._concealedThisBlock = false;
 
@@ -134,21 +135,25 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       output[i] = s;
       if (this._lastTailLen < this._lastTail.length) {
         this._lastTail[this._lastTailLen++] = s;
-        if (this._lastTailLen > 200) {
-          this._lastTail.copyWithin(0, this._lastTailLen - 200);
-          this._lastTailLen = 200;
+        if (this._lastTailLen > 240) {
+          this._lastTail.copyWithin(0, this._lastTailLen - 240);
+          this._lastTailLen = 240;
         }
       }
       this._stepReadOne(rate);
     }
 
-    this._maybePostMetrics((this._available / sampleRate) * 1000, quantum, this._concealedThisBlock);
+    this._maybePostMetrics(
+      (this._available / sampleRateHz) * 1000,
+      quantum,
+      this._concealedThisBlock
+    );
     return true;
   }
 
   _concealSample(i, quantum) {
     if (this._lastTailLen < 2) return 0;
-    const fadeLen = Math.min(quantum, 16);
+    const fadeLen = Math.min(quantum, 120);
     const t = i < fadeLen ? i / fadeLen : 1;
     const g = 1 - t;
     const idx = Math.max(0, this._lastTailLen - fadeLen + Math.min(i, fadeLen - 1));
