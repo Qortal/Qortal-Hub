@@ -229,8 +229,15 @@ function readGcallWasmFecDesired(): boolean {
   return true;
 }
 
-/** After VAD goes false, keep forwarding through forwarder for this long (word gaps / breath). */
-const FORWARD_VAD_HANGOVER_MS = 450;
+/**
+ * After capture VAD goes false, keep treating the source as "speaking" for relay for this long.
+ * Bridges natural pauses (breaths, word gaps) so the forwarder does not drop the next syllable:
+ * `evaluateActiveSpeaker` only forwards when `effectiveVadForForward` is true, and that flag
+ * comes from per-packet VAD or this hangover — not from packet arrival rate (we send ~20ms
+ * frames continuously while the mic is open, so ingress rate is not a speech proxy).
+ * Start at 700ms; if logs still show suppression with `lastVadAgeMs` just above this, try 800ms.
+ */
+const FORWARD_VAD_HANGOVER_MS = 700;
 
 /** Silence before standby may treat root as dead. >2× TOPOLOGY_HEARTBEAT_MS so one late tick does not flap. */
 const FORWARDER_TIMEOUT_MS = 3_200;
