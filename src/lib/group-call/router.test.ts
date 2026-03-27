@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  assessGroupCallSourceStall,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   GroupCallPerformanceTracker,
@@ -10,6 +11,7 @@ import {
   forwardPacketForRole,
   getGroupCallTransportSummary,
   groupCallTopologyStructureFingerprint,
+  hasGroupCallSourceWindowMediaActivity,
   isGroupCallTopologyDuplicateHeartbeat,
   isGroupCallWebRtcPeerInactive,
   reconcileParticipantSpeaking,
@@ -295,6 +297,87 @@ describe('group-call router helpers', () => {
       severe: false,
       shouldEscalate: false,
     });
+  });
+
+  it('assesses live silent stalls separately from packet gaps', () => {
+    expect(
+      assessGroupCallSourceStall({
+        sourceExpected: true,
+        dcTransportReady: true,
+        ingressPeerConnected: true,
+        lastRecvAgeMs: 15_000,
+        opusBufferedMs: 0,
+        adaptiveTargetMs: 0,
+        adaptiveTargetIdleAgeMs: 15_000,
+        hadRecentMediaWindow: true,
+        gapEvidence: false,
+      })
+    ).toMatchObject({
+      activeSource: true,
+      stalled: true,
+      gapEvidence: false,
+      shouldEscalate: true,
+    });
+
+    expect(
+      assessGroupCallSourceStall({
+        sourceExpected: true,
+        dcTransportReady: true,
+        ingressPeerConnected: true,
+        lastRecvAgeMs: 15_000,
+        opusBufferedMs: 0,
+        adaptiveTargetMs: 0,
+        adaptiveTargetIdleAgeMs: 15_000,
+        hadRecentMediaWindow: true,
+        gapEvidence: true,
+      })
+    ).toEqual({
+      activeSource: true,
+      stalled: false,
+      gapEvidence: true,
+      score: 0,
+      severe: false,
+      shouldEscalate: false,
+    });
+  });
+
+  it('does not escalate silent stalls for idle or never-active sources', () => {
+    expect(
+      assessGroupCallSourceStall({
+        sourceExpected: true,
+        dcTransportReady: true,
+        ingressPeerConnected: true,
+        lastRecvAgeMs: 20_000,
+        opusBufferedMs: 0,
+        adaptiveTargetMs: 0,
+        adaptiveTargetIdleAgeMs: 20_000,
+        hadRecentMediaWindow: false,
+        gapEvidence: false,
+      })
+    ).toEqual({
+      activeSource: false,
+      stalled: false,
+      gapEvidence: false,
+      score: 0,
+      severe: false,
+      shouldEscalate: false,
+    });
+
+    expect(
+      hasGroupCallSourceWindowMediaActivity({
+        sourceAddr: 'idle',
+        jitterUnderruns: 0,
+        missingFrames: 0,
+        concealmentTicks: 0,
+        avgPcmBufferedMs: 0,
+        playoutOutsideTargetFraction: 0,
+        avgOpusBufferedMs: 0,
+        maxOpusBufferedMs: 0,
+        adaptiveTargetMedianMs: 0,
+        adaptiveTargetP95Ms: 0,
+        adaptiveTargetMaxMs: 0,
+      })
+    ).toBe(false);
   });
 
   it('captures fixed-window metrics with per-source worst-leg detail', () => {

@@ -40,9 +40,11 @@ import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import {
+  assessGroupCallSourceStall,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   GroupCallPerformanceTracker,
+  hasGroupCallSourceWindowMediaActivity,
   type GroupCallWindowMetrics,
   collectActiveSpeakers,
   computeGroupCallDcTransportReady,
@@ -265,6 +267,11 @@ const PLAYOUT_ACTIVITY_WINDOW_MS = 400;
 /** Avoid reconnect storms when repeated bad media windows hit the same transport leg. */
 const MEDIA_RECOVERY_ACTION_COOLDOWN_MS = 45_000;
 const SOURCE_GAP_LOG_MIN_INTERVAL_MS = 5_000;
+const SOURCE_STALL_MIN_AGE_MS = 8_000;
+const SOURCE_STALL_LOG_MIN_INTERVAL_MS = 5_000;
+const SOURCE_STALL_BREACH_RECOVERY_THRESHOLD = 2;
+const FORWARDER_GATE_LOG_MIN_INTERVAL_MS = 5_000;
+const SEND_PATH_DIAGNOSTIC_LOG_MIN_INTERVAL_MS = 5_000;
 const RELAY_INGRESS_PEER = '__relay__';
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
@@ -831,6 +838,7 @@ export function useGroupVoiceCall(uiActive = false) {
   >(new Map());
   const peerInstabilityScoreRef = useRef<Map<string, number>>(new Map());
   const peerMediaRecoveryBreachRef = useRef<Map<string, number>>(new Map());
+  const peerMediaStallBreachRef = useRef<Map<string, number>>(new Map());
   const peerMediaRecoveryLastActionAtRef = useRef<Map<string, number>>(new Map());
   const globalRecoveryUntilMsRef = useRef<number>(0);
   /** True only while this node generated the current roomKey (as root-forwarder initiator).
@@ -892,6 +900,8 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Seq-gap count accumulated during last drain tick per source (feeds loss term). */
   const lastDrainMissedRef = useRef<Map<string, number>>(new Map());
   const lastSourceGapLogAtRef = useRef<Map<string, number>>(new Map());
+  const lastSourceStallLogAtRef = useRef<Map<string, number>>(new Map());
+  const lastForwarderGateLogAtRef = useRef<Map<string, number>>(new Map());
 
   /** Last mesh send time per peer — fallback vs primary policies do not share one map. */
   const relayLastSentFallbackRef = useRef<Map<string, number>>(new Map());
@@ -926,6 +936,7 @@ export function useGroupVoiceCall(uiActive = false) {
   );
   /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
+  const lastSendPathDiagnosticAtRef = useRef<Map<string, number>>(new Map());
   /** Verified key messages that arrived before topology root convergence caught up. */
   const pendingVerifiedKeysRef = useRef<PendingVerifiedRoomKey[]>([]);
   /** True while a new key is being distributed; sendEncodedFrame drops frames during this window. */
@@ -1227,6 +1238,52 @@ export function useGroupVoiceCall(uiActive = false) {
     return (jitterMapRef.current.get(sourceAddr)?.getBufferedFrames() ?? 0) > 0;
   }, []);
 
+  const getPeerTopologyRole = useCallback(
+    (address: string | null): MyRole | 'relay' | null => {
+      if (!address) return null;
+      if (address === RELAY_INGRESS_PEER) return 'relay';
+      const topology = topologyRef.current;
+      if (!topology) return null;
+      if (topology.rootForwarder === address) return 'root-forwarder';
+      if (topology.standbyForwarder === address) return 'standby-forwarder';
+      for (const cluster of topology.clusters) {
+        if (cluster.forwarder === address) return 'cluster-forwarder';
+        if (cluster.members.includes(address)) return 'participant';
+      }
+      return null;
+    },
+    []
+  );
+
+  const isSourceExpectedForDiagnostics = useCallback((sourceAddr: string) => {
+    if (participantsRef.current.has(sourceAddr)) return true;
+    const topology = topologyRef.current;
+    if (!topology) return false;
+    if (
+      topology.rootForwarder === sourceAddr ||
+      topology.standbyForwarder === sourceAddr
+    ) {
+      return true;
+    }
+    return topology.clusters.some(
+      (cluster) =>
+        cluster.forwarder === sourceAddr ||
+        cluster.standby === sourceAddr ||
+        cluster.members.includes(sourceAddr)
+    );
+  }, []);
+
+  const logSendPathDiagnostic = useCallback(
+    (reason: string, details: Record<string, unknown> = {}) => {
+      const nowMs = Date.now();
+      const lastLoggedAt = lastSendPathDiagnosticAtRef.current.get(reason) ?? 0;
+      if (nowMs - lastLoggedAt < SEND_PATH_DIAGNOSTIC_LOG_MIN_INTERVAL_MS) return;
+      lastSendPathDiagnosticAtRef.current.set(reason, nowMs);
+      debugWarn('[GCall] send path diagnostic', { reason, ...details });
+    },
+    []
+  );
+
   const getSourceIngressDiagnostic = useCallback(
     (sourceAddr: string) => {
       const ingressPeerAddress =
@@ -1236,17 +1293,18 @@ export function useGroupVoiceCall(uiActive = false) {
         return {
           ingressPeerAddress: null,
           ingressPeerRole: null,
+          peerConnectionRole: null,
         };
       }
+      const peerEntry = peerConnectionsRef.current.get(ingressPeerAddress);
       return {
         ingressPeerAddress,
-        ingressPeerRole:
-          ingressPeerAddress === RELAY_INGRESS_PEER
-            ? 'relay'
-            : (peerConnectionsRef.current.get(ingressPeerAddress)?.role ?? null),
+        ingressPeerRole: getPeerTopologyRole(ingressPeerAddress),
+        peerConnectionRole:
+          ingressPeerAddress === RELAY_INGRESS_PEER ? 'relay' : (peerEntry?.role ?? null),
       };
     },
-    []
+    [getPeerTopologyRole]
   );
 
   const buildWindowDiagnosticSources = useCallback(
@@ -1257,6 +1315,136 @@ export function useGroupVoiceCall(uiActive = false) {
         recoveryAssessment: assessGroupCallSourceWindowForRecovery(source),
       })),
     [getSourceIngressDiagnostic]
+  );
+
+  const evaluateLiveSourceStalls = useCallback(
+    (dcTransportReady: boolean) => {
+      const nowPerf = performance.now();
+      const nowMs = Date.now();
+      const lastWindowSourceMap = new Map(
+        (lastWindowMetricsRef.current?.sources ?? []).map((source) => [source.sourceAddr, source])
+      );
+      const candidateSources = new Set<string>([
+        ...sourceIngressPeerRef.current.keys(),
+        ...jitterMapRef.current.keys(),
+        ...lastWindowSourceMap.keys(),
+      ]);
+      const activePeers = new Set<string>();
+      const peerScores = new Map<
+        string,
+        { score: number; severe: boolean; stalledSources: number }
+      >();
+
+      for (const sourceAddr of candidateSources) {
+        if (!sourceAddr || sourceAddr === userInfo?.address) continue;
+        const { ingressPeerAddress, ingressPeerRole, peerConnectionRole } =
+          getSourceIngressDiagnostic(sourceAddr);
+        if (!ingressPeerAddress || ingressPeerAddress === RELAY_INGRESS_PEER) continue;
+        activePeers.add(ingressPeerAddress);
+
+        const peerEntry = peerConnectionsRef.current.get(ingressPeerAddress);
+        const ingressPeerConnected =
+          peerEntry?.dc?.readyState === 'open' ||
+          peerEntry?.pc.connectionState === 'connected' ||
+          peerEntry?.pc.iceConnectionState === 'connected';
+        const lastRecvAt = lastRecvAtRef.current.get(sourceAddr);
+        const lastRecvAgeMs =
+          lastRecvAt === undefined ? Number.POSITIVE_INFINITY : nowPerf - lastRecvAt;
+        const opusBufferedMs =
+          (jitterMapRef.current.get(sourceAddr)?.getBufferedFrames() ?? 0) *
+          OPUS_FRAME_DURATION_MS;
+        const lastTargetPostAt = lastPlayoutTargetPostAtRef.current.get(sourceAddr);
+        const adaptiveTargetIdleAgeMs =
+          lastTargetPostAt === undefined ? Number.POSITIVE_INFINITY : nowPerf - lastTargetPostAt;
+        const adaptiveTargetMs =
+          adaptiveTargetIdleAgeMs < SOURCE_STALL_MIN_AGE_MS
+            ? (smoothedPlayoutTargetRef.current.get(sourceAddr) ?? 0)
+            : 0;
+        const previousWindow = lastWindowSourceMap.get(sourceAddr);
+        const assessment = assessGroupCallSourceStall({
+          sourceExpected: isSourceExpectedForDiagnostics(sourceAddr),
+          dcTransportReady,
+          ingressPeerConnected,
+          lastRecvAgeMs,
+          opusBufferedMs,
+          adaptiveTargetMs,
+          adaptiveTargetIdleAgeMs,
+          hadRecentMediaWindow: hasGroupCallSourceWindowMediaActivity(previousWindow),
+          gapEvidence: (lastDrainMissedRef.current.get(sourceAddr) ?? 0) > 0,
+        });
+
+        if (!assessment.stalled) continue;
+
+        const lastLoggedAt = lastSourceStallLogAtRef.current.get(sourceAddr) ?? 0;
+        if (nowMs - lastLoggedAt >= SOURCE_STALL_LOG_MIN_INTERVAL_MS) {
+          lastSourceStallLogAtRef.current.set(sourceAddr, nowMs);
+          debugWarn('[GCall] source stall diagnostic', {
+            sourceAddr,
+            ingressPeerAddress,
+            ingressPeerRole,
+            peerConnectionRole,
+            lastRecvAgeMs: Math.round(lastRecvAgeMs),
+            opusBufferedMs,
+            adaptiveTargetMs,
+            adaptiveTargetIdleAgeMs: Math.round(adaptiveTargetIdleAgeMs),
+            dcTransportReady,
+            recentlyVadActive:
+              nowMs - (lastVadTrueAtRef.current.get(sourceAddr) ?? 0) <
+              SOURCE_STALL_MIN_AGE_MS,
+            hadRecentMediaWindow: hasGroupCallSourceWindowMediaActivity(previousWindow),
+          });
+        }
+
+        if (!assessment.shouldEscalate) continue;
+        const prev = peerScores.get(ingressPeerAddress) ?? {
+          score: 0,
+          severe: false,
+          stalledSources: 0,
+        };
+        prev.score += assessment.score;
+        prev.severe = prev.severe || assessment.severe;
+        prev.stalledSources++;
+        peerScores.set(ingressPeerAddress, prev);
+      }
+
+      for (const peerAddress of activePeers) {
+        const entry = peerScores.get(peerAddress);
+        if (!entry) {
+          const prevBreaches = peerMediaStallBreachRef.current.get(peerAddress) ?? 0;
+          if (prevBreaches > 0) {
+            peerMediaStallBreachRef.current.set(peerAddress, prevBreaches - 1);
+          }
+          continue;
+        }
+
+        const severity = Math.max(
+          1,
+          Math.min(
+            3,
+            entry.severe ? 3 : entry.stalledSources >= 2 ? 2 : Math.ceil(entry.score / 4)
+          )
+        );
+        markPeerUnstable(peerAddress, severity);
+
+        const breaches = (peerMediaStallBreachRef.current.get(peerAddress) ?? 0) + 1;
+        peerMediaStallBreachRef.current.set(peerAddress, breaches);
+
+        const lastAction = peerMediaRecoveryLastActionAtRef.current.get(peerAddress) ?? 0;
+        if (
+          breaches >= SOURCE_STALL_BREACH_RECOVERY_THRESHOLD &&
+          nowMs - lastAction >= MEDIA_RECOVERY_ACTION_COOLDOWN_MS
+        ) {
+          peerMediaRecoveryLastActionAtRef.current.set(peerAddress, nowMs);
+          requestMediaRecoveryForPeerRef.current(peerAddress);
+        }
+      }
+    },
+    [
+      getSourceIngressDiagnostic,
+      isSourceExpectedForDiagnostics,
+      markPeerUnstable,
+      userInfo?.address,
+    ]
   );
 
   const evaluateWindowMediaRecovery = useCallback(
@@ -1314,6 +1502,46 @@ export function useGroupVoiceCall(uiActive = false) {
       }
     },
     [getSourceIngressDiagnostic, markPeerUnstable]
+  );
+
+  const getForwardRecipientCountForDiagnostics = useCallback(
+    (
+      role: MyRole,
+      topology: GroupTopology | null,
+      myAddress: string,
+      sourceAddr: string
+    ): number => {
+      if (!topology || (role !== 'cluster-forwarder' && role !== 'root-forwarder')) {
+        return 0;
+      }
+      let count = 0;
+      if (role === 'root-forwarder') {
+        for (const cluster of topology.clusters) {
+          if (cluster.forwarder === myAddress) {
+            for (const member of cluster.members) {
+              if (member === sourceAddr || member === myAddress) continue;
+              count++;
+            }
+          } else {
+            count++;
+          }
+        }
+        return count;
+      }
+      if (topology.rootForwarder && topology.rootForwarder !== myAddress) {
+        count++;
+      }
+      for (const cluster of topology.clusters) {
+        if (cluster.forwarder !== myAddress) continue;
+        for (const member of cluster.members) {
+          if (member === sourceAddr || member === myAddress) continue;
+          count++;
+        }
+        break;
+      }
+      return count;
+    },
+    []
   );
 
   const getDataChannelOptionsForPeer = useCallback(
@@ -1631,6 +1859,7 @@ export function useGroupVoiceCall(uiActive = false) {
     metricsRef.current.recordTransportMode(transport.mode);
     const base = metricsRef.current.getSnapshot();
     const snapshot = { ...base, dcTransportReady };
+    evaluateLiveSourceStalls(dcTransportReady);
     if (uiActiveRef.current || roomStateRef.current !== 'idle') {
       setMetrics((prev) => {
         const prevEntries = Object.entries(prev) as Array<[string, unknown]>;
@@ -1643,6 +1872,7 @@ export function useGroupVoiceCall(uiActive = false) {
     debugLog('[GCall] metrics', snapshot);
   }, [
     logTuningSnapshotIfChanged,
+    evaluateLiveSourceStalls,
     recomputeAdaptiveNetworkMode,
     updateMetricResourceCounts,
     userInfo?.address,
@@ -1732,6 +1962,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPlayoutTargetPostAtRef.current.delete(address);
       lastDrainMissedRef.current.delete(address);
       lastSourceGapLogAtRef.current.delete(address);
+      lastSourceStallLogAtRef.current.delete(address);
+      lastForwarderGateLogAtRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
       updateMetricResourceCounts();
     },
@@ -1985,6 +2217,12 @@ export function useGroupVoiceCall(uiActive = false) {
       const topo = topologyRef.current;
 
       if ((role === 'cluster-forwarder' || role === 'root-forwarder') && topo) {
+        const intendedRecipients = getForwardRecipientCountForDiagnostics(
+          role,
+          topo,
+          myAddress,
+          sourceAddr
+        );
         if (isActiveSpeaker) {
           const forwarded = forwardPacketForRole(
             role,
@@ -1996,6 +2234,21 @@ export function useGroupVoiceCall(uiActive = false) {
           );
           if (forwarded > 0)
             metricsRef.current.recordPacketForwarded(forwarded);
+        } else {
+          const lastLoggedAt = lastForwarderGateLogAtRef.current.get(sourceAddr) ?? 0;
+          if (Date.now() - lastLoggedAt >= FORWARDER_GATE_LOG_MIN_INTERVAL_MS) {
+            lastForwarderGateLogAtRef.current.set(sourceAddr, Date.now());
+            debugLog('[GCall] forwarder gate suppressed source', {
+              sourceAddr,
+              role,
+              anyVad,
+              inForwardHangover,
+              effectiveVadForForward,
+              isActiveSpeaker,
+              intendedRecipients,
+              topologyClusterCount: topo.clusters.length,
+            });
+          }
         }
       }
 
@@ -2032,6 +2285,7 @@ export function useGroupVoiceCall(uiActive = false) {
       );
     },
     [
+      getForwardRecipientCountForDiagnostics,
       recordInterArrivalForPlayout,
       sendPacketToPeerWithRelay,
       updateMetricResourceCounts,
@@ -4052,8 +4306,15 @@ export function useGroupVoiceCall(uiActive = false) {
       ensureAudioCaptureStarted();
       const gateReleaseTimer = setTimeout(() => {
         if (keyDistributionGenRef.current === distGen) {
+          const droppedFrames = keyDistributionBufferedFramesRef.current.length;
           keyDistributionPendingRef.current = false;
           keyDistributionBufferedFramesRef.current = [];
+          if (droppedFrames > 0) {
+            logSendPathDiagnostic('key-distribution-timeout-clear', {
+              droppedFrames,
+              gateTimeoutMs: KEY_DIST_GATE_TIMEOUT_MS,
+            });
+          }
         }
       }, KEY_DIST_GATE_TIMEOUT_MS);
       void runner().finally(() => {
@@ -4064,7 +4325,11 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       });
     },
-    [ensureAudioCaptureStarted, flushKeyDistributionBufferedFrames]
+    [
+      ensureAudioCaptureStarted,
+      flushKeyDistributionBufferedFrames,
+      logSendPathDiagnostic,
+    ]
   );
 
   const ensurePlaybackWorkletLoaded = useCallback(async (): Promise<void> => {
@@ -4131,11 +4396,14 @@ export function useGroupVoiceCall(uiActive = false) {
               if (member !== userInfo.address) {
                 const pcEntry = peerConnectionsRef.current.get(member);
                 if (pcEntry?.dc?.readyState === 'open') {
-                  void safeSendDataChannel(
+                  const sent = safeSendDataChannel(
                     member,
                     pcEntry.dc,
                     packet.buffer as ArrayBuffer
                   );
+                  if (!sent && roomIdRef.current) {
+                    enqueueMeshRelaySend(member, packet, meshMode);
+                  }
                 } else if (roomIdRef.current) {
                   enqueueMeshRelaySend(member, packet, meshMode);
                 }
@@ -4162,9 +4430,18 @@ export function useGroupVoiceCall(uiActive = false) {
       if (mutedRef.current) return; // mic is muted — drop frame
       if (keyDistributionPendingRef.current) {
         enqueueKeyDistributionBufferedFrame(opusFrame);
+        logSendPathDiagnostic('key-distribution-pending', {
+          bufferedFrames: keyDistributionBufferedFramesRef.current.length,
+        });
         return;
       }
-      if (needsSessionKeyRef.current) return; // no K for current media session
+      if (needsSessionKeyRef.current) {
+        logSendPathDiagnostic('needs-session-key', {
+          role: myRoleRef.current,
+          upstreamReadyState: upstreamDCRef.current?.readyState ?? 'none',
+        });
+        return; // no K for current media session
+      }
       if (seqRef.current === 0) {
         debugLog(
           '[GCall] First encoded frame ready to send — role:',
@@ -4265,7 +4542,12 @@ export function useGroupVoiceCall(uiActive = false) {
         )
       );
     },
-    [dispatchEncodedPacket, enqueueKeyDistributionBufferedFrame, userInfo?.address]
+    [
+      dispatchEncodedPacket,
+      enqueueKeyDistributionBufferedFrame,
+      logSendPathDiagnostic,
+      userInfo?.address,
+    ]
   );
   sendEncodedFrameRef.current = sendEncodedFrame;
 
@@ -5134,11 +5416,20 @@ export function useGroupVoiceCall(uiActive = false) {
           opusFrame: ArrayBuffer;
         }>;
         packet?: ArrayBuffer | null;
+        error?: string;
       }>
     ) => {
       if (e.data.type === 'encryptResult') {
         if (e.data.packet) {
           dispatchEncodedPacket(new Uint8Array(e.data.packet as ArrayBuffer));
+        } else {
+          if (e.data.error === 'missing-room-key' && roomKeyRef.current) {
+            syncDecryptWorkerRoomKey(roomKeyRef.current);
+          }
+          logSendPathDiagnostic('encrypt-worker-empty-result', {
+            error: e.data.error ?? 'unknown',
+            hasMainThreadRoomKey: roomKeyRef.current !== null,
+          });
         }
         return;
       }
@@ -5194,6 +5485,7 @@ export function useGroupVoiceCall(uiActive = false) {
     applyPostDecrypt,
     applyPostDecryptList,
     dispatchEncodedPacket,
+    logSendPathDiagnostic,
     syncDecryptWorkerRoomKey,
   ]);
 
@@ -5222,7 +5514,11 @@ export function useGroupVoiceCall(uiActive = false) {
       peerRecoveryProfileRef.current.clear();
       peerInstabilityScoreRef.current.clear();
       peerMediaRecoveryBreachRef.current.clear();
+      peerMediaStallBreachRef.current.clear();
       peerMediaRecoveryLastActionAtRef.current.clear();
+      lastSourceStallLogAtRef.current.clear();
+      lastForwarderGateLogAtRef.current.clear();
+      lastSendPathDiagnosticAtRef.current.clear();
       globalRecoveryUntilMsRef.current = 0;
       setRoomState('joining');
       metricsRef.current.reset();
@@ -5473,6 +5769,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastDrainMissed: lastDrainMissedRef.current,
     });
     lastSourceGapLogAtRef.current.clear();
+    lastSourceStallLogAtRef.current.clear();
+    lastForwarderGateLogAtRef.current.clear();
 
     // Close peer connections (clear ICE disconnect grace timers first so callbacks cannot fire after teardown)
     for (const [, entry] of peerConnectionsRef.current) {
@@ -5502,7 +5800,9 @@ export function useGroupVoiceCall(uiActive = false) {
     peerRecoveryProfileRef.current.clear();
     peerInstabilityScoreRef.current.clear();
     peerMediaRecoveryBreachRef.current.clear();
+    peerMediaStallBreachRef.current.clear();
     peerMediaRecoveryLastActionAtRef.current.clear();
+    lastSendPathDiagnosticAtRef.current.clear();
     globalRecoveryUntilMsRef.current = 0;
 
     // Terminate the decrypt Worker (sync clears pending + worker key)

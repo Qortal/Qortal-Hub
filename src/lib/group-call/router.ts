@@ -169,6 +169,41 @@ export interface GroupCallSourceRecoveryAssessment {
   shouldEscalate: boolean;
 }
 
+export interface GroupCallSourceStallAssessmentInput {
+  sourceExpected: boolean;
+  dcTransportReady: boolean;
+  ingressPeerConnected: boolean;
+  lastRecvAgeMs: number;
+  opusBufferedMs: number;
+  adaptiveTargetMs: number;
+  adaptiveTargetIdleAgeMs: number;
+  hadRecentMediaWindow: boolean;
+  gapEvidence: boolean;
+}
+
+export interface GroupCallSourceStallAssessment {
+  activeSource: boolean;
+  stalled: boolean;
+  gapEvidence: boolean;
+  score: number;
+  severe: boolean;
+  shouldEscalate: boolean;
+}
+
+export function hasGroupCallSourceWindowMediaActivity(
+  source: GroupCallSourceWindowMetrics | null | undefined
+): boolean {
+  if (!source) return false;
+  return (
+    source.missingFrames > 0 ||
+    source.jitterUnderruns > 0 ||
+    source.concealmentTicks > 0 ||
+    source.avgOpusBufferedMs > 0 ||
+    source.maxOpusBufferedMs > 0 ||
+    source.adaptiveTargetMaxMs > 0
+  );
+}
+
 /**
  * Heuristic for when a source's 60s media window is bad enough to justify escalating the
  * transport leg that carried it into recovery/reconnect. We intentionally bias toward
@@ -215,6 +250,88 @@ export function assessGroupCallSourceWindowForRecovery(
 
   return {
     activeSource: true,
+    score,
+    severe,
+    shouldEscalate: severe || score >= 4,
+  };
+}
+
+/**
+ * Live watchdog heuristic for the "silent stall" class: the source used to carry media,
+ * remains expected in topology, transport still looks healthy, but no packets or playout
+ * activity are visible anymore. Packet-gap evidence is excluded so gap-based recovery and
+ * stall-based recovery stay distinct.
+ */
+export function assessGroupCallSourceStall(
+  input: GroupCallSourceStallAssessmentInput
+): GroupCallSourceStallAssessment {
+  const activeSource = input.sourceExpected && input.hadRecentMediaWindow;
+  if (!activeSource || !input.dcTransportReady || !input.ingressPeerConnected) {
+    return {
+      activeSource,
+      stalled: false,
+      gapEvidence: input.gapEvidence,
+      score: 0,
+      severe: false,
+      shouldEscalate: false,
+    };
+  }
+
+  if (input.gapEvidence) {
+    return {
+      activeSource: true,
+      stalled: false,
+      gapEvidence: true,
+      score: 0,
+      severe: false,
+      shouldEscalate: false,
+    };
+  }
+
+  const targetRecentlyActive =
+    input.adaptiveTargetMs > 0 && input.adaptiveTargetIdleAgeMs < 5_000;
+  const stalled =
+    input.lastRecvAgeMs >= 8_000 &&
+    input.opusBufferedMs <= 0 &&
+    !targetRecentlyActive;
+  if (!stalled) {
+    return {
+      activeSource: true,
+      stalled: false,
+      gapEvidence: false,
+      score: 0,
+      severe: false,
+      shouldEscalate: false,
+    };
+  }
+
+  let score = 0;
+  let severe = false;
+
+  if (input.lastRecvAgeMs >= 20_000) {
+    score += 3;
+    severe = true;
+  } else if (input.lastRecvAgeMs >= 12_000) {
+    score += 2;
+  } else {
+    score += 1;
+  }
+
+  if (input.opusBufferedMs <= 0) score += 2;
+  else if (input.opusBufferedMs <= 20) score += 1;
+
+  if (input.adaptiveTargetMs <= 0) score += 1;
+  if (
+    input.adaptiveTargetIdleAgeMs >= input.lastRecvAgeMs ||
+    input.adaptiveTargetIdleAgeMs >= 8_000
+  ) {
+    score += 1;
+  }
+
+  return {
+    activeSource: true,
+    stalled: true,
+    gapEvidence: false,
     score,
     severe,
     shouldEscalate: severe || score >= 4,

@@ -12,7 +12,7 @@
  *
  * Message protocol (worker → main):
  *   { type: 'result', id: number, decoded: DecryptResult | null }
- *   { type: 'encryptResult', id: number, packet: ArrayBuffer }
+ *   { type: 'encryptResult', id: number, packet: ArrayBuffer | null, error?: string }
  */
 
 import {
@@ -58,19 +58,36 @@ self.onmessage = (
   }
 
   if (!roomKeyBytes) {
+    if (data.type === 'encrypt') {
+      self.postMessage({
+        type: 'encryptResult',
+        id: data.id,
+        packet: null,
+        error: 'missing-room-key',
+      });
+    }
     return;
   }
 
   if (data.type === 'encrypt') {
-    const u8 = encodeAudioPacketV2(
-      data.sourceAddr,
-      data.vad,
-      data.seq,
-      data.timestampMs,
-      new Uint8Array(data.opusFrame),
-      roomKeyBytes
-    );
-    self.postMessage({ type: 'encryptResult', id: data.id, packet: u8.buffer }, [u8.buffer]);
+    try {
+      const u8 = encodeAudioPacketV2(
+        data.sourceAddr,
+        data.vad,
+        data.seq,
+        data.timestampMs,
+        new Uint8Array(data.opusFrame),
+        roomKeyBytes
+      );
+      self.postMessage({ type: 'encryptResult', id: data.id, packet: u8.buffer }, [u8.buffer]);
+    } catch {
+      self.postMessage({
+        type: 'encryptResult',
+        id: data.id,
+        packet: null,
+        error: 'encode-failed',
+      });
+    }
     return;
   }
 
