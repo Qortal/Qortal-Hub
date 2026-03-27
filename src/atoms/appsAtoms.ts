@@ -3,7 +3,7 @@ import { atomWithReset } from 'jotai/utils';
 import type { AppRatingData } from '../types/ratings';
 
 // Types
-export type SortOption = 'alphabetical' | 'newest' | 'oldest' | 'highest_rated' | 'most_rated';
+export type SortOption = 'alphabetical' | 'newest' | 'oldest' | 'highest_rated' | 'most_rated' | 'recently_updated';
 
 export type StatusFilterOption = 'all' | 'installed' | 'not_installed';
 
@@ -101,6 +101,9 @@ export const filterAndSortApps = (
         const votesB = ratingsMap?.get(getRatingKey(b))?.totalVotes ?? b.totalVotes ?? b.ratingCount ?? 0;
         return votesB - votesA;
       });
+      break;
+    case 'recently_updated':
+      filtered.sort((a, b) => (b.updated || 0) - (a.updated || 0));
       break;
     default:
       break;

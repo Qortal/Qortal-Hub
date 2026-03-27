@@ -174,6 +174,42 @@ describe('filterAndSortApps', () => {
       });
       expect(result[0].name).toBe('DaveApp'); // only one with votes
     });
+
+    it('sorts by recently_updated using updated field', () => {
+      const appsWithUpdated = [
+        { ...mockApps[0], updated: 1900000000000 }, // AliceApp — most recently updated
+        { ...mockApps[1], updated: 1500000000000 }, // BobApp
+        { ...mockApps[2], updated: 1800000000000 }, // CharlieApp
+        { ...mockApps[3], updated: 1700000000000 }, // DaveApp
+      ];
+      const result = filterAndSortApps(appsWithUpdated, {
+        sort: 'recently_updated',
+        category: 'all',
+        status: 'all',
+        search: '',
+      });
+      expect(result[0].name).toBe('AliceApp');
+      expect(result[1].name).toBe('CharlieApp');
+      expect(result[2].name).toBe('DaveApp');
+      expect(result[3].name).toBe('BobApp');
+    });
+
+    it('recently_updated: apps without updated field sort last (treated as 0)', () => {
+      const appsWithMissingUpdated = [
+        { ...mockApps[0] },                         // AliceApp — no updated
+        { ...mockApps[1], updated: 1800000000000 }, // BobApp — most recent
+        { ...mockApps[2], updated: 1700000000000 }, // CharlieApp
+      ];
+      const result = filterAndSortApps(appsWithMissingUpdated, {
+        sort: 'recently_updated',
+        category: 'all',
+        status: 'all',
+        search: '',
+      });
+      expect(result[0].name).toBe('BobApp');
+      expect(result[1].name).toBe('CharlieApp');
+      expect(result[2].name).toBe('AliceApp'); // no updated → treated as 0
+    });
   });
 
   describe('filtering by category', () => {
