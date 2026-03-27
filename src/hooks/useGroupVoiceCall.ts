@@ -44,6 +44,7 @@ import {
   assessGroupCallSourceStall,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
+  buildTopologyAfterClusterPromotion,
   GroupCallPerformanceTracker,
   hasGroupCallSourceWindowMediaActivity,
   type GroupCallWindowMetrics,
@@ -57,6 +58,7 @@ import {
   isGroupCallWebRtcPeerInactive,
   reconcileParticipantSpeaking,
   sameAddressList,
+  type RouterTopology,
 } from '../lib/group-call/router';
 import {
   clearPendingRemoteIceSession,
@@ -113,6 +115,7 @@ export interface ClusterDef {
   members: string[];
   forwarder: string;
   standby: string;
+  standby2: string;
 }
 
 export interface GroupTopology {
@@ -218,7 +221,8 @@ function readGcallWasmFecDesired(): boolean {
 /** After VAD goes false, keep forwarding through forwarder for this long (word gaps / breath). */
 const FORWARD_VAD_HANGOVER_MS = 200;
 
-const FORWARDER_TIMEOUT_MS = 4_500; // miss 3 heartbeats → dead
+/** Silence before standby may treat root as dead. >2× TOPOLOGY_HEARTBEAT_MS so one late tick does not flap. */
+const FORWARDER_TIMEOUT_MS = 3_200;
 const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
 /** Before closing PC on ICE `disconnected`, wait this long for recovery (connId-scoped timer). */
 const WEBRTC_DISCONNECT_GRACE_MS = 12_000;
@@ -227,8 +231,12 @@ const ICE_RESTART_RECOVERY_GRACE_MS = 5_000;
 const ICE_RESTART_MAX_ATTEMPTS = 2;
 /** Max wait for remote answer after upstream ICE-restart offer (`iceRestartInFlight`). */
 const ICE_RESTART_ANSWER_BUDGET_MS = 20_000;
-const PROMOTION_COOLDOWN_MS = 2_000; // standby waits before promoting
+/** After root-liveness threshold, defer promotion to next macrotask; inner re-check is the real guard. */
+const ROOT_PROMOTION_POST_DETECT_MS = 0;
+/** Default interval for `runForwarderFailoverChecks` (cluster failover + non-standby nodes). */
 const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
+/** Faster poll while global standby so detection + promotion start sooner after root silence. */
+const STANDBY_FAILOVER_POLL_MS = 250;
 /** Periodic self-healing sweep: reopen any upstream DC whose offer was lost or whose
  *  ICE connection failed without triggering a teardown callback. */
 const WEBRTC_ENSURE_INTERVAL_MS = 5_000;
@@ -250,6 +258,18 @@ const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
 const MESH_REANNOUNCE_MIN_INTERVAL_MS = 2_000;
 
 const CLUSTER_SIZE = 10;
+
+/** Cluster forwarder liveness (non-root clusters + all forwarders on mesh). */
+const CLUSTER_HEARTBEAT_INTERVAL_MS = 1_000;
+/** >2× CLUSTER_HEARTBEAT_INTERVAL_MS so one late cluster HB does not count as silence. */
+const CLUSTER_FAILOVER_MIN_SILENCE_MS = 2_300;
+/** Consecutive failover poll ticks with silence floor met before cluster standby promotes. */
+const CLUSTER_FAILOVER_MISS_STREAK = 2;
+/** Debounce after cluster promotion broadcast (separate from root post-detect delay). */
+const CLUSTER_POST_PROMOTION_DEBOUNCE_MS = 500;
+/** Min ms since last `applyTopology` before standby may broadcast promotion. */
+const PROMOTION_EPOCH_QUIET_MS = 350;
+
 const MAX_ACTIVE_SPEAKERS_LOCAL = 2;
 const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 
@@ -528,18 +548,37 @@ async function computeElectionOrder(
   return scores.map((s) => s.addr);
 }
 
+/** Normalize cluster rows from IPC (older peers may omit `standby2`). */
+function normalizeClusterDef(c: ClusterDef): ClusterDef {
+  return {
+    ...c,
+    standby2: c.standby2 ?? '',
+  };
+}
+
+function normalizeGroupTopologyClusters(topo: GroupTopology): GroupTopology {
+  return {
+    ...topo,
+    clusters: topo.clusters.map(normalizeClusterDef),
+  };
+}
+
 /** Build topology from a sorted participant list. */
 function buildTopology(sorted: string[], topologyEpoch: number): GroupTopology {
   if (sorted.length <= CLUSTER_SIZE) {
+    const root = sorted[0] ?? '';
+    const standby = sorted[1] ?? '';
+    const standby2 = sorted[2] ?? '';
     return {
       topologyEpoch,
-      rootForwarder: sorted[0] ?? '',
+      rootForwarder: root,
       standbyForwarder: sorted[1] ?? '',
       clusters: [
         {
           members: sorted,
-          forwarder: sorted[0] ?? '',
-          standby: sorted[1] ?? '',
+          forwarder: root,
+          standby: standby || root,
+          standby2,
         },
       ],
     };
@@ -553,6 +592,7 @@ function buildTopology(sorted: string[], topologyEpoch: number): GroupTopology {
       members: chunk,
       forwarder: chunk[0],
       standby: chunk[1] ?? chunk[0],
+      standby2: chunk[2] ?? '',
     });
   }
 
@@ -579,12 +619,52 @@ function findAssignedForwarder(
   myAddress: string,
   topology: GroupTopology
 ): string {
-  for (const cluster of topology.clusters) {
+  const topo = normalizeGroupTopologyClusters(topology);
+  for (const cluster of topo.clusters) {
     if (cluster.members.includes(myAddress)) {
       return cluster.forwarder;
     }
   }
-  return topology.rootForwarder;
+  return topo.rootForwarder;
+}
+
+function findMyCluster(
+  myAddress: string,
+  topology: GroupTopology
+): ClusterDef | null {
+  const topo = normalizeGroupTopologyClusters(topology);
+  for (const c of topo.clusters) {
+    if (c.members.includes(myAddress)) return c;
+  }
+  return null;
+}
+
+/** Standby promotion for non-root cluster forwarder failure (hierarchical rooms). */
+function findNonRootClusterStandbyDuty(
+  myAddress: string,
+  topology: GroupTopology
+): { index: number; cluster: ClusterDef } | null {
+  const topo = normalizeGroupTopologyClusters(topology);
+  if (topo.clusters.length < 2) return null;
+  for (let i = 0; i < topo.clusters.length; i++) {
+    const c = topo.clusters[i]!;
+    if (c.forwarder === topo.rootForwarder) continue;
+    if (c.standby === myAddress && c.forwarder !== myAddress) {
+      return { index: i, cluster: c };
+    }
+  }
+  return null;
+}
+
+function findClusterIndexForForwarder(
+  forwarder: string,
+  topology: GroupTopology
+): number {
+  const topo = normalizeGroupTopologyClusters(topology);
+  for (let i = 0; i < topo.clusters.length; i++) {
+    if (topo.clusters[i]!.forwarder === forwarder) return i;
+  }
+  return -1;
 }
 
 /** Convert Float32 PCM to Int16 PCM for WebCodecs AudioData. */
@@ -925,6 +1005,15 @@ export function useGroupVoiceCall(uiActive = false) {
   const forwarderTimeoutCheckRef = useRef<ReturnType<
     typeof setInterval
   > | null>(null);
+  const clusterHeartbeatTimerRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null);
+  const lastClusterForwarderHbRef = useRef<Map<string, number>>(new Map());
+  const clusterHbSeqRef = useRef(0);
+  const lastTopologyApplyAtRef = useRef(0);
+  const clusterPromotionInFlightRef = useRef(false);
+  const clusterFailoverMissStreakRef = useRef<Map<string, number>>(new Map());
+  const clusterPromotionCooldownUntilRef = useRef(0);
   // Periodic self-healing WebRTC ensure loop
   const webRtcEnsureTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null
@@ -3448,8 +3537,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const ensureGroupCallWebRtcConnections = useCallback(
     (topology: GroupTopology) => {
       if (isTestingRelay) return;
+      const topoN = normalizeGroupTopologyClusters(topology);
       const myAddress = userInfo?.address ?? '';
-      const role = computeMyRole(myAddress, topology);
+      const role = computeMyRole(myAddress, topoN);
       const now = Date.now();
 
       // Compute the set of addresses that should have upstream connections for
@@ -3463,11 +3553,26 @@ export function useGroupVoiceCall(uiActive = false) {
         role === 'cluster-forwarder' ||
         role === 'standby-forwarder'
       ) {
-        const af = findAssignedForwarder(myAddress, topology);
+        const af = findAssignedForwarder(myAddress, topoN);
         if (af && af !== myAddress) validUpstreamTargets.add(af);
+        const mc = findMyCluster(myAddress, topoN);
+        if (
+          mc?.standby &&
+          mc.standby !== myAddress &&
+          af &&
+          af !== myAddress
+        ) {
+          const lastHb = lastClusterForwarderHbRef.current.get(af) ?? 0;
+          if (
+            lastHb > 0 &&
+            now - lastHb >= CLUSTER_FAILOVER_MIN_SILENCE_MS
+          ) {
+            validUpstreamTargets.add(mc.standby);
+          }
+        }
       }
       if (role === 'cluster-forwarder') {
-        const rf = topology.rootForwarder;
+        const rf = topoN.rootForwarder;
         if (rf && rf !== myAddress) validUpstreamTargets.add(rf);
       }
       for (const [addr, entry] of peerConnectionsRef.current) {
@@ -3490,7 +3595,7 @@ export function useGroupVoiceCall(uiActive = false) {
         role === 'cluster-forwarder' ||
         role === 'standby-forwarder'
       ) {
-        const assignedForwarder = findAssignedForwarder(myAddress, topology);
+        const assignedForwarder = findAssignedForwarder(myAddress, topoN);
         if (assignedForwarder && assignedForwarder !== myAddress) {
           const existing = peerConnectionsRef.current.get(assignedForwarder);
           if (shouldReconnectRequiredPeer(existing, now)) {
@@ -3510,10 +3615,39 @@ export function useGroupVoiceCall(uiActive = false) {
             void connectUpstream(assignedForwarder);
           }
         }
+
+        const mcFail = findMyCluster(myAddress, topoN);
+        const af2 = findAssignedForwarder(myAddress, topoN);
+        if (
+          mcFail?.standby &&
+          mcFail.standby !== myAddress &&
+          af2 &&
+          af2 !== myAddress
+        ) {
+          const lastHb2 = lastClusterForwarderHbRef.current.get(af2) ?? 0;
+          const hbStale =
+            lastHb2 > 0 && now - lastHb2 >= CLUSTER_FAILOVER_MIN_SILENCE_MS;
+          const exF = peerConnectionsRef.current.get(af2);
+          const primaryOpen = exF?.dc?.readyState === 'open';
+          if (hbStale && !primaryOpen) {
+            const standbyAddr = mcFail.standby;
+            const exS = peerConnectionsRef.current.get(standbyAddr);
+            if (shouldReconnectRequiredPeer(exS, now)) {
+              debugLog(
+                '[GCall] ensureWebRtc: reconnect upstream → cluster standby (HB timeout)',
+                { forwarder: af2, standbyAddr }
+              );
+              if (exS) {
+                closePeerConnection(standbyAddr, exS.connId);
+              }
+              void connectUpstream(standbyAddr);
+            }
+          }
+        }
       }
 
       if (role === 'cluster-forwarder') {
-        const rootAddr = topology.rootForwarder;
+        const rootAddr = topoN.rootForwarder;
         if (rootAddr && rootAddr !== myAddress) {
           const existing = peerConnectionsRef.current.get(rootAddr);
           if (shouldReconnectRequiredPeer(existing, now)) {
@@ -3534,7 +3668,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       if (role === 'cluster-forwarder' || role === 'root-forwarder') {
-        for (const cluster of topology.clusters) {
+        for (const cluster of topoN.clusters) {
           if (cluster.forwarder === myAddress) {
             for (const member of cluster.members) {
               if (member !== myAddress) {
@@ -3597,6 +3731,61 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Forwarder heartbeat ────────────────────────────────────────────────────
 
+  const stopClusterHeartbeat = useCallback(() => {
+    if (clusterHeartbeatTimerRef.current) {
+      clearInterval(clusterHeartbeatTimerRef.current);
+      clusterHeartbeatTimerRef.current = null;
+    }
+  }, []);
+
+  const startClusterHeartbeat = useCallback(() => {
+    stopClusterHeartbeat();
+    const sendHb = async () => {
+      const ui = userInfoRef.current;
+      const myAddress = ui?.address ?? '';
+      if (!myAddress || !roomIdRef.current) return;
+      const topo = topologyRef.current;
+      if (!topo) return;
+      const ci = findClusterIndexForForwarder(myAddress, topo);
+      if (ci < 0) return;
+      if (topo.clusters[ci]?.forwarder !== myAddress) return;
+
+      clusterHbSeqRef.current += 1;
+      const seq = clusterHbSeqRef.current;
+      const ts = Date.now();
+      const sig = await signGroupCallFields({
+        type: 'GC_CLUSTER_HEARTBEAT',
+        roomId: roomIdRef.current,
+        topologyEpoch: topo.topologyEpoch,
+        clusterForwarder: myAddress,
+        clusterIndex: ci,
+        seq,
+        fromAddress: myAddress,
+        fromPublicKey: ui?.publicKey ?? '',
+        timestamp: ts,
+      }).catch(() => '');
+      if (!sig) return;
+      await window.groupCall?.sendClusterHeartbeat?.(
+        roomIdRef.current,
+        {
+          topologyEpoch: topo.topologyEpoch,
+          clusterForwarder: myAddress,
+          clusterIndex: ci,
+          seq,
+          fromAddress: myAddress,
+          fromPublicKey: ui?.publicKey ?? '',
+          timestamp: ts,
+        },
+        sig
+      );
+    };
+    void sendHb();
+    clusterHeartbeatTimerRef.current = setInterval(
+      () => void sendHb(),
+      CLUSTER_HEARTBEAT_INTERVAL_MS
+    );
+  }, [stopClusterHeartbeat]);
+
   const startTopologyHeartbeat = useCallback(
     (topology: GroupTopology) => {
       if (!userInfo?.address) return;
@@ -3644,9 +3833,11 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const applyTopology = useCallback(
     (topology: GroupTopology) => {
-      if (topology.topologyEpoch < localEpochRef.current) {
+      const topo = normalizeGroupTopologyClusters(topology);
+
+      if (topo.topologyEpoch < localEpochRef.current) {
         debugLog('[GCall] applyTopology skip — stale epoch', {
-          incoming: topology.topologyEpoch,
+          incoming: topo.topologyEpoch,
           local: localEpochRef.current,
         });
         return;
@@ -3654,18 +3845,18 @@ export function useGroupVoiceCall(uiActive = false) {
 
       // Same epoch + different root: converge deterministically instead of last-writer-wins.
       if (
-        topology.topologyEpoch === localEpochRef.current &&
+        topo.topologyEpoch === localEpochRef.current &&
         topologyRef.current !== null &&
-        topology.rootForwarder !== topologyRef.current.rootForwarder
+        topo.rootForwarder !== topologyRef.current.rootForwarder
       ) {
         const prev = topologyRef.current;
-        const decision = chooseSameEpochTopologyWinner(prev, topology);
+        const decision = chooseSameEpochTopologyWinner(prev, topo);
         debugLog('[GCall] same-epoch root disagreement', {
-          epoch: topology.topologyEpoch,
+          epoch: topo.topologyEpoch,
           currentRoot: prev.rootForwarder,
-          incomingRoot: topology.rootForwarder,
+          incomingRoot: topo.rootForwarder,
           currentLastSeen: prev.lastSeen ?? null,
-          incomingLastSeen: topology.lastSeen ?? null,
+          incomingLastSeen: topo.lastSeen ?? null,
           acceptedIncoming: decision.acceptIncoming,
           reason: decision.reason,
         });
@@ -3677,40 +3868,57 @@ export function useGroupVoiceCall(uiActive = false) {
       const prevTopo = topologyRef.current;
       const duplicateStructure = isGroupCallTopologyDuplicateHeartbeat(
         prevTopo,
-        topology,
+        topo,
         localEpochRef.current
       );
 
       if (duplicateStructure) {
+        lastTopologyApplyAtRef.current = Date.now();
         debugLog(
           '[GCall] applyTopology duplicate heartbeat — ensureWebRtc only',
           {
-            epoch: topology.topologyEpoch,
-            rootForwarder: topology.rootForwarder,
+            epoch: topo.topologyEpoch,
+            rootForwarder: topo.rootForwarder,
           }
         );
         processPendingVerifiedKeysRef.current();
-        ensureGroupCallWebRtcConnections(topology);
+        ensureGroupCallWebRtcConnections(topo);
         flushMetrics();
         return;
       }
 
+      const myAddrPre = userInfo?.address ?? '';
+      if (prevTopo && myAddrPre) {
+        for (let i = 0; i < prevTopo.clusters.length; i++) {
+          const pc = prevTopo.clusters[i];
+          if (!pc || pc.forwarder !== myAddrPre) continue;
+          const nc = topo.clusters[i];
+          if (!nc || nc.forwarder !== myAddrPre) {
+            metricsRef.current.recordClusterForwarderDemotion(1);
+            stopClusterHeartbeat();
+            break;
+          }
+        }
+      }
+
+      lastTopologyApplyAtRef.current = Date.now();
+
       if (
-        topology.rootForwarder &&
-        topology.rootForwarder !== (userInfo?.address ?? '')
+        topo.rootForwarder &&
+        topo.rootForwarder !== (userInfo?.address ?? '')
       ) {
         lastRootHeartbeatRef.current = Date.now();
       }
 
-      localEpochRef.current = topology.topologyEpoch;
+      localEpochRef.current = topo.topologyEpoch;
       lastObservedEpochRef.current = Math.max(
         lastObservedEpochRef.current,
-        topology.topologyEpoch
+        topo.topologyEpoch
       );
-      topologyRef.current = topology;
+      topologyRef.current = topo;
       if (
-        prevTopo?.rootForwarder !== topology.rootForwarder ||
-        prevTopo?.topologyEpoch !== topology.topologyEpoch
+        prevTopo?.rootForwarder !== topo.rootForwarder ||
+        prevTopo?.topologyEpoch !== topo.topologyEpoch
       ) {
         recoveryEligibleAfterRef.current =
           Date.now() + KEY_RECOVERY_SETTLE_DELAY_MS;
@@ -3718,11 +3926,11 @@ export function useGroupVoiceCall(uiActive = false) {
       processPendingVerifiedKeysRef.current();
 
       const myAddress = userInfo?.address ?? '';
-      const role = computeMyRole(myAddress, topology);
+      const role = computeMyRole(myAddress, topo);
       debugLog('[GCall] applyTopology', {
-        epoch: topology.topologyEpoch,
+        epoch: topo.topologyEpoch,
         role,
-        rootForwarder: topology.rootForwarder,
+        rootForwarder: topo.rootForwarder,
         prevEpoch: prevTopo?.topologyEpoch ?? null,
         prevRoot: prevTopo?.rootForwarder ?? null,
       });
@@ -3731,12 +3939,12 @@ export function useGroupVoiceCall(uiActive = false) {
 
       setMyRole((prev) => (prev !== role ? role : prev));
       const newLabel: TopologyLabel =
-        topology.clusters.length > 1 ? 'Hierarchical' : 'SFU';
+        topo.clusters.length > 1 ? 'Hierarchical' : 'SFU';
       setTopologyLabel((prev) => (prev !== newLabel ? newLabel : prev));
 
       setParticipants((prev) => {
         const newRoles = new Map(
-          prev.map((p) => [p.address, computeMyRole(p.address, topology)])
+          prev.map((p) => [p.address, computeMyRole(p.address, topo)])
         );
         const anyChange = prev.some((p) => p.role !== newRoles.get(p.address));
         if (!anyChange) return prev;
@@ -3751,16 +3959,26 @@ export function useGroupVoiceCall(uiActive = false) {
         topologyHeartbeatTimerRef.current = null;
       }
       if (role === 'root-forwarder') {
-        startTopologyHeartbeat(topology);
+        startTopologyHeartbeat(topo);
       }
 
-      ensureGroupCallWebRtcConnections(topology);
+      stopClusterHeartbeat();
+      if (
+        (role === 'cluster-forwarder' || role === 'root-forwarder') &&
+        findClusterIndexForForwarder(myAddress, topo) >= 0
+      ) {
+        startClusterHeartbeat();
+      }
+
+      ensureGroupCallWebRtcConnections(topo);
       flushMetrics();
     },
     [
       ensureGroupCallWebRtcConnections,
       flushMetrics,
+      startClusterHeartbeat,
       startTopologyHeartbeat,
+      stopClusterHeartbeat,
       userInfo?.address,
     ]
   );
@@ -3816,7 +4034,7 @@ export function useGroupVoiceCall(uiActive = false) {
           timestamp: ts,
         }).catch(() => '');
         if (!sig) return;
-        await window.groupCall.broadcastTopology(
+        const broadcastRes = await window.groupCall.broadcastTopology(
           roomIdRef.current,
           {
             topologyEpoch: newEpoch,
@@ -3831,9 +4049,120 @@ export function useGroupVoiceCall(uiActive = false) {
           userInfo?.publicKey ?? '',
           ts
         );
+        if (broadcastRes?.success) {
+          metricsRef.current.recordRootFailoverPromotion(1);
+        }
       }
-    }, PROMOTION_COOLDOWN_MS);
+    }, ROOT_PROMOTION_POST_DETECT_MS);
   }, [applyTopology, userInfo]);
+
+  const checkClusterStandbyFailover = useCallback(async () => {
+    const myAddress = userInfo?.address ?? '';
+    if (!myAddress || !roomIdRef.current) return;
+    const now = Date.now();
+    if (now < clusterPromotionCooldownUntilRef.current) return;
+    if (clusterPromotionInFlightRef.current) return;
+
+    const currentTopo = topologyRef.current;
+    if (!currentTopo) return;
+
+    const duty = findNonRootClusterStandbyDuty(myAddress, currentTopo);
+    if (!duty) return;
+
+    const { index, cluster } = duty;
+    const fwd = cluster.forwarder;
+    const lastHb = lastClusterForwarderHbRef.current.get(fwd) ?? 0;
+    if (lastHb === 0) return;
+
+    const silent = now - lastHb >= CLUSTER_FAILOVER_MIN_SILENCE_MS;
+    let streak = clusterFailoverMissStreakRef.current.get(fwd) ?? 0;
+    if (silent) streak += 1;
+    else streak = 0;
+    clusterFailoverMissStreakRef.current.set(fwd, streak);
+    if (streak < CLUSTER_FAILOVER_MISS_STREAK) return;
+
+    if (now - lastTopologyApplyAtRef.current < PROMOTION_EPOCH_QUIET_MS) return;
+
+    const topoGuard = topologyRef.current;
+    if (!topoGuard) return;
+    const duty2 = findNonRootClusterStandbyDuty(myAddress, topoGuard);
+    if (
+      !duty2 ||
+      duty2.index !== index ||
+      duty2.cluster.forwarder !== fwd ||
+      duty2.cluster.standby !== myAddress
+    ) {
+      return;
+    }
+    if (topoGuard.topologyEpoch !== currentTopo.topologyEpoch) return;
+
+    clusterPromotionInFlightRef.current = true;
+    try {
+      const newEpoch =
+        Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
+      const nextTopo = buildTopologyAfterClusterPromotion(
+        topoGuard as RouterTopology,
+        index,
+        newEpoch
+      );
+      if (!nextTopo) return;
+
+      const topoAfter = topologyRef.current;
+      if (
+        !topoAfter ||
+        topoAfter.topologyEpoch !== topoGuard.topologyEpoch ||
+        findNonRootClusterStandbyDuty(myAddress, topoAfter)?.cluster.forwarder !==
+          fwd
+      ) {
+        return;
+      }
+
+      applyTopology({
+        ...(nextTopo as unknown as GroupTopology),
+        lastSeen: Date.now(),
+      });
+
+      const ts = Date.now();
+      const sig = await signGroupCallFields({
+        type: 'GC_TOPOLOGY',
+        roomId: roomIdRef.current,
+        topologyEpoch: newEpoch,
+        rootForwarder: nextTopo.rootForwarder,
+        standbyForwarder: nextTopo.standbyForwarder,
+        fromAddress: myAddress,
+        fromPublicKey: userInfo?.publicKey ?? '',
+        timestamp: ts,
+      }).catch(() => '');
+      if (!sig) return;
+
+      await window.groupCall.broadcastTopology(
+        roomIdRef.current,
+        {
+          topologyEpoch: newEpoch,
+          rootForwarder: nextTopo.rootForwarder,
+          standbyForwarder: nextTopo.standbyForwarder,
+          clusters: nextTopo.clusters as ClusterDef[],
+          lastSeen: ts,
+          fromAddress: myAddress,
+          fromPublicKey: userInfo?.publicKey ?? '',
+        },
+        sig,
+        userInfo?.publicKey ?? '',
+        ts
+      );
+      clusterFailoverMissStreakRef.current.delete(fwd);
+      metricsRef.current.recordClusterFailoverPromotion(1);
+    } finally {
+      clusterPromotionInFlightRef.current = false;
+      clusterPromotionCooldownUntilRef.current =
+        Date.now() + CLUSTER_POST_PROMOTION_DEBOUNCE_MS;
+    }
+  }, [applyTopology, userInfo]);
+
+  const runForwarderFailoverChecks = useCallback(() => {
+    checkForwarderTimeout();
+    void checkClusterStandbyFailover();
+  }, [checkClusterStandbyFailover, checkForwarderTimeout]);
 
   // ── Audio encode ──────────────────────────────────────────────────────────
 
@@ -5958,11 +6287,21 @@ export function useGroupVoiceCall(uiActive = false) {
   const startForwarderTimeoutCheck = useCallback(() => {
     if (forwarderTimeoutCheckRef.current)
       clearInterval(forwarderTimeoutCheckRef.current);
+    const intervalMs =
+      myRoleRef.current === 'standby-forwarder'
+        ? STANDBY_FAILOVER_POLL_MS
+        : FORWARDER_TIMEOUT_CHECK_MS;
     forwarderTimeoutCheckRef.current = setInterval(
-      checkForwarderTimeout,
-      FORWARDER_TIMEOUT_CHECK_MS
+      runForwarderFailoverChecks,
+      intervalMs
     );
-  }, [checkForwarderTimeout]);
+  }, [runForwarderFailoverChecks]);
+
+  useEffect(() => {
+    if (roomState !== 'connected') return;
+    if (!forwarderTimeoutCheckRef.current) return;
+    startForwarderTimeoutCheck();
+  }, [myRole, roomState, startForwarderTimeoutCheck]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
@@ -6023,6 +6362,12 @@ export function useGroupVoiceCall(uiActive = false) {
       clearInterval(forwarderTimeoutCheckRef.current);
       forwarderTimeoutCheckRef.current = null;
     }
+    if (clusterHeartbeatTimerRef.current) {
+      clearInterval(clusterHeartbeatTimerRef.current);
+      clusterHeartbeatTimerRef.current = null;
+    }
+    lastClusterForwarderHbRef.current.clear();
+    clusterFailoverMissStreakRef.current.clear();
     stopMetricsFlushLoop();
     stopWindowMetricsLoop();
     stopWebRtcEnsureLoop();
@@ -6169,6 +6514,7 @@ export function useGroupVoiceCall(uiActive = false) {
     setRoomState('idle');
     setParticipants([]);
     setMyRole('participant');
+    myRoleRef.current = 'participant';
     setActiveSpeakers([]);
     debugLog('[GCall] cleanup done — remaining audio resources', {
       decoders: decoderMapRef.current.size,
@@ -6781,6 +7127,17 @@ export function useGroupVoiceCall(uiActive = false) {
         lastRootHeartbeatRef.current = Date.now();
         applyTopology(topo);
         maybeRequestKeyRecoveryRef.current('topology-transition');
+      }
+
+      if (event === 'gcall:cluster-heartbeat') {
+        const p = payload as {
+          roomId: string;
+          clusterForwarder: string;
+          topologyEpoch: number;
+        };
+        if (p.roomId !== roomIdRef.current) return;
+        if (p.topologyEpoch !== localEpochRef.current) return;
+        lastClusterForwarderHbRef.current.set(p.clusterForwarder, Date.now());
       }
 
       if (event === 'gcall:heartbeat') {

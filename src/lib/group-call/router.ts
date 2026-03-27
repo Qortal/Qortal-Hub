@@ -8,6 +8,100 @@ export interface RouterClusterDef {
   members: string[];
   forwarder: string;
   standby: string;
+  /** Third in election order within the cluster; empty if fewer than three members. */
+  standby2: string;
+}
+
+/** Named officers for failover logic (deterministic from topology row). */
+export function getClusterOfficers(cluster: {
+  forwarder: string;
+  standby: string;
+  standby2?: string;
+}): { forwarder: string; standby: string; backup: string } {
+  return {
+    forwarder: cluster.forwarder,
+    standby: cluster.standby,
+    backup: cluster.standby2 ?? '',
+  };
+}
+
+/**
+ * After cluster forwarder failure: standby becomes forwarder; fill standby/standby2 from backup
+ * then remaining members in election order (`members` array).
+ */
+export function promoteClusterOfficersRow(cluster: RouterClusterDef): RouterClusterDef {
+  const { forwarder, standby, backup } = getClusterOfficers(cluster);
+  if (!standby || standby === forwarder) return cluster;
+
+  const newForwarder = standby;
+  const used = new Set<string>([newForwarder]);
+
+  let newStandby = '';
+  if (backup && backup !== newForwarder) {
+    newStandby = backup;
+    used.add(newStandby);
+  }
+  if (!newStandby) {
+    for (const m of cluster.members) {
+      if (!used.has(m)) {
+        newStandby = m;
+        used.add(m);
+        break;
+      }
+    }
+  }
+
+  let newStandby2 = '';
+  for (const m of cluster.members) {
+    if (!used.has(m)) {
+      newStandby2 = m;
+      break;
+    }
+  }
+
+  return {
+    ...cluster,
+    forwarder: newForwarder,
+    standby: newStandby || newForwarder,
+    standby2: newStandby2,
+  };
+}
+
+/** Root / global standby forwarder derived from cluster forwarder list (matches hierarchical buildTopology). */
+export function roomLevelOfficersFromClusters(
+  clusters: readonly RouterClusterDef[]
+): { rootForwarder: string; standbyForwarder: string } {
+  const forwards = clusters.map((c) => c.forwarder).filter(Boolean);
+  return {
+    rootForwarder: forwards[0] ?? '',
+    standbyForwarder: forwards[1] ?? forwards[0] ?? '',
+  };
+}
+
+/**
+ * Apply in-cluster forwarder promotion at `clusterIndex` and bump epoch; re-derives room-level root/standby.
+ */
+export function buildTopologyAfterClusterPromotion(
+  topology: RouterTopology,
+  clusterIndex: number,
+  newEpoch: number
+): RouterTopology | null {
+  const c = topology.clusters[clusterIndex];
+  if (!c) return null;
+  const promoted = promoteClusterOfficersRow(c);
+  if (promoted.forwarder === c.forwarder) return null;
+  const clusters = topology.clusters.map((cl, i) =>
+    i === clusterIndex ? promoted : cl
+  );
+  const { rootForwarder, standbyForwarder } =
+    roomLevelOfficersFromClusters(clusters);
+  return {
+    ...topology,
+    topologyEpoch: newEpoch,
+    clusters,
+    rootForwarder,
+    standbyForwarder,
+  };
 }
 
 export interface RouterTopology {
@@ -34,7 +128,7 @@ export function buildSingleClusterTopologyWithStickyRoot(
       topologyEpoch,
       rootForwarder: '',
       standbyForwarder: '',
-      clusters: [{ members: [], forwarder: '', standby: '' }],
+      clusters: [{ members: [], forwarder: '', standby: '', standby2: '' }],
     };
   }
 
@@ -43,6 +137,8 @@ export function buildSingleClusterTopologyWithStickyRoot(
       ? previousRoot
       : (sorted[0] ?? '');
   const standby = sorted.find((a) => a !== root) ?? '';
+  const standby2 =
+    sorted.find((a) => a !== root && a !== standby) ?? '';
 
   return {
     topologyEpoch,
@@ -53,6 +149,7 @@ export function buildSingleClusterTopologyWithStickyRoot(
         members: sorted,
         forwarder: root,
         standby,
+        standby2,
       },
     ],
   };
@@ -128,6 +225,12 @@ export interface GroupCallMetricsSnapshot {
   wasmFecAttempts: number;
   wasmFecSuccessCoarse: number;
   wasmFecDeferredPcmTicks: number;
+  /** Non-root cluster standby promoted after forwarder liveness timeout (Phase 1 failover). */
+  clusterFailoverPromotionCount: number;
+  /** Room standby promoted to root after root liveness timeout (flat / global standby). */
+  rootFailoverPromotionCount: number;
+  /** This node applied higher epoch / lost cluster.forwarder and demoted forwarding. */
+  clusterForwarderDemotionCount: number;
 }
 
 export interface GroupCallSourceWindowMetrics {
@@ -362,6 +465,7 @@ export function groupCallTopologyStructureFingerprint(
     .map((c) => ({
       forwarder: c.forwarder,
       standby: c.standby,
+      standby2: c.standby2 ?? '',
       members: [...c.members].sort(),
     }))
     .sort((a, b) => a.forwarder.localeCompare(b.forwarder));
@@ -596,6 +700,9 @@ export class GroupCallPerformanceTracker {
     wasmFecAttempts: 0,
     wasmFecSuccessCoarse: 0,
     wasmFecDeferredPcmTicks: 0,
+    clusterFailoverPromotionCount: 0,
+    rootFailoverPromotionCount: 0,
+    clusterForwarderDemotionCount: 0,
   };
 
   private incomingPacketSamples = 0;
@@ -708,6 +815,21 @@ export class GroupCallPerformanceTracker {
   recordRelayReceived(count = 1): void {
     this.snapshot.relayPacketsReceived += count;
     this.snapshot.lastRelayActivityAtMs = Date.now();
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordClusterFailoverPromotion(count = 1): void {
+    this.snapshot.clusterFailoverPromotionCount += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordRootFailoverPromotion(count = 1): void {
+    this.snapshot.rootFailoverPromotionCount += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordClusterForwarderDemotion(count = 1): void {
+    this.snapshot.clusterForwarderDemotionCount += count;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -1050,6 +1172,9 @@ export class GroupCallPerformanceTracker {
       wasmFecAttempts: 0,
       wasmFecSuccessCoarse: 0,
       wasmFecDeferredPcmTicks: 0,
+      clusterFailoverPromotionCount: 0,
+      rootFailoverPromotionCount: 0,
+      clusterForwarderDemotionCount: 0,
     };
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;

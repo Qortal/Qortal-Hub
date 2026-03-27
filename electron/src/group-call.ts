@@ -13,12 +13,13 @@
  * This module handles only the signaling layer:
  *   GC_JOIN / GC_LEAVE       — room membership
  *   GC_TOPOLOGY              — forwarder tree broadcast (with topologyEpoch)
+ *   GC_CLUSTER_HEARTBEAT     — per cluster-forwarder liveness (signed)
  *   GC_AUDIO                 — P2P audio relay fallback
  *   GC_KEY / GC_KEY_ROTATE   — room media key distribution
  *   GC_RTC_OFFER/ANSWER/ICE  — WebRTC DataChannel signaling
  *   GC_RTC_RECONNECT         — forwarder asks member to re-offer immediately
  *
- * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_KEY, GC_KEY_ROTATE, and
+ * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_CLUSTER_HEARTBEAT, GC_KEY, GC_KEY_ROTATE, and
  * GC_KEY_REQUEST carry Ed25519 signatures.
  * When this node has no local state for a room, JOIN/LEAVE/TOPOLOGY are relayed
  * without signature verification (cheap path); in-room peers still verify before use.
@@ -71,6 +72,7 @@ export type GroupCallMsgType =
   | 'GC_JOIN'
   | 'GC_LEAVE'
   | 'GC_TOPOLOGY'
+  | 'GC_CLUSTER_HEARTBEAT'
   | 'GC_AUDIO'
   | 'GC_KEY'
   | 'GC_KEY_ROTATE'
@@ -81,7 +83,7 @@ export type GroupCallMsgType =
   | 'GC_RTC_RECONNECT';
 
 export const GC_MESSAGE_TYPES = new Set<string>([
-  'GC_JOIN', 'GC_LEAVE', 'GC_TOPOLOGY', 'GC_AUDIO',
+  'GC_JOIN', 'GC_LEAVE', 'GC_TOPOLOGY', 'GC_CLUSTER_HEARTBEAT', 'GC_AUDIO',
   'GC_KEY', 'GC_KEY_ROTATE', 'GC_KEY_REQUEST', 'GC_RTC_OFFER', 'GC_RTC_ANSWER', 'GC_RTC_ICE',
   'GC_RTC_RECONNECT',
 ]);
@@ -115,6 +117,7 @@ export interface ClusterDef {
   members: string[];
   forwarder: string;
   standby: string;
+  standby2: string;
 }
 
 export interface GcTopologyEnvelope {
@@ -126,6 +129,21 @@ export interface GcTopologyEnvelope {
   clusters: ClusterDef[];
   /** Root's local ms timestamp — used for heartbeat tracking by peers. */
   lastSeen: number;
+  fromAddress: string;
+  fromPublicKey: string;
+  signature: string;
+  timestamp: number;
+  hopsRemaining?: number;
+}
+
+export interface GcClusterHeartbeatEnvelope {
+  type: 'GC_CLUSTER_HEARTBEAT';
+  roomId: string;
+  topologyEpoch: number;
+  /** Must equal fromAddress — the cluster forwarder sending liveness. */
+  clusterForwarder: string;
+  clusterIndex: number;
+  seq: number;
   fromAddress: string;
   fromPublicKey: string;
   signature: string;
@@ -239,7 +257,7 @@ export interface GcRtcReconnectEnvelope {
 }
 
 export type GcEnvelope =
-  | GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope
+  | GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope | GcClusterHeartbeatEnvelope
   | GcAudioEnvelope | GcKeyEnvelope | GcKeyRotateEnvelope | GcKeyRequestEnvelope
   | GcRtcOfferEnvelope | GcRtcAnswerEnvelope | GcRtcIceEnvelope
   | GcRtcReconnectEnvelope;
@@ -274,7 +292,12 @@ function buildTopologySignature(env: Pick<
     topologyEpoch: env.topologyEpoch,
     rootForwarder: env.rootForwarder,
     standbyForwarder: env.standbyForwarder,
-    clusters: env.clusters,
+    clusters: env.clusters.map((c) => ({
+      members: c.members,
+      forwarder: c.forwarder,
+      standby: c.standby,
+      standby2: c.standby2 ?? '',
+    })),
   });
 }
 
@@ -411,11 +434,46 @@ function isCheapRelayTopologyShape(env: GcTopologyEnvelope): boolean {
   );
 }
 
+function isCheapRelayClusterHeartbeatShape(env: GcClusterHeartbeatEnvelope): boolean {
+  return (
+    isNonEmptyString(env.roomId) &&
+    isNonEmptyString(env.fromAddress) &&
+    isNonEmptyString(env.fromPublicKey) &&
+    isNonEmptyString(env.clusterForwarder) &&
+    typeof env.signature === 'string' &&
+    typeof env.timestamp === 'number' &&
+    Number.isFinite(env.timestamp) &&
+    typeof env.topologyEpoch === 'number' &&
+    Number.isFinite(env.topologyEpoch) &&
+    typeof env.clusterIndex === 'number' &&
+    Number.isFinite(env.clusterIndex) &&
+    typeof env.seq === 'number' &&
+    Number.isFinite(env.seq)
+  );
+}
+
+function buildGcClusterHeartbeatSignedFields(
+  env: GcClusterHeartbeatEnvelope
+): Record<string, unknown> {
+  return {
+    type: env.type,
+    roomId: env.roomId,
+    topologyEpoch: env.topologyEpoch,
+    clusterForwarder: env.clusterForwarder,
+    clusterIndex: env.clusterIndex,
+    seq: env.seq,
+    fromAddress: env.fromAddress,
+    fromPublicKey: env.fromPublicKey,
+    timestamp: env.timestamp,
+  };
+}
+
 /** Jobs waiting on off-thread Ed25519 verification */
 type GcVerifyPending =
   | { kind: 'join'; env: GcJoinEnvelope; fromNodeId?: string }
   | { kind: 'leave'; env: GcLeaveEnvelope }
   | { kind: 'topology'; env: GcTopologyEnvelope }
+  | { kind: 'cluster_heartbeat'; env: GcClusterHeartbeatEnvelope }
   | { kind: 'key'; env: GcKeyEnvelope }
   | { kind: 'key_rotate'; env: GcKeyRotateEnvelope }
   | { kind: 'key_request'; env: GcKeyRequestEnvelope };
@@ -559,6 +617,8 @@ export class GroupCallManager extends EventEmitter {
       loggerLog(`[GCall] Dropped GC_LEAVE: invalid signature from ${job.env.fromAddress}`);
     } else if (job.kind === 'topology') {
       loggerLog(`[GCall] Dropped GC_TOPOLOGY: invalid signature from ${job.env.fromAddress}`);
+    } else if (job.kind === 'cluster_heartbeat') {
+      loggerLog(`[GCall] Dropped GC_CLUSTER_HEARTBEAT: invalid signature from ${job.env.fromAddress}`);
     } else if (job.kind === 'key') {
       loggerLog(`[GCall] Dropped GC_KEY: invalid signature from ${job.env.fromAddress}`);
     } else if (job.kind === 'key_rotate') {
@@ -640,6 +700,9 @@ export class GroupCallManager extends EventEmitter {
       case 'topology':
         this.applyVerifiedTopology(job.env);
         break;
+      case 'cluster_heartbeat':
+        this.applyVerifiedClusterHeartbeat(job.env);
+        break;
       case 'key':
         this.applyVerifiedKey(job.env);
         break;
@@ -718,7 +781,7 @@ export class GroupCallManager extends EventEmitter {
    * Matches interested-node behavior for expired GC_JOIN (no relay).
    */
   private relayDisinterestedSignedControl(
-    env: GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope
+    env: GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope | GcClusterHeartbeatEnvelope
   ): void {
     if ((env.hopsRemaining ?? 0) <= 0) return;
     this.p2p.send(null, {
@@ -823,6 +886,24 @@ export class GroupCallManager extends EventEmitter {
     };
     this.p2p.send(null, env);
     loggerLog(`[GCall] Sent GC_TOPOLOGY for room ${roomId} epoch ${topology.topologyEpoch}`);
+  }
+
+  sendClusterHeartbeat(
+    roomId: string,
+    payload: Omit<
+      GcClusterHeartbeatEnvelope,
+      'type' | 'roomId' | 'hopsRemaining' | 'signature'
+    >,
+    signature: string
+  ): void {
+    const env: GcClusterHeartbeatEnvelope = {
+      type: 'GC_CLUSTER_HEARTBEAT',
+      roomId,
+      ...payload,
+      signature,
+      hopsRemaining: GC_MAX_HOPS,
+    };
+    this.p2p.send(null, env);
   }
 
   /**
@@ -1062,6 +1143,7 @@ export class GroupCallManager extends EventEmitter {
       case 'GC_JOIN':      return this.handleJoin(env, fromNodeId);
       case 'GC_LEAVE':     return this.handleLeaveEnvelope(env);
       case 'GC_TOPOLOGY':  return this.handleTopology(env);
+      case 'GC_CLUSTER_HEARTBEAT': return this.handleClusterHeartbeat(env);
       case 'GC_AUDIO':     return this.handleAudio(env);
       case 'GC_KEY':       return this.handleKey(env);
       case 'GC_KEY_ROTATE': return this.handleKeyRotate(env);
@@ -1265,6 +1347,58 @@ export class GroupCallManager extends EventEmitter {
         roomId: env.roomId,
         lastSeen: env.lastSeen,
         rootForwarder: env.rootForwarder,
+      });
+    }
+
+    if ((env.hopsRemaining ?? 0) > 0) {
+      this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+    }
+  }
+
+  private handleClusterHeartbeat(env: GcClusterHeartbeatEnvelope): void {
+    if (!this.hasLocalRoomInterest(env.roomId)) {
+      if (isCheapRelayClusterHeartbeatShape(env)) {
+        this.relayDisinterestedSignedControl(env);
+      }
+      return;
+    }
+
+    this.enqueueVerify(
+      buildGcClusterHeartbeatSignedFields(env),
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      { kind: 'cluster_heartbeat', env }
+    );
+  }
+
+  private applyVerifiedClusterHeartbeat(env: GcClusterHeartbeatEnvelope): void {
+    if (env.clusterForwarder !== env.fromAddress) return;
+
+    const room = this.rooms.get(env.roomId);
+    if (room) {
+      if (env.topologyEpoch < room.topologyEpoch) {
+        if ((env.hopsRemaining ?? 0) > 0) {
+          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+        }
+        return;
+      }
+      if (env.topologyEpoch !== room.topologyEpoch) {
+        if ((env.hopsRemaining ?? 0) > 0) {
+          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+        }
+        return;
+      }
+    }
+
+    if (this.hasLocalRoomInterest(env.roomId)) {
+      this.emit('gcall:cluster-heartbeat', {
+        roomId: env.roomId,
+        clusterForwarder: env.clusterForwarder,
+        topologyEpoch: env.topologyEpoch,
+        clusterIndex: env.clusterIndex,
+        seq: env.seq,
+        timestamp: env.timestamp,
       });
     }
 

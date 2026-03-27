@@ -989,6 +989,20 @@ try {
       timestamp: number
     ) => ipcRenderer.invoke('gcall:broadcastTopology', roomId, topology, signature, publicKey, timestamp),
 
+    sendClusterHeartbeat: async (
+      roomId: string,
+      payload: {
+        topologyEpoch: number;
+        clusterForwarder: string;
+        clusterIndex: number;
+        seq: number;
+        fromAddress: string;
+        fromPublicKey: string;
+        timestamp: number;
+      },
+      signature: string
+    ) => ipcRenderer.invoke('gcall:sendClusterHeartbeat', roomId, payload, signature),
+
     /** Send a P2P-relay audio packet to a specific participant. */
     sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
       ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
@@ -1085,6 +1099,7 @@ try {
         'gcall:participant-joined',
         'gcall:participant-left',
         'gcall:topology',
+        'gcall:cluster-heartbeat',
         'gcall:heartbeat',
         'gcall:audio',
         'gcall:key',

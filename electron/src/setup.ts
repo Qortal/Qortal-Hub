@@ -2042,6 +2042,7 @@ export function attachGroupCallListeners(
   manager.on('gcall:participant-joined', forward('gcall:participant-joined'));
   manager.on('gcall:participant-left',   forward('gcall:participant-left'));
   manager.on('gcall:topology',           forward('gcall:topology'));
+  manager.on('gcall:cluster-heartbeat', forward('gcall:cluster-heartbeat'));
   manager.on('gcall:heartbeat',          forward('gcall:heartbeat'));
   manager.on('gcall:audio',              forward('gcall:audio'));
   manager.on('gcall:key',                forward('gcall:key'));
@@ -2104,6 +2105,29 @@ ipcMain.handle(
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     mgr.broadcastTopology(roomId, topology as any, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:sendClusterHeartbeat',
+  async (
+    _event,
+    roomId: string,
+    payload: {
+      topologyEpoch: number;
+      clusterForwarder: string;
+      clusterIndex: number;
+      seq: number;
+      fromAddress: string;
+      fromPublicKey: string;
+      timestamp: number;
+    },
+    signature: string
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.sendClusterHeartbeat(roomId, payload, signature);
     return { success: true };
   }
 );

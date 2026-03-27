@@ -272,6 +272,19 @@ declare global {
       }>;
       leave: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       broadcastTopology: (roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      sendClusterHeartbeat?: (
+        roomId: string,
+        payload: {
+          topologyEpoch: number;
+          clusterForwarder: string;
+          clusterIndex: number;
+          seq: number;
+          fromAddress: string;
+          fromPublicKey: string;
+          timestamp: number;
+        },
+        signature: string
+      ) => Promise<{ success: boolean }>;
       sendAudio: (
         roomId: string,
         toAddress: string,

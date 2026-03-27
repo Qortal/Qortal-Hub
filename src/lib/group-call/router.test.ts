@@ -3,6 +3,7 @@ import {
   assessGroupCallSourceStall,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
+  buildTopologyAfterClusterPromotion,
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
   computeGroupCallDcTransportReady,
@@ -14,6 +15,7 @@ import {
   hasGroupCallSourceWindowMediaActivity,
   isGroupCallTopologyDuplicateHeartbeat,
   isGroupCallWebRtcPeerInactive,
+  promoteClusterOfficersRow,
   reconcileParticipantSpeaking,
   sameAddressList,
 } from './router';
@@ -31,6 +33,7 @@ describe('buildSingleClusterTopologyWithStickyRoot', () => {
       members: sorted,
       forwarder: 'b',
       standby: 'a',
+      standby2: 'c',
     });
   });
 
@@ -115,8 +118,18 @@ describe('group-call router helpers', () => {
       rootForwarder: 'root',
       standbyForwarder: 'standby',
       clusters: [
-        { members: ['root', 'alice', 'bob'], forwarder: 'root', standby: 'standby' },
-        { members: ['cluster', 'charlie'], forwarder: 'cluster', standby: 'charlie' },
+        {
+          members: ['root', 'alice', 'bob'],
+          forwarder: 'root',
+          standby: 'standby',
+          standby2: 'bob',
+        },
+        {
+          members: ['cluster', 'charlie'],
+          forwarder: 'cluster',
+          standby: 'charlie',
+          standby2: '',
+        },
       ],
     };
 
@@ -236,6 +249,13 @@ describe('group-call router helpers', () => {
       wasmFecSuccessCoarse: 0,
       wasmFecDeferredPcmTicks: 0,
     });
+  });
+
+  it('records root failover promotion count', () => {
+    const tracker = new GroupCallPerformanceTracker();
+    expect(tracker.getSnapshot().rootFailoverPromotionCount).toBe(0);
+    tracker.recordRootFailoverPromotion(1);
+    expect(tracker.getSnapshot().rootFailoverPromotionCount).toBe(1);
   });
 
   it('assesses bad per-source windows for media recovery', () => {
@@ -508,7 +528,9 @@ describe('group-call router helpers', () => {
       topologyEpoch: 1,
       rootForwarder: 'root',
       standbyForwarder: 'b',
-      clusters: [{ members: ['root', 'a', 'b'], forwarder: 'root', standby: 'b' }],
+      clusters: [
+        { members: ['root', 'a', 'b'], forwarder: 'root', standby: 'b', standby2: 'a' },
+      ],
     };
     expect(
       computeGroupCallDcTransportReady('root-forwarder', 'root', topo, () => false, false)
@@ -535,17 +557,52 @@ describe('group-call router helpers', () => {
       topologyEpoch: 3,
       rootForwarder: 'r',
       standbyForwarder: 's',
-      clusters: [{ members: ['b', 'a', 'r'], forwarder: 'r', standby: 's' }],
+      clusters: [
+        { members: ['b', 'a', 'r'], forwarder: 'r', standby: 's', standby2: '' },
+      ],
     };
     const b = {
       topologyEpoch: 3,
       rootForwarder: 'r',
       standbyForwarder: 's',
-      clusters: [{ members: ['r', 'a', 'b'], forwarder: 'r', standby: 's' }],
+      clusters: [
+        { members: ['r', 'a', 'b'], forwarder: 'r', standby: 's', standby2: '' },
+      ],
     };
     expect(groupCallTopologyStructureFingerprint(a)).toBe(groupCallTopologyStructureFingerprint(b));
     expect(isGroupCallTopologyDuplicateHeartbeat(a, b, 3)).toBe(true);
     expect(isGroupCallTopologyDuplicateHeartbeat(null, b, 3)).toBe(false);
     expect(isGroupCallTopologyDuplicateHeartbeat(a, { ...b, topologyEpoch: 4 }, 3)).toBe(false);
+  });
+
+  it('promoteClusterOfficersRow rotates forwarder within a cluster', () => {
+    const c = {
+      members: ['f', 's', 't'],
+      forwarder: 'f',
+      standby: 's',
+      standby2: 't',
+    };
+    const p = promoteClusterOfficersRow(c);
+    expect(p.forwarder).toBe('s');
+    expect(p.standby).toBe('t');
+    expect(p.standby2).toBe('f');
+  });
+
+  it('buildTopologyAfterClusterPromotion bumps epoch and room-level officers', () => {
+    const base = {
+      topologyEpoch: 5,
+      rootForwarder: 'c1',
+      standbyForwarder: 'c2',
+      clusters: [
+        { members: ['c1', 'a', 'b'], forwarder: 'c1', standby: 'a', standby2: 'b' },
+        { members: ['c2', 'x', 'y'], forwarder: 'c2', standby: 'x', standby2: 'y' },
+      ],
+    };
+    const next = buildTopologyAfterClusterPromotion(base, 1, 6);
+    expect(next).not.toBeNull();
+    expect(next!.topologyEpoch).toBe(6);
+    expect(next!.clusters[1]!.forwarder).toBe('x');
+    expect(next!.rootForwarder).toBe('c1');
+    expect(next!.standbyForwarder).toBe('x');
   });
 });
