@@ -14,7 +14,7 @@
 
 const OPUS_FRAME_SAMPLES = 960; // 20ms @ 48 kHz
 
-// Adaptive VAD constants — must match useGroupVoiceCall.ts
+// Adaptive RMS VAD constants (noise-tracking worklet only).
 const VAD_ALPHA = 0.99;
 const VAD_MULTIPLIER = 2.5;
 const VAD_MIN_THRESHOLD = 0.01;
@@ -90,12 +90,18 @@ class CaptureProcessor extends AudioWorkletProcessor {
         sum += frame[i] * frame[i];
       }
       const rms = Math.sqrt(sum / OPUS_FRAME_SAMPLES);
-      this._noiseFloor =
-        VAD_ALPHA * this._noiseFloor + (1 - VAD_ALPHA) * rms;
+      // Threshold from the *previous* noise estimate only. We must not blend every
+      // frame's RMS into the noise floor: sustained vowels have stable RMS, and
+      // updating the floor toward speech makes threshold drift up until vad flips
+      // false (chopped "aaaaaa…"). Track ambient noise only on sub-threshold frames.
       const threshold = Math.max(
         VAD_MIN_THRESHOLD,
         this._noiseFloor * VAD_MULTIPLIER
       );
+      if (rms < threshold) {
+        this._noiseFloor =
+          VAD_ALPHA * this._noiseFloor + (1 - VAD_ALPHA) * rms;
+      }
       const vad = rms > threshold;
 
       // Transfer the frame buffer to avoid copying
