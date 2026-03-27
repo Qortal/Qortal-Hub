@@ -121,6 +121,11 @@ export interface GroupCallMetricsSnapshot {
   mixerAvgReductionDb: number;
   mixerOverloadEvents: number;
   mixerHeavyReductionFraction: number;
+  /** libopus WASM FEC path (session totals). */
+  wasmFecPlcFrames: number;
+  wasmFecAttempts: number;
+  wasmFecSuccessCoarse: number;
+  wasmFecDeferredPcmTicks: number;
 }
 
 export interface GroupCallSourceWindowMetrics {
@@ -135,6 +140,10 @@ export interface GroupCallSourceWindowMetrics {
   adaptiveTargetMedianMs: number;
   adaptiveTargetP95Ms: number;
   adaptiveTargetMaxMs: number;
+  wasmFecPlcFrames?: number;
+  wasmFecAttempts?: number;
+  wasmFecSuccessCoarse?: number;
+  wasmFecDeferredPcmTicks?: number;
 }
 
 export interface GroupCallWindowMetrics {
@@ -200,7 +209,9 @@ export function hasGroupCallSourceWindowMediaActivity(
     source.concealmentTicks > 0 ||
     source.avgOpusBufferedMs > 0 ||
     source.maxOpusBufferedMs > 0 ||
-    source.adaptiveTargetMaxMs > 0
+    source.adaptiveTargetMaxMs > 0 ||
+    (source.wasmFecAttempts ?? 0) > 0 ||
+    (source.wasmFecPlcFrames ?? 0) > 0
   );
 }
 
@@ -485,6 +496,10 @@ interface SourceWindowAccumulator {
   opusBufferedMsSamples: number;
   opusBufferedMsMax: number;
   adaptiveTargetSamples: number[];
+  wasmFecPlcFrames: number;
+  wasmFecAttempts: number;
+  wasmFecSuccessCoarse: number;
+  wasmFecDeferredPcmTicks: number;
 }
 
 function roundMetric(value: number): number {
@@ -563,6 +578,10 @@ export class GroupCallPerformanceTracker {
     mixerAvgReductionDb: 0,
     mixerOverloadEvents: 0,
     mixerHeavyReductionFraction: 0,
+    wasmFecPlcFrames: 0,
+    wasmFecAttempts: 0,
+    wasmFecSuccessCoarse: 0,
+    wasmFecDeferredPcmTicks: 0,
   };
 
   private incomingPacketSamples = 0;
@@ -613,6 +632,10 @@ export class GroupCallPerformanceTracker {
         opusBufferedMsSamples: 0,
         opusBufferedMsMax: 0,
         adaptiveTargetSamples: [],
+        wasmFecPlcFrames: 0,
+        wasmFecAttempts: 0,
+        wasmFecSuccessCoarse: 0,
+        wasmFecDeferredPcmTicks: 0,
       };
       this.sourceWindowStats.set(sourceAddr, current);
     }
@@ -703,6 +726,29 @@ export class GroupCallPerformanceTracker {
     if (sourceAddr) {
       this.getSourceWindowAccumulator(sourceAddr).missingFrames += count;
     }
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /** WASM libopus FEC path stats (per decode batch). Coarse FEC success is heuristic (refinement D). */
+  recordWasmFecDecodeStats(
+    sourceAddr: string,
+    stats: {
+      plcFrames: number;
+      fecAttempts: number;
+      fecSuccessCoarse: number;
+      deferredPcmTick?: boolean;
+    }
+  ): void {
+    const { plcFrames, fecAttempts, fecSuccessCoarse, deferredPcmTick } = stats;
+    if (plcFrames > 0) this.snapshot.wasmFecPlcFrames += plcFrames;
+    if (fecAttempts > 0) this.snapshot.wasmFecAttempts += fecAttempts;
+    if (fecSuccessCoarse > 0) this.snapshot.wasmFecSuccessCoarse += fecSuccessCoarse;
+    if (deferredPcmTick) this.snapshot.wasmFecDeferredPcmTicks++;
+    const src = this.getSourceWindowAccumulator(sourceAddr);
+    if (plcFrames > 0) src.wasmFecPlcFrames += plcFrames;
+    if (fecAttempts > 0) src.wasmFecAttempts += fecAttempts;
+    if (fecSuccessCoarse > 0) src.wasmFecSuccessCoarse += fecSuccessCoarse;
+    if (deferredPcmTick) src.wasmFecDeferredPcmTicks++;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -974,6 +1020,10 @@ export class GroupCallPerformanceTracker {
       mixerAvgReductionDb: 0,
       mixerOverloadEvents: 0,
       mixerHeavyReductionFraction: 0,
+      wasmFecPlcFrames: 0,
+      wasmFecAttempts: 0,
+      wasmFecSuccessCoarse: 0,
+      wasmFecDeferredPcmTicks: 0,
     };
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;
@@ -1044,6 +1094,10 @@ export class GroupCallPerformanceTracker {
             percentile(stats.adaptiveTargetSamples, 0.95)
           ),
           adaptiveTargetMaxMs: roundMetric(adaptiveTargetMaxMs),
+          wasmFecPlcFrames: stats.wasmFecPlcFrames,
+          wasmFecAttempts: stats.wasmFecAttempts,
+          wasmFecSuccessCoarse: stats.wasmFecSuccessCoarse,
+          wasmFecDeferredPcmTicks: stats.wasmFecDeferredPcmTicks,
         };
       })
       .sort((a, b) => a.sourceAddr.localeCompare(b.sourceAddr));

@@ -231,6 +231,10 @@ describe('group-call router helpers', () => {
       mixerMasterGain: 0.55,
       mixerCurrentReductionDb: -3.2,
       mixerOverloadEvents: 1,
+      wasmFecPlcFrames: 0,
+      wasmFecAttempts: 0,
+      wasmFecSuccessCoarse: 0,
+      wasmFecDeferredPcmTicks: 0,
     });
   });
 

@@ -10,7 +10,8 @@
     "format": "prettier --write .",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "test": "vitest"
+    "test": "vitest",
+    "build:libopus-fec": "./native/libopus-fec-wasm/build.sh"
   },
   "dependencies": {
     "@capacitor-community/electron": "^5.0.1",

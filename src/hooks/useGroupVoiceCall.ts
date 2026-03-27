@@ -39,6 +39,7 @@ import {
 import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
+import OpusFecWorker from '../workers/gcall-opus-fec.worker?worker';
 import {
   assessGroupCallSourceStall,
   assessGroupCallSourceWindowForRecovery,
@@ -187,6 +188,32 @@ const ADAPTIVE_TARGET_POST_MIN_MS = 60;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
 const ADAPTIVE_LOSS_MS_CAP = 20;
+
+/**
+ * libopus WASM FEC decode path is **always desired** (dev and prod). If the worker fails to
+ * load, the hook falls back to WebCodecs. Emergency disable only: `VITE_GCALL_WASM_FEC=0` or
+ * `localStorage gcallWasmFec=0` (reload app after changing localStorage).
+ */
+const GCALL_WASM_FEC_ENV_OFF =
+  typeof import.meta !== 'undefined' &&
+  import.meta.env &&
+  import.meta.env.VITE_GCALL_WASM_FEC === '0';
+const GCALL_WASM_FEC_EXTRA_HOLD_FRAMES = 1;
+const GCALL_WASM_FEC_MAX_PCM_PER_TICK = 6;
+/** Above this seq gap, reset Opus decoder before processing the next packet. */
+const GCALL_WASM_FEC_MAX_GAP_RESET = 32;
+
+function readGcallWasmFecDesired(): boolean {
+  if (GCALL_WASM_FEC_ENV_OFF) return false;
+  try {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('gcallWasmFec') === '0') {
+      return false;
+    }
+  } catch {
+    /* private mode */
+  }
+  return true;
+}
 
 /** After VAD goes false, keep forwarding through forwarder for this long (word gaps / breath). */
 const FORWARD_VAD_HANGOVER_MS = 200;
@@ -597,11 +624,22 @@ interface JitterEntry {
   receivedAt: number;
 }
 
+/** Contiguous WASM decode output; `consumedFrames` already posted to the playout worklet. */
+interface WasmFecPcmSlab {
+  pcm: Float32Array;
+  frameCount: number;
+  consumedFrames: number;
+}
+
 class JitterBuffer {
   private entries: JitterEntry[] = [];
   private lastPlayedSeq = -1;
   private pendingMissedSeq = 0;
   private primed = false;
+  /** Raw seq gap for the last pop (for WASM FEC); cleared by consumeLastRawGapAfterPop. */
+  private lastRawGapAfterPop = 0;
+
+  constructor(private readonly extraHoldFrames = 0) {}
 
   /** Pop-side gap detection: call after pop; returns missed frame count since last pop. */
   consumePendingMissedFrames(): number {
@@ -630,9 +668,17 @@ class JitterBuffer {
     }
   }
 
+  /** Raw (mod 65536) seq gap before the frame just popped; 0 if first packet or no prior seq. */
+  consumeLastRawGapAfterPop(): number {
+    const g = this.lastRawGapAfterPop;
+    this.lastRawGapAfterPop = 0;
+    return g;
+  }
+
   /** Returns next frame to play, or null if buffer not ready. */
   pop(): Uint8Array | null {
-    const threshold = this.primed ? 1 : JITTER_START_BUFFER_SIZE;
+    const base = this.primed ? 1 : JITTER_START_BUFFER_SIZE;
+    const threshold = base + this.extraHoldFrames;
     if (this.entries.length < threshold) return null;
     const entry = this.entries.shift();
     if (!entry) return null;
@@ -640,7 +686,10 @@ class JitterBuffer {
     if (this.lastPlayedSeq >= 0) {
       const expected = (this.lastPlayedSeq + 1) & 0xffff;
       const gap = (entry.seq - expected + 65536) % 65536;
+      this.lastRawGapAfterPop = gap;
       if (gap > 0 && gap <= 48) this.pendingMissedSeq += gap;
+    } else {
+      this.lastRawGapAfterPop = 0;
     }
     this.lastPlayedSeq = entry.seq;
     if (this.entries.length === 0) this.primed = false;
@@ -648,7 +697,8 @@ class JitterBuffer {
   }
 
   hasReadyFrame(): boolean {
-    return this.entries.length >= (this.primed ? 1 : JITTER_START_BUFFER_SIZE);
+    const base = this.primed ? 1 : JITTER_START_BUFFER_SIZE;
+    return this.entries.length >= base + this.extraHoldFrames;
   }
 
   getBufferedFrames(): number {
@@ -660,6 +710,7 @@ class JitterBuffer {
     this.lastPlayedSeq = -1;
     this.pendingMissedSeq = 0;
     this.primed = false;
+    this.lastRawGapAfterPop = 0;
   }
 }
 
@@ -782,6 +833,16 @@ export function useGroupVoiceCall(uiActive = false) {
   // Per-source decoders and jitter buffers
   const decoderMapRef = useRef<Map<string, AudioDecoder>>(new Map());
   const jitterMapRef = useRef<Map<string, JitterBuffer>>(new Map());
+  const gcallWasmFecDesiredRef = useRef(readGcallWasmFecDesired());
+  const gcallWasmFecActiveRef = useRef(false);
+  const opusFecWorkerRef = useRef<Worker | null>(null);
+  const opusFecRequestIdRef = useRef(0);
+  const wasmFecInflightRef = useRef(new Map<string, boolean>());
+  const wasmFecJobQueueRef = useRef(
+    new Map<string, { packet: Uint8Array; gap: number }[]>()
+  );
+  const wasmFecDeferredPcmRef = useRef(new Map<string, WasmFecPcmSlab[]>());
+  const wasmFecPcmPostedThisTickRef = useRef(new Map<string, number>());
   /** Last time we received any decoded media packet per source. */
   const lastRecvAtRef = useRef<Map<string, number>>(new Map());
   /** Latest ingress transport peer for each logical speaker source. */
@@ -1965,6 +2026,15 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSourceStallLogAtRef.current.delete(address);
       lastForwarderGateLogAtRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
+      playbackWorkletSetupPromisesRef.current.delete(address);
+      wasmFecJobQueueRef.current.delete(address);
+      wasmFecInflightRef.current.delete(address);
+      wasmFecDeferredPcmRef.current.delete(address);
+      wasmFecPcmPostedThisTickRef.current.delete(address);
+      opusFecWorkerRef.current?.postMessage({
+        type: 'dispose',
+        sourceAddr: address,
+      });
       updateMetricResourceCounts();
     },
     [updateMetricResourceCounts]
@@ -2263,7 +2333,9 @@ export function useGroupVoiceCall(uiActive = false) {
 
       let jb = jitterMapRef.current.get(sourceAddr);
       if (!jb) {
-        jb = new JitterBuffer();
+        jb = new JitterBuffer(
+          gcallWasmFecDesiredRef.current ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0
+        );
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
       }
@@ -4553,8 +4625,236 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Audio decode ──────────────────────────────────────────────────────────
 
+  const playbackWorkletSetupPromisesRef = useRef(
+    new Map<string, Promise<AudioWorkletNode>>()
+  );
+
+  const schedulePlaybackWorkletSetup = useCallback(
+    (sourceAddr: string): Promise<AudioWorkletNode> | null => {
+      const existingNode = playbackWorkletsRef.current.get(sourceAddr);
+      if (existingNode) return Promise.resolve(existingNode);
+      let p = playbackWorkletSetupPromisesRef.current.get(sourceAddr);
+      if (p) return p;
+      if (!audioContextRef.current) return null;
+
+      const ctx = audioContextRef.current;
+      const expectedAudioToken = audioSessionTokenRef.current;
+
+      p = (async (): Promise<AudioWorkletNode> => {
+        debugLog(
+          '[GCall] Loading playback worklet for',
+          sourceAddr.slice(0, 12)
+        );
+        await ensurePlaybackWorkletLoaded();
+        if (
+          audioContextRef.current !== ctx ||
+          ctx.state === 'closed' ||
+          audioSessionTokenRef.current !== expectedAudioToken
+        ) {
+          throw new Error('stale-group-playback-setup');
+        }
+        const { mixBus } = ensurePlaybackMixGraph(ctx);
+        const wallNow = Date.now();
+        const recentSpeakerEstimate = computeRecentSpeakerEstimate(
+          localSpeakersRef.current,
+          wallNow,
+          RECENT_SPEAKER_WINDOW_MS
+        );
+        const playNode = new AudioWorkletNode(
+          ctx,
+          'group-playout-processor',
+          {
+            processorOptions: { sourceAddr },
+          } as AudioWorkletNodeOptions
+        );
+        const speakerGain = ctx.createGain();
+        speakerGain.gain.value = computePerSpeakerGainTarget({
+          recentSpeakerEstimate,
+          lastVadAtMs:
+            lastVadTrueAtRef.current.get(sourceAddr) ??
+            localSpeakersRef.current.get(sourceAddr),
+          nowMs: wallNow,
+          speakerHangoverMs: SPEAKER_HANGOVER_MS,
+          activeSpeakerGain: ACTIVE_SPEAKER_GAIN,
+          inactiveSpeakerGain: INACTIVE_SPEAKER_GAIN,
+        });
+        playNode.port.onmessage = (e: MessageEvent) => {
+          const d = e.data as {
+            type?: string;
+            sourceAddr?: string;
+            bufferedMs?: number;
+            targetPlayoutMs?: number;
+            outsideBand?: boolean;
+            concealmentUsed?: boolean;
+            playoutStarted?: boolean;
+          };
+          if (d?.type !== 'gcallPlayoutMetrics') return;
+          if (typeof d.bufferedMs !== 'number') return;
+          if (!d.playoutStarted) return;
+          if (!isSourcePlayoutActive(sourceAddr)) return;
+          metricsRef.current.recordPlayoutMetricTick(
+            d.bufferedMs,
+            !!d.outsideBand,
+            sourceAddr
+          );
+          if (d.concealmentUsed) {
+            metricsRef.current.recordConcealmentTick(1, sourceAddr);
+          }
+        };
+        playNode.connect(speakerGain);
+        speakerGain.connect(mixBus);
+        playbackWorkletsRef.current.set(sourceAddr, playNode);
+        playbackGainNodesRef.current.set(sourceAddr, speakerGain);
+        updateMetricResourceCounts();
+        tickPlaybackMixTargets();
+        debugLog(
+          '[GCall] Playback worklet ready for',
+          sourceAddr.slice(0, 12),
+          '— ctx state:',
+          ctx.state
+        );
+        return playNode;
+      })().finally(() => {
+        playbackWorkletSetupPromisesRef.current.delete(sourceAddr);
+      });
+
+      playbackWorkletSetupPromisesRef.current.set(sourceAddr, p);
+      return p;
+    },
+    [
+      ensurePlaybackMixGraph,
+      ensurePlaybackWorkletLoaded,
+      tickPlaybackMixTargets,
+      updateMetricResourceCounts,
+    ]
+  );
+
+  const postWasmFecBatchToPlayout = useCallback(
+    (
+      sourceAddr: string,
+      pcm: Float32Array,
+      frameCount: number,
+      stats: {
+        plcFrames: number;
+        fecAttempts: number;
+        fecSuccessCoarse: number;
+      },
+      recordStats = true
+    ) => {
+      const playNode = playbackWorkletsRef.current.get(sourceAddr);
+      const queue = [...(wasmFecDeferredPcmRef.current.get(sourceAddr) ?? [])];
+      wasmFecDeferredPcmRef.current.delete(sourceAddr);
+
+      if (frameCount > 0) {
+        const expectedLen = frameCount * OPUS_FRAME_SAMPLES;
+        if (pcm.length !== expectedLen) {
+          console.error('[GCall] opus-fec batch length mismatch', {
+            sourceAddr: sourceAddr.slice(0, 12),
+            frameCount,
+            pcmLength: pcm.length,
+            expectedLen,
+          });
+          if (queue.length > 0) wasmFecDeferredPcmRef.current.set(sourceAddr, queue);
+          return;
+        }
+        queue.push({ pcm, frameCount, consumedFrames: 0 });
+      }
+
+      if (!playNode) {
+        if (queue.length > 0) wasmFecDeferredPcmRef.current.set(sourceAddr, queue);
+        return;
+      }
+
+      let posted = wasmFecPcmPostedThisTickRef.current.get(sourceAddr) ?? 0;
+      let deferredTick = false;
+
+      outer: while (queue.length > 0) {
+        const slab = queue[0];
+        while (slab.consumedFrames < slab.frameCount) {
+          if (posted >= GCALL_WASM_FEC_MAX_PCM_PER_TICK) {
+            wasmFecDeferredPcmRef.current.set(sourceAddr, queue);
+            deferredTick = true;
+            break outer;
+          }
+          const o = slab.consumedFrames * OPUS_FRAME_SAMPLES;
+          const chunk = new Float32Array(OPUS_FRAME_SAMPLES);
+          chunk.set(slab.pcm.subarray(o, o + OPUS_FRAME_SAMPLES));
+          playNode.port.postMessage({ pcm: chunk }, [chunk.buffer]);
+          slab.consumedFrames++;
+          posted++;
+        }
+        queue.shift();
+      }
+
+      wasmFecPcmPostedThisTickRef.current.set(sourceAddr, posted);
+      if (
+        recordStats &&
+        (stats.plcFrames > 0 ||
+          stats.fecAttempts > 0 ||
+          stats.fecSuccessCoarse > 0 ||
+          deferredTick)
+      ) {
+        metricsRef.current.recordWasmFecDecodeStats(sourceAddr, {
+          ...stats,
+          deferredPcmTick: deferredTick,
+        });
+      }
+    },
+    []
+  );
+
+  const pumpWasmFecQueue = useCallback(
+    (sourceAddr: string) => {
+      if (wasmFecInflightRef.current.get(sourceAddr)) return;
+      const w = opusFecWorkerRef.current;
+      if (!w) return;
+      const q = wasmFecJobQueueRef.current.get(sourceAddr);
+      if (!q || q.length === 0) return;
+      const job = q.shift()!;
+      if (q.length === 0) wasmFecJobQueueRef.current.delete(sourceAddr);
+      else wasmFecJobQueueRef.current.set(sourceAddr, q);
+      wasmFecInflightRef.current.set(sourceAddr, true);
+      const requestId = ++opusFecRequestIdRef.current;
+      const buf = job.packet.buffer.slice(
+        job.packet.byteOffset,
+        job.packet.byteOffset + job.packet.byteLength
+      );
+      w.postMessage(
+        {
+          type: 'decode' as const,
+          requestId,
+          sourceAddr,
+          packet: buf,
+          gap: job.gap,
+        },
+        [buf]
+      );
+    },
+    []
+  );
+
+  const enqueueWasmFecDecode = useCallback(
+    (sourceAddr: string, packet: Uint8Array, gap: number) => {
+      const q = wasmFecJobQueueRef.current.get(sourceAddr) ?? [];
+      q.push({ packet, gap });
+      wasmFecJobQueueRef.current.set(sourceAddr, q);
+      pumpWasmFecQueue(sourceAddr);
+    },
+    [pumpWasmFecQueue]
+  );
+
   const getOrCreateDecoder = useCallback(
     (sourceAddr: string): AudioDecoder | null => {
+      if (gcallWasmFecActiveRef.current) {
+        void schedulePlaybackWorkletSetup(sourceAddr)?.catch((err) => {
+          console.error(
+            '[GCall] WASM FEC playback setup failed for',
+            sourceAddr.slice(0, 12),
+            err
+          );
+        });
+        return null;
+      }
       if (decoderMapRef.current.has(sourceAddr))
         return decoderMapRef.current.get(sourceAddr)!;
       if (!audioContextRef.current) return null;
@@ -4563,95 +4863,8 @@ export function useGroupVoiceCall(uiActive = false) {
         sourceAddr.slice(0, 12)
       );
 
-      const ctx = audioContextRef.current;
-      const expectedAudioToken = audioSessionTokenRef.current;
-
-      const setupPlayback = async (): Promise<AudioWorkletNode> => {
-        debugLog(
-          '[GCall] Loading playback worklet for',
-          sourceAddr.slice(0, 12)
-        );
-        try {
-          await ensurePlaybackWorkletLoaded();
-          if (
-            audioContextRef.current !== ctx ||
-            ctx.state === 'closed' ||
-            audioSessionTokenRef.current !== expectedAudioToken
-          ) {
-            throw new Error('stale-group-playback-setup');
-          }
-          const { mixBus } = ensurePlaybackMixGraph(ctx);
-          const wallNow = Date.now();
-          const recentSpeakerEstimate = computeRecentSpeakerEstimate(
-            localSpeakersRef.current,
-            wallNow,
-            RECENT_SPEAKER_WINDOW_MS
-          );
-          const playNode = new AudioWorkletNode(
-            ctx,
-            'group-playout-processor',
-            {
-              processorOptions: { sourceAddr },
-            } as AudioWorkletNodeOptions
-          );
-          const speakerGain = ctx.createGain();
-          speakerGain.gain.value = computePerSpeakerGainTarget({
-            recentSpeakerEstimate,
-            lastVadAtMs:
-              lastVadTrueAtRef.current.get(sourceAddr) ??
-              localSpeakersRef.current.get(sourceAddr),
-            nowMs: wallNow,
-            speakerHangoverMs: SPEAKER_HANGOVER_MS,
-            activeSpeakerGain: ACTIVE_SPEAKER_GAIN,
-            inactiveSpeakerGain: INACTIVE_SPEAKER_GAIN,
-          });
-          playNode.port.onmessage = (e: MessageEvent) => {
-            const d = e.data as {
-              type?: string;
-              sourceAddr?: string;
-              bufferedMs?: number;
-              targetPlayoutMs?: number;
-              outsideBand?: boolean;
-              concealmentUsed?: boolean;
-              playoutStarted?: boolean;
-            };
-            if (d?.type !== 'gcallPlayoutMetrics') return;
-            if (typeof d.bufferedMs !== 'number') return;
-            if (!d.playoutStarted) return;
-            if (!isSourcePlayoutActive(sourceAddr)) return;
-            metricsRef.current.recordPlayoutMetricTick(
-              d.bufferedMs,
-              !!d.outsideBand,
-              sourceAddr
-            );
-            if (d.concealmentUsed) {
-              metricsRef.current.recordConcealmentTick(1, sourceAddr);
-            }
-          };
-          playNode.connect(speakerGain);
-          speakerGain.connect(mixBus);
-          playbackWorkletsRef.current.set(sourceAddr, playNode);
-          playbackGainNodesRef.current.set(sourceAddr, speakerGain);
-          updateMetricResourceCounts();
-          tickPlaybackMixTargets();
-          debugLog(
-            '[GCall] Playback worklet ready for',
-            sourceAddr.slice(0, 12),
-            '— ctx state:',
-            ctx.state
-          );
-          return playNode;
-        } catch (err) {
-          console.error(
-            '[GCall] Playback worklet FAILED for',
-            sourceAddr.slice(0, 12),
-            err
-          );
-          throw err;
-        }
-      };
-
-      const playNodePromise = setupPlayback();
+      const playNodePromise = schedulePlaybackWorkletSetup(sourceAddr);
+      if (!playNodePromise) return null;
 
       let pcmCount = 0;
       const decoder = new (window as any).AudioDecoder({
@@ -4697,12 +4910,7 @@ export function useGroupVoiceCall(uiActive = false) {
       updateMetricResourceCounts();
       return decoder;
     },
-    [
-      ensurePlaybackMixGraph,
-      ensurePlaybackWorkletLoaded,
-      tickPlaybackMixTargets,
-      updateMetricResourceCounts,
-    ]
+    [schedulePlaybackWorkletSetup, updateMetricResourceCounts]
   );
 
   // ── Incoming audio packet processing ──────────────────────────────────────
@@ -4757,6 +4965,18 @@ export function useGroupVoiceCall(uiActive = false) {
    *  ring absorb variance. */
   const runJitterDrainTick = useCallback(() => {
     const tickStartedAt = performance.now();
+    if (gcallWasmFecActiveRef.current) {
+      wasmFecPcmPostedThisTickRef.current.clear();
+      const prefetchAddrs = new Set([
+        ...wasmFecDeferredPcmRef.current.keys(),
+        ...activeJitterSourcesRef.current,
+      ]);
+      const emptyStats = { plcFrames: 0, fecAttempts: 0, fecSuccessCoarse: 0 };
+      const emptyPcm = new Float32Array(0);
+      for (const addr of prefetchAddrs) {
+        postWasmFecBatchToPlayout(addr, emptyPcm, 0, emptyStats, false);
+      }
+    }
     for (const addr of [...activeJitterSourcesRef.current]) {
       const jb = jitterMapRef.current.get(addr);
       if (!jb || !jb.hasReadyFrame()) {
@@ -4796,24 +5016,39 @@ export function useGroupVoiceCall(uiActive = false) {
             bufferByteLength: frame.buffer.byteLength,
           });
         }
-        const decoder = getOrCreateDecoder(addr);
-        if (decoder && decoder.state !== 'closed') {
-          try {
-            const chunk = new (window as any).EncodedAudioChunk({
-              type: 'key',
-              timestamp: performance.now() * 1000,
-              data: frame,
+        if (gcallWasmFecActiveRef.current) {
+          void getOrCreateDecoder(addr);
+          const rawGap = jb.consumeLastRawGapAfterPop();
+          if (rawGap > GCALL_WASM_FEC_MAX_GAP_RESET) {
+            opusFecWorkerRef.current?.postMessage({
+              type: 'reset',
+              sourceAddr: addr,
             });
-            decoder.decode(chunk);
-          } catch (e) {
-            metricsRef.current.recordPacketDropped();
-            debugWarn('[GCall] decoder.decode threw:', e);
           }
-        } else if (!decoder) {
-          debugWarn(
-            '[GCall] getOrCreateDecoder returned null for',
-            addr.slice(0, 12)
-          );
+          const gapForWorker = Math.min(rawGap, 48);
+          const packetCopy = new Uint8Array(frame.byteLength);
+          packetCopy.set(frame);
+          enqueueWasmFecDecode(addr, packetCopy, gapForWorker);
+        } else {
+          const decoder = getOrCreateDecoder(addr);
+          if (decoder && decoder.state !== 'closed') {
+            try {
+              const chunk = new (window as any).EncodedAudioChunk({
+                type: 'key',
+                timestamp: performance.now() * 1000,
+                data: frame,
+              });
+              decoder.decode(chunk);
+            } catch (e) {
+              metricsRef.current.recordPacketDropped();
+              debugWarn('[GCall] decoder.decode threw:', e);
+            }
+          } else if (!decoder) {
+            debugWarn(
+              '[GCall] getOrCreateDecoder returned null for',
+              addr.slice(0, 12)
+            );
+          }
         }
       }
       if (missedThisTick > 0) {
@@ -4873,14 +5108,75 @@ export function useGroupVoiceCall(uiActive = false) {
       performance.now() - tickStartedAt
     );
   }, [
+    enqueueWasmFecDecode,
     getSourceIngressDiagnostic,
     getOrCreateDecoder,
     isSourcePlayoutActive,
+    postWasmFecBatchToPlayout,
     tickAdaptivePlayoutTargets,
     tickPlaybackMixTargets,
   ]);
 
   runJitterDrainTickRef.current = runJitterDrainTick;
+
+  const postWasmFecBatchToPlayoutRef = useRef(postWasmFecBatchToPlayout);
+  postWasmFecBatchToPlayoutRef.current = postWasmFecBatchToPlayout;
+  const pumpWasmFecQueueRef = useRef(pumpWasmFecQueue);
+  pumpWasmFecQueueRef.current = pumpWasmFecQueue;
+
+  useEffect(() => {
+    if (!gcallWasmFecDesiredRef.current) return;
+    const w = new OpusFecWorker();
+    w.onmessage = (
+      ev: MessageEvent<
+        | {
+            type: 'decoded';
+            requestId: number;
+            sourceAddr: string;
+            pcm: Float32Array;
+            frameCount: number;
+            stats: {
+              plcFrames: number;
+              fecAttempts: number;
+              fecSuccessCoarse: number;
+            };
+          }
+        | { type: 'error'; requestId?: number; sourceAddr?: string; message: string }
+      >
+    ) => {
+      const d = ev.data;
+      if (d.type === 'error') {
+        console.error('[GCall] opus-fec worker:', d.message);
+        if (d.sourceAddr) {
+          wasmFecInflightRef.current.delete(d.sourceAddr);
+          pumpWasmFecQueueRef.current(d.sourceAddr);
+        }
+        return;
+      }
+      if (d.type !== 'decoded') return;
+      wasmFecInflightRef.current.delete(d.sourceAddr);
+      postWasmFecBatchToPlayoutRef.current(
+        d.sourceAddr,
+        d.pcm,
+        d.frameCount,
+        d.stats
+      );
+      pumpWasmFecQueueRef.current(d.sourceAddr);
+    };
+    w.onerror = (err) => {
+      console.error('[GCall] opus-fec worker error', err);
+      gcallWasmFecActiveRef.current = false;
+    };
+    opusFecWorkerRef.current = w;
+    gcallWasmFecActiveRef.current = true;
+    return () => {
+      gcallWasmFecActiveRef.current = false;
+      opusFecWorkerRef.current = null;
+      wasmFecInflightRef.current.clear();
+      wasmFecJobQueueRef.current.clear();
+      w.terminate();
+    };
+  }, []);
 
   useEffect(() => {
     if (roomState !== 'connected') {
