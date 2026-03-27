@@ -162,6 +162,65 @@ export interface GroupCallWindowMetrics {
   sources: GroupCallSourceWindowMetrics[];
 }
 
+export interface GroupCallSourceRecoveryAssessment {
+  activeSource: boolean;
+  score: number;
+  severe: boolean;
+  shouldEscalate: boolean;
+}
+
+/**
+ * Heuristic for when a source's 60s media window is bad enough to justify escalating the
+ * transport leg that carried it into recovery/reconnect. We intentionally bias toward
+ * sequence gaps and sustained low-buffer playout rather than raw underrun counts, which
+ * can be noisy during idle talk gaps.
+ */
+export function assessGroupCallSourceWindowForRecovery(
+  source: GroupCallSourceWindowMetrics
+): GroupCallSourceRecoveryAssessment {
+  const hasTransportEvidence =
+    source.missingFrames > 0 ||
+    source.avgOpusBufferedMs > 0 ||
+    source.adaptiveTargetMaxMs > 0;
+  if (!hasTransportEvidence) {
+    return {
+      activeSource: false,
+      score: 0,
+      severe: false,
+      shouldEscalate: false,
+    };
+  }
+
+  let score = 0;
+  let severe = false;
+
+  if (source.missingFrames >= 160) {
+    score += 3;
+    severe = true;
+  } else if (source.missingFrames >= 60) {
+    score += 2;
+  } else if (source.missingFrames > 0) {
+    score += 1;
+  }
+
+  if (source.concealmentTicks >= 180) score += 2;
+  else if (source.concealmentTicks >= 60) score += 1;
+
+  if (source.playoutOutsideTargetFraction >= 0.95) score += 2;
+  else if (source.playoutOutsideTargetFraction >= 0.8) score += 1;
+
+  if (source.adaptiveTargetP95Ms >= 170) score += 1;
+  if (source.avgPcmBufferedMs <= 20) score += 1;
+  if (source.avgOpusBufferedMs <= 25) score += 1;
+
+  return {
+    activeSource: true,
+    score,
+    severe,
+    shouldEscalate: severe || score >= 4,
+  };
+}
+
 /** Mesh relay must be this recent (ms) to show "P2P relay" instead of Data channel. */
 export const GROUP_CALL_RELAY_INDICATOR_STALE_MS = 2_500;
 

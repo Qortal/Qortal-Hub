@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
@@ -228,6 +229,71 @@ describe('group-call router helpers', () => {
       mixerMasterGain: 0.55,
       mixerCurrentReductionDb: -3.2,
       mixerOverloadEvents: 1,
+    });
+  });
+
+  it('assesses bad per-source windows for media recovery', () => {
+    expect(
+      assessGroupCallSourceWindowForRecovery({
+        sourceAddr: 'bad',
+        jitterUnderruns: 425,
+        missingFrames: 390,
+        concealmentTicks: 338,
+        avgPcmBufferedMs: 15.443,
+        playoutOutsideTargetFraction: 0.985,
+        avgOpusBufferedMs: 22.965,
+        maxOpusBufferedMs: 140,
+        adaptiveTargetMedianMs: 180,
+        adaptiveTargetP95Ms: 180,
+        adaptiveTargetMaxMs: 180,
+      })
+    ).toMatchObject({
+      activeSource: true,
+      severe: true,
+      shouldEscalate: true,
+    });
+
+    expect(
+      assessGroupCallSourceWindowForRecovery({
+        sourceAddr: 'healthy',
+        jitterUnderruns: 1356,
+        missingFrames: 0,
+        concealmentTicks: 1,
+        avgPcmBufferedMs: 137.714,
+        playoutOutsideTargetFraction: 0.466,
+        avgOpusBufferedMs: 20.726,
+        maxOpusBufferedMs: 200,
+        adaptiveTargetMedianMs: 101.335,
+        adaptiveTargetP95Ms: 116.66,
+        adaptiveTargetMaxMs: 146.724,
+      })
+    ).toMatchObject({
+      activeSource: true,
+      severe: false,
+      shouldEscalate: false,
+    });
+  });
+
+  it('ignores idle sources when assessing media recovery', () => {
+    expect(
+      assessGroupCallSourceWindowForRecovery({
+        sourceAddr: 'idle',
+        jitterUnderruns: 0,
+        missingFrames: 0,
+        concealmentTicks: 479,
+        avgPcmBufferedMs: 0.021,
+        playoutOutsideTargetFraction: 1,
+        avgOpusBufferedMs: 0,
+        maxOpusBufferedMs: 0,
+        adaptiveTargetMedianMs: 0,
+        adaptiveTargetP95Ms: 0,
+        adaptiveTargetMaxMs: 0,
+      })
+    ).toEqual({
+      activeSource: false,
+      score: 0,
+      severe: false,
+      shouldEscalate: false,
     });
   });
 

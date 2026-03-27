@@ -40,6 +40,7 @@ import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import {
+  assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   GroupCallPerformanceTracker,
   type GroupCallWindowMetrics,
@@ -166,16 +167,16 @@ const OPUS_FRAME_SAMPLES = (OPUS_SAMPLE_RATE * OPUS_FRAME_DURATION_MS) / 1000; /
 const OPUS_EXPECTED_PACKETLOSS_PERCENT = 10;
 
 /** Minimum Opus frames queued before decode drain starts (20ms per frame). Playout also gates on PCM depth in worklet. */
-const JITTER_BUFFER_SIZE = 5; // ~100ms — paired with maxRetransmits:1 to reclaim headroom
-const JITTER_START_BUFFER_SIZE = 2;
+const JITTER_BUFFER_SIZE = 6; // ~120ms — paired with maxRetransmits:1 to reclaim headroom
+const JITTER_START_BUFFER_SIZE = 3;
 const JITTER_EMPTY_HYSTERESIS_TICKS = 3;
 
 /** Max Opus frames decoded per remote source per jitter scheduler tick (burst catch-up). */
 const JITTER_DECODE_BURST_MAX = 4;
 
 /** Adaptive playout target (main thread → group-playout-processor). */
-const ADAPTIVE_BASE_TARGET_MS = 80;
-const ADAPTIVE_MIN_TARGET_MS = 80;
+const ADAPTIVE_BASE_TARGET_MS = 90;
+const ADAPTIVE_MIN_TARGET_MS = 90;
 const ADAPTIVE_MAX_TARGET_MS = 180;
 const ADAPTIVE_JITTER_K = 2.2;
 const ADAPTIVE_ALPHA_UP = 0.4;
@@ -259,6 +260,12 @@ const isTestingRelay = false;
 const PENDING_DECRYPT_MAX = 96;
 /** Drop pending decrypt entries older than this (worker stuck / lost result). */
 const PENDING_DECRYPT_TTL_MS = 500;
+/** Treat playout as active only shortly after real packets or while Opus is still queued. */
+const PLAYOUT_ACTIVITY_WINDOW_MS = 400;
+/** Avoid reconnect storms when repeated bad media windows hit the same transport leg. */
+const MEDIA_RECOVERY_ACTION_COOLDOWN_MS = 45_000;
+const SOURCE_GAP_LOG_MIN_INTERVAL_MS = 5_000;
+const RELAY_INGRESS_PEER = '__relay__';
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
@@ -768,7 +775,10 @@ export function useGroupVoiceCall(uiActive = false) {
   // Per-source decoders and jitter buffers
   const decoderMapRef = useRef<Map<string, AudioDecoder>>(new Map());
   const jitterMapRef = useRef<Map<string, JitterBuffer>>(new Map());
+  /** Last time we received any decoded media packet per source. */
   const lastRecvAtRef = useRef<Map<string, number>>(new Map());
+  /** Latest ingress transport peer for each logical speaker source. */
+  const sourceIngressPeerRef = useRef<Map<string, string>>(new Map());
 
   // Outgoing seq counter per source
   const seqRef = useRef<number>(0);
@@ -800,6 +810,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const ensureGroupCallWebRtcRef = useRef<(topology: GroupTopology) => void>(
     () => {}
   );
+  const requestMediaRecoveryForPeerRef = useRef<(peerAddress: string) => void>(
+    () => {}
+  );
   const gcallIceServersRef = useRef<RTCIceServer[]>(
     getInitialIceServersFromHub().map((s) => ({ urls: s.urls }))
   );
@@ -817,6 +830,8 @@ export function useGroupVoiceCall(uiActive = false) {
     Map<string, 'low-latency' | 'recovery'>
   >(new Map());
   const peerInstabilityScoreRef = useRef<Map<string, number>>(new Map());
+  const peerMediaRecoveryBreachRef = useRef<Map<string, number>>(new Map());
+  const peerMediaRecoveryLastActionAtRef = useRef<Map<string, number>>(new Map());
   const globalRecoveryUntilMsRef = useRef<number>(0);
   /** True only while this node generated the current roomKey (as root-forwarder initiator).
    *  Cleared when root is lost so a re-promoted node never redistributes a foreign key. */
@@ -876,6 +891,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastPlayoutTargetPostAtRef = useRef<Map<string, number>>(new Map());
   /** Seq-gap count accumulated during last drain tick per source (feeds loss term). */
   const lastDrainMissedRef = useRef<Map<string, number>>(new Map());
+  const lastSourceGapLogAtRef = useRef<Map<string, number>>(new Map());
 
   /** Last mesh send time per peer — fallback vs primary policies do not share one map. */
   const relayLastSentFallbackRef = useRef<Map<string, number>>(new Map());
@@ -900,7 +916,12 @@ export function useGroupVoiceCall(uiActive = false) {
   const pendingDecryptsRef = useRef(
     new Map<
       number,
-      { wireForForward: ArrayBuffer; startedAt: number; receivedAt: number }
+      {
+        wireForForward: ArrayBuffer;
+        startedAt: number;
+        receivedAt: number;
+        ingressPeerAddress: string;
+      }
     >()
   );
   /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
@@ -1165,9 +1186,9 @@ export function useGroupVoiceCall(uiActive = false) {
   }, []);
 
   const markPeerUnstable = useCallback(
-    (address: string) => {
+    (address: string, severity = 1) => {
       const prev = peerInstabilityScoreRef.current.get(address) ?? 0;
-      const next = Math.min(10, prev + 1);
+      const next = Math.min(10, prev + Math.max(1, Math.floor(severity)));
       peerInstabilityScoreRef.current.set(address, next);
       if (next >= ADAPTIVE_RECOVERY_SCORE_THRESHOLD) {
         peerRecoveryProfileRef.current.set(address, 'recovery');
@@ -1196,6 +1217,103 @@ export function useGroupVoiceCall(uiActive = false) {
       recomputeAdaptiveNetworkMode();
     },
     [recomputeAdaptiveNetworkMode]
+  );
+
+  const isSourcePlayoutActive = useCallback((sourceAddr: string, now = performance.now()) => {
+    const lastRecvAt = lastRecvAtRef.current.get(sourceAddr);
+    if (lastRecvAt !== undefined && now - lastRecvAt <= PLAYOUT_ACTIVITY_WINDOW_MS) {
+      return true;
+    }
+    return (jitterMapRef.current.get(sourceAddr)?.getBufferedFrames() ?? 0) > 0;
+  }, []);
+
+  const getSourceIngressDiagnostic = useCallback(
+    (sourceAddr: string) => {
+      const ingressPeerAddress =
+        sourceIngressPeerRef.current.get(sourceAddr) ??
+        (myRoleRef.current === 'participant' ? upstreamAddressRef.current : null);
+      if (!ingressPeerAddress) {
+        return {
+          ingressPeerAddress: null,
+          ingressPeerRole: null,
+        };
+      }
+      return {
+        ingressPeerAddress,
+        ingressPeerRole:
+          ingressPeerAddress === RELAY_INGRESS_PEER
+            ? 'relay'
+            : (peerConnectionsRef.current.get(ingressPeerAddress)?.role ?? null),
+      };
+    },
+    []
+  );
+
+  const buildWindowDiagnosticSources = useCallback(
+    (windowMetrics: GroupCallWindowMetrics) =>
+      windowMetrics.sources.map((source) => ({
+        ...source,
+        ...getSourceIngressDiagnostic(source.sourceAddr),
+        recoveryAssessment: assessGroupCallSourceWindowForRecovery(source),
+      })),
+    [getSourceIngressDiagnostic]
+  );
+
+  const evaluateWindowMediaRecovery = useCallback(
+    (windowMetrics: GroupCallWindowMetrics) => {
+      const peerScores = new Map<
+        string,
+        { score: number; severe: boolean; degradedSources: number }
+      >();
+      const activePeers = new Set<string>();
+      for (const source of windowMetrics.sources) {
+        const ingressPeer = getSourceIngressDiagnostic(source.sourceAddr).ingressPeerAddress;
+        if (!ingressPeer || ingressPeer === RELAY_INGRESS_PEER) continue;
+        activePeers.add(ingressPeer);
+        const assessment = assessGroupCallSourceWindowForRecovery(source);
+        if (!assessment.shouldEscalate) continue;
+        const prev = peerScores.get(ingressPeer) ?? {
+          score: 0,
+          severe: false,
+          degradedSources: 0,
+        };
+        prev.score += assessment.score;
+        prev.severe = prev.severe || assessment.severe;
+        prev.degradedSources++;
+        peerScores.set(ingressPeer, prev);
+      }
+
+      for (const peerAddress of activePeers) {
+        const entry = peerScores.get(peerAddress);
+        if (!entry) {
+          const prevBreaches = peerMediaRecoveryBreachRef.current.get(peerAddress) ?? 0;
+          if (prevBreaches > 0) {
+            peerMediaRecoveryBreachRef.current.set(peerAddress, prevBreaches - 1);
+          }
+          continue;
+        }
+
+        const severity = Math.max(
+          1,
+          Math.min(
+            3,
+            entry.severe ? 3 : entry.degradedSources >= 2 ? 2 : Math.ceil(entry.score / 4)
+          )
+        );
+        markPeerUnstable(peerAddress, severity);
+
+        const breaches = (peerMediaRecoveryBreachRef.current.get(peerAddress) ?? 0) + 1;
+        peerMediaRecoveryBreachRef.current.set(peerAddress, breaches);
+
+        const lastAction = peerMediaRecoveryLastActionAtRef.current.get(peerAddress) ?? 0;
+        const nowMs = Date.now();
+        if (breaches >= 2 && nowMs - lastAction >= MEDIA_RECOVERY_ACTION_COOLDOWN_MS) {
+          peerMediaRecoveryLastActionAtRef.current.set(peerAddress, nowMs);
+          requestMediaRecoveryForPeerRef.current(peerAddress);
+        }
+      }
+    },
+    [getSourceIngressDiagnostic, markPeerUnstable]
   );
 
   const getDataChannelOptionsForPeer = useCallback(
@@ -1419,13 +1537,16 @@ export function useGroupVoiceCall(uiActive = false) {
       const receivingPeer = userInfo?.address ?? '';
       const windowMetrics = metricsRef.current.captureWindowMetrics(receivingPeer);
       lastWindowMetricsRef.current = windowMetrics;
+      evaluateWindowMediaRecovery(windowMetrics);
+      const diagnosticSources = buildWindowDiagnosticSources(windowMetrics);
       console.info('[GCall] groupCallWindowMetrics', {
         reason,
         ...windowMetrics,
+        sources: diagnosticSources,
       });
       return windowMetrics;
     },
-    [userInfo?.address]
+    [buildWindowDiagnosticSources, evaluateWindowMediaRecovery, userInfo?.address]
   );
 
   const tickAdaptivePlayoutTargets = useCallback(() => {
@@ -1603,12 +1724,14 @@ export function useGroupVoiceCall(uiActive = false) {
         localSpeakersRef.current
       );
       lastVadTrueAtRef.current.delete(address);
+      sourceIngressPeerRef.current.delete(address);
       lastPacketArrivalAtRef.current.delete(address);
       interArrivalSamplesRef.current.delete(address);
       smoothedPlayoutTargetRef.current.delete(address);
       lastSentPlayoutTargetRef.current.delete(address);
       lastPlayoutTargetPostAtRef.current.delete(address);
       lastDrainMissedRef.current.delete(address);
+      lastSourceGapLogAtRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
       updateMetricResourceCounts();
     },
@@ -1794,7 +1917,8 @@ export function useGroupVoiceCall(uiActive = false) {
       wireForForward: ArrayBuffer,
       decodedList: DecodedAudioPacket[],
       startedAt: number,
-      receivedAt: number
+      receivedAt: number,
+      ingressPeerAddress: string
     ) => {
       if (decodedList.length === 0) {
         decryptFailureStreakRef.current += 1;
@@ -1813,6 +1937,8 @@ export function useGroupVoiceCall(uiActive = false) {
       const head = decodedList[0]!;
       const { sourceAddr } = head;
       const myAddress = userInfo?.address ?? '';
+      lastRecvAtRef.current.set(sourceAddr, receivedAt);
+      sourceIngressPeerRef.current.set(sourceAddr, ingressPeerAddress);
 
       const jbExisting = jitterMapRef.current.get(sourceAddr);
       if (!jbExisting) {
@@ -1838,7 +1964,6 @@ export function useGroupVoiceCall(uiActive = false) {
       if (anyVad) {
         lastVadTrueAtRef.current.set(sourceAddr, now);
         localSpeakersRef.current.set(sourceAddr, now);
-        lastRecvAtRef.current.set(sourceAddr, performance.now());
       }
 
       const lastVadTrueAt = lastVadTrueAtRef.current.get(sourceAddr) ?? 0;
@@ -1919,7 +2044,8 @@ export function useGroupVoiceCall(uiActive = false) {
       wireForForward: ArrayBuffer,
       decoded: DecodedAudioPacket | null,
       startedAt: number,
-      receivedAt: number
+      receivedAt: number,
+      ingressPeerAddress: string
     ) => {
       if (!decoded) {
         decryptFailureStreakRef.current += 1;
@@ -1934,7 +2060,13 @@ export function useGroupVoiceCall(uiActive = false) {
         maybeRequestKeyRecoveryRef.current('decode-failure');
         return;
       }
-      applyPostDecryptList(wireForForward, [decoded], startedAt, receivedAt);
+      applyPostDecryptList(
+        wireForForward,
+        [decoded],
+        startedAt,
+        receivedAt,
+        ingressPeerAddress
+      );
     },
     [applyPostDecryptList]
   );
@@ -2695,6 +2827,15 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [requestRtcReconnectHint]
   );
+  requestMediaRecoveryForPeerRef.current = (peerAddress: string) => {
+    const entry = peerConnectionsRef.current.get(peerAddress);
+    if (!entry) return;
+    if (entry.role === 'upstream') {
+      void reconnectExpectedUpstreamPeer(peerAddress, entry.connId);
+      return;
+    }
+    void setupDownstreamChannel(peerAddress, entry.connId);
+  };
 
   /** Handle incoming RTC signal (offer/answer/ice/reconnect). Serialized per `fromAddress`. */
   const handleRtcSignal = useCallback(
@@ -4190,9 +4331,12 @@ export function useGroupVoiceCall(uiActive = false) {
               targetPlayoutMs?: number;
               outsideBand?: boolean;
               concealmentUsed?: boolean;
+              playoutStarted?: boolean;
             };
             if (d?.type !== 'gcallPlayoutMetrics') return;
             if (typeof d.bufferedMs !== 'number') return;
+            if (!d.playoutStarted) return;
+            if (!isSourcePlayoutActive(sourceAddr)) return;
             metricsRef.current.recordPlayoutMetricTick(
               d.bufferedMs,
               !!d.outsideBand,
@@ -4283,10 +4427,11 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // Forwarding/gating run after decrypt (worker RTT + queue depth vs old sync header parse).
   const handleIncomingAudioPacket = useCallback(
-    (data: ArrayBuffer, _fromAddress: string) => {
+    (data: ArrayBuffer, fromAddress: string) => {
       if (!roomKeyRef.current) return;
       const startedAt = performance.now();
       const receivedAt = startedAt;
+      const ingressPeerAddress = fromAddress || RELAY_INGRESS_PEER;
       metricsRef.current.recordPacketReceived();
 
       // Retain DC buffer for opaque forward after decrypt; never transfer this reference.
@@ -4301,6 +4446,7 @@ export function useGroupVoiceCall(uiActive = false) {
           wireForForward,
           startedAt,
           receivedAt,
+          ingressPeerAddress,
         });
         decryptWorkerRef.current.postMessage(
           { type: 'decrypt', id, buffer: workerBuffer },
@@ -4311,7 +4457,13 @@ export function useGroupVoiceCall(uiActive = false) {
 
       // Sync fallback: decrypt on main thread (same post-decrypt path as worker).
       const list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
-      applyPostDecryptList(wireForForward, list, startedAt, receivedAt);
+      applyPostDecryptList(
+        wireForForward,
+        list,
+        startedAt,
+        receivedAt,
+        ingressPeerAddress
+      );
     },
     [applyPostDecryptList, ensurePendingDecryptCap, sweepStalePendingDecrypts]
   );
@@ -4326,7 +4478,7 @@ export function useGroupVoiceCall(uiActive = false) {
     for (const addr of [...activeJitterSourcesRef.current]) {
       const jb = jitterMapRef.current.get(addr);
       if (!jb || !jb.hasReadyFrame()) {
-        if (jb) {
+        if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
           metricsRef.current.recordJitterUnderrun(1, addr);
           metricsRef.current.recordOpusBufferedMetric(
             addr,
@@ -4384,10 +4536,22 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       if (missedThisTick > 0) {
         metricsRef.current.recordMissingFrames(missedThisTick, addr);
-        lastDrainMissedRef.current.set(
-          addr,
-          (lastDrainMissedRef.current.get(addr) ?? 0) + missedThisTick
-        );
+        const nextMissed = (lastDrainMissedRef.current.get(addr) ?? 0) + missedThisTick;
+        lastDrainMissedRef.current.set(addr, nextMissed);
+        const lastGapLoggedAt = lastSourceGapLogAtRef.current.get(addr) ?? 0;
+        const nowMs = Date.now();
+        if (nowMs - lastGapLoggedAt >= SOURCE_GAP_LOG_MIN_INTERVAL_MS) {
+          lastSourceGapLogAtRef.current.set(addr, nowMs);
+          const ingressDiagnostic = getSourceIngressDiagnostic(addr);
+          debugLog('[GCall] source gap diagnostic', {
+            sourceAddr: addr,
+            ...ingressDiagnostic,
+            missedFramesThisTick: missedThisTick,
+            missedFramesAccumulated: nextMissed,
+            opusBufferedMs: jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS,
+            adaptiveTargetMs: smoothedPlayoutTargetRef.current.get(addr) ?? null,
+          });
+        }
       }
       metricsRef.current.recordOpusBufferedMetric(
         addr,
@@ -4426,7 +4590,13 @@ export function useGroupVoiceCall(uiActive = false) {
     metricsRef.current.recordJitterTickDuration(
       performance.now() - tickStartedAt
     );
-  }, [getOrCreateDecoder, tickAdaptivePlayoutTargets, tickPlaybackMixTargets]);
+  }, [
+    getSourceIngressDiagnostic,
+    getOrCreateDecoder,
+    isSourcePlayoutActive,
+    tickAdaptivePlayoutTargets,
+    tickPlaybackMixTargets,
+  ]);
 
   runJitterDrainTickRef.current = runJitterDrainTick;
 
@@ -4979,7 +5149,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!pending) {
         return;
       }
-      const { wireForForward, startedAt, receivedAt } = pending;
+      const { wireForForward, startedAt, receivedAt, ingressPeerAddress } = pending;
       const multi = e.data.decodedMulti;
       if (multi && multi.length > 0) {
         const list: DecodedAudioPacket[] = multi.map((raw) => ({
@@ -4989,7 +5159,13 @@ export function useGroupVoiceCall(uiActive = false) {
           timestampMs: raw.timestampMs,
           opusFrame: new Uint8Array(raw.opusFrame),
         }));
-        applyPostDecryptList(wireForForward, list, startedAt, receivedAt);
+        applyPostDecryptList(
+          wireForForward,
+          list,
+          startedAt,
+          receivedAt,
+          ingressPeerAddress
+        );
         return;
       }
       const raw = e.data.decoded;
@@ -5002,7 +5178,13 @@ export function useGroupVoiceCall(uiActive = false) {
             opusFrame: new Uint8Array(raw.opusFrame),
           }
         : null;
-      applyPostDecrypt(wireForForward, decoded, startedAt, receivedAt);
+      applyPostDecrypt(
+        wireForForward,
+        decoded,
+        startedAt,
+        receivedAt,
+        ingressPeerAddress
+      );
     };
 
     worker.onerror = (err) => {
@@ -5039,6 +5221,8 @@ export function useGroupVoiceCall(uiActive = false) {
       sessionStunBundleRef.current = [];
       peerRecoveryProfileRef.current.clear();
       peerInstabilityScoreRef.current.clear();
+      peerMediaRecoveryBreachRef.current.clear();
+      peerMediaRecoveryLastActionAtRef.current.clear();
       globalRecoveryUntilMsRef.current = 0;
       setRoomState('joining');
       metricsRef.current.reset();
@@ -5279,6 +5463,7 @@ export function useGroupVoiceCall(uiActive = false) {
     activeJitterSourcesRef.current.clear();
     emptyJitterDrainTicksRef.current.clear();
     lastRecvAtRef.current.clear();
+    sourceIngressPeerRef.current.clear();
     clearAdaptiveGroupCallPlayoutMaps({
       lastPacketArrivalAt: lastPacketArrivalAtRef.current,
       interArrivalSamples: interArrivalSamplesRef.current,
@@ -5287,6 +5472,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPlayoutTargetPostAt: lastPlayoutTargetPostAtRef.current,
       lastDrainMissed: lastDrainMissedRef.current,
     });
+    lastSourceGapLogAtRef.current.clear();
 
     // Close peer connections (clear ICE disconnect grace timers first so callbacks cannot fire after teardown)
     for (const [, entry] of peerConnectionsRef.current) {
@@ -5315,6 +5501,8 @@ export function useGroupVoiceCall(uiActive = false) {
     dcSendBackoffStreakRef.current.clear();
     peerRecoveryProfileRef.current.clear();
     peerInstabilityScoreRef.current.clear();
+    peerMediaRecoveryBreachRef.current.clear();
+    peerMediaRecoveryLastActionAtRef.current.clear();
     globalRecoveryUntilMsRef.current = 0;
 
     // Terminate the decrypt Worker (sync clears pending + worker key)

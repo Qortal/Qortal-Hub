@@ -165,7 +165,9 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     this._metricsQuantumCount++;
     if (this._metricsQuantumCount < METRICS_QUANTA) return;
     this._metricsQuantumCount = 0;
-    const outside = Math.abs(bufferedMs - this._targetPlayoutMs) > OUTSIDE_BAND_MS;
+    const outside =
+      this._playoutStarted &&
+      Math.abs(bufferedMs - this._targetPlayoutMs) > OUTSIDE_BAND_MS;
     this.port.postMessage({
       type: 'gcallPlayoutMetrics',
       sourceAddr: this._sourceAddr,
@@ -173,6 +175,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       targetPlayoutMs: this._targetPlayoutMs,
       rate: this._smoothedRate,
       outsideBand: outside,
+      playoutStarted: this._playoutStarted,
       concealmentUsed: !!concealmentUsed,
     });
   }
