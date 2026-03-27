@@ -39,7 +39,9 @@ export function buildSingleClusterTopologyWithStickyRoot(
   }
 
   const root =
-    previousRoot && sorted.includes(previousRoot) ? previousRoot : (sorted[0] ?? '');
+    previousRoot && sorted.includes(previousRoot)
+      ? previousRoot
+      : (sorted[0] ?? '');
   const standby = sorted.find((a) => a !== root) ?? '';
 
   return {
@@ -353,7 +355,9 @@ export function assessGroupCallSourceStall(
 export const GROUP_CALL_RELAY_INDICATOR_STALE_MS = 2_500;
 
 /** Compare-only fingerprint: normalize cluster/member order so duplicate topology heartbeats match. */
-export function groupCallTopologyStructureFingerprint(topology: RouterTopology): string {
+export function groupCallTopologyStructureFingerprint(
+  topology: RouterTopology
+): string {
   const normClusters = topology.clusters
     .map((c) => ({
       forwarder: c.forwarder,
@@ -381,13 +385,20 @@ export function isGroupCallTopologyDuplicateHeartbeat(
   return (
     prev !== null &&
     incoming.topologyEpoch === localEpoch &&
-    groupCallTopologyStructureFingerprint(incoming) === groupCallTopologyStructureFingerprint(prev)
+    groupCallTopologyStructureFingerprint(incoming) ===
+      groupCallTopologyStructureFingerprint(prev)
   );
 }
 
 /** True when the hook should open a new RTCPeerConnection (no PC or terminal ICE state). */
-export function isGroupCallWebRtcPeerInactive(connectionState: string | undefined): boolean {
-  return connectionState === undefined || connectionState === 'failed' || connectionState === 'closed';
+export function isGroupCallWebRtcPeerInactive(
+  connectionState: string | undefined
+): boolean {
+  return (
+    connectionState === undefined ||
+    connectionState === 'failed' ||
+    connectionState === 'closed'
+  );
 }
 
 /**
@@ -506,7 +517,10 @@ function roundMetric(value: number): number {
   return Number(value.toFixed(3));
 }
 
-function percentile(samples: readonly number[], percentileRank: number): number {
+function percentile(
+  samples: readonly number[],
+  percentileRank: number
+): number {
   if (samples.length === 0) return 0;
   const sorted = [...samples].sort((a, b) => a - b);
   const index = Math.min(
@@ -617,7 +631,9 @@ export class GroupCallPerformanceTracker {
   private windowOpusBufferedMsMax = 0;
   private sourceWindowStats = new Map<string, SourceWindowAccumulator>();
 
-  private getSourceWindowAccumulator(sourceAddr: string): SourceWindowAccumulator {
+  private getSourceWindowAccumulator(
+    sourceAddr: string
+  ): SourceWindowAccumulator {
     let current = this.sourceWindowStats.get(sourceAddr);
     if (!current) {
       current = {
@@ -742,7 +758,8 @@ export class GroupCallPerformanceTracker {
     const { plcFrames, fecAttempts, fecSuccessCoarse, deferredPcmTick } = stats;
     if (plcFrames > 0) this.snapshot.wasmFecPlcFrames += plcFrames;
     if (fecAttempts > 0) this.snapshot.wasmFecAttempts += fecAttempts;
-    if (fecSuccessCoarse > 0) this.snapshot.wasmFecSuccessCoarse += fecSuccessCoarse;
+    if (fecSuccessCoarse > 0)
+      this.snapshot.wasmFecSuccessCoarse += fecSuccessCoarse;
     if (deferredPcmTick) this.snapshot.wasmFecDeferredPcmTicks++;
     const src = this.getSourceWindowAccumulator(sourceAddr);
     if (plcFrames > 0) src.wasmFecPlcFrames += plcFrames;
@@ -763,7 +780,8 @@ export class GroupCallPerformanceTracker {
 
   recordPcConnectionStateTransition(state: RTCPeerConnectionState): void {
     if (state === 'connected') this.snapshot.pcConnectedTransitions++;
-    else if (state === 'disconnected') this.snapshot.pcDisconnectedTransitions++;
+    else if (state === 'disconnected')
+      this.snapshot.pcDisconnectedTransitions++;
     else if (state === 'failed') this.snapshot.pcFailedTransitions++;
     else if (state === 'closed') this.snapshot.pcClosedTransitions++;
     this.snapshot.lastUpdatedAt = Date.now();
@@ -847,7 +865,8 @@ export class GroupCallPerformanceTracker {
     }
     if (mode !== this.windowTransportMode) {
       if (this.windowTransportMode === 'relay') {
-        this.windowRelayDwellAccumulatedMs += now - this.windowTransportModeSinceMs;
+        this.windowRelayDwellAccumulatedMs +=
+          now - this.windowTransportModeSinceMs;
       }
       this.windowTransportMode = mode;
       this.windowTransportModeSinceMs = now;
@@ -886,7 +905,9 @@ export class GroupCallPerformanceTracker {
 
   recordAdaptiveTargetSample(sourceAddr: string, targetMs: number): void {
     if (!Number.isFinite(targetMs) || targetMs <= 0) return;
-    this.getSourceWindowAccumulator(sourceAddr).adaptiveTargetSamples.push(targetMs);
+    this.getSourceWindowAccumulator(sourceAddr).adaptiveTargetSamples.push(
+      targetMs
+    );
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -894,7 +915,10 @@ export class GroupCallPerformanceTracker {
     if (!Number.isFinite(bufferedMs) || bufferedMs < 0) return;
     this.windowOpusBufferedMsSum += bufferedMs;
     this.windowOpusBufferedMsSamples++;
-    this.windowOpusBufferedMsMax = Math.max(this.windowOpusBufferedMsMax, bufferedMs);
+    this.windowOpusBufferedMsMax = Math.max(
+      this.windowOpusBufferedMsMax,
+      bufferedMs
+    );
     const source = this.getSourceWindowAccumulator(sourceAddr);
     source.opusBufferedMsSum += bufferedMs;
     source.opusBufferedMsSamples++;
@@ -947,7 +971,9 @@ export class GroupCallPerformanceTracker {
     overloadThresholdDb = -1.5,
     heavyReductionThresholdDb = -3
   ): void {
-    const reduction = Number.isFinite(reductionDb) ? Math.min(0, reductionDb) : 0;
+    const reduction = Number.isFinite(reductionDb)
+      ? Math.min(0, reductionDb)
+      : 0;
     this.snapshot.mixerCurrentReductionDb = roundMetric(reduction);
     this.mixerReductionSamples++;
     this.mixerReductionTotalDb += reduction;
@@ -1059,7 +1085,10 @@ export class GroupCallPerformanceTracker {
     };
   }
 
-  captureWindowMetrics(receivingPeer: string, endAt = Date.now()): GroupCallWindowMetrics {
+  captureWindowMetrics(
+    receivingPeer: string,
+    endAt = Date.now()
+  ): GroupCallWindowMetrics {
     const relayDwellMs =
       this.windowRelayDwellAccumulatedMs +
       (this.windowTransportMode === 'relay'
@@ -1078,7 +1107,8 @@ export class GroupCallPerformanceTracker {
           missingFrames: stats.missingFrames,
           concealmentTicks: stats.concealmentTicks,
           avgPcmBufferedMs: roundMetric(
-            stats.playoutBufferedMsSum / Math.max(1, stats.playoutBufferedMsSamples)
+            stats.playoutBufferedMsSum /
+              Math.max(1, stats.playoutBufferedMsSamples)
           ),
           playoutOutsideTargetFraction: roundMetric(
             stats.playoutOutsideTicks / Math.max(1, stats.playoutTicks)
@@ -1101,8 +1131,10 @@ export class GroupCallPerformanceTracker {
         };
       })
       .sort((a, b) => a.sourceAddr.localeCompare(b.sourceAddr));
-    const allAdaptiveSamples = sources.flatMap((source) =>
-      this.sourceWindowStats.get(source.sourceAddr)?.adaptiveTargetSamples ?? []
+    const allAdaptiveSamples = sources.flatMap(
+      (source) =>
+        this.sourceWindowStats.get(source.sourceAddr)?.adaptiveTargetSamples ??
+        []
     );
     const worstSource = sources.reduce<GroupCallSourceWindowMetrics | null>(
       (worst, current) =>
@@ -1125,13 +1157,16 @@ export class GroupCallPerformanceTracker {
       relayDwellMs: roundMetric(relayDwellMs),
       relayDwellFraction: roundMetric(relayDwellMs / durationMs),
       avgPcmBufferedMs: roundMetric(
-        this.windowPlayoutBufferedMsSum / Math.max(1, this.windowPlayoutBufferedMsSamples)
+        this.windowPlayoutBufferedMsSum /
+          Math.max(1, this.windowPlayoutBufferedMsSamples)
       ),
       playoutOutsideTargetFraction: roundMetric(
-        this.windowPlayoutOutsideTicks / Math.max(1, this.windowPlayoutMetricTicks)
+        this.windowPlayoutOutsideTicks /
+          Math.max(1, this.windowPlayoutMetricTicks)
       ),
       avgOpusBufferedMs: roundMetric(
-        this.windowOpusBufferedMsSum / Math.max(1, this.windowOpusBufferedMsSamples)
+        this.windowOpusBufferedMsSum /
+          Math.max(1, this.windowOpusBufferedMsSamples)
       ),
       maxOpusBufferedMs: roundMetric(this.windowOpusBufferedMsMax),
       adaptiveTargetMedianMs: roundMetric(percentile(allAdaptiveSamples, 0.5)),
@@ -1262,7 +1297,10 @@ export function forwardPacketForRole(
   data: ArrayBuffer,
   sendToAddress: (address: string, data: ArrayBuffer) => boolean
 ): number {
-  if (!topology || (role !== 'cluster-forwarder' && role !== 'root-forwarder')) {
+  if (
+    !topology ||
+    (role !== 'cluster-forwarder' && role !== 'root-forwarder')
+  ) {
     return 0;
   }
 
