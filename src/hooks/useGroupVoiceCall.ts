@@ -36,6 +36,7 @@ import {
   applyCallAudioOutput,
   getUserAudioStreamForCall,
 } from '../lib/call/audioDevices';
+import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import nacl from '../encryption/nacl-fast';
 import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
@@ -109,8 +110,15 @@ import {
   truncateGcallDiagAddress,
   type GcallDiagExportContext,
 } from '../lib/group-call/gcall-diagnostics';
+import {
+  groupCallLocalConnectionHintFromLevel,
+  rawConnectionStressLevel,
+  type GroupCallLocalConnectionHint,
+} from '../lib/group-call/groupCallLocalConnectionHint';
 
 const naclApi = nacl as any;
+
+export type { GroupCallLocalConnectionHint } from '../lib/group-call/groupCallLocalConnectionHint';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -336,6 +344,10 @@ const SOURCE_STALL_MIN_AGE_MS = 8_000;
 const SOURCE_STALL_LOG_MIN_INTERVAL_MS = 5_000;
 const SOURCE_STALL_BREACH_RECOVERY_THRESHOLD = 2;
 const FORWARDER_GATE_LOG_MIN_INTERVAL_MS = 5_000;
+/** Local-only: show group voice connection hint after sustained bad transport/playout. */
+const GCALL_CONNECTION_HINT_BAD_MS = 2800;
+const GCALL_CONNECTION_HINT_SEVERE_MS = 1200;
+const GCALL_CONNECTION_HINT_GOOD_MS = 4500;
 const SEND_PATH_DIAGNOSTIC_LOG_MIN_INTERVAL_MS = 5_000;
 const RELAY_INGRESS_PEER = '__relay__';
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
@@ -354,6 +366,8 @@ const KEY_RECOVERY_NO_DECODE_MS = 4_000;
 const KEY_RECOVERY_REQUEST_COOLDOWN_MS = 4_000;
 const KEY_RECOVERY_REFRESH_DELAY_MS = 3_000;
 const KEY_RECOVERY_REJOIN_DELAY_MS = 8_000;
+/** Schedule key-recovery check after connect if we still have no room key (self-healing). */
+const CONNECTED_NO_KEY_RECOVERY_DELAY_MS = 8_000;
 type DataChannelProfile = 'low-latency' | 'recovery';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -486,6 +500,104 @@ export function clearAdaptiveGroupCallPlayoutMaps(maps: {
   maps.lastSentPlayoutTarget.clear();
   maps.lastPlayoutTargetPostAt.clear();
   maps.lastDrainMissed.clear();
+}
+
+/**
+ * `join()` should seed renderer session state only on the first local join.
+ * After that, the root-owned media session identity is authoritative and must
+ * come from `GC_KEY`, `GC_KEY_ROTATE`, or `gcall:session-updated`.
+ */
+export function shouldApplyJoinSessionSnapshot(opts: {
+  currentCallSessionId: string;
+  hasInstalledRoomKey: boolean;
+  needsSessionKey: boolean;
+}): boolean {
+  if (opts.hasInstalledRoomKey) return false;
+  if (!opts.needsSessionKey) return false;
+  return opts.currentCallSessionId === '';
+}
+
+/**
+ * Freshly elected root with no key should mint immediately for a cold-start room.
+ * If we already have signs of an established session, prefer the request/fallback
+ * path so failover can preserve continuity when another peer still holds K.
+ */
+export function shouldMintRootSessionKeyImmediately(opts: {
+  otherParticipantCount: number;
+  pendingVerifiedKeyCount: number;
+  lastRemoteDecodeAtMs: number;
+  decryptFailureStreak: number;
+}): boolean {
+  if (opts.otherParticipantCount === 0) return true;
+  return false;
+}
+
+/** Subscribe to room-scoped GC_* events only after main has acknowledged the join. */
+export function shouldSubscribeToJoinedGroupCallEvents(opts: {
+  roomState: RoomState;
+  mainJoinReady: boolean;
+}): boolean {
+  return opts.roomState === 'connected' && opts.mainJoinReady;
+}
+
+/** Main may already know remote peers before the renderer subscribes to events. */
+export function getPostJoinHydratedParticipants(opts: {
+  localAddress: string;
+  mainRoster: Array<{ address: string; publicKey: string }>;
+  existingParticipants: ReadonlyMap<
+    string,
+    { publicKey: string; lastJoinTs: number; joinGeneration?: number }
+  >;
+}): Array<{ address: string; publicKey: string }> {
+  const hydrated: Array<{ address: string; publicKey: string }> = [];
+  const seen = new Set<string>();
+  for (const participant of opts.mainRoster ?? []) {
+    const address = participant?.address?.trim?.() ?? '';
+    if (!address || address === opts.localAddress) continue;
+    if (opts.existingParticipants.has(address) || seen.has(address)) continue;
+    seen.add(address);
+    hydrated.push({
+      address,
+      publicKey: participant?.publicKey?.trim?.() ?? '',
+    });
+  }
+  return hydrated;
+}
+
+/**
+ * A hydrated peer may exist in the renderer before we've seen their first
+ * authoritative GC_JOIN with joinGeneration. Treat that first generation-bearing
+ * join as a discovery signal so we still re-announce ourselves and flush topology.
+ */
+export function shouldContinueAfterParticipantJoinRefresh(opts: {
+  existingJoinGeneration?: number;
+  incomingJoinGeneration?: number;
+}): boolean {
+  return (
+    opts.existingJoinGeneration === undefined &&
+    opts.incomingJoinGeneration !== undefined
+  );
+}
+
+export function shouldIgnoreParticipantLeftEvent(opts: {
+  localAddress: string;
+  leavingAddress: string;
+}): boolean {
+  return opts.localAddress === opts.leavingAddress;
+}
+
+export function shouldSendCachedQuitLeave(opts: {
+  roomState: RoomState;
+  hasGroupCallApi: boolean;
+  hasCachedLeave: boolean;
+  alreadySent: boolean;
+}): boolean {
+  return (
+    opts.roomState === 'connected' &&
+    opts.hasGroupCallApi &&
+    opts.hasCachedLeave &&
+    !opts.alreadySent
+  );
 }
 
 /** sha256 → Uint8Array. Used for deterministic election. */
@@ -877,6 +989,13 @@ export function useGroupVoiceCall(uiActive = false) {
   const [metrics, setMetrics] = useState(() =>
     new GroupCallPerformanceTracker().getSnapshot()
   );
+  const [localConnectionHint, setLocalConnectionHint] =
+    useState<GroupCallLocalConnectionHint | null>(null);
+  const connectionHintHysteresisRef = useRef<{
+    badSince: number | null;
+    goodSince: number | null;
+  }>({ badSince: null, goodSince: null });
+  const connectionHintSevereSinceRef = useRef<number | null>(null);
 
   // ── Refs ────────────────────────────────────────────────────────────────────
 
@@ -890,6 +1009,14 @@ export function useGroupVoiceCall(uiActive = false) {
   /** True until we hold K for current (callSessionId, mediaSessionGeneration). */
   const needsSessionKeyRef = useRef(true);
   const lastSessionBreakRequestAtRef = useRef(0);
+  const quitLeaveEnvelopeRef = useRef<{
+    roomId: string;
+    localAddress: string;
+    signature: string;
+    publicKey: string;
+    timestamp: number;
+  } | null>(null);
+  const quitLeaveSentRef = useRef(false);
 
   // Room key (32-byte symmetric key)
   const roomKeyRef = useRef<Uint8Array | null>(null);
@@ -1145,10 +1272,17 @@ export function useGroupVoiceCall(uiActive = false) {
   const keyRecoveryRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const scheduleKeyRecoveryCheckRef = useRef<(delayMs: number) => void>(() => {});
+  const scheduleTopologyElectionFlushRef = useRef<() => void>(() => {});
+  const gcallLifecycleTailRef = useRef<Promise<void>>(Promise.resolve());
   /** If case-(c) root never receives K (simultaneous join), mint after this delay. */
   const simultJoinKeyFallbackTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  /** True only after `window.groupCall.join()` succeeds and main owns local room state. */
+  const mainJoinReadyRef = useRef(false);
+  /** Run one topology election after main-backed post-join roster hydration. */
+  const pendingPostJoinRosterElectionRef = useRef(false);
   const handleRoomKeyPayloadRef = useRef<
     (payload: IncomingRoomKeyPayload, allowQueue?: boolean) => Promise<void>
   >(async () => {});
@@ -2056,6 +2190,161 @@ export function useGroupVoiceCall(uiActive = false) {
     updateMetricResourceCounts,
     userInfo?.address,
   ]);
+
+  /** Local user only: debounced hint when group-call transport/playout looks unhealthy. */
+  useEffect(() => {
+    if (roomState !== 'connected') {
+      connectionHintHysteresisRef.current.badSince = null;
+      connectionHintHysteresisRef.current.goodSince = null;
+      connectionHintSevereSinceRef.current = null;
+      setLocalConnectionHint(null);
+      return;
+    }
+
+    const raw = rawConnectionStressLevel(metrics);
+    const now = Date.now();
+    const h = connectionHintHysteresisRef.current;
+
+    if (raw === 0) {
+      connectionHintSevereSinceRef.current = null;
+      h.badSince = null;
+      setLocalConnectionHint((prev) => {
+        if (!prev) {
+          h.goodSince = null;
+          return null;
+        }
+        if (h.goodSince === null) h.goodSince = now;
+        if (now - h.goodSince >= GCALL_CONNECTION_HINT_GOOD_MS) {
+          h.goodSince = null;
+          return null;
+        }
+        return prev;
+      });
+      return;
+    }
+
+    h.goodSince = null;
+    if (h.badSince === null) h.badSince = now;
+
+    if (raw === 2) {
+      if (connectionHintSevereSinceRef.current === null) {
+        connectionHintSevereSinceRef.current = now;
+      }
+    } else {
+      connectionHintSevereSinceRef.current = null;
+    }
+
+    const badFor = now - h.badSince;
+    const severeFor = connectionHintSevereSinceRef.current
+      ? now - connectionHintSevereSinceRef.current
+      : 0;
+
+    setLocalConnectionHint((prev) => {
+      if (raw === 2 && severeFor >= GCALL_CONNECTION_HINT_SEVERE_MS) {
+        return groupCallLocalConnectionHintFromLevel(2);
+      }
+      if (prev?.level === 'severe' && raw >= 1) {
+        return prev;
+      }
+      if (badFor >= GCALL_CONNECTION_HINT_BAD_MS && raw >= 1) {
+        return groupCallLocalConnectionHintFromLevel(1);
+      }
+      return prev;
+    });
+  }, [metrics, roomState]);
+
+  useEffect(() => {
+    if (
+      roomState !== 'connected' ||
+      !userInfo?.address ||
+      !userInfo.publicKey ||
+      !roomIdRef.current
+    ) {
+      quitLeaveEnvelopeRef.current = null;
+      quitLeaveSentRef.current = false;
+      return;
+    }
+    quitLeaveSentRef.current = false;
+    let cancelled = false;
+    const roomId = roomIdRef.current;
+    const localAddress = userInfo.address;
+    const publicKey = userInfo.publicKey;
+    const timestamp = Date.now();
+    void signGroupCallFields({
+      type: 'GC_LEAVE',
+      roomId,
+      fromAddress: localAddress,
+      fromPublicKey: publicKey,
+      timestamp,
+    })
+      .then((signature) => {
+        if (cancelled) return;
+        quitLeaveEnvelopeRef.current = {
+          roomId,
+          localAddress,
+          signature,
+          publicKey,
+          timestamp,
+        };
+      })
+      .catch(() => {
+        if (cancelled) return;
+        quitLeaveEnvelopeRef.current = null;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [roomState, userInfo?.address, userInfo?.publicKey]);
+
+  useEffect(() => {
+    const sendCachedQuitLeave = () => {
+      const cachedLeave = quitLeaveEnvelopeRef.current;
+      const leaveSync = (
+        window.groupCall as
+          | {
+              leaveSync?: (
+                roomId: string,
+                localAddress: string,
+                signature: string,
+                publicKey: string,
+                timestamp: number
+              ) => { success: boolean; error?: string };
+            }
+          | undefined
+      )?.leaveSync;
+      if (
+        !shouldSendCachedQuitLeave({
+          roomState: roomStateRef.current,
+          hasGroupCallApi: typeof leaveSync === 'function',
+          hasCachedLeave: cachedLeave !== null,
+          alreadySent: quitLeaveSentRef.current,
+        })
+      ) {
+        return;
+      }
+      quitLeaveSentRef.current = true;
+      try {
+        leaveSync!(
+          cachedLeave!.roomId,
+          cachedLeave!.localAddress,
+          cachedLeave!.signature,
+          cachedLeave!.publicKey,
+          cachedLeave!.timestamp
+        );
+      } catch {
+        quitLeaveSentRef.current = false;
+      }
+    };
+
+    window.addEventListener('beforeunload', sendCachedQuitLeave);
+    window.addEventListener('pagehide', sendCachedQuitLeave);
+    subscribeToEvent('logout-event', sendCachedQuitLeave);
+    return () => {
+      window.removeEventListener('beforeunload', sendCachedQuitLeave);
+      window.removeEventListener('pagehide', sendCachedQuitLeave);
+      unsubscribeFromEvent('logout-event', sendCachedQuitLeave);
+    };
+  }, []);
 
   const exportGroupCallDiagnostics = useCallback(
     async (opts?: { download?: boolean; clipboard?: boolean }) => {
@@ -6232,10 +6521,29 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Join / Leave ──────────────────────────────────────────────────────────
 
+  const withGcallLifecycleLock = useCallback(
+    async <T>(fn: () => Promise<T>): Promise<T> => {
+      const prev = gcallLifecycleTailRef.current;
+      let release!: () => void;
+      const next = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      gcallLifecycleTailRef.current = prev.then(() => next);
+      await prev;
+      try {
+        return await fn();
+      } finally {
+        release();
+      }
+    },
+    []
+  );
+
   const joinGroupCall = useCallback(
     async (roomId: string, chatId: string) => {
+      return withGcallLifecycleLock(async () => {
       if (!userInfo?.address || !userInfo.publicKey) return;
-      if (roomState !== 'idle') return;
+      if (roomStateRef.current !== 'idle') return;
       debugLog(
         '[GCall] joinGroupCall — roomId:',
         roomId,
@@ -6263,6 +6571,7 @@ export function useGroupVoiceCall(uiActive = false) {
       forwardPacketRecvTimestampsRef.current.clear();
       lastSendPathDiagnosticAtRef.current.clear();
       globalRecoveryUntilMsRef.current = 0;
+      mainJoinReadyRef.current = false;
       setRoomState('joining');
       metricsRef.current.reset();
       metricsRef.current.setRole('participant');
@@ -6291,6 +6600,8 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!sig) {
         debugWarn('[GCall] Signing failed for GC_JOIN — aborting join');
         joinGenerationRef.current = null;
+        pendingPostJoinRosterElectionRef.current = false;
+        mainJoinReadyRef.current = false;
         setRoomState('idle');
         return;
       }
@@ -6318,12 +6629,15 @@ export function useGroupVoiceCall(uiActive = false) {
         sig,
         userInfo.publicKey,
         ts,
-        joinGeneration
+        joinGeneration,
+        lastObservedEpochRef.current
       );
       if (!joinRes.success) {
         debugWarn('[GCall] join IPC failed', joinRes.error);
         joinGenerationRef.current = null;
         participantsRef.current.delete(userInfo.address);
+        pendingPostJoinRosterElectionRef.current = false;
+        mainJoinReadyRef.current = false;
         setRoomState('idle');
         setParticipants([]);
         return;
@@ -6334,6 +6648,8 @@ export function useGroupVoiceCall(uiActive = false) {
         debugWarn('[GCall] join missing callSessionId — aborting');
         joinGenerationRef.current = null;
         participantsRef.current.delete(userInfo.address);
+        pendingPostJoinRosterElectionRef.current = false;
+        mainJoinReadyRef.current = false;
         setRoomState('idle');
         setParticipants([]);
         return;
@@ -6342,6 +6658,47 @@ export function useGroupVoiceCall(uiActive = false) {
       mediaSessionGenerationRef.current = mediaGen;
       needsSessionKeyRef.current = true;
       keyDistributionPendingRef.current = true;
+
+      try {
+        const authoritativeRoster = await window.groupCall.getRoomParticipants(
+          roomId
+        );
+        const hydratedRemoteParticipants = getPostJoinHydratedParticipants({
+          localAddress: userInfo.address,
+          mainRoster: authoritativeRoster ?? [],
+          existingParticipants: participantsRef.current,
+        });
+        for (const participant of hydratedRemoteParticipants) {
+          const { address, publicKey } = participant;
+          participantsRef.current.set(address, {
+            publicKey,
+            lastJoinTs: 0,
+          });
+        }
+        if (hydratedRemoteParticipants.length > 0) {
+          pendingPostJoinRosterElectionRef.current = true;
+          debugLog('[GCall] Post-join roster hydration from main', {
+            remoteCount: hydratedRemoteParticipants.length,
+            addresses: hydratedRemoteParticipants.map((p) => p.address),
+          });
+          setParticipants((prev) => {
+            const existing = new Set(prev.map((p) => p.address));
+            const next = hydratedRemoteParticipants
+              .filter((p) => !existing.has(p.address))
+              .map((p) => ({
+                address: p.address,
+                publicKey: p.publicKey,
+                speaking: false,
+                role: 'participant' as const,
+              }));
+            return next.length > 0 ? [...prev, ...next] : prev;
+          });
+        }
+      } catch (error) {
+        debugWarn('[GCall] Post-join roster hydration failed', error);
+      }
+
+      mainJoinReadyRef.current = true;
 
       setRoomState('connected');
 
@@ -6357,10 +6714,14 @@ export function useGroupVoiceCall(uiActive = false) {
       startMetricsFlushLoop();
       startWindowMetricsLoop();
       startWebRtcEnsureLoop();
+      queueMicrotask(() => {
+        scheduleKeyRecoveryCheckRef.current(CONNECTED_NO_KEY_RECOVERY_DELAY_MS);
+      });
+      });
     },
     [
       flushMetrics,
-      roomState,
+      withGcallLifecycleLock,
       setupDecryptWorker,
       startMetricsFlushLoop,
       startWindowMetricsLoop,
@@ -6368,39 +6729,6 @@ export function useGroupVoiceCall(uiActive = false) {
       userInfo,
     ]
   );
-
-  const leaveGroupCall = useCallback(async () => {
-    if (!userInfo?.address || roomState === 'idle') return;
-
-    debugLog('[GCall] leaveGroupCall (local)', {
-      roomId: roomIdRef.current,
-      address: userInfo.address,
-      joinGeneration: joinGenerationRef.current,
-      peerConnectionPeers: [...peerConnectionsRef.current.keys()],
-    });
-
-    // Sign leave envelope
-    const ts = Date.now();
-    const sig = await signGroupCallFields({
-      type: 'GC_LEAVE',
-      roomId: roomIdRef.current,
-      fromAddress: userInfo.address,
-      fromPublicKey: userInfo.publicKey ?? '',
-      timestamp: ts,
-    }).catch(() => '');
-
-    // Always tell the main process we left so it clears local room state even if
-    // the signed GC_LEAVE broadcast could not be produced.
-    await window.groupCall.leave(
-      roomIdRef.current,
-      userInfo.address,
-      sig,
-      userInfo.publicKey ?? '',
-      ts
-    );
-
-    cleanup();
-  }, [userInfo, roomState]);
 
   const startForwarderTimeoutCheck = useCallback(() => {
     if (forwarderTimeoutCheckRef.current)
@@ -6423,7 +6751,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback(async () => {
+    return withGcallLifecycleLock(async () => {
     const stunUrls = sessionStunBundleRef.current;
     const observedStunUrls = sessionObservedStunUrlsRef.current;
     const snap = metricsRef.current.getSnapshot();
@@ -6609,6 +6938,8 @@ export function useGroupVoiceCall(uiActive = false) {
     lastWindowMetricsRef.current = null;
     topologyRef.current = null;
     localEpochRef.current = 0;
+    mainJoinReadyRef.current = false;
+    pendingPostJoinRosterElectionRef.current = false;
     lastRoomIdRef.current = roomIdRef.current; // save before clearing for cross-room epoch scoping
     roomIdRef.current = '';
     // lastObservedEpochRef intentionally not reset here — survives for same-room rejoin
@@ -6643,9 +6974,11 @@ export function useGroupVoiceCall(uiActive = false) {
       smoothedTargets: smoothedPlayoutTargetRef.current.size,
     });
     flushMetrics();
+    });
   }, [
     closePeerConnection,
     flushMetrics,
+    withGcallLifecycleLock,
     stopMetricsFlushLoop,
     stopWindowMetricsLoop,
     stopWebRtcEnsureLoop,
@@ -6653,14 +6986,52 @@ export function useGroupVoiceCall(uiActive = false) {
     teardownCapturePipelineRefs,
   ]);
 
+  const leaveGroupCall = useCallback(async () => {
+    if (!userInfo?.address || roomState === 'idle') return;
+
+    debugLog('[GCall] leaveGroupCall (local)', {
+      roomId: roomIdRef.current,
+      address: userInfo.address,
+      joinGeneration: joinGenerationRef.current,
+      peerConnectionPeers: [...peerConnectionsRef.current.keys()],
+    });
+
+    // Sign leave envelope
+    const ts = Date.now();
+    const sig = await signGroupCallFields({
+      type: 'GC_LEAVE',
+      roomId: roomIdRef.current,
+      fromAddress: userInfo.address,
+      fromPublicKey: userInfo.publicKey ?? '',
+      timestamp: ts,
+    }).catch(() => '');
+
+    // Always tell the main process we left so it clears local room state even if
+    // the signed GC_LEAVE broadcast could not be produced.
+    await window.groupCall.leave(
+      roomIdRef.current,
+      userInfo.address,
+      sig,
+      userInfo.publicKey ?? '',
+      ts
+    );
+
+    await cleanup();
+  }, [cleanup, userInfo, roomState]);
+
   // ── IPC event subscription ─────────────────────────────────────────────────
 
   useEffect(() => {
     const shouldSubscribe =
-      Boolean(window.groupCall) && (uiActive || roomState !== 'idle');
+      Boolean(window.groupCall) &&
+      shouldSubscribeToJoinedGroupCallEvents({
+        roomState,
+        mainJoinReady: mainJoinReadyRef.current,
+      });
     if (!shouldSubscribe || !window.groupCall) {
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
+      scheduleTopologyElectionFlushRef.current = () => {};
       return;
     }
 
@@ -6739,8 +7110,17 @@ export function useGroupVoiceCall(uiActive = false) {
             } else if (!roomKeyRef.current) {
               debugLog('[GCall] Election (c) — root without session key');
               needsSessionKeyRef.current = true;
-              if (others.length === 0) {
-                debugLog('[GCall] Cold-start — mint session key (solo root)');
+              if (
+                shouldMintRootSessionKeyImmediately({
+                  otherParticipantCount: others.length,
+                  pendingVerifiedKeyCount: pendingVerifiedKeysRef.current.length,
+                  lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
+                  decryptFailureStreak: decryptFailureStreakRef.current,
+                })
+              ) {
+                debugLog('[GCall] Cold-start — mint session key as root', {
+                  otherParticipantCount: others.length,
+                });
                 const newKey = naclApi.randomBytes(32);
                 roomKeyRef.current = newKey;
                 isOurKeyRef.current = true;
@@ -6824,6 +7204,11 @@ export function useGroupVoiceCall(uiActive = false) {
         })();
       }, TOPOLOGY_ELECTION_DEBOUNCE_MS);
     };
+    scheduleTopologyElectionFlushRef.current = scheduleTopologyElectionFlush;
+    if (pendingPostJoinRosterElectionRef.current) {
+      pendingPostJoinRosterElectionRef.current = false;
+      scheduleTopologyElectionFlush();
+    }
 
     const scheduleKeyRecoveryCheck = (delayMs: number) => {
       const clamped = Math.max(0, delayMs);
@@ -6835,6 +7220,7 @@ export function useGroupVoiceCall(uiActive = false) {
         maybeRequestKeyRecoveryRef.current('scheduled-check');
       }, clamped);
     };
+    scheduleKeyRecoveryCheckRef.current = scheduleKeyRecoveryCheck;
 
     const reannounceLocalJoin = () => {
       if (
@@ -6867,10 +7253,19 @@ export function useGroupVoiceCall(uiActive = false) {
               rsig,
               userInfo.publicKey!,
               rts,
-              jg
+              jg,
+              lastObservedEpochRef.current
             )
             .then((res) => {
-              if (res?.success && res.callSessionId) {
+              if (
+                res?.success &&
+                res.callSessionId &&
+                shouldApplyJoinSessionSnapshot({
+                  currentCallSessionId: callSessionIdRef.current,
+                  hasInstalledRoomKey: roomKeyRef.current !== null,
+                  needsSessionKey: needsSessionKeyRef.current,
+                })
+              ) {
                 callSessionIdRef.current = res.callSessionId;
                 mediaSessionGenerationRef.current =
                   (res.mediaSessionGeneration ?? 1) >>> 0;
@@ -7064,6 +7459,11 @@ export function useGroupVoiceCall(uiActive = false) {
           joinTs > existing.lastJoinTs &&
           publicKey === existing.publicKey
         ) {
+          const shouldContinueAfterRefresh =
+            shouldContinueAfterParticipantJoinRefresh({
+              existingJoinGeneration: existing.joinGeneration,
+              incomingJoinGeneration: incomingGen,
+            });
           const genMismatch =
             existing.joinGeneration !== undefined &&
             incomingGen !== undefined &&
@@ -7077,7 +7477,28 @@ export function useGroupVoiceCall(uiActive = false) {
                 ? { joinGeneration: incomingGen ?? existing.joinGeneration }
                 : {}),
             });
-            return;
+            setParticipants((prev) => {
+              const i = prev.findIndex((p) => p.address === address);
+              if (i === -1) {
+                return [
+                  ...prev,
+                  { address, publicKey, speaking: false, role: 'participant' },
+                ];
+              }
+              return prev.map((p) =>
+                p.address === address ? { ...p, publicKey } : p
+              );
+            });
+            if (!shouldContinueAfterRefresh) {
+              return;
+            }
+            debugLog(
+              '[GCall] gcall:participant-joined learned first joinGeneration after hydration',
+              {
+                address,
+                incomingJoinGeneration: incomingGen ?? null,
+              }
+            );
           }
           participantsRef.current.set(address, {
             publicKey,
@@ -7197,10 +7618,19 @@ export function useGroupVoiceCall(uiActive = false) {
                         rsig,
                         userInfo.publicKey!,
                         rts,
-                        jg
+                        jg,
+                        lastObservedEpochRef.current
                       )
                       .then((res) => {
-                        if (res?.success && res.callSessionId) {
+                        if (
+                          res?.success &&
+                          res.callSessionId &&
+                          shouldApplyJoinSessionSnapshot({
+                            currentCallSessionId: callSessionIdRef.current,
+                            hasInstalledRoomKey: roomKeyRef.current !== null,
+                            needsSessionKey: needsSessionKeyRef.current,
+                          })
+                        ) {
                           callSessionIdRef.current = res.callSessionId;
                           mediaSessionGenerationRef.current =
                             (res.mediaSessionGeneration ?? 1) >>> 0;
@@ -7219,6 +7649,18 @@ export function useGroupVoiceCall(uiActive = false) {
       if (event === 'gcall:participant-left') {
         const { roomId, address } = payload;
         if (roomId !== roomIdRef.current) return;
+        if (
+          shouldIgnoreParticipantLeftEvent({
+            localAddress: userInfo?.address ?? '',
+            leavingAddress: address,
+          })
+        ) {
+          debugLog('[GCall] Ignoring self gcall:participant-left', {
+            roomId,
+            address,
+          });
+          return;
+        }
         const leavingConnId = peerConnectionsRef.current.get(address)?.connId;
         debugLog('[GCall] gcall:participant-left', {
           roomId,
@@ -7382,6 +7824,7 @@ export function useGroupVoiceCall(uiActive = false) {
     return () => {
       unsub();
       unsubscribeRef.current = null;
+      scheduleTopologyElectionFlushRef.current = () => {};
       if (topologyDebounceTimerRef.current) {
         clearTimeout(topologyDebounceTimerRef.current);
         topologyDebounceTimerRef.current = null;
@@ -7417,7 +7860,7 @@ export function useGroupVoiceCall(uiActive = false) {
   cleanupRef.current = cleanup;
   useEffect(
     () => () => {
-      cleanupRef.current();
+      void Promise.resolve(cleanupRef.current()).catch(() => {});
     },
     []
   );
@@ -7428,6 +7871,7 @@ export function useGroupVoiceCall(uiActive = false) {
     myRole,
     activeSpeakers,
     metrics,
+    localConnectionHint,
     topologyLabel,
     joinGroupCall,
     leaveGroupCall,

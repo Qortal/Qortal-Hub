@@ -22,6 +22,8 @@ const ADDRESS_VERSION = 58;
 export const PRESENCE_HEARTBEAT_INTERVAL_MS = 25_000;
 export const PRESENCE_SESSION_TIMEOUT_MS = 70_000;
 const MAX_PRESENCE_AGE_MS = 60_000;
+/** Extra slack for honest clock skew vs GC_JOIN policy (same tradeoff). */
+const PRESENCE_SKEW_ALLOWANCE_MS = 60_000;
 const MAX_FUTURE_SKEW_MS = 30_000;
 const PRESENCE_CLEANUP_INTERVAL_MS = 15_000;
 
@@ -453,6 +455,9 @@ function validateEnvelopeSansSignature(
   return { ok: true };
 }
 
+/** Throttle repeated "message too old" reject logs (hot relay path). */
+const PRESENCE_TOO_OLD_LOG_MIN_MS = 5_000;
+
 const PRESENCE_VERIFY_WORKER_COUNT = 2;
 const PRESENCE_MAX_PENDING_VERIFY = 1024;
 
@@ -483,6 +488,10 @@ export class PresenceManager extends EventEmitter {
   private lastLocalEnvelope: PresenceEnvelope | null = null;
 
   private cleanupTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** envelope.id → last log time for throttled "message too old" diagnostics */
+  private presenceTooOldLogAt = new Map<string, number>();
+  private presenceTooOldGlobalLogAt = 0;
 
   private verifyPool = new VerifyWorkerPool(
     'presence',
@@ -541,6 +550,26 @@ export class PresenceManager extends EventEmitter {
 
     const result = validateEnvelopeSansSignature(envelope, now);
     if (result.ok === false) {
+      if (result.reason === 'message too old') {
+        const id = envelope?.id;
+        const tnow = Date.now();
+        if (typeof id === 'string' && id.length > 0) {
+          const last = this.presenceTooOldLogAt.get(id) ?? 0;
+          if (tnow - last < PRESENCE_TOO_OLD_LOG_MIN_MS) {
+            return false;
+          }
+          this.presenceTooOldLogAt.set(id, tnow);
+          if (this.presenceTooOldLogAt.size > 2_000) {
+            const oldest = this.presenceTooOldLogAt.keys().next().value;
+            if (oldest !== undefined) this.presenceTooOldLogAt.delete(oldest);
+          }
+        } else {
+          if (tnow - this.presenceTooOldGlobalLogAt < PRESENCE_TOO_OLD_LOG_MIN_MS) {
+            return false;
+          }
+          this.presenceTooOldGlobalLogAt = tnow;
+        }
+      }
       loggerLog(`[Presence] Rejected envelope ${envelope?.id}: ${result.reason}`);
       return false;
     }
@@ -703,7 +732,7 @@ export class PresenceManager extends EventEmitter {
 
     // Also evict old monotonic timestamp entries
     for (const [key, ts] of this.latestTimestamp.entries()) {
-      if (now - ts > MAX_PRESENCE_AGE_MS * 5) {
+      if (now - ts > (MAX_PRESENCE_AGE_MS + PRESENCE_SKEW_ALLOWANCE_MS) * 5) {
         this.latestTimestamp.delete(key);
       }
     }

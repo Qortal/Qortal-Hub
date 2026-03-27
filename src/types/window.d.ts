@@ -263,7 +263,8 @@ declare global {
         signature: string,
         publicKey: string,
         timestamp: number,
-        joinGeneration?: number
+        joinGeneration?: number,
+        topologyEpochFloor?: number
       ) => Promise<{
         success: boolean;
         error?: string;
@@ -271,6 +272,7 @@ declare global {
         mediaSessionGeneration?: number;
       }>;
       leave: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      leaveSync?: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => { success: boolean; error?: string };
       broadcastTopology: (roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       sendClusterHeartbeat?: (
         roomId: string,
@@ -335,6 +337,11 @@ declare global {
       sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice' | 'reconnect', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
+      getPendingKeyMetrics?: () => Promise<{
+        pending_key_flush_success: number;
+        pending_key_expired: number;
+        pendingRooms: number;
+      }>;
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
     };
   }

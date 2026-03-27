@@ -4,8 +4,10 @@
  * PCM-only bufferedMs; fractional read with clamp + deadzone + EMA-smoothed rate.
  * Startup: silence until bufferedMs >= max(INITIAL_GATE_MS, target - START_GATE_TARGET_MARGIN_MS)
  * so playout does not begin far below the active adaptive target.
- * When |bufferedMs - target| > OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS, applies stronger
- * fixed targetRate before EMA (still clamped by RATE_MIN/RATE_MAX).
+ * Latency cap: every audio quantum (including before playout starts), if buffered PCM exceeds
+ * PCM_LATENCY_HARD_MS, discard oldest samples until <= max(PCM_LATENCY_RELEASE_MS, target+40)
+ * so one bursty peer cannot accumulate 500ms+ queues (interactive voice).
+ * When |bufferedMs - target| is large, tiered over-target rates (80ms / 150ms steps) before EMA.
  * Concealment: reuse short tail with gentler fade.
  * Posts { type:'gcallPlayoutMetrics', ... } periodically for main-thread metrics
  * (outsideBand, outsideBandUnder, outsideBandOver, deltaMs).
@@ -24,6 +26,14 @@ const OUTSIDE_BAND_MS = 25;
 /** Emergency rate path when |delta| exceeds band + this (aligned with KPI band). */
 const EMERGENCY_BAND_EXTRA_MS = 10;
 const METRICS_QUANTA = 47; // ~100ms at 48kHz/128
+/** If buffered PCM exceeds this, shed oldest down to release level (live voice latency bound). */
+const PCM_LATENCY_HARD_MS = 280;
+/** Floor for post-shed target ms; release uses max(this, targetPlayoutMs + margin). */
+const PCM_LATENCY_RELEASE_MS = 200;
+const TARGET_RELEASE_MARGIN_MS = 40;
+/** Tiered catch-up when buffer is far over adaptive target (before EMA). */
+const OVER_TARGET_TIER_STRONG_MS = 150;
+const OVER_TARGET_TIER_MID_MS = 80;
 
 class GroupPlayoutProcessor extends AudioWorkletProcessor {
   constructor(options) {
@@ -101,13 +111,34 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     }
   }
 
+  /**
+   * Drop oldest PCM if queue exceeds hard cap; target release tracks adaptive target.
+   * Runs every quantum, including before startup gate, to avoid pre-roll explosion.
+   */
+  _shedExcessPcmLatency(sampleRateHz) {
+    const bufferedMs = (this._available / sampleRateHz) * 1000;
+    if (bufferedMs <= PCM_LATENCY_HARD_MS) return;
+    const releaseMs = Math.max(
+      PCM_LATENCY_RELEASE_MS,
+      this._targetPlayoutMs + TARGET_RELEASE_MARGIN_MS
+    );
+    const maxSamples = (releaseMs / 1000) * sampleRateHz;
+    const toDrop = Math.floor(this._available - maxSamples);
+    if (toDrop > 0) {
+      this._advanceReadInt(toDrop);
+      this._readFrac = 0;
+    }
+  }
+
   process(_inputs, outputs) {
     const output = outputs[0]?.[0];
     if (!output) return true;
 
     const sampleRateHz = globalThis.sampleRate;
     const quantum = output.length;
-    const bufferedMs = (this._available / sampleRateHz) * 1000;
+
+    this._shedExcessPcmLatency(sampleRateHz);
+    let bufferedMs = (this._available / sampleRateHz) * 1000;
 
     this._concealedThisBlock = false;
 
@@ -127,9 +158,14 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     const deltaMs = bufferedMs - this._targetPlayoutMs;
     const emergencyThresh = OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS;
     let targetRate;
-    if (Math.abs(deltaMs) > emergencyThresh) {
-      if (deltaMs < 0) targetRate = 0.992;
-      else targetRate = 1.008;
+    if (deltaMs < -emergencyThresh) {
+      targetRate = 0.992;
+    } else if (deltaMs > OVER_TARGET_TIER_STRONG_MS) {
+      targetRate = RATE_MAX;
+    } else if (deltaMs > OVER_TARGET_TIER_MID_MS) {
+      targetRate = 1.01;
+    } else if (deltaMs > emergencyThresh) {
+      targetRate = 1.008;
     } else {
       let errorMs = Math.max(
         -ERROR_CLAMP_MS,

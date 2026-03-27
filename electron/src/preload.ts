@@ -953,7 +953,8 @@ try {
       signature: string,
       publicKey: string,
       timestamp: number,
-      joinGeneration?: number
+      joinGeneration?: number,
+      topologyEpochFloor?: number
     ) =>
       ipcRenderer.invoke(
         'gcall:join',
@@ -963,7 +964,8 @@ try {
         signature,
         publicKey,
         timestamp,
-        joinGeneration
+        joinGeneration,
+        topologyEpochFloor
       ) as Promise<{
         success: boolean;
         error?: string;
@@ -979,6 +981,22 @@ try {
       publicKey: string,
       timestamp: number
     ) => ipcRenderer.invoke('gcall:leave', roomId, localAddress, signature, publicKey, timestamp),
+
+    leaveSync: (
+      roomId: string,
+      localAddress: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) =>
+      ipcRenderer.sendSync(
+        'gcall:leaveSync',
+        roomId,
+        localAddress,
+        signature,
+        publicKey,
+        timestamp
+      ) as { success: boolean; error?: string },
 
     /** Broadcast topology (root forwarder only). */
     broadcastTopology: async (
@@ -1089,6 +1107,13 @@ try {
     /** Get current participants in a room. */
     getRoomParticipants: async (roomId: string) =>
       ipcRenderer.invoke('gcall:getRoomParticipants', roomId),
+
+    getPendingKeyMetrics: async () =>
+      ipcRenderer.invoke('gcall:getPendingKeyMetrics') as Promise<{
+        pending_key_flush_success: number;
+        pending_key_expired: number;
+        pendingRooms: number;
+      }>,
 
     /**
      * Subscribe to all group call events.

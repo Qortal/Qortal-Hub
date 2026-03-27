@@ -2061,7 +2061,8 @@ ipcMain.handle(
     signature: string,
     publicKey: string,
     timestamp: number,
-    joinGeneration?: number
+    joinGeneration?: number,
+    topologyEpochFloor?: number
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
@@ -2072,7 +2073,8 @@ ipcMain.handle(
       signature,
       publicKey,
       timestamp,
-      joinGeneration
+      joinGeneration,
+      topologyEpochFloor
     );
     return {
       success: true,
@@ -2096,6 +2098,29 @@ ipcMain.handle(
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     mgr.leaveRoom(roomId, localAddress, signature, publicKey, timestamp);
     return { success: true };
+  }
+);
+
+ipcMain.on(
+  'gcall:leaveSync',
+  (
+    event,
+    roomId: string,
+    localAddress: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) {
+      event.returnValue = {
+        success: false,
+        error: 'GroupCall manager not running',
+      };
+      return;
+    }
+    mgr.leaveRoom(roomId, localAddress, signature, publicKey, timestamp);
+    event.returnValue = { success: true };
   }
 );
 
@@ -2266,6 +2291,19 @@ ipcMain.handle('gcall:getRoomParticipants', async (_event, roomId: string) => {
   const mgr = getGroupCallManager();
   if (!mgr) return [];
   return mgr.getRoomParticipants(roomId);
+});
+
+
+ipcMain.handle('gcall:getPendingKeyMetrics', async () => {
+  const mgr = getGroupCallManager();
+  if (!mgr) {
+    return {
+      pending_key_flush_success: 0,
+      pending_key_expired: 0,
+      pendingRooms: 0,
+    };
+  }
+  return mgr.getPendingKeyMetrics();
 });
 
 ipcMain.on('gcall:subscribe', (event) => {

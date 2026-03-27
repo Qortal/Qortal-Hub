@@ -41,6 +41,69 @@ import {
 const GC_MAX_HOPS = 3;
 const GC_AUDIO_MAX_HOPS = 2;
 const GC_JOIN_TTL_MS = 120_000;
+/**
+ * Extra wall-clock slack for GC_JOIN vs peer timestamps (honest skew). Effective max age is
+ * `GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS`. Replay window widens slightly; mitigated by
+ * Ed25519 + verifiedGcSignatures.
+ */
+const GC_JOIN_SKEW_ALLOWANCE_MS = 90_000;
+/** Keep in sync with presence `MAX_FUTURE_SKEW_MS` (reject implausibly future join timestamps). */
+const GC_JOIN_MAX_FUTURE_SKEW_MS = 30_000;
+
+/** Max age of GC_JOIN `timestamp` vs local `now` (for tests and diagnostics). */
+export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
+
+export type GcJoinTimestampRejectReason = 'expired' | 'future';
+
+/** Exported for unit tests. */
+export function gcJoinTimestampRejectReason(
+  timestamp: number,
+  now: number
+): GcJoinTimestampRejectReason | null {
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return 'expired';
+  if (timestamp - now > GC_JOIN_MAX_FUTURE_SKEW_MS) return 'future';
+  if (now - timestamp > GC_JOIN_MAX_AGE_MS) return 'expired';
+  return null;
+}
+
+/**
+ * After same-room rejoin, seed main-process topology epoch so stale mesh GC_TOPOLOGY below what
+ * the renderer already saw is ignored. This is a defensive lower bound, not source of truth.
+ * Exported for unit tests.
+ */
+export function mergeRoomTopologyEpochWithFloor(
+  currentEpoch: number,
+  floor: number | undefined
+): number {
+  if (floor === undefined || typeof floor !== 'number' || !Number.isFinite(floor)) {
+    return currentEpoch;
+  }
+  const f = Math.max(0, Math.floor(floor));
+  return Math.max(currentEpoch, f);
+}
+
+/** Remote or relayed GC_LEAVE must never tear down the active local participant. */
+export function shouldIgnoreLeaveForLocalAddress(
+  localAddresses: ReadonlySet<string>,
+  address: string
+): boolean {
+  return localAddresses.has(address);
+}
+
+/**
+ * Strict merge for a single pending KEY/KEY_ROTATE slot: higher `mediaSessionGeneration` wins;
+ * if equal, newer `timestamp` wins. Never prefer lower generation even if timestamp is newer.
+ * Exported for unit tests.
+ */
+export function pendingKeyEnvelopeWinsOver(
+  incoming: { mediaSessionGeneration: number; timestamp: number },
+  existing: { mediaSessionGeneration: number; timestamp: number }
+): boolean {
+  if (incoming.mediaSessionGeneration > existing.mediaSessionGeneration) return true;
+  if (incoming.mediaSessionGeneration < existing.mediaSessionGeneration) return false;
+  return incoming.timestamp > existing.timestamp;
+}
+
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (no topology/key epoch on wire). */
 const GC_KEY_MESSAGE_VERSION = 3;
 
@@ -484,8 +547,35 @@ const GC_MAX_PENDING_VERIFY = 4096;
 const GC_VERIFIED_SIGNATURE_CACHE_MAX = 4096;
 /** Rate-limit stale topology logs (hot path under mesh relay). */
 const GC_STALE_TOPOLOGY_LOG_MIN_MS = 5_000;
+/** Rate-limit GC_JOIN drop logs per (reason, fromAddress). */
+const GC_JOIN_DROP_LOG_MIN_MS = 5_000;
+/** Throttle broadcastTopology with no local room (ordering / race diagnostic). */
+const BROADCAST_TOPOLOGY_NO_ROOM_LOG_MIN_MS = 10_000;
 
-// ── GroupCallManager ──────────────────────────────────────────────────────────
+/** Buffer GC_KEY / GC_KEY_ROTATE until joinRoom creates GroupRoom (ordering fix). */
+const PENDING_KEY_TTL_MS = 4_000;
+/** Throttle "unknown room" logs when we cannot buffer (invalid / stale vs pending). */
+const GC_UNKNOWN_ROOM_KEY_LOG_MIN_MS = 60_000;
+/** Throttle diagnostic when pending key expires before join. */
+const PENDING_KEY_EXPIRED_LOG_MIN_MS = 30_000;
+
+type PendingKeyEntry =
+  | {
+      type: 'KEY';
+      mediaSessionGeneration: number;
+      timestamp: number;
+      deadlineMs: number;
+      env: GcKeyEnvelope;
+    }
+  | {
+      type: 'ROTATE';
+      mediaSessionGeneration: number;
+      timestamp: number;
+      deadlineMs: number;
+      env: GcKeyRotateEnvelope;
+    };
+
+// ── GroupCallManager ────────────────────────────────────────────────────────── ──────────────────────────────────────────────────────────
 
 let _instance: GroupCallManager | null = null;
 
@@ -546,12 +636,23 @@ export class GroupCallManager extends EventEmitter {
   /** In-flight verify promises keyed by type+signature — coalesce duplicate envelopes before cache is warm. */
   private inFlightGcVerify = new Map<string, Promise<void>>();
   private lastStaleTopologyLogAt = 0;
+  /** Key `reason:fromAddress` → last log time for throttled GC_JOIN drop messages */
+  private joinDropLogAt = new Map<string, number>();
+  /** roomId → last warn time when broadcastTopology ran before joinRoom created the room */
+  private broadcastTopologyNoRoomLogAt = new Map<string, number>();
 
   /** Per-room mesh audio relay budget (outbound + forwarded GC_AUDIO). */
   private relayByteBudgetByRoom = new Map<
     string,
     { tokens: number; lastMs: number }
   >();
+
+  /** GC_KEY / GC_KEY_ROTATE before joinRoom — one slot per roomId (strict generation merge). */
+  private pendingKeyByRoom = new Map<string, PendingKeyEntry>();
+  private pendingKeyFlushSuccess = 0;
+  private pendingKeyExpired = 0;
+  private unknownRoomKeyLogAt = new Map<string, number>();
+  private pendingKeyExpiredLogAt = new Map<string, number>();
 
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
     super();
@@ -764,6 +865,11 @@ export class GroupCallManager extends EventEmitter {
     this.verifiedGcSignatures.clear();
     this.inFlightGcVerify.clear();
     this.lastStaleTopologyLogAt = 0;
+    this.joinDropLogAt.clear();
+    this.broadcastTopologyNoRoomLogAt.clear();
+    this.pendingKeyByRoom.clear();
+    this.unknownRoomKeyLogAt.clear();
+    this.pendingKeyExpiredLogAt.clear();
     loggerLog('[GCall] GroupCallManager stopped.');
   }
 
@@ -772,8 +878,147 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(`[GCall] Local addresses set: ${[...addresses].join(', ')}`);
   }
 
+  getPendingKeyMetrics(): {
+    pending_key_flush_success: number;
+    pending_key_expired: number;
+    pendingRooms: number;
+  } {
+    return {
+      pending_key_flush_success: this.pendingKeyFlushSuccess,
+      pending_key_expired: this.pendingKeyExpired,
+      pendingRooms: this.pendingKeyByRoom.size,
+    };
+  }
+
+  private sweepExpiredPendingKeys(now: number = Date.now()): void {
+    if (this.pendingKeyByRoom.size === 0) return;
+    for (const [roomId, p] of [...this.pendingKeyByRoom]) {
+      if (now > p.deadlineMs) {
+        this.pendingKeyByRoom.delete(roomId);
+        this.pendingKeyExpired++;
+        this.logPendingKeyExpiredThrottled(roomId);
+      }
+    }
+  }
+
+  private logPendingKeyExpiredThrottled(roomId: string): void {
+    const t = Date.now();
+    const last = this.pendingKeyExpiredLogAt.get(roomId) ?? 0;
+    if (t - last < PENDING_KEY_EXPIRED_LOG_MIN_MS) return;
+    this.pendingKeyExpiredLogAt.set(roomId, t);
+    loggerLog(`[GCall] Pending keying envelope dropped (TTL) for room ${roomId} before joinRoom`);
+  }
+
+  private logUnknownRoomKeyThrottled(roomId: string, kind: string): void {
+    const t = Date.now();
+    const last = this.unknownRoomKeyLogAt.get(roomId) ?? 0;
+    if (t - last < GC_UNKNOWN_ROOM_KEY_LOG_MIN_MS) return;
+    this.unknownRoomKeyLogAt.set(roomId, t);
+    loggerLog(`[GCall] Dropped ${kind}: unknown room ${roomId} (not buffered)`);
+  }
+
+  private tryEnqueuePendingKeyFromKey(env: GcKeyEnvelope): boolean {
+    const gen = env.mediaSessionGeneration;
+    const ts = env.timestamp;
+    if (
+      typeof gen !== 'number' ||
+      !Number.isFinite(gen) ||
+      typeof ts !== 'number' ||
+      !Number.isFinite(ts)
+    ) {
+      return false;
+    }
+    const roomId = env.roomId;
+    const existing = this.pendingKeyByRoom.get(roomId);
+    if (existing) {
+      if (
+        !pendingKeyEnvelopeWinsOver(
+          { mediaSessionGeneration: gen, timestamp: ts },
+          {
+            mediaSessionGeneration: existing.mediaSessionGeneration,
+            timestamp: existing.timestamp,
+          }
+        )
+      ) {
+        return false;
+      }
+    }
+    this.pendingKeyByRoom.set(roomId, {
+      type: 'KEY',
+      mediaSessionGeneration: gen,
+      timestamp: ts,
+      deadlineMs: Date.now() + PENDING_KEY_TTL_MS,
+      env: { ...env },
+    });
+    return true;
+  }
+
+  private tryEnqueuePendingKeyFromRotate(env: GcKeyRotateEnvelope): boolean {
+    const gen = env.mediaSessionGeneration;
+    const ts = env.timestamp;
+    if (
+      typeof gen !== 'number' ||
+      !Number.isFinite(gen) ||
+      typeof ts !== 'number' ||
+      !Number.isFinite(ts)
+    ) {
+      return false;
+    }
+    const roomId = env.roomId;
+    const existing = this.pendingKeyByRoom.get(roomId);
+    if (existing) {
+      if (
+        !pendingKeyEnvelopeWinsOver(
+          { mediaSessionGeneration: gen, timestamp: ts },
+          {
+            mediaSessionGeneration: existing.mediaSessionGeneration,
+            timestamp: existing.timestamp,
+          }
+        )
+      ) {
+        return false;
+      }
+    }
+    this.pendingKeyByRoom.set(roomId, {
+      type: 'ROTATE',
+      mediaSessionGeneration: gen,
+      timestamp: ts,
+      deadlineMs: Date.now() + PENDING_KEY_TTL_MS,
+      env: { ...env, encryptedKeys: { ...env.encryptedKeys } },
+    });
+    return true;
+  }
+
+  private flushPendingKeyForRoom(roomId: string): void {
+    const pending = this.pendingKeyByRoom.get(roomId);
+    if (!pending) return;
+    const now = Date.now();
+    if (now > pending.deadlineMs) {
+      this.pendingKeyByRoom.delete(roomId);
+      this.pendingKeyExpired++;
+      this.logPendingKeyExpiredThrottled(roomId);
+      return;
+    }
+    this.pendingKeyByRoom.delete(roomId);
+    if (pending.type === 'KEY') {
+      this.handleKey(pending.env);
+    } else {
+      this.handleKeyRotate(pending.env);
+    }
+    this.pendingKeyFlushSuccess++;
+  }
+
   private hasLocalRoomInterest(roomId: string): boolean {
     return this.rooms.has(roomId);
+  }
+
+  private logGcJoinDropThrottled(fromAddress: string, reasonBucket: string, message: string): void {
+    const key = `${reasonBucket}:${fromAddress}`;
+    const now = Date.now();
+    const last = this.joinDropLogAt.get(key) ?? 0;
+    if (now - last < GC_JOIN_DROP_LOG_MIN_MS) return;
+    this.joinDropLogAt.set(key, now);
+    loggerLog(message);
   }
 
   /**
@@ -799,7 +1044,9 @@ export class GroupCallManager extends EventEmitter {
     signature: string,
     publicKey: string,
     timestamp: number,
-    joinGeneration?: number
+    joinGeneration?: number,
+    /** Defensive lower bound after same-room rejoin — not canonical epoch (see mergeRoomTopologyEpochWithFloor). */
+    topologyEpochFloor?: number
   ): { callSessionId: string; mediaSessionGeneration: number } {
     let room = this.rooms.get(roomId);
     if (!room) {
@@ -807,12 +1054,14 @@ export class GroupCallManager extends EventEmitter {
         roomId,
         chatId,
         participants: new Map(),
-        topologyEpoch: 0,
+        topologyEpoch: mergeRoomTopologyEpochWithFloor(0, topologyEpochFloor),
         joinTimestamp: timestamp,
         callSessionId: nodeCrypto.randomUUID(),
         mediaSessionGeneration: 1,
       };
       this.rooms.set(roomId, room);
+    } else {
+      room.topologyEpoch = mergeRoomTopologyEpochWithFloor(room.topologyEpoch, topologyEpochFloor);
     }
     room.participants.set(localAddress, { publicKey, joinedAt: timestamp });
 
@@ -829,6 +1078,7 @@ export class GroupCallManager extends EventEmitter {
     };
     this.p2p.send(null, env);
     loggerLog(`[GCall] Sent GC_JOIN for room ${roomId}`);
+    this.flushPendingKeyForRoom(roomId);
     return {
       callSessionId: room.callSessionId,
       mediaSessionGeneration: room.mediaSessionGeneration,
@@ -859,6 +1109,7 @@ export class GroupCallManager extends EventEmitter {
       );
       this.participantNodeIds.delete(localAddress);
     }
+    this.pendingKeyByRoom.delete(roomId);
     this.rooms.delete(roomId);
     this.relayByteBudgetByRoom.delete(roomId);
     loggerLog(
@@ -884,6 +1135,21 @@ export class GroupCallManager extends EventEmitter {
       timestamp,
       hopsRemaining: GC_MAX_HOPS,
     };
+    const room = this.rooms.get(roomId);
+    if (room) {
+      // Renderer is authoritative for outbound topology; direct assign (do not Math.max — regressions should surface).
+      room.topologyEpoch = topology.topologyEpoch;
+      room.topologySignature = buildTopologySignature(topology);
+    } else {
+      const now = Date.now();
+      const last = this.broadcastTopologyNoRoomLogAt.get(roomId) ?? 0;
+      if (now - last >= BROADCAST_TOPOLOGY_NO_ROOM_LOG_MIN_MS) {
+        this.broadcastTopologyNoRoomLogAt.set(roomId, now);
+        loggerWarn(
+          `[GCall] broadcastTopology for ${roomId}: no local room yet — cannot sync main topology epoch (join IPC should run before topology heartbeat)`
+        );
+      }
+    }
     this.p2p.send(null, env);
     loggerLog(`[GCall] Sent GC_TOPOLOGY for room ${roomId} epoch ${topology.topologyEpoch}`);
   }
@@ -1138,6 +1404,7 @@ export class GroupCallManager extends EventEmitter {
 
   handleIncoming(env: GcEnvelope, fromNodeId?: string): void {
     if (!GC_MESSAGE_TYPES.has(env.type)) return;
+    if (this.pendingKeyByRoom.size > 0) this.sweepExpiredPendingKeys();
 
     switch (env.type) {
       case 'GC_JOIN':      return this.handleJoin(env, fromNodeId);
@@ -1156,10 +1423,11 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private handleJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
+    const nowJoin = Date.now();
     if (!this.hasLocalRoomInterest(env.roomId)) {
       if (
         isCheapRelayJoinShape(env) &&
-        Date.now() - env.timestamp <= GC_JOIN_TTL_MS
+        gcJoinTimestampRejectReason(env.timestamp, nowJoin) === null
       ) {
         this.relayDisinterestedSignedControl(env);
       }
@@ -1167,8 +1435,21 @@ export class GroupCallManager extends EventEmitter {
     }
 
     const now = Date.now();
-    if (now - env.timestamp > GC_JOIN_TTL_MS) {
-      loggerLog(`[GCall] Dropped GC_JOIN: expired from ${env.fromAddress} (pre-verify)`);
+    const preRej = gcJoinTimestampRejectReason(env.timestamp, now);
+    if (preRej === 'expired') {
+      this.logGcJoinDropThrottled(
+        env.fromAddress,
+        'expired_pre_verify',
+        `[GCall] Dropped GC_JOIN: expired from ${env.fromAddress} (pre-verify)`
+      );
+      return;
+    }
+    if (preRej === 'future') {
+      this.logGcJoinDropThrottled(
+        env.fromAddress,
+        'future_timestamp',
+        `[GCall] Dropped GC_JOIN: future timestamp from ${env.fromAddress} (pre-verify)`
+      );
       return;
     }
 
@@ -1193,8 +1474,21 @@ export class GroupCallManager extends EventEmitter {
 
   private applyVerifiedJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
     const now = Date.now();
-    if (now - env.timestamp > GC_JOIN_TTL_MS) {
-      loggerLog(`[GCall] Dropped GC_JOIN: expired from ${env.fromAddress}`);
+    const postRej = gcJoinTimestampRejectReason(env.timestamp, now);
+    if (postRej === 'expired') {
+      this.logGcJoinDropThrottled(
+        env.fromAddress,
+        'expired_post_verify',
+        `[GCall] Dropped GC_JOIN: expired from ${env.fromAddress}`
+      );
+      return;
+    }
+    if (postRej === 'future') {
+      this.logGcJoinDropThrottled(
+        env.fromAddress,
+        'future_timestamp_post',
+        `[GCall] Dropped GC_JOIN: future timestamp from ${env.fromAddress}`
+      );
       return;
     }
 
@@ -1268,6 +1562,12 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private handleLeave(roomId: string, address: string, isAbrupt: boolean): void {
+    if (shouldIgnoreLeaveForLocalAddress(this.localAddresses, address)) {
+      loggerLog(
+        `[GCall] Ignored ${isAbrupt ? 'abrupt ' : ''}GC_LEAVE for local address ${address} in ${roomId}`
+      );
+      return;
+    }
     const room = this.rooms.get(roomId);
     const hadLocalInterest = Boolean(room);
     if (room) {
@@ -1503,7 +1803,10 @@ export class GroupCallManager extends EventEmitter {
     }
     const room = this.rooms.get(env.roomId);
     if (!room) {
-      loggerLog(`[GCall] Dropped GC_KEY: unknown room ${env.roomId}`);
+      const accepted = this.tryEnqueuePendingKeyFromKey(env);
+      if (!accepted && !this.pendingKeyByRoom.has(env.roomId)) {
+        this.logUnknownRoomKeyThrottled(env.roomId, 'GC_KEY');
+      }
       return;
     }
     // Each Electron process allocates its own callSessionId UUID on first joinRoom.
@@ -1558,7 +1861,10 @@ export class GroupCallManager extends EventEmitter {
     }
     const room = this.rooms.get(env.roomId);
     if (!room) {
-      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: unknown room ${env.roomId}`);
+      const accepted = this.tryEnqueuePendingKeyFromRotate(env);
+      if (!accepted && !this.pendingKeyByRoom.has(env.roomId)) {
+        this.logUnknownRoomKeyThrottled(env.roomId, 'GC_KEY_ROTATE');
+      }
       return;
     }
     // Same cross-process session adoption as handleKey: root's callSessionId wins.

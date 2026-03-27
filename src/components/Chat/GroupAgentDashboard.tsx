@@ -34,6 +34,7 @@ import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportC
 import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
 import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
+import { GroupCallConnectionBanner } from './GroupCallConnectionBanner';
 import type { MyRole } from '../../hooks/useGroupVoiceCall';
 
 export { GROUP_SUPPORT_ADDRESSES };
@@ -191,6 +192,7 @@ function GroupAgentDashboardPanel({
 
   const {
     roomState, participants, myRole, activeSpeakers, topologyLabel, metrics,
+    localConnectionHint,
     joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
     exportGroupCallDiagnostics,
   } = useGroupVoiceCall(isOpen);
@@ -329,6 +331,8 @@ function GroupAgentDashboardPanel({
           <CloseRoundedIcon fontSize="small" />
         </IconButton>
       </Box>
+
+      <GroupCallConnectionBanner hint={localConnectionHint} />
 
       {/* Call controls */}
       <Box

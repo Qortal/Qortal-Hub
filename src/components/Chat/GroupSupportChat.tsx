@@ -34,6 +34,7 @@ import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportC
 import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
 import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
+import { GroupCallConnectionBanner } from './GroupCallConnectionBanner';
 
 export { GROUP_SUPPORT_ADDRESSES };
 
@@ -152,6 +153,7 @@ function GroupSupportChatPanel({
   // Group voice call
   const {
     roomState, participants, myRole, activeSpeakers, topologyLabel, metrics,
+    localConnectionHint,
     joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
     exportGroupCallDiagnostics,
   } = useGroupVoiceCall(isOpen);
@@ -291,6 +293,8 @@ function GroupSupportChatPanel({
           <CloseRoundedIcon fontSize="small" />
         </IconButton>
       </Box>
+
+      <GroupCallConnectionBanner hint={localConnectionHint} />
 
       {/* Group call bar — in call */}
       {inCall && (
