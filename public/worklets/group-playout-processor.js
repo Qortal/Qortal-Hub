@@ -1,19 +1,28 @@
 /**
  * group-playout-processor — adaptive PCM playout for group voice (per remote speaker).
  *
- * PCM-only bufferedMs; fractional read with clamp + deadzone + EMA-smoothed rate (0.99–1.01).
- * Startup: silence until bufferedMs >= INITIAL_GATE_MS (~100). Concealment: reuse short tail with gentler fade.
- * Posts { type:'gcallPlayoutMetrics', ... } periodically for main-thread metrics.
+ * PCM-only bufferedMs; fractional read with clamp + deadzone + EMA-smoothed rate.
+ * Startup: silence until bufferedMs >= max(INITIAL_GATE_MS, target - START_GATE_TARGET_MARGIN_MS)
+ * so playout does not begin far below the active adaptive target.
+ * When |bufferedMs - target| > OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS, applies stronger
+ * fixed targetRate before EMA (still clamped by RATE_MIN/RATE_MAX).
+ * Concealment: reuse short tail with gentler fade.
+ * Posts { type:'gcallPlayoutMetrics', ... } periodically for main-thread metrics
+ * (outsideBand, outsideBandUnder, outsideBandOver, deltaMs).
  */
 const RING_CAPACITY = 48000;
 const INITIAL_GATE_MS = 100;
+/** Start playout when buffered >= target minus this margin (scheduling / target-post jitter). */
+const START_GATE_TARGET_MARGIN_MS = 16;
 const DEFAULT_TARGET_MS = 100;
 const ERROR_CLAMP_MS = 80;
 const DEADZONE_MS = 8;
-const RATE_MIN = 0.99;
-const RATE_MAX = 1.01;
-const EMA_ALPHA = 0.03;
+const RATE_MIN = 0.985;
+const RATE_MAX = 1.012;
+const EMA_ALPHA = 0.04;
 const OUTSIDE_BAND_MS = 25;
+/** Emergency rate path when |delta| exceeds band + this (aligned with KPI band). */
+const EMERGENCY_BAND_EXTRA_MS = 10;
 const METRICS_QUANTA = 47; // ~100ms at 48kHz/128
 
 class GroupPlayoutProcessor extends AudioWorkletProcessor {
@@ -103,7 +112,11 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     this._concealedThisBlock = false;
 
     if (!this._playoutStarted) {
-      if (bufferedMs < INITIAL_GATE_MS) {
+      const startGateMs = Math.max(
+        INITIAL_GATE_MS,
+        this._targetPlayoutMs - START_GATE_TARGET_MARGIN_MS
+      );
+      if (bufferedMs < startGateMs) {
         output.fill(0);
         this._maybePostMetrics(bufferedMs, quantum, false);
         return true;
@@ -111,12 +124,21 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       this._playoutStarted = true;
     }
 
-    let errorRaw = bufferedMs - this._targetPlayoutMs;
-    let errorMs = Math.max(-ERROR_CLAMP_MS, Math.min(ERROR_CLAMP_MS, errorRaw));
-    if (Math.abs(errorMs) < DEADZONE_MS) errorMs = 0;
-
-    const k = 0.000125;
-    let targetRate = 1 + Math.max(-0.01, Math.min(0.01, errorMs * k));
+    const deltaMs = bufferedMs - this._targetPlayoutMs;
+    const emergencyThresh = OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS;
+    let targetRate;
+    if (Math.abs(deltaMs) > emergencyThresh) {
+      if (deltaMs < 0) targetRate = 0.992;
+      else targetRate = 1.008;
+    } else {
+      let errorMs = Math.max(
+        -ERROR_CLAMP_MS,
+        Math.min(ERROR_CLAMP_MS, deltaMs)
+      );
+      if (Math.abs(errorMs) < DEADZONE_MS) errorMs = 0;
+      const k = 0.000125;
+      targetRate = 1 + Math.max(-0.01, Math.min(0.01, errorMs * k));
+    }
     targetRate = Math.max(RATE_MIN, Math.min(RATE_MAX, targetRate));
 
     this._smoothedRate += EMA_ALPHA * (targetRate - this._smoothedRate);
@@ -165,9 +187,12 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     this._metricsQuantumCount++;
     if (this._metricsQuantumCount < METRICS_QUANTA) return;
     this._metricsQuantumCount = 0;
-    const outside =
-      this._playoutStarted &&
-      Math.abs(bufferedMs - this._targetPlayoutMs) > OUTSIDE_BAND_MS;
+    const deltaMs = bufferedMs - this._targetPlayoutMs;
+    const outsideBandUnder =
+      this._playoutStarted && deltaMs < -OUTSIDE_BAND_MS;
+    const outsideBandOver =
+      this._playoutStarted && deltaMs > OUTSIDE_BAND_MS;
+    const outside = outsideBandUnder || outsideBandOver;
     this.port.postMessage({
       type: 'gcallPlayoutMetrics',
       sourceAddr: this._sourceAddr,
@@ -175,6 +200,9 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       targetPlayoutMs: this._targetPlayoutMs,
       rate: this._smoothedRate,
       outsideBand: outside,
+      outsideBandUnder,
+      outsideBandOver,
+      deltaMs,
       playoutStarted: this._playoutStarted,
       concealmentUsed: !!concealmentUsed,
     });

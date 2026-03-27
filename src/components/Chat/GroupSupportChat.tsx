@@ -27,6 +27,8 @@ import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import MicRoundedIcon from '@mui/icons-material/MicRounded';
 import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
 import RecordVoiceOverRoundedIcon from '@mui/icons-material/RecordVoiceOverRounded';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
 import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
@@ -151,7 +153,10 @@ function GroupSupportChatPanel({
   const {
     roomState, participants, myRole, activeSpeakers, topologyLabel, metrics,
     joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
+    exportGroupCallDiagnostics,
   } = useGroupVoiceCall(isOpen);
+
+  const [diagExporting, setDiagExporting] = useState(false);
 
   const inCall = roomState === 'connected' || roomState === 'joining';
 
@@ -188,6 +193,28 @@ function GroupSupportChatPanel({
   const handleJoinCall = useCallback(async () => {
     await joinGroupCall(GROUP_ROOM_ID, GROUP_CHAT_ID);
   }, [joinGroupCall]);
+
+  const handleDiagDownload = useCallback(async () => {
+    setDiagExporting(true);
+    try {
+      await exportGroupCallDiagnostics?.({ download: true, clipboard: false });
+    } catch (e) {
+      console.error('[GCall] diagnostics export failed', e);
+    } finally {
+      setDiagExporting(false);
+    }
+  }, [exportGroupCallDiagnostics]);
+
+  const handleDiagClipboard = useCallback(async () => {
+    setDiagExporting(true);
+    try {
+      await exportGroupCallDiagnostics?.({ download: false, clipboard: true });
+    } catch (e) {
+      console.error('[GCall] diagnostics clipboard failed', e);
+    } finally {
+      setDiagExporting(false);
+    }
+  }, [exportGroupCallDiagnostics]);
 
   useEffect(() => {
     setKeepMounted(inCall);
@@ -326,6 +353,41 @@ function GroupSupportChatPanel({
               >
                 <CallEndRoundedIcon sx={{ fontSize: 14 }} />
               </IconButton>
+            </Tooltip>
+
+            <Tooltip title="Export call diagnostics (JSON download)">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={diagExporting}
+                  onClick={() => void handleDiagDownload()}
+                  sx={{
+                    color: '#93c5fd',
+                    bgcolor: alpha('#93c5fd', 0.12),
+                    width: 28,
+                    height: 28,
+                  }}
+                >
+                  <FileDownloadRoundedIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Copy diagnostics JSON to clipboard">
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={diagExporting}
+                  onClick={() => void handleDiagClipboard()}
+                  sx={{
+                    color: '#c4b5fd',
+                    bgcolor: alpha('#c4b5fd', 0.12),
+                    width: 28,
+                    height: 28,
+                  }}
+                >
+                  <ContentCopyRoundedIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              </span>
             </Tooltip>
 
             <Typography variant="caption" sx={{ fontSize: 10, color: alpha('#fff', 0.5), ml: 'auto' }}>

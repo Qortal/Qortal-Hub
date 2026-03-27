@@ -98,6 +98,17 @@ import {
   scheduleLogIceServerSourcesForPeer,
 } from '../lib/webrtc/iceCandidateStats';
 import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
+import {
+  buildGcallDiagnosticsExportJson,
+  copyGcallDiagnosticsToClipboard,
+  downloadGcallDiagnosticsJson,
+  gcallDiagnosticsClear,
+  gcallDiagnosticsCollectRtcStats,
+  gcallDiagnosticsIngestConsoleArgs,
+  gcallDiagnosticsPush,
+  truncateGcallDiagAddress,
+  type GcallDiagExportContext,
+} from '../lib/group-call/gcall-diagnostics';
 
 const naclApi = nacl as any;
 
@@ -219,7 +230,7 @@ function readGcallWasmFecDesired(): boolean {
 }
 
 /** After VAD goes false, keep forwarding through forwarder for this long (word gaps / breath). */
-const FORWARD_VAD_HANGOVER_MS = 200;
+const FORWARD_VAD_HANGOVER_MS = 450;
 
 /** Silence before standby may treat root as dead. >2× TOPOLOGY_HEARTBEAT_MS so one late tick does not flap. */
 const FORWARDER_TIMEOUT_MS = 3_200;
@@ -373,15 +384,19 @@ function isMicCaptureDebugEnabled(): boolean {
 
 /** Verbose mic pipeline logs when qortal:gcall-mic-debug=1 or qortal:gcall-debug=1 */
 function micDebugLog(...args: unknown[]): void {
-  if (isMicCaptureDebugEnabled()) console.info('[GCall][mic]', ...args);
+  if (!isMicCaptureDebugEnabled()) return;
+  console.info('[GCall][mic]', ...args);
+  gcallDiagnosticsPush('info', '[GCall][mic]', { parts: args });
 }
 
 function debugLog(...args: unknown[]): void {
   console.log(...args);
+  gcallDiagnosticsIngestConsoleArgs('log', args);
 }
 
 function debugWarn(...args: unknown[]): void {
   console.warn(...args);
+  gcallDiagnosticsIngestConsoleArgs('warn', args);
 }
 
 /** Best-effort succeeded candidate-pair line from getStats (helps spot relay vs host/srflx). */
@@ -1052,6 +1067,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastSourceGapLogAtRef = useRef<Map<string, number>>(new Map());
   const lastSourceStallLogAtRef = useRef<Map<string, number>>(new Map());
   const lastForwarderGateLogAtRef = useRef<Map<string, number>>(new Map());
+  /** Wall timestamps of decrypt batches per source (for forwarder suppression diagnostics). */
+  const forwardPacketRecvTimestampsRef = useRef<Map<string, number[]>>(
+    new Map()
+  );
 
   /** Last mesh send time per peer — fallback vs primary policies do not share one map. */
   const relayLastSentFallbackRef = useRef<Map<string, number>>(new Map());
@@ -1906,6 +1925,7 @@ export function useGroupVoiceCall(uiActive = false) {
     if (nextJson !== lastTuningSnapshotJsonRef.current) {
       lastTuningSnapshotJsonRef.current = nextJson;
       console.info('[GCall] groupCallTuningSnapshot', snapshot);
+      gcallDiagnosticsPush('info', '[GCall] groupCallTuningSnapshot', snapshot);
     }
     return snapshot;
   }, [buildGroupCallTuningSnapshot]);
@@ -1917,11 +1937,13 @@ export function useGroupVoiceCall(uiActive = false) {
       lastWindowMetricsRef.current = windowMetrics;
       evaluateWindowMediaRecovery(windowMetrics);
       const diagnosticSources = buildWindowDiagnosticSources(windowMetrics);
-      console.info('[GCall] groupCallWindowMetrics', {
+      const windowPayload = {
         reason,
         ...windowMetrics,
         sources: diagnosticSources,
-      });
+      };
+      console.info('[GCall] groupCallWindowMetrics', windowPayload);
+      gcallDiagnosticsPush('info', '[GCall] groupCallWindowMetrics', windowPayload);
       return windowMetrics;
     },
     [buildWindowDiagnosticSources, evaluateWindowMediaRecovery, userInfo?.address]
@@ -2027,6 +2049,64 @@ export function useGroupVoiceCall(uiActive = false) {
     updateMetricResourceCounts,
     userInfo?.address,
   ]);
+
+  const exportGroupCallDiagnostics = useCallback(
+    async (opts?: { download?: boolean; clipboard?: boolean }) => {
+      const windowMetrics = emitWindowMetrics('manual');
+      flushMetrics();
+      const live = metricsRef.current.getSnapshot();
+      const webrtcStats = await gcallDiagnosticsCollectRtcStats(
+        [...peerConnectionsRef.current.entries()].map(([addr, e]) => [
+          addr,
+          { pc: e.pc },
+        ])
+      );
+      const context: GcallDiagExportContext = {
+        buildMode: import.meta.env.MODE,
+        appVersionLabel: '0.0.0',
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        platform: typeof navigator !== 'undefined' ? navigator.platform : undefined,
+        roomId: roomIdRef.current || null,
+        chatId: chatIdRef.current || null,
+        roomState: roomStateRef.current,
+        myAddressTruncated: userInfoRef.current?.address
+          ? truncateGcallDiagAddress(userInfoRef.current.address)
+          : null,
+      };
+      const json = buildGcallDiagnosticsExportJson({
+        context,
+        liveMetricsSnapshot: live,
+        exportWindowMetrics: windowMetrics,
+        webrtcStats,
+      });
+      if (opts?.clipboard) {
+        await copyGcallDiagnosticsToClipboard(json);
+      }
+      const clipboardOnly =
+        opts?.clipboard === true && opts?.download === false;
+      if (!clipboardOnly && opts?.download !== false) {
+        downloadGcallDiagnosticsJson(json);
+      }
+      return json;
+    },
+    [emitWindowMetrics, flushMetrics]
+  );
+
+  const exportGroupCallDiagnosticsRef = useRef(exportGroupCallDiagnostics);
+  exportGroupCallDiagnosticsRef.current = exportGroupCallDiagnostics;
+
+  useEffect(() => {
+    window.__qortalGCallExportDiagnostics = async () => {
+      await exportGroupCallDiagnosticsRef.current?.({
+        download: true,
+        clipboard: false,
+      });
+      console.info('[GCall] diagnostics export finished (check downloads)');
+    };
+    return () => {
+      delete window.__qortalGCallExportDiagnostics;
+    };
+  }, []);
 
   const scheduleRelayMetricsFlush = useCallback(() => {
     if (relayMetricsFlushTimerRef.current) return;
@@ -2346,6 +2426,17 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       const now = Date.now();
+      {
+        const m = forwardPacketRecvTimestampsRef.current;
+        let arr = m.get(sourceAddr);
+        if (!arr) {
+          arr = [];
+          m.set(sourceAddr, arr);
+        }
+        arr.push(now);
+        const cutoff = now - 2000;
+        while (arr.length > 0 && arr[0]! < cutoff) arr.shift();
+      }
       const maxSpeakers =
         myRoleRef.current === 'root-forwarder'
           ? MAX_ACTIVE_SPEAKERS_GLOBAL
@@ -2406,6 +2497,13 @@ export function useGroupVoiceCall(uiActive = false) {
               isActiveSpeaker,
               intendedRecipients,
               topologyClusterCount: topo.clusters.length,
+              lastVadTrueAt:
+                lastVadTrueAt > 0 ? lastVadTrueAt : null,
+              lastVadAgeMs:
+                lastVadTrueAt > 0 ? now - lastVadTrueAt : null,
+              packetsLast2s:
+                forwardPacketRecvTimestampsRef.current.get(sourceAddr)
+                  ?.length ?? 0,
             });
           }
         }
@@ -5014,6 +5112,9 @@ export function useGroupVoiceCall(uiActive = false) {
             bufferedMs?: number;
             targetPlayoutMs?: number;
             outsideBand?: boolean;
+            outsideBandUnder?: boolean;
+            outsideBandOver?: boolean;
+            deltaMs?: number;
             concealmentUsed?: boolean;
             playoutStarted?: boolean;
           };
@@ -5024,7 +5125,15 @@ export function useGroupVoiceCall(uiActive = false) {
           metricsRef.current.recordPlayoutMetricTick(
             d.bufferedMs,
             !!d.outsideBand,
-            sourceAddr
+            sourceAddr,
+            {
+              outsideUnder: !!d.outsideBandUnder,
+              outsideOver: !!d.outsideBandOver,
+              deltaMs:
+                typeof d.deltaMs === 'number' && Number.isFinite(d.deltaMs)
+                  ? d.deltaMs
+                  : undefined,
+            }
           );
           if (d.concealmentUsed) {
             metricsRef.current.recordConcealmentTick(1, sourceAddr);
@@ -6129,6 +6238,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
       roomIdRef.current = roomId;
       chatIdRef.current = chatId;
+      gcallDiagnosticsClear();
       // Reset epoch floor when joining a different room; keep it for same-room rejoin
       // so the rejoining node broadcasts an epoch ≥ the room's current epoch.
       if (roomId !== lastRoomIdRef.current) {
@@ -6143,6 +6253,7 @@ export function useGroupVoiceCall(uiActive = false) {
       peerMediaRecoveryLastActionAtRef.current.clear();
       lastSourceStallLogAtRef.current.clear();
       lastForwarderGateLogAtRef.current.clear();
+      forwardPacketRecvTimestampsRef.current.clear();
       lastSendPathDiagnosticAtRef.current.clear();
       globalRecoveryUntilMsRef.current = 0;
       setRoomState('joining');
@@ -6412,6 +6523,7 @@ export function useGroupVoiceCall(uiActive = false) {
     lastSourceGapLogAtRef.current.clear();
     lastSourceStallLogAtRef.current.clear();
     lastForwarderGateLogAtRef.current.clear();
+    forwardPacketRecvTimestampsRef.current.clear();
 
     // Close peer connections (clear ICE disconnect grace timers first so callbacks cannot fire after teardown)
     for (const [, entry] of peerConnectionsRef.current) {
@@ -7312,6 +7424,7 @@ export function useGroupVoiceCall(uiActive = false) {
     topologyLabel,
     joinGroupCall,
     leaveGroupCall,
+    exportGroupCallDiagnostics,
     setMuted: (m: boolean) => {
       mutedRef.current = m;
       captureWorkletRef.current?.port.postMessage({ type: 'mute', muted: m });

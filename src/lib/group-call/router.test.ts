@@ -213,8 +213,11 @@ describe('group-call router helpers', () => {
     tracker.recordJitterUnderrun(2);
     tracker.recordMissingFrames(2);
     tracker.recordConcealmentTick(1);
-    tracker.recordPlayoutMetricTick(100, true);
-    tracker.recordPlayoutMetricTick(100, false);
+    tracker.recordPlayoutMetricTick(100, true, undefined, {
+      outsideUnder: true,
+      deltaMs: -40,
+    });
+    tracker.recordPlayoutMetricTick(100, false, undefined, { deltaMs: 2 });
     tracker.recordMixerState(4, 0.55);
     tracker.recordMixerReductionSample(-3.2);
     tracker.setResourceCounts({ decoders: 2, playbackNodes: 1, jitterBuffers: 3 });
@@ -240,6 +243,9 @@ describe('group-call router helpers', () => {
       avgJitterTickMs: 2,
       avgPcmBufferedMs: 100,
       playoutOutsideTargetFraction: 0.5,
+      playoutUnderTargetFraction: 0.5,
+      playoutOverTargetFraction: 0,
+      avgPlayoutDeltaMs: -19,
       mixerActiveSpeakerEstimate: 4,
       mixerMasterGain: 0.55,
       mixerCurrentReductionDb: -3.2,
@@ -412,8 +418,11 @@ describe('group-call router helpers', () => {
     tracker.recordJitterUnderrun(2, 'alice');
     tracker.recordMissingFrames(3, 'alice');
     tracker.recordConcealmentTick(1, 'alice');
-    tracker.recordPlayoutMetricTick(80, false, 'alice');
-    tracker.recordPlayoutMetricTick(120, true, 'alice');
+    tracker.recordPlayoutMetricTick(80, false, 'alice', { deltaMs: -5 });
+    tracker.recordPlayoutMetricTick(120, true, 'alice', {
+      outsideOver: true,
+      deltaMs: 28,
+    });
     tracker.recordAdaptiveTargetSample('alice', 110);
     tracker.recordAdaptiveTargetSample('alice', 155);
     tracker.recordOpusBufferedMetric('alice', 80);
@@ -430,6 +439,9 @@ describe('group-call router helpers', () => {
     expect(window.jitterUnderruns).toBe(2);
     expect(window.avgPcmBufferedMs).toBe(100);
     expect(window.playoutOutsideTargetFraction).toBe(0.5);
+    expect(window.playoutUnderTargetFraction).toBe(0);
+    expect(window.playoutOverTargetFraction).toBe(0.5);
+    expect(window.avgPlayoutDeltaMs).toBe(11.5);
     expect(window.worstSourceAddr).toBe('alice');
     expect(window.worstAdaptiveTargetMs).toBe(155);
     expect(window.sources).toEqual([
@@ -440,6 +452,9 @@ describe('group-call router helpers', () => {
         concealmentTicks: 1,
         avgPcmBufferedMs: 100,
         playoutOutsideTargetFraction: 0.5,
+        playoutUnderTargetFraction: 0,
+        playoutOverTargetFraction: 0.5,
+        avgPlayoutDeltaMs: 11.5,
         avgOpusBufferedMs: 100,
         maxOpusBufferedMs: 120,
         adaptiveTargetMedianMs: 110,

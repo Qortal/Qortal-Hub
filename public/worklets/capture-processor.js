@@ -16,7 +16,8 @@ const OPUS_FRAME_SAMPLES = 960; // 20ms @ 48 kHz
 
 // Adaptive RMS VAD constants (noise-tracking worklet only).
 const VAD_ALPHA = 0.99;
-const VAD_MULTIPLIER = 2.5;
+// Slightly sensitive so quiet mics still set vad=true (forwarder gates on vad).
+const VAD_MULTIPLIER = 2.3;
 const VAD_MIN_THRESHOLD = 0.01;
 const VAD_INITIAL_FLOOR = 0.005;
 

@@ -162,6 +162,13 @@ export interface RouterParticipant {
   role: RouterRole;
 }
 
+/** Optional detail for playout metric ticks (from group-playout-processor). */
+export interface PlayoutMetricTickOpts {
+  outsideUnder?: boolean;
+  outsideOver?: boolean;
+  deltaMs?: number;
+}
+
 export interface GroupCallMetricsSnapshot {
   role: RouterRole;
   packetsReceived: number;
@@ -186,6 +193,12 @@ export interface GroupCallMetricsSnapshot {
   avgPcmBufferedMs: number;
   /** Fraction of playout metric ticks where |bufferedMs - target| > band (tuning KPI). */
   playoutOutsideTargetFraction: number;
+  /** Fraction of ticks where buffered < target - band (shallow vs deep diagnostics). */
+  playoutUnderTargetFraction: number;
+  /** Fraction of ticks where buffered > target + band. */
+  playoutOverTargetFraction: number;
+  /** Mean (bufferedMs - targetMs) over ticks that reported deltaMs. */
+  avgPlayoutDeltaMs: number;
   lastUpdatedAt: number;
   /** Present-tense: DataChannels needed for this role are open (set in useGroupVoiceCall flush). */
   dcTransportReady?: boolean;
@@ -240,6 +253,9 @@ export interface GroupCallSourceWindowMetrics {
   concealmentTicks: number;
   avgPcmBufferedMs: number;
   playoutOutsideTargetFraction: number;
+  playoutUnderTargetFraction?: number;
+  playoutOverTargetFraction?: number;
+  avgPlayoutDeltaMs?: number;
   avgOpusBufferedMs: number;
   maxOpusBufferedMs: number;
   adaptiveTargetMedianMs: number;
@@ -266,6 +282,9 @@ export interface GroupCallWindowMetrics {
   relayDwellFraction: number;
   avgPcmBufferedMs: number;
   playoutOutsideTargetFraction: number;
+  playoutUnderTargetFraction: number;
+  playoutOverTargetFraction: number;
+  avgPlayoutDeltaMs: number;
   avgOpusBufferedMs: number;
   maxOpusBufferedMs: number;
   adaptiveTargetMedianMs: number;
@@ -605,6 +624,10 @@ interface SourceWindowAccumulator {
   concealmentTicks: number;
   playoutTicks: number;
   playoutOutsideTicks: number;
+  playoutUnderTicks: number;
+  playoutOverTicks: number;
+  playoutDeltaMsSum: number;
+  playoutDeltaMsSamples: number;
   playoutBufferedMsSum: number;
   playoutBufferedMsSamples: number;
   opusBufferedMsSum: number;
@@ -667,6 +690,9 @@ export class GroupCallPerformanceTracker {
     maxJitterTickMs: 0,
     avgPcmBufferedMs: 0,
     playoutOutsideTargetFraction: 0,
+    playoutUnderTargetFraction: 0,
+    playoutOverTargetFraction: 0,
+    avgPlayoutDeltaMs: 0,
     lastUpdatedAt: 0,
     pcConnectedTransitions: 0,
     pcDisconnectedTransitions: 0,
@@ -712,6 +738,10 @@ export class GroupCallPerformanceTracker {
 
   private playoutMetricTicks = 0;
   private playoutOutsideTicks = 0;
+  private playoutUnderTicks = 0;
+  private playoutOverTicks = 0;
+  private playoutDeltaMsSum = 0;
+  private playoutDeltaMsSamples = 0;
   private playoutBufferedMsSum = 0;
   private playoutBufferedMsSamples = 0;
   private recoverySamples = 0;
@@ -731,6 +761,10 @@ export class GroupCallPerformanceTracker {
   private windowCounters: WindowCounterSet = emptyWindowCounters();
   private windowPlayoutMetricTicks = 0;
   private windowPlayoutOutsideTicks = 0;
+  private windowPlayoutUnderTicks = 0;
+  private windowPlayoutOverTicks = 0;
+  private windowPlayoutDeltaMsSum = 0;
+  private windowPlayoutDeltaMsSamples = 0;
   private windowPlayoutBufferedMsSum = 0;
   private windowPlayoutBufferedMsSamples = 0;
   private windowOpusBufferedMsSum = 0;
@@ -749,6 +783,10 @@ export class GroupCallPerformanceTracker {
         concealmentTicks: 0,
         playoutTicks: 0,
         playoutOutsideTicks: 0,
+        playoutUnderTicks: 0,
+        playoutOverTicks: 0,
+        playoutDeltaMsSum: 0,
+        playoutDeltaMsSamples: 0,
         playoutBufferedMsSum: 0,
         playoutBufferedMsSamples: 0,
         opusBufferedMsSum: 0,
@@ -773,6 +811,10 @@ export class GroupCallPerformanceTracker {
     this.windowCounters = emptyWindowCounters();
     this.windowPlayoutMetricTicks = 0;
     this.windowPlayoutOutsideTicks = 0;
+    this.windowPlayoutUnderTicks = 0;
+    this.windowPlayoutOverTicks = 0;
+    this.windowPlayoutDeltaMsSum = 0;
+    this.windowPlayoutDeltaMsSamples = 0;
     this.windowPlayoutBufferedMsSum = 0;
     this.windowPlayoutBufferedMsSamples = 0;
     this.windowOpusBufferedMsSum = 0;
@@ -999,10 +1041,17 @@ export class GroupCallPerformanceTracker {
   recordPlayoutMetricTick(
     bufferedMs: number,
     outsideTargetBand: boolean,
-    sourceAddr?: string
+    sourceAddr?: string,
+    opts?: PlayoutMetricTickOpts
   ): void {
     this.playoutMetricTicks++;
     if (outsideTargetBand) this.playoutOutsideTicks++;
+    if (opts?.outsideUnder) this.playoutUnderTicks++;
+    if (opts?.outsideOver) this.playoutOverTicks++;
+    if (typeof opts?.deltaMs === 'number' && Number.isFinite(opts.deltaMs)) {
+      this.playoutDeltaMsSum += opts.deltaMs;
+      this.playoutDeltaMsSamples++;
+    }
     this.playoutBufferedMsSum += bufferedMs;
     this.playoutBufferedMsSamples++;
     this.snapshot.avgPcmBufferedMs = roundMetric(
@@ -1011,14 +1060,35 @@ export class GroupCallPerformanceTracker {
     this.snapshot.playoutOutsideTargetFraction = roundMetric(
       this.playoutOutsideTicks / Math.max(1, this.playoutMetricTicks)
     );
+    this.snapshot.playoutUnderTargetFraction = roundMetric(
+      this.playoutUnderTicks / Math.max(1, this.playoutMetricTicks)
+    );
+    this.snapshot.playoutOverTargetFraction = roundMetric(
+      this.playoutOverTicks / Math.max(1, this.playoutMetricTicks)
+    );
+    this.snapshot.avgPlayoutDeltaMs = roundMetric(
+      this.playoutDeltaMsSum / Math.max(1, this.playoutDeltaMsSamples)
+    );
     this.windowPlayoutMetricTicks++;
     if (outsideTargetBand) this.windowPlayoutOutsideTicks++;
+    if (opts?.outsideUnder) this.windowPlayoutUnderTicks++;
+    if (opts?.outsideOver) this.windowPlayoutOverTicks++;
+    if (typeof opts?.deltaMs === 'number' && Number.isFinite(opts.deltaMs)) {
+      this.windowPlayoutDeltaMsSum += opts.deltaMs;
+      this.windowPlayoutDeltaMsSamples++;
+    }
     this.windowPlayoutBufferedMsSum += bufferedMs;
     this.windowPlayoutBufferedMsSamples++;
     if (sourceAddr) {
       const source = this.getSourceWindowAccumulator(sourceAddr);
       source.playoutTicks++;
       if (outsideTargetBand) source.playoutOutsideTicks++;
+      if (opts?.outsideUnder) source.playoutUnderTicks++;
+      if (opts?.outsideOver) source.playoutOverTicks++;
+      if (typeof opts?.deltaMs === 'number' && Number.isFinite(opts.deltaMs)) {
+        source.playoutDeltaMsSum += opts.deltaMs;
+        source.playoutDeltaMsSamples++;
+      }
       source.playoutBufferedMsSum += bufferedMs;
       source.playoutBufferedMsSamples++;
     }
@@ -1139,6 +1209,9 @@ export class GroupCallPerformanceTracker {
       maxJitterTickMs: 0,
       avgPcmBufferedMs: 0,
       playoutOutsideTargetFraction: 0,
+      playoutUnderTargetFraction: 0,
+      playoutOverTargetFraction: 0,
+      avgPlayoutDeltaMs: 0,
       lastUpdatedAt: now,
       pcConnectedTransitions: 0,
       pcDisconnectedTransitions: 0,
@@ -1182,6 +1255,10 @@ export class GroupCallPerformanceTracker {
     this.jitterTickTotalMs = 0;
     this.playoutMetricTicks = 0;
     this.playoutOutsideTicks = 0;
+    this.playoutUnderTicks = 0;
+    this.playoutOverTicks = 0;
+    this.playoutDeltaMsSum = 0;
+    this.playoutDeltaMsSamples = 0;
     this.playoutBufferedMsSum = 0;
     this.playoutBufferedMsSamples = 0;
     this.recoverySamples = 0;
@@ -1238,6 +1315,16 @@ export class GroupCallPerformanceTracker {
           playoutOutsideTargetFraction: roundMetric(
             stats.playoutOutsideTicks / Math.max(1, stats.playoutTicks)
           ),
+          playoutUnderTargetFraction: roundMetric(
+            stats.playoutUnderTicks / Math.max(1, stats.playoutTicks)
+          ),
+          playoutOverTargetFraction: roundMetric(
+            stats.playoutOverTicks / Math.max(1, stats.playoutTicks)
+          ),
+          avgPlayoutDeltaMs: roundMetric(
+            stats.playoutDeltaMsSum /
+              Math.max(1, stats.playoutDeltaMsSamples)
+          ),
           avgOpusBufferedMs: roundMetric(
             stats.opusBufferedMsSum / Math.max(1, stats.opusBufferedMsSamples)
           ),
@@ -1288,6 +1375,18 @@ export class GroupCallPerformanceTracker {
       playoutOutsideTargetFraction: roundMetric(
         this.windowPlayoutOutsideTicks /
           Math.max(1, this.windowPlayoutMetricTicks)
+      ),
+      playoutUnderTargetFraction: roundMetric(
+        this.windowPlayoutUnderTicks /
+          Math.max(1, this.windowPlayoutMetricTicks)
+      ),
+      playoutOverTargetFraction: roundMetric(
+        this.windowPlayoutOverTicks /
+          Math.max(1, this.windowPlayoutMetricTicks)
+      ),
+      avgPlayoutDeltaMs: roundMetric(
+        this.windowPlayoutDeltaMsSum /
+          Math.max(1, this.windowPlayoutDeltaMsSamples)
       ),
       avgOpusBufferedMs: roundMetric(
         this.windowOpusBufferedMsSum /
