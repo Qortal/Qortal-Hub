@@ -40,6 +40,8 @@ const sortApps = (apps: any[], sortOption: SortOption): any[] => {
         const titleB = (b.metadata?.title || b.name || '').toLowerCase();
         return titleA.localeCompare(titleB);
       });
+    case 'recently_updated':
+      return sorted.sort((a, b) => (b.updated || 0) - (a.updated || 0));
     default:
       return sorted;
   }
