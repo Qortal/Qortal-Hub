@@ -7,9 +7,11 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
+import StarRoundedIcon from '@mui/icons-material/StarRounded';
 import CreateIcon from '@mui/icons-material/Create';
 import PersonOffIcon from '@mui/icons-material/PersonOff';
 import MarkChatUnreadIcon from '@mui/icons-material/MarkChatUnread';
@@ -28,6 +30,7 @@ import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
 import { statusDotColor } from '../../hooks/usePresence';
 import { isOnlineAtomFamily, statusAtomFamily } from '../../atoms/presence';
+import type { DmFriendStored } from '../../atoms/global';
 
 /** Renders only the presence badge for a single DM address.
  * Subscribes to per-address atoms so a change to any other peer
@@ -72,6 +75,7 @@ export interface DirectsSidebarProps {
   desktopSideView: string;
   directChatHasUnread: boolean;
   directs: any[];
+  dmFriendsByAddress: Record<string, DmFriendStored>;
   getUserAvatarUrl: (name?: string) => string;
   directAvatarLoaded: Record<string, boolean>;
   setDirectAvatarLoaded: React.Dispatch<
@@ -100,6 +104,7 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
     desktopSideView,
     directChatHasUnread,
     directs,
+    dmFriendsByAddress,
     getUserAvatarUrl,
     directAvatarLoaded,
     setDirectAvatarLoaded,
@@ -343,10 +348,13 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                 Date.now() - direct?.timestamp <
                   timeDifferenceForNotificationChats) ||
                 timestampEnterData[direct?.address] < direct?.timestamp);
+            const isDmFriend = Boolean(
+              direct?.address && dmFriendsByAddress[direct.address]
+            );
 
             return (
               <ListItem
-                key={direct?.timestamp + direct?.sender}
+                key={direct?.address || avatarKey}
                 onClick={() => {
                   setSelectedDirect(null);
                   setNewChat(false);
@@ -489,6 +497,19 @@ export const DirectsSidebar = (props: DirectsSidebarProps) => {
                     }}
                   />
 
+                  {isDmFriend && (
+                    <Tooltip title={t('core:dm_friends.friend_badge_aria')}>
+                      <StarRoundedIcon
+                        aria-label={t('core:dm_friends.friend_badge_aria')}
+                        sx={{
+                          color: theme.palette.warning.main,
+                          fontSize: '20px',
+                          flexShrink: 0,
+                          marginLeft: '4px',
+                        }}
+                      />
+                    </Tooltip>
+                  )}
                   {hasUnread && (
                     <MarkChatUnreadIcon
                       sx={{

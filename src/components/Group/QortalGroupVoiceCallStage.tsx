@@ -26,7 +26,7 @@ import MicRoundedIcon from '@mui/icons-material/MicRounded';
 import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
 import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useAtomValue } from 'jotai';
 import PictureInPictureAltRoundedIcon from '@mui/icons-material/PictureInPictureAltRounded';
@@ -680,15 +680,10 @@ export function QortalGroupVoiceCallStage() {
             gap: 0.5,
           }}
         >
-          <CallAudioSettingsButton iconButtonSize="medium" />
-          <IconButton
-            size="small"
-            sx={{ color: '#b5bac1' }}
-            disabled
-            aria-label="More"
-          >
-            <MoreVertRoundedIcon />
-          </IconButton>
+          <CallAudioSettingsButton
+            iconButtonSize="medium"
+            IconComponent={SettingsIcon}
+          />
         </Box>
       </Box>
     </Box>

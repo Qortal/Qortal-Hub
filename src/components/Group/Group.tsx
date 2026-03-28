@@ -69,7 +69,9 @@ import {
   timestampEnterDataAtom,
   userInfoAtom,
   qortalGroupVoiceCallMinimizedAtom,
+  dmFriendsByAddressAtom,
 } from '../../atoms/global';
+import { mergeDirectsWithFriends } from '../../lib/dm/mergeDirectsWithFriends';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
@@ -85,6 +87,7 @@ import { useWebsocketStatus } from './useWebsocketStatus';
 import { DirectsSidebar } from './DirectsSidebar';
 import { GlobalChatWidget } from './GlobalChatWidget';
 import { QortalGroupVoiceCallDock } from './QortalGroupVoiceCallDock';
+import { DirectVoiceCallDock } from './DirectVoiceCallDock';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import {
   AdminRowBox,
@@ -312,6 +315,7 @@ export const Group = ({
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
   const userInfo = useAtomValue(userInfoAtom);
+  const dmFriendsByAddress = useAtomValue(dmFriendsByAddressAtom);
 
   const {
     roomState: gcallRoomState,
@@ -636,6 +640,17 @@ export const Group = ({
     });
     return hasUnread;
   }, [timestampEnterData, directs, myAddress]);
+
+  const displayDirects = useMemo(
+    () =>
+      mergeDirectsWithFriends(
+        directs,
+        dmFriendsByAddress,
+        myAddress,
+        userInfo?.name
+      ),
+    [directs, dmFriendsByAddress, myAddress, userInfo?.name]
+  );
 
   const getSecretKey = useCallback(
     async (loadingGroupParam?: boolean, secretKeyToPublish?: boolean) => {
@@ -1204,7 +1219,7 @@ export const Group = ({
       isLoadingOpenSectionFromNotification.current = true;
       const directAddress = e.detail?.from;
 
-      const findDirect = directs?.find(
+      const findDirect = displayDirects?.find(
         (direct) => direct?.address === directAddress
       );
       if (findDirect?.address === selectedDirect?.address) {
@@ -1239,14 +1254,14 @@ export const Group = ({
         isLoadingOpenSectionFromNotification.current = false;
       }
     },
-    [directs, selectedDirect?.address, getTimestampEnterChat]
+    [displayDirects, selectedDirect?.address, getTimestampEnterChat]
   );
 
   const openDirectChatFromInternal = useCallback(
     (e) => {
       const directAddress = e.detail?.address;
       const name = e.detail?.name;
-      const findDirect = directs?.find(
+      const findDirect = displayDirects?.find(
         (direct) => direct?.address === directAddress || direct?.name === name
       );
 
@@ -1284,7 +1299,7 @@ export const Group = ({
         }, 500);
       }
     },
-    [directs, getTimestampEnterChat]
+    [displayDirects, getTimestampEnterChat]
   );
 
   useEffect(() => {
@@ -1296,7 +1311,7 @@ export const Group = ({
         openDirectChatFromInternal
       );
     };
-  }, [directs, selectedDirect]);
+  }, [displayDirects, selectedDirect, openDirectChatFromInternal]);
 
   useEffect(() => {
     subscribeToEvent('openDirectMessage', openDirectChatFromNotification);
@@ -1305,7 +1320,7 @@ export const Group = ({
       unsubscribeFromEvent('openDirectMessage', openDirectChatFromNotification);
     };
   }, [
-    directs,
+    displayDirects,
     selectedDirect,
     openDirectChatFromNotification,
     openDirectChatFromInternal,
@@ -1800,7 +1815,16 @@ export const Group = ({
   }, []);
 
   return (
-    <>
+    <Box
+      sx={{
+        display: 'flex',
+        flex: 1,
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        minWidth: 0,
+      }}
+    >
       <WebSocketActive
         myAddress={myAddress}
         setIsLoadingGroups={setIsLoadingGroups}
@@ -1814,7 +1838,7 @@ export const Group = ({
         setInfo={setInfoSnack}
       />
 
-      <RootBox>
+      <RootBox sx={{ flex: 1, minHeight: 0, minWidth: 0 }}>
         <MemberGroupsEffects
           getGroupsWhereIAmAMember={getGroupsWhereIAmAMember}
           getGroupsProperties={getGroupsProperties}
@@ -1858,7 +1882,8 @@ export const Group = ({
             setDesktopSideView={setDesktopSideView}
             desktopSideView={desktopSideView}
             directChatHasUnread={directChatHasUnread}
-            directs={directs}
+            directs={displayDirects}
+            dmFriendsByAddress={dmFriendsByAddress}
             getUserAvatarUrl={getUserAvatarUrl}
             directAvatarLoaded={directAvatarLoaded}
             setDirectAvatarLoaded={setDirectAvatarLoaded}
@@ -2259,6 +2284,7 @@ export const Group = ({
           />
           </Box>
           <QortalGroupVoiceCallDock />
+          <DirectVoiceCallDock />
         </MainContentBox>
 
         <GroupRightSidebar
@@ -2283,7 +2309,7 @@ export const Group = ({
 
         {!chatWidgetClosed && (
           <GlobalChatWidget
-            directs={directs}
+            directs={displayDirects}
             getUserAvatarUrl={getUserAvatarUrl}
             directChatHasUnread={directChatHasUnread}
             timestampEnterData={timestampEnterData}
@@ -2299,6 +2325,6 @@ export const Group = ({
           />
         )}
       </RootBox>
-    </>
+    </Box>
   );
 };

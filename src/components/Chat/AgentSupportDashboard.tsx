@@ -58,7 +58,7 @@ import {
 } from '../../hooks/useAgentSupportChat';
 import { useIsOnline } from '../../hooks/usePresence';
 import { decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
-import { useVoiceCall } from '../../hooks/useVoiceCall';
+import { useVoiceCallContext } from '../../context/VoiceCallContext';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -944,11 +944,22 @@ export function AgentSupportDashboard() {
     isMuted,
     callDuration,
     incomingCall,
+    activeCallChatId,
     acceptCall,
     rejectCall,
     hangUp,
     toggleMute,
-  } = useVoiceCall();
+  } = useVoiceCallContext();
+
+  const showSupportVoiceUI = useMemo(() => {
+    if (callState === 'ringing' && incomingCall) {
+      return incomingCall.chatId.startsWith('support:');
+    }
+    if (callState === 'calling' || callState === 'connected' || callState === 'ended') {
+      return activeCallChatId?.startsWith('support:') ?? false;
+    }
+    return true;
+  }, [callState, incomingCall, activeCallChatId]);
 
   const fmtDuration = (secs: number): string => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -1454,7 +1465,7 @@ export function AgentSupportDashboard() {
         </Box>
 
         {/* Incoming call banner */}
-        {callState === 'ringing' && incomingCall && (
+        {showSupportVoiceUI && callState === 'ringing' && incomingCall && (
           <Box
             sx={{
               px: 2,
@@ -1665,7 +1676,7 @@ export function AgentSupportDashboard() {
         )}
 
         {/* In-call status bar */}
-        {callState === 'connected' && (
+        {showSupportVoiceUI && callState === 'connected' && (
           <Box
             sx={{
               px: 1.5,

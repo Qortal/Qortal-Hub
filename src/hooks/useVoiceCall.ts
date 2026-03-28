@@ -26,7 +26,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { callAudioDevicesAtom, userInfoAtom } from '../atoms/global';
+import {
+  callAudioDevicesAtom,
+  infoSnackGlobalAtom,
+  openSnackGlobalAtom,
+  userInfoAtom,
+} from '../atoms/global';
+import i18n from '../i18n/i18n';
 import {
   applyCallAudioOutput,
   getUserAudioStreamForCall,
@@ -84,6 +90,8 @@ export interface UseVoiceCallReturn {
   isMuted: boolean;
   callDuration: number; // seconds
   incomingCall: IncomingCall | null;
+  /** chatId of the in-flight or active call (outbound set at initiate; inbound set on accept). */
+  activeCallChatId: string | null;
   initiateCall: (
     targetAddress: string,
     chatId: string,
@@ -145,12 +153,15 @@ const pcmCodec = {
 
 export function useVoiceCall(): UseVoiceCallReturn {
   const userInfo = useAtomValue(userInfoAtom);
+  const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
 
   const [callState, setCallState] = useState<CallState>('idle');
   const [audioMode, setAudioMode] = useState<AudioMode>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [activeCallChatId, setActiveCallChatId] = useState<string | null>(null);
   const [callAudioWireNonce, setCallAudioWireNonce] = useState(0);
 
   const callAudioDevices = useAtomValue(callAudioDevicesAtom);
@@ -329,6 +340,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       }
       callIdRef.current = null;
       audioModeRef.current = null;
+      setActiveCallChatId(null);
       updateCallState('ended');
       setAudioMode(null);
       setCallDuration(0);
@@ -865,6 +877,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
         case 'call:rejected': {
           if (callIdRef.current !== p.callId) break;
+          const rejectReason =
+            typeof p.reason === 'string' ? p.reason.trim() : '';
+          const message =
+            rejectReason === 'media unavailable'
+              ? i18n.t('core:voice_call.rejected_media')
+              : i18n.t('core:voice_call.rejected_declined');
+          setInfoSnackGlobal({ type: 'info', message });
+          setOpenSnackGlobal(true);
           endCall(false);
           break;
         }
@@ -884,7 +904,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
         }
 
         case 'call:hangup': {
-          if (callIdRef.current !== p.callId) break;
+          const hid = p.callId as string;
+          // Outbound / connected: callIdRef is set from initiate or accept.
+          // Inbound ringing: callIdRef is still null — match pending incoming instead.
+          const matchesOutboundOrActive = callIdRef.current === hid;
+          const matchesRingingIncoming =
+            callStateRef.current === 'ringing' &&
+            incomingCallRef.current?.callId === hid;
+          if (!matchesOutboundOrActive && !matchesRingingIncoming) break;
           endCall(false);
           break;
         }
@@ -923,6 +950,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
     startDurationTimer,
     updateCallState,
     updateIncomingCall,
+    setInfoSnackGlobal,
+    setOpenSnackGlobal,
   ]);
 
   // ── Register local address with call manager ───────────────────────────────
@@ -963,6 +992,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       });
 
       callIdRef.current = callId;
+      setActiveCallChatId(chatId);
       updateCallState('calling');
 
       const result = await (window as any).call?.initiate(
@@ -977,6 +1007,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
       if (!result?.success) {
         callIdRef.current = null;
+        setActiveCallChatId(null);
         resetPendingSignals();
         updateCallState('idle');
       }
@@ -991,12 +1022,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
     inboundSetupCallIdRef.current = incoming.callId;
     callIdRef.current = incoming.callId;
+    const acceptedChatId = incoming.chatId;
     updateIncomingCall(null);
 
     try {
       const setupOk = await setupInboundCall(incoming.callId);
       if (!setupOk) return;
 
+      setActiveCallChatId(acceptedChatId);
       updateCallState('connected');
       startDurationTimer();
 
@@ -1085,6 +1118,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     isMuted,
     callDuration,
     incomingCall,
+    activeCallChatId,
     initiateCall,
     acceptCall,
     rejectCall,

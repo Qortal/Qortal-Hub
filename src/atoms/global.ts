@@ -141,6 +141,17 @@ export const callAudioDevicesAtom = atomWithStorage<CallAudioDevicePrefs>(
   electronStorage as any
 );
 
+/** Persisted: DM friends keyed by Qortal address (includes publicKey for local use). */
+export const DM_FRIENDS_STORAGE_KEY = 'qortal_dm_friends';
+export type DmFriendStored = {
+  publicKey: string;
+  name?: string;
+  addedAt: number;
+};
+export const dmFriendsByAddressAtom = atomWithStorage<
+  Record<string, DmFriendStored>
+>(DM_FRIENDS_STORAGE_KEY, {}, electronStorage as any);
+
 /** Persisted: keys of notifications already "seen in app" (excluded from unread count), by address then notification key. Keys older than this are pruned. */
 export const NOTIFICATION_SEEN_IN_APP_STORAGE_KEY =
   'qortal_notification_seen_in_app';

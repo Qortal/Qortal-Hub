@@ -50,6 +50,8 @@ export const ELECTRON_PERSISTENT_ATOM_KEYS = {
   seenAllNotificationsByAddress: 'qortal_seen_all_notifications',
   /** Call mic/speaker prefs (see callAudioDevicesAtom). */
   callAudioDevices: 'qortal_call_audio_devices',
+  /** DM friends by address (see dmFriendsByAddressAtom). */
+  dmFriends: 'qortal_dm_friends',
 } as const;
 
 /** Populate in-memory cache from appStorage (call once when app mounts in Electron). */

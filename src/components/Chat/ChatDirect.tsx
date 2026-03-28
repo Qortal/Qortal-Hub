@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useAtomValue } from 'jotai';
-import { userInfoAtom, balanceAtom } from '../../atoms/global';
+import { useAtom, useAtomValue } from 'jotai';
+import {
+  userInfoAtom,
+  balanceAtom,
+  dmFriendsByAddressAtom,
+} from '../../atoms/global';
 import { ChatList } from './ChatList';
 import Tiptap from './TipTap';
 import './chat.css';
@@ -11,6 +15,7 @@ import {
   Box,
   ButtonBase,
   ClickAwayListener,
+  IconButton,
   InputAdornment,
   List,
   ListItem,
@@ -18,9 +23,16 @@ import {
   ListItemText,
   Paper,
   TextField,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
+import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
+import CallRoundedIcon from '@mui/icons-material/CallRounded';
+import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
+import PersonRemoveRoundedIcon from '@mui/icons-material/PersonRemoveRounded';
+import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
+import MicRoundedIcon from '@mui/icons-material/MicRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SendIcon from '@mui/icons-material/Send';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
@@ -53,6 +65,10 @@ import {
   TIME_MINUTES_2_IN_MILLISECONDS,
 } from '../../constants/constants.ts';
 import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { useVoiceCallContext } from '../../context/VoiceCallContext';
+import { buildDirectVoiceCallChatId } from '../../lib/call/directVoiceCallChatId';
+import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
+import { useIsOnline } from '../../hooks/usePresence';
 
 const uid = new ShortUniqueId({ length: 5 });
 
@@ -68,8 +84,78 @@ export const ChatDirect = ({
 }) => {
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
+  const [dmFriendsByAddress, setDmFriendsByAddress] = useAtom(
+    dmFriendsByAddressAtom
+  );
   const myName = userInfo?.name;
   const theme = useTheme();
+
+  const {
+    callState,
+    audioMode,
+    isMuted,
+    callDuration,
+    activeCallChatId,
+    initiateCall: initiateVoiceCall,
+    hangUp,
+    toggleMute,
+  } = useVoiceCallContext();
+
+  const peerOnline = useIsOnline(selectedDirect?.address);
+
+  const directVoiceChatId = useMemo(() => {
+    if (!myAddress || !selectedDirect?.address) return null;
+    return buildDirectVoiceCallChatId(myAddress, selectedDirect.address);
+  }, [myAddress, selectedDirect?.address]);
+
+  const callMatchesThisDirect = Boolean(
+    directVoiceChatId &&
+      ((callState === 'calling' && activeCallChatId === directVoiceChatId) ||
+        (callState === 'connected' && activeCallChatId === directVoiceChatId))
+  );
+
+  const signCallRequest = useCallback(
+    async (fields: Record<string, unknown>) => {
+      const res = await (window as any).sendMessage(
+        'signPresenceMessage',
+        fields,
+        10_000
+      );
+      return {
+        signature: res?.signature ?? '',
+        publicKey: userInfo?.publicKey ?? '',
+      };
+    },
+    [userInfo?.publicKey]
+  );
+
+  const handleStartDirectVoiceCall = useCallback(() => {
+    if (
+      !directVoiceChatId ||
+      !selectedDirect?.address ||
+      callState !== 'idle'
+    )
+      return;
+    if (!peerOnline) return;
+    initiateVoiceCall(
+      selectedDirect.address,
+      directVoiceChatId,
+      signCallRequest
+    );
+  }, [
+    callState,
+    directVoiceChatId,
+    initiateVoiceCall,
+    peerOnline,
+    selectedDirect?.address,
+    signCallRequest,
+  ]);
+
+  const fmtCallDuration = useCallback((secs: number): string => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  }, []);
   const { t } = useTranslation([
     'auth',
     'core',
@@ -588,6 +674,85 @@ export const ChatDirect = ({
     return nameSearchResults ?? [];
   }, [directToValue, nameSearchResults]);
 
+  const resolvedNewChatTarget = useMemo(() => {
+    const trimmed = directToValue.trim();
+    if (!trimmed) return null;
+    if (validateAddress(trimmed)) {
+      return { address: trimmed, name: trimmed };
+    }
+    const exact = (nameSearchResults || []).filter((r) => r.name === trimmed);
+    if (exact.length === 1) {
+      return { address: exact[0].address, name: exact[0].name };
+    }
+    return null;
+  }, [directToValue, nameSearchResults]);
+
+  const [friendActionBusy, setFriendActionBusy] = useState(false);
+
+  const handleToggleDmFriend = useCallback(
+    async (
+      address: string,
+      displayName: string | undefined,
+      isCurrentlyFriend: boolean
+    ) => {
+      if (!address || address === myAddress) return;
+      if (isCurrentlyFriend) {
+        setDmFriendsByAddress((prev) => {
+          if (!prev[address]) return prev;
+          const next = { ...prev };
+          delete next[address];
+          return next;
+        });
+        setInfoSnack({
+          type: 'success',
+          message: t('core:dm_friends.removed', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+        return;
+      }
+      setFriendActionBusy(true);
+      try {
+        const pk = await getPublicKey(address);
+        if (!pk) {
+          throw new Error('no public key');
+        }
+        let name = displayName;
+        if (!name || name === address) {
+          try {
+            const resolvedName = await getNameInfo(address);
+            name = resolvedName || address;
+          } catch {
+            name = address;
+          }
+        }
+        setDmFriendsByAddress((prev) => ({
+          ...prev,
+          [address]: { publicKey: pk, name, addedAt: Date.now() },
+        }));
+        setInfoSnack({
+          type: 'success',
+          message: t('core:dm_friends.added', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+      } catch {
+        setInfoSnack({
+          type: 'error',
+          message: t('core:dm_friends.add_failed', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+        });
+        setOpenSnack(true);
+      } finally {
+        setFriendActionBusy(false);
+      }
+    },
+    [myAddress, setDmFriendsByAddress, t]
+  );
+
   const handleSelectNameOrAddress = useCallback(
     async (option: NameOrAddressOption | null) => {
       if (!option) return;
@@ -902,7 +1067,162 @@ export const ChatDirect = ({
             {t('core:action.new.chat', { postProcess: 'capitalizeFirstChar' })}
           </Typography>
         )}
+        {!isNewChat && selectedDirect?.address && window.chat && (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flexShrink: 0,
+              gap: 1,
+              marginLeft: 'auto',
+            }}
+          >
+            <Tooltip
+              title={
+                peerOnline
+                  ? t('core:presence.peer_online_hint')
+                  : t('core:presence.peer_offline_hint')
+              }
+            >
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  flexShrink: 0,
+                  gap: 0.5,
+                }}
+              >
+                <Box
+                  sx={{
+                    backgroundColor: peerOnline
+                      ? '#44b700'
+                      : theme.palette.action.disabled,
+                    borderRadius: '50%',
+                    flexShrink: 0,
+                    height: 8,
+                    width: 8,
+                  }}
+                />
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: peerOnline ? 'success.main' : 'text.disabled',
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: 0.2,
+                  }}
+                >
+                  {peerOnline
+                    ? t('core:presence.online')
+                    : t('core:presence.offline')}
+                </Typography>
+              </Box>
+            </Tooltip>
+            <Tooltip
+              title={
+                dmFriendsByAddress[selectedDirect.address]
+                  ? t('core:dm_friends.remove_friend', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : t('core:dm_friends.add_friend', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+              }
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={friendActionBusy}
+                  onClick={() =>
+                    handleToggleDmFriend(
+                      selectedDirect.address,
+                      selectedDirect.name,
+                      Boolean(dmFriendsByAddress[selectedDirect.address])
+                    )
+                  }
+                  sx={{ color: 'text.secondary' }}
+                >
+                  {dmFriendsByAddress[selectedDirect.address] ? (
+                    <PersonRemoveRoundedIcon sx={{ fontSize: 20 }} />
+                  ) : (
+                    <PersonAddRoundedIcon sx={{ fontSize: 20 }} />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip
+              title={
+                callState === 'connected'
+                  ? 'In call'
+                  : callState === 'calling'
+                    ? ''
+                    : callState !== 'idle'
+                      ? ''
+                      : !peerOnline
+                        ? t('core:presence.call_offline_tooltip')
+                        : 'Start voice call'
+              }
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  disabled={
+                    !(
+                      (callState === 'idle' && peerOnline) ||
+                      callState === 'connected'
+                    )
+                  }
+                  onClick={
+                    callState === 'connected' ? hangUp : handleStartDirectVoiceCall
+                  }
+                  sx={{
+                    color:
+                      callState === 'connected' ? '#ef4444' : 'text.secondary',
+                    '&:hover': {
+                      color:
+                        callState === 'connected' ? '#dc2626' : 'text.primary',
+                    },
+                    '&.Mui-disabled': {
+                      color: theme.palette.action.disabled,
+                    },
+                  }}
+                >
+                  {callState === 'connected' ? (
+                    <CallEndRoundedIcon sx={{ fontSize: 20 }} />
+                  ) : (
+                    <CallRoundedIcon sx={{ fontSize: 20 }} />
+                  )}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </Box>
+        )}
       </Box>
+
+      {!isNewChat && callMatchesThisDirect && callState === 'calling' && (
+        <Box
+          sx={{
+            alignItems: 'center',
+            backgroundColor: 'action.selected',
+            display: 'flex',
+            flexShrink: 0,
+            gap: 1.5,
+            px: 2,
+            py: 1,
+          }}
+        >
+          <CircularProgress size={14} thickness={5} />
+          <Typography
+            variant="body2"
+            sx={{ flex: 1, fontSize: 12, fontWeight: 600 }}
+          >
+            Calling…
+          </Typography>
+          <IconButton size="small" onClick={hangUp} sx={{ color: '#ef4444' }}>
+            <CallEndRoundedIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      )}
 
       {isNewChat && (
         <>
@@ -958,11 +1278,72 @@ export const ChatDirect = ({
                       />
                     </InputAdornment>
                   ),
-                  endAdornment: nameSearchLoading ? (
-                    <InputAdornment position="end">
-                      <CircularProgress size={20} />
-                    </InputAdornment>
-                  ) : null,
+                  endAdornment:
+                    (resolvedNewChatTarget &&
+                      resolvedNewChatTarget.address !== myAddress) ||
+                    nameSearchLoading ? (
+                      <InputAdornment
+                        position="end"
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 0.5,
+                          maxHeight: 40,
+                        }}
+                      >
+                        {resolvedNewChatTarget &&
+                          resolvedNewChatTarget.address !== myAddress && (
+                            <Tooltip
+                              title={
+                                dmFriendsByAddress[
+                                  resolvedNewChatTarget.address
+                                ]
+                                  ? t('core:dm_friends.remove_friend', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })
+                                  : t('core:dm_friends.add_friend', {
+                                      postProcess: 'capitalizeFirstChar',
+                                    })
+                              }
+                            >
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  tabIndex={-1}
+                                  disabled={friendActionBusy}
+                                  onClick={() =>
+                                    handleToggleDmFriend(
+                                      resolvedNewChatTarget.address,
+                                      resolvedNewChatTarget.name,
+                                      Boolean(
+                                        dmFriendsByAddress[
+                                          resolvedNewChatTarget.address
+                                        ]
+                                      )
+                                    )
+                                  }
+                                  sx={{ color: 'text.secondary' }}
+                                >
+                                  {dmFriendsByAddress[
+                                    resolvedNewChatTarget.address
+                                  ] ? (
+                                    <PersonRemoveRoundedIcon
+                                      sx={{ fontSize: 22 }}
+                                    />
+                                  ) : (
+                                    <PersonAddRoundedIcon
+                                      sx={{ fontSize: 22 }}
+                                    />
+                                  )}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          )}
+                        {nameSearchLoading ? (
+                          <CircularProgress size={20} />
+                        ) : null}
+                      </InputAdornment>
+                    ) : null,
                   sx: {
                     backgroundColor: theme.palette.background.paper,
                     borderRadius: '14px',
@@ -1104,6 +1485,129 @@ export const ChatDirect = ({
             </Typography>
           </Box>
         </>
+      )}
+
+      {!isNewChat && callMatchesThisDirect && callState === 'connected' && (
+        <Box
+          sx={{
+            alignItems: 'center',
+            backgroundColor:
+              theme.palette.mode === 'dark'
+                ? 'rgba(34,197,94,0.12)'
+                : 'rgba(34,197,94,0.08)',
+            borderRadius: 1.5,
+            display: 'flex',
+            flexShrink: 0,
+            flexWrap: 'wrap',
+            gap: 1,
+            mb: 1,
+            mx: 2,
+            mt: 1,
+            px: 2,
+            py: 0.75,
+          }}
+        >
+          <Box
+            sx={{
+              backgroundColor: '#22c55e',
+              borderRadius: '50%',
+              flexShrink: 0,
+              height: 8,
+              width: 8,
+            }}
+          />
+          <Typography
+            variant="caption"
+            sx={{
+              color: 'success.main',
+              flex: 1,
+              fontSize: 11,
+              fontWeight: 600,
+            }}
+          >
+            In call — {fmtCallDuration(callDuration)}
+          </Typography>
+          {audioMode === 'media' && (
+            <Typography
+              variant="caption"
+              sx={{
+                backgroundColor: '#22c55e',
+                borderRadius: 1,
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 0.3,
+                px: 0.75,
+                py: 0.2,
+              }}
+            >
+              WebRTC
+            </Typography>
+          )}
+          {audioMode === 'datachannel' && (
+            <Typography
+              variant="caption"
+              sx={{
+                backgroundColor: 'primary.main',
+                borderRadius: 1,
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 0.3,
+                px: 0.75,
+                py: 0.2,
+              }}
+            >
+              DataChannel
+            </Typography>
+          )}
+          {audioMode === 'relay' && (
+            <Typography
+              variant="caption"
+              sx={{
+                backgroundColor: '#f59e0b',
+                borderRadius: 1,
+                color: '#fff',
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 0.3,
+                px: 0.75,
+                py: 0.2,
+              }}
+            >
+              Relay
+            </Typography>
+          )}
+          <CallAudioSettingsButton />
+          <IconButton
+            size="small"
+            onClick={toggleMute}
+            sx={{
+              color: isMuted ? 'error.main' : 'text.secondary',
+              height: 26,
+              width: 26,
+            }}
+          >
+            {isMuted ? (
+              <MicOffRoundedIcon sx={{ fontSize: 15 }} />
+            ) : (
+              <MicRoundedIcon sx={{ fontSize: 15 }} />
+            )}
+          </IconButton>
+          <IconButton
+            size="small"
+            onClick={hangUp}
+            sx={{
+              backgroundColor: '#ef4444',
+              color: '#fff',
+              height: 26,
+              width: 26,
+              '&:hover': { backgroundColor: '#dc2626' },
+            }}
+          >
+            <CallEndRoundedIcon sx={{ fontSize: 15 }} />
+          </IconButton>
+        </Box>
       )}
 
       <ChatList

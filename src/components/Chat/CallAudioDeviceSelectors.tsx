@@ -17,13 +17,16 @@ import {
 import type { SelectChangeEvent } from '@mui/material/Select';
 import SettingsVoiceRoundedIcon from '@mui/icons-material/SettingsVoiceRounded';
 import { useAtom } from 'jotai';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
+import type { SvgIconProps } from '@mui/material/SvgIcon';
 import { callAudioDevicesAtom } from '../../atoms/global';
 import { ensureMicPermissionForLabels, listAudioDevices } from '../../lib/call/audioDevices';
 
 type Props = {
   /** Match surrounding IconButton size in call toolbars */
   iconButtonSize?: 'small' | 'medium' | 'large';
+  /** Toolbar glyph; defaults to voice-settings icon */
+  IconComponent?: ComponentType<SvgIconProps>;
 };
 
 /** Group/support call floaters use z-index 1400; modal defaults to 1300 and would sit underneath. */
@@ -35,7 +38,10 @@ const CALL_AUDIO_MENU_Z_INDEX = 1700;
  * In-call audio I/O: icon opens a dialog. Refreshes device lists every time the dialog
  * opens so plugging a mic in mid-session works without rejoining.
  */
-export function CallAudioSettingsButton({ iconButtonSize = 'small' }: Props) {
+export function CallAudioSettingsButton({
+  iconButtonSize = 'small',
+  IconComponent = SettingsVoiceRoundedIcon,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useAtom(callAudioDevicesAtom);
   const [inputs, setInputs] = useState<MediaDeviceInfo[]>([]);
@@ -120,7 +126,7 @@ export function CallAudioSettingsButton({ iconButtonSize = 'small' }: Props) {
           aria-label="Call audio settings"
           sx={{ p: iconButtonSize === 'small' ? 0.5 : 1 }}
         >
-          <SettingsVoiceRoundedIcon sx={{ fontSize: iconButtonSize === 'small' ? 18 : 22 }} />
+          <IconComponent sx={{ fontSize: iconButtonSize === 'small' ? 18 : 22 }} />
         </IconButton>
       </Tooltip>
 

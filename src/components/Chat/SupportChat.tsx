@@ -47,7 +47,7 @@ import { supportChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, SUPPORT_ADDRESSES, decryptAttachmentFromSupport } from '../../hooks/useSupportChat';
 import { useIsOnline } from '../../hooks/usePresence';
 import ImageUploader from '../../common/ImageUploader';
-import { useVoiceCall } from '../../hooks/useVoiceCall';
+import { useVoiceCallContext } from '../../context/VoiceCallContext';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -920,12 +920,23 @@ export function SupportChat() {
     isMuted,
     callDuration,
     incomingCall,
+    activeCallChatId,
     initiateCall: initiateVoiceCall,
     acceptCall,
     rejectCall,
     hangUp,
     toggleMute,
-  } = useVoiceCall();
+  } = useVoiceCallContext();
+
+  const showSupportVoiceUI = useMemo(() => {
+    if (callState === 'ringing' && incomingCall) {
+      return incomingCall.chatId.startsWith('support:');
+    }
+    if (callState === 'calling' || callState === 'connected' || callState === 'ended') {
+      return activeCallChatId?.startsWith('support:') ?? false;
+    }
+    return true;
+  }, [callState, incomingCall, activeCallChatId]);
 
   const fmtDuration = (secs: number): string => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -1333,7 +1344,7 @@ export function SupportChat() {
         </Tooltip>
 
         {/* Call button */}
-        {isReady && !isAgent && (
+        {showSupportVoiceUI && isReady && !isAgent && (
           <Tooltip
             title={
               callState === 'connected'
@@ -1373,7 +1384,7 @@ export function SupportChat() {
       </Box>
 
       {/* ── Incoming call banner ────────────────────────────────────────── */}
-      {callState === 'ringing' && incomingCall && (
+      {showSupportVoiceUI && callState === 'ringing' && incomingCall && (
         <Box
           sx={{
             px: 2,
@@ -1419,7 +1430,7 @@ export function SupportChat() {
       )}
 
       {/* ── "Calling…" banner ───────────────────────────────────────────── */}
-      {callState === 'calling' && (
+      {showSupportVoiceUI && callState === 'calling' && (
         <Box
           sx={{
             px: 2,
@@ -1614,7 +1625,7 @@ export function SupportChat() {
       {/* ── Input row ───────────────────────────────────────────────────── */}
 
       {/* In-call status bar */}
-      {callState === 'connected' && (
+      {showSupportVoiceUI && callState === 'connected' && (
         <Box
           sx={{
             px: 2,

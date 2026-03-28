@@ -533,5 +533,24 @@
     "wallet_other": "wallets"
   },
   "website": "website",
-  "welcome": "welcome"
+  "welcome": "welcome",
+  "dm_friends": {
+    "add_friend": "Add friend",
+    "remove_friend": "Remove friend",
+    "friend_badge_aria": "Friend",
+    "added": "Added to friends",
+    "removed": "Removed from friends",
+    "add_failed": "Could not add friend — public key unavailable"
+  },
+  "presence": {
+    "online": "Online",
+    "offline": "Offline",
+    "peer_online_hint": "On the network — voice call available",
+    "peer_offline_hint": "Not on the network — voice call unavailable",
+    "call_offline_tooltip": "Contact is offline — voice call unavailable"
+  },
+  "voice_call": {
+    "rejected_declined": "The other person declined the call.",
+    "rejected_media": "The call ended — their microphone may be unavailable."
+  }
 }

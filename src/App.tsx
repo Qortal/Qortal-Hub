@@ -44,6 +44,8 @@ import {
 
 import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
 import { SupportChat, SUPPORT_ADDRESSES } from './components/Chat/SupportChat';
+import { VoiceCallProvider } from './context/VoiceCallContext';
+import { DirectVoiceCallGlobalOverlay } from './components/Chat/DirectVoiceCallGlobalOverlay';
 import { AgentSupportDashboard } from './components/Chat/AgentSupportDashboard';
 import {
   GroupSupportChat,
@@ -1031,52 +1033,55 @@ function App() {
 
         {extState === 'authenticated' && isMainWindow && (
           <GroupCallProvider>
-            <Suspense fallback={<Loader />}>
-              <LazyAuthenticatedShell
-                balance={balance}
-                desktopViewMode={desktopViewMode}
-                isMain={true}
-                isOpenDrawerProfile={isOpenDrawerProfile}
-                logoutFunc={logoutFunc}
-                myAddress={address}
-                setDesktopViewMode={setDesktopViewMode}
-                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-                userInfo={userInfo}
-                rawWallet={rawWallet}
-                qortBalanceLoading={qortBalanceLoading}
-                setOpenSnack={setOpenSnack}
-                setInfoSnack={setInfoSnack}
-                onRefreshBalance={getBalanceAndUserInfoFunc}
-                onOpenSendQort={onOpenSendQort}
-                onOpenRegisterName={onOpenRegisterName}
-                extState={extState}
-                isMainWindow={isMainWindow}
-                onOpenSettings={onOpenSettings}
-                onOpenDrawerLookup={onOpenDrawerLookup}
-                onOpenWalletsApp={onOpenWalletsApp}
-                onOpenDrawerProfile={onOpenDrawerProfile}
-                getUserInfo={getUserInfo}
-                onOpenMinting={onOpenMinting}
-                showTutorial={showTutorial}
-                onBackupWallet={onBackupWallet}
-              />
-            </Suspense>
+            <VoiceCallProvider>
+              <Suspense fallback={<Loader />}>
+                <LazyAuthenticatedShell
+                  balance={balance}
+                  desktopViewMode={desktopViewMode}
+                  isMain={true}
+                  isOpenDrawerProfile={isOpenDrawerProfile}
+                  logoutFunc={logoutFunc}
+                  myAddress={address}
+                  setDesktopViewMode={setDesktopViewMode}
+                  setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+                  userInfo={userInfo}
+                  rawWallet={rawWallet}
+                  qortBalanceLoading={qortBalanceLoading}
+                  setOpenSnack={setOpenSnack}
+                  setInfoSnack={setInfoSnack}
+                  onRefreshBalance={getBalanceAndUserInfoFunc}
+                  onOpenSendQort={onOpenSendQort}
+                  onOpenRegisterName={onOpenRegisterName}
+                  extState={extState}
+                  isMainWindow={isMainWindow}
+                  onOpenSettings={onOpenSettings}
+                  onOpenDrawerLookup={onOpenDrawerLookup}
+                  onOpenWalletsApp={onOpenWalletsApp}
+                  onOpenDrawerProfile={onOpenDrawerProfile}
+                  getUserInfo={getUserInfo}
+                  onOpenMinting={onOpenMinting}
+                  showTutorial={showTutorial}
+                  onBackupWallet={onBackupWallet}
+                />
+              </Suspense>
 
-            {/* P2P support chat — agents see the dashboard, regular users see SupportChat */}
-            {SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
-              <AgentSupportDashboard />
-            ) : (
-              <SupportChat />
-            )}
+              {/* P2P support chat — agents see the dashboard, regular users see SupportChat */}
+              {SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
+                <AgentSupportDashboard />
+              ) : (
+                <SupportChat />
+              )}
 
-            {/* Group voice call — parallel system using GROUP_SUPPORT_ADDRESSES */}
-            {/* {GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
+              {/* Group voice call — parallel system using GROUP_SUPPORT_ADDRESSES */}
+              {/* {GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
               <GroupAgentDashboard />
             ) : (
               <GroupSupportChat />
             )} */}
 
-            <QortalGroupVoiceCallStage />
+              <QortalGroupVoiceCallStage />
+              <DirectVoiceCallGlobalOverlay />
+            </VoiceCallProvider>
           </GroupCallProvider>
         )}
 
