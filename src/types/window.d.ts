@@ -349,6 +349,7 @@ declare global {
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
     };
     __qortalGCallExportDiagnostics?: () => Promise<void>;
+    __qortalGCallPerfStats?: () => unknown;
   }
 
   // ── P2P Chat shared types ──────────────────────────────────────────────────

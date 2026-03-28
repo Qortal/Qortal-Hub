@@ -113,6 +113,10 @@ import {
   type GcallDiagExportContext,
 } from '../lib/group-call/gcall-diagnostics';
 import {
+  GcallPerfCollector,
+  readGcallPerfEnabled,
+} from '../lib/group-call/gcall-perf';
+import {
   groupCallLocalConnectionHintFromLevel,
   rawConnectionStressLevel,
   type GroupCallLocalConnectionHint,
@@ -362,6 +366,7 @@ const RELAY_INGRESS_PEER = '__relay__';
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
 const WINDOW_METRICS_INTERVAL_MS = 60_000;
+const GCALL_PERF_TICK_BUDGET_WARN_MS = 6;
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (matches main process). */
 const GCALL_KEY_MESSAGE_VERSION = 3;
 /** After repeated key-recovery failure, ask main to bump media session generation. */
@@ -377,6 +382,12 @@ const KEY_RECOVERY_REJOIN_DELAY_MS = 8_000;
 /** Schedule key-recovery check after connect if we still have no room key (self-healing). */
 const CONNECTED_NO_KEY_RECOVERY_DELAY_MS = 8_000;
 type DataChannelProfile = 'low-latency' | 'recovery';
+const GCALL_WASM_FEC_EMPTY_STATS = Object.freeze({
+  plcFrames: 0,
+  fecAttempts: 0,
+  fecSuccessCoarse: 0,
+});
+const GCALL_EMPTY_PCM = new Float32Array(0);
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -409,6 +420,13 @@ function isMicCaptureDebugEnabled(): boolean {
   } catch {
     return false;
   }
+}
+
+function percentileSample(values: readonly number[], pct: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.max(0, Math.ceil(sorted.length * pct) - 1);
+  return sorted[idx] ?? 0;
 }
 
 /** Verbose mic pipeline logs when qortal:gcall-mic-debug=1 or qortal:gcall-debug=1 */
@@ -1393,6 +1411,9 @@ export function useGroupVoiceCall(uiActive = false) {
     null
   );
   const uiActiveRef = useRef(uiActive);
+  const gcallPerfEnabledRef = useRef(readGcallPerfEnabled());
+  const gcallPerfRef = useRef(new GcallPerfCollector());
+  const tickBudgetBreachesRef = useRef<number[]>([]);
 
   // IPC unsubscribe function
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -1536,6 +1557,55 @@ export function useGroupVoiceCall(uiActive = false) {
     typeof setTimeout
   > | null>(null);
   const sendEncodedFrameRef = useRef<(opusFrame: Uint8Array) => void>(() => {});
+
+  const perfEnabled = gcallPerfEnabledRef.current;
+  const recordPerfDuration = useCallback((name: string, durationMs: number) => {
+    if (!perfEnabled) return;
+    gcallPerfRef.current.recordDuration(name, durationMs);
+  }, [perfEnabled]);
+  const recordPerfDurationPerSource = useCallback(
+    (name: string, durationMs: number, activeSourceCount: number) => {
+      if (!perfEnabled) return;
+      gcallPerfRef.current.recordDurationPerSource(
+        name,
+        durationMs,
+        activeSourceCount
+      );
+    },
+    [perfEnabled]
+  );
+  const incrementPerfCounter = useCallback(
+    (name: string, inc = 1) => {
+      if (!perfEnabled) return;
+      gcallPerfRef.current.incrementCounter(name, inc);
+    },
+    [perfEnabled]
+  );
+  const recordPerfLongTask = useCallback(
+    (entry: PerformanceEntry) => {
+      if (!perfEnabled) return;
+      gcallPerfRef.current.recordLongTask({
+        startTime: entry.startTime,
+        duration: entry.duration,
+        name: entry.name,
+      });
+    },
+    [perfEnabled]
+  );
+  const snapshotGcallPerfStats = useCallback(() => {
+    const breaches = tickBudgetBreachesRef.current;
+    return gcallPerfRef.current.snapshot({
+      roomState: roomStateRef.current,
+      roomId: roomIdRef.current || null,
+      chatId: chatIdRef.current || null,
+      participants: participantsRef.current.size,
+      activeSources: activeJitterSourcesRef.current.size,
+      tickBudgetMs: GCALL_PERF_TICK_BUDGET_WARN_MS,
+      tickBudgetBreachCount: breaches.length,
+      tickBudgetBreachP95Ms: percentileSample(breaches, 0.95),
+      tickBudgetBreachMaxMs: breaches.length > 0 ? Math.max(...breaches) : 0,
+    });
+  }, []);
 
   // ── Election ──────────────────────────────────────────────────────────────
 
@@ -2168,11 +2238,11 @@ export function useGroupVoiceCall(uiActive = false) {
     [teardownPlaybackMixGraph]
   );
 
-  const tickPlaybackMixTargets = useCallback(() => {
+  const tickPlaybackMixTargets = useCallback((): boolean => {
     const ctx = audioContextRef.current;
     const mixBus = mixBusGainRef.current;
     const compressor = masterCompressorRef.current;
-    if (!ctx || !mixBus || !compressor) return;
+    if (!ctx || !mixBus || !compressor) return false;
 
     const perfNow = performance.now();
     if (
@@ -2182,9 +2252,10 @@ export function useGroupVoiceCall(uiActive = false) {
         GAIN_UPDATE_CADENCE_MS
       )
     ) {
-      return;
+      return false;
     }
     lastAudioMixUpdateAtRef.current = perfNow;
+    incrementPerfCounter('mixActualUpdates');
 
     const wallNow = Date.now();
     const recentSpeakerEstimate = computeRecentSpeakerEstimate(
@@ -2229,7 +2300,8 @@ export function useGroupVoiceCall(uiActive = false) {
       OVERLOAD_REDUCTION_THRESHOLD_DB,
       HEAVY_REDUCTION_THRESHOLD_DB
     );
-  }, []);
+    return true;
+  }, [incrementPerfCounter]);
 
   const recordInterArrivalForPlayout = useCallback(
     (sourceAddr: string, receivedAt = performance.now()) => {
@@ -2325,8 +2397,15 @@ export function useGroupVoiceCall(uiActive = false) {
     [buildWindowDiagnosticSources, evaluateWindowMediaRecovery, userInfo?.address]
   );
 
-  const tickAdaptivePlayoutTargets = useCallback(() => {
+  const tickAdaptivePlayoutTargets = useCallback((): number => {
     const now = performance.now();
+    const wallNow = Date.now();
+    const playoutBoostMs =
+      wallNow < globalRecoveryUntilMsRef.current
+        ? ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS
+        : 0;
+    let postCount = 0;
+    incrementPerfCounter('adaptiveRuns');
     for (const addr of activeJitterSourcesRef.current) {
       const node = playbackWorkletsRef.current.get(addr);
       if (!node) continue;
@@ -2338,10 +2417,6 @@ export function useGroupVoiceCall(uiActive = false) {
       lastDrainMissedRef.current.set(addr, 0);
       const lossPenalty = Math.min(ADAPTIVE_LOSS_MS_CAP, missed * 2);
 
-      const playoutBoostMs =
-        Date.now() < globalRecoveryUntilMsRef.current
-          ? ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS
-          : 0;
       const ideal = computeAdaptiveIdealTargetMs({
         baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
         minTargetMs: ADAPTIVE_MIN_TARGET_MS,
@@ -2377,10 +2452,15 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       node.port.postMessage({ type: 'target', targetPlayoutMs: smooth });
+      postCount++;
       lastSentPlayoutTargetRef.current.set(addr, smooth);
       lastPlayoutTargetPostAtRef.current.set(addr, now);
     }
-  }, []);
+    if (postCount > 0) {
+      incrementPerfCounter('adaptivePosts', postCount);
+    }
+    return postCount;
+  }, [incrementPerfCounter]);
 
   const flushMetrics = useCallback(() => {
     recomputeAdaptiveNetworkMode();
@@ -2651,6 +2731,32 @@ export function useGroupVoiceCall(uiActive = false) {
       delete window.__qortalGCallExportDiagnostics;
     };
   }, []);
+
+  useEffect(() => {
+    if (!perfEnabled) return;
+    window.__qortalGCallPerfStats = () => snapshotGcallPerfStats();
+    return () => {
+      delete window.__qortalGCallPerfStats;
+    };
+  }, [perfEnabled, snapshotGcallPerfStats]);
+
+  useEffect(() => {
+    if (!perfEnabled || typeof PerformanceObserver === 'undefined') return;
+    let observer: PerformanceObserver | null = null;
+    try {
+      observer = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          recordPerfLongTask(entry);
+        }
+      });
+      observer.observe({ entryTypes: ['longtask'] });
+    } catch {
+      observer = null;
+    }
+    return () => {
+      observer?.disconnect();
+    };
+  }, [perfEnabled, recordPerfLongTask]);
 
   const scheduleRelayMetricsFlush = useCallback(() => {
     if (relayMetricsFlushTimerRef.current) return;
@@ -4980,6 +5086,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const teardownCapturePipelineRefs = useCallback(() => {
     teardownPlaybackMixGraph();
     if (jitterSchedulerNodeRef.current) {
+      incrementPerfCounter('schedulerNodeTeardowns');
       try {
         jitterSchedulerNodeRef.current.port.onmessage = null;
         jitterSchedulerNodeRef.current.disconnect();
@@ -5347,6 +5454,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
         // Jitter drain cadence tied to audio render clock (not setInterval).
         if (!jitterSchedulerNodeRef.current) {
+          incrementPerfCounter('schedulerNodeCreates');
           const jitterSched = new AudioWorkletNode(
             ctx,
             'gcall-jitter-scheduler'
@@ -5355,7 +5463,13 @@ export function useGroupVoiceCall(uiActive = false) {
             ev: MessageEvent<{ type?: string }>
           ) => {
             if (ev.data?.type !== 'tick') return;
+            const handlerStartedAt = performance.now();
+            incrementPerfCounter('schedulerMessages');
             runJitterDrainTickRef.current();
+            recordPerfDuration(
+              'schedulerHandlerMs',
+              performance.now() - handlerStartedAt
+            );
           };
           const jitterSchedGain = ctx.createGain();
           jitterSchedGain.gain.value = 0.0001;
@@ -5478,7 +5592,7 @@ export function useGroupVoiceCall(uiActive = false) {
       buffered.shift();
     }
     buffered.push(new Uint8Array(opusFrame));
-  }, []);
+  }, [incrementPerfCounter]);
 
   const flushKeyDistributionBufferedFrames = useCallback(() => {
     if (keyDistributionPendingRef.current) return;
@@ -5798,6 +5912,7 @@ export function useGroupVoiceCall(uiActive = false) {
           inactiveSpeakerGain: INACTIVE_SPEAKER_GAIN,
         });
         playNode.port.onmessage = (e: MessageEvent) => {
+          const handlerStartedAt = performance.now();
           const d = e.data as {
             type?: string;
             sourceAddr?: string;
@@ -5811,6 +5926,7 @@ export function useGroupVoiceCall(uiActive = false) {
             playoutStarted?: boolean;
           };
           if (d?.type !== 'gcallPlayoutMetrics') return;
+          incrementPerfCounter('playoutMetricMessages');
           if (typeof d.bufferedMs !== 'number') return;
           if (!d.playoutStarted) return;
           if (!isSourcePlayoutActive(sourceAddr)) return;
@@ -5830,6 +5946,10 @@ export function useGroupVoiceCall(uiActive = false) {
           if (d.concealmentUsed) {
             metricsRef.current.recordConcealmentTick(1, sourceAddr);
           }
+          recordPerfDuration(
+            'playoutMetricHandlerMs',
+            performance.now() - handlerStartedAt
+          );
         };
         playNode.connect(speakerGain);
         speakerGain.connect(mixBus);
@@ -5872,7 +5992,7 @@ export function useGroupVoiceCall(uiActive = false) {
       recordStats = true
     ) => {
       const playNode = playbackWorkletsRef.current.get(sourceAddr);
-      const queue = [...(wasmFecDeferredPcmRef.current.get(sourceAddr) ?? [])];
+      const queue = wasmFecDeferredPcmRef.current.get(sourceAddr) ?? [];
       wasmFecDeferredPcmRef.current.delete(sourceAddr);
 
       if (frameCount > 0) {
@@ -6048,7 +6168,9 @@ export function useGroupVoiceCall(uiActive = false) {
   // Forwarding/gating run after decrypt (worker RTT + queue depth vs old sync header parse).
   const handleIncomingAudioPacket = useCallback(
     (data: ArrayBuffer, fromAddress: string) => {
+      const handlerStartedAt = performance.now();
       if (!roomKeyRef.current) return;
+      incrementPerfCounter('incomingAudioPacketHandlers');
       const startedAt = performance.now();
       const receivedAt = startedAt;
       const ingressPeerAddress = fromAddress || RELAY_INGRESS_PEER;
@@ -6072,6 +6194,10 @@ export function useGroupVoiceCall(uiActive = false) {
           { type: 'decrypt', id, buffer: workerBuffer },
           [workerBuffer]
         );
+        recordPerfDuration(
+          'incomingAudioPacketHandlerMs',
+          performance.now() - handlerStartedAt
+        );
         return;
       }
 
@@ -6084,8 +6210,18 @@ export function useGroupVoiceCall(uiActive = false) {
         receivedAt,
         ingressPeerAddress
       );
+      recordPerfDuration(
+        'incomingAudioPacketHandlerMs',
+        performance.now() - handlerStartedAt
+      );
     },
-    [applyPostDecryptList, ensurePendingDecryptCap, sweepStalePendingDecrypts]
+    [
+      applyPostDecryptList,
+      ensurePendingDecryptCap,
+      incrementPerfCounter,
+      recordPerfDuration,
+      sweepStalePendingDecrypts,
+    ]
   );
 
   handleIncomingAudioPacketRef.current = handleIncomingAudioPacket;
@@ -6095,18 +6231,32 @@ export function useGroupVoiceCall(uiActive = false) {
    *  ring absorb variance. */
   const runJitterDrainTick = useCallback(() => {
     const tickStartedAt = performance.now();
+    const activeSourceCount = activeJitterSourcesRef.current.size;
+    let prefetchMs = 0;
+    let drainMs = 0;
+    let adaptiveMs = 0;
+    let mixMs = 0;
+    let reactMs = 0;
+    incrementPerfCounter('drainTicks');
     if (gcallWasmFecActiveRef.current) {
+      const prefetchStartedAt = performance.now();
       wasmFecPcmPostedThisTickRef.current.clear();
       const prefetchAddrs = new Set([
         ...wasmFecDeferredPcmRef.current.keys(),
         ...activeJitterSourcesRef.current,
       ]);
-      const emptyStats = { plcFrames: 0, fecAttempts: 0, fecSuccessCoarse: 0 };
-      const emptyPcm = new Float32Array(0);
       for (const addr of prefetchAddrs) {
-        postWasmFecBatchToPlayout(addr, emptyPcm, 0, emptyStats, false);
+        postWasmFecBatchToPlayout(
+          addr,
+          GCALL_EMPTY_PCM,
+          0,
+          GCALL_WASM_FEC_EMPTY_STATS,
+          false
+        );
       }
+      prefetchMs = performance.now() - prefetchStartedAt;
     }
+    const drainStartedAt = performance.now();
     for (const addr of [...activeJitterSourcesRef.current]) {
       const jb = jitterMapRef.current.get(addr);
       if (!jb || !jb.hasReadyFrame()) {
@@ -6214,13 +6364,20 @@ export function useGroupVoiceCall(uiActive = false) {
         emptyJitterDrainTicksRef.current.set(addr, 0);
       }
     }
+    drainMs = performance.now() - drainStartedAt;
 
+    const adaptiveStartedAt = performance.now();
     tickAdaptivePlayoutTargets();
+    adaptiveMs = performance.now() - adaptiveStartedAt;
+
+    const mixStartedAt = performance.now();
     tickPlaybackMixTargets();
+    mixMs = performance.now() - mixStartedAt;
 
     // Throttle React state updates to ~200ms (10 scheduler ticks ≈ 10 × 20ms).
     jitterDrainReactTickCountRef.current++;
     if (jitterDrainReactTickCountRef.current >= 10) {
+      const reactStartedAt = performance.now();
       jitterDrainReactTickCountRef.current = 0;
       const tickNow = Date.now();
       const speakers = collectActiveSpeakers(
@@ -6233,16 +6390,54 @@ export function useGroupVoiceCall(uiActive = false) {
         sameAddressList(prev, speakers) ? prev : speakers
       );
       setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
+      reactMs = performance.now() - reactStartedAt;
     }
-    metricsRef.current.recordJitterTickDuration(
-      performance.now() - tickStartedAt
+    const tickTotalMs = performance.now() - tickStartedAt;
+    metricsRef.current.recordJitterTickDuration(tickTotalMs);
+    recordPerfDuration('tickTotalMs', tickTotalMs);
+    recordPerfDuration('drainPrefetchMs', prefetchMs);
+    recordPerfDuration('drainLoopMs', drainMs);
+    recordPerfDurationPerSource(
+      'drainLoopPerSourceMs',
+      drainMs,
+      activeSourceCount
     );
+    recordPerfDuration('adaptiveTickMs', adaptiveMs);
+    recordPerfDurationPerSource(
+      'adaptiveTickPerSourceMs',
+      adaptiveMs,
+      activeSourceCount
+    );
+    recordPerfDuration('mixTickMs', mixMs);
+    recordPerfDurationPerSource('mixTickPerSourceMs', mixMs, activeSourceCount);
+    if (reactMs > 0) {
+      recordPerfDuration('reactTickMs', reactMs);
+      recordPerfDurationPerSource(
+        'reactTickPerSourceMs',
+        reactMs,
+        activeSourceCount
+      );
+      incrementPerfCounter('reactSpeakerUpdates');
+    }
+    if (tickTotalMs >= GCALL_PERF_TICK_BUDGET_WARN_MS) {
+      tickBudgetBreachesRef.current.push(tickTotalMs);
+      if (tickBudgetBreachesRef.current.length > 512) {
+        tickBudgetBreachesRef.current.splice(
+          0,
+          tickBudgetBreachesRef.current.length - 512
+        );
+      }
+      incrementPerfCounter('tickBudgetBreaches');
+    }
   }, [
     enqueueWasmFecDecode,
     getSourceIngressDiagnostic,
     getOrCreateDecoder,
+    incrementPerfCounter,
     isSourcePlayoutActive,
     postWasmFecBatchToPlayout,
+    recordPerfDuration,
+    recordPerfDurationPerSource,
     tickAdaptivePlayoutTargets,
     tickPlaybackMixTargets,
   ]);
@@ -6274,16 +6469,30 @@ export function useGroupVoiceCall(uiActive = false) {
         | { type: 'error'; requestId?: number; sourceAddr?: string; message: string }
       >
     ) => {
+      const handlerStartedAt = performance.now();
+      incrementPerfCounter('opusFecWorkerMessages');
       const d = ev.data;
       if (d.type === 'error') {
+        incrementPerfCounter('opusFecWorkerErrors');
         console.error('[GCall] opus-fec worker:', d.message);
         if (d.sourceAddr) {
           wasmFecInflightRef.current.delete(d.sourceAddr);
           pumpWasmFecQueueRef.current(d.sourceAddr);
         }
+        recordPerfDuration(
+          'opusFecWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
         return;
       }
-      if (d.type !== 'decoded') return;
+      if (d.type !== 'decoded') {
+        recordPerfDuration(
+          'opusFecWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
+        return;
+      }
+      incrementPerfCounter('opusFecWorkerDecodedBatches');
       wasmFecInflightRef.current.delete(d.sourceAddr);
       postWasmFecBatchToPlayoutRef.current(
         d.sourceAddr,
@@ -6292,6 +6501,10 @@ export function useGroupVoiceCall(uiActive = false) {
         d.stats
       );
       pumpWasmFecQueueRef.current(d.sourceAddr);
+      recordPerfDuration(
+        'opusFecWorkerHandlerMs',
+        performance.now() - handlerStartedAt
+      );
     };
     w.onerror = (err) => {
       console.error('[GCall] opus-fec worker error', err);
@@ -6306,7 +6519,7 @@ export function useGroupVoiceCall(uiActive = false) {
       wasmFecJobQueueRef.current.clear();
       w.terminate();
     };
-  }, []);
+  }, [incrementPerfCounter, recordPerfDuration]);
 
   useEffect(() => {
     if (roomState !== 'connected') {
@@ -7008,7 +7221,10 @@ export function useGroupVoiceCall(uiActive = false) {
         error?: string;
       }>
     ) => {
+      const handlerStartedAt = performance.now();
+      incrementPerfCounter('decryptWorkerMessages');
       if (e.data.type === 'encryptResult') {
+        incrementPerfCounter('decryptWorkerEncryptResults');
         if (e.data.packet) {
           dispatchEncodedPacket(new Uint8Array(e.data.packet as ArrayBuffer));
         } else {
@@ -7020,31 +7236,54 @@ export function useGroupVoiceCall(uiActive = false) {
             hasMainThreadRoomKey: roomKeyRef.current !== null,
           });
         }
+        recordPerfDuration(
+          'decryptWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
         return;
       }
-      if (e.data.type !== 'result') return;
+      if (e.data.type !== 'result') {
+        recordPerfDuration(
+          'decryptWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
+        return;
+      }
+      incrementPerfCounter('decryptWorkerResults');
       const id = e.data.id;
       const pending = pendingDecryptsRef.current.get(id);
       pendingDecryptsRef.current.delete(id);
       if (!pending) {
+        recordPerfDuration(
+          'decryptWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
         return;
       }
       const { wireForForward, startedAt, receivedAt, ingressPeerAddress } = pending;
       const multi = e.data.decodedMulti;
       if (multi && multi.length > 0) {
-        const list: DecodedAudioPacket[] = multi.map((raw) => ({
-          sourceAddr: raw.sourceAddr,
-          vad: raw.vad,
-          seq: raw.seq,
-          timestampMs: raw.timestampMs,
-          opusFrame: new Uint8Array(raw.opusFrame),
-        }));
+        incrementPerfCounter('decryptWorkerDecodedMultiFrames', multi.length);
+        const list: DecodedAudioPacket[] = [];
+        for (const raw of multi) {
+          list.push({
+            sourceAddr: raw.sourceAddr,
+            vad: raw.vad,
+            seq: raw.seq,
+            timestampMs: raw.timestampMs,
+            opusFrame: new Uint8Array(raw.opusFrame),
+          });
+        }
         applyPostDecryptList(
           wireForForward,
           list,
           startedAt,
           receivedAt,
           ingressPeerAddress
+        );
+        recordPerfDuration(
+          'decryptWorkerHandlerMs',
+          performance.now() - handlerStartedAt
         );
         return;
       }
@@ -7065,6 +7304,10 @@ export function useGroupVoiceCall(uiActive = false) {
         receivedAt,
         ingressPeerAddress
       );
+      recordPerfDuration(
+        'decryptWorkerHandlerMs',
+        performance.now() - handlerStartedAt
+      );
     };
 
     worker.onerror = (err) => {
@@ -7074,7 +7317,9 @@ export function useGroupVoiceCall(uiActive = false) {
     applyPostDecrypt,
     applyPostDecryptList,
     dispatchEncodedPacket,
+    incrementPerfCounter,
     logSendPathDiagnostic,
+    recordPerfDuration,
     syncDecryptWorkerRoomKey,
   ]);
 
@@ -7113,6 +7358,8 @@ export function useGroupVoiceCall(uiActive = false) {
       roomIdRef.current = roomId;
       chatIdRef.current = chatId;
       gcallDiagnosticsClear();
+      gcallPerfRef.current.reset();
+      tickBudgetBreachesRef.current.length = 0;
       // Reset epoch floor when joining a different room; keep it for same-room rejoin
       // so the rejoining node broadcasts an epoch ≥ the room's current epoch.
       if (roomId !== lastRoomIdRef.current) {
