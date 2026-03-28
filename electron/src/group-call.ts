@@ -53,6 +53,12 @@ const GC_JOIN_MAX_FUTURE_SKEW_MS = 30_000;
 /** Max age of GC_JOIN `timestamp` vs local `now` (for tests and diagnostics). */
 export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
 
+/**
+ * Groups-list call hint: treat relayed GC_TOPOLOGY / GC_CLUSTER_HEARTBEAT as liveness if seen within
+ * this window (~8 forwarder heartbeats @ 1.5s + mesh slack). Cheap path only (no verify).
+ */
+const GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS = 12_000;
+
 export type GcJoinTimestampRejectReason = 'expired' | 'future';
 
 /** Exported for unit tests. */
@@ -768,6 +774,19 @@ export class GroupCallManager extends EventEmitter {
   private unknownRoomKeyLogAt = new Map<string, number>();
   private pendingKeyExpiredLogAt = new Map<string, number>();
 
+  /** Numeric Qortal group ids (from renderer) to derive sidebar call indicators from relayed GC_* traffic. */
+  private watchedQortalGroupNumericIds = new Set<number>();
+  /**
+   * For rooms we are not joined in: addresses seen on cheap-relay GC_JOIN (shape + TTL only).
+   * Cleared when watch list changes or join timestamps go stale.
+   */
+  private spectatorRooms = new Map<string, Map<string, number>>();
+  /** Watched rooms not locally joined: last wall time we relayed topology or cluster heartbeat (mesh liveness). */
+  private spectatorMeshLivenessAt = new Map<string, number>();
+  private qortalActivityEmitTimer: ReturnType<typeof setTimeout> | null = null;
+  private qortalMeshExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private qortalSpectatorSweepTimer: ReturnType<typeof setInterval> | null = null;
+
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
     super();
     this.p2p = p2p;
@@ -937,6 +956,14 @@ export class GroupCallManager extends EventEmitter {
     }, 120_000);
     this.seenMsgIdTimer.unref?.();
 
+    this.qortalSpectatorSweepTimer = setInterval(() => {
+      if (this.spectatorRooms.size === 0 && this.watchedQortalGroupNumericIds.size === 0) {
+        return;
+      }
+      this.scheduleQortalGroupCallActivityEmit(true);
+    }, 45_000);
+    this.qortalSpectatorSweepTimer.unref?.();
+
     loggerLog('[GCall] GroupCallManager started.');
   }
 
@@ -960,6 +987,21 @@ export class GroupCallManager extends EventEmitter {
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
     this.transportHealthByRoom.clear();
+    if (this.qortalActivityEmitTimer) {
+      clearTimeout(this.qortalActivityEmitTimer);
+      this.qortalActivityEmitTimer = null;
+    }
+    if (this.qortalMeshExpiryTimer) {
+      clearTimeout(this.qortalMeshExpiryTimer);
+      this.qortalMeshExpiryTimer = null;
+    }
+    if (this.qortalSpectatorSweepTimer) {
+      clearInterval(this.qortalSpectatorSweepTimer);
+      this.qortalSpectatorSweepTimer = null;
+    }
+    this.spectatorRooms.clear();
+    this.spectatorMeshLivenessAt.clear();
+    this.watchedQortalGroupNumericIds.clear();
     loggerLog('[GCall] GroupCallManager stopped.');
   }
 
@@ -1143,6 +1185,190 @@ export class GroupCallManager extends EventEmitter {
     });
   }
 
+  private static parseQortalGroupNumericId(roomId: string): number | null {
+    const m = /^gcall-qortal-(\d+)$/.exec(roomId);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  private isWatchedQortalRoom(roomId: string): boolean {
+    const n = GroupCallManager.parseQortalGroupNumericId(roomId);
+    return n !== null && this.watchedQortalGroupNumericIds.has(n);
+  }
+
+  /**
+   * Renderer passes member-group numeric ids; main tracks relayed joins/leaves only for those rooms.
+   */
+  setWatchedQortalGroupIds(ids: number[]): Record<string, boolean> {
+    const next = new Set<number>();
+    if (Array.isArray(ids)) {
+      for (const raw of ids) {
+        const n =
+          typeof raw === 'number' && Number.isFinite(raw)
+            ? Math.trunc(raw)
+            : Number(raw);
+        if (Number.isFinite(n) && n > 0) next.add(n);
+      }
+    }
+    this.watchedQortalGroupNumericIds = next;
+    for (const roomId of [...this.spectatorRooms.keys()]) {
+      const num = GroupCallManager.parseQortalGroupNumericId(roomId);
+      if (num === null || !next.has(num)) {
+        this.spectatorRooms.delete(roomId);
+      }
+    }
+    // Do not prune spectatorMeshLivenessAt by watch list: topology may arrive before groups load
+    // or while watch is briefly []; TTL sweep in flush drops stale entries.
+    this.scheduleQortalGroupCallActivityEmit(true);
+    this.scheduleNextQortalMeshExpiry();
+    return this.getQortalGroupCallActivitySnapshot();
+  }
+
+  private sweepSpectatorRooms(now: number): void {
+    for (const [roomId, participants] of [...this.spectatorRooms.entries()]) {
+      for (const [addr, joinedAt] of [...participants.entries()]) {
+        if (gcJoinTimestampRejectReason(joinedAt, now) === 'expired') {
+          participants.delete(addr);
+        }
+      }
+      if (participants.size === 0) {
+        this.spectatorRooms.delete(roomId);
+      }
+    }
+  }
+
+  private noteSpectatorJoinFromRelay(env: GcJoinEnvelope): void {
+    if (GroupCallManager.parseQortalGroupNumericId(env.roomId) === null) return;
+    let m = this.spectatorRooms.get(env.roomId);
+    if (!m) {
+      m = new Map();
+      this.spectatorRooms.set(env.roomId, m);
+    }
+    const existing = m.get(env.fromAddress);
+    if (
+      existing !== undefined &&
+      !shouldRefreshParticipantFromVerifiedJoin({
+        currentJoinedAt: existing,
+        incomingJoinTimestamp: env.timestamp,
+      })
+    ) {
+      return;
+    }
+    m.set(env.fromAddress, env.timestamp);
+    if (this.watchedQortalGroupNumericIds.size > 0) {
+      this.scheduleQortalGroupCallActivityEmit(false);
+    }
+  }
+
+  private noteSpectatorLeaveFromRelay(env: GcLeaveEnvelope): void {
+    if (GroupCallManager.parseQortalGroupNumericId(env.roomId) === null) return;
+    const m = this.spectatorRooms.get(env.roomId);
+    if (!m) return;
+    m.delete(env.fromAddress);
+    if (m.size === 0) {
+      this.spectatorRooms.delete(env.roomId);
+    }
+    if (this.watchedQortalGroupNumericIds.size > 0) {
+      this.scheduleQortalGroupCallActivityEmit(false);
+    }
+  }
+
+  private noteSpectatorMeshLivenessFromRelay(roomId: string): void {
+    if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) return;
+    this.spectatorMeshLivenessAt.set(roomId, Date.now());
+    this.scheduleNextQortalMeshExpiry();
+    if (this.watchedQortalGroupNumericIds.size > 0) {
+      this.scheduleQortalGroupCallActivityEmit(false);
+    }
+  }
+
+  private sweepSpectatorMeshLiveness(now: number): void {
+    for (const [roomId, at] of [...this.spectatorMeshLivenessAt.entries()]) {
+      if (now - at > GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS) {
+        this.spectatorMeshLivenessAt.delete(roomId);
+      }
+    }
+    this.scheduleNextQortalMeshExpiry();
+  }
+
+  private scheduleNextQortalMeshExpiry(): void {
+    if (this.qortalMeshExpiryTimer) {
+      clearTimeout(this.qortalMeshExpiryTimer);
+      this.qortalMeshExpiryTimer = null;
+    }
+    if (
+      this.watchedQortalGroupNumericIds.size === 0 ||
+      this.spectatorMeshLivenessAt.size === 0
+    ) {
+      return;
+    }
+    const now = Date.now();
+    let nextExpiryAt = Number.POSITIVE_INFINITY;
+    for (const at of this.spectatorMeshLivenessAt.values()) {
+      const expiryAt = at + GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS;
+      if (expiryAt < nextExpiryAt) nextExpiryAt = expiryAt;
+    }
+    if (!Number.isFinite(nextExpiryAt)) return;
+    const delayMs = Math.max(0, nextExpiryAt - now);
+    this.qortalMeshExpiryTimer = setTimeout(() => {
+      this.qortalMeshExpiryTimer = null;
+      this.scheduleQortalGroupCallActivityEmit(true);
+    }, delayMs);
+    this.qortalMeshExpiryTimer.unref?.();
+  }
+
+  private scheduleQortalGroupCallActivityEmit(immediate: boolean): void {
+    if (immediate) {
+      if (this.qortalActivityEmitTimer) {
+        clearTimeout(this.qortalActivityEmitTimer);
+        this.qortalActivityEmitTimer = null;
+      }
+      this.flushQortalGroupCallActivity();
+      return;
+    }
+    if (this.qortalActivityEmitTimer) return;
+    this.qortalActivityEmitTimer = setTimeout(() => {
+      this.qortalActivityEmitTimer = null;
+      this.flushQortalGroupCallActivity();
+    }, 250);
+    this.qortalActivityEmitTimer.unref?.();
+  }
+
+  private getQortalGroupCallActivitySnapshot(): Record<string, boolean> {
+    const now = Date.now();
+    this.sweepSpectatorRooms(now);
+    this.sweepSpectatorMeshLiveness(now);
+    const activeByGroupId: Record<string, boolean> = {};
+    for (const id of this.watchedQortalGroupNumericIds) {
+      const roomId = `gcall-qortal-${id}`;
+      const gid = String(id);
+      const local = this.rooms.get(roomId);
+      if (local && local.participants.size > 0) {
+        activeByGroupId[gid] = true;
+        continue;
+      }
+      const spec = this.spectatorRooms.get(roomId);
+      if (spec && spec.size > 0) {
+        activeByGroupId[gid] = true;
+        continue;
+      }
+      const meshAt = this.spectatorMeshLivenessAt.get(roomId);
+      if (
+        meshAt !== undefined &&
+        now - meshAt <= GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS
+      ) {
+        activeByGroupId[gid] = true;
+      }
+    }
+    return activeByGroupId;
+  }
+
+  private flushQortalGroupCallActivity(): void {
+    const activeByGroupId = this.getQortalGroupCallActivitySnapshot();
+    this.emit('gcall:qortal-group-call-activity', { activeByGroupId });
+  }
+
   // ── Outbound ──────────────────────────────────────────────────────────────
 
   joinRoom(
@@ -1187,6 +1413,7 @@ export class GroupCallManager extends EventEmitter {
     this.p2p.send(null, env);
     loggerLog(`[GCall] Sent GC_JOIN for room ${roomId}`);
     this.flushPendingKeyForRoom(roomId);
+    this.scheduleQortalGroupCallActivityEmit(true);
     return {
       callSessionId: room.callSessionId,
       mediaSessionGeneration: room.mediaSessionGeneration,
@@ -1226,6 +1453,7 @@ export class GroupCallManager extends EventEmitter {
         ? `[GCall] Sent GC_LEAVE for room ${roomId}`
         : `[GCall] Cleared local room state for ${roomId} without broadcasting GC_LEAVE`
     );
+    this.scheduleQortalGroupCallActivityEmit(true);
   }
 
   broadcastTopology(
@@ -1545,6 +1773,7 @@ export class GroupCallManager extends EventEmitter {
         isCheapRelayJoinShape(env) &&
         gcJoinTimestampRejectReason(env.timestamp, nowJoin) === null
       ) {
+        this.noteSpectatorJoinFromRelay(env);
         this.relayDisinterestedSignedControl(env);
       }
       return;
@@ -1655,6 +1884,7 @@ export class GroupCallManager extends EventEmitter {
   private handleLeaveEnvelope(env: GcLeaveEnvelope): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       if (isCheapRelayLeaveShape(env)) {
+        this.noteSpectatorLeaveFromRelay(env);
         this.relayDisinterestedSignedControl(env);
       }
       return;
@@ -1727,11 +1957,15 @@ export class GroupCallManager extends EventEmitter {
     if (hadLocalInterest) {
       this.emit('gcall:participant-left', { roomId, address, isAbrupt });
     }
+    if (hadLocalInterest || this.isWatchedQortalRoom(roomId)) {
+      this.scheduleQortalGroupCallActivityEmit(false);
+    }
   }
 
   private handleTopology(env: GcTopologyEnvelope): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       if (isCheapRelayTopologyShape(env)) {
+        this.noteSpectatorMeshLivenessFromRelay(env.roomId);
         this.relayDisinterestedSignedControl(env);
       }
       return;
@@ -1831,6 +2065,7 @@ export class GroupCallManager extends EventEmitter {
   private handleClusterHeartbeat(env: GcClusterHeartbeatEnvelope): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       if (isCheapRelayClusterHeartbeatShape(env)) {
+        this.noteSpectatorMeshLivenessFromRelay(env.roomId);
         this.relayDisinterestedSignedControl(env);
       }
       return;

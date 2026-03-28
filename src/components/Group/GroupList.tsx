@@ -10,6 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import PhoneInTalkIcon from '@mui/icons-material/PhoneInTalk';
 import { HubsIcon } from '../../assets/Icons/HubsIcon';
 import { MessagingIcon } from '../../assets/Icons/MessagingIcon';
 import { ContextMenu } from '../ContextMenu';
@@ -30,6 +31,8 @@ import {
   groupsOwnerNamesSelector,
   isRunningPublicNodeAtom,
   memberGroupsAtom,
+  qortalGroupMeshCallActiveAtom,
+  qortalGroupSelfGcallRoomIdAtom,
   timestampEnterDataSelector,
 } from '../../atoms/global';
 import { timeDifferenceForNotificationChats } from './Group';
@@ -37,6 +40,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { AvatarPreviewModal } from '../Chat/AvatarPreviewModal';
 import { getClickableAvatarSx } from '../Chat/clickableAvatarStyles';
+import { meshCallActiveForMemberGroup } from '../../lib/group-call/qortalGroupIdKey';
 
 const GroupListInner = ({
   selectGroupFunc,
@@ -372,6 +376,8 @@ const GroupItem = memo(
     const timestampEnterData = useAtomValue(
       timestampEnterDataSelector(group?.groupId)
     );
+    const meshCallActiveByGroup = useAtomValue(qortalGroupMeshCallActiveAtom);
+    const selfGcallRoomId = useAtomValue(qortalGroupSelfGcallRoomIdAtom);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewSrc, setPreviewSrc] = useState(null);
     const [isAvatarLoaded, setIsAvatarLoaded] = useState(false);
@@ -411,6 +417,18 @@ const GroupItem = memo(
     }, [setIsPreviewOpen, setPreviewSrc]);
 
     const isSelected = group?.groupId === selectedGroupId;
+
+    const gcallRoomIdForRow =
+      group?.groupId && group.groupId !== '0' && Number.isFinite(Number(group.groupId))
+        ? `gcall-qortal-${Number(group.groupId)}`
+        : null;
+    const imInThisGroupGcall =
+      Boolean(gcallRoomIdForRow) && selfGcallRoomId === gcallRoomIdForRow;
+    const meshShowsCall = meshCallActiveForMemberGroup(
+      meshCallActiveByGroup,
+      group?.groupId
+    );
+    const showGroupCallIndicator = Boolean(gcallRoomIdForRow) && (imInThisGroupGcall || meshShowsCall);
 
     return (
       <ListItem
@@ -567,6 +585,27 @@ const GroupItem = memo(
                   sx={{
                     color: theme.palette.other.positive,
                     fontSize: '18px',
+                  }}
+                />
+              )}
+
+              {showGroupCallIndicator && (
+                <PhoneInTalkIcon
+                  titleAccess={
+                    imInThisGroupGcall
+                      ? t('core:group_list_call_youre_in', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : t('core:group_list_call_active', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                  }
+                  sx={{
+                    color: imInThisGroupGcall
+                      ? theme.palette.primary.main
+                      : theme.palette.info.main,
+                    fontSize: '18px',
+                    flexShrink: 0,
                   }}
                 />
               )}

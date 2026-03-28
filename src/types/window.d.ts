@@ -341,6 +341,16 @@ declare global {
         healthyPeerAddresses: string[]
       ) => Promise<{ success: boolean }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
+      setWatchedQortalGroupIds?: (
+        ids: number[]
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        activeByGroupId?: Record<string, boolean>;
+      }>;
+      onQortalGroupCallActivity?: (
+        cb: (payload: { activeByGroupId: Record<string, boolean> }) => void
+      ) => () => void;
       getPendingKeyMetrics?: () => Promise<{
         pending_key_flush_success: number;
         pending_key_expired: number;

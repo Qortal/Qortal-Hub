@@ -31,7 +31,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { callAudioDevicesAtom, userInfoAtom } from '../atoms/global';
+import {
+  callAudioDevicesAtom,
+  qortalGroupSelfGcallRoomIdAtom,
+  userInfoAtom,
+} from '../atoms/global';
 import {
   applyCallAudioOutput,
   getUserAudioStreamForCall,
@@ -117,6 +121,11 @@ import {
   readGcallPerfEnabled,
 } from '../lib/group-call/gcall-perf';
 import {
+  filterRosterMapByMemberSet,
+  passesGroupCallMemberGate,
+} from '../lib/group-call/gcall-member-gate';
+import { getGroupMembers } from '../components/Group/groupApi';
+import {
   groupCallLocalConnectionHintFromLevel,
   rawConnectionStressLevel,
   type GroupCallLocalConnectionHint,
@@ -135,6 +144,13 @@ export type MyRole =
   | 'root-forwarder'
   | 'standby-forwarder';
 export type TopologyLabel = 'SFU' | 'Hierarchical';
+
+/** Optional member-list gate for Qortal group calls (API: `/groups/members/:id?limit=0`). */
+export type JoinGroupCallOptions = {
+  memberGateGroupId?: number;
+  /** Shown in Qortal group voice stage header (e.g. `selectedGroup.groupName`). */
+  memberGateGroupName?: string;
+};
 
 export interface ClusterDef {
   members: string[];
@@ -1205,6 +1221,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const callAudioDevices = useAtomValue(callAudioDevicesAtom);
   const setCallAudioDevices = useSetAtom(callAudioDevicesAtom);
+  const setQortalGroupSelfGcallRoomId = useSetAtom(qortalGroupSelfGcallRoomIdAtom);
   const callAudioPrefsRef = useRef(callAudioDevices);
   callAudioPrefsRef.current = callAudioDevices;
 
@@ -1225,6 +1242,8 @@ export function useGroupVoiceCall(uiActive = false) {
   );
   const [localConnectionHint, setLocalConnectionHint] =
     useState<GroupCallLocalConnectionHint | null>(null);
+  /** Mic mute — mirrored to UI (refs alone do not re-render consumers). */
+  const [micMuted, setMicMuted] = useState(false);
   const connectionHintHysteresisRef = useRef<{
     badSince: number | null;
     goodSince: number | null;
@@ -1235,6 +1254,23 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const roomIdRef = useRef<string>('');
   const chatIdRef = useRef<string>('');
+  /** Qortal group id for API member gate; null = open room (e.g. support). */
+  const memberGateGroupIdRef = useRef<number | null>(null);
+  const memberSetRef = useRef<Set<string>>(new Set());
+  const memberSetFetchedAtRef = useRef(0);
+  const refreshMemberSetForcedRef = useRef<(groupId: number) => Promise<void>>(
+    async () => {}
+  );
+  const [memberGateGroupIdState, setMemberGateGroupIdState] = useState<
+    number | null
+  >(null);
+  /** Address → primaryName from last gated `/groups/members` fetch (UI only). */
+  const [memberPrimaryNames, setMemberPrimaryNames] = useState<
+    Record<string, string>
+  >({});
+  const [memberGateGroupName, setMemberGateGroupName] = useState<string>('');
+  const [gcallJoinError, setGcallJoinError] = useState<string | null>(null);
+  const clearGcallJoinError = useCallback(() => setGcallJoinError(null), []);
   /** Main-owned media session (from join IPC); read synchronously in election — no lazy fetch. */
   const callSessionIdRef = useRef<string>('');
   const mediaSessionGenerationRef = useRef<number>(1);
@@ -1271,6 +1307,19 @@ export function useGroupVoiceCall(uiActive = false) {
   >(new Map());
   /** Stable per logical call session; same value on mesh re-announces until cleanup. */
   const joinGenerationRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const rid = roomIdRef.current;
+    if (
+      roomState === 'idle' ||
+      typeof rid !== 'string' ||
+      !rid.startsWith('gcall-qortal-')
+    ) {
+      setQortalGroupSelfGcallRoomId(null);
+      return;
+    }
+    setQortalGroupSelfGcallRoomId(rid);
+  }, [roomState, setQortalGroupSelfGcallRoomId]);
 
   // Audio
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -6651,6 +6700,9 @@ export function useGroupVoiceCall(uiActive = false) {
         mainRosterSize: mainRoster.length,
         authoritativeRosterSize: merged.size,
       });
+      if (memberGateGroupIdRef.current !== null) {
+        return filterRosterMapByMemberSet(merged, memberSetRef.current);
+      }
       return merged;
     },
     []
@@ -7343,11 +7395,101 @@ export function useGroupVoiceCall(uiActive = false) {
     []
   );
 
+  const refreshMemberSetForced = useCallback(async (groupId: number) => {
+    const data = await getGroupMembers(groupId);
+    const next = new Set<string>();
+    const names: Record<string, string> = {};
+    const members = data?.members;
+    if (Array.isArray(members)) {
+      for (const m of members) {
+        const addr = m?.member;
+        if (typeof addr === 'string' && addr) {
+          next.add(addr);
+          const pn =
+            typeof m.primaryName === 'string' ? m.primaryName.trim() : '';
+          if (pn) names[addr] = pn;
+        }
+      }
+    }
+    memberSetRef.current = next;
+    memberSetFetchedAtRef.current = Date.now();
+    setMemberPrimaryNames(names);
+  }, []);
+
+  refreshMemberSetForcedRef.current = refreshMemberSetForced;
+
+  useEffect(() => {
+    if (memberGateGroupIdState === null) return;
+    if (roomState !== 'connected' && roomState !== 'joining') return;
+    const id = window.setInterval(() => {
+      void refreshMemberSetForced(memberGateGroupIdState).catch(() => {});
+    }, 90_000);
+    return () => window.clearInterval(id);
+  }, [memberGateGroupIdState, roomState, refreshMemberSetForced]);
+
+  useEffect(() => {
+    if (memberGateGroupIdState === null) return;
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshMemberSetForced(memberGateGroupIdState).catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [memberGateGroupIdState, refreshMemberSetForced]);
+
   const joinGroupCall = useCallback(
-    async (roomId: string, chatId: string) => {
+    async (
+      roomId: string,
+      chatId: string,
+      options?: JoinGroupCallOptions
+    ) => {
       return withGcallLifecycleLock(async () => {
       if (!userInfo?.address || !userInfo.publicKey) return;
       if (roomStateRef.current !== 'idle') return;
+      setGcallJoinError(null);
+
+      const gateOpt = options?.memberGateGroupId;
+      if (
+        gateOpt !== undefined &&
+        gateOpt !== null &&
+        Number.isFinite(gateOpt)
+      ) {
+        const gateId = Math.floor(Number(gateOpt));
+        memberGateGroupIdRef.current = gateId;
+        setMemberGateGroupIdState(gateId);
+        try {
+          await refreshMemberSetForced(gateId);
+        } catch {
+          setGcallJoinError('members_fetch_failed');
+          memberGateGroupIdRef.current = null;
+          setMemberGateGroupIdState(null);
+          setMemberPrimaryNames({});
+          setMemberGateGroupName('');
+          return;
+        }
+        if (!memberSetRef.current.has(userInfo.address)) {
+          setGcallJoinError('not_group_member');
+          memberGateGroupIdRef.current = null;
+          setMemberGateGroupIdState(null);
+          setMemberPrimaryNames({});
+          setMemberGateGroupName('');
+          return;
+        }
+        const gatedTitle =
+          typeof options?.memberGateGroupName === 'string'
+            ? options.memberGateGroupName.trim()
+            : '';
+        setMemberGateGroupName(gatedTitle);
+      } else {
+        memberGateGroupIdRef.current = null;
+        setMemberGateGroupIdState(null);
+        memberSetRef.current = new Set();
+        memberSetFetchedAtRef.current = 0;
+        setMemberPrimaryNames({});
+        setMemberGateGroupName('');
+      }
+
       debugLog(
         '[GCall] joinGroupCall — roomId:',
         roomId,
@@ -7480,14 +7622,24 @@ export function useGroupVoiceCall(uiActive = false) {
           mainRoster: authoritativeRoster ?? [],
           existingParticipants: participantsRef.current,
         });
-        for (const participant of hydratedRemoteParticipants) {
+        const gatedHydrate = memberGateGroupIdRef.current !== null;
+        const filteredHydrated = gatedHydrate
+          ? hydratedRemoteParticipants.filter((p) =>
+              passesGroupCallMemberGate({
+                claimedAddress: p.address,
+                publicKeyBase58: p.publicKey,
+                memberSet: memberSetRef.current,
+              })
+            )
+          : hydratedRemoteParticipants;
+        for (const participant of filteredHydrated) {
           const { address, publicKey } = participant;
           participantsRef.current.set(address, {
             publicKey,
             lastJoinTs: 0,
           });
         }
-        if (hydratedRemoteParticipants.length > 0) {
+        {
           const trustedElectionRoot = getTrustedRootForRejoinElection({
             currentRoot: topologyRef.current?.rootForwarder,
             trustedRemoteRoot: trustedRemoteRootRef.current,
@@ -7498,23 +7650,26 @@ export function useGroupVoiceCall(uiActive = false) {
           });
           pendingPostJoinRosterElectionRef.current = true;
           pendingPostJoinRosterElectionDelayUntilRef.current =
+            filteredHydrated.length > 0 &&
             shouldDelayPostJoinRosterElection({
-              hydratedRemoteParticipantCount: hydratedRemoteParticipants.length,
+              hydratedRemoteParticipantCount: filteredHydrated.length,
               currentRoot: topologyRef.current?.rootForwarder,
               trustedRemoteRoot: trustedElectionRoot,
             })
               ? Date.now() + OCCUPIED_JOIN_AUTHORITY_WAIT_MS
               : 0;
           debugLog('[GCall] Post-join roster hydration from main', {
-            remoteCount: hydratedRemoteParticipants.length,
-            addresses: hydratedRemoteParticipants.map((p) => p.address),
+            remoteCount: filteredHydrated.length,
+            addresses: filteredHydrated.map((p) => p.address),
             delayingInitialElection:
               pendingPostJoinRosterElectionDelayUntilRef.current > 0,
             trustedElectionRoot: trustedElectionRoot ?? null,
           });
+        }
+        if (filteredHydrated.length > 0) {
           setParticipants((prev) => {
             const existing = new Set(prev.map((p) => p.address));
-            const next = hydratedRemoteParticipants
+            const next = filteredHydrated
               .filter((p) => !existing.has(p.address))
               .map((p) => ({
                 address: p.address,
@@ -7553,6 +7708,7 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [
       flushMetrics,
+      refreshMemberSetForced,
       startTransportHealthReportLoop,
       withGcallLifecycleLock,
       setupDecryptWorker,
@@ -7794,6 +7950,12 @@ export function useGroupVoiceCall(uiActive = false) {
     roomIdRef.current = '';
     // lastObservedEpochRef intentionally not reset here — survives for same-room rejoin
     chatIdRef.current = '';
+    memberGateGroupIdRef.current = null;
+    memberSetRef.current = new Set();
+    memberSetFetchedAtRef.current = 0;
+    setMemberGateGroupIdState(null);
+    setMemberPrimaryNames({});
+    setMemberGateGroupName('');
     participantsRef.current = new Map();
     seqRef.current = 0;
     topologyAsyncGenRef.current = 0;
@@ -7813,6 +7975,9 @@ export function useGroupVoiceCall(uiActive = false) {
     metricsRef.current.setRole('participant');
     conflictingRemoteRootRef.current = '';
     conflictingRemoteRootLastSeenAtRef.current = 0;
+
+    mutedRef.current = false;
+    setMicMuted(false);
 
     setRoomState('idle');
     setParticipants([]);
@@ -8343,6 +8508,7 @@ export function useGroupVoiceCall(uiActive = false) {
             participantsRef.current.get(address)?.joinGeneration ?? null,
         });
 
+        const applyParticipantJoinedBody = () => {
         const wasExisting = participantsRef.current.has(address);
         const existing = participantsRef.current.get(address);
         // Same or older GC_JOIN (relay duplicate) — ignore to avoid topology churn.
@@ -8549,6 +8715,41 @@ export function useGroupVoiceCall(uiActive = false) {
         }
 
         scheduleTopologyElectionFlush();
+        };
+
+        const gateId = memberGateGroupIdRef.current;
+        const pkJoin = typeof publicKey === 'string' ? publicKey : '';
+        if (
+          gateId !== null &&
+          !passesGroupCallMemberGate({
+            claimedAddress: address,
+            publicKeyBase58: pkJoin,
+            memberSet: memberSetRef.current,
+          })
+        ) {
+          void refreshMemberSetForcedRef
+            .current(gateId)
+            .then(() => {
+              if (
+                !passesGroupCallMemberGate({
+                  claimedAddress: address,
+                  publicKeyBase58: pkJoin,
+                  memberSet: memberSetRef.current,
+                })
+              ) {
+                debugWarn(
+                  '[GCall] gcall:participant-joined rejected by member gate',
+                  { address }
+                );
+                return;
+              }
+              applyParticipantJoinedBody();
+            })
+            .catch(() => {});
+          return;
+        }
+
+        applyParticipantJoinedBody();
       }
 
       if (event === 'gcall:participant-left') {
@@ -8788,6 +8989,16 @@ export function useGroupVoiceCall(uiActive = false) {
               mediaSessionGenerationRef.current >>> 0;
             for (const [addr, value] of pendingKeyRequestRecipientsRef.current) {
               if (
+                memberGateGroupIdRef.current !== null &&
+                !passesGroupCallMemberGate({
+                  claimedAddress: addr,
+                  publicKeyBase58: value.publicKey,
+                  memberSet: memberSetRef.current,
+                })
+              ) {
+                continue;
+              }
+              if (
                 value.publicKey &&
                 shouldAcceptKeyRecoveryRequestGeneration({
                   requestMediaSessionGeneration: value.mediaSessionGeneration,
@@ -8873,12 +9084,18 @@ export function useGroupVoiceCall(uiActive = false) {
     topologyLabel,
     joinGroupCall,
     leaveGroupCall,
+    gcallJoinError,
+    clearGcallJoinError,
     exportGroupCallDiagnostics,
+    muted: micMuted,
     setMuted: (m: boolean) => {
       mutedRef.current = m;
+      setMicMuted(m);
       captureWorkletRef.current?.port.postMessage({ type: 'mute', muted: m });
     },
     roomId: roomIdRef.current,
+    memberPrimaryNames,
+    memberGateGroupName,
   };
 }
 

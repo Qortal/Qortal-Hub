@@ -2,8 +2,8 @@
  * GroupSupportChat — group voice call test interface for regular users.
  *
  * Renders as a fixed bottom-right panel (same position as SupportChat).
- * Uses GROUP_SUPPORT_ADDRESSES as the list of agents, and useGroupVoiceCall
- * for the audio layer.  Text chat re-uses useSupportChat.
+ * Uses GROUP_SUPPORT_ADDRESSES as the list of agents, and GroupCallContext
+ * (single useGroupVoiceCall instance) for the audio layer. Text chat re-uses useSupportChat.
  */
 
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
@@ -31,7 +31,7 @@ import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
-import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
+import { useGroupCallContext } from '../../contexts/GroupCallContext';
 import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import { GroupCallConnectionBanner } from './GroupCallConnectionBanner';
@@ -154,9 +154,9 @@ function GroupSupportChatPanel({
   const {
     roomState, participants, myRole, activeSpeakers, topologyLabel, metrics,
     localConnectionHint,
-    joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
+    joinGroupCall, leaveGroupCall, muted: callMuted, setMuted: setCallMuted,
     exportGroupCallDiagnostics,
-  } = useGroupVoiceCall(isOpen);
+  } = useGroupCallContext();
 
   const [diagExporting, setDiagExporting] = useState(false);
 
@@ -174,7 +174,6 @@ function GroupSupportChatPanel({
   );
 
   const [inputValue, setInputValue] = useState('');
-  const [muted, setMuted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -332,17 +331,17 @@ function GroupSupportChatPanel({
           {/* Call controls */}
           <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
             <CallAudioSettingsButton />
-            <Tooltip title={muted ? 'Unmute' : 'Mute'}>
+            <Tooltip title={callMuted ? 'Unmute' : 'Mute'}>
               <IconButton
                 size="small"
-                onClick={() => { setMuted((m) => { setCallMuted(!m); return !m; }); }}
+                onClick={() => setCallMuted(!callMuted)}
                 sx={{
-                  color: muted ? '#ef4444' : '#22c55e',
-                  bgcolor: alpha(muted ? '#ef4444' : '#22c55e', 0.12),
+                  color: callMuted ? '#ef4444' : '#22c55e',
+                  bgcolor: alpha(callMuted ? '#ef4444' : '#22c55e', 0.12),
                   width: 28, height: 28,
                 }}
               >
-                {muted ? <MicOffRoundedIcon sx={{ fontSize: 14 }} /> : <MicRoundedIcon sx={{ fontSize: 14 }} />}
+                {callMuted ? <MicOffRoundedIcon sx={{ fontSize: 14 }} /> : <MicRoundedIcon sx={{ fontSize: 14 }} />}
               </IconButton>
             </Tooltip>
 

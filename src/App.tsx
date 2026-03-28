@@ -47,6 +47,8 @@ import { SupportChat, SUPPORT_ADDRESSES } from './components/Chat/SupportChat';
 import { AgentSupportDashboard } from './components/Chat/AgentSupportDashboard';
 import { GroupSupportChat, GROUP_SUPPORT_ADDRESSES } from './components/Chat/GroupSupportChat';
 import { GroupAgentDashboard } from './components/Chat/GroupAgentDashboard';
+import { GroupCallProvider } from './contexts/GroupCallContext';
+import { QortalGroupVoiceCallStage } from './components/Group/QortalGroupVoiceCallStage';
 import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
@@ -1025,50 +1027,54 @@ function App() {
         )}
 
         {extState === 'authenticated' && isMainWindow && (
-          <Suspense fallback={<Loader />}>
-            <LazyAuthenticatedShell
-              balance={balance}
-              desktopViewMode={desktopViewMode}
-              isMain={true}
-              isOpenDrawerProfile={isOpenDrawerProfile}
-              logoutFunc={logoutFunc}
-              myAddress={address}
-              setDesktopViewMode={setDesktopViewMode}
-              setIsOpenDrawerProfile={setIsOpenDrawerProfile}
-              userInfo={userInfo}
-              rawWallet={rawWallet}
-              qortBalanceLoading={qortBalanceLoading}
-              setOpenSnack={setOpenSnack}
-              setInfoSnack={setInfoSnack}
-              onRefreshBalance={getBalanceAndUserInfoFunc}
-              onOpenSendQort={onOpenSendQort}
-              onOpenRegisterName={onOpenRegisterName}
-              extState={extState}
-              isMainWindow={isMainWindow}
-              onOpenSettings={onOpenSettings}
-              onOpenDrawerLookup={onOpenDrawerLookup}
-              onOpenWalletsApp={onOpenWalletsApp}
-              onOpenDrawerProfile={onOpenDrawerProfile}
-              getUserInfo={getUserInfo}
-              onOpenMinting={onOpenMinting}
-              showTutorial={showTutorial}
-              onBackupWallet={onBackupWallet}
-            />
-          </Suspense>
-        )}
+          <GroupCallProvider>
+            <Suspense fallback={<Loader />}>
+              <LazyAuthenticatedShell
+                balance={balance}
+                desktopViewMode={desktopViewMode}
+                isMain={true}
+                isOpenDrawerProfile={isOpenDrawerProfile}
+                logoutFunc={logoutFunc}
+                myAddress={address}
+                setDesktopViewMode={setDesktopViewMode}
+                setIsOpenDrawerProfile={setIsOpenDrawerProfile}
+                userInfo={userInfo}
+                rawWallet={rawWallet}
+                qortBalanceLoading={qortBalanceLoading}
+                setOpenSnack={setOpenSnack}
+                setInfoSnack={setInfoSnack}
+                onRefreshBalance={getBalanceAndUserInfoFunc}
+                onOpenSendQort={onOpenSendQort}
+                onOpenRegisterName={onOpenRegisterName}
+                extState={extState}
+                isMainWindow={isMainWindow}
+                onOpenSettings={onOpenSettings}
+                onOpenDrawerLookup={onOpenDrawerLookup}
+                onOpenWalletsApp={onOpenWalletsApp}
+                onOpenDrawerProfile={onOpenDrawerProfile}
+                getUserInfo={getUserInfo}
+                onOpenMinting={onOpenMinting}
+                showTutorial={showTutorial}
+                onBackupWallet={onBackupWallet}
+              />
+            </Suspense>
 
-        {/* P2P support chat — agents see the dashboard, regular users see SupportChat */}
-        {extState === 'authenticated' && isMainWindow && (
-          SUPPORT_ADDRESSES.includes(userInfo?.address as any)
-            ? <AgentSupportDashboard />
-            : <SupportChat />
-        )}
+            {/* P2P support chat — agents see the dashboard, regular users see SupportChat */}
+            {SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
+              <AgentSupportDashboard />
+            ) : (
+              <SupportChat />
+            )}
 
-        {/* Group voice call — parallel system using GROUP_SUPPORT_ADDRESSES */}
-        {extState === 'authenticated' && isMainWindow && (
-          GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any)
-            ? <GroupAgentDashboard />
-            : <GroupSupportChat />
+            {/* Group voice call — parallel system using GROUP_SUPPORT_ADDRESSES */}
+            {GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
+              <GroupAgentDashboard />
+            ) : (
+              <GroupSupportChat />
+            )}
+
+            <QortalGroupVoiceCallStage />
+          </GroupCallProvider>
         )}
 
         {isOpenSendQort && isMainWindow && (

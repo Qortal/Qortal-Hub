@@ -124,7 +124,7 @@ export const getGroupAdminsAddress = async (
 };
 
 export const getGroupMembers = async (groupNumber: number): Promise<{
-  members?: { member: string }[];
+  members?: { member: string; primaryName?: string }[];
   memberCount?: number;
   [key: string]: unknown;
 }> => {

@@ -68,12 +68,14 @@ import {
   selectedGroupIdAtom,
   timestampEnterDataAtom,
   userInfoAtom,
+  qortalGroupVoiceCallMinimizedAtom,
 } from '../../atoms/global';
 import { sortArrayByTimestampAndGroupName } from '../../utils/time';
 import { WalletsAppWrapper } from './WalletsAppWrapper';
 import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
+import { useGroupCallContext } from '../../contexts/GroupCallContext';
 import {
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_MINUTES_2_IN_MILLISECONDS,
@@ -82,6 +84,7 @@ import {
 import { useWebsocketStatus } from './useWebsocketStatus';
 import { DirectsSidebar } from './DirectsSidebar';
 import { GlobalChatWidget } from './GlobalChatWidget';
+import { QortalGroupVoiceCallDock } from './QortalGroupVoiceCallDock';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import {
   AdminRowBox,
@@ -309,6 +312,75 @@ export const Group = ({
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
   const userInfo = useAtomValue(userInfoAtom);
+
+  const {
+    roomState: gcallRoomState,
+    joinGroupCall,
+    leaveGroupCall,
+    roomId: gcallActiveRoomId,
+    gcallJoinError,
+    clearGcallJoinError,
+  } = useGroupCallContext();
+  const qcallMinimized = useAtomValue(qortalGroupVoiceCallMinimizedAtom);
+  const setQcallMinimized = useSetAtom(qortalGroupVoiceCallMinimizedAtom);
+
+  const hideHomeRightChromeForQortalDock =
+    desktopViewMode === 'home' &&
+    qcallMinimized &&
+    gcallRoomState !== 'idle' &&
+    typeof gcallActiveRoomId === 'string' &&
+    gcallActiveRoomId.startsWith('gcall-qortal-');
+
+  const gcallGroupNumericId = useMemo(() => {
+    const id = selectedGroup?.groupId;
+    if (id === undefined || id === null || id === '0') return null;
+    const n = Number(id);
+    return Number.isFinite(n) ? n : null;
+  }, [selectedGroup?.groupId]);
+
+  const gcallRoomIdForGroup =
+    gcallGroupNumericId !== null ? `gcall-qortal-${gcallGroupNumericId}` : '';
+
+  const inThisGroupGcall =
+    gcallRoomState !== 'idle' && gcallActiveRoomId === gcallRoomIdForGroup;
+  const inOtherGcall =
+    gcallRoomState !== 'idle' && gcallActiveRoomId !== gcallRoomIdForGroup;
+
+  const handleGroupCallHeaderClick = useCallback(async () => {
+    if (gcallGroupNumericId === null || !gcallRoomIdForGroup) return;
+    if (inThisGroupGcall) {
+      await leaveGroupCall();
+      return;
+    }
+    setQcallMinimized(false);
+    await joinGroupCall(gcallRoomIdForGroup, `group:${gcallGroupNumericId}`, {
+      memberGateGroupId: gcallGroupNumericId,
+      memberGateGroupName: selectedGroup?.groupName,
+    });
+  }, [
+    gcallGroupNumericId,
+    gcallRoomIdForGroup,
+    inThisGroupGcall,
+    joinGroupCall,
+    leaveGroupCall,
+    selectedGroup?.groupName,
+    setQcallMinimized,
+  ]);
+
+  useEffect(() => {
+    if (!gcallJoinError) return;
+    const message =
+      gcallJoinError === 'members_fetch_failed'
+        ? t('core:group_call_members_fetch_failed', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : t('core:group_call_not_member', {
+            postProcess: 'capitalizeFirstChar',
+          });
+    setInfoSnack({ type: 'error', message });
+    setOpenSnack(true);
+    clearGcallJoinError();
+  }, [gcallJoinError, clearGcallJoinError, t]);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
@@ -1808,7 +1880,27 @@ export const Group = ({
           />
         )}
 
-        <MainContentBox>
+        <MainContentBox
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            alignSelf: 'stretch',
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'stretch',
+          }}
+        >
+          <Box
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 0,
+              position: 'relative',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
           {openAddGroup && (
             <Suspense fallback={null}>
               <LazyAddGroup
@@ -1875,6 +1967,23 @@ export const Group = ({
               isChat={groupSection === 'chat'}
               setGroupSection={setGroupSection}
               isForum={groupSection === 'forum'}
+              onGroupCallClick={
+                desktopViewMode === 'chat' && gcallGroupNumericId !== null
+                  ? handleGroupCallHeaderClick
+                  : undefined
+              }
+              groupCallInCall={
+                inThisGroupGcall && gcallRoomState === 'connected'
+              }
+              groupCallJoining={gcallRoomState === 'joining'}
+              groupCallDisabled={inOtherGcall}
+              groupCallTooltip={
+                inOtherGcall
+                  ? t('core:group_call_blocked', {
+                      postProcess: 'capitalizeFirstChar',
+                    })
+                  : ''
+              }
             />
 
             <ChatContentBox>
@@ -2148,13 +2257,16 @@ export const Group = ({
             setDesktopViewMode={setDesktopViewMode}
             desktopViewMode={desktopViewMode}
           />
+          </Box>
+          <QortalGroupVoiceCallDock />
         </MainContentBox>
 
         <GroupRightSidebar
           hide={
             desktopViewMode === 'apps' ||
             desktopViewMode === 'dev' ||
-            desktopViewMode === 'chat'
+            desktopViewMode === 'chat' ||
+            hideHomeRightChromeForQortalDock
           }
         />
 

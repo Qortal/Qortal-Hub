@@ -21,7 +21,11 @@ import electronIsDev from 'electron-is-dev';
 import electronServe from 'electron-serve';
 import windowStateKeeper from 'electron-window-state';
 import { dirname, join } from 'path';
-import { log as loggerLog, error as loggerError, warn as loggerWarn } from './logger';
+import {
+  log as loggerLog,
+  error as loggerError,
+  warn as loggerWarn,
+} from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
@@ -75,11 +79,7 @@ import {
   getChatManager,
   flushChatStore,
 } from './chat';
-import {
-  startCallManager,
-  stopCallManager,
-  getCallManager,
-} from './call';
+import { startCallManager, stopCallManager, getCallManager } from './call';
 import {
   startGroupCallManager,
   stopGroupCallManager,
@@ -245,30 +245,35 @@ export class ElectronCapacitorApp {
     this.mainWindowState.manage(this.MainWindow);
 
     // Allow microphone access for WebRTC voice calls.
-    const summarizeMediaPermissionDetails = (details: unknown): Record<string, unknown> => {
+    const summarizeMediaPermissionDetails = (
+      details: unknown
+    ): Record<string, unknown> => {
       if (!details || typeof details !== 'object') return {};
       const d = details as Record<string, unknown>;
       const out: Record<string, unknown> = {};
-      if (typeof d.requestingUrl === 'string') out.requestingUrl = d.requestingUrl;
+      if (typeof d.requestingUrl === 'string')
+        out.requestingUrl = d.requestingUrl;
       if (typeof d.isMainFrame === 'boolean') out.isMainFrame = d.isMainFrame;
       if (Array.isArray(d.mediaTypes)) out.mediaTypes = d.mediaTypes;
-      if (typeof d.securityOrigin === 'string') out.securityOrigin = d.securityOrigin;
+      if (typeof d.securityOrigin === 'string')
+        out.securityOrigin = d.securityOrigin;
       return out;
     };
-    this.MainWindow.webContents.session.setPermissionRequestHandler(
-      (_webContents, permission, callback, details) => {
-        const summary = summarizeMediaPermissionDetails(details);
-        const granted = permission === 'media';
-        loggerLog('[GCall][perm] request', { permission, granted, ...summary });
-        if (granted) return callback(true);
-        loggerWarn(
-          '[GCall][perm] denied — handler only auto-allows "media"; got:',
-          permission,
-          summary
-        );
-        callback(false);
-      }
-    );
+    // TODO: Restore if mic permissions don't work
+    // this.MainWindow.webContents.session.setPermissionRequestHandler(
+    //   (_webContents, permission, callback, details) => {
+    //     const summary = summarizeMediaPermissionDetails(details);
+    //     const granted = permission === 'media';
+    //     loggerLog('[GCall][perm] request', { permission, granted, ...summary });
+    //     if (granted) return callback(true);
+    //     loggerWarn(
+    //       '[GCall][perm] denied — handler only auto-allows "media"; got:',
+    //       permission,
+    //       summary
+    //     );
+    //     callback(false);
+    //   }
+    // );
 
     if (this.CapacitorFileConfig.backgroundColor) {
       this.MainWindow.setBackgroundColor(
@@ -724,7 +729,10 @@ export interface AppSettings {
   legacyPublicStunFallback?: boolean;
 }
 
-const DEFAULT_APP_SETTINGS: AppSettings = { closeAction: 'ask', p2pEnabled: true };
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  closeAction: 'ask',
+  p2pEnabled: true,
+};
 
 export async function readAppSettings(): Promise<AppSettings> {
   try {
@@ -835,7 +843,6 @@ async function loadPersistentStore(): Promise<Record<string, unknown>> {
   if (hadData) persistentStoreLoadedFromDisk = true;
   return persistentStoreCache;
 }
-
 
 export function flushPersistentStore(): void {
   if (persistentStoreCache === null) return;
@@ -971,14 +978,17 @@ ipcMain.handle(
   }
 );
 
-ipcMain.handle('hub:reportObservedStunSources', async (_event, urls: unknown) => {
-  const c = getStunCoordinator();
-  if (!c) return { ok: false };
-  if (!Array.isArray(urls)) return { ok: false };
-  const u = urls.filter((x): x is string => typeof x === 'string');
-  c.recordObservedStunSources(u);
-  return { ok: true };
-});
+ipcMain.handle(
+  'hub:reportObservedStunSources',
+  async (_event, urls: unknown) => {
+    const c = getStunCoordinator();
+    if (!c) return { ok: false };
+    if (!Array.isArray(urls)) return { ok: false };
+    const u = urls.filter((x): x is string => typeof x === 'string');
+    c.recordObservedStunSources(u);
+    return { ok: true };
+  }
+);
 
 // Handler for initiating a streaming file save
 ipcMain.handle(
@@ -1442,7 +1452,9 @@ export function setLastP2POptions(opts: P2PNetworkOptions): void {
   lastP2POptions = opts;
 }
 
-export function attachP2PListeners(network: ReturnType<typeof getP2PNetwork>): void {
+export function attachP2PListeners(
+  network: ReturnType<typeof getP2PNetwork>
+): void {
   if (!network) return;
   network.on('message', (payload) =>
     broadcastToSet(p2pMessageSubscribers, 'p2p:message', payload)
@@ -1483,7 +1495,8 @@ export async function startDecentralizedStunAfterP2P(
 ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
   try {
     // Re-use the last known options if none supplied (e.g. from the settings toggle).
-    const opts = (options && Object.keys(options).length > 0) ? options : lastP2POptions;
+    const opts =
+      options && Object.keys(options).length > 0 ? options : lastP2POptions;
     lastP2POptions = opts;
     const network = await startP2PNetwork(opts);
     attachP2PListeners(network);
@@ -1494,7 +1507,11 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     attachPresenceListeners(pm);
     // (Re-)start the chat manager backed by the shared SQLite database.
     stopChatManager();
-    const sharedDbPath = join(app.getPath('appData'), 'qortal-shared', 'chat.db');
+    const sharedDbPath = join(
+      app.getPath('appData'),
+      'qortal-shared',
+      'chat.db'
+    );
     const cm = await startChatManager(network, sharedDbPath);
     attachChatListeners(cm);
     // (Re-)start the call manager wired to the network + presence manager.
@@ -1508,7 +1525,11 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     // Notify renderers that P2P / presence is live again.
     flushPresenceUpdates();
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
-    return { success: true, port: network.getPort(), peerId: network.getPeerId() };
+    return {
+      success: true,
+      port: network.getPort(),
+      peerId: network.getPeerId(),
+    };
   } catch (err) {
     loggerError('[P2P] Failed to start:', err);
     return { success: false, error: (err as Error).message };
@@ -1550,7 +1571,8 @@ ipcMain.handle('p2p:getPeers', async () => {
 
 ipcMain.handle('p2p:getStatus', async () => {
   const network = getP2PNetwork();
-  if (!network) return { running: false, port: null, peerId: null, connectedPeers: 0 };
+  if (!network)
+    return { running: false, port: null, peerId: null, connectedPeers: 0 };
   return {
     running: network.isRunning(),
     port: network.getPort(),
@@ -1609,7 +1631,10 @@ function queuePresenceUpdate(payload: unknown): void {
       payload
     );
   } else {
-    queuedPresenceUpdates.set(`${Date.now()}:${queuedPresenceUpdates.size}`, payload);
+    queuedPresenceUpdates.set(
+      `${Date.now()}:${queuedPresenceUpdates.size}`,
+      payload
+    );
   }
 
   if (presenceUpdateFlushTimer) return;
@@ -1631,7 +1656,9 @@ export function attachPresenceListeners(
 }
 
 /** Validates a renderer-supplied envelope, applies it locally, then relays. */
-async function handleLocalPresenceEnvelope(envelope: unknown): Promise<boolean> {
+async function handleLocalPresenceEnvelope(
+  envelope: unknown
+): Promise<boolean> {
   const pm = getPresenceManager();
   const p2p = getP2PNetwork();
   if (!pm || !p2p) return false;
@@ -1778,12 +1805,7 @@ ipcMain.handle(
  */
 ipcMain.handle(
   'chat:getHistory',
-  async (
-    _event,
-    chatId: string,
-    limit: number,
-    beforeTimestamp?: number
-  ) => {
+  async (_event, chatId: string, limit: number, beforeTimestamp?: number) => {
     const cm = getChatManager();
     if (!cm) return [];
     return cm.getHistory(chatId, limit, beforeTimestamp);
@@ -1814,12 +1836,15 @@ ipcMain.handle(
  * auto-accept incoming DMs addressed to them.
  * Call when the user logs in; call with [] when they log out.
  */
-ipcMain.handle('chat:setLocalAddresses', async (_event, addresses: string[]) => {
-  const cm = getChatManager();
-  if (!cm) return { success: false, error: 'Chat manager is not running' };
-  cm.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
-  return { success: true };
-});
+ipcMain.handle(
+  'chat:setLocalAddresses',
+  async (_event, addresses: string[]) => {
+    const cm = getChatManager();
+    if (!cm) return { success: false, error: 'Chat manager is not running' };
+    cm.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+    return { success: true };
+  }
+);
 
 /**
  * Clear the support-queue rate-limit map.
@@ -1858,12 +1883,7 @@ ipcMain.on('chat:typing:unsubscribe', (event) => {
  */
 ipcMain.handle(
   'chat:sendReadReceipt',
-  async (
-    _event,
-    chatId: string,
-    eventIds: string[],
-    readerAddress: string
-  ) => {
+  async (_event, chatId: string, eventIds: string[], readerAddress: string) => {
     const cm = getChatManager();
     if (!cm) return { success: false, error: 'Chat manager is not running' };
     if (
@@ -1929,9 +1949,9 @@ export function attachCallListeners(
   manager.on('call:incoming', forward('call:incoming'));
   manager.on('call:accepted', forward('call:accepted'));
   manager.on('call:rejected', forward('call:rejected'));
-  manager.on('call:signal',   forward('call:signal'));
-  manager.on('call:hangup',   forward('call:hangup'));
-  manager.on('call:audio',    forward('call:audio'));
+  manager.on('call:signal', forward('call:signal'));
+  manager.on('call:hangup', forward('call:hangup'));
+  manager.on('call:audio', forward('call:audio'));
 }
 
 ipcMain.handle(
@@ -1957,34 +1977,72 @@ ipcMain.handle(
       callId,
       timestamp
     );
-    return resultCallId ? { success: true, callId: resultCallId } : { success: false, error: 'Target offline' };
+    return resultCallId
+      ? { success: true, callId: resultCallId }
+      : { success: false, error: 'Target offline' };
   }
 );
 
-ipcMain.handle('call:accept', async (_event, callId: string, signature: string, publicKey: string, timestamp: number) => {
-  const mgr = getCallManager();
-  if (!mgr) return { success: false, error: 'Call manager not running' };
-  mgr.acceptCall(callId, signature, publicKey, timestamp);
-  return { success: true };
-});
+ipcMain.handle(
+  'call:accept',
+  async (
+    _event,
+    callId: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.acceptCall(callId, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
 
-ipcMain.handle('call:reject', async (_event, callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) => {
-  const mgr = getCallManager();
-  if (!mgr) return { success: false, error: 'Call manager not running' };
-  mgr.rejectCall(callId, reason, signature, publicKey, timestamp);
-  return { success: true };
-});
+ipcMain.handle(
+  'call:reject',
+  async (
+    _event,
+    callId: string,
+    reason?: string,
+    signature?: string,
+    publicKey?: string,
+    timestamp?: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.rejectCall(callId, reason, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
 
-ipcMain.handle('call:hangup', async (_event, callId: string, signature: string, publicKey: string, timestamp: number) => {
-  const mgr = getCallManager();
-  if (!mgr) return { success: false, error: 'Call manager not running' };
-  mgr.hangUp(callId, signature, publicKey, timestamp);
-  return { success: true };
-});
+ipcMain.handle(
+  'call:hangup',
+  async (
+    _event,
+    callId: string,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.hangUp(callId, signature, publicKey, timestamp);
+    return { success: true };
+  }
+);
 
 ipcMain.handle(
   'call:sendSignal',
-  async (_event, callId: string, type: 'offer' | 'answer' | 'ice', data: unknown, signature?: string, publicKey?: string, timestamp?: number) => {
+  async (
+    _event,
+    callId: string,
+    type: 'offer' | 'answer' | 'ice',
+    data: unknown,
+    signature?: string,
+    publicKey?: string,
+    timestamp?: number
+  ) => {
     const mgr = getCallManager();
     if (!mgr) return { success: false, error: 'Call manager not running' };
     mgr.sendSignal(callId, type, data, signature, publicKey, timestamp);
@@ -2013,12 +2071,15 @@ ipcMain.handle('call:whoami', async () => {
   return network.askWhoAmI();
 });
 
-ipcMain.handle('call:setLocalAddresses', async (_event, addresses: string[]) => {
-  const mgr = getCallManager();
-  if (!mgr) return { success: false, error: 'Call manager not running' };
-  mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
-  return { success: true };
-});
+ipcMain.handle(
+  'call:setLocalAddresses',
+  async (_event, addresses: string[]) => {
+    const mgr = getCallManager();
+    if (!mgr) return { success: false, error: 'Call manager not running' };
+    mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+    return { success: true };
+  }
+);
 
 ipcMain.on('call:subscribe', (event) => {
   callSubscribers.add(event.sender);
@@ -2030,6 +2091,8 @@ ipcMain.on('call:unsubscribe', (event) => {
 // ── Group Call IPC Handlers ───────────────────────────────────────────────────
 
 const gcallSubscribers = new Set<Electron.WebContents>();
+/** Sidebar / list: lightweight `gcall:qortal-group-call-activity` only (no full GC_* stream). */
+const gcallActivitySubscribers = new Set<Electron.WebContents>();
 
 export function attachGroupCallListeners(
   manager: ReturnType<typeof getGroupCallManager>
@@ -2040,15 +2103,18 @@ export function attachGroupCallListeners(
     broadcastToSet(gcallSubscribers, channel, payload);
 
   manager.on('gcall:participant-joined', forward('gcall:participant-joined'));
-  manager.on('gcall:participant-left',   forward('gcall:participant-left'));
-  manager.on('gcall:topology',           forward('gcall:topology'));
+  manager.on('gcall:participant-left', forward('gcall:participant-left'));
+  manager.on('gcall:topology', forward('gcall:topology'));
   manager.on('gcall:cluster-heartbeat', forward('gcall:cluster-heartbeat'));
-  manager.on('gcall:heartbeat',          forward('gcall:heartbeat'));
-  manager.on('gcall:audio',              forward('gcall:audio'));
-  manager.on('gcall:key',                forward('gcall:key'));
-  manager.on('gcall:key-request',      forward('gcall:key-request'));
-  manager.on('gcall:session-updated',    forward('gcall:session-updated'));
-  manager.on('gcall:rtc-signal',         forward('gcall:rtc-signal'));
+  manager.on('gcall:heartbeat', forward('gcall:heartbeat'));
+  manager.on('gcall:audio', forward('gcall:audio'));
+  manager.on('gcall:key', forward('gcall:key'));
+  manager.on('gcall:key-request', forward('gcall:key-request'));
+  manager.on('gcall:session-updated', forward('gcall:session-updated'));
+  manager.on('gcall:rtc-signal', forward('gcall:rtc-signal'));
+  manager.on('gcall:qortal-group-call-activity', (payload: unknown) =>
+    broadcastToSet(gcallActivitySubscribers, 'gcall:qortal-group-call-activity', payload)
+  );
 }
 
 ipcMain.handle(
@@ -2126,10 +2192,23 @@ ipcMain.on(
 
 ipcMain.handle(
   'gcall:broadcastTopology',
-  async (_event, roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => {
+  async (
+    _event,
+    roomId: string,
+    topology: unknown,
+    signature: string,
+    publicKey: string,
+    timestamp: number
+  ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.broadcastTopology(roomId, topology as any, signature, publicKey, timestamp);
+    mgr.broadcastTopology(
+      roomId,
+      topology as any,
+      signature,
+      publicKey,
+      timestamp
+    );
     return { success: true };
   }
 );
@@ -2159,7 +2238,12 @@ ipcMain.handle(
 
 ipcMain.handle(
   'gcall:sendAudio',
-  async (_event, roomId: string, toAddress: string, data: Buffer | Uint8Array) => {
+  async (
+    _event,
+    roomId: string,
+    toAddress: string,
+    data: Buffer | Uint8Array
+  ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
@@ -2193,7 +2277,16 @@ ipcMain.handle(
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.sendKey(roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp, meta);
+    mgr.sendKey(
+      roomId,
+      toAddress,
+      encryptedKey,
+      fromAddress,
+      signature,
+      publicKey,
+      timestamp,
+      meta
+    );
     return { success: true };
   }
 );
@@ -2218,7 +2311,15 @@ ipcMain.handle(
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.sendKeyRotate(roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp, meta);
+    mgr.sendKeyRotate(
+      roomId,
+      encryptedKeys,
+      fromAddress,
+      signature,
+      publicKey,
+      timestamp,
+      meta
+    );
     return { success: true };
   }
 );
@@ -2256,7 +2357,9 @@ ipcMain.handle('gcall:requestSessionBreak', async (_event, roomId: string) => {
   const mgr = getGroupCallManager();
   if (!mgr) return { success: false, error: 'GroupCall manager not running' };
   const r = mgr.requestSessionBreak(roomId);
-  return r.ok ? { success: true } : { success: false, error: r.error ?? 'rejected' };
+  return r.ok
+    ? { success: true }
+    : { success: false, error: r.error ?? 'rejected' };
 });
 
 ipcMain.handle(
@@ -2275,17 +2378,30 @@ ipcMain.handle(
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.sendRtcSignal(roomId, fromAddress, toAddress, type, data, connId, signature, publicKey, timestamp);
+    mgr.sendRtcSignal(
+      roomId,
+      fromAddress,
+      toAddress,
+      type,
+      data,
+      connId,
+      signature,
+      publicKey,
+      timestamp
+    );
     return { success: true };
   }
 );
 
-ipcMain.handle('gcall:setLocalAddresses', async (_event, addresses: string[]) => {
-  const mgr = getGroupCallManager();
-  if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-  mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
-  return { success: true };
-});
+ipcMain.handle(
+  'gcall:setLocalAddresses',
+  async (_event, addresses: string[]) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+    return { success: true };
+  }
+);
 
 ipcMain.handle('gcall:getRoomParticipants', async (_event, roomId: string) => {
   const mgr = getGroupCallManager();
@@ -2306,7 +2422,6 @@ ipcMain.handle(
   }
 );
 
-
 ipcMain.handle('gcall:getPendingKeyMetrics', async () => {
   const mgr = getGroupCallManager();
   if (!mgr) {
@@ -2324,4 +2439,18 @@ ipcMain.on('gcall:subscribe', (event) => {
 });
 ipcMain.on('gcall:unsubscribe', (event) => {
   gcallSubscribers.delete(event.sender);
+});
+ipcMain.on('gcall:subscribe-activity', (event) => {
+  gcallActivitySubscribers.add(event.sender);
+});
+ipcMain.on('gcall:unsubscribe-activity', (event) => {
+  gcallActivitySubscribers.delete(event.sender);
+});
+
+ipcMain.handle('gcall:setWatchedQortalGroupIds', async (_event, ids: unknown) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+  const list = Array.isArray(ids) ? (ids as number[]) : [];
+  const activeByGroupId = mgr.setWatchedQortalGroupIds(list);
+  return { success: true, activeByGroupId };
 });

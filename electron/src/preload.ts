@@ -1118,6 +1118,36 @@ try {
     getRoomParticipants: async (roomId: string) =>
       ipcRenderer.invoke('gcall:getRoomParticipants', roomId),
 
+    /**
+     * Member-group numeric ids used to derive which `gcall-qortal-*` rooms get sidebar indicators
+     * from relayed mesh traffic (cheap path; debounced updates).
+     */
+    setWatchedQortalGroupIds: async (ids: number[]) =>
+      ipcRenderer.invoke('gcall:setWatchedQortalGroupIds', ids) as Promise<{
+        success: boolean;
+        error?: string;
+        activeByGroupId?: Record<string, boolean>;
+      }>,
+
+    /**
+     * Subscribe only to coalesced group-call activity for the groups list (not full GC_* IPC).
+     */
+    onQortalGroupCallActivity: (cb: (payload: { activeByGroupId: Record<string, boolean> }) => void) => {
+      const channel = 'gcall:qortal-group-call-activity';
+      const handler = (_e: unknown, payload: unknown) => {
+        const p = payload as { activeByGroupId?: Record<string, boolean> };
+        if (p?.activeByGroupId && typeof p.activeByGroupId === 'object') {
+          cb({ activeByGroupId: p.activeByGroupId });
+        }
+      };
+      ipcRenderer.on(channel, handler);
+      ipcRenderer.send('gcall:subscribe-activity');
+      return () => {
+        ipcRenderer.send('gcall:unsubscribe-activity');
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
+
     getPendingKeyMetrics: async () =>
       ipcRenderer.invoke('gcall:getPendingKeyMetrics') as Promise<{
         pending_key_flush_success: number;

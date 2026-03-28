@@ -599,3 +599,15 @@ export const supportChatOpenAtom = atom(false);
 
 /** Controls visibility of the group call panel (separate from 1v1 support chat). */
 export const groupChatOpenAtom = atom(false);
+
+/** Qortal group voice: full-screen stage hidden; slim rail next to group list. */
+export const qortalGroupVoiceCallMinimizedAtom = atom(false);
+
+/**
+ * P2P mesh hint: groupId (string) → at least one participant may be in a voice call
+ * for `gcall-qortal-<id>`. Updated from Electron main (debounced); not cryptographically verified.
+ */
+export const qortalGroupMeshCallActiveAtom = atom<Record<string, boolean>>({});
+
+/** Local user's active Qortal group call room id (`gcall-qortal-<n>`), or null. */
+export const qortalGroupSelfGcallRoomIdAtom = atom<string | null>(null);

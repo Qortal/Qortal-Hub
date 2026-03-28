@@ -1,6 +1,14 @@
 import { useState } from 'react';
 import { useAtomValue } from 'jotai';
-import { ButtonBase, Typography, useTheme } from '@mui/material';
+import {
+  ButtonBase,
+  CircularProgress,
+  Tooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import CallIcon from '@mui/icons-material/Call';
+import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import {
   groupChatHasUnreadAtom,
   groupsAnnHasUnreadAtom,
@@ -89,6 +97,11 @@ export const DesktopHeader = ({
   isForum,
   setGroupSection,
   isPrivate,
+  onGroupCallClick,
+  groupCallInCall = false,
+  groupCallJoining = false,
+  groupCallDisabled = false,
+  groupCallTooltip = '',
 }) => {
   const [value, setValue] = useState(0);
   const theme = useTheme();
@@ -167,6 +180,73 @@ export const DesktopHeader = ({
           visibility: selectedGroup?.groupId === '0' ? 'hidden' : 'visible',
         }}
       >
+        {typeof onGroupCallClick === 'function' && (
+          <Tooltip
+            title={groupCallTooltip}
+            disableHoverListener={!groupCallTooltip}
+          >
+            <span style={{ display: 'inline-flex' }}>
+              <ButtonBase
+                disabled={groupCallDisabled || groupCallJoining}
+                onClick={onGroupCallClick}
+                sx={{
+                  borderRadius: '12px',
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
+                  },
+                }}
+              >
+                <IconWrapper
+                  color={
+                    groupCallInCall || groupCallJoining
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary
+                  }
+                  label={
+                    groupCallJoining
+                      ? t('core:group_call_joining', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : groupCallInCall
+                        ? t('core:group_call_leave', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('core:group_call', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                  }
+                  selected={groupCallInCall || groupCallJoining}
+                  selectColor={theme.palette.action.selected}
+                  customHeight="55px"
+                >
+                  {groupCallJoining ? (
+                    <CircularProgress
+                      size={22}
+                      sx={{
+                        color: theme.palette.text.secondary,
+                      }}
+                    />
+                  ) : groupCallInCall ? (
+                    <CallEndRoundedIcon
+                      sx={{
+                        fontSize: 25,
+                        color: theme.palette.error.light,
+                      }}
+                    />
+                  ) : (
+                    <CallIcon
+                      sx={{
+                        fontSize: 25,
+                        color: theme.palette.text.secondary,
+                      }}
+                    />
+                  )}
+                </IconWrapper>
+              </ButtonBase>
+            </span>
+          </Tooltip>
+        )}
+
         <ButtonBase
           onClick={() => {
             goToAnnouncements();

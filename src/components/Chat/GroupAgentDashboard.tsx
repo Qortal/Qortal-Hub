@@ -2,7 +2,7 @@
  * GroupAgentDashboard — group voice call interface for support agents.
  *
  * Agents see a panel with all current group support conversations and
- * can join/leave the shared group call room.  Uses useGroupVoiceCall.
+ * can join/leave the shared group call room. Uses GroupCallContext.
  */
 
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
@@ -31,7 +31,7 @@ import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
-import { useGroupVoiceCall } from '../../hooks/useGroupVoiceCall';
+import { useGroupCallContext } from '../../contexts/GroupCallContext';
 import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import { GroupCallConnectionBanner } from './GroupCallConnectionBanner';
@@ -193,9 +193,9 @@ function GroupAgentDashboardPanel({
   const {
     roomState, participants, myRole, activeSpeakers, topologyLabel, metrics,
     localConnectionHint,
-    joinGroupCall, leaveGroupCall, setMuted: setCallMuted,
+    joinGroupCall, leaveGroupCall, muted: callMuted, setMuted: setCallMuted,
     exportGroupCallDiagnostics,
-  } = useGroupVoiceCall(isOpen);
+  } = useGroupCallContext();
 
   const [diagExporting, setDiagExporting] = useState(false);
 
@@ -213,7 +213,6 @@ function GroupAgentDashboardPanel({
   );
 
   const [inputValue, setInputValue] = useState('');
-  const [muted, setMuted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -369,17 +368,17 @@ function GroupAgentDashboardPanel({
             {/* Controls */}
             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <CallAudioSettingsButton />
-              <Tooltip title={muted ? 'Unmute' : 'Mute'}>
+              <Tooltip title={callMuted ? 'Unmute' : 'Mute'}>
                 <IconButton
                   size="small"
-                  onClick={() => { setMuted((m) => { setCallMuted(!m); return !m; }); }}
+                  onClick={() => setCallMuted(!callMuted)}
                   sx={{
-                    color: muted ? '#ef4444' : '#22c55e',
-                    bgcolor: alpha(muted ? '#ef4444' : '#22c55e', 0.12),
+                    color: callMuted ? '#ef4444' : '#22c55e',
+                    bgcolor: alpha(callMuted ? '#ef4444' : '#22c55e', 0.12),
                     width: 28, height: 28,
                   }}
                 >
-                  {muted ? <MicOffRoundedIcon sx={{ fontSize: 14 }} /> : <MicRoundedIcon sx={{ fontSize: 14 }} />}
+                  {callMuted ? <MicOffRoundedIcon sx={{ fontSize: 14 }} /> : <MicRoundedIcon sx={{ fontSize: 14 }} />}
                 </IconButton>
               </Tooltip>
 
