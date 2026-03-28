@@ -641,6 +641,22 @@ export function getPostJoinHydratedParticipants(opts: {
   return hydrated;
 }
 
+export function mergeHydratedParticipantsIntoUiList(opts: {
+  previousParticipants: Participant[];
+  hydratedParticipants: Array<{ address: string; publicKey: string }>;
+}): Participant[] {
+  const existing = new Set(opts.previousParticipants.map((p) => p.address));
+  const next = opts.hydratedParticipants
+    .filter((p) => !existing.has(p.address))
+    .map((p) => ({
+      address: p.address,
+      publicKey: p.publicKey,
+      speaking: false,
+      role: 'participant' as const,
+    }));
+  return next.length > 0 ? [...opts.previousParticipants, ...next] : opts.previousParticipants;
+}
+
 /**
  * A hydrated peer may exist in the renderer before we've seen their first
  * authoritative GC_JOIN with joinGeneration. Treat that first generation-bearing
@@ -7418,6 +7434,58 @@ export function useGroupVoiceCall(uiActive = false) {
 
   refreshMemberSetForcedRef.current = refreshMemberSetForced;
 
+  const reconcileParticipantsFromMainRoster = useCallback(
+    async (reason: 'post-join-hydration' | 'post-subscribe-repair') => {
+      const roomId = roomIdRef.current;
+      const localAddress = userInfoRef.current?.address?.trim?.() ?? '';
+      if (!roomId || !localAddress || !window.groupCall) return [];
+
+      const authoritativeRoster = await window.groupCall.getRoomParticipants(roomId);
+      if (roomId !== roomIdRef.current) return [];
+
+      const hydratedRemoteParticipants = getPostJoinHydratedParticipants({
+        localAddress,
+        mainRoster: authoritativeRoster ?? [],
+        existingParticipants: participantsRef.current,
+      });
+      const gatedHydrate = memberGateGroupIdRef.current !== null;
+      const filteredHydrated = gatedHydrate
+        ? hydratedRemoteParticipants.filter((p) =>
+            passesGroupCallMemberGate({
+              claimedAddress: p.address,
+              publicKeyBase58: p.publicKey,
+              memberSet: memberSetRef.current,
+            })
+          )
+        : hydratedRemoteParticipants;
+
+      for (const participant of filteredHydrated) {
+        const { address, publicKey } = participant;
+        participantsRef.current.set(address, {
+          publicKey,
+          lastJoinTs: 0,
+        });
+      }
+
+      if (filteredHydrated.length > 0) {
+        debugLog('[GCall] Authoritative roster reconciliation from main', {
+          reason,
+          remoteCount: filteredHydrated.length,
+          addresses: filteredHydrated.map((p) => p.address),
+        });
+        setParticipants((prev) =>
+          mergeHydratedParticipantsIntoUiList({
+            previousParticipants: prev,
+            hydratedParticipants: filteredHydrated,
+          })
+        );
+      }
+
+      return filteredHydrated;
+    },
+    []
+  );
+
   useEffect(() => {
     if (memberGateGroupIdState === null) return;
     if (roomState !== 'connected' && roomState !== 'joining') return;
@@ -7614,31 +7682,9 @@ export function useGroupVoiceCall(uiActive = false) {
       keyDistributionPendingRef.current = true;
 
       try {
-        const authoritativeRoster = await window.groupCall.getRoomParticipants(
-          roomId
+        const filteredHydrated = await reconcileParticipantsFromMainRoster(
+          'post-join-hydration'
         );
-        const hydratedRemoteParticipants = getPostJoinHydratedParticipants({
-          localAddress: userInfo.address,
-          mainRoster: authoritativeRoster ?? [],
-          existingParticipants: participantsRef.current,
-        });
-        const gatedHydrate = memberGateGroupIdRef.current !== null;
-        const filteredHydrated = gatedHydrate
-          ? hydratedRemoteParticipants.filter((p) =>
-              passesGroupCallMemberGate({
-                claimedAddress: p.address,
-                publicKeyBase58: p.publicKey,
-                memberSet: memberSetRef.current,
-              })
-            )
-          : hydratedRemoteParticipants;
-        for (const participant of filteredHydrated) {
-          const { address, publicKey } = participant;
-          participantsRef.current.set(address, {
-            publicKey,
-            lastJoinTs: 0,
-          });
-        }
         {
           const trustedElectionRoot = getTrustedRootForRejoinElection({
             currentRoot: topologyRef.current?.rootForwarder,
@@ -7664,20 +7710,6 @@ export function useGroupVoiceCall(uiActive = false) {
             delayingInitialElection:
               pendingPostJoinRosterElectionDelayUntilRef.current > 0,
             trustedElectionRoot: trustedElectionRoot ?? null,
-          });
-        }
-        if (filteredHydrated.length > 0) {
-          setParticipants((prev) => {
-            const existing = new Set(prev.map((p) => p.address));
-            const next = filteredHydrated
-              .filter((p) => !existing.has(p.address))
-              .map((p) => ({
-                address: p.address,
-                publicKey: p.publicKey,
-                speaking: false,
-                role: 'participant' as const,
-              }));
-            return next.length > 0 ? [...prev, ...next] : prev;
           });
         }
       } catch (error) {
@@ -7715,6 +7747,7 @@ export function useGroupVoiceCall(uiActive = false) {
       startMetricsFlushLoop,
       startWindowMetricsLoop,
       startWebRtcEnsureLoop,
+      reconcileParticipantsFromMainRoster,
       userInfo,
     ]
   );
@@ -8058,6 +8091,8 @@ export function useGroupVoiceCall(uiActive = false) {
       pendingPostJoinRosterElectionDelayUntilRef.current = 0;
       return;
     }
+
+    let cancelled = false;
 
     const clearPendingPostJoinRosterElectionDelay = (reason: string) => {
       if (pendingPostJoinRosterElectionTimerRef.current) {
@@ -9025,7 +9060,18 @@ export function useGroupVoiceCall(uiActive = false) {
     });
 
     unsubscribeRef.current = unsub;
+    void reconcileParticipantsFromMainRoster('post-subscribe-repair')
+      .then((reconciled) => {
+        if (cancelled || reconciled.length === 0) return;
+        if (pendingPostJoinRosterElectionDelayUntilRef.current > Date.now()) return;
+        scheduleTopologyElectionFlushRef.current();
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        debugWarn('[GCall] Post-subscribe roster reconciliation failed', error);
+      });
     return () => {
+      cancelled = true;
       unsub();
       unsubscribeRef.current = null;
       scheduleTopologyElectionFlushRef.current = () => {};
@@ -9057,6 +9103,7 @@ export function useGroupVoiceCall(uiActive = false) {
     scheduleRelayMetricsFlush,
     sendTargetedRoomKeys,
     ensureAudioCaptureStarted,
+    reconcileParticipantsFromMainRoster,
     syncDecryptWorkerRoomKey,
     uiActive,
     userInfo?.address,

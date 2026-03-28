@@ -45,7 +45,10 @@ import {
 import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell';
 import { SupportChat, SUPPORT_ADDRESSES } from './components/Chat/SupportChat';
 import { AgentSupportDashboard } from './components/Chat/AgentSupportDashboard';
-import { GroupSupportChat, GROUP_SUPPORT_ADDRESSES } from './components/Chat/GroupSupportChat';
+import {
+  GroupSupportChat,
+  GROUP_SUPPORT_ADDRESSES,
+} from './components/Chat/GroupSupportChat';
 import { GroupAgentDashboard } from './components/Chat/GroupAgentDashboard';
 import { GroupCallProvider } from './contexts/GroupCallContext';
 import { QortalGroupVoiceCallStage } from './components/Group/QortalGroupVoiceCallStage';
@@ -1067,11 +1070,11 @@ function App() {
             )}
 
             {/* Group voice call — parallel system using GROUP_SUPPORT_ADDRESSES */}
-            {GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
+            {/* {GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
               <GroupAgentDashboard />
             ) : (
               <GroupSupportChat />
-            )}
+            )} */}
 
             <QortalGroupVoiceCallStage />
           </GroupCallProvider>

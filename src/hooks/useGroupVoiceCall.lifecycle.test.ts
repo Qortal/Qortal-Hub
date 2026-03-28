@@ -9,6 +9,7 @@ import {
   getSessionUpdatedKeyRecoveryAction,
   getPostJoinHydratedParticipants,
   isCurrentGroupCallAudioStartupToken,
+  mergeHydratedParticipantsIntoUiList,
   shouldPromoteStandbyRootAfterHeartbeatTimeout,
   shouldAcceptIncomingRoomKeySender,
   shouldAcceptKeyRecoveryRequestGeneration,
@@ -255,6 +256,60 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         ],
       })
     ).toEqual([{ address: 'bob', publicKey: 'bob-pk' }]);
+  });
+
+  it('merges later authoritative roster repairs without disturbing existing participants', () => {
+    const initial = [
+      {
+        address: 'self',
+        publicKey: 'self-pk',
+        speaking: false,
+        role: 'participant' as const,
+      },
+      {
+        address: 'alice',
+        publicKey: 'alice-pk',
+        speaking: true,
+        role: 'cluster-forwarder' as const,
+      },
+    ];
+
+    const once = mergeHydratedParticipantsIntoUiList({
+      previousParticipants: initial,
+      hydratedParticipants: [{ address: 'bob', publicKey: 'bob-pk' }],
+    });
+    const twice = mergeHydratedParticipantsIntoUiList({
+      previousParticipants: once,
+      hydratedParticipants: [
+        { address: 'alice', publicKey: 'ignored-refresh' },
+        { address: 'carol', publicKey: 'carol-pk' },
+      ],
+    });
+
+    expect(once).toEqual([
+      ...initial,
+      {
+        address: 'bob',
+        publicKey: 'bob-pk',
+        speaking: false,
+        role: 'participant',
+      },
+    ]);
+    expect(twice).toEqual([
+      ...initial,
+      {
+        address: 'bob',
+        publicKey: 'bob-pk',
+        speaking: false,
+        role: 'participant',
+      },
+      {
+        address: 'carol',
+        publicKey: 'carol-pk',
+        speaking: false,
+        role: 'participant',
+      },
+    ]);
   });
 
   it('delays the first post-join election only for occupied rooms without a known root', () => {
