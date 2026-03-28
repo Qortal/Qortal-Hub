@@ -34,6 +34,8 @@ const TARGET_RELEASE_MARGIN_MS = 40;
 /** Tiered catch-up when buffer is far over adaptive target (before EMA). */
 const OVER_TARGET_TIER_STRONG_MS = 150;
 const OVER_TARGET_TIER_MID_MS = 80;
+const CONCEALMENT_TAIL_SAMPLES = 240; // 5ms @ 48kHz
+const CONCEALMENT_FADE_SAMPLES = 240;
 
 class GroupPlayoutProcessor extends AudioWorkletProcessor {
   constructor(options) {
@@ -50,8 +52,10 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     this._targetPlayoutMs = DEFAULT_TARGET_MS;
     this._playoutStarted = false;
 
-    this._lastTail = new Float32Array(240); // up to 5ms @48k for concealment tail
+    this._lastTail = new Float32Array(CONCEALMENT_TAIL_SAMPLES);
     this._lastTailLen = 0;
+    this._lastTailWritePos = 0;
+    this._concealCursor = 0;
 
     this._metricsQuantumCount = 0;
     this._concealedThisBlock = false;
@@ -102,6 +106,22 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     return s0 * (1 - this._readFrac) + s1 * this._readFrac;
   }
 
+  _rememberTailSample(sample) {
+    this._lastTail[this._lastTailWritePos] = sample;
+    this._lastTailWritePos = (this._lastTailWritePos + 1) % this._lastTail.length;
+    if (this._lastTailLen < this._lastTail.length) {
+      this._lastTailLen++;
+    }
+  }
+
+  _tailSampleAt(offset) {
+    if (offset < 0 || offset >= this._lastTailLen) return 0;
+    const firstValid =
+      this._lastTailLen === this._lastTail.length ? this._lastTailWritePos : 0;
+    const idx = (firstValid + offset) % this._lastTail.length;
+    return this._lastTail[idx];
+  }
+
   _stepReadOne(rate) {
     this._readFrac += rate;
     while (this._readFrac >= 1 && this._available > 0) {
@@ -149,6 +169,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       );
       if (bufferedMs < startGateMs) {
         output.fill(0);
+        this._concealCursor = 0;
         this._maybePostMetrics(bufferedMs, quantum, false);
         return true;
       }
@@ -185,19 +206,14 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < quantum; i++) {
       if (this._available < 2) {
         this._concealedThisBlock = true;
-        const conceal = this._concealSample(i, quantum);
+        const conceal = this._concealSample();
         output[i] = conceal;
         continue;
       }
       const s = this._sampleAtRead();
       output[i] = s;
-      if (this._lastTailLen < this._lastTail.length) {
-        this._lastTail[this._lastTailLen++] = s;
-        if (this._lastTailLen > 240) {
-          this._lastTail.copyWithin(0, this._lastTailLen - 240);
-          this._lastTailLen = 240;
-        }
-      }
+      this._rememberTailSample(s);
+      this._concealCursor = 0;
       this._stepReadOne(rate);
     }
 
@@ -209,13 +225,15 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     return true;
   }
 
-  _concealSample(i, quantum) {
+  _concealSample() {
     if (this._lastTailLen < 2) return 0;
-    const fadeLen = Math.min(quantum, 120);
-    const t = i < fadeLen ? i / fadeLen : 1;
+    const fadeLen = Math.min(this._lastTailLen, CONCEALMENT_FADE_SAMPLES);
+    if (this._concealCursor >= fadeLen) return 0;
+    const tailStart = this._lastTailLen - fadeLen;
+    const sample = this._tailSampleAt(tailStart + this._concealCursor);
+    const t = fadeLen <= 1 ? 1 : this._concealCursor / (fadeLen - 1);
     const g = 1 - t;
-    const idx = Math.max(0, this._lastTailLen - fadeLen + Math.min(i, fadeLen - 1));
-    const sample = this._lastTail[Math.min(idx, this._lastTailLen - 1)];
+    this._concealCursor++;
     return sample * g * g;
   }
 

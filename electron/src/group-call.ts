@@ -104,6 +104,17 @@ export function pendingKeyEnvelopeWinsOver(
   return incoming.timestamp > existing.timestamp;
 }
 
+/**
+ * Local recovery must not bump generation ahead of the mesh; otherwise authoritative
+ * GC_KEY/GC_KEY_ROTATE from the real root look stale to this process.
+ */
+export function getLocalSessionBreakMediaSessionGeneration(
+  currentGeneration: number
+): number {
+  const gen = currentGeneration >>> 0;
+  return gen === 0 ? 1 : gen;
+}
+
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (no topology/key epoch on wire). */
 const GC_KEY_MESSAGE_VERSION = 3;
 
@@ -1926,7 +1937,8 @@ export class GroupCallManager extends EventEmitter {
   }
 
   /**
-   * Last-resort session break: bump media session generation for all local subscribers.
+   * Last-resort local session resync: ask local subscribers to drop/reacquire K
+   * without inventing a newer generation than the rest of the mesh.
    */
   requestSessionBreak(roomId: string): { ok: boolean; error?: string } {
     const room = this.rooms.get(roomId);
@@ -1943,14 +1955,12 @@ export class GroupCallManager extends EventEmitter {
     if (!localInRoom) {
       return { ok: false, error: 'not-in-room' };
     }
-    room.mediaSessionGeneration = (room.mediaSessionGeneration + 1) >>> 0;
-    if (room.mediaSessionGeneration === 0) {
-      room.mediaSessionGeneration = 1;
-    }
     this.emit('gcall:session-updated', {
       roomId,
       callSessionId: room.callSessionId,
-      mediaSessionGeneration: room.mediaSessionGeneration,
+      mediaSessionGeneration: getLocalSessionBreakMediaSessionGeneration(
+        room.mediaSessionGeneration
+      ),
     });
     return { ok: true };
   }

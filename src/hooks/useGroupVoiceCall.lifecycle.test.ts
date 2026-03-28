@@ -1,17 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import {
   bumpGroupCallAudioSessionToken,
+  chooseSameEpochTopologyWinner,
+  countRecentlyHealthyRemoteSources,
   clearAdaptiveGroupCallPlayoutMaps,
+  getSessionUpdatedKeyRecoveryAction,
   getPostJoinHydratedParticipants,
   isCurrentGroupCallAudioStartupToken,
+  shouldAcceptIncomingRoomKeySender,
+  shouldAcceptKeyRecoveryRequestGeneration,
+  shouldAdoptTrustedRootSessionDuringRecovery,
   shouldApplyJoinSessionSnapshot,
   shouldContinueAfterParticipantJoinRefresh,
+  shouldEscalateRoomWideKeyRecovery,
   shouldIgnoreParticipantLeftEvent,
   shouldMintRootSessionKeyImmediately,
   shouldSendCachedQuitLeave,
   shouldSubscribeToJoinedGroupCallEvents,
   shouldStartGroupCallAudioCapture,
 } from './useGroupVoiceCall';
+import type { GroupTopology } from '../lib/group-call/types';
 
 describe('useGroupVoiceCall lifecycle helpers', () => {
   it('suppresses startup when pipeline is active or startup is in flight', () => {
@@ -127,6 +135,52 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
+  it('reuses or reacquires keys on session-updated without minting in occupied rooms', () => {
+    expect(
+      getSessionUpdatedKeyRecoveryAction({
+        isLocalRoot: true,
+        hasOwnedRoomKey: false,
+        otherParticipantCount: 0,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
+      })
+    ).toBe('mint-immediately');
+
+    expect(
+      getSessionUpdatedKeyRecoveryAction({
+        isLocalRoot: true,
+        hasOwnedRoomKey: true,
+        otherParticipantCount: 2,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 10,
+        decryptFailureStreak: 0,
+      })
+    ).toBe('redistribute-existing');
+
+    expect(
+      getSessionUpdatedKeyRecoveryAction({
+        isLocalRoot: true,
+        hasOwnedRoomKey: false,
+        otherParticipantCount: 2,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 10,
+        decryptFailureStreak: 3,
+      })
+    ).toBe('request-recovery');
+
+    expect(
+      getSessionUpdatedKeyRecoveryAction({
+        isLocalRoot: false,
+        hasOwnedRoomKey: false,
+        otherParticipantCount: 2,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 10,
+        decryptFailureStreak: 3,
+      })
+    ).toBe('request-recovery');
+  });
+
   it('subscribes to joined group-call events only after main join succeeds', () => {
     expect(
       shouldSubscribeToJoinedGroupCallEvents({
@@ -235,6 +289,217 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         leavingAddress: 'other',
       })
     ).toBe(false);
+  });
+
+  it('accepts incoming room keys only from the elected root once topology converges', () => {
+    expect(
+      shouldAcceptIncomingRoomKeySender({
+        currentRoot: 'root',
+        senderAddress: 'root',
+        senderInRoster: true,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAcceptIncomingRoomKeySender({
+        currentRoot: 'root',
+        senderAddress: 'peer',
+        senderInRoster: true,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldAcceptIncomingRoomKeySender({
+        currentRoot: '',
+        senderAddress: 'peer',
+        senderInRoster: true,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAcceptIncomingRoomKeySender({
+        currentRoot: '',
+        senderAddress: 'stranger',
+        senderInRoster: false,
+      })
+    ).toBe(false);
+  });
+
+  it('accepts recovery key requests for the current or newer authoritative generation', () => {
+    expect(
+      shouldAcceptKeyRecoveryRequestGeneration({
+        requestMediaSessionGeneration: 7,
+        localMediaSessionGeneration: 7,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAcceptKeyRecoveryRequestGeneration({
+        requestMediaSessionGeneration: 8,
+        localMediaSessionGeneration: 7,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAcceptKeyRecoveryRequestGeneration({
+        requestMediaSessionGeneration: 6,
+        localMediaSessionGeneration: 7,
+      })
+    ).toBe(false);
+  });
+
+  it('counts recently healthy remote sources before escalating room-wide recovery', () => {
+    const nowMs = 10_000;
+    const healthyCount = countRecentlyHealthyRemoteSources({
+      lastSuccessfulDecodeAtBySource: new Map([
+        ['root', nowMs - 500],
+        ['third', nowMs - 4_500],
+      ]),
+      nowMs,
+      healthyWindowMs: 4_000,
+    });
+
+    expect(healthyCount).toBe(1);
+    expect(
+      shouldEscalateRoomWideKeyRecovery({
+        hasRoomKey: true,
+        repeatedFailures: true,
+        noRecentDecode: false,
+        recentlyHealthyRemoteSourceCount: healthyCount,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldEscalateRoomWideKeyRecovery({
+        hasRoomKey: true,
+        repeatedFailures: true,
+        noRecentDecode: false,
+        recentlyHealthyRemoteSourceCount: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldEscalateRoomWideKeyRecovery({
+        hasRoomKey: false,
+        repeatedFailures: false,
+        noRecentDecode: false,
+        recentlyHealthyRemoteSourceCount: healthyCount,
+      })
+    ).toBe(true);
+  });
+
+  it('allows the trusted current root to replace a stale installed session during recovery', () => {
+    expect(
+      shouldAdoptTrustedRootSessionDuringRecovery({
+        hasInstalledRoomKey: true,
+        senderAddress: 'root',
+        currentRoot: 'root',
+        payloadCallSessionId: 'root-session',
+        localCallSessionId: 'stale-session',
+        payloadMediaSessionGeneration: 1,
+        localMediaSessionGeneration: 1,
+        decryptFailureStreak: 9,
+        lastRemoteDecodeAtMs: 1_000,
+        nowMs: 6_000,
+        noDecodeWindowMs: 4_000,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAdoptTrustedRootSessionDuringRecovery({
+        hasInstalledRoomKey: true,
+        senderAddress: 'peer',
+        currentRoot: 'root',
+        payloadCallSessionId: 'root-session',
+        localCallSessionId: 'stale-session',
+        payloadMediaSessionGeneration: 1,
+        localMediaSessionGeneration: 1,
+        decryptFailureStreak: 9,
+        lastRemoteDecodeAtMs: 1_000,
+        nowMs: 6_000,
+        noDecodeWindowMs: 4_000,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldAdoptTrustedRootSessionDuringRecovery({
+        hasInstalledRoomKey: true,
+        senderAddress: 'root',
+        currentRoot: 'root',
+        payloadCallSessionId: 'root-session',
+        localCallSessionId: 'stale-session',
+        payloadMediaSessionGeneration: 1,
+        localMediaSessionGeneration: 1,
+        decryptFailureStreak: 0,
+        lastRemoteDecodeAtMs: 5_500,
+        nowMs: 6_000,
+        noDecodeWindowMs: 4_000,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldAdoptTrustedRootSessionDuringRecovery({
+        hasInstalledRoomKey: true,
+        senderAddress: 'root',
+        currentRoot: 'root',
+        payloadCallSessionId: 'root-session',
+        localCallSessionId: 'stale-session',
+        payloadMediaSessionGeneration: 2,
+        localMediaSessionGeneration: 1,
+        decryptFailureStreak: 0,
+        lastRemoteDecodeAtMs: 5_500,
+        nowMs: 6_000,
+        noDecodeWindowMs: 4_000,
+      })
+    ).toBe(true);
+  });
+
+  it('preserves the established root when same-epoch topology arrives with a different root', () => {
+    const current: GroupTopology = {
+      topologyEpoch: 8,
+      rootForwarder: 'root-a',
+      standbyForwarder: 'standby',
+      clusters: [],
+      timestamp: 100,
+      lastSeen: 1_000,
+    };
+    const incoming: GroupTopology = {
+      topologyEpoch: 8,
+      rootForwarder: 'root-b',
+      standbyForwarder: 'standby',
+      clusters: [],
+      timestamp: 100,
+      lastSeen: 2_000,
+    };
+
+    expect(chooseSameEpochTopologyWinner(current, incoming)).toEqual({
+      acceptIncoming: false,
+      reason: 'preserve-established-root',
+    });
+  });
+
+  it('still refreshes same-root duplicate heartbeats by lastSeen', () => {
+    const current: GroupTopology = {
+      topologyEpoch: 8,
+      rootForwarder: 'root-a',
+      standbyForwarder: 'standby',
+      clusters: [],
+      timestamp: 100,
+      lastSeen: 1_000,
+    };
+    const incoming: GroupTopology = {
+      topologyEpoch: 8,
+      rootForwarder: 'root-a',
+      standbyForwarder: 'standby',
+      clusters: [],
+      timestamp: 100,
+      lastSeen: 2_000,
+    };
+
+    expect(chooseSameEpochTopologyWinner(current, incoming)).toEqual({
+      acceptIncoming: true,
+      reason: 'lastSeen',
+    });
   });
 
   it('sends cached quit leave only while connected and only once', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   GC_JOIN_MAX_AGE_MS,
   gcJoinTimestampRejectReason,
+  getLocalSessionBreakMediaSessionGeneration,
   mergeRoomTopologyEpochWithFloor,
   pendingKeyEnvelopeWinsOver,
   shouldIgnoreLeaveForLocalAddress,
@@ -101,5 +102,15 @@ describe('shouldIgnoreLeaveForLocalAddress', () => {
         'Q-remote'
       )
     ).toBe(false);
+  });
+});
+
+describe('getLocalSessionBreakMediaSessionGeneration', () => {
+  it('does not bump the local generation ahead of the mesh', () => {
+    expect(getLocalSessionBreakMediaSessionGeneration(7)).toBe(7);
+  });
+
+  it('normalizes an invalid zero generation to one', () => {
+    expect(getLocalSessionBreakMediaSessionGeneration(0)).toBe(1);
   });
 });
