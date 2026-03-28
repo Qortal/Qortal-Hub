@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  buildHierarchicalTopologyWithStickyRoot,
   assessGroupCallSourceStall,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   buildTopologyAfterClusterPromotion,
+  chooseRouterTopologyAuthority,
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
   computeGroupCallDcTransportReady,
@@ -68,6 +70,146 @@ describe('buildSingleClusterTopologyWithStickyRoot', () => {
     expect(topo!.rootForwarder).toBe('');
     expect(topo!.standbyForwarder).toBe('');
     expect(topo!.clusters[0].members).toEqual([]);
+  });
+});
+
+describe('buildHierarchicalTopologyWithStickyRoot', () => {
+  const CLUSTER = 3;
+
+  it('keeps the previous root authoritative across clusters', () => {
+    const topo = buildHierarchicalTopologyWithStickyRoot(
+      ['a', 'b', 'c', 'd', 'e', 'f'],
+      4,
+      'e',
+      CLUSTER
+    );
+    expect(topo).not.toBeNull();
+    expect(topo!.rootForwarder).toBe('e');
+    expect(topo!.standbyForwarder).toBe('a');
+    expect(topo!.clusters.map((cluster) => cluster.forwarder)).toEqual([
+      'e',
+      'a',
+    ]);
+    expect(topo!.clusters[0]).toEqual({
+      members: ['e', 'd', 'f'],
+      forwarder: 'e',
+      standby: 'd',
+      standby2: 'f',
+    });
+  });
+
+  it('returns null when root is absent or room is single-cluster', () => {
+    expect(
+      buildHierarchicalTopologyWithStickyRoot(['a', 'b', 'c'], 1, 'b', CLUSTER)
+    ).toBeNull();
+    expect(
+      buildHierarchicalTopologyWithStickyRoot(
+        ['a', 'b', 'c', 'd'],
+        1,
+        'missing',
+        CLUSTER
+      )
+    ).toBeNull();
+  });
+});
+
+describe('chooseRouterTopologyAuthority', () => {
+  it('accepts newer epochs and rejects stale ones', () => {
+    const current = {
+      topologyEpoch: 5,
+      rootForwarder: 'root-b',
+      standbyForwarder: 'standby',
+      clusters: [],
+      lastSeen: 1_000,
+    };
+    expect(
+      chooseRouterTopologyAuthority(current, {
+        ...current,
+        topologyEpoch: 6,
+      })
+    ).toEqual({
+      acceptIncoming: true,
+      reason: 'newer-epoch',
+      winningRoot: 'root-b',
+    });
+    expect(
+      chooseRouterTopologyAuthority(current, {
+        ...current,
+        topologyEpoch: 4,
+      })
+    ).toEqual({
+      acceptIncoming: false,
+      reason: 'stale-epoch',
+      winningRoot: 'root-b',
+    });
+  });
+
+  it('breaks same-epoch root conflicts symmetrically by root address', () => {
+    const current = {
+      topologyEpoch: 8,
+      rootForwarder: 'root-b',
+      standbyForwarder: 'standby',
+      clusters: [],
+      lastSeen: 1_000,
+    };
+    expect(
+      chooseRouterTopologyAuthority(current, {
+        ...current,
+        rootForwarder: 'root-a',
+        lastSeen: 2_000,
+      })
+    ).toEqual({
+      acceptIncoming: true,
+      reason: 'rootForwarder-lexical',
+      winningRoot: 'root-a',
+    });
+    expect(
+      chooseRouterTopologyAuthority(
+        {
+          ...current,
+          rootForwarder: 'root-a',
+        },
+        {
+          ...current,
+          rootForwarder: 'root-b',
+          lastSeen: 2_000,
+        }
+      )
+    ).toEqual({
+      acceptIncoming: false,
+      reason: 'rootForwarder-lexical',
+      winningRoot: 'root-a',
+    });
+  });
+
+  it('refreshes same-root topologies by lastSeen only', () => {
+    const current = {
+      topologyEpoch: 8,
+      rootForwarder: 'root-a',
+      standbyForwarder: 'standby',
+      clusters: [],
+      lastSeen: 1_000,
+    };
+    expect(
+      chooseRouterTopologyAuthority(current, {
+        ...current,
+        lastSeen: 2_000,
+      })
+    ).toEqual({
+      acceptIncoming: true,
+      reason: 'lastSeen',
+      winningRoot: 'root-a',
+    });
+    expect(
+      chooseRouterTopologyAuthority(current, {
+        ...current,
+        lastSeen: 1_000,
+      })
+    ).toEqual({
+      acceptIncoming: false,
+      reason: 'same-topology',
+      winningRoot: 'root-a',
+    });
   });
 });
 

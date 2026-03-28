@@ -998,6 +998,16 @@ try {
         timestamp
       ) as { success: boolean; error?: string },
 
+    reportTransportHealth: async (
+      roomId: string,
+      healthyPeerAddresses: string[]
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:reportTransportHealth',
+        roomId,
+        healthyPeerAddresses
+      ) as Promise<{ success: boolean }>,
+
     /** Broadcast topology (root forwarder only). */
     broadcastTopology: async (
       roomId: string,

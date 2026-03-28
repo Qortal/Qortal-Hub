@@ -90,6 +90,32 @@ export function shouldIgnoreLeaveForLocalAddress(
   return localAddresses.has(address);
 }
 
+export function shouldRefreshParticipantFromVerifiedJoin(opts: {
+  currentJoinedAt: number | undefined;
+  incomingJoinTimestamp: number;
+}): boolean {
+  if (
+    typeof opts.currentJoinedAt !== 'number' ||
+    !Number.isFinite(opts.currentJoinedAt)
+  ) {
+    return true;
+  }
+  return opts.incomingJoinTimestamp >= opts.currentJoinedAt;
+}
+
+export function shouldApplyVerifiedLeaveToParticipant(opts: {
+  participantJoinedAt: number | undefined;
+  leaveTimestamp: number;
+}): boolean {
+  if (
+    typeof opts.participantJoinedAt !== 'number' ||
+    !Number.isFinite(opts.participantJoinedAt)
+  ) {
+    return true;
+  }
+  return opts.leaveTimestamp >= opts.participantJoinedAt;
+}
+
 /**
  * Strict merge for a single pending KEY/KEY_ROTATE slot: higher `mediaSessionGeneration` wins;
  * if equal, newer `timestamp` wins. Never prefer lower generation even if timestamp is newer.
@@ -113,6 +139,19 @@ export function getLocalSessionBreakMediaSessionGeneration(
 ): number {
   const gen = currentGeneration >>> 0;
   return gen === 0 ? 1 : gen;
+}
+
+export function shouldDelayPresenceEvictionForHealthyTransport(opts: {
+  lastReportAtMs: number | null | undefined;
+  healthyPeerAddresses: ReadonlySet<string>;
+  address: string;
+  nowMs: number;
+  staleAfterMs: number;
+}): boolean {
+  if (!opts.address || !opts.healthyPeerAddresses.has(opts.address)) return false;
+  const lastReportAtMs = opts.lastReportAtMs ?? 0;
+  if (lastReportAtMs <= 0) return false;
+  return opts.nowMs - lastReportAtMs <= opts.staleAfterMs;
 }
 
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (no topology/key epoch on wire). */
@@ -349,6 +388,13 @@ interface GroupRoom {
   participants: Map<string, RoomParticipant>;
   topologyEpoch: number;
   topologySignature?: string;
+  lastTopology?: {
+    topologyEpoch: number;
+    rootForwarder: string;
+    standbyForwarder: string;
+    clusters: ClusterDef[];
+    lastSeen?: number | null;
+  };
   joinTimestamp?: number;
   /** Main-owned media session id; immutable until room is empty. */
   callSessionId: string;
@@ -373,6 +419,58 @@ function buildTopologySignature(env: Pick<
       standby2: c.standby2 ?? '',
     })),
   });
+}
+
+export function chooseMainTopologyAuthority(
+  current: {
+    topologyEpoch: number;
+    rootForwarder: string;
+    lastSeen?: number | null;
+  },
+  incoming: {
+    topologyEpoch: number;
+    rootForwarder: string;
+    lastSeen?: number | null;
+  }
+): { acceptIncoming: boolean; reason: string } {
+  if (incoming.topologyEpoch !== current.topologyEpoch) {
+    return {
+      acceptIncoming: incoming.topologyEpoch > current.topologyEpoch,
+      reason:
+        incoming.topologyEpoch > current.topologyEpoch
+          ? 'newer-epoch'
+          : 'stale-epoch',
+    };
+  }
+  if (incoming.rootForwarder !== current.rootForwarder) {
+    const currentRoot = current.rootForwarder.trim();
+    const incomingRoot = incoming.rootForwarder.trim();
+    if (!currentRoot && incomingRoot) {
+      return { acceptIncoming: true, reason: 'rootForwarder-lexical' };
+    }
+    if (currentRoot && !incomingRoot) {
+      return { acceptIncoming: false, reason: 'rootForwarder-lexical' };
+    }
+    return {
+      acceptIncoming: incomingRoot.localeCompare(currentRoot) < 0,
+      reason: 'rootForwarder-lexical',
+    };
+  }
+  const incomingSeen = incoming.lastSeen;
+  const currentSeen = current.lastSeen;
+  if (
+    typeof incomingSeen === 'number' &&
+    Number.isFinite(incomingSeen) &&
+    typeof currentSeen === 'number' &&
+    Number.isFinite(currentSeen) &&
+    incomingSeen !== currentSeen
+  ) {
+    return {
+      acceptIncoming: incomingSeen > currentSeen,
+      reason: 'lastSeen',
+    };
+  }
+  return { acceptIncoming: false, reason: 'same-topology' };
 }
 
 function sha256Hex(input: string): string {
@@ -635,6 +733,11 @@ export class GroupCallManager extends EventEmitter {
   private onPresenceUpdated: (({ address, online }: { address: string; online: boolean }) => void) | null = null;
   private presenceEvictionTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private static readonly PRESENCE_EVICTION_GRACE_MS = 12_000;
+  private static readonly TRANSPORT_HEALTH_STALE_MS = 15_000;
+  private transportHealthByRoom = new Map<
+    string,
+    { reportedAtMs: number; healthyPeerAddresses: Set<string> }
+  >();
 
   private verifyPool = new VerifyWorkerPool(
     'gcall',
@@ -692,32 +795,7 @@ export class GroupCallManager extends EventEmitter {
     };
 
     this.presenceExpiredHandler = (address: string) => {
-      // Don't start a duplicate grace timer for the same address
-      if (this.presenceEvictionTimers.has(address)) return;
-
-      // Only act if this address is actually in an active room
-      let inCall = false;
-      for (const [, room] of this.rooms) {
-        if (room.participants.has(address)) { inCall = true; break; }
-      }
-      if (!inCall) return;
-
-      loggerLog(`[GCall] Presence offline for ${address} — starting ${GroupCallManager.PRESENCE_EVICTION_GRACE_MS}ms grace timer`);
-      const timer = setTimeout(() => {
-        this.presenceEvictionTimers.delete(address);
-        // If the peer came back online during the grace window, skip eviction
-        if (this.presence.isAddressOnline(address)) {
-          loggerLog(`[GCall] ${address} recovered — skipping eviction`);
-          return;
-        }
-        for (const [roomId, room] of this.rooms) {
-          if (room.participants.has(address)) {
-            loggerLog(`[GCall] Grace period expired for ${address} — evicting from ${roomId}`);
-            this.handleLeave(roomId, address, true);
-          }
-        }
-      }, GroupCallManager.PRESENCE_EVICTION_GRACE_MS);
-      this.presenceEvictionTimers.set(address, timer);
+      this.schedulePresenceEviction(address);
     };
 
   }
@@ -881,12 +959,31 @@ export class GroupCallManager extends EventEmitter {
     this.pendingKeyByRoom.clear();
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
+    this.transportHealthByRoom.clear();
     loggerLog('[GCall] GroupCallManager stopped.');
   }
 
   setLocalAddresses(addresses: string[]): void {
     this.localAddresses = new Set(addresses);
     loggerLog(`[GCall] Local addresses set: ${[...addresses].join(', ')}`);
+  }
+
+  reportTransportHealth(roomId: string, healthyPeerAddresses: string[]): void {
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+    const healthyPeers = new Set<string>();
+    for (const rawAddress of healthyPeerAddresses) {
+      if (typeof rawAddress !== 'string') continue;
+      const address = rawAddress.trim();
+      if (!address) continue;
+      if (this.localAddresses.has(address)) continue;
+      if (!room.participants.has(address)) continue;
+      healthyPeers.add(address);
+    }
+    this.transportHealthByRoom.set(roomId, {
+      reportedAtMs: Date.now(),
+      healthyPeerAddresses: healthyPeers,
+    });
   }
 
   getPendingKeyMetrics(): {
@@ -1123,6 +1220,7 @@ export class GroupCallManager extends EventEmitter {
     this.pendingKeyByRoom.delete(roomId);
     this.rooms.delete(roomId);
     this.relayByteBudgetByRoom.delete(roomId);
+    this.transportHealthByRoom.delete(roomId);
     loggerLog(
       signature
         ? `[GCall] Sent GC_LEAVE for room ${roomId}`
@@ -1151,6 +1249,13 @@ export class GroupCallManager extends EventEmitter {
       // Renderer is authoritative for outbound topology; direct assign (do not Math.max — regressions should surface).
       room.topologyEpoch = topology.topologyEpoch;
       room.topologySignature = buildTopologySignature(topology);
+      room.lastTopology = {
+        topologyEpoch: topology.topologyEpoch,
+        rootForwarder: topology.rootForwarder,
+        standbyForwarder: topology.standbyForwarder,
+        clusters: topology.clusters,
+        lastSeen: topology.lastSeen,
+      };
     } else {
       const now = Date.now();
       const last = this.broadcastTopologyNoRoomLogAt.get(roomId) ?? 0;
@@ -1511,7 +1616,13 @@ export class GroupCallManager extends EventEmitter {
     // Update room state if we are in this room
     for (const [roomId, room] of this.rooms) {
       if (roomId === env.roomId) {
-        if (!room.participants.has(env.fromAddress)) {
+        const existing = room.participants.get(env.fromAddress);
+        if (
+          shouldRefreshParticipantFromVerifiedJoin({
+            currentJoinedAt: existing?.joinedAt,
+            incomingJoinTimestamp: env.timestamp,
+          })
+        ) {
           room.participants.set(env.fromAddress, {
             publicKey: env.fromPublicKey,
             joinedAt: env.timestamp,
@@ -1565,6 +1676,19 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private applyVerifiedLeave(env: GcLeaveEnvelope): void {
+    const room = this.rooms.get(env.roomId);
+    const participant = room?.participants.get(env.fromAddress);
+    if (
+      !shouldApplyVerifiedLeaveToParticipant({
+        participantJoinedAt: participant?.joinedAt,
+        leaveTimestamp: env.timestamp,
+      })
+    ) {
+      loggerLog(
+        `[GCall] Ignored stale GC_LEAVE for ${env.fromAddress} in ${env.roomId} (leaveTs=${env.timestamp}, joinedAt=${participant?.joinedAt ?? 'unknown'})`
+      );
+      return;
+    }
     this.handleLeave(env.roomId, env.fromAddress, false);
 
     if ((env.hopsRemaining ?? 0) > 0) {
@@ -1586,6 +1710,17 @@ export class GroupCallManager extends EventEmitter {
       if (room.participants.size === 0) {
         this.rooms.delete(roomId);
         this.relayByteBudgetByRoom.delete(roomId);
+        this.transportHealthByRoom.delete(roomId);
+      }
+    }
+    const health = this.transportHealthByRoom.get(roomId);
+    if (health) {
+      health.healthyPeerAddresses.delete(address);
+      if (
+        health.healthyPeerAddresses.size === 0 &&
+        (!room || room.participants.size === 0)
+      ) {
+        this.transportHealthByRoom.delete(roomId);
       }
     }
     this.participantNodeIds.delete(address);
@@ -1626,6 +1761,13 @@ export class GroupCallManager extends EventEmitter {
     const topologySignature = buildTopologySignature(env);
     let emitFullTopology = true;
     if (room) {
+      const incomingTopology = {
+        topologyEpoch: env.topologyEpoch,
+        rootForwarder: env.rootForwarder,
+        standbyForwarder: env.standbyForwarder,
+        clusters: env.clusters,
+        lastSeen: env.lastSeen,
+      };
       if (env.topologyEpoch < room.topologyEpoch) {
         const now = Date.now();
         if (now - this.lastStaleTopologyLogAt >= GC_STALE_TOPOLOGY_LOG_MIN_MS) {
@@ -1637,11 +1779,31 @@ export class GroupCallManager extends EventEmitter {
         }
         return;
       }
+      if (
+        room.lastTopology &&
+        incomingTopology.topologyEpoch === room.lastTopology.topologyEpoch &&
+        incomingTopology.rootForwarder !== room.lastTopology.rootForwarder
+      ) {
+        const decision = chooseMainTopologyAuthority(room.lastTopology, incomingTopology);
+        loggerLog(
+          `[GCall] Same-epoch GC_TOPOLOGY disagreement room=${env.roomId} epoch=${incomingTopology.topologyEpoch} currentRoot=${room.lastTopology.rootForwarder} incomingRoot=${incomingTopology.rootForwarder} acceptIncoming=${decision.acceptIncoming} reason=${decision.reason}`
+        );
+        if (!decision.acceptIncoming) {
+          if ((env.hopsRemaining ?? 0) > 0) {
+            this.p2p.send(null, {
+              ...env,
+              hopsRemaining: (env.hopsRemaining ?? 1) - 1,
+            });
+          }
+          return;
+        }
+      }
       emitFullTopology =
         env.topologyEpoch !== room.topologyEpoch ||
         topologySignature !== room.topologySignature;
       room.topologyEpoch = env.topologyEpoch;
       room.topologySignature = topologySignature;
+      room.lastTopology = incomingTopology;
     }
 
     if (room && emitFullTopology) {
@@ -2094,5 +2256,60 @@ export class GroupCallManager extends EventEmitter {
     const room = this.rooms.get(roomId);
     if (!room) return [];
     return [...room.participants.entries()].map(([address, p]) => ({ address, publicKey: p.publicKey }));
+  }
+
+  private schedulePresenceEviction(address: string): void {
+    if (this.presenceEvictionTimers.has(address)) return;
+
+    let inCall = false;
+    for (const [, room] of this.rooms) {
+      if (room.participants.has(address)) {
+        inCall = true;
+        break;
+      }
+    }
+    if (!inCall) return;
+
+    loggerLog(
+      `[GCall] Presence offline for ${address} — starting ${GroupCallManager.PRESENCE_EVICTION_GRACE_MS}ms grace timer`
+    );
+    const timer = setTimeout(() => {
+      this.presenceEvictionTimers.delete(address);
+      if (this.presence.isAddressOnline(address)) {
+        loggerLog(`[GCall] ${address} recovered — skipping eviction`);
+        return;
+      }
+
+      const now = Date.now();
+      let delayedByHealthyTransport = false;
+      for (const [roomId, room] of this.rooms) {
+        if (!room.participants.has(address)) continue;
+        const transportHealth = this.transportHealthByRoom.get(roomId);
+        if (
+          shouldDelayPresenceEvictionForHealthyTransport({
+            lastReportAtMs: transportHealth?.reportedAtMs,
+            healthyPeerAddresses: transportHealth?.healthyPeerAddresses ?? new Set(),
+            address,
+            nowMs: now,
+            staleAfterMs: GroupCallManager.TRANSPORT_HEALTH_STALE_MS,
+          })
+        ) {
+          delayedByHealthyTransport = true;
+          loggerLog(
+            `[GCall] Grace period expired for ${address} in ${roomId} — delaying eviction because transport is still healthy`
+          );
+          continue;
+        }
+        loggerLog(
+          `[GCall] Grace period expired for ${address} — evicting from ${roomId}`
+        );
+        this.handleLeave(roomId, address, true);
+      }
+
+      if (delayedByHealthyTransport && !this.presence.isAddressOnline(address)) {
+        this.schedulePresenceEviction(address);
+      }
+    }, GroupCallManager.PRESENCE_EVICTION_GRACE_MS);
+    this.presenceEvictionTimers.set(address, timer);
   }
 }

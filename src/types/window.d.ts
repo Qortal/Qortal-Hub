@@ -336,6 +336,10 @@ declare global {
       requestSessionBreak: (roomId: string) => Promise<{ success: boolean; error?: string }>;
       sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice' | 'reconnect', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+      reportTransportHealth?: (
+        roomId: string,
+        healthyPeerAddresses: string[]
+      ) => Promise<{ success: boolean }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
       getPendingKeyMetrics?: () => Promise<{
         pending_key_flush_success: number;
@@ -344,6 +348,7 @@ declare global {
       }>;
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
     };
+    __qortalGCallExportDiagnostics?: () => Promise<void>;
   }
 
   // ── P2P Chat shared types ──────────────────────────────────────────────────

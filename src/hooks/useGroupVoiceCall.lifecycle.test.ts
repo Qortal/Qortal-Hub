@@ -4,17 +4,22 @@ import {
   chooseSameEpochTopologyWinner,
   countRecentlyHealthyRemoteSources,
   clearAdaptiveGroupCallPlayoutMaps,
+  getConflictingRootForAuthorityWait,
+  getTrustedRootForRejoinElection,
   getSessionUpdatedKeyRecoveryAction,
   getPostJoinHydratedParticipants,
   isCurrentGroupCallAudioStartupToken,
+  shouldPromoteStandbyRootAfterHeartbeatTimeout,
   shouldAcceptIncomingRoomKeySender,
   shouldAcceptKeyRecoveryRequestGeneration,
   shouldAdoptTrustedRootSessionDuringRecovery,
   shouldApplyJoinSessionSnapshot,
   shouldContinueAfterParticipantJoinRefresh,
+  shouldDelayPostJoinRosterElection,
   shouldEscalateRoomWideKeyRecovery,
   shouldIgnoreParticipantLeftEvent,
   shouldMintRootSessionKeyImmediately,
+  shouldAllowSimultaneousJoinKeyFallback,
   shouldSendCachedQuitLeave,
   shouldSubscribeToJoinedGroupCallEvents,
   shouldStartGroupCallAudioCapture,
@@ -252,6 +257,40 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toEqual([{ address: 'bob', publicKey: 'bob-pk' }]);
   });
 
+  it('delays the first post-join election only for occupied rooms without a known root', () => {
+    expect(
+      shouldDelayPostJoinRosterElection({
+        hydratedRemoteParticipantCount: 2,
+        currentRoot: '',
+        trustedRemoteRoot: '',
+      })
+    ).toBe(true);
+
+    expect(
+      shouldDelayPostJoinRosterElection({
+        hydratedRemoteParticipantCount: 2,
+        currentRoot: 'root-a',
+        trustedRemoteRoot: '',
+      })
+    ).toBe(false);
+
+    expect(
+      shouldDelayPostJoinRosterElection({
+        hydratedRemoteParticipantCount: 2,
+        currentRoot: '',
+        trustedRemoteRoot: 'root-a',
+      })
+    ).toBe(false);
+
+    expect(
+      shouldDelayPostJoinRosterElection({
+        hydratedRemoteParticipantCount: 0,
+        currentRoot: '',
+        trustedRemoteRoot: '',
+      })
+    ).toBe(false);
+  });
+
   it('continues join handling when a hydrated peer reveals its first joinGeneration', () => {
     expect(
       shouldContinueAfterParticipantJoinRefresh({
@@ -454,10 +493,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(true);
   });
 
-  it('preserves the established root when same-epoch topology arrives with a different root', () => {
+  it('converges same-epoch different-root conflicts to a shared lexical winner', () => {
     const current: GroupTopology = {
       topologyEpoch: 8,
-      rootForwarder: 'root-a',
+      rootForwarder: 'root-b',
       standbyForwarder: 'standby',
       clusters: [],
       timestamp: 100,
@@ -465,7 +504,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     };
     const incoming: GroupTopology = {
       topologyEpoch: 8,
-      rootForwarder: 'root-b',
+      rootForwarder: 'root-a',
       standbyForwarder: 'standby',
       clusters: [],
       timestamp: 100,
@@ -473,8 +512,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     };
 
     expect(chooseSameEpochTopologyWinner(current, incoming)).toEqual({
-      acceptIncoming: false,
-      reason: 'preserve-established-root',
+      acceptIncoming: true,
+      reason: 'rootForwarder-lexical',
     });
   });
 
@@ -500,6 +539,146 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       acceptIncoming: true,
       reason: 'lastSeen',
     });
+  });
+
+  it('reuses the current topology root when it is still in the roster', () => {
+    expect(
+      getTrustedRootForRejoinElection({
+        currentRoot: 'root-a',
+        trustedRemoteRoot: 'root-b',
+        trustedRemoteRootLastSeenAtMs: 9_000,
+        nowMs: 10_000,
+        staleAfterMs: 7_500,
+        rosterAddresses: ['self', 'root-a', 'root-b'],
+      })
+    ).toBe('root-a');
+  });
+
+  it('keeps a recently seen remote root sticky across same-room rejoin', () => {
+    expect(
+      getTrustedRootForRejoinElection({
+        currentRoot: null,
+        trustedRemoteRoot: 'root-a',
+        trustedRemoteRootLastSeenAtMs: 9_000,
+        nowMs: 10_000,
+        staleAfterMs: 7_500,
+        rosterAddresses: ['self', 'root-a', 'peer-b'],
+      })
+    ).toBe('root-a');
+  });
+
+  it('drops the cached remote root once it is stale or absent', () => {
+    expect(
+      getTrustedRootForRejoinElection({
+        currentRoot: null,
+        trustedRemoteRoot: 'root-a',
+        trustedRemoteRootLastSeenAtMs: 1_000,
+        nowMs: 10_000,
+        staleAfterMs: 7_500,
+        rosterAddresses: ['self', 'root-a', 'peer-b'],
+      })
+    ).toBeNull();
+
+    expect(
+      getTrustedRootForRejoinElection({
+        currentRoot: null,
+        trustedRemoteRoot: 'root-a',
+        trustedRemoteRootLastSeenAtMs: 9_000,
+        nowMs: 10_000,
+        staleAfterMs: 7_500,
+        rosterAddresses: ['self', 'peer-b'],
+      })
+    ).toBeNull();
+  });
+
+  it('ignores unusable cached roots and conflicting roots outside the live roster window', () => {
+    expect(
+      getTrustedRootForRejoinElection({
+        currentRoot: null,
+        trustedRemoteRoot: 'root-a',
+        trustedRemoteRootLastSeenAtMs: 0,
+        nowMs: 10_000,
+        staleAfterMs: 7_500,
+        rosterAddresses: ['self', 'root-a'],
+      })
+    ).toBeNull();
+
+    expect(
+      getConflictingRootForAuthorityWait({
+        currentRoot: 'root-a',
+        conflictingRemoteRoot: 'root-b',
+        conflictingRemoteRootLastSeenAtMs: 9_000,
+        nowMs: 10_000,
+        staleAfterMs: 7_500,
+        rosterAddresses: ['self', 'root-a', 'root-b'],
+      })
+    ).toBe('root-b');
+
+    expect(
+      getConflictingRootForAuthorityWait({
+        currentRoot: 'root-a',
+        conflictingRemoteRoot: 'root-b',
+        conflictingRemoteRootLastSeenAtMs: 1_000,
+        nowMs: 10_000,
+        staleAfterMs: 7_500,
+        rosterAddresses: ['self', 'root-a', 'root-b'],
+      })
+    ).toBeNull();
+  });
+
+  it('blocks simultaneous-join fallback until authority is settled', () => {
+    expect(
+      shouldAllowSimultaneousJoinKeyFallback({
+        myAddress: 'self',
+        otherParticipantCount: 2,
+        trustedRemoteRoot: 'root-a',
+        conflictingRemoteRoot: null,
+        nowMs: 10_000,
+        authoritySettleUntilMs: 9_000,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldAllowSimultaneousJoinKeyFallback({
+        myAddress: 'self',
+        otherParticipantCount: 2,
+        trustedRemoteRoot: null,
+        conflictingRemoteRoot: 'root-b',
+        nowMs: 10_000,
+        authoritySettleUntilMs: 9_000,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldAllowSimultaneousJoinKeyFallback({
+        myAddress: 'self',
+        otherParticipantCount: 0,
+        trustedRemoteRoot: null,
+        conflictingRemoteRoot: null,
+        nowMs: 10_000,
+        authoritySettleUntilMs: 20_000,
+      })
+    ).toBe(true);
+  });
+
+  it('does not promote standby root on heartbeat silence alone while transport is healthy', () => {
+    expect(
+      shouldPromoteStandbyRootAfterHeartbeatTimeout({
+        heartbeatSilentMs: 4_000,
+        heartbeatTimeoutMs: 3_200,
+        rootPeerRequiresReconnect: false,
+      })
+    ).toBe(false);
+  });
+
+  it('promotes standby root only once heartbeat is stale and the root peer needs reconnect', () => {
+    expect(
+      shouldPromoteStandbyRootAfterHeartbeatTimeout({
+        heartbeatSilentMs: 4_000,
+        heartbeatTimeoutMs: 3_200,
+        rootPeerRequiresReconnect: true,
+      })
+    ).toBe(true);
   });
 
   it('sends cached quit leave only while connected and only once', () => {

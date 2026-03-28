@@ -42,10 +42,12 @@ import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import OpusFecWorker from '../workers/gcall-opus-fec.worker?worker';
 import {
+  buildHierarchicalTopologyWithStickyRoot,
   assessGroupCallSourceStall,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   buildTopologyAfterClusterPromotion,
+  chooseRouterTopologyAuthority,
   GroupCallPerformanceTracker,
   hasGroupCallSourceWindowMediaActivity,
   type GroupCallWindowMetrics,
@@ -250,6 +252,8 @@ const FORWARD_VAD_HANGOVER_MS = 700;
 /** Silence before standby may treat root as dead. >2× TOPOLOGY_HEARTBEAT_MS so one late tick does not flap. */
 const FORWARDER_TIMEOUT_MS = 3_200;
 const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
+/** Occupied-room joiners should wait briefly for the established root's topology before self-electing. */
+const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
 /** Before closing PC on ICE `disconnected`, wait this long for recovery (connId-scoped timer). */
 const WEBRTC_DISCONNECT_GRACE_MS = 12_000;
 const ICE_RESTART_MIN_INTERVAL_MS = 6_000;
@@ -282,6 +286,9 @@ const ICE_SERVER_REFRESH_MIN_INTERVAL_MS = 10_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
 /** Min time between mesh GC_JOIN re-announces (same joinGeneration, new timestamp). */
 const MESH_REANNOUNCE_MIN_INTERVAL_MS = 2_000;
+/** Keep a recently heartbeating remote root sticky across same-room rejoin long enough
+ *  to avoid a rejoining non-root self-electing before fresh topology arrives. */
+const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 
 const CLUSTER_SIZE = 10;
 
@@ -319,6 +326,7 @@ const STUN_OUTCOME_MAX_RELAY_DWELL_FRACTION = 0.6;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
 const PERF_LOG_INTERVAL_MS = 10_000;
+const TRANSPORT_HEALTH_REPORT_INTERVAL_MS = 5_000;
 /** Legacy: was used to gate `[GCall]` logs; group-call diagnostics are always on now. */
 const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 /** Set to "1" in localStorage for verbose mic/capture logs (or enable qortal:gcall-debug). */
@@ -560,6 +568,21 @@ export function shouldSubscribeToJoinedGroupCallEvents(opts: {
   return opts.roomState === 'connected' && opts.mainJoinReady;
 }
 
+/**
+ * If main already shows other peers in the room but we still do not know any
+ * authoritative root, give the established room a short window to replay its
+ * topology before we run our first local election.
+ */
+export function shouldDelayPostJoinRosterElection(opts: {
+  hydratedRemoteParticipantCount: number;
+  currentRoot: string | null | undefined;
+  trustedRemoteRoot: string | null | undefined;
+}): boolean {
+  if (opts.hydratedRemoteParticipantCount <= 0) return false;
+  if ((opts.currentRoot?.trim() ?? '') !== '') return false;
+  return (opts.trustedRemoteRoot?.trim() ?? '') === '';
+}
+
 /** Main may already know remote peers before the renderer subscribes to events. */
 export function getPostJoinHydratedParticipants(opts: {
   localAddress: string;
@@ -694,6 +717,84 @@ export function shouldAdoptTrustedRootSessionDuringRecovery(opts: {
   return repeatedFailures || noRecentDecode;
 }
 
+export function getTrustedRootForRejoinElection(opts: {
+  currentRoot: string | null | undefined;
+  trustedRemoteRoot: string | null | undefined;
+  trustedRemoteRootLastSeenAtMs: number;
+  nowMs: number;
+  staleAfterMs: number;
+  rosterAddresses: Iterable<string>;
+}): string | null {
+  const roster = new Set<string>();
+  for (const rawAddress of opts.rosterAddresses) {
+    const address = rawAddress.trim();
+    if (address) roster.add(address);
+  }
+
+  const currentRoot = opts.currentRoot?.trim() ?? '';
+  if (currentRoot && roster.has(currentRoot)) {
+    return currentRoot;
+  }
+
+  const trustedRemoteRoot = opts.trustedRemoteRoot?.trim() ?? '';
+  if (!trustedRemoteRoot || !roster.has(trustedRemoteRoot)) return null;
+  if (opts.trustedRemoteRootLastSeenAtMs <= 0) return null;
+  if (opts.nowMs - opts.trustedRemoteRootLastSeenAtMs > opts.staleAfterMs) {
+    return null;
+  }
+  return trustedRemoteRoot;
+}
+
+export function getConflictingRootForAuthorityWait(opts: {
+  currentRoot: string | null | undefined;
+  conflictingRemoteRoot: string | null | undefined;
+  conflictingRemoteRootLastSeenAtMs: number;
+  nowMs: number;
+  staleAfterMs: number;
+  rosterAddresses: Iterable<string>;
+}): string | null {
+  const roster = new Set<string>();
+  for (const rawAddress of opts.rosterAddresses) {
+    const address = rawAddress.trim();
+    if (address) roster.add(address);
+  }
+  const currentRoot = opts.currentRoot?.trim() ?? '';
+  const conflictingRoot = opts.conflictingRemoteRoot?.trim() ?? '';
+  if (!conflictingRoot || conflictingRoot === currentRoot) return null;
+  if (!roster.has(conflictingRoot)) return null;
+  if (opts.conflictingRemoteRootLastSeenAtMs <= 0) return null;
+  if (opts.nowMs - opts.conflictingRemoteRootLastSeenAtMs > opts.staleAfterMs) {
+    return null;
+  }
+  return conflictingRoot;
+}
+
+export function shouldAllowSimultaneousJoinKeyFallback(opts: {
+  myAddress: string;
+  otherParticipantCount: number;
+  trustedRemoteRoot: string | null | undefined;
+  conflictingRemoteRoot: string | null | undefined;
+  nowMs: number;
+  authoritySettleUntilMs: number;
+}): boolean {
+  if (opts.otherParticipantCount === 0) return true;
+  if (opts.nowMs < opts.authoritySettleUntilMs) return false;
+  const trustedRoot = opts.trustedRemoteRoot?.trim() ?? '';
+  if (trustedRoot && trustedRoot !== opts.myAddress) return false;
+  const conflictingRoot = opts.conflictingRemoteRoot?.trim() ?? '';
+  if (conflictingRoot && conflictingRoot !== opts.myAddress) return false;
+  return true;
+}
+
+export function shouldPromoteStandbyRootAfterHeartbeatTimeout(opts: {
+  heartbeatSilentMs: number;
+  heartbeatTimeoutMs: number;
+  rootPeerRequiresReconnect: boolean;
+}): boolean {
+  if (opts.heartbeatSilentMs < opts.heartbeatTimeoutMs) return false;
+  return opts.rootPeerRequiresReconnect;
+}
+
 /** sha256 → Uint8Array. Used for deterministic election. */
 async function sha256Bytes(input: string): Promise<Uint8Array> {
   const enc = new TextEncoder();
@@ -740,30 +841,10 @@ export function chooseSameEpochTopologyWinner(
   current: GroupTopology,
   incoming: GroupTopology
 ): { acceptIncoming: boolean; reason: string } {
-  if (current.rootForwarder !== incoming.rootForwarder) {
-    return {
-      acceptIncoming: false,
-      reason: 'preserve-established-root',
-    };
-  }
-  const incomingSeen = incoming.lastSeen;
-  const currentSeen = current.lastSeen;
-  if (
-    typeof incomingSeen === 'number' &&
-    Number.isFinite(incomingSeen) &&
-    typeof currentSeen === 'number' &&
-    Number.isFinite(currentSeen) &&
-    incomingSeen !== currentSeen
-  ) {
-    return {
-      acceptIncoming: incomingSeen > currentSeen,
-      reason: 'lastSeen',
-    };
-  }
+  const decision = chooseRouterTopologyAuthority(current, incoming);
   return {
-    acceptIncoming:
-      incoming.rootForwarder.localeCompare(current.rootForwarder) < 0,
-    reason: 'rootForwarder-lexical',
+    acceptIncoming: decision.acceptIncoming,
+    reason: decision.reason,
   };
 }
 
@@ -836,6 +917,32 @@ function buildTopology(sorted: string[], topologyEpoch: number): GroupTopology {
   const standbyForwarder = clusterForwarders[1] ?? clusterForwarders[0];
 
   return { topologyEpoch, rootForwarder, standbyForwarder, clusters };
+}
+
+function buildTopologyWithTrustedRoot(
+  sorted: string[],
+  topologyEpoch: number,
+  trustedRoot: string | null | undefined
+): GroupTopology {
+  const trusted = trustedRoot?.trim() ?? '';
+  if (sorted.length <= CLUSTER_SIZE) {
+    return (
+      buildSingleClusterTopologyWithStickyRoot(
+        sorted,
+        topologyEpoch,
+        trusted,
+        CLUSTER_SIZE
+      ) ?? buildTopology(sorted, topologyEpoch)
+    );
+  }
+  return (
+    buildHierarchicalTopologyWithStickyRoot(
+      sorted,
+      topologyEpoch,
+      trusted,
+      CLUSTER_SIZE
+    ) ?? buildTopology(sorted, topologyEpoch)
+  );
 }
 
 /** Determine this node's role given a topology. */
@@ -1049,6 +1156,15 @@ interface PeerConnection {
   lastSoftRecoveryAtMs: number;
 }
 
+function isPeerTransportHealthy(entry: PeerConnection): boolean {
+  return (
+    entry.dc?.readyState === 'open' ||
+    entry.pc.connectionState === 'connected' ||
+    entry.pc.iceConnectionState === 'connected' ||
+    entry.pc.iceConnectionState === 'completed'
+  );
+}
+
 function clearIceRestartAnswerBudgetTimerField(entry: PeerConnection): void {
   if (entry.iceRestartAnswerBudgetTimer !== undefined) {
     clearTimeout(entry.iceRestartAnswerBudgetTimer);
@@ -1108,6 +1224,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const currentKeyCommitmentRef = useRef<string | null>(null);
   /** True until we hold K for current (callSessionId, mediaSessionGeneration). */
   const needsSessionKeyRef = useRef(true);
+  const awaitingAuthoritativeKeyRef = useRef(false);
   const lastSessionBreakRequestAtRef = useRef(0);
   const quitLeaveEnvelopeRef = useRef<{
     roomId: string;
@@ -1250,6 +1367,14 @@ export function useGroupVoiceCall(uiActive = false) {
   const promotionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Last time we saw a topology heartbeat from root
   const lastRootHeartbeatRef = useRef<number>(Date.now());
+  // Most recent externally observed remote root. Survives same-room cleanup so
+  // rejoining participants do not temporarily crown themselves before the real
+  // root's next topology/heartbeat arrives.
+  const trustedRemoteRootRef = useRef('');
+  const trustedRemoteRootLastSeenAtRef = useRef(0);
+  const conflictingRemoteRootRef = useRef('');
+  const conflictingRemoteRootLastSeenAtRef = useRef(0);
+  const authoritySettleUntilRef = useRef(0);
   // Forwarder-timeout polling interval (runs every 500ms)
   const forwarderTimeoutCheckRef = useRef<ReturnType<
     typeof setInterval
@@ -1351,6 +1476,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastRemoteDecodeAtRef = useRef(0);
   const lastSuccessfulRemoteDecodeAtBySourceRef = useRef<Map<string, number>>(new Map());
   const decryptFailureStreakRef = useRef(0);
+  const lastAuthorityConflictDecodeLogAtRef = useRef(0);
   const recoveryEligibleAfterRef = useRef(0);
   const lastKeyRecoveryRequestAtRef = useRef(0);
   const lastKeyRecoveryRefreshAtRef = useRef(0);
@@ -1384,6 +1510,11 @@ export function useGroupVoiceCall(uiActive = false) {
   const mainJoinReadyRef = useRef(false);
   /** Run one topology election after main-backed post-join roster hydration. */
   const pendingPostJoinRosterElectionRef = useRef(false);
+  /** Briefly defers the first occupied-room election until an existing root has time to replay topology. */
+  const pendingPostJoinRosterElectionDelayUntilRef = useRef(0);
+  const pendingPostJoinRosterElectionTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   const handleRoomKeyPayloadRef = useRef<
     (payload: IncomingRoomKeyPayload, allowQueue?: boolean) => Promise<void>
   >(async () => {});
@@ -1391,6 +1522,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const maybeRequestKeyRecoveryRef = useRef<(reason: string) => void>(() => {});
   const metricsRef = useRef(new GroupCallPerformanceTracker());
   const metricsFlushTimerRef = useRef<ReturnType<typeof setInterval> | null>(
+    null
+  );
+  const transportHealthTimerRef = useRef<ReturnType<typeof setInterval> | null>(
     null
   );
   const windowMetricsTimerRef = useRef<ReturnType<typeof setInterval> | null>(
@@ -2292,6 +2426,19 @@ export function useGroupVoiceCall(uiActive = false) {
     userInfo?.address,
   ]);
 
+  const reportTransportHealthToMain = useCallback(() => {
+    const reportTransportHealth = window.groupCall?.reportTransportHealth;
+    const roomId = roomIdRef.current;
+    if (typeof reportTransportHealth !== 'function' || !roomId) return;
+    const healthyPeerAddresses = [...peerConnectionsRef.current.entries()]
+      .filter(
+        ([peerAddress, entry]) =>
+          participantsRef.current.has(peerAddress) && isPeerTransportHealthy(entry)
+      )
+      .map(([peerAddress]) => peerAddress);
+    void reportTransportHealth(roomId, healthyPeerAddresses).catch(() => {});
+  }, []);
+
   /** Local user only: debounced hint when group-call transport/playout looks unhealthy. */
   useEffect(() => {
     if (roomState !== 'connected') {
@@ -2533,6 +2680,21 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!metricsFlushTimerRef.current) return;
     clearInterval(metricsFlushTimerRef.current);
     metricsFlushTimerRef.current = null;
+  }, []);
+
+  const startTransportHealthReportLoop = useCallback(() => {
+    if (transportHealthTimerRef.current) return;
+    reportTransportHealthToMain();
+    transportHealthTimerRef.current = setInterval(
+      reportTransportHealthToMain,
+      TRANSPORT_HEALTH_REPORT_INTERVAL_MS
+    );
+  }, [reportTransportHealthToMain]);
+
+  const stopTransportHealthReportLoop = useCallback(() => {
+    if (!transportHealthTimerRef.current) return;
+    clearInterval(transportHealthTimerRef.current);
+    transportHealthTimerRef.current = null;
   }, []);
 
   const startWindowMetricsLoop = useCallback(() => {
@@ -2799,6 +2961,28 @@ export function useGroupVoiceCall(uiActive = false) {
           '[GCall] decodeAudioPacket failed — size:',
           wireForForward.byteLength
         );
+        const conflictingRoot = getConflictingRootForAuthorityWait({
+          currentRoot: topologyRef.current?.rootForwarder,
+          conflictingRemoteRoot: conflictingRemoteRootRef.current,
+          conflictingRemoteRootLastSeenAtMs:
+            conflictingRemoteRootLastSeenAtRef.current,
+          nowMs: Date.now(),
+          staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+          rosterAddresses: participantsRef.current.keys(),
+        });
+        if (
+          (awaitingAuthoritativeKeyRef.current || conflictingRoot) &&
+          Date.now() - lastAuthorityConflictDecodeLogAtRef.current >=
+            TOPOLOGY_HEARTBEAT_MS
+        ) {
+          lastAuthorityConflictDecodeLogAtRef.current = Date.now();
+          debugWarn('[GCall] decodeAudioPacket failed — authority/key mismatch suspected', {
+            currentRoot: topologyRef.current?.rootForwarder ?? '',
+            trustedRemoteRoot: trustedRemoteRootRef.current || null,
+            conflictingRoot: conflictingRoot ?? null,
+            awaitingAuthoritativeKey: awaitingAuthoritativeKeyRef.current,
+          });
+        }
         maybeRequestKeyRecoveryRef.current('decode-failure');
         return;
       }
@@ -2914,6 +3098,7 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
       decryptFailureStreakRef.current = 0;
+      awaitingAuthoritativeKeyRef.current = false;
       const successfulDecodeAt = Date.now();
       lastRemoteDecodeAtRef.current = successfulDecodeAt;
       lastSuccessfulRemoteDecodeAtBySourceRef.current.set(
@@ -2973,6 +3158,28 @@ export function useGroupVoiceCall(uiActive = false) {
           '[GCall] decodeAudioPacket failed — size:',
           wireForForward.byteLength
         );
+        const conflictingRoot = getConflictingRootForAuthorityWait({
+          currentRoot: topologyRef.current?.rootForwarder,
+          conflictingRemoteRoot: conflictingRemoteRootRef.current,
+          conflictingRemoteRootLastSeenAtMs:
+            conflictingRemoteRootLastSeenAtRef.current,
+          nowMs: Date.now(),
+          staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+          rosterAddresses: participantsRef.current.keys(),
+        });
+        if (
+          (awaitingAuthoritativeKeyRef.current || conflictingRoot) &&
+          Date.now() - lastAuthorityConflictDecodeLogAtRef.current >=
+            TOPOLOGY_HEARTBEAT_MS
+        ) {
+          lastAuthorityConflictDecodeLogAtRef.current = Date.now();
+          debugWarn('[GCall] decodeAudioPacket failed — authority/key mismatch suspected', {
+            currentRoot: topologyRef.current?.rootForwarder ?? '',
+            trustedRemoteRoot: trustedRemoteRootRef.current || null,
+            conflictingRoot: conflictingRoot ?? null,
+            awaitingAuthoritativeKey: awaitingAuthoritativeKeyRef.current,
+          });
+        }
         maybeRequestKeyRecoveryRef.current('decode-failure');
         return;
       }
@@ -4335,6 +4542,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const applyTopology = useCallback(
     (topology: GroupTopology) => {
       const topo = normalizeGroupTopologyClusters(topology);
+      const prevTopo = topologyRef.current;
+      const myAddress = userInfo?.address ?? '';
 
       if (topo.topologyEpoch < localEpochRef.current) {
         debugLog('[GCall] applyTopology skip — stale epoch', {
@@ -4344,29 +4553,36 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
 
-      // Same epoch + different root: converge deterministically instead of last-writer-wins.
+      // Same epoch + different root: converge symmetrically instead of preserving
+      // each peer's local incumbent.
       if (
+        prevTopo !== null &&
         topo.topologyEpoch === localEpochRef.current &&
-        topologyRef.current !== null &&
-        topo.rootForwarder !== topologyRef.current.rootForwarder
+        topo.rootForwarder !== prevTopo.rootForwarder
       ) {
-        const prev = topologyRef.current;
-        const decision = chooseSameEpochTopologyWinner(prev, topo);
+        const decision = chooseSameEpochTopologyWinner(prevTopo, topo);
         debugLog('[GCall] same-epoch root disagreement', {
           epoch: topo.topologyEpoch,
-          currentRoot: prev.rootForwarder,
+          currentRoot: prevTopo.rootForwarder,
           incomingRoot: topo.rootForwarder,
-          currentLastSeen: prev.lastSeen ?? null,
+          currentLastSeen: prevTopo.lastSeen ?? null,
           incomingLastSeen: topo.lastSeen ?? null,
           acceptedIncoming: decision.acceptIncoming,
           reason: decision.reason,
         });
         if (!decision.acceptIncoming) {
+          conflictingRemoteRootRef.current = topo.rootForwarder;
+          conflictingRemoteRootLastSeenAtRef.current = Date.now();
+          authoritySettleUntilRef.current = Math.max(
+            authoritySettleUntilRef.current,
+            Date.now() +
+              TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS +
+              TOPOLOGY_HEARTBEAT_MS
+          );
           return;
         }
       }
 
-      const prevTopo = topologyRef.current;
       const duplicateStructure = isGroupCallTopologyDuplicateHeartbeat(
         prevTopo,
         topo,
@@ -4375,6 +4591,17 @@ export function useGroupVoiceCall(uiActive = false) {
 
       if (duplicateStructure) {
         lastTopologyApplyAtRef.current = Date.now();
+        if (topo.rootForwarder && topo.rootForwarder !== myAddress) {
+          trustedRemoteRootRef.current = topo.rootForwarder;
+          trustedRemoteRootLastSeenAtRef.current = Date.now();
+          if (conflictingRemoteRootRef.current === topo.rootForwarder) {
+            conflictingRemoteRootRef.current = '';
+            conflictingRemoteRootLastSeenAtRef.current = 0;
+          }
+        } else if (topo.rootForwarder === myAddress) {
+          trustedRemoteRootRef.current = '';
+          trustedRemoteRootLastSeenAtRef.current = 0;
+        }
         debugLog(
           '[GCall] applyTopology duplicate heartbeat — ensureWebRtc only',
           {
@@ -4388,7 +4615,7 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
 
-      const myAddrPre = userInfo?.address ?? '';
+      const myAddrPre = myAddress;
       if (prevTopo && myAddrPre) {
         for (let i = 0; i < prevTopo.clusters.length; i++) {
           const pc = prevTopo.clusters[i];
@@ -4406,7 +4633,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
       if (
         topo.rootForwarder &&
-        topo.rootForwarder !== (userInfo?.address ?? '')
+        topo.rootForwarder !== myAddress
       ) {
         lastRootHeartbeatRef.current = Date.now();
       }
@@ -4421,13 +4648,39 @@ export function useGroupVoiceCall(uiActive = false) {
         prevTopo?.rootForwarder !== topo.rootForwarder ||
         prevTopo?.topologyEpoch !== topo.topologyEpoch
       ) {
+        if (roomKeyRef.current && topo.rootForwarder !== myAddress) {
+          awaitingAuthoritativeKeyRef.current = true;
+        }
+        if (
+          prevTopo?.rootForwarder === myAddress &&
+          topo.rootForwarder !== myAddress
+        ) {
+          isOurKeyRef.current = false;
+        }
         recoveryEligibleAfterRef.current =
           Date.now() + KEY_RECOVERY_SETTLE_DELAY_MS;
+        authoritySettleUntilRef.current = Math.max(
+          authoritySettleUntilRef.current,
+          Date.now() + OCCUPIED_JOIN_AUTHORITY_WAIT_MS
+        );
+      }
+      if (topo.rootForwarder && topo.rootForwarder !== myAddress) {
+        trustedRemoteRootRef.current = topo.rootForwarder;
+        trustedRemoteRootLastSeenAtRef.current = Date.now();
+        if (conflictingRemoteRootRef.current === topo.rootForwarder) {
+          conflictingRemoteRootRef.current = '';
+          conflictingRemoteRootLastSeenAtRef.current = 0;
+        }
+      } else if (topo.rootForwarder === myAddress) {
+        trustedRemoteRootRef.current = '';
+        trustedRemoteRootLastSeenAtRef.current = 0;
       }
       processPendingVerifiedKeysRef.current();
 
-      const myAddress = userInfo?.address ?? '';
       const role = computeMyRole(myAddress, topo);
+      if (role === 'root-forwarder' && roomKeyRef.current) {
+        awaitingAuthoritativeKeyRef.current = false;
+      }
       debugLog('[GCall] applyTopology', {
         epoch: topo.topologyEpoch,
         role,
@@ -4489,17 +4742,53 @@ export function useGroupVoiceCall(uiActive = false) {
   const checkForwarderTimeout = useCallback(() => {
     const myAddress = userInfo?.address ?? '';
     if (myRoleRef.current !== 'standby-forwarder') return;
-    if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS)
+    const currentTopo = topologyRef.current;
+    if (!currentTopo) return;
+    const rootPeerEntry = currentTopo.rootForwarder
+      ? peerConnectionsRef.current.get(currentTopo.rootForwarder)
+      : undefined;
+    const heartbeatSilentMs = Date.now() - lastRootHeartbeatRef.current;
+    if (
+      !shouldPromoteStandbyRootAfterHeartbeatTimeout({
+        heartbeatSilentMs,
+        heartbeatTimeoutMs: FORWARDER_TIMEOUT_MS,
+        rootPeerRequiresReconnect: shouldReconnectRequiredPeer(
+          rootPeerEntry,
+          Date.now()
+        ),
+      })
+    ) {
       return;
+    }
 
     if (promotionTimerRef.current) return;
     promotionTimerRef.current = setTimeout(async () => {
       promotionTimerRef.current = null;
-      if (Date.now() - lastRootHeartbeatRef.current < FORWARDER_TIMEOUT_MS)
-        return;
-
       const currentTopo = topologyRef.current;
       if (!currentTopo) return;
+      const rootPeerEntry = currentTopo.rootForwarder
+        ? peerConnectionsRef.current.get(currentTopo.rootForwarder)
+        : undefined;
+      const heartbeatSilentMs = Date.now() - lastRootHeartbeatRef.current;
+      if (
+        !shouldPromoteStandbyRootAfterHeartbeatTimeout({
+          heartbeatSilentMs,
+          heartbeatTimeoutMs: FORWARDER_TIMEOUT_MS,
+          rootPeerRequiresReconnect: shouldReconnectRequiredPeer(
+            rootPeerEntry,
+            Date.now()
+          ),
+        })
+      ) {
+        debugLog('[GCall] Standby promotion skipped — root transport still healthy', {
+          currentRoot: currentTopo.rootForwarder,
+          heartbeatSilentMs,
+          rootPcState: rootPeerEntry?.pc.connectionState ?? null,
+          rootIceState: rootPeerEntry?.pc.iceConnectionState ?? null,
+          rootDcState: rootPeerEntry?.dc?.readyState ?? null,
+        });
+        return;
+      }
 
       const newEpoch =
         Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
@@ -4555,7 +4844,7 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     }, ROOT_PROMOTION_POST_DETECT_MS);
-  }, [applyTopology, userInfo]);
+  }, [applyTopology, shouldReconnectRequiredPeer, userInfo]);
 
   const checkClusterStandbyFailover = useCallback(async () => {
     const myAddress = userInfo?.address ?? '';
@@ -6308,6 +6597,98 @@ export function useGroupVoiceCall(uiActive = false) {
     [encryptRoomKeyForRecipients, userInfo]
   );
 
+  const armSimultaneousJoinKeyFallback = useCallback(
+    (electionGen: number, myAddress: string) => {
+      if (simultJoinKeyFallbackTimerRef.current) {
+        clearTimeout(simultJoinKeyFallbackTimerRef.current);
+      }
+
+      const attemptFallback = () => {
+        simultJoinKeyFallbackTimerRef.current = null;
+        if (electionGen !== topologyAsyncGenRef.current) return;
+        if (!isInitiatorRef.current || roomKeyRef.current !== null) return;
+        const nowMs = Date.now();
+        const roster = [...participantsRef.current.keys()];
+        const fallbackTrustedRoot = getTrustedRootForRejoinElection({
+          currentRoot: topologyRef.current?.rootForwarder,
+          trustedRemoteRoot: trustedRemoteRootRef.current,
+          trustedRemoteRootLastSeenAtMs: trustedRemoteRootLastSeenAtRef.current,
+          nowMs,
+          staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+          rosterAddresses: roster,
+        });
+        const conflictingRoot = getConflictingRootForAuthorityWait({
+          currentRoot: topologyRef.current?.rootForwarder,
+          conflictingRemoteRoot: conflictingRemoteRootRef.current,
+          conflictingRemoteRootLastSeenAtMs:
+            conflictingRemoteRootLastSeenAtRef.current,
+          nowMs,
+          staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+          rosterAddresses: roster,
+        });
+        const otherParticipantCount = roster.filter(
+          (address) => address !== myAddress
+        ).length;
+        const canMint = shouldAllowSimultaneousJoinKeyFallback({
+          myAddress,
+          otherParticipantCount,
+          trustedRemoteRoot: fallbackTrustedRoot,
+          conflictingRemoteRoot: conflictingRoot,
+          nowMs,
+          authoritySettleUntilMs: authoritySettleUntilRef.current,
+        });
+        if (!canMint) {
+          const retryDelayMs = Math.max(
+            TOPOLOGY_HEARTBEAT_MS,
+            authoritySettleUntilRef.current > nowMs
+              ? authoritySettleUntilRef.current - nowMs
+              : 0
+          );
+          debugLog(
+            '[GCall] Simultaneous-join fallback deferred — authority unsettled',
+            {
+              trustedRoot: fallbackTrustedRoot ?? null,
+              conflictingRoot: conflictingRoot ?? null,
+              authoritySettleUntil:
+                authoritySettleUntilRef.current > 0
+                  ? authoritySettleUntilRef.current
+                  : null,
+              retryDelayMs,
+            }
+          );
+          simultJoinKeyFallbackTimerRef.current = setTimeout(
+            attemptFallback,
+            retryDelayMs
+          );
+          return;
+        }
+        debugLog('[GCall] Simultaneous-join fallback — minting session key');
+        const newKey = naclApi.randomBytes(32);
+        roomKeyRef.current = newKey;
+        isOurKeyRef.current = true;
+        needsSessionKeyRef.current = false;
+        awaitingAuthoritativeKeyRef.current = false;
+        currentKeyCommitmentRef.current = null;
+        conflictingRemoteRootRef.current = '';
+        conflictingRemoteRootLastSeenAtRef.current = 0;
+        syncDecryptWorkerRoomKey(newKey);
+        armKeyDistributionGateAndRun(() => distributeRoomKey(newKey));
+      };
+
+      const delayMs = Math.max(
+        TOPOLOGY_HEARTBEAT_MS,
+        authoritySettleUntilRef.current > 0
+          ? Math.max(0, authoritySettleUntilRef.current - Date.now())
+          : 0
+      );
+      simultJoinKeyFallbackTimerRef.current = setTimeout(
+        attemptFallback,
+        delayMs
+      );
+    },
+    [armKeyDistributionGateAndRun, distributeRoomKey, syncDecryptWorkerRoomKey]
+  );
+
   const queueVerifiedRoomKey = useCallback((payload: IncomingRoomKeyPayload) => {
     const digestSlot = payload.encryptedKey.slice(0, 48);
     const dedupeKey = [
@@ -6365,11 +6746,16 @@ export function useGroupVoiceCall(uiActive = false) {
       isOurKeyRef.current = caseCRootBecomeHolder;
       currentKeyCommitmentRef.current = payload.keyCommitment;
       needsSessionKeyRef.current = false;
+      awaitingAuthoritativeKeyRef.current = false;
       keyDistributionPendingRef.current = false;
       decryptFailureStreakRef.current = 0;
       lastRemoteDecodeAtRef.current = Date.now();
       recoveryEligibleAfterRef.current =
         Date.now() + KEY_RECOVERY_SETTLE_DELAY_MS;
+      if (conflictingRemoteRootRef.current === payload.fromAddress) {
+        conflictingRemoteRootRef.current = '';
+        conflictingRemoteRootLastSeenAtRef.current = 0;
+      }
       syncDecryptWorkerRoomKey(roomKeyRef.current);
       debugLog('[GCall] Room key set', {
         fromAddress: payload.fromAddress,
@@ -6424,6 +6810,22 @@ export function useGroupVoiceCall(uiActive = false) {
         if (allowQueue && !currentRoot) {
           queueVerifiedRoomKey(payload);
         } else {
+          if (
+            payload.fromAddress &&
+            payload.fromAddress !== currentRoot &&
+            participantsRef.current.has(payload.fromAddress)
+          ) {
+            conflictingRemoteRootRef.current = payload.fromAddress;
+            conflictingRemoteRootLastSeenAtRef.current = Date.now();
+            authoritySettleUntilRef.current = Math.max(
+              authoritySettleUntilRef.current,
+              Date.now() +
+                TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS +
+                TOPOLOGY_HEARTBEAT_MS
+            );
+            awaitingAuthoritativeKeyRef.current =
+              awaitingAuthoritativeKeyRef.current || roomKeyRef.current !== null;
+          }
           debugLog('[GCall] Dropping key — sender not trusted for current topology', {
             fromAddress: payload.fromAddress,
             currentRoot,
@@ -6715,7 +7117,13 @@ export function useGroupVoiceCall(uiActive = false) {
       // so the rejoining node broadcasts an epoch ≥ the room's current epoch.
       if (roomId !== lastRoomIdRef.current) {
         lastObservedEpochRef.current = 0;
+        trustedRemoteRootRef.current = '';
+        trustedRemoteRootLastSeenAtRef.current = 0;
+        conflictingRemoteRootRef.current = '';
+        conflictingRemoteRootLastSeenAtRef.current = 0;
       }
+      authoritySettleUntilRef.current = 0;
+      awaitingAuthoritativeKeyRef.current = false;
       sessionStartedAtMsRef.current = Date.now();
       sessionStunBundleRef.current = [];
       peerRecoveryProfileRef.current.clear();
@@ -6833,10 +7241,29 @@ export function useGroupVoiceCall(uiActive = false) {
           });
         }
         if (hydratedRemoteParticipants.length > 0) {
+          const trustedElectionRoot = getTrustedRootForRejoinElection({
+            currentRoot: topologyRef.current?.rootForwarder,
+            trustedRemoteRoot: trustedRemoteRootRef.current,
+            trustedRemoteRootLastSeenAtMs: trustedRemoteRootLastSeenAtRef.current,
+            nowMs: Date.now(),
+            staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+            rosterAddresses: participantsRef.current.keys(),
+          });
           pendingPostJoinRosterElectionRef.current = true;
+          pendingPostJoinRosterElectionDelayUntilRef.current =
+            shouldDelayPostJoinRosterElection({
+              hydratedRemoteParticipantCount: hydratedRemoteParticipants.length,
+              currentRoot: topologyRef.current?.rootForwarder,
+              trustedRemoteRoot: trustedElectionRoot,
+            })
+              ? Date.now() + OCCUPIED_JOIN_AUTHORITY_WAIT_MS
+              : 0;
           debugLog('[GCall] Post-join roster hydration from main', {
             remoteCount: hydratedRemoteParticipants.length,
             addresses: hydratedRemoteParticipants.map((p) => p.address),
+            delayingInitialElection:
+              pendingPostJoinRosterElectionDelayUntilRef.current > 0,
+            trustedElectionRoot: trustedElectionRoot ?? null,
           });
           setParticipants((prev) => {
             const existing = new Set(prev.map((p) => p.address));
@@ -6869,6 +7296,7 @@ export function useGroupVoiceCall(uiActive = false) {
       setupDecryptWorker();
       startForwarderTimeoutCheck();
       startMetricsFlushLoop();
+      startTransportHealthReportLoop();
       startWindowMetricsLoop();
       startWebRtcEnsureLoop();
       queueMicrotask(() => {
@@ -6878,6 +7306,7 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [
       flushMetrics,
+      startTransportHealthReportLoop,
       withGcallLifecycleLock,
       setupDecryptWorker,
       startMetricsFlushLoop,
@@ -6970,9 +7399,19 @@ export function useGroupVoiceCall(uiActive = false) {
       clearInterval(clusterHeartbeatTimerRef.current);
       clusterHeartbeatTimerRef.current = null;
     }
+    const roomIdForTransportHealth = roomIdRef.current;
+    if (
+      roomIdForTransportHealth &&
+      typeof window.groupCall?.reportTransportHealth === 'function'
+    ) {
+      void window.groupCall.reportTransportHealth(roomIdForTransportHealth, []).catch(
+        () => {}
+      );
+    }
     lastClusterForwarderHbRef.current.clear();
     clusterFailoverMissStreakRef.current.clear();
     stopMetricsFlushLoop();
+    stopTransportHealthReportLoop();
     stopWindowMetricsLoop();
     stopWebRtcEnsureLoop();
     if (relayMetricsFlushTimerRef.current) {
@@ -7096,8 +7535,14 @@ export function useGroupVoiceCall(uiActive = false) {
     lastWindowMetricsRef.current = null;
     topologyRef.current = null;
     localEpochRef.current = 0;
+    authoritySettleUntilRef.current = 0;
     mainJoinReadyRef.current = false;
     pendingPostJoinRosterElectionRef.current = false;
+    pendingPostJoinRosterElectionDelayUntilRef.current = 0;
+    if (pendingPostJoinRosterElectionTimerRef.current) {
+      clearTimeout(pendingPostJoinRosterElectionTimerRef.current);
+      pendingPostJoinRosterElectionTimerRef.current = null;
+    }
     lastRoomIdRef.current = roomIdRef.current; // save before clearing for cross-room epoch scoping
     roomIdRef.current = '';
     // lastObservedEpochRef intentionally not reset here — survives for same-room rejoin
@@ -7111,6 +7556,7 @@ export function useGroupVoiceCall(uiActive = false) {
     }
     lastMeshReannounceAtRef.current = 0;
     joinGenerationRef.current = null;
+    awaitingAuthoritativeKeyRef.current = false;
     localSpeakersRef.current.clear();
     sessionStunBundleRef.current = [];
     sessionObservedStunUrlsRef.current = [];
@@ -7118,6 +7564,8 @@ export function useGroupVoiceCall(uiActive = false) {
     lastIceServerRefreshAtMsRef.current = 0;
     metricsRef.current.reset();
     metricsRef.current.setRole('participant');
+    conflictingRemoteRootRef.current = '';
+    conflictingRemoteRootLastSeenAtRef.current = 0;
 
     setRoomState('idle');
     setParticipants([]);
@@ -7138,6 +7586,7 @@ export function useGroupVoiceCall(uiActive = false) {
     flushMetrics,
     withGcallLifecycleLock,
     stopMetricsFlushLoop,
+    stopTransportHealthReportLoop,
     stopWindowMetricsLoop,
     stopWebRtcEnsureLoop,
     syncDecryptWorkerRoomKey,
@@ -7190,8 +7639,47 @@ export function useGroupVoiceCall(uiActive = false) {
       unsubscribeRef.current?.();
       unsubscribeRef.current = null;
       scheduleTopologyElectionFlushRef.current = () => {};
+      if (pendingPostJoinRosterElectionTimerRef.current) {
+        clearTimeout(pendingPostJoinRosterElectionTimerRef.current);
+        pendingPostJoinRosterElectionTimerRef.current = null;
+      }
+      pendingPostJoinRosterElectionDelayUntilRef.current = 0;
       return;
     }
+
+    const clearPendingPostJoinRosterElectionDelay = (reason: string) => {
+      if (pendingPostJoinRosterElectionTimerRef.current) {
+        clearTimeout(pendingPostJoinRosterElectionTimerRef.current);
+        pendingPostJoinRosterElectionTimerRef.current = null;
+      }
+      if (pendingPostJoinRosterElectionDelayUntilRef.current > 0) {
+        debugLog('[GCall] Clearing occupied-room join election wait', {
+          reason,
+        });
+      }
+      pendingPostJoinRosterElectionDelayUntilRef.current = 0;
+    };
+
+    const scheduleInitialPostJoinRosterElection = () => {
+      const remainingMs =
+        pendingPostJoinRosterElectionDelayUntilRef.current - Date.now();
+      if (remainingMs <= 0) {
+        clearPendingPostJoinRosterElectionDelay('expired');
+        scheduleTopologyElectionFlush();
+        return;
+      }
+      if (pendingPostJoinRosterElectionTimerRef.current) {
+        clearTimeout(pendingPostJoinRosterElectionTimerRef.current);
+      }
+      debugLog('[GCall] Waiting for established root before first local election', {
+        remainingMs,
+      });
+      pendingPostJoinRosterElectionTimerRef.current = setTimeout(() => {
+        pendingPostJoinRosterElectionTimerRef.current = null;
+        clearPendingPostJoinRosterElectionDelay('timeout');
+        scheduleTopologyElectionFlush();
+      }, remainingMs);
+    };
 
     const scheduleTopologyElectionFlush = () => {
       if (topologyDebounceTimerRef.current) {
@@ -7209,19 +7697,21 @@ export function useGroupVoiceCall(uiActive = false) {
           // Use the highest epoch seen in this room as the floor so a rejoining
           // node never broadcasts a stale epoch that peers would reject.
           const prevRoot = topologyRef.current?.rootForwarder;
+          const trustedElectionRoot = getTrustedRootForRejoinElection({
+            currentRoot: prevRoot,
+            trustedRemoteRoot: trustedRemoteRootRef.current,
+            trustedRemoteRootLastSeenAtMs: trustedRemoteRootLastSeenAtRef.current,
+            nowMs: Date.now(),
+            staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+            rosterAddresses: fresh,
+          });
           const epoch =
             Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
-          // Single-cluster: sticky root if prior root still in roster (after await so
-          // topologyRef reflects any applyTopology during computeElectionOrder).
-          const newTopoBase =
-            fresh.length <= CLUSTER_SIZE
-              ? (buildSingleClusterTopologyWithStickyRoot(
-                  sorted,
-                  epoch,
-                  prevRoot,
-                  CLUSTER_SIZE
-                ) ?? buildTopology(sorted, epoch))
-              : buildTopology(sorted, epoch);
+          const newTopoBase = buildTopologyWithTrustedRoot(
+            sorted,
+            epoch,
+            trustedElectionRoot
+          );
           const newTopo = { ...newTopoBase, lastSeen: Date.now() };
           applyTopology(newTopo);
 
@@ -7249,6 +7739,7 @@ export function useGroupVoiceCall(uiActive = false) {
             // handleRoomKey will atomically replace it when the new root
             // distributes their fresh key.
             isOurKeyRef.current = false;
+            awaitingAuthoritativeKeyRef.current = roomKeyRef.current !== null;
           }
 
           if (isInitiatorRef.current) {
@@ -7262,12 +7753,22 @@ export function useGroupVoiceCall(uiActive = false) {
               debugLog('[GCall] Election (b) — reclaim key and rotate');
               isOurKeyRef.current = true;
               needsSessionKeyRef.current = false;
+              awaitingAuthoritativeKeyRef.current = false;
               armKeyDistributionGateAndRun(() =>
                 distributeRoomKey(roomKeyRef.current!)
               );
             } else if (!roomKeyRef.current) {
               debugLog('[GCall] Election (c) — root without session key');
               needsSessionKeyRef.current = true;
+              awaitingAuthoritativeKeyRef.current = others.length > 0;
+              if (others.length > 0) {
+                authoritySettleUntilRef.current = Math.max(
+                  authoritySettleUntilRef.current,
+                  Date.now() +
+                    TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS +
+                    TOPOLOGY_HEARTBEAT_MS
+                );
+              }
               if (
                 shouldMintRootSessionKeyImmediately({
                   otherParticipantCount: others.length,
@@ -7283,6 +7784,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 roomKeyRef.current = newKey;
                 isOurKeyRef.current = true;
                 needsSessionKeyRef.current = false;
+                awaitingAuthoritativeKeyRef.current = false;
                 syncDecryptWorkerRoomKey(newKey);
                 armKeyDistributionGateAndRun(() =>
                   distributeRoomKey(newKey)
@@ -7337,24 +7839,7 @@ export function useGroupVoiceCall(uiActive = false) {
                   );
                 };
                 void sendFirstKeyRequest();
-                simultJoinKeyFallbackTimerRef.current = setTimeout(() => {
-                  simultJoinKeyFallbackTimerRef.current = null;
-                  if (myGen !== topologyAsyncGenRef.current) return;
-                  if (!isInitiatorRef.current || roomKeyRef.current !== null) {
-                    return;
-                  }
-                  debugLog(
-                    '[GCall] Simultaneous-join fallback — minting session key'
-                  );
-                  const newKey = naclApi.randomBytes(32);
-                  roomKeyRef.current = newKey;
-                  isOurKeyRef.current = true;
-                  needsSessionKeyRef.current = false;
-                  syncDecryptWorkerRoomKey(newKey);
-                  armKeyDistributionGateAndRun(() =>
-                    distributeRoomKey(newKey)
-                  );
-                }, 3500);
+                armSimultaneousJoinKeyFallback(myGen, myAddress);
               }
             }
           }
@@ -7365,7 +7850,7 @@ export function useGroupVoiceCall(uiActive = false) {
     scheduleTopologyElectionFlushRef.current = scheduleTopologyElectionFlush;
     if (pendingPostJoinRosterElectionRef.current) {
       pendingPostJoinRosterElectionRef.current = false;
-      scheduleTopologyElectionFlush();
+      scheduleInitialPostJoinRosterElection();
     }
 
     const scheduleKeyRecoveryCheck = (delayMs: number) => {
@@ -7858,6 +8343,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (event === 'gcall:topology') {
         const topo = payload as GroupTopology & { roomId: string };
         if (topo.roomId !== roomIdRef.current) return;
+        clearPendingPostJoinRosterElectionDelay('topology');
         lastRootHeartbeatRef.current = Date.now();
         applyTopology(topo);
         maybeRequestKeyRecoveryRef.current('topology-transition');
@@ -7875,8 +8361,38 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       if (event === 'gcall:heartbeat') {
-        const { roomId } = payload as { roomId: string };
+        const { roomId, rootForwarder } = payload as {
+          roomId: string;
+          rootForwarder?: string;
+        };
         if (roomId !== roomIdRef.current) return;
+        const currentRoot = topologyRef.current?.rootForwarder ?? '';
+        if (
+          rootForwarder &&
+          rootForwarder !== (userInfo?.address ?? '') &&
+          participantsRef.current.has(rootForwarder)
+        ) {
+          clearPendingPostJoinRosterElectionDelay('heartbeat');
+          if (!currentRoot || currentRoot === rootForwarder) {
+            trustedRemoteRootRef.current = rootForwarder;
+            trustedRemoteRootLastSeenAtRef.current = Date.now();
+            if (conflictingRemoteRootRef.current === rootForwarder) {
+              conflictingRemoteRootRef.current = '';
+              conflictingRemoteRootLastSeenAtRef.current = 0;
+            }
+          } else {
+            conflictingRemoteRootRef.current = rootForwarder;
+            conflictingRemoteRootLastSeenAtRef.current = Date.now();
+            authoritySettleUntilRef.current = Math.max(
+              authoritySettleUntilRef.current,
+              Date.now() +
+                TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS +
+                TOPOLOGY_HEARTBEAT_MS
+            );
+          }
+        } else if (trustedRemoteRootRef.current) {
+          trustedRemoteRootLastSeenAtRef.current = Date.now();
+        }
         lastRootHeartbeatRef.current = Date.now();
       }
 
@@ -7913,20 +8429,32 @@ export function useGroupVoiceCall(uiActive = false) {
         mediaSessionGenerationRef.current = (p.mediaSessionGeneration ?? 1) >>> 0;
         const root = topologyRef.current?.rootForwarder ?? '';
         const myAddr = userInfo?.address ?? '';
+        const conflictingRoot = getConflictingRootForAuthorityWait({
+          currentRoot: root,
+          conflictingRemoteRoot: conflictingRemoteRootRef.current,
+          conflictingRemoteRootLastSeenAtMs:
+            conflictingRemoteRootLastSeenAtRef.current,
+          nowMs: Date.now(),
+          staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+          rosterAddresses: participantsRef.current.keys(),
+        });
         const existingOwnedKey =
           myAddr && root === myAddr && roomKeyRef.current && isOurKeyRef.current
             ? roomKeyRef.current
             : null;
-        const sessionUpdatedAction = getSessionUpdatedKeyRecoveryAction({
-          isLocalRoot: !!myAddr && root === myAddr,
-          hasOwnedRoomKey: !!existingOwnedKey,
-          otherParticipantCount: [...participantsRef.current.keys()].filter(
-            (addr) => addr !== myAddr
-          ).length,
-          pendingVerifiedKeyCount: pendingVerifiedKeysRef.current.length,
-          lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
-          decryptFailureStreak: decryptFailureStreakRef.current,
-        });
+        const sessionUpdatedAction =
+          conflictingRoot && conflictingRoot !== myAddr
+            ? 'request-recovery'
+            : getSessionUpdatedKeyRecoveryAction({
+                isLocalRoot: !!myAddr && root === myAddr,
+                hasOwnedRoomKey: !!existingOwnedKey,
+                otherParticipantCount: [...participantsRef.current.keys()].filter(
+                  (addr) => addr !== myAddr
+                ).length,
+                pendingVerifiedKeyCount: pendingVerifiedKeysRef.current.length,
+                lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
+                decryptFailureStreak: decryptFailureStreakRef.current,
+              });
         roomKeyRef.current = null;
         currentKeyCommitmentRef.current = null;
         isOurKeyRef.current = false;
@@ -7934,12 +8462,14 @@ export function useGroupVoiceCall(uiActive = false) {
         recoveryEligibleAfterRef.current = 0;
         syncDecryptWorkerRoomKey(null);
         needsSessionKeyRef.current = true;
+        awaitingAuthoritativeKeyRef.current = true;
         keyDistributionPendingRef.current = true;
         pendingVerifiedKeysRef.current = [];
         if (sessionUpdatedAction === 'redistribute-existing' && existingOwnedKey) {
           roomKeyRef.current = existingOwnedKey;
           isOurKeyRef.current = true;
           needsSessionKeyRef.current = false;
+          awaitingAuthoritativeKeyRef.current = false;
           keyDistributionPendingRef.current = false;
           syncDecryptWorkerRoomKey(existingOwnedKey);
           armKeyDistributionGateAndRun(() => distributeRoomKey(existingOwnedKey));
@@ -7948,10 +8478,16 @@ export function useGroupVoiceCall(uiActive = false) {
           roomKeyRef.current = newKey;
           isOurKeyRef.current = true;
           needsSessionKeyRef.current = false;
+          awaitingAuthoritativeKeyRef.current = false;
           keyDistributionPendingRef.current = false;
           syncDecryptWorkerRoomKey(newKey);
           armKeyDistributionGateAndRun(() => distributeRoomKey(newKey));
         } else if (sessionUpdatedAction === 'request-recovery') {
+          authoritySettleUntilRef.current = Math.max(
+            authoritySettleUntilRef.current,
+            Date.now() + TOPOLOGY_HEARTBEAT_MS
+          );
+          scheduleTopologyElectionFlush();
           maybeRequestKeyRecoveryRef.current('session-updated');
         }
       }
@@ -8035,6 +8571,11 @@ export function useGroupVoiceCall(uiActive = false) {
       unsub();
       unsubscribeRef.current = null;
       scheduleTopologyElectionFlushRef.current = () => {};
+      if (pendingPostJoinRosterElectionTimerRef.current) {
+        clearTimeout(pendingPostJoinRosterElectionTimerRef.current);
+        pendingPostJoinRosterElectionTimerRef.current = null;
+      }
+      pendingPostJoinRosterElectionDelayUntilRef.current = 0;
       if (topologyDebounceTimerRef.current) {
         clearTimeout(topologyDebounceTimerRef.current);
         topologyDebounceTimerRef.current = null;

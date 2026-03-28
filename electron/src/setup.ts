@@ -2293,6 +2293,19 @@ ipcMain.handle('gcall:getRoomParticipants', async (_event, roomId: string) => {
   return mgr.getRoomParticipants(roomId);
 });
 
+ipcMain.handle(
+  'gcall:reportTransportHealth',
+  async (_event, roomId: string, healthyPeerAddresses: string[]) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.reportTransportHealth(
+      roomId,
+      Array.isArray(healthyPeerAddresses) ? healthyPeerAddresses : []
+    );
+    return { success: true };
+  }
+);
+
 
 ipcMain.handle('gcall:getPendingKeyMetrics', async () => {
   const mgr = getGroupCallManager();

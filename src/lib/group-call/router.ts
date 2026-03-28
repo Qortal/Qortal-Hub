@@ -111,6 +111,94 @@ export interface RouterTopology {
   clusters: RouterClusterDef[];
 }
 
+export interface RouterTopologyAuthorityView extends RouterTopology {
+  lastSeen?: number | null;
+}
+
+export type RouterTopologyAuthorityReason =
+  | 'stale-epoch'
+  | 'newer-epoch'
+  | 'lastSeen'
+  | 'rootForwarder-lexical'
+  | 'same-topology';
+
+export interface RouterTopologyAuthorityDecision {
+  acceptIncoming: boolean;
+  reason: RouterTopologyAuthorityReason;
+  winningRoot: string;
+}
+
+/**
+ * Resolve conflicting topology candidates with a symmetric rule that every peer
+ * can compute locally. Same-epoch root conflicts must not preserve local state,
+ * or split-brain can persist forever after rejoin.
+ */
+export function chooseRouterTopologyAuthority(
+  current: RouterTopologyAuthorityView,
+  incoming: RouterTopologyAuthorityView
+): RouterTopologyAuthorityDecision {
+  if (incoming.topologyEpoch !== current.topologyEpoch) {
+    return {
+      acceptIncoming: incoming.topologyEpoch > current.topologyEpoch,
+      reason:
+        incoming.topologyEpoch > current.topologyEpoch
+          ? 'newer-epoch'
+          : 'stale-epoch',
+      winningRoot:
+        incoming.topologyEpoch > current.topologyEpoch
+          ? incoming.rootForwarder
+          : current.rootForwarder,
+    };
+  }
+
+  if (incoming.rootForwarder !== current.rootForwarder) {
+    const currentRoot = current.rootForwarder.trim();
+    const incomingRoot = incoming.rootForwarder.trim();
+    if (!currentRoot && incomingRoot) {
+      return {
+        acceptIncoming: true,
+        reason: 'rootForwarder-lexical',
+        winningRoot: incomingRoot,
+      };
+    }
+    if (currentRoot && !incomingRoot) {
+      return {
+        acceptIncoming: false,
+        reason: 'rootForwarder-lexical',
+        winningRoot: currentRoot,
+      };
+    }
+    const acceptIncoming = incomingRoot.localeCompare(currentRoot) < 0;
+    return {
+      acceptIncoming,
+      reason: 'rootForwarder-lexical',
+      winningRoot: acceptIncoming ? incomingRoot : currentRoot,
+    };
+  }
+
+  const incomingSeen = incoming.lastSeen;
+  const currentSeen = current.lastSeen;
+  if (
+    typeof incomingSeen === 'number' &&
+    Number.isFinite(incomingSeen) &&
+    typeof currentSeen === 'number' &&
+    Number.isFinite(currentSeen) &&
+    incomingSeen !== currentSeen
+  ) {
+    return {
+      acceptIncoming: incomingSeen > currentSeen,
+      reason: 'lastSeen',
+      winningRoot: current.rootForwarder,
+    };
+  }
+
+  return {
+    acceptIncoming: false,
+    reason: 'same-topology',
+    winningRoot: current.rootForwarder,
+  };
+}
+
 /**
  * Single-cluster election with sticky root: keep the previous root if still present
  * (hash order is `sorted` ascending). Caller must only use when `sorted.length <= clusterSize`.
@@ -152,6 +240,55 @@ export function buildSingleClusterTopologyWithStickyRoot(
         standby2,
       },
     ],
+  };
+}
+
+/**
+ * Hierarchical election with sticky root: if the previous root is still present,
+ * keep that peer as the room root by promoting it to the front of its cluster and
+ * moving that cluster to the front of the room-level ordering.
+ */
+export function buildHierarchicalTopologyWithStickyRoot(
+  sorted: string[],
+  topologyEpoch: number,
+  previousRoot: string | null | undefined,
+  clusterSize: number
+): RouterTopology | null {
+  if (sorted.length === 0 || sorted.length <= clusterSize) return null;
+  const stickyRoot = previousRoot?.trim() ?? '';
+  if (!stickyRoot || !sorted.includes(stickyRoot)) return null;
+
+  const chunked: string[][] = [];
+  for (let i = 0; i < sorted.length; i += clusterSize) {
+    chunked.push(sorted.slice(i, i + clusterSize));
+  }
+  const rootClusterIndex = chunked.findIndex((cluster) =>
+    cluster.includes(stickyRoot)
+  );
+  if (rootClusterIndex < 0) return null;
+
+  const reordered = chunked.map((cluster, idx) => {
+    if (idx !== rootClusterIndex) return cluster;
+    return [stickyRoot, ...cluster.filter((addr) => addr !== stickyRoot)];
+  });
+  if (rootClusterIndex > 0) {
+    const [rootCluster] = reordered.splice(rootClusterIndex, 1);
+    if (rootCluster) reordered.unshift(rootCluster);
+  }
+
+  const clusters = reordered.map((members) => ({
+    members,
+    forwarder: members[0] ?? '',
+    standby: members[1] ?? members[0] ?? '',
+    standby2: members[2] ?? '',
+  }));
+  const { rootForwarder, standbyForwarder } =
+    roomLevelOfficersFromClusters(clusters);
+  return {
+    topologyEpoch,
+    rootForwarder,
+    standbyForwarder,
+    clusters,
   };
 }
 

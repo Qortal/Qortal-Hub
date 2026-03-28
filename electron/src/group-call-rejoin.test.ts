@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chooseMainTopologyAuthority,
   GC_JOIN_MAX_AGE_MS,
   gcJoinTimestampRejectReason,
   getLocalSessionBreakMediaSessionGeneration,
   mergeRoomTopologyEpochWithFloor,
   pendingKeyEnvelopeWinsOver,
+  shouldDelayPresenceEvictionForHealthyTransport,
+  shouldApplyVerifiedLeaveToParticipant,
   shouldIgnoreLeaveForLocalAddress,
+  shouldRefreshParticipantFromVerifiedJoin,
 } from './group-call';
 
 describe('mergeRoomTopologyEpochWithFloor', () => {
@@ -67,6 +71,66 @@ describe('pendingKeyEnvelopeWinsOver', () => {
   });
 });
 
+describe('chooseMainTopologyAuthority', () => {
+  it('breaks same-epoch root conflicts deterministically', () => {
+    expect(
+      chooseMainTopologyAuthority(
+        {
+          topologyEpoch: 11,
+          rootForwarder: 'root-b',
+          lastSeen: 1_000,
+        },
+        {
+          topologyEpoch: 11,
+          rootForwarder: 'root-a',
+          lastSeen: 2_000,
+        }
+      )
+    ).toEqual({
+      acceptIncoming: true,
+      reason: 'rootForwarder-lexical',
+    });
+  });
+
+  it('keeps newer same-root heartbeats and rejects stale epochs', () => {
+    expect(
+      chooseMainTopologyAuthority(
+        {
+          topologyEpoch: 11,
+          rootForwarder: 'root-a',
+          lastSeen: 1_000,
+        },
+        {
+          topologyEpoch: 11,
+          rootForwarder: 'root-a',
+          lastSeen: 2_000,
+        }
+      )
+    ).toEqual({
+      acceptIncoming: true,
+      reason: 'lastSeen',
+    });
+
+    expect(
+      chooseMainTopologyAuthority(
+        {
+          topologyEpoch: 11,
+          rootForwarder: 'root-a',
+          lastSeen: 1_000,
+        },
+        {
+          topologyEpoch: 10,
+          rootForwarder: 'root-b',
+          lastSeen: 2_000,
+        }
+      )
+    ).toEqual({
+      acceptIncoming: false,
+      reason: 'stale-epoch',
+    });
+  });
+});
+
 describe('gcJoinTimestampRejectReason', () => {
   const t0 = 1_000_000;
 
@@ -105,6 +169,52 @@ describe('shouldIgnoreLeaveForLocalAddress', () => {
   });
 });
 
+describe('shouldRefreshParticipantFromVerifiedJoin', () => {
+  it('refreshes room participant state for newer rejoins', () => {
+    expect(
+      shouldRefreshParticipantFromVerifiedJoin({
+        currentJoinedAt: 100,
+        incomingJoinTimestamp: 200,
+      })
+    ).toBe(true);
+  });
+
+  it('does not regress room participant state for older duplicate joins', () => {
+    expect(
+      shouldRefreshParticipantFromVerifiedJoin({
+        currentJoinedAt: 200,
+        incomingJoinTimestamp: 100,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('shouldApplyVerifiedLeaveToParticipant', () => {
+  it('accepts a leave for the active participant session', () => {
+    expect(
+      shouldApplyVerifiedLeaveToParticipant({
+        participantJoinedAt: 100,
+        leaveTimestamp: 100,
+      })
+    ).toBe(true);
+    expect(
+      shouldApplyVerifiedLeaveToParticipant({
+        participantJoinedAt: 100,
+        leaveTimestamp: 150,
+      })
+    ).toBe(true);
+  });
+
+  it('rejects stale leaves from before a rejoin', () => {
+    expect(
+      shouldApplyVerifiedLeaveToParticipant({
+        participantJoinedAt: 200,
+        leaveTimestamp: 150,
+      })
+    ).toBe(false);
+  });
+});
+
 describe('getLocalSessionBreakMediaSessionGeneration', () => {
   it('does not bump the local generation ahead of the mesh', () => {
     expect(getLocalSessionBreakMediaSessionGeneration(7)).toBe(7);
@@ -112,5 +222,43 @@ describe('getLocalSessionBreakMediaSessionGeneration', () => {
 
   it('normalizes an invalid zero generation to one', () => {
     expect(getLocalSessionBreakMediaSessionGeneration(0)).toBe(1);
+  });
+});
+
+describe('shouldDelayPresenceEvictionForHealthyTransport', () => {
+  it('delays eviction when the peer was recently reported healthy', () => {
+    expect(
+      shouldDelayPresenceEvictionForHealthyTransport({
+        lastReportAtMs: 10_000,
+        healthyPeerAddresses: new Set(['Q-remote']),
+        address: 'Q-remote',
+        nowMs: 22_000,
+        staleAfterMs: 15_000,
+      })
+    ).toBe(true);
+  });
+
+  it('does not delay eviction when the transport report is stale', () => {
+    expect(
+      shouldDelayPresenceEvictionForHealthyTransport({
+        lastReportAtMs: 10_000,
+        healthyPeerAddresses: new Set(['Q-remote']),
+        address: 'Q-remote',
+        nowMs: 26_000,
+        staleAfterMs: 15_000,
+      })
+    ).toBe(false);
+  });
+
+  it('does not delay eviction for peers missing from the healthy set', () => {
+    expect(
+      shouldDelayPresenceEvictionForHealthyTransport({
+        lastReportAtMs: 10_000,
+        healthyPeerAddresses: new Set(['Q-other']),
+        address: 'Q-remote',
+        nowMs: 12_000,
+        staleAfterMs: 15_000,
+      })
+    ).toBe(false);
   });
 });
