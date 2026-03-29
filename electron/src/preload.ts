@@ -1118,6 +1118,10 @@ try {
     getRoomParticipants: async (roomId: string) =>
       ipcRenderer.invoke('gcall:getRoomParticipants', roomId),
 
+    /** Get authoritative bootstrap state for a room join/rejoin. */
+    getRoomBootstrapState: async (roomId: string) =>
+      ipcRenderer.invoke('gcall:getRoomBootstrapState', roomId),
+
     /**
      * Member-group numeric ids used to derive which `gcall-qortal-*` rooms get sidebar indicators
      * from relayed mesh traffic (cheap path; debounced updates).

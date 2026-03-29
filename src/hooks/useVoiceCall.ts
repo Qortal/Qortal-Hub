@@ -27,11 +27,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
+  blockedAddressesAtom,
   callAudioDevicesAtom,
+  dmFriendsByAddressAtom,
   infoSnackGlobalAtom,
   openSnackGlobalAtom,
   userInfoAtom,
 } from '../atoms/global';
+import { isDirectVoiceCallChatId } from '../lib/call/directVoiceCallChatId';
 import i18n from '../i18n/i18n';
 import {
   applyCallAudioOutput,
@@ -88,6 +91,8 @@ export interface UseVoiceCallReturn {
   callState: CallState;
   audioMode: AudioMode;
   isMuted: boolean;
+  /** When false, remote call audio is not played locally (mic unaffected). */
+  hearCall: boolean;
   callDuration: number; // seconds
   incomingCall: IncomingCall | null;
   /** chatId of the in-flight or active call (outbound set at initiate; inbound set on accept). */
@@ -101,6 +106,8 @@ export interface UseVoiceCallReturn {
   rejectCall: () => void;
   hangUp: () => void;
   toggleMute: () => void;
+  setHearCall: (hear: boolean) => void;
+  toggleHearCall: () => void;
 }
 
 // ── Inline PCM codec (no external dependency) ────────────────────────────────
@@ -153,12 +160,15 @@ const pcmCodec = {
 
 export function useVoiceCall(): UseVoiceCallReturn {
   const userInfo = useAtomValue(userInfoAtom);
+  const blockedAddresses = useAtomValue(blockedAddressesAtom);
+  const dmFriendsByAddress = useAtomValue(dmFriendsByAddressAtom);
   const setInfoSnackGlobal = useSetAtom(infoSnackGlobalAtom);
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
 
   const [callState, setCallState] = useState<CallState>('idle');
   const [audioMode, setAudioMode] = useState<AudioMode>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [hearCall, setHearCallState] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [activeCallChatId, setActiveCallChatId] = useState<string | null>(null);
@@ -178,6 +188,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const dcRef = useRef<RTCDataChannel | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  /** Remote (Tier 2/3) PCM playback — inserted before `AudioContext.destination`. */
+  const remotePlaybackGainRef = useRef<GainNode | null>(null);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const iceFailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dcActivateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -186,6 +198,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
   // Jitter buffer: Map<seq, { ts: number; data: Uint8Array }>
   const jitterBufferRef = useRef<Map<number, { ts: number; data: Uint8Array }>>(new Map());
   const incomingCallRef = useRef<IncomingCall | null>(null);
+  const blockedAddressesRef = useRef(blockedAddresses);
+  blockedAddressesRef.current = blockedAddresses;
+  const dmFriendsByAddressRef = useRef(dmFriendsByAddress);
+  dmFriendsByAddressRef.current = dmFriendsByAddress;
   const pendingSignalsRef = useRef<BufferedCallSignal[]>([]);
   const outboundSetupCallIdRef = useRef<string | null>(null);
   const inboundSetupCallIdRef = useRef<string | null>(null);
@@ -203,6 +219,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const isMutedRef = useRef(isMuted);
   isMutedRef.current = isMuted;
+  const hearCallRef = useRef(hearCall);
+  hearCallRef.current = hearCall;
 
   /** Skip the first input-device effect after connect (stream already matches prefs from setup). */
   const inputSwapSeededRef = useRef(false);
@@ -307,6 +325,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     localStreamRef.current = null;
     audioCtxRef.current?.close().catch(() => {});
     audioCtxRef.current = null;
+    remotePlaybackGainRef.current = null;
     jitterBufferRef.current.clear();
     relaySeqRef.current = 0;
     resetPendingSignals();
@@ -345,6 +364,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
       setAudioMode(null);
       setCallDuration(0);
       setIsMuted(false);
+      setHearCallState(true);
+      hearCallRef.current = true;
       updateIncomingCall(null);
       inputSwapSeededRef.current = false;
       prevInputPrefRef.current = undefined;
@@ -381,6 +402,17 @@ export function useVoiceCall(): UseVoiceCallReturn {
     return audioCtxRef.current;
   }, []);
 
+  const connectRemotePcmToOutput = useCallback((ctx: AudioContext): GainNode => {
+    let g = remotePlaybackGainRef.current;
+    if (!g || g.context !== ctx) {
+      g = ctx.createGain();
+      g.gain.value = hearCallRef.current ? 1 : 0;
+      g.connect(ctx.destination);
+      remotePlaybackGainRef.current = g;
+    }
+    return g;
+  }, []);
+
   const playPcmFrame = useCallback(
     (pcm: Float32Array, sampleRate = AUDIO_SAMPLE_RATE) => {
       const ctx = ensureAudioContext();
@@ -388,10 +420,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
       buffer.copyToChannel(pcm, 0);
       const src = ctx.createBufferSource();
       src.buffer = buffer;
-      src.connect(ctx.destination);
+      src.connect(connectRemotePcmToOutput(ctx));
       src.start();
     },
-    [ensureAudioContext]
+    [connectRemotePcmToOutput, ensureAudioContext]
   );
 
   // ── DataChannel audio capture (Tier 2) ────────────────────────────────────
@@ -617,6 +649,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
         document.body.appendChild(audio);
       }
       audio.srcObject = e.streams[0] ?? null;
+      audio.muted = !hearCallRef.current;
       void applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
         audioElement: audio,
       }).then(({ clearPersistedOutput }) => {
@@ -845,11 +878,42 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
       switch (event) {
         case 'call:incoming': {
+          const incCallId = p.callId as string;
+          const incFrom = p.fromAddress as string;
+          const incChatId = p.chatId as string;
+
+          const rejectIncoming = async (reason: string) => {
+            const rejectTs = Date.now();
+            const { signature, publicKey } = await signFields({
+              type: 'CALL_REJECT',
+              callId: incCallId,
+              timestamp: rejectTs,
+            });
+            await (window as any).call?.reject(
+              incCallId,
+              reason,
+              signature,
+              publicKey,
+              rejectTs
+            );
+          };
+
+          if (isDirectVoiceCallChatId(incChatId)) {
+            if (blockedAddressesRef.current[incFrom]) {
+              await rejectIncoming('blocked');
+              break;
+            }
+            if (!dmFriendsByAddressRef.current[incFrom]) {
+              await rejectIncoming('not_friend');
+              break;
+            }
+          }
+
           if (callStateRef.current !== 'idle') break; // already in a call
           updateIncomingCall({
-            callId: p.callId as string,
-            fromAddress: p.fromAddress as string,
-            chatId: p.chatId as string,
+            callId: incCallId,
+            fromAddress: incFrom,
+            chatId: incChatId,
           });
           updateCallState('ringing');
           break;
@@ -947,6 +1011,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     endCall,
     playPcmFrame,
     setupOutboundCall,
+    signFields,
     startDurationTimer,
     updateCallState,
     updateIncomingCall,
@@ -1071,6 +1136,30 @@ export function useVoiceCall(): UseVoiceCallReturn {
     setIsMuted((m) => !m);
   }, []);
 
+  const setHearCall = useCallback((hear: boolean) => {
+    hearCallRef.current = hear;
+    setHearCallState(hear);
+    const el = document.getElementById(
+      '__qortal_call_audio__'
+    ) as HTMLAudioElement | null;
+    if (el) el.muted = !hear;
+    const g = remotePlaybackGainRef.current;
+    const ctx = audioCtxRef.current;
+    if (g && ctx && ctx.state !== 'closed') {
+      const t = ctx.currentTime;
+      try {
+        g.gain.cancelScheduledValues(t);
+        g.gain.setTargetAtTime(hear ? 1 : 0, t, 0.02);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
+
+  const toggleHearCall = useCallback(() => {
+    setHearCall(!hearCallRef.current);
+  }, [setHearCall]);
+
   useEffect(() => {
     if (callState !== 'connected') {
       inputSwapSeededRef.current = false;
@@ -1116,6 +1205,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     callState,
     audioMode,
     isMuted,
+    hearCall,
     callDuration,
     incomingCall,
     activeCallChatId,
@@ -1124,5 +1214,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     rejectCall,
     hangUp,
     toggleMute,
+    setHearCall,
+    toggleHearCall,
   };
 }

@@ -24,12 +24,16 @@ import { alpha } from '@mui/material/styles';
 import Groups2RoundedIcon from '@mui/icons-material/Groups2Rounded';
 import MicRoundedIcon from '@mui/icons-material/MicRounded';
 import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
+import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
+import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useAtomValue } from 'jotai';
 import PictureInPictureAltRoundedIcon from '@mui/icons-material/PictureInPictureAltRounded';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import {
   userInfoAtom,
   qortalGroupVoiceCallMinimizedAtom,
@@ -71,9 +75,36 @@ export function QortalGroupVoiceCallStage() {
     leaveGroupCall,
     setMuted,
     muted,
+    hearCall,
+    toggleHearCall,
     memberPrimaryNames,
     memberGateGroupName,
+    exportGroupCallDiagnostics,
   } = useGroupCallContext();
+
+  const [diagExporting, setDiagExporting] = useState(false);
+
+  const handleDiagDownload = useCallback(async () => {
+    setDiagExporting(true);
+    try {
+      await exportGroupCallDiagnostics?.({ download: true, clipboard: false });
+    } catch (e) {
+      console.error('[GCall] diagnostics export failed', e);
+    } finally {
+      setDiagExporting(false);
+    }
+  }, [exportGroupCallDiagnostics]);
+
+  const handleDiagClipboard = useCallback(async () => {
+    setDiagExporting(true);
+    try {
+      await exportGroupCallDiagnostics?.({ download: false, clipboard: true });
+    } catch (e) {
+      console.error('[GCall] diagnostics clipboard failed', e);
+    } finally {
+      setDiagExporting(false);
+    }
+  }, [exportGroupCallDiagnostics]);
 
   const [qcallMinimized, setQcallMinimized] = useAtom(
     qortalGroupVoiceCallMinimizedAtom
@@ -299,6 +330,40 @@ export function QortalGroupVoiceCallStage() {
             flexShrink: 0,
           }}
         >
+          <Tooltip
+            title={t('core:group_call_export_diagnostics', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            placement="bottom"
+          >
+            <span>
+              <IconButton
+                size="small"
+                disabled={diagExporting}
+                onClick={() => void handleDiagDownload()}
+                sx={{ color: '#93c5fd' }}
+              >
+                <FileDownloadRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip
+            title={t('core:group_call_copy_diagnostics', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            placement="bottom"
+          >
+            <span>
+              <IconButton
+                size="small"
+                disabled={diagExporting}
+                onClick={() => void handleDiagClipboard()}
+                sx={{ color: '#c4b5fd' }}
+              >
+                <ContentCopyRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
           <Tooltip
             title={t('core:group_call_minimize', {
               postProcess: 'capitalizeFirstChar',
@@ -646,6 +711,37 @@ export function QortalGroupVoiceCallStage() {
               <MicRoundedIcon sx={{ fontSize: 28 }} />
             )}
           </IconButton>
+
+          <Tooltip
+            title={
+              hearCall
+                ? t('core:call_audio_mute', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:call_audio_hear', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+            }
+          >
+            <IconButton
+              onClick={toggleHearCall}
+              sx={{
+                width: 56,
+                height: 56,
+                bgcolor: hearCall ? '#313338' : DANGER,
+                color: '#fff',
+                '&:hover': {
+                  bgcolor: hearCall ? '#4e5058' : alpha(DANGER, 0.85),
+                },
+              }}
+            >
+              {hearCall ? (
+                <VolumeUpRoundedIcon sx={{ fontSize: 28 }} />
+              ) : (
+                <VolumeOffRoundedIcon sx={{ fontSize: 28 }} />
+              )}
+            </IconButton>
+          </Tooltip>
 
           <Box
             sx={{

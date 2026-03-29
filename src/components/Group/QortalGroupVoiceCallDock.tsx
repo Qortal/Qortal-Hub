@@ -3,7 +3,13 @@
  * Paired with `QortalGroupVoiceCallStage` and `qortalGroupVoiceCallMinimizedAtom`.
  */
 
-import React, { useCallback, useEffect, useMemo, useReducer } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useState,
+} from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -17,7 +23,11 @@ import { alpha, useTheme } from '@mui/material/styles';
 import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import MicRoundedIcon from '@mui/icons-material/MicRounded';
 import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
+import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
+import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import OpenInFullRoundedIcon from '@mui/icons-material/OpenInFullRounded';
+import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
+import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import { useTranslation } from 'react-i18next';
 import {
   qortalGroupVoiceCallMinimizedAtom,
@@ -53,9 +63,36 @@ export function QortalGroupVoiceCallDock() {
     leaveGroupCall,
     setMuted,
     muted,
+    hearCall,
+    toggleHearCall,
     memberGateGroupName,
     memberPrimaryNames,
+    exportGroupCallDiagnostics,
   } = useGroupCallContext();
+
+  const [diagExporting, setDiagExporting] = useState(false);
+
+  const handleDiagDownload = useCallback(async () => {
+    setDiagExporting(true);
+    try {
+      await exportGroupCallDiagnostics?.({ download: true, clipboard: false });
+    } catch (e) {
+      console.error('[GCall] diagnostics export failed', e);
+    } finally {
+      setDiagExporting(false);
+    }
+  }, [exportGroupCallDiagnostics]);
+
+  const handleDiagClipboard = useCallback(async () => {
+    setDiagExporting(true);
+    try {
+      await exportGroupCallDiagnostics?.({ download: false, clipboard: true });
+    } catch (e) {
+      console.error('[GCall] diagnostics clipboard failed', e);
+    } finally {
+      setDiagExporting(false);
+    }
+  }, [exportGroupCallDiagnostics]);
 
   const isQortal =
     typeof roomId === 'string' && roomId.startsWith('gcall-qortal-');
@@ -290,6 +327,51 @@ export function QortalGroupVoiceCallDock() {
         })}
       </Box>
 
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 0.25,
+          width: '100%',
+        }}
+      >
+        <Tooltip
+          title={t('core:group_call_export_diagnostics', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          placement="left"
+        >
+          <span>
+            <IconButton
+              size="small"
+              disabled={diagExporting}
+              onClick={() => void handleDiagDownload()}
+              sx={{ color: '#93c5fd', p: 0.5 }}
+            >
+              <FileDownloadRoundedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+        <Tooltip
+          title={t('core:group_call_copy_diagnostics', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          placement="left"
+        >
+          <span>
+            <IconButton
+              size="small"
+              disabled={diagExporting}
+              onClick={() => void handleDiagClipboard()}
+              sx={{ color: '#c4b5fd', p: 0.5 }}
+            >
+              <ContentCopyRoundedIcon sx={{ fontSize: 18 }} />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+
       <Tooltip
         title={
           muted
@@ -298,6 +380,7 @@ export function QortalGroupVoiceCallDock() {
               })
             : t('core:group_call_mute', { postProcess: 'capitalizeFirstChar' })
         }
+        placement="left"
       >
         <span>
           <IconButton
@@ -322,9 +405,44 @@ export function QortalGroupVoiceCallDock() {
       </Tooltip>
 
       <Tooltip
+        title={
+          hearCall
+            ? t('core:call_audio_mute', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:call_audio_hear', {
+                postProcess: 'capitalizeFirstChar',
+              })
+        }
+        placement="left"
+      >
+        <span>
+          <IconButton
+            onClick={toggleHearCall}
+            sx={{
+              width: 44,
+              height: 44,
+              bgcolor: hearCall ? '#313338' : DANGER,
+              color: '#fff',
+              '&:hover': {
+                bgcolor: hearCall ? '#4e5058' : alpha(DANGER, 0.85),
+              },
+            }}
+          >
+            {hearCall ? (
+              <VolumeUpRoundedIcon sx={{ fontSize: 22 }} />
+            ) : (
+              <VolumeOffRoundedIcon sx={{ fontSize: 22 }} />
+            )}
+          </IconButton>
+        </span>
+      </Tooltip>
+
+      <Tooltip
         title={t('core:group_call_leave', {
           postProcess: 'capitalizeFirstChar',
         })}
+        placement="left"
       >
         <IconButton
           onClick={handleLeave}

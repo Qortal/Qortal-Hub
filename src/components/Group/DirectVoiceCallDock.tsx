@@ -17,6 +17,8 @@ import { alpha, useTheme } from '@mui/material/styles';
 import CallEndRoundedIcon from '@mui/icons-material/CallEndRounded';
 import MicRoundedIcon from '@mui/icons-material/MicRounded';
 import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
+import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
+import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { userInfoAtom } from '../../atoms/global';
 import { useVoiceCallContext } from '../../context/VoiceCallContext';
@@ -32,6 +34,7 @@ import {
 } from './qortalGroupCallParticipantUi';
 import { CallAudioSettingsButton } from '../Chat/CallAudioDeviceSelectors';
 import { getPrimaryNameForAvatar } from './groupApi';
+import { useTranslation } from 'react-i18next';
 
 const BG_RAIL = '#2b2d31';
 const TEXT_MUTED = '#949ba4';
@@ -39,16 +42,19 @@ const DANGER = '#f23f42';
 
 export function DirectVoiceCallDock() {
   const theme = useTheme();
+  const { t } = useTranslation(['core']);
   const userInfo = useAtomValue(userInfoAtom);
   const myAddress = userInfo?.address ?? '';
   const {
     callState,
     audioMode,
     isMuted,
+    hearCall,
     callDuration,
     activeCallChatId,
     hangUp,
     toggleMute,
+    toggleHearCall,
   } = useVoiceCallContext();
 
   const activeDirect =
@@ -240,11 +246,22 @@ export function DirectVoiceCallDock() {
             '& .MuiIconButton-root': { color: '#b5bac1' },
           }}
         >
-          <CallAudioSettingsButton IconComponent={SettingsRoundedIcon} />
+          <CallAudioSettingsButton
+            IconComponent={SettingsRoundedIcon}
+            tooltipPlacement="left"
+          />
         </Box>
       )}
 
-      <Tooltip title={isMuted ? 'Unmute' : 'Mute'}>
+      <Tooltip
+        title={
+          isMuted
+            ? t('core:group_call_unmute', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:group_call_mute', { postProcess: 'capitalizeFirstChar' })
+        }
+      >
         <span>
           <IconButton
             disabled={callState !== 'connected'}
@@ -268,7 +285,42 @@ export function DirectVoiceCallDock() {
         </span>
       </Tooltip>
 
-      <Tooltip title="Hang up">
+      <Tooltip
+        title={
+          hearCall
+            ? t('core:call_audio_mute', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:call_audio_hear', {
+                postProcess: 'capitalizeFirstChar',
+              })
+        }
+        placement="left"
+      >
+        <span>
+          <IconButton
+            disabled={callState !== 'connected'}
+            onClick={toggleHearCall}
+            sx={{
+              width: 44,
+              height: 44,
+              bgcolor: hearCall ? '#313338' : DANGER,
+              color: '#fff',
+              '&:hover': {
+                bgcolor: hearCall ? '#4e5058' : alpha(DANGER, 0.85),
+              },
+            }}
+          >
+            {hearCall ? (
+              <VolumeUpRoundedIcon sx={{ fontSize: 22 }} />
+            ) : (
+              <VolumeOffRoundedIcon sx={{ fontSize: 22 }} />
+            )}
+          </IconButton>
+        </span>
+      </Tooltip>
+
+      <Tooltip title="Hang up" placement="left">
         <IconButton
           onClick={hangUp}
           sx={{

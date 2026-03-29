@@ -19,6 +19,7 @@ import SettingsVoiceRoundedIcon from '@mui/icons-material/SettingsVoiceRounded';
 import { useAtom } from 'jotai';
 import { useCallback, useEffect, useMemo, useState, type ComponentType } from 'react';
 import type { SvgIconProps } from '@mui/material/SvgIcon';
+import type { TooltipProps } from '@mui/material/Tooltip';
 import { callAudioDevicesAtom } from '../../atoms/global';
 import { ensureMicPermissionForLabels, listAudioDevices } from '../../lib/call/audioDevices';
 
@@ -27,6 +28,8 @@ type Props = {
   iconButtonSize?: 'small' | 'medium' | 'large';
   /** Toolbar glyph; defaults to voice-settings icon */
   IconComponent?: ComponentType<SvgIconProps>;
+  /** Tooltip position; e.g. sidebar docks use `"left"` so popovers open away from the edge. */
+  tooltipPlacement?: TooltipProps['placement'];
 };
 
 /** Group/support call floaters use z-index 1400; modal defaults to 1300 and would sit underneath. */
@@ -41,6 +44,7 @@ const CALL_AUDIO_MENU_Z_INDEX = 1700;
 export function CallAudioSettingsButton({
   iconButtonSize = 'small',
   IconComponent = SettingsVoiceRoundedIcon,
+  tooltipPlacement,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [prefs, setPrefs] = useAtom(callAudioDevicesAtom);
@@ -119,7 +123,7 @@ export function CallAudioSettingsButton({
 
   return (
     <>
-      <Tooltip title="Call audio settings">
+      <Tooltip title="Call audio settings" placement={tooltipPlacement}>
         <IconButton
           size={iconButtonSize}
           onClick={() => setOpen(true)}

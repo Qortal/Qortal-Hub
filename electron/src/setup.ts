@@ -2409,6 +2409,12 @@ ipcMain.handle('gcall:getRoomParticipants', async (_event, roomId: string) => {
   return mgr.getRoomParticipants(roomId);
 });
 
+ipcMain.handle('gcall:getRoomBootstrapState', async (_event, roomId: string) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return null;
+  return mgr.getRoomBootstrapState(roomId);
+});
+
 ipcMain.handle(
   'gcall:reportTransportHealth',
   async (_event, roomId: string, healthyPeerAddresses: string[]) => {

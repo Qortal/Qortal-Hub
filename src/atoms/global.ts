@@ -141,16 +141,13 @@ export const callAudioDevicesAtom = atomWithStorage<CallAudioDevicePrefs>(
   electronStorage as any
 );
 
-/** Persisted: DM friends keyed by Qortal address (includes publicKey for local use). */
+/** Persisted: DM friends (see dmFriendsByAccountAtom / dmFriendsByAddressAtom). */
 export const DM_FRIENDS_STORAGE_KEY = 'qortal_dm_friends';
 export type DmFriendStored = {
   publicKey: string;
   name?: string;
   addedAt: number;
 };
-export const dmFriendsByAddressAtom = atomWithStorage<
-  Record<string, DmFriendStored>
->(DM_FRIENDS_STORAGE_KEY, {}, electronStorage as any);
 
 /** Persisted: keys of notifications already "seen in app" (excluded from unread count), by address then notification key. Keys older than this are pruned. */
 export const NOTIFICATION_SEEN_IN_APP_STORAGE_KEY =
@@ -389,6 +386,125 @@ export const isLoadingAuthenticateAtom = atomWithReset(false);
 export const authenticatePasswordAtom = atomWithReset('');
 export const extStateAtom = atomWithReset<extStates>('not-authenticated');
 export const userInfoAtom = atomWithReset<any>(null);
+
+/** Pre–per-account storage: flat friend map; merged into first logged-in user on migrate. */
+export const DM_FRIENDS_LEGACY_BUCKET_KEY = '__legacy_dm_friends_flat_v1__';
+
+function isDmFriendStoredEntry(v: unknown): v is DmFriendStored {
+  return (
+    v != null &&
+    typeof v === 'object' &&
+    !Array.isArray(v) &&
+    typeof (v as DmFriendStored).publicKey === 'string' &&
+    typeof (v as DmFriendStored).addedAt === 'number'
+  );
+}
+
+function isLegacyFlatDmFriendsRoot(obj: Record<string, unknown>): boolean {
+  const keys = Object.keys(obj).filter((k) => !k.startsWith('__'));
+  if (keys.length === 0) return false;
+  return keys.every((k) => isDmFriendStoredEntry(obj[k]));
+}
+
+/** Stored: authenticated address → friend address → metadata. */
+export type DmFriendsByAccount = Record<string, Record<string, DmFriendStored>>;
+
+export function parseDmFriendsPersisted(
+  raw: string | null | unknown
+): DmFriendsByAccount {
+  if (raw == null || raw === '') return {};
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const obj = parsed as Record<string, unknown>;
+
+  if (isLegacyFlatDmFriendsRoot(obj)) {
+    const bucket: Record<string, DmFriendStored> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (isDmFriendStoredEntry(v)) bucket[k] = v;
+    }
+    return { [DM_FRIENDS_LEGACY_BUCKET_KEY]: bucket };
+  }
+
+  const result: DmFriendsByAccount = {};
+  for (const [accountKey, inner] of Object.entries(obj)) {
+    if (!inner || typeof inner !== 'object' || Array.isArray(inner)) continue;
+    const innerObj = inner as Record<string, unknown>;
+    const friendMap: Record<string, DmFriendStored> = {};
+    for (const [fk, fv] of Object.entries(innerObj)) {
+      if (isDmFriendStoredEntry(fv)) friendMap[fk] = fv;
+    }
+    result[accountKey] = friendMap;
+  }
+  return result;
+}
+
+const dmFriendsByAccountStorage = {
+  getItem: (key: string): DmFriendsByAccount => {
+    const raw: string | null | unknown =
+      electronStorage != null
+        ? (electronStorage as any).getItem(key, null)
+        : typeof localStorage !== 'undefined'
+          ? localStorage.getItem(key)
+          : null;
+    return parseDmFriendsPersisted(raw);
+  },
+  setItem: (key: string, value: string | DmFriendsByAccount): void => {
+    const record =
+      typeof value === 'string' ? parseDmFriendsPersisted(value) : value;
+    if (electronStorage != null) {
+      (electronStorage as any).setItem(key, record);
+    } else if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(record));
+    }
+  },
+  removeItem: (key: string): void => {
+    if (electronStorage != null) {
+      (electronStorage as any).removeItem?.(key);
+    } else if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  },
+};
+
+/** Persisted: DM friends per authenticated address (friend address → metadata). */
+export const dmFriendsByAccountAtom = atomWithStorage<DmFriendsByAccount>(
+  DM_FRIENDS_STORAGE_KEY,
+  {},
+  dmFriendsByAccountStorage as any
+);
+
+/** Current user's DM friends (derived from dmFriendsByAccountAtom). */
+export const dmFriendsByAddressAtom = atom(
+  (get) => {
+    const byAccount = get(dmFriendsByAccountAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return {};
+    return (byAccount[address] ?? {}) as Record<string, DmFriendStored>;
+  },
+  (
+    get,
+    set,
+    update:
+      | Record<string, DmFriendStored>
+      | ((
+          prev: Record<string, DmFriendStored>
+        ) => Record<string, DmFriendStored>)
+  ) => {
+    const byAccount = get(dmFriendsByAccountAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return;
+    const prev = (byAccount[address] ?? {}) as Record<string, DmFriendStored>;
+    const next = typeof update === 'function' ? update(prev) : update;
+    set(dmFriendsByAccountAtom, { ...byAccount, [address]: next });
+  }
+);
 
 /** Current user's custom WS subscriptions (derived from customWebsocketSubscriptionsByAddressAtom by address). */
 export const customWebsocketSubscriptionsAtom = atom(

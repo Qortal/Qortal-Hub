@@ -5,11 +5,13 @@ import {
   countRecentlyHealthyRemoteSources,
   clearAdaptiveGroupCallPlayoutMaps,
   getConflictingRootForAuthorityWait,
+  hasOccupiedRoomEvidenceForJoin,
   getTrustedRootForRejoinElection,
   getSessionUpdatedKeyRecoveryAction,
   getPostJoinHydratedParticipants,
   isCurrentGroupCallAudioStartupToken,
   mergeHydratedParticipantsIntoUiList,
+  shouldDeferLocalTopologyElection,
   shouldPromoteStandbyRootAfterHeartbeatTimeout,
   shouldAcceptIncomingRoomKeySender,
   shouldAcceptKeyRecoveryRequestGeneration,
@@ -342,6 +344,62 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         hydratedRemoteParticipantCount: 0,
         currentRoot: '',
         trustedRemoteRoot: '',
+        hasOccupiedRoomEvidence: true,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldDelayPostJoinRosterElection({
+        hydratedRemoteParticipantCount: 0,
+        currentRoot: '',
+        trustedRemoteRoot: '',
+        hasOccupiedRoomEvidence: false,
+      })
+    ).toBe(false);
+  });
+
+  it('treats empty hydration with bootstrap/topology evidence as an occupied-room rejoin', () => {
+    expect(
+      hasOccupiedRoomEvidenceForJoin({
+        sameRoomRejoin: true,
+        hydratedRemoteParticipantCount: 0,
+        bootstrapParticipantCount: 0,
+        bootstrapTopologyEpoch: 17,
+        bootstrapHasTopology: true,
+        lastObservedEpoch: 17,
+        trustedRemoteRoot: 'root-a',
+        bootstrapCallSessionId: 'session-a',
+        bootstrapMediaSessionGeneration: 2,
+      })
+    ).toBe(true);
+
+    expect(
+      hasOccupiedRoomEvidenceForJoin({
+        sameRoomRejoin: false,
+        hydratedRemoteParticipantCount: 0,
+        bootstrapParticipantCount: 0,
+        bootstrapTopologyEpoch: 0,
+        bootstrapHasTopology: false,
+        lastObservedEpoch: 0,
+        trustedRemoteRoot: '',
+        bootstrapCallSessionId: '',
+        bootstrapMediaSessionGeneration: 1,
+      })
+    ).toBe(false);
+  });
+
+  it('defers local topology elections while the join authority window is active', () => {
+    expect(
+      shouldDeferLocalTopologyElection({
+        nowMs: 1_000,
+        authorityDelayUntilMs: 1_500,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldDeferLocalTopologyElection({
+        nowMs: 1_500,
+        authorityDelayUntilMs: 1_500,
       })
     ).toBe(false);
   });

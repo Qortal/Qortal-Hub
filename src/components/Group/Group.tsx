@@ -378,9 +378,13 @@ export const Group = ({
         ? t('core:group_call_members_fetch_failed', {
             postProcess: 'capitalizeFirstChar',
           })
-        : t('core:group_call_not_member', {
-            postProcess: 'capitalizeFirstChar',
-          });
+        : gcallJoinError === 'presence_offline'
+          ? t('core:group_call_presence_offline', {
+              postProcess: 'capitalizeFirstChar',
+            })
+          : t('core:group_call_not_member', {
+              postProcess: 'capitalizeFirstChar',
+            });
     setInfoSnack({ type: 'error', message });
     setOpenSnack(true);
     clearGcallJoinError();

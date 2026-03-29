@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildGroupRoomBootstrapState,
   chooseMainTopologyAuthority,
   GC_JOIN_MAX_AGE_MS,
   gcJoinTimestampRejectReason,
   getLocalSessionBreakMediaSessionGeneration,
+  GroupCallManager,
+  isRecentRoomStateFresh,
   mergeRoomTopologyEpochWithFloor,
   pendingKeyEnvelopeWinsOver,
   shouldDelayPresenceEvictionForHealthyTransport,
@@ -26,6 +29,161 @@ describe('mergeRoomTopologyEpochWithFloor', () => {
 
   it('floors fractional values', () => {
     expect(mergeRoomTopologyEpochWithFloor(0, 9.7)).toBe(9);
+  });
+});
+
+describe('recent room bootstrap state', () => {
+  it('keeps cached room state only within the TTL', () => {
+    expect(isRecentRoomStateFresh(10_000, 29_999, 20_000)).toBe(true);
+    expect(isRecentRoomStateFresh(10_000, 30_001, 20_000)).toBe(false);
+  });
+
+  it('builds a readonly bootstrap snapshot including topology and joinedAt data', () => {
+    const snapshot = buildGroupRoomBootstrapState(
+      {
+        roomId: 'gcall-qortal-812',
+        chatId: 'chat-812',
+        participants: new Map([
+          ['Q-self', { publicKey: 'pk-self', joinedAt: 100 }],
+          ['Q-root', { publicKey: 'pk-root', joinedAt: 200 }],
+        ]),
+        topologyEpoch: 17,
+        lastTopology: {
+          topologyEpoch: 17,
+          rootForwarder: 'Q-root',
+          standbyForwarder: 'Q-standby',
+          clusters: [
+            {
+              members: ['Q-root', 'Q-self'],
+              forwarder: 'Q-root',
+              standby: 'Q-self',
+              standby2: '',
+            },
+          ],
+          lastSeen: 9_999,
+        },
+        callSessionId: 'session-17',
+        mediaSessionGeneration: 3,
+      },
+      12_345,
+      true
+    );
+
+    expect(snapshot).toEqual({
+      roomId: 'gcall-qortal-812',
+      chatId: 'chat-812',
+      participants: [
+        { address: 'Q-self', publicKey: 'pk-self', joinedAt: 100 },
+        { address: 'Q-root', publicKey: 'pk-root', joinedAt: 200 },
+      ],
+      topologyEpoch: 17,
+      lastTopology: {
+        topologyEpoch: 17,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-standby',
+        clusters: [
+          {
+            members: ['Q-root', 'Q-self'],
+            forwarder: 'Q-root',
+            standby: 'Q-self',
+            standby2: '',
+          },
+        ],
+        lastSeen: 9_999,
+      },
+      callSessionId: 'session-17',
+      mediaSessionGeneration: 3,
+      updatedAtMs: 12_345,
+      fromRecentCache: true,
+    });
+  });
+
+  it('does not revive cached participants into live rejoin bootstrap state', () => {
+    const sent: unknown[] = [];
+    const manager = new GroupCallManager(
+      {
+        send: (_nodeId: string | null, payload: unknown) => {
+          sent.push(payload);
+        },
+      } as any,
+      {} as any
+    );
+
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user1', 'sig', 'pk1', 100);
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user2', 'sig', 'pk2', 200);
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', 300);
+
+    manager.leaveRoom('gcall-qortal-812', 'Q-user3', 'sig', 'pk3', 400);
+
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', 500);
+
+    expect(sent.length).toBeGreaterThan(0);
+    expect(manager.getRoomParticipants('gcall-qortal-812')).toEqual([
+      { address: 'Q-user3', publicKey: 'pk3' },
+    ]);
+    expect(manager.getRoomBootstrapState('gcall-qortal-812')).toMatchObject({
+      participants: [{ address: 'Q-user3', publicKey: 'pk3', joinedAt: 500 }],
+    });
+  });
+
+  it('preserves cached topology and session on rejoin without reviving cached participants', () => {
+    const t0 = Date.now();
+    const manager = new GroupCallManager(
+      {
+        send: () => {},
+      } as any,
+      {} as any
+    );
+
+    const firstJoin = manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-root',
+      'sig',
+      'pk-root',
+      t0
+    );
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user2', 'sig', 'pk2', t0 + 100);
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', t0 + 200);
+
+    manager.broadcastTopology(
+      'gcall-qortal-812',
+      {
+        fromAddress: 'Q-root',
+        topologyEpoch: 17,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-user2',
+        clusters: [
+          {
+            members: ['Q-root', 'Q-user2', 'Q-user3'],
+            forwarder: 'Q-root',
+            standby: 'Q-user2',
+            standby2: 'Q-user3',
+          },
+        ],
+        lastSeen: t0 + 300,
+      },
+      'sig',
+      'pk-root',
+      t0 + 300
+    );
+
+    manager.leaveRoom('gcall-qortal-812', 'Q-user3', 'sig', 'pk3', t0 + 400);
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', t0 + 500);
+
+    const bootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
+
+    expect(bootstrap).toMatchObject({
+      participants: [{ address: 'Q-user3', publicKey: 'pk3', joinedAt: t0 + 500 }],
+      topologyEpoch: 17,
+      lastTopology: {
+        topologyEpoch: 17,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-user2',
+      },
+      callSessionId: firstJoin.callSessionId,
+      mediaSessionGeneration: firstJoin.mediaSessionGeneration,
+    });
   });
 });
 

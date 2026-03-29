@@ -546,37 +546,86 @@ export class CallManager extends EventEmitter {
       });
   }
 
+  /**
+   * Addresses that should see an incoming ring for this request (everyone in the
+   * signed chatId except the caller). Relay nodes are not in this set, so they
+   * forward gossip without surfacing UI.
+   */
+  private callRequestRecipientAddresses(
+    chatId: string,
+    fromAddress: string
+  ): Set<string> | null {
+    if (chatId.startsWith('direct:')) {
+      const parts = chatId.slice('direct:'.length).split(':').filter(Boolean);
+      if (parts.length !== 2) return null;
+      const a = new Set(parts);
+      if (!a.has(fromAddress)) return null;
+      a.delete(fromAddress);
+      return a.size === 1 ? a : null;
+    }
+    if (chatId.startsWith('support:')) {
+      if (chatId === 'support:queue') return null;
+      const parts = chatId.slice('support:'.length).split(':').filter(Boolean);
+      if (parts.length < 2) return null;
+      const recipients = new Set(parts);
+      recipients.delete(fromAddress);
+      return recipients.size > 0 ? recipients : null;
+    }
+    return null;
+  }
+
+  /** Local wallet address that is the intended callee, if any. */
+  private localCallRecipientAddress(env: CallRequestEnvelope): string | null {
+    const recipients = this.callRequestRecipientAddresses(
+      env.chatId,
+      env.fromAddress
+    );
+    if (!recipients) return null;
+    for (const addr of this.localAddresses) {
+      if (recipients.has(addr)) return addr;
+    }
+    return null;
+  }
+
   private applyVerifiedIncomingRequest(
     fromNodeId: string,
     env: CallRequestEnvelope
   ): void {
     if (this.activeCalls.has(env.callId)) return;
 
-    const record: CallRecord = {
-      callId: env.callId,
-      localAddress: '',
-      remoteAddress: env.fromAddress,
-      remoteNodeId: fromNodeId,
-      chatId: env.chatId,
-      direction: 'inbound',
-      state: 'pending',
-      startedAt: Date.now(),
-    };
+    const localRecipient = this.localCallRecipientAddress(env);
 
-    record.cleanupTimer = setTimeout(() => {
-      if (this.activeCalls.get(env.callId)?.state === 'pending') {
-        loggerLog(`[Call] Incoming call ${env.callId.slice(0, 8)}… timed out.`);
-        this.activeCalls.delete(env.callId);
-      }
-    }, CALL_REQUEST_TTL_MS);
+    if (localRecipient) {
+      const record: CallRecord = {
+        callId: env.callId,
+        localAddress: localRecipient,
+        remoteAddress: env.fromAddress,
+        remoteNodeId: fromNodeId,
+        chatId: env.chatId,
+        direction: 'inbound',
+        state: 'pending',
+        startedAt: Date.now(),
+      };
 
-    this.activeCalls.set(env.callId, record);
+      record.cleanupTimer = setTimeout(() => {
+        if (this.activeCalls.get(env.callId)?.state === 'pending') {
+          loggerLog(`[Call] Incoming call ${env.callId.slice(0, 8)}… timed out.`);
+          this.activeCalls.delete(env.callId);
+        }
+      }, CALL_REQUEST_TTL_MS);
 
-    this.emit('call:incoming', {
-      callId: env.callId,
-      fromAddress: env.fromAddress,
-      chatId: env.chatId,
-    });
+      this.activeCalls.set(env.callId, record);
+
+      this.emit('call:incoming', {
+        callId: env.callId,
+        fromAddress: env.fromAddress,
+        chatId: env.chatId,
+      });
+
+      loggerLog(
+        `[Call] Incoming call ${env.callId.slice(0, 8)}… from ${env.fromAddress}`
+      );
+    }
 
     if ((env.hopsRemaining ?? 0) > 0) {
       this.p2p.send(null, {
@@ -584,10 +633,6 @@ export class CallManager extends EventEmitter {
         hopsRemaining: (env.hopsRemaining ?? 1) - 1,
       });
     }
-
-    loggerLog(
-      `[Call] Incoming call ${env.callId.slice(0, 8)}… from ${env.fromAddress}`
-    );
   }
 
   private handleAccept(env: CallAcceptEnvelope): void {

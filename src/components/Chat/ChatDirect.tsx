@@ -33,6 +33,8 @@ import PersonAddRoundedIcon from '@mui/icons-material/PersonAddRounded';
 import PersonRemoveRoundedIcon from '@mui/icons-material/PersonRemoveRounded';
 import MicOffRoundedIcon from '@mui/icons-material/MicOffRounded';
 import MicRoundedIcon from '@mui/icons-material/MicRounded';
+import VolumeUpRoundedIcon from '@mui/icons-material/VolumeUpRounded';
+import VolumeOffRoundedIcon from '@mui/icons-material/VolumeOffRounded';
 import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SendIcon from '@mui/icons-material/Send';
 import { LoadingSnackbar } from '../Snackbar/LoadingSnackbar';
@@ -94,11 +96,13 @@ export const ChatDirect = ({
     callState,
     audioMode,
     isMuted,
+    hearCall,
     callDuration,
     activeCallChatId,
     initiateCall: initiateVoiceCall,
     hangUp,
     toggleMute,
+    toggleHearCall,
   } = useVoiceCallContext();
 
   const peerOnline = useIsOnline(selectedDirect?.address);
@@ -1579,21 +1583,58 @@ export const ChatDirect = ({
             </Typography>
           )}
           <CallAudioSettingsButton />
-          <IconButton
-            size="small"
-            onClick={toggleMute}
-            sx={{
-              color: isMuted ? 'error.main' : 'text.secondary',
-              height: 26,
-              width: 26,
-            }}
+          <Tooltip
+            title={
+              isMuted
+                ? t('core:group_call_unmute', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:group_call_mute', { postProcess: 'capitalizeFirstChar' })
+            }
           >
-            {isMuted ? (
-              <MicOffRoundedIcon sx={{ fontSize: 15 }} />
-            ) : (
-              <MicRoundedIcon sx={{ fontSize: 15 }} />
-            )}
-          </IconButton>
+            <IconButton
+              size="small"
+              onClick={toggleMute}
+              sx={{
+                color: isMuted ? 'error.main' : 'text.secondary',
+                height: 26,
+                width: 26,
+              }}
+            >
+              {isMuted ? (
+                <MicOffRoundedIcon sx={{ fontSize: 15 }} />
+              ) : (
+                <MicRoundedIcon sx={{ fontSize: 15 }} />
+              )}
+            </IconButton>
+          </Tooltip>
+          <Tooltip
+            title={
+              hearCall
+                ? t('core:call_audio_mute', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+                : t('core:call_audio_hear', {
+                    postProcess: 'capitalizeFirstChar',
+                  })
+            }
+          >
+            <IconButton
+              size="small"
+              onClick={toggleHearCall}
+              sx={{
+                color: hearCall ? 'text.secondary' : 'error.main',
+                height: 26,
+                width: 26,
+              }}
+            >
+              {hearCall ? (
+                <VolumeUpRoundedIcon sx={{ fontSize: 15 }} />
+              ) : (
+                <VolumeOffRoundedIcon sx={{ fontSize: 15 }} />
+              )}
+            </IconButton>
+          </Tooltip>
           <IconButton
             size="small"
             onClick={hangUp}

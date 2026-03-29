@@ -341,6 +341,32 @@ declare global {
         healthyPeerAddresses: string[]
       ) => Promise<{ success: boolean }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
+      getRoomBootstrapState?: (roomId: string) => Promise<{
+        roomId: string;
+        chatId: string;
+        participants: Array<{
+          address: string;
+          publicKey: string;
+          joinedAt: number;
+        }>;
+        topologyEpoch: number;
+        lastTopology?: {
+          topologyEpoch: number;
+          rootForwarder: string;
+          standbyForwarder: string;
+          clusters: Array<{
+            members: string[];
+            forwarder: string;
+            standby: string;
+            standby2?: string;
+          }>;
+          lastSeen?: number | null;
+        };
+        callSessionId: string;
+        mediaSessionGeneration: number;
+        updatedAtMs: number;
+        fromRecentCache: boolean;
+      } | null>;
       setWatchedQortalGroupIds?: (
         ids: number[]
       ) => Promise<{

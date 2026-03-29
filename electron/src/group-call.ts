@@ -408,6 +408,88 @@ interface GroupRoom {
   mediaSessionGeneration: number;
 }
 
+export interface GroupRoomTopologySnapshot {
+  topologyEpoch: number;
+  rootForwarder: string;
+  standbyForwarder: string;
+  clusters: ClusterDef[];
+  lastSeen?: number | null;
+}
+
+export interface GroupRoomParticipantSnapshot extends RoomParticipant {
+  address: string;
+}
+
+export interface GroupRoomBootstrapState {
+  roomId: string;
+  chatId: string;
+  participants: GroupRoomParticipantSnapshot[];
+  topologyEpoch: number;
+  lastTopology?: GroupRoomTopologySnapshot;
+  callSessionId: string;
+  mediaSessionGeneration: number;
+  updatedAtMs: number;
+  fromRecentCache: boolean;
+}
+
+interface RecentRoomState extends GroupRoomBootstrapState {
+  cachedAtMs: number;
+}
+
+const RECENT_ROOM_STATE_TTL_MS = 20_000;
+
+export function isRecentRoomStateFresh(
+  cachedAtMs: number,
+  nowMs: number,
+  ttlMs = RECENT_ROOM_STATE_TTL_MS
+): boolean {
+  return nowMs - cachedAtMs <= ttlMs;
+}
+
+export function buildGroupRoomBootstrapState(
+  room: Pick<
+    GroupRoom,
+    | 'roomId'
+    | 'chatId'
+    | 'participants'
+    | 'topologyEpoch'
+    | 'lastTopology'
+    | 'callSessionId'
+    | 'mediaSessionGeneration'
+  >,
+  updatedAtMs: number,
+  fromRecentCache: boolean
+): GroupRoomBootstrapState {
+  return {
+    roomId: room.roomId,
+    chatId: room.chatId,
+    participants: [...room.participants.entries()].map(([address, p]) => ({
+      address,
+      publicKey: p.publicKey,
+      joinedAt: p.joinedAt,
+    })),
+    topologyEpoch: room.topologyEpoch,
+    lastTopology: room.lastTopology
+      ? {
+          topologyEpoch: room.lastTopology.topologyEpoch,
+          rootForwarder: room.lastTopology.rootForwarder,
+          standbyForwarder: room.lastTopology.standbyForwarder,
+          clusters: room.lastTopology.clusters.map((cluster) => ({
+            members: [...cluster.members],
+            forwarder: cluster.forwarder,
+            standby: cluster.standby,
+            standby2: cluster.standby2 ?? '',
+          })),
+          lastSeen: room.lastTopology.lastSeen,
+        }
+      : undefined,
+    callSessionId: room.callSessionId,
+    mediaSessionGeneration: room.mediaSessionGeneration,
+    updatedAtMs,
+    fromRecentCache,
+  };
+}
+
 // ── Signature helpers ─────────────────────────────────────────────────────────
 
 function buildTopologySignature(env: Pick<
@@ -717,6 +799,7 @@ export class GroupCallManager extends EventEmitter {
   private presence: PresenceManager;
   private localAddresses = new Set<string>();
   private rooms = new Map<string, GroupRoom>();
+  private recentRoomStateByRoomId = new Map<string, RecentRoomState>();
 
   /** Track recent processed message IDs to prevent replay */
   private seenMsgIds = new Set<string>();
@@ -786,6 +869,30 @@ export class GroupCallManager extends EventEmitter {
   private qortalActivityEmitTimer: ReturnType<typeof setTimeout> | null = null;
   private qortalMeshExpiryTimer: ReturnType<typeof setTimeout> | null = null;
   private qortalSpectatorSweepTimer: ReturnType<typeof setInterval> | null = null;
+
+  private buildRecentRoomState(room: GroupRoom, nowMs: number): RecentRoomState {
+    return {
+      ...buildGroupRoomBootstrapState(room, nowMs, true),
+      cachedAtMs: nowMs,
+    };
+  }
+
+  private getFreshRecentRoomState(roomId: string, nowMs = Date.now()): RecentRoomState | null {
+    const cached = this.recentRoomStateByRoomId.get(roomId);
+    if (!cached) return null;
+    if (!isRecentRoomStateFresh(cached.cachedAtMs, nowMs)) {
+      this.recentRoomStateByRoomId.delete(roomId);
+      return null;
+    }
+    return cached;
+  }
+
+  private rememberRecentRoomState(room: GroupRoom, nowMs = Date.now()): void {
+    this.recentRoomStateByRoomId.set(
+      room.roomId,
+      this.buildRecentRoomState(room, nowMs)
+    );
+  }
 
   constructor(p2p: P2PNetwork, presence: PresenceManager) {
     super();
@@ -987,6 +1094,7 @@ export class GroupCallManager extends EventEmitter {
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
     this.transportHealthByRoom.clear();
+    this.recentRoomStateByRoomId.clear();
     if (this.qortalActivityEmitTimer) {
       clearTimeout(this.qortalActivityEmitTimer);
       this.qortalActivityEmitTimer = null;
@@ -1384,14 +1492,37 @@ export class GroupCallManager extends EventEmitter {
   ): { callSessionId: string; mediaSessionGeneration: number } {
     let room = this.rooms.get(roomId);
     if (!room) {
+      const recent = this.getFreshRecentRoomState(roomId);
       room = {
         roomId,
         chatId,
+        // Never revive cached participants into live room state on rejoin.
+        // Recent topology/session is useful bootstrap authority; recent roster is not.
         participants: new Map(),
-        topologyEpoch: mergeRoomTopologyEpochWithFloor(0, topologyEpochFloor),
+        topologyEpoch: mergeRoomTopologyEpochWithFloor(
+          recent?.topologyEpoch ?? 0,
+          topologyEpochFloor
+        ),
+        topologySignature: recent?.lastTopology
+          ? buildTopologySignature(recent.lastTopology)
+          : undefined,
+        lastTopology: recent?.lastTopology
+          ? {
+              topologyEpoch: recent.lastTopology.topologyEpoch,
+              rootForwarder: recent.lastTopology.rootForwarder,
+              standbyForwarder: recent.lastTopology.standbyForwarder,
+              clusters: recent.lastTopology.clusters.map((cluster) => ({
+                members: [...cluster.members],
+                forwarder: cluster.forwarder,
+                standby: cluster.standby,
+                standby2: cluster.standby2 ?? '',
+              })),
+              lastSeen: recent.lastTopology.lastSeen,
+            }
+          : undefined,
         joinTimestamp: timestamp,
-        callSessionId: nodeCrypto.randomUUID(),
-        mediaSessionGeneration: 1,
+        callSessionId: recent?.callSessionId || nodeCrypto.randomUUID(),
+        mediaSessionGeneration: recent?.mediaSessionGeneration ?? 1,
       };
       this.rooms.set(roomId, room);
     } else {
@@ -1427,6 +1558,7 @@ export class GroupCallManager extends EventEmitter {
     publicKey: string,
     timestamp: number
   ): void {
+    const room = this.rooms.get(roomId);
     if (signature) {
       const env: GcLeaveEnvelope = {
         type: 'GC_LEAVE',
@@ -1444,6 +1576,7 @@ export class GroupCallManager extends EventEmitter {
       );
       this.participantNodeIds.delete(localAddress);
     }
+    if (room) this.rememberRecentRoomState(room, timestamp);
     this.pendingKeyByRoom.delete(roomId);
     this.rooms.delete(roomId);
     this.relayByteBudgetByRoom.delete(roomId);
@@ -1458,7 +1591,10 @@ export class GroupCallManager extends EventEmitter {
 
   broadcastTopology(
     roomId: string,
-    topology: Omit<GcTopologyEnvelope, 'type' | 'roomId' | 'hopsRemaining'>,
+    topology: Omit<
+      GcTopologyEnvelope,
+      'type' | 'roomId' | 'hopsRemaining' | 'fromPublicKey' | 'signature' | 'timestamp'
+    >,
     signature: string,
     publicKey: string,
     timestamp: number
@@ -2491,6 +2627,46 @@ export class GroupCallManager extends EventEmitter {
     const room = this.rooms.get(roomId);
     if (!room) return [];
     return [...room.participants.entries()].map(([address, p]) => ({ address, publicKey: p.publicKey }));
+  }
+
+  getRoomBootstrapState(roomId: string): GroupRoomBootstrapState | null {
+    const liveRoom = this.rooms.get(roomId);
+    const recent = this.getFreshRecentRoomState(roomId);
+    if (!liveRoom && !recent) return null;
+    if (!liveRoom) {
+      return {
+        ...recent!,
+        // Recent cached participants are not authoritative roster truth.
+        participants: [],
+        lastTopology: recent!.lastTopology
+          ? {
+              ...recent!.lastTopology,
+              clusters: recent!.lastTopology.clusters.map((cluster) => ({
+                members: [...cluster.members],
+                forwarder: cluster.forwarder,
+                standby: cluster.standby,
+                standby2: cluster.standby2 ?? '',
+              })),
+            }
+          : undefined,
+      };
+    }
+
+    const live = buildGroupRoomBootstrapState(liveRoom, Date.now(), false);
+    if (!recent) return live;
+
+    return {
+      ...live,
+      topologyEpoch: Math.max(live.topologyEpoch, recent.topologyEpoch),
+      lastTopology: live.lastTopology ?? recent.lastTopology,
+      callSessionId: live.callSessionId || recent.callSessionId,
+      mediaSessionGeneration: Math.max(
+        live.mediaSessionGeneration,
+        recent.mediaSessionGeneration
+      ),
+      updatedAtMs: Math.max(live.updatedAtMs, recent.updatedAtMs),
+      fromRecentCache: recent.fromRecentCache,
+    };
   }
 
   private schedulePresenceEviction(address: string): void {

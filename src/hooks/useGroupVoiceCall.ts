@@ -36,6 +36,7 @@ import {
   qortalGroupSelfGcallRoomIdAtom,
   userInfoAtom,
 } from '../atoms/global';
+import { myStatusAtom } from '../atoms/presence';
 import {
   applyCallAudioOutput,
   getUserAudioStreamForCall,
@@ -611,10 +612,45 @@ export function shouldDelayPostJoinRosterElection(opts: {
   hydratedRemoteParticipantCount: number;
   currentRoot: string | null | undefined;
   trustedRemoteRoot: string | null | undefined;
+  hasOccupiedRoomEvidence?: boolean;
 }): boolean {
-  if (opts.hydratedRemoteParticipantCount <= 0) return false;
   if ((opts.currentRoot?.trim() ?? '') !== '') return false;
-  return (opts.trustedRemoteRoot?.trim() ?? '') === '';
+  if ((opts.trustedRemoteRoot?.trim() ?? '') !== '') return false;
+  return (
+    opts.hydratedRemoteParticipantCount > 0 ||
+    opts.hasOccupiedRoomEvidence === true
+  );
+}
+
+export function hasOccupiedRoomEvidenceForJoin(opts: {
+  sameRoomRejoin: boolean;
+  hydratedRemoteParticipantCount: number;
+  bootstrapParticipantCount: number;
+  bootstrapTopologyEpoch: number;
+  bootstrapHasTopology: boolean;
+  lastObservedEpoch: number;
+  trustedRemoteRoot: string | null | undefined;
+  bootstrapCallSessionId: string | null | undefined;
+  bootstrapMediaSessionGeneration: number | null | undefined;
+}): boolean {
+  if (opts.hydratedRemoteParticipantCount > 0) return true;
+  if (opts.bootstrapParticipantCount > 1) return true;
+  if (opts.bootstrapHasTopology) return true;
+  if (opts.bootstrapTopologyEpoch > 0) return true;
+  if (opts.lastObservedEpoch > 0) return true;
+  if ((opts.trustedRemoteRoot?.trim() ?? '') !== '') return true;
+  if (!opts.sameRoomRejoin) return false;
+  return (
+    (opts.bootstrapCallSessionId?.trim() ?? '') !== '' ||
+    (opts.bootstrapMediaSessionGeneration ?? 0) > 1
+  );
+}
+
+export function shouldDeferLocalTopologyElection(opts: {
+  nowMs: number;
+  authorityDelayUntilMs: number;
+}): boolean {
+  return opts.authorityDelayUntilMs > opts.nowMs;
 }
 
 /** Main may already know remote peers before the renderer subscribes to events. */
@@ -1238,6 +1274,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const callAudioDevices = useAtomValue(callAudioDevicesAtom);
   const setCallAudioDevices = useSetAtom(callAudioDevicesAtom);
   const setQortalGroupSelfGcallRoomId = useSetAtom(qortalGroupSelfGcallRoomIdAtom);
+  const myStatus = useAtomValue(myStatusAtom);
   const callAudioPrefsRef = useRef(callAudioDevices);
   callAudioPrefsRef.current = callAudioDevices;
 
@@ -1260,6 +1297,10 @@ export function useGroupVoiceCall(uiActive = false) {
     useState<GroupCallLocalConnectionHint | null>(null);
   /** Mic mute — mirrored to UI (refs alone do not re-render consumers). */
   const [micMuted, setMicMuted] = useState(false);
+  /** Local speaker: when false, mix bus output is forced to silence (mic send unchanged). */
+  const [hearCall, setHearCallState] = useState(true);
+  const hearCallRef = useRef(true);
+  hearCallRef.current = hearCall;
   const connectionHintHysteresisRef = useRef<{
     badSince: number | null;
     goodSince: number | null;
@@ -2333,8 +2374,9 @@ export function useGroupVoiceCall(uiActive = false) {
       MASTER_GAIN_NUMERATOR,
       MASTER_GAIN_FLOOR
     );
+    const effectiveMixOut = hearCallRef.current ? masterGainTarget : 0;
     mixBus.gain.setTargetAtTime(
-      masterGainTarget,
+      effectiveMixOut,
       ctx.currentTime,
       GAIN_SMOOTHING_TIME_CONSTANT_S
     );
@@ -2367,6 +2409,33 @@ export function useGroupVoiceCall(uiActive = false) {
     );
     return true;
   }, [incrementPerfCounter]);
+
+  const flushMixBusHearOutput = useCallback(() => {
+    const ctx = audioContextRef.current;
+    const mixBus = mixBusGainRef.current;
+    if (!ctx || !mixBus || ctx.state === 'closed') return;
+    const wallNow = Date.now();
+    const recentSpeakerEstimate = computeRecentSpeakerEstimate(
+      localSpeakersRef.current,
+      wallNow,
+      RECENT_SPEAKER_WINDOW_MS
+    );
+    const masterGainTarget = computeMasterGainTarget(
+      recentSpeakerEstimate,
+      MASTER_GAIN_NUMERATOR,
+      MASTER_GAIN_FLOOR
+    );
+    const effectiveMixOut = hearCallRef.current ? masterGainTarget : 0;
+    try {
+      mixBus.gain.setTargetAtTime(
+        effectiveMixOut,
+        ctx.currentTime,
+        GAIN_SMOOTHING_TIME_CONSTANT_S
+      );
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const recordInterArrivalForPlayout = useCallback(
     (sourceAddr: string, receivedAt = performance.now()) => {
@@ -4694,7 +4763,6 @@ export function useGroupVoiceCall(uiActive = false) {
             clusters: topology.clusters,
             lastSeen: ts,
             fromAddress: userInfo.address,
-            fromPublicKey: userInfo.publicKey ?? '',
           },
           sig,
           userInfo.publicKey ?? '',
@@ -5004,7 +5072,6 @@ export function useGroupVoiceCall(uiActive = false) {
             clusters: overriddenTopo.clusters,
             lastSeen: ts,
             fromAddress: myAddress,
-            fromPublicKey: userInfo?.publicKey ?? '',
           },
           sig,
           userInfo?.publicKey ?? '',
@@ -5105,7 +5172,6 @@ export function useGroupVoiceCall(uiActive = false) {
           clusters: nextTopo.clusters as ClusterDef[],
           lastSeen: ts,
           fromAddress: myAddress,
-          fromPublicKey: userInfo?.publicKey ?? '',
         },
         sig,
         userInfo?.publicKey ?? '',
@@ -7434,14 +7500,16 @@ export function useGroupVoiceCall(uiActive = false) {
 
   refreshMemberSetForcedRef.current = refreshMemberSetForced;
 
-  const reconcileParticipantsFromMainRoster = useCallback(
-    async (reason: 'post-join-hydration' | 'post-subscribe-repair') => {
-      const roomId = roomIdRef.current;
+  const hydrateParticipantsFromAuthoritativeRoster = useCallback(
+    (
+      reason:
+        | 'bootstrap-snapshot'
+        | 'post-join-hydration'
+        | 'post-subscribe-repair',
+      authoritativeRoster: Array<{ address: string; publicKey: string }>
+    ) => {
       const localAddress = userInfoRef.current?.address?.trim?.() ?? '';
-      if (!roomId || !localAddress || !window.groupCall) return [];
-
-      const authoritativeRoster = await window.groupCall.getRoomParticipants(roomId);
-      if (roomId !== roomIdRef.current) return [];
+      if (!localAddress) return [];
 
       const hydratedRemoteParticipants = getPostJoinHydratedParticipants({
         localAddress,
@@ -7486,6 +7554,21 @@ export function useGroupVoiceCall(uiActive = false) {
     []
   );
 
+  const reconcileParticipantsFromMainRoster = useCallback(
+    async (reason: 'post-join-hydration' | 'post-subscribe-repair') => {
+      const roomId = roomIdRef.current;
+      if (!roomId || !userInfoRef.current?.address || !window.groupCall) return [];
+
+      const authoritativeRoster = await window.groupCall.getRoomParticipants(roomId);
+      if (roomId !== roomIdRef.current) return [];
+      return hydrateParticipantsFromAuthoritativeRoster(
+        reason,
+        authoritativeRoster ?? []
+      );
+    },
+    [hydrateParticipantsFromAuthoritativeRoster]
+  );
+
   useEffect(() => {
     if (memberGateGroupIdState === null) return;
     if (roomState !== 'connected' && roomState !== 'joining') return;
@@ -7516,6 +7599,14 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!userInfo?.address || !userInfo.publicKey) return;
       if (roomStateRef.current !== 'idle') return;
       setGcallJoinError(null);
+
+      if (
+        roomId.startsWith('gcall-qortal-') &&
+        myStatus === 'offline'
+      ) {
+        setGcallJoinError('presence_offline');
+        return;
+      }
 
       const gateOpt = options?.memberGateGroupId;
       if (
@@ -7680,35 +7771,113 @@ export function useGroupVoiceCall(uiActive = false) {
       mediaSessionGenerationRef.current = mediaGen;
       needsSessionKeyRef.current = true;
       keyDistributionPendingRef.current = true;
+      let bootstrapTopologyToApply: GroupTopology | null = null;
 
       try {
+        const bootstrapState =
+          typeof window.groupCall.getRoomBootstrapState === 'function'
+            ? await window.groupCall.getRoomBootstrapState(roomId)
+            : null;
+        if (roomId !== roomIdRef.current) return;
+
+        const bootstrapHydrated = bootstrapState
+          ? hydrateParticipantsFromAuthoritativeRoster(
+              'bootstrap-snapshot',
+              bootstrapState.participants ?? []
+            )
+          : [];
+        const bootstrapTopology = bootstrapState?.lastTopology;
+        if (bootstrapTopology?.rootForwarder) {
+          const bootstrapUpdatedAtMs =
+            bootstrapState?.updatedAtMs && Number.isFinite(bootstrapState.updatedAtMs)
+              ? bootstrapState.updatedAtMs
+              : Date.now();
+          trustedRemoteRootRef.current = bootstrapTopology.rootForwarder;
+          trustedRemoteRootLastSeenAtRef.current = bootstrapUpdatedAtMs;
+          conflictingRemoteRootRef.current = '';
+          conflictingRemoteRootLastSeenAtRef.current = 0;
+          lastObservedEpochRef.current = Math.max(
+            lastObservedEpochRef.current,
+            bootstrapState?.topologyEpoch ?? 0,
+            bootstrapTopology.topologyEpoch ?? 0
+          );
+          bootstrapTopologyToApply = {
+            topologyEpoch: bootstrapTopology.topologyEpoch,
+            rootForwarder: bootstrapTopology.rootForwarder,
+            standbyForwarder: bootstrapTopology.standbyForwarder,
+            clusters: bootstrapTopology.clusters.map((cluster) => ({
+              members: [...cluster.members],
+              forwarder: cluster.forwarder,
+              standby: cluster.standby,
+              standby2: cluster.standby2 ?? '',
+            })),
+            lastSeen: bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs,
+          };
+          if (bootstrapState.callSessionId && !roomKeyRef.current) {
+            callSessionIdRef.current = bootstrapState.callSessionId;
+            mediaSessionGenerationRef.current =
+              (bootstrapState.mediaSessionGeneration ?? 1) >>> 0;
+          }
+        }
+
         const filteredHydrated = await reconcileParticipantsFromMainRoster(
           'post-join-hydration'
         );
         {
           const trustedElectionRoot = getTrustedRootForRejoinElection({
-            currentRoot: topologyRef.current?.rootForwarder,
+            currentRoot:
+              bootstrapTopologyToApply?.rootForwarder ??
+              topologyRef.current?.rootForwarder,
             trustedRemoteRoot: trustedRemoteRootRef.current,
             trustedRemoteRootLastSeenAtMs: trustedRemoteRootLastSeenAtRef.current,
             nowMs: Date.now(),
             staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
             rosterAddresses: participantsRef.current.keys(),
           });
-          pendingPostJoinRosterElectionRef.current = true;
-          pendingPostJoinRosterElectionDelayUntilRef.current =
-            filteredHydrated.length > 0 &&
+          const hasBootstrapAuthority =
+            (bootstrapTopologyToApply?.rootForwarder?.trim() ?? '') !== '';
+          const occupiedRoomEvidence = hasOccupiedRoomEvidenceForJoin({
+            sameRoomRejoin: roomId === lastRoomIdRef.current,
+            hydratedRemoteParticipantCount: filteredHydrated.length,
+            bootstrapParticipantCount: bootstrapHydrated.length,
+            bootstrapTopologyEpoch: bootstrapState?.topologyEpoch ?? 0,
+            bootstrapHasTopology: hasBootstrapAuthority,
+            lastObservedEpoch: lastObservedEpochRef.current,
+            trustedRemoteRoot: trustedElectionRoot,
+            bootstrapCallSessionId: bootstrapState?.callSessionId,
+            bootstrapMediaSessionGeneration:
+              bootstrapState?.mediaSessionGeneration ?? 0,
+          });
+          const shouldDelayInitialElection =
+            !hasBootstrapAuthority &&
             shouldDelayPostJoinRosterElection({
               hydratedRemoteParticipantCount: filteredHydrated.length,
-              currentRoot: topologyRef.current?.rootForwarder,
+              currentRoot:
+                bootstrapTopologyToApply?.rootForwarder ??
+                topologyRef.current?.rootForwarder,
               trustedRemoteRoot: trustedElectionRoot,
-            })
+              hasOccupiedRoomEvidence: occupiedRoomEvidence,
+            });
+          pendingPostJoinRosterElectionRef.current = !hasBootstrapAuthority;
+          pendingPostJoinRosterElectionDelayUntilRef.current =
+            shouldDelayInitialElection
               ? Date.now() + OCCUPIED_JOIN_AUTHORITY_WAIT_MS
               : 0;
+          if (pendingPostJoinRosterElectionDelayUntilRef.current > 0) {
+            authoritySettleUntilRef.current = Math.max(
+              authoritySettleUntilRef.current,
+              pendingPostJoinRosterElectionDelayUntilRef.current
+            );
+          }
           debugLog('[GCall] Post-join roster hydration from main', {
             remoteCount: filteredHydrated.length,
             addresses: filteredHydrated.map((p) => p.address),
+            bootstrapRemoteCount: bootstrapHydrated.length,
+            bootstrapHasTopology: hasBootstrapAuthority,
+            bootstrapFromRecentCache: bootstrapState?.fromRecentCache ?? false,
             delayingInitialElection:
               pendingPostJoinRosterElectionDelayUntilRef.current > 0,
+            occupiedRoomEvidence,
             trustedElectionRoot: trustedElectionRoot ?? null,
           });
         }
@@ -7733,13 +7902,18 @@ export function useGroupVoiceCall(uiActive = false) {
       startTransportHealthReportLoop();
       startWindowMetricsLoop();
       startWebRtcEnsureLoop();
+      if (bootstrapTopologyToApply) {
+        applyTopology(bootstrapTopologyToApply);
+      }
       queueMicrotask(() => {
         scheduleKeyRecoveryCheckRef.current(CONNECTED_NO_KEY_RECOVERY_DELAY_MS);
       });
       });
     },
     [
+      applyTopology,
       flushMetrics,
+      hydrateParticipantsFromAuthoritativeRoster,
       refreshMemberSetForced,
       startTransportHealthReportLoop,
       withGcallLifecycleLock,
@@ -7749,6 +7923,7 @@ export function useGroupVoiceCall(uiActive = false) {
       startWebRtcEnsureLoop,
       reconcileParticipantsFromMainRoster,
       userInfo,
+      myStatus,
     ]
   );
 
@@ -8011,6 +8186,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
     mutedRef.current = false;
     setMicMuted(false);
+    hearCallRef.current = true;
+    setHearCallState(true);
 
     setRoomState('idle');
     setParticipants([]);
@@ -8112,7 +8289,7 @@ export function useGroupVoiceCall(uiActive = false) {
         pendingPostJoinRosterElectionDelayUntilRef.current - Date.now();
       if (remainingMs <= 0) {
         clearPendingPostJoinRosterElectionDelay('expired');
-        scheduleTopologyElectionFlush();
+        requestTopologyElectionFlush('participant-joined');
         return;
       }
       if (pendingPostJoinRosterElectionTimerRef.current) {
@@ -8124,8 +8301,28 @@ export function useGroupVoiceCall(uiActive = false) {
       pendingPostJoinRosterElectionTimerRef.current = setTimeout(() => {
         pendingPostJoinRosterElectionTimerRef.current = null;
         clearPendingPostJoinRosterElectionDelay('timeout');
-        scheduleTopologyElectionFlush();
+        requestTopologyElectionFlush('participant-left');
       }, remainingMs);
+    };
+
+    const requestTopologyElectionFlush = (reason: string) => {
+      if (
+        shouldDeferLocalTopologyElection({
+          nowMs: Date.now(),
+          authorityDelayUntilMs:
+            pendingPostJoinRosterElectionDelayUntilRef.current,
+        })
+      ) {
+        debugLog('[GCall] Deferring local topology election until authority settles', {
+          reason,
+          remainingMs: Math.max(
+            0,
+            pendingPostJoinRosterElectionDelayUntilRef.current - Date.now()
+          ),
+        });
+        return;
+      }
+      scheduleTopologyElectionFlush();
     };
 
     const scheduleTopologyElectionFlush = () => {
@@ -8294,7 +8491,8 @@ export function useGroupVoiceCall(uiActive = false) {
         })();
       }, TOPOLOGY_ELECTION_DEBOUNCE_MS);
     };
-    scheduleTopologyElectionFlushRef.current = scheduleTopologyElectionFlush;
+    scheduleTopologyElectionFlushRef.current = () =>
+      requestTopologyElectionFlush('manual-request');
     if (pendingPostJoinRosterElectionRef.current) {
       pendingPostJoinRosterElectionRef.current = false;
       scheduleInitialPostJoinRosterElection();
@@ -8487,7 +8685,7 @@ export function useGroupVoiceCall(uiActive = false) {
             reason,
             rootForwarder: topology.rootForwarder,
           });
-          scheduleTopologyElectionFlush();
+          requestTopologyElectionFlush('key-recovery-refresh');
           scheduleKeyRecoveryCheck(KEY_RECOVERY_REJOIN_DELAY_MS);
           return;
         }
@@ -8749,7 +8947,7 @@ export function useGroupVoiceCall(uiActive = false) {
           }
         }
 
-        scheduleTopologyElectionFlush();
+        requestTopologyElectionFlush('participant-joined');
         };
 
         const gateId = memberGateGroupIdRef.current;
@@ -8820,7 +9018,7 @@ export function useGroupVoiceCall(uiActive = false) {
         const addrs = [...participantsRef.current.keys()];
         if (addrs.length === 0) return;
 
-        scheduleTopologyElectionFlush();
+        requestTopologyElectionFlush('participant-left');
       }
 
       if (event === 'gcall:topology') {
@@ -8970,7 +9168,7 @@ export function useGroupVoiceCall(uiActive = false) {
             authoritySettleUntilRef.current,
             Date.now() + TOPOLOGY_HEARTBEAT_MS
           );
-          scheduleTopologyElectionFlush();
+          requestTopologyElectionFlush('session-updated');
           maybeRequestKeyRecoveryRef.current('session-updated');
         }
       }
@@ -9139,6 +9337,18 @@ export function useGroupVoiceCall(uiActive = false) {
       mutedRef.current = m;
       setMicMuted(m);
       captureWorkletRef.current?.port.postMessage({ type: 'mute', muted: m });
+    },
+    hearCall,
+    setHearCall: (hear: boolean) => {
+      hearCallRef.current = hear;
+      setHearCallState(hear);
+      flushMixBusHearOutput();
+    },
+    toggleHearCall: () => {
+      const next = !hearCallRef.current;
+      hearCallRef.current = next;
+      setHearCallState(next);
+      flushMixBusHearOutput();
     },
     roomId: roomIdRef.current,
     memberPrimaryNames,
