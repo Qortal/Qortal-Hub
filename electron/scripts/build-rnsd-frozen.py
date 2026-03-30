@@ -176,7 +176,7 @@ def main() -> None:
         dest.chmod(0o755)
     marker = args.output_dir / "BUNDLE_READY"
     marker.write_text(
-        f"frozen_at={datetime.datetime.now(datetime.UTC).isoformat()}\npython={pyexe}\n",
+        f"frozen_at={datetime.datetime.now(datetime.timezone.utc).isoformat()}\npython={pyexe}\n",
         encoding="utf-8",
     )
     print(f"Wrote {dest}")
