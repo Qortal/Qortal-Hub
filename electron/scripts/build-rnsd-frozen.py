@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build a standalone rnsd executable with PyInstaller (no end-user Python required).
+Build standalone Reticulum executables with PyInstaller (no end-user Python required).
 Must be run on each target OS/arch before packaging Electron (output is not portable).
 
 Works on minimal Debian/Ubuntu without python3-venv by bootstrapping pip with
@@ -23,6 +23,18 @@ PIP_ENV = {
     "PIP_DISABLE_PIP_VERSION_CHECK": "1",
     "PIP_BREAK_SYSTEM_PACKAGES": "1",
 }
+BUILD_TARGETS = (
+    {
+        "name": "rnsd",
+        "entry_resolver": lambda pyexe, electron_root: resolve_rnsd_entry(pyexe),
+    },
+    {
+        "name": "presence_bridge",
+        "entry_resolver": lambda pyexe, electron_root: str(
+            electron_root / "resources" / "reticulum" / "presence_bridge.py"
+        ),
+    },
+)
 
 
 def run(cmd: list[str], *, env_extra: dict[str, str] | None = None, cwd: Path | None = None) -> None:
@@ -91,6 +103,81 @@ def pip_install(pyexe: str, packages: list[str]) -> None:
     sys.exit(f"Failed to install {' '.join(packages)} with pip.")
 
 
+def resolve_rnsd_entry(pyexe: str) -> str:
+    proc = subprocess.run(
+        [pyexe, "-c", "import RNS.Utilities.rnsd as m; print(m.__file__)"],
+        capture_output=True,
+        text=True,
+        check=True,
+        env=os.environ,
+    )
+    rnsd_py = proc.stdout.strip()
+    if not rnsd_py or not Path(rnsd_py).is_file():
+        sys.exit(f"Could not resolve rnsd entry script (got: {rnsd_py!r})")
+    return rnsd_py
+
+
+def freeze_target(
+    pyexe: str,
+    electron_root: Path,
+    build_root: Path,
+    output_dir: Path,
+    *,
+    name: str,
+    entry_script: str,
+) -> None:
+    if not Path(entry_script).is_file():
+        sys.exit(f"Could not resolve {name} entry script (got: {entry_script!r})")
+
+    pi_work = build_root / name
+    pi_work.mkdir(parents=True)
+    dist_path = pi_work / "dist"
+    work_path = pi_work / "build"
+
+    cmd = [
+        pyexe,
+        "-m",
+        "PyInstaller",
+        "--onefile",
+        "--console",
+        "--clean",
+        "--noconfirm",
+        "--distpath",
+        str(dist_path),
+        "--workpath",
+        str(work_path),
+        "--specpath",
+        str(pi_work),
+        "--name",
+        name,
+        "--collect-all",
+        "RNS",
+        "--collect-all",
+        "cryptography",
+        "--collect-all",
+        "pyserial",
+        "--hidden-import",
+        "RNS",
+        "--hidden-import",
+        "cryptography.hazmat.backends.openssl.backend",
+        entry_script,
+    ]
+    print("Running:", " ".join(cmd))
+    run(cmd, env_extra=PIP_ENV, cwd=pi_work)
+
+    exe_name = f"{name}.exe" if os.name == "nt" else name
+    built = dist_path / exe_name
+    if not built.is_file():
+        sys.exit(f"PyInstaller did not produce {built}")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / exe_name
+    shutil.copy2(built, dest)
+    if os.name != "nt":
+        dest.chmod(0o755)
+    print(f"Wrote {dest}")
+
+
 def main() -> None:
     script_dir = Path(__file__).resolve().parent
     electron_root = script_dir.parent
@@ -116,70 +203,23 @@ def main() -> None:
         pip_install(pyexe, ["rns"])
     if not has_module(pyexe, "PyInstaller"):
         pip_install(pyexe, ["pyinstaller"])
+    for target in BUILD_TARGETS:
+        entry_script = target["entry_resolver"](pyexe, electron_root)
+        freeze_target(
+            pyexe,
+            electron_root,
+            build_root,
+            args.output_dir,
+            name=target["name"],
+            entry_script=entry_script,
+        )
 
-    proc = subprocess.run(
-        [pyexe, "-c", "import RNS.Utilities.rnsd as m; print(m.__file__)"],
-        capture_output=True,
-        text=True,
-        check=True,
-        env=os.environ,
-    )
-    rnsd_py = proc.stdout.strip()
-    if not rnsd_py or not Path(rnsd_py).is_file():
-        sys.exit(f"Could not resolve rnsd entry script (got: {rnsd_py!r})")
-
-    pi_work = build_root / "pyinstaller"
-    pi_work.mkdir(parents=True)
-    dist_path = pi_work / "dist"
-    work_path = pi_work / "build"
-
-    cmd = [
-        pyexe,
-        "-m",
-        "PyInstaller",
-        "--onefile",
-        "--console",
-        "--clean",
-        "--noconfirm",
-        "--distpath",
-        str(dist_path),
-        "--workpath",
-        str(work_path),
-        "--specpath",
-        str(pi_work),
-        "--name",
-        "rnsd",
-        "--collect-all",
-        "RNS",
-        "--collect-all",
-        "cryptography",
-        "--collect-all",
-        "pyserial",
-        "--hidden-import",
-        "RNS",
-        "--hidden-import",
-        "cryptography.hazmat.backends.openssl.backend",
-        rnsd_py,
-    ]
-    print("Running:", " ".join(cmd))
-    run(cmd, env_extra=PIP_ENV, cwd=pi_work)
-
-    exe_name = "rnsd.exe" if os.name == "nt" else "rnsd"
-    built = dist_path / exe_name
-    if not built.is_file():
-        sys.exit(f"PyInstaller did not produce {built}")
-
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    dest = args.output_dir / exe_name
-    shutil.copy2(built, dest)
-    if os.name != "nt":
-        dest.chmod(0o755)
     marker = args.output_dir / "BUNDLE_READY"
     marker.write_text(
         f"frozen_at={datetime.datetime.now(datetime.timezone.utc).isoformat()}\npython={pyexe}\n",
         encoding="utf-8",
     )
-    print(f"Wrote {dest}")
+    print(f"Wrote {marker}")
 
 
 if __name__ == "__main__":

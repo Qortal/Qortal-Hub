@@ -1,6 +1,9 @@
-# Bundled Reticulum daemon (`rnsd`)
+# Bundled Reticulum runtime (`rnsd` + `presence_bridge`)
 
-End users **do not install Python**. Ship a **PyInstaller one-file** `rnsd` (or `rnsd.exe` on Windows) built **on the same OS and CPU architecture** you release for.
+End users **do not install Python**. Ship **PyInstaller one-file** executables built **on the same OS and CPU architecture** you release for:
+
+- `rnsd` / `rnsd.exe`
+- `presence_bridge` / `presence_bridge.exe`
 
 ## Build the binary (before `electron:make*`)
 
@@ -14,8 +17,8 @@ This runs `scripts/run-build-rnsd-frozen.mjs`, which invokes `scripts/build-rnsd
 
 This writes:
 
-- **Linux / macOS:** `resources/reticulum/rnsd`
-- **Windows:** `resources/reticulum/rnsd.exe`
+- **Linux / macOS:** `resources/reticulum/rnsd` and `resources/reticulum/presence_bridge`
+- **Windows:** `resources/reticulum/rnsd.exe` and `resources/reticulum/presence_bridge.exe`
 
 and a small `BUNDLE_READY` marker. The build uses the current Python, bootstraps **`pip`** if needed, installs **`rns`** + **`pyinstaller`** into the current user site-packages, and writes scratch files under `electron/.build/rnsd-frozen/` (gitignored).
 
@@ -41,7 +44,7 @@ For automated cross-platform builds use the GitHub Actions workflow:
 
 ## Runtime (Electron)
 
-The main process spawns this binary with `--config` pointing at **`userData/reticulum`** (writable). Logs also go to **`userData/logs/reticulum.log`**.
+The main process spawns `rnsd` with `--config` pointing at **`userData/reticulum`** (writable). The Reticulum bridge prefers the bundled `presence_bridge` executable and falls back to Python only in development. Logs also go to **`userData/logs/reticulum.log`**.
 
 ## Fallbacks (development)
 

@@ -8,17 +8,19 @@ module.exports = async function afterPack(context) {
   const { appOutDir, electronPlatformName } = context;
   const plat = (electronPlatformName || '').toLowerCase();
 
-  const rnsd = path.join(appOutDir, 'resources', 'reticulum', 'rnsd');
-  if (
-    fs.existsSync(rnsd) &&
-    (plat.includes('linux') || plat.includes('mac') || plat.includes('darwin'))
-  ) {
-    log('🔧 Marking reticulum/rnsd executable…');
-    try {
-      execSync(`chmod 755 "${rnsd}"`, { stdio: 'inherit' });
-      log('✅ reticulum/rnsd permissions set.');
-    } catch (e) {
-      warn('⚠️ chmod reticulum/rnsd failed:', e.message);
+  const reticulumDir = path.join(appOutDir, 'resources', 'reticulum');
+  const reticulumExecutables = ['rnsd', 'presence_bridge'];
+  if (plat.includes('linux') || plat.includes('mac') || plat.includes('darwin')) {
+    for (const name of reticulumExecutables) {
+      const exePath = path.join(reticulumDir, name);
+      if (!fs.existsSync(exePath)) continue;
+      log(`🔧 Marking reticulum/${name} executable…`);
+      try {
+        execSync(`chmod 755 "${exePath}"`, { stdio: 'inherit' });
+        log(`✅ reticulum/${name} permissions set.`);
+      } catch (e) {
+        warn(`⚠️ chmod reticulum/${name} failed:`, e.message);
+      }
     }
   }
 

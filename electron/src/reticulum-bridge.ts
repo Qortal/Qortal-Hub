@@ -1,6 +1,7 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import { app } from 'electron';
 import { EventEmitter } from 'events';
+import fs from 'fs';
 import path from 'path';
 import type {
   PresenceEnvelope,
@@ -150,11 +151,38 @@ const HEARTBEAT_MIN_INTERVAL_MS = 10_000;
 const ANNOUNCE_DEDUP_WINDOW_MS = 1_000;
 const RESTART_DELAY_MS = 2_000;
 
+function bridgeExeName(): string {
+  return process.platform === 'win32' ? 'presence_bridge.exe' : 'presence_bridge';
+}
+
+function getFrozenBridgePath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'reticulum', bridgeExeName());
+  }
+  return path.join(__dirname, '..', '..', 'resources', 'reticulum', bridgeExeName());
+}
+
 function getBridgeScriptPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'reticulum', 'presence_bridge.py');
   }
   return path.join(__dirname, '..', '..', 'resources', 'reticulum', 'presence_bridge.py');
+}
+
+function resolveBridgeLaunch(configDir: string):
+  | { cmd: string; args: string[]; cwd: string; mode: 'frozen'; envExtra?: Record<string, string> }
+  | ReturnType<typeof resolveReticulumPythonLaunch> {
+  const frozenBridge = getFrozenBridgePath();
+  if (fs.existsSync(frozenBridge)) {
+    return {
+      cmd: frozenBridge,
+      args: ['--config', configDir],
+      cwd: path.dirname(frozenBridge),
+      mode: 'frozen',
+    };
+  }
+
+  return resolveReticulumPythonLaunch(getBridgeScriptPath(), ['--config', configDir]);
 }
 
 function toPresenceRoute(raw: unknown): PresenceRoute | null {
@@ -398,24 +426,21 @@ export class ReticulumBridge
   }
 
   private async spawnAndHandshake(): Promise<void> {
-    const scriptPath = getBridgeScriptPath();
-    const launch = resolveReticulumPythonLaunch(scriptPath, [
-      '--config',
-      getReticulumConfigDir(),
-    ]);
+    const configDir = getReticulumConfigDir();
+    const launch = resolveBridgeLaunch(configDir);
     if ('error' in launch) {
       this.transitionToDegraded(launch.error);
       throw new Error(launch.error);
     }
 
     loggerLog(
-      `[ReticulumBridge] Launching python bridge mode=${launch.mode} script=${scriptPath}`
+      `[ReticulumBridge] Launching bridge mode=${launch.mode} cmd=${launch.cmd}`
     );
     const env = {
       ...process.env,
       ...(launch.envExtra ?? {}),
       PYTHONUNBUFFERED: '1',
-      QORTAL_RETICULUM_CONFIG_DIR: getReticulumConfigDir(),
+      QORTAL_RETICULUM_CONFIG_DIR: configDir,
     };
 
     const child = spawn(launch.cmd, launch.args, {
@@ -458,7 +483,7 @@ export class ReticulumBridge
     });
 
     const resp = await this.sendCommand('start', {
-      configDir: getReticulumConfigDir(),
+      configDir,
     });
     if (!resp.ok) {
       const reason = resp.error ?? 'Reticulum bridge start failed';

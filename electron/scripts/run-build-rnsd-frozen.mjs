@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
  * Invokes build-rnsd-frozen.py with a working Python (python3, python, or py -3 on Windows).
+ * The Python builder emits both `rnsd` and `presence_bridge`.
  */
 import { spawnSync } from 'child_process';
 import fs from 'fs';
