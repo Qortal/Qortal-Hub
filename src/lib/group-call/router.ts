@@ -314,7 +314,7 @@ export interface GroupCallMetricsSnapshot {
   packetsDropped: number;
   relayPacketsSent: number;
   relayPacketsReceived: number;
-  /** Wall time (ms) of last mesh GC_AUDIO send or receive; 0 = none this session. */
+  /** Wall time (ms) of last legacy relay send or receive; 0 = none this session. */
   lastRelayActivityAtMs: number;
   jitterUnderruns: number;
   missingFrames: number;
@@ -698,7 +698,12 @@ export function computeGroupCallDcTransportReady(
   return upstreamDcOpen;
 }
 
-export type GroupCallTransportMode = 'datachannel' | 'relay' | 'connecting';
+export type GroupCallTransportMode =
+  | 'datachannel'
+  | 'reticulum'
+  | 'relay'
+  | 'connecting';
+export type GroupCallPrimaryTransport = 'datachannel' | 'reticulum';
 
 /**
  * Live transport indicator: DataChannels when role-required DCs are ready; else recent mesh relay;
@@ -708,15 +713,27 @@ export function getGroupCallTransportSummary(
   m: Pick<
     GroupCallMetricsSnapshot,
     'relayPacketsSent' | 'relayPacketsReceived' | 'lastRelayActivityAtMs'
-  > & { dcTransportReady?: boolean },
+  > & {
+    dcTransportReady?: boolean;
+    mediaTransport?: GroupCallPrimaryTransport;
+  },
   now: number = Date.now()
 ): { mode: GroupCallTransportMode; label: string; tooltip: string } {
   const staleMs = GROUP_CALL_RELAY_INDICATOR_STALE_MS;
   const recentRelay =
     m.lastRelayActivityAtMs > 0 && now - m.lastRelayActivityAtMs <= staleMs;
   const dcReady = m.dcTransportReady === true;
+  const mediaTransport = m.mediaTransport ?? 'datachannel';
 
   if (dcReady) {
+    if (mediaTransport === 'reticulum') {
+      return {
+        mode: 'reticulum',
+        label: 'Reticulum',
+        tooltip:
+          'Reticulum audio links are up for this role and are carrying group-call media.',
+      };
+    }
     return {
       mode: 'datachannel',
       label: 'Data channel',
@@ -729,7 +746,7 @@ export function getGroupCallTransportSummary(
       mode: 'relay',
       label: 'P2P relay',
       tooltip:
-        'Audio is using the P2P mesh (GC_AUDIO) fallback — typically while WebRTC DataChannels connect or recover.',
+        'Audio is using the legacy P2P relay path.',
     };
   }
   return {

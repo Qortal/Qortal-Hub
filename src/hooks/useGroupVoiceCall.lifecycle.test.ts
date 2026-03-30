@@ -7,6 +7,7 @@ import {
   getConflictingRootForAuthorityWait,
   hasOccupiedRoomEvidenceForJoin,
   getTrustedRootForRejoinElection,
+  getReticulumTransportTargets,
   getSessionUpdatedKeyRecoveryAction,
   getPostJoinHydratedParticipants,
   isCurrentGroupCallAudioStartupToken,
@@ -224,6 +225,43 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         mainJoinReady: true,
       })
     ).toBe(true);
+  });
+
+  it('computes Reticulum transport targets per role without changing routing logic', () => {
+    const topology: GroupTopology = {
+      topologyEpoch: 4,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-standby',
+      clusters: [
+        {
+          members: ['Q-root', 'Q-a', 'Q-b'],
+          forwarder: 'Q-root',
+          standby: 'Q-a',
+          standby2: 'Q-b',
+        },
+        {
+          members: ['Q-cf', 'Q-c', 'Q-d'],
+          forwarder: 'Q-cf',
+          standby: 'Q-c',
+          standby2: 'Q-d',
+        },
+      ],
+    };
+
+    expect(getReticulumTransportTargets('Q-root', topology)).toEqual([
+      'Q-a',
+      'Q-b',
+      'Q-cf',
+    ]);
+    expect(getReticulumTransportTargets('Q-cf', topology)).toEqual([
+      'Q-root',
+      'Q-c',
+      'Q-d',
+    ]);
+    expect(getReticulumTransportTargets('Q-c', topology)).toEqual(['Q-cf']);
+    expect(getReticulumTransportTargets('Q-standby', topology)).toEqual([
+      'Q-root',
+    ]);
   });
 
   it('hydrates only missing remote participants from the main roster after join', () => {

@@ -6,40 +6,65 @@
  *
  * Architecture (handled entirely in the renderer):
  *   - Adaptive topology: ≤10 members → single forwarder, 11-50 → hierarchical
- *   - WebRTC DataChannel for audio transport (Opus ~24 kbps)
- *   - P2P GC_AUDIO relay as last-resort fallback
+ *   - Reticulum Links for audio transport (Opus ~24 kbps)
  *   - End-to-end encryption: v2/v3 wire nonce||secretbox(inner); v1 decode fallback in renderer
  *
  * This module handles only the signaling layer:
- *   GC_JOIN / GC_LEAVE       — room membership
- *   GC_TOPOLOGY              — forwarder tree broadcast (with topologyEpoch)
- *   GC_CLUSTER_HEARTBEAT     — per cluster-forwarder liveness (signed)
- *   GC_AUDIO                 — P2P audio relay fallback
- *   GC_KEY / GC_KEY_ROTATE   — room media key distribution
- *   GC_RTC_OFFER/ANSWER/ICE  — WebRTC DataChannel signaling
- *   GC_RTC_RECONNECT         — forwarder asks member to re-offer immediately
+ *   GC_JOIN / GC_LEAVE       — room membership (Reticulum compact wire; see group-call-wire-reticulum.ts)
+ *   GC_TOPOLOGY              — forwarder tree (Reticulum; fragmentation when large)
+ *   GC_CLUSTER_HEARTBEAT     — per cluster-forwarder liveness (signed, Reticulum)
+ *   GC_KEY / GC_KEY_ROTATE   — room media key distribution (Reticulum)
  *
  * Security: GC_JOIN, GC_LEAVE, GC_TOPOLOGY, GC_CLUSTER_HEARTBEAT, GC_KEY, GC_KEY_ROTATE, and
- * GC_KEY_REQUEST carry Ed25519 signatures.
- * When this node has no local state for a room, JOIN/LEAVE/TOPOLOGY are relayed
- * without signature verification (cheap path); in-room peers still verify before use.
+ * GC_KEY_REQUEST carry Ed25519 signatures. In-room peers verify before use.
  */
 
 import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
-import { log as loggerLog, error as loggerError, warn as loggerWarn } from './logger';
+import {
+  log as loggerLog,
+  error as loggerError,
+  warn as loggerWarn,
+} from './logger';
 import type { P2PNetwork } from './p2p-network';
 import type { PresenceManager } from './presence';
+import type {
+  ReticulumBridge,
+  ReticulumOpenAudioLinkResult,
+  ReticulumSendFailureReason,
+  ReticulumSendResult,
+} from './reticulum-bridge';
 import { VerifyWorkerPool } from './verify-worker-pool';
 import {
-  encodeGcAudioBinaryFrame,
-  GcAudioBinaryEncodeError,
-} from './gc-audio-binary-frame';
+  decodeClusterHeartbeatWire,
+  decodeJoinWire,
+  decodeKeyRequestWire,
+  decodeKeyRotateFromGr1,
+  decodeKeyRotateWireSingle,
+  decodeKeyWireFromGk1,
+  decodeKeyWireSingle,
+  decodeLeaveWire,
+  decodeTopologyFromGt1,
+  decodeTopologyWireSingle,
+  encodeClusterHeartbeatWire,
+  encodeJoinWire,
+  encodeKeyRequestWire,
+  encodeKeyRotateWire,
+  encodeKeyWire,
+  encodeLeaveWire,
+  encodeTopologyWire,
+  isGroupCallReticulumWireType,
+  parseGk0,
+  parseGk1,
+  parseGr0,
+  parseGr1,
+  parseGt0,
+  parseGt1,
+} from './group-call-wire-reticulum';
+import type { GrFragmentMeta, GkFragmentMeta, GtFragmentMeta } from './group-call-wire-reticulum';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GC_MAX_HOPS = 3;
-const GC_AUDIO_MAX_HOPS = 2;
 const GC_JOIN_TTL_MS = 120_000;
 /**
  * Extra wall-clock slack for GC_JOIN vs peer timestamps (honest skew). Effective max age is
@@ -53,11 +78,41 @@ const GC_JOIN_MAX_FUTURE_SKEW_MS = 30_000;
 /** Max age of GC_JOIN `timestamp` vs local `now` (for tests and diagnostics). */
 export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
 
-/**
- * Groups-list call hint: treat relayed GC_TOPOLOGY / GC_CLUSTER_HEARTBEAT as liveness if seen within
- * this window (~8 forwarder heartbeats @ 1.5s + mesh slack). Cheap path only (no verify).
- */
-const GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS = 12_000;
+const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 15_000;
+const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 40_000;
+const GC_RETICULUM_ACTIVITY_MAX_FUTURE_SKEW_MS = 30_000;
+/** Inbound fragment reassembly buffers for Reticulum group-call control. */
+const GC_RETICULUM_REASM_TTL_MS = 45_000;
+const GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000];
+const GC_RETICULUM_FAILURE_LOG_MIN_MS = 5_000;
+const GC_RETICULUM_AUDIO_PENDING_MAX_FRAMES = 24;
+
+type GcReticulumRetryKind =
+  | 'join'
+  | 'topology'
+  | 'key'
+  | 'key_request';
+
+type GcReticulumSendFailureReason =
+  | ReticulumSendFailureReason
+  | 'no-route'
+  | 'no-targets';
+
+type GcReticulumSendResult =
+  | { ok: true }
+  | { ok: false; reason: GcReticulumSendFailureReason; error?: string };
+
+const GC_RETICULUM_RETRYABLE_FAILURES = new Set<GcReticulumSendFailureReason>([
+  'bridge-unavailable',
+  'bridge-not-ready',
+  'bridge-timeout',
+  'bridge-exception',
+  'bridge-not-started',
+  'unknown-peer-presence-hash',
+  'packet-send-false',
+  'no-route',
+  'no-targets',
+]);
 
 export type GcJoinTimestampRejectReason = 'expired' | 'future';
 
@@ -66,7 +121,8 @@ export function gcJoinTimestampRejectReason(
   timestamp: number,
   now: number
 ): GcJoinTimestampRejectReason | null {
-  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return 'expired';
+  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp))
+    return 'expired';
   if (timestamp - now > GC_JOIN_MAX_FUTURE_SKEW_MS) return 'future';
   if (now - timestamp > GC_JOIN_MAX_AGE_MS) return 'expired';
   return null;
@@ -81,7 +137,11 @@ export function mergeRoomTopologyEpochWithFloor(
   currentEpoch: number,
   floor: number | undefined
 ): number {
-  if (floor === undefined || typeof floor !== 'number' || !Number.isFinite(floor)) {
+  if (
+    floor === undefined ||
+    typeof floor !== 'number' ||
+    !Number.isFinite(floor)
+  ) {
     return currentEpoch;
   }
   const f = Math.max(0, Math.floor(floor));
@@ -131,8 +191,10 @@ export function pendingKeyEnvelopeWinsOver(
   incoming: { mediaSessionGeneration: number; timestamp: number },
   existing: { mediaSessionGeneration: number; timestamp: number }
 ): boolean {
-  if (incoming.mediaSessionGeneration > existing.mediaSessionGeneration) return true;
-  if (incoming.mediaSessionGeneration < existing.mediaSessionGeneration) return false;
+  if (incoming.mediaSessionGeneration > existing.mediaSessionGeneration)
+    return true;
+  if (incoming.mediaSessionGeneration < existing.mediaSessionGeneration)
+    return false;
   return incoming.timestamp > existing.timestamp;
 }
 
@@ -154,7 +216,8 @@ export function shouldDelayPresenceEvictionForHealthyTransport(opts: {
   nowMs: number;
   staleAfterMs: number;
 }): boolean {
-  if (!opts.address || !opts.healthyPeerAddresses.has(opts.address)) return false;
+  if (!opts.address || !opts.healthyPeerAddresses.has(opts.address))
+    return false;
   const lastReportAtMs = opts.lastReportAtMs ?? 0;
   if (lastReportAtMs <= 0) return false;
   return opts.nowMs - lastReportAtMs <= opts.staleAfterMs;
@@ -163,26 +226,11 @@ export function shouldDelayPresenceEvictionForHealthyTransport(opts: {
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (no topology/key epoch on wire). */
 const GC_KEY_MESSAGE_VERSION = 3;
 
-/** Max base64 length for `GC_AUDIO.data` (matches renderer wire + margin; rejects oversize before relay/emit). */
-const GC_AUDIO_MAX_BASE64_CHARS = 16_384;
 /** After base64 decode; rejects absurd blobs before IPC to renderer. */
-const GC_AUDIO_MAX_BINARY_WIRE_BYTES = 12_288;
-
-/** Per-room token bucket: approx bytes (decoded wire) we will relay per wall-clock ms refill. */
-const GC_AUDIO_RELAY_BUCKET_MAX = 1_200_000;
-const GC_AUDIO_RELAY_REFILL_BYTES_PER_MS = 800;
-
-function isValidGcAudioBase64(data: unknown): data is string {
-  return typeof data === 'string' && data.length > 0 && data.length <= GC_AUDIO_MAX_BASE64_CHARS;
-}
+const GROUP_AUDIO_MAX_BINARY_WIRE_BYTES = 12_288;
 
 function isValidGcAudioBuffer(data: Buffer): boolean {
-  return data.length > 0 && data.length <= GC_AUDIO_MAX_BINARY_WIRE_BYTES;
-}
-
-/** Approximate decoded byte cost for bucket accounting (upper bound from base64 length). */
-function gcAudioPayloadApproxBytes(base64: string): number {
-  return Math.min(GC_AUDIO_MAX_BASE64_CHARS * 3, Math.ceil((base64.length * 3) / 4));
+  return data.length > 0 && data.length <= GROUP_AUDIO_MAX_BINARY_WIRE_BYTES;
 }
 
 // ── Wire types ────────────────────────────────────────────────────────────────
@@ -192,20 +240,47 @@ export type GroupCallMsgType =
   | 'GC_LEAVE'
   | 'GC_TOPOLOGY'
   | 'GC_CLUSTER_HEARTBEAT'
-  | 'GC_AUDIO'
   | 'GC_KEY'
   | 'GC_KEY_ROTATE'
-  | 'GC_KEY_REQUEST'
-  | 'GC_RTC_OFFER'
-  | 'GC_RTC_ANSWER'
-  | 'GC_RTC_ICE'
-  | 'GC_RTC_RECONNECT';
+  | 'GC_KEY_REQUEST';
 
 export const GC_MESSAGE_TYPES = new Set<string>([
-  'GC_JOIN', 'GC_LEAVE', 'GC_TOPOLOGY', 'GC_CLUSTER_HEARTBEAT', 'GC_AUDIO',
-  'GC_KEY', 'GC_KEY_ROTATE', 'GC_KEY_REQUEST', 'GC_RTC_OFFER', 'GC_RTC_ANSWER', 'GC_RTC_ICE',
-  'GC_RTC_RECONNECT',
+  'GC_JOIN',
+  'GC_LEAVE',
+  'GC_TOPOLOGY',
+  'GC_CLUSTER_HEARTBEAT',
+  'GC_KEY',
+  'GC_KEY_ROTATE',
+  'GC_KEY_REQUEST',
 ]);
+
+export interface GcReticulumActivityWire {
+  t: 'GA';
+  g: number;
+  m: number;
+}
+
+export function decodeGcReticulumActivityWire(
+  wire: Record<string, unknown>,
+  now: number = Date.now()
+): { groupId: number; timestamp: number } | null {
+  if (wire.t !== 'GA') return null;
+  if (
+    typeof wire.g !== 'number' ||
+    !Number.isInteger(wire.g) ||
+    wire.g <= 0 ||
+    typeof wire.m !== 'number' ||
+    !Number.isFinite(wire.m)
+  ) {
+    return null;
+  }
+  if (wire.m - now > GC_RETICULUM_ACTIVITY_MAX_FUTURE_SKEW_MS) return null;
+  if (now - wire.m > GC_RETICULUM_ACTIVITY_MAX_AGE_MS) return null;
+  return {
+    groupId: wire.g,
+    timestamp: wire.m,
+  };
+}
 
 // ── Envelope shapes ───────────────────────────────────────────────────────────
 
@@ -270,15 +345,6 @@ export interface GcClusterHeartbeatEnvelope {
   hopsRemaining?: number;
 }
 
-export interface GcAudioEnvelope {
-  type: 'GC_AUDIO';
-  roomId: string;
-  toAddress: string;
-  /** Base64-encoded encrypted audio packet (v2/v3 or v1 wire, see renderer audioPacketCodec) */
-  data: string;
-  hopsRemaining?: number;
-}
-
 export interface GcKeyEnvelope {
   type: 'GC_KEY';
   roomId: string;
@@ -328,58 +394,14 @@ export interface GcKeyRequestEnvelope {
   hopsRemaining?: number;
 }
 
-export interface GcRtcOfferEnvelope {
-  type: 'GC_RTC_OFFER';
-  roomId: string;
-  fromAddress: string;
-  toAddress: string;
-  /** SDP offer string */
-  sdp: string;
-  /** Unique connection id to match answer */
-  connId: string;
-  fromPublicKey: string;
-  signature: string;
-  timestamp: number;
-  hopsRemaining?: number;
-}
-
-export interface GcRtcAnswerEnvelope {
-  type: 'GC_RTC_ANSWER';
-  roomId: string;
-  fromAddress: string;
-  toAddress: string;
-  sdp: string;
-  connId: string;
-  fromPublicKey: string;
-  signature: string;
-  timestamp: number;
-  hopsRemaining?: number;
-}
-
-export interface GcRtcIceEnvelope {
-  type: 'GC_RTC_ICE';
-  roomId: string;
-  fromAddress: string;
-  toAddress: string;
-  candidate: unknown;
-  connId: string;
-  hopsRemaining?: number;
-}
-
-export interface GcRtcReconnectEnvelope {
-  type: 'GC_RTC_RECONNECT';
-  roomId: string;
-  fromAddress: string;
-  toAddress: string;
-  connId: string;
-  hopsRemaining?: number;
-}
-
 export type GcEnvelope =
-  | GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope | GcClusterHeartbeatEnvelope
-  | GcAudioEnvelope | GcKeyEnvelope | GcKeyRotateEnvelope | GcKeyRequestEnvelope
-  | GcRtcOfferEnvelope | GcRtcAnswerEnvelope | GcRtcIceEnvelope
-  | GcRtcReconnectEnvelope;
+  | GcJoinEnvelope
+  | GcLeaveEnvelope
+  | GcTopologyEnvelope
+  | GcClusterHeartbeatEnvelope
+  | GcKeyEnvelope
+  | GcKeyRotateEnvelope
+  | GcKeyRequestEnvelope;
 
 // ── Room state ────────────────────────────────────────────────────────────────
 
@@ -406,6 +428,21 @@ interface GroupRoom {
   callSessionId: string;
   /** Bumped only on explicit session-break IPC. */
   mediaSessionGeneration: number;
+}
+
+interface ReticulumAudioPendingFrame {
+  roomId: string;
+  data: Buffer;
+}
+
+interface ReticulumAudioPeerState {
+  address: string;
+  peerPresenceHash: string;
+  linkId: string | null;
+  established: boolean;
+  opening: boolean;
+  rooms: Set<string>;
+  pending: ReticulumAudioPendingFrame[];
 }
 
 export interface GroupRoomTopologySnapshot {
@@ -492,10 +529,12 @@ export function buildGroupRoomBootstrapState(
 
 // ── Signature helpers ─────────────────────────────────────────────────────────
 
-function buildTopologySignature(env: Pick<
-  GcTopologyEnvelope,
-  'topologyEpoch' | 'rootForwarder' | 'standbyForwarder' | 'clusters'
->): string {
+function buildTopologySignature(
+  env: Pick<
+    GcTopologyEnvelope,
+    'topologyEpoch' | 'rootForwarder' | 'standbyForwarder' | 'clusters'
+  >
+): string {
   return JSON.stringify({
     topologyEpoch: env.topologyEpoch,
     rootForwarder: env.rootForwarder,
@@ -581,7 +620,9 @@ function buildGcKeyRotateDigest(encryptedKeys: Record<string, string>): string {
   return sha256Hex(canonicalizeStringMap(encryptedKeys));
 }
 
-function buildGcKeySignedFields(env: GcKeyEnvelope): Record<string, unknown> | null {
+function buildGcKeySignedFields(
+  env: GcKeyEnvelope
+): Record<string, unknown> | null {
   if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) return null;
   if (
     !isNonEmptyString(env.callSessionId) ||
@@ -634,7 +675,9 @@ function buildGcKeyRotateSignedFields(
   };
 }
 
-function buildGcKeyRequestSignedFields(env: GcKeyRequestEnvelope): Record<string, unknown> {
+function buildGcKeyRequestSignedFields(
+  env: GcKeyRequestEnvelope
+): Record<string, unknown> {
   return {
     type: env.type,
     roomId: env.roomId,
@@ -650,66 +693,6 @@ function buildGcKeyRequestSignedFields(env: GcKeyRequestEnvelope): Record<string
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.length > 0;
-}
-
-/** Shape-only checks for disinterested relay (no Ed25519). */
-function isCheapRelayJoinShape(env: GcJoinEnvelope): boolean {
-  return (
-    isNonEmptyString(env.roomId) &&
-    isNonEmptyString(env.chatId) &&
-    isNonEmptyString(env.fromAddress) &&
-    isNonEmptyString(env.fromPublicKey) &&
-    typeof env.signature === 'string' &&
-    typeof env.timestamp === 'number' &&
-    Number.isFinite(env.timestamp)
-  );
-}
-
-function isCheapRelayLeaveShape(env: GcLeaveEnvelope): boolean {
-  return (
-    isNonEmptyString(env.roomId) &&
-    isNonEmptyString(env.fromAddress) &&
-    isNonEmptyString(env.fromPublicKey) &&
-    typeof env.signature === 'string' &&
-    typeof env.timestamp === 'number' &&
-    Number.isFinite(env.timestamp)
-  );
-}
-
-function isCheapRelayTopologyShape(env: GcTopologyEnvelope): boolean {
-  return (
-    isNonEmptyString(env.roomId) &&
-    isNonEmptyString(env.fromAddress) &&
-    isNonEmptyString(env.fromPublicKey) &&
-    typeof env.signature === 'string' &&
-    typeof env.timestamp === 'number' &&
-    Number.isFinite(env.timestamp) &&
-    typeof env.topologyEpoch === 'number' &&
-    Number.isFinite(env.topologyEpoch) &&
-    typeof env.rootForwarder === 'string' &&
-    typeof env.standbyForwarder === 'string' &&
-    typeof env.lastSeen === 'number' &&
-    Number.isFinite(env.lastSeen) &&
-    Array.isArray(env.clusters)
-  );
-}
-
-function isCheapRelayClusterHeartbeatShape(env: GcClusterHeartbeatEnvelope): boolean {
-  return (
-    isNonEmptyString(env.roomId) &&
-    isNonEmptyString(env.fromAddress) &&
-    isNonEmptyString(env.fromPublicKey) &&
-    isNonEmptyString(env.clusterForwarder) &&
-    typeof env.signature === 'string' &&
-    typeof env.timestamp === 'number' &&
-    Number.isFinite(env.timestamp) &&
-    typeof env.topologyEpoch === 'number' &&
-    Number.isFinite(env.topologyEpoch) &&
-    typeof env.clusterIndex === 'number' &&
-    Number.isFinite(env.clusterIndex) &&
-    typeof env.seq === 'number' &&
-    Number.isFinite(env.seq)
-  );
 }
 
 function buildGcClusterHeartbeatSignedFields(
@@ -778,16 +761,20 @@ let _instance: GroupCallManager | null = null;
 
 export function startGroupCallManager(
   p2p: P2PNetwork,
-  presence: PresenceManager
+  presence: PresenceManager,
+  reticulumBridge?: ReticulumBridge | null
 ): GroupCallManager {
   if (_instance) _instance.stop();
-  _instance = new GroupCallManager(p2p, presence);
+  _instance = new GroupCallManager(p2p, presence, reticulumBridge ?? null);
   _instance.start();
   return _instance;
 }
 
 export function stopGroupCallManager(): void {
-  if (_instance) { _instance.stop(); _instance = null; }
+  if (_instance) {
+    _instance.stop();
+    _instance = null;
+  }
 }
 
 export function getGroupCallManager(): GroupCallManager | null {
@@ -797,30 +784,54 @@ export function getGroupCallManager(): GroupCallManager | null {
 export class GroupCallManager extends EventEmitter {
   private p2p: P2PNetwork;
   private presence: PresenceManager;
+  private reticulumBridge: ReticulumBridge | null;
   private localAddresses = new Set<string>();
   private rooms = new Map<string, GroupRoom>();
   private recentRoomStateByRoomId = new Map<string, RecentRoomState>();
 
-  /** Track recent processed message IDs to prevent replay */
-  private seenMsgIds = new Set<string>();
-  private seenMsgIdTimer: ReturnType<typeof setInterval> | null = null;
-
-  /** Cache address → nodeId learned from GC_JOIN, used as fallback in sendAudio */
+  /** Cache address → nodeId learned from GC_JOIN, retained for diagnostics / legacy compatibility. */
   private participantNodeIds = new Map<string, string>();
+  private reticulumAudioPeersByAddress = new Map<string, ReticulumAudioPeerState>();
+  private reticulumAudioAddressByLinkId = new Map<string, string>();
 
   private presenceExpiredHandler: (address: string) => void;
-  private onP2PMessage!: (payload: { id: string; from: string; data: unknown }) => void;
-  private onBinaryGcAudio!: (payload: {
-    fromNodeId: string;
-    via: string;
-    roomId: string;
-    toAddress: string;
-    ciphertext: Buffer;
-    gcHopsRemaining: number;
-    p2pHops: number;
-  }) => void;
-  private onPresenceUpdated: (({ address, online }: { address: string; online: boolean }) => void) | null = null;
-  private presenceEvictionTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private onReticulumGroupCallMessage:
+    | ((wire: Record<string, unknown>, senderCallHash: string) => void)
+    | null = null;
+  private onReticulumGroupAudioPacket:
+    | ((payload: {
+        linkId: string;
+        roomId: string;
+        data: string;
+        peerPresenceHash: string;
+        peerCallHash: string;
+        incoming: boolean;
+      }) => void)
+    | null = null;
+  private onReticulumGroupAudioLinkEstablished:
+    | ((payload: {
+        linkId: string;
+        peerPresenceHash: string;
+        peerCallHash: string;
+        incoming: boolean;
+      }) => void)
+    | null = null;
+  private onReticulumGroupAudioLinkClosed:
+    | ((payload: {
+        linkId: string;
+        peerPresenceHash: string;
+        peerCallHash: string;
+        incoming: boolean;
+        reason: string;
+      }) => void)
+    | null = null;
+  private onPresenceUpdated:
+    | (({ address, online }: { address: string; online: boolean }) => void)
+    | null = null;
+  private presenceEvictionTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private static readonly PRESENCE_EVICTION_GRACE_MS = 12_000;
   private static readonly TRANSPORT_HEALTH_STALE_MS = 15_000;
   private transportHealthByRoom = new Map<
@@ -844,40 +855,55 @@ export class GroupCallManager extends EventEmitter {
   /** roomId → last warn time when broadcastTopology ran before joinRoom created the room */
   private broadcastTopologyNoRoomLogAt = new Map<string, number>();
 
-  /** Per-room mesh audio relay budget (outbound + forwarded GC_AUDIO). */
-  private relayByteBudgetByRoom = new Map<
-    string,
-    { tokens: number; lastMs: number }
-  >();
-
   /** GC_KEY / GC_KEY_ROTATE before joinRoom — one slot per roomId (strict generation merge). */
   private pendingKeyByRoom = new Map<string, PendingKeyEntry>();
   private pendingKeyFlushSuccess = 0;
   private pendingKeyExpired = 0;
   private unknownRoomKeyLogAt = new Map<string, number>();
   private pendingKeyExpiredLogAt = new Map<string, number>();
+  private reticulumFailureLogAt = new Map<string, number>();
 
-  /** Numeric Qortal group ids (from renderer) to derive sidebar call indicators from relayed GC_* traffic. */
+  /** Numeric Qortal group ids (from renderer) to derive sidebar call indicators. */
   private watchedQortalGroupNumericIds = new Set<number>();
-  /**
-   * For rooms we are not joined in: addresses seen on cheap-relay GC_JOIN (shape + TTL only).
-   * Cleared when watch list changes or join timestamps go stale.
-   */
-  private spectatorRooms = new Map<string, Map<string, number>>();
-  /** Watched rooms not locally joined: last wall time we relayed topology or cluster heartbeat (mesh liveness). */
-  private spectatorMeshLivenessAt = new Map<string, number>();
+  /** Watched rooms not locally joined: last wall time we received a Reticulum activity hint. */
+  private spectatorReticulumLivenessAt = new Map<string, number>();
+  /** Qortal roomId → authoritative group member addresses to target with Reticulum activity hints. */
+  private qortalReticulumTargetsByRoomId = new Map<string, Set<string>>();
   private qortalActivityEmitTimer: ReturnType<typeof setTimeout> | null = null;
-  private qortalMeshExpiryTimer: ReturnType<typeof setTimeout> | null = null;
-  private qortalSpectatorSweepTimer: ReturnType<typeof setInterval> | null = null;
+  private qortalReticulumExpiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private qortalSpectatorSweepTimer: ReturnType<typeof setInterval> | null =
+    null;
+  private qortalReticulumHeartbeatTimer: ReturnType<typeof setInterval> | null =
+    null;
 
-  private buildRecentRoomState(room: GroupRoom, nowMs: number): RecentRoomState {
+  private reticulumTopoReasm = new Map<
+    string,
+    { meta: GtFragmentMeta; parts: Map<number, string>; deadline: number }
+  >();
+  private reticulumGrReasm = new Map<
+    string,
+    { meta: GrFragmentMeta; parts: Map<number, string>; deadline: number }
+  >();
+  private reticulumGkReasm = new Map<
+    string,
+    { meta: GkFragmentMeta; parts: Map<number, string>; deadline: number }
+  >();
+  private reticulumRetryTimers = new Set<ReturnType<typeof setTimeout>>();
+
+  private buildRecentRoomState(
+    room: GroupRoom,
+    nowMs: number
+  ): RecentRoomState {
     return {
       ...buildGroupRoomBootstrapState(room, nowMs, true),
       cachedAtMs: nowMs,
     };
   }
 
-  private getFreshRecentRoomState(roomId: string, nowMs = Date.now()): RecentRoomState | null {
+  private getFreshRecentRoomState(
+    roomId: string,
+    nowMs = Date.now()
+  ): RecentRoomState | null {
     const cached = this.recentRoomStateByRoomId.get(roomId);
     if (!cached) return null;
     if (!isRecentRoomStateFresh(cached.cachedAtMs, nowMs)) {
@@ -894,53 +920,50 @@ export class GroupCallManager extends EventEmitter {
     );
   }
 
-  constructor(p2p: P2PNetwork, presence: PresenceManager) {
+  constructor(
+    p2p: P2PNetwork,
+    presence: PresenceManager,
+    reticulumBridge?: ReticulumBridge | null
+  ) {
     super();
     this.p2p = p2p;
     this.presence = presence;
-
-    this.onP2PMessage = ({ id, from, data }: { id: string; from: string; data: unknown }) => {
-      if (!data || typeof data !== 'object') return;
-      const msg = data as Record<string, unknown>;
-      if (!GC_MESSAGE_TYPES.has(msg.type as string)) return;
-      if (id && this.seenMsgIds.has(id)) return;
-      if (id) this.seenMsgIds.add(id);
-      try {
-        this.handleIncoming(msg as unknown as GcEnvelope, from);
-      } catch (err) {
-        loggerError('[GCall] Error handling message:', err);
-      }
-    };
-
-    this.onBinaryGcAudio = (payload) => {
-      try {
-        this.handleBinaryGcAudioWire(payload);
-      } catch (err) {
-        loggerError('[GCall] Error handling binary GC_AUDIO:', err);
-      }
-    };
+    this.reticulumBridge = reticulumBridge ?? null;
 
     this.presenceExpiredHandler = (address: string) => {
       this.schedulePresenceEviction(address);
     };
-
   }
 
   private logVerifyFailure(job: GcVerifyPending): void {
     if (job.kind === 'join') {
-      loggerLog(`[GCall] Dropped GC_JOIN: invalid signature from ${job.env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_JOIN: invalid signature from ${job.env.fromAddress}`
+      );
     } else if (job.kind === 'leave') {
-      loggerLog(`[GCall] Dropped GC_LEAVE: invalid signature from ${job.env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_LEAVE: invalid signature from ${job.env.fromAddress}`
+      );
     } else if (job.kind === 'topology') {
-      loggerLog(`[GCall] Dropped GC_TOPOLOGY: invalid signature from ${job.env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_TOPOLOGY: invalid signature from ${job.env.fromAddress}`
+      );
     } else if (job.kind === 'cluster_heartbeat') {
-      loggerLog(`[GCall] Dropped GC_CLUSTER_HEARTBEAT: invalid signature from ${job.env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_CLUSTER_HEARTBEAT: invalid signature from ${job.env.fromAddress}`
+      );
     } else if (job.kind === 'key') {
-      loggerLog(`[GCall] Dropped GC_KEY: invalid signature from ${job.env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_KEY: invalid signature from ${job.env.fromAddress}`
+      );
     } else if (job.kind === 'key_rotate') {
-      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: invalid signature from ${job.env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_KEY_ROTATE: invalid signature from ${job.env.fromAddress}`
+      );
     } else {
-      loggerLog(`[GCall] Dropped GC_KEY_REQUEST: invalid signature from ${job.env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_KEY_REQUEST: invalid signature from ${job.env.fromAddress}`
+      );
     }
   }
 
@@ -955,7 +978,9 @@ export class GroupCallManager extends EventEmitter {
       this.verifiedGcSignatures.delete(key);
     }
     while (this.verifiedGcSignatures.size >= GC_VERIFIED_SIGNATURE_CACHE_MAX) {
-      const first = this.verifiedGcSignatures.keys().next().value as string | undefined;
+      const first = this.verifiedGcSignatures.keys().next().value as
+        | string
+        | undefined;
       if (first === undefined) break;
       this.verifiedGcSignatures.delete(first);
     }
@@ -1032,24 +1057,73 @@ export class GroupCallManager extends EventEmitter {
   }
 
   start(): void {
-    // Register P2P listener before verify workers so a worker spawn failure
-    // never leaves the manager deaf to GC_* traffic.
-    this.onP2PMessage = this.onP2PMessage.bind(this);
-    this.p2p.on('message', this.onP2PMessage);
-    this.p2p.on('binary-gc-audio', this.onBinaryGcAudio);
+    if (this.reticulumBridge) {
+      this.onReticulumGroupCallMessage = (wire, senderCallHash) => {
+        try {
+          this.handleReticulumGroupCallWire(wire, senderCallHash);
+        } catch (err) {
+          loggerError('[GCall] Error handling Reticulum group call wire:', err);
+        }
+      };
+      this.onReticulumGroupAudioPacket = (payload) => {
+        try {
+          this.handleReticulumGroupAudioPacket(payload);
+        } catch (err) {
+          loggerError('[GCall] Error handling Reticulum group audio packet:', err);
+        }
+      };
+      this.onReticulumGroupAudioLinkEstablished = (payload) => {
+        try {
+          this.handleReticulumGroupAudioLinkEstablished(payload);
+        } catch (err) {
+          loggerError('[GCall] Error handling Reticulum group audio link ready:', err);
+        }
+      };
+      this.onReticulumGroupAudioLinkClosed = (payload) => {
+        try {
+          this.handleReticulumGroupAudioLinkClosed(payload);
+        } catch (err) {
+          loggerError('[GCall] Error handling Reticulum group audio link close:', err);
+        }
+      };
+      this.reticulumBridge.on(
+        'group-call-message',
+        this.onReticulumGroupCallMessage
+      );
+      this.reticulumBridge.on(
+        'group-audio-packet',
+        this.onReticulumGroupAudioPacket
+      );
+      this.reticulumBridge.on(
+        'group-audio-link-established',
+        this.onReticulumGroupAudioLinkEstablished
+      );
+      this.reticulumBridge.on(
+        'group-audio-link-closed',
+        this.onReticulumGroupAudioLinkClosed
+      );
+    }
 
     this.verifyPool.start();
 
     // Hook into presence-updated to detect abrupt disconnects (with grace period)
     // Store reference so stop() can properly remove it.
-    this.onPresenceUpdated = ({ address, online }: { address: string; online: boolean }) => {
+    this.onPresenceUpdated = ({
+      address,
+      online,
+    }: {
+      address: string;
+      online: boolean;
+    }) => {
       if (!online) {
         this.presenceExpiredHandler(address);
       } else {
         // Peer came back online — cancel any pending eviction timer
         const timer = this.presenceEvictionTimers.get(address);
         if (timer !== undefined) {
-          loggerLog(`[GCall] ${address} back online — cancelling eviction timer`);
+          loggerLog(
+            `[GCall] ${address} back online — cancelling eviction timer`
+          );
           clearTimeout(timer);
           this.presenceEvictionTimers.delete(address);
         }
@@ -1057,33 +1131,59 @@ export class GroupCallManager extends EventEmitter {
     };
     this.presence.on('presence-updated', this.onPresenceUpdated);
 
-    // Periodic cleanup of seen message IDs (every 2 minutes)
-    this.seenMsgIdTimer = setInterval(() => {
-      if (this.seenMsgIds.size > 10_000) this.seenMsgIds.clear();
-    }, 120_000);
-    this.seenMsgIdTimer.unref?.();
-
     this.qortalSpectatorSweepTimer = setInterval(() => {
-      if (this.spectatorRooms.size === 0 && this.watchedQortalGroupNumericIds.size === 0) {
+      if (this.watchedQortalGroupNumericIds.size === 0) {
         return;
       }
       this.scheduleQortalGroupCallActivityEmit(true);
     }, 45_000);
     this.qortalSpectatorSweepTimer.unref?.();
+    this.qortalReticulumHeartbeatTimer = setInterval(() => {
+      this.flushReticulumGroupActivityHeartbeats();
+    }, GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS);
+    this.qortalReticulumHeartbeatTimer.unref?.();
 
     loggerLog('[GCall] GroupCallManager started.');
   }
 
   stop(): void {
     this.verifyPool.stop();
-
-    if (this.onP2PMessage) this.p2p.off('message', this.onP2PMessage);
-    if (this.onBinaryGcAudio) this.p2p.off('binary-gc-audio', this.onBinaryGcAudio);
-    if (this.onPresenceUpdated) this.presence.off('presence-updated', this.onPresenceUpdated);
-    for (const timer of this.presenceEvictionTimers.values()) clearTimeout(timer);
+    if (this.reticulumBridge && this.onReticulumGroupCallMessage) {
+      this.reticulumBridge.off(
+        'group-call-message',
+        this.onReticulumGroupCallMessage
+      );
+      this.onReticulumGroupCallMessage = null;
+    }
+    if (this.reticulumBridge && this.onReticulumGroupAudioPacket) {
+      this.reticulumBridge.off(
+        'group-audio-packet',
+        this.onReticulumGroupAudioPacket
+      );
+      this.onReticulumGroupAudioPacket = null;
+    }
+    if (this.reticulumBridge && this.onReticulumGroupAudioLinkEstablished) {
+      this.reticulumBridge.off(
+        'group-audio-link-established',
+        this.onReticulumGroupAudioLinkEstablished
+      );
+      this.onReticulumGroupAudioLinkEstablished = null;
+    }
+    if (this.reticulumBridge && this.onReticulumGroupAudioLinkClosed) {
+      this.reticulumBridge.off(
+        'group-audio-link-closed',
+        this.onReticulumGroupAudioLinkClosed
+      );
+      this.onReticulumGroupAudioLinkClosed = null;
+    }
+    if (this.onPresenceUpdated)
+      this.presence.off('presence-updated', this.onPresenceUpdated);
+    for (const timer of this.presenceEvictionTimers.values())
+      clearTimeout(timer);
     this.presenceEvictionTimers.clear();
-    if (this.seenMsgIdTimer) { clearInterval(this.seenMsgIdTimer); this.seenMsgIdTimer = null; }
     this.participantNodeIds.clear();
+    this.reticulumAudioPeersByAddress.clear();
+    this.reticulumAudioAddressByLinkId.clear();
     this.rooms.clear();
     this.verifiedGcSignatures.clear();
     this.inFlightGcVerify.clear();
@@ -1099,23 +1199,57 @@ export class GroupCallManager extends EventEmitter {
       clearTimeout(this.qortalActivityEmitTimer);
       this.qortalActivityEmitTimer = null;
     }
-    if (this.qortalMeshExpiryTimer) {
-      clearTimeout(this.qortalMeshExpiryTimer);
-      this.qortalMeshExpiryTimer = null;
+    if (this.qortalReticulumExpiryTimer) {
+      clearTimeout(this.qortalReticulumExpiryTimer);
+      this.qortalReticulumExpiryTimer = null;
     }
     if (this.qortalSpectatorSweepTimer) {
       clearInterval(this.qortalSpectatorSweepTimer);
       this.qortalSpectatorSweepTimer = null;
     }
-    this.spectatorRooms.clear();
-    this.spectatorMeshLivenessAt.clear();
+    if (this.qortalReticulumHeartbeatTimer) {
+      clearInterval(this.qortalReticulumHeartbeatTimer);
+      this.qortalReticulumHeartbeatTimer = null;
+    }
+    this.spectatorReticulumLivenessAt.clear();
+    this.qortalReticulumTargetsByRoomId.clear();
     this.watchedQortalGroupNumericIds.clear();
+    this.reticulumTopoReasm.clear();
+    this.reticulumGrReasm.clear();
+    this.reticulumGkReasm.clear();
+    for (const timer of this.reticulumRetryTimers) {
+      clearTimeout(timer);
+    }
+    this.reticulumRetryTimers.clear();
     loggerLog('[GCall] GroupCallManager stopped.');
   }
 
   setLocalAddresses(addresses: string[]): void {
     this.localAddresses = new Set(addresses);
     loggerLog(`[GCall] Local addresses set: ${[...addresses].join(', ')}`);
+    this.syncReticulumAudioLinks();
+  }
+
+  setQortalGroupReticulumTargets(roomId: string, addresses: string[]): void {
+    if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) {
+      this.qortalReticulumTargetsByRoomId.delete(roomId);
+      return;
+    }
+    const next = new Set<string>();
+    if (Array.isArray(addresses)) {
+      for (const raw of addresses) {
+        if (typeof raw !== 'string') continue;
+        const address = raw.trim();
+        if (!address || this.localAddresses.has(address)) continue;
+        next.add(address);
+      }
+    }
+    if (next.size > 0) {
+      this.qortalReticulumTargetsByRoomId.set(roomId, next);
+    } else {
+      this.qortalReticulumTargetsByRoomId.delete(roomId);
+    }
+    this.flushReticulumGroupActivityHeartbeats(roomId);
   }
 
   reportTransportHealth(roomId: string, healthyPeerAddresses: string[]): void {
@@ -1164,7 +1298,9 @@ export class GroupCallManager extends EventEmitter {
     const last = this.pendingKeyExpiredLogAt.get(roomId) ?? 0;
     if (t - last < PENDING_KEY_EXPIRED_LOG_MIN_MS) return;
     this.pendingKeyExpiredLogAt.set(roomId, t);
-    loggerLog(`[GCall] Pending keying envelope dropped (TTL) for room ${roomId} before joinRoom`);
+    loggerLog(
+      `[GCall] Pending keying envelope dropped (TTL) for room ${roomId} before joinRoom`
+    );
   }
 
   private logUnknownRoomKeyThrottled(roomId: string, kind: string): void {
@@ -1270,7 +1406,11 @@ export class GroupCallManager extends EventEmitter {
     return this.rooms.has(roomId);
   }
 
-  private logGcJoinDropThrottled(fromAddress: string, reasonBucket: string, message: string): void {
+  private logGcJoinDropThrottled(
+    fromAddress: string,
+    reasonBucket: string,
+    message: string
+  ): void {
     const key = `${reasonBucket}:${fromAddress}`;
     const now = Date.now();
     const last = this.joinDropLogAt.get(key) ?? 0;
@@ -1279,18 +1419,254 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(message);
   }
 
-  /**
-   * Forward JOIN/LEAVE/TOPOLOGY for rooms we are not in, without Ed25519 verify.
-   * Matches interested-node behavior for expired GC_JOIN (no relay).
-   */
-  private relayDisinterestedSignedControl(
-    env: GcJoinEnvelope | GcLeaveEnvelope | GcTopologyEnvelope | GcClusterHeartbeatEnvelope
+  private sweepExpiredReticulumReassembly(now: number): void {
+    for (const m of [
+      this.reticulumTopoReasm,
+      this.reticulumGrReasm,
+      this.reticulumGkReasm,
+    ]) {
+      for (const [k, v] of m) {
+        if (now > v.deadline) m.delete(k);
+      }
+    }
+  }
+
+  private collectReticulumTargetAddressesForRoom(
+    roomId: string,
+    excludeAddresses?: Set<string>
+  ): string[] {
+    const ex = excludeAddresses ?? new Set<string>();
+    const out = new Set<string>();
+    const room = this.rooms.get(roomId);
+    if (room) {
+      for (const addr of room.participants.keys()) {
+        if (this.localAddresses.has(addr) || ex.has(addr)) continue;
+        out.add(addr);
+      }
+    }
+    const extra = this.qortalReticulumTargetsByRoomId.get(roomId);
+    if (extra) {
+      for (const addr of extra) {
+        if (this.localAddresses.has(addr) || ex.has(addr)) continue;
+        out.add(addr);
+      }
+    }
+    return [...out];
+  }
+
+  private collectReticulumDestinationHashesForRoom(
+    roomId: string,
+    excludeAddresses?: Set<string>
+  ): string[] {
+    const out = new Set<string>();
+    for (const addr of this.collectReticulumTargetAddressesForRoom(
+      roomId,
+      excludeAddresses
+    )) {
+      const r = this.presence.getRouteForAddress(addr);
+      if (r?.kind === 'reticulum') out.add(r.destinationHash);
+    }
+    return [...out];
+  }
+
+  private isRetryableReticulumFailure(
+    result: GcReticulumSendResult
+  ): result is { ok: false; reason: GcReticulumSendFailureReason; error?: string } {
+    if (!('reason' in result)) return false;
+    return GC_RETICULUM_RETRYABLE_FAILURES.has(result.reason);
+  }
+
+  private scheduleReticulumRetry(
+    delayMs: number,
+    job: () => void
   ): void {
-    if ((env.hopsRemaining ?? 0) <= 0) return;
-    this.p2p.send(null, {
-      ...env,
-      hopsRemaining: (env.hopsRemaining ?? 1) - 1,
-    });
+    const timer = setTimeout(() => {
+      this.reticulumRetryTimers.delete(timer);
+      job();
+    }, delayMs);
+    timer.unref?.();
+    this.reticulumRetryTimers.add(timer);
+  }
+
+  private logReticulumFailureThrottled(key: string, message: string): void {
+    const now = Date.now();
+    const last = this.reticulumFailureLogAt.get(key) ?? 0;
+    if (now - last < GC_RETICULUM_FAILURE_LOG_MIN_MS) return;
+    this.reticulumFailureLogAt.set(key, now);
+    loggerWarn(message);
+  }
+
+  private async sendReticulumFramesToHash(
+    destinationHash: string,
+    frames: Record<string, unknown>[]
+  ): Promise<GcReticulumSendResult> {
+    if (frames.length === 0) {
+      return {
+        ok: false,
+        reason: 'wire-too-large',
+        error: 'No Reticulum frames fit encrypted wire limit',
+      };
+    }
+    const bridge = this.reticulumBridge;
+    if (!bridge) return { ok: false, reason: 'bridge-unavailable' };
+    if (bridge.getState() !== 'ready') {
+      return { ok: false, reason: 'bridge-not-ready' };
+    }
+    for (const w of frames) {
+      const result: ReticulumSendResult = await bridge.sendGroupCallDetailed(
+        destinationHash,
+        w
+      );
+      if (!result.ok) {
+        return result;
+      }
+    }
+    return { ok: true };
+  }
+
+  private fanoutReticulumWire(
+    roomId: string,
+    frames: Record<string, unknown>[],
+    excludeAddresses?: Set<string>,
+    retryKind?: GcReticulumRetryKind,
+    attempt = 0
+  ): void {
+    const targetAddresses = this.collectReticulumTargetAddressesForRoom(
+      roomId,
+      excludeAddresses
+    );
+    if (targetAddresses.length === 0) {
+      if (
+        retryKind &&
+        attempt < GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS.length
+      ) {
+        this.scheduleReticulumRetry(
+          GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS[attempt]!,
+          () =>
+            this.fanoutReticulumWire(
+              roomId,
+              frames,
+              excludeAddresses,
+              retryKind,
+              attempt + 1
+            )
+        );
+      }
+      return;
+    }
+    void this.fanoutReticulumWireAsync(
+      roomId,
+      targetAddresses,
+      frames,
+      excludeAddresses,
+      retryKind,
+      attempt
+    );
+  }
+
+  private async fanoutReticulumWireAsync(
+    roomId: string,
+    targetAddresses: string[],
+    frames: Record<string, unknown>[],
+    excludeAddresses: Set<string> | undefined,
+    retryKind: GcReticulumRetryKind | undefined,
+    attempt: number
+  ): Promise<void> {
+    let hadFailure = false;
+    let firstFailure: GcReticulumSendResult | null = null;
+    for (const address of targetAddresses) {
+      const route = this.presence.getRouteForAddress(address);
+      if (route?.kind !== 'reticulum') {
+        hadFailure = true;
+        firstFailure ??= { ok: false, reason: 'no-route' };
+        continue;
+      }
+      const result = await this.sendReticulumFramesToHash(
+        route.destinationHash,
+        frames
+      );
+      if (!result.ok) {
+        hadFailure = true;
+        firstFailure ??= result;
+      }
+    }
+    if (
+      retryKind &&
+      hadFailure &&
+      firstFailure &&
+      this.isRetryableReticulumFailure(firstFailure) &&
+      attempt < GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS.length
+    ) {
+      this.scheduleReticulumRetry(
+        GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS[attempt]!,
+        () =>
+          this.fanoutReticulumWire(
+            roomId,
+            frames,
+            excludeAddresses,
+            retryKind,
+            attempt + 1
+          )
+      );
+      return;
+    }
+    if (firstFailure && 'reason' in firstFailure) {
+      const failure = firstFailure;
+      this.logReticulumFailureThrottled(
+        `room:${roomId}:${retryKind ?? 'fanout'}:${failure.reason}:${failure.error ?? ''}`,
+        `[GCall] Reticulum ${retryKind ?? 'fanout'} send failed room=${roomId} reason=${failure.reason}${failure.error ? ` error=${failure.error}` : ''}`
+      );
+    }
+  }
+
+  private sendReticulumToAddress(
+    address: string,
+    frames: Record<string, unknown>[],
+    retryKind?: GcReticulumRetryKind,
+    attempt = 0
+  ): void {
+    void this.sendReticulumToAddressAsync(address, frames, retryKind, attempt);
+  }
+
+  private async sendReticulumToAddressAsync(
+    address: string,
+    frames: Record<string, unknown>[],
+    retryKind: GcReticulumRetryKind | undefined,
+    attempt: number
+  ): Promise<void> {
+    const route = this.presence.getRouteForAddress(address);
+    const result =
+      route?.kind === 'reticulum'
+        ? await this.sendReticulumFramesToHash(route.destinationHash, frames)
+        : ({ ok: false, reason: 'no-route' } as const);
+    if (
+      retryKind &&
+      this.isRetryableReticulumFailure(result) &&
+      attempt < GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS.length
+    ) {
+      this.scheduleReticulumRetry(
+        GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS[attempt]!,
+        () =>
+          this.sendReticulumToAddress(
+            address,
+            frames,
+            retryKind,
+            attempt + 1
+          )
+      );
+      return;
+    }
+    if ('reason' in result) {
+      const failure = result;
+      const failureError =
+        'error' in failure && typeof failure.error === 'string'
+          ? failure.error
+          : '';
+      this.logReticulumFailureThrottled(
+        `addr:${address}:${retryKind ?? 'direct'}:${failure.reason}:${failureError}`,
+        `[GCall] Reticulum ${retryKind ?? 'direct'} send failed address=${address} reason=${failure.reason}${failureError ? ` error=${failureError}` : ''}`
+      );
+    }
   }
 
   private static parseQortalGroupNumericId(roomId: string): number | null {
@@ -1320,110 +1696,55 @@ export class GroupCallManager extends EventEmitter {
       }
     }
     this.watchedQortalGroupNumericIds = next;
-    for (const roomId of [...this.spectatorRooms.keys()]) {
-      const num = GroupCallManager.parseQortalGroupNumericId(roomId);
-      if (num === null || !next.has(num)) {
-        this.spectatorRooms.delete(roomId);
-      }
-    }
-    // Do not prune spectatorMeshLivenessAt by watch list: topology may arrive before groups load
+    // Do not prune Reticulum liveness by watch list: hints may arrive before groups load
     // or while watch is briefly []; TTL sweep in flush drops stale entries.
     this.scheduleQortalGroupCallActivityEmit(true);
-    this.scheduleNextQortalMeshExpiry();
+    this.scheduleNextQortalReticulumExpiry();
     return this.getQortalGroupCallActivitySnapshot();
   }
 
-  private sweepSpectatorRooms(now: number): void {
-    for (const [roomId, participants] of [...this.spectatorRooms.entries()]) {
-      for (const [addr, joinedAt] of [...participants.entries()]) {
-        if (gcJoinTimestampRejectReason(joinedAt, now) === 'expired') {
-          participants.delete(addr);
-        }
-      }
-      if (participants.size === 0) {
-        this.spectatorRooms.delete(roomId);
-      }
-    }
-  }
-
-  private noteSpectatorJoinFromRelay(env: GcJoinEnvelope): void {
-    if (GroupCallManager.parseQortalGroupNumericId(env.roomId) === null) return;
-    let m = this.spectatorRooms.get(env.roomId);
-    if (!m) {
-      m = new Map();
-      this.spectatorRooms.set(env.roomId, m);
-    }
-    const existing = m.get(env.fromAddress);
-    if (
-      existing !== undefined &&
-      !shouldRefreshParticipantFromVerifiedJoin({
-        currentJoinedAt: existing,
-        incomingJoinTimestamp: env.timestamp,
-      })
-    ) {
-      return;
-    }
-    m.set(env.fromAddress, env.timestamp);
-    if (this.watchedQortalGroupNumericIds.size > 0) {
-      this.scheduleQortalGroupCallActivityEmit(false);
-    }
-  }
-
-  private noteSpectatorLeaveFromRelay(env: GcLeaveEnvelope): void {
-    if (GroupCallManager.parseQortalGroupNumericId(env.roomId) === null) return;
-    const m = this.spectatorRooms.get(env.roomId);
-    if (!m) return;
-    m.delete(env.fromAddress);
-    if (m.size === 0) {
-      this.spectatorRooms.delete(env.roomId);
-    }
-    if (this.watchedQortalGroupNumericIds.size > 0) {
-      this.scheduleQortalGroupCallActivityEmit(false);
-    }
-  }
-
-  private noteSpectatorMeshLivenessFromRelay(roomId: string): void {
+  private noteSpectatorReticulumLiveness(roomId: string): void {
     if (GroupCallManager.parseQortalGroupNumericId(roomId) === null) return;
-    this.spectatorMeshLivenessAt.set(roomId, Date.now());
-    this.scheduleNextQortalMeshExpiry();
+    this.spectatorReticulumLivenessAt.set(roomId, Date.now());
+    this.scheduleNextQortalReticulumExpiry();
     if (this.watchedQortalGroupNumericIds.size > 0) {
       this.scheduleQortalGroupCallActivityEmit(false);
     }
   }
 
-  private sweepSpectatorMeshLiveness(now: number): void {
-    for (const [roomId, at] of [...this.spectatorMeshLivenessAt.entries()]) {
-      if (now - at > GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS) {
-        this.spectatorMeshLivenessAt.delete(roomId);
+  private sweepSpectatorReticulumLiveness(now: number): void {
+    for (const [roomId, at] of [...this.spectatorReticulumLivenessAt.entries()]) {
+      if (now - at > GC_RETICULUM_ACTIVITY_MAX_AGE_MS) {
+        this.spectatorReticulumLivenessAt.delete(roomId);
       }
     }
-    this.scheduleNextQortalMeshExpiry();
+    this.scheduleNextQortalReticulumExpiry();
   }
 
-  private scheduleNextQortalMeshExpiry(): void {
-    if (this.qortalMeshExpiryTimer) {
-      clearTimeout(this.qortalMeshExpiryTimer);
-      this.qortalMeshExpiryTimer = null;
+  private scheduleNextQortalReticulumExpiry(): void {
+    if (this.qortalReticulumExpiryTimer) {
+      clearTimeout(this.qortalReticulumExpiryTimer);
+      this.qortalReticulumExpiryTimer = null;
     }
     if (
       this.watchedQortalGroupNumericIds.size === 0 ||
-      this.spectatorMeshLivenessAt.size === 0
+      this.spectatorReticulumLivenessAt.size === 0
     ) {
       return;
     }
     const now = Date.now();
     let nextExpiryAt = Number.POSITIVE_INFINITY;
-    for (const at of this.spectatorMeshLivenessAt.values()) {
-      const expiryAt = at + GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS;
+    for (const at of this.spectatorReticulumLivenessAt.values()) {
+      const expiryAt = at + GC_RETICULUM_ACTIVITY_MAX_AGE_MS;
       if (expiryAt < nextExpiryAt) nextExpiryAt = expiryAt;
     }
     if (!Number.isFinite(nextExpiryAt)) return;
     const delayMs = Math.max(0, nextExpiryAt - now);
-    this.qortalMeshExpiryTimer = setTimeout(() => {
-      this.qortalMeshExpiryTimer = null;
+    this.qortalReticulumExpiryTimer = setTimeout(() => {
+      this.qortalReticulumExpiryTimer = null;
       this.scheduleQortalGroupCallActivityEmit(true);
     }, delayMs);
-    this.qortalMeshExpiryTimer.unref?.();
+    this.qortalReticulumExpiryTimer.unref?.();
   }
 
   private scheduleQortalGroupCallActivityEmit(immediate: boolean): void {
@@ -1445,8 +1766,7 @@ export class GroupCallManager extends EventEmitter {
 
   private getQortalGroupCallActivitySnapshot(): Record<string, boolean> {
     const now = Date.now();
-    this.sweepSpectatorRooms(now);
-    this.sweepSpectatorMeshLiveness(now);
+    this.sweepSpectatorReticulumLiveness(now);
     const activeByGroupId: Record<string, boolean> = {};
     for (const id of this.watchedQortalGroupNumericIds) {
       const roomId = `gcall-qortal-${id}`;
@@ -1456,20 +1776,208 @@ export class GroupCallManager extends EventEmitter {
         activeByGroupId[gid] = true;
         continue;
       }
-      const spec = this.spectatorRooms.get(roomId);
-      if (spec && spec.size > 0) {
-        activeByGroupId[gid] = true;
-        continue;
-      }
-      const meshAt = this.spectatorMeshLivenessAt.get(roomId);
+      const reticulumAt = this.spectatorReticulumLivenessAt.get(roomId);
       if (
-        meshAt !== undefined &&
-        now - meshAt <= GC_SPECTATOR_MESH_LIVENESS_MAX_AGE_MS
+        reticulumAt !== undefined &&
+        now - reticulumAt <= GC_RETICULUM_ACTIVITY_MAX_AGE_MS
       ) {
         activeByGroupId[gid] = true;
       }
     }
     return activeByGroupId;
+  }
+
+  private flushReticulumGroupActivityHeartbeats(roomId?: string): void {
+    const bridge = this.reticulumBridge;
+    if (!bridge || bridge.getState() !== 'ready') return;
+    const roomIds = roomId ? [roomId] : [...this.qortalReticulumTargetsByRoomId.keys()];
+    for (const candidateRoomId of roomIds) {
+      this.sendReticulumGroupActivityForRoom(candidateRoomId);
+    }
+  }
+
+  private sendReticulumGroupActivityForRoom(roomId: string): void {
+    const bridge = this.reticulumBridge;
+    if (!bridge || bridge.getState() !== 'ready') return;
+    const groupId = GroupCallManager.parseQortalGroupNumericId(roomId);
+    if (groupId === null) return;
+    const room = this.rooms.get(roomId);
+    if (!room || room.participants.size === 0) return;
+    const targets = this.qortalReticulumTargetsByRoomId.get(roomId);
+    if (!targets || targets.size === 0) return;
+    const destinationHashes = new Set<string>();
+    for (const address of targets) {
+      const route = this.presence.getRouteForAddress(address);
+      if (route?.kind !== 'reticulum') continue;
+      destinationHashes.add(route.destinationHash);
+    }
+    if (destinationHashes.size === 0) return;
+    const wire: GcReticulumActivityWire = {
+      t: 'GA',
+      g: groupId,
+      m: Date.now(),
+    };
+    for (const destinationHash of destinationHashes) {
+      void bridge
+        .sendGroupCall(destinationHash, wire as unknown as Record<string, unknown>)
+        .catch(() => {});
+    }
+  }
+
+  private handleReticulumGroupCallWire(
+    wire: Record<string, unknown>,
+    senderCallHash: string
+  ): void {
+    const now = Date.now();
+    this.sweepExpiredReticulumReassembly(now);
+
+    const t = wire.t;
+    if (t === 'GA') {
+      const decoded = decodeGcReticulumActivityWire(wire, now);
+      if (!decoded) return;
+      const roomId = `gcall-qortal-${decoded.groupId}`;
+      this.noteSpectatorReticulumLiveness(roomId);
+      return;
+    }
+
+    if (typeof t !== 'string' || !isGroupCallReticulumWireType(t)) {
+      return;
+    }
+
+    const syntheticFrom =
+      senderCallHash.length > 0 ? `reticulum:${senderCallHash}` : undefined;
+
+    if (t === 'GJ') {
+      const env = decodeJoinWire(wire);
+      if (!env) return;
+      this.handleJoin(env as GcJoinEnvelope, syntheticFrom);
+      return;
+    }
+    if (t === 'GL') {
+      const env = decodeLeaveWire(wire);
+      if (!env) return;
+      this.handleLeaveEnvelope(env as GcLeaveEnvelope);
+      return;
+    }
+    if (t === 'GH') {
+      const env = decodeClusterHeartbeatWire(wire);
+      if (!env) return;
+      this.handleClusterHeartbeat(env as GcClusterHeartbeatEnvelope);
+      return;
+    }
+    if (t === 'GT') {
+      const env = decodeTopologyWireSingle(wire);
+      if (!env) return;
+      this.handleTopology(env as GcTopologyEnvelope);
+      return;
+    }
+    if (t === 'GT0') {
+      const meta = parseGt0(wire);
+      if (!meta) return;
+      this.reticulumTopoReasm.set(`${meta.roomId}:${meta.z}`, {
+        meta,
+        parts: new Map(),
+        deadline: now + GC_RETICULUM_REASM_TTL_MS,
+      });
+      return;
+    }
+    if (t === 'GT1') {
+      const pr = parseGt1(wire);
+      if (!pr) return;
+      const key = `${pr.R}:${pr.z}`;
+      const buf = this.reticulumTopoReasm.get(key);
+      if (!buf || pr.n !== buf.meta.n) return;
+      buf.parts.set(pr.x, pr.p);
+      if (buf.parts.size < buf.meta.n) return;
+      const env = decodeTopologyFromGt1(buf.meta, buf.parts);
+      this.reticulumTopoReasm.delete(key);
+      if (!env) return;
+      this.handleTopology(env as GcTopologyEnvelope);
+      return;
+    }
+
+    if (t === 'GR') {
+      const env = decodeKeyRotateWireSingle(wire);
+      if (!env) return;
+      this.handleKeyRotate(env as GcKeyRotateEnvelope);
+      return;
+    }
+    if (t === 'GR0') {
+      const meta = parseGr0(wire);
+      if (!meta) return;
+      this.reticulumGrReasm.set(`${meta.roomId}:${meta.z}`, {
+        meta,
+        parts: new Map(),
+        deadline: now + GC_RETICULUM_REASM_TTL_MS,
+      });
+      return;
+    }
+    if (t === 'GR1') {
+      const pr = parseGr1(wire);
+      if (!pr) return;
+      const key = `${pr.R}:${pr.z}`;
+      const buf = this.reticulumGrReasm.get(key);
+      if (!buf || pr.n !== buf.meta.n) return;
+      buf.parts.set(pr.x, pr.p);
+      if (buf.parts.size < buf.meta.n) return;
+      const env = decodeKeyRotateFromGr1(buf.meta, buf.parts);
+      this.reticulumGrReasm.delete(key);
+      if (!env) return;
+      this.handleKeyRotate(env as GcKeyRotateEnvelope);
+      return;
+    }
+
+    if (t === 'GK') {
+      const env = decodeKeyWireSingle(wire);
+      if (!env) return;
+      this.handleKey(env as GcKeyEnvelope);
+      return;
+    }
+    if (t === 'GK0') {
+      const meta = parseGk0(wire);
+      if (!meta) return;
+      this.reticulumGkReasm.set(`${meta.roomId}:${meta.z}`, {
+        meta,
+        parts: new Map(),
+        deadline: now + GC_RETICULUM_REASM_TTL_MS,
+      });
+      return;
+    }
+    if (t === 'GK1') {
+      const pr = parseGk1(wire);
+      if (!pr) return;
+      const key = `${pr.R}:${pr.z}`;
+      const buf = this.reticulumGkReasm.get(key);
+      if (!buf || pr.n !== buf.meta.n) return;
+      buf.parts.set(pr.x, pr.p);
+      if (buf.parts.size < buf.meta.n) return;
+      const env = decodeKeyWireFromGk1(buf.meta, buf.parts);
+      this.reticulumGkReasm.delete(key);
+      if (!env) return;
+      this.handleKey(env as GcKeyEnvelope);
+      return;
+    }
+
+    if (t === 'GQ') {
+      const env = decodeKeyRequestWire(wire);
+      if (!env) return;
+      this.handleKeyRequest(env as GcKeyRequestEnvelope);
+      return;
+    }
+
+    if (
+      t === 'GI' ||
+      t === 'GX' ||
+      t === 'GO' ||
+      t === 'GE' ||
+      t === 'GO0' ||
+      t === 'GO1' ||
+      t === 'GE0' ||
+      t === 'GE1' ||
+      t === 'GF'
+    ) {
+      return;
+    }
   }
 
   private flushQortalGroupCallActivity(): void {
@@ -1526,7 +2034,10 @@ export class GroupCallManager extends EventEmitter {
       };
       this.rooms.set(roomId, room);
     } else {
-      room.topologyEpoch = mergeRoomTopologyEpochWithFloor(room.topologyEpoch, topologyEpochFloor);
+      room.topologyEpoch = mergeRoomTopologyEpochWithFloor(
+        room.topologyEpoch,
+        topologyEpochFloor
+      );
     }
     room.participants.set(localAddress, { publicKey, joinedAt: timestamp });
 
@@ -1539,12 +2050,18 @@ export class GroupCallManager extends EventEmitter {
       signature,
       timestamp,
       ...(joinGeneration !== undefined ? { joinGeneration } : {}),
-      hopsRemaining: GC_MAX_HOPS,
     };
-    this.p2p.send(null, env);
-    loggerLog(`[GCall] Sent GC_JOIN for room ${roomId}`);
+    this.fanoutReticulumWire(
+      roomId,
+      [encodeJoinWire(env)],
+      new Set([localAddress]),
+      'join'
+    );
+    loggerLog(`[GCall] Sent GC_JOIN (Reticulum) for room ${roomId}`);
     this.flushPendingKeyForRoom(roomId);
     this.scheduleQortalGroupCallActivityEmit(true);
+    this.flushReticulumGroupActivityHeartbeats(roomId);
+    this.syncReticulumAudioLinks();
     return {
       callSessionId: room.callSessionId,
       mediaSessionGeneration: room.mediaSessionGeneration,
@@ -1567,9 +2084,14 @@ export class GroupCallManager extends EventEmitter {
         fromPublicKey: publicKey,
         signature,
         timestamp,
-        hopsRemaining: GC_MAX_HOPS,
       };
-      this.p2p.send(null, env);
+      if (room) {
+        this.fanoutReticulumWire(
+          roomId,
+          [encodeLeaveWire(env)],
+          new Set([localAddress])
+        );
+      }
     } else {
       loggerWarn(
         `[GCall] Missing GC_LEAVE signature for ${localAddress} in ${roomId} — clearing local room only`
@@ -1579,8 +2101,9 @@ export class GroupCallManager extends EventEmitter {
     if (room) this.rememberRecentRoomState(room, timestamp);
     this.pendingKeyByRoom.delete(roomId);
     this.rooms.delete(roomId);
-    this.relayByteBudgetByRoom.delete(roomId);
+    this.qortalReticulumTargetsByRoomId.delete(roomId);
     this.transportHealthByRoom.delete(roomId);
+    this.syncReticulumAudioLinks();
     loggerLog(
       signature
         ? `[GCall] Sent GC_LEAVE for room ${roomId}`
@@ -1593,7 +2116,12 @@ export class GroupCallManager extends EventEmitter {
     roomId: string,
     topology: Omit<
       GcTopologyEnvelope,
-      'type' | 'roomId' | 'hopsRemaining' | 'fromPublicKey' | 'signature' | 'timestamp'
+      | 'type'
+      | 'roomId'
+      | 'hopsRemaining'
+      | 'fromPublicKey'
+      | 'signature'
+      | 'timestamp'
     >,
     signature: string,
     publicKey: string,
@@ -1606,7 +2134,6 @@ export class GroupCallManager extends EventEmitter {
       fromPublicKey: publicKey,
       signature,
       timestamp,
-      hopsRemaining: GC_MAX_HOPS,
     };
     const room = this.rooms.get(roomId);
     if (room) {
@@ -1630,8 +2157,22 @@ export class GroupCallManager extends EventEmitter {
         );
       }
     }
-    this.p2p.send(null, env);
-    loggerLog(`[GCall] Sent GC_TOPOLOGY for room ${roomId} epoch ${topology.topologyEpoch}`);
+    const frames = encodeTopologyWire(env);
+    if (frames.length === 0) {
+      loggerWarn(
+        `[GCall] Skipping GC_TOPOLOGY (Reticulum) for room ${roomId} epoch ${topology.topologyEpoch}: unable to encode within Reticulum wire limit`
+      );
+      return;
+    }
+    this.fanoutReticulumWire(
+      roomId,
+      frames,
+      new Set([topology.fromAddress]),
+      'topology'
+    );
+    loggerLog(
+      `[GCall] Queued GC_TOPOLOGY (Reticulum) for room ${roomId} epoch ${topology.topologyEpoch}`
+    );
   }
 
   sendClusterHeartbeat(
@@ -1647,83 +2188,286 @@ export class GroupCallManager extends EventEmitter {
       roomId,
       ...payload,
       signature,
-      hopsRemaining: GC_MAX_HOPS,
     };
-    this.p2p.send(null, env);
+    this.fanoutReticulumWire(
+      roomId,
+      [encodeClusterHeartbeatWire(env)],
+      new Set([payload.fromAddress])
+    );
   }
 
   /**
-   * Send local GC_AUDIO from IPC. Returns false if payload invalid or relay budget exhausted.
+   * Send encrypted group audio over a persistent Reticulum link.
    */
+  private computeReticulumAudioTargetsForRoom(room: GroupRoom): Set<string> {
+    const targets = new Set<string>();
+    const topology = room.lastTopology;
+    if (!topology) return targets;
+
+    for (const localAddress of this.localAddresses) {
+      if (!room.participants.has(localAddress)) continue;
+
+      if (localAddress === topology.rootForwarder) {
+        for (const cluster of topology.clusters) {
+          if (cluster.forwarder === localAddress) {
+            for (const member of cluster.members) {
+              if (member && member !== localAddress) targets.add(member);
+            }
+          } else if (cluster.forwarder) {
+            targets.add(cluster.forwarder);
+          }
+        }
+        continue;
+      }
+
+      let assignedForwarder = topology.rootForwarder;
+      for (const cluster of topology.clusters) {
+        if (cluster.forwarder === localAddress) {
+          if (topology.rootForwarder && topology.rootForwarder !== localAddress) {
+            targets.add(topology.rootForwarder);
+          }
+          for (const member of cluster.members) {
+            if (member && member !== localAddress) targets.add(member);
+          }
+          assignedForwarder = '';
+          break;
+        }
+        if (cluster.members.includes(localAddress)) {
+          assignedForwarder = cluster.forwarder || topology.rootForwarder;
+          break;
+        }
+      }
+      if (assignedForwarder && assignedForwarder !== localAddress) {
+        targets.add(assignedForwarder);
+      }
+    }
+
+    for (const address of [...targets]) {
+      if (!address || this.localAddresses.has(address)) {
+        targets.delete(address);
+      }
+    }
+    return targets;
+  }
+
+  private resolveReticulumAudioAddress(
+    linkId: string,
+    peerPresenceHash: string
+  ): string | null {
+    const byLinkId = this.reticulumAudioAddressByLinkId.get(linkId);
+    if (byLinkId) return byLinkId;
+    if (!peerPresenceHash) return null;
+    for (const [address, state] of this.reticulumAudioPeersByAddress) {
+      if (state.peerPresenceHash === peerPresenceHash) return address;
+    }
+    return null;
+  }
+
+  private async openReticulumAudioLinkForAddress(address: string): Promise<void> {
+    const bridge = this.reticulumBridge;
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    if (!bridge || !state || state.opening || state.established) return;
+    state.opening = true;
+    const result: ReticulumOpenAudioLinkResult = await bridge.openGroupAudioLink(
+      state.peerPresenceHash
+    );
+    const latest = this.reticulumAudioPeersByAddress.get(address);
+    if (!latest) return;
+    latest.opening = false;
+    if (result.ok) {
+      latest.linkId = result.linkId;
+      this.reticulumAudioAddressByLinkId.set(result.linkId, address);
+      if (result.established) {
+        latest.established = true;
+        await this.flushPendingReticulumAudioForAddress(address);
+      }
+      return;
+    }
+    const failure = result as {
+      ok: false;
+      reason: ReticulumSendFailureReason;
+      error?: string;
+    };
+    this.logReticulumFailureThrottled(
+      `audio-open:${address}:${failure.reason}:${failure.error ?? ''}`,
+      `[GCall] Reticulum audio link open failed address=${address} reason=${failure.reason}${failure.error ? ` error=${failure.error}` : ''}`
+    );
+  }
+
+  private markReticulumAudioLinkUnready(address: string, linkId?: string): void {
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    if (!state) return;
+    if (linkId) {
+      this.reticulumAudioAddressByLinkId.delete(linkId);
+      if (state.linkId === linkId) state.linkId = null;
+    } else if (state.linkId) {
+      this.reticulumAudioAddressByLinkId.delete(state.linkId);
+      state.linkId = null;
+    }
+    state.established = false;
+    state.opening = false;
+  }
+
+  private ensureReticulumAudioPeerState(
+    roomId: string,
+    address: string
+  ): ReticulumAudioPeerState | null {
+    const route = this.presence.getRouteForAddress(address);
+    if (route?.kind !== 'reticulum') {
+      return null;
+    }
+    let state = this.reticulumAudioPeersByAddress.get(address);
+    if (state && state.peerPresenceHash !== route.destinationHash) {
+      this.markReticulumAudioLinkUnready(address, state.linkId ?? undefined);
+      this.reticulumAudioPeersByAddress.delete(address);
+      state = undefined;
+    }
+    if (!state) {
+      state = {
+        address,
+        peerPresenceHash: route.destinationHash,
+        linkId: null,
+        established: false,
+        opening: false,
+        rooms: new Set<string>(),
+        pending: [],
+      };
+      this.reticulumAudioPeersByAddress.set(address, state);
+    }
+    state.rooms.add(roomId);
+    void this.openReticulumAudioLinkForAddress(address);
+    return state;
+  }
+
+  private enqueuePendingReticulumAudio(
+    state: ReticulumAudioPeerState,
+    roomId: string,
+    data: Buffer
+  ): void {
+    state.pending.push({ roomId, data: Buffer.from(data) });
+    while (state.pending.length > GC_RETICULUM_AUDIO_PENDING_MAX_FRAMES) {
+      state.pending.shift();
+    }
+  }
+
+  private async flushPendingReticulumAudioForAddress(
+    address: string
+  ): Promise<void> {
+    const bridge = this.reticulumBridge;
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    if (!bridge || !state || !state.established || !state.linkId) return;
+    while (state.pending.length > 0 && state.established && state.linkId) {
+      const next = state.pending[0]!;
+      const result = await bridge.sendGroupAudio(
+        state.linkId,
+        next.roomId,
+        next.data.toString('base64')
+      );
+      if (result.ok) {
+        state.pending.shift();
+        continue;
+      }
+      const failure = result as {
+        ok: false;
+        reason: ReticulumSendFailureReason;
+        error?: string;
+      };
+      if (
+        failure.reason === 'audio-link-not-ready' ||
+        failure.reason === 'unknown-link-id' ||
+        failure.reason === 'packet-send-false' ||
+        failure.reason === 'bridge-not-ready' ||
+        failure.reason === 'bridge-exception' ||
+        failure.reason === 'bridge-timeout'
+      ) {
+        this.markReticulumAudioLinkUnready(address, state.linkId);
+        void this.openReticulumAudioLinkForAddress(address);
+        return;
+      }
+      this.logReticulumFailureThrottled(
+        `audio-send:${address}:${failure.reason}:${failure.error ?? ''}`,
+        `[GCall] Reticulum audio send failed address=${address} reason=${failure.reason}${failure.error ? ` error=${failure.error}` : ''}`
+      );
+      state.pending.shift();
+    }
+  }
+
+  private syncReticulumAudioLinks(): void {
+    const desiredByAddress = new Map<
+      string,
+      { peerPresenceHash: string; rooms: Set<string> }
+    >();
+    for (const room of this.rooms.values()) {
+      for (const address of this.computeReticulumAudioTargetsForRoom(room)) {
+        const route = this.presence.getRouteForAddress(address);
+        if (route?.kind !== 'reticulum') continue;
+        const existing = desiredByAddress.get(address);
+        if (existing) {
+          existing.rooms.add(room.roomId);
+          continue;
+        }
+        desiredByAddress.set(address, {
+          peerPresenceHash: route.destinationHash,
+          rooms: new Set([room.roomId]),
+        });
+      }
+    }
+
+    for (const [address, state] of [...this.reticulumAudioPeersByAddress]) {
+      const desired = desiredByAddress.get(address);
+      if (!desired) {
+        const linkId = state.linkId;
+        this.reticulumAudioPeersByAddress.delete(address);
+        if (linkId) {
+          this.reticulumAudioAddressByLinkId.delete(linkId);
+          void this.reticulumBridge?.closeGroupAudioLink(linkId).catch(() => {});
+        }
+        continue;
+      }
+      state.peerPresenceHash = desired.peerPresenceHash;
+      state.rooms = desired.rooms;
+      void this.openReticulumAudioLinkForAddress(address);
+    }
+
+    for (const [address, desired] of desiredByAddress) {
+      let state = this.reticulumAudioPeersByAddress.get(address);
+      if (!state) {
+        state = {
+          address,
+          peerPresenceHash: desired.peerPresenceHash,
+          linkId: null,
+          established: false,
+          opening: false,
+          rooms: desired.rooms,
+          pending: [],
+        };
+        this.reticulumAudioPeersByAddress.set(address, state);
+      } else {
+        state.peerPresenceHash = desired.peerPresenceHash;
+        state.rooms = desired.rooms;
+      }
+      void this.openReticulumAudioLinkForAddress(address);
+    }
+  }
+
   sendAudio(roomId: string, toAddress: string, data: Buffer): boolean {
     if (!isValidGcAudioBuffer(data)) {
       loggerWarn('[GCall] sendAudio dropped: invalid or oversize payload');
       return false;
     }
-    const cost = data.length;
-    if (!this.tryConsumeRelayBudget(roomId, cost)) {
-      loggerWarn(`[GCall] sendAudio dropped: relay budget exhausted for room ${roomId}`);
+    if (this.localAddresses.has(toAddress)) {
+      this.emit('gcall:audio', { roomId, data: Buffer.from(data), fromAddress: toAddress });
+      return true;
+    }
+    const state = this.ensureReticulumAudioPeerState(roomId, toAddress);
+    if (!state) {
+      loggerWarn(`[GCall] sendAudio dropped: no Reticulum route for ${toAddress}`);
       return false;
     }
-    const nodeId =
-      this.presence.getNodeIdForAddress(toAddress) ??
-      this.participantNodeIds.get(toAddress) ??
-      null;
-
-    if (nodeId && this.p2p.canSendBinaryGcAudio(nodeId)) {
-      try {
-        const wire = encodeGcAudioBinaryFrame({
-          p2pHops: 0,
-          toNodeId: nodeId,
-          fromNodeId: this.p2p.getNodeId(),
-          roomId,
-          toAddress,
-          gcHopsRemaining: GC_AUDIO_MAX_HOPS,
-          ciphertext: data,
-        });
-        if (this.p2p.writeGcAudioBinaryFrame(nodeId, wire)) {
-          return true;
-        }
-      } catch (err) {
-        if (err instanceof GcAudioBinaryEncodeError) {
-          loggerWarn(`[GCall] sendAudio binary encode failed: ${err.message}`);
-        } else {
-          loggerError('[GCall] sendAudio binary path error:', err);
-        }
-      }
+    this.enqueuePendingReticulumAudio(state, roomId, data);
+    if (state.established) {
+      void this.flushPendingReticulumAudioForAddress(toAddress);
     }
-
-    const env: GcAudioEnvelope = {
-      type: 'GC_AUDIO',
-      roomId,
-      toAddress,
-      data: data.toString('base64'),
-      hopsRemaining: GC_AUDIO_MAX_HOPS,
-    };
-    if (nodeId) {
-      this.p2p.send(nodeId, env);
-    } else {
-      this.p2p.send(null, env);
-    }
-    return true;
-  }
-
-  private tryConsumeRelayBudget(roomId: string, byteCost: number): boolean {
-    if (byteCost <= 0) return true;
-    const now = Date.now();
-    let b = this.relayByteBudgetByRoom.get(roomId);
-    if (!b) {
-      b = { tokens: GC_AUDIO_RELAY_BUCKET_MAX, lastMs: now };
-      this.relayByteBudgetByRoom.set(roomId, b);
-    }
-    const dt = now - b.lastMs;
-    b.lastMs = now;
-    b.tokens = Math.min(
-      GC_AUDIO_RELAY_BUCKET_MAX,
-      b.tokens + dt * GC_AUDIO_RELAY_REFILL_BYTES_PER_MS
-    );
-    if (b.tokens < byteCost) return false;
-    b.tokens -= byteCost;
     return true;
   }
 
@@ -1752,15 +2496,9 @@ export class GroupCallManager extends EventEmitter {
       encryptedKey,
       signature,
       timestamp,
-      hopsRemaining: GC_MAX_HOPS,
       ...meta,
     };
-    const nodeId = this.presence.getNodeIdForAddress(toAddress);
-    if (nodeId) {
-      this.p2p.send(nodeId, env);
-    } else {
-      this.p2p.send(null, env);
-    }
+    this.sendReticulumToAddress(toAddress, encodeKeyWire(env), 'key');
   }
 
   sendKeyRotate(
@@ -1786,10 +2524,13 @@ export class GroupCallManager extends EventEmitter {
       encryptedKeys,
       signature,
       timestamp,
-      hopsRemaining: GC_MAX_HOPS,
       ...meta,
     };
-    this.p2p.send(null, env);
+    this.fanoutReticulumWire(
+      roomId,
+      encodeKeyRotateWire(env),
+      new Set([fromAddress])
+    );
   }
 
   sendKeyRequest(
@@ -1813,71 +2554,12 @@ export class GroupCallManager extends EventEmitter {
       keyMessageVersion: GC_KEY_MESSAGE_VERSION,
       signature,
       timestamp,
-      hopsRemaining: GC_MAX_HOPS,
     };
-    const nodeId = this.presence.getNodeIdForAddress(toAddress);
-    if (nodeId) {
-      this.p2p.send(nodeId, env);
-    } else {
-      this.p2p.send(null, env);
-    }
-  }
-
-  sendRtcSignal(
-    roomId: string,
-    fromAddress: string,
-    toAddress: string,
-    type: 'offer' | 'answer' | 'ice' | 'reconnect',
-    data: unknown,
-    connId: string,
-    signature?: string,
-    publicKey?: string,
-    timestamp?: number
-  ): void {
-    const nodeId = this.presence.getNodeIdForAddress(toAddress);
-    const hops = GC_MAX_HOPS;
-
-    if (type === 'offer') {
-      const env: GcRtcOfferEnvelope = {
-        type: 'GC_RTC_OFFER',
-        roomId, fromAddress, toAddress, connId,
-        sdp: data as string,
-        fromPublicKey: publicKey ?? '',
-        signature: signature ?? '',
-        timestamp: timestamp ?? Date.now(),
-        hopsRemaining: hops,
-      };
-      nodeId ? this.p2p.send(nodeId, env) : this.p2p.send(null, env);
-    } else if (type === 'answer') {
-      const env: GcRtcAnswerEnvelope = {
-        type: 'GC_RTC_ANSWER',
-        roomId, fromAddress, toAddress, connId,
-        sdp: data as string,
-        fromPublicKey: publicKey ?? '',
-        signature: signature ?? '',
-        timestamp: timestamp ?? Date.now(),
-        hopsRemaining: hops,
-      };
-      nodeId ? this.p2p.send(nodeId, env) : this.p2p.send(null, env);
-    } else if (type === 'reconnect') {
-      const env: GcRtcReconnectEnvelope = {
-        type: 'GC_RTC_RECONNECT',
-        roomId,
-        fromAddress,
-        toAddress,
-        connId,
-        hopsRemaining: hops,
-      };
-      nodeId ? this.p2p.send(nodeId, env) : this.p2p.send(null, env);
-    } else {
-      const env: GcRtcIceEnvelope = {
-        type: 'GC_RTC_ICE',
-        roomId, fromAddress, toAddress, connId,
-        candidate: data,
-        hopsRemaining: hops,
-      };
-      nodeId ? this.p2p.send(nodeId, env) : this.p2p.send(null, env);
-    }
+    this.sendReticulumToAddress(
+      toAddress,
+      [encodeKeyRequestWire(env)],
+      'key_request'
+    );
   }
 
   // ── Inbound ───────────────────────────────────────────────────────────────
@@ -1887,31 +2569,26 @@ export class GroupCallManager extends EventEmitter {
     if (this.pendingKeyByRoom.size > 0) this.sweepExpiredPendingKeys();
 
     switch (env.type) {
-      case 'GC_JOIN':      return this.handleJoin(env, fromNodeId);
-      case 'GC_LEAVE':     return this.handleLeaveEnvelope(env);
-      case 'GC_TOPOLOGY':  return this.handleTopology(env);
-      case 'GC_CLUSTER_HEARTBEAT': return this.handleClusterHeartbeat(env);
-      case 'GC_AUDIO':     return this.handleAudio(env);
-      case 'GC_KEY':       return this.handleKey(env);
-      case 'GC_KEY_ROTATE': return this.handleKeyRotate(env);
-      case 'GC_KEY_REQUEST': return this.handleKeyRequest(env);
-      case 'GC_RTC_OFFER': return this.handleRtcOffer(env);
-      case 'GC_RTC_ANSWER': return this.handleRtcAnswer(env);
-      case 'GC_RTC_ICE':   return this.handleRtcIce(env);
-      case 'GC_RTC_RECONNECT': return this.handleRtcReconnect(env);
+      case 'GC_JOIN':
+        return this.handleJoin(env, fromNodeId);
+      case 'GC_LEAVE':
+        return this.handleLeaveEnvelope(env);
+      case 'GC_TOPOLOGY':
+        return this.handleTopology(env);
+      case 'GC_CLUSTER_HEARTBEAT':
+        return this.handleClusterHeartbeat(env);
+      case 'GC_KEY':
+        return this.handleKey(env);
+      case 'GC_KEY_ROTATE':
+        return this.handleKeyRotate(env);
+      case 'GC_KEY_REQUEST':
+        return this.handleKeyRequest(env);
     }
   }
 
   private handleJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
     const nowJoin = Date.now();
     if (!this.hasLocalRoomInterest(env.roomId)) {
-      if (
-        isCheapRelayJoinShape(env) &&
-        gcJoinTimestampRejectReason(env.timestamp, nowJoin) === null
-      ) {
-        this.noteSpectatorJoinFromRelay(env);
-        this.relayDisinterestedSignedControl(env);
-      }
       return;
     }
 
@@ -1942,7 +2619,8 @@ export class GroupCallManager extends EventEmitter {
         fromAddress: env.fromAddress,
         fromPublicKey: env.fromPublicKey,
         timestamp: env.timestamp,
-        ...(typeof env.joinGeneration === 'number' && Number.isFinite(env.joinGeneration)
+        ...(typeof env.joinGeneration === 'number' &&
+        Number.isFinite(env.joinGeneration)
           ? { joinGeneration: env.joinGeneration }
           : {}),
       },
@@ -2005,24 +2683,17 @@ export class GroupCallManager extends EventEmitter {
         address: env.fromAddress,
         publicKey: env.fromPublicKey,
         timestamp: env.timestamp,
-        ...(typeof env.joinGeneration === 'number' && Number.isFinite(env.joinGeneration)
+        ...(typeof env.joinGeneration === 'number' &&
+        Number.isFinite(env.joinGeneration)
           ? { joinGeneration: env.joinGeneration }
           : {}),
       });
     }
-
-    // Relay
-    if ((env.hopsRemaining ?? 0) > 0) {
-      this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-    }
+    this.syncReticulumAudioLinks();
   }
 
   private handleLeaveEnvelope(env: GcLeaveEnvelope): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
-      if (isCheapRelayLeaveShape(env)) {
-        this.noteSpectatorLeaveFromRelay(env);
-        this.relayDisinterestedSignedControl(env);
-      }
       return;
     }
 
@@ -2056,13 +2727,13 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     this.handleLeave(env.roomId, env.fromAddress, false);
-
-    if ((env.hopsRemaining ?? 0) > 0) {
-      this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-    }
   }
 
-  private handleLeave(roomId: string, address: string, isAbrupt: boolean): void {
+  private handleLeave(
+    roomId: string,
+    address: string,
+    isAbrupt: boolean
+  ): void {
     if (shouldIgnoreLeaveForLocalAddress(this.localAddresses, address)) {
       loggerLog(
         `[GCall] Ignored ${isAbrupt ? 'abrupt ' : ''}GC_LEAVE for local address ${address} in ${roomId}`
@@ -2075,7 +2746,6 @@ export class GroupCallManager extends EventEmitter {
       room.participants.delete(address);
       if (room.participants.size === 0) {
         this.rooms.delete(roomId);
-        this.relayByteBudgetByRoom.delete(roomId);
         this.transportHealthByRoom.delete(roomId);
       }
     }
@@ -2096,14 +2766,11 @@ export class GroupCallManager extends EventEmitter {
     if (hadLocalInterest || this.isWatchedQortalRoom(roomId)) {
       this.scheduleQortalGroupCallActivityEmit(false);
     }
+    this.syncReticulumAudioLinks();
   }
 
   private handleTopology(env: GcTopologyEnvelope): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
-      if (isCheapRelayTopologyShape(env)) {
-        this.noteSpectatorMeshLivenessFromRelay(env.roomId);
-        this.relayDisinterestedSignedControl(env);
-      }
       return;
     }
 
@@ -2142,10 +2809,9 @@ export class GroupCallManager extends EventEmitter {
         const now = Date.now();
         if (now - this.lastStaleTopologyLogAt >= GC_STALE_TOPOLOGY_LOG_MIN_MS) {
           this.lastStaleTopologyLogAt = now;
-          loggerLog(`[GCall] Dropped stale GC_TOPOLOGY epoch ${env.topologyEpoch} < ${room.topologyEpoch}`);
-        }
-        if ((env.hopsRemaining ?? 0) > 0) {
-          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
+          loggerLog(
+            `[GCall] Dropped stale GC_TOPOLOGY epoch ${env.topologyEpoch} < ${room.topologyEpoch}`
+          );
         }
         return;
       }
@@ -2154,17 +2820,14 @@ export class GroupCallManager extends EventEmitter {
         incomingTopology.topologyEpoch === room.lastTopology.topologyEpoch &&
         incomingTopology.rootForwarder !== room.lastTopology.rootForwarder
       ) {
-        const decision = chooseMainTopologyAuthority(room.lastTopology, incomingTopology);
+        const decision = chooseMainTopologyAuthority(
+          room.lastTopology,
+          incomingTopology
+        );
         loggerLog(
           `[GCall] Same-epoch GC_TOPOLOGY disagreement room=${env.roomId} epoch=${incomingTopology.topologyEpoch} currentRoot=${room.lastTopology.rootForwarder} incomingRoot=${incomingTopology.rootForwarder} acceptIncoming=${decision.acceptIncoming} reason=${decision.reason}`
         );
         if (!decision.acceptIncoming) {
-          if ((env.hopsRemaining ?? 0) > 0) {
-            this.p2p.send(null, {
-              ...env,
-              hopsRemaining: (env.hopsRemaining ?? 1) - 1,
-            });
-          }
           return;
         }
       }
@@ -2192,18 +2855,11 @@ export class GroupCallManager extends EventEmitter {
         rootForwarder: env.rootForwarder,
       });
     }
-
-    if ((env.hopsRemaining ?? 0) > 0) {
-      this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-    }
+    this.syncReticulumAudioLinks();
   }
 
   private handleClusterHeartbeat(env: GcClusterHeartbeatEnvelope): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
-      if (isCheapRelayClusterHeartbeatShape(env)) {
-        this.noteSpectatorMeshLivenessFromRelay(env.roomId);
-        this.relayDisinterestedSignedControl(env);
-      }
       return;
     }
 
@@ -2222,15 +2878,9 @@ export class GroupCallManager extends EventEmitter {
     const room = this.rooms.get(env.roomId);
     if (room) {
       if (env.topologyEpoch < room.topologyEpoch) {
-        if ((env.hopsRemaining ?? 0) > 0) {
-          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-        }
         return;
       }
       if (env.topologyEpoch !== room.topologyEpoch) {
-        if ((env.hopsRemaining ?? 0) > 0) {
-          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-        }
         return;
       }
     }
@@ -2245,104 +2895,96 @@ export class GroupCallManager extends EventEmitter {
         timestamp: env.timestamp,
       });
     }
-
-    if ((env.hopsRemaining ?? 0) > 0) {
-      this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-    }
   }
 
-  private handleAudio(env: GcAudioEnvelope): void {
-    if (!isValidGcAudioBase64(env.data)) {
-      loggerWarn('[GCall] GC_AUDIO dropped: invalid or oversize payload');
-      return;
-    }
-    const cost = gcAudioPayloadApproxBytes(env.data);
-    if (!this.tryConsumeRelayBudget(env.roomId, cost)) {
+  private handleReticulumGroupAudioPacket(payload: {
+    linkId: string;
+    roomId: string;
+    data: string;
+    peerPresenceHash: string;
+    peerCallHash: string;
+    incoming: boolean;
+  }): void {
+    if (!this.hasLocalRoomInterest(payload.roomId)) {
       return;
     }
     let raw: Buffer;
     try {
-      raw = Buffer.from(env.data, 'base64');
+      raw = Buffer.from(payload.data, 'base64');
     } catch {
       return;
     }
-    if (raw.length > GC_AUDIO_MAX_BINARY_WIRE_BYTES) {
+    if (!isValidGcAudioBuffer(raw)) {
+      loggerWarn('[GCall] Reticulum audio dropped: invalid or oversize payload');
       return;
     }
-    this.deliverOrRelayGcAudio(
-      env.roomId,
-      env.toAddress,
-      raw,
-      env.hopsRemaining ?? 1
+    const fromAddress = this.resolveReticulumAudioAddress(
+      payload.linkId,
+      payload.peerPresenceHash
     );
+    this.emit('gcall:audio', {
+      roomId: payload.roomId,
+      data: raw,
+      ...(fromAddress ? { fromAddress } : {}),
+    });
   }
 
-  private handleBinaryGcAudioWire(payload: {
-    roomId: string;
-    toAddress: string;
-    ciphertext: Buffer;
-    gcHopsRemaining: number;
+  private handleReticulumGroupAudioLinkEstablished(payload: {
+    linkId: string;
+    peerPresenceHash: string;
+    peerCallHash: string;
+    incoming: boolean;
   }): void {
-    const { roomId, toAddress, ciphertext } = payload;
-    if (ciphertext.length > GC_AUDIO_MAX_BINARY_WIRE_BYTES) {
-      return;
-    }
-    const cost = ciphertext.length;
-    if (!this.tryConsumeRelayBudget(roomId, cost)) {
-      return;
-    }
-    this.deliverOrRelayGcAudio(
-      roomId,
-      toAddress,
-      ciphertext,
-      payload.gcHopsRemaining ?? 1
+    const address = this.resolveReticulumAudioAddress(
+      payload.linkId,
+      payload.peerPresenceHash
     );
+    if (!address) return;
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    if (!state) return;
+    state.linkId = payload.linkId;
+    state.established = true;
+    state.opening = false;
+    this.reticulumAudioAddressByLinkId.set(payload.linkId, address);
+    void this.flushPendingReticulumAudioForAddress(address);
   }
 
-  /** After relay budget charged; relay uses JSON + base64. */
-  private deliverOrRelayGcAudio(
-    roomId: string,
-    toAddress: string,
-    raw: Buffer,
-    hopsRemaining: number
-  ): void {
-    if (!this.localAddresses.has(toAddress)) {
-      if ((hopsRemaining ?? 0) > 0) {
-        const nodeId = this.presence.getNodeIdForAddress(toAddress);
-        if (nodeId) {
-          const env: GcAudioEnvelope = {
-            type: 'GC_AUDIO',
-            roomId,
-            toAddress,
-            data: raw.toString('base64'),
-            hopsRemaining: (hopsRemaining ?? 1) - 1,
-          };
-          this.p2p.send(nodeId, env);
-        }
-      }
-      return;
+  private handleReticulumGroupAudioLinkClosed(payload: {
+    linkId: string;
+    peerPresenceHash: string;
+    peerCallHash: string;
+    incoming: boolean;
+    reason: string;
+  }): void {
+    const address = this.resolveReticulumAudioAddress(
+      payload.linkId,
+      payload.peerPresenceHash
+    );
+    if (!address) return;
+    this.markReticulumAudioLinkUnready(address, payload.linkId);
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    if (state && state.rooms.size > 0) {
+      void this.openReticulumAudioLinkForAddress(address);
     }
-    this.emit('gcall:audio', { roomId, data: raw });
   }
 
   private handleKey(env: GcKeyEnvelope): void {
     if (!this.localAddresses.has(env.toAddress)) {
-      if ((env.hopsRemaining ?? 0) > 0) {
-        const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
-        if (nodeId) {
-          this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-        } else {
-          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-        }
-      }
       return;
     }
     if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
-      loggerLog(`[GCall] Dropped GC_KEY: unsupported version ${env.keyMessageVersion}`);
+      loggerLog(
+        `[GCall] Dropped GC_KEY: unsupported version ${env.keyMessageVersion}`
+      );
       return;
     }
-    if (env.encryptedKeyDigest !== buildGcKeyDigest(env.toAddress, env.encryptedKey)) {
-      loggerLog(`[GCall] Dropped GC_KEY: payload digest mismatch from ${env.fromAddress}`);
+    if (
+      env.encryptedKeyDigest !==
+      buildGcKeyDigest(env.toAddress, env.encryptedKey)
+    ) {
+      loggerLog(
+        `[GCall] Dropped GC_KEY: payload digest mismatch from ${env.fromAddress}`
+      );
       return;
     }
     const room = this.rooms.get(env.roomId);
@@ -2361,9 +3003,13 @@ export class GroupCallManager extends EventEmitter {
         // Root has advanced the generation (session-break). Adopt the new session.
         room.callSessionId = env.callSessionId;
         room.mediaSessionGeneration = env.mediaSessionGeneration;
-        loggerLog(`[GCall] GC_KEY: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`);
+        loggerLog(
+          `[GCall] GC_KEY: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`
+        );
       } else {
-        loggerLog(`[GCall] Dropped GC_KEY: stale session generation from ${env.fromAddress}`);
+        loggerLog(
+          `[GCall] Dropped GC_KEY: stale session generation from ${env.fromAddress}`
+        );
         return;
       }
     } else if (env.callSessionId !== room.callSessionId) {
@@ -2390,17 +3036,18 @@ export class GroupCallManager extends EventEmitter {
       }
     }
     if (!hasLocalRecipient) {
-      if ((env.hopsRemaining ?? 0) > 0) {
-        this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      }
       return;
     }
     if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
-      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: unsupported version ${env.keyMessageVersion}`);
+      loggerLog(
+        `[GCall] Dropped GC_KEY_ROTATE: unsupported version ${env.keyMessageVersion}`
+      );
       return;
     }
     if (env.encryptedKeysDigest !== buildGcKeyRotateDigest(env.encryptedKeys)) {
-      loggerLog(`[GCall] Dropped GC_KEY_ROTATE: payload digest mismatch from ${env.fromAddress}`);
+      loggerLog(
+        `[GCall] Dropped GC_KEY_ROTATE: payload digest mismatch from ${env.fromAddress}`
+      );
       return;
     }
     const room = this.rooms.get(env.roomId);
@@ -2416,9 +3063,13 @@ export class GroupCallManager extends EventEmitter {
       if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
         room.callSessionId = env.callSessionId;
         room.mediaSessionGeneration = env.mediaSessionGeneration;
-        loggerLog(`[GCall] GC_KEY_ROTATE: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`);
+        loggerLog(
+          `[GCall] GC_KEY_ROTATE: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`
+        );
       } else {
-        loggerLog(`[GCall] Dropped GC_KEY_ROTATE: stale session generation from ${env.fromAddress}`);
+        loggerLog(
+          `[GCall] Dropped GC_KEY_ROTATE: stale session generation from ${env.fromAddress}`
+        );
         return;
       }
     } else if (env.callSessionId !== room.callSessionId) {
@@ -2437,18 +3088,12 @@ export class GroupCallManager extends EventEmitter {
 
   private handleKeyRequest(env: GcKeyRequestEnvelope): void {
     if (!this.localAddresses.has(env.toAddress)) {
-      if ((env.hopsRemaining ?? 0) > 0) {
-        const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
-        if (nodeId) {
-          this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-        } else {
-          this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-        }
-      }
       return;
     }
     if (env.keyMessageVersion !== GC_KEY_MESSAGE_VERSION) {
-      loggerLog(`[GCall] Dropped GC_KEY_REQUEST: unsupported version ${env.keyMessageVersion}`);
+      loggerLog(
+        `[GCall] Dropped GC_KEY_REQUEST: unsupported version ${env.keyMessageVersion}`
+      );
       return;
     }
     const room = this.rooms.get(env.roomId);
@@ -2530,9 +3175,6 @@ export class GroupCallManager extends EventEmitter {
         verified: true,
       });
     }
-    if ((env.hopsRemaining ?? 0) > 0) {
-      this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-    }
   }
 
   private applyVerifiedKeyRequest(env: GcKeyRequestEnvelope): void {
@@ -2561,72 +3203,17 @@ export class GroupCallManager extends EventEmitter {
     return buildGcKeyRotateDigest(encryptedKeys);
   }
 
-  private handleRtcOffer(env: GcRtcOfferEnvelope): void {
-    if (this.localAddresses.has(env.toAddress)) {
-      this.emit('gcall:rtc-signal', { ...env, type: 'offer' });
-      return;
-    }
-    if ((env.hopsRemaining ?? 0) > 0) {
-      const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
-      if (nodeId) {
-        this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      } else {
-        this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      }
-    }
-  }
-
-  private handleRtcAnswer(env: GcRtcAnswerEnvelope): void {
-    if (this.localAddresses.has(env.toAddress)) {
-      this.emit('gcall:rtc-signal', { ...env, type: 'answer' });
-      return;
-    }
-    if ((env.hopsRemaining ?? 0) > 0) {
-      const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
-      if (nodeId) {
-        this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      } else {
-        this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      }
-    }
-  }
-
-  private handleRtcIce(env: GcRtcIceEnvelope): void {
-    if (this.localAddresses.has(env.toAddress)) {
-      this.emit('gcall:rtc-signal', { ...env, type: 'ice' });
-      return;
-    }
-    if ((env.hopsRemaining ?? 0) > 0) {
-      const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
-      if (nodeId) {
-        this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      } else {
-        this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      }
-    }
-  }
-
-  private handleRtcReconnect(env: GcRtcReconnectEnvelope): void {
-    if (this.localAddresses.has(env.toAddress)) {
-      this.emit('gcall:rtc-signal', { ...env, type: 'reconnect' });
-      return;
-    }
-    if ((env.hopsRemaining ?? 0) > 0) {
-      const nodeId = this.presence.getNodeIdForAddress(env.toAddress);
-      if (nodeId) {
-        this.p2p.send(nodeId, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      } else {
-        this.p2p.send(null, { ...env, hopsRemaining: (env.hopsRemaining ?? 1) - 1 });
-      }
-    }
-  }
-
   // ── Queries ───────────────────────────────────────────────────────────────
 
-  getRoomParticipants(roomId: string): Array<{ address: string; publicKey: string }> {
+  getRoomParticipants(
+    roomId: string
+  ): Array<{ address: string; publicKey: string }> {
     const room = this.rooms.get(roomId);
     if (!room) return [];
-    return [...room.participants.entries()].map(([address, p]) => ({ address, publicKey: p.publicKey }));
+    return [...room.participants.entries()].map(([address, p]) => ({
+      address,
+      publicKey: p.publicKey,
+    }));
   }
 
   getRoomBootstrapState(roomId: string): GroupRoomBootstrapState | null {
@@ -2699,7 +3286,8 @@ export class GroupCallManager extends EventEmitter {
         if (
           shouldDelayPresenceEvictionForHealthyTransport({
             lastReportAtMs: transportHealth?.reportedAtMs,
-            healthyPeerAddresses: transportHealth?.healthyPeerAddresses ?? new Set(),
+            healthyPeerAddresses:
+              transportHealth?.healthyPeerAddresses ?? new Set(),
             address,
             nowMs: now,
             staleAfterMs: GroupCallManager.TRANSPORT_HEALTH_STALE_MS,
@@ -2717,7 +3305,10 @@ export class GroupCallManager extends EventEmitter {
         this.handleLeave(roomId, address, true);
       }
 
-      if (delayedByHealthyTransport && !this.presence.isAddressOnline(address)) {
+      if (
+        delayedByHealthyTransport &&
+        !this.presence.isAddressOnline(address)
+      ) {
         this.schedulePresenceEviction(address);
       }
     }, GroupCallManager.PRESENCE_EVICTION_GRACE_MS);

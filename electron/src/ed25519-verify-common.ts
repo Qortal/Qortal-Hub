@@ -44,6 +44,8 @@ export type Ed25519VerifyPayload =
       signature: string;
       fromPublicKey: string;
       expectedAddress: string;
+      /** Required for CALL_OFFER / CALL_ANSWER (SHA-256 hex of SDP UTF-8). */
+      sdpHash?: string;
     };
 
 export function verifyGcDetached(
@@ -114,14 +116,34 @@ export function verifyCallSignedDetached(
   timestamp: number,
   signature: string,
   fromPublicKey: string,
-  expectedAddress: string
+  expectedAddress: string,
+  sdpHash?: string
 ): boolean {
   try {
     const skew = Date.now() - timestamp;
     if (skew > 30_000 || skew < -10_000) return false;
     const derived = deriveAddressFromPublicKey(fromPublicKey);
     if (derived !== expectedAddress) return false;
-    const msgBytes = canonicalizeForSigning({ callId, timestamp, type: wireType });
+    const needsSdp =
+      wireType === 'CALL_OFFER' || wireType === 'CALL_ANSWER';
+    if (needsSdp) {
+      if (
+        typeof sdpHash !== 'string' ||
+        !/^[0-9a-f]{64}$/i.test(sdpHash)
+      ) {
+        return false;
+      }
+    }
+    const msgBytes = canonicalizeForSigning(
+      needsSdp
+        ? {
+            callId,
+            timestamp,
+            type: wireType,
+            sdpHash: sdpHash!.toLowerCase(),
+          }
+        : { callId, timestamp, type: wireType }
+    );
     const sigBytes = base58Decode(signature) as Uint8Array;
     const keyBytes = base58Decode(fromPublicKey) as Uint8Array;
     return nacl.sign.detached.verify(msgBytes, sigBytes, keyBytes);
@@ -165,7 +187,8 @@ export function runEd25519VerifySync(payload: Ed25519VerifyPayload): boolean {
         payload.timestamp,
         payload.signature,
         payload.fromPublicKey,
-        payload.expectedAddress
+        payload.expectedAddress,
+        payload.sdpHash
       );
     default:
       return false;

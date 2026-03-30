@@ -10,6 +10,17 @@
 
   "afterPack": "scripts/afterPack.js",
 
+  "extraResources": [
+    {
+      "from": "resources/reticulum",
+      "to": "reticulum"
+    },
+    {
+      "from": "resources/reticulum-runtime",
+      "to": "reticulum-runtime"
+    }
+  ],
+
   "afterSign": "scripts/notarize.js",
 
   "files": [

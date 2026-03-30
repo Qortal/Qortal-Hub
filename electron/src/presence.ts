@@ -11,7 +11,6 @@
 import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
 import { log as loggerLog, error as loggerError } from './logger';
-import type { P2PNetwork } from './p2p-network';
 import { runEd25519VerifySync } from './ed25519-verify-common';
 import { VerifyWorkerPool } from './verify-worker-pool';
 
@@ -26,6 +25,8 @@ const MAX_PRESENCE_AGE_MS = 60_000;
 const PRESENCE_SKEW_ALLOWANCE_MS = 60_000;
 const MAX_FUTURE_SKEW_MS = 30_000;
 const PRESENCE_CLEANUP_INTERVAL_MS = 15_000;
+const RETICULUM_ROUTE_TTL_MS = 45_000;
+const PRESENCE_TOO_OLD_LOG_MIN_MS = 5_000;
 
 // ── Message Types ─────────────────────────────────────────────────────────────
 
@@ -54,7 +55,6 @@ export interface PresenceAnnouncePayload {
   sessionId: string;
   status: UserStatus;
   clientVersion: string;
-  capabilities?: string[];
 }
 
 export interface PresenceHeartbeatPayload {
@@ -138,6 +138,9 @@ export interface PresenceSession {
   firstSeen: number;
   originNodeId: string;
   viaPeerId: string;
+  route: PresenceRoute;
+  routeLastValidated: number;
+  routeExpiresAt: number | null;
   clientVersion?: string;
   status: UserStatus;
   signatureValid: true;
@@ -149,11 +152,29 @@ export interface PresenceStatusResult {
   sessions: PresenceSession[];
 }
 
+export type PresenceRoute =
+  | { kind: 'local' }
+  | { kind: 'mesh-node'; id: string }
+  | { kind: 'reticulum'; destinationHash: string; linkId?: string };
+
+export interface PresenceTransportHandlers {
+  onEnvelope: (remoteEnvelope: PresenceEnvelope, route: PresenceRoute) => void;
+  onReady?: () => void;
+  onDegraded?: (reason?: string) => void;
+}
+
+export interface PresenceTransport {
+  readonly kind: 'mesh-node' | 'reticulum';
+  publish(envelope: PresenceEnvelope): Promise<boolean> | boolean;
+  subscribe(handlers: PresenceTransportHandlers): () => void;
+}
+
 interface PresenceAddressAggregate {
   liveSessionCount: number;
   lastSeen: number | null;
   status: UserStatus | null;
   originNodeId: string | null;
+  route: PresenceRoute | null;
   nextExpiryAt: number | null;
 }
 
@@ -455,11 +476,34 @@ function validateEnvelopeSansSignature(
   return { ok: true };
 }
 
-/** Throttle repeated "message too old" reject logs (hot relay path). */
-const PRESENCE_TOO_OLD_LOG_MIN_MS = 5_000;
-
 const PRESENCE_VERIFY_WORKER_COUNT = 2;
 const PRESENCE_MAX_PENDING_VERIFY = 1024;
+
+function routeToLegacyPeerIds(route: PresenceRoute): {
+  originNodeId: string;
+  viaPeerId: string;
+} {
+  switch (route.kind) {
+    case 'local':
+      return { originNodeId: 'local', viaPeerId: 'local' };
+    case 'mesh-node':
+      return { originNodeId: route.id, viaPeerId: route.id };
+    case 'reticulum':
+      return {
+        originNodeId: `reticulum:${route.destinationHash}`,
+        viaPeerId: `reticulum:${route.destinationHash}`,
+      };
+  }
+}
+
+function getRouteExpiry(route: PresenceRoute, now: number): number | null {
+  if (route.kind === 'reticulum') return now + RETICULUM_ROUTE_TTL_MS;
+  return null;
+}
+
+function isRouteFresh(session: PresenceSession, now: number): boolean {
+  return session.routeExpiresAt === null || now <= session.routeExpiresAt;
+}
 
 // ── Presence Manager ──────────────────────────────────────────────────────────
 
@@ -535,15 +579,12 @@ export class PresenceManager extends EventEmitter {
    * Handles an incoming presence envelope from a remote peer or from the
    * local renderer. Returns true if the message was accepted.
    *
-   * `originNodeId` is the P2P nodeId in the message's `from` field.
-   * `viaPeerId` is the directly-connected peer that delivered the message to
-   * us. For direct peers these are the same value; for relayed peers they
-   * differ. Use 'local' for both when called by the renderer directly.
+   * `route` identifies the transport path that delivered the message.
+   * Use `{ kind: 'local' }` when called for a locally-originated envelope.
    */
   async handleEnvelope(
     raw: unknown,
-    originNodeId: string,
-    viaPeerId: string = originNodeId
+    route: PresenceRoute
   ): Promise<boolean> {
     const envelope = raw as PresenceEnvelope;
     const now = Date.now();
@@ -589,8 +630,7 @@ export class PresenceManager extends EventEmitter {
 
     return this.applyVerifiedPresenceEnvelope(
       envelope,
-      originNodeId,
-      viaPeerId,
+      route,
       now
     );
   }
@@ -598,12 +638,13 @@ export class PresenceManager extends EventEmitter {
   /** After signature verify: monotonic timestamp + session mutation. */
   private applyVerifiedPresenceEnvelope(
     envelope: PresenceEnvelope,
-    originNodeId: string,
-    viaPeerId: string,
+    route: PresenceRoute,
     now: number
   ): boolean {
     const p = envelope.payload as PresenceAnnouncePayload;
     const { address, publicKey, sessionId } = p;
+    const legacyPeerIds = routeToLegacyPeerIds(route);
+    const routeExpiresAt = getRouteExpiry(route, now);
 
     const tsKey = `${address}:${sessionId}:${envelope.type}`;
     const prevTs = this.latestTimestamp.get(tsKey) ?? 0;
@@ -614,7 +655,7 @@ export class PresenceManager extends EventEmitter {
 
     if (envelope.type === 'PRESENCE_OFFLINE') {
       this.removeSession(address, sessionId);
-      if (originNodeId === 'local') this.lastLocalEnvelope = null;
+      if (route.kind === 'local') this.lastLocalEnvelope = null;
     } else {
       const key = `${address}:${sessionId}`;
       const existing = this.sessions.get(key);
@@ -624,8 +665,11 @@ export class PresenceManager extends EventEmitter {
         sessionId,
         firstSeen: existing?.firstSeen ?? now,
         lastSeen: envelope.timestamp,
-        originNodeId,
-        viaPeerId,
+        originNodeId: legacyPeerIds.originNodeId,
+        viaPeerId: legacyPeerIds.viaPeerId,
+        route,
+        routeLastValidated: now,
+        routeExpiresAt,
         clientVersion:
           envelope.type === 'PRESENCE_ANNOUNCE'
             ? (p as PresenceAnnouncePayload).clientVersion
@@ -634,7 +678,7 @@ export class PresenceManager extends EventEmitter {
         signatureValid: true,
       });
       this.addSessionKey(address, key);
-      if (originNodeId === 'local') {
+      if (route.kind === 'local') {
         this.lastLocalEnvelope = envelope as PresenceEnvelope;
       }
       this.emitPresenceUpdate(address, now);
@@ -708,7 +752,12 @@ export class PresenceManager extends EventEmitter {
    * unknown.  Used by the call system to route signaling messages.
    */
   getNodeIdForAddress(address: string): string | null {
-    return this.getAddressAggregate(address).originNodeId;
+    const route = this.getRouteForAddress(address);
+    return route?.kind === 'mesh-node' ? route.id : null;
+  }
+
+  getRouteForAddress(address: string): PresenceRoute | null {
+    return this.getAddressAggregate(address).route;
   }
 
   /** Returns the most-recently-seen active status for an address, or null. */
@@ -752,9 +801,28 @@ export class PresenceManager extends EventEmitter {
       // itself. Relayed sessions may still be reachable through another path,
       // so they should stay online until they naturally time out or refresh
       // via a new route.
-      if (session.originNodeId !== peerId || session.viaPeerId !== peerId) {
+      if (
+        session.route.kind !== 'mesh-node' ||
+        session.originNodeId !== peerId ||
+        session.viaPeerId !== peerId
+      ) {
         continue;
       }
+      this.sessions.delete(key);
+      this.removeSessionKey(session.address, key);
+      changedAddresses.add(session.address);
+    }
+
+    for (const address of changedAddresses) {
+      this.emitPresenceUpdate(address);
+    }
+  }
+
+  invalidateTransportRoutes(routeKind: PresenceRoute['kind']): void {
+    const changedAddresses = new Set<string>();
+
+    for (const [key, session] of this.sessions.entries()) {
+      if (session.route.kind !== routeKind || routeKind === 'local') continue;
       this.sessions.delete(key);
       this.removeSessionKey(session.address, key);
       changedAddresses.add(session.address);
@@ -825,6 +893,12 @@ export class PresenceManager extends EventEmitter {
           nextExpiryAt = expiryAt;
         }
         if (
+          session.routeExpiresAt !== null &&
+          (nextExpiryAt === null || session.routeExpiresAt < nextExpiryAt)
+        ) {
+          nextExpiryAt = session.routeExpiresAt;
+        }
+        if (
           !latestLiveSession ||
           session.lastSeen > latestLiveSession.lastSeen
         ) {
@@ -833,11 +907,18 @@ export class PresenceManager extends EventEmitter {
       }
     }
 
+    const freshestRoute =
+      latestLiveSession && isRouteFresh(latestLiveSession, now)
+        ? latestLiveSession.route
+        : null;
+
     const aggregate: PresenceAddressAggregate = {
       liveSessionCount,
       lastSeen,
       status: latestLiveSession?.status ?? null,
-      originNodeId: latestLiveSession?.originNodeId ?? null,
+      originNodeId:
+        freshestRoute?.kind === 'mesh-node' ? freshestRoute.id : null,
+      route: freshestRoute,
       nextExpiryAt,
     };
 
@@ -903,51 +984,86 @@ export function buildEnvelope(
 // ── Module-level singleton ────────────────────────────────────────────────────
 
 let presenceManager: PresenceManager | null = null;
+let presenceTransportUnsubscribers: Array<() => void> = [];
 
 export function getPresenceManager(): PresenceManager | null {
   return presenceManager;
 }
 
-export function startPresenceManager(p2p: P2PNetwork): PresenceManager {
+export function startPresenceManager(
+  transports: PresenceTransport[] = []
+): PresenceManager {
   if (presenceManager) {
+    for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
+    presenceTransportUnsubscribers = [];
     presenceManager.stopCleanup();
+    presenceManager.stopVerifyPool();
     presenceManager.removeAllListeners();
   }
   presenceManager = new PresenceManager();
+  activePresenceTransports = [...transports];
+  presenceManager.startVerifyPool();
   presenceManager.startCleanup();
-
-  // Feed incoming P2P broadcast messages into the presence manager when they
-  // carry a presence envelope. The P2P layer already gossiped the message to
-  // other peers — no re-broadcast needed here.
-  p2p.on('message', ({ from, via, data }) => {
-    if (
-      data !== null &&
-      typeof data === 'object' &&
-      PRESENCE_MESSAGE_TYPES.has((data as PresenceEnvelope).type)
-    ) {
-      void presenceManager?.handleEnvelope(data, from, via ?? from);
-    }
-  });
-
-  p2p.on('peer-connected', ({ id }) => {
-    // Immediately send our own cached presence to the newly connected peer so
-    // they learn we're online without waiting up to 25 s for the next heartbeat.
-    const cached = presenceManager?.getLastLocalEnvelope();
-    if (cached) {
-      p2p.send(id, cached);
-    }
-  });
-
-  p2p.on('peer-disconnected', ({ id }) => {
-    presenceManager?.removeSessionsForPeer(id);
-  });
+  for (const transport of transports) {
+    const unsubscribe = transport.subscribe({
+      onEnvelope: (envelope, route) => {
+        void presenceManager?.handleEnvelope(envelope, route);
+      },
+      onReady: () => {
+        const cached = presenceManager?.getLastLocalEnvelope();
+        if (!cached) return;
+        void Promise.resolve(transport.publish(cached)).catch((err) => {
+          loggerError('[Presence] Failed to re-publish cached envelope:', err);
+        });
+      },
+      onDegraded: () => {
+        presenceManager?.invalidateTransportRoutes(transport.kind);
+      },
+    });
+    presenceTransportUnsubscribers.push(unsubscribe);
+  }
 
   loggerLog('[Presence] Manager started.');
   return presenceManager;
 }
 
+export async function publishPresenceEnvelope(
+  envelope: PresenceEnvelope
+): Promise<boolean> {
+  const pm = getPresenceManager();
+  if (!pm) return false;
+
+  const accepted = await pm.handleEnvelope(envelope, { kind: 'local' });
+  if (!accepted) return false;
+
+  if (presenceTransportUnsubscribers.length === 0) {
+    return true;
+  }
+
+  let published = false;
+  for (const transport of getActivePresenceTransports()) {
+    try {
+      if (await transport.publish(envelope)) {
+        published = true;
+      }
+    } catch (err) {
+      loggerError('[Presence] Transport publish failed:', err);
+    }
+  }
+  return published;
+}
+
+let activePresenceTransports: PresenceTransport[] = [];
+
+function getActivePresenceTransports(): PresenceTransport[] {
+  return activePresenceTransports;
+}
+
 export function stopPresenceManager(): void {
   if (presenceManager) {
+    for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
+    presenceTransportUnsubscribers = [];
+    activePresenceTransports = [];
     presenceManager.stopVerifyPool();
     presenceManager.stopCleanup();
     presenceManager.removeAllListeners();

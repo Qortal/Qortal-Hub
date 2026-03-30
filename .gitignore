@@ -38,3 +38,16 @@ appimagetool-x86_64.AppImage
 *.bak
 *-fixed.AppImage
 *-secured.AppImage
+
+# PyInstaller rnsd binary (see electron/resources/reticulum/README.md)
+electron/resources/reticulum/*
+!electron/resources/reticulum/README.md
+!electron/resources/reticulum/.gitkeep
+
+# Optional dev-only venv (see electron/resources/reticulum-runtime/README.md)
+electron/resources/reticulum-runtime/*
+!electron/resources/reticulum-runtime/README.md
+!electron/resources/reticulum-runtime/.gitkeep
+
+# PyInstaller / venv build scratch (build-rnsd-frozen.py)
+electron/.build/

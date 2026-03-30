@@ -6,8 +6,23 @@ const { log, warn } = require('./logger');
 
 module.exports = async function afterPack(context) {
   const { appOutDir, electronPlatformName } = context;
+  const plat = (electronPlatformName || '').toLowerCase();
 
-  if (!electronPlatformName.toLowerCase().includes('linux')) return;
+  const rnsd = path.join(appOutDir, 'resources', 'reticulum', 'rnsd');
+  if (
+    fs.existsSync(rnsd) &&
+    (plat.includes('linux') || plat.includes('mac') || plat.includes('darwin'))
+  ) {
+    log('🔧 Marking reticulum/rnsd executable…');
+    try {
+      execSync(`chmod 755 "${rnsd}"`, { stdio: 'inherit' });
+      log('✅ reticulum/rnsd permissions set.');
+    } catch (e) {
+      warn('⚠️ chmod reticulum/rnsd failed:', e.message);
+    }
+  }
+
+  if (!plat.includes('linux')) return;
 
   const chromeSandbox = path.join(appOutDir, 'chrome-sandbox');
   if (!fs.existsSync(chromeSandbox)) {
@@ -17,18 +32,7 @@ module.exports = async function afterPack(context) {
 
   log('🔧 Fixing chrome-sandbox permissions...');
   try {
-    // Set setuid bit (rwsr-xr-x)
     execSync(`chmod 4755 "${chromeSandbox}"`, { stdio: 'inherit' });
-
-    // // Needs root to succeed; if not root, we warn but continue
-    // try {
-    //   execSync(`chown root:root "${chromeSandbox}"`, { stdio: 'inherit' });
-    // } catch (e) {
-    //   warn(
-    //     '⚠️ chown root:root failed (not running as root?). AppImage may refuse to run the sandbox.'
-    //   );
-    // }
-
     log('✅ chrome-sandbox permissions fixed.');
   } catch (e) {
     warn('⚠️ Failed to set chrome-sandbox permissions:', e.message);

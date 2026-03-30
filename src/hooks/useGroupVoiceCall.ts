@@ -8,9 +8,9 @@
  * Audio pipeline:
  *   Microphone → CaptureWorkletNode (audio-worklet thread, VAD + 960-sample framing)
  *   → port.postMessage { frame, vad } → AudioEncoder (Opus ~24kbps, main thread)
- *   → packet framing (v2: metadata inside secretbox; v1 decode fallback) → DataChannel
+ *   → packet framing (v2: metadata inside secretbox; v1 decode fallback) → Reticulum
  *   Forwarder → decrypt-reencrypt skipped; forwarder routes encrypted bytes only
- *   Receiver → DataChannel ← forwarder → jitter buffer (depth below) → drain tick from
+ *   Receiver ← Reticulum forwarder → jitter buffer (depth below) → drain tick from
  *   gcall-jitter-scheduler AudioWorklet (~20ms audio clock) → AudioDecoder (Opus)
  *   → PlaybackWorkletNode per speaker (audio-worklet thread, ring-buffer playback)
  *
@@ -57,22 +57,15 @@ import {
   hasGroupCallSourceWindowMediaActivity,
   type GroupCallWindowMetrics,
   collectActiveSpeakers,
-  computeGroupCallDcTransportReady,
   disposeParticipantAudioState,
   evaluateActiveSpeaker,
   forwardPacketForRole,
   getGroupCallTransportSummary,
   isGroupCallTopologyDuplicateHeartbeat,
-  isGroupCallWebRtcPeerInactive,
   reconcileParticipantSpeaking,
   sameAddressList,
   type RouterTopology,
 } from '../lib/group-call/router';
-import {
-  clearPendingRemoteIceSession,
-  drainPendingRemoteIceSession,
-  pushPendingRemoteIceCandidate,
-} from '../lib/group-call/pendingRemoteIce';
 import {
   ACTIVE_SPEAKER_GAIN,
   GAIN_SMOOTHING_TIME_CONSTANT_S,
@@ -97,21 +90,14 @@ import {
 import {
   decodeAudioPackets,
   encodeAudioPacketV2,
-  encodeAudioPacketV3,
   type DecodedAudioPacket,
 } from '../lib/group-call/audioPacketCodec';
 import { buildMediaKeyCommitmentHex } from '../lib/group-call/mediaKeyCommitment';
-import {
-  getIceServerSourceUrlsForPeer,
-  scheduleLogIceServerSourcesForPeer,
-} from '../lib/webrtc/iceCandidateStats';
-import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
 import {
   buildGcallDiagnosticsExportJson,
   copyGcallDiagnosticsToClipboard,
   downloadGcallDiagnosticsJson,
   gcallDiagnosticsClear,
-  gcallDiagnosticsCollectRtcStats,
   gcallDiagnosticsIngestConsoleArgs,
   gcallDiagnosticsPush,
   truncateGcallDiagAddress,
@@ -275,33 +261,12 @@ const FORWARDER_TIMEOUT_MS = 3_200;
 const TOPOLOGY_HEARTBEAT_MS = 1_500; // forwarder sends GC_TOPOLOGY heartbeat
 /** Occupied-room joiners should wait briefly for the established root's topology before self-electing. */
 const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
-/** Before closing PC on ICE `disconnected`, wait this long for recovery (connId-scoped timer). */
-const WEBRTC_DISCONNECT_GRACE_MS = 12_000;
-const ICE_RESTART_MIN_INTERVAL_MS = 6_000;
-const ICE_RESTART_RECOVERY_GRACE_MS = 5_000;
-const ICE_RESTART_MAX_ATTEMPTS = 2;
-/** Max wait for remote answer after upstream ICE-restart offer (`iceRestartInFlight`). */
-const ICE_RESTART_ANSWER_BUDGET_MS = 20_000;
 /** After root-liveness threshold, defer promotion to next macrotask; inner re-check is the real guard. */
 const ROOT_PROMOTION_POST_DETECT_MS = 0;
 /** Default interval for `runForwarderFailoverChecks` (cluster failover + non-standby nodes). */
 const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 /** Faster poll while global standby so detection + promotion start sooner after root silence. */
 const STANDBY_FAILOVER_POLL_MS = 250;
-/** Periodic self-healing sweep: reopen any upstream DC whose offer was lost or whose
- *  ICE connection failed without triggering a teardown callback. */
-const WEBRTC_ENSURE_INTERVAL_MS = 5_000;
-/** Pre-SDP or downstream: max wait before treating `new`/`connecting` as wedged.
- *  Set to two ensure sweeps + margin so the first periodic tick does not tear down normal ICE. */
-const WEBRTC_CONNECTING_STALE_MS = WEBRTC_ENSURE_INTERVAL_MS * 2 + 2_000; // 12_000
-/** Upstream after offer/answer (`signalingState === 'stable'`) and ICE not `failed`:
- *  silent wedge escape hatch (see shouldReconnectRequiredPeer). */
-const WEBRTC_UPSTREAM_STABLE_MAX_WAIT_MS = 30_000;
-/** Rejoin-driven relay fallback should not wait the full disconnect grace window. */
-const WEBRTC_FAST_DISCONNECTED_RECONNECT_MS = 2_500;
-/** After a required upstream DC closes, give it a short chance to recover before re-dialing. */
-const WEBRTC_DC_RECOVERY_GRACE_MS = 1_500;
-const ICE_SERVER_REFRESH_MIN_INTERVAL_MS = 10_000;
 
 /** Coalesce burst participant-joined/left into one topology election + key pass. */
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
@@ -327,23 +292,9 @@ const PROMOTION_EPOCH_QUIET_MS = 350;
 const MAX_ACTIVE_SPEAKERS_LOCAL = 2;
 const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 
-/** Minimum ms between P2P relay sends to the same peer while their DataChannel
- *  is still negotiating. Caps relay IPC during the WebRTC negotiation window. */
-const RELAY_FALLBACK_MIN_INTERVAL_MS = 200;
-/** Full-rate mesh relay (e.g. isTestingRelay); coalescing + main-process bucket cap load. */
-const RELAY_PRIMARY_MIN_INTERVAL_MS = 0;
-
-type GcallRelayMeshMode = 'fallback' | 'primary';
-const RTC_RECONNECT_HINT_MIN_INTERVAL_MS = 1_500;
-const DOWNSTREAM_SOFT_RECOVERY_MAX_ATTEMPTS = 2;
-const DC_BUFFERED_AMOUNT_HIGH_WATER = 256 * 1024;
-const DC_SEND_BACKOFF_BASE_MS = 120;
-const DC_SEND_BACKOFF_MAX_MS = 1_000;
 const ADAPTIVE_RECOVERY_SCORE_THRESHOLD = 3;
 const ADAPTIVE_RECOVERY_COOLDOWN_MS = 12_000;
 const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 20;
-const STUN_OUTCOME_MIN_SESSION_MS = 15_000;
-const STUN_OUTCOME_MAX_RELAY_DWELL_FRACTION = 0.6;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
 const PERF_LOG_INTERVAL_MS = 10_000;
@@ -352,13 +303,6 @@ const TRANSPORT_HEALTH_REPORT_INTERVAL_MS = 5_000;
 const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 /** Set to "1" in localStorage for verbose mic/capture logs (or enable qortal:gcall-debug). */
 const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
-
-/**
- * In-memory toggle: set `true` locally to force mesh GC_AUDIO only — no DataChannel send path,
- * no `ensureGroupCallWebRtcConnections`. Receiving peers may still use DC unless they flip this too.
- * Keep `false` in committed code.
- */
-const isTestingRelay = false;
 
 /** Max queued decrypt jobs awaiting worker result; oldest dropped under pressure. */
 const PENDING_DECRYPT_MAX = 96;
@@ -398,7 +342,6 @@ const KEY_RECOVERY_REFRESH_DELAY_MS = 3_000;
 const KEY_RECOVERY_REJOIN_DELAY_MS = 8_000;
 /** Schedule key-recovery check after connect if we still have no room key (self-healing). */
 const CONNECTED_NO_KEY_RECOVERY_DELAY_MS = 8_000;
-type DataChannelProfile = 'low-latency' | 'recovery';
 const GCALL_WASM_FEC_EMPTY_STATS = Object.freeze({
   plcFrames: 0,
   fecAttempts: 0,
@@ -464,53 +407,6 @@ function debugWarn(...args: unknown[]): void {
 }
 
 /** Best-effort succeeded candidate-pair line from getStats (helps spot relay vs host/srflx). */
-function debugLogIceSucceededPair(
-  pc: RTCPeerConnection,
-  base: Record<string, string | number | boolean | null | undefined>
-): void {
-  void pc
-    .getStats()
-    .then((report) => {
-      let pair: RTCIceCandidatePairStats | undefined;
-      for (const s of report.values()) {
-        if (
-          s.type === 'candidate-pair' &&
-          (s as RTCIceCandidatePairStats).state === 'succeeded'
-        ) {
-          pair = s as RTCIceCandidatePairStats;
-          break;
-        }
-      }
-      if (!pair) {
-        debugLog('[GCall] ICE pair stats', {
-          ...base,
-          note: 'no_succeeded_pair',
-        });
-        return;
-      }
-      const loc = pair.localCandidateId
-        ? report.get(pair.localCandidateId)
-        : undefined;
-      const rem = pair.remoteCandidateId
-        ? report.get(pair.remoteCandidateId)
-        : undefined;
-      const localType =
-        loc && loc.type === 'local-candidate'
-          ? (loc as { candidateType?: string }).candidateType
-          : undefined;
-      const remoteType =
-        rem && rem.type === 'remote-candidate'
-          ? (rem as { candidateType?: string }).candidateType
-          : undefined;
-      debugLog('[GCall] ICE pair stats', {
-        ...base,
-        localCandidateType: localType,
-        remoteCandidateType: remoteType,
-      });
-    })
-    .catch(() => {});
-}
-
 export function shouldStartGroupCallAudioCapture(opts: {
   pipelineActive: boolean;
   startupInFlight: boolean;
@@ -1066,6 +962,45 @@ function findMyCluster(
   return null;
 }
 
+export function getReticulumTransportTargets(
+  myAddress: string,
+  topology: GroupTopology
+): string[] {
+  if (!myAddress) return [];
+  const topo = normalizeGroupTopologyClusters(topology);
+  const role = computeMyRole(myAddress, topo);
+  const targets = new Set<string>();
+
+  if (role === 'root-forwarder') {
+    for (const cluster of topo.clusters) {
+      if (cluster.forwarder === myAddress) {
+        for (const member of cluster.members) {
+          if (member && member !== myAddress) targets.add(member);
+        }
+      } else if (cluster.forwarder) {
+        targets.add(cluster.forwarder);
+      }
+    }
+  } else if (role === 'cluster-forwarder') {
+    if (topo.rootForwarder && topo.rootForwarder !== myAddress) {
+      targets.add(topo.rootForwarder);
+    }
+    const myCluster = findMyCluster(myAddress, topo);
+    if (myCluster) {
+      for (const member of myCluster.members) {
+        if (member && member !== myAddress) targets.add(member);
+      }
+    }
+  } else {
+    const assignedForwarder = findAssignedForwarder(myAddress, topo);
+    if (assignedForwarder && assignedForwarder !== myAddress) {
+      targets.add(assignedForwarder);
+    }
+  }
+
+  return [...targets];
+}
+
 /** Standby promotion for non-root cluster forwarder failure (hierarchical rooms). */
 function findNonRootClusterStandbyDuty(
   myAddress: string,
@@ -1221,59 +1156,19 @@ class JitterBuffer {
   }
 }
 
-// ── DataChannel manager ────────────────────────────────────────────────────────
-
-interface PeerConnection {
-  pc: RTCPeerConnection;
-  dc: RTCDataChannel | null;
-  address: string;
-  connId: string;
-  role: 'upstream' | 'downstream';
-  createdAtMs: number;
-  lastDcStateChangeAtMs: number;
-  disconnectGraceTimer?: ReturnType<typeof setTimeout>;
-  disconnectStartedAtMs?: number;
-  iceRestartAttempts: number;
-  lastIceRestartAtMs: number;
-  iceRestartInFlight: boolean;
-  /** Failsafe: clear when answer applied (`stable`), `connected`, close, or catch. */
-  iceRestartAnswerBudgetTimer?: ReturnType<typeof setTimeout>;
-  softRecoveryAttempts: number;
-  lastSoftRecoveryAtMs: number;
-}
-
-function isPeerTransportHealthy(entry: PeerConnection): boolean {
-  return (
-    entry.dc?.readyState === 'open' ||
-    entry.pc.connectionState === 'connected' ||
-    entry.pc.iceConnectionState === 'connected' ||
-    entry.pc.iceConnectionState === 'completed'
-  );
-}
-
-function clearIceRestartAnswerBudgetTimerField(entry: PeerConnection): void {
-  if (entry.iceRestartAnswerBudgetTimer !== undefined) {
-    clearTimeout(entry.iceRestartAnswerBudgetTimer);
-    entry.iceRestartAnswerBudgetTimer = undefined;
-  }
-}
-
-function releaseUpstreamIceRestartAnswerGuard(entry: PeerConnection): void {
-  clearIceRestartAnswerBudgetTimerField(entry);
-  entry.iceRestartInFlight = false;
-}
-
 // ── Main hook ──────────────────────────────────────────────────────────────────
 
 export function useGroupVoiceCall(uiActive = false) {
   const userInfo = useAtomValue(userInfoAtom);
-  /** Latest identity for async paths (RTC signal queue, ICE); do not use stale hook closure. */
+  /** Latest identity for async paths; do not use stale hook closure. */
   const userInfoRef = useRef(userInfo);
   userInfoRef.current = userInfo;
 
   const callAudioDevices = useAtomValue(callAudioDevicesAtom);
   const setCallAudioDevices = useSetAtom(callAudioDevicesAtom);
-  const setQortalGroupSelfGcallRoomId = useSetAtom(qortalGroupSelfGcallRoomIdAtom);
+  const setQortalGroupSelfGcallRoomId = useSetAtom(
+    qortalGroupSelfGcallRoomIdAtom as any
+  ) as (value: string | null) => void;
   const myStatus = useAtomValue(myStatusAtom);
   const callAudioPrefsRef = useRef(callAudioDevices);
   callAudioPrefsRef.current = callAudioDevices;
@@ -1426,44 +1321,16 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Last wall time we saw vad true per source (for forwarder hangover after speech). */
   const lastVadTrueAtRef = useRef<Map<string, number>>(new Map());
 
-  // WebRTC peer connections
-  const peerConnectionsRef = useRef<Map<string, PeerConnection>>(new Map());
-  /** Serialized handleRtcSignal work per remote `fromAddress` (avoids overlapping offers / double PC). */
-  const rtcSignalChainsRef = useRef<Map<string, Promise<void>>>(new Map());
-  /**
-   * Trickle ICE keyed by `pendingRemoteIceKey`; survives until drain or session close.
-   * Superseded no-PC keys are inert until `leaveGroupCall` clears the map.
-   */
-  const pendingRemoteIceRef = useRef<Map<string, RTCIceCandidateInit[]>>(
-    new Map()
-  );
   const lastAudioMixUpdateAtRef = useRef(0);
   const lastTuningSnapshotJsonRef = useRef('');
   const opusInBandFecEnabledRef = useRef(false);
-  /** Latest packet handler — `handleRtcSignal` is declared above `handleIncomingAudioPacket`. */
   const handleIncomingAudioPacketRef = useRef<
     (data: ArrayBuffer, fromAddress: string) => void
   >(() => {});
-  /** Latest ensureGroupCallWebRtcConnections; assigned each render after the callback exists. */
-  const ensureGroupCallWebRtcRef = useRef<(topology: GroupTopology) => void>(
-    () => {}
-  );
   const requestMediaRecoveryForPeerRef = useRef<(peerAddress: string) => void>(
     () => {}
   );
-  const gcallIceServersRef = useRef<RTCIceServer[]>(
-    getInitialIceServersFromHub().map((s) => ({ urls: s.urls }))
-  );
-
-  // Upstream DC to assigned forwarder
-  const upstreamDCRef = useRef<RTCDataChannel | null>(null);
-  const upstreamAddressRef = useRef<string | null>(null);
-  const sessionStunBundleRef = useRef<string[]>([]);
-  const sessionObservedStunUrlsRef = useRef<string[]>([]);
   const sessionStartedAtMsRef = useRef<number>(0);
-  const lastIceServerRefreshAtMsRef = useRef<number>(0);
-  const dcSendBackoffUntilRef = useRef<Map<string, number>>(new Map());
-  const dcSendBackoffStreakRef = useRef<Map<string, number>>(new Map());
   const peerRecoveryProfileRef = useRef<
     Map<string, 'low-latency' | 'recovery'>
   >(new Map());
@@ -1512,10 +1379,6 @@ export function useGroupVoiceCall(uiActive = false) {
   const clusterPromotionInFlightRef = useRef(false);
   const clusterFailoverMissStreakRef = useRef<Map<string, number>>(new Map());
   const clusterPromotionCooldownUntilRef = useRef(0);
-  // Periodic self-healing WebRTC ensure loop
-  const webRtcEnsureTimerRef = useRef<ReturnType<typeof setInterval> | null>(
-    null
-  );
   const uiActiveRef = useRef(uiActive);
   const gcallPerfEnabledRef = useRef(readGcallPerfEnabled());
   const gcallPerfRef = useRef(new GcallPerfCollector());
@@ -1557,21 +1420,6 @@ export function useGroupVoiceCall(uiActive = false) {
   const forwardPacketRecvTimestampsRef = useRef<Map<string, number[]>>(
     new Map()
   );
-
-  /** Last mesh send time per peer — fallback vs primary policies do not share one map. */
-  const relayLastSentFallbackRef = useRef<Map<string, number>>(new Map());
-  const relayLastSentPrimaryRef = useRef<Map<string, number>>(new Map());
-  const relayPendingLatestRef = useRef<Map<string, Uint8Array>>(new Map());
-  const relayPumpBusyRef = useRef<Set<string>>(new Set());
-  /** isTestingRelay: batch Opus frames into one v3 wire packet before dispatch. */
-  const relayEncodeAggRef = useRef<{
-    opusFrames: Uint8Array[];
-    seqs: number[];
-    baseTs: number;
-    vad: boolean;
-    flushTimer: ReturnType<typeof setTimeout> | null;
-  } | null>(null);
-  const rtcReconnectHintLastSentAtRef = useRef<Map<string, number>>(new Map());
 
   // Off-thread audio packet decryption worker
   const decryptWorkerRef = useRef<Worker | null>(null);
@@ -1715,87 +1563,6 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Election ──────────────────────────────────────────────────────────────
 
-  const getConnIdTimestamp = useCallback((connId: string): number | null => {
-    const lastDash = connId.lastIndexOf('-');
-    if (lastDash === -1) return null;
-    const ts = Number(connId.slice(lastDash + 1));
-    return Number.isFinite(ts) ? ts : null;
-  }, []);
-
-  const isPeerConnectionInactive = useCallback((entry?: PeerConnection) => {
-    return isGroupCallWebRtcPeerInactive(entry?.pc.connectionState);
-  }, []);
-
-  const shouldReconnectRequiredPeer = useCallback(
-    (entry: PeerConnection | undefined, now = Date.now()): boolean => {
-      if (!entry) return true;
-      if (isPeerConnectionInactive(entry)) return true;
-
-      const state = entry.pc.connectionState;
-      const dcState = entry.dc?.readyState;
-      if (dcState === 'open') return false;
-
-      if (entry.role === 'upstream' && entry.iceRestartInFlight) return false;
-
-      if (state === 'new' || state === 'connecting') {
-        if (
-          entry.role === 'upstream' &&
-          state === 'connecting' &&
-          entry.pc.signalingState === 'have-local-offer' &&
-          entry.iceRestartAttempts > 0 &&
-          entry.pc.iceConnectionState !== 'failed' &&
-          now - entry.lastIceRestartAtMs < ICE_RESTART_ANSWER_BUDGET_MS
-        ) {
-          return false;
-        }
-        const age = now - entry.createdAtMs;
-        if (
-          entry.role === 'upstream' &&
-          entry.pc.signalingState === 'stable' &&
-          entry.pc.iceConnectionState !== 'failed'
-        ) {
-          return age >= WEBRTC_UPSTREAM_STABLE_MAX_WAIT_MS;
-        }
-        return age >= WEBRTC_CONNECTING_STALE_MS;
-      }
-
-      if (state === 'disconnected') {
-        const disconnectedAt =
-          entry.disconnectStartedAtMs ??
-          entry.lastDcStateChangeAtMs ??
-          entry.createdAtMs;
-        if (entry.role === 'upstream') {
-          if (entry.iceRestartInFlight) return false;
-          if (entry.disconnectStartedAtMs) {
-            const softRecoveryBudgetMs =
-              WEBRTC_DISCONNECT_GRACE_MS +
-              entry.iceRestartAttempts * ICE_RESTART_RECOVERY_GRACE_MS;
-            if (now - entry.disconnectStartedAtMs < softRecoveryBudgetMs) {
-              return false;
-            }
-          }
-        }
-        return now - disconnectedAt >= WEBRTC_FAST_DISCONNECTED_RECONNECT_MS;
-      }
-
-      if (entry.role === 'upstream') {
-        if (dcState === 'closing' || dcState === 'closed') {
-          return (
-            now - entry.lastDcStateChangeAtMs >= WEBRTC_DC_RECOVERY_GRACE_MS
-          );
-        }
-        if (state === 'connected') {
-          return (
-            now - entry.lastDcStateChangeAtMs >= WEBRTC_DC_RECOVERY_GRACE_MS
-          );
-        }
-      }
-
-      return false;
-    },
-    [isPeerConnectionInactive]
-  );
-
   const isExpectedUpstreamPeer = useCallback(
     (
       address: string,
@@ -1818,90 +1585,10 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const closePeerConnection = useCallback(
     (
-      peerAddress: string,
-      expectedConnId?: string,
-      reason: 'normal' | 'persistent-disconnect' = 'normal'
-    ) => {
-      const entry = peerConnectionsRef.current.get(peerAddress);
-      if (!entry) {
-        debugLog('[GCall] closePeerConnection skip — no peer entry', {
-          peerAddress,
-          expectedConnId: expectedConnId ?? null,
-          reason,
-        });
-        return;
-      }
-      if (expectedConnId && entry.connId !== expectedConnId) {
-        debugWarn('[GCall] closePeerConnection skip — connId mismatch', {
-          peerAddress,
-          expectedConnId,
-          activeConnId: entry.connId,
-          reason,
-        });
-        return;
-      }
-
-      debugLog('[GCall] closePeerConnection', {
-        peerAddress,
-        connId: entry.connId,
-        role: entry.role,
-        reason,
-        pcConnectionState: entry.pc.connectionState,
-        pcSignalingState: entry.pc.signalingState,
-        iceConnectionState: entry.pc.iceConnectionState,
-        dcReadyState: entry.dc?.readyState ?? null,
-        iceRestartInFlight: entry.iceRestartInFlight,
-        iceRestartAttempts: entry.iceRestartAttempts,
-      });
-
-      if (entry.disconnectGraceTimer) {
-        clearTimeout(entry.disconnectGraceTimer);
-        entry.disconnectGraceTimer = undefined;
-      }
-      clearIceRestartAnswerBudgetTimerField(entry);
-
-      clearPendingRemoteIceSession(
-        pendingRemoteIceRef.current,
-        peerAddress,
-        entry.connId
-      );
-
-      peerConnectionsRef.current.delete(peerAddress);
-      relayLastSentFallbackRef.current.delete(peerAddress);
-      relayLastSentPrimaryRef.current.delete(peerAddress);
-      relayPendingLatestRef.current.delete(peerAddress);
-      rtcReconnectHintLastSentAtRef.current.delete(peerAddress);
-      dcSendBackoffUntilRef.current.delete(peerAddress);
-      dcSendBackoffStreakRef.current.delete(peerAddress);
-      // Clear the per-peer RTC signal chain so a rejoining peer's offers/answers
-      // are not queued behind the stale tail of the old session's promise chain.
-      rtcSignalChainsRef.current.delete(peerAddress);
-      // Reset per-peer instability state so a re-joined connection starts fresh
-      // and does not inherit the recovery DC profile from the previous session.
-      peerInstabilityScoreRef.current.delete(peerAddress);
-      peerRecoveryProfileRef.current.delete(peerAddress);
-      if (reason === 'persistent-disconnect') {
-        metricsRef.current.recordPersistentDisconnectTeardown();
-      }
-
-      if (entry.dc) {
-        if (upstreamDCRef.current === entry.dc) {
-          upstreamDCRef.current = null;
-          upstreamAddressRef.current = null;
-        }
-        try {
-          entry.dc.close();
-        } catch {
-          /* ignore */
-        }
-      }
-
-      try {
-        entry.pc.close();
-      } catch {
-        /* ignore */
-      }
-    },
+      _peerAddress: string,
+      _expectedConnId?: string,
+      _reason: 'normal' | 'persistent-disconnect' = 'normal'
+    ) => {},
     []
   );
 
@@ -1910,7 +1597,7 @@ export function useGroupVoiceCall(uiActive = false) {
     const hasRecoveryPeer = [...peerRecoveryProfileRef.current.values()].some(
       (profile) => profile === 'recovery'
     );
-    const mode: DataChannelProfile =
+    const mode: 'low-latency' | 'recovery' =
       hasRecoveryPeer || now < globalRecoveryUntilMsRef.current
         ? 'recovery'
         : 'low-latency';
@@ -2007,9 +1694,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const getSourceIngressDiagnostic = useCallback(
     (sourceAddr: string) => {
-      const ingressPeerAddress =
-        sourceIngressPeerRef.current.get(sourceAddr) ??
-        (myRoleRef.current === 'participant' ? upstreamAddressRef.current : null);
+      const ingressPeerAddress = sourceIngressPeerRef.current.get(sourceAddr) ?? null;
       if (!ingressPeerAddress) {
         return {
           ingressPeerAddress: null,
@@ -2017,12 +1702,10 @@ export function useGroupVoiceCall(uiActive = false) {
           peerConnectionRole: null,
         };
       }
-      const peerEntry = peerConnectionsRef.current.get(ingressPeerAddress);
       return {
         ingressPeerAddress,
         ingressPeerRole: getPeerTopologyRole(ingressPeerAddress),
-        peerConnectionRole:
-          ingressPeerAddress === RELAY_INGRESS_PEER ? 'relay' : (peerEntry?.role ?? null),
+        peerConnectionRole: ingressPeerAddress === RELAY_INGRESS_PEER ? 'relay' : null,
       };
     },
     [getPeerTopologyRole]
@@ -2063,11 +1746,8 @@ export function useGroupVoiceCall(uiActive = false) {
         if (!ingressPeerAddress || ingressPeerAddress === RELAY_INGRESS_PEER) continue;
         activePeers.add(ingressPeerAddress);
 
-        const peerEntry = peerConnectionsRef.current.get(ingressPeerAddress);
         const ingressPeerConnected =
-          peerEntry?.dc?.readyState === 'open' ||
-          peerEntry?.pc.connectionState === 'connected' ||
-          peerEntry?.pc.iceConnectionState === 'connected';
+          participantsRef.current.has(ingressPeerAddress);
         const lastRecvAt = lastRecvAtRef.current.get(sourceAddr);
         const lastRecvAgeMs =
           lastRecvAt === undefined ? Number.POSITIVE_INFINITY : nowPerf - lastRecvAt;
@@ -2261,18 +1941,6 @@ export function useGroupVoiceCall(uiActive = false) {
         break;
       }
       return count;
-    },
-    []
-  );
-
-  const getDataChannelOptionsForPeer = useCallback(
-    (address: string): RTCDataChannelInit => {
-      const profile =
-        peerRecoveryProfileRef.current.get(address) ?? 'low-latency';
-      if (profile === 'recovery') {
-        return { ordered: false, maxRetransmits: 3 };
-      }
-      return { ordered: false, maxRetransmits: 1 };
     },
     []
   );
@@ -2602,21 +2270,21 @@ export function useGroupVoiceCall(uiActive = false) {
     logTuningSnapshotIfChanged();
     const preMode = metricsRef.current.getSnapshot();
     const myAddress = userInfo?.address ?? '';
-    const dcTransportReady = isTestingRelay
-      ? false
-      : computeGroupCallDcTransportReady(
-          preMode.role,
-          myAddress,
-          topologyRef.current,
-          (addr) =>
-            peerConnectionsRef.current.get(addr)?.dc?.readyState === 'open',
-          upstreamDCRef.current?.readyState === 'open'
-        );
+    const dcTransportReady =
+      Boolean(
+        roomStateRef.current === 'connected' &&
+          topologyRef.current &&
+          myAddress &&
+          getReticulumTransportTargets(myAddress, topologyRef.current).length > 0
+      ) ||
+      (Boolean(roomStateRef.current === 'connected' && myAddress) &&
+        preMode.role === 'root-forwarder');
     const transport = getGroupCallTransportSummary({
       relayPacketsSent: preMode.relayPacketsSent,
       relayPacketsReceived: preMode.relayPacketsReceived,
       lastRelayActivityAtMs: preMode.lastRelayActivityAtMs,
       dcTransportReady,
+      mediaTransport: 'reticulum',
     });
     metricsRef.current.recordTransportMode(transport.mode);
     const base = metricsRef.current.getSnapshot();
@@ -2644,12 +2312,13 @@ export function useGroupVoiceCall(uiActive = false) {
     const reportTransportHealth = window.groupCall?.reportTransportHealth;
     const roomId = roomIdRef.current;
     if (typeof reportTransportHealth !== 'function' || !roomId) return;
-    const healthyPeerAddresses = [...peerConnectionsRef.current.entries()]
-      .filter(
-        ([peerAddress, entry]) =>
-          participantsRef.current.has(peerAddress) && isPeerTransportHealthy(entry)
-      )
-      .map(([peerAddress]) => peerAddress);
+    const healthyPeerAddresses =
+      topologyRef.current && userInfoRef.current?.address
+        ? getReticulumTransportTargets(
+            userInfoRef.current.address,
+            topologyRef.current
+          ).filter((peerAddress) => participantsRef.current.has(peerAddress))
+        : [];
     void reportTransportHealth(roomId, healthyPeerAddresses).catch(() => {});
   }, []);
 
@@ -2813,12 +2482,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const windowMetrics = emitWindowMetrics('manual');
       flushMetrics();
       const live = metricsRef.current.getSnapshot();
-      const webrtcStats = await gcallDiagnosticsCollectRtcStats(
-        [...peerConnectionsRef.current.entries()].map(([addr, e]) => [
-          addr,
-          { pc: e.pc },
-        ])
-      );
+      const webrtcStats = {};
       const context: GcallDiagExportContext = {
         buildMode: import.meta.env.MODE,
         appVersionLabel: '0.0.0',
@@ -2900,14 +2564,6 @@ export function useGroupVoiceCall(uiActive = false) {
     }, 200);
   }, [flushMetrics]);
 
-  /** Queue a fresh ensure pass after peer teardown or a recovery-worthy RTC transition. */
-  const scheduleEnsureAfterIceTeardown = useCallback(() => {
-    queueMicrotask(() => {
-      if (!roomIdRef.current || !topologyRef.current) return;
-      ensureGroupCallWebRtcRef.current(topologyRef.current);
-    });
-  }, []);
-
   const startMetricsFlushLoop = useCallback(() => {
     if (metricsFlushTimerRef.current) return;
     metricsFlushTimerRef.current = setInterval(
@@ -2948,20 +2604,6 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!windowMetricsTimerRef.current) return;
     clearInterval(windowMetricsTimerRef.current);
     windowMetricsTimerRef.current = null;
-  }, []);
-
-  const startWebRtcEnsureLoop = useCallback(() => {
-    if (webRtcEnsureTimerRef.current) return;
-    webRtcEnsureTimerRef.current = setInterval(() => {
-      const topo = topologyRef.current;
-      if (topo) ensureGroupCallWebRtcRef.current(topo);
-    }, WEBRTC_ENSURE_INTERVAL_MS);
-  }, []);
-
-  const stopWebRtcEnsureLoop = useCallback(() => {
-    if (!webRtcEnsureTimerRef.current) return;
-    clearInterval(webRtcEnsureTimerRef.current);
-    webRtcEnsureTimerRef.current = null;
   }, []);
 
   useEffect(() => {
@@ -3009,146 +2651,30 @@ export function useGroupVoiceCall(uiActive = false) {
     [updateMetricResourceCounts]
   );
 
-  const safeSendDataChannel = useCallback(
-    (peerAddress: string, dc: RTCDataChannel, data: ArrayBuffer): boolean => {
-      if (dc.readyState !== 'open') return false;
-      const now = Date.now();
-      const blockedUntil = dcSendBackoffUntilRef.current.get(peerAddress) ?? 0;
-      if (blockedUntil > now) {
-        metricsRef.current.recordDcBackoffDrop();
-        return false;
-      }
-      if (dc.bufferedAmount > DC_BUFFERED_AMOUNT_HIGH_WATER) {
-        const streak =
-          (dcSendBackoffStreakRef.current.get(peerAddress) ?? 0) + 1;
-        dcSendBackoffStreakRef.current.set(peerAddress, streak);
-        const backoffMs = Math.min(
-          DC_SEND_BACKOFF_BASE_MS * Math.pow(2, streak - 1),
-          DC_SEND_BACKOFF_MAX_MS
-        );
-        dcSendBackoffUntilRef.current.set(peerAddress, now + backoffMs);
-        metricsRef.current.recordDcBackpressureDrop();
-        markPeerUnstable(peerAddress);
-        return false;
-      }
-      try {
-        dc.send(data);
-        const streak = dcSendBackoffStreakRef.current.get(peerAddress) ?? 0;
-        if (streak > 0) {
-          dcSendBackoffStreakRef.current.set(peerAddress, streak - 1);
-        }
-        markPeerStable(peerAddress);
-        return true;
-      } catch {
-        dcSendBackoffUntilRef.current.set(
-          peerAddress,
-          now + DC_SEND_BACKOFF_BASE_MS
-        );
-        metricsRef.current.recordDcSendErrorDrop();
-        markPeerUnstable(peerAddress);
-        return false;
-      }
-    },
-    [markPeerStable, markPeerUnstable]
-  );
-
-  const sendPacketToPeer = useCallback(
+  const sendPacketToPeerReticulum = useCallback(
     (address: string, data: ArrayBuffer): boolean => {
-      const pcEntry = peerConnectionsRef.current.get(address);
-      if (pcEntry?.dc?.readyState !== 'open') return false;
-      return safeSendDataChannel(address, pcEntry.dc, data);
-    },
-    [safeSendDataChannel]
-  );
-
-  const pumpMeshRelay = useCallback(
-    async (peerAddress: string, mode: GcallRelayMeshMode) => {
-      if (relayPumpBusyRef.current.has(peerAddress)) return;
-      relayPumpBusyRef.current.add(peerAddress);
-      try {
-        pumpLoop: for (;;) {
-          const roomId = roomIdRef.current;
-          if (!roomId) break;
-
-          const pending = relayPendingLatestRef.current.get(peerAddress);
-          if (!pending) break;
-
-          const minI =
-            mode === 'primary'
-              ? RELAY_PRIMARY_MIN_INTERVAL_MS
-              : RELAY_FALLBACK_MIN_INTERVAL_MS;
-          const lastMap =
-            mode === 'primary'
-              ? relayLastSentPrimaryRef
-              : relayLastSentFallbackRef;
-          const now = Date.now();
-          const last = lastMap.current.get(peerAddress) ?? 0;
-          if (minI > 0 && now - last < minI) {
-            metricsRef.current.recordRelayThrottleDrop(1);
-            await new Promise((r) => setTimeout(r, minI - (now - last)));
-            continue pumpLoop;
-          }
-
-          relayPendingLatestRef.current.delete(peerAddress);
-          lastMap.current.set(peerAddress, Date.now());
-          metricsRef.current.recordRelaySent();
-          scheduleRelayMetricsFlush();
-
-          try {
-            const res = await window.groupCall.sendAudio(
-              roomId,
-              peerAddress,
-              pending
-            );
-            if (!res?.success) metricsRef.current.recordRelayIpcFailure(1);
-          } catch {
-            metricsRef.current.recordRelayIpcFailure(1);
-          }
-        }
-      } finally {
-        relayPumpBusyRef.current.delete(peerAddress);
-      }
-      if (roomIdRef.current && relayPendingLatestRef.current.has(peerAddress)) {
-        void pumpMeshRelay(peerAddress, mode);
-      }
+      const roomId = roomIdRef.current;
+      if (!roomId) return false;
+      const payload = new Uint8Array(data.slice(0));
+      metricsRef.current.recordRelaySent();
+      scheduleRelayMetricsFlush();
+      void window.groupCall
+        .sendAudio(roomId, address, payload)
+        .then((res) => {
+          if (!res?.success) metricsRef.current.recordRelayIpcFailure(1);
+        })
+        .catch(() => {
+          metricsRef.current.recordRelayIpcFailure(1);
+        });
+      return true;
     },
     [scheduleRelayMetricsFlush]
   );
 
-  const enqueueMeshRelaySend = useCallback(
-    (peerAddress: string, packet: Uint8Array, mode: GcallRelayMeshMode) => {
-      if (relayPendingLatestRef.current.has(peerAddress)) {
-        metricsRef.current.recordRelayCoalesceSuperseded(1);
-      }
-      relayPendingLatestRef.current.set(peerAddress, new Uint8Array(packet));
-      void pumpMeshRelay(peerAddress, mode);
-    },
-    [pumpMeshRelay]
-  );
-
-  /**
-   * Like sendPacketToPeer but with mesh relay fallback: when the peer's DC is not
-   * open or safeSendDataChannel fails, audio uses GC_AUDIO. Fallback mode rate-limits
-   * during negotiation; primary mode (isTestingRelay) sends at full frame rate with
-   * newest-frame-wins coalescing per peer.
-   */
-  const sendPacketToPeerWithRelay = useCallback(
-    (address: string, data: ArrayBuffer): boolean => {
-      const meshMode: GcallRelayMeshMode = isTestingRelay
-        ? 'primary'
-        : 'fallback';
-      if (!isTestingRelay) {
-        const pcEntry = peerConnectionsRef.current.get(address);
-        if (pcEntry?.dc?.readyState === 'open') {
-          const sent = safeSendDataChannel(address, pcEntry.dc, data);
-          if (sent) return true;
-        }
-      }
-      if (!roomIdRef.current) return false;
-      enqueueMeshRelaySend(address, new Uint8Array(data), meshMode);
-      return true;
-    },
-    [enqueueMeshRelaySend, safeSendDataChannel]
+  const sendPacketToPeer = useCallback(
+    (address: string, data: ArrayBuffer): boolean =>
+      sendPacketToPeerReticulum(address, data),
+    [sendPacketToPeerReticulum]
   );
 
   const flushPendingDecryptMap = useCallback(() => {
@@ -3302,7 +2828,7 @@ export function useGroupVoiceCall(uiActive = false) {
             myAddress,
             sourceAddr,
             wireForForward,
-            sendPacketToPeerWithRelay
+            sendPacketToPeer
           );
           if (forwarded > 0)
             metricsRef.current.recordPacketForwarded(forwarded);
@@ -3374,7 +2900,7 @@ export function useGroupVoiceCall(uiActive = false) {
     [
       getForwardRecipientCountForDiagnostics,
       recordInterArrivalForPlayout,
-      sendPacketToPeerWithRelay,
+      sendPacketToPeer,
       updateMetricResourceCounts,
       userInfo?.address,
     ]
@@ -3466,1216 +2992,7 @@ export function useGroupVoiceCall(uiActive = false) {
     [flushPendingDecryptMap]
   );
 
-  // ── WebRTC DataChannel connections ─────────────────────────────────────────
-
-  const captureSessionStunBundleIfNeeded = useCallback(() => {
-    if (sessionStunBundleRef.current.length > 0) return;
-    const urls = gcallIceServersRef.current
-      .map((server) =>
-        typeof server.urls === 'string' ? server.urls : server.urls?.[0]
-      )
-      .filter(
-        (url): url is string => typeof url === 'string' && url.length > 0
-      );
-    if (urls.length > 0) {
-      sessionStunBundleRef.current = [...new Set(urls)];
-    }
-  }, []);
-
-  const refreshGroupCallIceServers = useCallback(
-    async (
-      reason: string,
-      opts?: { force?: boolean; peerAddress?: string; connId?: string }
-    ): Promise<boolean> => {
-      const w = window as Window & {
-        hub?: { getIceServers?: () => Promise<{ urls: string }[]> };
-      };
-      if (!w.hub?.getIceServers) return false;
-      const now = Date.now();
-      if (
-        opts?.force !== true &&
-        now - lastIceServerRefreshAtMsRef.current <
-          ICE_SERVER_REFRESH_MIN_INTERVAL_MS
-      ) {
-        return false;
-      }
-      lastIceServerRefreshAtMsRef.current = now;
-      try {
-        const list = await w.hub.getIceServers();
-        if (!Array.isArray(list) || list.length === 0) return false;
-        const nextIceServers = list.map((s) => ({ urls: s.urls }));
-        gcallIceServersRef.current = nextIceServers;
-        const urls = nextIceServers
-          .map((server) =>
-            typeof server.urls === 'string' ? server.urls : server.urls?.[0]
-          )
-          .filter(
-            (url): url is string => typeof url === 'string' && url.length > 0
-          );
-        debugLog('[GCall] Refreshed ICE servers', {
-          reason,
-          peerAddress: opts?.peerAddress ?? null,
-          connId: opts?.connId ?? null,
-          urls,
-        });
-        if (opts?.peerAddress && opts?.connId) {
-          const entry = peerConnectionsRef.current.get(opts.peerAddress);
-          if (
-            entry?.connId === opts.connId &&
-            entry.pc.signalingState !== 'closed'
-          ) {
-            try {
-              entry.pc.setConfiguration({ iceServers: nextIceServers });
-            } catch (error) {
-              debugWarn('[GCall] Failed to apply refreshed ICE servers', {
-                reason,
-                peerAddress: opts.peerAddress,
-                connId: opts.connId,
-                error,
-              });
-            }
-          }
-        }
-        return true;
-      } catch (error) {
-        debugWarn('[GCall] Failed to refresh ICE servers', {
-          reason,
-          peerAddress: opts?.peerAddress ?? null,
-          connId: opts?.connId ?? null,
-          error,
-        });
-        return false;
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (isTestingRelay) {
-      debugLog(
-        '[GCall] Relay-only test mode — WebRTC ensure disabled; sends use mesh GC_AUDIO (isTestingRelay=true in useGroupVoiceCall).'
-      );
-      return;
-    }
-    void refreshGroupCallIceServers('initial-load', { force: true });
-    const id = setInterval(() => {
-      void refreshGroupCallIceServers('periodic-refresh');
-    }, 120_000);
-    return () => clearInterval(id);
-  }, [refreshGroupCallIceServers]);
-
-  const captureObservedIceServerSources = useCallback(
-    async (pc: RTCPeerConnection, label: string) => {
-      try {
-        const observedUrls = await getIceServerSourceUrlsForPeer(pc);
-        if (observedUrls.length === 0) return;
-        sessionObservedStunUrlsRef.current = [
-          ...new Set([...sessionObservedStunUrlsRef.current, ...observedUrls]),
-        ];
-        debugLog('[GCall] Observed ICE source urls', {
-          label,
-          urls: observedUrls,
-        });
-        if (window.hub?.reportObservedStunSources) {
-          void window.hub
-            .reportObservedStunSources(observedUrls)
-            .catch(() => {});
-        }
-      } catch {
-        /* ignore */
-      }
-    },
-    []
-  );
-
-  const attemptUpstreamIceRestart = useCallback(
-    async (peerAddress: string, connId: string): Promise<boolean> => {
-      const entry = peerConnectionsRef.current.get(peerAddress);
-      const ui = userInfoRef.current;
-      if (
-        !entry ||
-        entry.connId !== connId ||
-        entry.role !== 'upstream' ||
-        !ui?.address
-      ) {
-        return false;
-      }
-      const now = Date.now();
-      if (entry.iceRestartInFlight) return false;
-      if (entry.iceRestartAttempts >= ICE_RESTART_MAX_ATTEMPTS) return false;
-      if (now - entry.lastIceRestartAtMs < ICE_RESTART_MIN_INTERVAL_MS)
-        return false;
-      if (entry.pc.signalingState === 'closed') return false;
-
-      clearIceRestartAnswerBudgetTimerField(entry);
-      entry.iceRestartInFlight = true;
-      entry.iceRestartAttempts++;
-      entry.lastIceRestartAtMs = now;
-      metricsRef.current.recordIceRestartAttempt();
-      markPeerUnstable(peerAddress);
-      debugLog('[GCall] Attempting upstream ICE restart', {
-        peerAddress,
-        connId,
-        attempt: entry.iceRestartAttempts,
-      });
-      try {
-        await refreshGroupCallIceServers('upstream-ice-restart', {
-          peerAddress,
-          connId,
-        });
-        const offer = await entry.pc.createOffer({ iceRestart: true });
-        await entry.pc.setLocalDescription(offer);
-        const ts = Date.now();
-        const sig = await signGroupCallFields({
-          type: 'GC_RTC_OFFER',
-          roomId: roomIdRef.current,
-          fromAddress: ui.address,
-          toAddress: peerAddress,
-          connId,
-          fromPublicKey: ui.publicKey ?? '',
-          timestamp: ts,
-        }).catch(() => '');
-        if (!sig) {
-          const latest = peerConnectionsRef.current.get(peerAddress);
-          if (latest?.connId === connId) {
-            releaseUpstreamIceRestartAnswerGuard(latest);
-          }
-          return false;
-        }
-        await window.groupCall.sendRtcSignal(
-          roomIdRef.current,
-          ui.address,
-          peerAddress,
-          'offer',
-          offer.sdp,
-          connId,
-          sig,
-          ui.publicKey ?? '',
-          ts
-        );
-        debugLog('[GCall] Upstream ICE restart offer sent', {
-          peerAddress,
-          connId,
-        });
-        const latestAfterSend = peerConnectionsRef.current.get(peerAddress);
-        if (latestAfterSend?.connId === connId) {
-          clearIceRestartAnswerBudgetTimerField(latestAfterSend);
-          latestAfterSend.iceRestartAnswerBudgetTimer = setTimeout(() => {
-            const cur = peerConnectionsRef.current.get(peerAddress);
-            if (cur?.connId !== connId) return;
-            cur.iceRestartAnswerBudgetTimer = undefined;
-            cur.iceRestartInFlight = false;
-          }, ICE_RESTART_ANSWER_BUDGET_MS) as ReturnType<typeof setTimeout>;
-        }
-        return true;
-      } catch (error) {
-        debugWarn('[GCall] Upstream ICE restart failed', {
-          peerAddress,
-          connId,
-          error,
-        });
-        const latest = peerConnectionsRef.current.get(peerAddress);
-        if (latest?.connId === connId) {
-          releaseUpstreamIceRestartAnswerGuard(latest);
-        }
-        return false;
-      }
-    },
-    [markPeerUnstable, refreshGroupCallIceServers]
-  );
-
-  const attemptDownstreamSoftRecovery = useCallback(
-    async (peerAddress: string, connId: string): Promise<boolean> => {
-      const entry = peerConnectionsRef.current.get(peerAddress);
-      if (!entry || entry.connId !== connId || entry.role !== 'downstream')
-        return false;
-      const ui = userInfoRef.current;
-      if (!ui?.address || !roomIdRef.current) return false;
-      const now = Date.now();
-      if (entry.softRecoveryAttempts >= DOWNSTREAM_SOFT_RECOVERY_MAX_ATTEMPTS) {
-        return false;
-      }
-      if (now - entry.lastSoftRecoveryAtMs < ICE_RESTART_RECOVERY_GRACE_MS) {
-        return false;
-      }
-      const lastHint =
-        rtcReconnectHintLastSentAtRef.current.get(peerAddress) ?? 0;
-      if (now - lastHint < RTC_RECONNECT_HINT_MIN_INTERVAL_MS) {
-        return false;
-      }
-      entry.softRecoveryAttempts++;
-      entry.lastSoftRecoveryAtMs = now;
-      rtcReconnectHintLastSentAtRef.current.set(peerAddress, now);
-      debugLog('[GCall] Requesting downstream soft recovery', {
-        peerAddress,
-        connId,
-        attempt: entry.softRecoveryAttempts,
-      });
-      await window.groupCall
-        .sendRtcSignal(
-          roomIdRef.current,
-          ui.address,
-          peerAddress,
-          'reconnect',
-          null,
-          connId
-        )
-        .catch(() => {});
-      return true;
-    },
-    []
-  );
-
-  const queuePeerRecoveryCheck = useCallback(
-    (peerAddress: string, connId: string, delayMs: number) => {
-      const entry = peerConnectionsRef.current.get(peerAddress);
-      if (!entry || entry.connId !== connId || entry.disconnectGraceTimer)
-        return;
-      entry.disconnectGraceTimer = setTimeout(() => {
-        const ent = peerConnectionsRef.current.get(peerAddress);
-        if (!ent || ent.connId !== connId) return;
-        ent.disconnectGraceTimer = undefined;
-        const st = ent.pc.connectionState;
-        if (st === 'connected') return;
-        if (st !== 'disconnected' && st !== 'failed') return;
-        if (ent.role === 'upstream') {
-          void attemptUpstreamIceRestart(peerAddress, connId).then(
-            (restarted) => {
-              if (restarted) {
-                queuePeerRecoveryCheck(
-                  peerAddress,
-                  connId,
-                  ICE_RESTART_RECOVERY_GRACE_MS
-                );
-                return;
-              }
-              closePeerConnection(peerAddress, connId, 'persistent-disconnect');
-              scheduleEnsureAfterIceTeardown();
-            }
-          );
-          return;
-        }
-        void attemptDownstreamSoftRecovery(peerAddress, connId).then(
-          (restarted) => {
-            if (restarted) {
-              queuePeerRecoveryCheck(
-                peerAddress,
-                connId,
-                ICE_RESTART_RECOVERY_GRACE_MS
-              );
-              return;
-            }
-            closePeerConnection(peerAddress, connId, 'persistent-disconnect');
-            scheduleEnsureAfterIceTeardown();
-          }
-        );
-      }, delayMs);
-    },
-    [
-      attemptDownstreamSoftRecovery,
-      attemptUpstreamIceRestart,
-      closePeerConnection,
-      scheduleEnsureAfterIceTeardown,
-    ]
-  );
-
-  const createPeerConnection = useCallback(
-    (
-      peerAddress: string,
-      connId: string,
-      role: 'upstream' | 'downstream'
-    ): RTCPeerConnection => {
-      captureSessionStunBundleIfNeeded();
-      const createdAtMs = Date.now();
-      debugLog('[GCall] createPeerConnection', {
-        peerAddress,
-        connId,
-        role,
-      });
-      const pc = new RTCPeerConnection({
-        iceServers: gcallIceServersRef.current,
-      });
-      closePeerConnection(peerAddress);
-      peerConnectionsRef.current.set(peerAddress, {
-        pc,
-        dc: null,
-        address: peerAddress,
-        connId,
-        role,
-        createdAtMs,
-        lastDcStateChangeAtMs: createdAtMs,
-        disconnectStartedAtMs: undefined,
-        iceRestartAttempts: 0,
-        lastIceRestartAtMs: 0,
-        iceRestartInFlight: false,
-        softRecoveryAttempts: 0,
-        lastSoftRecoveryAtMs: 0,
-      });
-
-      const logRtcNego = (tag: string) => {
-        const ent = peerConnectionsRef.current.get(peerAddress);
-        const match = ent?.connId === connId;
-        debugLog('[GCall] rtcNego', {
-          tag,
-          role,
-          peerAddress,
-          connId,
-          mapEntryMatch: match,
-          ageMs: match && ent ? Date.now() - ent.createdAtMs : null,
-          ice: pc.iceConnectionState,
-          pcConn: pc.connectionState,
-          signaling: pc.signalingState,
-          iceGather: pc.iceGatheringState,
-          dc: match && ent ? (ent.dc?.readyState ?? null) : null,
-        });
-      };
-
-      pc.onicecandidate = (e) => {
-        const u = userInfoRef.current;
-        if (e.candidate && u?.address) {
-          window.groupCall.sendRtcSignal(
-            roomIdRef.current,
-            u.address,
-            peerAddress,
-            'ice',
-            e.candidate.toJSON(),
-            connId
-          );
-        } else if (!e.candidate) {
-          logRtcNego('ice:end-of-candidates');
-        }
-      };
-
-      pc.addEventListener('iceconnectionstatechange', () => {
-        logRtcNego(`iceConn:${pc.iceConnectionState}`);
-        const ent = peerConnectionsRef.current.get(peerAddress);
-        if (
-          ent?.connId === connId &&
-          (pc.iceConnectionState === 'connected' ||
-            pc.iceConnectionState === 'completed')
-        ) {
-          debugLogIceSucceededPair(pc, {
-            role,
-            peerAddress,
-            connId,
-          });
-        }
-      });
-
-      pc.addEventListener('icegatheringstatechange', () => {
-        logRtcNego(`iceGather:${pc.iceGatheringState}`);
-        if (pc.iceGatheringState === 'complete') {
-          const label = `[GCall ICE] ${role} → ${peerAddress} (${connId})`;
-          scheduleLogIceServerSourcesForPeer(pc, label);
-          window.setTimeout(() => {
-            void captureObservedIceServerSources(pc, label);
-          }, 150);
-        }
-      });
-
-      pc.addEventListener('signalingstatechange', () => {
-        const ent = peerConnectionsRef.current.get(peerAddress);
-        if (!ent || ent.connId !== connId) return;
-        if (pc.signalingState !== 'stable') return;
-        releaseUpstreamIceRestartAnswerGuard(ent);
-      });
-
-      pc.addEventListener('connectionstatechange', () => {
-        const state = pc.connectionState;
-        logRtcNego(`pcConn:${state}`);
-        const entry = peerConnectionsRef.current.get(peerAddress);
-        metricsRef.current.recordPcConnectionStateTransition(state);
-
-        if (!entry || entry.connId !== connId) return;
-
-        if (state === 'closed') {
-          closePeerConnection(peerAddress, connId, 'normal');
-          scheduleEnsureAfterIceTeardown();
-          return;
-        }
-
-        if (state === 'connected') {
-          if (entry.disconnectGraceTimer) {
-            clearTimeout(entry.disconnectGraceTimer);
-            entry.disconnectGraceTimer = undefined;
-          }
-          clearIceRestartAnswerBudgetTimerField(entry);
-          if (entry.disconnectStartedAtMs) {
-            const recoveryMs = Date.now() - entry.disconnectStartedAtMs;
-            metricsRef.current.recordRecoveryDuration(recoveryMs);
-            if (entry.iceRestartAttempts > 0) {
-              metricsRef.current.recordIceRestartSuccess();
-            }
-            entry.disconnectStartedAtMs = undefined;
-          }
-          entry.iceRestartAttempts = 0;
-          entry.iceRestartInFlight = false;
-          entry.softRecoveryAttempts = 0;
-          entry.lastSoftRecoveryAtMs = 0;
-          markPeerStable(peerAddress);
-          return;
-        }
-
-        if (state === 'disconnected' || state === 'failed') {
-          markPeerUnstable(peerAddress);
-          if (!entry.disconnectStartedAtMs) {
-            entry.disconnectStartedAtMs = Date.now();
-          }
-          void refreshGroupCallIceServers('connection-state-recovery', {
-            peerAddress,
-            connId,
-          });
-          queuePeerRecoveryCheck(
-            peerAddress,
-            connId,
-            state === 'failed' ? 0 : WEBRTC_DISCONNECT_GRACE_MS
-          );
-        }
-      });
-
-      return pc;
-    },
-    [
-      captureSessionStunBundleIfNeeded,
-      captureObservedIceServerSources,
-      closePeerConnection,
-      markPeerStable,
-      markPeerUnstable,
-      queuePeerRecoveryCheck,
-      refreshGroupCallIceServers,
-      scheduleEnsureAfterIceTeardown,
-    ]
-  );
-
-  /** Connect upstream (as participant/cluster-forwarder, send to forwarder). */
-  const connectUpstream = useCallback(
-    async (forwarderAddress: string) => {
-      if (!userInfo?.address) return;
-      debugLog('[GCall] connectUpstream →', forwarderAddress);
-      const connId = `up-${userInfo.address}-${forwarderAddress}-${Date.now()}`;
-      const pc = createPeerConnection(forwarderAddress, connId, 'upstream');
-      const dc = pc.createDataChannel(
-        'audio',
-        getDataChannelOptionsForPeer(forwarderAddress)
-      );
-      dc.binaryType = 'arraybuffer';
-
-      debugLog('[GCall] Upstream DC created', {
-        forwarderAddress,
-        connId,
-        dcLabel: dc.label,
-        dcReadyState: dc.readyState,
-      });
-
-      const pcEntry = peerConnectionsRef.current.get(forwarderAddress);
-      if (pcEntry) {
-        pcEntry.dc = dc;
-        pcEntry.lastDcStateChangeAtMs = Date.now();
-      }
-
-      dc.onopen = () => {
-        const latest = peerConnectionsRef.current.get(forwarderAddress);
-        if (latest?.connId !== connId) return;
-        latest.lastDcStateChangeAtMs = Date.now();
-        latest.softRecoveryAttempts = 0;
-        latest.lastSoftRecoveryAtMs = 0;
-        debugLog('[GCall] Upstream DC opened to', forwarderAddress, {
-          connId,
-          ageSincePcCreatedMs: Date.now() - latest.createdAtMs,
-          ice: latest.pc.iceConnectionState,
-          pcConn: latest.pc.connectionState,
-        });
-        upstreamDCRef.current = dc;
-        upstreamAddressRef.current = forwarderAddress;
-        metricsRef.current.recordDcOpen();
-        // DC is now open — clear the relay rate-limiter entry so the relay is
-        // available immediately if this DC closes later.
-        relayLastSentFallbackRef.current.delete(forwarderAddress);
-        relayLastSentPrimaryRef.current.delete(forwarderAddress);
-        relayPendingLatestRef.current.delete(forwarderAddress);
-        rtcReconnectHintLastSentAtRef.current.delete(forwarderAddress);
-        markPeerStable(forwarderAddress);
-        flushMetrics();
-      };
-
-      dc.onclose = () => {
-        const latest = peerConnectionsRef.current.get(forwarderAddress);
-        if (latest?.connId === connId) {
-          latest.lastDcStateChangeAtMs = Date.now();
-        }
-        debugLog('[GCall] Upstream DC closed to', forwarderAddress, { connId });
-        metricsRef.current.recordDcClose();
-        markPeerUnstable(forwarderAddress);
-        if (upstreamDCRef.current === dc) {
-          upstreamDCRef.current = null;
-          upstreamAddressRef.current = null;
-        }
-        flushMetrics();
-        scheduleEnsureAfterIceTeardown();
-      };
-
-      dc.onerror = () => {
-        const latest = peerConnectionsRef.current.get(forwarderAddress);
-        if (latest?.connId === connId) {
-          latest.lastDcStateChangeAtMs = Date.now();
-        }
-        metricsRef.current.recordDcError();
-        markPeerUnstable(forwarderAddress);
-        debugLog('[GCall] Upstream DC error', { forwarderAddress, connId });
-        flushMetrics();
-        scheduleEnsureAfterIceTeardown();
-      };
-
-      // DataChannels are bidirectional: the forwarder sends audio (e.g. other
-      // speakers' frames) back down through the same channel.  We must handle
-      // those incoming frames here or they are silently discarded.
-      dc.onmessage = (ev) => {
-        handleIncomingAudioPacket(ev.data as ArrayBuffer, forwarderAddress);
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const ts = Date.now();
-      const sig = await signGroupCallFields({
-        type: 'GC_RTC_OFFER',
-        roomId: roomIdRef.current,
-        fromAddress: userInfo.address,
-        toAddress: forwarderAddress,
-        connId,
-        fromPublicKey: userInfo.publicKey ?? '',
-        timestamp: ts,
-      }).catch(() => '');
-      if (!sig) return; // signing failed — don't send unsigned RTC offer
-
-      await window.groupCall.sendRtcSignal(
-        roomIdRef.current,
-        userInfo.address,
-        forwarderAddress,
-        'offer',
-        offer.sdp,
-        connId,
-        sig,
-        userInfo.publicKey ?? '',
-        ts
-      );
-      debugLog('[GCall] Sent upstream RTC offer', {
-        forwarderAddress,
-        connId,
-      });
-    },
-    [
-      createPeerConnection,
-      flushMetrics,
-      getDataChannelOptionsForPeer,
-      markPeerStable,
-      markPeerUnstable,
-      scheduleEnsureAfterIceTeardown,
-      userInfo,
-    ]
-  );
-
-  const requestRtcReconnectHint = useCallback(
-    async (memberAddress: string, connId: string) => {
-      const ui = userInfoRef.current;
-      if (!ui?.address || !roomIdRef.current) return;
-      const now = Date.now();
-      const lastHint =
-        rtcReconnectHintLastSentAtRef.current.get(memberAddress) ?? 0;
-      if (now - lastHint < RTC_RECONNECT_HINT_MIN_INTERVAL_MS) return;
-      rtcReconnectHintLastSentAtRef.current.set(memberAddress, now);
-      debugLog(
-        '[GCall] Requesting immediate RTC reconnect from',
-        memberAddress,
-        {
-          connId,
-        }
-      );
-      await window.groupCall
-        .sendRtcSignal(
-          roomIdRef.current,
-          ui.address,
-          memberAddress,
-          'reconnect',
-          null,
-          connId
-        )
-        .catch(() => {});
-    },
-    []
-  );
-
-  const reconnectExpectedUpstreamPeer = useCallback(
-    async (address: string, hintedConnId?: string): Promise<boolean> => {
-      if (!isExpectedUpstreamPeer(address)) return false;
-
-      const existing = peerConnectionsRef.current.get(address);
-      if (existing && hintedConnId && existing.connId !== hintedConnId) {
-        const existingTs = getConnIdTimestamp(existing.connId);
-        const hintedTs = getConnIdTimestamp(hintedConnId);
-        if (existingTs !== null && hintedTs !== null && existingTs > hintedTs) {
-          debugLog(
-            '[GCall] Ignoring stale RTC reconnect hint from',
-            address,
-            'hint:',
-            hintedConnId,
-            'current:',
-            existing.connId
-          );
-          return false;
-        }
-      }
-
-      if (
-        existing?.dc?.readyState === 'open' &&
-        (!hintedConnId || existing.connId === hintedConnId)
-      ) {
-        return true;
-      }
-
-      if (existing && (!hintedConnId || existing.connId === hintedConnId)) {
-        debugLog('[GCall] rtcNego', {
-          tag: 'reconnectExpectedUpstream',
-          role: existing.role,
-          peerAddress: address,
-          connId: existing.connId,
-          hintedConnId: hintedConnId ?? null,
-          ageMs: Date.now() - existing.createdAtMs,
-          ice: existing.pc.iceConnectionState,
-          pcConn: existing.pc.connectionState,
-          signaling: existing.pc.signalingState,
-          iceGather: existing.pc.iceGatheringState,
-          dc: existing.dc?.readyState ?? null,
-        });
-      }
-
-      if (
-        existing &&
-        existing.role === 'upstream' &&
-        (!hintedConnId || existing.connId === hintedConnId)
-      ) {
-        const restarted = await attemptUpstreamIceRestart(
-          address,
-          existing.connId
-        );
-        if (restarted) {
-          return true;
-        }
-      }
-
-      if (existing) {
-        closePeerConnection(address, existing.connId);
-      }
-      void connectUpstream(address);
-      return true;
-    },
-    [
-      attemptUpstreamIceRestart,
-      closePeerConnection,
-      connectUpstream,
-      getConnIdTimestamp,
-      isExpectedUpstreamPeer,
-    ]
-  );
-
-  /** Forwarder fallback: ask the member to recover upstream immediately. */
-  const setupDownstreamChannel = useCallback(
-    async (memberAddress: string, connId?: string) => {
-      const reconnectId = connId ?? `reconnect-${memberAddress}-${Date.now()}`;
-      debugLog('[GCall] Requesting downstream hard reconnect', {
-        memberAddress,
-        connId: reconnectId,
-      });
-      await requestRtcReconnectHint(memberAddress, reconnectId);
-    },
-    [requestRtcReconnectHint]
-  );
-  requestMediaRecoveryForPeerRef.current = (peerAddress: string) => {
-    const entry = peerConnectionsRef.current.get(peerAddress);
-    if (!entry) return;
-    if (entry.role === 'upstream') {
-      void reconnectExpectedUpstreamPeer(peerAddress, entry.connId);
-      return;
-    }
-    void setupDownstreamChannel(peerAddress, entry.connId);
-  };
-
-  /** Handle incoming RTC signal (offer/answer/ice/reconnect). Serialized per `fromAddress`. */
-  const handleRtcSignal = useCallback(
-    (payload: any) => {
-      const fromAddress = payload?.fromAddress;
-      if (typeof fromAddress !== 'string' || !fromAddress) return;
-
-      const map = rtcSignalChainsRef.current;
-      const prev = map.get(fromAddress) ?? Promise.resolve();
-      const next = prev.then(async () => {
-        const { type, connId, sdp, candidate } = payload;
-        const ui = userInfoRef.current;
-        if (!ui?.address) return;
-        debugLog('[GCall] handleRtcSignal type:', type, 'from:', fromAddress);
-
-        if (type === 'offer') {
-          const existing = peerConnectionsRef.current.get(fromAddress);
-          if (
-            existing &&
-            existing.connId !== connId &&
-            !isPeerConnectionInactive(existing)
-          ) {
-            const existingTs = getConnIdTimestamp(existing.connId);
-            const incomingTs = getConnIdTimestamp(connId);
-            if (
-              existingTs !== null &&
-              incomingTs !== null &&
-              incomingTs < existingTs
-            ) {
-              debugLog(
-                '[GCall] Ignoring stale RTC offer from',
-                fromAddress,
-                'connId:',
-                connId,
-                'current:',
-                existing.connId
-              );
-              return;
-            }
-          }
-
-          const pc = createPeerConnection(fromAddress, connId, 'downstream');
-
-          pc.ondatachannel = (e) => {
-            const dc = e.channel;
-            dc.binaryType = 'arraybuffer';
-            debugLog('[GCall] Downstream DC received from', fromAddress, {
-              connId,
-              channel: dc.label,
-              dcReadyState: dc.readyState,
-            });
-            dc.onopen = () => {
-              const latest = peerConnectionsRef.current.get(fromAddress);
-              const match = latest?.connId === connId;
-              if (match && latest) {
-                latest.lastDcStateChangeAtMs = Date.now();
-                latest.softRecoveryAttempts = 0;
-                latest.lastSoftRecoveryAtMs = 0;
-              }
-              debugLog('[GCall] Downstream DC opened from', fromAddress, {
-                connId,
-                mapEntryMatch: match,
-                ageSincePcCreatedMs:
-                  match && latest ? Date.now() - latest.createdAtMs : null,
-                ice: match && latest ? latest.pc.iceConnectionState : null,
-                pcConn: match && latest ? latest.pc.connectionState : null,
-              });
-              metricsRef.current.recordDcOpen();
-              markPeerStable(fromAddress);
-              relayLastSentFallbackRef.current.delete(fromAddress);
-              relayLastSentPrimaryRef.current.delete(fromAddress);
-              relayPendingLatestRef.current.delete(fromAddress);
-              rtcReconnectHintLastSentAtRef.current.delete(fromAddress);
-              flushMetrics();
-            };
-            dc.onclose = () => {
-              const latest = peerConnectionsRef.current.get(fromAddress);
-              if (latest?.connId === connId) {
-                latest.lastDcStateChangeAtMs = Date.now();
-              }
-              debugLog('[GCall] Downstream DC closed from', fromAddress, {
-                connId,
-              });
-              metricsRef.current.recordDcClose();
-              markPeerUnstable(fromAddress);
-              flushMetrics();
-            };
-            dc.onerror = () => {
-              const latest = peerConnectionsRef.current.get(fromAddress);
-              if (latest?.connId === connId) {
-                latest.lastDcStateChangeAtMs = Date.now();
-              }
-              metricsRef.current.recordDcError();
-              markPeerUnstable(fromAddress);
-              debugLog('[GCall] Downstream DC error', { fromAddress, connId });
-              flushMetrics();
-            };
-            dc.onmessage = (ev) => {
-              handleIncomingAudioPacketRef.current(
-                ev.data as ArrayBuffer,
-                fromAddress
-              );
-            };
-            const pcEntry = peerConnectionsRef.current.get(fromAddress);
-            if (pcEntry?.connId === connId) {
-              pcEntry.dc = dc;
-              pcEntry.lastDcStateChangeAtMs = Date.now();
-            }
-          };
-
-          await pc.setRemoteDescription({ type: 'offer', sdp });
-          await drainPendingRemoteIceSession(
-            pc,
-            pendingRemoteIceRef.current,
-            fromAddress,
-            connId
-          );
-          {
-            const ent = peerConnectionsRef.current.get(fromAddress);
-            if (ent?.connId === connId) {
-              debugLog('[GCall] rtcNego', {
-                tag: 'afterRemoteOffer',
-                role: 'downstream',
-                peerAddress: fromAddress,
-                connId,
-                mapEntryMatch: true,
-                ageMs: Date.now() - ent.createdAtMs,
-                ice: pc.iceConnectionState,
-                pcConn: pc.connectionState,
-                signaling: pc.signalingState,
-                iceGather: pc.iceGatheringState,
-                dc: ent.dc?.readyState ?? null,
-              });
-            }
-          }
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-
-          const ts = Date.now();
-          const sig = await signGroupCallFields({
-            type: 'GC_RTC_ANSWER',
-            roomId: roomIdRef.current,
-            fromAddress: ui.address,
-            toAddress: fromAddress,
-            connId,
-            fromPublicKey: ui.publicKey ?? '',
-            timestamp: ts,
-          }).catch(() => '');
-          if (!sig) return;
-
-          await window.groupCall.sendRtcSignal(
-            roomIdRef.current,
-            ui.address,
-            fromAddress,
-            'answer',
-            answer.sdp,
-            connId,
-            sig,
-            ui.publicKey ?? '',
-            ts
-          );
-          debugLog('[GCall] Sent downstream RTC answer', {
-            fromAddress,
-            connId,
-          });
-        } else if (type === 'reconnect') {
-          if (typeof connId !== 'string' || !connId) return;
-          debugLog(
-            '[GCall] RTC reconnect request from',
-            fromAddress,
-            'connId:',
-            connId
-          );
-          void reconnectExpectedUpstreamPeer(fromAddress, connId);
-        } else if (type === 'answer') {
-          const pcEntry = peerConnectionsRef.current.get(fromAddress);
-          if (!pcEntry || pcEntry.connId !== connId) {
-            debugLog(
-              '[GCall] Ignoring stale RTC answer from',
-              fromAddress,
-              'connId:',
-              connId,
-              'current:',
-              pcEntry?.connId ?? '(none)'
-            );
-            void reconnectExpectedUpstreamPeer(fromAddress, connId);
-            return;
-          }
-          await pcEntry.pc.setRemoteDescription({ type: 'answer', sdp });
-          await drainPendingRemoteIceSession(
-            pcEntry.pc,
-            pendingRemoteIceRef.current,
-            fromAddress,
-            connId
-          );
-          debugLog('[GCall] Applied RTC answer', {
-            fromAddress,
-            connId,
-            signalingState: pcEntry.pc.signalingState,
-          });
-          debugLog('[GCall] rtcNego', {
-            tag: 'afterRemoteAnswer',
-            role: pcEntry.role,
-            peerAddress: fromAddress,
-            connId,
-            mapEntryMatch: true,
-            ageMs: Date.now() - pcEntry.createdAtMs,
-            ice: pcEntry.pc.iceConnectionState,
-            pcConn: pcEntry.pc.connectionState,
-            signaling: pcEntry.pc.signalingState,
-            iceGather: pcEntry.pc.iceGatheringState,
-            dc: pcEntry.dc?.readyState ?? null,
-          });
-        } else if (type === 'ice') {
-          if (typeof connId !== 'string' || !connId || !candidate) return;
-
-          const pcEntry = peerConnectionsRef.current.get(fromAddress);
-          if (!pcEntry) {
-            pushPendingRemoteIceCandidate(
-              pendingRemoteIceRef.current,
-              fromAddress,
-              connId,
-              candidate
-            );
-            return;
-          }
-          if (pcEntry.connId !== connId) {
-            const curTs = getConnIdTimestamp(pcEntry.connId);
-            const inTs = getConnIdTimestamp(connId);
-            if (curTs !== null && inTs !== null && inTs < curTs) {
-              debugLog(
-                '[GCall] Discarding RTC ICE for older connId from',
-                fromAddress,
-                'connId:',
-                connId,
-                'current:',
-                pcEntry.connId
-              );
-              return;
-            }
-            pushPendingRemoteIceCandidate(
-              pendingRemoteIceRef.current,
-              fromAddress,
-              connId,
-              candidate
-            );
-            return;
-          }
-          if (!pcEntry.pc.remoteDescription) {
-            pushPendingRemoteIceCandidate(
-              pendingRemoteIceRef.current,
-              fromAddress,
-              connId,
-              candidate
-            );
-            return;
-          }
-          try {
-            await pcEntry.pc.addIceCandidate(candidate);
-          } catch {
-            /* ignore */
-          }
-        }
-      });
-      map.set(
-        fromAddress,
-        next.catch(() => {})
-      );
-    },
-    // Do not add userInfo — queued work uses userInfoRef.current. Callback may still recreate when
-    // createPeerConnection identity changes.
-    [
-      createPeerConnection,
-      flushMetrics,
-      getConnIdTimestamp,
-      isPeerConnectionInactive,
-      markPeerStable,
-      markPeerUnstable,
-      reconnectExpectedUpstreamPeer,
-    ]
-  );
-
-  /** WebRTC connection ensure — runs on every topology apply, including duplicate heartbeats. */
-  const ensureGroupCallWebRtcConnections = useCallback(
-    (topology: GroupTopology) => {
-      if (isTestingRelay) return;
-      const topoN = normalizeGroupTopologyClusters(topology);
-      const myAddress = userInfo?.address ?? '';
-      const role = computeMyRole(myAddress, topoN);
-      const now = Date.now();
-
-      // Compute the set of addresses that should have upstream connections for
-      // this role. Any existing upstream PCs not in this set are stale (the
-      // forwarder was demoted) and must be closed so upstreamDCRef stops
-      // pointing at the wrong peer and the relay fallback takes over until the
-      // new forwarder's DC opens.
-      const validUpstreamTargets = new Set<string>();
-      if (
-        role === 'participant' ||
-        role === 'cluster-forwarder' ||
-        role === 'standby-forwarder'
-      ) {
-        const af = findAssignedForwarder(myAddress, topoN);
-        if (af && af !== myAddress) validUpstreamTargets.add(af);
-        const mc = findMyCluster(myAddress, topoN);
-        if (
-          mc?.standby &&
-          mc.standby !== myAddress &&
-          af &&
-          af !== myAddress
-        ) {
-          const lastHb = lastClusterForwarderHbRef.current.get(af) ?? 0;
-          if (
-            lastHb > 0 &&
-            now - lastHb >= CLUSTER_FAILOVER_MIN_SILENCE_MS
-          ) {
-            validUpstreamTargets.add(mc.standby);
-          }
-        }
-      }
-      if (role === 'cluster-forwarder') {
-        const rf = topoN.rootForwarder;
-        if (rf && rf !== myAddress) validUpstreamTargets.add(rf);
-      }
-      for (const [addr, entry] of peerConnectionsRef.current) {
-        if (entry.role === 'upstream' && !validUpstreamTargets.has(addr)) {
-          debugLog(
-            '[GCall] ensureWebRtc: closing stale upstream (not in topology)',
-            {
-              addr,
-              connId: entry.connId,
-              role,
-              validUpstreamTargets: [...validUpstreamTargets],
-            }
-          );
-          closePeerConnection(addr); // also nulls upstreamDCRef if it pointed here
-        }
-      }
-
-      if (
-        role === 'participant' ||
-        role === 'cluster-forwarder' ||
-        role === 'standby-forwarder'
-      ) {
-        const assignedForwarder = findAssignedForwarder(myAddress, topoN);
-        if (assignedForwarder && assignedForwarder !== myAddress) {
-          const existing = peerConnectionsRef.current.get(assignedForwarder);
-          if (shouldReconnectRequiredPeer(existing, now)) {
-            debugLog(
-              '[GCall] ensureWebRtc: reconnect upstream → assigned forwarder',
-              {
-                assignedForwarder,
-                hadExisting: !!existing,
-                existingConnId: existing?.connId ?? null,
-                existingPcState: existing?.pc.connectionState ?? null,
-                dcState: existing?.dc?.readyState ?? null,
-              }
-            );
-            if (existing) {
-              closePeerConnection(assignedForwarder, existing.connId);
-            }
-            void connectUpstream(assignedForwarder);
-          }
-        }
-
-        const mcFail = findMyCluster(myAddress, topoN);
-        const af2 = findAssignedForwarder(myAddress, topoN);
-        if (
-          mcFail?.standby &&
-          mcFail.standby !== myAddress &&
-          af2 &&
-          af2 !== myAddress
-        ) {
-          const lastHb2 = lastClusterForwarderHbRef.current.get(af2) ?? 0;
-          const hbStale =
-            lastHb2 > 0 && now - lastHb2 >= CLUSTER_FAILOVER_MIN_SILENCE_MS;
-          const exF = peerConnectionsRef.current.get(af2);
-          const primaryOpen = exF?.dc?.readyState === 'open';
-          if (hbStale && !primaryOpen) {
-            const standbyAddr = mcFail.standby;
-            const exS = peerConnectionsRef.current.get(standbyAddr);
-            if (shouldReconnectRequiredPeer(exS, now)) {
-              debugLog(
-                '[GCall] ensureWebRtc: reconnect upstream → cluster standby (HB timeout)',
-                { forwarder: af2, standbyAddr }
-              );
-              if (exS) {
-                closePeerConnection(standbyAddr, exS.connId);
-              }
-              void connectUpstream(standbyAddr);
-            }
-          }
-        }
-      }
-
-      if (role === 'cluster-forwarder') {
-        const rootAddr = topoN.rootForwarder;
-        if (rootAddr && rootAddr !== myAddress) {
-          const existing = peerConnectionsRef.current.get(rootAddr);
-          if (shouldReconnectRequiredPeer(existing, now)) {
-            debugLog(
-              '[GCall] ensureWebRtc: reconnect upstream → root forwarder',
-              {
-                rootAddr,
-                hadExisting: !!existing,
-                existingConnId: existing?.connId ?? null,
-              }
-            );
-            if (existing) {
-              closePeerConnection(rootAddr, existing.connId);
-            }
-            void connectUpstream(rootAddr);
-          }
-        }
-      }
-
-      if (role === 'cluster-forwarder' || role === 'root-forwarder') {
-        for (const cluster of topoN.clusters) {
-          if (cluster.forwarder === myAddress) {
-            for (const member of cluster.members) {
-              if (member !== myAddress) {
-                const existing = peerConnectionsRef.current.get(member);
-                if (shouldReconnectRequiredPeer(existing, now)) {
-                  if (!existing) {
-                    debugLog(
-                      '[GCall] ensureWebRtc: downstream missing — request hard reconnect hint',
-                      {
-                        member,
-                      }
-                    );
-                    void setupDownstreamChannel(member);
-                    continue;
-                  }
-                  const shouldHardReset =
-                    existing.softRecoveryAttempts >=
-                      DOWNSTREAM_SOFT_RECOVERY_MAX_ATTEMPTS &&
-                    now - existing.lastSoftRecoveryAtMs >=
-                      ICE_RESTART_RECOVERY_GRACE_MS;
-                  if (shouldHardReset) {
-                    debugLog('[GCall] Escalating downstream hard reconnect', {
-                      member,
-                      connId: existing.connId,
-                      softRecoveryAttempts: existing.softRecoveryAttempts,
-                    });
-                    closePeerConnection(member, existing.connId);
-                    void setupDownstreamChannel(member, existing.connId);
-                    continue;
-                  }
-                  debugLog(
-                    '[GCall] ensureWebRtc: downstream wedged — soft recovery',
-                    {
-                      member,
-                      connId: existing.connId,
-                      softRecoveryAttempts: existing.softRecoveryAttempts,
-                      pcState: existing.pc.connectionState,
-                      dcState: existing.dc?.readyState ?? null,
-                    }
-                  );
-                  void attemptDownstreamSoftRecovery(member, existing.connId);
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    [
-      attemptDownstreamSoftRecovery,
-      closePeerConnection,
-      connectUpstream,
-      setupDownstreamChannel,
-      shouldReconnectRequiredPeer,
-      userInfo?.address,
-    ]
-  );
-
-  ensureGroupCallWebRtcRef.current = ensureGroupCallWebRtcConnections;
+  requestMediaRecoveryForPeerRef.current = () => {};
 
   // ── Forwarder heartbeat ────────────────────────────────────────────────────
 
@@ -4842,14 +3159,13 @@ export function useGroupVoiceCall(uiActive = false) {
           trustedRemoteRootLastSeenAtRef.current = 0;
         }
         debugLog(
-          '[GCall] applyTopology duplicate heartbeat — ensureWebRtc only',
+          '[GCall] applyTopology duplicate heartbeat',
           {
             epoch: topo.topologyEpoch,
             rootForwarder: topo.rootForwarder,
           }
         );
         processPendingVerifiedKeysRef.current();
-        ensureGroupCallWebRtcConnections(topo);
         flushMetrics();
         return;
       }
@@ -4917,6 +3233,21 @@ export function useGroupVoiceCall(uiActive = false) {
       processPendingVerifiedKeysRef.current();
 
       const role = computeMyRole(myAddress, topo);
+      const shouldRestartTopologyHeartbeat =
+        role === 'root-forwarder' &&
+        (myRoleRef.current !== 'root-forwarder' ||
+          !prevTopo ||
+          prevTopo.topologyEpoch !== topo.topologyEpoch ||
+          prevTopo.rootForwarder !== topo.rootForwarder ||
+          prevTopo.standbyForwarder !== topo.standbyForwarder);
+      const shouldRestartClusterHeartbeat =
+        (role === 'cluster-forwarder' || role === 'root-forwarder') &&
+        findClusterIndexForForwarder(myAddress, topo) >= 0 &&
+        (myRoleRef.current !== role ||
+          !prevTopo ||
+          prevTopo.topologyEpoch !== topo.topologyEpoch ||
+          prevTopo.rootForwarder !== topo.rootForwarder ||
+          prevTopo.standbyForwarder !== topo.standbyForwarder);
       if (role === 'root-forwarder' && roomKeyRef.current) {
         awaitingAuthoritativeKeyRef.current = false;
       }
@@ -4947,27 +3278,31 @@ export function useGroupVoiceCall(uiActive = false) {
         }));
       });
 
-      if (topologyHeartbeatTimerRef.current) {
+      if (
+        topologyHeartbeatTimerRef.current &&
+        (role !== 'root-forwarder' || shouldRestartTopologyHeartbeat)
+      ) {
         clearInterval(topologyHeartbeatTimerRef.current);
         topologyHeartbeatTimerRef.current = null;
       }
-      if (role === 'root-forwarder') {
+      if (shouldRestartTopologyHeartbeat) {
         startTopologyHeartbeat(topo);
       }
 
-      stopClusterHeartbeat();
       if (
-        (role === 'cluster-forwarder' || role === 'root-forwarder') &&
-        findClusterIndexForForwarder(myAddress, topo) >= 0
+        clusterHeartbeatTimerRef.current &&
+        ((role !== 'cluster-forwarder' && role !== 'root-forwarder') ||
+          shouldRestartClusterHeartbeat)
       ) {
+        stopClusterHeartbeat();
+      }
+      if (shouldRestartClusterHeartbeat) {
         startClusterHeartbeat();
       }
 
-      ensureGroupCallWebRtcConnections(topo);
       flushMetrics();
     },
     [
-      ensureGroupCallWebRtcConnections,
       flushMetrics,
       startClusterHeartbeat,
       startTopologyHeartbeat,
@@ -4983,18 +3318,12 @@ export function useGroupVoiceCall(uiActive = false) {
     if (myRoleRef.current !== 'standby-forwarder') return;
     const currentTopo = topologyRef.current;
     if (!currentTopo) return;
-    const rootPeerEntry = currentTopo.rootForwarder
-      ? peerConnectionsRef.current.get(currentTopo.rootForwarder)
-      : undefined;
     const heartbeatSilentMs = Date.now() - lastRootHeartbeatRef.current;
     if (
       !shouldPromoteStandbyRootAfterHeartbeatTimeout({
         heartbeatSilentMs,
         heartbeatTimeoutMs: FORWARDER_TIMEOUT_MS,
-        rootPeerRequiresReconnect: shouldReconnectRequiredPeer(
-          rootPeerEntry,
-          Date.now()
-        ),
+        rootPeerRequiresReconnect: false,
       })
     ) {
       return;
@@ -5005,26 +3334,17 @@ export function useGroupVoiceCall(uiActive = false) {
       promotionTimerRef.current = null;
       const currentTopo = topologyRef.current;
       if (!currentTopo) return;
-      const rootPeerEntry = currentTopo.rootForwarder
-        ? peerConnectionsRef.current.get(currentTopo.rootForwarder)
-        : undefined;
       const heartbeatSilentMs = Date.now() - lastRootHeartbeatRef.current;
       if (
         !shouldPromoteStandbyRootAfterHeartbeatTimeout({
           heartbeatSilentMs,
           heartbeatTimeoutMs: FORWARDER_TIMEOUT_MS,
-          rootPeerRequiresReconnect: shouldReconnectRequiredPeer(
-            rootPeerEntry,
-            Date.now()
-          ),
+          rootPeerRequiresReconnect: false,
         })
       ) {
         debugLog('[GCall] Standby promotion skipped — root transport still healthy', {
           currentRoot: currentTopo.rootForwarder,
           heartbeatSilentMs,
-          rootPcState: rootPeerEntry?.pc.connectionState ?? null,
-          rootIceState: rootPeerEntry?.pc.iceConnectionState ?? null,
-          rootDcState: rootPeerEntry?.dc?.readyState ?? null,
         });
         return;
       }
@@ -5082,7 +3402,7 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     }, ROOT_PROMOTION_POST_DETECT_MS);
-  }, [applyTopology, shouldReconnectRequiredPeer, userInfo]);
+  }, [applyTopology, userInfo]);
 
   const checkClusterStandbyFailover = useCallback(async () => {
     const myAddress = userInfo?.address ?? '';
@@ -5783,81 +4103,26 @@ export function useGroupVoiceCall(uiActive = false) {
     (packet: Uint8Array) => {
       if (!userInfo?.address || !roomIdRef.current || !roomKeyRef.current)
         return;
-      const meshMode: GcallRelayMeshMode = isTestingRelay
-        ? 'primary'
-        : 'fallback';
-      if (isTestingRelay) {
-        if (myRoleRef.current === 'root-forwarder' && topologyRef.current) {
-          const topo = topologyRef.current;
-          for (const cluster of topo.clusters) {
-            if (cluster.forwarder === userInfo.address) {
-              for (const member of cluster.members) {
-                if (member !== userInfo.address && roomIdRef.current) {
-                  enqueueMeshRelaySend(member, packet, meshMode);
-                }
-              }
-            }
-          }
-          return;
-        }
-        const topo = topologyRef.current;
-        const target = topo
-          ? findAssignedForwarder(userInfo.address, topo)
-          : null;
-        if (target && roomIdRef.current) {
-          enqueueMeshRelaySend(target, packet, meshMode);
-        }
-        return;
-      }
-      if (upstreamDCRef.current?.readyState === 'open') {
-        const upstreamAddress = upstreamAddressRef.current;
-        if (upstreamAddress) {
-          const sent = safeSendDataChannel(
-            upstreamAddress,
-            upstreamDCRef.current,
-            packet.buffer as ArrayBuffer
-          );
-          if (!sent && roomIdRef.current) {
-            enqueueMeshRelaySend(upstreamAddress, packet, meshMode);
-          }
-        }
-      } else if (
-        myRoleRef.current === 'root-forwarder' &&
-        topologyRef.current
-      ) {
+      if (myRoleRef.current === 'root-forwarder' && topologyRef.current) {
         const topo = topologyRef.current;
         for (const cluster of topo.clusters) {
           if (cluster.forwarder === userInfo.address) {
             for (const member of cluster.members) {
               if (member !== userInfo.address) {
-                const pcEntry = peerConnectionsRef.current.get(member);
-                if (pcEntry?.dc?.readyState === 'open') {
-                  const sent = safeSendDataChannel(
-                    member,
-                    pcEntry.dc,
-                    packet.buffer as ArrayBuffer
-                  );
-                  if (!sent && roomIdRef.current) {
-                    enqueueMeshRelaySend(member, packet, meshMode);
-                  }
-                } else if (roomIdRef.current) {
-                  enqueueMeshRelaySend(member, packet, meshMode);
-                }
+                sendPacketToPeerReticulum(member, packet.buffer as ArrayBuffer);
               }
             }
           }
         }
-      } else {
-        const topo = topologyRef.current;
-        const target = topo
-          ? findAssignedForwarder(userInfo.address, topo)
-          : null;
-        if (target && roomIdRef.current) {
-          enqueueMeshRelaySend(target, packet, meshMode);
-        }
+        return;
+      }
+      const topo = topologyRef.current;
+      const target = topo ? findAssignedForwarder(userInfo.address, topo) : null;
+      if (target && target !== userInfo.address) {
+        sendPacketToPeerReticulum(target, packet.buffer as ArrayBuffer);
       }
     },
-    [enqueueMeshRelaySend, safeSendDataChannel, userInfo?.address]
+    [sendPacketToPeerReticulum, userInfo?.address]
   );
 
   const sendEncodedFrame = useCallback(
@@ -5874,7 +4139,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (needsSessionKeyRef.current) {
         logSendPathDiagnostic('needs-session-key', {
           role: myRoleRef.current,
-          upstreamReadyState: upstreamDCRef.current?.readyState ?? 'none',
+          transport: 'reticulum',
         });
         return; // no K for current media session
       }
@@ -5882,16 +4147,16 @@ export function useGroupVoiceCall(uiActive = false) {
         debugLog(
           '[GCall] First encoded frame ready to send — role:',
           myRoleRef.current,
-          'upstreamDC:',
-          upstreamDCRef.current?.readyState ?? 'none'
+          'transport:',
+          'reticulum'
         );
         micDebugLog(
           'first Opus frame from encoder — bytes:',
           opusFrame.byteLength,
           'role:',
           myRoleRef.current,
-          'upstreamDC:',
-          upstreamDCRef.current?.readyState ?? 'none',
+          'transport:',
+          'reticulum',
           'vad:',
           isSpeakingRef.current
         );
@@ -5901,50 +4166,6 @@ export function useGroupVoiceCall(uiActive = false) {
       const timestampMs = Date.now() - callEpochRef.current;
       const key = roomKeyRef.current;
       const addr = userInfo.address;
-
-      if (isTestingRelay) {
-        const flushAgg = () => {
-          const agg = relayEncodeAggRef.current;
-          if (!agg || agg.opusFrames.length === 0) return;
-          if (agg.flushTimer) {
-            clearTimeout(agg.flushTimer);
-            agg.flushTimer = null;
-          }
-          const frames = agg.opusFrames;
-          const startSeq = agg.seqs[0]!;
-          const baseTs = agg.baseTs;
-          const vad = agg.vad;
-          relayEncodeAggRef.current = null;
-          try {
-            dispatchEncodedPacket(
-              encodeAudioPacketV3(addr, vad, startSeq, baseTs, frames, key)
-            );
-          } catch (e) {
-            debugWarn('[GCall] encodeAudioPacketV3 failed:', e);
-          }
-        };
-
-        let agg = relayEncodeAggRef.current;
-        if (!agg) {
-          agg = {
-            opusFrames: [],
-            seqs: [],
-            baseTs: timestampMs,
-            vad: isSpeakingRef.current,
-            flushTimer: null,
-          };
-          relayEncodeAggRef.current = agg;
-        }
-        agg.vad = agg.vad || isSpeakingRef.current;
-        agg.opusFrames.push(new Uint8Array(opusFrame));
-        agg.seqs.push(seq);
-        if (agg.opusFrames.length >= 3) {
-          flushAgg();
-        } else if (!agg.flushTimer) {
-          agg.flushTimer = setTimeout(flushAgg, 60);
-        }
-        return;
-      }
 
       if (decryptWorkerRef.current) {
         const frameBuffer =
@@ -7500,6 +5721,31 @@ export function useGroupVoiceCall(uiActive = false) {
 
   refreshMemberSetForcedRef.current = refreshMemberSetForced;
 
+  const syncQortalGroupReticulumTargets = useCallback(
+    async (roomId: string, addresses: Iterable<string>) => {
+      const api = window.groupCall?.setQortalGroupReticulumTargets;
+      if (!api || !roomId || !roomId.startsWith('gcall-qortal-')) return;
+      const next = Array.from(
+        new Set(
+          [...addresses].filter(
+            (address): address is string =>
+              typeof address === 'string' && address.trim().length > 0
+          )
+        )
+      );
+      await api(roomId, next).catch(() => {});
+    },
+    []
+  );
+
+  /** Group API members ∪ in-call participants — used for Reticulum GC_* fanout in main. */
+  const getQortalReticulumFanoutAddressSet = useCallback((): Set<string> => {
+    return new Set([
+      ...memberSetRef.current,
+      ...participantsRef.current.keys(),
+    ]);
+  }, []);
+
   const hydrateParticipantsFromAuthoritativeRoster = useCallback(
     (
       reason:
@@ -7573,21 +5819,46 @@ export function useGroupVoiceCall(uiActive = false) {
     if (memberGateGroupIdState === null) return;
     if (roomState !== 'connected' && roomState !== 'joining') return;
     const id = window.setInterval(() => {
-      void refreshMemberSetForced(memberGateGroupIdState).catch(() => {});
+      void refreshMemberSetForced(memberGateGroupIdState)
+        .then(() =>
+          syncQortalGroupReticulumTargets(
+            roomIdRef.current,
+            getQortalReticulumFanoutAddressSet()
+          )
+        )
+        .catch(() => {});
     }, 90_000);
     return () => window.clearInterval(id);
-  }, [memberGateGroupIdState, roomState, refreshMemberSetForced]);
+  }, [
+    memberGateGroupIdState,
+    roomState,
+    refreshMemberSetForced,
+    syncQortalGroupReticulumTargets,
+    getQortalReticulumFanoutAddressSet,
+  ]);
 
   useEffect(() => {
     if (memberGateGroupIdState === null) return;
     const onVis = () => {
       if (document.visibilityState === 'visible') {
-        void refreshMemberSetForced(memberGateGroupIdState).catch(() => {});
+        void refreshMemberSetForced(memberGateGroupIdState)
+          .then(() =>
+            syncQortalGroupReticulumTargets(
+              roomIdRef.current,
+              getQortalReticulumFanoutAddressSet()
+            )
+          )
+          .catch(() => {});
       }
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, [memberGateGroupIdState, refreshMemberSetForced]);
+  }, [
+    memberGateGroupIdState,
+    refreshMemberSetForced,
+    syncQortalGroupReticulumTargets,
+    getQortalReticulumFanoutAddressSet,
+  ]);
 
   const joinGroupCall = useCallback(
     async (
@@ -7673,7 +5944,6 @@ export function useGroupVoiceCall(uiActive = false) {
       authoritySettleUntilRef.current = 0;
       awaitingAuthoritativeKeyRef.current = false;
       sessionStartedAtMsRef.current = Date.now();
-      sessionStunBundleRef.current = [];
       peerRecoveryProfileRef.current.clear();
       peerInstabilityScoreRef.current.clear();
       peerMediaRecoveryBreachRef.current.clear();
@@ -7734,6 +6004,14 @@ export function useGroupVoiceCall(uiActive = false) {
         },
       ]);
 
+      // Main-process Reticulum fanout uses qortalReticulumTargets ∪ room.participants.
+      // Sync authoritative member roster (and any hydrated peers) *before* join so the
+      // first GC_JOIN / topology frames are sent to other group members' presence hashes.
+      await syncQortalGroupReticulumTargets(
+        roomId,
+        getQortalReticulumFanoutAddressSet()
+      );
+
       // Send join to network (main allocates stable callSessionId for this occupied room)
       const joinRes = await window.groupCall.join(
         roomId,
@@ -7771,6 +6049,10 @@ export function useGroupVoiceCall(uiActive = false) {
       mediaSessionGenerationRef.current = mediaGen;
       needsSessionKeyRef.current = true;
       keyDistributionPendingRef.current = true;
+      await syncQortalGroupReticulumTargets(
+        roomId,
+        getQortalReticulumFanoutAddressSet()
+      );
       let bootstrapTopologyToApply: GroupTopology | null = null;
 
       try {
@@ -7881,6 +6163,10 @@ export function useGroupVoiceCall(uiActive = false) {
             trustedElectionRoot: trustedElectionRoot ?? null,
           });
         }
+        await syncQortalGroupReticulumTargets(
+          roomId,
+          getQortalReticulumFanoutAddressSet()
+        );
       } catch (error) {
         debugWarn('[GCall] Post-join roster hydration failed', error);
       }
@@ -7901,7 +6187,6 @@ export function useGroupVoiceCall(uiActive = false) {
       startMetricsFlushLoop();
       startTransportHealthReportLoop();
       startWindowMetricsLoop();
-      startWebRtcEnsureLoop();
       if (bootstrapTopologyToApply) {
         applyTopology(bootstrapTopologyToApply);
       }
@@ -7915,12 +6200,13 @@ export function useGroupVoiceCall(uiActive = false) {
       flushMetrics,
       hydrateParticipantsFromAuthoritativeRoster,
       refreshMemberSetForced,
+      getQortalReticulumFanoutAddressSet,
       startTransportHealthReportLoop,
+      syncQortalGroupReticulumTargets,
       withGcallLifecycleLock,
       setupDecryptWorker,
       startMetricsFlushLoop,
       startWindowMetricsLoop,
-      startWebRtcEnsureLoop,
       reconcileParticipantsFromMainRoster,
       userInfo,
       myStatus,
@@ -7950,30 +6236,6 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const cleanup = useCallback(async () => {
     return withGcallLifecycleLock(async () => {
-    const stunUrls = sessionStunBundleRef.current;
-    const observedStunUrls = sessionObservedStunUrlsRef.current;
-    const snap = metricsRef.current.getSnapshot();
-    const sessionElapsedMs =
-      sessionStartedAtMsRef.current > 0
-        ? Date.now() - sessionStartedAtMsRef.current
-        : 0;
-    const stunHelped =
-      sessionElapsedMs >= STUN_OUTCOME_MIN_SESSION_MS &&
-      snap.persistentDisconnectTeardowns <= 2 &&
-      snap.relayDwellFraction <= STUN_OUTCOME_MAX_RELAY_DWELL_FRACTION;
-    // relayDwellFraction vs STUN_OUTCOME_MAX_RELAY_DWELL_FRACTION: high mesh-relay dwell
-    // suggests prioritizing ICE/TURN work (Phase 4) alongside STUN bootstrap quality.
-    if (window.hub?.reportStunCallOutcome && stunUrls.length > 0) {
-      void window.hub
-        .reportStunCallOutcome(stunUrls, stunHelped)
-        .catch(() => {});
-    }
-    debugLog('[GCall] STUN session summary', {
-      configuredUrls: stunUrls,
-      observedUrls: observedStunUrls,
-      stunHelped,
-    });
-
     const nextAudioToken = bumpGroupCallAudioSessionToken(
       audioSessionTokenRef.current
     );
@@ -8024,7 +6286,6 @@ export function useGroupVoiceCall(uiActive = false) {
     stopMetricsFlushLoop();
     stopTransportHealthReportLoop();
     stopWindowMetricsLoop();
-    stopWebRtcEnsureLoop();
     if (relayMetricsFlushTimerRef.current) {
       clearTimeout(relayMetricsFlushTimerRef.current);
       relayMetricsFlushTimerRef.current = null;
@@ -8069,31 +6330,6 @@ export function useGroupVoiceCall(uiActive = false) {
     lastForwarderGateLogAtRef.current.clear();
     forwardPacketRecvTimestampsRef.current.clear();
 
-    // Close peer connections (clear ICE disconnect grace timers first so callbacks cannot fire after teardown)
-    for (const [, entry] of peerConnectionsRef.current) {
-      if (entry.disconnectGraceTimer) {
-        clearTimeout(entry.disconnectGraceTimer);
-        entry.disconnectGraceTimer = undefined;
-      }
-    }
-    for (const peerAddress of [...peerConnectionsRef.current.keys()]) {
-      closePeerConnection(peerAddress);
-    }
-
-    upstreamDCRef.current = null;
-    upstreamAddressRef.current = null;
-    const aggCleanup = relayEncodeAggRef.current;
-    if (aggCleanup?.flushTimer) clearTimeout(aggCleanup.flushTimer);
-    relayEncodeAggRef.current = null;
-    relayLastSentFallbackRef.current.clear();
-    relayLastSentPrimaryRef.current.clear();
-    relayPendingLatestRef.current.clear();
-    relayPumpBusyRef.current.clear();
-    rtcReconnectHintLastSentAtRef.current.clear();
-    rtcSignalChainsRef.current.clear();
-    pendingRemoteIceRef.current.clear();
-    dcSendBackoffUntilRef.current.clear();
-    dcSendBackoffStreakRef.current.clear();
     peerRecoveryProfileRef.current.clear();
     peerInstabilityScoreRef.current.clear();
     peerMediaRecoveryBreachRef.current.clear();
@@ -8175,10 +6411,7 @@ export function useGroupVoiceCall(uiActive = false) {
     joinGenerationRef.current = null;
     awaitingAuthoritativeKeyRef.current = false;
     localSpeakersRef.current.clear();
-    sessionStunBundleRef.current = [];
-    sessionObservedStunUrlsRef.current = [];
     sessionStartedAtMsRef.current = 0;
-    lastIceServerRefreshAtMsRef.current = 0;
     metricsRef.current.reset();
     metricsRef.current.setRole('participant');
     conflictingRemoteRootRef.current = '';
@@ -8204,13 +6437,11 @@ export function useGroupVoiceCall(uiActive = false) {
     flushMetrics();
     });
   }, [
-    closePeerConnection,
     flushMetrics,
     withGcallLifecycleLock,
     stopMetricsFlushLoop,
     stopTransportHealthReportLoop,
     stopWindowMetricsLoop,
-    stopWebRtcEnsureLoop,
     syncDecryptWorkerRoomKey,
     teardownCapturePipelineRefs,
   ]);
@@ -8222,7 +6453,7 @@ export function useGroupVoiceCall(uiActive = false) {
       roomId: roomIdRef.current,
       address: userInfo.address,
       joinGeneration: joinGenerationRef.current,
-      peerConnectionPeers: [...peerConnectionsRef.current.keys()],
+      transport: 'reticulum',
     });
 
     // Sign leave envelope
@@ -8809,23 +7040,15 @@ export function useGroupVoiceCall(uiActive = false) {
             lastJoinTs: joinTs,
             joinGeneration: incomingGen,
           });
-          // Capture the stale connId BEFORE closing so that if handleRtcSignal
-          // already created a fresh PC for the re-joiner (race: offer arrived before
-          // this gcall:participant-joined event), we only close the old session's
-          // PC and leave the new one intact.
-          const staleConnId = peerConnectionsRef.current.get(address)?.connId;
           debugLog(
-            '[GCall] gcall:participant-joined joinGeneration change — teardown peer WebRTC',
+            '[GCall] gcall:participant-joined joinGeneration change — reset peer audio state',
             {
               address,
               previousJoinGeneration: existing.joinGeneration ?? null,
               incomingJoinGeneration: incomingGen ?? null,
-              staleConnId: staleConnId ?? null,
             }
           );
-          closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
-          scheduleEnsureAfterIceTeardown();
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);
             if (i === -1) {
@@ -8861,17 +7084,13 @@ export function useGroupVoiceCall(uiActive = false) {
               ? { joinGeneration: incomingGen }
               : {}),
           });
-          const staleConnId = peerConnectionsRef.current.get(address)?.connId;
           debugLog(
-            '[GCall] gcall:participant-joined publicKey change — teardown peer WebRTC',
+            '[GCall] gcall:participant-joined publicKey change — reset peer audio state',
             {
               address,
-              staleConnId: staleConnId ?? null,
             }
           );
-          closePeerConnection(address, staleConnId);
           disposeParticipantAudio(address);
-          scheduleEnsureAfterIceTeardown();
           setParticipants((prev) => {
             const i = prev.findIndex((p) => p.address === address);
             if (i === -1) {
@@ -9000,14 +7219,10 @@ export function useGroupVoiceCall(uiActive = false) {
           });
           return;
         }
-        const leavingConnId = peerConnectionsRef.current.get(address)?.connId;
         debugLog('[GCall] gcall:participant-left', {
           roomId,
           address,
-          closedConnId: leavingConnId ?? null,
-          hadPeerEntry: peerConnectionsRef.current.has(address),
         });
-        closePeerConnection(address);
         disposeParticipantAudio(address);
         participantsRef.current.delete(address);
         setActiveSpeakers((prev) =>
@@ -9078,16 +7293,20 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       if (event === 'gcall:audio') {
-        const { data } = payload as { data: Uint8Array };
-        // P2P relay fallback — main process already decoded base64 to binary Buffer,
-        // which arrives here as a Uint8Array via structured clone. No atob needed.
+        const { data, fromAddress } = payload as {
+          data: Uint8Array;
+          fromAddress?: string;
+        };
         metricsRef.current.recordRelayReceived();
         scheduleRelayMetricsFlush();
         const relayBuffer =
           data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
             ? data.buffer
             : data.slice().buffer;
-        handleIncomingAudioPacket(relayBuffer as ArrayBuffer, '');
+        handleIncomingAudioPacket(
+          relayBuffer as ArrayBuffer,
+          typeof fromAddress === 'string' ? fromAddress : ''
+        );
       }
 
       if (event === 'gcall:key') {
@@ -9252,9 +7471,6 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
 
-      if (event === 'gcall:rtc-signal') {
-        handleRtcSignal(payload);
-      }
     });
 
     unsubscribeRef.current = unsub;
@@ -9290,14 +7506,11 @@ export function useGroupVoiceCall(uiActive = false) {
   }, [
     applyTopology,
     armKeyDistributionGateAndRun,
-    closePeerConnection,
     disposeParticipantAudio,
     distributeRoomKey,
     handleIncomingAudioPacket,
     handleRoomKey,
-    handleRtcSignal,
     roomState,
-    scheduleEnsureAfterIceTeardown,
     scheduleRelayMetricsFlush,
     sendTargetedRoomKeys,
     ensureAudioCaptureStarted,

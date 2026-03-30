@@ -76,6 +76,14 @@ const RELAY_FRAME_MS = 40;
 /** Sample rate for AudioContext capture and DataChannel frames. */
 const AUDIO_SAMPLE_RATE = 48_000;
 
+async function sha256HexUtf8(text: string): Promise<string> {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CallState = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended';
@@ -523,16 +531,22 @@ export function useVoiceCall(): UseVoiceCallReturn {
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         const answerTs = Date.now();
+        const answerSdp = answer.sdp ?? '';
+        const answerHash = await sha256HexUtf8(answerSdp);
         const { signature: ansSig, publicKey: ansKey } = await signFields({
-          type: 'CALL_ANSWER', callId: signal.callId, timestamp: answerTs,
+          type: 'CALL_ANSWER',
+          callId: signal.callId,
+          timestamp: answerTs,
+          sdpHash: answerHash,
         });
         await (window as any).call?.sendSignal(
           signal.callId,
           'answer',
-          answer.sdp,
+          answerSdp,
           ansSig,
           ansKey,
-          answerTs
+          answerTs,
+          answerHash
         );
         return;
       }
@@ -814,10 +828,23 @@ export function useVoiceCall(): UseVoiceCallReturn {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       const offerTs = Date.now();
+      const offerSdp = offer.sdp ?? '';
+      const offerHash = await sha256HexUtf8(offerSdp);
       const { signature: offerSig, publicKey: offerKey } = await signFields({
-        type: 'CALL_OFFER', callId, timestamp: offerTs,
+        type: 'CALL_OFFER',
+        callId,
+        timestamp: offerTs,
+        sdpHash: offerHash,
       });
-      await (window as any).call?.sendSignal(callId, 'offer', offer.sdp, offerSig, offerKey, offerTs);
+      await (window as any).call?.sendSignal(
+        callId,
+        'offer',
+        offerSdp,
+        offerSig,
+        offerKey,
+        offerTs,
+        offerHash
+      );
       await drainPendingSignals();
       setCallAudioWireNonce((n) => n + 1);
       return true;

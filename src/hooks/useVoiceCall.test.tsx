@@ -165,6 +165,7 @@ describe('useVoiceCall', () => {
         expect.anything(),
         expect.anything(),
         expect.anything(),
+        expect.anything(),
         expect.anything()
       );
 

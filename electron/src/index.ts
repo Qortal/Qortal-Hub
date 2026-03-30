@@ -39,8 +39,18 @@ import { startChatManager, flushChatStore } from './chat';
 import { startCallManager } from './call';
 import { startGroupCallManager } from './group-call';
 import { readAppSettings } from './setup';
+import {
+  registerReticulumIpcHandlers,
+  setReticulumInstanceIndex,
+  startBundledReticulumDaemon,
+  stopBundledReticulumDaemon,
+} from './reticulum-daemon';
+import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
+import { startReticulumBridge, stopReticulumBridge } from './reticulum-bridge';
 
 import * as net from 'net';
+
+registerReticulumIpcHandlers();
 
 app.commandLine.appendSwitch(
   'disable-features',
@@ -188,8 +198,14 @@ async function setupMultiInstanceUserData(
 // Run Application
 (async () => {
   const instanceIndex = await setupMultiInstanceUserData();
+  setReticulumInstanceIndex(instanceIndex);
 
   await app.whenReady();
+
+  const reticulumDevEnsureOk = await runDevReticulumEnsureIfNeeded();
+  if (!reticulumDevEnsureOk) {
+    return;
+  }
 
   // Set Content Security Policy
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
@@ -202,6 +218,8 @@ async function setupMultiInstanceUserData(
   loadPersistedLocalNodeCa();
 
   await myCapacitorApp.init(HUB_P2P_BOOTSTRAP_SEEDS);
+
+  startBundledReticulumDaemon();
 
   // Auto-start the P2P network unless the user has disabled it in settings.
   const appSettings = await readAppSettings();
@@ -233,8 +251,15 @@ async function setupMultiInstanceUserData(
       await startDecentralizedStunAfterP2P(p2pNetwork, p2pOptions);
       loggerLog(`[P2P] Auto-started on port ${p2pPort}`);
 
-      // Start the presence manager, wired to the P2P network.
-      const pm = startPresenceManager(p2pNetwork);
+      let bridgeTransport = null;
+      try {
+        bridgeTransport = await startReticulumBridge();
+      } catch (err) {
+        loggerError('[ReticulumBridge] Auto-start failed:', err);
+      }
+
+      // Start the presence manager, wired to the Reticulum bridge.
+      const pm = startPresenceManager(bridgeTransport ? [bridgeTransport] : []);
       attachPresenceListeners(pm);
       loggerLog('[Presence] Manager auto-started.');
 
@@ -244,12 +269,12 @@ async function setupMultiInstanceUserData(
       loggerLog('[Chat] Manager auto-started.');
 
       // Start the call manager wired to the network and presence manager.
-      const callMgr = startCallManager(p2pNetwork, pm);
+      const callMgr = startCallManager(p2pNetwork, pm, bridgeTransport);
       attachCallListeners(callMgr);
       loggerLog('[Call] Manager auto-started.');
 
       // Start the group call manager.
-      const gcallMgr = startGroupCallManager(p2pNetwork, pm);
+      const gcallMgr = startGroupCallManager(p2pNetwork, pm, bridgeTransport);
       attachGroupCallListeners(gcallMgr);
       loggerLog('[GCall] Manager auto-started.');
     } catch (err) {
@@ -273,6 +298,8 @@ async function setupMultiInstanceUserData(
 // Set isQuitting flag before the app quits
 app.on('before-quit', () => {
   setIsQuitting(true);
+  stopReticulumBridge();
+  stopBundledReticulumDaemon();
   flushPersistentStore();
   flushChatStore();
 });

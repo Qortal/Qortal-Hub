@@ -69,9 +69,8 @@ import {
 import {
   startPresenceManager,
   stopPresenceManager,
+  publishPresenceEnvelope,
   getPresenceManager,
-  type PresenceEnvelope,
-  PRESENCE_MESSAGE_TYPES,
 } from './presence';
 import {
   startChatManager,
@@ -87,6 +86,11 @@ import {
   GC_MESSAGE_TYPES,
 } from './group-call';
 import type { GcEnvelope } from './group-call';
+import {
+  startReticulumBridge,
+  stopReticulumBridge,
+  getReticulumBridge,
+} from './reticulum-bridge';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -1501,9 +1505,16 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     const network = await startP2PNetwork(opts);
     attachP2PListeners(network);
     await startDecentralizedStunAfterP2P(network, opts);
+    let bridgeTransport = getReticulumBridge();
+    try {
+      bridgeTransport = await startReticulumBridge();
+    } catch (err) {
+      loggerError('[ReticulumBridge] Failed to start:', err);
+      bridgeTransport = null;
+    }
     // (Re-)start the presence manager wired to the new network instance.
     stopPresenceManager();
-    const pm = startPresenceManager(network);
+    const pm = startPresenceManager(bridgeTransport ? [bridgeTransport] : []);
     attachPresenceListeners(pm);
     // (Re-)start the chat manager backed by the shared SQLite database.
     stopChatManager();
@@ -1516,11 +1527,11 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     attachChatListeners(cm);
     // (Re-)start the call manager wired to the network + presence manager.
     stopCallManager();
-    const callMgr = startCallManager(network, pm);
+    const callMgr = startCallManager(network, pm, bridgeTransport);
     attachCallListeners(callMgr);
     // (Re-)start the group call manager.
     stopGroupCallManager();
-    const gcallMgr = startGroupCallManager(network, pm);
+    const gcallMgr = startGroupCallManager(network, pm, bridgeTransport);
     attachGroupCallListeners(gcallMgr);
     // Notify renderers that P2P / presence is live again.
     flushPresenceUpdates();
@@ -1542,6 +1553,7 @@ ipcMain.handle('p2p:stop', async () => {
     queuedPresenceUpdates.clear();
     flushPresenceUpdates();
     broadcastToSet(presenceUpdateSubscribers, 'presence:cleared', {});
+    stopReticulumBridge();
     stopPresenceManager();
     stopChatManager();
     stopCallManager();
@@ -1660,16 +1672,8 @@ async function handleLocalPresenceEnvelope(
   envelope: unknown
 ): Promise<boolean> {
   const pm = getPresenceManager();
-  const p2p = getP2PNetwork();
-  if (!pm || !p2p) return false;
-
-  const accepted = await pm.handleEnvelope(envelope, 'local');
-  if (accepted) {
-    // Broadcast to connected peers. p2p.send() creates a new P2P message
-    // (new ID) which gossips the presence envelope once across the network.
-    p2p.send(null, envelope as PresenceEnvelope);
-  }
-  return accepted;
+  if (!pm) return false;
+  return publishPresenceEnvelope(envelope as any);
 }
 
 ipcMain.handle('presence:announce', async (_event, envelope: unknown) => {
@@ -1968,7 +1972,7 @@ ipcMain.handle(
   ) => {
     const mgr = getCallManager();
     if (!mgr) return { success: false, error: 'Call manager not running' };
-    const resultCallId = mgr.initiateCall(
+    const resultCallId = await mgr.initiateCall(
       targetAddress,
       chatId,
       localAddress,
@@ -2041,11 +2045,12 @@ ipcMain.handle(
     data: unknown,
     signature?: string,
     publicKey?: string,
-    timestamp?: number
+    timestamp?: number,
+    sdpHash?: string
   ) => {
     const mgr = getCallManager();
     if (!mgr) return { success: false, error: 'Call manager not running' };
-    mgr.sendSignal(callId, type, data, signature, publicKey, timestamp);
+    mgr.sendSignal(callId, type, data, signature, publicKey, timestamp, sdpHash);
     return { success: true };
   }
 );
@@ -2111,7 +2116,6 @@ export function attachGroupCallListeners(
   manager.on('gcall:key', forward('gcall:key'));
   manager.on('gcall:key-request', forward('gcall:key-request'));
   manager.on('gcall:session-updated', forward('gcall:session-updated'));
-  manager.on('gcall:rtc-signal', forward('gcall:rtc-signal'));
   manager.on('gcall:qortal-group-call-activity', (payload: unknown) =>
     broadcastToSet(gcallActivitySubscribers, 'gcall:qortal-group-call-activity', payload)
   );
@@ -2363,42 +2367,24 @@ ipcMain.handle('gcall:requestSessionBreak', async (_event, roomId: string) => {
 });
 
 ipcMain.handle(
-  'gcall:sendRtcSignal',
-  async (
-    _event,
-    roomId: string,
-    fromAddress: string,
-    toAddress: string,
-    type: 'offer' | 'answer' | 'ice' | 'reconnect',
-    data: unknown,
-    connId: string,
-    signature?: string,
-    publicKey?: string,
-    timestamp?: number
-  ) => {
-    const mgr = getGroupCallManager();
-    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.sendRtcSignal(
-      roomId,
-      fromAddress,
-      toAddress,
-      type,
-      data,
-      connId,
-      signature,
-      publicKey,
-      timestamp
-    );
-    return { success: true };
-  }
-);
-
-ipcMain.handle(
   'gcall:setLocalAddresses',
   async (_event, addresses: string[]) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
     mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
+  'gcall:setQortalGroupReticulumTargets',
+  async (_event, roomId: string, addresses: string[]) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.setQortalGroupReticulumTargets(
+      typeof roomId === 'string' ? roomId : '',
+      Array.isArray(addresses) ? addresses : []
+    );
     return { success: true };
   }
 );

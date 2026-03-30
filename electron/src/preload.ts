@@ -275,6 +275,14 @@ try {
       p2pEnabled?: boolean;
       legacyPublicStunFallback?: boolean;
     }) => ipcRenderer.invoke('appSettings:set', settings),
+    reticulumGetStatus: () =>
+      ipcRenderer.invoke('reticulum:getStatus') as Promise<{
+        running: boolean;
+        pid?: number;
+        mode: 'frozen' | 'venv' | 'system' | null;
+        configDir: string;
+        reason?: string;
+      }>,
   });
 
   // Expose other utility functions
@@ -880,8 +888,19 @@ try {
       data: unknown,
       signature?: string,
       publicKey?: string,
-      timestamp?: number
-    ) => ipcRenderer.invoke('call:sendSignal', callId, type, data, signature, publicKey, timestamp),
+      timestamp?: number,
+      sdpHash?: string
+    ) =>
+      ipcRenderer.invoke(
+        'call:sendSignal',
+        callId,
+        type,
+        data,
+        signature,
+        publicKey,
+        timestamp,
+        sdpHash
+      ),
 
     /**
      * Send a Tier-3 audio chunk over the P2P relay.
@@ -1031,7 +1050,7 @@ try {
       signature: string
     ) => ipcRenderer.invoke('gcall:sendClusterHeartbeat', roomId, payload, signature),
 
-    /** Send a P2P-relay audio packet to a specific participant. */
+    /** Send a group audio packet to a specific participant via the main transport. */
     sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
       ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
 
@@ -1097,22 +1116,16 @@ try {
         error?: string;
       }>,
 
-    /** Send a WebRTC signal (offer/answer/ice/reconnect) to a specific participant. */
-    sendRtcSignal: async (
-      roomId: string,
-      fromAddress: string,
-      toAddress: string,
-      type: 'offer' | 'answer' | 'ice' | 'reconnect',
-      data: unknown,
-      connId: string,
-      signature?: string,
-      publicKey?: string,
-      timestamp?: number
-    ) => ipcRenderer.invoke('gcall:sendRtcSignal', roomId, fromAddress, toAddress, type, data, connId, signature, publicKey, timestamp),
-
     /** Register the local user's address with the group call manager. */
     setLocalAddresses: async (addresses: string[]) =>
       ipcRenderer.invoke('gcall:setLocalAddresses', addresses),
+
+    /** Sync authoritative Qortal group member addresses for Reticulum call-activity fanout. */
+    setQortalGroupReticulumTargets: async (roomId: string, addresses: string[]) =>
+      ipcRenderer.invoke('gcall:setQortalGroupReticulumTargets', roomId, addresses) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
 
     /** Get current participants in a room. */
     getRoomParticipants: async (roomId: string) =>
@@ -1174,7 +1187,6 @@ try {
         'gcall:key',
         'gcall:key-request',
         'gcall:session-updated',
-        'gcall:rtc-signal',
       ] as const;
 
       const handlers: Map<string, (...args: unknown[]) => void> = new Map();

@@ -1,0 +1,74 @@
+name: Electron Cross-Platform Builds
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-latest
+            node: "22"
+            python: "3.12"
+            npm_script: electron:make-lin
+            artifact_glob: electron/dist/**
+          - name: Windows x64
+            os: windows-latest
+            node: "22"
+            python: "3.12"
+            npm_script: electron:make-win
+            artifact_glob: electron/dist/**
+          - name: macOS
+            os: macos-latest
+            node: "22"
+            python: "3.12"
+            npm_script: electron:make-mac
+            artifact_glob: electron/dist/**
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            electron/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install electron dependencies
+        working-directory: electron
+        run: npm ci
+
+      - name: Build packaged app
+        working-directory: electron
+        run: npm run ${{ matrix.npm_script }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: qortal-hub-${{ matrix.name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error

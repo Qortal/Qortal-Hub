@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'events';
 import {
   buildGroupRoomBootstrapState,
   chooseMainTopologyAuthority,
   GC_JOIN_MAX_AGE_MS,
+  decodeGcReticulumActivityWire,
   gcJoinTimestampRejectReason,
   getLocalSessionBreakMediaSessionGeneration,
   GroupCallManager,
@@ -14,6 +16,64 @@ import {
   shouldIgnoreLeaveForLocalAddress,
   shouldRefreshParticipantFromVerifiedJoin,
 } from './group-call';
+
+function reticulumAwarePresenceStub(): PresenceStub {
+  return {
+    on: () => {},
+    off: () => {},
+    getRouteForAddress: (address: string) => ({
+      kind: 'reticulum' as const,
+      destinationHash: `d:${address}`,
+    }),
+    getNodeIdForAddress: () => null,
+  };
+}
+
+type PresenceStub = {
+  on: () => void;
+  off: () => void;
+  getRouteForAddress: (address: string) => {
+    kind: 'reticulum';
+    destinationHash: string;
+  };
+  getNodeIdForAddress: () => null;
+};
+
+function reticulumBridgeReadyStub(
+  sent: Array<{ hash: string; msg: Record<string, unknown> }>
+): ReticulumBridgeStub {
+  return {
+    getState: () => 'ready',
+    sendGroupCallDetailed: (hash: string, msg: Record<string, unknown>) => {
+      sent.push({ hash, msg });
+      return Promise.resolve({ ok: true as const });
+    },
+    sendGroupCall: (hash: string, msg: Record<string, unknown>) => {
+      sent.push({ hash, msg });
+      return Promise.resolve(true);
+    },
+    on: () => {},
+    off: () => {},
+  };
+}
+
+type ReticulumBridgeStub = {
+  getState: () => 'ready';
+  sendGroupCallDetailed: (
+    hash: string,
+    msg: Record<string, unknown>
+  ) => Promise<{ ok: true } | { ok: false; reason: string; error?: string }>;
+  sendGroupCall: (
+    hash: string,
+    msg: Record<string, unknown>
+  ) => Promise<boolean>;
+  on: () => void;
+  off: () => void;
+};
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('mergeRoomTopologyEpochWithFloor', () => {
   it('uses max of current and non-negative floor', () => {
@@ -99,25 +159,53 @@ describe('recent room bootstrap state', () => {
   });
 
   it('does not revive cached participants into live rejoin bootstrap state', () => {
-    const sent: unknown[] = [];
+    const reticulumSent: Array<{ hash: string; msg: Record<string, unknown> }> =
+      [];
     const manager = new GroupCallManager(
       {
-        send: (_nodeId: string | null, payload: unknown) => {
-          sent.push(payload);
-        },
+        send: () => {},
       } as any,
-      {} as any
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub(reticulumSent) as any
     );
 
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user1', 'sig', 'pk1', 100);
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user2', 'sig', 'pk2', 200);
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', 300);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-user1',
+      'sig',
+      'pk1',
+      100
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-user2',
+      'sig',
+      'pk2',
+      200
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-user3',
+      'sig',
+      'pk3',
+      300
+    );
 
     manager.leaveRoom('gcall-qortal-812', 'Q-user3', 'sig', 'pk3', 400);
 
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', 500);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-user3',
+      'sig',
+      'pk3',
+      500
+    );
 
-    expect(sent.length).toBeGreaterThan(0);
+    expect(reticulumSent.length).toBeGreaterThan(0);
     expect(manager.getRoomParticipants('gcall-qortal-812')).toEqual([
       { address: 'Q-user3', publicKey: 'pk3' },
     ]);
@@ -132,7 +220,8 @@ describe('recent room bootstrap state', () => {
       {
         send: () => {},
       } as any,
-      {} as any
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
     );
 
     const firstJoin = manager.joinRoom(
@@ -143,8 +232,22 @@ describe('recent room bootstrap state', () => {
       'pk-root',
       t0
     );
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user2', 'sig', 'pk2', t0 + 100);
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', t0 + 200);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-user2',
+      'sig',
+      'pk2',
+      t0 + 100
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-user3',
+      'sig',
+      'pk3',
+      t0 + 200
+    );
 
     manager.broadcastTopology(
       'gcall-qortal-812',
@@ -169,12 +272,21 @@ describe('recent room bootstrap state', () => {
     );
 
     manager.leaveRoom('gcall-qortal-812', 'Q-user3', 'sig', 'pk3', t0 + 400);
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-user3', 'sig', 'pk3', t0 + 500);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-user3',
+      'sig',
+      'pk3',
+      t0 + 500
+    );
 
     const bootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
 
     expect(bootstrap).toMatchObject({
-      participants: [{ address: 'Q-user3', publicKey: 'pk3', joinedAt: t0 + 500 }],
+      participants: [
+        { address: 'Q-user3', publicKey: 'pk3', joinedAt: t0 + 500 },
+      ],
       topologyEpoch: 17,
       lastTopology: {
         topologyEpoch: 17,
@@ -185,8 +297,235 @@ describe('recent room bootstrap state', () => {
       mediaSessionGeneration: firstJoin.mediaSessionGeneration,
     });
   });
+
+  it('retries first-contact Reticulum join fanout after unknown peer discovery lag', async () => {
+    vi.useFakeTimers();
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    let attempts = 0;
+    const manager = new GroupCallManager(
+      { send: () => {} } as any,
+      reticulumAwarePresenceStub() as any,
+      {
+        getState: () => 'ready',
+        sendGroupCallDetailed: async (
+          hash: string,
+          msg: Record<string, unknown>
+        ) => {
+          attempts += 1;
+          sent.push({ hash, msg });
+          if (attempts === 1) {
+            return {
+              ok: false as const,
+              reason: 'unknown-peer-presence-hash',
+              error: 'Unknown peer presence hash',
+            };
+          }
+          return { ok: true as const };
+        },
+        sendGroupCall: async () => true,
+        on: () => {},
+        off: () => {},
+      } as any
+    );
+
+    manager.setQortalGroupReticulumTargets('gcall-qortal-812', ['Q-peer']);
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-self', 'sig', 'pk', 100);
+
+    expect(attempts).toBe(1);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(attempts).toBeGreaterThan(1);
+    expect(sent.some((entry) => entry.msg.t === 'GJ')).toBe(true);
+  });
 });
 
+describe('Reticulum group audio transport', () => {
+  it('opens a persistent Reticulum audio link and sends queued audio', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      sendGroupAudio = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      {
+        send: () => {},
+      } as any,
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100);
+
+    const ok = manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(ok).toBe(true);
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledWith('d:Q-peer');
+    expect(bridge.sendGroupAudio).toHaveBeenCalledWith(
+      'link-1',
+      'room-1',
+      Buffer.from([1, 2, 3]).toString('base64')
+    );
+  });
+
+  it('emits inbound Reticulum audio as gcall:audio with the mapped sender address', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      sendGroupAudio = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      {
+        send: () => {},
+      } as any,
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    const seen: Array<Record<string, unknown>> = [];
+    manager.on('gcall:audio', (payload) => {
+      seen.push(payload as Record<string, unknown>);
+    });
+
+    manager.start();
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100);
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    bridge.emit('group-audio-packet', {
+      linkId: 'link-1',
+      roomId: 'room-1',
+      data: Buffer.from([7, 8, 9]).toString('base64'),
+      peerPresenceHash: 'd:Q-peer',
+      peerCallHash: 'call-peer',
+      incoming: true,
+    });
+
+    expect(seen).toEqual([
+      {
+        roomId: 'room-1',
+        data: Buffer.from([7, 8, 9]),
+        fromAddress: 'Q-peer',
+      },
+    ]);
+    manager.stop();
+  });
+});
+
+describe('Reticulum group activity hints', () => {
+  it('accepts fresh GA wires and rejects malformed or stale ones', () => {
+    const now = 100_000;
+    expect(
+      decodeGcReticulumActivityWire({ t: 'GA', g: 812, m: now - 5_000 }, now)
+    ).toEqual({
+      groupId: 812,
+      timestamp: now - 5_000,
+    });
+    expect(
+      decodeGcReticulumActivityWire({ t: 'GA', g: 812.5, m: now }, now)
+    ).toBeNull();
+    expect(
+      decodeGcReticulumActivityWire({ t: 'GA', g: 812, m: now - 50_000 }, now)
+    ).toBeNull();
+  });
+
+  it('feeds valid Reticulum hints into watched group activity snapshots', () => {
+    const manager = new GroupCallManager(
+      {
+        send: () => {},
+      } as any,
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    expect(manager.setWatchedQortalGroupIds([812])).toEqual({});
+    (manager as any).handleReticulumGroupCallWire(
+      {
+        t: 'GA',
+        g: 812,
+        m: Date.now(),
+      },
+      ''
+    );
+    expect(manager.setWatchedQortalGroupIds([812])).toEqual({
+      '812': true,
+    });
+  });
+
+  it('ignores relayed mesh control traffic for watched sidebar activity', () => {
+    const relayed: unknown[] = [];
+    const manager = new GroupCallManager(
+      {
+        send: (_nodeId: string | null, payload: unknown) => {
+          relayed.push(payload);
+        },
+      } as any,
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    expect(manager.setWatchedQortalGroupIds([812])).toEqual({});
+
+    manager.handleIncoming({
+      type: 'GC_JOIN',
+      roomId: 'gcall-qortal-812',
+      chatId: 'chat-812',
+      fromAddress: 'Q-peer',
+      fromPublicKey: 'pk-peer',
+      signature: 'sig',
+      timestamp: Date.now(),
+      hopsRemaining: 2,
+    });
+
+    manager.handleIncoming({
+      type: 'GC_TOPOLOGY',
+      roomId: 'gcall-qortal-812',
+      fromAddress: 'Q-peer',
+      fromPublicKey: 'pk-peer',
+      signature: 'sig',
+      timestamp: Date.now(),
+      topologyEpoch: 1,
+      rootForwarder: 'Q-peer',
+      standbyForwarder: 'Q-peer2',
+      clusters: [],
+      lastSeen: Date.now(),
+      hopsRemaining: 2,
+    });
+
+    expect(relayed.length).toBe(0);
+    expect(manager.setWatchedQortalGroupIds([812])).toEqual({});
+  });
+});
 
 describe('pendingKeyEnvelopeWinsOver', () => {
   it('prefers strictly higher mediaSessionGeneration regardless of timestamp', () => {
@@ -299,7 +638,9 @@ describe('gcJoinTimestampRejectReason', () => {
   });
 
   it('rejects too old', () => {
-    expect(gcJoinTimestampRejectReason(t0, t0 + GC_JOIN_MAX_AGE_MS + 1)).toBe('expired');
+    expect(gcJoinTimestampRejectReason(t0, t0 + GC_JOIN_MAX_AGE_MS + 1)).toBe(
+      'expired'
+    );
   });
 
   it('rejects too far in the future', () => {
@@ -310,19 +651,13 @@ describe('gcJoinTimestampRejectReason', () => {
 describe('shouldIgnoreLeaveForLocalAddress', () => {
   it('ignores relayed leave for the active local address', () => {
     expect(
-      shouldIgnoreLeaveForLocalAddress(
-        new Set(['Q-local']),
-        'Q-local'
-      )
+      shouldIgnoreLeaveForLocalAddress(new Set(['Q-local']), 'Q-local')
     ).toBe(true);
   });
 
   it('does not ignore leave for a remote participant', () => {
     expect(
-      shouldIgnoreLeaveForLocalAddress(
-        new Set(['Q-local']),
-        'Q-remote'
-      )
+      shouldIgnoreLeaveForLocalAddress(new Set(['Q-local']), 'Q-remote')
     ).toBe(false);
   });
 });

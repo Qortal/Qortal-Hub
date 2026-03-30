@@ -4,6 +4,16 @@
   "copyright": "Copyright © 2021 - 2025 Qortal",
   "compression": "normal",
   "asar": true,
+  "extraResources": [
+    {
+      "from": "resources/reticulum",
+      "to": "reticulum"
+    },
+    {
+      "from": "resources/reticulum-runtime",
+      "to": "reticulum-runtime"
+    }
+  ],
   "files": ["assets/**/*", "build/**/*", "capacitor.config.*", "app/**/*"],
   "asarUnpack": ["build/src/ed25519-verify.worker.js"],
   "win": {

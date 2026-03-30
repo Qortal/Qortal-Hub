@@ -663,6 +663,24 @@ describe('group-call router helpers', () => {
     });
   });
 
+  it('getGroupCallTransportSummary: reports Reticulum when configured as primary transport', () => {
+    expect(
+      getGroupCallTransportSummary(
+        {
+          relayPacketsSent: 0,
+          relayPacketsReceived: 0,
+          lastRelayActivityAtMs: 0,
+          dcTransportReady: true,
+          mediaTransport: 'reticulum',
+        },
+        5_000
+      )
+    ).toMatchObject({
+      mode: 'reticulum',
+      label: 'Reticulum',
+    });
+  });
+
   it('getGroupCallTransportSummary: connecting when not ready and relay stale', () => {
     expect(
       getGroupCallTransportSummary(

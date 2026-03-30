@@ -13,12 +13,6 @@ import {
   STUN_FIXED_UDP_PORT,
   STUN_WIRE_VERSION,
 } from './stun-bootstrap';
-import {
-  bufferStartsWithGcAudioBinaryMagic,
-  parseGcAudioBinaryFrame,
-  MAX_GC_AUDIO_BINARY_FRAME_BYTES,
-  type GcAudioBinaryDecoded,
-} from './gc-audio-binary-frame';
 
 export const DEFAULT_P2P_PORT = 62391;
 export const DEFAULT_MAX_PEERS = 16;
@@ -36,18 +30,13 @@ const MAX_PEER_ADDRS = 16;
 /** Max bytes for one newline-delimited JSON line (excluding `\n`). */
 const MAX_JSON_LINE_BYTES = 256 * 1024;
 
-/**
- * Max bytes buffered while waiting for a complete binary GC_AUDIO frame after magic.
- * (Separate from JSON line limit — see binary GC_AUDIO plan.)
- */
-const MAX_BINARY_INCOMPLETE_RX_BYTES = 2 * MAX_GC_AUDIO_BINARY_FRAME_BYTES;
+/** Max bytes buffered while waiting for a complete JSON line. */
+const MAX_BINARY_INCOMPLETE_RX_BYTES = MAX_JSON_LINE_BYTES;
 
 /**
- * Pre-concat ceiling: must allow buffering up to one max JSON line before `\n`
- * (e.g. chat sync), plus one max binary frame headroom.
+ * Pre-concat ceiling: allow buffering up to one max JSON line before `\n`.
  */
-const MAX_P2P_RX_BUFFER_HARD_CAP =
-  MAX_JSON_LINE_BYTES + MAX_GC_AUDIO_BINARY_FRAME_BYTES;
+const MAX_P2P_RX_BUFFER_HARD_CAP = MAX_JSON_LINE_BYTES;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,11 +89,6 @@ export interface P2PNetworkOptions {
    *  When provided, discovered peers are loaded on startup and persisted on
    *  discovery so all Electron instances share the same peer pool. */
   dbPath?: string;
-  /**
-   * When false, omit `gcAudioBinaryWire` from handshake so peers stay on JSON GC_AUDIO only.
-   * Default true.
-   */
-  gcAudioBinaryWire?: boolean;
 }
 
 // ── Internal peer record ─────────────────────────────────────────────────────
@@ -116,10 +100,8 @@ interface PeerRecord extends P2PPeerInfo {
   dialAddr: string;
   reconnectAttempts: number;
   reconnectTimer?: ReturnType<typeof setTimeout>;
-  /** Partial-read buffer: length-prefixed binary GC_AUDIO records or newline JSON. */
+  /** Partial-read buffer for newline-delimited JSON records. */
   rxBuffer: Buffer;
-  /** Remote peer advertised `gcAudioBinaryWire` in handshake — can receive v1 binary GC_AUDIO. */
-  supportsGcAudioBinary?: boolean;
   /** Set to true when this peer is intentionally dropped (e.g. duplicate
    *  tie-break).  Prevents onClose from scheduling a reconnect. */
   abortReconnect?: boolean;
@@ -253,9 +235,6 @@ export class P2PNetwork extends EventEmitter {
   private ipConnCount = new Map<string, { count: number; windowStart: number }>();
   private readonly MAX_INBOUND_PER_IP = 5;
   private readonly IP_WINDOW_MS = 60_000;
-  /** Advertise binary GC_AUDIO wire in handshake (rollout toggle). */
-  private readonly advertiseGcAudioBinaryWire: boolean;
-
   constructor(options: P2PNetworkOptions = {}) {
     super();
     this.port = options.port ?? DEFAULT_P2P_PORT;
@@ -264,7 +243,6 @@ export class P2PNetwork extends EventEmitter {
     this.initialPeers = options.initialPeers ?? [];
     this.nodeId = crypto.randomUUID();
     this.selfAddresses = buildSelfAddresses();
-    this.advertiseGcAudioBinaryWire = options.gcAudioBinaryWire !== false;
 
     if (options.dbPath) {
       try {
@@ -459,25 +437,6 @@ export class P2PNetwork extends EventEmitter {
     // No direct connection (or broadcast): gossip to everyone
     this.gossip(msg, null);
     return msg.id;
-  }
-
-  /**
-   * True if `nodeId` is a directly connected peer that advertised binary GC_AUDIO.
-   */
-  canSendBinaryGcAudio(nodeId: string): boolean {
-    const peer = this.peers.get(nodeId);
-    return !!(peer?.connected && peer.supportsGcAudioBinary);
-  }
-
-  /**
-   * Write a pre-encoded binary GC_AUDIO frame to a direct peer.
-   * Re-checks `canSendBinaryGcAudio` and socket liveness; returns false if no bytes sent.
-   */
-  writeGcAudioBinaryFrame(nodeId: string, wire: Buffer): boolean {
-    if (!this.canSendBinaryGcAudio(nodeId)) return false;
-    const peer = this.peers.get(nodeId);
-    if (!peer) return false;
-    return this.writeBinaryToSocket(peer, wire);
   }
 
   /** Attempt to connect to a new peer address ("host:port"). */
@@ -897,24 +856,6 @@ export class P2PNetwork extends EventEmitter {
     for (;;) {
       if (peer.rxBuffer.length === 0) return;
 
-      if (bufferStartsWithGcAudioBinaryMagic(peer.rxBuffer)) {
-        const pr = parseGcAudioBinaryFrame(peer.rxBuffer);
-        if (pr.ok === true) {
-          this.handleBinaryGcAudioFrame(peer, pr.frame);
-          peer.rxBuffer = peer.rxBuffer.subarray(pr.consumed);
-          continue;
-        }
-        if (pr.code === 'incomplete') {
-          if (peer.rxBuffer.length > MAX_BINARY_INCOMPLETE_RX_BYTES) {
-            loggerError(`[P2P] Incomplete binary frame, RX cap (${peer.id})`);
-            peer.socket.destroy();
-          }
-          return;
-        }
-        peer.rxBuffer = peer.rxBuffer.subarray(pr.consumed);
-        continue;
-      }
-
       const nl = peer.rxBuffer.indexOf(0x0a);
       if (nl === -1) {
         if (peer.rxBuffer.length > MAX_JSON_LINE_BYTES) {
@@ -945,30 +886,6 @@ export class P2PNetwork extends EventEmitter {
         loggerError(`[P2P] Malformed message from ${peer.id}`);
       }
     }
-  }
-
-  private handleBinaryGcAudioFrame(
-    peer: PeerRecord,
-    frame: GcAudioBinaryDecoded
-  ): void {
-    if (this.hasSeen(frame.dedupKeyHex)) return;
-    this.markSeen(frame.dedupKeyHex);
-
-    const forMe = !frame.toNodeId || frame.toNodeId === this.nodeId;
-    if (!forMe) {
-      // v1: binary GC_AUDIO is direct-unicast only; no P2P binary relay.
-      return;
-    }
-
-    this.emit('binary-gc-audio', {
-      fromNodeId: frame.fromNodeId,
-      via: peer.id,
-      roomId: frame.roomId,
-      toAddress: frame.toAddress,
-      ciphertext: frame.ciphertext,
-      gcHopsRemaining: frame.gcHopsRemaining,
-      p2pHops: frame.p2pHops,
-    });
   }
 
   private onClose(peer: PeerRecord): void {
@@ -1172,7 +1089,6 @@ export class P2PNetwork extends EventEmitter {
     peer.connected = true;
     peer.canAcceptInbound = advertisedCanAcceptInbound;
     peer.remoteStunUdpPort = advertisedStunUdp;
-    peer.supportsGcAudioBinary = handshakeData?.gcAudioBinaryWire === 1;
     peer.connectedAt = Date.now();
     // Latch: once we've successfully accepted an inbound connection our port
     // is proven reachable — remember it for the rest of this session.
@@ -1365,9 +1281,6 @@ export class P2PNetwork extends EventEmitter {
       stunUdpPort: STUN_FIXED_UDP_PORT,
       stunWireVersion: STUN_WIRE_VERSION,
     };
-    if (this.advertiseGcAudioBinaryWire) {
-      data.gcAudioBinaryWire = 1;
-    }
     this.writeToSocket(peer, {
       id: crypto.randomUUID(),
       type: 'handshake',
@@ -1378,7 +1291,7 @@ export class P2PNetwork extends EventEmitter {
     });
   }
 
-  /** Fan-out JSON messages. Phase 3b: per-peer binary vs JSON for GC_AUDIO (not in v1). */
+  /** Fan-out JSON messages to all connected peers. */
   private gossip(msg: P2PMessage, excludeId: string | null): void {
     for (const peer of this.peers.values()) {
       if (!peer.connected || peer.id === excludeId) continue;

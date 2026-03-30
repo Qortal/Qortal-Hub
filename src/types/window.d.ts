@@ -34,6 +34,14 @@ declare global {
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
       }>;
+      /** Reticulum (rnsd) child process status from main process. */
+      reticulumGetStatus?: () => Promise<{
+        running: boolean;
+        pid?: number;
+        mode: 'frozen' | 'venv' | 'system' | null;
+        configDir: string;
+        reason?: string;
+      }>;
     };
     videoServer?: {
       start: (port?: number) => Promise<{ success: boolean; port?: number; error?: string }>;
@@ -246,7 +254,7 @@ declare global {
       accept: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       reject: (callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       hangup: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      sendSignal: (callId: string, type: 'offer' | 'answer' | 'ice', data: unknown, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
+      sendSignal: (callId: string, type: 'offer' | 'answer' | 'ice', data: unknown, signature?: string, publicKey?: string, timestamp?: number, sdpHash?: string) => Promise<{ success: boolean }>;
       sendAudio: (callId: string, seq: number, data: string) => Promise<{ success: boolean }>;
       getPublicIpPeers: () => Promise<Array<{ id: string; ip: string; port: number }>>;
       whoami: () => Promise<{ ip: string; port: number } | null>;
@@ -334,8 +342,11 @@ declare global {
         mediaSessionGeneration: number
       ) => Promise<{ success: boolean }>;
       requestSessionBreak: (roomId: string) => Promise<{ success: boolean; error?: string }>;
-      sendRtcSignal: (roomId: string, fromAddress: string, toAddress: string, type: 'offer' | 'answer' | 'ice' | 'reconnect', data: unknown, connId: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+      setQortalGroupReticulumTargets?: (
+        roomId: string,
+        addresses: string[]
+      ) => Promise<{ success: boolean; error?: string }>;
       reportTransportHealth?: (
         roomId: string,
         healthyPeerAddresses: string[]
@@ -487,7 +498,6 @@ declare global {
     sessionId: string;
     status: UserStatus;
     clientVersion: string;
-    capabilities?: string[];
   }
 
   interface PresenceHeartbeatPayload {

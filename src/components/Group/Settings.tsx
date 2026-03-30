@@ -78,6 +78,13 @@ export const LocalNodeSwitch = styled(Switch)(({ theme }) => ({
 }));
 
 type CloseAction = 'ask' | 'minimizeToTray' | 'quit';
+type ReticulumStatus = {
+  running: boolean;
+  pid?: number;
+  mode: 'frozen' | 'venv' | 'system' | null;
+  configDir: string;
+  reason?: string;
+};
 
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
@@ -85,6 +92,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
   const [p2pEnabled, setP2pEnabled] = useState(true);
   const [platform, setPlatform] = useState<string>('');
+  const [reticulumStatus, setReticulumStatus] =
+    useState<ReticulumStatus | null>(null);
   const setOnlineAddresses = useSetAtom(onlineAddressesAtom);
   const setStatusMap = useSetAtom(statusMapAtom);
   const theme = useTheme();
@@ -172,6 +181,32 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   useEffect(() => {
     if (window?.electronAPI) loadAppSettings();
   }, [loadAppSettings]);
+
+  const loadReticulumStatus = useCallback(async () => {
+    if (typeof window.electronAPI?.reticulumGetStatus !== 'function') return;
+    try {
+      const status = await window.electronAPI.reticulumGetStatus();
+      setReticulumStatus(status);
+    } catch (error) {
+      setReticulumStatus({
+        running: false,
+        mode: null,
+        configDir: '',
+        reason: error instanceof Error ? error.message : 'Unable to read status',
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open || typeof window.electronAPI?.reticulumGetStatus !== 'function') {
+      return;
+    }
+    void loadReticulumStatus();
+    const timer = window.setInterval(() => {
+      void loadReticulumStatus();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [loadReticulumStatus, open]);
 
   const handleCloseActionChange = useCallback(
     async (value: CloseAction) => {
@@ -344,6 +379,61 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                     checked={p2pEnabled}
                     onChange={(e) => handleP2pToggle(e.target.checked)}
                   />
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: 2,
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Reticulum daemon
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.disabled"
+                      sx={{
+                        display: 'block',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {reticulumStatus?.running
+                        ? `Config: ${reticulumStatus.configDir}`
+                        : reticulumStatus?.reason || 'Not started'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: reticulumStatus?.running
+                          ? theme.palette.success.main
+                          : theme.palette.warning.main,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {reticulumStatus?.running ? 'Running' : 'Not running'}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled">
+                      {reticulumStatus?.mode === 'frozen'
+                        ? 'Bundled binary'
+                        : reticulumStatus?.mode === 'venv'
+                          ? 'Bundled Python venv'
+                          : reticulumStatus?.mode === 'system'
+                            ? 'System Python (dev)'
+                            : 'Unavailable'}
+                      {reticulumStatus?.pid ? ` • PID ${reticulumStatus.pid}` : ''}
+                    </Typography>
+                  </Box>
                 </Box>
                 <Box
                   sx={{

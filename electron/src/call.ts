@@ -24,13 +24,23 @@
  * ICE candidates and out-of-order audio chunks are useless anyway.
  */
 
-import * as nodeCrypto from 'crypto';
 import { EventEmitter } from 'events';
+import { ReticulumSdpSession, allowIceReticulum } from './call-reticulum-sdp';
+import {
+  RT_CALL_ROUTE_POLL_MS,
+  RT_CALL_ROUTE_WINDOW_MS,
+  RT_ICE_MAX_PER_SEC,
+  buildSdpWireFrames,
+  decodeReticulumCallWire,
+  encodeReticulumCallWire,
+  sha256HexUtf8,
+} from './call-wire-reticulum';
 import { log as loggerLog, error as loggerError } from './logger';
 import { deriveAddressFromPublicKey } from './presence';
 import { VerifyWorkerPool } from './verify-worker-pool';
 import type { P2PNetwork } from './p2p-network';
 import type { PresenceManager } from './presence';
+import type { ReticulumBridge } from './reticulum-bridge';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -115,9 +125,11 @@ export interface CallOfferEnvelope {
   type: 'CALL_OFFER';
   callId: string;
   sdp: string;
+  /** SHA-256 hex (lowercase) of SDP UTF-8; included in the signed payload. */
+  sdpHash: string;
   /** Base58-encoded Ed25519 public key of the offering peer. */
   fromPublicKey: string;
-  /** Ed25519 signature over canonicalized { callId, timestamp, type }. */
+  /** Ed25519 signature over canonicalized { callId, timestamp, type, sdpHash }. */
   signature: string;
   timestamp: number;
   hopsRemaining?: number;
@@ -127,9 +139,11 @@ export interface CallAnswerEnvelope {
   type: 'CALL_ANSWER';
   callId: string;
   sdp: string;
+  /** SHA-256 hex (lowercase) of SDP UTF-8; included in the signed payload. */
+  sdpHash: string;
   /** Base58-encoded Ed25519 public key of the answering peer. */
   fromPublicKey: string;
-  /** Ed25519 signature over canonicalized { callId, timestamp, type }. */
+  /** Ed25519 signature over canonicalized { callId, timestamp, type, sdpHash }. */
   signature: string;
   timestamp: number;
   hopsRemaining?: number;
@@ -188,6 +202,10 @@ interface CallRecord {
   remoteAddress: string;
   /** P2P nodeId of the remote peer (used for targeted signal delivery). */
   remoteNodeId: string | null;
+  /** Preferred signaling transport when Reticulum is available. */
+  remoteTransport: 'mesh' | 'reticulum';
+  /** Callee/caller presence destination hash (Reticulum) for `send_call`. */
+  reticulumPeerPresenceHash: string | null;
   chatId: string;
   direction: CallDirection;
   state: CallState;
@@ -224,6 +242,7 @@ const activeAudioRelayStreams = new Set<string>();
 export class CallManager extends EventEmitter {
   private p2p: P2PNetwork;
   private presence: PresenceManager;
+  private reticulumBridge: ReticulumBridge | null;
   private activeCalls = new Map<string, CallRecord>();
   private localAddresses = new Set<string>();
   private verifyPool = new VerifyWorkerPool(
@@ -231,22 +250,71 @@ export class CallManager extends EventEmitter {
     CALL_VERIFY_WORKER_COUNT,
     CALL_MAX_PENDING_VERIFY
   );
+  private reticulumUnsub: (() => void) | null = null;
+  private readonly sdpSession: ReticulumSdpSession;
+  private iceBuckets = new Map<
+    string,
+    { windowStart: number; count: number }
+  >();
 
-  constructor(p2p: P2PNetwork, presence: PresenceManager) {
+  constructor(
+    p2p: P2PNetwork,
+    presence: PresenceManager,
+    reticulumBridge?: ReticulumBridge | null
+  ) {
     super();
     this.p2p = p2p;
     this.presence = presence;
+    this.reticulumBridge = reticulumBridge ?? null;
+    this.sdpSession = new ReticulumSdpSession({
+      sendWire: (peer, msg) => {
+        void this.reticulumBridge?.sendCall(peer, msg);
+      },
+      onReassembled: (args) => {
+        this.deliverReticulumReassembledSdp(args);
+      },
+      onInboundFailed: (callId, reason) => {
+        loggerLog(`[Call] Reticulum SDP inbound failed ${callId}: ${reason}`);
+      },
+      getPeerPresenceHashForAddress: (address) => {
+        const r = this.presence.getRouteForAddress(address);
+        return r?.kind === 'reticulum' ? r.destinationHash : null;
+      },
+      isCallActiveForSdp: (callId) => {
+        const c = this.activeCalls.get(callId);
+        return Boolean(c && c.state === 'active');
+      },
+    });
   }
 
   start(): void {
     this.verifyPool.start();
     this.p2p.on('message', this.onP2PMessage);
+    const bridge = this.reticulumBridge;
+    if (bridge) {
+      const onRt = (
+        wire: Record<string, unknown>,
+        senderCallHash: string
+      ): void => {
+        try {
+          this.onReticulumCallWire(wire, senderCallHash);
+        } catch (err) {
+          loggerError('[Call] Reticulum wire error:', err);
+        }
+      };
+      bridge.on('call-message', onRt);
+      this.reticulumUnsub = () => bridge.off('call-message', onRt);
+    }
     loggerLog('[Call] Manager started.');
   }
 
   stop(): void {
     this.verifyPool.stop();
     this.p2p.off('message', this.onP2PMessage);
+    this.reticulumUnsub?.();
+    this.reticulumUnsub = null;
+    this.sdpSession.disposeAll();
+    this.iceBuckets.clear();
     for (const call of this.activeCalls.values()) {
       if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
     }
@@ -263,9 +331,10 @@ export class CallManager extends EventEmitter {
 
   /**
    * Initiate an outbound call to `targetAddress`.
-   * Returns the new callId, or null if the target appears offline.
+   * Waits briefly for a Reticulum or mesh route, then sends CALL_REQUEST.
+   * Returns the new callId, or null if no route appears in time.
    */
-  initiateCall(
+  async initiateCall(
     targetAddress: string,
     chatId: string,
     localAddress: string,
@@ -273,9 +342,7 @@ export class CallManager extends EventEmitter {
     publicKey: string,
     callId: string,
     timestamp: number
-  ): string | null {
-    const remoteNodeId = this.presence.getNodeIdForAddress(targetAddress);
-
+  ): Promise<string | null> {
     const env: CallRequestEnvelope = {
       type: 'CALL_REQUEST',
       callId,
@@ -287,11 +354,43 @@ export class CallManager extends EventEmitter {
       hopsRemaining: CALL_MAX_HOPS,
     };
 
+    const deadline = Date.now() + RT_CALL_ROUTE_WINDOW_MS;
+    let remoteNodeId: string | null = null;
+    let reticulumPeerHash: string | null = null;
+    let useReticulum = false;
+
+    while (Date.now() < deadline) {
+      const route = this.presence.getRouteForAddress(targetAddress);
+      if (
+        route?.kind === 'reticulum' &&
+        this.reticulumBridge?.getState() === 'ready'
+      ) {
+        reticulumPeerHash = route.destinationHash;
+        useReticulum = true;
+        break;
+      }
+      remoteNodeId = this.presence.getNodeIdForAddress(targetAddress);
+      if (remoteNodeId) {
+        useReticulum = false;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, RT_CALL_ROUTE_POLL_MS));
+    }
+
+    if (!useReticulum && !remoteNodeId) {
+      loggerLog(`[Call] No route to ${targetAddress} within window`);
+      return null;
+    }
+
     const record: CallRecord = {
       callId,
       localAddress,
       remoteAddress: targetAddress,
-      remoteNodeId,
+      remoteNodeId: useReticulum
+        ? this.presence.getNodeIdForAddress(targetAddress)
+        : remoteNodeId,
+      remoteTransport: useReticulum ? 'reticulum' : 'mesh',
+      reticulumPeerPresenceHash: useReticulum ? reticulumPeerHash : null,
       chatId,
       direction: 'outbound',
       state: 'pending',
@@ -301,21 +400,28 @@ export class CallManager extends EventEmitter {
     record.cleanupTimer = setTimeout(() => {
       if (this.activeCalls.get(callId)?.state === 'pending') {
         loggerLog(`[Call] Request ${callId.slice(0, 8)}… timed out.`);
+        this.sdpSession.disposeCall(callId);
+        this.iceBuckets.delete(callId);
         this.activeCalls.delete(callId);
       }
     }, CALL_REQUEST_TTL_MS);
 
     this.activeCalls.set(callId, record);
+    this.sdpSession.registerCallRemoteAddress(callId, targetAddress);
 
-    if (remoteNodeId) {
+    if (useReticulum && reticulumPeerHash) {
+      const wire = encodeReticulumCallWire(env);
+      if (wire) {
+        void this.reticulumBridge?.sendCall(reticulumPeerHash, wire);
+      }
+    } else if (remoteNodeId) {
       this.p2p.send(remoteNodeId, env);
     } else {
-      // Target's nodeId unknown — broadcast via gossip
       this.p2p.send(null, env);
     }
 
     loggerLog(
-      `[Call] Initiated call ${callId.slice(0, 8)}… to ${targetAddress}`
+      `[Call] Initiated call ${callId.slice(0, 8)}… to ${targetAddress} via ${useReticulum ? 'reticulum' : 'mesh'}`
     );
     return callId;
   }
@@ -343,6 +449,9 @@ export class CallManager extends EventEmitter {
     if (!call) return;
     if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
     call.state = 'ended';
+    this.sdpSession.disposeCall(callId);
+    this.sdpSession.unregisterCallRemoteAddress(callId);
+    this.iceBuckets.delete(callId);
     this.activeCalls.delete(callId);
 
     const env: CallRejectEnvelope = {
@@ -363,6 +472,9 @@ export class CallManager extends EventEmitter {
     if (!call) return;
     if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
     call.state = 'ended';
+    this.sdpSession.disposeCall(callId);
+    this.sdpSession.unregisterCallRemoteAddress(callId);
+    this.iceBuckets.delete(callId);
     this.activeCalls.delete(callId);
     activeAudioRelayStreams.delete(callId);
 
@@ -381,7 +493,7 @@ export class CallManager extends EventEmitter {
   /**
    * Forward a WebRTC signal (offer, answer, ice) to the remote peer.
    * `type` must be 'offer', 'answer', or 'ice'.
-   * For 'offer' and 'answer', signature/publicKey/timestamp are required and
+   * For 'offer' and 'answer', signature/publicKey/timestamp and sdpHash are required and
    * verified by the receiver.  ICE candidates are not signed (Tier C).
    */
   sendSignal(
@@ -390,37 +502,96 @@ export class CallManager extends EventEmitter {
     data: unknown,
     signature?: string,
     publicKey?: string,
-    timestamp?: number
+    timestamp?: number,
+    sdpHash?: string
   ): void {
     const call = this.activeCalls.get(callId);
     if (!call || call.state === 'ended') return;
+
+    if (type === 'ice') {
+      if (
+        call.remoteTransport === 'reticulum' &&
+        !allowIceReticulum(this.iceBuckets, callId, RT_ICE_MAX_PER_SEC)
+      ) {
+        return;
+      }
+      const env: CallIceEnvelope = {
+        type: 'CALL_ICE',
+        callId,
+        candidate: data as Record<string, unknown> | null,
+        hopsRemaining: CALL_MAX_HOPS,
+      };
+      this.sendToCall(call, env);
+      return;
+    }
+
+    const sdp = data as string;
+    const h = sdpHash?.toLowerCase() ?? '';
+    if (
+      !signature ||
+      !publicKey ||
+      typeof timestamp !== 'number' ||
+      !/^[0-9a-f]{64}$/i.test(h)
+    ) {
+      loggerLog(`[Call] Dropped ${type}: missing sdpHash or auth fields`);
+      return;
+    }
+    if (sha256HexUtf8(sdp).toLowerCase() !== h) {
+      loggerLog(`[Call] Dropped ${type}: sdpHash mismatch`);
+      return;
+    }
+
+    if (
+      call.remoteTransport === 'reticulum' &&
+      call.reticulumPeerPresenceHash &&
+      this.reticulumBridge?.getState() === 'ready'
+    ) {
+      const dir = type === 'offer' ? 'o' : 'a';
+      const built = buildSdpWireFrames(
+        callId,
+        dir,
+        sdp,
+        h,
+        publicKey,
+        timestamp,
+        signature
+      );
+      if (!built) {
+        loggerLog(`[Call] Failed to build SDP wire frames for ${callId}`);
+        return;
+      }
+      this.sdpSession.startOutbound({
+        peerPresenceHash: call.reticulumPeerPresenceHash,
+        callId,
+        dir,
+        z: h,
+        cs0: built.cs0,
+        cs1List: built.cs1List,
+      });
+      return;
+    }
 
     let env: CallWireEnvelope;
     if (type === 'offer') {
       env = {
         type: 'CALL_OFFER',
         callId,
-        sdp: data as string,
-        fromPublicKey: publicKey ?? '',
-        signature: signature ?? '',
-        timestamp: timestamp ?? Date.now(),
-        hopsRemaining: CALL_MAX_HOPS,
-      };
-    } else if (type === 'answer') {
-      env = {
-        type: 'CALL_ANSWER',
-        callId,
-        sdp: data as string,
-        fromPublicKey: publicKey ?? '',
-        signature: signature ?? '',
-        timestamp: timestamp ?? Date.now(),
+        sdp,
+        sdpHash: h,
+        fromPublicKey: publicKey,
+        signature,
+        timestamp,
         hopsRemaining: CALL_MAX_HOPS,
       };
     } else {
       env = {
-        type: 'CALL_ICE',
+        type: 'CALL_ANSWER',
         callId,
-        candidate: data as Record<string, unknown> | null,
+        sdp,
+        sdpHash: h,
+        fromPublicKey: publicKey,
+        signature,
+        timestamp,
         hopsRemaining: CALL_MAX_HOPS,
       };
     }
@@ -539,7 +710,10 @@ export class CallManager extends EventEmitter {
           return;
         }
         try {
-          this.applyVerifiedIncomingRequest(fromNodeId, env);
+          this.applyVerifiedIncomingRequest(env, {
+            transport: 'mesh',
+            fromNodeId,
+          });
         } catch (err) {
           loggerError('[Call] Error applying CALL_REQUEST:', err);
         }
@@ -588,19 +762,30 @@ export class CallManager extends EventEmitter {
   }
 
   private applyVerifiedIncomingRequest(
-    fromNodeId: string,
-    env: CallRequestEnvelope
+    env: CallRequestEnvelope,
+    ctx:
+      | { transport: 'mesh'; fromNodeId: string }
+      | { transport: 'reticulum'; senderCallHash: string }
   ): void {
     if (this.activeCalls.has(env.callId)) return;
 
     const localRecipient = this.localCallRecipientAddress(env);
 
     if (localRecipient) {
+      const presenceRoute = this.presence.getRouteForAddress(env.fromAddress);
+      const retHash =
+        presenceRoute?.kind === 'reticulum' ? presenceRoute.destinationHash : null;
+
       const record: CallRecord = {
         callId: env.callId,
         localAddress: localRecipient,
         remoteAddress: env.fromAddress,
-        remoteNodeId: fromNodeId,
+        remoteNodeId:
+          ctx.transport === 'mesh'
+            ? ctx.fromNodeId
+            : this.presence.getNodeIdForAddress(env.fromAddress),
+        remoteTransport: ctx.transport === 'reticulum' ? 'reticulum' : 'mesh',
+        reticulumPeerPresenceHash: retHash,
         chatId: env.chatId,
         direction: 'inbound',
         state: 'pending',
@@ -610,11 +795,15 @@ export class CallManager extends EventEmitter {
       record.cleanupTimer = setTimeout(() => {
         if (this.activeCalls.get(env.callId)?.state === 'pending') {
           loggerLog(`[Call] Incoming call ${env.callId.slice(0, 8)}… timed out.`);
+          this.sdpSession.disposeCall(env.callId);
+          this.sdpSession.unregisterCallRemoteAddress(env.callId);
+          this.iceBuckets.delete(env.callId);
           this.activeCalls.delete(env.callId);
         }
       }, CALL_REQUEST_TTL_MS);
 
       this.activeCalls.set(env.callId, record);
+      this.sdpSession.registerCallRemoteAddress(env.callId, env.fromAddress);
 
       this.emit('call:incoming', {
         callId: env.callId,
@@ -623,11 +812,11 @@ export class CallManager extends EventEmitter {
       });
 
       loggerLog(
-        `[Call] Incoming call ${env.callId.slice(0, 8)}… from ${env.fromAddress}`
+        `[Call] Incoming call ${env.callId.slice(0, 8)}… from ${env.fromAddress} (${ctx.transport})`
       );
     }
 
-    if ((env.hopsRemaining ?? 0) > 0) {
+    if (ctx.transport === 'mesh' && (env.hopsRemaining ?? 0) > 0) {
       this.p2p.send(null, {
         ...env,
         hopsRemaining: (env.hopsRemaining ?? 1) - 1,
@@ -706,6 +895,9 @@ export class CallManager extends EventEmitter {
         if (!c) return;
         if (c.cleanupTimer) clearTimeout(c.cleanupTimer);
         c.state = 'ended';
+        this.sdpSession.disposeCall(env.callId);
+        this.sdpSession.unregisterCallRemoteAddress(env.callId);
+        this.iceBuckets.delete(env.callId);
         this.activeCalls.delete(env.callId);
         this.emit('call:rejected', { callId: env.callId, reason: env.reason });
         loggerLog(`[Call] Call ${env.callId.slice(0, 8)}… rejected.`);
@@ -719,6 +911,9 @@ export class CallManager extends EventEmitter {
     if (!call || call.state === 'ended') return;
 
     if (env.type === 'CALL_ICE') {
+      if (!allowIceReticulum(this.iceBuckets, env.callId, RT_ICE_MAX_PER_SEC)) {
+        return;
+      }
       this.emit('call:signal', {
         callId: env.callId,
         type: 'ice',
@@ -727,12 +922,29 @@ export class CallManager extends EventEmitter {
       return;
     }
 
+    this.deliverIncomingOfferAnswer(env);
+  }
+
+  /** Verify and emit offer/answer from mesh or reassembled Reticulum SDP. */
+  private deliverIncomingOfferAnswer(
+    env: CallOfferEnvelope | CallAnswerEnvelope
+  ): void {
+    const call = this.activeCalls.get(env.callId);
+    if (!call || call.state === 'ended') return;
+
     if (
       typeof env.fromPublicKey !== 'string' ||
       typeof env.signature !== 'string' ||
-      typeof env.timestamp !== 'number'
+      typeof env.timestamp !== 'number' ||
+      typeof env.sdpHash !== 'string' ||
+      !/^[0-9a-f]{64}$/i.test(env.sdpHash)
     ) {
-      loggerLog(`[Call] Dropped ${env.type}: missing auth fields`);
+      loggerLog(`[Call] Dropped ${env.type}: missing auth or sdpHash`);
+      return;
+    }
+    const h = env.sdpHash.toLowerCase();
+    if (sha256HexUtf8(env.sdp).toLowerCase() !== h) {
+      loggerLog(`[Call] Dropped ${env.type}: sdp does not match sdpHash`);
       return;
     }
 
@@ -746,6 +958,7 @@ export class CallManager extends EventEmitter {
         signature: env.signature,
         fromPublicKey: env.fromPublicKey,
         expectedAddress,
+        sdpHash: h,
       })
       .then((ok) => {
         if (!ok) {
@@ -755,8 +968,160 @@ export class CallManager extends EventEmitter {
         const c = this.activeCalls.get(env.callId);
         if (!c || c.state === 'ended') return;
         const type = env.type === 'CALL_OFFER' ? 'offer' : 'answer';
-        const data = env.sdp;
-        this.emit('call:signal', { callId: env.callId, type, data });
+        this.emit('call:signal', { callId: env.callId, type, data: env.sdp });
+      });
+  }
+
+  private deliverReticulumReassembledSdp(args: {
+    callId: string;
+    wireType: 'CALL_OFFER' | 'CALL_ANSWER';
+    sdp: string;
+    sdpHash: string;
+    fromPublicKey: string;
+    signature: string;
+    timestamp: number;
+  }): void {
+    if (args.wireType === 'CALL_OFFER') {
+      this.deliverIncomingOfferAnswer({
+        type: 'CALL_OFFER',
+        callId: args.callId,
+        sdp: args.sdp,
+        sdpHash: args.sdpHash,
+        fromPublicKey: args.fromPublicKey,
+        signature: args.signature,
+        timestamp: args.timestamp,
+      });
+    } else {
+      this.deliverIncomingOfferAnswer({
+        type: 'CALL_ANSWER',
+        callId: args.callId,
+        sdp: args.sdp,
+        sdpHash: args.sdpHash,
+        fromPublicKey: args.fromPublicKey,
+        signature: args.signature,
+        timestamp: args.timestamp,
+      });
+    }
+  }
+
+  private onReticulumCallWire(
+    wire: Record<string, unknown>,
+    senderCallHash: string
+  ): void {
+    const decoded = decodeReticulumCallWire(wire);
+    if (decoded.kind === 'invalid') return;
+
+    if (decoded.kind === 'sdp_meta') {
+      this.sdpSession.onCs0(decoded.meta, senderCallHash);
+      return;
+    }
+    if (decoded.kind === 'sdp_part') {
+      const { part } = decoded;
+      this.sdpSession.onCs1(
+        part.callId,
+        part.dir,
+        part.z,
+        part.x,
+        part.n,
+        part.p,
+        senderCallHash
+      );
+      return;
+    }
+    if (decoded.kind === 'ck') {
+      this.sdpSession.onCkFromPeer(decoded.ck, senderCallHash);
+      return;
+    }
+
+    const env = decoded.envelope;
+    if (env.type === 'CALL_REQUEST') {
+      this.handleRequestReticulum(senderCallHash, env);
+      return;
+    }
+
+    switch (env.type) {
+      case 'CALL_ACCEPT':
+        this.handleAccept(env);
+        break;
+      case 'CALL_REJECT':
+        this.handleReject(env);
+        break;
+      case 'CALL_OFFER':
+      case 'CALL_ANSWER':
+      case 'CALL_ICE':
+        this.handleSignal(env);
+        break;
+      case 'CALL_HANGUP':
+        this.handleHangup(env);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private handleRequestReticulum(
+    senderCallHash: string,
+    env: CallRequestEnvelope
+  ): void {
+    if (this.localAddresses.size === 0) return;
+
+    if (
+      typeof env.callId !== 'string' ||
+      typeof env.fromAddress !== 'string' ||
+      typeof env.fromPublicKey !== 'string' ||
+      typeof env.chatId !== 'string' ||
+      typeof env.signature !== 'string' ||
+      typeof env.timestamp !== 'number'
+    ) {
+      loggerLog('[Call] Dropped CALL_REQUEST (RT): missing fields');
+      return;
+    }
+
+    const skew = Date.now() - env.timestamp;
+    if (skew > 30_000 || skew < -10_000) {
+      loggerLog('[Call] Dropped CALL_REQUEST (RT): stale timestamp');
+      return;
+    }
+
+    let derivedAddr: string;
+    try {
+      derivedAddr = deriveAddressFromPublicKey(env.fromPublicKey);
+    } catch {
+      loggerLog('[Call] Dropped CALL_REQUEST (RT): invalid publicKey');
+      return;
+    }
+    if (derivedAddr !== env.fromAddress) {
+      loggerLog('[Call] Dropped CALL_REQUEST (RT): address mismatch');
+      return;
+    }
+
+    void this.verifyPool
+      .verify({
+        kind: 'call_request',
+        fields: {
+          type: env.type,
+          callId: env.callId,
+          chatId: env.chatId,
+          fromAddress: env.fromAddress,
+          fromPublicKey: env.fromPublicKey,
+          timestamp: env.timestamp,
+        },
+        signature: env.signature,
+        fromPublicKey: env.fromPublicKey,
+      })
+      .then((ok) => {
+        if (!ok) {
+          loggerLog('[Call] Dropped CALL_REQUEST (RT): invalid signature');
+          return;
+        }
+        try {
+          this.applyVerifiedIncomingRequest(env, {
+            transport: 'reticulum',
+            senderCallHash,
+          });
+        } catch (err) {
+          loggerError('[Call] Error applying CALL_REQUEST (RT):', err);
+        }
       });
   }
 
@@ -793,6 +1158,9 @@ export class CallManager extends EventEmitter {
         if (!c) return;
         if (c.cleanupTimer) clearTimeout(c.cleanupTimer);
         c.state = 'ended';
+        this.sdpSession.disposeCall(env.callId);
+        this.sdpSession.unregisterCallRemoteAddress(env.callId);
+        this.iceBuckets.delete(env.callId);
         this.activeCalls.delete(env.callId);
         activeAudioRelayStreams.delete(env.callId);
         this.emit('call:hangup', { callId: env.callId });
@@ -844,8 +1212,20 @@ export class CallManager extends EventEmitter {
    * the stored nodeId first, falls back to gossip if unknown.
    */
   private sendToCall(call: CallRecord, env: CallWireEnvelope): void {
-    const nodeId = call.remoteNodeId
-      ?? this.presence.getNodeIdForAddress(call.remoteAddress);
+    if (
+      call.remoteTransport === 'reticulum' &&
+      call.reticulumPeerPresenceHash &&
+      this.reticulumBridge?.getState() === 'ready'
+    ) {
+      const wire = encodeReticulumCallWire(env);
+      if (wire) {
+        void this.reticulumBridge.sendCall(call.reticulumPeerPresenceHash, wire);
+      }
+      return;
+    }
+
+    const nodeId =
+      call.remoteNodeId ?? this.presence.getNodeIdForAddress(call.remoteAddress);
     if (nodeId) {
       this.p2p.send(nodeId, env);
     } else {
@@ -864,13 +1244,14 @@ export function getCallManager(): CallManager | null {
 
 export function startCallManager(
   p2p: P2PNetwork,
-  presence: PresenceManager
+  presence: PresenceManager,
+  reticulumBridge?: ReticulumBridge | null
 ): CallManager {
   if (callManager) {
     callManager.stop();
     callManager = null;
   }
-  callManager = new CallManager(p2p, presence);
+  callManager = new CallManager(p2p, presence, reticulumBridge ?? null);
   callManager.start();
   return callManager;
 }
