@@ -166,7 +166,7 @@ function getBridgeScriptPath(): string {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'reticulum', 'presence_bridge.py');
   }
-  return path.join(__dirname, '..', '..', 'resources', 'reticulum', 'presence_bridge.py');
+  return path.join(__dirname, '..', '..', 'resources', 'presence_bridge.py');
 }
 
 function resolveBridgeLaunch(configDir: string):

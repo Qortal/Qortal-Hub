@@ -1,0 +1,1013 @@
+#!/usr/bin/env python3
+
+import argparse
+import base64
+import json
+import os
+import queue
+import sys
+import threading
+import traceback
+import uuid
+from typing import Any, Dict, Optional
+
+import RNS
+
+APP_NAMESPACE = "qortal-hub"
+PRESENCE_ASPECT = "presence"
+PRESENCE_VERSION = "v1"
+CALL_ASPECT = "call"
+CALL_VERSION = "v1"
+IDENTITY_FILENAME = "presence-bridge.identity"
+
+_state_lock = threading.RLock()
+_reticulum = None
+_identity = None
+_destination = None
+_call_destination = None
+_announce_handler = None
+_call_announce_handler = None
+_command_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue()
+_known_peers: Dict[str, Any] = {}
+_last_presence_wire: Optional[bytes] = None
+_MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
+_GROUP_AUDIO_WIRE_TYPE = "GCA"
+_audio_links_by_id: Dict[str, Dict[str, Any]] = {}
+_audio_link_ids_by_object: Dict[int, str] = {}
+_outgoing_audio_link_id_by_peer_hash: Dict[str, str] = {}
+
+# Compact group-call control on call aspect (see electron/src/group-call-wire-reticulum.ts).
+_GROUP_CALL_WIRE_TYPES = frozenset(
+    {
+        "GA",
+        "GJ",
+        "GL",
+        "GH",
+        "GK",
+        "GK0",
+        "GK1",
+        "GQ",
+        "GT",
+        "GT0",
+        "GT1",
+        "GR",
+        "GR0",
+        "GR1",
+        "GO",
+        "GO0",
+        "GO1",
+        "GE",
+        "GE0",
+        "GE1",
+        "GF",
+        "GI",
+        "GX",
+    }
+)
+
+
+def emit(frame: Dict[str, Any]) -> None:
+    sys.stdout.write(json.dumps(frame, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+
+
+def emit_resp(req_id: str, ok: bool, payload: Optional[Dict[str, Any]] = None, error: Optional[str] = None) -> None:
+    frame: Dict[str, Any] = {"type": "resp", "id": req_id, "ok": ok}
+    if payload is not None:
+        frame["payload"] = payload
+    if error is not None:
+        frame["error"] = error
+    emit(frame)
+
+
+def emit_event(event: str, payload: Optional[Dict[str, Any]] = None) -> None:
+    frame: Dict[str, Any] = {"type": "event", "event": event}
+    if payload is not None:
+        frame["payload"] = payload
+    emit(frame)
+
+
+def log(message: str) -> None:
+    print(message, file=sys.stderr, flush=True)
+
+
+def destination_hash_hex(destination_hash: bytes) -> str:
+    return destination_hash.hex()
+
+
+def identity_hash_hex(identity: Any) -> str:
+    raw = getattr(identity, "hash", None)
+    if isinstance(raw, bytes):
+        return destination_hash_hex(raw)
+    return ""
+
+
+def find_peer_hash_for_identity(identity: Any) -> str:
+    identity_hash = identity_hash_hex(identity)
+    if not identity_hash:
+        return ""
+    for peer_hash, peer_identity in list(_known_peers.items()):
+        if identity_hash_hex(peer_identity) == identity_hash:
+            return peer_hash
+    return ""
+
+
+def ensure_identity(config_dir: str):
+    global _identity
+
+    identity_path = os.environ.get("QORTAL_RETICULUM_IDENTITY_PATH") or os.path.join(
+        config_dir, IDENTITY_FILENAME
+    )
+    if os.path.exists(identity_path):
+        loaded = RNS.Identity.from_file(identity_path)
+        if loaded is not None:
+            _identity = loaded
+            return _identity
+
+    _identity = RNS.Identity()
+    _identity.to_file(identity_path)
+    return _identity
+
+
+class PresenceAnnounceHandler:
+    def __init__(self, local_hash: bytes):
+        self.aspect_filter = f"{APP_NAMESPACE}.{PRESENCE_ASPECT}.{PRESENCE_VERSION}"
+        self.local_hash = local_hash
+
+    def received_announce(self, destination_hash, announced_identity, app_data):
+        if destination_hash == self.local_hash:
+            return
+        peer_hash = destination_hash_hex(destination_hash)
+        _known_peers[peer_hash] = announced_identity
+        app_data_len = len(app_data) if app_data is not None else 0
+        log(
+            f"[presence_bridge] received announce peer={peer_hash} app_data_len={app_data_len}"
+        )
+        if _last_presence_wire is not None:
+            send_presence_wire_to_peer(peer_hash, announced_identity, _last_presence_wire)
+
+
+class CallAnnounceHandler:
+    """Registers on the call aspect so Reticulum learns paths to peers' call destinations."""
+
+    def __init__(self, local_hash: bytes):
+        self.aspect_filter = f"{APP_NAMESPACE}.{CALL_ASPECT}.{CALL_VERSION}"
+        self.local_hash = local_hash
+
+    def received_announce(self, destination_hash, announced_identity, app_data):
+        if destination_hash == self.local_hash:
+            return
+        peer_hash = destination_hash_hex(destination_hash)
+        log(f"[presence_bridge] call aspect announce peer_call={peer_hash}")
+
+
+def build_outbound_destination(peer_identity):
+    return RNS.Destination(
+        peer_identity,
+        RNS.Destination.OUT,
+        RNS.Destination.SINGLE,
+        APP_NAMESPACE,
+        PRESENCE_ASPECT,
+        PRESENCE_VERSION,
+    )
+
+
+def build_outbound_call_destination(peer_identity):
+    return RNS.Destination(
+        peer_identity,
+        RNS.Destination.OUT,
+        RNS.Destination.SINGLE,
+        APP_NAMESPACE,
+        CALL_ASPECT,
+        CALL_VERSION,
+    )
+
+
+def make_presence_wire(envelope: Dict[str, Any]) -> bytes:
+    if _destination is None:
+        raise RuntimeError("Local destination not initialised")
+    payload = envelope.get("payload")
+    if not isinstance(payload, dict):
+        raise RuntimeError("Presence envelope missing payload")
+
+    wire = {
+        "t": envelope.get("type"),
+        "i": envelope.get("id"),
+        "a": payload.get("address"),
+        "k": payload.get("publicKey"),
+        "n": payload.get("sessionId"),
+        "m": envelope.get("timestamp"),
+        "g": envelope.get("signature"),
+        "r": destination_hash_hex(_destination.hash),
+    }
+    if "status" in payload:
+        wire["s"] = payload.get("status")
+    if "clientVersion" in payload:
+        wire["c"] = payload.get("clientVersion")
+    return json.dumps(wire, separators=(",", ":")).encode("utf-8")
+
+
+def announce_local_destination() -> None:
+    if _destination is None:
+        return
+    _destination.announce(app_data=b"presence")
+    log(
+        "[presence_bridge] announced local destination "
+        + destination_hash_hex(_destination.hash)
+    )
+
+
+def announce_call_local_destination() -> None:
+    if _call_destination is None:
+        return
+    _call_destination.announce(app_data=b"call")
+    log(
+        "[presence_bridge] announced call destination "
+        + destination_hash_hex(_call_destination.hash)
+    )
+
+
+def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes) -> None:
+    try:
+        outbound = build_outbound_destination(peer_identity)
+        packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
+        result = packet.send()
+        if result is False:
+            log(f"[presence_bridge] send failed peer={peer_hash}")
+        else:
+            log(f"[presence_bridge] sent presence packet peer={peer_hash}")
+    except Exception as exc:
+        log(f"[presence_bridge] send exception peer={peer_hash}: {exc}")
+
+
+def make_group_audio_wire(room_id: str, data_b64: str) -> bytes:
+    if _call_destination is None:
+        raise RuntimeError("Local call destination not initialised")
+    wire = {
+        "t": _GROUP_AUDIO_WIRE_TYPE,
+        "R": room_id,
+        "d": data_b64,
+        "r": destination_hash_hex(_call_destination.hash),
+    }
+    return json.dumps(wire, separators=(",", ":")).encode("utf-8")
+
+
+def get_audio_link_state(link_id: str) -> Optional[Dict[str, Any]]:
+    return _audio_links_by_id.get(link_id)
+
+
+def get_audio_link_id(link: Any) -> Optional[str]:
+    return _audio_link_ids_by_object.get(id(link))
+
+
+def remove_audio_link(link_id: str) -> Optional[Dict[str, Any]]:
+    state = _audio_links_by_id.pop(link_id, None)
+    if state is None:
+        return None
+    link = state.get("link")
+    if link is not None:
+        _audio_link_ids_by_object.pop(id(link), None)
+    peer_hash = state.get("peerPresenceHash")
+    if isinstance(peer_hash, str):
+        existing = _outgoing_audio_link_id_by_peer_hash.get(peer_hash)
+        if existing == link_id:
+            _outgoing_audio_link_id_by_peer_hash.pop(peer_hash, None)
+    return state
+
+
+def emit_audio_link_established(link_id: str) -> None:
+    state = get_audio_link_state(link_id)
+    if state is None:
+        return
+    emit_event(
+        "group_audio_link_established",
+        {
+            "linkId": link_id,
+            "peerPresenceHash": state.get("peerPresenceHash") or "",
+            "peerCallHash": state.get("peerCallHash") or "",
+            "incoming": state.get("incoming") is True,
+        },
+    )
+
+
+def emit_audio_link_closed(link_id: str, reason: str = "") -> None:
+    state = remove_audio_link(link_id)
+    if state is None:
+        return
+    emit_event(
+        "group_audio_link_closed",
+        {
+            "linkId": link_id,
+            "peerPresenceHash": state.get("peerPresenceHash") or "",
+            "peerCallHash": state.get("peerCallHash") or "",
+            "incoming": state.get("incoming") is True,
+            "reason": reason,
+        },
+    )
+
+
+def on_audio_link_closed(link) -> None:
+    link_id = get_audio_link_id(link)
+    if link_id is None:
+        return
+    teardown_reason = getattr(link, "teardown_reason", None)
+    reason = str(teardown_reason) if teardown_reason is not None else "closed"
+    emit_audio_link_closed(link_id, reason)
+
+
+def on_audio_link_remote_identified(link, identity) -> None:
+    link_id = get_audio_link_id(link)
+    if link_id is None:
+        return
+    state = get_audio_link_state(link_id)
+    if state is None:
+        return
+    peer_hash = find_peer_hash_for_identity(identity)
+    if peer_hash:
+        state["peerPresenceHash"] = peer_hash
+    identity_hex = identity_hash_hex(identity)
+    if identity_hex:
+        state["peerCallHash"] = identity_hex
+    emit_audio_link_established(link_id)
+
+
+def on_audio_link_packet(message, packet) -> None:
+    link = getattr(packet, "link", None)
+    link_id = get_audio_link_id(link) if link is not None else None
+    if link_id is None:
+        return
+    state = get_audio_link_state(link_id)
+    if state is None:
+        return
+    try:
+        decoded = json.loads(message.decode("utf-8"))
+    except Exception as exc:
+        log(f"[presence_bridge] invalid link audio payload: {exc}")
+        return
+    if not isinstance(decoded, dict):
+        return
+    if decoded.get("t") != _GROUP_AUDIO_WIRE_TYPE:
+        return
+    room_id = decoded.get("R")
+    data_b64 = decoded.get("d")
+    sender_call_hash = decoded.get("r")
+    if not isinstance(room_id, str) or not room_id:
+        return
+    if not isinstance(data_b64, str) or not data_b64:
+        return
+    if isinstance(sender_call_hash, str) and sender_call_hash:
+        state["peerCallHash"] = sender_call_hash
+    emit_event(
+        "group_audio_packet",
+        {
+            "linkId": link_id,
+            "peerPresenceHash": state.get("peerPresenceHash") or "",
+            "peerCallHash": state.get("peerCallHash") or "",
+            "roomId": room_id,
+            "data": data_b64,
+            "incoming": state.get("incoming") is True,
+        },
+    )
+
+
+def configure_audio_link(link, link_id: str) -> None:
+    link.set_link_closed_callback(on_audio_link_closed)
+    link.set_packet_callback(on_audio_link_packet)
+    link.set_remote_identified_callback(on_audio_link_remote_identified)
+    _audio_link_ids_by_object[id(link)] = link_id
+
+
+def on_outgoing_audio_link_established(link) -> None:
+    link_id = get_audio_link_id(link)
+    if link_id is None:
+        return
+    state = get_audio_link_state(link_id)
+    if state is None:
+        return
+    configure_audio_link(link, link_id)
+    state["established"] = True
+    try:
+        if _identity is not None:
+            link.identify(_identity)
+    except Exception as exc:
+        log(f"[presence_bridge] audio link identify failed link={link_id}: {exc}")
+    emit_audio_link_established(link_id)
+
+
+def on_incoming_audio_link_established(link) -> None:
+    link_id = str(uuid.uuid4())
+    _audio_links_by_id[link_id] = {
+        "link": link,
+        "peerPresenceHash": "",
+        "peerCallHash": "",
+        "incoming": True,
+        "established": True,
+    }
+    configure_audio_link(link, link_id)
+
+
+def on_packet_received(data, packet) -> None:
+    try:
+        message = json.loads(data.decode("utf-8"))
+    except Exception as exc:
+        log(f"[presence_bridge] invalid packet payload: {exc}")
+        return
+
+    if not isinstance(message, dict):
+        log("[presence_bridge] ignored non-object packet payload")
+        return
+
+    message_type = message.get("t")
+    message_id = message.get("i")
+    address = message.get("a")
+    public_key = message.get("k")
+    session_id = message.get("n")
+    timestamp = message.get("m")
+    signature = message.get("g")
+    sender_hash = message.get("r")
+
+    if (
+        not isinstance(message_type, str)
+        or not isinstance(message_id, str)
+        or not isinstance(address, str)
+        or not isinstance(public_key, str)
+        or not isinstance(session_id, str)
+        or not isinstance(timestamp, int)
+        or not isinstance(signature, str)
+        or not isinstance(sender_hash, str)
+    ):
+        log("[presence_bridge] ignored malformed presence packet")
+        return
+
+    payload: Dict[str, Any] = {
+        "address": address,
+        "publicKey": public_key,
+        "sessionId": session_id,
+    }
+    if message_type == "PRESENCE_ANNOUNCE":
+        payload["status"] = message.get("s")
+        payload["clientVersion"] = message.get("c")
+    elif message_type == "PRESENCE_HEARTBEAT":
+        payload["status"] = message.get("s")
+    elif message_type == "PRESENCE_OFFLINE":
+        payload["status"] = "offline"
+    else:
+        log(f"[presence_bridge] ignored unknown presence packet type={message_type}")
+        return
+
+    envelope = {
+        "id": message_id,
+        "type": message_type,
+        "senderAddress": address,
+        "timestamp": timestamp,
+        "payload": payload,
+        "signature": signature,
+    }
+
+    emit_event(
+        "presence_message",
+        {
+            "envelope": envelope,
+            "route": {
+                "kind": "reticulum",
+                "destinationHash": sender_hash,
+            },
+        },
+    )
+    log(
+        f"[presence_bridge] received presence packet sender={sender_hash} envelope_type={envelope.get('type')} size={len(data)}"
+    )
+
+
+def on_call_packet_received(data, packet) -> None:
+    try:
+        message = json.loads(data.decode("utf-8"))
+    except Exception as exc:
+        log(f"[presence_bridge] invalid call packet payload: {exc}")
+        return
+
+    if not isinstance(message, dict):
+        log("[presence_bridge] ignored non-object call packet payload")
+        return
+
+    sender_r = message.get("r")
+    sender_call_hash = sender_r if isinstance(sender_r, str) else ""
+
+    t = message.get("t")
+    event_name = (
+        "group_call_message" if isinstance(t, str) and t in _GROUP_CALL_WIRE_TYPES else "call_message"
+    )
+    emit_event(
+        event_name,
+        {
+            "wire": message,
+            "senderCallHash": sender_call_hash,
+        },
+    )
+    log(
+        f"[presence_bridge] received {event_name} t={message.get('t')} sender_r={sender_call_hash[:16] if sender_call_hash else ''} size={len(data)}"
+    )
+
+
+def ensure_started(config_dir: str):
+    global _reticulum, _identity, _destination, _call_destination
+    global _announce_handler, _call_announce_handler
+
+    with _state_lock:
+        if _destination is not None:
+            return _destination
+
+        os.makedirs(config_dir, exist_ok=True)
+        _reticulum = RNS.Reticulum(
+            configdir=config_dir,
+            logdest=RNS.LOG_FILE,
+            require_shared_instance=True,
+        )
+        log(
+            "[presence_bridge] connected_to_shared_instance="
+            + str(getattr(_reticulum, "is_connected_to_shared_instance", None))
+        )
+        _identity = ensure_identity(config_dir)
+        _destination = RNS.Destination(
+            _identity,
+            RNS.Destination.IN,
+            RNS.Destination.SINGLE,
+            APP_NAMESPACE,
+            PRESENCE_ASPECT,
+            PRESENCE_VERSION,
+        )
+        _destination.set_proof_strategy(RNS.Destination.PROVE_ALL)
+        _destination.set_packet_callback(on_packet_received)
+        _announce_handler = PresenceAnnounceHandler(_destination.hash)
+        RNS.Transport.register_announce_handler(_announce_handler)
+
+        _call_destination = RNS.Destination(
+            _identity,
+            RNS.Destination.IN,
+            RNS.Destination.SINGLE,
+            APP_NAMESPACE,
+            CALL_ASPECT,
+            CALL_VERSION,
+        )
+        _call_destination.set_proof_strategy(RNS.Destination.PROVE_ALL)
+        _call_destination.set_packet_callback(on_call_packet_received)
+        _call_destination.set_link_established_callback(on_incoming_audio_link_established)
+        _call_announce_handler = CallAnnounceHandler(_call_destination.hash)
+        RNS.Transport.register_announce_handler(_call_announce_handler)
+        return _destination
+
+
+def handle_start(req_id: str, payload: Dict[str, Any]) -> None:
+    config_dir = str(payload.get("configDir") or os.environ.get("QORTAL_RETICULUM_CONFIG_DIR") or "")
+    if not config_dir:
+        emit_resp(req_id, False, error="Missing configDir")
+        return
+
+    try:
+        destination = ensure_started(config_dir)
+        announce_local_destination()
+        announce_call_local_destination()
+        presence_hex = destination_hash_hex(destination.hash)
+        call_hex = (
+            destination_hash_hex(_call_destination.hash)
+            if _call_destination is not None
+            else ""
+        )
+        emit_event(
+            "ready",
+            {"destinationHash": presence_hex, "callDestinationHash": call_hex},
+        )
+        emit_resp(
+            req_id,
+            True,
+            payload={"destinationHash": presence_hex, "callDestinationHash": call_hex},
+        )
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
+    envelope = payload.get("envelope")
+    if not isinstance(envelope, dict):
+        emit_resp(req_id, False, error="Missing envelope")
+        return
+
+    if _destination is None:
+        emit_resp(req_id, False, error="Bridge not started")
+        return
+
+    try:
+        wire_bytes = make_presence_wire(envelope)
+        global _last_presence_wire
+        _last_presence_wire = wire_bytes
+        announce_local_destination()
+        announce_call_local_destination()
+        for peer_hash, peer_identity in list(_known_peers.items()):
+            send_presence_wire_to_peer(peer_hash, peer_identity, wire_bytes)
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_stop(req_id: str) -> None:
+    emit_resp(req_id, True)
+
+
+def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_hash = str(payload.get("peerPresenceHash") or "")
+    msg = payload.get("message")
+    if not peer_hash or not isinstance(msg, dict):
+        emit_resp(req_id, False, error="Missing peerPresenceHash or message")
+        return
+
+    if _call_destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+
+    peer_identity = _known_peers.get(peer_hash)
+    if peer_identity is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "unknown_peer_presence_hash"},
+            error="Unknown peer presence hash",
+        )
+        return
+
+    try:
+        out = dict(msg)
+        out["r"] = destination_hash_hex(_call_destination.hash)
+        wire_bytes = json.dumps(out, separators=(",", ":")).encode("utf-8")
+        if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
+            emit_resp(
+                req_id,
+                False,
+                payload={
+                    "code": "wire_too_large",
+                    "wireBytes": len(wire_bytes),
+                    "maxWireBytes": _MAX_ENCRYPTED_WIRE_BYTES,
+                    "messageType": out.get("t"),
+                },
+                error=(
+                    f"Wire size {len(wire_bytes)} exceeds encrypted MDU "
+                    f"{_MAX_ENCRYPTED_WIRE_BYTES}"
+                ),
+            )
+            return
+        if len(wire_bytes) > 600:
+            log(f"[presence_bridge] warning call packet len={len(wire_bytes)}")
+        outbound = build_outbound_call_destination(peer_identity)
+        packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
+        result = packet.send()
+        if result is False:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "packet_send_false"},
+                error="Packet send returned False",
+            )
+            return
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_hash = str(payload.get("peerPresenceHash") or "")
+    msg = payload.get("message")
+    if not peer_hash or not isinstance(msg, dict):
+        emit_resp(req_id, False, error="Missing peerPresenceHash or message")
+        return
+
+    if _call_destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+
+    peer_identity = _known_peers.get(peer_hash)
+    if peer_identity is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "unknown_peer_presence_hash"},
+            error="Unknown peer presence hash",
+        )
+        return
+
+    try:
+        out = dict(msg)
+        out["r"] = destination_hash_hex(_call_destination.hash)
+        wire_bytes = json.dumps(out, separators=(",", ":")).encode("utf-8")
+        if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
+            emit_resp(
+                req_id,
+                False,
+                payload={
+                    "code": "wire_too_large",
+                    "wireBytes": len(wire_bytes),
+                    "maxWireBytes": _MAX_ENCRYPTED_WIRE_BYTES,
+                    "messageType": out.get("t"),
+                },
+                error=(
+                    f"Wire size {len(wire_bytes)} exceeds encrypted MDU "
+                    f"{_MAX_ENCRYPTED_WIRE_BYTES}"
+                ),
+            )
+            return
+        outbound = build_outbound_call_destination(peer_identity)
+        packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
+        result = packet.send()
+        if result is False:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "packet_send_false"},
+                error="Packet send returned False",
+            )
+            return
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_hash = str(payload.get("peerPresenceHash") or "")
+    if not peer_hash:
+        emit_resp(req_id, False, error="Missing peerPresenceHash")
+        return
+
+    if _call_destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+
+    peer_identity = _known_peers.get(peer_hash)
+    if peer_identity is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "unknown_peer_presence_hash"},
+            error="Unknown peer presence hash",
+        )
+        return
+
+    existing_link_id = _outgoing_audio_link_id_by_peer_hash.get(peer_hash)
+    if existing_link_id:
+        state = get_audio_link_state(existing_link_id)
+        if state is not None:
+            emit_resp(
+                req_id,
+                True,
+                payload={
+                    "linkId": existing_link_id,
+                    "established": state.get("established") is True,
+                },
+            )
+            return
+
+    try:
+        outbound = build_outbound_call_destination(peer_identity)
+        link_id = str(uuid.uuid4())
+        link = RNS.Link(
+            outbound,
+            established_callback=on_outgoing_audio_link_established,
+            closed_callback=on_audio_link_closed,
+        )
+        _audio_links_by_id[link_id] = {
+            "link": link,
+            "peerPresenceHash": peer_hash,
+            "peerCallHash": destination_hash_hex(outbound.hash),
+            "incoming": False,
+            "established": False,
+        }
+        _audio_link_ids_by_object[id(link)] = link_id
+        _outgoing_audio_link_id_by_peer_hash[peer_hash] = link_id
+        emit_resp(
+            req_id,
+            True,
+            payload={"linkId": link_id, "established": False},
+        )
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
+    link_id = str(payload.get("linkId") or "")
+    if not link_id:
+        emit_resp(req_id, False, error="Missing linkId")
+        return
+    state = get_audio_link_state(link_id)
+    if state is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "unknown_link_id"},
+            error="Unknown audio link id",
+        )
+        return
+    link = state.get("link")
+    try:
+        if link is not None:
+            link.teardown()
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_send_group_audio(req_id: str, payload: Dict[str, Any]) -> None:
+    link_id = str(payload.get("linkId") or "")
+    room_id = str(payload.get("roomId") or "")
+    data_b64 = payload.get("data")
+    if not link_id or not room_id or not isinstance(data_b64, str) or not data_b64:
+        emit_resp(req_id, False, error="Missing linkId, roomId or data")
+        return
+
+    state = get_audio_link_state(link_id)
+    if state is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "unknown_link_id"},
+            error="Unknown audio link id",
+        )
+        return
+    if state.get("established") is not True:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "audio_link_not_ready"},
+            error="Audio link not established",
+        )
+        return
+    try:
+        base64.b64decode(data_b64, validate=True)
+    except Exception:
+        emit_resp(req_id, False, error="Invalid base64 audio payload")
+        return
+
+    link = state.get("link")
+    if link is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "unknown_link_id"},
+            error="Missing audio link",
+        )
+        return
+    try:
+        wire_bytes = make_group_audio_wire(room_id, data_b64)
+        max_wire_bytes = _MAX_ENCRYPTED_WIRE_BYTES
+        try:
+            link_mdu = link.get_mdu()
+            if isinstance(link_mdu, int) and link_mdu > 0:
+                max_wire_bytes = link_mdu
+        except Exception:
+            pass
+        if len(wire_bytes) > max_wire_bytes:
+            emit_resp(
+                req_id,
+                False,
+                payload={
+                    "code": "audio_payload_too_large",
+                    "wireBytes": len(wire_bytes),
+                    "maxWireBytes": max_wire_bytes,
+                },
+                error=(
+                    f"Audio wire size {len(wire_bytes)} exceeds link MDU {max_wire_bytes}"
+                ),
+            )
+            return
+        packet = RNS.Packet(link, wire_bytes, create_receipt=False)
+        result = packet.send()
+        if result is False:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "packet_send_false"},
+                error="Packet send returned False",
+            )
+            return
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_command(message: Dict[str, Any]) -> None:
+    req_id = str(message.get("id") or "")
+    action = message.get("action")
+    payload = message.get("payload")
+
+    if not req_id:
+        emit_event(
+            "error",
+            {"code": "missing_id", "message": "Command frame missing id"},
+        )
+        return
+
+    if not isinstance(payload, dict):
+        payload = {}
+
+    if action == "start":
+        handle_start(req_id, payload)
+    elif action == "publish_presence":
+        handle_publish_presence(req_id, payload)
+    elif action == "stop":
+        handle_stop(req_id)
+    elif action == "send_call":
+        handle_send_call(req_id, payload)
+    elif action == "send_group_call":
+        handle_send_group_call(req_id, payload)
+    elif action == "open_group_audio_link":
+        handle_open_group_audio_link(req_id, payload)
+    elif action == "close_group_audio_link":
+        handle_close_group_audio_link(req_id, payload)
+    elif action == "send_group_audio":
+        handle_send_group_audio(req_id, payload)
+    else:
+        emit_resp(req_id, False, error=f"Unknown action: {action}")
+
+
+def stdin_loop() -> None:
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            message = json.loads(line)
+        except Exception as exc:
+            emit_event(
+                "error",
+                {"code": "invalid_json", "message": str(exc), "detail": line[:200]},
+            )
+            continue
+
+        if not isinstance(message, dict) or message.get("type") != "cmd":
+            emit_event(
+                "error",
+                {
+                    "code": "invalid_frame",
+                    "message": "Expected cmd frame",
+                    "detail": str(message)[:200],
+                },
+            )
+            continue
+
+        _command_queue.put(message)
+
+    _command_queue.put(None)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Qortal Hub Reticulum presence bridge")
+    parser.add_argument("--config", action="store", default=None, help="Reticulum config directory")
+    args = parser.parse_args()
+
+    if args.config:
+        os.environ["QORTAL_RETICULUM_CONFIG_DIR"] = args.config
+
+    stdin_thread = threading.Thread(target=stdin_loop, daemon=True)
+    stdin_thread.start()
+    while True:
+        message = _command_queue.get()
+        if message is None:
+            break
+        try:
+            handle_command(message)
+        except Exception as exc:
+            emit_event(
+                "error",
+                {
+                    "code": "command_failed",
+                    "message": str(exc),
+                    "detail": traceback.format_exc(limit=3),
+                },
+            )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass
+    except Exception as exc:
+        emit_event(
+            "error",
+            {
+                "code": "fatal",
+                "message": str(exc),
+                "detail": traceback.format_exc(limit=5),
+            },
+        )

@@ -31,7 +31,7 @@ BUILD_TARGETS = (
     {
         "name": "presence_bridge",
         "entry_resolver": lambda pyexe, electron_root: str(
-            electron_root / "resources" / "reticulum" / "presence_bridge.py"
+            electron_root / "resources" / "presence_bridge.py"
         ),
     },
 )
@@ -178,6 +178,14 @@ def freeze_target(
     print(f"Wrote {dest}")
 
 
+def copy_runtime_sources(electron_root: Path, output_dir: Path) -> None:
+    source_bridge = electron_root / "resources" / "presence_bridge.py"
+    if not source_bridge.is_file():
+        sys.exit(f"Missing tracked bridge source: {source_bridge}")
+    shutil.copy2(source_bridge, output_dir / "presence_bridge.py")
+    print(f"Wrote {output_dir / 'presence_bridge.py'}")
+
+
 def main() -> None:
     script_dir = Path(__file__).resolve().parent
     electron_root = script_dir.parent
@@ -213,6 +221,7 @@ def main() -> None:
             name=target["name"],
             entry_script=entry_script,
         )
+    copy_runtime_sources(electron_root, args.output_dir)
 
     marker = args.output_dir / "BUNDLE_READY"
     marker.write_text(
