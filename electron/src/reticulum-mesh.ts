@@ -16,6 +16,7 @@ import {
   stopBundledReticulumDaemon,
   writeManagedReticulumConfigIfManaged,
 } from './reticulum-daemon';
+import { rebindReticulumBridgeConsumers } from './reticulum-bridge-rebind';
 import {
   getReticulumBridge,
   startReticulumBridge,
@@ -272,6 +273,7 @@ async function flushMeshConfigNow(): Promise<void> {
   try {
     await startReticulumBridge();
     startReticulumMeshCoordinator(getReticulumBridge());
+    rebindReticulumBridgeConsumers();
   } catch (err) {
     loggerLog('[ReticulumMesh] Bridge restart failed:', err);
   }
