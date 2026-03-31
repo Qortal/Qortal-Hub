@@ -30,6 +30,8 @@ _call_destination = None
 _announce_handler = None
 _call_announce_handler = None
 _known_peers: Dict[str, Any] = {}
+# Per-peer metadata: last_seen_inbound, last_send_ok, last_request_path_at, ts_seed_until (epoch seconds).
+_peer_lifecycle: Dict[str, Dict[str, Any]] = {}
 # Recent presence senders (destination hash hex, lowercased) for recall retries on publish.
 _recent_presence_senders: "deque[str]" = deque(maxlen=128)
 _last_presence_wire: Optional[bytes] = None
@@ -38,6 +40,42 @@ _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
 PRESENCE_BRIDGE_BUILD = "wire378-gq-frag-v1"
+
+# Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
+_BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+_BASE58_MAP = {c: i for i, c in enumerate(_BASE58_ALPHABET)}
+
+# Lifecycle / path nudge (see reticulum presence plan).
+_PEER_STALE_SECONDS = 4 * 3600
+_PEER_TS_SEED_LEASE_SECONDS = 300
+_MAX_KNOWN_PEERS = 256
+_REQUEST_PATH_COOLDOWN_SECONDS = 90.0
+_MAX_PATH_NUDGES_PER_PUBLISH = 5
+_KR_MISMATCH_LOGGED: set[str] = set()
+
+
+def qortal_base58_decode(s: str) -> bytes:
+    """Decode Qortal Base58 (same algorithm as presence.ts base58Decode)."""
+    if not isinstance(s, str) or not s:
+        raise ValueError("empty")
+    bytes_acc = [0]
+    for ch in s:
+        if ch not in _BASE58_MAP:
+            raise ValueError(f"invalid Base58 char: {ch!r}")
+        carry = _BASE58_MAP[ch]
+        for j in range(len(bytes_acc)):
+            carry += bytes_acc[j] * 58
+            bytes_acc[j] = carry & 0xFF
+            carry >>= 8
+        while carry > 0:
+            bytes_acc.append(carry & 0xFF)
+            carry >>= 8
+    # Leading '1's → leading zero bytes (after decode loop, before reverse)
+    idx = 0
+    while idx < len(s) and s[idx] == "1":
+        bytes_acc.append(0)
+        idx += 1
+    return bytes(bytes_acc[::-1])
 
 
 def _normalize_json_numbers(obj: Any) -> Any:
@@ -668,6 +706,143 @@ def destination_hash_hex(destination_hash: bytes) -> str:
     return destination_hash.hex()
 
 
+def _register_peer(
+    peer_key: str,
+    peer_identity: Any,
+    source: str,
+) -> None:
+    """Register identity for fanout; updates lifecycle by source."""
+    global _known_peers, _peer_lifecycle
+    is_new = peer_key not in _known_peers
+    _known_peers[peer_key] = peer_identity
+    now = time.time()
+    if peer_key not in _peer_lifecycle:
+        _peer_lifecycle[peer_key] = {
+            "last_seen_inbound": None,
+            "last_send_ok": None,
+            "last_request_path_at": None,
+            "ts_seed_until": None,
+        }
+    st = _peer_lifecycle[peer_key]
+    if source in ("inbound", "announce", "wire_kr"):
+        st["last_seen_inbound"] = now
+    if source == "ts_seed":
+        st["ts_seed_until"] = now + _PEER_TS_SEED_LEASE_SECONDS
+    if is_new:
+        peers_sorted = sorted(_known_peers.keys())
+        log(
+            "[presence_bridge] target=presence-reticulum peer_learned "
+            f"peer_hash={peer_key} source={source} known_peers_count={len(_known_peers)} "
+            f"all_peer_hashes={','.join(peers_sorted)}"
+        )
+    _evict_lru_if_needed()
+
+
+def _evict_lru_if_needed() -> None:
+    """Cap _known_peers by dropping least-recently-seen peers (not TS-leased)."""
+    global _known_peers, _peer_lifecycle
+    if len(_known_peers) <= _MAX_KNOWN_PEERS:
+        return
+    now = time.time()
+    candidates: list[tuple[float, str]] = []
+    for pk in list(_known_peers.keys()):
+        st = _peer_lifecycle.get(pk) or {}
+        lease = st.get("ts_seed_until")
+        if isinstance(lease, (int, float)) and lease > now:
+            continue
+        last = st.get("last_seen_inbound")
+        if not isinstance(last, (int, float)):
+            last = 0.0
+        candidates.append((float(last), pk))
+    candidates.sort(key=lambda x: x[0])
+    need = len(_known_peers) - _MAX_KNOWN_PEERS
+    for _score, pk in candidates[: max(0, need)]:
+        _known_peers.pop(pk, None)
+        _peer_lifecycle.pop(pk, None)
+        log(
+            f"[presence_bridge] target=presence-reticulum peer_evicted_lru peer_hash={pk}"
+        )
+
+
+def _refresh_ts_seed_only(peer_key: str) -> None:
+    """Extend lease for Electron-supplied destination hashes (split-brain sync)."""
+    now = time.time()
+    if peer_key not in _peer_lifecycle:
+        _peer_lifecycle[peer_key] = {
+            "last_seen_inbound": None,
+            "last_send_ok": None,
+            "last_request_path_at": None,
+            "ts_seed_until": None,
+        }
+    _peer_lifecycle[peer_key]["ts_seed_until"] = now + _PEER_TS_SEED_LEASE_SECONDS
+
+
+def _maybe_prune_stale_peers() -> None:
+    """Remove peers with no recent activity and no active TS seed lease."""
+    global _known_peers, _peer_lifecycle
+    if _destination is None:
+        return
+    now = time.time()
+    local_hex = destination_hash_hex(_destination.hash)
+    to_drop: list[str] = []
+    for pk, st in list(_peer_lifecycle.items()):
+        if pk == local_hex:
+            continue
+        lease = st.get("ts_seed_until")
+        if isinstance(lease, (int, float)) and lease > now:
+            continue
+        last_in = st.get("last_seen_inbound")
+        last_ok = st.get("last_send_ok")
+        active = False
+        if isinstance(last_in, (int, float)) and (now - float(last_in)) <= _PEER_STALE_SECONDS:
+            active = True
+        if isinstance(last_ok, (int, float)) and (now - float(last_ok)) <= _PEER_STALE_SECONDS:
+            active = True
+        if not active:
+            to_drop.append(pk)
+    for pk in to_drop:
+        _known_peers.pop(pk, None)
+        _peer_lifecycle.pop(pk, None)
+        log(f"[presence_bridge] target=presence-reticulum peer_pruned_stale peer_hash={pk}")
+
+
+def _request_path_if_eligible(peer_key: str, h: bytes, nudge_budget: list[int]) -> None:
+    """Nudge Reticulum path discovery when appropriate (throttled)."""
+    if nudge_budget[0] <= 0:
+        return
+    st = _peer_lifecycle.get(peer_key) or {}
+    now = time.time()
+    last_rp = st.get("last_request_path_at")
+    if isinstance(last_rp, (int, float)) and (now - float(last_rp)) < _REQUEST_PATH_COOLDOWN_SECONDS:
+        return
+    has_path = True
+    try:
+        has_path = bool(RNS.Transport.has_path(h))
+    except Exception:
+        has_path = False
+    last_ok = st.get("last_send_ok")
+    recently_sent = isinstance(last_ok, (int, float)) and (now - float(last_ok)) < 180.0
+    if has_path and recently_sent:
+        return
+    try:
+        RNS.Transport.request_path(h)
+        if peer_key not in _peer_lifecycle:
+            _peer_lifecycle[peer_key] = {
+                "last_seen_inbound": None,
+                "last_send_ok": None,
+                "last_request_path_at": None,
+                "ts_seed_until": None,
+            }
+        _peer_lifecycle[peer_key]["last_request_path_at"] = now
+        nudge_budget[0] -= 1
+        log(
+            f"[presence_bridge] target=presence-reticulum request_path peer={peer_key} "
+            f"has_path={has_path}"
+        )
+    except Exception as exc:
+        log(f"[presence_bridge] target=presence-reticulum request_path_failed peer={peer_key}: {exc}")
+
+
 def identity_hash_hex(identity: Any) -> str:
     raw = getattr(identity, "hash", None)
     if isinstance(raw, bytes):
@@ -685,12 +860,14 @@ def find_peer_hash_for_identity(identity: Any) -> str:
     return ""
 
 
-def ensure_known_peer_from_recall(peer_hash_hex: str) -> bool:
+def ensure_known_peer_from_recall(
+    peer_hash_hex: str, registration_source: str = "recall"
+) -> bool:
     """
     Mirror RNS's known destination into _known_peers when we see traffic but missed the announce.
-    Uses RNS.Identity.recall(destination_hash); does not load Identity from wire public key (k).
+    Uses RNS.Identity.recall(destination_hash).
+    registration_source: recall | ts_seed (TS-supplied hashes refresh seed lease).
     """
-    global _known_peers
     if not peer_hash_hex or _destination is None:
         return False
     peer_key = peer_hash_hex.lower()
@@ -698,6 +875,8 @@ def ensure_known_peer_from_recall(peer_hash_hex: str) -> bool:
     if peer_key == local_hex:
         return False
     if peer_key in _known_peers:
+        if registration_source == "ts_seed":
+            _refresh_ts_seed_only(peer_key)
         return True
     try:
         h = bytes.fromhex(peer_hash_hex)
@@ -708,15 +887,66 @@ def ensure_known_peer_from_recall(peer_hash_hex: str) -> bool:
     recalled = RNS.Identity.recall(h)
     if recalled is None:
         return False
-    _known_peers[peer_key] = recalled
-    peers_sorted = sorted(_known_peers.keys())
-    log(
-        "[presence_bridge] target=presence-reticulum peer_learned "
-        f"peer_hash={peer_key} source=recall known_peers_count={len(_known_peers)} "
-        f"all_peer_hashes={','.join(peers_sorted)}"
-    )
+    _register_peer(peer_key, recalled, registration_source)
     if _last_presence_wire is not None:
         send_presence_wire_to_peer(peer_key, recalled, _last_presence_wire)
+    return True
+
+
+def ensure_known_peer_from_wire_kr(public_key_base58: str, peer_hash_hex: str) -> bool:
+    """
+    When Identity.recall(r) failed, derive RNS destination from wire k (Base58) and verify
+    it matches r. Only works when k decodes to a full RNS public key (64 bytes: X25519+Ed25519).
+    Qortal's usual 32-byte Ed25519-only k cannot be used here; those peers rely on recall/TS seed.
+    """
+    if not peer_hash_hex or _destination is None:
+        return False
+    peer_key = peer_hash_hex.lower()
+    if peer_key in _known_peers:
+        return True
+    local_hex = destination_hash_hex(_destination.hash)
+    if peer_key == local_hex:
+        return False
+    try:
+        pub_bytes = qortal_base58_decode(public_key_base58)
+    except Exception:
+        return False
+    if len(pub_bytes) != 64:
+        if peer_key not in _KR_MISMATCH_LOGGED:
+            _KR_MISMATCH_LOGGED.add(peer_key)
+            log(
+                f"[presence_bridge] target=presence-reticulum kr_skip peer={peer_key} "
+                f"reason=pub_len_{len(pub_bytes)}_not_64_rns_full_key"
+            )
+        return False
+    try:
+        ident = RNS.Identity(create_keys=False)
+        ident.load_public_key(pub_bytes)
+        outbound = RNS.Destination(
+            ident,
+            RNS.Destination.OUT,
+            RNS.Destination.SINGLE,
+            APP_NAMESPACE,
+            PRESENCE_ASPECT,
+            PRESENCE_VERSION,
+        )
+        derived = destination_hash_hex(outbound.hash)
+    except Exception as exc:
+        log(
+            f"[presence_bridge] target=presence-reticulum kr_skip peer={peer_key} err={exc}"
+        )
+        return False
+    if derived != peer_key:
+        if peer_key not in _KR_MISMATCH_LOGGED:
+            _KR_MISMATCH_LOGGED.add(peer_key)
+            log(
+                f"[presence_bridge] target=presence-reticulum kr_mismatch peer={peer_key} "
+                f"derived={derived}"
+            )
+        return False
+    _register_peer(peer_key, ident, "wire_kr")
+    if _last_presence_wire is not None:
+        send_presence_wire_to_peer(peer_key, ident, _last_presence_wire)
     return True
 
 
@@ -746,17 +976,11 @@ class PresenceAnnounceHandler:
         if destination_hash == self.local_hash:
             return
         peer_hash = destination_hash_hex(destination_hash)
-        _known_peers[peer_hash] = announced_identity
         app_data_len = len(app_data) if app_data is not None else 0
         log(
             f"[presence_bridge] received announce peer={peer_hash} app_data_len={app_data_len}"
         )
-        peers_sorted = sorted(_known_peers.keys())
-        log(
-            "[presence_bridge] target=presence-reticulum peer_learned "
-            f"peer_hash={peer_hash} known_peers_count={len(_known_peers)} "
-            f"all_peer_hashes={','.join(peers_sorted)}"
-        )
+        _register_peer(peer_hash, announced_identity, "announce")
         if _last_presence_wire is not None:
             send_presence_wire_to_peer(peer_hash, announced_identity, _last_presence_wire)
 
@@ -842,19 +1066,33 @@ def announce_call_local_destination() -> None:
 
 
 def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes) -> None:
+    """Send presence wire; updates last_send_ok in _peer_lifecycle (TODO: failure vs no-path diagnostics)."""
+    now = time.time()
     try:
         outbound = build_outbound_destination(peer_identity)
         packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
         result = packet.send()
+        if peer_hash not in _peer_lifecycle:
+            _peer_lifecycle[peer_hash] = {
+                "last_seen_inbound": None,
+                "last_send_ok": None,
+                "last_request_path_at": None,
+                "ts_seed_until": None,
+            }
+        st = _peer_lifecycle[peer_hash]
         if result is False:
+            st["last_send_ok"] = None
             log(
                 f"[presence_bridge] target=presence-reticulum send_failed peer={peer_hash}"
             )
         else:
+            st["last_send_ok"] = now
             log(
                 f"[presence_bridge] target=presence-reticulum sent_presence peer={peer_hash}"
             )
     except Exception as exc:
+        if peer_hash in _peer_lifecycle:
+            _peer_lifecycle[peer_hash]["last_send_ok"] = None
         log(
             f"[presence_bridge] target=presence-reticulum send_exception peer={peer_hash}: {exc}"
         )
@@ -1096,6 +1334,26 @@ def on_packet_received(data, packet) -> None:
     peer_key = sender_hash.lower()
     _recent_presence_senders.append(peer_key)
     ensure_known_peer_from_recall(peer_key)
+    if peer_key not in _known_peers:
+        ensure_known_peer_from_wire_kr(public_key, sender_hash)
+    if peer_key in _known_peers:
+        st = _peer_lifecycle.setdefault(
+            peer_key,
+            {
+                "last_seen_inbound": None,
+                "last_send_ok": None,
+                "last_request_path_at": None,
+                "ts_seed_until": None,
+            },
+        )
+        now = time.time()
+        st["last_seen_inbound"] = now
+        lease = st.get("ts_seed_until")
+        if isinstance(lease, (int, float)) and now < float(lease):
+            log(
+                "[presence_bridge] target=presence-reticulum ts_seed_confirmed "
+                f"peer={peer_key[:24]}..."
+            )
 
     emit_event(
         "presence_message",
@@ -1240,13 +1498,28 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         announce_call_local_destination()
         for ph in list(_recent_presence_senders):
             ensure_known_peer_from_recall(ph)
+        extra = payload.get("additionalFanoutHashes")
+        if isinstance(extra, list):
+            for h in extra:
+                if isinstance(h, str) and h.strip():
+                    ensure_known_peer_from_recall(h.strip().lower(), "ts_seed")
+        _maybe_prune_stale_peers()
+        nudge_budget = [_MAX_PATH_NUDGES_PER_PUBLISH]
+        for peer_hash in sorted(_known_peers.keys()):
+            try:
+                hb = bytes.fromhex(peer_hash)
+            except ValueError:
+                continue
+            if len(hb) != 16:
+                continue
+            _request_path_if_eligible(peer_hash, hb, nudge_budget)
         peer_hashes = sorted(_known_peers.keys())
         local_hex = destination_hash_hex(_destination.hash)
         env_type = envelope.get("type") if isinstance(envelope.get("type"), str) else ""
-        payload = envelope.get("payload")
+        env_payload = envelope.get("payload")
         env_addr = ""
-        if isinstance(payload, dict) and isinstance(payload.get("address"), str):
-            env_addr = str(payload.get("address"))
+        if isinstance(env_payload, dict) and isinstance(env_payload.get("address"), str):
+            env_addr = str(env_payload.get("address"))
         log(
             "[presence_bridge] target=presence-reticulum publish_fanout "
             f"peers={len(peer_hashes)} local_presence_hash={local_hex} "

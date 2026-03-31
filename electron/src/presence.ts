@@ -838,6 +838,26 @@ export class PresenceManager extends EventEmitter {
     return this.getAddressAggregate(address).route;
   }
 
+  /**
+   * Unique Reticulum presence destination hashes for non-expired sessions.
+   * Passed to the Python bridge so fanout stays aligned with TS route state.
+   */
+  getReticulumFanoutDestinationHashes(): string[] {
+    const now = Date.now();
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const session of this.sessions.values()) {
+      if (session.route.kind !== 'reticulum') continue;
+      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
+      const h = session.route.destinationHash;
+      if (typeof h === 'string' && h.length > 0 && !seen.has(h)) {
+        seen.add(h);
+        out.push(h);
+      }
+    }
+    return out;
+  }
+
   /** Returns the most-recently-seen active status for an address, or null. */
   getAddressStatus(address: string): UserStatus | null {
     return this.getAddressAggregate(address).status;

@@ -9,7 +9,7 @@ import type {
   PresenceTransport,
   PresenceTransportHandlers,
 } from './presence';
-import { buildPresenceSignedFields } from './presence';
+import { buildPresenceSignedFields, getPresenceManager } from './presence';
 import {
   getReticulumConfigDir,
   resolveReticulumPythonLaunch,
@@ -521,7 +521,12 @@ export class ReticulumBridge
     loggerLog(
       `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}`
     );
-    const resp = await this.sendCommand('publish_presence', { envelope });
+    const pm = getPresenceManager();
+    const additionalFanoutHashes = pm?.getReticulumFanoutDestinationHashes() ?? [];
+    const resp = await this.sendCommand('publish_presence', {
+      envelope,
+      additionalFanoutHashes,
+    });
     const pubAddr =
       typeof (envelope.payload as { address?: string })?.address === 'string'
         ? (envelope.payload as { address: string }).address

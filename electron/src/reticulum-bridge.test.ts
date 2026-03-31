@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
   app: {
@@ -13,7 +13,17 @@ vi.mock('./reticulum-daemon', () => ({
   }),
 }));
 
+vi.mock('./presence', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./presence')>();
+  return {
+    ...actual,
+    getPresenceManager: vi.fn(() => null),
+  };
+});
+
 import { encodeReticulumAudioBatch } from './reticulum-audio-ipc';
+import { base58Decode, getPresenceManager } from './presence';
+import type { PresenceEnvelope } from './presence';
 import { ReticulumBridge } from './reticulum-bridge';
 
 describe('ReticulumBridge group audio support', () => {
@@ -163,5 +173,93 @@ describe('ReticulumBridge group audio support', () => {
         hubSummary: 'Hub A=online, Hub B=offline',
       },
     ]);
+  });
+});
+
+describe('ReticulumBridge publish_presence payload', () => {
+  beforeEach(() => {
+    vi.mocked(getPresenceManager).mockReturnValue(null);
+  });
+
+  it('matches Python qortal_base58_decode for a golden vector (TS↔bridge Base58)', () => {
+    // Keep in sync with presence_bridge.qortal_base58_decode('2MyQRb').hex()
+    expect(Buffer.from(base58Decode('2MyQRb')).toString('hex')).toBe('3544a76e');
+  });
+
+  it('sends additionalFanoutHashes from PresenceManager (empty when null)', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: '1',
+      ok: true,
+      payload: {},
+    }));
+
+    const envelope: PresenceEnvelope = {
+      id: 'e1',
+      type: 'PRESENCE_ANNOUNCE',
+      senderAddress: 'addr1',
+      timestamp: Date.now(),
+      payload: {
+        address: 'addr1',
+        publicKey: 'pk',
+        sessionId: 'sid',
+        status: 'online',
+        clientVersion: '1',
+      },
+      signature: 'sig',
+    };
+
+    await bridge.publish(envelope);
+
+    expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
+      envelope,
+      additionalFanoutHashes: [],
+    });
+  });
+
+  it('sends reticulum destination hashes from PresenceManager', async () => {
+    vi.mocked(getPresenceManager).mockReturnValue({
+      getReticulumFanoutDestinationHashes: () => ['aa112233445566778899aabbccddeeff', 'bb00112233445566778899aabbccddee'],
+    } as any);
+
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: '1',
+      ok: true,
+      payload: {},
+    }));
+
+    const envelope: PresenceEnvelope = {
+      id: 'e2',
+      type: 'PRESENCE_ANNOUNCE',
+      senderAddress: 'addr2',
+      timestamp: Date.now(),
+      payload: {
+        address: 'addr2',
+        publicKey: 'pk2',
+        sessionId: 'sid2',
+        status: 'online',
+        clientVersion: '1',
+      },
+      signature: 'sig2',
+    };
+
+    await bridge.publish(envelope);
+
+    expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
+      envelope,
+      additionalFanoutHashes: [
+        'aa112233445566778899aabbccddeeff',
+        'bb00112233445566778899aabbccddee',
+      ],
+    });
   });
 });
