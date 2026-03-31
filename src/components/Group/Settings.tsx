@@ -10,6 +10,7 @@ import {
   DialogTitle,
   MenuItem,
   Select,
+  Stack,
   styled,
   Switch,
   TextField,
@@ -92,6 +93,34 @@ type ReticulumStatus = {
   hubSummary?: string;
 };
 
+type ReticulumMeshSettingsStatus = {
+  enabled: boolean;
+  peerCount: number;
+  listenPort: number;
+  meshListenEnabled: boolean;
+  upnpMapped: boolean;
+  reachableSelf: boolean;
+  activeMeshPeers: Array<{
+    endpoint: string;
+    host: string;
+    port: number;
+    reachable: boolean;
+    failures: number;
+  }>;
+  knownMeshPeers: Array<{
+    endpoint: string;
+    host: string;
+    port: number;
+    reachable: boolean;
+    failures: number;
+    lastSeen: number;
+    dialAttempts: number;
+    dialSuccesses: number;
+    connectionSuccessRate: number;
+    isActiveOutbound: boolean;
+  }>;
+};
+
 function formatReticulumReachability(status: ReticulumStatus | null): string {
   switch (status?.reachability) {
     case 'hub-connected':
@@ -112,6 +141,18 @@ function formatReticulumMode(status: ReticulumStatus | null): string {
   return 'Unavailable';
 }
 
+function formatMeshPeerAge(lastSeen: number): string {
+  const s = Math.floor((Date.now() - lastSeen) / 1000);
+  if (s < 0) return 'just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+}
+
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
@@ -120,6 +161,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [platform, setPlatform] = useState<string>('');
   const [reticulumStatus, setReticulumStatus] =
     useState<ReticulumStatus | null>(null);
+  const [reticulumMeshStatus, setReticulumMeshStatus] =
+    useState<ReticulumMeshSettingsStatus | null>(null);
   const setOnlineAddresses = useSetAtom(onlineAddressesAtom);
   const setStatusMap = useSetAtom(statusMapAtom);
   const theme = useTheme();
@@ -209,30 +252,45 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   }, [loadAppSettings]);
 
   const loadReticulumStatus = useCallback(async () => {
-    if (typeof window.electronAPI?.reticulumGetStatus !== 'function') return;
-    try {
-      const status = await window.electronAPI.reticulumGetStatus();
-      setReticulumStatus(status);
-    } catch (error) {
-      setReticulumStatus({
-        running: false,
-        mode: null,
-        configDir: '',
-        reachability: 'unknown',
-        reason: error instanceof Error ? error.message : 'Unable to read status',
-      });
+    if (typeof window.electronAPI?.reticulumGetStatus === 'function') {
+      try {
+        const status = await window.electronAPI.reticulumGetStatus();
+        setReticulumStatus(status);
+      } catch (error) {
+        setReticulumStatus({
+          running: false,
+          mode: null,
+          configDir: '',
+          reachability: 'unknown',
+          reason: error instanceof Error ? error.message : 'Unable to read status',
+        });
+      }
+    }
+    if (typeof window.electronAPI?.reticulumGetMeshStatus === 'function') {
+      try {
+        const mesh = await window.electronAPI.reticulumGetMeshStatus();
+        setReticulumMeshStatus(mesh);
+      } catch {
+        setReticulumMeshStatus(null);
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (!open || typeof window.electronAPI?.reticulumGetStatus !== 'function') {
+    if (!open) return;
+    if (
+      typeof window.electronAPI?.reticulumGetStatus !== 'function' &&
+      typeof window.electronAPI?.reticulumGetMeshStatus !== 'function'
+    ) {
       return;
     }
     void loadReticulumStatus();
     const timer = window.setInterval(() => {
       void loadReticulumStatus();
     }, 3000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+    };
   }, [loadReticulumStatus, open]);
 
   const handleCloseActionChange = useCallback(
@@ -410,46 +468,31 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                 <Box
                   sx={{
                     display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: 2,
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    gap: 1,
                     px: 2,
                     py: 1.25,
                     borderBottom: 1,
                     borderColor: 'divider',
                   }}
                 >
-                  <Box sx={{ minWidth: 0 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                      width: '100%',
+                    }}
+                  >
                     <Typography variant="body2" color="text.secondary">
                       Reticulum daemon
                     </Typography>
                     <Typography
-                      variant="caption"
-                      color="text.disabled"
-                      sx={{
-                        display: 'block',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {reticulumStatus?.running
-                        ? `Config: ${reticulumStatus.configDir}`
-                        : reticulumStatus?.reason || 'Not started'}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      color="text.disabled"
-                      sx={{ display: 'block' }}
-                    >
-                      {reticulumStatus?.hubSummary ||
-                        `Reachability: ${formatReticulumReachability(reticulumStatus)}`}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
-                    <Typography
                       variant="body2"
                       sx={{
+                        flexShrink: 0,
                         color:
                           reticulumStatus?.reachability === 'hub-connected'
                             ? theme.palette.success.main
@@ -457,28 +500,210 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                               ? theme.palette.warning.main
                               : theme.palette.warning.main,
                         fontWeight: 600,
+                        textAlign: 'right',
                       }}
                     >
                       {formatReticulumReachability(reticulumStatus)}
                     </Typography>
-                    <Typography variant="caption" color="text.disabled">
-                      {reticulumStatus?.running ? 'Running' : 'Not running'}
-                      {reticulumStatus?.bridgeState
-                        ? ` • Bridge ${reticulumStatus.bridgeState}`
-                        : ''}
-                    </Typography>
-                    <Typography variant="caption" color="text.disabled">
-                      {formatReticulumMode(reticulumStatus)}
-                      {typeof reticulumStatus?.onlineHubInterfaces === 'number' &&
-                      typeof reticulumStatus?.configuredHubInterfaces === 'number'
-                        ? ` • Hubs ${reticulumStatus.onlineHubInterfaces}/${reticulumStatus.configuredHubInterfaces}`
-                        : ''}
-                      {typeof reticulumStatus?.transportEnabled === 'boolean'
-                        ? ` • Transport ${reticulumStatus.transportEnabled ? 'on' : 'off'}`
-                        : ''}
-                      {reticulumStatus?.pid ? ` • PID ${reticulumStatus.pid}` : ''}
-                    </Typography>
                   </Box>
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    color="text.disabled"
+                    sx={{
+                      wordBreak: 'break-word',
+                      overflowWrap: 'anywhere',
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {reticulumStatus?.running
+                      ? `Config: ${reticulumStatus.configDir}`
+                      : reticulumStatus?.reason || 'Not started'}
+                  </Typography>
+                  {reticulumStatus?.hubSummary ? (
+                    <Typography
+                      variant="caption"
+                      component="div"
+                      color="text.disabled"
+                      sx={{
+                        wordBreak: 'break-word',
+                        overflowWrap: 'anywhere',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {reticulumStatus.hubSummary}
+                    </Typography>
+                  ) : null}
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    color="text.disabled"
+                    sx={{ lineHeight: 1.6 }}
+                  >
+                    {reticulumStatus?.running ? 'Running' : 'Not running'}
+                    {reticulumStatus?.bridgeState
+                      ? ` · Bridge ${reticulumStatus.bridgeState}`
+                      : ''}
+                    {' · '}
+                    {formatReticulumMode(reticulumStatus)}
+                    {typeof reticulumStatus?.onlineHubInterfaces === 'number' &&
+                    typeof reticulumStatus?.configuredHubInterfaces === 'number'
+                      ? ` · Hubs ${reticulumStatus.onlineHubInterfaces}/${reticulumStatus.configuredHubInterfaces}`
+                      : ''}
+                    {typeof reticulumStatus?.transportEnabled === 'boolean'
+                      ? ` · Transport ${reticulumStatus.transportEnabled ? 'on' : 'off'}`
+                      : ''}
+                    {reticulumStatus?.pid ? ` · PID ${reticulumStatus.pid}` : ''}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'stretch',
+                    gap: 1,
+                    px: 2,
+                    py: 1.25,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Reticulum hub mesh (direct TCP)
+                  </Typography>
+                  {reticulumMeshStatus == null ? (
+                    <Typography variant="caption" color="text.disabled">
+                      Mesh status unavailable.
+                    </Typography>
+                  ) : !reticulumMeshStatus.enabled ? (
+                    <Typography variant="caption" color="text.disabled">
+                      Not available on secondary app instances.
+                    </Typography>
+                  ) : (
+                    <>
+                      <Typography
+                        variant="caption"
+                        component="div"
+                        color="text.disabled"
+                        sx={{ lineHeight: 1.6 }}
+                      >
+                        Listen port {reticulumMeshStatus.listenPort}
+                        {reticulumMeshStatus.meshListenEnabled
+                          ? ' · listen enabled'
+                          : ' · listen disabled'}
+                        {reticulumMeshStatus.upnpMapped
+                          ? ' · UPnP mapped'
+                          : ''}
+                        {typeof reticulumMeshStatus.peerCount === 'number'
+                          ? ` · ${reticulumMeshStatus.peerCount} known endpoint(s) in store`
+                          : ''}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontWeight: 600 }}
+                      >
+                        Active mesh peers (outbound TCP)
+                      </Typography>
+                      {(reticulumMeshStatus.activeMeshPeers ?? []).length ===
+                      0 ? (
+                        <Typography variant="caption" color="text.disabled">
+                          None configured yet. Peers appear here after gossip
+                          selects endpoints and rnsd applies mesh interfaces.
+                        </Typography>
+                      ) : (
+                        <Stack
+                          component="ul"
+                          spacing={0.5}
+                          sx={{
+                            m: 0,
+                            pl: 2.25,
+                            listStyle: 'disc',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
+                          {(reticulumMeshStatus.activeMeshPeers ?? []).map(
+                            (p) => (
+                              <Typography
+                                key={p.endpoint}
+                                component="li"
+                                variant="caption"
+                                color="text.disabled"
+                                sx={{ display: 'list-item', lineHeight: 1.5 }}
+                              >
+                                {p.endpoint}
+                                {p.reachable ? ' · reachable' : ''}
+                                {p.failures > 0
+                                  ? ` · failures ${p.failures}`
+                                  : ''}
+                              </Typography>
+                            )
+                          )}
+                        </Stack>
+                      )}
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontWeight: 600, mt: 1, display: 'block' }}
+                      >
+                        Known mesh peers (newest first)
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        component="div"
+                        color="text.disabled"
+                        sx={{ lineHeight: 1.5, mb: 0.5 }}
+                      >
+                        All endpoints in the mesh store—including new gossip
+                        entries before they rotate into sparse outbound—and
+                        health hints (not live RNS socket state).
+                      </Typography>
+                      {(reticulumMeshStatus.knownMeshPeers ?? []).length ===
+                      0 ? (
+                        <Typography variant="caption" color="text.disabled">
+                          No mesh endpoints stored yet.
+                        </Typography>
+                      ) : (
+                        <Stack
+                          component="ul"
+                          spacing={0.5}
+                          sx={{
+                            m: 0,
+                            pl: 2.25,
+                            listStyle: 'disc',
+                            wordBreak: 'break-word',
+                            overflowWrap: 'anywhere',
+                          }}
+                        >
+                          {(reticulumMeshStatus.knownMeshPeers ?? []).map(
+                            (p) => (
+                              <Typography
+                                key={p.endpoint}
+                                component="li"
+                                variant="caption"
+                                color="text.disabled"
+                                sx={{ display: 'list-item', lineHeight: 1.5 }}
+                              >
+                                {p.endpoint}
+                                {p.isActiveOutbound
+                                  ? ' · active outbound'
+                                  : ' · standby'}
+                                {p.reachable ? ' · reachable' : ''}
+                                {p.dialAttempts > 0
+                                  ? ` · dials ${p.dialSuccesses}/${p.dialAttempts}`
+                                  : ''}
+                                {p.failures > 0
+                                  ? ` · failures ${p.failures}`
+                                  : ''}
+                                {` · seen ${formatMeshPeerAge(p.lastSeen)}`}
+                              </Typography>
+                            )
+                          )}
+                        </Stack>
+                      )}
+                    </>
+                  )}
                 </Box>
                 <Box
                   sx={{

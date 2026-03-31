@@ -24,15 +24,18 @@ declare global {
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
+        reticulumMeshUpnpEnabled?: boolean;
       }>;
       setAppSettings?: (settings: {
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
+        reticulumMeshUpnpEnabled?: boolean;
       }) => Promise<{
         closeAction?: 'ask' | 'minimizeToTray' | 'quit';
         p2pEnabled?: boolean;
         legacyPublicStunFallback?: boolean;
+        reticulumMeshUpnpEnabled?: boolean;
       }>;
       /** Reticulum (rnsd) child process status from main process. */
       reticulumGetStatus?: () => Promise<{
@@ -47,6 +50,33 @@ declare global {
         configuredHubInterfaces?: number;
         onlineHubInterfaces?: number;
         hubSummary?: string;
+      }>;
+      reticulumGetMeshStatus?: () => Promise<{
+        enabled: boolean;
+        peerCount: number;
+        listenPort: number;
+        meshListenEnabled: boolean;
+        upnpMapped: boolean;
+        reachableSelf: boolean;
+        activeMeshPeers: Array<{
+          endpoint: string;
+          host: string;
+          port: number;
+          reachable: boolean;
+          failures: number;
+        }>;
+        knownMeshPeers: Array<{
+          endpoint: string;
+          host: string;
+          port: number;
+          reachable: boolean;
+          failures: number;
+          lastSeen: number;
+          dialAttempts: number;
+          dialSuccesses: number;
+          connectionSuccessRate: number;
+          isActiveOutbound: boolean;
+        }>;
       }>;
     };
     videoServer?: {

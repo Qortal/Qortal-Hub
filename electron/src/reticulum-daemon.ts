@@ -22,6 +22,17 @@ import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
 import path from 'path';
 import { log as loggerLog, error as loggerError } from './logger';
+import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
+import {
+  loadReticulumMeshState,
+  meshConfigSliceFromState,
+  selectMeshOutboundHostsForConfig,
+} from './reticulum-mesh-store';
+
+/**
+ * Reticulum hub mesh uses a dedicated TCP listen port (see reticulum-mesh-constants DEFAULT_RETICULUM_MESH_LISTEN_PORT)
+ * plus optional TCPClientInterface rows for sparse hub-to-hub links. Config is managed here; rnsd restarts are debounced in reticulum-mesh.ts.
+ */
 
 const RNS_MODULE = 'RNS.Utilities.rnsd';
 const FROZEN_DIR_NAME = 'reticulum';
@@ -72,6 +83,10 @@ export function setReticulumInstanceIndex(index: number): void {
   reticulumInstanceIndex = Math.max(0, Math.trunc(index));
 }
 
+export function getReticulumInstanceIndex(): number {
+  return reticulumInstanceIndex;
+}
+
 function getReticulumSharedInstancePort(): number {
   return RETICULUM_SHARED_INSTANCE_BASE_PORT;
 }
@@ -104,8 +119,33 @@ function renderManagedHubInterfaces(
     .join('');
 }
 
+function renderMeshInterfaces(slice: ReticulumMeshConfigSlice | null | undefined): string {
+  if (!slice) return '';
+  let out = '';
+  if (slice.listenEnabled) {
+    out += `
+  [[Qortal Hub Mesh Listen]]
+  type = TCPServerInterface
+  enabled = yes
+  listen_ip = 0.0.0.0
+  listen_port = ${slice.listenPort}
+`;
+  }
+  for (const p of slice.outbound) {
+    out += `
+  [[${p.sectionName}]]
+  type = TCPClientInterface
+  enabled = yes
+  target_host = ${p.host}
+  target_port = ${p.port}
+`;
+  }
+  return out;
+}
+
 export function buildManagedReticulumConfig(
-  hubs: readonly ReticulumHubEndpoint[] = DEFAULT_RETICULUM_HUBS
+  hubs: readonly ReticulumHubEndpoint[] = DEFAULT_RETICULUM_HUBS,
+  meshSlice?: ReticulumMeshConfigSlice | null
 ): string {
   return `${MANAGED_CONFIG_MARKER}
 [reticulum]
@@ -122,22 +162,32 @@ loglevel = 4
   [[Default Interface]]
   type = AutoInterface
   enabled = yes
-${renderManagedHubInterfaces(hubs)}
+${renderManagedHubInterfaces(hubs)}${renderMeshInterfaces(meshSlice ?? null)}
 `;
 }
 
-function ensureManagedReticulumConfig(): void {
+/** Full managed config including mesh slice derived from reticulum-mesh-state.json */
+export function buildCurrentManagedReticulumConfig(): string {
+  const state = loadReticulumMeshState();
+  const slice = meshConfigSliceFromState(
+    state,
+    selectMeshOutboundHostsForConfig(state)
+  );
+  return buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, slice);
+}
+
+/**
+ * Writes managed Reticulum config when the hub owns the file (same rules as startup).
+ * @returns true if the file was updated
+ */
+export function writeManagedReticulumConfigIfManaged(nextContents: string): boolean {
   const configPath = getReticulumConfigFilePath();
-  const nextContents = buildManagedReticulumConfig();
   const currentContents = fs.existsSync(configPath)
     ? fs.readFileSync(configPath, 'utf8')
     : null;
 
   if (currentContents === nextContents) {
-    loggerLog(
-      `[Reticulum] Using managed config ${configPath} instance_name=${getReticulumInstanceName()} shared_port=${getReticulumSharedInstancePort()} control_port=${getReticulumControlPort()}`
-    );
-    return;
+    return false;
   }
 
   const isDefaultGeneratedConfig =
@@ -151,14 +201,35 @@ function ensureManagedReticulumConfig(): void {
     !isDefaultGeneratedConfig
   ) {
     loggerLog(
-      `[Reticulum] Preserving existing custom config ${configPath}; multi-instance local port isolation may be incomplete.`
+      `[Reticulum] Preserving existing custom config ${configPath}; mesh config not written.`
+    );
+    return false;
+  }
+
+  fs.writeFileSync(configPath, nextContents, 'utf8');
+  loggerLog(`[Reticulum] Wrote managed config ${configPath} (mesh-aware)`);
+  return true;
+}
+
+function ensureManagedReticulumConfig(): void {
+  const configPath = getReticulumConfigFilePath();
+  const nextContents = buildCurrentManagedReticulumConfig();
+  const currentContents = fs.existsSync(configPath)
+    ? fs.readFileSync(configPath, 'utf8')
+    : null;
+
+  if (currentContents === nextContents) {
+    loggerLog(
+      `[Reticulum] Using managed config ${configPath} instance_name=${getReticulumInstanceName()} shared_port=${getReticulumSharedInstancePort()} control_port=${getReticulumControlPort()}`
     );
     return;
   }
 
-  fs.writeFileSync(configPath, nextContents, 'utf8');
+  if (!writeManagedReticulumConfigIfManaged(nextContents)) {
+    return;
+  }
   loggerLog(
-    `[Reticulum] Wrote managed config ${configPath} instance_name=${getReticulumInstanceName()} shared_port=${getReticulumSharedInstancePort()} control_port=${getReticulumControlPort()}`
+    `[Reticulum] instance_name=${getReticulumInstanceName()} shared_port=${getReticulumSharedInstancePort()} control_port=${getReticulumControlPort()}`
   );
 }
 

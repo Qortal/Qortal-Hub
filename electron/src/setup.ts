@@ -92,6 +92,10 @@ import {
   stopReticulumBridge,
   getReticulumBridge,
 } from './reticulum-bridge';
+import {
+  startReticulumMeshCoordinator,
+  stopReticulumMeshCoordinator,
+} from './reticulum-mesh';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -732,11 +736,14 @@ export interface AppSettings {
    * Default false — use decentralized peer STUN + bootstrap.
    */
   legacyPublicStunFallback?: boolean;
+  /** When false, skip UPnP for Reticulum hub mesh TCP listen port (default true). */
+  reticulumMeshUpnpEnabled?: boolean;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   closeAction: 'ask',
   p2pEnabled: true,
+  reticulumMeshUpnpEnabled: true,
 };
 
 export async function readAppSettings(): Promise<AppSettings> {
@@ -755,6 +762,8 @@ export async function readAppSettings(): Promise<AppSettings> {
           : DEFAULT_APP_SETTINGS.closeAction,
       p2pEnabled: parsed.p2pEnabled === false ? false : true,
       legacyPublicStunFallback: parsed.legacyPublicStunFallback === true,
+      reticulumMeshUpnpEnabled:
+        parsed.reticulumMeshUpnpEnabled === false ? false : true,
     };
   } catch {
     return { ...DEFAULT_APP_SETTINGS };
@@ -1536,6 +1545,8 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     stopGroupCallManager();
     const gcallMgr = startGroupCallManager(network, pm, bridgeTransport);
     attachGroupCallListeners(gcallMgr);
+    stopReticulumMeshCoordinator();
+    startReticulumMeshCoordinator(getReticulumBridge());
     // Notify renderers that P2P / presence is live again.
     flushPresenceUpdates();
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
@@ -1553,6 +1564,7 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
 ipcMain.handle('p2p:stop', async () => {
   try {
     clearLateReticulumBridgeRecovery();
+    stopReticulumMeshCoordinator();
     stopP2PNetwork();
     queuedPresenceUpdates.clear();
     flushPresenceUpdates();

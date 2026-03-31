@@ -274,6 +274,7 @@ try {
       closeAction?: 'ask' | 'minimizeToTray' | 'quit';
       p2pEnabled?: boolean;
       legacyPublicStunFallback?: boolean;
+      reticulumMeshUpnpEnabled?: boolean;
     }) => ipcRenderer.invoke('appSettings:set', settings),
     reticulumGetStatus: () =>
       ipcRenderer.invoke('reticulum:getStatus') as Promise<{
@@ -288,6 +289,34 @@ try {
         configuredHubInterfaces?: number;
         onlineHubInterfaces?: number;
         hubSummary?: string;
+      }>,
+    reticulumGetMeshStatus: () =>
+      ipcRenderer.invoke('reticulum:getMeshStatus') as Promise<{
+        enabled: boolean;
+        peerCount: number;
+        listenPort: number;
+        meshListenEnabled: boolean;
+        upnpMapped: boolean;
+        reachableSelf: boolean;
+        activeMeshPeers: Array<{
+          endpoint: string;
+          host: string;
+          port: number;
+          reachable: boolean;
+          failures: number;
+        }>;
+        knownMeshPeers: Array<{
+          endpoint: string;
+          host: string;
+          port: number;
+          reachable: boolean;
+          failures: number;
+          lastSeen: number;
+          dialAttempts: number;
+          dialSuccesses: number;
+          connectionSuccessRate: number;
+          isActiveOutbound: boolean;
+        }>;
       }>,
   });
 

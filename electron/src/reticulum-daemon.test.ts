@@ -18,6 +18,7 @@ import {
   DEFAULT_RETICULUM_HUBS,
   buildManagedReticulumConfig,
 } from './reticulum-daemon';
+import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
 
 describe('reticulum-daemon managed config', () => {
   it('keeps LAN discovery and includes the default public hubs', () => {
@@ -47,5 +48,22 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('[[Hub Two]]');
     expect(config).toContain('target_host = two.example');
     expect(config).toContain('target_port = 2222');
+  });
+
+  it('includes optional hub mesh TCPServer and mesh TCP clients', () => {
+    const meshSlice: ReticulumMeshConfigSlice = {
+      listenEnabled: true,
+      listenPort: 4243,
+      outbound: [
+        { sectionName: 'Mesh_deadbeef01', host: 'mesh.example', port: 4243 },
+      ],
+    };
+    const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
+    expect(config).toContain('[[Qortal Hub Mesh Listen]]');
+    expect(config).toContain('type = TCPServerInterface');
+    expect(config).toContain('listen_port = 4243');
+    expect(config).toContain('[[Mesh_deadbeef01]]');
+    expect(config).toContain('target_host = mesh.example');
+    expect(config).toContain('target_port = 4243');
   });
 });

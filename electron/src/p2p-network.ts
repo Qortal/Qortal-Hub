@@ -13,6 +13,14 @@ import {
   STUN_FIXED_UDP_PORT,
   STUN_WIRE_VERSION,
 } from './stun-bootstrap';
+import {
+  createNatApiClient,
+  destroyNatClient,
+  mapTcpPort,
+  mapUdpPort,
+  unmapTcpPort,
+  unmapUdpPort,
+} from './upnp-nat';
 
 export const DEFAULT_P2P_PORT = 62391;
 export const DEFAULT_MAX_PEERS = 16;
@@ -377,31 +385,13 @@ export class P2PNetwork extends EventEmitter {
       const stunPort = STUN_FIXED_UDP_PORT;
       this.upnpClient = null;
       this.ownsStunUdpMapping = false;
-      const chain = client
-        .unmap({
-          publicPort: this.port,
-          privatePort: this.port,
-          protocol: 'TCP',
-        })
-        .catch(() => {
-          /* best-effort */
+      void unmapTcpPort(client, this.port, this.port)
+        .then(() =>
+          unmapStun ? unmapUdpPort(client, stunPort, stunPort) : Promise.resolve()
+        )
+        .finally(() => {
+          void destroyNatClient(client);
         });
-      if (unmapStun) {
-        chain
-          .then(() =>
-            client.unmap({
-              publicPort: stunPort,
-              privatePort: stunPort,
-              protocol: 'UDP',
-            })
-          )
-          .catch(() => {
-            /* best-effort */
-          })
-          .finally(() => client.destroy().catch(() => {}));
-      } else {
-        chain.finally(() => client.destroy().catch(() => {}));
-      }
     }
 
     loggerLog('[P2P] Stopped.');
@@ -485,15 +475,13 @@ export class P2PNetwork extends EventEmitter {
     if (!coord?.didBindStunUdp()) return;
     if (!this.upnpClient) return;
     try {
-      const udpRes = await this.upnpClient.map({
+      const udpRes = await mapUdpPort(this.upnpClient, {
         publicPort: STUN_FIXED_UDP_PORT,
         privatePort: STUN_FIXED_UDP_PORT,
-        protocol: 'UDP',
-        ttl: 7200,
         description: 'Qortal Hub STUN',
       });
       if (this.upnpStopped) return;
-      if (udpRes !== false) {
+      if (udpRes) {
         this.ownsStunUdpMapping = true;
         loggerLog(
           `[P2P] UPnP: port ${STUN_FIXED_UDP_PORT}/UDP mapped successfully.`
@@ -615,51 +603,34 @@ export class P2PNetwork extends EventEmitter {
    */
   private async setupUPnP(): Promise<void> {
     try {
-      // Dynamic import bridges the ESM-only package into our CommonJS build.
-      // Wrapping in new Function() prevents the TypeScript CommonJS compiler
-      // from rewriting import() to require() — require() fails on ESM packages.
-      const load = new Function('return import("@silentbot1/nat-api")');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { default: NatAPI } = (await load()) as { default: any };
-
       // Bail out if stop() was called while we were loading the module.
       if (this.upnpStopped) return;
 
-      const client = new NatAPI({
-        enableUPNP: true,
-        enablePMP: false, // NAT-PMP is less common; skip for simplicity
-        autoUpdate: true, // library handles lease renewal automatically
-        ttl: 7200, // 2-hour lease; renewed ~10 min before expiry
-        description: 'Qortal Hub P2P',
-      });
+      const client = await createNatApiClient({ description: 'Qortal Hub P2P' });
+      if (this.upnpStopped) {
+        await destroyNatClient(client);
+        return;
+      }
 
-      const result = await client.map({
+      const ok = await mapTcpPort(client, {
         publicPort: this.port,
         privatePort: this.port,
-        protocol: 'TCP',
-        ttl: 7200,
         description: 'Qortal Hub P2P',
       });
 
       // If stop() raced with the async map() call, tear down and return.
       if (this.upnpStopped) {
-        client
-          .unmap({
-            publicPort: this.port,
-            privatePort: this.port,
-            protocol: 'TCP',
-          })
-          .catch(() => {});
-        client.destroy().catch(() => {});
+        await unmapTcpPort(client, this.port, this.port);
+        await destroyNatClient(client);
         return;
       }
 
-      if (result === false) {
+      if (!ok) {
         loggerLog(
           `[P2P] UPnP: mapping failed for port ${this.port}/TCP. ` +
             'Manual port forwarding may be needed for inbound connections.'
         );
-        await client.destroy().catch(() => {});
+        await destroyNatClient(client);
         return;
       }
 

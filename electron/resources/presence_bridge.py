@@ -53,6 +53,11 @@ _REQUEST_PATH_COOLDOWN_SECONDS = 90.0
 _MAX_PATH_NUDGES_PER_PUBLISH = 5
 _KR_MISMATCH_LOGGED: set[str] = set()
 
+# Hub mesh peer exchange (Reticulum transport hints — TCP endpoint ≠ identity)
+_MESH_TYPES = frozenset({"HUB_MESH_PEER_REQUEST", "HUB_MESH_PEER_RESPONSE"})
+_MAX_MESH_PEER_REQUESTS_PER_MINUTE = 12
+_mesh_req_times: Dict[str, deque] = {}
+
 
 def qortal_base58_decode(s: str) -> bytes:
     """Decode Qortal Base58 (same algorithm as presence.ts base58Decode)."""
@@ -591,6 +596,7 @@ def collect_transport_state() -> Dict[str, Any]:
             "onlineHubInterfaces": 0,
             "hubSummary": "Reticulum bridge not started",
             "reason": "Reticulum bridge not started",
+            "meshTcpListenOnline": False,
         }
 
     stats = _reticulum.get_interface_stats() or {}
@@ -642,12 +648,23 @@ def collect_transport_state() -> Dict[str, Any]:
     else:
         hub_summary = "No active Reticulum interfaces"
 
+    mesh_tcp_listen_online = False
+    for item in normalised:
+        if (
+            item.get("name") == "Qortal Hub Mesh Listen"
+            and item.get("type") == "TCPServerInterface"
+            and item.get("online")
+        ):
+            mesh_tcp_listen_online = True
+            break
+
     return {
         "reachability": reachability,
         "transportEnabled": "transport_id" in stats,
         "configuredHubInterfaces": len(hub_interfaces),
         "onlineHubInterfaces": len(online_hubs),
         "hubSummary": hub_summary,
+        "meshTcpListenOnline": mesh_tcp_listen_online,
     }
 
 
@@ -664,6 +681,7 @@ def maybe_emit_transport_state(force: bool = False) -> None:
             "onlineHubInterfaces": 0,
             "hubSummary": "Unable to read Reticulum interface stats",
             "reason": str(exc),
+            "meshTcpListenOnline": False,
         }
 
     previous = _last_transport_state
@@ -1098,6 +1116,103 @@ def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes)
         )
 
 
+def _packet_source_hash_hex(packet) -> str:
+    try:
+        gh = getattr(packet, "get_source_hash", None)
+        if callable(gh):
+            h = gh()
+            if isinstance(h, bytes) and len(h) == 16:
+                return destination_hash_hex(h)
+    except Exception:
+        pass
+    return ""
+
+
+def _mesh_rate_limit_ok(sender_hash: str) -> bool:
+    global _mesh_req_times
+    now = time.time()
+    window = 60.0
+    dq = _mesh_req_times.setdefault(sender_hash, deque())
+    while dq and dq[0] < now - window:
+        dq.popleft()
+    if len(dq) >= _MAX_MESH_PEER_REQUESTS_PER_MINUTE:
+        return False
+    dq.append(now)
+    return True
+
+
+def send_mesh_wire_to_peer(peer_hash: str, peer_identity, wire_obj: Dict[str, Any]) -> None:
+    wire_bytes = json.dumps(wire_obj, separators=(",", ":"), allow_nan=False).encode(
+        "utf-8"
+    )
+    now = time.time()
+    try:
+        outbound = build_outbound_destination(peer_identity)
+        packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
+        result = packet.send()
+        if peer_hash not in _peer_lifecycle:
+            _peer_lifecycle[peer_hash] = {
+                "last_seen_inbound": None,
+                "last_send_ok": None,
+                "last_request_path_at": None,
+                "ts_seed_until": None,
+            }
+        st = _peer_lifecycle[peer_hash]
+        if result is False:
+            st["last_send_ok"] = None
+            log(f"[presence_bridge] target=reticulum-mesh send_failed peer={peer_hash}")
+        else:
+            st["last_send_ok"] = now
+            log(f"[presence_bridge] target=reticulum-mesh sent peer={peer_hash}")
+    except Exception as exc:
+        if peer_hash in _peer_lifecycle:
+            _peer_lifecycle[peer_hash]["last_send_ok"] = None
+        log(f"[presence_bridge] target=reticulum-mesh send_exception peer={peer_hash}: {exc}")
+
+
+def try_handle_mesh_packet(
+    data: bytes, packet, message: Dict[str, Any]
+) -> bool:
+    t = message.get("t")
+    if t not in _MESH_TYPES:
+        return False
+    sender_r = str(message.get("r") or "").lower()
+    if len(sender_r) != 32:
+        ph = _packet_source_hash_hex(packet)
+        if len(ph) == 32:
+            sender_r = ph
+        else:
+            log("[presence_bridge] target=reticulum-mesh ignored (bad sender r)")
+            return True
+    if t == "HUB_MESH_PEER_REQUEST":
+        if not _mesh_rate_limit_ok(sender_r):
+            log(
+                "[presence_bridge] target=reticulum-mesh rate_limited "
+                f"peer={sender_r[:16]}..."
+            )
+            return True
+    elif t == "HUB_MESH_PEER_RESPONSE":
+        if not _mesh_rate_limit_ok(sender_r + ":resp"):
+            log(
+                "[presence_bridge] target=reticulum-mesh rate_limited_response "
+                f"peer={sender_r[:16]}..."
+            )
+            return True
+    ensure_known_peer_from_recall(sender_r)
+    emit_event(
+        "mesh_peer_message",
+        {
+            "t": t,
+            "senderHash": sender_r,
+            "message": message,
+        },
+    )
+    log(
+        f"[presence_bridge] target=reticulum-mesh rx t={t} sender={sender_r[:16]}..."
+    )
+    return True
+
+
 def make_group_audio_wire(room_id: str, data_b64: str) -> bytes:
     if _call_destination is None:
         raise RuntimeError("Local call destination not initialised")
@@ -1282,6 +1397,9 @@ def on_packet_received(data, packet) -> None:
 
     if not isinstance(message, dict):
         log("[presence_bridge] ignored non-object packet payload")
+        return
+
+    if try_handle_mesh_packet(data, packet, message):
         return
 
     message_type = message.get("t")
@@ -1736,6 +1854,44 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error=str(exc))
 
 
+def handle_mesh_send_peer_exchange(req_id: str, payload: Dict[str, Any]) -> None:
+    if _destination is None:
+        emit_resp(req_id, False, error="bridge_not_started")
+        return
+    peer_hash = str(payload.get("peerPresenceHash") or "").lower()
+    if not peer_hash:
+        emit_resp(req_id, False, error="missing_peerPresenceHash")
+        return
+    peer_identity = _known_peers.get(peer_hash)
+    if peer_identity is None:
+        emit_resp(req_id, False, error="unknown_peer")
+        return
+    kind = str(payload.get("kind") or "")
+    local_hex = destination_hash_hex(_destination.hash)
+    now_ms = int(time.time() * 1000)
+    if kind == "request":
+        wire: Dict[str, Any] = {
+            "t": "HUB_MESH_PEER_REQUEST",
+            "r": local_hex,
+            "m": now_ms,
+        }
+    elif kind == "response":
+        peers = payload.get("endpoints")
+        if not isinstance(peers, list):
+            peers = []
+        wire = {
+            "t": "HUB_MESH_PEER_RESPONSE",
+            "r": local_hex,
+            "m": now_ms,
+            "peers": peers,
+        }
+    else:
+        emit_resp(req_id, False, error="bad_kind")
+        return
+    send_mesh_wire_to_peer(peer_hash, peer_identity, wire)
+    emit_resp(req_id, True)
+
+
 def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
     link_id = str(payload.get("linkId") or "")
     if not link_id:
@@ -1788,6 +1944,8 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_open_group_audio_link(req_id, payload)
     elif action == "close_group_audio_link":
         handle_close_group_audio_link(req_id, payload)
+    elif action == "mesh_send_peer_exchange":
+        handle_mesh_send_peer_exchange(req_id, payload)
     else:
         emit_resp(req_id, False, error=f"Unknown action: {action}")
 

@@ -47,12 +47,22 @@ import {
   startBundledReticulumDaemon,
   stopBundledReticulumDaemon,
 } from './reticulum-daemon';
+import {
+  registerReticulumMeshIpcHandlers,
+  startReticulumMeshCoordinator,
+  stopReticulumMeshCoordinator,
+} from './reticulum-mesh';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
-import { startReticulumBridge, stopReticulumBridge } from './reticulum-bridge';
+import {
+  startReticulumBridge,
+  stopReticulumBridge,
+  getReticulumBridge,
+} from './reticulum-bridge';
 
 import * as net from 'net';
 
 registerReticulumIpcHandlers();
+registerReticulumMeshIpcHandlers();
 
 app.commandLine.appendSwitch(
   'disable-features',
@@ -262,6 +272,8 @@ async function setupMultiInstanceUserData(
         registerLateReticulumBridgeRecovery(p2pNetwork);
       }
 
+      startReticulumMeshCoordinator(getReticulumBridge());
+
       // Start the presence manager, wired to the Reticulum bridge.
       const pm = startPresenceManager(bridgeTransport ? [bridgeTransport] : []);
       attachPresenceListeners(pm);
@@ -302,6 +314,7 @@ async function setupMultiInstanceUserData(
 // Set isQuitting flag before the app quits
 app.on('before-quit', () => {
   setIsQuitting(true);
+  stopReticulumMeshCoordinator();
   stopReticulumBridge();
   stopBundledReticulumDaemon();
   flushPersistentStore();
