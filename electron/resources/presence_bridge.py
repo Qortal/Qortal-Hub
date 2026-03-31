@@ -4,6 +4,7 @@ import argparse
 import base64
 import json
 import os
+from collections import deque
 import queue
 import sys
 import threading
@@ -29,6 +30,8 @@ _call_destination = None
 _announce_handler = None
 _call_announce_handler = None
 _known_peers: Dict[str, Any] = {}
+# Recent presence senders (destination hash hex, lowercased) for recall retries on publish.
+_recent_presence_senders: "deque[str]" = deque(maxlen=128)
 _last_presence_wire: Optional[bytes] = None
 _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
@@ -682,6 +685,41 @@ def find_peer_hash_for_identity(identity: Any) -> str:
     return ""
 
 
+def ensure_known_peer_from_recall(peer_hash_hex: str) -> bool:
+    """
+    Mirror RNS's known destination into _known_peers when we see traffic but missed the announce.
+    Uses RNS.Identity.recall(destination_hash); does not load Identity from wire public key (k).
+    """
+    global _known_peers
+    if not peer_hash_hex or _destination is None:
+        return False
+    peer_key = peer_hash_hex.lower()
+    local_hex = destination_hash_hex(_destination.hash)
+    if peer_key == local_hex:
+        return False
+    if peer_key in _known_peers:
+        return True
+    try:
+        h = bytes.fromhex(peer_hash_hex)
+    except ValueError:
+        return False
+    if len(h) != 16:
+        return False
+    recalled = RNS.Identity.recall(h)
+    if recalled is None:
+        return False
+    _known_peers[peer_key] = recalled
+    peers_sorted = sorted(_known_peers.keys())
+    log(
+        "[presence_bridge] target=presence-reticulum peer_learned "
+        f"peer_hash={peer_key} source=recall known_peers_count={len(_known_peers)} "
+        f"all_peer_hashes={','.join(peers_sorted)}"
+    )
+    if _last_presence_wire is not None:
+        send_presence_wire_to_peer(peer_key, recalled, _last_presence_wire)
+    return True
+
+
 def ensure_identity(config_dir: str):
     global _identity
 
@@ -1055,6 +1093,10 @@ def on_packet_received(data, packet) -> None:
         "signature": signature,
     }
 
+    peer_key = sender_hash.lower()
+    _recent_presence_senders.append(peer_key)
+    ensure_known_peer_from_recall(peer_key)
+
     emit_event(
         "presence_message",
         {
@@ -1196,6 +1238,8 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         _last_presence_wire = wire_bytes
         announce_local_destination()
         announce_call_local_destination()
+        for ph in list(_recent_presence_senders):
+            ensure_known_peer_from_recall(ph)
         peer_hashes = sorted(_known_peers.keys())
         local_hex = destination_hash_hex(_destination.hash)
         env_type = envelope.get("type") if isinstance(envelope.get("type"), str) else ""
