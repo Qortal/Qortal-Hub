@@ -243,6 +243,7 @@ export class CallManager extends EventEmitter {
   private p2p: P2PNetwork;
   private presence: PresenceManager;
   private reticulumBridge: ReticulumBridge | null;
+  private started = false;
   private activeCalls = new Map<string, CallRecord>();
   private localAddresses = new Set<string>();
   private verifyPool = new VerifyWorkerPool(
@@ -250,6 +251,9 @@ export class CallManager extends EventEmitter {
     CALL_VERIFY_WORKER_COUNT,
     CALL_MAX_PENDING_VERIFY
   );
+  private onReticulumCallMessage:
+    | ((wire: Record<string, unknown>, senderCallHash: string) => void)
+    | null = null;
   private reticulumUnsub: (() => void) | null = null;
   private readonly sdpSession: ReticulumSdpSession;
   private iceBuckets = new Map<
@@ -287,12 +291,11 @@ export class CallManager extends EventEmitter {
     });
   }
 
-  start(): void {
-    this.verifyPool.start();
-    this.p2p.on('message', this.onP2PMessage);
+  private attachReticulumBridge(): void {
     const bridge = this.reticulumBridge;
-    if (bridge) {
-      const onRt = (
+    if (!bridge || this.reticulumUnsub) return;
+    if (!this.onReticulumCallMessage) {
+      this.onReticulumCallMessage = (
         wire: Record<string, unknown>,
         senderCallHash: string
       ): void => {
@@ -302,17 +305,47 @@ export class CallManager extends EventEmitter {
           loggerError('[Call] Reticulum wire error:', err);
         }
       };
-      bridge.on('call-message', onRt);
-      this.reticulumUnsub = () => bridge.off('call-message', onRt);
     }
+    bridge.on('call-message', this.onReticulumCallMessage);
+    this.reticulumUnsub = () => {
+      if (this.onReticulumCallMessage) {
+        bridge.off('call-message', this.onReticulumCallMessage);
+      }
+    };
+  }
+
+  private detachReticulumBridge(): void {
+    this.reticulumUnsub?.();
+    this.reticulumUnsub = null;
+  }
+
+  setReticulumBridge(reticulumBridge?: ReticulumBridge | null): void {
+    const nextBridge = reticulumBridge ?? null;
+    if (this.reticulumBridge === nextBridge) {
+      if (this.started) this.attachReticulumBridge();
+      return;
+    }
+    this.detachReticulumBridge();
+    this.reticulumBridge = nextBridge;
+    if (this.started) {
+      this.attachReticulumBridge();
+    }
+  }
+
+  start(): void {
+    if (this.started) return;
+    this.started = true;
+    this.verifyPool.start();
+    this.p2p.on('message', this.onP2PMessage);
+    this.attachReticulumBridge();
     loggerLog('[Call] Manager started.');
   }
 
   stop(): void {
+    this.started = false;
     this.verifyPool.stop();
     this.p2p.off('message', this.onP2PMessage);
-    this.reticulumUnsub?.();
-    this.reticulumUnsub = null;
+    this.detachReticulumBridge();
     this.sdpSession.disposeAll();
     this.iceBuckets.clear();
     for (const call of this.activeCalls.values()) {

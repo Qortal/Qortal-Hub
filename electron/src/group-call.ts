@@ -713,13 +713,22 @@ function buildGcClusterHeartbeatSignedFields(
 
 /** Jobs waiting on off-thread Ed25519 verification */
 type GcVerifyPending =
-  | { kind: 'join'; env: GcJoinEnvelope; fromNodeId?: string }
-  | { kind: 'leave'; env: GcLeaveEnvelope }
-  | { kind: 'topology'; env: GcTopologyEnvelope }
-  | { kind: 'cluster_heartbeat'; env: GcClusterHeartbeatEnvelope }
-  | { kind: 'key'; env: GcKeyEnvelope }
-  | { kind: 'key_rotate'; env: GcKeyRotateEnvelope }
-  | { kind: 'key_request'; env: GcKeyRequestEnvelope };
+  | {
+      kind: 'join';
+      env: GcJoinEnvelope;
+      fromNodeId?: string;
+      peerPresenceHash?: string;
+    }
+  | { kind: 'leave'; env: GcLeaveEnvelope; peerPresenceHash?: string }
+  | { kind: 'topology'; env: GcTopologyEnvelope; peerPresenceHash?: string }
+  | {
+      kind: 'cluster_heartbeat';
+      env: GcClusterHeartbeatEnvelope;
+      peerPresenceHash?: string;
+    }
+  | { kind: 'key'; env: GcKeyEnvelope; peerPresenceHash?: string }
+  | { kind: 'key_rotate'; env: GcKeyRotateEnvelope; peerPresenceHash?: string }
+  | { kind: 'key_request'; env: GcKeyRequestEnvelope; peerPresenceHash?: string };
 
 const GC_VERIFY_WORKER_COUNT = 6;
 const GC_MAX_PENDING_VERIFY = 4096;
@@ -785,18 +794,25 @@ export class GroupCallManager extends EventEmitter {
   private p2p: P2PNetwork;
   private presence: PresenceManager;
   private reticulumBridge: ReticulumBridge | null;
+  private started = false;
   private localAddresses = new Set<string>();
   private rooms = new Map<string, GroupRoom>();
   private recentRoomStateByRoomId = new Map<string, RecentRoomState>();
 
   /** Cache address → nodeId learned from GC_JOIN, retained for diagnostics / legacy compatibility. */
   private participantNodeIds = new Map<string, string>();
+  /** Fallback address → peer presence hash learned from verified inbound Reticulum traffic. */
+  private reticulumPeerPresenceHashByAddress = new Map<string, string>();
   private reticulumAudioPeersByAddress = new Map<string, ReticulumAudioPeerState>();
   private reticulumAudioAddressByLinkId = new Map<string, string>();
 
   private presenceExpiredHandler: (address: string) => void;
   private onReticulumGroupCallMessage:
-    | ((wire: Record<string, unknown>, senderCallHash: string) => void)
+    | ((
+        wire: Record<string, unknown>,
+        senderCallHash: string,
+        peerPresenceHash: string
+      ) => void)
     | null = null;
   private onReticulumGroupAudioPacket:
     | ((payload: {
@@ -935,6 +951,114 @@ export class GroupCallManager extends EventEmitter {
     };
   }
 
+  private rememberReticulumPeerPresenceHash(
+    address: string,
+    peerPresenceHash?: string
+  ): void {
+    if (!address || !peerPresenceHash) return;
+    this.reticulumPeerPresenceHashByAddress.set(address, peerPresenceHash);
+  }
+
+  private resolveReticulumPeerPresenceHash(address: string): string | null {
+    const route = this.presence.getRouteForAddress(address);
+    if (route?.kind === 'reticulum') {
+      this.rememberReticulumPeerPresenceHash(address, route.destinationHash);
+      return route.destinationHash;
+    }
+    return this.reticulumPeerPresenceHashByAddress.get(address) ?? null;
+  }
+
+  private attachReticulumBridgeListeners(): void {
+    const bridge = this.reticulumBridge;
+    if (!bridge || this.onReticulumGroupCallMessage) {
+      return;
+    }
+
+    this.onReticulumGroupCallMessage = (
+      wire,
+      senderCallHash,
+      peerPresenceHash
+    ) => {
+      try {
+        this.handleReticulumGroupCallWire(wire, senderCallHash, peerPresenceHash);
+      } catch (err) {
+        loggerError('[GCall] Error handling Reticulum group call wire:', err);
+      }
+    };
+    this.onReticulumGroupAudioPacket = (payload) => {
+      try {
+        this.handleReticulumGroupAudioPacket(payload);
+      } catch (err) {
+        loggerError('[GCall] Error handling Reticulum group audio packet:', err);
+      }
+    };
+    this.onReticulumGroupAudioLinkEstablished = (payload) => {
+      try {
+        this.handleReticulumGroupAudioLinkEstablished(payload);
+      } catch (err) {
+        loggerError('[GCall] Error handling Reticulum group audio link ready:', err);
+      }
+    };
+    this.onReticulumGroupAudioLinkClosed = (payload) => {
+      try {
+        this.handleReticulumGroupAudioLinkClosed(payload);
+      } catch (err) {
+        loggerError('[GCall] Error handling Reticulum group audio link close:', err);
+      }
+    };
+    bridge.on('group-call-message', this.onReticulumGroupCallMessage);
+    bridge.on('group-audio-packet', this.onReticulumGroupAudioPacket);
+    bridge.on(
+      'group-audio-link-established',
+      this.onReticulumGroupAudioLinkEstablished
+    );
+    bridge.on('group-audio-link-closed', this.onReticulumGroupAudioLinkClosed);
+  }
+
+  private detachReticulumBridgeListeners(): void {
+    if (this.reticulumBridge && this.onReticulumGroupCallMessage) {
+      this.reticulumBridge.off(
+        'group-call-message',
+        this.onReticulumGroupCallMessage
+      );
+      this.onReticulumGroupCallMessage = null;
+    }
+    if (this.reticulumBridge && this.onReticulumGroupAudioPacket) {
+      this.reticulumBridge.off(
+        'group-audio-packet',
+        this.onReticulumGroupAudioPacket
+      );
+      this.onReticulumGroupAudioPacket = null;
+    }
+    if (this.reticulumBridge && this.onReticulumGroupAudioLinkEstablished) {
+      this.reticulumBridge.off(
+        'group-audio-link-established',
+        this.onReticulumGroupAudioLinkEstablished
+      );
+      this.onReticulumGroupAudioLinkEstablished = null;
+    }
+    if (this.reticulumBridge && this.onReticulumGroupAudioLinkClosed) {
+      this.reticulumBridge.off(
+        'group-audio-link-closed',
+        this.onReticulumGroupAudioLinkClosed
+      );
+      this.onReticulumGroupAudioLinkClosed = null;
+    }
+  }
+
+  setReticulumBridge(reticulumBridge?: ReticulumBridge | null): void {
+    const nextBridge = reticulumBridge ?? null;
+    if (this.reticulumBridge === nextBridge) {
+      if (this.started) this.attachReticulumBridgeListeners();
+      return;
+    }
+    this.detachReticulumBridgeListeners();
+    this.reticulumBridge = nextBridge;
+    if (this.started) {
+      this.attachReticulumBridgeListeners();
+    }
+  }
+
   private logVerifyFailure(job: GcVerifyPending): void {
     if (job.kind === 'join') {
       loggerLog(
@@ -1031,6 +1155,10 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private applyVerifiedJobSync(job: GcVerifyPending): void {
+    this.rememberReticulumPeerPresenceHash(
+      job.env.fromAddress,
+      job.peerPresenceHash
+    );
     switch (job.kind) {
       case 'join':
         this.applyVerifiedJoin(job.env, job.fromNodeId);
@@ -1057,52 +1185,9 @@ export class GroupCallManager extends EventEmitter {
   }
 
   start(): void {
-    if (this.reticulumBridge) {
-      this.onReticulumGroupCallMessage = (wire, senderCallHash) => {
-        try {
-          this.handleReticulumGroupCallWire(wire, senderCallHash);
-        } catch (err) {
-          loggerError('[GCall] Error handling Reticulum group call wire:', err);
-        }
-      };
-      this.onReticulumGroupAudioPacket = (payload) => {
-        try {
-          this.handleReticulumGroupAudioPacket(payload);
-        } catch (err) {
-          loggerError('[GCall] Error handling Reticulum group audio packet:', err);
-        }
-      };
-      this.onReticulumGroupAudioLinkEstablished = (payload) => {
-        try {
-          this.handleReticulumGroupAudioLinkEstablished(payload);
-        } catch (err) {
-          loggerError('[GCall] Error handling Reticulum group audio link ready:', err);
-        }
-      };
-      this.onReticulumGroupAudioLinkClosed = (payload) => {
-        try {
-          this.handleReticulumGroupAudioLinkClosed(payload);
-        } catch (err) {
-          loggerError('[GCall] Error handling Reticulum group audio link close:', err);
-        }
-      };
-      this.reticulumBridge.on(
-        'group-call-message',
-        this.onReticulumGroupCallMessage
-      );
-      this.reticulumBridge.on(
-        'group-audio-packet',
-        this.onReticulumGroupAudioPacket
-      );
-      this.reticulumBridge.on(
-        'group-audio-link-established',
-        this.onReticulumGroupAudioLinkEstablished
-      );
-      this.reticulumBridge.on(
-        'group-audio-link-closed',
-        this.onReticulumGroupAudioLinkClosed
-      );
-    }
+    if (this.started) return;
+    this.started = true;
+    this.attachReticulumBridgeListeners();
 
     this.verifyPool.start();
 
@@ -1147,41 +1232,16 @@ export class GroupCallManager extends EventEmitter {
   }
 
   stop(): void {
+    this.started = false;
     this.verifyPool.stop();
-    if (this.reticulumBridge && this.onReticulumGroupCallMessage) {
-      this.reticulumBridge.off(
-        'group-call-message',
-        this.onReticulumGroupCallMessage
-      );
-      this.onReticulumGroupCallMessage = null;
-    }
-    if (this.reticulumBridge && this.onReticulumGroupAudioPacket) {
-      this.reticulumBridge.off(
-        'group-audio-packet',
-        this.onReticulumGroupAudioPacket
-      );
-      this.onReticulumGroupAudioPacket = null;
-    }
-    if (this.reticulumBridge && this.onReticulumGroupAudioLinkEstablished) {
-      this.reticulumBridge.off(
-        'group-audio-link-established',
-        this.onReticulumGroupAudioLinkEstablished
-      );
-      this.onReticulumGroupAudioLinkEstablished = null;
-    }
-    if (this.reticulumBridge && this.onReticulumGroupAudioLinkClosed) {
-      this.reticulumBridge.off(
-        'group-audio-link-closed',
-        this.onReticulumGroupAudioLinkClosed
-      );
-      this.onReticulumGroupAudioLinkClosed = null;
-    }
+    this.detachReticulumBridgeListeners();
     if (this.onPresenceUpdated)
       this.presence.off('presence-updated', this.onPresenceUpdated);
     for (const timer of this.presenceEvictionTimers.values())
       clearTimeout(timer);
     this.presenceEvictionTimers.clear();
     this.participantNodeIds.clear();
+    this.reticulumPeerPresenceHashByAddress.clear();
     this.reticulumAudioPeersByAddress.clear();
     this.reticulumAudioAddressByLinkId.clear();
     this.rooms.clear();
@@ -1463,8 +1523,8 @@ export class GroupCallManager extends EventEmitter {
       roomId,
       excludeAddresses
     )) {
-      const r = this.presence.getRouteForAddress(addr);
-      if (r?.kind === 'reticulum') out.add(r.destinationHash);
+      const peerPresenceHash = this.resolveReticulumPeerPresenceHash(addr);
+      if (peerPresenceHash) out.add(peerPresenceHash);
     }
     return [...out];
   }
@@ -1575,14 +1635,14 @@ export class GroupCallManager extends EventEmitter {
     let hadFailure = false;
     let firstFailure: GcReticulumSendResult | null = null;
     for (const address of targetAddresses) {
-      const route = this.presence.getRouteForAddress(address);
-      if (route?.kind !== 'reticulum') {
+      const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
+      if (!peerPresenceHash) {
         hadFailure = true;
         firstFailure ??= { ok: false, reason: 'no-route' };
         continue;
       }
       const result = await this.sendReticulumFramesToHash(
-        route.destinationHash,
+        peerPresenceHash,
         frames
       );
       if (!result.ok) {
@@ -1634,10 +1694,10 @@ export class GroupCallManager extends EventEmitter {
     retryKind: GcReticulumRetryKind | undefined,
     attempt: number
   ): Promise<void> {
-    const route = this.presence.getRouteForAddress(address);
+    const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
     const result =
-      route?.kind === 'reticulum'
-        ? await this.sendReticulumFramesToHash(route.destinationHash, frames)
+      peerPresenceHash
+        ? await this.sendReticulumFramesToHash(peerPresenceHash, frames)
         : ({ ok: false, reason: 'no-route' } as const);
     if (
       retryKind &&
@@ -1807,9 +1867,9 @@ export class GroupCallManager extends EventEmitter {
     if (!targets || targets.size === 0) return;
     const destinationHashes = new Set<string>();
     for (const address of targets) {
-      const route = this.presence.getRouteForAddress(address);
-      if (route?.kind !== 'reticulum') continue;
-      destinationHashes.add(route.destinationHash);
+      const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
+      if (!peerPresenceHash) continue;
+      destinationHashes.add(peerPresenceHash);
     }
     if (destinationHashes.size === 0) return;
     const wire: GcReticulumActivityWire = {
@@ -1826,7 +1886,8 @@ export class GroupCallManager extends EventEmitter {
 
   private handleReticulumGroupCallWire(
     wire: Record<string, unknown>,
-    senderCallHash: string
+    senderCallHash: string,
+    peerPresenceHash: string
   ): void {
     const now = Date.now();
     this.sweepExpiredReticulumReassembly(now);
@@ -1850,25 +1911,28 @@ export class GroupCallManager extends EventEmitter {
     if (t === 'GJ') {
       const env = decodeJoinWire(wire);
       if (!env) return;
-      this.handleJoin(env as GcJoinEnvelope, syntheticFrom);
+      this.handleJoin(env as GcJoinEnvelope, syntheticFrom, peerPresenceHash);
       return;
     }
     if (t === 'GL') {
       const env = decodeLeaveWire(wire);
       if (!env) return;
-      this.handleLeaveEnvelope(env as GcLeaveEnvelope);
+      this.handleLeaveEnvelope(env as GcLeaveEnvelope, peerPresenceHash);
       return;
     }
     if (t === 'GH') {
       const env = decodeClusterHeartbeatWire(wire);
       if (!env) return;
-      this.handleClusterHeartbeat(env as GcClusterHeartbeatEnvelope);
+      this.handleClusterHeartbeat(
+        env as GcClusterHeartbeatEnvelope,
+        peerPresenceHash
+      );
       return;
     }
     if (t === 'GT') {
       const env = decodeTopologyWireSingle(wire);
       if (!env) return;
-      this.handleTopology(env as GcTopologyEnvelope);
+      this.handleTopology(env as GcTopologyEnvelope, peerPresenceHash);
       return;
     }
     if (t === 'GT0') {
@@ -1892,14 +1956,14 @@ export class GroupCallManager extends EventEmitter {
       const env = decodeTopologyFromGt1(buf.meta, buf.parts);
       this.reticulumTopoReasm.delete(key);
       if (!env) return;
-      this.handleTopology(env as GcTopologyEnvelope);
+      this.handleTopology(env as GcTopologyEnvelope, peerPresenceHash);
       return;
     }
 
     if (t === 'GR') {
       const env = decodeKeyRotateWireSingle(wire);
       if (!env) return;
-      this.handleKeyRotate(env as GcKeyRotateEnvelope);
+      this.handleKeyRotate(env as GcKeyRotateEnvelope, peerPresenceHash);
       return;
     }
     if (t === 'GR0') {
@@ -1923,14 +1987,14 @@ export class GroupCallManager extends EventEmitter {
       const env = decodeKeyRotateFromGr1(buf.meta, buf.parts);
       this.reticulumGrReasm.delete(key);
       if (!env) return;
-      this.handleKeyRotate(env as GcKeyRotateEnvelope);
+      this.handleKeyRotate(env as GcKeyRotateEnvelope, peerPresenceHash);
       return;
     }
 
     if (t === 'GK') {
       const env = decodeKeyWireSingle(wire);
       if (!env) return;
-      this.handleKey(env as GcKeyEnvelope);
+      this.handleKey(env as GcKeyEnvelope, peerPresenceHash);
       return;
     }
     if (t === 'GK0') {
@@ -1954,14 +2018,14 @@ export class GroupCallManager extends EventEmitter {
       const env = decodeKeyWireFromGk1(buf.meta, buf.parts);
       this.reticulumGkReasm.delete(key);
       if (!env) return;
-      this.handleKey(env as GcKeyEnvelope);
+      this.handleKey(env as GcKeyEnvelope, peerPresenceHash);
       return;
     }
 
     if (t === 'GQ') {
       const env = decodeKeyRequestWire(wire);
       if (!env) return;
-      this.handleKeyRequest(env as GcKeyRequestEnvelope);
+      this.handleKeyRequest(env as GcKeyRequestEnvelope, peerPresenceHash);
       return;
     }
 
@@ -2097,6 +2161,7 @@ export class GroupCallManager extends EventEmitter {
         `[GCall] Missing GC_LEAVE signature for ${localAddress} in ${roomId} — clearing local room only`
       );
       this.participantNodeIds.delete(localAddress);
+      this.reticulumPeerPresenceHashByAddress.delete(localAddress);
     }
     if (room) this.rememberRecentRoomState(room, timestamp);
     this.pendingKeyByRoom.delete(roomId);
@@ -2312,12 +2377,12 @@ export class GroupCallManager extends EventEmitter {
     roomId: string,
     address: string
   ): ReticulumAudioPeerState | null {
-    const route = this.presence.getRouteForAddress(address);
-    if (route?.kind !== 'reticulum') {
+    const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
+    if (!peerPresenceHash) {
       return null;
     }
     let state = this.reticulumAudioPeersByAddress.get(address);
-    if (state && state.peerPresenceHash !== route.destinationHash) {
+    if (state && state.peerPresenceHash !== peerPresenceHash) {
       this.markReticulumAudioLinkUnready(address, state.linkId ?? undefined);
       this.reticulumAudioPeersByAddress.delete(address);
       state = undefined;
@@ -2325,7 +2390,7 @@ export class GroupCallManager extends EventEmitter {
     if (!state) {
       state = {
         address,
-        peerPresenceHash: route.destinationHash,
+        peerPresenceHash,
         linkId: null,
         established: false,
         opening: false,
@@ -2399,15 +2464,15 @@ export class GroupCallManager extends EventEmitter {
     >();
     for (const room of this.rooms.values()) {
       for (const address of this.computeReticulumAudioTargetsForRoom(room)) {
-        const route = this.presence.getRouteForAddress(address);
-        if (route?.kind !== 'reticulum') continue;
+        const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
+        if (!peerPresenceHash) continue;
         const existing = desiredByAddress.get(address);
         if (existing) {
           existing.rooms.add(room.roomId);
           continue;
         }
         desiredByAddress.set(address, {
-          peerPresenceHash: route.destinationHash,
+          peerPresenceHash,
           rooms: new Set([room.roomId]),
         });
       }
@@ -2564,29 +2629,37 @@ export class GroupCallManager extends EventEmitter {
 
   // ── Inbound ───────────────────────────────────────────────────────────────
 
-  handleIncoming(env: GcEnvelope, fromNodeId?: string): void {
+  handleIncoming(
+    env: GcEnvelope,
+    fromNodeId?: string,
+    peerPresenceHash?: string
+  ): void {
     if (!GC_MESSAGE_TYPES.has(env.type)) return;
     if (this.pendingKeyByRoom.size > 0) this.sweepExpiredPendingKeys();
 
     switch (env.type) {
       case 'GC_JOIN':
-        return this.handleJoin(env, fromNodeId);
+        return this.handleJoin(env, fromNodeId, peerPresenceHash);
       case 'GC_LEAVE':
-        return this.handleLeaveEnvelope(env);
+        return this.handleLeaveEnvelope(env, peerPresenceHash);
       case 'GC_TOPOLOGY':
-        return this.handleTopology(env);
+        return this.handleTopology(env, peerPresenceHash);
       case 'GC_CLUSTER_HEARTBEAT':
-        return this.handleClusterHeartbeat(env);
+        return this.handleClusterHeartbeat(env, peerPresenceHash);
       case 'GC_KEY':
-        return this.handleKey(env);
+        return this.handleKey(env, peerPresenceHash);
       case 'GC_KEY_ROTATE':
-        return this.handleKeyRotate(env);
+        return this.handleKeyRotate(env, peerPresenceHash);
       case 'GC_KEY_REQUEST':
-        return this.handleKeyRequest(env);
+        return this.handleKeyRequest(env, peerPresenceHash);
     }
   }
 
-  private handleJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
+  private handleJoin(
+    env: GcJoinEnvelope,
+    fromNodeId?: string,
+    peerPresenceHash?: string
+  ): void {
     const nowJoin = Date.now();
     if (!this.hasLocalRoomInterest(env.roomId)) {
       return;
@@ -2627,7 +2700,7 @@ export class GroupCallManager extends EventEmitter {
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
-      { kind: 'join', env, fromNodeId }
+      { kind: 'join', env, fromNodeId, peerPresenceHash }
     );
   }
 
@@ -2692,7 +2765,10 @@ export class GroupCallManager extends EventEmitter {
     this.syncReticulumAudioLinks();
   }
 
-  private handleLeaveEnvelope(env: GcLeaveEnvelope): void {
+  private handleLeaveEnvelope(
+    env: GcLeaveEnvelope,
+    peerPresenceHash?: string
+  ): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       return;
     }
@@ -2708,7 +2784,7 @@ export class GroupCallManager extends EventEmitter {
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
-      { kind: 'leave', env }
+      { kind: 'leave', env, peerPresenceHash }
     );
   }
 
@@ -2760,6 +2836,7 @@ export class GroupCallManager extends EventEmitter {
       }
     }
     this.participantNodeIds.delete(address);
+    this.reticulumPeerPresenceHashByAddress.delete(address);
     if (hadLocalInterest) {
       this.emit('gcall:participant-left', { roomId, address, isAbrupt });
     }
@@ -2769,7 +2846,10 @@ export class GroupCallManager extends EventEmitter {
     this.syncReticulumAudioLinks();
   }
 
-  private handleTopology(env: GcTopologyEnvelope): void {
+  private handleTopology(
+    env: GcTopologyEnvelope,
+    peerPresenceHash?: string
+  ): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       return;
     }
@@ -2788,7 +2868,7 @@ export class GroupCallManager extends EventEmitter {
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
-      { kind: 'topology', env }
+      { kind: 'topology', env, peerPresenceHash }
     );
   }
 
@@ -2858,7 +2938,10 @@ export class GroupCallManager extends EventEmitter {
     this.syncReticulumAudioLinks();
   }
 
-  private handleClusterHeartbeat(env: GcClusterHeartbeatEnvelope): void {
+  private handleClusterHeartbeat(
+    env: GcClusterHeartbeatEnvelope,
+    peerPresenceHash?: string
+  ): void {
     if (!this.hasLocalRoomInterest(env.roomId)) {
       return;
     }
@@ -2868,7 +2951,7 @@ export class GroupCallManager extends EventEmitter {
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
-      { kind: 'cluster_heartbeat', env }
+      { kind: 'cluster_heartbeat', env, peerPresenceHash }
     );
   }
 
@@ -2968,7 +3051,7 @@ export class GroupCallManager extends EventEmitter {
     }
   }
 
-  private handleKey(env: GcKeyEnvelope): void {
+  private handleKey(env: GcKeyEnvelope, peerPresenceHash?: string): void {
     if (!this.localAddresses.has(env.toAddress)) {
       return;
     }
@@ -3023,11 +3106,14 @@ export class GroupCallManager extends EventEmitter {
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
-      { kind: 'key', env }
+      { kind: 'key', env, peerPresenceHash }
     );
   }
 
-  private handleKeyRotate(env: GcKeyRotateEnvelope): void {
+  private handleKeyRotate(
+    env: GcKeyRotateEnvelope,
+    peerPresenceHash?: string
+  ): void {
     let hasLocalRecipient = false;
     for (const localAddr of this.localAddresses) {
       if (env.encryptedKeys[localAddr]) {
@@ -3082,11 +3168,14 @@ export class GroupCallManager extends EventEmitter {
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
-      { kind: 'key_rotate', env }
+      { kind: 'key_rotate', env, peerPresenceHash }
     );
   }
 
-  private handleKeyRequest(env: GcKeyRequestEnvelope): void {
+  private handleKeyRequest(
+    env: GcKeyRequestEnvelope,
+    peerPresenceHash?: string
+  ): void {
     if (!this.localAddresses.has(env.toAddress)) {
       return;
     }
@@ -3110,7 +3199,7 @@ export class GroupCallManager extends EventEmitter {
       env.signature,
       env.fromPublicKey,
       env.fromAddress,
-      { kind: 'key_request', env }
+      { kind: 'key_request', env, peerPresenceHash }
     );
   }
 

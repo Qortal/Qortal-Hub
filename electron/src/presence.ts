@@ -528,6 +528,21 @@ function isRouteFresh(session: PresenceSession, now: number): boolean {
   return session.routeExpiresAt === null || now <= session.routeExpiresAt;
 }
 
+function shouldPreferAggregateRoute(
+  candidate: PresenceSession,
+  current: PresenceSession | null,
+  now: number
+): boolean {
+  if (!isRouteFresh(candidate, now)) return false;
+  if (!current) return true;
+  const candidateIsReticulum = candidate.route.kind === 'reticulum';
+  const currentIsReticulum = current.route.kind === 'reticulum';
+  if (candidateIsReticulum !== currentIsReticulum) {
+    return candidateIsReticulum;
+  }
+  return candidate.lastSeen > current.lastSeen;
+}
+
 // ── Presence Manager ──────────────────────────────────────────────────────────
 
 export class PresenceManager extends EventEmitter {
@@ -955,6 +970,7 @@ export class PresenceManager extends EventEmitter {
     let liveSessionCount = 0;
     let lastSeen: number | null = null;
     let latestLiveSession: PresenceSession | null = null;
+    let aggregateRouteSession: PresenceSession | null = null;
     let nextExpiryAt: number | null = null;
 
     if (keys) {
@@ -983,13 +999,14 @@ export class PresenceManager extends EventEmitter {
         ) {
           latestLiveSession = session;
         }
+        if (shouldPreferAggregateRoute(session, aggregateRouteSession, now)) {
+          aggregateRouteSession = session;
+        }
       }
     }
 
     const freshestRoute =
-      latestLiveSession && isRouteFresh(latestLiveSession, now)
-        ? latestLiveSession.route
-        : null;
+      aggregateRouteSession?.route ?? null;
 
     const aggregate: PresenceAddressAggregate = {
       liveSessionCount,
@@ -1068,6 +1085,74 @@ export function buildEnvelope(
 let presenceManager: PresenceManager | null = null;
 let presenceTransportUnsubscribers: Array<() => void> = [];
 
+function clearPresenceTransportSubscriptions(): void {
+  for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
+  presenceTransportUnsubscribers = [];
+  activePresenceTransports = [];
+}
+
+function subscribePresenceTransport(
+  manager: PresenceManager,
+  transport: PresenceTransport
+): void {
+  const unsubscribe = transport.subscribe({
+    onEnvelope: (envelope, route) => {
+      loggerLog(
+        `[Presence] Transport delivered envelope via ${transport.kind} ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+      );
+      void presenceManager?.handleEnvelope(envelope, route);
+    },
+    onReady: () => {
+      const cached = manager.getLastLocalEnvelope();
+      loggerLog(
+        `[Presence] Transport ready kind=${transport.kind} cached_local_envelope=${cached ? 'yes' : 'no'}`
+      );
+      if (!cached) return;
+      void Promise.resolve(transport.publish(cached)).catch((err) => {
+        loggerError('[Presence] Failed to re-publish cached envelope:', err);
+      });
+    },
+    onDegraded: () => {
+      loggerLog(`[Presence] Transport degraded kind=${transport.kind}`);
+      manager.invalidateTransportRoutes(transport.kind);
+    },
+  });
+  presenceTransportUnsubscribers.push(unsubscribe);
+}
+
+async function republishCachedPresenceToTransport(
+  manager: PresenceManager,
+  transport: PresenceTransport
+): Promise<void> {
+  const cached = manager.getLastLocalEnvelope();
+  if (!cached) return;
+  loggerLog(
+    `[Presence] Re-publishing cached local envelope to attached transport kind=${transport.kind}`
+  );
+  try {
+    await Promise.resolve(transport.publish(cached));
+  } catch (err) {
+    loggerError('[Presence] Failed to publish cached envelope to attached transport:', err);
+  }
+}
+
+export function setPresenceManagerTransports(
+  transports: PresenceTransport[] = []
+): PresenceManager | null {
+  if (!presenceManager) {
+    activePresenceTransports = [...transports];
+    return null;
+  }
+  clearPresenceTransportSubscriptions();
+  activePresenceTransports = [...transports];
+  for (const transport of transports) {
+    subscribePresenceTransport(presenceManager, transport);
+    void republishCachedPresenceToTransport(presenceManager, transport);
+  }
+  loggerLog(`[Presence] Updated manager transports=${transports.length}`);
+  return presenceManager;
+}
+
 export function getPresenceManager(): PresenceManager | null {
   return presenceManager;
 }
@@ -1077,41 +1162,15 @@ export function startPresenceManager(
 ): PresenceManager {
   if (presenceManager) {
     loggerLog('[Presence] Restarting existing manager.');
-    for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
-    presenceTransportUnsubscribers = [];
+    clearPresenceTransportSubscriptions();
     presenceManager.stopCleanup();
     presenceManager.stopVerifyPool();
     presenceManager.removeAllListeners();
   }
   presenceManager = new PresenceManager();
-  activePresenceTransports = [...transports];
   presenceManager.startVerifyPool();
   presenceManager.startCleanup();
-  for (const transport of transports) {
-    const unsubscribe = transport.subscribe({
-      onEnvelope: (envelope, route) => {
-        loggerLog(
-          `[Presence] Transport delivered envelope via ${transport.kind} ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
-        );
-        void presenceManager?.handleEnvelope(envelope, route);
-      },
-      onReady: () => {
-        const cached = presenceManager?.getLastLocalEnvelope();
-        loggerLog(
-          `[Presence] Transport ready kind=${transport.kind} cached_local_envelope=${cached ? 'yes' : 'no'}`
-        );
-        if (!cached) return;
-        void Promise.resolve(transport.publish(cached)).catch((err) => {
-          loggerError('[Presence] Failed to re-publish cached envelope:', err);
-        });
-      },
-      onDegraded: () => {
-        loggerLog(`[Presence] Transport degraded kind=${transport.kind}`);
-        presenceManager?.invalidateTransportRoutes(transport.kind);
-      },
-    });
-    presenceTransportUnsubscribers.push(unsubscribe);
-  }
+  setPresenceManagerTransports(transports);
 
   loggerLog(`[Presence] Manager started transports=${transports.length}`);
   return presenceManager;
@@ -1173,9 +1232,7 @@ function getActivePresenceTransports(): PresenceTransport[] {
 
 export function stopPresenceManager(): void {
   if (presenceManager) {
-    for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
-    presenceTransportUnsubscribers = [];
-    activePresenceTransports = [];
+    clearPresenceTransportSubscriptions();
     presenceManager.stopVerifyPool();
     presenceManager.stopCleanup();
     presenceManager.removeAllListeners();

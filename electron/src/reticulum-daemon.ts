@@ -12,7 +12,11 @@
  * @see https://reticulum.network/manual/using.html
  */
 
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'child_process';
+import {
+  spawn,
+  spawnSync,
+  type ChildProcessWithoutNullStreams,
+} from 'child_process';
 import { app, ipcMain } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
@@ -36,45 +40,25 @@ export type ReticulumReachability =
   | 'lan-only'
   | 'hub-connected'
   | 'disconnected';
-export type ReticulumBridgeState = 'stopped' | 'starting' | 'ready' | 'degraded';
+export type ReticulumBridgeState =
+  | 'stopped'
+  | 'starting'
+  | 'ready'
+  | 'degraded';
 export type ReticulumHubEndpoint = {
   name: string;
   host: string;
   port: number;
 };
 
-export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] = Object.freeze([
-  {
-    name: 'Public Reticulum Hub Dublin',
-    host: 'dublin.connect.reticulum.network',
-    port: 4965,
-  },
-  {
-    name: 'Noderage Public Hub',
-    host: 'rns.noderage.org',
-    port: 4242,
-  },
-  {
-    name: 'RMAP Public Hub',
-    host: 'rmap.world',
-    port: 4242,
-  },
-  {
-    name: 'Sydney Reticulum Hub',
-    host: 'sydney.reticulum.au',
-    port: 4242,
-  },
-  {
-    name: 'Wiegandtech Public Hub',
-    host: 'rns.wiegandtech.net',
-    port: 4242,
-  },
-  {
-    name: 'Dismail Public Hub',
-    host: 'rns.dismail.de',
-    port: 7822,
-  },
-]);
+export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
+  Object.freeze([
+    {
+      name: 'Crowetic Reticulum Hub',
+      host: 'reticulum.qortal.link',
+      port: 4242,
+    },
+  ]);
 
 let child: ChildProcessWithoutNullStreams | null = null;
 let lastStartMode: ReticulumDaemonMode = null;
@@ -104,7 +88,9 @@ function getReticulumConfigFilePath(): string {
   return path.join(getReticulumConfigDir(), RETICULUM_CONFIG_FILENAME);
 }
 
-function renderManagedHubInterfaces(hubs: readonly ReticulumHubEndpoint[]): string {
+function renderManagedHubInterfaces(
+  hubs: readonly ReticulumHubEndpoint[]
+): string {
   if (hubs.length === 0) return '';
   return hubs
     .map(
@@ -358,7 +344,9 @@ function resolveLaunchPlan(): LaunchPlan {
   }
 
   const tryNames =
-    process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
+    process.platform === 'win32'
+      ? ['python', 'python3']
+      : ['python3', 'python'];
   for (const name of tryNames) {
     const probe = spawnSync(name, ['-c', 'import RNS'], {
       encoding: 'utf8',
@@ -415,7 +403,9 @@ export function resolveReticulumPythonLaunch(
   }
 
   const tryNames =
-    process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
+    process.platform === 'win32'
+      ? ['python', 'python3']
+      : ['python3', 'python'];
   for (const name of tryNames) {
     const probe = spawnSync(name, ['-c', 'import RNS'], {
       encoding: 'utf8',
@@ -438,8 +428,7 @@ export function resolveReticulumPythonLaunch(
 }
 
 export function getReticulumDaemonStatus(): ReticulumDaemonStatus {
-  const running =
-    child !== null && child.exitCode === null && !child.killed;
+  const running = child !== null && child.exitCode === null && !child.killed;
   return {
     running,
     pid: child?.pid,
@@ -540,36 +529,39 @@ export function startBundledReticulumDaemon(): void {
 }
 
 export function registerReticulumIpcHandlers(): void {
-  ipcMain.handle('reticulum:getStatus', async (): Promise<ReticulumDaemonStatus> => {
-    const base = getReticulumDaemonStatus();
-    if (!base.running && !lastStartMode) {
-      const plan = resolveLaunchPlan();
-      if ('error' in plan) {
-        return { ...base, running: false, reason: plan.error };
+  ipcMain.handle(
+    'reticulum:getStatus',
+    async (): Promise<ReticulumDaemonStatus> => {
+      const base = getReticulumDaemonStatus();
+      if (!base.running && !lastStartMode) {
+        const plan = resolveLaunchPlan();
+        if ('error' in plan) {
+          return { ...base, running: false, reason: plan.error };
+        }
+      }
+      try {
+        const { getReticulumBridge } =
+          require('./reticulum-bridge') as typeof import('./reticulum-bridge');
+        const bridge = getReticulumBridge();
+        const bridgeStatus = bridge?.getConnectivitySnapshot();
+        if (!bridgeStatus) return base;
+        return {
+          ...base,
+          bridgeState: bridgeStatus.bridgeState,
+          reachability: bridgeStatus.reachability,
+          transportEnabled: bridgeStatus.transportEnabled,
+          configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
+          onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
+          hubSummary: bridgeStatus.hubSummary,
+          ...(bridgeStatus.reason ? { reason: bridgeStatus.reason } : {}),
+        };
+      } catch (error) {
+        loggerError('[Reticulum] Failed to collect bridge status:', error);
+        return {
+          ...base,
+          reason: base.reason ?? 'Unable to read Reticulum bridge status',
+        };
       }
     }
-    try {
-      const { getReticulumBridge } =
-        require('./reticulum-bridge') as typeof import('./reticulum-bridge');
-      const bridge = getReticulumBridge();
-      const bridgeStatus = bridge?.getConnectivitySnapshot();
-      if (!bridgeStatus) return base;
-      return {
-        ...base,
-        bridgeState: bridgeStatus.bridgeState,
-        reachability: bridgeStatus.reachability,
-        transportEnabled: bridgeStatus.transportEnabled,
-        configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
-        onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
-        hubSummary: bridgeStatus.hubSummary,
-        ...(bridgeStatus.reason ? { reason: bridgeStatus.reason } : {}),
-      };
-    } catch (error) {
-      loggerError('[Reticulum] Failed to collect bridge status:', error);
-      return {
-        ...base,
-        reason: base.reason ?? 'Unable to read Reticulum bridge status',
-      };
-    }
-  });
+  );
 }

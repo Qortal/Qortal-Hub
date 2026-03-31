@@ -101,6 +101,7 @@ type BridgeEventFrame =
       payload?: {
         wire?: Record<string, unknown>;
         senderCallHash?: string;
+        peerPresenceHash?: string;
       };
     }
   | {
@@ -109,6 +110,7 @@ type BridgeEventFrame =
       payload?: {
         wire?: Record<string, unknown>;
         senderCallHash?: string;
+        peerPresenceHash?: string;
       };
     }
   | {
@@ -629,22 +631,26 @@ export class ReticulumBridge
       case 'call_message': {
         const wire = frame.payload?.wire;
         const senderCallHash = frame.payload?.senderCallHash;
+        const peerPresenceHash = frame.payload?.peerPresenceHash;
         if (!wire || typeof wire !== 'object') return;
         this.emit(
           'call-message',
           wire as Record<string, unknown>,
-          typeof senderCallHash === 'string' ? senderCallHash : ''
+          typeof senderCallHash === 'string' ? senderCallHash : '',
+          typeof peerPresenceHash === 'string' ? peerPresenceHash : ''
         );
         return;
       }
       case 'group_call_message': {
         const wire = frame.payload?.wire;
         const senderCallHash = frame.payload?.senderCallHash;
+        const peerPresenceHash = frame.payload?.peerPresenceHash;
         if (!wire || typeof wire !== 'object') return;
         this.emit(
           'group-call-message',
           wire as Record<string, unknown>,
-          typeof senderCallHash === 'string' ? senderCallHash : ''
+          typeof senderCallHash === 'string' ? senderCallHash : '',
+          typeof peerPresenceHash === 'string' ? peerPresenceHash : ''
         );
         return;
       }

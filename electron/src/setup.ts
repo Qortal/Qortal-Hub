@@ -71,6 +71,7 @@ import {
   stopPresenceManager,
   publishPresenceEnvelope,
   getPresenceManager,
+  setPresenceManagerTransports,
 } from './presence';
 import {
   startChatManager,
@@ -1710,11 +1711,15 @@ export function registerLateReticulumBridgeRecovery(
     }
 
     loggerLog(
-      '[ReticulumBridge] Bridge became ready after startup timeout; reattaching presence/call managers'
+      '[ReticulumBridge] Bridge became ready after startup timeout; updating presence transport and restarting call/group-call managers'
     );
-    stopPresenceManager();
-    const pm = startPresenceManager([currentBridge]);
-    attachPresenceListeners(pm);
+    let pm = getPresenceManager();
+    if (pm) {
+      setPresenceManagerTransports([currentBridge]);
+    } else {
+      pm = startPresenceManager([currentBridge]);
+      attachPresenceListeners(pm);
+    }
     stopCallManager();
     const callMgr = startCallManager(network, pm, currentBridge);
     attachCallListeners(callMgr);

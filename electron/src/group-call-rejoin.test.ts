@@ -16,6 +16,7 @@ import {
   shouldIgnoreLeaveForLocalAddress,
   shouldRefreshParticipantFromVerifiedJoin,
 } from './group-call';
+import { encodeJoinWire } from './group-call-wire-reticulum';
 
 function reticulumAwarePresenceStub(): PresenceStub {
   return {
@@ -335,6 +336,78 @@ describe('recent room bootstrap state', () => {
     await vi.advanceTimersByTimeAsync(250);
     expect(attempts).toBeGreaterThan(1);
     expect(sent.some((entry) => entry.msg.t === 'GJ')).toBe(true);
+  });
+
+  it('reuses the peer presence hash learned from verified inbound Reticulum join traffic', async () => {
+    class ReticulumBridgeStub extends EventEmitter {
+      sendGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+
+      getState() {
+        return 'ready' as const;
+      }
+
+      sendGroupCall(hash: string, msg: Record<string, unknown>) {
+        return Promise.resolve(true);
+      }
+    }
+
+    const bridge = new ReticulumBridgeStub();
+    const manager = new GroupCallManager(
+      { send: () => {} } as any,
+      {
+        on: () => {},
+        off: () => {},
+        getRouteForAddress: () => null,
+        getNodeIdForAddress: () => null,
+      } as any,
+      bridge as any
+    );
+
+    manager.start();
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
+    manager.setLocalAddresses(['Q-self']);
+    const now = Date.now();
+    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-self', 'sig', 'pk', now);
+
+    bridge.emit(
+      'group-call-message',
+      encodeJoinWire({
+        roomId: 'gcall-qortal-812',
+        chatId: 'chat-812',
+        fromAddress: 'Q-peer',
+        fromPublicKey: 'pk-peer',
+        signature: 'sig-peer',
+        timestamp: now + 1,
+      }),
+      'call-peer',
+      'd:Q-peer'
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    manager.sendKey(
+      'gcall-qortal-812',
+      'Q-peer',
+      'ciphertext',
+      'Q-self',
+      'sig-self',
+      'pk-self',
+      now + 2,
+      {
+        keyMessageVersion: 1,
+        callSessionId: 'call-session',
+        mediaSessionGeneration: 1,
+        keyCommitment: 'commitment',
+        encryptedKeyDigest: 'digest',
+      }
+    );
+    await Promise.resolve();
+
+    expect(bridge.sendGroupCallDetailed).toHaveBeenCalledWith(
+      'd:Q-peer',
+      expect.objectContaining({ t: 'GK' })
+    );
+    manager.stop();
   });
 });
 
