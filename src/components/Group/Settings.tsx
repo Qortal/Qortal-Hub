@@ -84,7 +84,33 @@ type ReticulumStatus = {
   mode: 'frozen' | 'venv' | 'system' | null;
   configDir: string;
   reason?: string;
+  bridgeState?: 'stopped' | 'starting' | 'ready' | 'degraded';
+  reachability: 'unknown' | 'lan-only' | 'hub-connected' | 'disconnected';
+  transportEnabled?: boolean;
+  configuredHubInterfaces?: number;
+  onlineHubInterfaces?: number;
+  hubSummary?: string;
 };
+
+function formatReticulumReachability(status: ReticulumStatus | null): string {
+  switch (status?.reachability) {
+    case 'hub-connected':
+      return 'Hub connected';
+    case 'lan-only':
+      return 'LAN only';
+    case 'disconnected':
+      return 'Hub disconnected';
+    default:
+      return 'Detecting reachability';
+  }
+}
+
+function formatReticulumMode(status: ReticulumStatus | null): string {
+  if (status?.mode === 'frozen') return 'Bundled binary';
+  if (status?.mode === 'venv') return 'Bundled Python venv';
+  if (status?.mode === 'system') return 'System Python (dev)';
+  return 'Unavailable';
+}
 
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
@@ -192,6 +218,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         running: false,
         mode: null,
         configDir: '',
+        reachability: 'unknown',
         reason: error instanceof Error ? error.message : 'Unable to read status',
       });
     }
@@ -410,27 +437,45 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                         ? `Config: ${reticulumStatus.configDir}`
                         : reticulumStatus?.reason || 'Not started'}
                     </Typography>
+                    <Typography
+                      variant="caption"
+                      color="text.disabled"
+                      sx={{ display: 'block' }}
+                    >
+                      {reticulumStatus?.hubSummary ||
+                        `Reachability: ${formatReticulumReachability(reticulumStatus)}`}
+                    </Typography>
                   </Box>
                   <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
                     <Typography
                       variant="body2"
                       sx={{
-                        color: reticulumStatus?.running
-                          ? theme.palette.success.main
-                          : theme.palette.warning.main,
+                        color:
+                          reticulumStatus?.reachability === 'hub-connected'
+                            ? theme.palette.success.main
+                            : reticulumStatus?.running
+                              ? theme.palette.warning.main
+                              : theme.palette.warning.main,
                         fontWeight: 600,
                       }}
                     >
-                      {reticulumStatus?.running ? 'Running' : 'Not running'}
+                      {formatReticulumReachability(reticulumStatus)}
                     </Typography>
                     <Typography variant="caption" color="text.disabled">
-                      {reticulumStatus?.mode === 'frozen'
-                        ? 'Bundled binary'
-                        : reticulumStatus?.mode === 'venv'
-                          ? 'Bundled Python venv'
-                          : reticulumStatus?.mode === 'system'
-                            ? 'System Python (dev)'
-                            : 'Unavailable'}
+                      {reticulumStatus?.running ? 'Running' : 'Not running'}
+                      {reticulumStatus?.bridgeState
+                        ? ` • Bridge ${reticulumStatus.bridgeState}`
+                        : ''}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled">
+                      {formatReticulumMode(reticulumStatus)}
+                      {typeof reticulumStatus?.onlineHubInterfaces === 'number' &&
+                      typeof reticulumStatus?.configuredHubInterfaces === 'number'
+                        ? ` • Hubs ${reticulumStatus.onlineHubInterfaces}/${reticulumStatus.configuredHubInterfaces}`
+                        : ''}
+                      {typeof reticulumStatus?.transportEnabled === 'boolean'
+                        ? ` • Transport ${reticulumStatus.transportEnabled ? 'on' : 'off'}`
+                        : ''}
                       {reticulumStatus?.pid ? ` • PID ${reticulumStatus.pid}` : ''}
                     </Typography>
                   </Box>

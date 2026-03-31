@@ -282,6 +282,12 @@ try {
         mode: 'frozen' | 'venv' | 'system' | null;
         configDir: string;
         reason?: string;
+        bridgeState?: 'stopped' | 'starting' | 'ready' | 'degraded';
+        reachability: 'unknown' | 'lan-only' | 'hub-connected' | 'disconnected';
+        transportEnabled?: boolean;
+        configuredHubInterfaces?: number;
+        onlineHubInterfaces?: number;
+        hubSummary?: string;
       }>,
   });
 

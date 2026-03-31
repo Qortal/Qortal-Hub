@@ -18,8 +18,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Pin OS (not ubuntu-latest): PyInstaller frozen rnsd/presence_bridge inherit the
+          # runner's glibc. Noble/latest can pull in GLIBC_2.38+ and break 22.04/older users.
+          # ubuntu-20.04 runners are EOL on GHA; 22.04 is the practical older baseline.
           - name: Linux x64
-            os: ubuntu-latest
+            os: ubuntu-22.04
             node: "22"
             python: "3.12"
             npm_script: electron:make-lin

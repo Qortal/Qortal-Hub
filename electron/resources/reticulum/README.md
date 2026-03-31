@@ -31,6 +31,7 @@ Repeat on **each** platform you ship (Linux x64, Windows, macOS, Linux arm64, et
 The packaging scripts now bundle a **native Reticulum binary before packaging** and enforce that you build on the **matching host OS/arch**:
 
 - `npm run electron:make-lin` → only on **Linux x64**
+- `npm run electron:make-lin-docker` → **any host with Docker**; builds **Linux x64** AppImage + deb inside **Debian 11 (bullseye)** (~glibc **2.31**) for **broader** compatibility than CI (**ubuntu-22.04**, ~2.35). Uses `linux/amd64` (Apple Silicon works via emulation, slower).
 - `npm run electron:make-arm` → only on **Linux arm64**
 - `npm run electron:make-win` → only on **Windows**
 - `npm run electron:make-mac` → only on **macOS**
@@ -45,6 +46,28 @@ For automated cross-platform builds use the GitHub Actions workflow:
 ## Runtime (Electron)
 
 The main process spawns `rnsd` with `--config` pointing at **`userData/reticulum`** (writable). The Reticulum bridge prefers the bundled `presence_bridge` executable and falls back to Python only in development. Logs also go to **`userData/logs/reticulum.log`**.
+
+The managed config keeps local `AutoInterface` discovery enabled and also ships a default list of public `TCPClientInterface` hubs so matching `qortal-hub` namespaces can discover each other across the Internet without manual config edits.
+
+## Default WAN bootstrap
+
+The app now treats worldwide Reticulum reachability as a built-in feature:
+
+- LAN discovery still uses `AutoInterface`
+- WAN bootstrap uses one or more curated public TCP hubs from the managed config
+- A custom Reticulum config under `userData/reticulum/config` is still preserved and overrides the managed default
+
+The default hub list is curated in-app rather than scraped at runtime. That keeps startup deterministic and lets us rotate or expand endpoints later without redesigning the config format.
+
+## Reachability status
+
+The bridge polls Reticulum interface stats and surfaces a coarse reachability state to the app:
+
+- `hub-connected` when at least one configured TCP hub is online
+- `disconnected` when WAN hubs are configured but currently offline
+- `lan-only` when only local discovery is available
+
+When WAN connectivity appears after startup, the bridge re-announces the local presence and call destinations so remote peers can discover the node without restarting the app.
 
 ## Fallbacks (development)
 

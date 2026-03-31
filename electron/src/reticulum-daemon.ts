@@ -31,6 +31,50 @@ const DEFAULT_CONFIG_SENTINEL = '# This is the default Reticulum config file.';
 const RETICULUM_SHARED_INSTANCE_NAME = 'qortal-hub-shared';
 
 export type ReticulumDaemonMode = 'frozen' | 'venv' | 'system' | null;
+export type ReticulumReachability =
+  | 'unknown'
+  | 'lan-only'
+  | 'hub-connected'
+  | 'disconnected';
+export type ReticulumBridgeState = 'stopped' | 'starting' | 'ready' | 'degraded';
+export type ReticulumHubEndpoint = {
+  name: string;
+  host: string;
+  port: number;
+};
+
+export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] = Object.freeze([
+  {
+    name: 'Public Reticulum Hub Dublin',
+    host: 'dublin.connect.reticulum.network',
+    port: 4965,
+  },
+  {
+    name: 'Noderage Public Hub',
+    host: 'rns.noderage.org',
+    port: 4242,
+  },
+  {
+    name: 'RMAP Public Hub',
+    host: 'rmap.world',
+    port: 4242,
+  },
+  {
+    name: 'Sydney Reticulum Hub',
+    host: 'sydney.reticulum.au',
+    port: 4242,
+  },
+  {
+    name: 'Wiegandtech Public Hub',
+    host: 'rns.wiegandtech.net',
+    port: 4242,
+  },
+  {
+    name: 'Dismail Public Hub',
+    host: 'rns.dismail.de',
+    port: 7822,
+  },
+]);
 
 let child: ChildProcessWithoutNullStreams | null = null;
 let lastStartMode: ReticulumDaemonMode = null;
@@ -60,7 +104,23 @@ function getReticulumConfigFilePath(): string {
   return path.join(getReticulumConfigDir(), RETICULUM_CONFIG_FILENAME);
 }
 
-function buildManagedReticulumConfig(): string {
+function renderManagedHubInterfaces(hubs: readonly ReticulumHubEndpoint[]): string {
+  if (hubs.length === 0) return '';
+  return hubs
+    .map(
+      (hub) => `
+  [[${hub.name}]]
+  type = TCPClientInterface
+  enabled = yes
+  target_host = ${hub.host}
+  target_port = ${hub.port}`
+    )
+    .join('');
+}
+
+export function buildManagedReticulumConfig(
+  hubs: readonly ReticulumHubEndpoint[] = DEFAULT_RETICULUM_HUBS
+): string {
   return `${MANAGED_CONFIG_MARKER}
 [reticulum]
 enable_transport = False
@@ -76,6 +136,7 @@ loglevel = 4
   [[Default Interface]]
   type = AutoInterface
   enabled = yes
+${renderManagedHubInterfaces(hubs)}
 `;
 }
 
@@ -212,6 +273,12 @@ export type ReticulumDaemonStatus = {
   mode: ReticulumDaemonMode;
   configDir: string;
   reason?: string;
+  bridgeState?: ReticulumBridgeState;
+  reachability: ReticulumReachability;
+  transportEnabled?: boolean;
+  configuredHubInterfaces?: number;
+  onlineHubInterfaces?: number;
+  hubSummary?: string;
 };
 
 export type ReticulumPythonLaunchPlan =
@@ -378,6 +445,7 @@ export function getReticulumDaemonStatus(): ReticulumDaemonStatus {
     pid: child?.pid,
     mode: lastStartMode,
     configDir: getReticulumConfigDir(),
+    reachability: running ? 'unknown' : 'disconnected',
   };
 }
 
@@ -480,6 +548,28 @@ export function registerReticulumIpcHandlers(): void {
         return { ...base, running: false, reason: plan.error };
       }
     }
-    return base;
+    try {
+      const { getReticulumBridge } =
+        require('./reticulum-bridge') as typeof import('./reticulum-bridge');
+      const bridge = getReticulumBridge();
+      const bridgeStatus = bridge?.getConnectivitySnapshot();
+      if (!bridgeStatus) return base;
+      return {
+        ...base,
+        bridgeState: bridgeStatus.bridgeState,
+        reachability: bridgeStatus.reachability,
+        transportEnabled: bridgeStatus.transportEnabled,
+        configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
+        onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
+        hubSummary: bridgeStatus.hubSummary,
+        ...(bridgeStatus.reason ? { reason: bridgeStatus.reason } : {}),
+      };
+    } catch (error) {
+      loggerError('[Reticulum] Failed to collect bridge status:', error);
+      return {
+        ...base,
+        reason: base.reason ?? 'Unable to read Reticulum bridge status',
+      };
+    }
   });
 }

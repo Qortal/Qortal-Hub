@@ -100,4 +100,46 @@ describe('ReticulumBridge group audio support', () => {
       },
     ]);
   });
+
+  it('tracks transport reachability snapshots from bridge events', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const seen: Array<Record<string, unknown>> = [];
+
+    bridge.on('transport-state', (payload) => {
+      seen.push(payload as Record<string, unknown>);
+    });
+
+    internal.state = 'ready';
+    internal.handleFrame({
+      type: 'event',
+      event: 'transport_state',
+      payload: {
+        reachability: 'hub-connected',
+        transportEnabled: false,
+        configuredHubInterfaces: 2,
+        onlineHubInterfaces: 1,
+        hubSummary: 'Hub A=online, Hub B=offline',
+      },
+    });
+
+    expect(bridge.getConnectivitySnapshot()).toEqual({
+      bridgeState: 'ready',
+      reachability: 'hub-connected',
+      transportEnabled: false,
+      configuredHubInterfaces: 2,
+      onlineHubInterfaces: 1,
+      hubSummary: 'Hub A=online, Hub B=offline',
+    });
+    expect(seen).toEqual([
+      {
+        bridgeState: 'ready',
+        reachability: 'hub-connected',
+        transportEnabled: false,
+        configuredHubInterfaces: 2,
+        onlineHubInterfaces: 1,
+        hubSummary: 'Hub A=online, Hub B=offline',
+      },
+    ]);
+  });
 });

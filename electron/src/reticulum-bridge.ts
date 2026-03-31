@@ -13,6 +13,8 @@ import { buildPresenceSignedFields } from './presence';
 import {
   getReticulumConfigDir,
   resolveReticulumPythonLaunch,
+  type ReticulumBridgeState,
+  type ReticulumReachability,
 } from './reticulum-daemon';
 import { error as loggerError, log as loggerLog, warn as loggerWarn } from './logger';
 
@@ -68,6 +70,16 @@ export type ReticulumOpenAudioLinkResult =
       reason: ReticulumSendFailureReason;
       error?: string;
     };
+
+export type ReticulumConnectivitySnapshot = {
+  bridgeState: ReticulumBridgeState;
+  reachability: ReticulumReachability;
+  transportEnabled?: boolean;
+  configuredHubInterfaces?: number;
+  onlineHubInterfaces?: number;
+  hubSummary?: string;
+  reason?: string;
+};
 
 type BridgeEventFrame =
   | {
@@ -136,6 +148,18 @@ type BridgeEventFrame =
       type: 'event';
       event: 'error';
       payload?: { code?: string; message?: string; detail?: string };
+    }
+  | {
+      type: 'event';
+      event: 'transport_state';
+      payload?: {
+        reachability?: ReticulumReachability;
+        transportEnabled?: boolean;
+        configuredHubInterfaces?: number;
+        onlineHubInterfaces?: number;
+        hubSummary?: string;
+        reason?: string;
+      };
     };
 
 type PendingRequest = {
@@ -224,6 +248,11 @@ export class ReticulumBridge
   private statePromise: Promise<void> | null = null;
   private lastHeartbeatSentAt = 0;
   private lastSemanticPresence = new Map<string, number>();
+  private connectivitySnapshot: ReticulumConnectivitySnapshot = {
+    bridgeState: 'stopped',
+    reachability: 'disconnected',
+  };
+  private lastDegradedReason: string | undefined;
 
   subscribe(handlers: PresenceTransportHandlers): () => void {
     const onReady = () => handlers.onReady?.();
@@ -425,6 +454,14 @@ export class ReticulumBridge
     return this.state;
   }
 
+  getConnectivitySnapshot(): ReticulumConnectivitySnapshot {
+    return {
+      ...this.connectivitySnapshot,
+      bridgeState: this.state,
+      ...(this.lastDegradedReason ? { reason: this.lastDegradedReason } : {}),
+    };
+  }
+
   private async spawnAndHandshake(): Promise<void> {
     const configDir = getReticulumConfigDir();
     const launch = resolveBridgeLaunch(configDir);
@@ -568,6 +605,12 @@ export class ReticulumBridge
     switch (frame.event) {
       case 'ready':
         this.state = 'ready';
+        this.lastDegradedReason = undefined;
+        this.connectivitySnapshot = {
+          ...this.connectivitySnapshot,
+          bridgeState: 'ready',
+          reason: undefined,
+        };
         loggerLog(
           `[ReticulumBridge] Ready destination=${frame.payload?.destinationHash ?? 'unknown'}`
         );
@@ -681,12 +724,53 @@ export class ReticulumBridge
         loggerError('[ReticulumBridge] Python error event:', message);
         return;
       }
+      case 'transport_state': {
+        const reachability = frame.payload?.reachability;
+        this.connectivitySnapshot = {
+          bridgeState: this.state,
+          reachability:
+            reachability === 'lan-only' ||
+            reachability === 'hub-connected' ||
+            reachability === 'disconnected'
+              ? reachability
+              : 'unknown',
+          transportEnabled: frame.payload?.transportEnabled === true,
+          configuredHubInterfaces:
+            typeof frame.payload?.configuredHubInterfaces === 'number'
+              ? frame.payload.configuredHubInterfaces
+              : undefined,
+          onlineHubInterfaces:
+            typeof frame.payload?.onlineHubInterfaces === 'number'
+              ? frame.payload.onlineHubInterfaces
+              : undefined,
+          hubSummary:
+            typeof frame.payload?.hubSummary === 'string'
+              ? frame.payload.hubSummary
+              : undefined,
+          reason:
+            typeof frame.payload?.reason === 'string'
+              ? frame.payload.reason
+              : undefined,
+        };
+        loggerLog(
+          `[ReticulumBridge] Transport state=${this.connectivitySnapshot.reachability} hubs=${this.connectivitySnapshot.onlineHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredHubInterfaces ?? 0} transport=${this.connectivitySnapshot.transportEnabled === true ? 'on' : 'off'}`
+        );
+        this.emit('transport-state', this.getConnectivitySnapshot());
+        return;
+      }
     }
   }
 
   private transitionToDegraded(reason?: string): void {
     if (this.state === 'degraded' && !reason) return;
     this.state = 'degraded';
+    this.lastDegradedReason = reason;
+    this.connectivitySnapshot = {
+      ...this.connectivitySnapshot,
+      bridgeState: 'degraded',
+      reachability: 'disconnected',
+      reason,
+    };
     loggerWarn(`[ReticulumBridge] Degraded: ${reason ?? 'unknown reason'}`);
     for (const [, pending] of this.pending) {
       clearTimeout(pending.timer);

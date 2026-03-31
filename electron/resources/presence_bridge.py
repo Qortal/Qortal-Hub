@@ -7,6 +7,7 @@ import os
 import queue
 import sys
 import threading
+import time
 import traceback
 import uuid
 from typing import Any, Dict, Optional
@@ -30,11 +31,14 @@ _call_announce_handler = None
 _command_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue()
 _known_peers: Dict[str, Any] = {}
 _last_presence_wire: Optional[bytes] = None
+_last_transport_state: Optional[Dict[str, Any]] = None
+_transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 _GROUP_AUDIO_WIRE_TYPE = "GCA"
 _audio_links_by_id: Dict[str, Dict[str, Any]] = {}
 _audio_link_ids_by_object: Dict[int, str] = {}
 _outgoing_audio_link_id_by_peer_hash: Dict[str, str] = {}
+_TRANSPORT_MONITOR_INTERVAL_SECONDS = 5.0
 
 # Compact group-call control on call aspect (see electron/src/group-call-wire-reticulum.ts).
 _GROUP_CALL_WIRE_TYPES = frozenset(
@@ -89,6 +93,142 @@ def emit_event(event: str, payload: Optional[Dict[str, Any]] = None) -> None:
 
 def log(message: str) -> None:
     print(message, file=sys.stderr, flush=True)
+
+
+def as_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return False
+
+
+def summarize_transport_state(payload: Dict[str, Any]) -> str:
+    return (
+        f"{payload.get('reachability')} "
+        f"hubs={payload.get('onlineHubInterfaces', 0)}/{payload.get('configuredHubInterfaces', 0)} "
+        f"transport={'on' if payload.get('transportEnabled') else 'off'}"
+    )
+
+
+def collect_transport_state() -> Dict[str, Any]:
+    if _reticulum is None:
+        return {
+            "reachability": "unknown",
+            "transportEnabled": False,
+            "configuredHubInterfaces": 0,
+            "onlineHubInterfaces": 0,
+            "hubSummary": "Reticulum bridge not started",
+            "reason": "Reticulum bridge not started",
+        }
+
+    stats = _reticulum.get_interface_stats() or {}
+    interfaces = stats.get("interfaces")
+    if not isinstance(interfaces, list):
+        interfaces = []
+
+    normalised = []
+    for item in interfaces:
+        if not isinstance(item, dict):
+            continue
+        normalised.append(
+            {
+                "name": str(item.get("name") or item.get("short_name") or ""),
+                "type": str(item.get("type") or ""),
+                "online": as_bool(item.get("status")),
+            }
+        )
+
+    hub_interfaces = [
+        item
+        for item in normalised
+        if item.get("type") in ("TCPClientInterface", "BackboneInterface")
+    ]
+    online_hubs = [item for item in hub_interfaces if item.get("online")]
+    local_auto_online = any(
+        item.get("online") and item.get("type") == "AutoInterface"
+        for item in normalised
+    )
+
+    if online_hubs:
+        reachability = "hub-connected"
+    elif hub_interfaces:
+        reachability = "disconnected"
+    elif local_auto_online:
+        reachability = "lan-only"
+    else:
+        reachability = "unknown"
+
+    if hub_interfaces:
+        hub_summary = ", ".join(
+            [
+                f"{item.get('name') or item.get('type')}={'online' if item.get('online') else 'offline'}"
+                for item in hub_interfaces
+            ]
+        )
+    elif local_auto_online:
+        hub_summary = "LAN-only discovery available"
+    else:
+        hub_summary = "No active Reticulum interfaces"
+
+    return {
+        "reachability": reachability,
+        "transportEnabled": "transport_id" in stats,
+        "configuredHubInterfaces": len(hub_interfaces),
+        "onlineHubInterfaces": len(online_hubs),
+        "hubSummary": hub_summary,
+    }
+
+
+def maybe_emit_transport_state(force: bool = False) -> None:
+    global _last_transport_state
+
+    try:
+        payload = collect_transport_state()
+    except Exception as exc:
+        payload = {
+            "reachability": "unknown",
+            "transportEnabled": False,
+            "configuredHubInterfaces": 0,
+            "onlineHubInterfaces": 0,
+            "hubSummary": "Unable to read Reticulum interface stats",
+            "reason": str(exc),
+        }
+
+    previous = _last_transport_state
+    if not force and previous == payload:
+        return
+
+    _last_transport_state = payload
+    emit_event("transport_state", payload)
+    log(f"[presence_bridge] transport_state {summarize_transport_state(payload)}")
+
+    if payload.get("reachability") == "hub-connected" and (
+        previous is None or previous.get("reachability") != "hub-connected"
+    ):
+        announce_local_destination()
+        announce_call_local_destination()
+
+
+def transport_monitor_loop() -> None:
+    while True:
+        try:
+            maybe_emit_transport_state()
+        except Exception as exc:
+            log(f"[presence_bridge] transport monitor error: {exc}")
+        time.sleep(_TRANSPORT_MONITOR_INTERVAL_SECONDS)
+
+
+def ensure_transport_monitor_started() -> None:
+    global _transport_monitor_thread
+    if _transport_monitor_thread is not None and _transport_monitor_thread.is_alive():
+        return
+    _transport_monitor_thread = threading.Thread(
+        target=transport_monitor_loop,
+        daemon=True,
+        name="reticulum-transport-monitor",
+    )
+    _transport_monitor_thread.start()
 
 
 def destination_hash_hex(destination_hash: bytes) -> str:
@@ -554,6 +694,7 @@ def ensure_started(config_dir: str):
         _call_destination.set_link_established_callback(on_incoming_audio_link_established)
         _call_announce_handler = CallAnnounceHandler(_call_destination.hash)
         RNS.Transport.register_announce_handler(_call_announce_handler)
+        ensure_transport_monitor_started()
         return _destination
 
 
@@ -567,6 +708,7 @@ def handle_start(req_id: str, payload: Dict[str, Any]) -> None:
         destination = ensure_started(config_dir)
         announce_local_destination()
         announce_call_local_destination()
+        maybe_emit_transport_state(force=True)
         presence_hex = destination_hash_hex(destination.hash)
         call_hex = (
             destination_hash_hex(_call_destination.hash)
