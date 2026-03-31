@@ -26,6 +26,8 @@ import {
   attachChatListeners,
   attachCallListeners,
   attachGroupCallListeners,
+  clearLateReticulumBridgeRecovery,
+  registerLateReticulumBridgeRecovery,
   setLastP2POptions,
   startDecentralizedStunAfterP2P,
 } from './setup';
@@ -250,12 +252,14 @@ async function setupMultiInstanceUserData(
       attachP2PListeners(p2pNetwork);
       await startDecentralizedStunAfterP2P(p2pNetwork, p2pOptions);
       loggerLog(`[P2P] Auto-started on port ${p2pPort}`);
+      clearLateReticulumBridgeRecovery();
 
       let bridgeTransport = null;
       try {
         bridgeTransport = await startReticulumBridge();
       } catch (err) {
         loggerError('[ReticulumBridge] Auto-start failed:', err);
+        registerLateReticulumBridgeRecovery(p2pNetwork);
       }
 
       // Start the presence manager, wired to the Reticulum bridge.

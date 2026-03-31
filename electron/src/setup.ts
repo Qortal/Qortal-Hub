@@ -1498,6 +1498,7 @@ export async function startDecentralizedStunAfterP2P(
 
 ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
   try {
+    clearLateReticulumBridgeRecovery();
     // Re-use the last known options if none supplied (e.g. from the settings toggle).
     const opts =
       options && Object.keys(options).length > 0 ? options : lastP2POptions;
@@ -1511,6 +1512,7 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     } catch (err) {
       loggerError('[ReticulumBridge] Failed to start:', err);
       bridgeTransport = null;
+      registerLateReticulumBridgeRecovery(network);
     }
     // (Re-)start the presence manager wired to the new network instance.
     stopPresenceManager();
@@ -1549,6 +1551,7 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
 
 ipcMain.handle('p2p:stop', async () => {
   try {
+    clearLateReticulumBridgeRecovery();
     stopP2PNetwork();
     queuedPresenceUpdates.clear();
     flushPresenceUpdates();
@@ -1619,6 +1622,7 @@ ipcMain.on('p2p:peerChange:unsubscribe', (event) => {
 const presenceUpdateSubscribers = new Set<Electron.WebContents>();
 const queuedPresenceUpdates = new Map<string, unknown>();
 let presenceUpdateFlushTimer: ReturnType<typeof setTimeout> | null = null;
+let lateReticulumRecoveryCleanup: (() => void) | null = null;
 
 function flushPresenceUpdates(): void {
   if (presenceUpdateFlushTimer) {
@@ -1674,6 +1678,63 @@ export function attachPresenceListeners(
   if (!manager) return;
   loggerLog('[Presence] Attaching manager listeners.');
   manager.on('presence-updated', broadcastPresenceUpdate);
+}
+
+export function clearLateReticulumBridgeRecovery(): void {
+  lateReticulumRecoveryCleanup?.();
+  lateReticulumRecoveryCleanup = null;
+}
+
+export function registerLateReticulumBridgeRecovery(
+  network: NonNullable<ReturnType<typeof getP2PNetwork>>
+): void {
+  clearLateReticulumBridgeRecovery();
+  const bridge = getReticulumBridge();
+  if (!bridge) {
+    loggerWarn('[ReticulumBridge] Late recovery not registered: no bridge instance');
+    return;
+  }
+
+  let recovered = false;
+  const recoverManagers = () => {
+    if (recovered) return;
+    recovered = true;
+    clearLateReticulumBridgeRecovery();
+
+    const currentBridge = getReticulumBridge();
+    if (!currentBridge || currentBridge.getState() !== 'ready') {
+      loggerWarn(
+        '[ReticulumBridge] Late recovery skipped: bridge missing or not ready'
+      );
+      return;
+    }
+
+    loggerLog(
+      '[ReticulumBridge] Bridge became ready after startup timeout; reattaching presence/call managers'
+    );
+    stopPresenceManager();
+    const pm = startPresenceManager([currentBridge]);
+    attachPresenceListeners(pm);
+    stopCallManager();
+    const callMgr = startCallManager(network, pm, currentBridge);
+    attachCallListeners(callMgr);
+    stopGroupCallManager();
+    const gcallMgr = startGroupCallManager(network, pm, currentBridge);
+    attachGroupCallListeners(gcallMgr);
+    flushPresenceUpdates();
+    broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
+  };
+
+  if (bridge.getState() === 'ready') {
+    recoverManagers();
+    return;
+  }
+
+  bridge.once('ready', recoverManagers);
+  lateReticulumRecoveryCleanup = () => {
+    bridge.off('ready', recoverManagers);
+  };
+  loggerLog('[ReticulumBridge] Registered late-ready recovery hook');
 }
 
 /** Validates a renderer-supplied envelope, applies it locally, then relays. */
