@@ -13,6 +13,7 @@ vi.mock('./reticulum-daemon', () => ({
   }),
 }));
 
+import { encodeReticulumAudioBatch } from './reticulum-audio-ipc';
 import { ReticulumBridge } from './reticulum-bridge';
 
 describe('ReticulumBridge group audio support', () => {
@@ -45,58 +46,79 @@ describe('ReticulumBridge group audio support', () => {
     });
   });
 
-  it('maps group audio send failures from bridge codes', async () => {
+  it('enqueueGroupAudio returns not-ready when bridge is down', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'stopped';
+    internal.child = null;
+    const result = bridge.enqueueGroupAudio(
+      'link-1',
+      'room-1',
+      Buffer.from([1, 2, 3])
+    );
+    expect(result).toEqual({ ok: false, reason: 'bridge-not-ready' });
+  });
+
+  it('writes encoded batches to fd3 after enqueue', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     internal.state = 'ready';
-    internal.start = vi.fn(async () => {});
-    internal.sendCommand = vi.fn(async () => ({
-      type: 'resp',
-      id: '1',
-      ok: false,
-      payload: { code: 'unknown_link_id' },
-      error: 'Unknown audio link id',
-    }));
-
-    const result = await bridge.sendGroupAudio('link-1', 'room-1', 'AQID');
-
-    expect(result).toEqual({
-      ok: false,
-      reason: 'unknown-link-id',
-      error: 'Unknown audio link id',
-    });
+    const writes: Buffer[] = [];
+    internal.child = {
+      exitCode: null,
+      stdio: [
+        null,
+        null,
+        null,
+        {
+          write: vi.fn((buf: Buffer) => {
+            writes.push(Buffer.from(buf));
+            return true;
+          }),
+          once: vi.fn(),
+        },
+      ],
+    };
+    const r = bridge.enqueueGroupAudio('link-1', 'room-1', Buffer.from([9, 9]));
+    expect(r.ok).toBe(true);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(writes.length).toBeGreaterThan(0);
   });
 
-  it('emits decoded group audio packet events', () => {
+  it('emits group audio from binary fd4 path', () => {
+    const bridge = new ReticulumBridge();
+    const seen: Array<{ data: Buffer }> = [];
+    bridge.on('group-audio-packet', (p: any) => seen.push(p));
+    const internal = bridge as any;
+    const wire = encodeReticulumAudioBatch([
+      { linkId: 'link-1', roomId: 'room-1', payload: Buffer.from([1, 2, 3]) },
+    ]);
+    internal.appendAudioInData(wire);
+    expect(seen.length).toBe(1);
+    expect(Buffer.compare(seen[0]!.data, Buffer.from([1, 2, 3]))).toBe(0);
+  });
+
+  it('emits group_audio_send_failed from JSON event', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
-    const seen: Array<Record<string, unknown>> = [];
-
-    bridge.on('group-audio-packet', (payload) => {
-      seen.push(payload as Record<string, unknown>);
-    });
-
+    const seen: unknown[] = [];
+    bridge.on('group-audio-send-failed', (p) => seen.push(p));
     internal.handleFrame({
       type: 'event',
-      event: 'group_audio_packet',
+      event: 'group_audio_send_failed',
       payload: {
         linkId: 'link-1',
-        roomId: 'room-1',
-        data: 'AQID',
-        peerPresenceHash: 'peer-hash',
-        peerCallHash: 'call-hash',
-        incoming: true,
+        reason: 'x',
+        code: 'packet_send_false',
+        error: 'e',
       },
     });
-
     expect(seen).toEqual([
       {
         linkId: 'link-1',
-        roomId: 'room-1',
-        data: 'AQID',
-        peerPresenceHash: 'peer-hash',
-        peerCallHash: 'call-hash',
-        incoming: true,
+        reason: 'x',
+        code: 'packet_send_false',
+        error: 'e',
       },
     ]);
   });

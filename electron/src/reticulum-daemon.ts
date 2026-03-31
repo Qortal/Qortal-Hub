@@ -2,7 +2,7 @@
  * Spawns the Reticulum Network Stack daemon (rnsd).
  *
  * Priority:
- * 1. PyInstaller one-file binary under resources/reticulum/ (release builds)
+ * 1. PyInstaller one-file binary under resources/reticulum/ (packaged apps only; dev skips this)
  * 2. Dev / optional: venv under resources/reticulum-runtime/venv/
  * 3. Dev: system Python on PATH if `rns` is installed (`pip install rns`) — no env var needed
  * 4. Any build: system Python if QORTAL_RETICULUM_SYSTEM=1 (e.g. forced testing)
@@ -292,7 +292,8 @@ function resolveLaunchPlan(): LaunchPlan {
   const configDir = getReticulumConfigDir();
   const extraArgs = ['--config', configDir];
 
-  const frozen = resolveFrozenRnsdPath();
+  // Dev (`npm run electron:start`): use venv or system `rnsd`, not PyInstaller `rnsd` in resources/reticulum/.
+  const frozen = app.isPackaged ? resolveFrozenRnsdPath() : null;
   if (frozen) {
     const cwd = path.dirname(frozen);
     return {

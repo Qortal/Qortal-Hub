@@ -38,7 +38,8 @@ import { VerifyWorkerPool } from './verify-worker-pool';
 import {
   decodeClusterHeartbeatWire,
   decodeJoinWire,
-  decodeKeyRequestWire,
+  decodeKeyRequestFromGq1,
+  decodeKeyRequestWireSingle,
   decodeKeyRotateFromGr1,
   decodeKeyRotateWireSingle,
   decodeKeyWireFromGk1,
@@ -53,15 +54,19 @@ import {
   encodeKeyWire,
   encodeLeaveWire,
   encodeTopologyWire,
+  GC_RETICULUM_WIRE_BUILD_MARKER,
   isGroupCallReticulumWireType,
   parseGk0,
   parseGk1,
+  parseGq0,
+  parseGq1,
   parseGr0,
   parseGr1,
   parseGt0,
   parseGt1,
 } from './group-call-wire-reticulum';
 import type { GrFragmentMeta, GkFragmentMeta, GtFragmentMeta } from './group-call-wire-reticulum';
+import { wireFitsReticulum } from './reticulum-wire-size';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -818,10 +823,18 @@ export class GroupCallManager extends EventEmitter {
     | ((payload: {
         linkId: string;
         roomId: string;
-        data: string;
+        data: Buffer | string;
         peerPresenceHash: string;
         peerCallHash: string;
         incoming: boolean;
+      }) => void)
+    | null = null;
+  private onReticulumGroupAudioSendFailed:
+    | ((payload: {
+        linkId: string;
+        reason: string;
+        code: string;
+        error: string;
       }) => void)
     | null = null;
   private onReticulumGroupAudioLinkEstablished:
@@ -901,6 +914,10 @@ export class GroupCallManager extends EventEmitter {
     { meta: GrFragmentMeta; parts: Map<number, string>; deadline: number }
   >();
   private reticulumGkReasm = new Map<
+    string,
+    { meta: GkFragmentMeta; parts: Map<number, string>; deadline: number }
+  >();
+  private reticulumGqReasm = new Map<
     string,
     { meta: GkFragmentMeta; parts: Map<number, string>; deadline: number }
   >();
@@ -1006,6 +1023,13 @@ export class GroupCallManager extends EventEmitter {
         loggerError('[GCall] Error handling Reticulum group audio link close:', err);
       }
     };
+    this.onReticulumGroupAudioSendFailed = (payload) => {
+      try {
+        this.handleReticulumGroupAudioSendFailed(payload);
+      } catch (err) {
+        loggerError('[GCall] Error handling Reticulum audio send failure:', err);
+      }
+    };
     bridge.on('group-call-message', this.onReticulumGroupCallMessage);
     bridge.on('group-audio-packet', this.onReticulumGroupAudioPacket);
     bridge.on(
@@ -1013,6 +1037,7 @@ export class GroupCallManager extends EventEmitter {
       this.onReticulumGroupAudioLinkEstablished
     );
     bridge.on('group-audio-link-closed', this.onReticulumGroupAudioLinkClosed);
+    bridge.on('group-audio-send-failed', this.onReticulumGroupAudioSendFailed);
   }
 
   private detachReticulumBridgeListeners(): void {
@@ -1043,6 +1068,13 @@ export class GroupCallManager extends EventEmitter {
         this.onReticulumGroupAudioLinkClosed
       );
       this.onReticulumGroupAudioLinkClosed = null;
+    }
+    if (this.reticulumBridge && this.onReticulumGroupAudioSendFailed) {
+      this.reticulumBridge.off(
+        'group-audio-send-failed',
+        this.onReticulumGroupAudioSendFailed
+      );
+      this.onReticulumGroupAudioSendFailed = null;
     }
   }
 
@@ -1228,7 +1260,9 @@ export class GroupCallManager extends EventEmitter {
     }, GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS);
     this.qortalReticulumHeartbeatTimer.unref?.();
 
-    loggerLog('[GCall] GroupCallManager started.');
+    loggerLog(
+      `[GCall] GroupCallManager started. reticulumWire=${GC_RETICULUM_WIRE_BUILD_MARKER}`
+    );
   }
 
   stop(): void {
@@ -1277,6 +1311,7 @@ export class GroupCallManager extends EventEmitter {
     this.reticulumTopoReasm.clear();
     this.reticulumGrReasm.clear();
     this.reticulumGkReasm.clear();
+    this.reticulumGqReasm.clear();
     for (const timer of this.reticulumRetryTimers) {
       clearTimeout(timer);
     }
@@ -1484,6 +1519,7 @@ export class GroupCallManager extends EventEmitter {
       this.reticulumTopoReasm,
       this.reticulumGrReasm,
       this.reticulumGkReasm,
+      this.reticulumGqReasm,
     ]) {
       for (const [k, v] of m) {
         if (now > v.deadline) m.delete(k);
@@ -1877,6 +1913,12 @@ export class GroupCallManager extends EventEmitter {
       g: groupId,
       m: Date.now(),
     };
+    if (!wireFitsReticulum(wire as unknown as Record<string, unknown>)) {
+      loggerWarn(
+        `[GCall] Skipping GA activity for room ${roomId}: wire exceeds Reticulum limit`
+      );
+      return;
+    }
     for (const destinationHash of destinationHashes) {
       void bridge
         .sendGroupCall(destinationHash, wire as unknown as Record<string, unknown>)
@@ -2022,8 +2064,33 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
 
+    if (t === 'GQ0') {
+      const meta = parseGq0(wire);
+      if (!meta) return;
+      this.reticulumGqReasm.set(`${meta.roomId}:${meta.z}`, {
+        meta,
+        parts: new Map(),
+        deadline: now + GC_RETICULUM_REASM_TTL_MS,
+      });
+      return;
+    }
+    if (t === 'GQ1') {
+      const pr = parseGq1(wire);
+      if (!pr) return;
+      const key = `${pr.R}:${pr.z}`;
+      const buf = this.reticulumGqReasm.get(key);
+      if (!buf || pr.n !== buf.meta.n) return;
+      buf.parts.set(pr.x, pr.p);
+      if (buf.parts.size < buf.meta.n) return;
+      const env = decodeKeyRequestFromGq1(buf.meta, buf.parts);
+      this.reticulumGqReasm.delete(key);
+      if (!env) return;
+      this.handleKeyRequest(env as GcKeyRequestEnvelope, peerPresenceHash);
+      return;
+    }
+
     if (t === 'GQ') {
-      const env = decodeKeyRequestWire(wire);
+      const env = decodeKeyRequestWireSingle(wire);
       if (!env) return;
       this.handleKeyRequest(env as GcKeyRequestEnvelope, peerPresenceHash);
       return;
@@ -2115,13 +2182,20 @@ export class GroupCallManager extends EventEmitter {
       timestamp,
       ...(joinGeneration !== undefined ? { joinGeneration } : {}),
     };
-    this.fanoutReticulumWire(
-      roomId,
-      [encodeJoinWire(env)],
-      new Set([localAddress]),
-      'join'
-    );
-    loggerLog(`[GCall] Sent GC_JOIN (Reticulum) for room ${roomId}`);
+    const joinWire = encodeJoinWire(env);
+    if (!wireFitsReticulum(joinWire)) {
+      loggerWarn(
+        `[GCall] Skipping GC_JOIN (Reticulum) for room ${roomId}: wire exceeds Reticulum limit`
+      );
+    } else {
+      this.fanoutReticulumWire(
+        roomId,
+        [joinWire],
+        new Set([localAddress]),
+        'join'
+      );
+      loggerLog(`[GCall] Sent GC_JOIN (Reticulum) for room ${roomId}`);
+    }
     this.flushPendingKeyForRoom(roomId);
     this.scheduleQortalGroupCallActivityEmit(true);
     this.flushReticulumGroupActivityHeartbeats(roomId);
@@ -2150,11 +2224,18 @@ export class GroupCallManager extends EventEmitter {
         timestamp,
       };
       if (room) {
-        this.fanoutReticulumWire(
-          roomId,
-          [encodeLeaveWire(env)],
-          new Set([localAddress])
-        );
+        const leaveWire = encodeLeaveWire(env);
+        if (!wireFitsReticulum(leaveWire)) {
+          loggerWarn(
+            `[GCall] Skipping GC_LEAVE (Reticulum) for room ${roomId}: wire exceeds Reticulum limit`
+          );
+        } else {
+          this.fanoutReticulumWire(
+            roomId,
+            [leaveWire],
+            new Set([localAddress])
+          );
+        }
       }
     } else {
       loggerWarn(
@@ -2254,9 +2335,16 @@ export class GroupCallManager extends EventEmitter {
       ...payload,
       signature,
     };
+    const ghWire = encodeClusterHeartbeatWire(env);
+    if (!wireFitsReticulum(ghWire)) {
+      loggerWarn(
+        `[GCall] Skipping GC_CLUSTER_HEARTBEAT (Reticulum) for room ${roomId}: wire exceeds Reticulum limit`
+      );
+      return;
+    }
     this.fanoutReticulumWire(
       roomId,
-      [encodeClusterHeartbeatWire(env)],
+      [ghWire],
       new Set([payload.fromAddress])
     );
   }
@@ -2344,7 +2432,7 @@ export class GroupCallManager extends EventEmitter {
       this.reticulumAudioAddressByLinkId.set(result.linkId, address);
       if (result.established) {
         latest.established = true;
-        await this.flushPendingReticulumAudioForAddress(address);
+        this.flushPendingReticulumAudioForAddress(address);
       }
       return;
     }
@@ -2415,46 +2503,64 @@ export class GroupCallManager extends EventEmitter {
     }
   }
 
-  private async flushPendingReticulumAudioForAddress(
-    address: string
-  ): Promise<void> {
+  private flushPendingReticulumAudioForAddress(address: string): void {
     const bridge = this.reticulumBridge;
     const state = this.reticulumAudioPeersByAddress.get(address);
     if (!bridge || !state || !state.established || !state.linkId) return;
     while (state.pending.length > 0 && state.established && state.linkId) {
-      const next = state.pending[0]!;
-      const result = await bridge.sendGroupAudio(
+      const next = state.pending.shift()!;
+      const result = bridge.enqueueGroupAudio(
         state.linkId,
         next.roomId,
-        next.data.toString('base64')
+        next.data
       );
       if (result.ok) {
-        state.pending.shift();
         continue;
       }
-      const failure = result as {
-        ok: false;
-        reason: ReticulumSendFailureReason;
-        error?: string;
-      };
+      state.pending.unshift(next);
+      if (result.ok === false) {
+        this.logReticulumFailureThrottled(
+          `target-reticulum-audio-ipc-enqueue:${address}:${result.reason}`,
+          `[GCall] target=reticulum-audio-ipc enqueueGroupAudio failed address=${address} reason=${result.reason}`
+        );
+      }
       if (
-        failure.reason === 'audio-link-not-ready' ||
-        failure.reason === 'unknown-link-id' ||
-        failure.reason === 'packet-send-false' ||
-        failure.reason === 'bridge-not-ready' ||
-        failure.reason === 'bridge-exception' ||
-        failure.reason === 'bridge-timeout'
+        result.ok === false &&
+        result.reason === 'bridge-not-ready'
       ) {
         this.markReticulumAudioLinkUnready(address, state.linkId);
         void this.openReticulumAudioLinkForAddress(address);
-        return;
       }
-      this.logReticulumFailureThrottled(
-        `audio-send:${address}:${failure.reason}:${failure.error ?? ''}`,
-        `[GCall] Reticulum audio send failed address=${address} reason=${failure.reason}${failure.error ? ` error=${failure.error}` : ''}`
-      );
-      state.pending.shift();
+      return;
     }
+  }
+
+  private handleReticulumGroupAudioSendFailed(payload: {
+    linkId: string;
+    reason: string;
+    code: string;
+    error: string;
+  }): void {
+    const address = this.reticulumAudioAddressByLinkId.get(payload.linkId);
+    if (!address) return;
+    const code = payload.code;
+    if (
+      code === 'unknown_link_id' ||
+      code === 'audio_link_not_ready' ||
+      code === 'packet_send_false' ||
+      code === 'audio_payload_too_large' ||
+      code === 'exception'
+    ) {
+      const state = this.reticulumAudioPeersByAddress.get(address);
+      if (state?.linkId === payload.linkId) {
+        this.markReticulumAudioLinkUnready(address, payload.linkId);
+        void this.openReticulumAudioLinkForAddress(address);
+      }
+    }
+    this.logReticulumFailureThrottled(
+      `audio-send-failed:${address ?? payload.linkId}:${payload.code}:${payload.error}`,
+      `[GCall] Reticulum audio send failed link=${payload.linkId.slice(0, 8)} code=${payload.code} reason=${payload.reason}${payload.error ? ` error=${payload.error}` : ''}`
+    );
   }
 
   private syncReticulumAudioLinks(): void {
@@ -2563,7 +2669,14 @@ export class GroupCallManager extends EventEmitter {
       timestamp,
       ...meta,
     };
-    this.sendReticulumToAddress(toAddress, encodeKeyWire(env), 'key');
+    const keyFrames = encodeKeyWire(env);
+    if (keyFrames.length === 0) {
+      loggerWarn(
+        `[GCall] Skipping GC_KEY (Reticulum) for room ${roomId}: unable to encode within Reticulum wire limit`
+      );
+      return;
+    }
+    this.sendReticulumToAddress(toAddress, keyFrames, 'key');
   }
 
   sendKeyRotate(
@@ -2591,9 +2704,16 @@ export class GroupCallManager extends EventEmitter {
       timestamp,
       ...meta,
     };
+    const keyRotateFrames = encodeKeyRotateWire(env);
+    if (keyRotateFrames.length === 0) {
+      loggerWarn(
+        `[GCall] Skipping GC_KEY_ROTATE (Reticulum) for room ${roomId}: unable to encode within Reticulum wire limit`
+      );
+      return;
+    }
     this.fanoutReticulumWire(
       roomId,
-      encodeKeyRotateWire(env),
+      keyRotateFrames,
       new Set([fromAddress])
     );
   }
@@ -2620,11 +2740,14 @@ export class GroupCallManager extends EventEmitter {
       signature,
       timestamp,
     };
-    this.sendReticulumToAddress(
-      toAddress,
-      [encodeKeyRequestWire(env)],
-      'key_request'
-    );
+    const gqFrames = encodeKeyRequestWire(env);
+    if (gqFrames.length === 0) {
+      loggerWarn(
+        `[GCall] Skipping GC_KEY_REQUEST (Reticulum) for room ${roomId}: unable to encode within Reticulum wire limit`
+      );
+      return;
+    }
+    this.sendReticulumToAddress(toAddress, gqFrames, 'key_request');
   }
 
   // ── Inbound ───────────────────────────────────────────────────────────────
@@ -2983,7 +3106,7 @@ export class GroupCallManager extends EventEmitter {
   private handleReticulumGroupAudioPacket(payload: {
     linkId: string;
     roomId: string;
-    data: string;
+    data: Buffer | string;
     peerPresenceHash: string;
     peerCallHash: string;
     incoming: boolean;
@@ -2992,9 +3115,15 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     let raw: Buffer;
-    try {
-      raw = Buffer.from(payload.data, 'base64');
-    } catch {
+    if (Buffer.isBuffer(payload.data)) {
+      raw = payload.data;
+    } else if (typeof payload.data === 'string') {
+      try {
+        raw = Buffer.from(payload.data, 'base64');
+      } catch {
+        return;
+      }
+    } else {
       return;
     }
     if (!isValidGcAudioBuffer(raw)) {

@@ -1,4 +1,4 @@
-import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import { app } from 'electron';
 import { EventEmitter } from 'events';
 import fs from 'fs';
@@ -17,6 +17,17 @@ import {
   type ReticulumReachability,
 } from './reticulum-daemon';
 import { error as loggerError, log as loggerLog, warn as loggerWarn } from './logger';
+import {
+  decodeReticulumAudioMessage,
+  encodeReticulumAudioBatch,
+  RETICULUM_AUDIO_HEADER_BYTES,
+  RETICULUM_AUDIO_MAGIC,
+  RETICULUM_AUDIO_MAX_BODY_BYTES,
+  RETICULUM_AUDIO_MAX_FRAMES_PER_BATCH,
+  RETICULUM_AUDIO_VERSION,
+  type ReticulumAudioFrame,
+} from './reticulum-audio-ipc';
+import { GC_RETICULUM_WIRE_BUILD_MARKER } from './group-call-wire-reticulum';
 
 type BridgeCmdFrame = {
   type: 'cmd';
@@ -27,8 +38,7 @@ type BridgeCmdFrame = {
     | 'send_call'
     | 'send_group_call'
     | 'open_group_audio_link'
-    | 'close_group_audio_link'
-    | 'send_group_audio';
+    | 'close_group_audio_link';
   id: string;
   payload?: Record<string, unknown>;
 };
@@ -53,7 +63,8 @@ export type ReticulumSendFailureReason =
   | 'unknown-link-id'
   | 'audio-link-not-ready'
   | 'audio-payload-too-large'
-  | 'send-command-failed';
+  | 'send-command-failed'
+  | 'audio-enqueue-failed';
 
 export type ReticulumSendResult =
   | { ok: true }
@@ -136,14 +147,12 @@ type BridgeEventFrame =
     }
   | {
       type: 'event';
-      event: 'group_audio_packet';
+      event: 'group_audio_send_failed';
       payload?: {
         linkId?: string;
-        peerPresenceHash?: string;
-        peerCallHash?: string;
-        roomId?: string;
-        data?: string;
-        incoming?: boolean;
+        reason?: string;
+        code?: string;
+        error?: string;
       };
     }
   | {
@@ -177,6 +186,9 @@ const HEARTBEAT_MIN_INTERVAL_MS = 10_000;
 const ANNOUNCE_DEDUP_WINDOW_MS = 1_000;
 const RESTART_DELAY_MS = 2_000;
 
+/** Grep main-process logs for this string when debugging binary audio IPC (fd3/fd4). */
+const RETICULUM_AUDIO_IPC_LOG = 'target=reticulum-audio-ipc';
+
 function bridgeExeName(): string {
   return process.platform === 'win32' ? 'presence_bridge.exe' : 'presence_bridge';
 }
@@ -198,6 +210,11 @@ function getBridgeScriptPath(): string {
 function resolveBridgeLaunch(configDir: string):
   | { cmd: string; args: string[]; cwd: string; mode: 'frozen'; envExtra?: Record<string, string> }
   | ReturnType<typeof resolveReticulumPythonLaunch> {
+  // Dev (`npm run electron:start`): always use `presence_bridge.py` so edits apply; ignore PyInstaller binary in resources/reticulum/.
+  if (!app.isPackaged) {
+    return resolveReticulumPythonLaunch(getBridgeScriptPath(), ['--config', configDir]);
+  }
+
   const frozenBridge = getFrozenBridgePath();
   if (fs.existsSync(frozenBridge)) {
     return {
@@ -233,18 +250,45 @@ function semanticPresenceKey(envelope: PresenceEnvelope): string {
   });
 }
 
+export type ReticulumGroupAudioPacketPayload = {
+  linkId: string;
+  roomId: string;
+  data: Buffer;
+  peerPresenceHash: string;
+  peerCallHash: string;
+  incoming: boolean;
+};
+
 export class ReticulumBridge
   extends EventEmitter
   implements PresenceTransport
 {
   readonly kind = 'reticulum' as const;
 
-  private child: ChildProcessWithoutNullStreams | null = null;
+  private child: ChildProcess | null = null;
   private desiredRunning = false;
   private state: BridgeState = 'stopped';
   private stdoutBuffer = '';
   private writeQueue: string[] = [];
   private waitingForDrain = false;
+  /** Pending frames before encoding to binary batches (drop-oldest when full). */
+  private audioFrameQueue: Array<{
+    linkId: string;
+    roomId: string;
+    data: Buffer;
+  }> = [];
+  private readonly audioFrameQueueMax = 48;
+  private audioBinaryWriteQueue: Buffer[] = [];
+  private waitingForAudioBinaryDrain = false;
+  private audioFlushScheduled = false;
+  private audioInBuffer = Buffer.alloc(0);
+  /** One-shot diagnostics: confirm binary egress/ingress actually ran. */
+  private audioIpcFd3FirstBatchLogged = false;
+  private audioIpcFd4FirstMessageLogged = false;
+  /** Bytes arrived on fd4 before framing (proves Python wrote something). */
+  private audioIpcFd4FirstRawChunkLogged = false;
+  /** First JSON `group_audio_send_failed` per `code` (RNS path). */
+  private audioIpcSendFailedCodesLogged = new Set<string>();
   private pending = new Map<string, PendingRequest>();
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private statePromise: Promise<void> | null = null;
@@ -305,6 +349,15 @@ export class ReticulumBridge
     this.pending.clear();
     this.writeQueue = [];
     this.waitingForDrain = false;
+    this.audioFrameQueue = [];
+    this.audioBinaryWriteQueue = [];
+    this.waitingForAudioBinaryDrain = false;
+    this.audioFlushScheduled = false;
+    this.audioInBuffer = Buffer.alloc(0);
+    this.audioIpcFd3FirstBatchLogged = false;
+    this.audioIpcFd4FirstMessageLogged = false;
+    this.audioIpcFd4FirstRawChunkLogged = false;
+    this.audioIpcSendFailedCodesLogged.clear();
     this.stdoutBuffer = '';
     const child = this.child;
     this.child = null;
@@ -409,16 +462,33 @@ export class ReticulumBridge
     return this.sendDetailed('close_group_audio_link', { linkId });
   }
 
-  async sendGroupAudio(
+  /**
+   * Queue Opus (or other) payload for fd3 binary IPC. Non-blocking; may drop oldest
+   * frames when the queue is full. Listen for `group-audio-send-failed` for RNS errors.
+   */
+  enqueueGroupAudio(
     linkId: string,
     roomId: string,
-    dataBase64: string
-  ): Promise<ReticulumSendResult> {
-    return this.sendDetailed('send_group_audio', {
+    data: Buffer
+  ): { ok: true; dropped: boolean } | { ok: false; reason: ReticulumSendFailureReason } {
+    if (!Buffer.isBuffer(data)) {
+      return { ok: false, reason: 'audio-enqueue-failed' };
+    }
+    if (!this.child || this.child.exitCode !== null || this.state !== 'ready') {
+      return { ok: false, reason: 'bridge-not-ready' };
+    }
+    let dropped = false;
+    while (this.audioFrameQueue.length >= this.audioFrameQueueMax) {
+      this.audioFrameQueue.shift();
+      dropped = true;
+    }
+    this.audioFrameQueue.push({
       linkId,
       roomId,
-      data: dataBase64,
+      data: Buffer.from(data),
     });
+    this.scheduleAudioOutFlush();
+    return { ok: true, dropped };
   }
 
   async publish(envelope: PresenceEnvelope): Promise<boolean> {
@@ -485,7 +555,7 @@ export class ReticulumBridge
     const child = spawn(launch.cmd, launch.args, {
       cwd: launch.cwd,
       env,
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'],
       windowsHide: true,
     });
 
@@ -493,9 +563,41 @@ export class ReticulumBridge
     loggerLog(
       `[ReticulumBridge] Spawned child pid=${child.pid ?? 'unknown'} cmd=${launch.cmd}`
     );
+    const audioOutParent = child.stdio[3];
+    if (
+      !audioOutParent ||
+      typeof (audioOutParent as NodeJS.WritableStream).write !== 'function'
+    ) {
+      loggerWarn(
+        `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd3=parent-write-missing outbound-binary-audio-disabled`
+      );
+    } else {
+      loggerLog(
+        `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd3=parent-pipe-open (Electron→Python)`
+      );
+    }
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk: string) => this.handleStdout(chunk));
+    const audioIn = child.stdio[4];
+    if (audioIn && typeof (audioIn as NodeJS.ReadableStream).on === 'function') {
+      (audioIn as NodeJS.ReadableStream).on('data', (chunk: Buffer | string) => {
+        const buf = Buffer.isBuffer(chunk)
+          ? chunk
+          : Buffer.from(chunk as string, 'binary');
+        if (!this.audioIpcFd4FirstRawChunkLogged && buf.length > 0) {
+          this.audioIpcFd4FirstRawChunkLogged = true;
+          loggerLog(
+            `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} stage=fd4-first-raw-chunk-from-child len=${buf.length}`
+          );
+        }
+        this.appendAudioInData(buf);
+      });
+    } else {
+      loggerWarn(
+        `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd4=parent-read-missing inbound-binary-audio-disabled`
+      );
+    }
     child.stderr.on('data', (chunk: string) => {
       const text = chunk.trim();
       if (text) loggerLog(`[ReticulumBridge/stderr] ${text}`);
@@ -529,7 +631,9 @@ export class ReticulumBridge
       this.transitionToDegraded(reason);
       throw new Error(reason);
     }
-    loggerLog('[ReticulumBridge] Start handshake completed');
+    loggerLog(
+      `[ReticulumBridge] Start handshake completed reticulumWire=${GC_RETICULUM_WIRE_BUILD_MARKER}`
+    );
   }
 
   private sendCommand(
@@ -570,6 +674,158 @@ export class ReticulumBridge
         return;
       }
       this.writeQueue.shift();
+    }
+  }
+
+  private scheduleAudioOutFlush(): void {
+    if (this.audioFlushScheduled) return;
+    this.audioFlushScheduled = true;
+    setImmediate(() => {
+      this.audioFlushScheduled = false;
+      this.packAudioFramesIntoBinaryWrites();
+      this.flushAudioBinaryQueue();
+    });
+  }
+
+  private packAudioFramesIntoBinaryWrites(): void {
+    while (this.audioFrameQueue.length > 0 && this.child) {
+      const batch: ReticulumAudioFrame[] = [];
+      let bodyBudget = 2;
+      const maxBody = Math.min(60000, RETICULUM_AUDIO_MAX_BODY_BYTES);
+      while (
+        this.audioFrameQueue.length > 0 &&
+        batch.length < RETICULUM_AUDIO_MAX_FRAMES_PER_BATCH
+      ) {
+        const next = this.audioFrameQueue[0]!;
+        const lid = Buffer.from(next.linkId, 'utf8');
+        const rid = Buffer.from(next.roomId, 'utf8');
+        const frameBody =
+          1 +
+          lid.length +
+          1 +
+          rid.length +
+          1 +
+          0 +
+          1 +
+          0 +
+          2 +
+          next.data.length;
+        const nextBody = bodyBudget + frameBody;
+        if (batch.length > 0 && nextBody > maxBody) break;
+        this.audioFrameQueue.shift();
+        batch.push({
+          linkId: next.linkId,
+          roomId: next.roomId,
+          payload: next.data,
+        });
+        bodyBudget = nextBody;
+      }
+      if (batch.length === 0) break;
+      try {
+        const buf = encodeReticulumAudioBatch(batch);
+        this.audioBinaryWriteQueue.push(buf);
+      } catch (err) {
+        loggerError('[ReticulumBridge] encode audio batch failed:', err);
+      }
+    }
+  }
+
+  private flushAudioBinaryQueue(): void {
+    const c = this.child;
+    const raw = c?.stdio?.[3];
+    if (!c || !raw || this.waitingForAudioBinaryDrain) return;
+    const stream = raw as NodeJS.WritableStream & {
+      write(
+        chunk: Buffer,
+        cb?: (err?: Error | null) => void
+      ): boolean;
+      once(event: 'drain', listener: () => void): typeof stream;
+    };
+    while (this.audioBinaryWriteQueue.length > 0) {
+      const buf = this.audioBinaryWriteQueue[0]!;
+      const ok = stream.write(buf);
+      if (!ok) {
+        this.waitingForAudioBinaryDrain = true;
+        stream.once('drain', () => {
+          this.waitingForAudioBinaryDrain = false;
+          this.audioBinaryWriteQueue.shift();
+          if (!this.audioIpcFd3FirstBatchLogged) {
+            this.audioIpcFd3FirstBatchLogged = true;
+            loggerLog(
+              `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd3=first-batch-written (async drain)`
+            );
+          }
+          this.flushAudioBinaryQueue();
+        });
+        return;
+      }
+      this.audioBinaryWriteQueue.shift();
+      if (!this.audioIpcFd3FirstBatchLogged) {
+        this.audioIpcFd3FirstBatchLogged = true;
+        loggerLog(
+          `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd3=first-batch-written`
+        );
+      }
+    }
+  }
+
+  private appendAudioInData(chunk: Buffer): void {
+    this.audioInBuffer = Buffer.concat([this.audioInBuffer, chunk]);
+    for (;;) {
+      if (this.audioInBuffer.length < RETICULUM_AUDIO_HEADER_BYTES) return;
+      if (
+        this.audioInBuffer.subarray(0, 4).compare(RETICULUM_AUDIO_MAGIC) !== 0
+      ) {
+        loggerWarn(
+          `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd4=bad-magic-resync`
+        );
+        this.audioInBuffer = this.audioInBuffer.subarray(1);
+        continue;
+      }
+      if (this.audioInBuffer[4] !== RETICULUM_AUDIO_VERSION) {
+        loggerWarn(
+          `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd4=bad-version-resync`
+        );
+        this.audioInBuffer = this.audioInBuffer.subarray(1);
+        continue;
+      }
+      const bodyLen = this.audioInBuffer.readUInt32BE(5);
+      if (bodyLen > RETICULUM_AUDIO_MAX_BODY_BYTES) {
+        loggerWarn(
+          `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd4=oversize-body-resync`
+        );
+        this.audioInBuffer = this.audioInBuffer.subarray(1);
+        continue;
+      }
+      const total = RETICULUM_AUDIO_HEADER_BYTES + bodyLen;
+      if (this.audioInBuffer.length < total) return;
+      const msg = this.audioInBuffer.subarray(0, total);
+      this.audioInBuffer = this.audioInBuffer.subarray(total);
+      try {
+        const frames = decodeReticulumAudioMessage(msg);
+        if (!this.audioIpcFd4FirstMessageLogged) {
+          this.audioIpcFd4FirstMessageLogged = true;
+          loggerLog(
+            `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd4=first-message-decoded frames=${frames.length}`
+          );
+        }
+        for (const f of frames) {
+          const pkt: ReticulumGroupAudioPacketPayload = {
+            linkId: f.linkId,
+            roomId: f.roomId,
+            data: Buffer.from(f.payload),
+            peerPresenceHash: f.peerPresenceHash ?? '',
+            peerCallHash: f.peerCallHash ?? '',
+            incoming: true,
+          };
+          this.emit('group-audio-packet', pkt);
+        }
+      } catch (err) {
+        loggerError(
+          `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} fd4=decode-error`,
+          err
+        );
+      }
     }
   }
 
@@ -692,33 +948,24 @@ export class ReticulumBridge
         });
         return;
       }
-      case 'group_audio_packet': {
+      case 'group_audio_send_failed': {
         const linkId = frame.payload?.linkId;
-        const roomId = frame.payload?.roomId;
-        const data = frame.payload?.data;
-        if (
-          typeof linkId !== 'string' ||
-          !linkId ||
-          typeof roomId !== 'string' ||
-          !roomId ||
-          typeof data !== 'string' ||
-          !data
-        ) {
-          return;
+        if (typeof linkId !== 'string' || !linkId) return;
+        const code =
+          typeof frame.payload?.code === 'string' ? frame.payload.code : '';
+        if (code && !this.audioIpcSendFailedCodesLogged.has(code)) {
+          this.audioIpcSendFailedCodesLogged.add(code);
+          loggerWarn(
+            `[ReticulumBridge] ${RETICULUM_AUDIO_IPC_LOG} stage=rns-send-failed-first-code code=${code} link_prefix=${linkId.slice(0, 8)} reason=${typeof frame.payload?.reason === 'string' ? frame.payload.reason : ''}${typeof frame.payload?.error === 'string' && frame.payload.error ? ` err=${frame.payload.error}` : ''}`
+          );
         }
-        this.emit('group-audio-packet', {
+        this.emit('group-audio-send-failed', {
           linkId,
-          roomId,
-          data,
-          peerPresenceHash:
-            typeof frame.payload?.peerPresenceHash === 'string'
-              ? frame.payload.peerPresenceHash
-              : '',
-          peerCallHash:
-            typeof frame.payload?.peerCallHash === 'string'
-              ? frame.payload.peerCallHash
-              : '',
-          incoming: frame.payload?.incoming === true,
+          reason:
+            typeof frame.payload?.reason === 'string' ? frame.payload.reason : '',
+          code,
+          error:
+            typeof frame.payload?.error === 'string' ? frame.payload.error : '',
         });
         return;
       }
@@ -785,6 +1032,15 @@ export class ReticulumBridge
     this.pending.clear();
     this.writeQueue = [];
     this.waitingForDrain = false;
+    this.audioFrameQueue = [];
+    this.audioBinaryWriteQueue = [];
+    this.waitingForAudioBinaryDrain = false;
+    this.audioFlushScheduled = false;
+    this.audioInBuffer = Buffer.alloc(0);
+    this.audioIpcFd3FirstBatchLogged = false;
+    this.audioIpcFd4FirstMessageLogged = false;
+    this.audioIpcFd4FirstRawChunkLogged = false;
+    this.audioIpcSendFailedCodesLogged.clear();
     this.emit('degraded', reason);
   }
 
@@ -802,11 +1058,7 @@ export class ReticulumBridge
   }
 
   private async sendDetailed(
-    action:
-      | 'send_call'
-      | 'send_group_call'
-      | 'close_group_audio_link'
-      | 'send_group_audio',
+    action: 'send_call' | 'send_group_call' | 'close_group_audio_link',
     payload: Record<string, unknown>
   ): Promise<ReticulumSendResult> {
     try {

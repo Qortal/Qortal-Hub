@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   RT_GCALL_MAX_WIRE_JSON_BYTES,
   decodeJoinWire,
+  decodeKeyRequestFromGq1,
   decodeKeyWireFromGk1,
   decodeKeyRotateFromGr1,
   decodeKeyRotateWireSingle,
   decodeTopologyFromGt1,
   decodeTopologyWireSingle,
   encodeJoinWire,
+  encodeKeyRequestWire,
   encodeKeyWire,
   encodeKeyRotateWire,
   encodeTopologyWire,
@@ -15,6 +17,8 @@ import {
   parseGr1,
   parseGk0,
   parseGk1,
+  parseGq0,
+  parseGq1,
   parseGt0,
   parseGt1,
 } from './group-call-wire-reticulum';
@@ -23,7 +27,7 @@ function bridgeWireJsonBytes(frame: Record<string, unknown>): number {
   return Buffer.byteLength(
     JSON.stringify({
       ...frame,
-      r: '0'.repeat(32),
+      r: '0'.repeat(64),
     }),
     'utf8'
   );
@@ -317,5 +321,69 @@ describe('group-call-wire-reticulum', () => {
       callSessionId: 'session-123',
       mediaSessionGeneration: 2,
     });
+  });
+
+  it('fragments large GC_KEY_REQUEST (GQ0/GQ1) under wire limit', () => {
+    const frames = encodeKeyRequestWire({
+      roomId: 'gcall-qortal-812',
+      toAddress: 'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP',
+      fromAddress: 'QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs',
+      fromPublicKey: 'A'.repeat(56),
+      callSessionId: 'session-123',
+      mediaSessionGeneration: 2,
+      keyMessageVersion: 3,
+      signature: 'b'.repeat(128),
+      timestamp: 1_734_567_890_234,
+    });
+
+    expect(frames.length).toBeGreaterThan(1);
+    expect(frames[0]!.t).toBe('GQ0');
+    for (const frame of frames) {
+      expect(bridgeWireJsonBytes(frame)).toBeLessThanOrEqual(
+        RT_GCALL_MAX_WIRE_JSON_BYTES
+      );
+    }
+
+    const meta = parseGq0(frames[0] as Record<string, unknown>);
+    expect(meta).not.toBeNull();
+    const parts = new Map<number, string>();
+    for (let i = 1; i < frames.length; i++) {
+      const p = parseGq1(frames[i] as Record<string, unknown>);
+      expect(p).not.toBeNull();
+      parts.set(p!.x, p!.p);
+    }
+    const back = decodeKeyRequestFromGq1(meta!, parts);
+    expect(back).toMatchObject({
+      roomId: 'gcall-qortal-812',
+      toAddress: 'QP9Jj4S3jpCgvPnaABMx8VWzND3qpji6rP',
+      fromAddress: 'QWxEcmZxnM8yb1p92C1YKKRsp8svSVbFEs',
+      fromPublicKey: 'A'.repeat(56),
+      callSessionId: 'session-123',
+      mediaSessionGeneration: 2,
+      keyMessageVersion: 3,
+      signature: 'b'.repeat(128),
+      timestamp: 1_734_567_890_234,
+    });
+  });
+
+  it('encodeKeyRotateWire returns empty array when GR0 meta cannot fit wire limit', () => {
+    const longRoom = `gcall-${'x'.repeat(500)}`;
+    const keys: Record<string, string> = { Qa: 'ek' };
+    const env = {
+      type: 'GC_KEY_ROTATE' as const,
+      roomId: longRoom,
+      fromAddress: 'Qroot',
+      fromPublicKey: 'pk',
+      encryptedKeys: keys,
+      keyMessageVersion: 3,
+      callSessionId: 'sid',
+      mediaSessionGeneration: 2,
+      keyCommitment: 'kc',
+      encryptedKeysDigest: 'deadbeef',
+      signature: 'sig',
+      timestamp: 5,
+    };
+    const frames = encodeKeyRotateWire(env);
+    expect(frames).toEqual([]);
   });
 });

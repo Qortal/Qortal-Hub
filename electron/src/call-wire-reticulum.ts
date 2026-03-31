@@ -1,9 +1,13 @@
 /**
  * Reticulum compact call signaling wire format (v1).
- * See project plan: short keys, ~450-byte JSON budget, SDP fragmentation CS0/CS1, CK ack/resend.
+ * SDP CS0/CS1 uses the same per-packet budget as group-call wire (see reticulum-wire-size.ts).
  */
 
 import * as nodeCrypto from 'crypto';
+import {
+  RT_RETICULUM_MAX_WIRE_JSON_BYTES,
+  byteLengthUtf8JsonWithBridgeSender,
+} from './reticulum-wire-size';
 import type {
   CallAcceptEnvelope,
   CallHangupEnvelope,
@@ -13,8 +17,8 @@ import type {
   CallWireEnvelope,
 } from './call';
 
-/** Target max UTF-8 / JSON length per Reticulum packet (conservative). */
-export const RT_CALL_MAX_JSON_BYTES = 450;
+/** Same budget as `send_call` / `send_group_call` after Python injects `r`. */
+export const RT_CALL_MAX_JSON_BYTES = RT_RETICULUM_MAX_WIRE_JSON_BYTES;
 
 /** Max SDP fragment count (defensive). */
 export const RT_SDP_MAX_FRAGMENTS = 128;
@@ -85,6 +89,7 @@ export function encodeReticulumCallWire(
         g: env.signature,
       };
     case 'CALL_REJECT':
+      // Wire key `r` collides with Python-injected sender hash in presence_bridge — separate fix.
       return {
         t: 'CJ',
         i: env.callId,
@@ -386,7 +391,7 @@ export interface BuiltSdpWire {
 }
 
 /**
- * Split SDP into CS0 + CS1 frames that each fit within RT_CALL_MAX_JSON_BYTES.
+ * Split SDP into CS0 + CS1 frames that each fit within RT_RETICULUM_MAX_WIRE_JSON_BYTES (with bridge `r`).
  */
 export function buildSdpWireFrames(
   callId: string,
@@ -446,20 +451,16 @@ export function buildSdpWireFrames(
       (cs1List[i] as Record<string, unknown>).n = n;
     }
     const maxLen = Math.max(
-      byteLengthUtf8Json(cs0),
-      ...cs1List.map((o) => byteLengthUtf8Json(o))
+      byteLengthUtf8JsonWithBridgeSender(cs0),
+      ...cs1List.map((o) => byteLengthUtf8JsonWithBridgeSender(o))
     );
-    if (maxLen <= RT_CALL_MAX_JSON_BYTES) {
+    if (maxLen <= RT_RETICULUM_MAX_WIRE_JSON_BYTES) {
       return { cs0, cs1List };
     }
     chunkSize = Math.floor(chunkSize * 0.85);
     if (chunkSize < 32) return null;
   }
   return null;
-}
-
-function byteLengthUtf8Json(obj: Record<string, unknown>): number {
-  return Buffer.byteLength(JSON.stringify(obj, null, 0), 'utf8');
 }
 
 export function buildCkAck(

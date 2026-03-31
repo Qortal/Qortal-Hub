@@ -35,7 +35,8 @@ import {
   encodeReticulumCallWire,
   sha256HexUtf8,
 } from './call-wire-reticulum';
-import { log as loggerLog, error as loggerError } from './logger';
+import { log as loggerLog, error as loggerError, warn as loggerWarn } from './logger';
+import { wireFitsReticulum } from './reticulum-wire-size';
 import { deriveAddressFromPublicKey } from './presence';
 import { VerifyWorkerPool } from './verify-worker-pool';
 import type { P2PNetwork } from './p2p-network';
@@ -272,6 +273,10 @@ export class CallManager extends EventEmitter {
     this.reticulumBridge = reticulumBridge ?? null;
     this.sdpSession = new ReticulumSdpSession({
       sendWire: (peer, msg) => {
+        if (!wireFitsReticulum(msg)) {
+          loggerWarn('[Call] Skipping Reticulum sendCall: wire exceeds limit');
+          return;
+        }
         void this.reticulumBridge?.sendCall(peer, msg);
       },
       onReassembled: (args) => {
@@ -445,7 +450,11 @@ export class CallManager extends EventEmitter {
     if (useReticulum && reticulumPeerHash) {
       const wire = encodeReticulumCallWire(env);
       if (wire) {
-        void this.reticulumBridge?.sendCall(reticulumPeerHash, wire);
+        if (!wireFitsReticulum(wire)) {
+          loggerWarn('[Call] Skipping Reticulum CALL_REQUEST: wire exceeds limit');
+        } else {
+          void this.reticulumBridge?.sendCall(reticulumPeerHash, wire);
+        }
       }
     } else if (remoteNodeId) {
       this.p2p.send(remoteNodeId, env);
@@ -1252,6 +1261,10 @@ export class CallManager extends EventEmitter {
     ) {
       const wire = encodeReticulumCallWire(env);
       if (wire) {
+        if (!wireFitsReticulum(wire)) {
+          loggerWarn('[Call] Skipping Reticulum sendToCall: wire exceeds limit');
+          return;
+        }
         void this.reticulumBridge.sendCall(call.reticulumPeerPresenceHash, wire);
       }
       return;

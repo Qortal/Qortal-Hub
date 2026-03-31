@@ -1,5 +1,8 @@
 # Bundled Reticulum runtime (`rnsd` + `presence_bridge`)
 
+**Python source:** `electron/resources/presence_bridge.py` (single source of truth, tracked in Git).  
+`npm run bundle:reticulum` and packaged apps place a copy under this folder as `presence_bridge.py` next to the frozen binaries.
+
 End users **do not install Python**. Ship **PyInstaller one-file** executables built **on the same OS and CPU architecture** you release for:
 
 - `rnsd` / `rnsd.exe`

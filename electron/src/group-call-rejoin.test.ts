@@ -428,7 +428,7 @@ describe('Reticulum group audio transport', () => {
         linkId: 'link-1',
         established: true,
       }));
-      sendGroupAudio = vi.fn(async () => ({ ok: true as const }));
+      enqueueGroupAudio = vi.fn(() => ({ ok: true as const, dropped: false }));
       closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
     }
 
@@ -450,10 +450,10 @@ describe('Reticulum group audio transport', () => {
 
     expect(ok).toBe(true);
     expect(bridge.openGroupAudioLink).toHaveBeenCalledWith('d:Q-peer');
-    expect(bridge.sendGroupAudio).toHaveBeenCalledWith(
+    expect(bridge.enqueueGroupAudio).toHaveBeenCalledWith(
       'link-1',
       'room-1',
-      Buffer.from([1, 2, 3]).toString('base64')
+      Buffer.from([1, 2, 3])
     );
   });
 
@@ -473,7 +473,7 @@ describe('Reticulum group audio transport', () => {
         linkId: 'link-1',
         established: true,
       }));
-      sendGroupAudio = vi.fn(async () => ({ ok: true as const }));
+      enqueueGroupAudio = vi.fn(() => ({ ok: true as const, dropped: false }));
       closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
     }
 
@@ -500,7 +500,7 @@ describe('Reticulum group audio transport', () => {
     bridge.emit('group-audio-packet', {
       linkId: 'link-1',
       roomId: 'room-1',
-      data: Buffer.from([7, 8, 9]).toString('base64'),
+      data: Buffer.from([7, 8, 9]),
       peerPresenceHash: 'd:Q-peer',
       peerCallHash: 'call-peer',
       incoming: true,
