@@ -519,6 +519,13 @@ export class ReticulumBridge
       `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}`
     );
     const resp = await this.sendCommand('publish_presence', { envelope });
+    const pubAddr =
+      typeof (envelope.payload as { address?: string })?.address === 'string'
+        ? (envelope.payload as { address: string }).address
+        : 'unknown';
+    loggerLog(
+      `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
+    );
     return resp.ok;
   }
 
@@ -878,8 +885,15 @@ export class ReticulumBridge
         const envelope = frame.payload?.envelope;
         const route = toPresenceRoute(frame.payload?.route);
         if (!envelope || !route || route.kind !== 'reticulum') return;
+        const peerAddr =
+          typeof (envelope.payload as { address?: string })?.address === 'string'
+            ? (envelope.payload as { address: string }).address
+            : 'unknown';
         loggerLog(
-          `[ReticulumBridge] Inbound ${envelope.type} from ${(envelope.payload as { address?: string }).address ?? 'unknown'} via ${route.destinationHash}`
+          `[ReticulumBridge] Inbound ${envelope.type} from ${peerAddr} via ${route.destinationHash}`
+        );
+        loggerLog(
+          `[ReticulumBridge] target=presence-reticulum rx=bridge_in type=${envelope.type} peer_addr=${peerAddr} sender_hash=${route.destinationHash} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'}`
         );
         this.emit('presence-envelope', envelope, route);
         return;

@@ -706,6 +706,11 @@ export class PresenceManager extends EventEmitter {
       loggerLog(
         `[Presence] Dropped envelope due to non-increasing timestamp ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} prev_ts=${prevTs}`
       );
+      if (route.kind === 'reticulum') {
+        loggerLog(
+          `[Presence] target=presence-reticulum rx=drop_dup peer_addr=${address} sender_hash=${route.destinationHash} type=${envelope.type} env_ts=${envelope.timestamp} prev_ts=${prevTs} envelope_id=${envelope.id ?? 'n/a'}`
+        );
+      }
       return false;
     }
     this.latestTimestamp.set(tsKey, envelope.timestamp);
@@ -714,6 +719,11 @@ export class PresenceManager extends EventEmitter {
       loggerLog(
         `[Presence] Applying offline envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
       );
+      if (route.kind === 'reticulum') {
+        loggerLog(
+          `[Presence] target=presence-reticulum rx=offline_apply peer_addr=${address} sender_hash=${route.destinationHash} envelope_id=${envelope.id ?? 'n/a'}`
+        );
+      }
       this.removeSession(address, sessionId);
       if (route.kind === 'local') this.lastLocalEnvelope = null;
     } else {
@@ -744,6 +754,11 @@ export class PresenceManager extends EventEmitter {
       loggerLog(
         `[Presence] Accepted envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} existing_session=${existing ? 'yes' : 'no'} route_expires_at=${routeExpiresAt ?? 'none'} live_sessions_for_address=${this.sessionKeysByAddress.get(address)?.size ?? 0}`
       );
+      if (route.kind === 'reticulum') {
+        loggerLog(
+          `[Presence] target=presence-reticulum rx=accepted peer_addr=${address} sender_hash=${route.destinationHash} type=${envelope.type} env_ts=${envelope.timestamp} envelope_id=${envelope.id ?? 'n/a'} sessionId=${sessionId} existing_session=${existing ? 'yes' : 'no'}`
+        );
+      }
       this.emitPresenceUpdate(address, now);
     }
 
@@ -844,6 +859,11 @@ export class PresenceManager extends EventEmitter {
         loggerLog(
           `[Presence] Expired session address=${session.address} sessionId=${session.sessionId} lastSeen=${session.lastSeen} age_ms=${now - session.lastSeen} route=${describePresenceRoute(session.route)}`
         );
+        if (session.route.kind === 'reticulum') {
+          loggerLog(
+            `[Presence] target=presence-reticulum session_expired peer_addr=${session.address} sender_hash=${session.route.destinationHash} lastSeen=${session.lastSeen} age_ms=${now - session.lastSeen}`
+          );
+        }
       }
     }
 
@@ -914,6 +934,11 @@ export class PresenceManager extends EventEmitter {
       loggerLog(
         `[Presence] Invalidated session due to transport degradation routeKind=${routeKind} address=${session.address} sessionId=${session.sessionId} route=${describePresenceRoute(session.route)}`
       );
+      if (session.route.kind === 'reticulum') {
+        loggerLog(
+          `[Presence] target=presence-reticulum transport_invalidate peer_addr=${session.address} sender_hash=${session.route.destinationHash} sessionId=${session.sessionId}`
+        );
+      }
     }
 
     for (const address of changedAddresses) {
@@ -1032,6 +1057,11 @@ export class PresenceManager extends EventEmitter {
     loggerLog(
       `[Presence] Emitting update address=${address} online=${aggregate.liveSessionCount > 0} live_sessions=${aggregate.liveSessionCount} status=${aggregate.status ?? 'offline'} route=${describePresenceRoute(aggregate.route)} lastSeen=${aggregate.lastSeen ?? 'none'}`
     );
+    if (aggregate.route?.kind === 'reticulum') {
+      loggerLog(
+        `[Presence] target=presence-reticulum emit peer_addr=${address} online=${aggregate.liveSessionCount > 0} sender_hash=${aggregate.route.destinationHash} lastSeen=${aggregate.lastSeen ?? 'none'}`
+      );
+    }
     this.emit('presence-updated', {
       address,
       online: aggregate.liveSessionCount > 0,
@@ -1211,6 +1241,15 @@ export async function publishPresenceEnvelope(
       loggerLog(
         `[Presence] Transport publish result kind=${transport.kind} published=${transportPublished ? 'yes' : 'no'} ${describePresenceEnvelope(envelope)}`
       );
+      if (transport.kind === 'reticulum') {
+        const paddr =
+          typeof (envelope.payload as { address?: string })?.address === 'string'
+            ? (envelope.payload as { address: string }).address
+            : 'unknown';
+        loggerLog(
+          `[Presence] target=presence-reticulum tx=transport_publish kind=reticulum published=${transportPublished ? 'yes' : 'no'} peer_addr=${paddr} type=${envelope.type} envelope_id=${envelope.id ?? 'n/a'}`
+        );
+      }
       if (transportPublished) {
         published = true;
       }
