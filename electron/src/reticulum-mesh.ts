@@ -74,6 +74,73 @@ function peerKey(host: string, port: number): string {
   return `${host.toLowerCase()}:${port}`;
 }
 
+/** IPv4 only — mesh wire uses `tcp://host:port` without bracketed v6. */
+function isLikelyIpv4String(host: string): boolean {
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
+  const match = host.match(m);
+  if (!match) return false;
+  return match.slice(1).every((oct) => {
+    const n = parseInt(oct, 10);
+    return n >= 0 && n <= 255;
+  });
+}
+
+async function tryMeshWanGossipEndpoint(
+  listenPort: number
+): Promise<{ endpoint: string; reachable: boolean } | null> {
+  const client = meshUpnpClient as { externalIp?: () => Promise<string> } | null;
+  if (!client || typeof client.externalIp !== 'function') {
+    return null;
+  }
+  try {
+    const timeoutMs = 900;
+    const ip = await Promise.race([
+      client.externalIp(),
+      new Promise<string>((_, reject) => {
+        const t = setTimeout(() => reject(new Error('mesh_wan_ip_timeout')), timeoutMs);
+        t.unref?.();
+      }),
+    ]);
+    const raw =
+      typeof ip === 'string' ? ip.trim() : `(non-string: ${typeof ip})`;
+    if (typeof ip !== 'string' || ip.length === 0) {
+      loggerLog(
+        `[ReticulumMesh] mesh WAN IP (externalIp): empty or missing raw=${raw}`
+      );
+      return null;
+    }
+    if (!isLikelyIpv4String(ip.trim())) {
+      loggerLog(
+        `[ReticulumMesh] mesh WAN IP (externalIp): not usable IPv4 for mesh gossip raw=${raw.slice(0, 80)}`
+      );
+      return null;
+    }
+    const host = ip.trim();
+    loggerLog(
+      `[ReticulumMesh] mesh WAN IP (externalIp): ok raw=${host} endpoint=tcp://${host}:${listenPort}`
+    );
+    return { endpoint: `tcp://${host}:${listenPort}`, reachable: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    loggerLog(`[ReticulumMesh] mesh WAN IP (externalIp): failed ${msg}`);
+    return null;
+  }
+}
+
+/**
+ * Remote-only self gossip: WAN IPv4 from the UPnP client (`externalIp`) when mesh listen is on.
+ * No LAN/private address — same-segment hubs are out of scope for this path.
+ */
+async function gatherMeshSelfGossipEndpoints(
+  state: ReticulumMeshState
+): Promise<Array<{ endpoint: string; reachable: boolean }>> {
+  if (state.meshListenEnabled === false) return [];
+  const wan = await tryMeshWanGossipEndpoint(state.listenPort);
+  if (!wan) return [];
+  const w = parseTcpEndpoint(wan.endpoint);
+  return w ? [wan] : [];
+}
+
 function upsertPeer(
   state: ReticulumMeshState,
   host: string,
@@ -112,7 +179,7 @@ function upsertPeer(
   return { ...state, peers };
 }
 
-function pickGossipEndpoints(state: ReticulumMeshState): Array<{
+function pickGossipEndpointsFromPeers(state: ReticulumMeshState): Array<{
   endpoint: string;
   reachable: boolean;
 }> {
@@ -126,6 +193,29 @@ function pickGossipEndpoints(state: ReticulumMeshState): Array<{
     });
   }
   return out;
+}
+
+/**
+ * Full `HUB_MESH_PEER_RESPONSE` payload: our WAN mesh listen (when UPnP yields an IP) plus stored peers.
+ * Self entries first so empty peer stores still bootstrap remote hubs.
+ */
+async function buildMeshResponseEndpoints(
+  state: ReticulumMeshState
+): Promise<Array<{ endpoint: string; reachable: boolean }>> {
+  const self = await gatherMeshSelfGossipEndpoints(state);
+  const others = pickGossipEndpointsFromPeers(state);
+  const seen = new Set<string>();
+  const merged: Array<{ endpoint: string; reachable: boolean }> = [];
+  for (const e of [...self, ...others]) {
+    const parsed = parseTcpEndpoint(e.endpoint);
+    if (!parsed) continue;
+    const k = peerKey(parsed.host, parsed.port);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    merged.push(e);
+    if (merged.length >= MAX_SHARED_PEERS_PER_MESSAGE) break;
+  }
+  return merged;
 }
 
 async function flushMeshConfigNow(): Promise<void> {
@@ -378,7 +468,7 @@ class ReticulumMeshCoordinator {
     if (!bridge || bridge.getState() !== 'ready') return;
 
     if (msg.t === 'HUB_MESH_PEER_REQUEST') {
-      const endpoints = pickGossipEndpoints(loadReticulumMeshState());
+      const endpoints = await buildMeshResponseEndpoints(loadReticulumMeshState());
       const resp = await bridge.meshSendPeerExchange({
         peerPresenceHash: msg.senderHash,
         kind: 'response',
