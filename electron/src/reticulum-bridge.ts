@@ -299,6 +299,8 @@ export class ReticulumBridge
     reachability: 'disconnected',
   };
   private lastDegradedReason: string | undefined;
+  /** Local presence destination hash (RNS); set on `ready` event from Python. */
+  private localPresenceDestinationHash: string | undefined;
 
   subscribe(handlers: PresenceTransportHandlers): () => void {
     const onReady = () => handlers.onReady?.();
@@ -364,6 +366,7 @@ export class ReticulumBridge
     if (child && child.exitCode === null && !child.killed) {
       child.kill();
     }
+    this.localPresenceDestinationHash = undefined;
   }
 
   /**
@@ -523,8 +526,21 @@ export class ReticulumBridge
       typeof (envelope.payload as { address?: string })?.address === 'string'
         ? (envelope.payload as { address: string }).address
         : 'unknown';
+    const pl = resp.payload;
+    const fanoutPeers =
+      pl && typeof pl['fanoutPeers'] === 'number' ? pl['fanoutPeers'] : undefined;
+    const fanoutHashes =
+      pl &&
+      Array.isArray(pl['fanoutHashes']) &&
+      pl['fanoutHashes'].every((h): h is string => typeof h === 'string')
+        ? (pl['fanoutHashes'] as string[]).join(',')
+        : undefined;
+    const fanoutLocal =
+      pl && typeof pl['localPresenceHash'] === 'string'
+        ? pl['localPresenceHash']
+        : undefined;
     loggerLog(
-      `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
+      `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'} fanout_peers=${fanoutPeers ?? 'n/a'} fanout_hashes=${fanoutHashes ?? 'n/a'} local_presence_hash=${fanoutLocal ?? this.localPresenceDestinationHash ?? 'n/a'}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
     );
     return resp.ok;
   }
@@ -876,6 +892,10 @@ export class ReticulumBridge
           bridgeState: 'ready',
           reason: undefined,
         };
+        this.localPresenceDestinationHash =
+          typeof frame.payload?.destinationHash === 'string'
+            ? frame.payload.destinationHash
+            : undefined;
         loggerLog(
           `[ReticulumBridge] Ready destination=${frame.payload?.destinationHash ?? 'unknown'}`
         );
@@ -1032,6 +1052,7 @@ export class ReticulumBridge
     if (this.state === 'degraded' && !reason) return;
     this.state = 'degraded';
     this.lastDegradedReason = reason;
+    this.localPresenceDestinationHash = undefined;
     this.connectivitySnapshot = {
       ...this.connectivitySnapshot,
       bridgeState: 'degraded',

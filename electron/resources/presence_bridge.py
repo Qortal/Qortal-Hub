@@ -713,6 +713,12 @@ class PresenceAnnounceHandler:
         log(
             f"[presence_bridge] received announce peer={peer_hash} app_data_len={app_data_len}"
         )
+        peers_sorted = sorted(_known_peers.keys())
+        log(
+            "[presence_bridge] target=presence-reticulum peer_learned "
+            f"peer_hash={peer_hash} known_peers_count={len(_known_peers)} "
+            f"all_peer_hashes={','.join(peers_sorted)}"
+        )
         if _last_presence_wire is not None:
             send_presence_wire_to_peer(peer_hash, announced_identity, _last_presence_wire)
 
@@ -803,11 +809,17 @@ def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes)
         packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
         result = packet.send()
         if result is False:
-            log(f"[presence_bridge] send failed peer={peer_hash}")
+            log(
+                f"[presence_bridge] target=presence-reticulum send_failed peer={peer_hash}"
+            )
         else:
-            log(f"[presence_bridge] sent presence packet peer={peer_hash}")
+            log(
+                f"[presence_bridge] target=presence-reticulum sent_presence peer={peer_hash}"
+            )
     except Exception as exc:
-        log(f"[presence_bridge] send exception peer={peer_hash}: {exc}")
+        log(
+            f"[presence_bridge] target=presence-reticulum send_exception peer={peer_hash}: {exc}"
+        )
 
 
 def make_group_audio_wire(room_id: str, data_b64: str) -> bytes:
@@ -1184,9 +1196,30 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         _last_presence_wire = wire_bytes
         announce_local_destination()
         announce_call_local_destination()
+        peer_hashes = sorted(_known_peers.keys())
+        local_hex = destination_hash_hex(_destination.hash)
+        env_type = envelope.get("type") if isinstance(envelope.get("type"), str) else ""
+        payload = envelope.get("payload")
+        env_addr = ""
+        if isinstance(payload, dict) and isinstance(payload.get("address"), str):
+            env_addr = str(payload.get("address"))
+        log(
+            "[presence_bridge] target=presence-reticulum publish_fanout "
+            f"peers={len(peer_hashes)} local_presence_hash={local_hex} "
+            f"type={env_type} peer_addr={env_addr} "
+            f"fanout_hashes={','.join(peer_hashes)}"
+        )
         for peer_hash, peer_identity in list(_known_peers.items()):
             send_presence_wire_to_peer(peer_hash, peer_identity, wire_bytes)
-        emit_resp(req_id, True)
+        emit_resp(
+            req_id,
+            True,
+            payload={
+                "fanoutPeers": len(peer_hashes),
+                "fanoutHashes": peer_hashes,
+                "localPresenceHash": local_hex,
+            },
+        )
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))
 
