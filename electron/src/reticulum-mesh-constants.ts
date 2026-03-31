@@ -17,3 +17,9 @@ export const MIN_MESH_DAEMON_RESTART_INTERVAL_MS = 5 * 60 * 1000;
 export const MAX_PENDING_MESH_CHANGES_BEFORE_RESTART = 32;
 
 export const MESH_MAINTENANCE_INTERVAL_MS = 10 * 60 * 1000;
+
+/** Coalesce rapid presence-updated bursts before scanning fanout hashes. */
+export const MESH_FANOUT_PRESENCE_DEBOUNCE_MS = 75;
+
+/** Max immediate HUB_MESH_PEER_REQUEST probes per presence-updated event (rest deferred to maintenance). */
+export const MAX_IMMEDIATE_MESH_PROBES_PER_EVENT = 8;

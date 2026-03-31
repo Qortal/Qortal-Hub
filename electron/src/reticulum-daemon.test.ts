@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -16,7 +17,9 @@ vi.mock('electron-is-dev', () => ({
 
 import {
   DEFAULT_RETICULUM_HUBS,
+  buildCurrentManagedReticulumConfig,
   buildManagedReticulumConfig,
+  computeManagedReticulumConfigFingerprint,
 } from './reticulum-daemon';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
 
@@ -65,5 +68,12 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('[[Mesh_deadbeef01]]');
     expect(config).toContain('target_host = mesh.example');
     expect(config).toContain('target_port = 4243');
+  });
+
+  it('computeManagedReticulumConfigFingerprint matches sha256 of buildCurrentManagedReticulumConfig', () => {
+    const body = buildCurrentManagedReticulumConfig();
+    const fp = computeManagedReticulumConfigFingerprint();
+    const expected = crypto.createHash('sha256').update(body, 'utf8').digest('hex');
+    expect(fp).toBe(expected);
   });
 });

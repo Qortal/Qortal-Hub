@@ -149,14 +149,30 @@ export type ReticulumMeshConfigSlice = {
   outbound: Array<{ sectionName: string; host: string; port: number }>;
 };
 
+/**
+ * Stable ordering for config emission (not health rank). Keeps rnsd config bytes
+ * identical when the selected peer set is unchanged but scores reorder.
+ */
+export function sortMeshOutboundHostsForEmission(
+  hosts: Array<{ host: string; port: number }>
+): Array<{ host: string; port: number }> {
+  return [...hosts].sort((a, b) => {
+    const ha = a.host.toLowerCase();
+    const hb = b.host.toLowerCase();
+    if (ha !== hb) return ha < hb ? -1 : 1;
+    return a.port - b.port;
+  });
+}
+
 export function meshConfigSliceFromState(
   state: ReticulumMeshState,
   selectedHosts: Array<{ host: string; port: number }>
 ): ReticulumMeshConfigSlice {
+  const sorted = sortMeshOutboundHostsForEmission(selectedHosts);
   return {
     listenEnabled: state.meshListenEnabled === true,
     listenPort: state.listenPort,
-    outbound: selectedHosts.map((p) => ({
+    outbound: sorted.map((p) => ({
       sectionName: meshTcpSectionName(p.host, p.port),
       host: p.host,
       port: p.port,

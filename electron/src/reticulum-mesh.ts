@@ -7,9 +7,10 @@
  */
 
 import { ipcMain } from 'electron';
-import { log as loggerLog } from './logger';
+import { debug as loggerDebug, log as loggerLog } from './logger';
 import {
   buildCurrentManagedReticulumConfig,
+  computeManagedReticulumConfigFingerprint,
   getReticulumInstanceIndex,
   startBundledReticulumDaemon,
   stopBundledReticulumDaemon,
@@ -21,7 +22,9 @@ import {
   stopReticulumBridge,
 } from './reticulum-bridge';
 import {
+  MESH_FANOUT_PRESENCE_DEBOUNCE_MS,
   MESH_MAINTENANCE_INTERVAL_MS,
+  MAX_IMMEDIATE_MESH_PROBES_PER_EVENT,
   MAX_MESH_STORED_ENDPOINTS,
   MAX_PENDING_MESH_CHANGES_BEFORE_RESTART,
   MAX_SHARED_PEERS_PER_MESSAGE,
@@ -46,6 +49,10 @@ let pendingChangeCount = 0;
 let restartTimer: ReturnType<typeof setTimeout> | null = null;
 /** Last time mesh-driven rnsd restart completed (debounce against MIN_MESH_DAEMON_RESTART_INTERVAL_MS). */
 let lastMeshRestartAt = Date.now();
+/** SHA-256 hex of last written managed config; skips apply when gossip does not change disk output. */
+let lastAppliedFingerprint: string | null = null;
+/** Carried into flushMeshConfigNow for logging (last scheduling path wins). */
+let pendingApplyReason: string | undefined;
 let meshUpnpClient: unknown = null;
 let meshUpnpStopped = false;
 let maintenanceTimer: ReturnType<typeof setInterval> | null = null;
@@ -218,15 +225,46 @@ async function buildMeshResponseEndpoints(
   return merged;
 }
 
+function meshOutboundPeerSetKey(state: ReticulumMeshState): string {
+  return selectMeshOutboundHostsForConfig(state)
+    .map((p) => peerKey(p.host, p.port))
+    .sort()
+    .join(',');
+}
+
+/** Best-effort reason when managed config fingerprint changes (full hash is source of truth). */
+function meshConfigFingerprintDeltaReason(
+  before: ReticulumMeshState,
+  after: ReticulumMeshState
+): string {
+  if (
+    before.meshListenEnabled !== after.meshListenEnabled ||
+    before.listenPort !== after.listenPort
+  ) {
+    return 'listen_changed';
+  }
+  if (meshOutboundPeerSetKey(before) !== meshOutboundPeerSetKey(after)) {
+    return 'peer_set_changed';
+  }
+  return 'config_hash_delta';
+}
+
 async function flushMeshConfigNow(): Promise<void> {
   const next = buildCurrentManagedReticulumConfig();
+  const fp = computeManagedReticulumConfigFingerprint();
   const changed = writeManagedReticulumConfigIfManaged(next);
   pendingChangeCount = 0;
-  lastMeshRestartAt = Date.now();
   if (!changed) {
+    pendingApplyReason = undefined;
     return;
   }
-  loggerLog('[ReticulumMesh] Applying mesh config — restarting rnsd + bridge');
+  const flushReason = pendingApplyReason ?? 'debounce_flush';
+  pendingApplyReason = undefined;
+  lastMeshRestartAt = Date.now();
+  lastAppliedFingerprint = fp;
+  loggerLog(
+    `[ReticulumMesh] Applying mesh config — restarting rnsd + bridge fp=${fp.slice(0, 8)} reason=${flushReason}`
+  );
   stopReticulumMeshCoordinator({ teardownUpnp: false });
   stopReticulumBridge();
   stopBundledReticulumDaemon();
@@ -239,14 +277,24 @@ async function flushMeshConfigNow(): Promise<void> {
   }
 }
 
-export function requestMeshConfigApply(): void {
+export function requestMeshConfigApply(opts?: {
+  reason?: string;
+  fpPrefix?: string;
+}): void {
   if (getReticulumInstanceIndex() > 0) return;
+  if (opts?.reason) pendingApplyReason = opts.reason;
   pendingChangeCount++;
+  if (opts?.fpPrefix !== undefined) {
+    loggerLog(
+      `[ReticulumMesh] mesh_apply_scheduled fp=${opts.fpPrefix} reason=${opts.reason ?? pendingApplyReason ?? 'pending'} pending=${pendingChangeCount}`
+    );
+  }
   if (pendingChangeCount >= MAX_PENDING_MESH_CHANGES_BEFORE_RESTART) {
     if (restartTimer) {
       clearTimeout(restartTimer);
       restartTimer = null;
     }
+    pendingApplyReason = 'forced_pending_threshold';
     void flushMeshConfigNow();
     return;
   }
@@ -258,6 +306,7 @@ export function requestMeshConfigApply(): void {
   const wait = Math.max(0, MIN_MESH_DAEMON_RESTART_INTERVAL_MS - elapsed);
   restartTimer = setTimeout(() => {
     restartTimer = null;
+    if (!pendingApplyReason) pendingApplyReason = 'debounce_flush';
     void flushMeshConfigNow();
   }, wait);
   restartTimer.unref?.();
@@ -395,6 +444,22 @@ function buildKnownMeshPeers(st: ReticulumMeshState): ReticulumMeshKnownPeerInfo
     .sort((a, b) => b.lastSeen - a.lastSeen);
 }
 
+/**
+ * New fanout destination hashes not yet covered by an immediate probe, capped per event.
+ * Exported for unit tests.
+ */
+export function peekFanoutProbeBatch(
+  current: string[],
+  seen: ReadonlySet<string>,
+  maxPerEvent: number
+): { batch: string[]; deferredRemaining: number } {
+  const fresh = current.filter((h) => !seen.has(h));
+  return {
+    batch: fresh.slice(0, maxPerEvent),
+    deferredRemaining: Math.max(0, fresh.length - maxPerEvent),
+  };
+}
+
 function getMeshStatus(): ReticulumMeshStatus {
   const st = loadReticulumMeshState();
   return {
@@ -418,6 +483,12 @@ export function registerReticulumMeshIpcHandlers(): void {
 class ReticulumMeshCoordinator {
   private bridgeRef: ReturnType<typeof getReticulumBridge>;
   private onMeshBound?: (msg: MeshMsg) => void;
+  /** Fanout hashes we already attempted an immediate mesh probe for (until coordinator stop). */
+  private immediateProbeSeenHashes = new Set<string>();
+  private fanoutPresenceDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly boundOnPresenceUpdated = (): void => {
+    this.schedulePresenceFanoutProbe();
+  };
 
   constructor(bridge: ReturnType<typeof getReticulumBridge>) {
     this.bridgeRef = bridge;
@@ -429,6 +500,19 @@ class ReticulumMeshCoordinator {
     }
     loggerLog('[ReticulumMesh] Coordinator starting');
     lastMeshRestartAt = Date.now() - MIN_MESH_DAEMON_RESTART_INTERVAL_MS;
+    lastAppliedFingerprint = computeManagedReticulumConfigFingerprint();
+    loggerLog(
+      `[ReticulumMesh] mesh fingerprint baseline fp=${lastAppliedFingerprint.slice(0, 8)}`
+    );
+    const pm0 = getPresenceManager();
+    if (pm0) {
+      this.immediateProbeSeenHashes = new Set(
+        pm0.getReticulumFanoutDestinationHashes()
+      );
+      pm0.on('presence-updated', this.boundOnPresenceUpdated);
+    } else {
+      this.immediateProbeSeenHashes = new Set();
+    }
     const st = loadReticulumMeshState();
     void setupMeshUpnp(st.listenPort);
 
@@ -446,6 +530,13 @@ class ReticulumMeshCoordinator {
   }
 
   stop(teardownUpnp = true): void {
+    const pm = getPresenceManager();
+    pm?.off('presence-updated', this.boundOnPresenceUpdated);
+    if (this.fanoutPresenceDebounceTimer) {
+      clearTimeout(this.fanoutPresenceDebounceTimer);
+      this.fanoutPresenceDebounceTimer = null;
+    }
+    this.immediateProbeSeenHashes.clear();
     if (this.onMeshBound) {
       this.bridgeRef?.off('mesh-peer-message', this.onMeshBound);
     }
@@ -461,6 +552,44 @@ class ReticulumMeshCoordinator {
       teardownMeshUpnp(loadReticulumMeshState().listenPort);
     }
     loggerLog('[ReticulumMesh] Coordinator stopped');
+  }
+
+  private schedulePresenceFanoutProbe(): void {
+    if (this.fanoutPresenceDebounceTimer) {
+      clearTimeout(this.fanoutPresenceDebounceTimer);
+    }
+    this.fanoutPresenceDebounceTimer = setTimeout(() => {
+      this.fanoutPresenceDebounceTimer = null;
+      void this.runImmediateFanoutProbes();
+    }, MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
+    this.fanoutPresenceDebounceTimer.unref?.();
+  }
+
+  private async runImmediateFanoutProbes(): Promise<void> {
+    const bridge = getReticulumBridge() ?? this.bridgeRef;
+    if (!bridge || bridge.getState() !== 'ready') return;
+    const pm = getPresenceManager();
+    const hashes = pm?.getReticulumFanoutDestinationHashes() ?? [];
+    const { batch, deferredRemaining } = peekFanoutProbeBatch(
+      hashes,
+      this.immediateProbeSeenHashes,
+      MAX_IMMEDIATE_MESH_PROBES_PER_EVENT
+    );
+    if (deferredRemaining > 0) {
+      loggerDebug(
+        `[ReticulumMesh] fanout_immediate_deferred n=${deferredRemaining} (cap=${MAX_IMMEDIATE_MESH_PROBES_PER_EVENT})`
+      );
+    }
+    for (const h of batch) {
+      const resp = await bridge.meshSendPeerExchange({
+        peerPresenceHash: h,
+        kind: 'request',
+      });
+      this.immediateProbeSeenHashes.add(h);
+      if (!resp.ok && resp.error !== 'unknown_peer') {
+        loggerLog('[ReticulumMesh] mesh request failed:', resp.error);
+      }
+    }
   }
 
   private async handleMeshMessage(msg: MeshMsg): Promise<void> {
@@ -483,7 +612,8 @@ class ReticulumMeshCoordinator {
     if (msg.t === 'HUB_MESH_PEER_RESPONSE') {
       const raw = msg.message.peers;
       if (!Array.isArray(raw)) return;
-      let state = loadReticulumMeshState();
+      const stateBefore = loadReticulumMeshState();
+      let state = stateBefore;
       for (const item of raw) {
         if (!item || typeof item !== 'object') continue;
         const o = item as Record<string, unknown>;
@@ -495,7 +625,18 @@ class ReticulumMeshCoordinator {
         state = upsertPeer(state, parsed.host, parsed.port, reachable);
       }
       saveReticulumMeshState(state);
-      requestMeshConfigApply();
+      const fp = computeManagedReticulumConfigFingerprint();
+      if (lastAppliedFingerprint !== null && fp === lastAppliedFingerprint) {
+        loggerDebug(
+          `[ReticulumMesh] mesh_apply_skip fp=${fp.slice(0, 8)} reason=no_config_delta`
+        );
+        return;
+      }
+      const reason = meshConfigFingerprintDeltaReason(stateBefore, state);
+      requestMeshConfigApply({
+        reason,
+        fpPrefix: fp.slice(0, 8),
+      });
     }
   }
 

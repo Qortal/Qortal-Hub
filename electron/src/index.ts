@@ -272,12 +272,13 @@ async function setupMultiInstanceUserData(
         registerLateReticulumBridgeRecovery(p2pNetwork);
       }
 
-      startReticulumMeshCoordinator(getReticulumBridge());
-
-      // Start the presence manager, wired to the Reticulum bridge.
+      // Presence before mesh coordinator so getPresenceManager() is non-null when
+      // ReticulumMeshCoordinator.start() seeds fanout probes and runs maintenance.
       const pm = startPresenceManager(bridgeTransport ? [bridgeTransport] : []);
       attachPresenceListeners(pm);
       loggerLog('[Presence] Manager auto-started.');
+
+      startReticulumMeshCoordinator(getReticulumBridge());
 
       // Start the chat manager backed by the shared SQLite database.
       const cm = await startChatManager(p2pNetwork, sharedDbPath);

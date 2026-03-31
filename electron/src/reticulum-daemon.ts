@@ -17,6 +17,7 @@ import {
   spawnSync,
   type ChildProcessWithoutNullStreams,
 } from 'child_process';
+import crypto from 'crypto';
 import { app, ipcMain } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
@@ -174,6 +175,15 @@ export function buildCurrentManagedReticulumConfig(): string {
     selectMeshOutboundHostsForConfig(state)
   );
   return buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, slice);
+}
+
+/**
+ * SHA-256 hex digest of the exact managed config string that would be written.
+ * Used to skip mesh-driven rnsd restarts when gossip/state updates do not change disk output.
+ */
+export function computeManagedReticulumConfigFingerprint(): string {
+  const body = buildCurrentManagedReticulumConfig();
+  return crypto.createHash('sha256').update(body, 'utf8').digest('hex');
 }
 
 /**
