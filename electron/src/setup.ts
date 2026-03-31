@@ -1629,6 +1629,9 @@ function flushPresenceUpdates(): void {
 
   const payloads = Array.from(queuedPresenceUpdates.values());
   queuedPresenceUpdates.clear();
+  loggerLog(
+    `[Presence] Flushing ${payloads.length} queued update(s) to ${presenceUpdateSubscribers.size} renderer subscriber(s)`
+  );
   broadcastToSet(presenceUpdateSubscribers, 'presence:update-batch', payloads);
 }
 
@@ -1638,11 +1641,15 @@ function queuePresenceUpdate(payload: unknown): void {
     typeof payload === 'object' &&
     typeof (payload as { address?: unknown }).address === 'string'
   ) {
+    loggerLog(
+      `[Presence] Queueing renderer update for address=${(payload as { address: string }).address}`
+    );
     queuedPresenceUpdates.set(
       (payload as { address: string }).address,
       payload
     );
   } else {
+    loggerLog('[Presence] Queueing renderer update without address key');
     queuedPresenceUpdates.set(
       `${Date.now()}:${queuedPresenceUpdates.size}`,
       payload
@@ -1657,6 +1664,7 @@ function queuePresenceUpdate(payload: unknown): void {
 }
 
 function broadcastPresenceUpdate(payload: unknown): void {
+  loggerLog('[Presence] Broadcasting presence update from manager to renderer queue');
   queuePresenceUpdate(payload);
 }
 
@@ -1664,6 +1672,7 @@ export function attachPresenceListeners(
   manager: ReturnType<typeof getPresenceManager>
 ): void {
   if (!manager) return;
+  loggerLog('[Presence] Attaching manager listeners.');
   manager.on('presence-updated', broadcastPresenceUpdate);
 }
 
@@ -1672,7 +1681,11 @@ async function handleLocalPresenceEnvelope(
   envelope: unknown
 ): Promise<boolean> {
   const pm = getPresenceManager();
-  if (!pm) return false;
+  if (!pm) {
+    loggerLog('[Presence] Local envelope dropped because manager is unavailable.');
+    return false;
+  }
+  loggerLog('[Presence] Handling local renderer presence envelope.');
   return publishPresenceEnvelope(envelope as any);
 }
 
@@ -1724,9 +1737,15 @@ ipcMain.handle('presence:getAllOnline', async () => {
 
 ipcMain.on('presence:subscribe', (event) => {
   presenceUpdateSubscribers.add(event.sender);
+  loggerLog(
+    `[Presence] Renderer subscribed. subscriber_count=${presenceUpdateSubscribers.size}`
+  );
 });
 ipcMain.on('presence:unsubscribe', (event) => {
   presenceUpdateSubscribers.delete(event.sender);
+  loggerLog(
+    `[Presence] Renderer unsubscribed. subscriber_count=${presenceUpdateSubscribers.size}`
+  );
 });
 
 // ── Chat IPC Handlers ─────────────────────────────────────────────────────────

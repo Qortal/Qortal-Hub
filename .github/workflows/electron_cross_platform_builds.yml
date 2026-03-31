@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,20 +23,20 @@ jobs:
           # ubuntu-20.04 runners are EOL on GHA; 22.04 is the practical older baseline.
           - name: Linux x64
             os: ubuntu-22.04
-            node: "22"
-            python: "3.12"
+            node: '22'
+            python: '3.12'
             npm_script: electron:make-lin
             artifact_glob: electron/dist/**
           - name: Windows x64
             os: windows-latest
-            node: "22"
-            python: "3.12"
+            node: '22'
+            python: '3.12'
             npm_script: electron:make-win
             artifact_glob: electron/dist/**
           - name: macOS
             os: macos-latest
-            node: "22"
-            python: "3.12"
+            node: '22'
+            python: '3.12'
             npm_script: electron:make-mac
             artifact_glob: electron/dist/**
 

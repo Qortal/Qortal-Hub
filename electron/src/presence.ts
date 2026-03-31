@@ -169,6 +169,29 @@ export interface PresenceTransport {
   subscribe(handlers: PresenceTransportHandlers): () => void;
 }
 
+function describePresenceRoute(route: PresenceRoute | null | undefined): string {
+  if (!route) return 'none';
+  if (route.kind === 'local') return 'local';
+  if (route.kind === 'mesh-node') return `mesh-node:${route.id}`;
+  return `reticulum:${route.destinationHash}${route.linkId ? `#${route.linkId}` : ''}`;
+}
+
+function describePresenceEnvelope(
+  envelope: Partial<PresenceEnvelope> | null | undefined
+): string {
+  const payload =
+    envelope?.payload && typeof envelope.payload === 'object'
+      ? (envelope.payload as Partial<PresencePayload>)
+      : null;
+  const address =
+    typeof payload?.address === 'string' ? payload.address : envelope?.senderAddress;
+  const sessionId =
+    typeof payload?.sessionId === 'string' ? payload.sessionId : 'unknown-session';
+  const status =
+    typeof payload?.status === 'string' ? payload.status : 'n/a';
+  return `id=${envelope?.id ?? 'unknown'} type=${envelope?.type ?? 'unknown'} address=${address ?? 'unknown'} sessionId=${sessionId} status=${status} timestamp=${typeof envelope?.timestamp === 'number' ? envelope.timestamp : 'unknown'}`;
+}
+
 interface PresenceAddressAggregate {
   liveSessionCount: number;
   lastSeen: number | null;
@@ -588,6 +611,9 @@ export class PresenceManager extends EventEmitter {
   ): Promise<boolean> {
     const envelope = raw as PresenceEnvelope;
     const now = Date.now();
+    loggerLog(
+      `[Presence] Handling envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} age_ms=${typeof envelope?.timestamp === 'number' ? now - envelope.timestamp : 'unknown'}`
+    );
 
     const result = validateEnvelopeSansSignature(envelope, now);
     if (result.ok === false) {
@@ -597,6 +623,9 @@ export class PresenceManager extends EventEmitter {
         if (typeof id === 'string' && id.length > 0) {
           const last = this.presenceTooOldLogAt.get(id) ?? 0;
           if (tnow - last < PRESENCE_TOO_OLD_LOG_MIN_MS) {
+            loggerLog(
+              `[Presence] Dropped stale envelope without repeat log ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+            );
             return false;
           }
           this.presenceTooOldLogAt.set(id, tnow);
@@ -606,12 +635,17 @@ export class PresenceManager extends EventEmitter {
           }
         } else {
           if (tnow - this.presenceTooOldGlobalLogAt < PRESENCE_TOO_OLD_LOG_MIN_MS) {
+            loggerLog(
+              `[Presence] Dropped stale envelope without repeat log ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+            );
             return false;
           }
           this.presenceTooOldGlobalLogAt = tnow;
         }
       }
-      loggerLog(`[Presence] Rejected envelope ${envelope?.id}: ${result.reason}`);
+      loggerLog(
+        `[Presence] Rejected envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} reason=${result.reason}`
+      );
       return false;
     }
 
@@ -624,9 +658,14 @@ export class PresenceManager extends EventEmitter {
       publicKeyBase58,
     });
     if (!sigOk) {
-      loggerLog(`[Presence] Rejected envelope ${envelope?.id}: invalid signature`);
+      loggerLog(
+        `[Presence] Rejected envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} reason=invalid signature`
+      );
       return false;
     }
+    loggerLog(
+      `[Presence] Signature verified ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+    );
 
     return this.applyVerifiedPresenceEnvelope(
       envelope,
@@ -649,11 +688,17 @@ export class PresenceManager extends EventEmitter {
     const tsKey = `${address}:${sessionId}:${envelope.type}`;
     const prevTs = this.latestTimestamp.get(tsKey) ?? 0;
     if (envelope.timestamp <= prevTs) {
+      loggerLog(
+        `[Presence] Dropped envelope due to non-increasing timestamp ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} prev_ts=${prevTs}`
+      );
       return false;
     }
     this.latestTimestamp.set(tsKey, envelope.timestamp);
 
     if (envelope.type === 'PRESENCE_OFFLINE') {
+      loggerLog(
+        `[Presence] Applying offline envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+      );
       this.removeSession(address, sessionId);
       if (route.kind === 'local') this.lastLocalEnvelope = null;
     } else {
@@ -681,6 +726,9 @@ export class PresenceManager extends EventEmitter {
       if (route.kind === 'local') {
         this.lastLocalEnvelope = envelope as PresenceEnvelope;
       }
+      loggerLog(
+        `[Presence] Accepted envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} existing_session=${existing ? 'yes' : 'no'} route_expires_at=${routeExpiresAt ?? 'none'} live_sessions_for_address=${this.sessionKeysByAddress.get(address)?.size ?? 0}`
+      );
       this.emitPresenceUpdate(address, now);
     }
 
@@ -770,12 +818,17 @@ export class PresenceManager extends EventEmitter {
   cleanupExpired(): void {
     const now = Date.now();
     const changedAddresses = new Set<string>();
+    let expiredSessions = 0;
 
     for (const [key, session] of this.sessions.entries()) {
       if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) {
         this.sessions.delete(key);
         this.removeSessionKey(session.address, key);
         changedAddresses.add(session.address);
+        expiredSessions++;
+        loggerLog(
+          `[Presence] Expired session address=${session.address} sessionId=${session.sessionId} lastSeen=${session.lastSeen} age_ms=${now - session.lastSeen} route=${describePresenceRoute(session.route)}`
+        );
       }
     }
 
@@ -789,12 +842,18 @@ export class PresenceManager extends EventEmitter {
     for (const address of changedAddresses) {
       this.emitPresenceUpdate(address, now);
     }
+    if (expiredSessions > 0) {
+      loggerLog(
+        `[Presence] Cleanup removed ${expiredSessions} expired session(s) affecting ${changedAddresses.size} address(es)`
+      );
+    }
   }
 
   removeSessionsForPeer(peerId: string): void {
     if (!peerId) return;
 
     const changedAddresses = new Set<string>();
+    let removedSessions = 0;
 
     for (const [key, session] of this.sessions.entries()) {
       // Only drop immediately when the disconnected peer was the origin node
@@ -811,30 +870,50 @@ export class PresenceManager extends EventEmitter {
       this.sessions.delete(key);
       this.removeSessionKey(session.address, key);
       changedAddresses.add(session.address);
+      removedSessions++;
+      loggerLog(
+        `[Presence] Removed session for disconnected mesh peer peerId=${peerId} address=${session.address} sessionId=${session.sessionId}`
+      );
     }
 
     for (const address of changedAddresses) {
       this.emitPresenceUpdate(address);
     }
+    if (removedSessions > 0) {
+      loggerLog(
+        `[Presence] Removed ${removedSessions} session(s) after mesh peer disconnect peerId=${peerId}`
+      );
+    }
   }
 
   invalidateTransportRoutes(routeKind: PresenceRoute['kind']): void {
     const changedAddresses = new Set<string>();
+    let removedSessions = 0;
 
     for (const [key, session] of this.sessions.entries()) {
       if (session.route.kind !== routeKind || routeKind === 'local') continue;
       this.sessions.delete(key);
       this.removeSessionKey(session.address, key);
       changedAddresses.add(session.address);
+      removedSessions++;
+      loggerLog(
+        `[Presence] Invalidated session due to transport degradation routeKind=${routeKind} address=${session.address} sessionId=${session.sessionId} route=${describePresenceRoute(session.route)}`
+      );
     }
 
     for (const address of changedAddresses) {
       this.emitPresenceUpdate(address);
     }
+    if (removedSessions > 0) {
+      loggerLog(
+        `[Presence] Invalidated ${removedSessions} session(s) after transport degradation routeKind=${routeKind}`
+      );
+    }
   }
 
   private removeSession(address: string, sessionId: string): void {
     const key = `${address}:${sessionId}`;
+    loggerLog(`[Presence] Removing session address=${address} sessionId=${sessionId}`);
     this.sessions.delete(key);
     this.removeSessionKey(address, key);
     this.emitPresenceUpdate(address);
@@ -933,6 +1012,9 @@ export class PresenceManager extends EventEmitter {
 
   private emitPresenceUpdate(address: string, now: number = Date.now()): void {
     const aggregate = this.getAddressAggregate(address, now);
+    loggerLog(
+      `[Presence] Emitting update address=${address} online=${aggregate.liveSessionCount > 0} live_sessions=${aggregate.liveSessionCount} status=${aggregate.status ?? 'offline'} route=${describePresenceRoute(aggregate.route)} lastSeen=${aggregate.lastSeen ?? 'none'}`
+    );
     this.emit('presence-updated', {
       address,
       online: aggregate.liveSessionCount > 0,
@@ -994,6 +1076,7 @@ export function startPresenceManager(
   transports: PresenceTransport[] = []
 ): PresenceManager {
   if (presenceManager) {
+    loggerLog('[Presence] Restarting existing manager.');
     for (const unsubscribe of presenceTransportUnsubscribers) unsubscribe();
     presenceTransportUnsubscribers = [];
     presenceManager.stopCleanup();
@@ -1007,23 +1090,30 @@ export function startPresenceManager(
   for (const transport of transports) {
     const unsubscribe = transport.subscribe({
       onEnvelope: (envelope, route) => {
+        loggerLog(
+          `[Presence] Transport delivered envelope via ${transport.kind} ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
+        );
         void presenceManager?.handleEnvelope(envelope, route);
       },
       onReady: () => {
         const cached = presenceManager?.getLastLocalEnvelope();
+        loggerLog(
+          `[Presence] Transport ready kind=${transport.kind} cached_local_envelope=${cached ? 'yes' : 'no'}`
+        );
         if (!cached) return;
         void Promise.resolve(transport.publish(cached)).catch((err) => {
           loggerError('[Presence] Failed to re-publish cached envelope:', err);
         });
       },
       onDegraded: () => {
+        loggerLog(`[Presence] Transport degraded kind=${transport.kind}`);
         presenceManager?.invalidateTransportRoutes(transport.kind);
       },
     });
     presenceTransportUnsubscribers.push(unsubscribe);
   }
 
-  loggerLog('[Presence] Manager started.');
+  loggerLog(`[Presence] Manager started transports=${transports.length}`);
   return presenceManager;
 }
 
@@ -1031,25 +1121,47 @@ export async function publishPresenceEnvelope(
   envelope: PresenceEnvelope
 ): Promise<boolean> {
   const pm = getPresenceManager();
-  if (!pm) return false;
+  if (!pm) {
+    loggerLog(
+      `[Presence] Refusing to publish without manager ${describePresenceEnvelope(envelope)}`
+    );
+    return false;
+  }
+
+  loggerLog(`[Presence] Publishing local envelope ${describePresenceEnvelope(envelope)}`);
 
   const accepted = await pm.handleEnvelope(envelope, { kind: 'local' });
-  if (!accepted) return false;
+  if (!accepted) {
+    loggerLog(
+      `[Presence] Local envelope was not accepted for publish ${describePresenceEnvelope(envelope)}`
+    );
+    return false;
+  }
 
   if (presenceTransportUnsubscribers.length === 0) {
+    loggerLog(
+      `[Presence] No external transports active; local publish only ${describePresenceEnvelope(envelope)}`
+    );
     return true;
   }
 
   let published = false;
   for (const transport of getActivePresenceTransports()) {
     try {
-      if (await transport.publish(envelope)) {
+      const transportPublished = await transport.publish(envelope);
+      loggerLog(
+        `[Presence] Transport publish result kind=${transport.kind} published=${transportPublished ? 'yes' : 'no'} ${describePresenceEnvelope(envelope)}`
+      );
+      if (transportPublished) {
         published = true;
       }
     } catch (err) {
       loggerError('[Presence] Transport publish failed:', err);
     }
   }
+  loggerLog(
+    `[Presence] Finished publish published_any=${published ? 'yes' : 'no'} ${describePresenceEnvelope(envelope)}`
+  );
   return published;
 }
 
