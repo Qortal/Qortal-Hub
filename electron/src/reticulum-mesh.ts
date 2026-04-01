@@ -1,7 +1,7 @@
 /**
  * Reticulum hub-to-hub mesh coordinator (separate from TLS P2P).
  *
- * Transport uses managed rnsd config (mesh listen: Backbone on Linux, TCPServer on Windows/macOS; bootstrap TCPClient hubs).
+ * Transport uses managed rnsd config (public mesh listen: TCPServer; Linux also exposes a supplemental Backbone listener; bootstrap TCPClient hubs).
  * Community mesh links use RNS interface discovery + autoconnect (see reticulum-daemon).
  */
 

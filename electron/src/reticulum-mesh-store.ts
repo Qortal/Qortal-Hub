@@ -16,7 +16,7 @@ export const RETICULUM_MESH_STATE_VERSION = 2 as const;
 export type ReticulumMeshState = {
   version: typeof RETICULUM_MESH_STATE_VERSION;
   listenPort: number;
-  /** When true, render mesh listen interface in managed config (Backbone on Linux, TCPServer on other OS). */
+  /** When true, render managed mesh listeners (public TCP listener everywhere, plus Linux Backbone listener). */
   meshListenEnabled: boolean;
   meshUpnpEnabled: boolean;
   /** Coordinator: observed inbound on mesh port (diagnostics) */
@@ -155,7 +155,7 @@ export type ReticulumMeshConfigSlice = {
   /** AutoInterface: discover community interfaces (LXMF shipped with Hub Reticulum runtime). Independent of mesh listen. */
   meshDiscoveryClient: boolean;
   autoconnectDiscoveredMax: number;
-  /** TCPServer: encrypted private gateway when identity file exists */
+  /** Encrypted private gateway when identity file exists. Discovery/publishing still requires `reachableOn`. */
   meshPrivateGateway: boolean;
   networkIdentityPath: string;
   /** `[reticulum] enable_transport`: on whenever mesh listen is enabled (hub + RNS transport; bridge shows transport=on when RNS exposes transport_id). */

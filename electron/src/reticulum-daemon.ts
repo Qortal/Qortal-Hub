@@ -33,17 +33,21 @@ import {
 
 /**
  * Reticulum hub mesh: listen on the mesh port with optional private-gateway discovery.
- * RNS BackboneInterface is Linux-only; Windows/macOS use TCPServerInterface for the same section.
- * Bootstrap hubs as TCPClient rows; AutoInterface discover/autoconnect (no gossip-driven outbound).
+ * Public/discoverable mesh listen uses TCPServerInterface for cross-platform autoconnect.
+ * Linux also exposes a supplemental BackboneInterface listener on an adjacent port.
+ * Bootstrap hubs stay as managed outbound clients; AutoInterface discover/autoconnect has no gossip-driven outbound.
  */
 
-/** BackboneInterface is only supported on Linux in upstream RNS (not Windows/macOS). */
-function meshListenRnsInterfaceType():
-  | 'BackboneInterface'
-  | 'TCPServerInterface' {
-  return process.platform === 'linux'
-    ? 'BackboneInterface'
-    : 'TCPServerInterface';
+function meshDiscoveryListenRnsInterfaceType(): 'TCPServerInterface' {
+  return 'TCPServerInterface';
+}
+
+function hasSupplementalBackboneMeshListen(): boolean {
+  return process.platform === 'linux';
+}
+
+function getSupplementalBackboneMeshListenPort(listenPort: number): number {
+  return listenPort + 1;
 }
 
 const RNS_MODULE = 'RNS.Utilities.rnsd';
@@ -180,21 +184,17 @@ function renderMeshInterfaces(
   slice: ReticulumMeshConfigSlice | null | undefined
 ): string {
   if (!slice) return '';
-  let out = '';
+  const sections: string[] = [];
   if (slice.listenEnabled) {
-    const iface = meshListenRnsInterfaceType();
-    const listenKeys =
-      iface === 'BackboneInterface'
-        ? `  listen_on = 0.0.0.0
-  port = ${slice.listenPort}`
-        : `  listen_ip = 0.0.0.0
+    const iface = meshDiscoveryListenRnsInterfaceType();
+    const listenKeys = `  listen_ip = 0.0.0.0
   listen_port = ${slice.listenPort}`;
     if (slice.meshPrivateGateway) {
       if (
         typeof slice.reachableOn === 'string' &&
         slice.reachableOn.length > 0
       ) {
-        out += `  [[Qortal Hub Mesh Listen]]
+        sections.push(`  [[Qortal Hub Mesh Listen]]
   type = ${iface}
   enabled = yes
 ${listenKeys}
@@ -204,28 +204,33 @@ ${listenKeys}
   announce_interval = ${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}
   mode = gateway
   discovery_encrypt = yes
-`;
+`);
       }
     } else {
-      out += `  [[Qortal Hub Mesh Listen]]
+      sections.push(`  [[Qortal Hub Mesh Listen]]
   type = ${iface}
   enabled = yes
 ${listenKeys}
-`;
+`);
+    }
+    if (hasSupplementalBackboneMeshListen()) {
+      sections.push(`  [[Qortal Hub Mesh Backbone Listen]]
+  type = BackboneInterface
+  enabled = yes
+  listen_on = 0.0.0.0
+  port = ${getSupplementalBackboneMeshListenPort(slice.listenPort)}
+`);
     }
   }
   for (const p of slice.outbound) {
-    if (out.length > 0) {
-      out += '\n\n';
-    }
-    out += `  [[${p.sectionName}]]
+    sections.push(`  [[${p.sectionName}]]
   type = TCPClientInterface
   enabled = yes
   target_host = ${p.host}
   target_port = ${p.port}
-`;
+`);
   }
-  return out;
+  return sections.join('\n\n');
 }
 
 function renderReticulumHeader(
@@ -263,16 +268,25 @@ function logManagedDiscoveryConfig(
   if (!meshSlice?.listenEnabled) {
     return;
   }
-  const iface = meshListenRnsInterfaceType();
-  if (meshSlice.meshPrivateGateway) {
-    const reachable = meshSlice.reachableOn ?? 'unset';
+  if (hasSupplementalBackboneMeshListen()) {
     loggerLog(
-      `[Reticulum] Discovery gateway config path=${configPath} type=${iface} port=${meshSlice.listenPort} reachable_on=${reachable} encrypted=yes announce_interval=${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}m`
+      `[Reticulum] Supplemental backbone mesh listen path=${configPath} type=BackboneInterface port=${getSupplementalBackboneMeshListenPort(meshSlice.listenPort)} discoverable=no`
     );
+  }
+  if (meshSlice.meshPrivateGateway) {
+    if (meshSlice.reachableOn) {
+      loggerLog(
+        `[Reticulum] Discovery gateway config path=${configPath} type=TCPServerInterface port=${meshSlice.listenPort} reachable_on=${meshSlice.reachableOn} encrypted=yes announce_interval=${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}m`
+      );
+    } else {
+      loggerLog(
+        `[Reticulum] Mesh listen config path=${configPath} type=TCPServerInterface port=${meshSlice.listenPort} discoverable=no reachable_on=unset`
+      );
+    }
     return;
   }
   loggerLog(
-    `[Reticulum] Mesh listen config path=${configPath} type=${iface} port=${meshSlice.listenPort} discoverable=no`
+    `[Reticulum] Mesh listen config path=${configPath} type=TCPServerInterface port=${meshSlice.listenPort} discoverable=no`
   );
 }
 
