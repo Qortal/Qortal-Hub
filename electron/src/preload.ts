@@ -293,30 +293,22 @@ try {
     reticulumGetMeshStatus: () =>
       ipcRenderer.invoke('reticulum:getMeshStatus') as Promise<{
         enabled: boolean;
-        peerCount: number;
         listenPort: number;
         meshListenEnabled: boolean;
         upnpMapped: boolean;
         reachableSelf: boolean;
-        activeMeshPeers: Array<{
-          endpoint: string;
-          host: string;
-          port: number;
-          reachable: boolean;
-          failures: number;
-        }>;
-        knownMeshPeers: Array<{
-          endpoint: string;
-          host: string;
-          port: number;
-          reachable: boolean;
-          failures: number;
-          lastSeen: number;
-          dialAttempts: number;
-          dialSuccesses: number;
-          connectionSuccessRate: number;
-          isActiveOutbound: boolean;
-        }>;
+        meshDiscoveryClient: boolean;
+        meshPrivateGateway: boolean;
+        networkIdentityPath: string;
+        discoveryReachableHost?: string;
+        meshReachableOnHost?: string;
+        meshReachableOnEffective: string | null;
+      }>,
+    reticulumEnsureMeshNetworkIdentity: () =>
+      ipcRenderer.invoke('reticulum:ensureMeshNetworkIdentity') as Promise<{
+        ok: boolean;
+        error?: string;
+        created?: boolean;
       }>,
   });
 

@@ -1,20 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import fs from 'fs';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: (name: string) =>
+      name === 'userData' ? '/tmp/qortal-userdata' : '/tmp/qortal-appdata',
+  },
+}));
+
 import {
+  isPlausibleReachableOnHost,
   meshConfigSliceFromState,
+  resolveMeshReachableOnHost,
   sortMeshOutboundHostsForEmission,
   type ReticulumMeshState,
 } from './reticulum-mesh-store';
 
 function baseState(overrides: Partial<ReticulumMeshState> = {}): ReticulumMeshState {
   return {
-    version: 1,
+    version: 2,
     listenPort: 4243,
     meshListenEnabled: true,
     meshUpnpEnabled: true,
     reachableSelf: false,
     inboundObservedOnMeshPort: false,
     externalProbeSucceeded: false,
-    peers: [],
     ...overrides,
   };
 }
@@ -47,18 +57,84 @@ describe('meshConfigSliceFromState', () => {
     ];
     const sliceA = meshConfigSliceFromState(state, selectedA);
     const sliceB = meshConfigSliceFromState(state, selectedB);
-    expect(sliceA).toEqual(sliceB);
+    expect(sliceA.outbound).toEqual(sliceB.outbound);
     expect(sliceA.outbound.map((o) => `${o.host}:${o.port}`)).toEqual([
       'a.test:4242',
       'z.test:4243',
     ]);
   });
 
-  it('differs when peer set differs', () => {
+  it('empty selected hosts yields empty outbound', () => {
     const state = baseState();
-    const s1 = meshConfigSliceFromState(state, [{ host: 'a.test', port: 1 }]);
-    const s2 = meshConfigSliceFromState(state, [{ host: 'b.test', port: 1 }]);
-    expect(s1.outbound[0]?.host).toBe('a.test');
-    expect(s2.outbound[0]?.host).toBe('b.test');
+    const s = meshConfigSliceFromState(state, []);
+    expect(s.outbound).toEqual([]);
+  });
+
+  it('keeps AutoInterface discovery on when mesh listen is disabled', () => {
+    const state = baseState({ meshListenEnabled: false });
+    const s = meshConfigSliceFromState(state, []);
+    expect(s.meshDiscoveryClient).toBe(true);
+  });
+
+  it('enables transport when mesh listen on (private gateway, reachable unknown)', () => {
+    const spy = vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
+      const s = String(p);
+      return s.endsWith('mesh-network.identity');
+    });
+    try {
+      const state = baseState({ meshListenEnabled: true });
+      const s = meshConfigSliceFromState(state, []);
+      expect(s.meshPrivateGateway).toBe(true);
+      expect(s.reachableOn).toBeNull();
+      expect(s.enableTransport).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('enables transport when mesh listen on without gateway identity (plain mesh listen)', () => {
+    const spy = vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+    try {
+      const state = baseState({ meshListenEnabled: true });
+      const s = meshConfigSliceFromState(state, []);
+      expect(s.meshPrivateGateway).toBe(false);
+      expect(s.enableTransport).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('disables transport when mesh listen is off', () => {
+    const state = baseState({ meshListenEnabled: false });
+    const s = meshConfigSliceFromState(state, []);
+    expect(s.enableTransport).toBe(false);
+  });
+});
+
+describe('resolveMeshReachableOnHost', () => {
+  it('prefers manual host over discovery', () => {
+    const state = baseState({
+      meshReachableOnHost: 'mesh.example.org',
+      discoveryReachableHost: '203.0.113.1',
+    });
+    expect(resolveMeshReachableOnHost(state)).toBe('mesh.example.org');
+  });
+
+  it('falls back to discovery when manual unset', () => {
+    const state = baseState({ discoveryReachableHost: '198.51.100.2' });
+    expect(resolveMeshReachableOnHost(state)).toBe('198.51.100.2');
+  });
+});
+
+describe('isPlausibleReachableOnHost', () => {
+  it('accepts valid IPv4 and hostnames', () => {
+    expect(isPlausibleReachableOnHost('203.0.113.1')).toBe(true);
+    expect(isPlausibleReachableOnHost('mesh.example.net')).toBe(true);
+  });
+
+  it('rejects invalid values', () => {
+    expect(isPlausibleReachableOnHost('999.1.1.1')).toBe(false);
+    expect(isPlausibleReachableOnHost('no-dot')).toBe(false);
+    expect(isPlausibleReachableOnHost('')).toBe(false);
   });
 });

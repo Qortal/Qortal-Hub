@@ -1,5 +1,5 @@
 /**
- * Persistent state for Reticulum hub mesh (TCP hints only — not cryptographic identity).
+ * Persistent state for Reticulum hub mesh (listen port, UPnP — not gossip peer lists).
  */
 
 import * as crypto from 'crypto';
@@ -9,39 +9,52 @@ import { app } from 'electron';
 import {
   DEFAULT_RETICULUM_MESH_LISTEN_PORT,
   MAX_MESH_OUTBOUND_PEERS,
-  MAX_MESH_STORED_ENDPOINTS,
 } from './reticulum-mesh-constants';
 
-export const RETICULUM_MESH_STATE_VERSION = 1 as const;
-
-export type ReticulumMeshPeerEntry = {
-  host: string;
-  port: number;
-  failures: number;
-  lastSeen: number;
-  /** Gossip / observed — not set from UPnP alone */
-  reachable: boolean;
-  dialAttempts: number;
-  dialSuccesses: number;
-  /** Rolling success rate for dial attempts (0–1) */
-  connectionSuccessRate: number;
-};
+export const RETICULUM_MESH_STATE_VERSION = 2 as const;
 
 export type ReticulumMeshState = {
   version: typeof RETICULUM_MESH_STATE_VERSION;
   listenPort: number;
-  /** When true, render TCPServerInterface in managed config */
+  /** When true, render mesh listen interface in managed config (Backbone on Linux, TCPServer on other OS). */
   meshListenEnabled: boolean;
   meshUpnpEnabled: boolean;
-  /** We only gossip reachable=true after inbound observed or external probe — see coordinator */
+  /** Coordinator: observed inbound on mesh port (diagnostics) */
   reachableSelf: boolean;
   inboundObservedOnMeshPort: boolean;
   externalProbeSucceeded: boolean;
-  peers: ReticulumMeshPeerEntry[];
+  /**
+   * Last WAN IPv4/hostname seen from UPnP after a successful mesh port map (for `reachable_on`).
+   * Not written when `meshReachableOnHost` is set (manual wins).
+   */
+  discoveryReachableHost?: string;
+  /**
+   * Optional manual `reachable_on` value (IPv4 or hostname, no port). Overrides `discoveryReachableHost`.
+   */
+  meshReachableOnHost?: string;
 };
 
 export function getReticulumMeshStatePath(): string {
   return path.join(app.getPath('userData'), 'reticulum-mesh-state.json');
+}
+
+/**
+ * Writable copy under userData; `network_identity` points here. Installed from the bundled
+ * community file (same identity for all Qortal Hub users — see `getBundledMeshNetworkIdentityPath`).
+ */
+export function getMeshNetworkIdentityPath(): string {
+  return path.join(app.getPath('userData'), 'reticulum', 'mesh-network.identity');
+}
+
+/**
+ * Canonical Qortal Hub community mesh identity shipped in the app (Reticulum `network_identity`).
+ * Same file for every build/install so private gateway discovery stays one logical network.
+ */
+export function getBundledMeshNetworkIdentityPath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'reticulum', 'mesh-network.identity');
+  }
+  return path.join(__dirname, '..', '..', 'resources', 'mesh-network.identity');
 }
 
 export function defaultReticulumMeshState(): ReticulumMeshState {
@@ -53,8 +66,37 @@ export function defaultReticulumMeshState(): ReticulumMeshState {
     reachableSelf: false,
     inboundObservedOnMeshPort: false,
     externalProbeSucceeded: false,
-    peers: [],
+    discoveryReachableHost: undefined,
+    meshReachableOnHost: undefined,
   };
+}
+
+const REACHABLE_ON_MAX = 253;
+
+/** IPv4 or simple FQDN for Reticulum `reachable_on` (no port, no path). */
+export function isPlausibleReachableOnHost(value: string): boolean {
+  const v = value.trim();
+  if (!v || v.length > REACHABLE_ON_MAX) return false;
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(v)) {
+    const parts = v.split('.').map(Number);
+    return parts.length === 4 && parts.every((p) => p >= 0 && p <= 255);
+  }
+  if (!/^[a-zA-Z0-9.-]+$/.test(v) || !v.includes('.')) return false;
+  return true;
+}
+
+function sanitizeReachableHostField(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const t = raw.trim();
+  if (!t || t.length > REACHABLE_ON_MAX) return undefined;
+  return isPlausibleReachableOnHost(t) ? t : undefined;
+}
+
+export function resolveMeshReachableOnHost(state: ReticulumMeshState): string | null {
+  const manual = sanitizeReachableHostField(state.meshReachableOnHost);
+  if (manual) return manual;
+  const auto = sanitizeReachableHostField(state.discoveryReachableHost);
+  return auto ?? null;
 }
 
 export function loadReticulumMeshState(): ReticulumMeshState {
@@ -79,51 +121,14 @@ export function loadReticulumMeshState(): ReticulumMeshState {
       reachableSelf: parsed.reachableSelf === true,
       inboundObservedOnMeshPort: parsed.inboundObservedOnMeshPort === true,
       externalProbeSucceeded: parsed.externalProbeSucceeded === true,
-      peers: Array.isArray(parsed.peers)
-        ? parsed.peers
-            .map(normalizePeerEntry)
-            .filter((x): x is ReticulumMeshPeerEntry => x !== null)
-            .slice(0, MAX_MESH_STORED_ENDPOINTS)
-        : [],
+      discoveryReachableHost: sanitizeReachableHostField(
+        parsed.discoveryReachableHost
+      ),
+      meshReachableOnHost: sanitizeReachableHostField(parsed.meshReachableOnHost),
     };
   } catch {
     return defaultReticulumMeshState();
   }
-}
-
-function normalizePeerEntry(
-  raw: unknown
-): ReticulumMeshPeerEntry | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const o = raw as Record<string, unknown>;
-  const host = typeof o.host === 'string' ? o.host.trim() : '';
-  const port = typeof o.port === 'number' ? o.port : Number(o.port);
-  if (!host || !Number.isFinite(port) || port <= 0 || port > 65535) {
-    return null;
-  }
-  const failures = typeof o.failures === 'number' ? Math.max(0, o.failures) : 0;
-  const lastSeen =
-    typeof o.lastSeen === 'number' ? o.lastSeen : Date.now();
-  const dialAttempts =
-    typeof o.dialAttempts === 'number' ? Math.max(0, o.dialAttempts) : 0;
-  const dialSuccesses =
-    typeof o.dialSuccesses === 'number' ? Math.max(0, o.dialSuccesses) : 0;
-  const connectionSuccessRate =
-    typeof o.connectionSuccessRate === 'number'
-      ? Math.min(1, Math.max(0, o.connectionSuccessRate))
-      : dialAttempts > 0
-        ? dialSuccesses / dialAttempts
-        : 0;
-  return {
-    host,
-    port,
-    failures,
-    lastSeen,
-    reachable: o.reachable === true,
-    dialAttempts,
-    dialSuccesses,
-    connectionSuccessRate,
-  };
 }
 
 export function saveReticulumMeshState(state: ReticulumMeshState): void {
@@ -132,7 +137,7 @@ export function saveReticulumMeshState(state: ReticulumMeshState): void {
   fs.writeFileSync(p, JSON.stringify(state, null, 2), 'utf8');
 }
 
-/** Stable Reticulum config section name for a mesh TCP client */
+/** Stable Reticulum config section name for a mesh TCP client (unused when outbound is empty). */
 export function meshTcpSectionName(host: string, port: number): string {
   const h = crypto
     .createHash('sha256')
@@ -145,13 +150,22 @@ export function meshTcpSectionName(host: string, port: number): string {
 export type ReticulumMeshConfigSlice = {
   listenEnabled: boolean;
   listenPort: number;
-  /** One TCPClientInterface per outbound mesh peer */
+  /** Always empty — mesh TCP clients come only from bootstrap hubs in managed config, not gossip. */
   outbound: Array<{ sectionName: string; host: string; port: number }>;
+  /** AutoInterface: discover community interfaces (LXMF shipped with Hub Reticulum runtime). Independent of mesh listen. */
+  meshDiscoveryClient: boolean;
+  autoconnectDiscoveredMax: number;
+  /** TCPServer: encrypted private gateway when identity file exists */
+  meshPrivateGateway: boolean;
+  networkIdentityPath: string;
+  /** `[reticulum] enable_transport`: on whenever mesh listen is enabled (hub + RNS transport; bridge shows transport=on when RNS exposes transport_id). */
+  enableTransport: boolean;
+  /** Public address for mesh gateway discovery (`reachable_on`); null if unknown. */
+  reachableOn: string | null;
 };
 
 /**
- * Stable ordering for config emission (not health rank). Keeps rnsd config bytes
- * identical when the selected peer set is unchanged but scores reorder.
+ * Stable ordering for config emission (not health rank).
  */
 export function sortMeshOutboundHostsForEmission(
   hosts: Array<{ host: string; port: number }>
@@ -169,6 +183,10 @@ export function meshConfigSliceFromState(
   selectedHosts: Array<{ host: string; port: number }>
 ): ReticulumMeshConfigSlice {
   const sorted = sortMeshOutboundHostsForEmission(selectedHosts);
+  const identityPath = getMeshNetworkIdentityPath();
+  const hasIdentity = fs.existsSync(identityPath);
+  const meshPrivateGateway = state.meshListenEnabled === true && hasIdentity;
+  const reachableOn = meshPrivateGateway ? resolveMeshReachableOnHost(state) : null;
   return {
     listenEnabled: state.meshListenEnabled === true,
     listenPort: state.listenPort,
@@ -177,28 +195,11 @@ export function meshConfigSliceFromState(
       host: p.host,
       port: p.port,
     })),
+    meshDiscoveryClient: true,
+    autoconnectDiscoveredMax: MAX_MESH_OUTBOUND_PEERS,
+    meshPrivateGateway,
+    networkIdentityPath: identityPath,
+    enableTransport: state.meshListenEnabled === true,
+    reachableOn,
   };
-}
-
-/** Choose outbound mesh TCP clients for rnsd config — sparse mesh, prefer healthier peers. */
-export function selectMeshOutboundHostsForConfig(
-  state: ReticulumMeshState
-): Array<{ host: string; port: number }> {
-  const sorted = [...state.peers].sort((a, b) => {
-    const dr = b.connectionSuccessRate - a.connectionSuccessRate;
-    if (Math.abs(dr) > 1e-9) return dr > 0 ? 1 : -1;
-    if (a.failures !== b.failures) return a.failures - b.failures;
-    if (a.reachable !== b.reachable) return a.reachable ? -1 : 1;
-    return 0;
-  });
-  const seen = new Set<string>();
-  const out: Array<{ host: string; port: number }> = [];
-  for (const p of sorted) {
-    const k = `${p.host.toLowerCase()}:${p.port}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    out.push({ host: p.host, port: p.port });
-    if (out.length >= MAX_MESH_OUTBOUND_PEERS) break;
-  }
-  return out;
 }

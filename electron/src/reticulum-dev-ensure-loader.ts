@@ -1,5 +1,5 @@
 /**
- * Dev-only: first-run Reticulum (rns) setup with a small loader window while
+ * Dev-only: first-run Reticulum (rns + lxmf) setup with a small loader window while
  * scripts/ensure-reticulum-for-dev.mjs runs (get-pip + pip install).
  */
 
@@ -13,6 +13,19 @@ const PROGRESS_PREFIX = '__RET_ENSURE__:';
 
 function resourcesDir(): string {
   return path.join(__dirname, '..', '..', 'resources');
+}
+
+function canImportModule(
+  py: string,
+  module: string,
+  shell: boolean
+): boolean {
+  const r = spawnSync(py, ['-c', `import ${module}`], {
+    encoding: 'utf8',
+    windowsHide: true,
+    shell,
+  });
+  return r.status === 0;
 }
 
 /** Same fast checks as ensure-reticulum-for-dev.mjs (keep in sync). */
@@ -38,22 +51,18 @@ export function needsDevReticulumEnsure(): boolean {
 
   for (const py of venvCandidates) {
     if (!py || !fs.existsSync(py)) continue;
-    const r = spawnSync(py, ['-c', 'import RNS'], {
-      encoding: 'utf8',
-      windowsHide: true,
-    });
-    if (r.status === 0) return false;
+    if (!canImportModule(py, 'RNS', false)) continue;
+    if (canImportModule(py, 'LXMF', false)) return false;
+    return true;
   }
 
   const names =
     process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python'];
+  const shell = process.platform === 'win32';
   for (const name of names) {
-    const r = spawnSync(name, ['-c', 'import RNS'], {
-      encoding: 'utf8',
-      windowsHide: true,
-      shell: process.platform === 'win32',
-    });
-    if (r.status === 0) return false;
+    if (!canImportModule(name, 'RNS', shell)) continue;
+    if (canImportModule(name, 'LXMF', shell)) return false;
+    return true;
   }
 
   return true;
@@ -90,7 +99,7 @@ const STATUS_MAP: Record<string, string> = {
   get_pip_check: 'Checking Python environment…',
   get_pip_download: 'Downloading Python tooling…',
   get_pip_run: 'Installing pip…',
-  pip_install_rns: 'Installing Reticulum (rns) from PyPI…',
+  pip_install_rns: 'Installing Reticulum (rns) and LXMF from PyPI…',
   done: 'Done.',
 };
 
@@ -186,7 +195,7 @@ export async function runDevReticulumEnsureIfNeeded(): Promise<boolean> {
         await dialog.showMessageBox({
           type: 'error',
           title: 'Reticulum setup failed',
-          message: 'Could not install Reticulum (rns) automatically.',
+          message: 'Could not install Reticulum (rns) and LXMF automatically.',
           detail: `${stderrBuf.trim().slice(-1800) || `Process exited with code ${code}.`}
 
 You need Python 3.9+ on PATH and a working internet connection.

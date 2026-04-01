@@ -1,8 +1,6 @@
 /**
- * Integration-style tests for ReticulumMeshCoordinator fanout immediate probes.
- * Mocks heavy deps so the real coordinator module can run start/stop.
+ * Reticulum mesh coordinator: UPnP for mesh listen; no hub-mesh wire.
  */
-import { EventEmitter } from 'events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -29,140 +27,47 @@ vi.mock('./setup', () => ({
 }));
 
 vi.mock('./reticulum-daemon', () => ({
-  buildCurrentManagedReticulumConfig: vi.fn(() => ''),
-  computeManagedReticulumConfigFingerprint: vi.fn(() => 'a'.repeat(64)),
   getReticulumInstanceIndex: vi.fn(() => 0),
+  buildCurrentManagedReticulumConfig: vi.fn(() => ''),
+  getReticulumDaemonStatus: vi.fn(() => ({ running: false })),
   startBundledReticulumDaemon: vi.fn(),
   stopBundledReticulumDaemon: vi.fn(),
   writeManagedReticulumConfigIfManaged: vi.fn(() => false),
 }));
 
+vi.mock('./reticulum-bridge-rebind', () => ({
+  rebindReticulumBridgeConsumers: vi.fn(),
+}));
+
 vi.mock('./reticulum-bridge', () => ({
-  getReticulumBridge: vi.fn(() => null),
-  startReticulumBridge: vi.fn(),
+  startReticulumBridge: vi.fn(async () => {}),
   stopReticulumBridge: vi.fn(),
 }));
 
-let mockPm!: EventEmitter & {
-  getReticulumFanoutDestinationHashes: () => string[];
-};
-
-vi.mock('./presence', () => ({
-  getPresenceManager: () => mockPm,
+vi.mock('./upnp-nat', () => ({
+  createNatApiClient: vi.fn(),
+  destroyNatClient: vi.fn(),
+  mapTcpPort: vi.fn(async () => false),
+  unmapTcpPort: vi.fn(async () => {}),
 }));
 
 import {
   startReticulumMeshCoordinator,
   stopReticulumMeshCoordinator,
 } from './reticulum-mesh';
-import { MESH_FANOUT_PRESENCE_DEBOUNCE_MS } from './reticulum-mesh-constants';
 
-function createBridgeStub() {
-  const meshSendPeerExchange = vi.fn(async () => ({ ok: true as const }));
-  const bridge = {
-    getState: vi.fn(() => 'ready' as const),
-    on: vi.fn(),
-    off: vi.fn(),
-    meshSendPeerExchange,
-  };
-  return bridge;
-}
-
-describe('ReticulumMeshCoordinator fanout immediate probes', () => {
-  let fanoutHashes: string[];
-
+describe('ReticulumMeshCoordinator', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    fanoutHashes = [];
-    mockPm = new EventEmitter() as EventEmitter & {
-      getReticulumFanoutDestinationHashes: () => string[];
-    };
-    mockPm.getReticulumFanoutDestinationHashes = () => fanoutHashes;
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
     stopReticulumMeshCoordinator();
-    vi.useRealTimers();
-    vi.clearAllMocks();
   });
 
-  it('fires one mesh request when a new fanout hash appears after startup', async () => {
-    const bridge = createBridgeStub();
-    startReticulumMeshCoordinator(bridge as never);
-
-    expect(bridge.meshSendPeerExchange).not.toHaveBeenCalled();
-
-    fanoutHashes = ['new-hash-a'];
-    mockPm.emit('presence-updated');
-    await vi.advanceTimersByTimeAsync(MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
-
-    expect(bridge.meshSendPeerExchange).toHaveBeenCalledTimes(1);
-    expect(bridge.meshSendPeerExchange).toHaveBeenCalledWith({
-      peerPresenceHash: 'new-hash-a',
-      kind: 'request',
-    });
-  });
-
-  it('does not re-probe the same hash on a later presence-updated', async () => {
-    const bridge = createBridgeStub();
-    fanoutHashes = [];
-    startReticulumMeshCoordinator(bridge as never);
-
-    fanoutHashes = ['stable'];
-    mockPm.emit('presence-updated');
-    await vi.advanceTimersByTimeAsync(MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
-    expect(bridge.meshSendPeerExchange).toHaveBeenCalledTimes(1);
-
-    mockPm.emit('presence-updated');
-    await vi.advanceTimersByTimeAsync(MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
-    expect(bridge.meshSendPeerExchange).toHaveBeenCalledTimes(1);
-  });
-
-  it('probes a second hash when it is added after the first was already probed', async () => {
-    const bridge = createBridgeStub();
-    startReticulumMeshCoordinator(bridge as never);
-
-    fanoutHashes = ['first'];
-    mockPm.emit('presence-updated');
-    await vi.advanceTimersByTimeAsync(MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
-    expect(bridge.meshSendPeerExchange).toHaveBeenCalledTimes(1);
-
-    fanoutHashes = ['first', 'second'];
-    mockPm.emit('presence-updated');
-    await vi.advanceTimersByTimeAsync(MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
-
-    expect(bridge.meshSendPeerExchange).toHaveBeenCalledTimes(2);
-    expect(bridge.meshSendPeerExchange).toHaveBeenLastCalledWith({
-      peerPresenceHash: 'second',
-      kind: 'request',
-    });
-  });
-
-  it('caps immediate probes per event and issues multiple calls in one debounced run', async () => {
-    const bridge = createBridgeStub();
-    startReticulumMeshCoordinator(bridge as never);
-
-    fanoutHashes = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'];
-    mockPm.emit('presence-updated');
-    await vi.advanceTimersByTimeAsync(MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
-
-    expect(bridge.meshSendPeerExchange).toHaveBeenCalledTimes(8);
-    const calls = bridge.meshSendPeerExchange.mock.calls as unknown as Array<
-      [{ peerPresenceHash: string; kind: string }]
-    >;
-    const hashes = calls.map((c) => c[0].peerPresenceHash);
-    expect(hashes).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
-  });
-
-  it('stops listening after coordinator stop (no probes after emit)', async () => {
-    const bridge = createBridgeStub();
-    startReticulumMeshCoordinator(bridge as never);
-    stopReticulumMeshCoordinator();
-
-    fanoutHashes = ['late'];
-    mockPm.emit('presence-updated');
-    await vi.advanceTimersByTimeAsync(MESH_FANOUT_PRESENCE_DEBOUNCE_MS);
-
-    expect(bridge.meshSendPeerExchange).not.toHaveBeenCalled();
+  it('start/stop without throwing', () => {
+    const bridge = { getState: () => 'ready' as const };
+    expect(() => startReticulumMeshCoordinator(bridge as never)).not.toThrow();
+    expect(() => stopReticulumMeshCoordinator()).not.toThrow();
   });
 });

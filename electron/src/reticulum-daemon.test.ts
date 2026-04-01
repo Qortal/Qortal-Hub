@@ -33,7 +33,16 @@ describe('reticulum-daemon managed config', () => {
 
     for (const hub of DEFAULT_RETICULUM_HUBS) {
       expect(config).toContain(`[[${hub.name}]]`);
-      expect(config).toContain('type = TCPClientInterface');
+      const wantType =
+        hub.interfaceType === 'BackboneInterface' && process.platform === 'linux'
+          ? 'BackboneInterface'
+          : 'TCPClientInterface';
+      const start = config.indexOf(`[[${hub.name}]]`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const nextBlock = config.indexOf('[[', start + 3);
+      const section =
+        nextBlock === -1 ? config.slice(start) : config.slice(start, nextBlock);
+      expect(section).toContain(`type = ${wantType}`);
       expect(config).toContain(`target_host = ${hub.host}`);
       expect(config).toContain(`target_port = ${hub.port}`);
     }
@@ -53,21 +62,69 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('target_port = 2222');
   });
 
-  it('includes optional hub mesh TCPServer and mesh TCP clients', () => {
+  it('includes optional hub mesh listen and mesh TCP clients', () => {
     const meshSlice: ReticulumMeshConfigSlice = {
       listenEnabled: true,
       listenPort: 4243,
       outbound: [
         { sectionName: 'Mesh_deadbeef01', host: 'mesh.example', port: 4243 },
       ],
+      meshDiscoveryClient: true,
+      autoconnectDiscoveredMax: 8,
+      meshPrivateGateway: false,
+      networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      enableTransport: true,
+      reachableOn: null,
     };
     const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
+    expect(config).toContain('enable_transport = True');
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
-    expect(config).toContain('type = TCPServerInterface');
+    const meshListenType =
+      process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
+    expect(config).toContain(`type = ${meshListenType}`);
     expect(config).toContain('listen_port = 4243');
+    expect(config).toContain('discover_interfaces = yes');
     expect(config).toContain('[[Mesh_deadbeef01]]');
     expect(config).toContain('target_host = mesh.example');
     expect(config).toContain('target_port = 4243');
+  });
+
+  it('enables transport for private gateway without reachable_on in config', () => {
+    const meshSlice: ReticulumMeshConfigSlice = {
+      listenEnabled: true,
+      listenPort: 4243,
+      outbound: [],
+      meshDiscoveryClient: true,
+      autoconnectDiscoveredMax: 8,
+      meshPrivateGateway: true,
+      networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      enableTransport: true,
+      reachableOn: null,
+    };
+    const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
+    expect(config).toContain('enable_transport = True');
+    expect(config).not.toContain('reachable_on =');
+    expect(config).toContain('discoverable = yes');
+  });
+
+  it('emits reachable_on and enable_transport when private gateway slice includes reachableOn', () => {
+    const meshSlice: ReticulumMeshConfigSlice = {
+      listenEnabled: true,
+      listenPort: 4243,
+      outbound: [],
+      meshDiscoveryClient: true,
+      autoconnectDiscoveredMax: 8,
+      meshPrivateGateway: true,
+      networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      enableTransport: true,
+      reachableOn: '203.0.113.7',
+    };
+    const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
+    expect(config).toContain('enable_transport = True');
+    expect(config).toContain('reachable_on = 203.0.113.7');
+    const meshListenType =
+      process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
+    expect(config).toContain(`type = ${meshListenType}`);
   });
 
   it('computeManagedReticulumConfigFingerprint matches sha256 of buildCurrentManagedReticulumConfig', () => {

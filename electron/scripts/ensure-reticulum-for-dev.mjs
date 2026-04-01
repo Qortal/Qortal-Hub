@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Before `electron:start`: make Reticulum (rns) available without apt-installing pip/venv.
+ * Before `electron:start`: make Reticulum (rns + lxmf) available without apt-installing pip/venv.
  *
  * 1. Frozen `resources/reticulum/rnsd` — no Python (use `npm run bundle:reticulum` in CI).
- * 2. Existing dev venv or system Python with RNS.
- * 3. Otherwise: download PyPA `get-pip.py`, bootstrap pip into user site, `pip install --user rns`.
+ * 2. Existing dev venv or system Python with RNS and LXMF (AutoInterface discovery).
+ * 3. Otherwise: download PyPA `get-pip.py`, bootstrap pip into user site, `pip install --user rns lxmf`.
  *
  * Requires: Python **3.9+** on PATH (standard on Ubuntu desktop) and network once for get-pip + PyPI.
  * Skip: QORTAL_RETICULUM_SKIP_ENSURE=1
@@ -52,6 +52,11 @@ const pipEnv = {
 function canImportRNS(pythonPath) {
   if (!pythonPath || !fs.existsSync(pythonPath)) return false;
   return spawnPy(pythonPath, ['-c', 'import RNS']).status === 0;
+}
+
+function canImportLXMF(pythonPath) {
+  if (!pythonPath || !fs.existsSync(pythonPath)) return false;
+  return spawnPy(pythonPath, ['-c', 'import LXMF']).status === 0;
 }
 
 function isPython39Plus(name) {
@@ -124,16 +129,32 @@ async function ensureUserPip(name) {
   return hasPipModule(name);
 }
 
-function tryPipUserInstallRns() {
+function tryPipUserInstallRnsAndLxmf() {
   const attempts =
     process.platform === 'win32'
       ? [
-          ['-m', 'pip', 'install', '--user', 'rns'],
-          ['-m', 'pip', 'install', '--user', '--break-system-packages', 'rns'],
+          ['-m', 'pip', 'install', '--user', 'rns', 'lxmf'],
+          [
+            '-m',
+            'pip',
+            'install',
+            '--user',
+            '--break-system-packages',
+            'rns',
+            'lxmf',
+          ],
         ]
       : [
-          ['-m', 'pip', 'install', '--user', '--break-system-packages', 'rns'],
-          ['-m', 'pip', 'install', '--user', 'rns'],
+          [
+            '-m',
+            'pip',
+            'install',
+            '--user',
+            '--break-system-packages',
+            'rns',
+            'lxmf',
+          ],
+          ['-m', 'pip', 'install', '--user', 'rns', 'lxmf'],
         ];
   for (const name of systemNames) {
     if (!isPython39Plus(name)) continue;
@@ -142,7 +163,12 @@ function tryPipUserInstallRns() {
         env: pipEnv,
       });
       if (pip.status !== 0) continue;
-      if (spawnPy(name, ['-c', 'import RNS']).status === 0) return true;
+      if (
+        spawnPy(name, ['-c', 'import RNS']).status === 0 &&
+        spawnPy(name, ['-c', 'import LXMF']).status === 0
+      ) {
+        return true;
+      }
     }
   }
   return false;
@@ -170,16 +196,26 @@ async function main() {
         ];
 
   for (const p of venvPythonCandidates) {
-    if (canImportRNS(p)) return;
+    if (!fs.existsSync(p)) continue;
+    if (canImportRNS(p) && canImportLXMF(p)) return;
+    if (canImportRNS(p) && !canImportLXMF(p)) {
+      const r = spawnPy(p, ['-m', 'pip', 'install', 'lxmf'], { env: pipEnv });
+      if (r.status === 0 && canImportLXMF(p)) return;
+    }
   }
 
   for (const name of systemNames) {
-    if (spawnPy(name, ['-c', 'import RNS']).status === 0) return;
+    if (
+      spawnPy(name, ['-c', 'import RNS']).status === 0 &&
+      spawnPy(name, ['-c', 'import LXMF']).status === 0
+    ) {
+      return;
+    }
   }
 
   progress('need_install');
   progress('get_pip_check');
-  console.log('[ensure-reticulum] Ensuring pip + rns (user install, no sudo)…');
+  console.log('[ensure-reticulum] Ensuring pip + rns + lxmf (user install, no sudo)…');
 
   for (const name of systemNames) {
     if (!isPython39Plus(name)) continue;
@@ -187,14 +223,14 @@ async function main() {
   }
 
   progress('pip_install_rns');
-  if (tryPipUserInstallRns()) {
-    console.log('[ensure-reticulum] rns is ready (user site-packages).');
+  if (tryPipUserInstallRnsAndLxmf()) {
+    console.log('[ensure-reticulum] rns + lxmf are ready (user site-packages).');
     progress('done');
     return;
   }
 
   console.error(`
-[ensure-reticulum] Could not install rns automatically.
+[ensure-reticulum] Could not install rns + lxmf automatically.
 
   • Need Python 3.9+ on PATH and internet (downloads get-pip.py + PyPI once).
 

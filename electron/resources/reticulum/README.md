@@ -23,7 +23,7 @@ This writes:
 - **Linux / macOS:** `resources/reticulum/rnsd` and `resources/reticulum/presence_bridge`
 - **Windows:** `resources/reticulum/rnsd.exe` and `resources/reticulum/presence_bridge.exe`
 
-and a small `BUNDLE_READY` marker. The build uses the current Python, bootstraps **`pip`** if needed, installs **`rns`** + **`pyinstaller`** into the current user site-packages, and writes scratch files under `electron/.build/rnsd-frozen/` (gitignored).
+and a small `BUNDLE_READY` marker. The build uses the current Python, bootstraps **`pip`** if needed, installs **`rns`** + **`lxmf`** (for AutoInterface discovery) + **`pyinstaller`** into the current user site-packages, and writes scratch files under `electron/.build/rnsd-frozen/` (gitignored).
 
 Repeat on **each** platform you ship (Linux x64, Windows, macOS, Linux arm64, etc.); do not copy a binary built on one OS onto another.
 
@@ -74,7 +74,7 @@ When WAN connectivity appears after startup, the bridge re-announces the local p
 
 ## Fallbacks (development)
 
-- **System Python:** with `electron:start` / dev mode, if there is no frozen binary and no venv, the app tries `python3` / `python` on `PATH` when `pip install rns` has been run (no env var required).
+- **System Python:** with `electron:start` / dev mode, if there is no frozen binary and no venv, the app tries `python3` / `python` on `PATH` when `pip install rns lxmf` has been run (no env var required).
 - **Venv:** `electron/resources/reticulum-runtime/venv/` from `npm run bundle:reticulum-venv` (optional).
 - **Force system Python in packaged builds:** `QORTAL_RETICULUM_SYSTEM=1`.
 - **Disable system Python in dev** (only frozen / venv): `QORTAL_RETICULUM_NO_SYSTEM=1`.
@@ -84,7 +84,7 @@ When WAN connectivity appears after startup, the bridge re-announces the local p
 If RNS is not already available, the **Electron main process** shows a small **“Setting up networking”** window and runs `scripts/ensure-reticulum-for-dev.mjs`, which:
 
 1. Downloads PyPA **`get-pip.py`** and runs it with **`--user --break-system-packages`** on Linux/macOS when the distro is **PEP 668** “externally managed” (e.g. Ubuntu 24.04+), so bootstrap works without **`python3-pip`** / **`python3-venv`**.
-2. Runs **`python3 -m pip install --user rns`** (same flag first on Linux/macOS).
+2. Runs **`python3 -m pip install --user rns lxmf`** (same flag first on Linux/macOS).
 
 Needs **Python 3.9+ on PATH** and **network** once. A **frozen `resources/reticulum/rnsd`** skips this entirely.
 
@@ -99,4 +99,4 @@ Set environment variable `QORTAL_RETICULUM_DISABLE=1`.
 ## References
 
 - [Using Reticulum on your system](https://reticulum.network/manual/using.html)
-- PyPI: `rns`
+- PyPI: `rns`, `lxmf`

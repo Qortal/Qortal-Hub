@@ -4,7 +4,7 @@ Build standalone Reticulum executables with PyInstaller (no end-user Python requ
 Must be run on each target OS/arch before packaging Electron (output is not portable).
 
 Works on minimal Debian/Ubuntu without python3-venv by bootstrapping pip with
-get-pip.py and installing rns + pyinstaller into the user site-packages.
+get-pip.py and installing rns + lxmf + pyinstaller into the user site-packages.
 """
 from __future__ import annotations
 
@@ -156,8 +156,12 @@ def freeze_target(
         "cryptography",
         "--collect-all",
         "pyserial",
+        "--collect-all",
+        "LXMF",
         "--hidden-import",
         "RNS",
+        "--hidden-import",
+        "LXMF",
         "--hidden-import",
         "cryptography.hazmat.backends.openssl.backend",
         entry_script,
@@ -184,6 +188,11 @@ def copy_runtime_sources(electron_root: Path, output_dir: Path) -> None:
         sys.exit(f"Missing tracked bridge source: {source_bridge}")
     shutil.copy2(source_bridge, output_dir / "presence_bridge.py")
     print(f"Wrote {output_dir / 'presence_bridge.py'}")
+    mesh_net = electron_root / "resources" / "mesh-network.identity"
+    if not mesh_net.is_file():
+        sys.exit(f"Missing bundled mesh network identity: {mesh_net}")
+    shutil.copy2(mesh_net, output_dir / "mesh-network.identity")
+    print(f"Wrote {output_dir / 'mesh-network.identity'}")
 
 
 def main() -> None:
@@ -209,6 +218,8 @@ def main() -> None:
     ensure_pip(pyexe)
     if not has_module(pyexe, "RNS"):
         pip_install(pyexe, ["rns"])
+    if not has_module(pyexe, "LXMF"):
+        pip_install(pyexe, ["lxmf"])
     if not has_module(pyexe, "PyInstaller"):
         pip_install(pyexe, ["pyinstaller"])
     for target in BUILD_TARGETS:

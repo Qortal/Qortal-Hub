@@ -38,8 +38,7 @@ type BridgeCmdFrame = {
     | 'send_call'
     | 'send_group_call'
     | 'open_group_audio_link'
-    | 'close_group_audio_link'
-    | 'mesh_send_peer_exchange';
+    | 'close_group_audio_link';
   id: string;
   payload?: Record<string, unknown>;
 };
@@ -91,8 +90,8 @@ export type ReticulumConnectivitySnapshot = {
   onlineHubInterfaces?: number;
   hubSummary?: string;
   reason?: string;
-  /** TCPServerInterface "Qortal Hub Mesh Listen" is online (from Python interface stats). */
-  meshTcpListenOnline?: boolean;
+  /** Mesh listen section is online; RNS may report short or long interface names (presence_bridge matches substring). */
+  meshListenOnline?: boolean;
 };
 
 type BridgeEventFrame =
@@ -173,19 +172,9 @@ type BridgeEventFrame =
         onlineHubInterfaces?: number;
         hubSummary?: string;
         reason?: string;
-        meshTcpListenOnline?: boolean;
+        meshListenOnline?: boolean;
       };
     }
-  | {
-      type: 'event';
-      event: 'mesh_peer_message';
-      payload?: {
-        t?: string;
-        senderHash?: string;
-        message?: Record<string, unknown>;
-      };
-    };
-
 type PendingRequest = {
   resolve: (frame: BridgeRespFrame) => void;
   reject: (error: Error) => void;
@@ -561,25 +550,6 @@ export class ReticulumBridge
       `[ReticulumBridge] target=presence-reticulum tx=${resp.ok ? 'publish_ok' : 'publish_fail'} type=${envelope.type} peer_addr=${pubAddr} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'} fanout_peers=${fanoutPeers ?? 'n/a'} fanout_hashes=${fanoutHashes ?? 'n/a'} local_presence_hash=${fanoutLocal ?? this.localPresenceDestinationHash ?? 'n/a'}${resp.ok ? '' : ` err=${resp.error ?? 'unknown'}`}`
     );
     return resp.ok;
-  }
-
-  /**
-   * Send hub mesh peer exchange (HUB_MESH_PEER_REQUEST / RESPONSE) to a known presence peer.
-   * TCP endpoints in responses are transport hints only — identity is always Reticulum destination hash.
-   */
-  async meshSendPeerExchange(
-    payload: Record<string, unknown>
-  ): Promise<BridgeRespFrame> {
-    await this.start();
-    if (this.state !== 'ready') {
-      return {
-        type: 'resp',
-        id: 'mesh',
-        ok: false,
-        error: 'bridge-not-ready',
-      };
-    }
-    return this.sendCommand('mesh_send_peer_exchange', payload);
   }
 
   getState(): BridgeState {
@@ -1075,26 +1045,12 @@ export class ReticulumBridge
             typeof frame.payload?.reason === 'string'
               ? frame.payload.reason
               : undefined,
-          meshTcpListenOnline: frame.payload?.meshTcpListenOnline === true,
+          meshListenOnline: frame.payload?.meshListenOnline === true,
         };
         loggerLog(
-          `[ReticulumBridge] Transport state=${this.connectivitySnapshot.reachability} hubs=${this.connectivitySnapshot.onlineHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredHubInterfaces ?? 0} transport=${this.connectivitySnapshot.transportEnabled === true ? 'on' : 'off'} meshListen=${this.connectivitySnapshot.meshTcpListenOnline === true ? 'on' : 'off'}`
+          `[ReticulumBridge] Transport state=${this.connectivitySnapshot.reachability} hubs=${this.connectivitySnapshot.onlineHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredHubInterfaces ?? 0} transport=${this.connectivitySnapshot.transportEnabled === true ? 'on' : 'off'} meshListenOnline=${this.connectivitySnapshot.meshListenOnline === true ? 'on' : 'off'}`
         );
         this.emit('transport-state', this.getConnectivitySnapshot());
-        return;
-      }
-      case 'mesh_peer_message': {
-        const t = frame.payload?.t;
-        const senderHash = frame.payload?.senderHash;
-        const message = frame.payload?.message;
-        this.emit('mesh-peer-message', {
-          t: typeof t === 'string' ? t : '',
-          senderHash: typeof senderHash === 'string' ? senderHash : '',
-          message:
-            message && typeof message === 'object' && !Array.isArray(message)
-              ? (message as Record<string, unknown>)
-              : {},
-        });
         return;
       }
     }

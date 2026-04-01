@@ -10,6 +10,10 @@
       "to": "reticulum/presence_bridge.py"
     },
     {
+      "from": "resources/mesh-network.identity",
+      "to": "reticulum/mesh-network.identity"
+    },
+    {
       "from": "resources/reticulum",
       "to": "reticulum"
     },

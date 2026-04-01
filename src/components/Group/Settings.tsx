@@ -95,30 +95,16 @@ type ReticulumStatus = {
 
 type ReticulumMeshSettingsStatus = {
   enabled: boolean;
-  peerCount: number;
   listenPort: number;
   meshListenEnabled: boolean;
   upnpMapped: boolean;
   reachableSelf: boolean;
-  activeMeshPeers: Array<{
-    endpoint: string;
-    host: string;
-    port: number;
-    reachable: boolean;
-    failures: number;
-  }>;
-  knownMeshPeers: Array<{
-    endpoint: string;
-    host: string;
-    port: number;
-    reachable: boolean;
-    failures: number;
-    lastSeen: number;
-    dialAttempts: number;
-    dialSuccesses: number;
-    connectionSuccessRate: number;
-    isActiveOutbound: boolean;
-  }>;
+  meshDiscoveryClient: boolean;
+  meshPrivateGateway: boolean;
+  networkIdentityPath: string;
+  discoveryReachableHost?: string;
+  meshReachableOnHost?: string;
+  meshReachableOnEffective: string | null;
 };
 
 function formatReticulumReachability(status: ReticulumStatus | null): string {
@@ -141,18 +127,6 @@ function formatReticulumMode(status: ReticulumStatus | null): string {
   return 'Unavailable';
 }
 
-function formatMeshPeerAge(lastSeen: number): string {
-  const s = Math.floor((Date.now() - lastSeen) / 1000);
-  if (s < 0) return 'just now';
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 48) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  return `${d}d ago`;
-}
-
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
@@ -165,6 +139,9 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
     useState<ReticulumMeshSettingsStatus | null>(null);
   const setOnlineAddresses = useSetAtom(onlineAddressesAtom);
   const setStatusMap = useSetAtom(statusMapAtom);
+  const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
+  const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
+  const [meshIdentityBusy, setMeshIdentityBusy] = useState(false);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -275,6 +252,44 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
       }
     }
   }, []);
+
+  const handleEnsureMeshNetworkIdentity = useCallback(async () => {
+    if (
+      typeof window.electronAPI?.reticulumEnsureMeshNetworkIdentity !==
+      'function'
+    ) {
+      return;
+    }
+    setMeshIdentityBusy(true);
+    try {
+      const r = await window.electronAPI.reticulumEnsureMeshNetworkIdentity();
+      if (r.ok) {
+        setInfoSnackCustom({
+          type: 'success',
+          message: r.created
+            ? 'Community mesh identity installed from the app bundle. Reticulum will restart if needed.'
+            : 'Community mesh identity already installed.',
+        });
+        setOpenSnackGlobal(true);
+        void loadReticulumStatus();
+      } else {
+        setInfoSnackCustom({
+          type: 'error',
+          message: r.error ?? 'Could not install community mesh identity.',
+        });
+        setOpenSnackGlobal(true);
+      }
+    } catch (e) {
+      setInfoSnackCustom({
+        type: 'error',
+        message:
+          e instanceof Error ? e.message : 'Mesh network identity failed.',
+      });
+      setOpenSnackGlobal(true);
+    } finally {
+      setMeshIdentityBusy(false);
+    }
+  }, [loadReticulumStatus, setInfoSnackCustom, setOpenSnackGlobal]);
 
   useEffect(() => {
     if (!open) return;
@@ -594,113 +609,62 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                         {reticulumMeshStatus.upnpMapped
                           ? ' · UPnP mapped'
                           : ''}
-                        {typeof reticulumMeshStatus.peerCount === 'number'
-                          ? ` · ${reticulumMeshStatus.peerCount} known endpoint(s) in store`
+                        {reticulumMeshStatus.meshDiscoveryClient
+                          ? ' · RNS interface discovery + autoconnect (LXMF included with the Hub Reticulum runtime; see Reticulum manual)'
+                          : ''}
+                        {reticulumMeshStatus.meshPrivateGateway
+                          ? ' · encrypted private gateway on mesh listen'
                           : ''}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontWeight: 600 }}
-                      >
-                        Active mesh peers (outbound TCP)
-                      </Typography>
-                      {(reticulumMeshStatus.activeMeshPeers ?? []).length ===
-                      0 ? (
-                        <Typography variant="caption" color="text.disabled">
-                          None configured yet. Peers appear here after gossip
-                          selects endpoints and rnsd applies mesh interfaces.
-                        </Typography>
-                      ) : (
-                        <Stack
-                          component="ul"
-                          spacing={0.5}
-                          sx={{
-                            m: 0,
-                            pl: 2.25,
-                            listStyle: 'disc',
-                            wordBreak: 'break-word',
-                            overflowWrap: 'anywhere',
-                          }}
-                        >
-                          {(reticulumMeshStatus.activeMeshPeers ?? []).map(
-                            (p) => (
-                              <Typography
-                                key={p.endpoint}
-                                component="li"
-                                variant="caption"
-                                color="text.disabled"
-                                sx={{ display: 'list-item', lineHeight: 1.5 }}
-                              >
-                                {p.endpoint}
-                                {p.reachable ? ' · reachable' : ''}
-                                {p.failures > 0
-                                  ? ` · failures ${p.failures}`
-                                  : ''}
-                              </Typography>
-                            )
-                          )}
-                        </Stack>
-                      )}
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ fontWeight: 600, mt: 1, display: 'block' }}
-                      >
-                        Known mesh peers (newest first)
-                      </Typography>
+                      {reticulumMeshStatus.meshPrivateGateway &&
+                        reticulumMeshStatus.meshReachableOnEffective != null &&
+                        reticulumMeshStatus.meshReachableOnEffective !== '' && (
+                          <Typography
+                            variant="caption"
+                            component="div"
+                            color="text.disabled"
+                            sx={{ lineHeight: 1.5, mt: 0.25 }}
+                          >
+                            Discovery reachable_on:{' '}
+                            {reticulumMeshStatus.meshReachableOnEffective}
+                            {reticulumMeshStatus.meshReachableOnHost?.trim()
+                              ? ' (manual)'
+                              : reticulumMeshStatus.discoveryReachableHost
+                                ? ' (UPnP)'
+                                : ''}
+                          </Typography>
+                        )}
                       <Typography
                         variant="caption"
                         component="div"
                         color="text.disabled"
-                        sx={{ lineHeight: 1.5, mb: 0.5 }}
+                        sx={{ lineHeight: 1.5, mt: 0.5 }}
                       >
-                        All endpoints in the mesh store—including new gossip
-                        entries before they rotate into sparse outbound—and
-                        health hints (not live RNS socket state).
+                        Bootstrap hubs use the managed TCP client entries in
+                        Reticulum config. Community mesh peers are reached via
+                        RNS discovery (not app-level gossip). The mesh network
+                        identity (encrypted private gateway) is created
+                        automatically when mesh listen is on; file path:{' '}
+                        <Box component="span" sx={{ wordBreak: 'break-all' }}>
+                          {reticulumMeshStatus.networkIdentityPath}
+                        </Box>
                       </Typography>
-                      {(reticulumMeshStatus.knownMeshPeers ?? []).length ===
-                      0 ? (
-                        <Typography variant="caption" color="text.disabled">
-                          No mesh endpoints stored yet.
-                        </Typography>
-                      ) : (
-                        <Stack
-                          component="ul"
-                          spacing={0.5}
-                          sx={{
-                            m: 0,
-                            pl: 2.25,
-                            listStyle: 'disc',
-                            wordBreak: 'break-word',
-                            overflowWrap: 'anywhere',
-                          }}
-                        >
-                          {(reticulumMeshStatus.knownMeshPeers ?? []).map(
-                            (p) => (
-                              <Typography
-                                key={p.endpoint}
-                                component="li"
-                                variant="caption"
-                                color="text.disabled"
-                                sx={{ display: 'list-item', lineHeight: 1.5 }}
-                              >
-                                {p.endpoint}
-                                {p.isActiveOutbound
-                                  ? ' · active outbound'
-                                  : ' · standby'}
-                                {p.reachable ? ' · reachable' : ''}
-                                {p.dialAttempts > 0
-                                  ? ` · dials ${p.dialSuccesses}/${p.dialAttempts}`
-                                  : ''}
-                                {p.failures > 0
-                                  ? ` · failures ${p.failures}`
-                                  : ''}
-                                {` · seen ${formatMeshPeerAge(p.lastSeen)}`}
-                              </Typography>
-                            )
-                          )}
-                        </Stack>
+                      {reticulumMeshStatus.meshListenEnabled &&
+                        !reticulumMeshStatus.meshPrivateGateway &&
+                        typeof window.electronAPI
+                          ?.reticulumEnsureMeshNetworkIdentity === 'function' && (
+                        <Box sx={{ mt: 1 }}>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={meshIdentityBusy}
+                            onClick={() => void handleEnsureMeshNetworkIdentity()}
+                          >
+                            {meshIdentityBusy
+                              ? 'Installing…'
+                              : 'Install community mesh identity'}
+                          </Button>
+                        </Box>
                       )}
                     </>
                   )}

@@ -25,15 +25,26 @@ import path from 'path';
 import { log as loggerLog, error as loggerError } from './logger';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
 import {
+  getBundledMeshNetworkIdentityPath,
+  getMeshNetworkIdentityPath,
   loadReticulumMeshState,
   meshConfigSliceFromState,
-  selectMeshOutboundHostsForConfig,
 } from './reticulum-mesh-store';
 
 /**
- * Reticulum hub mesh uses a dedicated TCP listen port (see reticulum-mesh-constants DEFAULT_RETICULUM_MESH_LISTEN_PORT)
- * plus optional TCPClientInterface rows for sparse hub-to-hub links. Config is managed here; rnsd restarts are debounced in reticulum-mesh.ts.
+ * Reticulum hub mesh: listen on the mesh port with optional private-gateway discovery.
+ * RNS BackboneInterface is Linux-only; Windows/macOS use TCPServerInterface for the same section.
+ * Bootstrap hubs as TCPClient rows; AutoInterface discover/autoconnect (no gossip-driven outbound).
  */
+
+/** BackboneInterface is only supported on Linux in upstream RNS (not Windows/macOS). */
+function meshListenRnsInterfaceType():
+  | 'BackboneInterface'
+  | 'TCPServerInterface' {
+  return process.platform === 'linux'
+    ? 'BackboneInterface'
+    : 'TCPServerInterface';
+}
 
 const RNS_MODULE = 'RNS.Utilities.rnsd';
 const FROZEN_DIR_NAME = 'reticulum';
@@ -61,10 +72,32 @@ export type ReticulumHubEndpoint = {
   name: string;
   host: string;
   port: number;
+  /**
+   * Outbound hub link. `BackboneInterface` + target_host uses RNS BackboneClient on Linux.
+   * Non-Linux hosts fall back to TCPClientInterface (Backbone stack is Linux-only in RNS).
+   */
+  interfaceType?: 'TCPClientInterface' | 'BackboneInterface';
 };
+
+/** RNS: BackboneInterface with target_host becomes BackboneClient; without Linux, use TCP. */
+function effectiveHubInterfaceType(
+  hub: ReticulumHubEndpoint
+): 'TCPClientInterface' | 'BackboneInterface' {
+  const want = hub.interfaceType ?? 'TCPClientInterface';
+  if (want === 'BackboneInterface' && process.platform !== 'linux') {
+    return 'TCPClientInterface';
+  }
+  return want;
+}
 
 export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
   Object.freeze([
+    {
+      name: 'Backbone Client Qortal Hub',
+      host: 'phantom.mobilefabrik.com',
+      port: 4400,
+      interfaceType: 'BackboneInterface',
+    },
     {
       name: 'Crowetic Reticulum Hub',
       host: 'reticulum.qortal.link',
@@ -110,31 +143,69 @@ function renderManagedHubInterfaces(
   if (hubs.length === 0) return '';
   return hubs
     .map(
-      (hub) => `
-  [[${hub.name}]]
-  type = TCPClientInterface
+      (hub) => `  [[${hub.name}]]
+  type = ${effectiveHubInterfaceType(hub)}
   enabled = yes
   target_host = ${hub.host}
   target_port = ${hub.port}`
     )
-    .join('');
+    .join('\n\n');
 }
 
-function renderMeshInterfaces(slice: ReticulumMeshConfigSlice | null | undefined): string {
+/** Interface discovery: LXMF is installed with the bundled/dev Reticulum Python env (see ensure + bundle scripts). */
+function renderDefaultAutoInterface(
+  slice: ReticulumMeshConfigSlice | null | undefined
+): string {
+  if (!slice?.meshDiscoveryClient) {
+    return `  [[Default Interface]]
+  type = AutoInterface
+  enabled = yes
+`;
+  }
+  return `  [[Default Interface]]
+  type = AutoInterface
+  enabled = yes
+  discover_interfaces = yes
+  autoconnect_discovered_interfaces = ${slice.autoconnectDiscoveredMax}
+`;
+}
+
+function renderMeshInterfaces(
+  slice: ReticulumMeshConfigSlice | null | undefined
+): string {
   if (!slice) return '';
   let out = '';
   if (slice.listenEnabled) {
-    out += `
-  [[Qortal Hub Mesh Listen]]
-  type = TCPServerInterface
+    const iface = meshListenRnsInterfaceType();
+    if (slice.meshPrivateGateway) {
+      const reachable =
+        typeof slice.reachableOn === 'string' && slice.reachableOn.length > 0
+          ? `
+  reachable_on = ${slice.reachableOn}`
+          : '';
+      out += `  [[Qortal Hub Mesh Listen]]
+  type = ${iface}
+  enabled = yes
+  listen_ip = 0.0.0.0
+  listen_port = ${slice.listenPort}${reachable}
+  discoverable = yes
+  mode = gateway
+  discovery_encrypt = yes
+`;
+    } else {
+      out += `  [[Qortal Hub Mesh Listen]]
+  type = ${iface}
   enabled = yes
   listen_ip = 0.0.0.0
   listen_port = ${slice.listenPort}
 `;
+    }
   }
   for (const p of slice.outbound) {
-    out += `
-  [[${p.sectionName}]]
+    if (out.length > 0) {
+      out += '\n\n';
+    }
+    out += `  [[${p.sectionName}]]
   type = TCPClientInterface
   enabled = yes
   target_host = ${p.host}
@@ -144,42 +215,54 @@ function renderMeshInterfaces(slice: ReticulumMeshConfigSlice | null | undefined
   return out;
 }
 
-export function buildManagedReticulumConfig(
-  hubs: readonly ReticulumHubEndpoint[] = DEFAULT_RETICULUM_HUBS,
-  meshSlice?: ReticulumMeshConfigSlice | null
+function renderReticulumHeader(
+  meshSlice: ReticulumMeshConfigSlice | null | undefined
 ): string {
-  return `${MANAGED_CONFIG_MARKER}
+  const transport = meshSlice?.enableTransport === true ? 'True' : 'False';
+  let block = `${MANAGED_CONFIG_MARKER}
 [reticulum]
-enable_transport = False
+enable_transport = ${transport}
 share_instance = Yes
 instance_name = ${getReticulumInstanceName()}
 shared_instance_port = ${getReticulumSharedInstancePort()}
 instance_control_port = ${getReticulumControlPort()}
+`;
+  if (meshSlice?.meshPrivateGateway && meshSlice.networkIdentityPath) {
+    block += `network_identity = ${meshSlice.networkIdentityPath}
+`;
+  }
+  return block;
+}
 
+export function buildManagedReticulumConfig(
+  hubs: readonly ReticulumHubEndpoint[] = DEFAULT_RETICULUM_HUBS,
+  meshSlice?: ReticulumMeshConfigSlice | null
+): string {
+  const slice = meshSlice ?? null;
+  const ifaceParts = [
+    renderDefaultAutoInterface(slice),
+    renderManagedHubInterfaces(hubs),
+    renderMeshInterfaces(slice),
+  ].filter((s) => s.length > 0);
+  const ifaceBody = ifaceParts.join('\n\n');
+  return `${renderReticulumHeader(slice)}
 [logging]
 loglevel = 4
 
 [interfaces]
-  [[Default Interface]]
-  type = AutoInterface
-  enabled = yes
-${renderManagedHubInterfaces(hubs)}${renderMeshInterfaces(meshSlice ?? null)}
+${ifaceBody}
 `;
 }
 
 /** Full managed config including mesh slice derived from reticulum-mesh-state.json */
 export function buildCurrentManagedReticulumConfig(): string {
   const state = loadReticulumMeshState();
-  const slice = meshConfigSliceFromState(
-    state,
-    selectMeshOutboundHostsForConfig(state)
-  );
+  const slice = meshConfigSliceFromState(state, []);
   return buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, slice);
 }
 
 /**
  * SHA-256 hex digest of the exact managed config string that would be written.
- * Used to skip mesh-driven rnsd restarts when gossip/state updates do not change disk output.
  */
 export function computeManagedReticulumConfigFingerprint(): string {
   const body = buildCurrentManagedReticulumConfig();
@@ -190,7 +273,9 @@ export function computeManagedReticulumConfigFingerprint(): string {
  * Writes managed Reticulum config when the hub owns the file (same rules as startup).
  * @returns true if the file was updated
  */
-export function writeManagedReticulumConfigIfManaged(nextContents: string): boolean {
+export function writeManagedReticulumConfigIfManaged(
+  nextContents: string
+): boolean {
   const configPath = getReticulumConfigFilePath();
   const currentContents = fs.existsSync(configPath)
     ? fs.readFileSync(configPath, 'utf8')
@@ -217,11 +302,19 @@ export function writeManagedReticulumConfigIfManaged(nextContents: string): bool
   }
 
   fs.writeFileSync(configPath, nextContents, 'utf8');
-  loggerLog(`[Reticulum] Wrote managed config ${configPath} (mesh-aware)`);
+  loggerLog(`[Reticulum] Wrote managed config ${configPath}`);
   return true;
 }
 
 function ensureManagedReticulumConfig(): void {
+  const id = ensureMeshNetworkIdentityIfNeeded();
+  if (!id.ok) {
+    loggerLog(`[Reticulum] Mesh identity: ${id.error ?? 'failed'}`);
+  } else if (id.created) {
+    loggerLog(
+      '[Reticulum] Community mesh network identity installed; regenerating managed config'
+    );
+  }
   const configPath = getReticulumConfigFilePath();
   const nextContents = buildCurrentManagedReticulumConfig();
   const currentContents = fs.existsSync(configPath)
@@ -507,6 +600,46 @@ export function resolveReticulumPythonLaunch(
     error:
       'No Python on PATH with RNS installed for the Reticulum bridge. Install rns or bundle reticulum-runtime.',
   };
+}
+
+export type EnsureMeshNetworkIdentityResult = {
+  ok: boolean;
+  error?: string;
+  /** True if the bundled community identity was copied into userData. */
+  created?: boolean;
+};
+
+/**
+ * When mesh listen is enabled, installs the bundled Qortal community `mesh-network.identity`
+ * into userData (same RNS network identity for all hubs). Idempotent. Call before managed config.
+ */
+export function ensureMeshNetworkIdentityIfNeeded(): EnsureMeshNetworkIdentityResult {
+  const st = loadReticulumMeshState();
+  if (st.meshListenEnabled !== true) {
+    return { ok: true, created: false };
+  }
+  const dest = getMeshNetworkIdentityPath();
+  if (fs.existsSync(dest)) {
+    return { ok: true, created: false };
+  }
+  const source = getBundledMeshNetworkIdentityPath();
+  if (!fs.existsSync(source)) {
+    const msg = `Bundled community mesh identity missing: ${source}`;
+    loggerLog(`[Reticulum] ${msg}`);
+    return { ok: false, error: msg };
+  }
+  try {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(source, dest);
+  } catch (err) {
+    const msg = `Failed to install mesh network identity: ${String(err)}`;
+    loggerError(`[Reticulum] ${msg}`);
+    return { ok: false, error: msg };
+  }
+  loggerLog(
+    `[Reticulum] Installed community mesh network identity (bundle → userData) ${dest}`
+  );
+  return { ok: true, created: true };
 }
 
 export function getReticulumDaemonStatus(): ReticulumDaemonStatus {

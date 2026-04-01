@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Creates electron/resources/reticulum-runtime/venv and pip-installs rns.
+ * Creates electron/resources/reticulum-runtime/venv and pip-installs rns + lxmf.
  * Run on the target OS before packaging (venv is not portable across OSes).
  */
 import { spawnSync } from 'child_process';
@@ -53,9 +53,9 @@ if (!fs.existsSync(venvPip)) {
   process.exit(1);
 }
 
-console.log('Installing / upgrading rns…');
+console.log('Installing / upgrading rns + lxmf…');
 run(venvPip, ['install', '--upgrade', 'pip']);
-run(venvPip, ['install', 'rns']);
+run(venvPip, ['install', 'rns', 'lxmf']);
 
 const marker = path.join(runtimeDir, 'BUNDLE_READY');
 fs.writeFileSync(

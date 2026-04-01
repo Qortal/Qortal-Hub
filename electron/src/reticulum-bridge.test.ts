@@ -162,7 +162,7 @@ describe('ReticulumBridge group audio support', () => {
       configuredHubInterfaces: 2,
       onlineHubInterfaces: 1,
       hubSummary: 'Hub A=online, Hub B=offline',
-      meshTcpListenOnline: false,
+      meshListenOnline: false,
     });
     expect(seen).toEqual([
       {
@@ -172,7 +172,7 @@ describe('ReticulumBridge group audio support', () => {
         configuredHubInterfaces: 2,
         onlineHubInterfaces: 1,
         hubSummary: 'Hub A=online, Hub B=offline',
-        meshTcpListenOnline: false,
+        meshListenOnline: false,
       },
     ]);
   });

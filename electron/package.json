@@ -37,7 +37,8 @@
     "electron:make-lin-docker": "bash ./scripts/run-linux-build-in-docker.sh",
     "electron:make-all": "node ./scripts/run-electron-package.mjs all",
     "bundle:reticulum": "node ./scripts/run-build-rnsd-frozen.mjs",
-    "bundle:reticulum-venv": "node ./scripts/bundle-reticulum-runtime.mjs"
+    "bundle:reticulum-venv": "node ./scripts/bundle-reticulum-runtime.mjs",
+    "generate:mesh-network-identity": "python3 -c \"import RNS; RNS.Identity().to_file('resources/mesh-network.identity')\""
   },
   "dependencies": {
     "@capacitor-community/electron": "^5.0.0",
