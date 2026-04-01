@@ -16,7 +16,7 @@ export const RETICULUM_MESH_STATE_VERSION = 2 as const;
 export type ReticulumMeshState = {
   version: typeof RETICULUM_MESH_STATE_VERSION;
   listenPort: number;
-  /** When true, render managed mesh listeners (public TCP listener everywhere, plus Linux Backbone listener). */
+  /** When true, render mesh listen interface in managed config (Backbone on Linux, TCPServer on other OS). */
   meshListenEnabled: boolean;
   meshUpnpEnabled: boolean;
   /** Coordinator: observed inbound on mesh port (diagnostics) */

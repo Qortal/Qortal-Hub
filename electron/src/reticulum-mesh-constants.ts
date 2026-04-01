@@ -1,6 +1,6 @@
 /**
  * Reticulum hub-to-hub mesh (separate from TLS P2P in p2p-network.ts).
- * Managed rnsd config uses TCPClient hubs, a public TCP mesh listener, a supplemental Linux Backbone listener, and AutoInterface.
+ * Managed rnsd config uses TCPClient hubs, mesh listen (BackboneInterface on Linux, TCPServer elsewhere), and AutoInterface.
  */
 
 /** Dedicated listen port for mesh listen (distinct from community hub 4242). */

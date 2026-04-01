@@ -118,19 +118,19 @@ describe('reticulum-daemon managed config', () => {
     expect(reticulumBlock).toContain('discover_interfaces = yes');
     expect(reticulumBlock).toContain('autoconnect_discovered_interfaces = 8');
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
+    const meshListenType =
+      process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
     const meshListenSection = sectionBody(config, '[[Qortal Hub Mesh Listen]]');
-    expect(meshListenSection).toContain('type = TCPServerInterface');
-    expect(meshListenSection).toContain('listen_ip = 0.0.0.0');
-    expect(meshListenSection).toContain('listen_port = 4243');
-    expect(meshListenSection).not.toContain('announce_interval =');
+    expect(meshListenSection).toContain(`type = ${meshListenType}`);
     if (process.platform === 'linux') {
-      const backboneSection = sectionBody(config, '[[Qortal Hub Mesh Backbone Listen]]');
-      expect(backboneSection).toContain('type = BackboneInterface');
-      expect(backboneSection).toContain('listen_on = 0.0.0.0');
-      expect(backboneSection).toContain('port = 4244');
+      expect(meshListenSection).toContain('listen_on = 0.0.0.0');
+      expect(meshListenSection).toContain('port = 4243');
+      expect(meshListenSection).not.toContain('listen_port =');
     } else {
-      expect(config).not.toContain('[[Qortal Hub Mesh Backbone Listen]]');
+      expect(meshListenSection).toContain('listen_ip = 0.0.0.0');
+      expect(meshListenSection).toContain('listen_port = 4243');
     }
+    expect(meshListenSection).not.toContain('announce_interval =');
     const autoInterfaceSection = sectionBody(config, '[[Default Interface]]');
     expect(autoInterfaceSection).not.toContain('discover_interfaces = yes');
     expect(config).toContain('[[Mesh_deadbeef01]]');
@@ -161,9 +161,6 @@ describe('reticulum-daemon managed config', () => {
       );
       expect(config).not.toContain('reachable_on =');
       expect(config).not.toContain('[[Qortal Hub Mesh Listen]]');
-      if (process.platform === 'linux') {
-        expect(config).toContain('[[Qortal Hub Mesh Backbone Listen]]');
-      }
       expect(config).not.toContain('discoverable = yes');
       expect(config).not.toContain('discovery_name = Qortal Hub Mesh Listen');
       expect(config).not.toContain('announce_interval = 5');
@@ -193,14 +190,12 @@ describe('reticulum-daemon managed config', () => {
       expect(config).toContain(
         'network_identity = /tmp/qortal-userdata/reticulum/mesh-network.identity'
       );
-      expect(config).toContain('type = TCPServerInterface');
       expect(config).toContain('discovery_name = Qortal Hub Mesh Listen');
       expect(config).toContain('reachable_on = 203.0.113.7');
       expect(config).toContain('announce_interval = 5');
-      if (process.platform === 'linux') {
-        expect(config).toContain('[[Qortal Hub Mesh Backbone Listen]]');
-        expect(config).toContain('port = 4244');
-      }
+      const meshListenType =
+        process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
+      expect(config).toContain(`type = ${meshListenType}`);
     } finally {
       spy.mockRestore();
     }
