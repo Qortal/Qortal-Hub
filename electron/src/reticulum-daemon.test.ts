@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import fs from 'fs';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('electron', () => ({
@@ -23,6 +24,13 @@ import {
 } from './reticulum-daemon';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
 
+function sectionBody(config: string, header: string): string {
+  const start = config.indexOf(header);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const nextBlock = config.indexOf('[[', start + header.length);
+  return nextBlock === -1 ? config.slice(start) : config.slice(start, nextBlock);
+}
+
 describe('reticulum-daemon managed config', () => {
   it('keeps LAN discovery and includes the default public hubs', () => {
     const config = buildManagedReticulumConfig();
@@ -37,14 +45,19 @@ describe('reticulum-daemon managed config', () => {
         hub.interfaceType === 'BackboneInterface' && process.platform === 'linux'
           ? 'BackboneInterface'
           : 'TCPClientInterface';
+      const wantHostKey =
+        wantType === 'BackboneInterface' ? 'remote' : 'target_host';
       const start = config.indexOf(`[[${hub.name}]]`);
       expect(start).toBeGreaterThanOrEqual(0);
       const nextBlock = config.indexOf('[[', start + 3);
       const section =
         nextBlock === -1 ? config.slice(start) : config.slice(start, nextBlock);
       expect(section).toContain(`type = ${wantType}`);
-      expect(config).toContain(`target_host = ${hub.host}`);
+      expect(section).toContain(`${wantHostKey} = ${hub.host}`);
       expect(config).toContain(`target_port = ${hub.port}`);
+      if (hub.networkName) {
+        expect(section).toContain(`network_name = ${hub.networkName}`);
+      }
     }
   });
 
@@ -60,6 +73,26 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('[[Hub Two]]');
     expect(config).toContain('target_host = two.example');
     expect(config).toContain('target_port = 2222');
+  });
+
+  it('uses remote for Backbone hubs on Linux', () => {
+    const config = buildManagedReticulumConfig([
+      {
+        name: 'Backbone Hub',
+        host: 'backbone.example',
+        port: 4242,
+        interfaceType: 'BackboneInterface',
+      },
+    ]);
+    const section = sectionBody(config, '[[Backbone Hub]]');
+    if (process.platform === 'linux') {
+      expect(section).toContain('type = BackboneInterface');
+      expect(section).toContain('remote = backbone.example');
+      expect(section).not.toContain('target_host = backbone.example');
+    } else {
+      expect(section).toContain('type = TCPClientInterface');
+      expect(section).toContain('target_host = backbone.example');
+    }
   });
 
   it('includes optional hub mesh listen and mesh TCP clients', () => {
@@ -78,18 +111,36 @@ describe('reticulum-daemon managed config', () => {
     };
     const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
     expect(config).toContain('enable_transport = True');
+    const reticulumBlock = config.slice(
+      config.indexOf('[reticulum]'),
+      config.indexOf('[logging]')
+    );
+    expect(reticulumBlock).toContain('discover_interfaces = yes');
+    expect(reticulumBlock).toContain('autoconnect_discovered_interfaces = 8');
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
     const meshListenType =
       process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
-    expect(config).toContain(`type = ${meshListenType}`);
-    expect(config).toContain('listen_port = 4243');
-    expect(config).toContain('discover_interfaces = yes');
+    const meshListenSection = sectionBody(config, '[[Qortal Hub Mesh Listen]]');
+    expect(meshListenSection).toContain(`type = ${meshListenType}`);
+    if (process.platform === 'linux') {
+      expect(meshListenSection).toContain('listen_on = 0.0.0.0');
+      expect(meshListenSection).toContain('port = 4243');
+      expect(meshListenSection).not.toContain('listen_port =');
+    } else {
+      expect(meshListenSection).toContain('listen_ip = 0.0.0.0');
+      expect(meshListenSection).toContain('listen_port = 4243');
+    }
+    const autoInterfaceSection = sectionBody(config, '[[Default Interface]]');
+    expect(autoInterfaceSection).not.toContain('discover_interfaces = yes');
     expect(config).toContain('[[Mesh_deadbeef01]]');
     expect(config).toContain('target_host = mesh.example');
     expect(config).toContain('target_port = 4243');
   });
 
   it('enables transport for private gateway without reachable_on in config', () => {
+    const spy = vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
+      return String(p).endsWith('mesh-network.identity');
+    });
     const meshSlice: ReticulumMeshConfigSlice = {
       listenEnabled: true,
       listenPort: 4243,
@@ -101,13 +152,23 @@ describe('reticulum-daemon managed config', () => {
       enableTransport: true,
       reachableOn: null,
     };
-    const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
-    expect(config).toContain('enable_transport = True');
-    expect(config).not.toContain('reachable_on =');
-    expect(config).toContain('discoverable = yes');
+    try {
+      const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
+      expect(config).toContain('enable_transport = True');
+      expect(config).toContain(
+        'network_identity = /tmp/qortal-userdata/reticulum/mesh-network.identity'
+      );
+      expect(config).not.toContain('reachable_on =');
+      expect(config).toContain('discoverable = yes');
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('emits reachable_on and enable_transport when private gateway slice includes reachableOn', () => {
+    const spy = vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
+      return String(p).endsWith('mesh-network.identity');
+    });
     const meshSlice: ReticulumMeshConfigSlice = {
       listenEnabled: true,
       listenPort: 4243,
@@ -119,12 +180,19 @@ describe('reticulum-daemon managed config', () => {
       enableTransport: true,
       reachableOn: '203.0.113.7',
     };
-    const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
-    expect(config).toContain('enable_transport = True');
-    expect(config).toContain('reachable_on = 203.0.113.7');
-    const meshListenType =
-      process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
-    expect(config).toContain(`type = ${meshListenType}`);
+    try {
+      const config = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
+      expect(config).toContain('enable_transport = True');
+      expect(config).toContain(
+        'network_identity = /tmp/qortal-userdata/reticulum/mesh-network.identity'
+      );
+      expect(config).toContain('reachable_on = 203.0.113.7');
+      const meshListenType =
+        process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
+      expect(config).toContain(`type = ${meshListenType}`);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('computeManagedReticulumConfigFingerprint matches sha256 of buildCurrentManagedReticulumConfig', () => {

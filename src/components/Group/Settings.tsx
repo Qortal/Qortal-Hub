@@ -643,8 +643,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                         Bootstrap hubs use the managed TCP client entries in
                         Reticulum config. Community mesh peers are reached via
                         RNS discovery (not app-level gossip). The mesh network
-                        identity (encrypted private gateway) is created
-                        automatically when mesh listen is on; file path:{' '}
+                        identity used for encrypted discovery/private gateways is
+                        installed automatically; file path:{' '}
                         <Box component="span" sx={{ wordBreak: 'break-all' }}>
                           {reticulumMeshStatus.networkIdentityPath}
                         </Box>

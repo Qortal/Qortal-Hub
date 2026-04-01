@@ -158,9 +158,9 @@ export type ReticulumMeshStatus = {
   meshListenEnabled: boolean;
   upnpMapped: boolean;
   reachableSelf: boolean;
-  /** RNS interface discovery + autoconnect (AutoInterface); LXMF is bundled with the Reticulum runtime. */
+  /** RNS interface discovery + autoconnect; LXMF is bundled with the Reticulum runtime. */
   meshDiscoveryClient: boolean;
-  /** Private gateway fields on mesh TCPServer (requires mesh-network.identity). */
+  /** Private gateway fields on the mesh listener (requires mesh-network.identity). */
   meshPrivateGateway: boolean;
   networkIdentityPath: string;
   /** UPnP-derived WAN host last stored for `reachable_on` (manual override does not clear this). */

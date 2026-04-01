@@ -73,13 +73,15 @@ export type ReticulumHubEndpoint = {
   host: string;
   port: number;
   /**
-   * Outbound hub link. `BackboneInterface` + target_host uses RNS BackboneClient on Linux.
+   * Outbound hub link. `BackboneInterface` remotes use `remote` on Linux.
    * Non-Linux hosts fall back to TCPClientInterface (Backbone stack is Linux-only in RNS).
    */
   interfaceType?: 'TCPClientInterface' | 'BackboneInterface';
+  /** Optional Reticulum virtual network segment (see RNS interface `network_name`). */
+  networkName?: string;
 };
 
-/** RNS: BackboneInterface with target_host becomes BackboneClient; without Linux, use TCP. */
+/** RNS: BackboneInterface remotes stay Backbone on Linux; without Linux, use TCP client. */
 function effectiveHubInterfaceType(
   hub: ReticulumHubEndpoint
 ): 'TCPClientInterface' | 'BackboneInterface' {
@@ -97,11 +99,13 @@ export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
       host: 'phantom.mobilefabrik.com',
       port: 4400,
       interfaceType: 'BackboneInterface',
+      networkName: 'qortal-hub',
     },
     {
       name: 'Crowetic Reticulum Hub',
       host: 'reticulum.qortal.link',
-      port: 4242,
+      port: 4444,
+      interfaceType: 'BackboneInterface',
     },
   ]);
 
@@ -142,31 +146,32 @@ function renderManagedHubInterfaces(
 ): string {
   if (hubs.length === 0) return '';
   return hubs
-    .map(
-      (hub) => `  [[${hub.name}]]
-  type = ${effectiveHubInterfaceType(hub)}
+    .map((hub) => {
+      const ifaceType = effectiveHubInterfaceType(hub);
+      const hostKey =
+        ifaceType === 'BackboneInterface' ? 'remote' : 'target_host';
+      const networkName =
+        typeof hub.networkName === 'string' && hub.networkName.trim().length > 0
+          ? `
+  network_name = ${hub.networkName.trim()}`
+          : '';
+      return `  [[${hub.name}]]
+  type = ${ifaceType}
   enabled = yes
-  target_host = ${hub.host}
-  target_port = ${hub.port}`
-    )
+  ${hostKey} = ${hub.host}
+  target_port = ${hub.port}${networkName}`;
+    })
     .join('\n\n');
 }
 
-/** Interface discovery: LXMF is installed with the bundled/dev Reticulum Python env (see ensure + bundle scripts). */
+/** Keep local link discovery available on LANs; RNS interface discovery is configured in `[reticulum]`. */
 function renderDefaultAutoInterface(
   slice: ReticulumMeshConfigSlice | null | undefined
 ): string {
-  if (!slice?.meshDiscoveryClient) {
-    return `  [[Default Interface]]
-  type = AutoInterface
-  enabled = yes
-`;
-  }
+  void slice;
   return `  [[Default Interface]]
   type = AutoInterface
   enabled = yes
-  discover_interfaces = yes
-  autoconnect_discovered_interfaces = ${slice.autoconnectDiscoveredMax}
 `;
 }
 
@@ -177,6 +182,12 @@ function renderMeshInterfaces(
   let out = '';
   if (slice.listenEnabled) {
     const iface = meshListenRnsInterfaceType();
+    const listenKeys =
+      iface === 'BackboneInterface'
+        ? `  listen_on = 0.0.0.0
+  port = ${slice.listenPort}`
+        : `  listen_ip = 0.0.0.0
+  listen_port = ${slice.listenPort}`;
     if (slice.meshPrivateGateway) {
       const reachable =
         typeof slice.reachableOn === 'string' && slice.reachableOn.length > 0
@@ -186,8 +197,7 @@ function renderMeshInterfaces(
       out += `  [[Qortal Hub Mesh Listen]]
   type = ${iface}
   enabled = yes
-  listen_ip = 0.0.0.0
-  listen_port = ${slice.listenPort}${reachable}
+${listenKeys}${reachable}
   discoverable = yes
   mode = gateway
   discovery_encrypt = yes
@@ -196,8 +206,7 @@ function renderMeshInterfaces(
       out += `  [[Qortal Hub Mesh Listen]]
   type = ${iface}
   enabled = yes
-  listen_ip = 0.0.0.0
-  listen_port = ${slice.listenPort}
+${listenKeys}
 `;
     }
   }
@@ -219,6 +228,10 @@ function renderReticulumHeader(
   meshSlice: ReticulumMeshConfigSlice | null | undefined
 ): string {
   const transport = meshSlice?.enableTransport === true ? 'True' : 'False';
+  const hasNetworkIdentity =
+    typeof meshSlice?.networkIdentityPath === 'string' &&
+    meshSlice.networkIdentityPath.length > 0 &&
+    fs.existsSync(meshSlice.networkIdentityPath);
   let block = `${MANAGED_CONFIG_MARKER}
 [reticulum]
 enable_transport = ${transport}
@@ -227,7 +240,12 @@ instance_name = ${getReticulumInstanceName()}
 shared_instance_port = ${getReticulumSharedInstancePort()}
 instance_control_port = ${getReticulumControlPort()}
 `;
-  if (meshSlice?.meshPrivateGateway && meshSlice.networkIdentityPath) {
+  if (meshSlice?.meshDiscoveryClient) {
+    block += `discover_interfaces = yes
+autoconnect_discovered_interfaces = ${meshSlice.autoconnectDiscoveredMax}
+`;
+  }
+  if (hasNetworkIdentity) {
     block += `network_identity = ${meshSlice.networkIdentityPath}
 `;
   }
@@ -247,7 +265,7 @@ export function buildManagedReticulumConfig(
   const ifaceBody = ifaceParts.join('\n\n');
   return `${renderReticulumHeader(slice)}
 [logging]
-loglevel = 4
+loglevel = 5
 
 [interfaces]
 ${ifaceBody}
@@ -610,14 +628,11 @@ export type EnsureMeshNetworkIdentityResult = {
 };
 
 /**
- * When mesh listen is enabled, installs the bundled Qortal community `mesh-network.identity`
- * into userData (same RNS network identity for all hubs). Idempotent. Call before managed config.
+ * Installs the bundled Qortal community `mesh-network.identity` into userData so
+ * encrypted discovery and private gateway publishing can share one RNS network identity.
+ * Idempotent. Call before rendering managed config.
  */
 export function ensureMeshNetworkIdentityIfNeeded(): EnsureMeshNetworkIdentityResult {
-  const st = loadReticulumMeshState();
-  if (st.meshListenEnabled !== true) {
-    return { ok: true, created: false };
-  }
   const dest = getMeshNetworkIdentityPath();
   if (fs.existsSync(dest)) {
     return { ok: true, created: false };
@@ -756,7 +771,7 @@ export function registerReticulumIpcHandlers(): void {
       }
       try {
         const { getReticulumBridge } =
-          require('./reticulum-bridge') as typeof import('./reticulum-bridge');
+          (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
         const bridge = getReticulumBridge();
         const bridgeStatus = bridge?.getConnectivitySnapshot();
         if (!bridgeStatus) return base;
