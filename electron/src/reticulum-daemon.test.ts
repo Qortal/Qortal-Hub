@@ -130,6 +130,7 @@ describe('reticulum-daemon managed config', () => {
       expect(meshListenSection).toContain('listen_ip = 0.0.0.0');
       expect(meshListenSection).toContain('listen_port = 4243');
     }
+    expect(meshListenSection).not.toContain('announce_interval =');
     const autoInterfaceSection = sectionBody(config, '[[Default Interface]]');
     expect(autoInterfaceSection).not.toContain('discover_interfaces = yes');
     expect(config).toContain('[[Mesh_deadbeef01]]');
@@ -137,7 +138,7 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('target_port = 4243');
   });
 
-  it('enables transport for private gateway without reachable_on in config', () => {
+  it('omits mesh listen when private gateway has no reachable_on', () => {
     const spy = vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
       return String(p).endsWith('mesh-network.identity');
     });
@@ -159,7 +160,10 @@ describe('reticulum-daemon managed config', () => {
         'network_identity = /tmp/qortal-userdata/reticulum/mesh-network.identity'
       );
       expect(config).not.toContain('reachable_on =');
-      expect(config).toContain('discoverable = yes');
+      expect(config).not.toContain('[[Qortal Hub Mesh Listen]]');
+      expect(config).not.toContain('discoverable = yes');
+      expect(config).not.toContain('discovery_name = Qortal Hub Mesh Listen');
+      expect(config).not.toContain('announce_interval = 5');
     } finally {
       spy.mockRestore();
     }
@@ -186,7 +190,9 @@ describe('reticulum-daemon managed config', () => {
       expect(config).toContain(
         'network_identity = /tmp/qortal-userdata/reticulum/mesh-network.identity'
       );
+      expect(config).toContain('discovery_name = Qortal Hub Mesh Listen');
       expect(config).toContain('reachable_on = 203.0.113.7');
+      expect(config).toContain('announce_interval = 5');
       const meshListenType =
         process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
       expect(config).toContain(`type = ${meshListenType}`);

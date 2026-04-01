@@ -56,6 +56,7 @@ const RETICULUM_CONFIG_FILENAME = 'config';
 const MANAGED_CONFIG_MARKER = '# Managed by Qortal Hub';
 const DEFAULT_CONFIG_SENTINEL = '# This is the default Reticulum config file.';
 const RETICULUM_SHARED_INSTANCE_NAME = 'qortal-hub-shared';
+const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 
 export type ReticulumDaemonMode = 'frozen' | 'venv' | 'system' | null;
 export type ReticulumReachability =
@@ -189,19 +190,22 @@ function renderMeshInterfaces(
         : `  listen_ip = 0.0.0.0
   listen_port = ${slice.listenPort}`;
     if (slice.meshPrivateGateway) {
-      const reachable =
-        typeof slice.reachableOn === 'string' && slice.reachableOn.length > 0
-          ? `
-  reachable_on = ${slice.reachableOn}`
-          : '';
-      out += `  [[Qortal Hub Mesh Listen]]
+      if (
+        typeof slice.reachableOn === 'string' &&
+        slice.reachableOn.length > 0
+      ) {
+        out += `  [[Qortal Hub Mesh Listen]]
   type = ${iface}
   enabled = yes
-${listenKeys}${reachable}
+${listenKeys}
+  reachable_on = ${slice.reachableOn}
+  discovery_name = Qortal Hub Mesh Listen
   discoverable = yes
+  announce_interval = ${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}
   mode = gateway
   discovery_encrypt = yes
 `;
+      }
     } else {
       out += `  [[Qortal Hub Mesh Listen]]
   type = ${iface}
@@ -250,6 +254,26 @@ autoconnect_discovered_interfaces = ${meshSlice.autoconnectDiscoveredMax}
 `;
   }
   return block;
+}
+
+function logManagedDiscoveryConfig(
+  meshSlice: ReticulumMeshConfigSlice | null | undefined,
+  configPath: string
+): void {
+  if (!meshSlice?.listenEnabled) {
+    return;
+  }
+  const iface = meshListenRnsInterfaceType();
+  if (meshSlice.meshPrivateGateway) {
+    const reachable = meshSlice.reachableOn ?? 'unset';
+    loggerLog(
+      `[Reticulum] Discovery gateway config path=${configPath} type=${iface} port=${meshSlice.listenPort} reachable_on=${reachable} encrypted=yes announce_interval=${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}m`
+    );
+    return;
+  }
+  loggerLog(
+    `[Reticulum] Mesh listen config path=${configPath} type=${iface} port=${meshSlice.listenPort} discoverable=no`
+  );
 }
 
 export function buildManagedReticulumConfig(
@@ -326,6 +350,8 @@ export function writeManagedReticulumConfigIfManaged(
 
 function ensureManagedReticulumConfig(): void {
   const id = ensureMeshNetworkIdentityIfNeeded();
+  const state = loadReticulumMeshState();
+  const meshSlice = meshConfigSliceFromState(state, []);
   if (!id.ok) {
     loggerLog(`[Reticulum] Mesh identity: ${id.error ?? 'failed'}`);
   } else if (id.created) {
@@ -334,12 +360,13 @@ function ensureManagedReticulumConfig(): void {
     );
   }
   const configPath = getReticulumConfigFilePath();
-  const nextContents = buildCurrentManagedReticulumConfig();
+  const nextContents = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
   const currentContents = fs.existsSync(configPath)
     ? fs.readFileSync(configPath, 'utf8')
     : null;
 
   if (currentContents === nextContents) {
+    logManagedDiscoveryConfig(meshSlice, configPath);
     loggerLog(
       `[Reticulum] Using managed config ${configPath} instance_name=${getReticulumInstanceName()} shared_port=${getReticulumSharedInstancePort()} control_port=${getReticulumControlPort()}`
     );
@@ -349,6 +376,7 @@ function ensureManagedReticulumConfig(): void {
   if (!writeManagedReticulumConfigIfManaged(nextContents)) {
     return;
   }
+  logManagedDiscoveryConfig(meshSlice, configPath);
   loggerLog(
     `[Reticulum] instance_name=${getReticulumInstanceName()} shared_port=${getReticulumSharedInstancePort()} control_port=${getReticulumControlPort()}`
   );
