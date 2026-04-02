@@ -50,7 +50,7 @@ For automated cross-platform builds use the GitHub Actions workflow:
 
 The main process spawns `rnsd` with `--config` pointing at **`userData/reticulum`** (writable). The Reticulum bridge prefers the bundled `presence_bridge` executable and falls back to Python only in development. Logs also go to **`userData/logs/reticulum.log`**.
 
-The managed config keeps local `AutoInterface` discovery enabled and also ships a default list of public `TCPClientInterface` hubs so matching `qortal-hub` namespaces can discover each other across the Internet without manual config edits.
+The managed config keeps local `AutoInterface` discovery enabled and also ships a default list of public `TCPClientInterface` hubs so matching `qortal-hub` namespaces can discover each other across the Internet without manual config edits. When the private mesh gateway is enabled, the managed `Qortal Hub Mesh Listen` interface is emitted on the same `qortal-hub` Reticulum network segment and publishes IFAC details inside the encrypted discovery payload for trusted peers.
 
 ## Default WAN bootstrap
 

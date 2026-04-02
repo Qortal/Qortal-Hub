@@ -21,6 +21,7 @@ import crypto from 'crypto';
 import { app, ipcMain } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import fs from 'fs';
+import net from 'net';
 import path from 'path';
 import { log as loggerLog, error as loggerError } from './logger';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
@@ -56,7 +57,12 @@ const RETICULUM_CONFIG_FILENAME = 'config';
 const MANAGED_CONFIG_MARKER = '# Managed by Qortal Hub';
 const DEFAULT_CONFIG_SENTINEL = '# This is the default Reticulum config file.';
 const RETICULUM_SHARED_INSTANCE_NAME = 'qortal-hub-shared';
+const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
+const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
+const RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS = 10_000;
+const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
+const RETICULUM_LOOPBACK_HOST = '127.0.0.1';
 
 export type ReticulumDaemonMode = 'frozen' | 'venv' | 'system' | null;
 export type ReticulumReachability =
@@ -100,7 +106,7 @@ export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
       host: 'phantom.mobilefabrik.com',
       port: 4400,
       interfaceType: 'BackboneInterface',
-      networkName: 'qortal-hub',
+      networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
     },
     {
       name: 'Crowetic Reticulum Hub',
@@ -198,12 +204,14 @@ function renderMeshInterfaces(
   type = ${iface}
   enabled = yes
 ${listenKeys}
+  network_name = ${RETICULUM_QORTAL_HUB_NETWORK_NAME}
   reachable_on = ${slice.reachableOn}
   discovery_name = Qortal Hub Mesh Listen
   discoverable = yes
   announce_interval = ${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}
   mode = gateway
   discovery_encrypt = yes
+  publish_ifac = yes
 `;
       }
     } else {
@@ -267,7 +275,7 @@ function logManagedDiscoveryConfig(
   if (meshSlice.meshPrivateGateway) {
     const reachable = meshSlice.reachableOn ?? 'unset';
     loggerLog(
-      `[Reticulum] Discovery gateway config path=${configPath} type=${iface} port=${meshSlice.listenPort} reachable_on=${reachable} encrypted=yes announce_interval=${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}m`
+      `[Reticulum] Discovery gateway config path=${configPath} type=${iface} port=${meshSlice.listenPort} network_name=${RETICULUM_QORTAL_HUB_NETWORK_NAME} reachable_on=${reachable} encrypted=yes publish_ifac=yes announce_interval=${RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES}m`
     );
     return;
   }
@@ -716,6 +724,113 @@ export function stopBundledReticulumDaemon(): void {
   }
   child = null;
   lastStartMode = null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function waitForChildExit(
+  subprocess: ChildProcessWithoutNullStreams,
+  timeoutMs: number
+): Promise<void> {
+  if (subprocess.exitCode !== null) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const cleanup = () => {
+      clearTimeout(timer);
+      subprocess.off('exit', onExit);
+      subprocess.off('error', onError);
+    };
+    const finish = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    };
+    const onExit = () => finish();
+    const onError = (err: Error) => finish(err);
+    const timer = setTimeout(() => {
+      finish(
+        new Error(
+          `Timed out waiting for Reticulum daemon to exit after ${timeoutMs}ms`
+        )
+      );
+    }, timeoutMs);
+    subprocess.once('exit', onExit);
+    subprocess.once('error', onError);
+  });
+}
+
+function canConnectToSharedInstance(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = net.createConnection({
+      host: RETICULUM_LOOPBACK_HOST,
+      port,
+    });
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(500);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+  });
+}
+
+export async function stopBundledReticulumDaemonAndWait(
+  timeoutMs = RETICULUM_DAEMON_STOP_TIMEOUT_MS
+): Promise<void> {
+  const subprocess = child;
+  stopBundledReticulumDaemon();
+  if (!subprocess || subprocess.exitCode !== null) {
+    return;
+  }
+  await waitForChildExit(subprocess, timeoutMs);
+}
+
+export async function waitForReticulumSharedInstanceReady(
+  timeoutMs = RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS
+): Promise<void> {
+  const port = getReticulumSharedInstancePort();
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (await canConnectToSharedInstance(port)) {
+      return;
+    }
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      break;
+    }
+    await sleep(Math.min(RETICULUM_SHARED_INSTANCE_READY_POLL_MS, remainingMs));
+  }
+  throw new Error(
+    `Timed out waiting for Reticulum shared instance on ${RETICULUM_LOOPBACK_HOST}:${port}`
+  );
+}
+
+export async function restartBundledReticulumDaemonAndWaitReady(
+  timeoutMs = RETICULUM_SHARED_INSTANCE_READY_TIMEOUT_MS
+): Promise<void> {
+  await stopBundledReticulumDaemonAndWait();
+  startBundledReticulumDaemon();
+  if (reticulumInstanceIndex === 0 && (!child || child.exitCode !== null)) {
+    throw new Error('Reticulum daemon did not start');
+  }
+  await waitForReticulumSharedInstanceReady(timeoutMs);
 }
 
 /**

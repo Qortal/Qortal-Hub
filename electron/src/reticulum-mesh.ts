@@ -14,8 +14,7 @@ import {
   getReticulumDaemonStatus,
   getReticulumInstanceIndex,
   type EnsureMeshNetworkIdentityResult,
-  startBundledReticulumDaemon,
-  stopBundledReticulumDaemon,
+  restartBundledReticulumDaemonAndWaitReady,
   writeManagedReticulumConfigIfManaged,
 } from './reticulum-daemon';
 import { rebindReticulumBridgeConsumers } from './reticulum-bridge-rebind';
@@ -86,8 +85,12 @@ export async function applyManagedMeshConfigAfterReachableUpdate(): Promise<void
     return;
   }
   stopReticulumBridge();
-  stopBundledReticulumDaemon();
-  startBundledReticulumDaemon();
+  try {
+    await restartBundledReticulumDaemonAndWaitReady();
+  } catch (err) {
+    loggerLog('[ReticulumMesh] rnsd restart after mesh config failed:', err);
+    return;
+  }
   try {
     await startReticulumBridge();
     rebindReticulumBridgeConsumers();

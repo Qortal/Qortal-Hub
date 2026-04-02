@@ -29,7 +29,9 @@ vi.mock('./setup', () => ({
 vi.mock('./reticulum-daemon', () => ({
   getReticulumInstanceIndex: vi.fn(() => 0),
   buildCurrentManagedReticulumConfig: vi.fn(() => ''),
+  ensureMeshNetworkIdentityIfNeeded: vi.fn(() => ({ ok: true, created: false })),
   getReticulumDaemonStatus: vi.fn(() => ({ running: false })),
+  restartBundledReticulumDaemonAndWaitReady: vi.fn(async () => {}),
   startBundledReticulumDaemon: vi.fn(),
   stopBundledReticulumDaemon: vi.fn(),
   writeManagedReticulumConfigIfManaged: vi.fn(() => false),
@@ -52,9 +54,18 @@ vi.mock('./upnp-nat', () => ({
 }));
 
 import {
+  applyManagedMeshConfigAfterReachableUpdate,
   startReticulumMeshCoordinator,
   stopReticulumMeshCoordinator,
 } from './reticulum-mesh';
+import {
+  buildCurrentManagedReticulumConfig,
+  getReticulumDaemonStatus,
+  restartBundledReticulumDaemonAndWaitReady,
+  writeManagedReticulumConfigIfManaged,
+} from './reticulum-daemon';
+import { rebindReticulumBridgeConsumers } from './reticulum-bridge-rebind';
+import { startReticulumBridge, stopReticulumBridge } from './reticulum-bridge';
 
 describe('ReticulumMeshCoordinator', () => {
   beforeEach(() => {
@@ -69,5 +80,37 @@ describe('ReticulumMeshCoordinator', () => {
     const bridge = { getState: () => 'ready' as const };
     expect(() => startReticulumMeshCoordinator(bridge as never)).not.toThrow();
     expect(() => stopReticulumMeshCoordinator()).not.toThrow();
+  });
+
+  it('waits for daemon readiness before restarting the bridge after mesh config changes', async () => {
+    vi.mocked(buildCurrentManagedReticulumConfig).mockReturnValue('next-config');
+    vi.mocked(writeManagedReticulumConfigIfManaged).mockReturnValue(true);
+    vi.mocked(getReticulumDaemonStatus).mockReturnValue({ running: true } as any);
+
+    await applyManagedMeshConfigAfterReachableUpdate();
+
+    expect(stopReticulumBridge).toHaveBeenCalledTimes(1);
+    expect(restartBundledReticulumDaemonAndWaitReady).toHaveBeenCalledTimes(1);
+    expect(startReticulumBridge).toHaveBeenCalledTimes(1);
+    expect(rebindReticulumBridgeConsumers).toHaveBeenCalledTimes(1);
+    expect(
+      vi.mocked(restartBundledReticulumDaemonAndWaitReady).mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(startReticulumBridge).mock.invocationCallOrder[0]!);
+  });
+
+  it('does not restart the bridge if the awaited daemon restart fails', async () => {
+    vi.mocked(buildCurrentManagedReticulumConfig).mockReturnValue('next-config');
+    vi.mocked(writeManagedReticulumConfigIfManaged).mockReturnValue(true);
+    vi.mocked(getReticulumDaemonStatus).mockReturnValue({ running: true } as any);
+    vi.mocked(restartBundledReticulumDaemonAndWaitReady).mockRejectedValueOnce(
+      new Error('shared instance timeout')
+    );
+
+    await applyManagedMeshConfigAfterReachableUpdate();
+
+    expect(stopReticulumBridge).toHaveBeenCalledTimes(1);
+    expect(restartBundledReticulumDaemonAndWaitReady).toHaveBeenCalledTimes(1);
+    expect(startReticulumBridge).not.toHaveBeenCalled();
+    expect(rebindReticulumBridgeConsumers).not.toHaveBeenCalled();
   });
 });
