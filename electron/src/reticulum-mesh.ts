@@ -11,6 +11,7 @@ import { log as loggerLog } from './logger';
 import {
   buildCurrentManagedReticulumConfig,
   ensureMeshNetworkIdentityIfNeeded,
+  ensureMeshNetworkPassphraseIfNeeded,
   getReticulumDaemonStatus,
   getReticulumInstanceIndex,
   type EnsureMeshNetworkIdentityResult,
@@ -28,8 +29,10 @@ import {
 } from './upnp-nat';
 import {
   getMeshNetworkIdentityPath,
+  getMeshNetworkPassphrasePath,
   isPlausibleReachableOnHost,
   loadReticulumMeshState,
+  readMeshNetworkPassphrase,
   resolveMeshReachableOnHost,
   saveReticulumMeshState,
 } from './reticulum-mesh-store';
@@ -73,6 +76,7 @@ export async function applyManagedMeshConfigAfterReachableUpdate(): Promise<void
     return;
   }
   ensureMeshNetworkIdentityIfNeeded();
+  ensureMeshNetworkPassphraseIfNeeded();
   const next = buildCurrentManagedReticulumConfig();
   if (!writeManagedReticulumConfigIfManaged(next)) {
     return;
@@ -163,7 +167,7 @@ export type ReticulumMeshStatus = {
   reachableSelf: boolean;
   /** RNS interface discovery + autoconnect; LXMF is bundled with the Reticulum runtime. */
   meshDiscoveryClient: boolean;
-  /** Private gateway fields on the mesh listener (requires mesh-network.identity). */
+  /** Private gateway fields on the mesh listener (requires bundled mesh identity + passphrase). */
   meshPrivateGateway: boolean;
   networkIdentityPath: string;
   /** UPnP-derived WAN host last stored for `reachable_on` (manual override does not clear this). */
@@ -177,8 +181,11 @@ export type ReticulumMeshStatus = {
 function getMeshStatus(): ReticulumMeshStatus {
   const st = loadReticulumMeshState();
   const identityPath = getMeshNetworkIdentityPath();
+  const passphrasePath = getMeshNetworkPassphrasePath();
   const meshPrivateGateway =
-    st.meshListenEnabled === true && fs.existsSync(identityPath);
+    st.meshListenEnabled === true &&
+    fs.existsSync(identityPath) &&
+    readMeshNetworkPassphrase(passphrasePath) !== null;
   return {
     enabled: getReticulumInstanceIndex() === 0,
     listenPort: st.listenPort,
@@ -210,8 +217,12 @@ export function registerReticulumMeshIpcHandlers(): void {
       if (!r.ok) {
         return r;
       }
+      const passphrase = ensureMeshNetworkPassphraseIfNeeded();
+      if (!passphrase.ok) {
+        return passphrase;
+      }
       await applyManagedMeshConfigAfterReachableUpdate();
-      return r;
+      return { ...r, created: r.created === true || passphrase.created === true };
     }
   );
 }

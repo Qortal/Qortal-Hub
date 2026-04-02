@@ -106,6 +106,7 @@ describe('reticulum-daemon managed config', () => {
       autoconnectDiscoveredMax: 8,
       meshPrivateGateway: false,
       networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      networkPassphrase: null,
       enableTransport: true,
       reachableOn: null,
     };
@@ -151,6 +152,7 @@ describe('reticulum-daemon managed config', () => {
       autoconnectDiscoveredMax: 8,
       meshPrivateGateway: true,
       networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      networkPassphrase: 'qortal-hub-community-mesh-v1',
       enableTransport: true,
       reachableOn: null,
     };
@@ -182,6 +184,7 @@ describe('reticulum-daemon managed config', () => {
       autoconnectDiscoveredMax: 8,
       meshPrivateGateway: true,
       networkIdentityPath: '/tmp/qortal-userdata/reticulum/mesh-network.identity',
+      networkPassphrase: 'qortal-hub-community-mesh-v1',
       enableTransport: true,
       reachableOn: '203.0.113.7',
     };
@@ -193,6 +196,7 @@ describe('reticulum-daemon managed config', () => {
       );
       expect(config).toContain('discovery_name = Qortal Hub Mesh Listen');
       expect(config).toContain('network_name = qortal-hub');
+      expect(config).toContain('passphrase = qortal-hub-community-mesh-v1');
       expect(config).toContain('reachable_on = 203.0.113.7');
       expect(config).toContain('announce_interval = 5');
       expect(config).toContain('publish_ifac = yes');

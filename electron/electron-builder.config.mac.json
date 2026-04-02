@@ -20,6 +20,10 @@
       "to": "reticulum/mesh-network.identity"
     },
     {
+      "from": "resources/mesh-network.passphrase",
+      "to": "reticulum/mesh-network.passphrase"
+    },
+    {
       "from": "resources/reticulum",
       "to": "reticulum"
     },

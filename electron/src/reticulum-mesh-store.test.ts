@@ -77,18 +77,27 @@ describe('meshConfigSliceFromState', () => {
   });
 
   it('enables transport when mesh listen on (private gateway, reachable unknown)', () => {
-    const spy = vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
       const s = String(p);
-      return s.endsWith('mesh-network.identity');
+      return s.endsWith('mesh-network.identity') || s.endsWith('mesh-network.passphrase');
+    });
+    const readSpy = vi.spyOn(fs, 'readFileSync').mockImplementation((p: fs.PathLike) => {
+      const s = String(p);
+      if (s.endsWith('mesh-network.passphrase')) {
+        return 'qortal-hub-community-mesh-v1\n' as unknown as ReturnType<typeof fs.readFileSync>;
+      }
+      throw new Error(`Unexpected readFileSync path: ${s}`);
     });
     try {
       const state = baseState({ meshListenEnabled: true });
       const s = meshConfigSliceFromState(state, []);
       expect(s.meshPrivateGateway).toBe(true);
+      expect(s.networkPassphrase).toBe('qortal-hub-community-mesh-v1');
       expect(s.reachableOn).toBeNull();
       expect(s.enableTransport).toBe(true);
     } finally {
-      spy.mockRestore();
+      readSpy.mockRestore();
+      existsSpy.mockRestore();
     }
   });
 
@@ -101,6 +110,26 @@ describe('meshConfigSliceFromState', () => {
       expect(s.enableTransport).toBe(true);
     } finally {
       spy.mockRestore();
+    }
+  });
+
+  it('keeps plain mesh listen when passphrase is missing', () => {
+    const existsSpy = vi.spyOn(fs, 'existsSync').mockImplementation((p: fs.PathLike) => {
+      const s = String(p);
+      return s.endsWith('mesh-network.identity');
+    });
+    const readSpy = vi.spyOn(fs, 'readFileSync').mockImplementation(() => {
+      throw new Error('mesh passphrase missing');
+    });
+    try {
+      const state = baseState({ meshListenEnabled: true });
+      const s = meshConfigSliceFromState(state, []);
+      expect(s.meshPrivateGateway).toBe(false);
+      expect(s.networkPassphrase).toBeNull();
+      expect(s.enableTransport).toBe(true);
+    } finally {
+      readSpy.mockRestore();
+      existsSpy.mockRestore();
     }
   });
 

@@ -30,6 +30,7 @@ vi.mock('./reticulum-daemon', () => ({
   getReticulumInstanceIndex: vi.fn(() => 0),
   buildCurrentManagedReticulumConfig: vi.fn(() => ''),
   ensureMeshNetworkIdentityIfNeeded: vi.fn(() => ({ ok: true, created: false })),
+  ensureMeshNetworkPassphraseIfNeeded: vi.fn(() => ({ ok: true, created: false })),
   getReticulumDaemonStatus: vi.fn(() => ({ running: false })),
   restartBundledReticulumDaemonAndWaitReady: vi.fn(async () => {}),
   startBundledReticulumDaemon: vi.fn(),

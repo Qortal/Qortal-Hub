@@ -193,6 +193,11 @@ def copy_runtime_sources(electron_root: Path, output_dir: Path) -> None:
         sys.exit(f"Missing bundled mesh network identity: {mesh_net}")
     shutil.copy2(mesh_net, output_dir / "mesh-network.identity")
     print(f"Wrote {output_dir / 'mesh-network.identity'}")
+    mesh_passphrase = electron_root / "resources" / "mesh-network.passphrase"
+    if not mesh_passphrase.is_file():
+        sys.exit(f"Missing bundled mesh network passphrase: {mesh_passphrase}")
+    shutil.copy2(mesh_passphrase, output_dir / "mesh-network.passphrase")
+    print(f"Wrote {output_dir / 'mesh-network.passphrase'}")
 
 
 def main() -> None:

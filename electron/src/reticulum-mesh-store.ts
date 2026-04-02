@@ -47,6 +47,14 @@ export function getMeshNetworkIdentityPath(): string {
 }
 
 /**
+ * Writable copy under userData; the mesh listener `passphrase` points here so
+ * all installs can join the same authenticated Qortal Hub mesh segment.
+ */
+export function getMeshNetworkPassphrasePath(): string {
+  return path.join(app.getPath('userData'), 'reticulum', 'mesh-network.passphrase');
+}
+
+/**
  * Canonical Qortal Hub community mesh identity shipped in the app (Reticulum `network_identity`).
  * Same file for every build/install so private gateway discovery stays one logical network.
  */
@@ -55,6 +63,27 @@ export function getBundledMeshNetworkIdentityPath(): string {
     return path.join(process.resourcesPath, 'reticulum', 'mesh-network.identity');
   }
   return path.join(__dirname, '..', '..', 'resources', 'mesh-network.identity');
+}
+
+/**
+ * Canonical passphrase shipped in the app for the shared `qortal-hub` mesh segment.
+ */
+export function getBundledMeshNetworkPassphrasePath(): string {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'reticulum', 'mesh-network.passphrase');
+  }
+  return path.join(__dirname, '..', '..', 'resources', 'mesh-network.passphrase');
+}
+
+export function readMeshNetworkPassphrase(
+  passphrasePath: string = getMeshNetworkPassphrasePath()
+): string | null {
+  try {
+    const raw = fs.readFileSync(passphrasePath, 'utf8').trim();
+    return raw.length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
 }
 
 export function defaultReticulumMeshState(): ReticulumMeshState {
@@ -155,9 +184,11 @@ export type ReticulumMeshConfigSlice = {
   /** AutoInterface: discover community interfaces (LXMF shipped with Hub Reticulum runtime). Independent of mesh listen. */
   meshDiscoveryClient: boolean;
   autoconnectDiscoveredMax: number;
-  /** Encrypted private gateway when identity file exists. Discovery/publishing still requires `reachableOn`. */
+  /** Encrypted private gateway when both bundled mesh identity and passphrase exist. Discovery/publishing still requires `reachableOn`. */
   meshPrivateGateway: boolean;
   networkIdentityPath: string;
+  /** Shared IFAC/passphrase for the private `qortal-hub` mesh segment. */
+  networkPassphrase: string | null;
   /** `[reticulum] enable_transport`: on whenever mesh listen is enabled (hub + RNS transport; bridge shows transport=on when RNS exposes transport_id). */
   enableTransport: boolean;
   /** Public address for mesh gateway discovery (`reachable_on`); null if unknown. */
@@ -184,8 +215,12 @@ export function meshConfigSliceFromState(
 ): ReticulumMeshConfigSlice {
   const sorted = sortMeshOutboundHostsForEmission(selectedHosts);
   const identityPath = getMeshNetworkIdentityPath();
+  const networkPassphrase = readMeshNetworkPassphrase();
   const hasIdentity = fs.existsSync(identityPath);
-  const meshPrivateGateway = state.meshListenEnabled === true && hasIdentity;
+  const meshPrivateGateway =
+    state.meshListenEnabled === true &&
+    hasIdentity &&
+    networkPassphrase !== null;
   const reachableOn = meshPrivateGateway ? resolveMeshReachableOnHost(state) : null;
   return {
     listenEnabled: state.meshListenEnabled === true,
@@ -199,6 +234,7 @@ export function meshConfigSliceFromState(
     autoconnectDiscoveredMax: MAX_MESH_OUTBOUND_PEERS,
     meshPrivateGateway,
     networkIdentityPath: identityPath,
+    networkPassphrase,
     enableTransport: state.meshListenEnabled === true,
     reachableOn,
   };

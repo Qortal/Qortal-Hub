@@ -27,7 +27,9 @@ import { log as loggerLog, error as loggerError } from './logger';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
 import {
   getBundledMeshNetworkIdentityPath,
+  getBundledMeshNetworkPassphrasePath,
   getMeshNetworkIdentityPath,
+  getMeshNetworkPassphrasePath,
   loadReticulumMeshState,
   meshConfigSliceFromState,
 } from './reticulum-mesh-store';
@@ -197,6 +199,8 @@ function renderMeshInterfaces(
   listen_port = ${slice.listenPort}`;
     if (slice.meshPrivateGateway) {
       if (
+        typeof slice.networkPassphrase === 'string' &&
+        slice.networkPassphrase.length > 0 &&
         typeof slice.reachableOn === 'string' &&
         slice.reachableOn.length > 0
       ) {
@@ -205,6 +209,7 @@ function renderMeshInterfaces(
   enabled = yes
 ${listenKeys}
   network_name = ${RETICULUM_QORTAL_HUB_NETWORK_NAME}
+  passphrase = ${slice.networkPassphrase}
   reachable_on = ${slice.reachableOn}
   discovery_name = Qortal Hub Mesh Listen
   discoverable = yes
@@ -297,7 +302,7 @@ export function buildManagedReticulumConfig(
   const ifaceBody = ifaceParts.join('\n\n');
   return `${renderReticulumHeader(slice)}
 [logging]
-loglevel = 5
+loglevel = 7
 
 [interfaces]
 ${ifaceBody}
@@ -358,6 +363,7 @@ export function writeManagedReticulumConfigIfManaged(
 
 function ensureManagedReticulumConfig(): void {
   const id = ensureMeshNetworkIdentityIfNeeded();
+  const passphrase = ensureMeshNetworkPassphraseIfNeeded();
   const state = loadReticulumMeshState();
   const meshSlice = meshConfigSliceFromState(state, []);
   if (!id.ok) {
@@ -367,8 +373,18 @@ function ensureManagedReticulumConfig(): void {
       '[Reticulum] Community mesh network identity installed; regenerating managed config'
     );
   }
+  if (!passphrase.ok) {
+    loggerLog(`[Reticulum] Mesh passphrase: ${passphrase.error ?? 'failed'}`);
+  } else if (passphrase.created) {
+    loggerLog(
+      '[Reticulum] Community mesh passphrase installed; regenerating managed config'
+    );
+  }
   const configPath = getReticulumConfigFilePath();
-  const nextContents = buildManagedReticulumConfig(DEFAULT_RETICULUM_HUBS, meshSlice);
+  const nextContents = buildManagedReticulumConfig(
+    DEFAULT_RETICULUM_HUBS,
+    meshSlice
+  );
   const currentContents = fs.existsSync(configPath)
     ? fs.readFileSync(configPath, 'utf8')
     : null;
@@ -665,34 +681,69 @@ export type EnsureMeshNetworkIdentityResult = {
   created?: boolean;
 };
 
+function ensureBundledMeshResourceIfNeeded(options: {
+  dest: string;
+  source: string;
+  missingMessage: string;
+  installErrorPrefix: string;
+  installedMessage: string;
+}): EnsureMeshNetworkIdentityResult {
+  const {
+    dest,
+    source,
+    missingMessage,
+    installErrorPrefix,
+    installedMessage,
+  } = options;
+  if (fs.existsSync(dest)) {
+    return { ok: true, created: false };
+  }
+  if (!fs.existsSync(source)) {
+    loggerLog(`[Reticulum] ${missingMessage}`);
+    return { ok: false, error: missingMessage };
+  }
+  try {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(source, dest);
+  } catch (err) {
+    const msg = `${installErrorPrefix}: ${String(err)}`;
+    loggerError(`[Reticulum] ${msg}`);
+    return { ok: false, error: msg };
+  }
+  loggerLog(`[Reticulum] ${installedMessage} ${dest}`);
+  return { ok: true, created: true };
+}
+
 /**
  * Installs the bundled Qortal community `mesh-network.identity` into userData so
  * encrypted discovery and private gateway publishing can share one RNS network identity.
  * Idempotent. Call before rendering managed config.
  */
 export function ensureMeshNetworkIdentityIfNeeded(): EnsureMeshNetworkIdentityResult {
-  const dest = getMeshNetworkIdentityPath();
-  if (fs.existsSync(dest)) {
-    return { ok: true, created: false };
-  }
-  const source = getBundledMeshNetworkIdentityPath();
-  if (!fs.existsSync(source)) {
-    const msg = `Bundled community mesh identity missing: ${source}`;
-    loggerLog(`[Reticulum] ${msg}`);
-    return { ok: false, error: msg };
-  }
-  try {
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.copyFileSync(source, dest);
-  } catch (err) {
-    const msg = `Failed to install mesh network identity: ${String(err)}`;
-    loggerError(`[Reticulum] ${msg}`);
-    return { ok: false, error: msg };
-  }
-  loggerLog(
-    `[Reticulum] Installed community mesh network identity (bundle → userData) ${dest}`
-  );
-  return { ok: true, created: true };
+  return ensureBundledMeshResourceIfNeeded({
+    dest: getMeshNetworkIdentityPath(),
+    source: getBundledMeshNetworkIdentityPath(),
+    missingMessage: `Bundled community mesh identity missing: ${getBundledMeshNetworkIdentityPath()}`,
+    installErrorPrefix: 'Failed to install mesh network identity',
+    installedMessage:
+      'Installed community mesh network identity (bundle -> userData)',
+  });
+}
+
+/**
+ * Installs the bundled Qortal community mesh passphrase into userData so
+ * private gateway discovery can publish the shared IFAC credentials.
+ * Idempotent. Call before rendering managed config.
+ */
+export function ensureMeshNetworkPassphraseIfNeeded(): EnsureMeshNetworkIdentityResult {
+  return ensureBundledMeshResourceIfNeeded({
+    dest: getMeshNetworkPassphrasePath(),
+    source: getBundledMeshNetworkPassphrasePath(),
+    missingMessage: `Bundled community mesh passphrase missing: ${getBundledMeshNetworkPassphrasePath()}`,
+    installErrorPrefix: 'Failed to install mesh network passphrase',
+    installedMessage:
+      'Installed community mesh passphrase (bundle -> userData)',
+  });
 }
 
 export function getReticulumDaemonStatus(): ReticulumDaemonStatus {
