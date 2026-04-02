@@ -200,9 +200,7 @@ describe('reticulum-daemon managed config', () => {
       expect(config).toContain('reachable_on = 203.0.113.7');
       expect(config).toContain('announce_interval = 5');
       expect(config).toContain('publish_ifac = yes');
-      const meshListenType =
-        process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
-      expect(config).toContain(`type = ${meshListenType}`);
+      expect(config).toContain('type = TCPServerInterface');
     } finally {
       spy.mockRestore();
     }

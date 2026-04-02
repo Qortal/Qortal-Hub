@@ -40,10 +40,17 @@ import {
  * Bootstrap hubs as TCPClient rows; AutoInterface discover/autoconnect (no gossip-driven outbound).
  */
 
-/** BackboneInterface is only supported on Linux in upstream RNS (not Windows/macOS). */
-function meshListenRnsInterfaceType():
+/**
+ * BackboneInterface is only supported on Linux in upstream RNS (not Windows/macOS).
+ * For testing cross-platform discovery, force private gateways to publish a
+ * TCPServerInterface even on Linux so non-Linux peers can auto-connect.
+ */
+function meshListenRnsInterfaceType(meshPrivateGateway = false):
   | 'BackboneInterface'
   | 'TCPServerInterface' {
+  if (meshPrivateGateway) {
+    return 'TCPServerInterface';
+  }
   return process.platform === 'linux'
     ? 'BackboneInterface'
     : 'TCPServerInterface';
@@ -190,7 +197,7 @@ function renderMeshInterfaces(
   if (!slice) return '';
   let out = '';
   if (slice.listenEnabled) {
-    const iface = meshListenRnsInterfaceType();
+    const iface = meshListenRnsInterfaceType(slice.meshPrivateGateway);
     const listenKeys =
       iface === 'BackboneInterface'
         ? `  listen_on = 0.0.0.0
@@ -276,7 +283,7 @@ function logManagedDiscoveryConfig(
   if (!meshSlice?.listenEnabled) {
     return;
   }
-  const iface = meshListenRnsInterfaceType();
+  const iface = meshListenRnsInterfaceType(meshSlice.meshPrivateGateway);
   if (meshSlice.meshPrivateGateway) {
     const reachable = meshSlice.reachableOn ?? 'unset';
     loggerLog(
