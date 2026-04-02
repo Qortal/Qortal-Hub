@@ -534,6 +534,43 @@ type LaunchPlan =
     }
   | { error: string };
 
+function probeReticulumVersion(
+  plan: Extract<LaunchPlan, { cmd: string }>
+): string | null {
+  try {
+    const env = { ...process.env, ...(plan.envExtra ?? {}) };
+    if (plan.mode === 'frozen') {
+      const result = spawnSync(plan.cmd, ['--version'], {
+        cwd: plan.cwd,
+        env,
+        encoding: 'utf8',
+        windowsHide: true,
+      });
+      const text = `${result.stdout ?? ''}\n${result.stderr ?? ''}`.trim();
+      return text.length > 0 ? text.replace(/\s+/g, ' ') : null;
+    }
+
+    const result = spawnSync(
+      plan.cmd,
+      ['-c', 'import RNS; print(getattr(RNS, "__version__", "unknown"))'],
+      {
+        cwd: plan.cwd,
+        env,
+        encoding: 'utf8',
+        windowsHide: true,
+        shell: process.platform === 'win32',
+      }
+    );
+    if (result.status !== 0) {
+      return null;
+    }
+    const text = `${result.stdout ?? ''}`.trim();
+    return text.length > 0 ? text : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveLaunchPlan(): LaunchPlan {
   const configDir = getReticulumConfigDir();
   const extraArgs = ['--config', configDir];
@@ -911,6 +948,11 @@ export function startBundledReticulumDaemon(): void {
     loggerLog(`[Reticulum] Not starting: ${plan.error}`);
     appendReticulumFileLog(`Not starting: ${plan.error}`);
     return;
+  }
+  const version = probeReticulumVersion(plan);
+  if (version) {
+    loggerLog(`[Reticulum] Using RNS ${version} (${plan.mode})`);
+    appendReticulumFileLog(`Using RNS ${version} (${plan.mode})`);
   }
 
   try {
