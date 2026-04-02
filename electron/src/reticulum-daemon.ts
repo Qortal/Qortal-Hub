@@ -38,19 +38,15 @@ import {
  * Reticulum hub mesh: listen on the mesh port with optional private-gateway discovery.
  * RNS BackboneInterface is Linux-only; Windows/macOS use TCPServerInterface for the same section.
  * Bootstrap hubs as TCPClient rows; AutoInterface discover/autoconnect (no gossip-driven outbound).
+ * On macOS only, `autoconnect_discovered_interfaces` is forced to 0: upstream RNS
+ * treats Windows specially for discovered gateways but not Darwin, so autoconnect
+ * may synthesize BackboneInterface clients; Backbone is Linux-only (epoll).
  */
 
-/**
- * BackboneInterface is only supported on Linux in upstream RNS (not Windows/macOS).
- * For testing cross-platform discovery, force private gateways to publish a
- * TCPServerInterface even on Linux so non-Linux peers can auto-connect.
- */
-function meshListenRnsInterfaceType(meshPrivateGateway = false):
+/** Mesh listen / private gateway: Backbone on Linux; TCPServer on Windows/macOS (no epoll). */
+function meshListenRnsInterfaceType():
   | 'BackboneInterface'
   | 'TCPServerInterface' {
-  if (meshPrivateGateway) {
-    return 'TCPServerInterface';
-  }
   return process.platform === 'linux'
     ? 'BackboneInterface'
     : 'TCPServerInterface';
@@ -197,7 +193,7 @@ function renderMeshInterfaces(
   if (!slice) return '';
   let out = '';
   if (slice.listenEnabled) {
-    const iface = meshListenRnsInterfaceType(slice.meshPrivateGateway);
+    const iface = meshListenRnsInterfaceType();
     const listenKeys =
       iface === 'BackboneInterface'
         ? `  listen_on = 0.0.0.0
@@ -265,8 +261,12 @@ shared_instance_port = ${getReticulumSharedInstancePort()}
 instance_control_port = ${getReticulumControlPort()}
 `;
   if (meshSlice?.meshDiscoveryClient) {
+    const autoconnectDiscoveredMax =
+      process.platform === 'darwin'
+        ? 0
+        : meshSlice.autoconnectDiscoveredMax;
     block += `discover_interfaces = yes
-autoconnect_discovered_interfaces = ${meshSlice.autoconnectDiscoveredMax}
+autoconnect_discovered_interfaces = ${autoconnectDiscoveredMax}
 `;
   }
   if (hasNetworkIdentity) {
@@ -283,7 +283,7 @@ function logManagedDiscoveryConfig(
   if (!meshSlice?.listenEnabled) {
     return;
   }
-  const iface = meshListenRnsInterfaceType(meshSlice.meshPrivateGateway);
+  const iface = meshListenRnsInterfaceType();
   if (meshSlice.meshPrivateGateway) {
     const reachable = meshSlice.reachableOn ?? 'unset';
     loggerLog(

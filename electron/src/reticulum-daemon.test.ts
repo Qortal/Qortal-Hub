@@ -117,7 +117,11 @@ describe('reticulum-daemon managed config', () => {
       config.indexOf('[logging]')
     );
     expect(reticulumBlock).toContain('discover_interfaces = yes');
-    expect(reticulumBlock).toContain('autoconnect_discovered_interfaces = 8');
+    const wantAutoconnect =
+      process.platform === 'darwin'
+        ? 'autoconnect_discovered_interfaces = 0'
+        : 'autoconnect_discovered_interfaces = 8';
+    expect(reticulumBlock).toContain(wantAutoconnect);
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
     const meshListenType =
       process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
@@ -200,7 +204,9 @@ describe('reticulum-daemon managed config', () => {
       expect(config).toContain('reachable_on = 203.0.113.7');
       expect(config).toContain('announce_interval = 5');
       expect(config).toContain('publish_ifac = yes');
-      expect(config).toContain('type = TCPServerInterface');
+      const privateGatewayListenType =
+        process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';
+      expect(config).toContain(`type = ${privateGatewayListenType}`);
     } finally {
       spy.mockRestore();
     }
