@@ -91,6 +91,8 @@ const GC_RETICULUM_REASM_TTL_MS = 45_000;
 const GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS = [250, 500, 1_000, 2_000];
 const GC_RETICULUM_FAILURE_LOG_MIN_MS = 5_000;
 const GC_RETICULUM_AUDIO_PENDING_MAX_FRAMES = 24;
+const GC_RETICULUM_OVERLAY_HOPS = 4;
+const GC_RETICULUM_OVERLAY_SEEN_TTL_MS = 120_000;
 
 type GcReticulumRetryKind =
   | 'join'
@@ -891,6 +893,7 @@ export class GroupCallManager extends EventEmitter {
   private unknownRoomKeyLogAt = new Map<string, number>();
   private pendingKeyExpiredLogAt = new Map<string, number>();
   private reticulumFailureLogAt = new Map<string, number>();
+  private seenReticulumOverlayIds = new Map<string, number>();
 
   /** Numeric Qortal group ids (from renderer) to derive sidebar call indicators. */
   private watchedQortalGroupNumericIds = new Set<number>();
@@ -1289,6 +1292,7 @@ export class GroupCallManager extends EventEmitter {
     this.pendingKeyExpiredLogAt.clear();
     this.transportHealthByRoom.clear();
     this.recentRoomStateByRoomId.clear();
+    this.seenReticulumOverlayIds.clear();
     if (this.qortalActivityEmitTimer) {
       clearTimeout(this.qortalActivityEmitTimer);
       this.qortalActivityEmitTimer = null;
@@ -1592,6 +1596,87 @@ export class GroupCallManager extends EventEmitter {
     loggerWarn(message);
   }
 
+  private nextReticulumOverlayId(): string {
+    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private attachReticulumOverlayMeta(
+    frame: Record<string, unknown>,
+    hopsRemaining: number = GC_RETICULUM_OVERLAY_HOPS
+  ): Record<string, unknown> {
+    return {
+      ...frame,
+      X: this.nextReticulumOverlayId(),
+      L: Math.max(0, Math.trunc(hopsRemaining)),
+    };
+  }
+
+  private parseReticulumOverlayMeta(
+    wire: Record<string, unknown>
+  ): { overlayId: string; hopsRemaining: number } | null {
+    if (typeof wire.X !== 'string' || typeof wire.L !== 'number') {
+      return null;
+    }
+    return {
+      overlayId: wire.X,
+      hopsRemaining: Math.max(0, Math.trunc(wire.L)),
+    };
+  }
+
+  private rememberReticulumOverlayId(overlayId: string): void {
+    const now = Date.now();
+    this.seenReticulumOverlayIds.set(overlayId, now + GC_RETICULUM_OVERLAY_SEEN_TTL_MS);
+    for (const [id, expiresAt] of this.seenReticulumOverlayIds) {
+      if (expiresAt <= now) this.seenReticulumOverlayIds.delete(id);
+    }
+  }
+
+  private hasSeenReticulumOverlayId(overlayId: string): boolean {
+    const now = Date.now();
+    const expiresAt = this.seenReticulumOverlayIds.get(overlayId);
+    if (typeof expiresAt !== 'number') return false;
+    if (expiresAt <= now) {
+      this.seenReticulumOverlayIds.delete(overlayId);
+      return false;
+    }
+    return true;
+  }
+
+  private async broadcastReticulumFramesViaOverlay(
+    frames: Record<string, unknown>[],
+    excludePeerHashes: string[] = []
+  ): Promise<GcReticulumSendResult> {
+    if (frames.length === 0) {
+      return {
+        ok: false,
+        reason: 'wire-too-large',
+        error: 'No Reticulum frames fit encrypted wire limit',
+      };
+    }
+    const bridge = this.reticulumBridge;
+    if (!bridge) return { ok: false, reason: 'bridge-unavailable' };
+    if (bridge.getState() !== 'ready') {
+      return { ok: false, reason: 'bridge-not-ready' };
+    }
+    const neighbors =
+      this.presence.getReticulumActiveNeighborHashes(excludePeerHashes);
+    if (neighbors.length === 0) {
+      return { ok: false, reason: 'no-route' };
+    }
+    for (const peerHash of neighbors) {
+      for (const frame of frames) {
+        const result: ReticulumSendResult = await bridge.sendGroupCallDetailed(
+          peerHash,
+          frame
+        );
+        if (!result.ok) {
+          return result;
+        }
+      }
+    }
+    return { ok: true };
+  }
+
   private async sendReticulumFramesToHash(
     destinationHash: string,
     frames: Record<string, unknown>[]
@@ -1627,32 +1712,11 @@ export class GroupCallManager extends EventEmitter {
     retryKind?: GcReticulumRetryKind,
     attempt = 0
   ): void {
-    const targetAddresses = this.collectReticulumTargetAddressesForRoom(
-      roomId,
-      excludeAddresses
-    );
-    if (targetAddresses.length === 0) {
-      if (
-        retryKind &&
-        attempt < GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS.length
-      ) {
-        this.scheduleReticulumRetry(
-          GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS[attempt]!,
-          () =>
-            this.fanoutReticulumWire(
-              roomId,
-              frames,
-              excludeAddresses,
-              retryKind,
-              attempt + 1
-            )
-        );
-      }
-      return;
-    }
+    void roomId;
+    void excludeAddresses;
     void this.fanoutReticulumWireAsync(
       roomId,
-      targetAddresses,
+      [],
       frames,
       excludeAddresses,
       retryKind,
@@ -1668,27 +1732,17 @@ export class GroupCallManager extends EventEmitter {
     retryKind: GcReticulumRetryKind | undefined,
     attempt: number
   ): Promise<void> {
-    let hadFailure = false;
-    let firstFailure: GcReticulumSendResult | null = null;
-    for (const address of targetAddresses) {
-      const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
-      if (!peerPresenceHash) {
-        hadFailure = true;
-        firstFailure ??= { ok: false, reason: 'no-route' };
-        continue;
-      }
-      const result = await this.sendReticulumFramesToHash(
-        peerPresenceHash,
-        frames
-      );
-      if (!result.ok) {
-        hadFailure = true;
-        firstFailure ??= result;
-      }
-    }
+    void roomId;
+    void targetAddresses;
+    void excludeAddresses;
+    const overlayFrames = frames.map((frame) =>
+      this.attachReticulumOverlayMeta(frame)
+    );
+    const firstFailure = await this.broadcastReticulumFramesViaOverlay(
+      overlayFrames
+    );
     if (
       retryKind &&
-      hadFailure &&
       firstFailure &&
       this.isRetryableReticulumFailure(firstFailure) &&
       attempt < GC_RETICULUM_FIRST_CONTACT_RETRY_DELAYS_MS.length
@@ -1730,11 +1784,11 @@ export class GroupCallManager extends EventEmitter {
     retryKind: GcReticulumRetryKind | undefined,
     attempt: number
   ): Promise<void> {
-    const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
-    const result =
-      peerPresenceHash
-        ? await this.sendReticulumFramesToHash(peerPresenceHash, frames)
-        : ({ ok: false, reason: 'no-route' } as const);
+    void address;
+    const overlayFrames = frames.map((frame) =>
+      this.attachReticulumOverlayMeta(frame)
+    );
+    const result = await this.broadcastReticulumFramesViaOverlay(overlayFrames);
     if (
       retryKind &&
       this.isRetryableReticulumFailure(result) &&
@@ -1901,29 +1955,21 @@ export class GroupCallManager extends EventEmitter {
     if (!room || room.participants.size === 0) return;
     const targets = this.qortalReticulumTargetsByRoomId.get(roomId);
     if (!targets || targets.size === 0) return;
-    const destinationHashes = new Set<string>();
-    for (const address of targets) {
-      const peerPresenceHash = this.resolveReticulumPeerPresenceHash(address);
-      if (!peerPresenceHash) continue;
-      destinationHashes.add(peerPresenceHash);
-    }
-    if (destinationHashes.size === 0) return;
     const wire: GcReticulumActivityWire = {
       t: 'GA',
       g: groupId,
       m: Date.now(),
     };
-    if (!wireFitsReticulum(wire as unknown as Record<string, unknown>)) {
+    const overlayWire = this.attachReticulumOverlayMeta(
+      wire as unknown as Record<string, unknown>
+    );
+    if (!wireFitsReticulum(overlayWire)) {
       loggerWarn(
         `[GCall] Skipping GA activity for room ${roomId}: wire exceeds Reticulum limit`
       );
       return;
     }
-    for (const destinationHash of destinationHashes) {
-      void bridge
-        .sendGroupCall(destinationHash, wire as unknown as Record<string, unknown>)
-        .catch(() => {});
-    }
+    void this.broadcastReticulumFramesViaOverlay([overlayWire]).then(() => {});
   }
 
   private handleReticulumGroupCallWire(
@@ -1931,6 +1977,21 @@ export class GroupCallManager extends EventEmitter {
     senderCallHash: string,
     peerPresenceHash: string
   ): void {
+    const overlayMeta = this.parseReticulumOverlayMeta(wire);
+    if (overlayMeta) {
+      if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId)) return;
+      this.rememberReticulumOverlayId(overlayMeta.overlayId);
+      if (overlayMeta.hopsRemaining > 0) {
+        const forwarded = {
+          ...wire,
+          L: overlayMeta.hopsRemaining - 1,
+        };
+        void this.broadcastReticulumFramesViaOverlay(
+          [forwarded],
+          peerPresenceHash ? [peerPresenceHash] : []
+        ).then(() => {});
+      }
+    }
     const now = Date.now();
     this.sweepExpiredReticulumReassembly(now);
 

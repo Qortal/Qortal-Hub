@@ -7,6 +7,7 @@ import * as nodeCrypto from 'crypto';
 import {
   RT_RETICULUM_MAX_WIRE_JSON_BYTES,
   byteLengthUtf8JsonWithBridgeSender,
+  byteLengthUtf8JsonWithBridgeSenderAndTarget,
 } from './reticulum-wire-size';
 import type {
   CallAcceptEnvelope,
@@ -400,7 +401,8 @@ export function buildSdpWireFrames(
   sdpHash: string,
   fromPublicKey: string,
   timestamp: number,
-  signature: string
+  signature: string,
+  targetAddress: string
 ): BuiltSdpWire | null {
   const z = sdpHash.toLowerCase();
   if (!isHex64(z)) return null;
@@ -451,8 +453,10 @@ export function buildSdpWireFrames(
       (cs1List[i] as Record<string, unknown>).n = n;
     }
     const maxLen = Math.max(
-      byteLengthUtf8JsonWithBridgeSender(cs0),
-      ...cs1List.map((o) => byteLengthUtf8JsonWithBridgeSender(o))
+      byteLengthUtf8JsonWithBridgeSenderAndTarget(cs0, targetAddress),
+      ...cs1List.map((o) =>
+        byteLengthUtf8JsonWithBridgeSenderAndTarget(o, targetAddress)
+      )
     );
     if (maxLen <= RT_RETICULUM_MAX_WIRE_JSON_BYTES) {
       return { cs0, cs1List };

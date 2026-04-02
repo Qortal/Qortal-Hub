@@ -48,6 +48,7 @@ function presenceStub() {
     on: vi.fn(),
     off: vi.fn(),
     getRouteForAddress: vi.fn(() => null),
+    getReticulumActiveNeighborHashes: vi.fn(() => []),
     getNodeIdForAddress: vi.fn(() => null),
   };
 }

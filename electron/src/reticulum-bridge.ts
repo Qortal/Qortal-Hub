@@ -34,6 +34,9 @@ type BridgeCmdFrame = {
   action:
     | 'start'
     | 'publish_presence'
+    | 'forward_presence'
+    | 'overlay_sync_state'
+    | 'overlay_note_candidate_failure'
     | 'stop'
     | 'send_call'
     | 'send_group_call'
@@ -92,6 +95,14 @@ export type ReticulumConnectivitySnapshot = {
   reason?: string;
   /** Mesh listen section is online; RNS may report short or long interface names (presence_bridge matches substring). */
   meshListenOnline?: boolean;
+  /** Established RNS.Link sessions used for Reticulum presence/signaling overlay (not group audio). */
+  overlayLinksConnected?: number;
+};
+
+export type ReticulumOverlayVerifiedPeer = {
+  destinationHash: string;
+  address: string;
+  lastSeen: number;
 };
 
 type BridgeEventFrame =
@@ -105,7 +116,20 @@ type BridgeEventFrame =
       event: 'presence_message';
       payload?: {
         envelope?: PresenceEnvelope;
-        route?: { kind: 'reticulum'; destinationHash: string; linkId?: string };
+        route?: {
+          kind: 'reticulum';
+          destinationHash: string;
+          linkId?: string;
+          overlayHopsRemaining?: number;
+        };
+      };
+    }
+  | {
+      type: 'event';
+      event: 'candidate_peer_discovered';
+      payload?: {
+        peerHash?: string;
+        source?: string;
       };
     }
   | {
@@ -155,6 +179,18 @@ type BridgeEventFrame =
         reason?: string;
         code?: string;
         error?: string;
+      };
+    }
+  | {
+      type: 'event';
+      event: 'overlay_link_state';
+      payload?: {
+        linkId?: string;
+        peerPresenceHash?: string;
+        incoming?: boolean;
+        established?: boolean;
+        reason?: string;
+        queuedPackets?: number;
       };
     }
   | {
@@ -232,7 +268,12 @@ function resolveBridgeLaunch(configDir: string):
 
 function toPresenceRoute(raw: unknown): PresenceRoute | null {
   if (!raw || typeof raw !== 'object') return null;
-  const route = raw as { kind?: unknown; destinationHash?: unknown; linkId?: unknown };
+  const route = raw as {
+    kind?: unknown;
+    destinationHash?: unknown;
+    linkId?: unknown;
+    overlayHopsRemaining?: unknown;
+  };
   if (route.kind !== 'reticulum' || typeof route.destinationHash !== 'string') {
     return null;
   }
@@ -240,6 +281,9 @@ function toPresenceRoute(raw: unknown): PresenceRoute | null {
     kind: 'reticulum',
     destinationHash: route.destinationHash,
     ...(typeof route.linkId === 'string' ? { linkId: route.linkId } : {}),
+    ...(typeof route.overlayHopsRemaining === 'number'
+      ? { overlayHopsRemaining: route.overlayHopsRemaining }
+      : {}),
   };
 }
 
@@ -303,6 +347,8 @@ export class ReticulumBridge
   private lastDegradedReason: string | undefined;
   /** Local presence destination hash (RNS); set on `ready` event from Python. */
   private localPresenceDestinationHash: string | undefined;
+  /** Overlay control-plane links reporting `established` from Python `overlay_link_state`. */
+  private overlayEstablishedLinkIds = new Set<string>();
 
   subscribe(handlers: PresenceTransportHandlers): () => void {
     const onReady = () => handlers.onReady?.();
@@ -311,15 +357,21 @@ export class ReticulumBridge
       envelope: PresenceEnvelope,
       route: PresenceRoute
     ) => handlers.onEnvelope(envelope, route);
+    const onCandidatePeerDiscovered = (payload: {
+      peerHash: string;
+      source?: string;
+    }) => handlers.onCandidatePeerDiscovered?.(payload);
 
     this.on('ready', onReady);
     this.on('degraded', onDegraded);
     this.on('presence-envelope', onEnvelope);
+    this.on('candidate-peer-discovered', onCandidatePeerDiscovered);
 
     return () => {
       this.off('ready', onReady);
       this.off('degraded', onDegraded);
       this.off('presence-envelope', onEnvelope);
+      this.off('candidate-peer-discovered', onCandidatePeerDiscovered);
     };
   }
 
@@ -362,6 +414,7 @@ export class ReticulumBridge
     this.audioIpcFd4FirstMessageLogged = false;
     this.audioIpcFd4FirstRawChunkLogged = false;
     this.audioIpcSendFailedCodesLogged.clear();
+    this.overlayEstablishedLinkIds.clear();
     this.stdoutBuffer = '';
     const child = this.child;
     this.child = null;
@@ -524,10 +577,13 @@ export class ReticulumBridge
       `[ReticulumBridge] Publishing ${envelope.type} for ${(envelope.payload as { address?: string }).address ?? 'unknown'}`
     );
     const pm = getPresenceManager();
-    const additionalFanoutHashes = pm?.getReticulumFanoutDestinationHashes() ?? [];
+    const overlayNeighborHashes =
+      pm?.getReticulumActiveNeighborHashes() ??
+      pm?.getReticulumFanoutDestinationHashes() ??
+      [];
     const resp = await this.sendCommand('publish_presence', {
       envelope,
-      additionalFanoutHashes,
+      overlayNeighborHashes,
     });
     const pubAddr =
       typeof (envelope.payload as { address?: string })?.address === 'string'
@@ -552,6 +608,47 @@ export class ReticulumBridge
     return resp.ok;
   }
 
+  async forwardPresence(
+    envelope: PresenceEnvelope,
+    overlayHopsRemaining: number,
+    excludeDestinationHashes: string[] = []
+  ): Promise<boolean> {
+    await this.start();
+    if (this.state !== 'ready') return false;
+    const resp = await this.sendCommand('forward_presence', {
+      envelope,
+      overlayHopsRemaining,
+      excludeDestinationHashes,
+    });
+    return resp.ok;
+  }
+
+  async syncOverlayState(
+    verifiedPeers: ReticulumOverlayVerifiedPeer[],
+    activeNeighborHashes: string[]
+  ): Promise<boolean> {
+    await this.start();
+    if (this.state !== 'ready') return false;
+    const resp = await this.sendCommand('overlay_sync_state', {
+      verifiedPeers,
+      activeNeighborHashes,
+    });
+    return resp.ok;
+  }
+
+  async noteOverlayCandidateFailure(
+    peerHash: string,
+    reason: string
+  ): Promise<boolean> {
+    await this.start();
+    if (this.state !== 'ready') return false;
+    const resp = await this.sendCommand('overlay_note_candidate_failure', {
+      peerHash,
+      reason,
+    });
+    return resp.ok;
+  }
+
   getState(): BridgeState {
     return this.state;
   }
@@ -560,6 +657,7 @@ export class ReticulumBridge
     return {
       ...this.connectivitySnapshot,
       bridgeState: this.state,
+      overlayLinksConnected: this.overlayEstablishedLinkIds.size,
       ...(this.lastDegradedReason ? { reason: this.lastDegradedReason } : {}),
     };
   }
@@ -925,6 +1023,17 @@ export class ReticulumBridge
         this.emit('presence-envelope', envelope, route);
         return;
       }
+      case 'candidate_peer_discovered': {
+        const peerHash = frame.payload?.peerHash;
+        if (typeof peerHash !== 'string' || !peerHash) return;
+        this.emit('candidate-peer-discovered', {
+          peerHash,
+          ...(typeof frame.payload?.source === 'string'
+            ? { source: frame.payload.source }
+            : {}),
+        });
+        return;
+      }
       case 'call_message': {
         const wire = frame.payload?.wire;
         const senderCallHash = frame.payload?.senderCallHash;
@@ -1007,6 +1116,38 @@ export class ReticulumBridge
           code,
           error:
             typeof frame.payload?.error === 'string' ? frame.payload.error : '',
+        });
+        return;
+      }
+      case 'overlay_link_state': {
+        const linkId = frame.payload?.linkId;
+        if (typeof linkId !== 'string' || !linkId) return;
+        const peerPresenceHash =
+          typeof frame.payload?.peerPresenceHash === 'string'
+            ? frame.payload.peerPresenceHash
+            : '';
+        const reason =
+          typeof frame.payload?.reason === 'string' ? frame.payload.reason : '';
+        const queuedPackets =
+          typeof frame.payload?.queuedPackets === 'number'
+            ? frame.payload.queuedPackets
+            : 0;
+        loggerLog(
+          `[ReticulumBridge] overlay-link link_id=${linkId} peer=${peerPresenceHash || 'unknown'} incoming=${frame.payload?.incoming === true ? 'yes' : 'no'} established=${frame.payload?.established === true ? 'yes' : 'no'} queued=${queuedPackets}${reason ? ` reason=${reason}` : ''}`
+        );
+        const established = frame.payload?.established === true;
+        if (established) {
+          this.overlayEstablishedLinkIds.add(linkId);
+        } else {
+          this.overlayEstablishedLinkIds.delete(linkId);
+        }
+        this.emit('overlay-link-state', {
+          linkId,
+          peerPresenceHash,
+          incoming: frame.payload?.incoming === true,
+          established,
+          reason,
+          queuedPackets,
         });
         return;
       }

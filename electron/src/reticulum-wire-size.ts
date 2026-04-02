@@ -12,6 +12,7 @@
 export const RT_RETICULUM_MAX_WIRE_JSON_BYTES = 378;
 
 const BRIDGE_SENDER_HASH_PLACEHOLDER = '0'.repeat(64);
+const OVERLAY_MESSAGE_ID_PLACEHOLDER = 'overlay000000';
 
 /**
  * UTF-8 byte length of JSON after Python adds `r` (same width as real destination hash hex).
@@ -23,6 +24,24 @@ export function byteLengthUtf8JsonWithBridgeSender(
     JSON.stringify({
       ...obj,
       r: BRIDGE_SENDER_HASH_PLACEHOLDER,
+      X: OVERLAY_MESSAGE_ID_PLACEHOLDER,
+      L: 0,
+    }),
+    'utf8'
+  );
+}
+
+export function byteLengthUtf8JsonWithBridgeSenderAndTarget(
+  obj: Record<string, unknown>,
+  targetAddress: string
+): number {
+  return Buffer.byteLength(
+    JSON.stringify({
+      ...obj,
+      r: BRIDGE_SENDER_HASH_PLACEHOLDER,
+      X: OVERLAY_MESSAGE_ID_PLACEHOLDER,
+      L: 0,
+      U: targetAddress,
     }),
     'utf8'
   );

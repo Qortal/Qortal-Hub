@@ -163,6 +163,7 @@ describe('ReticulumBridge group audio support', () => {
       onlineHubInterfaces: 1,
       hubSummary: 'Hub A=online, Hub B=offline',
       meshListenOnline: false,
+      overlayLinksConnected: 0,
     });
     expect(seen).toEqual([
       {
@@ -173,6 +174,66 @@ describe('ReticulumBridge group audio support', () => {
         onlineHubInterfaces: 1,
         hubSummary: 'Hub A=online, Hub B=offline',
         meshListenOnline: false,
+        overlayLinksConnected: 0,
+      },
+    ]);
+  });
+
+  it('emits overlay link lifecycle snapshots from JSON events', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const seen: unknown[] = [];
+
+    bridge.on('overlay-link-state', (payload) => {
+      seen.push(payload);
+    });
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: false,
+        established: true,
+        reason: 'established',
+        queuedPackets: 2,
+      },
+    });
+
+    expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(1);
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: false,
+        established: false,
+        reason: 'pruned',
+        queuedPackets: 0,
+      },
+    });
+
+    expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(0);
+
+    expect(seen).toEqual([
+      {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: false,
+        established: true,
+        reason: 'established',
+        queuedPackets: 2,
+      },
+      {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: false,
+        established: false,
+        reason: 'pruned',
+        queuedPackets: 0,
       },
     ]);
   });
@@ -188,7 +249,7 @@ describe('ReticulumBridge publish_presence payload', () => {
     expect(Buffer.from(base58Decode('2MyQRb')).toString('hex')).toBe('3544a76e');
   });
 
-  it('sends additionalFanoutHashes from PresenceManager (empty when null)', async () => {
+  it('sends overlayNeighborHashes from PresenceManager (empty when null)', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     internal.state = 'ready';
@@ -219,13 +280,16 @@ describe('ReticulumBridge publish_presence payload', () => {
 
     expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
       envelope,
-      additionalFanoutHashes: [],
+      overlayNeighborHashes: [],
     });
   });
 
-  it('sends reticulum destination hashes from PresenceManager', async () => {
+  it('sends active overlay neighbor hashes from PresenceManager', async () => {
     vi.mocked(getPresenceManager).mockReturnValue({
-      getReticulumFanoutDestinationHashes: () => ['aa112233445566778899aabbccddeeff', 'bb00112233445566778899aabbccddee'],
+      getReticulumActiveNeighborHashes: () => [
+        'aa112233445566778899aabbccddeeff',
+        'bb00112233445566778899aabbccddee',
+      ],
     } as any);
 
     const bridge = new ReticulumBridge();
@@ -258,7 +322,7 @@ describe('ReticulumBridge publish_presence payload', () => {
 
     expect(internal.sendCommand).toHaveBeenCalledWith('publish_presence', {
       envelope,
-      additionalFanoutHashes: [
+      overlayNeighborHashes: [
         'aa112233445566778899aabbccddeeff',
         'bb00112233445566778899aabbccddee',
       ],

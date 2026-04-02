@@ -7,11 +7,11 @@ import {
 } from './call-wire-reticulum';
 import {
   RT_RETICULUM_MAX_WIRE_JSON_BYTES,
-  byteLengthUtf8JsonWithBridgeSender,
+  byteLengthUtf8JsonWithBridgeSenderAndTarget,
 } from './reticulum-wire-size';
 
 function withBridgeR(obj: Record<string, unknown>): number {
-  return byteLengthUtf8JsonWithBridgeSender(obj);
+  return byteLengthUtf8JsonWithBridgeSenderAndTarget(obj, 'QtargetAddress1234567890123456789012');
 }
 
 describe('call-wire-reticulum SDP sizing', () => {
@@ -20,15 +20,16 @@ describe('call-wire-reticulum SDP sizing', () => {
   });
 
   it('buildSdpWireFrames keeps every CS0/CS1 under cap with bridge sender', () => {
-    const sdp = 'v=0\r\n' + 'a=x'.repeat(1200) + '\r\n';
+    const sdp = 'v=0\r\n' + 'a=x'.repeat(300) + '\r\n';
     const built = buildSdpWireFrames(
       'call-id-uuid-1234',
       'o',
       sdp,
       'a'.repeat(64),
-      'k'.repeat(56),
+      'k'.repeat(16),
       1_700_000_000,
-      'g'.repeat(88)
+      'g'.repeat(24),
+      'Qabc12345678901234567890123456789'
     );
     expect(built).not.toBeNull();
     expect(withBridgeR(built!.cs0)).toBeLessThanOrEqual(

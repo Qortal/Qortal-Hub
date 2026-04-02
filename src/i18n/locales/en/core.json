@@ -157,6 +157,7 @@
     "block_height": "block height",
     "data_peers": "QDN (data) peers",
     "information": "core information",
+    "overlay_links": "Reticulum overlay links",
     "peers": "connected peers",
     "version": "core version"
   },

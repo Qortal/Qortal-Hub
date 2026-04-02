@@ -27,6 +27,9 @@ const MAX_FUTURE_SKEW_MS = 30_000;
 const PRESENCE_CLEANUP_INTERVAL_MS = 15_000;
 const RETICULUM_ROUTE_TTL_MS = 45_000;
 const PRESENCE_TOO_OLD_LOG_MIN_MS = 5_000;
+export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
+const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 45_000;
+const RETICULUM_CANDIDATE_FAILURE_LIMIT = 2;
 
 // ── Message Types ─────────────────────────────────────────────────────────────
 
@@ -155,12 +158,21 @@ export interface PresenceStatusResult {
 export type PresenceRoute =
   | { kind: 'local' }
   | { kind: 'mesh-node'; id: string }
-  | { kind: 'reticulum'; destinationHash: string; linkId?: string };
+  | {
+      kind: 'reticulum';
+      destinationHash: string;
+      linkId?: string;
+      overlayHopsRemaining?: number;
+    };
 
 export interface PresenceTransportHandlers {
   onEnvelope: (remoteEnvelope: PresenceEnvelope, route: PresenceRoute) => void;
   onReady?: () => void;
   onDegraded?: (reason?: string) => void;
+  onCandidatePeerDiscovered?: (payload: {
+    peerHash: string;
+    source?: string;
+  }) => void;
 }
 
 export interface PresenceTransport {
@@ -200,6 +212,28 @@ interface PresenceAddressAggregate {
   route: PresenceRoute | null;
   nextExpiryAt: number | null;
 }
+
+type ReticulumCandidatePeer = {
+  destinationHash: string;
+  firstSeenAt: number;
+  lastSeenAt: number;
+  proofDeadlineAt: number;
+  failureCount: number;
+  lastFailureReason?: string;
+};
+
+type VerifiedReticulumPeer = {
+  destinationHash: string;
+  address: string;
+  lastSeen: number;
+  verifiedAt: number;
+};
+
+export type ReticulumVerifiedPeerSnapshot = {
+  destinationHash: string;
+  address: string;
+  lastSeen: number;
+};
 
 // ── Utility: Base58 (ported from src/encryption/Base58.ts) ───────────────────
 
@@ -574,6 +608,15 @@ export class PresenceManager extends EventEmitter {
   /** envelope.id → last log time for throttled "message too old" diagnostics */
   private presenceTooOldLogAt = new Map<string, number>();
   private presenceTooOldGlobalLogAt = 0;
+  private reticulumCandidates = new Map<string, ReticulumCandidatePeer>();
+  private verifiedReticulumPeers = new Map<string, VerifiedReticulumPeer>();
+  /** Verified-only overlay neighbors (cryptographic proof), sorted by recency. */
+  private activeReticulumNeighborHashes: string[] = [];
+  /**
+   * Reticulum publish/forward fanout: verified neighbors first, then candidate
+   * backfill up to {@link RETICULUM_OVERLAY_MAX_NEIGHBORS} for bootstrap.
+   */
+  private activeReticulumPublishHashes: string[] = [];
 
   private verifyPool = new VerifyWorkerPool(
     'presence',
@@ -632,6 +675,9 @@ export class PresenceManager extends EventEmitter {
 
     const result = validateEnvelopeSansSignature(envelope, now);
     if (result.ok === false) {
+      if (route.kind === 'reticulum') {
+        this.noteReticulumCandidateFailure(route.destinationHash, result.reason, now);
+      }
       if (result.reason === 'message too old') {
         const id = envelope?.id;
         const tnow = Date.now();
@@ -673,6 +719,13 @@ export class PresenceManager extends EventEmitter {
       publicKeyBase58,
     });
     if (!sigOk) {
+      if (route.kind === 'reticulum') {
+        this.noteReticulumCandidateFailure(
+          route.destinationHash,
+          'invalid signature',
+          now
+        );
+      }
       loggerLog(
         `[Presence] Rejected envelope ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)} reason=invalid signature`
       );
@@ -714,6 +767,10 @@ export class PresenceManager extends EventEmitter {
       return false;
     }
     this.latestTimestamp.set(tsKey, envelope.timestamp);
+
+    if (route.kind === 'reticulum') {
+      this.promoteVerifiedReticulumPeer(route.destinationHash, address, now);
+    }
 
     if (envelope.type === 'PRESENCE_OFFLINE') {
       loggerLog(
@@ -760,6 +817,10 @@ export class PresenceManager extends EventEmitter {
         );
       }
       this.emitPresenceUpdate(address, now);
+    }
+
+    if (route.kind === 'reticulum') {
+      this.emit('reticulum-envelope-accepted', { envelope, route });
     }
 
     return true;
@@ -858,6 +919,119 @@ export class PresenceManager extends EventEmitter {
     return out;
   }
 
+  getReticulumVerifiedPeers(): ReticulumVerifiedPeerSnapshot[] {
+    const now = Date.now();
+    this.pruneReticulumOverlayState(now);
+    return [...this.verifiedReticulumPeers.values()]
+      .sort((a, b) => b.lastSeen - a.lastSeen)
+      .map((peer) => ({
+        destinationHash: peer.destinationHash,
+        address: peer.address,
+        lastSeen: peer.lastSeen,
+      }));
+  }
+
+  /**
+   * Destination hashes for Reticulum overlay fanout (publish, forward, call/group
+   * signaling gossip): verified peers first, then unverified candidates filling
+   * remaining slots until the cap — so cold-start can reach announces before proof.
+   */
+  getReticulumActiveNeighborHashes(
+    excludeDestinationHashes: string[] = []
+  ): string[] {
+    const now = Date.now();
+    this.pruneReticulumOverlayState(now);
+    const base = this.activeReticulumPublishHashes;
+    if (excludeDestinationHashes.length === 0) {
+      return [...base];
+    }
+    const exclude = new Set(
+      excludeDestinationHashes
+        .filter((h) => typeof h === 'string' && h.length > 0)
+        .map((h) => h.toLowerCase())
+    );
+    return base.filter((hash) => !exclude.has(hash.toLowerCase()));
+  }
+
+  /** Verified Reticulum overlay neighbors only (no candidate backfill). */
+  getReticulumVerifiedNeighborHashes(): string[] {
+    const now = Date.now();
+    this.pruneReticulumOverlayState(now);
+    return [...this.activeReticulumNeighborHashes];
+  }
+
+  noteReticulumCandidateDiscovered(
+    destinationHash: string,
+    source: string = 'announce',
+    now: number = Date.now()
+  ): void {
+    const hash = destinationHash.trim().toLowerCase();
+    if (!hash) return;
+    const existing = this.reticulumCandidates.get(hash);
+    const peer: ReticulumCandidatePeer = {
+      destinationHash: hash,
+      firstSeenAt: existing?.firstSeenAt ?? now,
+      lastSeenAt: now,
+      proofDeadlineAt: now + RETICULUM_CANDIDATE_PROOF_WINDOW_MS,
+      failureCount: existing?.failureCount ?? 0,
+      ...(existing?.lastFailureReason
+        ? { lastFailureReason: existing.lastFailureReason }
+        : {}),
+    };
+    this.reticulumCandidates.set(hash, peer);
+    loggerLog(
+      `[Presence] Reticulum candidate discovered sender_hash=${hash} source=${source} proof_deadline=${peer.proofDeadlineAt}`
+    );
+    this.recomputeReticulumActiveNeighbors(now);
+    this.emitReticulumOverlayChanged();
+  }
+
+  noteReticulumCandidateFailure(
+    destinationHash: string,
+    reason: string,
+    now: number = Date.now()
+  ): void {
+    const hash = destinationHash.trim().toLowerCase();
+    if (!hash) return;
+    const existing = this.reticulumCandidates.get(hash);
+    if (!existing) {
+      this.reticulumCandidates.set(hash, {
+        destinationHash: hash,
+        firstSeenAt: now,
+        lastSeenAt: now,
+        proofDeadlineAt: now + RETICULUM_CANDIDATE_PROOF_WINDOW_MS,
+        failureCount: 1,
+        lastFailureReason: reason,
+      });
+      this.emit('reticulum-candidate-failed', {
+        destinationHash: hash,
+        reason,
+        failureCount: 1,
+      });
+      this.recomputeReticulumActiveNeighbors(now);
+      this.emitReticulumOverlayChanged();
+      return;
+    }
+    existing.lastSeenAt = now;
+    existing.failureCount += 1;
+    existing.lastFailureReason = reason;
+    if (existing.failureCount >= RETICULUM_CANDIDATE_FAILURE_LIMIT) {
+      this.reticulumCandidates.delete(hash);
+      loggerLog(
+        `[Presence] Reticulum candidate evicted sender_hash=${hash} failures=${existing.failureCount} reason=${reason}`
+      );
+    } else {
+      this.reticulumCandidates.set(hash, existing);
+    }
+    this.emit('reticulum-candidate-failed', {
+      destinationHash: hash,
+      reason,
+      failureCount: existing.failureCount,
+    });
+    this.recomputeReticulumActiveNeighbors(now);
+    this.emitReticulumOverlayChanged();
+  }
+
   /** Returns the most-recently-seen active status for an address, or null. */
   getAddressStatus(address: string): UserStatus | null {
     return this.getAddressAggregate(address).status;
@@ -897,6 +1071,7 @@ export class PresenceManager extends EventEmitter {
     for (const address of changedAddresses) {
       this.emitPresenceUpdate(address, now);
     }
+    this.pruneReticulumOverlayState(now);
     if (expiredSessions > 0) {
       loggerLog(
         `[Presence] Cleanup removed ${expiredSessions} expired session(s) affecting ${changedAddresses.size} address(es)`
@@ -964,6 +1139,7 @@ export class PresenceManager extends EventEmitter {
     for (const address of changedAddresses) {
       this.emitPresenceUpdate(address);
     }
+    this.pruneReticulumOverlayState();
     if (removedSessions > 0) {
       loggerLog(
         `[Presence] Invalidated ${removedSessions} session(s) after transport degradation routeKind=${routeKind}`
@@ -977,6 +1153,7 @@ export class PresenceManager extends EventEmitter {
     this.sessions.delete(key);
     this.removeSessionKey(address, key);
     this.emitPresenceUpdate(address);
+    this.pruneReticulumOverlayState();
   }
 
   private addSessionKey(address: string, key: string): void {
@@ -1088,6 +1265,124 @@ export class PresenceManager extends EventEmitter {
       status: aggregate.status,
     });
   }
+
+  private promoteVerifiedReticulumPeer(
+    destinationHash: string,
+    address: string,
+    now: number
+  ): void {
+    const hash = destinationHash.trim().toLowerCase();
+    if (!hash || !address) return;
+    this.reticulumCandidates.delete(hash);
+    const existing = this.verifiedReticulumPeers.get(hash);
+    this.verifiedReticulumPeers.set(hash, {
+      destinationHash: hash,
+      address,
+      lastSeen: now,
+      verifiedAt: existing?.verifiedAt ?? now,
+    });
+    this.recomputeReticulumActiveNeighbors(now);
+    this.emit('reticulum-peer-verified', {
+      destinationHash: hash,
+      address,
+      lastSeen: now,
+    });
+    this.emitReticulumOverlayChanged();
+  }
+
+  private pruneReticulumOverlayState(now: number = Date.now()): void {
+    let changed = false;
+    for (const [hash, candidate] of [...this.reticulumCandidates.entries()]) {
+      if (now > candidate.proofDeadlineAt) {
+        this.reticulumCandidates.delete(hash);
+        changed = true;
+      }
+    }
+    const liveHashes = new Set<string>();
+    for (const session of this.sessions.values()) {
+      if (session.route.kind !== 'reticulum') continue;
+      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
+      liveHashes.add(session.route.destinationHash.toLowerCase());
+    }
+    for (const [hash, peer] of [...this.verifiedReticulumPeers.entries()]) {
+      if (!liveHashes.has(hash)) {
+        this.verifiedReticulumPeers.delete(hash);
+        changed = true;
+        continue;
+      }
+      const aggregate = this.getAddressAggregate(peer.address, now);
+      if (aggregate.liveSessionCount === 0) {
+        this.verifiedReticulumPeers.delete(hash);
+        changed = true;
+      }
+    }
+    const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
+    if (changed || neighborsChanged) {
+      this.emitReticulumOverlayChanged();
+    }
+  }
+
+  private recomputeReticulumActiveNeighbors(now: number): boolean {
+    const verifiedSorted = [...this.verifiedReticulumPeers.values()]
+      .filter((peer) => {
+        const aggregate = this.getAddressAggregate(peer.address, now);
+        return (
+          aggregate.liveSessionCount > 0 &&
+          aggregate.route?.kind === 'reticulum' &&
+          aggregate.route.destinationHash.toLowerCase() ===
+            peer.destinationHash.toLowerCase()
+        );
+      })
+      .sort((a, b) => b.lastSeen - a.lastSeen);
+
+    const nextVerified = verifiedSorted
+      .slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
+      .map((peer) => peer.destinationHash);
+
+    const verifiedChanged =
+      nextVerified.length !== this.activeReticulumNeighborHashes.length ||
+      nextVerified.some(
+        (hash, idx) => hash !== this.activeReticulumNeighborHashes[idx]
+      );
+    if (verifiedChanged) {
+      this.activeReticulumNeighborHashes = nextVerified;
+    }
+
+    const seen = new Set(nextVerified.map((h) => h.toLowerCase()));
+    const publish: string[] = [...nextVerified];
+    if (publish.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
+      const cand = [...this.reticulumCandidates.values()]
+        .filter(
+          (c) =>
+            now <= c.proofDeadlineAt &&
+            !seen.has(c.destinationHash.toLowerCase())
+        )
+        .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+      for (const c of cand) {
+        if (publish.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
+        publish.push(c.destinationHash);
+        seen.add(c.destinationHash.toLowerCase());
+      }
+    }
+
+    const publishChanged =
+      publish.length !== this.activeReticulumPublishHashes.length ||
+      publish.some((hash, idx) => hash !== this.activeReticulumPublishHashes[idx]);
+    if (publishChanged) {
+      this.activeReticulumPublishHashes = publish;
+    }
+
+    return verifiedChanged || publishChanged;
+  }
+
+  private emitReticulumOverlayChanged(): void {
+    this.emit('reticulum-overlay-changed', {
+      candidates: this.reticulumCandidates.size,
+      verified: this.verifiedReticulumPeers.size,
+      activeNeighbors: this.activeReticulumNeighborHashes.length,
+      publishFanout: this.activeReticulumPublishHashes.length,
+    });
+  }
 }
 
 // ── Helpers for the renderer (exported for use via IPC) ──────────────────────
@@ -1151,6 +1446,9 @@ function subscribePresenceTransport(
         `[Presence] Transport delivered envelope via ${transport.kind} ${describePresenceEnvelope(envelope)} route=${describePresenceRoute(route)}`
       );
       void presenceManager?.handleEnvelope(envelope, route);
+    },
+    onCandidatePeerDiscovered: ({ peerHash, source }) => {
+      manager.noteReticulumCandidateDiscovered(peerHash, source ?? transport.kind);
     },
     onReady: () => {
       const cached = manager.getLastLocalEnvelope();

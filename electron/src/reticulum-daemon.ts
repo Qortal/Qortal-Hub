@@ -485,6 +485,8 @@ export type ReticulumDaemonStatus = {
   configuredHubInterfaces?: number;
   onlineHubInterfaces?: number;
   hubSummary?: string;
+  /** Established overlay (presence/signaling) RNS.Link count from the Python bridge. */
+  overlayLinksConnected?: number;
 };
 
 export type ReticulumPythonLaunchPlan =
@@ -811,6 +813,9 @@ export function registerReticulumIpcHandlers(): void {
           configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
           onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
           hubSummary: bridgeStatus.hubSummary,
+          ...(typeof bridgeStatus.overlayLinksConnected === 'number'
+            ? { overlayLinksConnected: bridgeStatus.overlayLinksConnected }
+            : {}),
           ...(bridgeStatus.reason ? { reason: bridgeStatus.reason } : {}),
         };
       } catch (error) {

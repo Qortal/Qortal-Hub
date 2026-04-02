@@ -26,6 +26,7 @@ function reticulumAwarePresenceStub(): PresenceStub {
       kind: 'reticulum' as const,
       destinationHash: `d:${address}`,
     }),
+    getReticulumActiveNeighborHashes: () => ['d:Q-peer'],
     getNodeIdForAddress: () => null,
   };
 }
@@ -37,6 +38,7 @@ type PresenceStub = {
     kind: 'reticulum';
     destinationHash: string;
   };
+  getReticulumActiveNeighborHashes: () => string[];
   getNodeIdForAddress: () => null;
 };
 
@@ -332,7 +334,7 @@ describe('recent room bootstrap state', () => {
     manager.setQortalGroupReticulumTargets('gcall-qortal-812', ['Q-peer']);
     manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-self', 'sig', 'pk', 100);
 
-    expect(attempts).toBe(1);
+    expect(attempts).toBeGreaterThanOrEqual(1);
     await vi.advanceTimersByTimeAsync(250);
     expect(attempts).toBeGreaterThan(1);
     expect(sent.some((entry) => entry.msg.t === 'GJ')).toBe(true);
@@ -358,6 +360,7 @@ describe('recent room bootstrap state', () => {
         on: () => {},
         off: () => {},
         getRouteForAddress: () => null,
+        getReticulumActiveNeighborHashes: () => ['d:Q-peer'],
         getNodeIdForAddress: () => null,
       } as any,
       bridge as any

@@ -30,6 +30,9 @@ _call_destination = None
 _announce_handler = None
 _call_announce_handler = None
 _known_peers: Dict[str, Any] = {}
+_candidate_peers: Dict[str, Dict[str, Any]] = {}
+_verified_overlay_peers: Dict[str, Dict[str, Any]] = {}
+_active_overlay_neighbors: Dict[str, float] = {}
 # Per-peer metadata: last_seen_inbound, last_send_ok, last_request_path_at, ts_seed_until (epoch seconds).
 _peer_lifecycle: Dict[str, Dict[str, Any]] = {}
 # Recent presence senders (destination hash hex, lowercased) for recall retries on publish.
@@ -52,6 +55,10 @@ _MAX_KNOWN_PEERS = 256
 _REQUEST_PATH_COOLDOWN_SECONDS = 90.0
 _MAX_PATH_NUDGES_PER_PUBLISH = 5
 _KR_MISMATCH_LOGGED: set[str] = set()
+_OVERLAY_MAX_NEIGHBORS = 16
+_CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
+_CANDIDATE_FAILURE_LIMIT = 2
+_OVERLAY_DEFAULT_HOPS = 4
 
 
 def qortal_base58_decode(s: str) -> bytes:
@@ -105,7 +112,11 @@ _GROUP_AUDIO_WIRE_TYPE = "GCA"
 _audio_links_by_id: Dict[str, Dict[str, Any]] = {}
 _audio_link_ids_by_object: Dict[int, str] = {}
 _outgoing_audio_link_id_by_peer_hash: Dict[str, str] = {}
+_overlay_links_by_id: Dict[str, Dict[str, Any]] = {}
+_overlay_link_ids_by_object: Dict[int, str] = {}
+_outgoing_overlay_link_id_by_peer_hash: Dict[str, str] = {}
 _TRANSPORT_MONITOR_INTERVAL_SECONDS = 5.0
+_OVERLAY_PENDING_PACKET_LIMIT = 24
 
 # Binary audio IPC (fd 3 parent→child, fd 4 child→parent). Must match electron/src/reticulum-audio-ipc.ts.
 # Diagnostics: grep logs for "target=reticulum-audio-ipc" (fd open, parse, drops, first bytes).
@@ -774,6 +785,136 @@ def _register_peer(
     _evict_lru_if_needed()
 
 
+def _mark_candidate_peer(peer_key: str, source: str) -> None:
+    now = time.time()
+    existing = _candidate_peers.get(peer_key) or {}
+    peer = {
+        "first_seen_at": existing.get("first_seen_at") or now,
+        "last_seen_at": now,
+        "proof_deadline_at": now + _CANDIDATE_PROOF_WINDOW_SECONDS,
+        "failure_count": int(existing.get("failure_count") or 0),
+        "source": source,
+    }
+    if "last_failure_reason" in existing:
+        peer["last_failure_reason"] = existing["last_failure_reason"]
+    _candidate_peers[peer_key] = peer
+    emit_event(
+        "candidate_peer_discovered",
+        {
+            "peerHash": peer_key,
+            "source": source,
+        },
+    )
+    log(
+        "[presence_bridge] target=presence-reticulum candidate_discovered "
+        f"peer_hash={peer_key} source={source} proof_deadline_at={peer['proof_deadline_at']}"
+    )
+
+
+def _note_candidate_failure(peer_key: str, reason: str) -> None:
+    now = time.time()
+    existing = _candidate_peers.get(peer_key)
+    if existing is None:
+        existing = {
+            "first_seen_at": now,
+            "last_seen_at": now,
+            "proof_deadline_at": now + _CANDIDATE_PROOF_WINDOW_SECONDS,
+            "failure_count": 0,
+            "source": "failure",
+        }
+    existing["last_seen_at"] = now
+    existing["failure_count"] = int(existing.get("failure_count") or 0) + 1
+    existing["last_failure_reason"] = reason
+    if existing["failure_count"] >= _CANDIDATE_FAILURE_LIMIT:
+        _candidate_peers.pop(peer_key, None)
+        log(
+            "[presence_bridge] target=presence-reticulum candidate_evicted "
+            f"peer_hash={peer_key} failure_count={existing['failure_count']} reason={reason}"
+        )
+        return
+    _candidate_peers[peer_key] = existing
+    log(
+        "[presence_bridge] target=presence-reticulum candidate_failure "
+        f"peer_hash={peer_key} failure_count={existing['failure_count']} reason={reason}"
+    )
+
+
+def _prune_candidate_peers() -> None:
+    now = time.time()
+    for peer_key, peer in list(_candidate_peers.items()):
+        deadline = peer.get("proof_deadline_at")
+        if isinstance(deadline, (int, float)) and now > float(deadline):
+            _candidate_peers.pop(peer_key, None)
+            log(
+                "[presence_bridge] target=presence-reticulum candidate_timeout "
+                f"peer_hash={peer_key}"
+            )
+
+
+def _set_verified_overlay_peers(
+    verified_peers: list[Dict[str, Any]], active_neighbor_hashes: list[str]
+) -> None:
+    global _verified_overlay_peers, _active_overlay_neighbors
+    next_verified: Dict[str, Dict[str, Any]] = {}
+    for peer in verified_peers:
+        if not isinstance(peer, dict):
+            continue
+        peer_hash = str(peer.get("destinationHash") or "").strip().lower()
+        address = str(peer.get("address") or "").strip()
+        last_seen = peer.get("lastSeen")
+        if not peer_hash or not address or not isinstance(last_seen, (int, float)):
+            continue
+        if peer_hash not in _known_peers:
+            ensure_known_peer_from_recall(peer_hash, "ts_seed")
+        next_verified[peer_hash] = {
+            "address": address,
+            "last_seen": float(last_seen),
+        }
+        _candidate_peers.pop(peer_hash, None)
+    _verified_overlay_peers = next_verified
+    next_neighbors: Dict[str, float] = {}
+    for raw_hash in active_neighbor_hashes[:_OVERLAY_MAX_NEIGHBORS]:
+        peer_hash = str(raw_hash or "").strip().lower()
+        if not peer_hash:
+            continue
+        if peer_hash not in _known_peers:
+            ensure_known_peer_from_recall(peer_hash, "ts_seed")
+        if peer_hash not in _known_peers:
+            continue
+        # Fanout list from TS: verified neighbors plus candidate backfill (bootstrap).
+        next_neighbors[peer_hash] = time.time()
+    _active_overlay_neighbors = next_neighbors
+    log(
+        "[presence_bridge] target=presence-reticulum overlay_sync "
+        f"verified={len(_verified_overlay_peers)} publish_fanout={len(_active_overlay_neighbors)}"
+    )
+
+
+def _resolve_overlay_neighbor_hashes(exclude_hashes: Optional[list[str]] = None) -> list[str]:
+    _prune_candidate_peers()
+    exclude = {
+        str(h).strip().lower() for h in (exclude_hashes or []) if str(h).strip()
+    }
+    out: list[str] = []
+    for peer_hash in list(_active_overlay_neighbors.keys()):
+        if peer_hash in exclude:
+            continue
+        if peer_hash not in _known_peers:
+            continue
+        out.append(peer_hash)
+    return out[:_OVERLAY_MAX_NEIGHBORS]
+
+
+def _is_verified_overlay_peer(peer_hash: str) -> bool:
+    return peer_hash in _verified_overlay_peers
+
+
+def _get_verified_peer_identity(peer_hash: str):
+    if not _is_verified_overlay_peer(peer_hash):
+        return None
+    return _known_peers.get(peer_hash)
+
+
 def _evict_lru_if_needed() -> None:
     """Cap _known_peers by dropping least-recently-seen peers (not TS-leased)."""
     global _known_peers, _peer_lifecycle
@@ -924,8 +1065,6 @@ def ensure_known_peer_from_recall(
     if recalled is None:
         return False
     _register_peer(peer_key, recalled, registration_source)
-    if _last_presence_wire is not None:
-        send_presence_wire_to_peer(peer_key, recalled, _last_presence_wire)
     return True
 
 
@@ -981,8 +1120,6 @@ def ensure_known_peer_from_wire_kr(public_key_base58: str, peer_hash_hex: str) -
             )
         return False
     _register_peer(peer_key, ident, "wire_kr")
-    if _last_presence_wire is not None:
-        send_presence_wire_to_peer(peer_key, ident, _last_presence_wire)
     return True
 
 
@@ -1017,8 +1154,7 @@ class PresenceAnnounceHandler:
             f"[presence_bridge] received announce peer={peer_hash} app_data_len={app_data_len}"
         )
         _register_peer(peer_hash, announced_identity, "announce")
-        if _last_presence_wire is not None:
-            send_presence_wire_to_peer(peer_hash, announced_identity, _last_presence_wire)
+        _mark_candidate_peer(peer_hash, "announce")
 
 
 class CallAnnounceHandler:
@@ -1057,7 +1193,431 @@ def build_outbound_call_destination(peer_identity):
     )
 
 
-def make_presence_wire(envelope: Dict[str, Any]) -> bytes:
+def get_overlay_link_id(link) -> Optional[str]:
+    if link is None:
+        return None
+    return _overlay_link_ids_by_object.get(id(link))
+
+
+def get_overlay_link_state(link_id: str) -> Optional[Dict[str, Any]]:
+    return _overlay_links_by_id.get(link_id)
+
+
+def remove_overlay_link(link_id: str) -> Optional[Dict[str, Any]]:
+    state = _overlay_links_by_id.pop(link_id, None)
+    if not state:
+        return None
+    link = state.get("link")
+    if link is not None:
+        _overlay_link_ids_by_object.pop(id(link), None)
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    if peer_hash:
+        existing = _outgoing_overlay_link_id_by_peer_hash.get(peer_hash)
+        if existing == link_id:
+            _outgoing_overlay_link_id_by_peer_hash.pop(peer_hash, None)
+    return state
+
+
+def emit_overlay_link_state(link_id: str, state: Dict[str, Any], reason: str = "") -> None:
+    emit_event(
+        "overlay_link_state",
+        {
+            "linkId": link_id,
+            "peerPresenceHash": str(state.get("peerPresenceHash") or ""),
+            "incoming": state.get("incoming") is True,
+            "established": state.get("established") is True,
+            "reason": reason,
+            "queuedPackets": len(state.get("pending_packets") or []),
+        },
+    )
+
+
+def _queue_overlay_packet(state: Dict[str, Any], traffic: str, wire_bytes: bytes) -> None:
+    pending = state.get("pending_packets")
+    if pending is None:
+        pending = deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT)
+        state["pending_packets"] = pending
+    pending.append((traffic, bytes(wire_bytes)))
+
+
+def _send_packet_on_link(link, wire_bytes: bytes, log_target: str) -> bool:
+    try:
+        packet = RNS.Packet(link, wire_bytes, create_receipt=False)
+        result = packet.send()
+        if result is False:
+            log(f"[presence_bridge] {log_target} packet_send_false")
+            return False
+        return True
+    except Exception as exc:
+        log(f"[presence_bridge] {log_target} packet_send_exception err={exc}")
+        return False
+
+
+def _flush_overlay_link_pending(link_id: str) -> None:
+    state = get_overlay_link_state(link_id)
+    if state is None or state.get("established") is not True:
+        return
+    link = state.get("link")
+    pending = state.get("pending_packets")
+    if link is None or pending is None:
+        return
+    while pending:
+        traffic, wire_bytes = pending[0]
+        if not _send_packet_on_link(
+            link,
+            wire_bytes,
+            f"target=presence-reticulum overlay_link_flush peer={state.get('peerPresenceHash') or 'unknown'} traffic={traffic}",
+        ):
+            break
+        pending.popleft()
+    emit_overlay_link_state(link_id, state, "flush")
+
+
+def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
+    peer_key = str(peer_hash or "").strip().lower()
+    if not peer_key:
+        return None
+    existing_link_id = _outgoing_overlay_link_id_by_peer_hash.get(peer_key)
+    if existing_link_id:
+        existing = get_overlay_link_state(existing_link_id)
+        if existing is not None:
+            return existing
+        _outgoing_overlay_link_id_by_peer_hash.pop(peer_key, None)
+    peer_identity = _known_peers.get(peer_key)
+    if peer_identity is None:
+        return None
+    try:
+        outbound = build_outbound_destination(peer_identity)
+        link_id = str(uuid.uuid4())
+        link = RNS.Link(
+            outbound,
+            established_callback=on_outgoing_overlay_link_established,
+            closed_callback=on_overlay_link_closed,
+        )
+        state = {
+            "link": link,
+            "peerPresenceHash": peer_key,
+            "incoming": False,
+            "established": False,
+            "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
+        }
+        _overlay_links_by_id[link_id] = state
+        _overlay_link_ids_by_object[id(link)] = link_id
+        _outgoing_overlay_link_id_by_peer_hash[peer_key] = link_id
+        emit_overlay_link_state(link_id, state, "connecting")
+        log(
+            f"[presence_bridge] target=presence-reticulum overlay_link_connect peer={peer_key}"
+        )
+        return state
+    except Exception as exc:
+        log(
+            f"[presence_bridge] target=presence-reticulum overlay_link_connect_failed peer={peer_key}: {exc}"
+        )
+        return None
+
+
+def _sync_overlay_links() -> None:
+    desired = set(_active_overlay_neighbors.keys())
+    for peer_hash in desired:
+        if peer_hash not in _known_peers:
+            ensure_known_peer_from_recall(peer_hash, "ts_seed")
+        _ensure_overlay_link(peer_hash)
+    for peer_hash, link_id in list(_outgoing_overlay_link_id_by_peer_hash.items()):
+        if peer_hash in desired:
+            continue
+        state = get_overlay_link_state(link_id)
+        if state is None:
+            _outgoing_overlay_link_id_by_peer_hash.pop(peer_hash, None)
+            continue
+        link = state.get("link")
+        if link is not None:
+            try:
+                link.teardown()
+            except Exception:
+                pass
+        remove_overlay_link(link_id)
+        # Emit established=false so UIs can drop this link from "connected" counts.
+        state["established"] = False
+        emit_overlay_link_state(link_id, state, "pruned")
+
+
+def _resolve_peer_presence_hash_from_call_hash(sender_call_hash: str) -> str:
+    sender_call_hash = str(sender_call_hash or "").strip().lower()
+    if not sender_call_hash:
+        return ""
+    try:
+        h = bytes.fromhex(sender_call_hash)
+    except ValueError:
+        return ""
+    if len(h) != 16:
+        return ""
+    recalled = RNS.Identity.recall(h)
+    if recalled is None:
+        return ""
+    return find_peer_hash_for_identity(recalled)
+
+
+def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = None) -> bool:
+    message_type = message.get("t")
+    message_id = message.get("i")
+    address = message.get("a")
+    public_key = message.get("k")
+    session_id = message.get("n")
+    timestamp = message.get("m")
+    signature = message.get("g")
+    sender_hash = message.get("r")
+    overlay_hops_remaining = message.get("q")
+
+    if (
+        not isinstance(message_type, str)
+        or not isinstance(message_id, str)
+        or not isinstance(address, str)
+        or not isinstance(public_key, str)
+        or not isinstance(session_id, str)
+        or not isinstance(timestamp, int)
+        or not isinstance(signature, str)
+        or not isinstance(sender_hash, str)
+    ):
+        log("[presence_bridge] ignored malformed presence packet")
+        return False
+
+    payload: Dict[str, Any] = {
+        "address": address,
+        "publicKey": public_key,
+        "sessionId": session_id,
+    }
+    if message_type == "PRESENCE_ANNOUNCE":
+        payload["status"] = message.get("s")
+        payload["clientVersion"] = message.get("c")
+    elif message_type == "PRESENCE_HEARTBEAT":
+        payload["status"] = message.get("s")
+    elif message_type == "PRESENCE_OFFLINE":
+        payload["status"] = "offline"
+    else:
+        log(f"[presence_bridge] ignored unknown presence packet type={message_type}")
+        return False
+
+    envelope = {
+        "id": message_id,
+        "type": message_type,
+        "senderAddress": address,
+        "timestamp": timestamp,
+        "payload": payload,
+        "signature": signature,
+    }
+
+    peer_key = sender_hash.lower()
+    _recent_presence_senders.append(peer_key)
+    ensure_known_peer_from_recall(peer_key)
+    if peer_key not in _known_peers:
+        ensure_known_peer_from_wire_kr(public_key, sender_hash)
+    if peer_key in _known_peers:
+        st = _peer_lifecycle.setdefault(
+            peer_key,
+            {
+                "last_seen_inbound": None,
+                "last_send_ok": None,
+                "last_request_path_at": None,
+                "ts_seed_until": None,
+            },
+        )
+        now = time.time()
+        st["last_seen_inbound"] = now
+        lease = st.get("ts_seed_until")
+        if isinstance(lease, (int, float)) and now < float(lease):
+            log(
+                "[presence_bridge] target=presence-reticulum ts_seed_confirmed "
+                f"peer={peer_key[:24]}..."
+            )
+
+    route: Dict[str, Any] = {
+        "kind": "reticulum",
+        "destinationHash": sender_hash,
+        "overlayHopsRemaining": overlay_hops_remaining
+        if isinstance(overlay_hops_remaining, int)
+        else 0,
+    }
+    if link_id:
+        route["linkId"] = link_id
+    emit_event(
+        "presence_message",
+        {
+            "envelope": envelope,
+            "route": route,
+        },
+    )
+    log(
+        f"[presence_bridge] received presence packet sender={sender_hash} envelope_type={envelope.get('type')} size={len(_call_wire_json_bytes(message))}"
+    )
+    return True
+
+
+def _emit_call_bridge_message(
+    message: Dict[str, Any], peer_presence_hash: str = "", link_id: Optional[str] = None
+) -> bool:
+    sender_r = message.get("r")
+    sender_call_hash = sender_r if isinstance(sender_r, str) else ""
+    resolved_presence_hash = (
+        peer_presence_hash
+        if isinstance(peer_presence_hash, str) and peer_presence_hash
+        else _resolve_peer_presence_hash_from_call_hash(sender_call_hash)
+    )
+    t = message.get("t")
+    event_name = (
+        "group_call_message"
+        if isinstance(t, str) and t in _GROUP_CALL_WIRE_TYPES
+        else "call_message"
+    )
+    payload: Dict[str, Any] = {
+        "wire": message,
+        "senderCallHash": sender_call_hash,
+        "peerPresenceHash": resolved_presence_hash,
+    }
+    if link_id:
+        payload["linkId"] = link_id
+    emit_event(event_name, payload)
+    log(
+        f"[presence_bridge] received {event_name} t={message.get('t')} sender_r={sender_call_hash[:16] if sender_call_hash else ''} size={len(_call_wire_json_bytes(message))}"
+    )
+    return True
+
+
+def on_overlay_link_closed(link) -> None:
+    link_id = get_overlay_link_id(link)
+    if link_id is None:
+        return
+    teardown_reason = getattr(link, "teardown_reason", None)
+    reason = str(teardown_reason) if teardown_reason is not None else "closed"
+    state = remove_overlay_link(link_id)
+    if state is None:
+        return
+    state["established"] = False
+    emit_overlay_link_state(link_id, state, reason)
+    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+    if peer_hash and peer_hash in _active_overlay_neighbors:
+        _ensure_overlay_link(peer_hash)
+
+
+def on_overlay_link_remote_identified(link, identity) -> None:
+    link_id = get_overlay_link_id(link)
+    if link_id is None:
+        return
+    state = get_overlay_link_state(link_id)
+    if state is None:
+        return
+    peer_hash = find_peer_hash_for_identity(identity)
+    if peer_hash:
+        state["peerPresenceHash"] = peer_hash
+    emit_overlay_link_state(link_id, state, "identified")
+
+
+def on_overlay_link_packet(message, packet) -> None:
+    link = getattr(packet, "link", None)
+    link_id = get_overlay_link_id(link) if link is not None else None
+    if link_id is None:
+        return
+    state = get_overlay_link_state(link_id)
+    if state is None:
+        return
+    try:
+        decoded = json.loads(message.decode("utf-8"))
+    except Exception as exc:
+        log(f"[presence_bridge] invalid overlay link payload: {exc}")
+        return
+    if not isinstance(decoded, dict):
+        return
+    state["last_activity_at"] = time.time()
+    t = decoded.get("t")
+    if isinstance(t, str) and t.startswith("PRESENCE_"):
+        if _emit_presence_message(decoded, link_id):
+            peer_hash = str(decoded.get("r") or "").strip().lower()
+            if peer_hash:
+                state["peerPresenceHash"] = peer_hash
+                emit_overlay_link_state(link_id, state, "rx_presence")
+        return
+    _emit_call_bridge_message(
+        decoded,
+        str(state.get("peerPresenceHash") or ""),
+        link_id,
+    )
+
+
+def configure_overlay_link(link, link_id: str) -> None:
+    link.set_link_closed_callback(on_overlay_link_closed)
+    link.set_packet_callback(on_overlay_link_packet)
+    link.set_remote_identified_callback(on_overlay_link_remote_identified)
+    _overlay_link_ids_by_object[id(link)] = link_id
+
+
+def on_outgoing_overlay_link_established(link) -> None:
+    link_id = get_overlay_link_id(link)
+    if link_id is None:
+        return
+    state = get_overlay_link_state(link_id)
+    if state is None:
+        return
+    configure_overlay_link(link, link_id)
+    state["established"] = True
+    state["last_activity_at"] = time.time()
+    try:
+        if _identity is not None:
+            link.identify(_identity)
+    except Exception as exc:
+        log(f"[presence_bridge] overlay link identify failed link={link_id}: {exc}")
+    emit_overlay_link_state(link_id, state, "established")
+    _flush_overlay_link_pending(link_id)
+
+
+def on_incoming_overlay_link_established(link) -> None:
+    link_id = str(uuid.uuid4())
+    _overlay_links_by_id[link_id] = {
+        "link": link,
+        "peerPresenceHash": "",
+        "incoming": True,
+        "established": True,
+        "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
+        "last_activity_at": time.time(),
+    }
+    configure_overlay_link(link, link_id)
+    emit_overlay_link_state(link_id, _overlay_links_by_id[link_id], "incoming")
+
+
+def _send_wire_to_overlay_peer(
+    peer_hash: str, wire_bytes: bytes, traffic: str, queue_if_pending: bool = True
+) -> bool:
+    state = _ensure_overlay_link(peer_hash)
+    if state is None:
+        log(
+            f"[presence_bridge] target=presence-reticulum overlay_link_missing peer={peer_hash} traffic={traffic}"
+        )
+        return False
+    link = state.get("link")
+    if state.get("established") is True and link is not None:
+        ok = _send_packet_on_link(
+            link,
+            wire_bytes,
+            f"target=presence-reticulum overlay_link_send peer={peer_hash} traffic={traffic}",
+        )
+        if ok:
+            state["last_activity_at"] = time.time()
+        else:
+            _queue_overlay_packet(state, traffic, wire_bytes)
+        emit_overlay_link_state(get_overlay_link_id(link) or "", state, traffic)
+        return True
+    if queue_if_pending:
+        _queue_overlay_packet(state, traffic, wire_bytes)
+        emit_overlay_link_state(
+            _outgoing_overlay_link_id_by_peer_hash.get(peer_hash, ""),
+            state,
+            f"queued:{traffic}",
+        )
+        return True
+    return False
+
+
+def make_presence_wire(
+    envelope: Dict[str, Any], overlay_hops_remaining: Optional[int] = None
+) -> bytes:
     if _destination is None:
         raise RuntimeError("Local destination not initialised")
     payload = envelope.get("payload")
@@ -1078,6 +1638,8 @@ def make_presence_wire(envelope: Dict[str, Any]) -> bytes:
         wire["s"] = payload.get("status")
     if "clientVersion" in payload:
         wire["c"] = payload.get("clientVersion")
+    if isinstance(overlay_hops_remaining, int) and overlay_hops_remaining >= 0:
+        wire["q"] = overlay_hops_remaining
     return json.dumps(wire, separators=(",", ":")).encode("utf-8")
 
 
@@ -1319,91 +1881,7 @@ def on_packet_received(data, packet) -> None:
     if not isinstance(message, dict):
         log("[presence_bridge] ignored non-object packet payload")
         return
-
-    message_type = message.get("t")
-    message_id = message.get("i")
-    address = message.get("a")
-    public_key = message.get("k")
-    session_id = message.get("n")
-    timestamp = message.get("m")
-    signature = message.get("g")
-    sender_hash = message.get("r")
-
-    if (
-        not isinstance(message_type, str)
-        or not isinstance(message_id, str)
-        or not isinstance(address, str)
-        or not isinstance(public_key, str)
-        or not isinstance(session_id, str)
-        or not isinstance(timestamp, int)
-        or not isinstance(signature, str)
-        or not isinstance(sender_hash, str)
-    ):
-        log("[presence_bridge] ignored malformed presence packet")
-        return
-
-    payload: Dict[str, Any] = {
-        "address": address,
-        "publicKey": public_key,
-        "sessionId": session_id,
-    }
-    if message_type == "PRESENCE_ANNOUNCE":
-        payload["status"] = message.get("s")
-        payload["clientVersion"] = message.get("c")
-    elif message_type == "PRESENCE_HEARTBEAT":
-        payload["status"] = message.get("s")
-    elif message_type == "PRESENCE_OFFLINE":
-        payload["status"] = "offline"
-    else:
-        log(f"[presence_bridge] ignored unknown presence packet type={message_type}")
-        return
-
-    envelope = {
-        "id": message_id,
-        "type": message_type,
-        "senderAddress": address,
-        "timestamp": timestamp,
-        "payload": payload,
-        "signature": signature,
-    }
-
-    peer_key = sender_hash.lower()
-    _recent_presence_senders.append(peer_key)
-    ensure_known_peer_from_recall(peer_key)
-    if peer_key not in _known_peers:
-        ensure_known_peer_from_wire_kr(public_key, sender_hash)
-    if peer_key in _known_peers:
-        st = _peer_lifecycle.setdefault(
-            peer_key,
-            {
-                "last_seen_inbound": None,
-                "last_send_ok": None,
-                "last_request_path_at": None,
-                "ts_seed_until": None,
-            },
-        )
-        now = time.time()
-        st["last_seen_inbound"] = now
-        lease = st.get("ts_seed_until")
-        if isinstance(lease, (int, float)) and now < float(lease):
-            log(
-                "[presence_bridge] target=presence-reticulum ts_seed_confirmed "
-                f"peer={peer_key[:24]}..."
-            )
-
-    emit_event(
-        "presence_message",
-        {
-            "envelope": envelope,
-            "route": {
-                "kind": "reticulum",
-                "destinationHash": sender_hash,
-            },
-        },
-    )
-    log(
-        f"[presence_bridge] received presence packet sender={sender_hash} envelope_type={envelope.get('type')} size={len(data)}"
-    )
+    _emit_presence_message(message)
 
 
 def on_call_packet_received(data, packet) -> None:
@@ -1416,24 +1894,7 @@ def on_call_packet_received(data, packet) -> None:
     if not isinstance(message, dict):
         log("[presence_bridge] ignored non-object call packet payload")
         return
-
-    sender_r = message.get("r")
-    sender_call_hash = sender_r if isinstance(sender_r, str) else ""
-
-    t = message.get("t")
-    event_name = (
-        "group_call_message" if isinstance(t, str) and t in _GROUP_CALL_WIRE_TYPES else "call_message"
-    )
-    emit_event(
-        event_name,
-        {
-            "wire": message,
-            "senderCallHash": sender_call_hash,
-        },
-    )
-    log(
-        f"[presence_bridge] received {event_name} t={message.get('t')} sender_r={sender_call_hash[:16] if sender_call_hash else ''} size={len(data)}"
-    )
+    _emit_call_bridge_message(message)
 
 
 def ensure_started(config_dir: str):
@@ -1465,6 +1926,7 @@ def ensure_started(config_dir: str):
         )
         _destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
         _destination.set_packet_callback(on_packet_received)
+        _destination.set_link_established_callback(on_incoming_overlay_link_established)
         _announce_handler = PresenceAnnounceHandler(_destination.hash)
         RNS.Transport.register_announce_handler(_announce_handler)
 
@@ -1527,21 +1989,23 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         return
 
     try:
-        wire_bytes = make_presence_wire(envelope)
+        wire_bytes = make_presence_wire(envelope, _OVERLAY_DEFAULT_HOPS)
         global _last_presence_wire
         _last_presence_wire = wire_bytes
         announce_local_destination()
         announce_call_local_destination()
         for ph in list(_recent_presence_senders):
             ensure_known_peer_from_recall(ph)
-        extra = payload.get("additionalFanoutHashes")
+        extra = payload.get("overlayNeighborHashes")
         if isinstance(extra, list):
             for h in extra:
                 if isinstance(h, str) and h.strip():
                     ensure_known_peer_from_recall(h.strip().lower(), "ts_seed")
         _maybe_prune_stale_peers()
+        _sync_overlay_links()
+        peer_hashes = _resolve_overlay_neighbor_hashes()
         nudge_budget = [_MAX_PATH_NUDGES_PER_PUBLISH]
-        for peer_hash in sorted(_known_peers.keys()):
+        for peer_hash in peer_hashes:
             try:
                 hb = bytes.fromhex(peer_hash)
             except ValueError:
@@ -1549,7 +2013,6 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
             if len(hb) != 16:
                 continue
             _request_path_if_eligible(peer_hash, hb, nudge_budget)
-        peer_hashes = sorted(_known_peers.keys())
         local_hex = destination_hash_hex(_destination.hash)
         env_type = envelope.get("type") if isinstance(envelope.get("type"), str) else ""
         env_payload = envelope.get("payload")
@@ -1562,8 +2025,8 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
             f"type={env_type} peer_addr={env_addr} "
             f"fanout_hashes={','.join(peer_hashes)}"
         )
-        for peer_hash, peer_identity in list(_known_peers.items()):
-            send_presence_wire_to_peer(peer_hash, peer_identity, wire_bytes)
+        for peer_hash in peer_hashes:
+            _send_wire_to_overlay_peer(peer_hash, wire_bytes, "presence_publish")
         emit_resp(
             req_id,
             True,
@@ -1575,6 +2038,62 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         )
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))
+
+
+def handle_forward_presence(req_id: str, payload: Dict[str, Any]) -> None:
+    envelope = payload.get("envelope")
+    if not isinstance(envelope, dict):
+        emit_resp(req_id, False, error="Missing envelope")
+        return
+    if _destination is None:
+        emit_resp(req_id, False, error="Bridge not started")
+        return
+    hops_remaining = payload.get("overlayHopsRemaining")
+    if not isinstance(hops_remaining, int) or hops_remaining < 0:
+        emit_resp(req_id, False, error="Missing overlayHopsRemaining")
+        return
+    exclude_raw = payload.get("excludeDestinationHashes")
+    exclude_hashes = (
+        [str(h).strip().lower() for h in exclude_raw if isinstance(h, str) and h.strip()]
+        if isinstance(exclude_raw, list)
+        else []
+    )
+    try:
+        wire_bytes = make_presence_wire(envelope, hops_remaining)
+        _sync_overlay_links()
+        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        for peer_hash in peer_hashes:
+            _send_wire_to_overlay_peer(peer_hash, wire_bytes, "presence_forward")
+        emit_resp(
+            req_id,
+            True,
+            payload={
+                "fanoutPeers": len(peer_hashes),
+                "fanoutHashes": peer_hashes,
+            },
+        )
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_overlay_sync_state(req_id: str, payload: Dict[str, Any]) -> None:
+    verified_raw = payload.get("verifiedPeers")
+    active_raw = payload.get("activeNeighborHashes")
+    verified = verified_raw if isinstance(verified_raw, list) else []
+    active = active_raw if isinstance(active_raw, list) else []
+    _set_verified_overlay_peers(verified, [str(h) for h in active])
+    _sync_overlay_links()
+    emit_resp(req_id, True)
+
+
+def handle_overlay_note_candidate_failure(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_hash = str(payload.get("peerHash") or "").strip().lower()
+    reason = str(payload.get("reason") or "").strip() or "unknown"
+    if not peer_hash:
+        emit_resp(req_id, False, error="Missing peerHash")
+        return
+    _note_candidate_failure(peer_hash, reason)
+    emit_resp(req_id, True)
 
 
 def handle_stop(req_id: str) -> None:
@@ -1597,8 +2116,9 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    peer_identity = _known_peers.get(peer_hash)
-    if peer_identity is None:
+    if peer_hash not in _active_overlay_neighbors:
+        _ensure_overlay_link(peer_hash)
+    if peer_hash not in _known_peers:
         emit_resp(
             req_id,
             False,
@@ -1629,10 +2149,7 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
             return
         if len(wire_bytes) > 600:
             log(f"[presence_bridge] warning call packet len={len(wire_bytes)}")
-        outbound = build_outbound_call_destination(peer_identity)
-        packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
-        result = packet.send()
-        if result is False:
+        if not _send_wire_to_overlay_peer(peer_hash.lower(), wire_bytes, "call_signal"):
             emit_resp(
                 req_id,
                 False,
@@ -1661,8 +2178,9 @@ def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    peer_identity = _known_peers.get(peer_hash)
-    if peer_identity is None:
+    if peer_hash not in _active_overlay_neighbors:
+        _ensure_overlay_link(peer_hash)
+    if peer_hash not in _known_peers:
         emit_resp(
             req_id,
             False,
@@ -1691,10 +2209,7 @@ def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
                 ),
             )
             return
-        outbound = build_outbound_call_destination(peer_identity)
-        packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
-        result = packet.send()
-        if result is False:
+        if not _send_wire_to_overlay_peer(peer_hash.lower(), wire_bytes, "group_signal"):
             emit_resp(
                 req_id,
                 False,
@@ -1722,7 +2237,7 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    peer_identity = _known_peers.get(peer_hash)
+    peer_identity = _get_verified_peer_identity(peer_hash)
     if peer_identity is None:
         emit_resp(
             req_id,
@@ -1814,6 +2329,12 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_start(req_id, payload)
     elif action == "publish_presence":
         handle_publish_presence(req_id, payload)
+    elif action == "forward_presence":
+        handle_forward_presence(req_id, payload)
+    elif action == "overlay_sync_state":
+        handle_overlay_sync_state(req_id, payload)
+    elif action == "overlay_note_candidate_failure":
+        handle_overlay_note_candidate_failure(req_id, payload)
     elif action == "stop":
         handle_stop(req_id)
     elif action == "send_call":

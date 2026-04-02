@@ -289,6 +289,7 @@ try {
         configuredHubInterfaces?: number;
         onlineHubInterfaces?: number;
         hubSummary?: string;
+        overlayLinksConnected?: number;
       }>,
     reticulumGetMeshStatus: () =>
       ipcRenderer.invoke('reticulum:getMeshStatus') as Promise<{

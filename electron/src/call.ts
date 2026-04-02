@@ -46,7 +46,7 @@ import type { ReticulumBridge } from './reticulum-bridge';
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 /** Max hops for call signaling and audio relay (less than chat's 4). */
-const CALL_MAX_HOPS = 2;
+const CALL_MAX_HOPS = 4;
 
 /** How long an unanswered CALL_REQUEST lives before we auto-clean it. */
 const CALL_REQUEST_TTL_MS = 60_000;
@@ -56,6 +56,7 @@ const CALL_AUDIO_MAX_BYTES = 8_192;
 
 /** Max simultaneous CALL_AUDIO streams this node will relay for others. */
 const CALL_AUDIO_MAX_RELAY_STREAMS = 3;
+const RETICULUM_OVERLAY_SEEN_TTL_MS = 60_000;
 
 // ── Wire types ────────────────────────────────────────────────────────────────
 
@@ -253,9 +254,14 @@ export class CallManager extends EventEmitter {
     CALL_MAX_PENDING_VERIFY
   );
   private onReticulumCallMessage:
-    | ((wire: Record<string, unknown>, senderCallHash: string) => void)
+    | ((
+        wire: Record<string, unknown>,
+        senderCallHash: string,
+        peerPresenceHash: string
+      ) => void)
     | null = null;
   private reticulumUnsub: (() => void) | null = null;
+  private seenReticulumOverlayIds = new Map<string, number>();
   private readonly sdpSession: ReticulumSdpSession;
   private iceBuckets = new Map<
     string,
@@ -273,11 +279,18 @@ export class CallManager extends EventEmitter {
     this.reticulumBridge = reticulumBridge ?? null;
     this.sdpSession = new ReticulumSdpSession({
       sendWire: (peer, msg) => {
-        if (!wireFitsReticulum(msg)) {
+        const targetAddress = this.reticulumOverlayTargetAddressForWire(msg);
+        if (!targetAddress) return;
+        const overlayWire = this.attachReticulumOverlayMeta(
+          msg,
+          targetAddress,
+          CALL_MAX_HOPS
+        );
+        if (!wireFitsReticulum(overlayWire)) {
           loggerWarn('[Call] Skipping Reticulum sendCall: wire exceeds limit');
           return;
         }
-        void this.reticulumBridge?.sendCall(peer, msg);
+        this.broadcastReticulumOverlayWire(overlayWire);
       },
       onReassembled: (args) => {
         this.deliverReticulumReassembledSdp(args);
@@ -302,10 +315,11 @@ export class CallManager extends EventEmitter {
     if (!this.onReticulumCallMessage) {
       this.onReticulumCallMessage = (
         wire: Record<string, unknown>,
-        senderCallHash: string
+        senderCallHash: string,
+        peerPresenceHash: string
       ): void => {
         try {
-          this.onReticulumCallWire(wire, senderCallHash);
+          this.onReticulumCallWire(wire, senderCallHash, peerPresenceHash);
         } catch (err) {
           loggerError('[Call] Reticulum wire error:', err);
         }
@@ -358,6 +372,7 @@ export class CallManager extends EventEmitter {
     }
     this.activeCalls.clear();
     activeAudioRelayStreams.clear();
+    this.seenReticulumOverlayIds.clear();
     loggerLog('[Call] Manager stopped.');
   }
 
@@ -450,10 +465,15 @@ export class CallManager extends EventEmitter {
     if (useReticulum && reticulumPeerHash) {
       const wire = encodeReticulumCallWire(env);
       if (wire) {
-        if (!wireFitsReticulum(wire)) {
+        const overlayWire = this.attachReticulumOverlayMeta(
+          wire,
+          targetAddress,
+          CALL_MAX_HOPS
+        );
+        if (!wireFitsReticulum(overlayWire)) {
           loggerWarn('[Call] Skipping Reticulum CALL_REQUEST: wire exceeds limit');
         } else {
-          void this.reticulumBridge?.sendCall(reticulumPeerHash, wire);
+          this.broadcastReticulumOverlayWire(overlayWire);
         }
       }
     } else if (remoteNodeId) {
@@ -596,7 +616,8 @@ export class CallManager extends EventEmitter {
         h,
         publicKey,
         timestamp,
-        signature
+        signature,
+        call.remoteAddress
       );
       if (!built) {
         loggerLog(`[Call] Failed to build SDP wire frames for ${callId}`);
@@ -1048,8 +1069,25 @@ export class CallManager extends EventEmitter {
 
   private onReticulumCallWire(
     wire: Record<string, unknown>,
-    senderCallHash: string
+    senderCallHash: string,
+    peerPresenceHash: string
   ): void {
+    const overlayMeta = this.parseReticulumOverlayMeta(wire);
+    if (overlayMeta) {
+      if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId)) return;
+      this.rememberReticulumOverlayId(overlayMeta.overlayId);
+      const targetIsLocal = this.localAddresses.has(overlayMeta.targetAddress);
+      if (!targetIsLocal) {
+        if (overlayMeta.hopsRemaining > 0) {
+          const forwarded = {
+            ...wire,
+            L: overlayMeta.hopsRemaining - 1,
+          };
+          this.broadcastReticulumOverlayWire(forwarded, [peerPresenceHash]);
+        }
+        return;
+      }
+    }
     const decoded = decodeReticulumCallWire(wire);
     if (decoded.kind === 'invalid') return;
 
@@ -1261,11 +1299,16 @@ export class CallManager extends EventEmitter {
     ) {
       const wire = encodeReticulumCallWire(env);
       if (wire) {
-        if (!wireFitsReticulum(wire)) {
+        const overlayWire = this.attachReticulumOverlayMeta(
+          wire,
+          call.remoteAddress,
+          CALL_MAX_HOPS
+        );
+        if (!wireFitsReticulum(overlayWire)) {
           loggerWarn('[Call] Skipping Reticulum sendToCall: wire exceeds limit');
           return;
         }
-        void this.reticulumBridge.sendCall(call.reticulumPeerPresenceHash, wire);
+        this.broadcastReticulumOverlayWire(overlayWire);
       }
       return;
     }
@@ -1276,6 +1319,85 @@ export class CallManager extends EventEmitter {
       this.p2p.send(nodeId, env);
     } else {
       this.p2p.send(null, env);
+    }
+  }
+
+  private nextReticulumOverlayId(): string {
+    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  private attachReticulumOverlayMeta(
+    wire: Record<string, unknown>,
+    targetAddress: string,
+    hopsRemaining: number
+  ): Record<string, unknown> {
+    return {
+      ...wire,
+      U: targetAddress,
+      L: Math.max(0, Math.trunc(hopsRemaining)),
+      X: this.nextReticulumOverlayId(),
+    };
+  }
+
+  private parseReticulumOverlayMeta(
+    wire: Record<string, unknown>
+  ): { overlayId: string; targetAddress: string; hopsRemaining: number } | null {
+    if (
+      typeof wire.X !== 'string' ||
+      typeof wire.U !== 'string' ||
+      typeof wire.L !== 'number'
+    ) {
+      return null;
+    }
+    return {
+      overlayId: wire.X,
+      targetAddress: wire.U,
+      hopsRemaining: Math.max(0, Math.trunc(wire.L)),
+    };
+  }
+
+  private rememberReticulumOverlayId(overlayId: string): void {
+    const now = Date.now();
+    this.seenReticulumOverlayIds.set(overlayId, now + RETICULUM_OVERLAY_SEEN_TTL_MS);
+    for (const [id, expiresAt] of this.seenReticulumOverlayIds) {
+      if (expiresAt <= now) this.seenReticulumOverlayIds.delete(id);
+    }
+  }
+
+  private hasSeenReticulumOverlayId(overlayId: string): boolean {
+    const now = Date.now();
+    const expiresAt = this.seenReticulumOverlayIds.get(overlayId);
+    if (typeof expiresAt !== 'number') return false;
+    if (expiresAt <= now) {
+      this.seenReticulumOverlayIds.delete(overlayId);
+      return false;
+    }
+    return true;
+  }
+
+  private reticulumOverlayTargetAddressForWire(
+    wire: Record<string, unknown>
+  ): string | null {
+    if (typeof wire.U === 'string' && wire.U) {
+      return wire.U;
+    }
+    const callId = typeof wire.i === 'string' ? wire.i : '';
+    if (!callId) return null;
+    const active = this.activeCalls.get(callId);
+    if (active) return active.remoteAddress;
+    return null;
+  }
+
+  private broadcastReticulumOverlayWire(
+    wire: Record<string, unknown>,
+    excludePeerHashes: string[] = []
+  ): void {
+    const bridge = this.reticulumBridge;
+    if (!bridge || bridge.getState() !== 'ready') return;
+    const neighbors =
+      this.presence.getReticulumActiveNeighborHashes(excludePeerHashes);
+    for (const peerHash of neighbors) {
+      void bridge.sendCall(peerHash, wire).catch(() => {});
     }
   }
 }

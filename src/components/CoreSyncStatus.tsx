@@ -15,6 +15,9 @@ import { isLocalNodeUrl } from '../constants/constants';
 export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
+  const [overlayLinksConnected, setOverlayLinksConnected] = useState<number | null>(
+    null
+  );
 
   const [nodeBase, setNodeBase] = useState(getBaseApiReact());
   const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
@@ -44,11 +47,32 @@ export const CoreSyncStatus = () => {
       }
     };
 
-    getCoreInfos();
+    const fetchOverlayLinks = async () => {
+      const api = window.electronAPI;
+      if (typeof api?.reticulumGetStatus !== 'function') {
+        setOverlayLinksConnected(null);
+        return;
+      }
+      try {
+        const status = await api.reticulumGetStatus();
+        if (typeof status.overlayLinksConnected === 'number') {
+          setOverlayLinksConnected(status.overlayLinksConnected);
+        } else {
+          setOverlayLinksConnected(null);
+        }
+      } catch {
+        setOverlayLinksConnected(null);
+      }
+    };
 
-    const interval = setInterval(() => {
-      getCoreInfos();
-    }, 30000);
+    const tick = () => {
+      void getCoreInfos();
+      void fetchOverlayLinks();
+    };
+
+    tick();
+
+    const interval = setInterval(tick, 30000);
 
     return () => clearInterval(interval);
   }, []);
@@ -148,6 +172,13 @@ export const CoreSyncStatus = () => {
               {numberOfDataConnections || ''}
             </span>
           </h4>
+
+          {overlayLinksConnected !== null && (
+            <h4 className="lineHeight">
+              {t('core:core.overlay_links', { postProcess: 'capitalizeFirstChar' })}:{' '}
+              <span style={{ color: '#03a9f4' }}>{overlayLinksConnected}</span>
+            </h4>
+          )}
 
           <h4 className="lineHeight">
             {t('auth:node.using', {

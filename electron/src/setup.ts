@@ -91,6 +91,7 @@ import {
   startReticulumBridge,
   stopReticulumBridge,
   getReticulumBridge,
+  type ReticulumOverlayVerifiedPeer,
 } from './reticulum-bridge';
 import {
   startReticulumMeshCoordinator,
@@ -1685,12 +1686,63 @@ function broadcastPresenceUpdate(payload: unknown): void {
   queuePresenceUpdate(payload);
 }
 
+async function syncReticulumOverlayStateToBridge(
+  manager: NonNullable<ReturnType<typeof getPresenceManager>>
+): Promise<void> {
+  const bridge = getReticulumBridge();
+  if (!bridge || bridge.getState() !== 'ready') return;
+  const verifiedPeers: ReticulumOverlayVerifiedPeer[] = manager
+    .getReticulumVerifiedPeers()
+    .map((peer) => ({
+      destinationHash: peer.destinationHash,
+      address: peer.address,
+      lastSeen: peer.lastSeen,
+    }));
+  const activeNeighborHashes = manager.getReticulumActiveNeighborHashes();
+  try {
+    await bridge.syncOverlayState(verifiedPeers, activeNeighborHashes);
+  } catch (err) {
+    loggerWarn('[ReticulumOverlay] Failed to sync overlay state to bridge:', err);
+  }
+}
+
 export function attachPresenceListeners(
   manager: ReturnType<typeof getPresenceManager>
 ): void {
   if (!manager) return;
   loggerLog('[Presence] Attaching manager listeners.');
   manager.on('presence-updated', broadcastPresenceUpdate);
+  manager.on('reticulum-overlay-changed', () => {
+    void syncReticulumOverlayStateToBridge(manager);
+  });
+  manager.on(
+    'reticulum-candidate-failed',
+    ({ destinationHash, reason }: { destinationHash: string; reason: string }) => {
+      const bridge = getReticulumBridge();
+      if (!bridge || bridge.getState() !== 'ready') return;
+      void bridge.noteOverlayCandidateFailure(destinationHash, reason).catch(() => {});
+    }
+  );
+  manager.on(
+    'reticulum-envelope-accepted',
+    ({
+      envelope,
+      route,
+    }: {
+      envelope: import('./presence').PresenceEnvelope;
+      route: import('./presence').PresenceRoute;
+    }) => {
+      if (route.kind !== 'reticulum') return;
+      const hops = route.overlayHopsRemaining ?? 0;
+      if (hops <= 0) return;
+      const bridge = getReticulumBridge();
+      if (!bridge || bridge.getState() !== 'ready') return;
+      void bridge
+        .forwardPresence(envelope, hops - 1, [route.destinationHash])
+        .catch(() => {});
+    }
+  );
+  void syncReticulumOverlayStateToBridge(manager);
 }
 
 export function clearLateReticulumBridgeRecovery(): void {
@@ -1728,6 +1780,7 @@ export function registerLateReticulumBridgeRecovery(
     let pm = getPresenceManager();
     if (pm) {
       setPresenceManagerTransports([currentBridge]);
+      void syncReticulumOverlayStateToBridge(pm);
     } else {
       pm = startPresenceManager([currentBridge]);
       attachPresenceListeners(pm);

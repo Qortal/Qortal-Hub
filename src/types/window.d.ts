@@ -50,6 +50,7 @@ declare global {
         configuredHubInterfaces?: number;
         onlineHubInterfaces?: number;
         hubSummary?: string;
+        overlayLinksConnected?: number;
       }>;
       reticulumGetMeshStatus?: () => Promise<{
         enabled: boolean;
