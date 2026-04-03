@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire379-single-dest-v1"
+PRESENCE_BRIDGE_BUILD = "wire380-rns-announce-45m-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -59,6 +59,12 @@ _OVERLAY_DEFAULT_HOPS = 4
 _INBOUND_LINK_CLASSIFY_TIMEOUT_SEC = 5.0
 _pending_inbound_classify_link_ids: Set[int] = set()
 _inbound_classify_timers: Dict[int, threading.Timer] = {}
+
+# RNS Destination.announce: once after authenticated presence (first PRESENCE_ANNOUNCE),
+# then every RNS_ANNOUNCE_INTERVAL_SEC while session active; cancel on PRESENCE_OFFLINE / stop.
+RNS_ANNOUNCE_INTERVAL_SEC = 45 * 60
+_rns_auth_announced: bool = False
+_rns_periodic_announce_timer: Optional[threading.Timer] = None
 
 
 def qortal_base58_decode(s: str) -> bytes:
@@ -947,11 +953,6 @@ def maybe_emit_transport_state(force: bool = False) -> None:
     _last_transport_state = payload
     emit_event("transport_state", payload)
     log(f"[presence_bridge] transport_state {summarize_transport_state(payload)}")
-
-    if payload.get("reachability") == "hub-connected" and (
-        previous is None or previous.get("reachability") != "hub-connected"
-    ):
-        announce_local_destination()
 
 
 def transport_monitor_loop() -> None:
@@ -2133,6 +2134,49 @@ def announce_local_destination() -> None:
     )
 
 
+def _cancel_rns_periodic_announce_timer() -> None:
+    global _rns_periodic_announce_timer
+    t = _rns_periodic_announce_timer
+    _rns_periodic_announce_timer = None
+    if t is not None:
+        t.cancel()
+
+
+def _rns_periodic_announce_fire() -> None:
+    global _rns_periodic_announce_timer
+    _rns_periodic_announce_timer = None
+    if _shutdown.is_set():
+        return
+    with _state_lock:
+        if _destination is None or not _rns_auth_announced:
+            return
+        try:
+            _destination.announce(app_data=b"presence")
+            log(
+                "[presence_bridge] rns announce periodic "
+                f"interval={RNS_ANNOUNCE_INTERVAL_SEC}s "
+                + destination_hash_hex(_destination.hash)
+            )
+        except Exception as exc:
+            log(f"[presence_bridge] rns announce periodic failed: {exc}")
+    _schedule_rns_periodic_announce_timer()
+
+
+def _schedule_rns_periodic_announce_timer() -> None:
+    global _rns_periodic_announce_timer
+    _cancel_rns_periodic_announce_timer()
+    t = threading.Timer(RNS_ANNOUNCE_INTERVAL_SEC, _rns_periodic_announce_fire)
+    t.daemon = True
+    _rns_periodic_announce_timer = t
+    t.start()
+
+
+def _rns_announce_on_auth_session_end() -> None:
+    global _rns_auth_announced
+    _rns_auth_announced = False
+    _cancel_rns_periodic_announce_timer()
+
+
 def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes) -> None:
     """Send presence wire; updates last_send_ok in _peer_lifecycle (TODO: failure vs no-path diagnostics)."""
     now = time.time()
@@ -2525,7 +2569,6 @@ def handle_start(req_id: str, payload: Dict[str, Any]) -> None:
 
     try:
         destination = ensure_started(config_dir)
-        announce_local_destination()
         maybe_emit_transport_state(force=True)
         presence_hex = destination_hash_hex(destination.hash)
         emit_event(
@@ -2553,10 +2596,22 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         return
 
     try:
+        global _last_presence_wire, _rns_auth_announced
+        env_type = envelope.get("type") if isinstance(envelope.get("type"), str) else ""
+        if env_type == "PRESENCE_OFFLINE":
+            _rns_announce_on_auth_session_end()
+        elif env_type == "PRESENCE_ANNOUNCE":
+            if not _rns_auth_announced:
+                announce_local_destination()
+                log(
+                    "[presence_bridge] rns announce reason=authenticated_initial "
+                    + destination_hash_hex(_destination.hash)
+                )
+                _rns_auth_announced = True
+                _schedule_rns_periodic_announce_timer()
+
         wire_bytes = make_presence_wire(envelope, _OVERLAY_DEFAULT_HOPS)
-        global _last_presence_wire
         _last_presence_wire = wire_bytes
-        announce_local_destination()
         for ph in list(_recent_presence_senders):
             ensure_known_peer_from_recall(ph)
         extra = payload.get("overlayNeighborHashes")
@@ -2666,6 +2721,7 @@ def handle_overlay_note_candidate_failure(req_id: str, payload: Dict[str, Any]) 
 
 
 def handle_stop(req_id: str) -> None:
+    _rns_announce_on_auth_session_end()
     emit_resp(req_id, True)
 
 
