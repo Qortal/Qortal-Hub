@@ -29,7 +29,7 @@
  *   v1 legacy decode supported.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
   callAudioDevicesAtom,
@@ -1431,6 +1431,10 @@ export function useGroupVoiceCall(uiActive = false) {
     useState<GroupCallLocalConnectionHint | null>(null);
   /** Mic mute — mirrored to UI (refs alone do not re-render consumers). */
   const [micMuted, setMicMuted] = useState(false);
+  /** True when a room key is installed (mirrors roomKeyRef for UI). */
+  const [roomKeyPresent, setRoomKeyPresent] = useState(false);
+  /** Bumps when capture pipeline or key state changes affect media viability. */
+  const [mediaViabilityRevision, setMediaViabilityRevision] = useState(0);
   /** Local speaker: when false, mix bus output is forced to silence (mic send unchanged). */
   const [hearCall, setHearCallState] = useState(true);
   const hearCallRef = useRef(true);
@@ -1645,6 +1649,14 @@ export function useGroupVoiceCall(uiActive = false) {
     null
   );
   const lastMeshReannounceAtRef = useRef(0);
+  /** Dedupe per-address targeted GC_KEY sends when roster learns a peer (startup A2). */
+  const lastRosterLearnedKeyDigestByAddrRef = useRef<Map<string, string>>(
+    new Map()
+  );
+  /** One eager key recovery per join generation when standby lacks K (startup B). */
+  const eagerStandbyNoKeyRecoveryFiredJoinGenRef = useRef<number | null>(null);
+  /** One-shot reticulum path warm toward root per joinGen+root (startup C). */
+  const startupReticulumPathWarmKeyRef = useRef<string>('');
 
   /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
@@ -3606,6 +3618,7 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         roomKeyRef.current = null;
         currentKeyCommitmentRef.current = null;
+        setRoomKeyPresent(false);
         syncDecryptWorkerRoomKey(null);
         authoritativeKeyGraceUntilRef.current = 0;
         queueMicrotask(() => {
@@ -3973,6 +3986,49 @@ export function useGroupVoiceCall(uiActive = false) {
         startClusterHeartbeat();
       }
 
+      const myAddrTopo = userInfo?.address ?? '';
+      if (
+        roomKeyRef.current === null &&
+        myAddrTopo &&
+        topo.rootForwarder &&
+        topo.rootForwarder !== myAddrTopo &&
+        participantsRef.current.has(topo.rootForwarder)
+      ) {
+        const jg = joinGenerationRef.current;
+        if (
+          jg !== null &&
+          eagerStandbyNoKeyRecoveryFiredJoinGenRef.current !== jg
+        ) {
+          eagerStandbyNoKeyRecoveryFiredJoinGenRef.current = jg;
+          queueMicrotask(() => {
+            if (roomKeyRef.current !== null) return;
+            maybeRequestKeyRecoveryRef.current('topology-standby-no-key');
+          });
+        }
+      }
+
+      const snapWarm = metricsRef.current.getSnapshot();
+      const targetsWarm = getReticulumTransportTargets(myAddrTopo, topo);
+      if (
+        role !== 'root-forwarder' &&
+        roomKeyRef.current &&
+        topo.rootForwarder &&
+        topo.rootForwarder !== myAddrTopo &&
+        targetsWarm.includes(topo.rootForwarder) &&
+        (snapWarm.packetsReceived ?? 0) === 0 &&
+        (snapWarm.packetsDecoded ?? 0) === 0 &&
+        (snapWarm.reticulumAudioPacketPathResolutions ?? 0) === 0
+      ) {
+        const warmKey = `${joinGenerationRef.current ?? 0}:${topo.rootForwarder}`;
+        if (startupReticulumPathWarmKeyRef.current !== warmKey) {
+          startupReticulumPathWarmKeyRef.current = warmKey;
+          requestMediaRecoveryForPeerRef.current(
+            topo.rootForwarder,
+            'topology-startup-warm'
+          );
+        }
+      }
+
       flushMetrics();
     },
     [
@@ -4210,6 +4266,31 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!encoder || encoder.state === 'closed') return false;
     return true;
   }, []);
+
+  const bumpMediaViability = useCallback(() => {
+    setMediaViabilityRevision((n) => n + 1);
+  }, []);
+
+  const mediaViable = useMemo(() => {
+    const myAddr = userInfo?.address ?? '';
+    if (roomState !== 'connected') return true;
+    if (!roomKeyPresent) return false;
+    const remoteOthers = participants.filter((p) => p.address !== myAddr);
+    const soloCall = remoteOthers.length === 0;
+    const firstInbound =
+      (metrics.packetsReceived ?? 0) > 0 ||
+      (metrics.packetsDecoded ?? 0) > 0;
+    const localCaptureActive = isAudioPipelineActive();
+    return firstInbound || (soloCall && localCaptureActive);
+  }, [
+    roomState,
+    roomKeyPresent,
+    participants,
+    metrics,
+    userInfo?.address,
+    mediaViabilityRevision,
+    isAudioPipelineActive,
+  ]);
 
   const teardownCapturePipelineRefs = useCallback(() => {
     teardownPlaybackMixGraph();
@@ -4721,8 +4802,9 @@ export function useGroupVoiceCall(uiActive = false) {
       if (audioSessionTokenRef.current !== token) return;
       audioStartInFlightRef.current = false;
       debugLog('[GCall] ensureAudioCaptureStarted done — token:', token);
+      bumpMediaViability();
     });
-  }, [isAudioPipelineActive, startAudioCapture, userInfo?.address]);
+  }, [bumpMediaViability, isAudioPipelineActive, startAudioCapture, userInfo?.address]);
 
   const enqueueKeyDistributionBufferedFrame = useCallback((opusFrame: Uint8Array) => {
     const buffered = keyDistributionBufferedFramesRef.current;
@@ -5869,6 +5951,51 @@ export function useGroupVoiceCall(uiActive = false) {
     [encryptRoomKeyForRecipients, userInfo]
   );
 
+  /** Root with owned key: send GC_KEY to a peer as soon as roster learns their PK (startup A2). */
+  const maybeSendRosterLearnedTargetedKey = useCallback(
+    (address: string, publicKey: string) => {
+      const myAddr = userInfo?.address ?? '';
+      if (!myAddr || address === myAddr) return;
+      const pk = typeof publicKey === 'string' ? publicKey.trim() : '';
+      if (!pk) return;
+      if (roomStateRef.current !== 'connected') return;
+      if (!roomKeyRef.current || !isOurKeyRef.current) return;
+      const root = topologyRef.current?.rootForwarder ?? '';
+      const isRootForKey =
+        root === myAddr ||
+        myRoleRef.current === 'root-forwarder' ||
+        (isInitiatorRef.current && isOurKeyRef.current);
+      if (!isRootForKey) return;
+      const cs = callSessionIdRef.current;
+      const gen = mediaSessionGenerationRef.current >>> 0;
+      if (!cs) return;
+      const digest = `${cs}:${gen}:${pk}`;
+      if (lastRosterLearnedKeyDigestByAddrRef.current.get(address) === digest) {
+        return;
+      }
+      if (
+        memberGateGroupIdRef.current !== null &&
+        !passesGroupCallMemberGate({
+          claimedAddress: address,
+          publicKeyBase58: pk,
+          memberSet: memberSetRef.current,
+        })
+      ) {
+        return;
+      }
+      const key = roomKeyRef.current;
+      if (!key) return;
+      void sendTargetedRoomKeys(
+        key,
+        new Map([[address, { publicKey: pk }]]),
+        'roster-learned'
+      ).then(() => {
+        lastRosterLearnedKeyDigestByAddrRef.current.set(address, digest);
+      });
+    },
+    [sendTargetedRoomKeys, userInfo?.address]
+  );
+
   const armSimultaneousJoinKeyFallback = useCallback(
     (electionGen: number, myAddress: string) => {
       if (simultJoinKeyFallbackTimerRef.current) {
@@ -5983,6 +6110,7 @@ export function useGroupVoiceCall(uiActive = false) {
         const installAtMs = Date.now();
         clearAuthoritativeKeyGrace();
         roomKeyRef.current = newKey;
+        setRoomKeyPresent(true);
         isOurKeyRef.current = true;
         needsSessionKeyRef.current = false;
         awaitingAuthoritativeKeyRef.current = false;
@@ -6080,6 +6208,7 @@ export function useGroupVoiceCall(uiActive = false) {
       clearAuthoritativeKeyGrace();
       const installAtMs = Date.now();
       roomKeyRef.current = bytes;
+      setRoomKeyPresent(true);
       isOurKeyRef.current = caseCRootBecomeHolder;
       selfMintedRoomKeyRef.current = false;
       currentKeyCommitmentRef.current = payload.keyCommitment;
@@ -7406,6 +7535,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
     // Reset state
     roomKeyRef.current = null;
+    setRoomKeyPresent(false);
     isOurKeyRef.current = false;
     callSessionIdRef.current = '';
     mediaSessionGenerationRef.current = 1;
@@ -7427,6 +7557,9 @@ export function useGroupVoiceCall(uiActive = false) {
     startupKeyRejectCountsRef.current = {};
     roomKeyInstallInFlightRef.current.clear();
     loggedInboundReticulumRoutesRef.current.clear();
+    lastRosterLearnedKeyDigestByAddrRef.current.clear();
+    eagerStandbyNoKeyRecoveryFiredJoinGenRef.current = null;
+    startupReticulumPathWarmKeyRef.current = '';
     lastRecoverySuppressionLogAtRef.current = 0;
     lastKeyRecoveryRequestAtRef.current = 0;
     lastKeyRecoveryRefreshAtRef.current = 0;
@@ -7793,6 +7926,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 const installAtMs = Date.now();
                 clearAuthoritativeKeyGrace();
                 roomKeyRef.current = newKey;
+                setRoomKeyPresent(true);
                 isOurKeyRef.current = true;
                 needsSessionKeyRef.current = false;
                 awaitingAuthoritativeKeyRef.current = false;
@@ -8328,6 +8462,8 @@ export function useGroupVoiceCall(uiActive = false) {
           });
         }
 
+        maybeSendRosterLearnedTargetedKey(address, publicKey);
+
         // Re-announce ourselves to the newly discovered peer so they learn about us.
         // Peers who joined before the flood may have missed our GC_JOIN; re-sends fix that.
         // Throttled to limit signed GC_JOIN / verify load during mesh bursts.
@@ -8723,6 +8859,7 @@ export function useGroupVoiceCall(uiActive = false) {
           requestTopologyElectionFlush('session-updated');
           maybeRequestKeyRecoveryRef.current('session-updated');
         }
+        setRoomKeyPresent(roomKeyRef.current !== null);
       }
 
       if (event === 'gcall:key-request') {
@@ -8849,6 +8986,7 @@ export function useGroupVoiceCall(uiActive = false) {
     ensureAudioCaptureStarted,
     reconcileParticipantsFromMainRoster,
     syncDecryptWorkerRoomKey,
+    maybeSendRosterLearnedTargetedKey,
     uiActive,
     userInfo?.address,
   ]);
@@ -8871,6 +9009,7 @@ export function useGroupVoiceCall(uiActive = false) {
     myRole,
     activeSpeakers,
     metrics,
+    mediaViable,
     localConnectionHint,
     topologyLabel,
     joinGroupCall,

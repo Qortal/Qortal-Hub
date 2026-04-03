@@ -125,6 +125,7 @@
   "group_call_chat_sidebar": "Chat",
   "group_call_chat_placeholder": "Text chat for group calls is not available yet.",
   "group_call_connecting": "Connecting…",
+  "group_call_connecting_audio": "Connecting audio…",
   "group_call_you": "You",
   "group_call_minimize": "Minimize to sidebar",
   "group_call_expand": "Expand call",

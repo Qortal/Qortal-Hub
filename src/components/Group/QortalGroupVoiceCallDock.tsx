@@ -56,6 +56,7 @@ export function QortalGroupVoiceCallDock() {
   const [minimized, setMinimized] = useAtom(qortalGroupVoiceCallMinimizedAtom);
   const {
     roomState,
+    mediaViable,
     roomId,
     participants,
     activeSpeakers,
@@ -105,10 +106,19 @@ export function QortalGroupVoiceCallDock() {
     const id = window.setInterval(bumpTransport, 700);
     return () => window.clearInterval(id);
   }, [active, minimized]);
-  const transport = useMemo(
-    () => getGroupCallTransportSummary(metrics, Date.now()),
-    [metrics, transportTick]
-  );
+  const transport = useMemo(() => {
+    if (roomState === 'connected' && !mediaViable) {
+      return {
+        mode: 'connecting' as const,
+        label: t('core:group_call_connecting_audio', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+        tooltip:
+          'Room key and audio path are still establishing; you may not hear others yet.',
+      };
+    }
+    return getGroupCallTransportSummary(metrics, Date.now());
+  }, [roomState, mediaViable, metrics, transportTick, t]);
 
   const title =
     memberGateGroupName?.trim() ||
