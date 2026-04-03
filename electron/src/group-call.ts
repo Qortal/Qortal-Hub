@@ -107,11 +107,12 @@ const GC_RETICULUM_AUDIO_RECOVERY_ACTION_COOLDOWN_MS = 1_000;
 const GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES = 8;
 const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH = 12;
 const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS = 6;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_TIMEOUTS = 4;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
 const GC_RETICULUM_PACKET_MEDIA_ENABLED = true;
-const GC_RETICULUM_PACKET_MEDIA_KEEP_AUDIO_LINKS = false;
+const GC_RETICULUM_PACKET_MEDIA_KEEP_AUDIO_LINKS = true;
 const GC_RETICULUM_OVERLAY_HOPS = 4;
 const GC_RETICULUM_OVERLAY_SEEN_TTL_MS = 120_000;
 
@@ -469,6 +470,7 @@ interface ReticulumAudioPeerState {
   peerPresenceHash: string;
   peerCallHash: string;
   transport: ReticulumMediaTransportKind;
+  packetTransportFallback: boolean;
   routeKey: string;
   linkId: string | null;
   established: boolean;
@@ -626,7 +628,8 @@ export function chooseMainTopologyAuthority(
     topologyEpoch: number;
     rootForwarder: string;
     lastSeen?: number | null;
-  }
+  },
+  roomId: string
 ): { acceptIncoming: boolean; reason: string } {
   if (incoming.topologyEpoch !== current.topologyEpoch) {
     return {
@@ -646,8 +649,10 @@ export function chooseMainTopologyAuthority(
     if (currentRoot && !incomingRoot) {
       return { acceptIncoming: false, reason: 'rootForwarder-lexical' };
     }
+    const currentRank = sha256Hex(`${currentRoot}:${roomId}`);
+    const incomingRank = sha256Hex(`${incomingRoot}:${roomId}`);
     return {
-      acceptIncoming: incomingRoot.localeCompare(currentRoot) < 0,
+      acceptIncoming: incomingRank.localeCompare(currentRank) < 0,
       reason: 'rootForwarder-lexical',
     };
   }
@@ -2687,6 +2692,58 @@ export class GroupCallManager extends EventEmitter {
     return GC_RETICULUM_PACKET_MEDIA_ENABLED ? 'packet' : 'link';
   }
 
+  private getEffectiveReticulumAudioTransport(
+    state?: Pick<ReticulumAudioPeerState, 'packetTransportFallback'> | null
+  ): ReticulumMediaTransportKind {
+    const baseTransport = this.getReticulumAudioTransportKind();
+    if (baseTransport !== 'packet') return baseTransport;
+    return state?.packetTransportFallback ? 'link' : 'packet';
+  }
+
+  private setReticulumAudioTransport(
+    address: string,
+    state: ReticulumAudioPeerState,
+    transport: ReticulumMediaTransportKind,
+    reason?: string
+  ): void {
+    state.transport = transport;
+    if (reason) state.recoveryReason = reason;
+    this.setReticulumAudioRouteKey(
+      address,
+      state,
+      this.computeReticulumAudioRouteKey(
+        transport,
+        state.peerPresenceHash,
+        state.linkId
+      )
+    );
+  }
+
+  private activateReticulumAudioLinkFallback(
+    address: string,
+    state: ReticulumAudioPeerState,
+    reason: string
+  ): void {
+    if (this.getReticulumAudioTransportKind() !== 'packet') return;
+    if (state.packetTransportFallback && state.transport === 'link') return;
+    state.packetTransportFallback = true;
+    this.setReticulumAudioTransport(address, state, 'link', reason);
+    if (this.shouldMaintainReticulumAudioLink(state)) {
+      void this.openReticulumAudioLinkForAddress(address);
+    }
+    this.scheduleReticulumAudioFlush();
+  }
+
+  private shouldFallbackPacketTransport(
+    snapshot: ReticulumAudioQueueSnapshot | null | undefined
+  ): boolean {
+    if (!snapshot) return false;
+    return (
+      snapshot.packetPathResolutions === 0 &&
+      snapshot.packetPathTimeouts >= GC_RETICULUM_PACKET_LINK_FALLBACK_TIMEOUTS
+    );
+  }
+
   private shouldMaintainReticulumAudioLink(
     state: Pick<ReticulumAudioPeerState, 'transport'> | null | undefined
   ): boolean {
@@ -2894,7 +2951,7 @@ export class GroupCallManager extends EventEmitter {
       return null;
     }
     let state = this.reticulumAudioPeersByAddress.get(address);
-    const transport = this.getReticulumAudioTransportKind();
+    const transport = this.getEffectiveReticulumAudioTransport(state);
     if (state && state.peerPresenceHash !== peerPresenceHash) {
       this.markReticulumAudioLinkUnready(address, state.linkId ?? undefined);
       this.reticulumAudioAddressByLinkId.delete(state.routeKey);
@@ -2907,6 +2964,7 @@ export class GroupCallManager extends EventEmitter {
         peerPresenceHash,
         peerCallHash: '',
         transport,
+        packetTransportFallback: false,
         routeKey: this.computeReticulumAudioRouteKey(transport, peerPresenceHash),
         linkId: null,
         established: false,
@@ -2923,12 +2981,7 @@ export class GroupCallManager extends EventEmitter {
       this.reticulumAudioAddressByLinkId.set(state.routeKey, address);
     } else {
       state.peerPresenceHash = peerPresenceHash;
-      state.transport = transport;
-      this.setReticulumAudioRouteKey(
-        address,
-        state,
-        this.computeReticulumAudioRouteKey(transport, peerPresenceHash, state.linkId)
-      );
+      this.setReticulumAudioTransport(address, state, transport);
     }
     state.rooms.add(roomId);
     if (this.shouldMaintainReticulumAudioLink(state)) {
@@ -3190,6 +3243,16 @@ export class GroupCallManager extends EventEmitter {
           packetSendFailures,
           result.snapshot.packetSendFailures
         );
+        if (
+          state.transport === 'packet' &&
+          this.shouldFallbackPacketTransport(result.snapshot)
+        ) {
+          this.activateReticulumAudioLinkFallback(
+            address,
+            state,
+            'packet-fallback:path-unresolved'
+          );
+        }
         bridgePressured =
           bridgePressured ||
           (opts?.stopOnPressure === true &&
@@ -3348,6 +3411,17 @@ export class GroupCallManager extends EventEmitter {
             code === 'exception',
           holdAudio: true,
         });
+        if (
+          code === 'path_request_timeout' ||
+          code === 'packet_send_false' ||
+          code === 'exception'
+        ) {
+          this.activateReticulumAudioLinkFallback(
+            address,
+            state,
+            `packet-fallback:${code || payload.reason}`
+          );
+        }
       }
     }
     this.logReticulumFailureThrottled(
@@ -3390,16 +3464,14 @@ export class GroupCallManager extends EventEmitter {
         continue;
       }
       state.peerPresenceHash = desired.peerPresenceHash;
-      state.transport = this.getReticulumAudioTransportKind();
+      if (this.getReticulumAudioTransportKind() !== 'packet') {
+        state.packetTransportFallback = false;
+      }
       state.rooms = desired.rooms;
-      this.setReticulumAudioRouteKey(
+      this.setReticulumAudioTransport(
         address,
         state,
-        this.computeReticulumAudioRouteKey(
-          state.transport,
-          desired.peerPresenceHash,
-          state.linkId
-        )
+        this.getEffectiveReticulumAudioTransport(state)
       );
       if (this.shouldMaintainReticulumAudioLink(state)) {
         void this.openReticulumAudioLinkForAddress(address);
@@ -3423,9 +3495,10 @@ export class GroupCallManager extends EventEmitter {
           address,
           peerPresenceHash: desired.peerPresenceHash,
           peerCallHash: '',
-          transport: this.getReticulumAudioTransportKind(),
+          transport: this.getEffectiveReticulumAudioTransport(null),
+          packetTransportFallback: false,
           routeKey: this.computeReticulumAudioRouteKey(
-            this.getReticulumAudioTransportKind(),
+            this.getEffectiveReticulumAudioTransport(null),
             desired.peerPresenceHash
           ),
           linkId: null,
@@ -3443,16 +3516,14 @@ export class GroupCallManager extends EventEmitter {
         this.reticulumAudioAddressByLinkId.set(state.routeKey, address);
       } else {
         state.peerPresenceHash = desired.peerPresenceHash;
-        state.transport = this.getReticulumAudioTransportKind();
+        if (this.getReticulumAudioTransportKind() !== 'packet') {
+          state.packetTransportFallback = false;
+        }
         state.rooms = desired.rooms;
-        this.setReticulumAudioRouteKey(
+        this.setReticulumAudioTransport(
           address,
           state,
-          this.computeReticulumAudioRouteKey(
-            state.transport,
-            desired.peerPresenceHash,
-            state.linkId
-          )
+          this.getEffectiveReticulumAudioTransport(state)
         );
       }
       if (this.shouldMaintainReticulumAudioLink(state)) {
@@ -3915,7 +3986,8 @@ export class GroupCallManager extends EventEmitter {
       ) {
         const decision = chooseMainTopologyAuthority(
           room.lastTopology,
-          incomingTopology
+          incomingTopology,
+          env.roomId
         );
         loggerLog(
           `[GCall] Same-epoch GC_TOPOLOGY disagreement room=${env.roomId} epoch=${incomingTopology.topologyEpoch} currentRoot=${room.lastTopology.rootForwarder} incomingRoot=${incomingTopology.rootForwarder} acceptIncoming=${decision.acceptIncoming} reason=${decision.reason}`
@@ -4041,11 +4113,8 @@ export class GroupCallManager extends EventEmitter {
         state.recoveryHoldUntilMs = 0;
         state.recoveryReason = '';
         if ((payload.transport ?? 'link') === 'packet') {
-          this.setReticulumAudioRouteKey(
-            fromAddress,
-            state,
-            this.computeReticulumAudioRouteKey('packet', state.peerPresenceHash)
-          );
+          state.packetTransportFallback = false;
+          this.setReticulumAudioTransport(fromAddress, state, 'packet');
         }
       }
     }

@@ -128,6 +128,10 @@ export interface RouterTopologyAuthorityDecision {
   winningRoot: string;
 }
 
+export interface RouterTopologyAuthorityOptions {
+  compareRoots?: (incomingRoot: string, currentRoot: string) => number;
+}
+
 /**
  * Resolve conflicting topology candidates with a symmetric rule that every peer
  * can compute locally. Same-epoch root conflicts must not preserve local state,
@@ -135,7 +139,8 @@ export interface RouterTopologyAuthorityDecision {
  */
 export function chooseRouterTopologyAuthority(
   current: RouterTopologyAuthorityView,
-  incoming: RouterTopologyAuthorityView
+  incoming: RouterTopologyAuthorityView,
+  opts?: RouterTopologyAuthorityOptions
 ): RouterTopologyAuthorityDecision {
   if (incoming.topologyEpoch !== current.topologyEpoch) {
     return {
@@ -168,7 +173,11 @@ export function chooseRouterTopologyAuthority(
         winningRoot: currentRoot,
       };
     }
-    const acceptIncoming = incomingRoot.localeCompare(currentRoot) < 0;
+    const compareRoots =
+      opts?.compareRoots ??
+      ((nextRoot: string, existingRoot: string) =>
+        nextRoot.localeCompare(existingRoot));
+    const acceptIncoming = compareRoots(incomingRoot, currentRoot) < 0;
     return {
       acceptIncoming,
       reason: 'rootForwarder-lexical',

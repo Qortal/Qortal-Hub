@@ -67,6 +67,7 @@ import {
   sameAddressList,
   type RouterTopology,
 } from '../lib/group-call/router';
+import { compareGroupCallElectionAddresses } from '../lib/group-call/election-order';
 import {
   ACTIVE_SPEAKER_GAIN,
   GAIN_SMOOTHING_TIME_CONSTANT_S,
@@ -473,6 +474,7 @@ export function shouldApplyJoinSessionSnapshot(opts: {
  */
 export function getStartupKeyAuthorityDecision(opts: {
   myAddress: string;
+  designatedRoot?: string | null | undefined;
   otherParticipantCount: number;
   nowMs: number;
   authoritySettleUntilMs: number;
@@ -492,6 +494,7 @@ export function getStartupKeyAuthorityDecision(opts: {
   | {
       allowMint: false;
       reason:
+        | 'not-designated-root'
         | 'startup-authority-wait'
         | 'other-participants-visible'
         | 'occupied-room-evidence'
@@ -500,6 +503,10 @@ export function getStartupKeyAuthorityDecision(opts: {
         | 'pending-verified-key'
         | 'recent-remote-media';
     } {
+  const designatedRoot = opts.designatedRoot?.trim() ?? '';
+  if (designatedRoot && designatedRoot !== opts.myAddress) {
+    return { allowMint: false, reason: 'not-designated-root' };
+  }
   const otherParticipantsVisible = opts.otherParticipantCount > 0;
   const occupiedRoomEvidence =
     opts.hasOccupiedRoomEvidence === true ||
@@ -539,6 +546,7 @@ export function getStartupKeyAuthorityDecision(opts: {
 
 export function shouldMintRootSessionKeyImmediately(opts: {
   myAddress: string;
+  designatedRoot?: string | null | undefined;
   otherParticipantCount: number;
   nowMs: number;
   authoritySettleUntilMs: number;
@@ -559,6 +567,7 @@ export function getSessionUpdatedKeyRecoveryAction(opts: {
   myAddress: string;
   isLocalRoot: boolean;
   hasOwnedRoomKey: boolean;
+  designatedRoot?: string | null | undefined;
   otherParticipantCount: number;
   nowMs: number;
   authoritySettleUntilMs: number;
@@ -576,6 +585,7 @@ export function getSessionUpdatedKeyRecoveryAction(opts: {
   if (opts.hasOwnedRoomKey) return 'redistribute-existing';
   return shouldMintRootSessionKeyImmediately({
     myAddress: opts.myAddress,
+    designatedRoot: opts.designatedRoot,
     otherParticipantCount: opts.otherParticipantCount,
     nowMs: opts.nowMs,
     authoritySettleUntilMs: opts.authoritySettleUntilMs,
@@ -742,6 +752,47 @@ export function shouldAcceptIncomingRoomKeySender(opts: {
   return opts.senderInRoster;
 }
 
+/**
+ * When GC_KEY / GC_KEY_ROTATE can arrive before GC_TOPOLOGY is applied locally, `currentRoot`
+ * may still be empty or still point at this node. While we are waiting for the authoritative
+ * key from the elected root, accept verified keys from the trusted remote root, designated
+ * election winner, or (2-party) the sole remote peer when we still believe we are root —
+ * otherwise the demoted peer drops the real root's key and never decrypts.
+ */
+export function shouldAcceptIncomingRoomKeySenderRelaxed(opts: {
+  currentRoot: string;
+  senderAddress: string;
+  senderInRoster: boolean;
+  awaitingAuthoritativeKey: boolean;
+  myAddress: string;
+  trustedRemoteRoot: string;
+  designatedRoot: string | null;
+  participantCount: number;
+}): boolean {
+  if (
+    shouldAcceptIncomingRoomKeySender({
+      currentRoot: opts.currentRoot,
+      senderAddress: opts.senderAddress,
+      senderInRoster: opts.senderInRoster,
+    })
+  ) {
+    return true;
+  }
+  if (!opts.awaitingAuthoritativeKey || !opts.senderInRoster) return false;
+  const s = opts.senderAddress.trim();
+  const me = opts.myAddress.trim();
+  if (!s || !me || s === me) return false;
+  const tr = opts.trustedRemoteRoot.trim();
+  if (tr && s === tr) return true;
+  const dr = opts.designatedRoot?.trim() ?? '';
+  if (dr && s === dr) return true;
+  const cr = opts.currentRoot.trim();
+  if (opts.participantCount === 2 && cr === me && s !== me) {
+    return true;
+  }
+  return false;
+}
+
 export function shouldAcceptKeyRecoveryRequestGeneration(opts: {
   requestMediaSessionGeneration: number;
   localMediaSessionGeneration: number;
@@ -884,6 +935,7 @@ export function getConflictingRootForAuthorityWait(opts: {
 
 export function shouldAllowSimultaneousJoinKeyFallback(opts: {
   myAddress: string;
+  designatedRoot?: string | null | undefined;
   otherParticipantCount: number;
   trustedRemoteRoot: string | null | undefined;
   conflictingRemoteRoot: string | null | undefined;
@@ -898,6 +950,7 @@ export function shouldAllowSimultaneousJoinKeyFallback(opts: {
 }): boolean {
   return getStartupKeyAuthorityDecision({
     myAddress: opts.myAddress,
+    designatedRoot: opts.designatedRoot,
     otherParticipantCount: opts.otherParticipantCount,
     nowMs: opts.nowMs,
     authoritySettleUntilMs: opts.authoritySettleUntilMs,
@@ -961,20 +1014,28 @@ async function buildGcKeyRotateDigest(
   return sha256Hex(canonicalizeStringMap(encryptedKeys));
 }
 
-/** Compare two Uint8Arrays lexicographically. */
-function compareBytes(a: Uint8Array, b: Uint8Array): number {
-  for (let i = 0; i < Math.min(a.length, b.length); i++) {
-    if (a[i] < b[i]) return -1;
-    if (a[i] > b[i]) return 1;
-  }
-  return a.length - b.length;
-}
-
 export function chooseSameEpochTopologyWinner(
   current: GroupTopology,
-  incoming: GroupTopology
+  incoming: GroupTopology,
+  roomId: string,
+  electionDigests?: ReadonlyMap<string, string>
 ): { acceptIncoming: boolean; reason: string } {
-  const decision = chooseRouterTopologyAuthority(current, incoming);
+  const decision = chooseRouterTopologyAuthority(current, incoming, {
+    compareRoots: (incomingRoot, currentRoot) => {
+      const cachedComparison =
+        electionDigests &&
+        compareGroupCallElectionAddresses(
+          incomingRoot,
+          currentRoot,
+          electionDigests
+        );
+      if (typeof cachedComparison === 'number') return cachedComparison;
+      // Fallback should be rare; digest cache is populated anywhere we compute
+      // deterministic election order for this room.
+      void roomId;
+      return incomingRoot.localeCompare(currentRoot);
+    },
+  });
   return {
     acceptIncoming: decision.acceptIncoming,
     reason: decision.reason,
@@ -984,16 +1045,43 @@ export function chooseSameEpochTopologyWinner(
 /** Compute election scores for all participants. Returns sorted list (lowest score first). */
 async function computeElectionOrder(
   addresses: string[],
-  roomId: string
+  roomId: string,
+  electionDigestCache?: Map<string, string>
 ): Promise<string[]> {
   const scores = await Promise.all(
     addresses.map(async (addr) => ({
       addr,
-      score: await sha256Bytes(addr + ':' + roomId),
+      score:
+        electionDigestCache?.get(addr) ?? (await sha256Hex(addr + ':' + roomId)),
     }))
   );
-  scores.sort((a, b) => compareBytes(a.score, b.score));
+  scores.sort((a, b) => a.score.localeCompare(b.score));
+  if (electionDigestCache) {
+    for (const { addr, score } of scores) {
+      electionDigestCache.set(addr, score);
+    }
+  }
   return scores.map((s) => s.addr);
+}
+
+function getDesignatedRootFromElectionDigests(
+  addresses: string[],
+  electionDigests: ReadonlyMap<string, string>,
+  fallbackRoot?: string | null | undefined
+): string | null {
+  let winner = '';
+  let winningDigest = '';
+  for (const address of addresses) {
+    const digest = electionDigests.get(address)?.trim() ?? '';
+    if (!digest) continue;
+    if (!winner || digest.localeCompare(winningDigest) < 0) {
+      winner = address;
+      winningDigest = digest;
+    }
+  }
+  if (winner) return winner;
+  const fallback = fallbackRoot?.trim() ?? '';
+  return fallback && addresses.includes(fallback) ? fallback : null;
 }
 
 /** Normalize cluster rows from IPC (older peers may omit `standby2`). */
@@ -1399,6 +1487,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // Topology state
   const topologyRef = useRef<GroupTopology | null>(null);
+  const electionDigestCacheRef = useRef<Map<string, string>>(new Map());
   const localEpochRef = useRef<number>(0);
   const myRoleRef = useRef<MyRole>('participant');
   /** lastJoinTs / joinGeneration = latest seen GC_JOIN for this address (rejoin detection). */
@@ -1618,6 +1707,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const roomKeyInstalledAtRef = useRef(0);
   const lastStartupMediaSuppressionLogAtRef = useRef(0);
   const selfMintedRoomKeyRef = useRef(false);
+  const authoritativeKeyGraceUntilRef = useRef(0);
+  const authoritativeKeyGraceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const startupKeyRejectCountsRef = useRef<Record<string, number>>({});
   const roomKeyInstallInFlightRef = useRef<Set<string>>(new Set());
   const lastRecoverySuppressionLogAtRef = useRef(0);
@@ -3479,6 +3572,52 @@ export function useGroupVoiceCall(uiActive = false) {
     [flushPendingDecryptMap]
   );
 
+  const clearAuthoritativeKeyGrace = useCallback(() => {
+    authoritativeKeyGraceUntilRef.current = 0;
+    if (authoritativeKeyGraceTimerRef.current) {
+      clearTimeout(authoritativeKeyGraceTimerRef.current);
+      authoritativeKeyGraceTimerRef.current = null;
+    }
+  }, []);
+
+  const armAuthoritativeKeyDecryptGrace = useCallback(
+    (reason: string) => {
+      if (!roomKeyRef.current) return;
+      clearAuthoritativeKeyGrace();
+      const expiresAt = Date.now() + KEY_RECOVERY_NO_DECODE_MS;
+      authoritativeKeyGraceUntilRef.current = expiresAt;
+      authoritativeKeyGraceTimerRef.current = setTimeout(() => {
+        authoritativeKeyGraceTimerRef.current = null;
+        if (
+          !awaitingAuthoritativeKeyRef.current ||
+          isOurKeyRef.current ||
+          !roomKeyRef.current
+        ) {
+          authoritativeKeyGraceUntilRef.current = 0;
+          return;
+        }
+        debugWarn('[GCall] authoritative key grace expired — clearing retained decrypt key', {
+          reason,
+        });
+        gcallDiagnosticsPush(
+          'warn',
+          '[GCall] authoritativeKeyDecryptGraceExpired',
+          { reason }
+        );
+        roomKeyRef.current = null;
+        currentKeyCommitmentRef.current = null;
+        syncDecryptWorkerRoomKey(null);
+        authoritativeKeyGraceUntilRef.current = 0;
+        queueMicrotask(() => {
+          maybeRequestKeyRecoveryRef.current(
+            'authoritative-key-grace-expired'
+          );
+        });
+      }, KEY_RECOVERY_NO_DECODE_MS);
+    },
+    [clearAuthoritativeKeyGrace, syncDecryptWorkerRoomKey]
+  );
+
   requestMediaRecoveryForPeerRef.current = (peerAddress: string, reason: string) => {
     const roomId = roomIdRef.current;
     const requestPeerMediaRecovery = window.groupCall?.requestPeerMediaRecovery;
@@ -3620,7 +3759,12 @@ export function useGroupVoiceCall(uiActive = false) {
         topo.topologyEpoch === localEpochRef.current &&
         topo.rootForwarder !== prevTopo.rootForwarder
       ) {
-        const decision = chooseSameEpochTopologyWinner(prevTopo, topo);
+        const decision = chooseSameEpochTopologyWinner(
+          prevTopo,
+          topo,
+          roomIdRef.current,
+          electionDigestCacheRef.current
+        );
         debugLog('[GCall] same-epoch root disagreement', {
           epoch: topo.topologyEpoch,
           currentRoot: prevTopo.rootForwarder,
@@ -3717,7 +3861,7 @@ export function useGroupVoiceCall(uiActive = false) {
           isOurKeyRef.current = false;
           if (roomKeyRef.current && selfMintedRoomKeyRef.current) {
             debugWarn(
-              '[GCall] Lost deterministic authority while holding a self-minted key — clearing receive key',
+              '[GCall] Lost deterministic authority while holding a self-minted key — retaining decrypt key until recovery',
               {
                 previousRoot: prevTopo.rootForwarder,
                 newRoot: topo.rootForwarder,
@@ -3731,13 +3875,11 @@ export function useGroupVoiceCall(uiActive = false) {
                 Date.now() - lastRemoteDecodeAtRef.current <=
                   KEY_RECOVERY_NO_DECODE_MS,
             });
-            roomKeyRef.current = null;
-            currentKeyCommitmentRef.current = null;
             needsSessionKeyRef.current = true;
             awaitingAuthoritativeKeyRef.current = true;
-            keyDistributionPendingRef.current = true;
+            keyDistributionPendingRef.current = false;
             selfMintedRoomKeyRef.current = false;
-            syncDecryptWorkerRoomKey(null);
+            armAuthoritativeKeyDecryptGrace('root-changed-self-minted-key');
             queueMicrotask(() => {
               maybeRequestKeyRecoveryRef.current('root-changed-self-minted-key');
             });
@@ -3883,7 +4025,11 @@ export function useGroupVoiceCall(uiActive = false) {
       const newEpoch =
         Math.max(localEpochRef.current, lastObservedEpochRef.current) + 1;
       const addrs = [...participantsRef.current.keys()];
-      const sorted = await computeElectionOrder(addrs, roomIdRef.current);
+      const sorted = await computeElectionOrder(
+        addrs,
+        roomIdRef.current,
+        electionDigestCacheRef.current
+      );
       const promotedTopo = buildTopology(sorted, newEpoch);
 
       if (currentTopo.standbyForwarder === myAddress) {
@@ -4670,6 +4816,13 @@ export function useGroupVoiceCall(uiActive = false) {
     (opusFrame: Uint8Array) => {
       if (!roomKeyRef.current || !userInfo?.address) return;
       if (mutedRef.current) return; // mic is muted — drop frame
+      if (awaitingAuthoritativeKeyRef.current && !isOurKeyRef.current) {
+        logSendPathDiagnostic('authoritative-key-pending-send-blocked', {
+          role: myRoleRef.current,
+          transport: 'reticulum',
+        });
+        return;
+      }
       if (keyDistributionPendingRef.current) {
         enqueueKeyDistributionBufferedFrame(opusFrame);
         logSendPathDiagnostic('key-distribution-pending', {
@@ -5748,8 +5901,14 @@ export function useGroupVoiceCall(uiActive = false) {
         const otherParticipantCount = roster.filter(
           (address) => address !== myAddress
         ).length;
+        const designatedRoot = getDesignatedRootFromElectionDigests(
+          roster,
+          electionDigestCacheRef.current,
+          topologyRef.current?.rootForwarder
+        );
         const fallbackDecision = getStartupKeyAuthorityDecision({
           myAddress,
+          designatedRoot,
           otherParticipantCount,
           nowMs,
           authoritySettleUntilMs: authoritySettleUntilRef.current,
@@ -5764,6 +5923,7 @@ export function useGroupVoiceCall(uiActive = false) {
         });
         const canMint = shouldAllowSimultaneousJoinKeyFallback({
           myAddress,
+          designatedRoot,
           otherParticipantCount,
           trustedRemoteRoot: fallbackTrustedRoot,
           conflictingRemoteRoot: conflictingRoot,
@@ -5785,6 +5945,7 @@ export function useGroupVoiceCall(uiActive = false) {
             '[GCall] Simultaneous-join fallback deferred — authority unsettled',
             {
               reason: fallbackDecision.reason,
+              designatedRoot,
               trustedRoot: fallbackTrustedRoot ?? null,
               conflictingRoot: conflictingRoot ?? null,
               pendingVerifiedKeyCount: pendingVerifiedKeysRef.current.length,
@@ -5801,6 +5962,7 @@ export function useGroupVoiceCall(uiActive = false) {
           );
           gcallDiagnosticsPush('info', '[GCall] simultaneousJoinFallbackDeferred', {
             reason: fallbackDecision.reason,
+            designatedRoot,
             trustedRoot: fallbackTrustedRoot ?? null,
             conflictingRoot: conflictingRoot ?? null,
             pendingVerifiedKeyCount: pendingVerifiedKeysRef.current.length,
@@ -5819,6 +5981,7 @@ export function useGroupVoiceCall(uiActive = false) {
         debugLog('[GCall] Simultaneous-join fallback — minting session key');
         const newKey = naclApi.randomBytes(32);
         const installAtMs = Date.now();
+        clearAuthoritativeKeyGrace();
         roomKeyRef.current = newKey;
         isOurKeyRef.current = true;
         needsSessionKeyRef.current = false;
@@ -5837,6 +6000,7 @@ export function useGroupVoiceCall(uiActive = false) {
           installAtMs,
           electionGen,
           myAddress,
+          designatedRoot,
         });
         syncDecryptWorkerRoomKey(newKey);
         armKeyDistributionGateAndRun(() => distributeRoomKey(newKey));
@@ -5852,7 +6016,12 @@ export function useGroupVoiceCall(uiActive = false) {
         delayMs
       );
     },
-    [armKeyDistributionGateAndRun, distributeRoomKey, syncDecryptWorkerRoomKey]
+    [
+      armKeyDistributionGateAndRun,
+      clearAuthoritativeKeyGrace,
+      distributeRoomKey,
+      syncDecryptWorkerRoomKey,
+    ]
   );
 
   const queueVerifiedRoomKey = useCallback((payload: IncomingRoomKeyPayload) => {
@@ -5908,6 +6077,7 @@ export function useGroupVoiceCall(uiActive = false) {
         clearTimeout(simultJoinKeyFallbackTimerRef.current);
         simultJoinKeyFallbackTimerRef.current = null;
       }
+      clearAuthoritativeKeyGrace();
       const installAtMs = Date.now();
       roomKeyRef.current = bytes;
       isOurKeyRef.current = caseCRootBecomeHolder;
@@ -5952,6 +6122,7 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [
       armKeyDistributionGateAndRun,
+      clearAuthoritativeKeyGrace,
       distributeRoomKey,
       ensureAudioCaptureStarted,
       syncDecryptWorkerRoomKey,
@@ -6061,13 +6232,41 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
       const inRoster = participantsRef.current.has(payload.fromAddress);
-      const trustedSender = shouldAcceptIncomingRoomKeySender({
+      const designatedRoot = getDesignatedRootFromElectionDigests(
+        [...participantsRef.current.keys()],
+        electionDigestCacheRef.current,
+        topologyRef.current?.rootForwarder
+      );
+      const trustedSender = shouldAcceptIncomingRoomKeySenderRelaxed({
         currentRoot,
         senderAddress: payload.fromAddress,
         senderInRoster: inRoster,
+        awaitingAuthoritativeKey: awaitingAuthoritativeKeyRef.current,
+        myAddress: userInfo?.address ?? '',
+        trustedRemoteRoot: trustedRemoteRootRef.current,
+        designatedRoot,
+        participantCount: participantsRef.current.size,
       });
+      if (
+        trustedSender &&
+        !shouldAcceptIncomingRoomKeySender({
+          currentRoot,
+          senderAddress: payload.fromAddress,
+          senderInRoster: inRoster,
+        })
+      ) {
+        gcallDiagnosticsPush('info', '[GCall] incomingRoomKeyRelaxedTrust', {
+          fromAddress: payload.fromAddress,
+          currentRoot: currentRoot || null,
+          designatedRoot,
+        });
+      }
       if (!trustedSender) {
-        if (allowQueue && !currentRoot) {
+        if (
+          allowQueue &&
+          (!currentRoot || awaitingAuthoritativeKeyRef.current) &&
+          inRoster
+        ) {
           queueVerifiedRoomKey(payload);
           noteStartupKeyRejection('queued-pending-topology', payload);
         } else {
@@ -6291,6 +6490,11 @@ export function useGroupVoiceCall(uiActive = false) {
     const csid = callSessionIdRef.current;
     const gen = mediaSessionGenerationRef.current;
     const hasInstalledRoomKey = roomKeyRef.current !== null;
+    const designatedRoot = getDesignatedRootFromElectionDigests(
+      [...participantsRef.current.keys()],
+      electionDigestCacheRef.current,
+      topologyRef.current?.rootForwarder
+    );
     const keep: PendingVerifiedRoomKey[] = [];
     for (const entry of pendingVerifiedKeysRef.current) {
       if (entry.expiresAt <= now) {
@@ -6307,19 +6511,24 @@ export function useGroupVoiceCall(uiActive = false) {
         continue;
       }
       const inRoster = participantsRef.current.has(entry.fromAddress);
-      const trustedSender = shouldAcceptIncomingRoomKeySender({
+      const trustedSender = shouldAcceptIncomingRoomKeySenderRelaxed({
         currentRoot,
         senderAddress: entry.fromAddress,
         senderInRoster: inRoster,
+        awaitingAuthoritativeKey: awaitingAuthoritativeKeyRef.current,
+        myAddress: userInfo?.address ?? '',
+        trustedRemoteRoot: trustedRemoteRootRef.current,
+        designatedRoot,
+        participantCount: participantsRef.current.size,
       });
       if (!trustedSender) {
-        if (!currentRoot) keep.push(entry);
+        if (!currentRoot || awaitingAuthoritativeKeyRef.current) keep.push(entry);
         continue;
       }
       void handleRoomKeyPayloadRef.current(entry, false);
     }
     pendingVerifiedKeysRef.current = keep;
-  }, []);
+  }, [userInfo?.address]);
   processPendingVerifiedKeysRef.current = processPendingVerifiedKeys;
 
   // ── Decrypt Worker lifecycle ──────────────────────────────────────────────
@@ -7183,6 +7392,7 @@ export function useGroupVoiceCall(uiActive = false) {
     peerMediaRecoveryLastActionAtRef.current.clear();
     lastSendPathDiagnosticAtRef.current.clear();
     globalRecoveryUntilMsRef.current = 0;
+    clearAuthoritativeKeyGrace();
 
     // Terminate the decrypt Worker (sync clears pending + worker key)
     if (decryptWorkerRef.current) {
@@ -7438,7 +7648,11 @@ export function useGroupVoiceCall(uiActive = false) {
         void (async () => {
           const fresh = [...participantsRef.current.keys()];
           if (fresh.length === 0) return;
-          const sorted = await computeElectionOrder(fresh, roomIdRef.current);
+          const sorted = await computeElectionOrder(
+            fresh,
+            roomIdRef.current,
+            electionDigestCacheRef.current
+          );
           if (myGen !== topologyAsyncGenRef.current) return;
           // Use the highest epoch seen in this room as the floor so a rejoining
           // node never broadcasts a stale epoch that peers would reject.
@@ -7517,6 +7731,7 @@ export function useGroupVoiceCall(uiActive = false) {
               }
               const mintDecision = getStartupKeyAuthorityDecision({
                 myAddress,
+                designatedRoot: newTopo.rootForwarder,
                 otherParticipantCount: others.length,
                 nowMs: Date.now(),
                 authoritySettleUntilMs: authoritySettleUntilRef.current,
@@ -7541,6 +7756,7 @@ export function useGroupVoiceCall(uiActive = false) {
               if (
                 shouldMintRootSessionKeyImmediately({
                   myAddress,
+                  designatedRoot: newTopo.rootForwarder,
                   otherParticipantCount: others.length,
                   nowMs: Date.now(),
                   authoritySettleUntilMs: authoritySettleUntilRef.current,
@@ -7565,6 +7781,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 })
               ) {
                 debugLog('[GCall] Cold-start — mint session key as root', {
+                  designatedRoot: newTopo.rootForwarder,
                   otherParticipantCount: others.length,
                   reason: mintDecision.reason,
                   authorityWaitMs: Math.max(
@@ -7574,6 +7791,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 });
                 const newKey = naclApi.randomBytes(32);
                 const installAtMs = Date.now();
+                clearAuthoritativeKeyGrace();
                 roomKeyRef.current = newKey;
                 isOurKeyRef.current = true;
                 needsSessionKeyRef.current = false;
@@ -7588,6 +7806,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 );
                 gcallDiagnosticsPush('info', '[GCall] startupRootKeyMinted', {
                   installAtMs,
+                  designatedRoot: newTopo.rootForwarder,
                   otherParticipantCount: others.length,
                   authorityWaitMs: Math.max(
                     0,
@@ -7602,6 +7821,7 @@ export function useGroupVoiceCall(uiActive = false) {
               } else {
                 gcallDiagnosticsPush('info', '[GCall] startupRootKeyDeferred', {
                   reason: mintDecision.reason,
+                  designatedRoot: newTopo.rootForwarder,
                   otherParticipantCount: others.length,
                   authoritySettleUntil: authoritySettleUntilRef.current,
                   trustedRoot: trustedElectionRoot ?? null,
@@ -8414,6 +8634,8 @@ export function useGroupVoiceCall(uiActive = false) {
             ? roomKeyRef.current
             : null;
         const existingOwnedKeyWasSelfMinted = selfMintedRoomKeyRef.current;
+        const retainedDecryptKey = roomKeyRef.current;
+        const retainedKeyCommitment = currentKeyCommitmentRef.current;
         const sessionUpdatedAction =
           conflictingRoot && conflictingRoot !== myAddr
             ? 'request-recovery'
@@ -8421,6 +8643,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 myAddress: myAddr,
                 isLocalRoot: !!myAddr && root === myAddr,
                 hasOwnedRoomKey: !!existingOwnedKey,
+                designatedRoot: root,
                 otherParticipantCount: [...participantsRef.current.keys()].filter(
                   (addr) => addr !== myAddr
                 ).length,
@@ -8437,19 +8660,27 @@ export function useGroupVoiceCall(uiActive = false) {
                   startupHydratedRemoteCountRef.current,
                 bootstrapHasTopology: startupBootstrapHasTopologyRef.current,
               });
-        roomKeyRef.current = null;
-        currentKeyCommitmentRef.current = null;
+        clearAuthoritativeKeyGrace();
         isOurKeyRef.current = false;
         selfMintedRoomKeyRef.current = false;
         decryptFailureStreakRef.current = 0;
         recoveryEligibleAfterRef.current = 0;
-        syncDecryptWorkerRoomKey(null);
         needsSessionKeyRef.current = true;
         awaitingAuthoritativeKeyRef.current = true;
-        keyDistributionPendingRef.current = true;
+        keyDistributionPendingRef.current = false;
         pendingVerifiedKeysRef.current = [];
+        if (sessionUpdatedAction === 'request-recovery' && retainedDecryptKey) {
+          roomKeyRef.current = retainedDecryptKey;
+          currentKeyCommitmentRef.current = retainedKeyCommitment;
+          armAuthoritativeKeyDecryptGrace('session-updated');
+        } else {
+          roomKeyRef.current = null;
+          currentKeyCommitmentRef.current = null;
+          syncDecryptWorkerRoomKey(null);
+        }
         if (sessionUpdatedAction === 'redistribute-existing' && existingOwnedKey) {
           const installAtMs = Date.now();
+          clearAuthoritativeKeyGrace();
           roomKeyRef.current = existingOwnedKey;
           isOurKeyRef.current = true;
           selfMintedRoomKeyRef.current = existingOwnedKeyWasSelfMinted;
@@ -8468,6 +8699,7 @@ export function useGroupVoiceCall(uiActive = false) {
         } else if (sessionUpdatedAction === 'mint-immediately') {
           const newKey = naclApi.randomBytes(32);
           const installAtMs = Date.now();
+          clearAuthoritativeKeyGrace();
           roomKeyRef.current = newKey;
           isOurKeyRef.current = true;
           selfMintedRoomKeyRef.current = true;

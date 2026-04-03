@@ -629,7 +629,7 @@ describe('Reticulum group audio transport', () => {
         linkUnreadyDrops: 0,
       }),
     });
-    expect(bridge.openGroupAudioLink).not.toHaveBeenCalled();
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledWith('d:Q-peer');
     expect(bridge.warmGroupAudioPath).toHaveBeenCalledWith('d:Q-peer');
     expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledWith(
       'd:Q-peer',
@@ -637,6 +637,101 @@ describe('Reticulum group audio transport', () => {
       Buffer.from([1, 2, 3]),
       ''
     );
+  });
+
+  it('falls back to the audio link when packet path never resolves', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => ({
+        bridgeQueuedFrames: 0,
+        bridgeQueuedBytes: 0,
+        bridgeBinaryWritesQueued: 0,
+        bridgeWaitingForDrain: false,
+        perLinkQueuedFrames: 0,
+        queuePressureDrops: 0,
+        queuePressureDropsLast5s: 0,
+        staleDrops: 0,
+        staleDropsLast5s: 0,
+        decodedQueueDepth: 0,
+        decodedQueueMax: 48,
+        decodedQueueDrops: 0,
+        binaryOutQueueDepth: 0,
+        binaryOutQueueMax: 128,
+        binaryOutQueueDrops: 0,
+        jsonOutQueueDrops: 0,
+        packetSendFailures: 0,
+        packetPathRequests: 3,
+        packetPathResolutions: 0,
+        packetPathTimeouts: 4,
+        packetFreshSends: 0,
+        packetStaleSends: 0,
+        packetUnknownSends: 2,
+      }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      {
+        send: () => {},
+      } as any,
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100);
+
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const second = manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledWith('d:Q-peer');
+    expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledTimes(1);
+    expect(bridge.enqueueGroupAudio).toHaveBeenCalledWith(
+      'link-1',
+      'room-1',
+      Buffer.from([4, 5, 6])
+    );
+    expect(second).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+        targetAddress: 'Q-peer',
+      }),
+    });
   });
 
   it('emits inbound Reticulum audio as gcall:audio with the mapped sender address', async () => {
@@ -978,14 +1073,15 @@ describe('chooseMainTopologyAuthority', () => {
       chooseMainTopologyAuthority(
         {
           topologyEpoch: 11,
-          rootForwarder: 'root-b',
+          rootForwarder: 'alpha',
           lastSeen: 1_000,
         },
         {
           topologyEpoch: 11,
-          rootForwarder: 'root-a',
+          rootForwarder: 'beta',
           lastSeen: 2_000,
-        }
+        },
+        'gcall-qortal-812'
       )
     ).toEqual({
       acceptIncoming: true,
@@ -1005,7 +1101,8 @@ describe('chooseMainTopologyAuthority', () => {
           topologyEpoch: 11,
           rootForwarder: 'root-a',
           lastSeen: 2_000,
-        }
+        },
+        'gcall-qortal-812'
       )
     ).toEqual({
       acceptIncoming: true,
@@ -1023,7 +1120,8 @@ describe('chooseMainTopologyAuthority', () => {
           topologyEpoch: 10,
           rootForwarder: 'root-b',
           lastSeen: 2_000,
-        }
+        },
+        'gcall-qortal-812'
       )
     ).toEqual({
       acceptIncoming: false,

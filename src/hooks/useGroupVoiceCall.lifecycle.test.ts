@@ -15,6 +15,7 @@ import {
   shouldDeferLocalTopologyElection,
   shouldPromoteStandbyRootAfterHeartbeatTimeout,
   shouldAcceptIncomingRoomKeySender,
+  shouldAcceptIncomingRoomKeySenderRelaxed,
   shouldAcceptKeyRecoveryRequestGeneration,
   shouldAdoptTrustedRootSessionDuringRecovery,
   shouldApplyJoinSessionSnapshot,
@@ -160,6 +161,19 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(
       shouldMintRootSessionKeyImmediately({
         myAddress: 'self',
+        designatedRoot: 'root-a',
+        otherParticipantCount: 2,
+        nowMs: 2_500,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
         otherParticipantCount: 0,
         nowMs: 2_500,
         authoritySettleUntilMs: 1_200,
@@ -291,6 +305,21 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 10,
         decryptFailureStreak: 3,
+      })
+    ).toBe('request-recovery');
+
+    expect(
+      getSessionUpdatedKeyRecoveryAction({
+        myAddress: 'self',
+        isLocalRoot: true,
+        hasOwnedRoomKey: false,
+        designatedRoot: 'root-a',
+        otherParticipantCount: 2,
+        nowMs: 2_000,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
       })
     ).toBe('request-recovery');
   });
@@ -620,6 +649,64 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
+  it('relaxes room-key sender checks while awaiting authoritative key (reordered GC_KEY vs topology)', () => {
+    const base = {
+      senderAddress: 'rootPeer',
+      senderInRoster: true,
+      myAddress: 'standbyPeer',
+      participantCount: 2,
+    };
+    expect(
+      shouldAcceptIncomingRoomKeySenderRelaxed({
+        ...base,
+        currentRoot: 'standbyPeer',
+        awaitingAuthoritativeKey: true,
+        trustedRemoteRoot: 'rootPeer',
+        designatedRoot: null,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAcceptIncomingRoomKeySenderRelaxed({
+        ...base,
+        currentRoot: 'standbyPeer',
+        awaitingAuthoritativeKey: true,
+        trustedRemoteRoot: '',
+        designatedRoot: 'rootPeer',
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAcceptIncomingRoomKeySenderRelaxed({
+        ...base,
+        currentRoot: 'standbyPeer',
+        awaitingAuthoritativeKey: true,
+        trustedRemoteRoot: '',
+        designatedRoot: null,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldAcceptIncomingRoomKeySenderRelaxed({
+        ...base,
+        currentRoot: 'standbyPeer',
+        awaitingAuthoritativeKey: false,
+        trustedRemoteRoot: 'rootPeer',
+        designatedRoot: null,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldAcceptIncomingRoomKeySenderRelaxed({
+        ...base,
+        currentRoot: 'rootPeer',
+        awaitingAuthoritativeKey: true,
+        trustedRemoteRoot: '',
+        designatedRoot: null,
+      })
+    ).toBe(true);
+  });
+
   it('accepts recovery key requests for the current or newer authoritative generation', () => {
     expect(
       shouldAcceptKeyRecoveryRequestGeneration({
@@ -863,10 +950,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(true);
   });
 
-  it('converges same-epoch different-root conflicts to a shared lexical winner', () => {
+  it('converges same-epoch different-root conflicts to the shared hash winner', () => {
     const current: GroupTopology = {
       topologyEpoch: 8,
-      rootForwarder: 'root-b',
+      rootForwarder: 'alpha',
       standbyForwarder: 'standby',
       clusters: [],
       timestamp: 100,
@@ -874,14 +961,25 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     };
     const incoming: GroupTopology = {
       topologyEpoch: 8,
-      rootForwarder: 'root-a',
+      rootForwarder: 'beta',
       standbyForwarder: 'standby',
       clusters: [],
       timestamp: 100,
       lastSeen: 2_000,
     };
+    const electionDigests = new Map<string, string>([
+      ['alpha', 'dd957904'],
+      ['beta', 'cdc71363'],
+    ]);
 
-    expect(chooseSameEpochTopologyWinner(current, incoming)).toEqual({
+    expect(
+      chooseSameEpochTopologyWinner(
+        current,
+        incoming,
+        'gcall-qortal-812',
+        electionDigests
+      )
+    ).toEqual({
       acceptIncoming: true,
       reason: 'rootForwarder-lexical',
     });
@@ -905,7 +1003,9 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       lastSeen: 2_000,
     };
 
-    expect(chooseSameEpochTopologyWinner(current, incoming)).toEqual({
+    expect(
+      chooseSameEpochTopologyWinner(current, incoming, 'gcall-qortal-812')
+    ).toEqual({
       acceptIncoming: true,
       reason: 'lastSeen',
     });
@@ -1040,6 +1140,18 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         authoritySettleUntilMs: 20_000,
       })
     ).toBe(true);
+
+    expect(
+      shouldAllowSimultaneousJoinKeyFallback({
+        myAddress: 'self',
+        designatedRoot: 'root-a',
+        otherParticipantCount: 0,
+        trustedRemoteRoot: null,
+        conflictingRemoteRoot: null,
+        nowMs: 20_100,
+        authoritySettleUntilMs: 20_000,
+      })
+    ).toBe(false);
 
     expect(
       shouldAllowSimultaneousJoinKeyFallback({

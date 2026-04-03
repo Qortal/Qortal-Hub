@@ -51,6 +51,14 @@ Each call has a room media key.
 - Audio packets are encrypted with `nacl.secretbox` using that room key.
 - Forwarders normally route opaque encrypted audio bytes. They do not need to decrypt and re-encrypt just to forward.
 
+Authority is deterministic and generation-scoped:
+
+- The room root is the lowest election rank from `sha256(address + ':' + roomId)`.
+- Same-epoch topology disagreements must converge to that same hash-based winner, not raw string order.
+- For a given `(roomId, mediaSessionGeneration)`, there must be at most one authoritative room key.
+- Only the designated root may originate a new authoritative room key for that generation.
+- If a peer loses root while it still has the old key, that key may remain briefly for decrypt continuity, but outbound encrypt/send must stop until the new authoritative key arrives.
+
 The hook also tracks:
 
 - `callSessionId`
@@ -120,6 +128,7 @@ When the encoder outputs a chunk:
    - mic is muted
    - key distribution is still pending
    - the session key for the active media generation is missing
+   - this peer is waiting for an authoritative replacement key after losing root
 3. It increments the local audio sequence.
 4. It encrypts the Opus frame with `encodeAudioPacketV2()`.
 5. It calls `dispatchEncodedPacket()`.
@@ -171,6 +180,8 @@ Important behavior here:
 - The manager drops stale and overloaded pending frames before they pile up indefinitely.
 - Flush is fair/round-robin so one busy downstream leg cannot dominate the send path.
 - Diagnostics record whether pressure came from pending overflow, stale dropping, link-unready state, or later bridge pressure.
+- Packet mode now keeps audio links alive as a parallel safety net.
+- If a peer's packet path never resolves, the manager can downgrade that peer to link transport instead of letting the call stay silent.
 
 ## Electron Bridge IPC Format
 
@@ -242,6 +253,8 @@ The main process opens and tracks these audio links by peer:
 - wait for establishment
 - enqueue audio frames against the link id
 - reopen when a link becomes unready or closes
+
+When packet media is enabled, the manager still keeps the link path available. Packet transport remains the preferred fast path, but a peer can fall back to the audio link when packet path warmup or send diagnostics show repeated unresolved-path timeouts.
 
 This is why group audio send diagnostics can distinguish:
 
