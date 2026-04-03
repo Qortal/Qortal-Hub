@@ -57,6 +57,12 @@ function reticulumBridgeReadyStub(
     },
     warmGroupAudioPath: (_peerPresenceHash: string) =>
       Promise.resolve({ ok: true as const }),
+    openGroupAudioLink: async (_peerPresenceHash: string) => ({
+      ok: true as const,
+      linkId: 'stub-link',
+      established: true,
+    }),
+    closeGroupAudioLink: async (_linkId: string) => ({ ok: true as const }),
     on: () => {},
     off: () => {},
   };
@@ -74,6 +80,15 @@ type ReticulumBridgeStub = {
   ) => Promise<boolean>;
   warmGroupAudioPath?: (
     peerPresenceHash: string
+  ) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  openGroupAudioLink?: (
+    peerPresenceHash: string
+  ) => Promise<
+    | { ok: true; linkId: string; established: boolean }
+    | { ok: false; reason: string; error?: string }
+  >;
+  closeGroupAudioLink?: (
+    linkId: string
   ) => Promise<{ ok: true } | { ok: false; reason: string }>;
   on: () => void;
   off: () => void;
@@ -331,6 +346,13 @@ describe('recent room bootstrap state', () => {
           return { ok: true as const };
         },
         sendGroupCall: async () => true,
+        warmGroupAudioPath: async () => ({ ok: true as const }),
+        openGroupAudioLink: async () => ({
+          ok: true as const,
+          linkId: 'stub-link',
+          established: true,
+        }),
+        closeGroupAudioLink: async () => ({ ok: true as const }),
         on: () => {},
         off: () => {},
       } as any
@@ -348,6 +370,13 @@ describe('recent room bootstrap state', () => {
   it('reuses the peer presence hash learned from verified inbound Reticulum join traffic', async () => {
     class ReticulumBridgeStub extends EventEmitter {
       sendGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'stub-link',
+        established: true,
+      }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
 
       getState() {
         return 'ready' as const;

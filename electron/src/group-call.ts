@@ -2625,7 +2625,18 @@ export class GroupCallManager extends EventEmitter {
   private computeReticulumAudioTargetsForRoom(room: GroupRoom): Set<string> {
     const targets = new Set<string>();
     const topology = room.lastTopology;
-    if (!topology) return targets;
+    if (!topology) {
+      for (const peer of room.participants.keys()) {
+        if (!peer || this.localAddresses.has(peer)) continue;
+        targets.add(peer);
+      }
+      for (const address of [...targets]) {
+        if (!address || this.localAddresses.has(address)) {
+          targets.delete(address);
+        }
+      }
+      return targets;
+    }
 
     for (const localAddress of this.localAddresses) {
       if (!room.participants.has(localAddress)) continue;
@@ -2687,6 +2698,7 @@ export class GroupCallManager extends EventEmitter {
    * Falls back to scanning `room.participants` when audio peer state was
    * evicted (e.g. sync before topology applied) so inbound packets still
    * resolve and `gcall:audio` carries `fromAddress` for decode.
+   * When `roomId` is omitted, scans every joined room for a matching participant.
    */
   private resolveReticulumAudioAddress(
     routeKey: string,
@@ -2707,19 +2719,34 @@ export class GroupCallManager extends EventEmitter {
         return address;
       }
     }
-    if (roomId) {
-      const room = this.rooms.get(roomId);
-      if (room) {
-        for (const addr of room.participants.keys()) {
-          const h = this.resolveReticulumPeerPresenceHash(addr);
-          if (
-            h &&
-            this.normalizePeerPresenceHashForAudio(h) === want
-          ) {
-            return addr;
-          }
+    const matchParticipantsInRoom = (room: GroupRoom | undefined): string | null => {
+      if (!room) return null;
+      for (const addr of room.participants.keys()) {
+        const h = this.resolveReticulumPeerPresenceHash(addr);
+        if (
+          h &&
+          this.normalizePeerPresenceHashForAudio(h) === want
+        ) {
+          return addr;
         }
       }
+      return null;
+    };
+    if (roomId) {
+      const hit = matchParticipantsInRoom(this.rooms.get(roomId));
+      if (hit) return hit;
+    } else {
+      for (const r of this.rooms.values()) {
+        const hit = matchParticipantsInRoom(r);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
+  private findRoomIdContainingParticipant(address: string): string | null {
+    for (const [rid, room] of this.rooms) {
+      if (room.participants.has(address)) return rid;
     }
     return null;
   }
@@ -4195,6 +4222,12 @@ export class GroupCallManager extends EventEmitter {
       payload.peerPresenceHash
     );
     if (!address) return;
+    if (!this.reticulumAudioPeersByAddress.has(address)) {
+      const rid = this.findRoomIdContainingParticipant(address);
+      if (rid) {
+        void this.ensureReticulumAudioPeerState(rid, address);
+      }
+    }
     const state = this.reticulumAudioPeersByAddress.get(address);
     if (!state) return;
     state.linkId = payload.linkId;
