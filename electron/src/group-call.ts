@@ -2665,6 +2665,11 @@ export class GroupCallManager extends EventEmitter {
       }
     }
 
+    for (const peer of room.participants.keys()) {
+      if (!peer || this.localAddresses.has(peer)) continue;
+      targets.add(peer);
+    }
+
     for (const address of [...targets]) {
       if (!address || this.localAddresses.has(address)) {
         targets.delete(address);
@@ -4038,12 +4043,26 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
 
+    let fromPublicKey = env.fromPublicKey;
+    if (!fromPublicKey) {
+      const room = this.rooms.get(env.roomId);
+      fromPublicKey = room?.participants.get(env.fromAddress)?.publicKey ?? '';
+    }
+    if (!fromPublicKey) {
+      return;
+    }
+
+    const envForVerify: GcClusterHeartbeatEnvelope = {
+      ...env,
+      fromPublicKey,
+    };
+
     this.enqueueVerify(
-      buildGcClusterHeartbeatSignedFields(env),
+      buildGcClusterHeartbeatSignedFields(envForVerify),
       env.signature,
-      env.fromPublicKey,
+      fromPublicKey,
       env.fromAddress,
-      { kind: 'cluster_heartbeat', env, peerPresenceHash }
+      { kind: 'cluster_heartbeat', env: envForVerify, peerPresenceHash }
     );
   }
 

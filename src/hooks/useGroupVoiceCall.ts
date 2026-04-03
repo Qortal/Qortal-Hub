@@ -1100,6 +1100,33 @@ function getDesignatedRootFromElectionDigests(
   return fallback && addresses.includes(fallback) ? fallback : null;
 }
 
+/**
+ * Digest-min winner and elected `rootForwarder` can disagree during simultaneous
+ * join (partial digest cache, roster ordering). The room session key must be
+ * minted by the **topology** root-forwarder so that peer can distribute `GC_KEY`.
+ * When both picks are in the roster and differ, prefer the topology root.
+ */
+export function resolveDesignatedRootForSessionKey(opts: {
+  rosterAddresses: readonly string[];
+  electionDigests: ReadonlyMap<string, string>;
+  topologyRootForwarder?: string | null;
+}): string | null {
+  const roster = [...opts.rosterAddresses];
+  const digestPick = getDesignatedRootFromElectionDigests(
+    roster,
+    opts.electionDigests,
+    opts.topologyRootForwarder
+  );
+  const topo = opts.topologyRootForwarder?.trim() ?? '';
+  if (!topo || !roster.includes(topo)) {
+    return digestPick;
+  }
+  if (digestPick && digestPick !== topo && roster.includes(digestPick)) {
+    return topo;
+  }
+  return digestPick;
+}
+
 /** Normalize cluster rows from IPC (older peers may omit `standby2`). */
 function normalizeClusterDef(c: ClusterDef): ClusterDef {
   return {
@@ -1236,6 +1263,8 @@ export function getReticulumTransportTargets(
         targets.add(cluster.forwarder);
       }
     }
+    const sf = topo.standbyForwarder?.trim() ?? '';
+    if (sf && sf !== myAddress) targets.add(sf);
   } else if (role === 'cluster-forwarder') {
     if (topo.rootForwarder && topo.rootForwarder !== myAddress) {
       targets.add(topo.rootForwarder);
@@ -5016,14 +5045,9 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       if (myRoleRef.current === 'root-forwarder' && topologyRef.current) {
         const topo = topologyRef.current;
-        for (const cluster of topo.clusters) {
-          if (cluster.forwarder === userInfo.address) {
-            for (const member of cluster.members) {
-              if (member !== userInfo.address) {
-                sendPacketToPeerReticulum(member, packet.buffer as ArrayBuffer);
-              }
-            }
-          }
+        const myAddr = userInfo.address;
+        for (const addr of getReticulumTransportTargets(myAddr, topo)) {
+          sendPacketToPeerReticulum(addr, packet.buffer as ArrayBuffer);
         }
         return;
       }
@@ -6170,11 +6194,11 @@ export function useGroupVoiceCall(uiActive = false) {
         const otherParticipantCount = roster.filter(
           (address) => address !== myAddress
         ).length;
-        const designatedRoot = getDesignatedRootFromElectionDigests(
-          roster,
-          electionDigestCacheRef.current,
-          topologyRef.current?.rootForwarder
-        );
+        const designatedRoot = resolveDesignatedRootForSessionKey({
+          rosterAddresses: roster,
+          electionDigests: electionDigestCacheRef.current,
+          topologyRootForwarder: topologyRef.current?.rootForwarder,
+        });
         const fallbackDecision = getStartupKeyAuthorityDecision({
           myAddress,
           designatedRoot,
@@ -6527,11 +6551,11 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
       const inRoster = participantsRef.current.has(payload.fromAddress);
-      const designatedRoot = getDesignatedRootFromElectionDigests(
-        [...participantsRef.current.keys()],
-        electionDigestCacheRef.current,
-        topologyRef.current?.rootForwarder
-      );
+      const designatedRoot = resolveDesignatedRootForSessionKey({
+        rosterAddresses: [...participantsRef.current.keys()],
+        electionDigests: electionDigestCacheRef.current,
+        topologyRootForwarder: topologyRef.current?.rootForwarder,
+      });
       const trustedSender = shouldAcceptIncomingRoomKeySenderRelaxed({
         currentRoot,
         senderAddress: payload.fromAddress,
@@ -6785,11 +6809,11 @@ export function useGroupVoiceCall(uiActive = false) {
     const csid = callSessionIdRef.current;
     const gen = mediaSessionGenerationRef.current;
     const hasInstalledRoomKey = roomKeyRef.current !== null;
-    const designatedRoot = getDesignatedRootFromElectionDigests(
-      [...participantsRef.current.keys()],
-      electionDigestCacheRef.current,
-      topologyRef.current?.rootForwarder
-    );
+    const designatedRoot = resolveDesignatedRootForSessionKey({
+      rosterAddresses: [...participantsRef.current.keys()],
+      electionDigests: electionDigestCacheRef.current,
+      topologyRootForwarder: topologyRef.current?.rootForwarder,
+    });
     const keep: PendingVerifiedRoomKey[] = [];
     for (const entry of pendingVerifiedKeysRef.current) {
       if (entry.expiresAt <= now) {

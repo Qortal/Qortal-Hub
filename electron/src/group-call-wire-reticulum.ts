@@ -198,18 +198,23 @@ export function encodeClusterHeartbeatWire(env: {
   signature: string;
   timestamp: number;
 }): Record<string, unknown> {
-  return {
+  // Reticulum JSON MDU (~378 bytes with bridge `r`/`X`/`L`): omit duplicate
+  // `f` when clusterForwarder === fromAddress, and omit `k` (peers resolve pk
+  // from roster). Verification still uses full signed fields from main.
+  const w: Record<string, unknown> = {
     t: 'GH',
     R: env.roomId,
     e: env.topologyEpoch,
-    f: env.clusterForwarder,
     i: env.clusterIndex,
     s: env.seq,
     a: env.fromAddress,
-    k: env.fromPublicKey,
     m: env.timestamp,
     g: env.signature,
   };
+  if (env.clusterForwarder !== env.fromAddress) {
+    w.f = env.clusterForwarder;
+  }
+  return w;
 }
 
 export function decodeClusterHeartbeatWire(raw: Record<string, unknown>): {
@@ -237,25 +242,26 @@ export function decodeClusterHeartbeatWire(raw: Record<string, unknown>): {
   if (
     typeof R !== 'string' ||
     typeof e !== 'number' ||
-    typeof f !== 'string' ||
     typeof i !== 'number' ||
     typeof s !== 'number' ||
     typeof a !== 'string' ||
-    typeof k !== 'string' ||
     typeof m !== 'number' ||
     typeof g !== 'string'
   ) {
     return null;
   }
+  const clusterForwarder =
+    typeof f === 'string' && f.length > 0 ? f : a;
+  const fromPublicKey = typeof k === 'string' ? k : '';
   return {
     type: 'GC_CLUSTER_HEARTBEAT',
     roomId: R,
     topologyEpoch: e,
-    clusterForwarder: f,
+    clusterForwarder,
     clusterIndex: i,
     seq: s,
     fromAddress: a,
-    fromPublicKey: k,
+    fromPublicKey,
     signature: g,
     timestamp: m,
   };

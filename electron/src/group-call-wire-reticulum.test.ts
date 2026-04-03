@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   RT_GCALL_MAX_WIRE_JSON_BYTES,
+  decodeClusterHeartbeatWire,
   decodeJoinWire,
   decodeKeyRequestFromGq1,
   decodeKeyWireFromGk1,
@@ -8,6 +9,7 @@ import {
   decodeKeyRotateWireSingle,
   decodeTopologyFromGt1,
   decodeTopologyWireSingle,
+  encodeClusterHeartbeatWire,
   encodeJoinWire,
   encodeKeyRequestWire,
   encodeKeyWire,
@@ -22,6 +24,7 @@ import {
   parseGt0,
   parseGt1,
 } from './group-call-wire-reticulum';
+import { wireFitsReticulum } from './reticulum-wire-size';
 
 function bridgeWireJsonBytes(frame: Record<string, unknown>): number {
   return Buffer.byteLength(
@@ -34,6 +37,64 @@ function bridgeWireJsonBytes(frame: Record<string, unknown>): number {
 }
 
 describe('group-call-wire-reticulum', () => {
+  it('encodes GC_CLUSTER_HEARTBEAT within Reticulum MDU (compact GH)', () => {
+    const addr =
+      'QWmV5a3nQKqEYvR8sT2uX4wZ6bC1dF3gH7jK9mP0qS5tU8vW2xY4zA6bC8dE0fG2h';
+    const pk =
+      '2mK9pL4nR7qS1tU5vW8xY3zA6bC0dE4fG7hJ1kM5nP9qR3sT6uV0wX4yZ8aB2cD6eF9g';
+    const sig =
+      '5hJ8kM2nP6qR1sT4uV7wX0yZ3aB6cD9eF2gH5jK8mN1pQ4rS7tU0vW3xY6zA9bC2dE5fG8h';
+    const w = encodeClusterHeartbeatWire({
+      roomId: 'gcall-qortal-812',
+      topologyEpoch: 42,
+      clusterForwarder: addr,
+      clusterIndex: 0,
+      seq: 9001,
+      fromAddress: addr,
+      fromPublicKey: pk,
+      signature: sig,
+      timestamp: 1_775_201_000_000,
+    });
+    expect(w).not.toHaveProperty('k');
+    expect(w).not.toHaveProperty('f');
+    expect(wireFitsReticulum(w)).toBe(true);
+    const back = decodeClusterHeartbeatWire(w);
+    expect(back).not.toBeNull();
+    expect(back!.clusterForwarder).toBe(addr);
+    expect(back!.fromAddress).toBe(addr);
+    expect(back!.fromPublicKey).toBe('');
+    expect(back!.signature).toBe(sig);
+  });
+
+  it('decodes legacy GH wire with f and k', () => {
+    const addr = 'Qa';
+    const legacy = {
+      t: 'GH',
+      R: 'gcall-qortal-1',
+      e: 1,
+      f: addr,
+      i: 0,
+      s: 1,
+      a: addr,
+      k: 'pk',
+      m: 100,
+      g: 'sig',
+    };
+    const back = decodeClusterHeartbeatWire(legacy);
+    expect(back).toEqual({
+      type: 'GC_CLUSTER_HEARTBEAT',
+      roomId: 'gcall-qortal-1',
+      topologyEpoch: 1,
+      clusterForwarder: addr,
+      clusterIndex: 0,
+      seq: 1,
+      fromAddress: addr,
+      fromPublicKey: 'pk',
+      signature: 'sig',
+      timestamp: 100,
+    });
+  });
+
   it('round-trips compact join wire', () => {
     const env = {
       type: 'GC_JOIN' as const,

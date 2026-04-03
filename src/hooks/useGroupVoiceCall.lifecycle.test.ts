@@ -26,6 +26,7 @@ import {
   shouldIgnoreRedundantRoomKeyDelivery,
   shouldMintRootSessionKeyImmediately,
   shouldAllowSimultaneousJoinKeyFallback,
+  resolveDesignatedRootForSessionKey,
   shouldSendCachedQuitLeave,
   shouldSuppressStartupDecodeFailure,
   shouldSubscribeToJoinedGroupCallEvents,
@@ -382,11 +383,9 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       ],
     };
 
-    expect(getReticulumTransportTargets('Q-root', topology)).toEqual([
-      'Q-a',
-      'Q-b',
-      'Q-cf',
-    ]);
+    expect(getReticulumTransportTargets('Q-root', topology).sort()).toEqual(
+      ['Q-a', 'Q-b', 'Q-cf', 'Q-standby'].sort()
+    );
     expect(getReticulumTransportTargets('Q-cf', topology)).toEqual([
       'Q-root',
       'Q-c',
@@ -1094,6 +1093,40 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         rosterAddresses: ['self', 'root-a', 'root-b'],
       })
     ).toBeNull();
+  });
+
+  it('prefers topology root-forwarder over digest-min when they disagree', () => {
+    const digestSaysStandby = new Map([
+      ['rootA', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'],
+      ['standbyB', '0000000000000000000000000000000000000000000000000000000000000001'],
+    ]);
+    expect(
+      resolveDesignatedRootForSessionKey({
+        rosterAddresses: ['rootA', 'standbyB'],
+        electionDigests: digestSaysStandby,
+        topologyRootForwarder: 'rootA',
+      })
+    ).toBe('rootA');
+
+    const digestSaysRoot = new Map([
+      ['rootA', '0000000000000000000000000000000000000000000000000000000000000001'],
+      ['standbyB', 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'],
+    ]);
+    expect(
+      resolveDesignatedRootForSessionKey({
+        rosterAddresses: ['rootA', 'standbyB'],
+        electionDigests: digestSaysRoot,
+        topologyRootForwarder: 'rootA',
+      })
+    ).toBe('rootA');
+
+    expect(
+      resolveDesignatedRootForSessionKey({
+        rosterAddresses: ['rootA', 'standbyB'],
+        electionDigests: digestSaysStandby,
+        topologyRootForwarder: null,
+      })
+    ).toBe('standbyB');
   });
 
   it('blocks simultaneous-join fallback until authority is settled', () => {
