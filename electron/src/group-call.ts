@@ -468,7 +468,7 @@ interface ReticulumAudioPendingFrame {
 interface ReticulumAudioPeerState {
   address: string;
   peerPresenceHash: string;
-  peerCallHash: string;
+  peerDestinationHash: string;
   transport: ReticulumMediaTransportKind;
   packetTransportFallback: boolean;
   routeKey: string;
@@ -902,7 +902,7 @@ export class GroupCallManager extends EventEmitter {
   private onReticulumGroupCallMessage:
     | ((
         wire: Record<string, unknown>,
-        senderCallHash: string,
+        senderDestinationHash: string,
         peerPresenceHash: string
       ) => void)
     | null = null;
@@ -912,7 +912,7 @@ export class GroupCallManager extends EventEmitter {
         roomId: string;
         data: Buffer | string;
         peerPresenceHash: string;
-        peerCallHash: string;
+        peerDestinationHash: string;
         incoming: boolean;
       }) => void)
     | null = null;
@@ -931,7 +931,7 @@ export class GroupCallManager extends EventEmitter {
     | ((payload: {
         linkId: string;
         peerPresenceHash: string;
-        peerCallHash: string;
+        peerDestinationHash: string;
         incoming: boolean;
       }) => void)
     | null = null;
@@ -939,7 +939,7 @@ export class GroupCallManager extends EventEmitter {
     | ((payload: {
         linkId: string;
         peerPresenceHash: string;
-        peerCallHash: string;
+        peerDestinationHash: string;
         incoming: boolean;
         reason: string;
       }) => void)
@@ -1089,11 +1089,15 @@ export class GroupCallManager extends EventEmitter {
 
     this.onReticulumGroupCallMessage = (
       wire,
-      senderCallHash,
+      senderDestinationHash,
       peerPresenceHash
     ) => {
       try {
-        this.handleReticulumGroupCallWire(wire, senderCallHash, peerPresenceHash);
+        this.handleReticulumGroupCallWire(
+          wire,
+          senderDestinationHash,
+          peerPresenceHash
+        );
       } catch (err) {
         loggerError('[GCall] Error handling Reticulum group call wire:', err);
       }
@@ -2174,7 +2178,7 @@ export class GroupCallManager extends EventEmitter {
 
   private handleReticulumGroupCallWire(
     wire: Record<string, unknown>,
-    senderCallHash: string,
+    senderDestinationHash: string,
     peerPresenceHash: string
   ): void {
     const overlayMeta = this.parseReticulumOverlayMeta(wire);
@@ -2209,7 +2213,9 @@ export class GroupCallManager extends EventEmitter {
     }
 
     const syntheticFrom =
-      senderCallHash.length > 0 ? `reticulum:${senderCallHash}` : undefined;
+      senderDestinationHash.length > 0
+        ? `reticulum:${senderDestinationHash}`
+        : undefined;
 
     if (t === 'GJ') {
       const env = decodeJoinWire(wire);
@@ -3025,7 +3031,7 @@ export class GroupCallManager extends EventEmitter {
       state = {
         address,
         peerPresenceHash,
-        peerCallHash: '',
+        peerDestinationHash: '',
         transport,
         packetTransportFallback: false,
         routeKey: this.computeReticulumAudioRouteKey(transport, peerPresenceHash),
@@ -3295,7 +3301,7 @@ export class GroupCallManager extends EventEmitter {
               state.peerPresenceHash,
               next.roomId,
               next.data,
-              state.peerCallHash
+              state.peerDestinationHash
             )
           : bridge.enqueueGroupAudio(state.linkId!, next.roomId, next.data);
       if (result.ok) {
@@ -3557,7 +3563,7 @@ export class GroupCallManager extends EventEmitter {
         state = {
           address,
           peerPresenceHash: desired.peerPresenceHash,
-          peerCallHash: '',
+          peerDestinationHash: '',
           transport: this.getEffectiveReticulumAudioTransport(null),
           packetTransportFallback: false,
           routeKey: this.computeReticulumAudioRouteKey(
@@ -4156,7 +4162,7 @@ export class GroupCallManager extends EventEmitter {
     roomId: string;
     data: Buffer | string;
     peerPresenceHash: string;
-    peerCallHash: string;
+    peerDestinationHash: string;
     incoming: boolean;
   }): void {
     if (!this.hasLocalRoomInterest(payload.roomId)) {
@@ -4189,7 +4195,8 @@ export class GroupCallManager extends EventEmitter {
     if (fromAddress) {
       const state = this.reticulumAudioPeersByAddress.get(fromAddress);
       if (state) {
-        state.peerCallHash = payload.peerCallHash || state.peerCallHash;
+        state.peerDestinationHash =
+          payload.peerDestinationHash || state.peerDestinationHash;
         state.lastInboundAtMs = Date.now();
         state.recoveryHoldUntilMs = 0;
         state.recoveryReason = '';
@@ -4205,7 +4212,7 @@ export class GroupCallManager extends EventEmitter {
       transport: payload.transport ?? 'link',
       routeKey: payload.routeKey ?? payload.linkId,
       peerPresenceHash: payload.peerPresenceHash,
-      peerCallHash: payload.peerCallHash,
+      peerDestinationHash: payload.peerDestinationHash,
       resolvedFromAddress: fromAddress ?? null,
       ...(fromAddress ? { fromAddress } : {}),
     });
@@ -4214,7 +4221,7 @@ export class GroupCallManager extends EventEmitter {
   private handleReticulumGroupAudioLinkEstablished(payload: {
     linkId: string;
     peerPresenceHash: string;
-    peerCallHash: string;
+    peerDestinationHash: string;
     incoming: boolean;
   }): void {
     const address = this.resolveReticulumAudioAddress(
@@ -4231,7 +4238,8 @@ export class GroupCallManager extends EventEmitter {
     const state = this.reticulumAudioPeersByAddress.get(address);
     if (!state) return;
     state.linkId = payload.linkId;
-    state.peerCallHash = payload.peerCallHash || state.peerCallHash;
+    state.peerDestinationHash =
+      payload.peerDestinationHash || state.peerDestinationHash;
     state.established = true;
     state.opening = false;
     this.reticulumAudioAddressByLinkId.set(payload.linkId, address);
@@ -4244,7 +4252,7 @@ export class GroupCallManager extends EventEmitter {
   private handleReticulumGroupAudioLinkClosed(payload: {
     linkId: string;
     peerPresenceHash: string;
-    peerCallHash: string;
+    peerDestinationHash: string;
     incoming: boolean;
     reason: string;
   }): void {

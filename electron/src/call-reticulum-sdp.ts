@@ -34,7 +34,7 @@ export interface ReticulumSdpCallbacks {
 
 interface InboundBuf {
   meta: Cs0Meta;
-  senderCallHash: string;
+  senderDestinationHash: string;
   parts: Map<number, string>;
   bytesBuffered: number;
   timer: ReturnType<typeof setTimeout> | null;
@@ -54,12 +54,12 @@ interface OutboundBuf {
 }
 
 function inboundKey(
-  senderCallHash: string,
+  senderDestinationHash: string,
   callId: string,
   dir: 'o' | 'a',
   z: string
 ): string {
-  return `${senderCallHash}|${callId}|${dir}|${z}`;
+  return `${senderDestinationHash}|${callId}|${dir}|${z}`;
 }
 
 export class ReticulumSdpSession {
@@ -97,20 +97,20 @@ export class ReticulumSdpSession {
     }
   }
 
-  onCs0(meta: Cs0Meta, senderCallHash: string): void {
-    if (!senderCallHash || !this.cb.isCallActiveForSdp(meta.callId)) {
+  onCs0(meta: Cs0Meta, senderDestinationHash: string): void {
+    if (!senderDestinationHash || !this.cb.isCallActiveForSdp(meta.callId)) {
       return;
     }
     if (this.inbound.size >= RT_SDP_MAX_CONCURRENT_BUFFERS) {
       loggerLog('[Call/RT] Inbound SDP buffer cap');
       return;
     }
-    const key = inboundKey(senderCallHash, meta.callId, meta.dir, meta.z);
+    const key = inboundKey(senderDestinationHash, meta.callId, meta.dir, meta.z);
     if (this.inbound.has(key)) return;
 
     const buf: InboundBuf = {
       meta,
-      senderCallHash,
+      senderDestinationHash,
       parts: new Map(),
       bytesBuffered: 0,
       timer: null,
@@ -128,9 +128,9 @@ export class ReticulumSdpSession {
     x: number,
     n: number,
     p: string,
-    senderCallHash: string
+    senderDestinationHash: string
   ): void {
-    const key = inboundKey(senderCallHash, callId, dir, z.toLowerCase());
+    const key = inboundKey(senderDestinationHash, callId, dir, z.toLowerCase());
     const buf = this.inbound.get(key);
     if (!buf || buf.completed) return;
     if (n !== buf.meta.n || x < 0 || x >= n) return;
@@ -158,7 +158,7 @@ export class ReticulumSdpSession {
           z: string;
           indexes: number[];
         },
-    _senderCallHash: string
+    _senderDestinationHash: string
   ): void {
     const z = ck.z.toLowerCase();
     const okey = `${ck.callId}|${ck.dir}|${z}`;

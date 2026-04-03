@@ -11,24 +11,20 @@ import threading
 import time
 import traceback
 import uuid
-from typing import IO, Any, Dict, Optional
+from typing import IO, Any, Dict, Optional, Set
 
 import RNS
 
 APP_NAMESPACE = "qortal-hub"
 PRESENCE_ASPECT = "presence"
 PRESENCE_VERSION = "v1"
-CALL_ASPECT = "call"
-CALL_VERSION = "v1"
 IDENTITY_FILENAME = "presence-bridge.identity"
 
 _state_lock = threading.RLock()
 _reticulum = None
 _identity = None
 _destination = None
-_call_destination = None
 _announce_handler = None
-_call_announce_handler = None
 _known_peers: Dict[str, Any] = {}
 _candidate_peers: Dict[str, Dict[str, Any]] = {}
 _verified_overlay_peers: Dict[str, Dict[str, Any]] = {}
@@ -42,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire378-gq-frag-v1"
+PRESENCE_BRIDGE_BUILD = "wire379-single-dest-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -59,6 +55,10 @@ _OVERLAY_MAX_NEIGHBORS = 16
 _CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
 _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
+# Inbound RNS.Link: classify overlay vs audio by first JSON packet; if none, default to overlay.
+_INBOUND_LINK_CLASSIFY_TIMEOUT_SEC = 5.0
+_pending_inbound_classify_link_ids: Set[int] = set()
+_inbound_classify_timers: Dict[int, threading.Timer] = {}
 
 
 def qortal_base58_decode(s: str) -> bytes:
@@ -554,7 +554,7 @@ def _process_audio_batch(frames: list) -> None:
             )
             continue
         try:
-            outbound = build_outbound_call_destination(peer_identity)
+            outbound = build_outbound_destination(peer_identity)
             destination_hash = outbound.hash
             path_state, path_ready = _ensure_call_media_path(
                 peer_hash,
@@ -952,7 +952,6 @@ def maybe_emit_transport_state(force: bool = False) -> None:
         previous is None or previous.get("reachability") != "hub-connected"
     ):
         announce_local_destination()
-        announce_call_local_destination()
 
 
 def transport_monitor_loop() -> None:
@@ -1521,7 +1520,7 @@ def _warm_call_media_path_if_possible(
     if peer_identity is None:
         return "unknown", False
     try:
-        outbound = build_outbound_call_destination(peer_identity)
+        outbound = build_outbound_destination(peer_identity)
     except Exception as exc:
         log(
             "[presence_bridge] target=reticulum-audio-ipc packet_path_build_failed "
@@ -1674,20 +1673,6 @@ class PresenceAnnounceHandler:
         _mark_candidate_peer(peer_hash, "announce")
 
 
-class CallAnnounceHandler:
-    """Registers on the call aspect so Reticulum learns paths to peers' call destinations."""
-
-    def __init__(self, local_hash: bytes):
-        self.aspect_filter = f"{APP_NAMESPACE}.{CALL_ASPECT}.{CALL_VERSION}"
-        self.local_hash = local_hash
-
-    def received_announce(self, destination_hash, announced_identity, app_data):
-        if destination_hash == self.local_hash:
-            return
-        peer_hash = destination_hash_hex(destination_hash)
-        log(f"[presence_bridge] call aspect announce peer_call={peer_hash}")
-
-
 def build_outbound_destination(peer_identity):
     return RNS.Destination(
         peer_identity,
@@ -1696,17 +1681,6 @@ def build_outbound_destination(peer_identity):
         APP_NAMESPACE,
         PRESENCE_ASPECT,
         PRESENCE_VERSION,
-    )
-
-
-def build_outbound_call_destination(peer_identity):
-    return RNS.Destination(
-        peer_identity,
-        RNS.Destination.OUT,
-        RNS.Destination.SINGLE,
-        APP_NAMESPACE,
-        CALL_ASPECT,
-        CALL_VERSION,
     )
 
 
@@ -1858,12 +1832,15 @@ def _sync_overlay_links() -> None:
         emit_overlay_link_state(link_id, state, "pruned")
 
 
-def _resolve_peer_presence_hash_from_call_hash(sender_call_hash: str) -> str:
-    sender_call_hash = str(sender_call_hash or "").strip().lower()
-    if not sender_call_hash:
+def _resolve_sender_peer_destination_hash(sender_hex: str) -> str:
+    """Map wire `r` (destination hash hex) to peer key in _known_peers; recall fallback."""
+    sender_hex = str(sender_hex or "").strip().lower()
+    if not sender_hex:
         return ""
+    if sender_hex in _known_peers:
+        return sender_hex
     try:
-        h = bytes.fromhex(sender_call_hash)
+        h = bytes.fromhex(sender_hex)
     except ValueError:
         return ""
     if len(h) != 16:
@@ -1977,7 +1954,7 @@ def _emit_call_bridge_message(
     resolved_presence_hash = (
         peer_presence_hash
         if isinstance(peer_presence_hash, str) and peer_presence_hash
-        else _resolve_peer_presence_hash_from_call_hash(sender_call_hash)
+        else _resolve_sender_peer_destination_hash(sender_call_hash)
     )
     t = message.get("t")
     event_name = (
@@ -1987,7 +1964,7 @@ def _emit_call_bridge_message(
     )
     payload: Dict[str, Any] = {
         "wire": message,
-        "senderCallHash": sender_call_hash,
+        "senderDestinationHash": sender_call_hash,
         "peerPresenceHash": resolved_presence_hash,
     }
     if link_id:
@@ -2085,20 +2062,6 @@ def on_outgoing_overlay_link_established(link) -> None:
     _flush_overlay_link_pending(link_id)
 
 
-def on_incoming_overlay_link_established(link) -> None:
-    link_id = str(uuid.uuid4())
-    _overlay_links_by_id[link_id] = {
-        "link": link,
-        "peerPresenceHash": "",
-        "incoming": True,
-        "established": True,
-        "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
-        "last_activity_at": time.time(),
-    }
-    configure_overlay_link(link, link_id)
-    emit_overlay_link_state(link_id, _overlay_links_by_id[link_id], "incoming")
-
-
 def _send_wire_to_overlay_peer(
     peer_hash: str, wire_bytes: bytes, traffic: str, queue_if_pending: bool = True
 ) -> bool:
@@ -2170,16 +2133,6 @@ def announce_local_destination() -> None:
     )
 
 
-def announce_call_local_destination() -> None:
-    if _call_destination is None:
-        return
-    _call_destination.announce(app_data=b"call")
-    log(
-        "[presence_bridge] announced call destination "
-        + destination_hash_hex(_call_destination.hash)
-    )
-
-
 def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes) -> None:
     """Send presence wire; updates last_send_ok in _peer_lifecycle (TODO: failure vs no-path diagnostics)."""
     now = time.time()
@@ -2214,13 +2167,13 @@ def send_presence_wire_to_peer(peer_hash: str, peer_identity, wire_bytes: bytes)
 
 
 def make_group_audio_wire(room_id: str, data_b64: str) -> bytes:
-    if _call_destination is None:
-        raise RuntimeError("Local call destination not initialised")
+    if _destination is None:
+        raise RuntimeError("Local destination not initialised")
     wire = {
         "t": _GROUP_AUDIO_WIRE_TYPE,
         "R": room_id,
         "d": data_b64,
-        "r": destination_hash_hex(_call_destination.hash),
+        "r": destination_hash_hex(_destination.hash),
     }
     return json.dumps(wire, separators=(",", ":")).encode("utf-8")
 
@@ -2257,7 +2210,7 @@ def emit_audio_link_established(link_id: str) -> None:
         {
             "linkId": link_id,
             "peerPresenceHash": state.get("peerPresenceHash") or "",
-            "peerCallHash": state.get("peerCallHash") or "",
+            "peerDestinationHash": state.get("peerDestinationHash") or "",
             "incoming": state.get("incoming") is True,
         },
     )
@@ -2272,7 +2225,7 @@ def emit_audio_link_closed(link_id: str, reason: str = "") -> None:
         {
             "linkId": link_id,
             "peerPresenceHash": state.get("peerPresenceHash") or "",
-            "peerCallHash": state.get("peerCallHash") or "",
+            "peerDestinationHash": state.get("peerDestinationHash") or "",
             "incoming": state.get("incoming") is True,
             "reason": reason,
         },
@@ -2298,9 +2251,7 @@ def on_audio_link_remote_identified(link, identity) -> None:
     peer_hash = find_peer_hash_for_identity(identity)
     if peer_hash:
         state["peerPresenceHash"] = peer_hash
-    identity_hex = identity_hash_hex(identity)
-    if identity_hex:
-        state["peerCallHash"] = identity_hex
+        state["peerDestinationHash"] = peer_hash
     emit_audio_link_established(link_id)
 
 
@@ -2329,7 +2280,7 @@ def on_audio_link_packet(message, packet) -> None:
     if not isinstance(data_b64, str) or not data_b64:
         return
     if isinstance(sender_call_hash, str) and sender_call_hash:
-        state["peerCallHash"] = sender_call_hash
+        state["peerDestinationHash"] = sender_call_hash
     try:
         raw_audio = base64.b64decode(data_b64, validate=True)
     except Exception:
@@ -2342,7 +2293,7 @@ def on_audio_link_packet(message, packet) -> None:
                     link_id,
                     room_id,
                     str(state.get("peerPresenceHash") or ""),
-                    str(state.get("peerCallHash") or ""),
+                    str(state.get("peerDestinationHash") or ""),
                     raw_audio,
                 )
             ]
@@ -2376,56 +2327,137 @@ def on_outgoing_audio_link_established(link) -> None:
     emit_audio_link_established(link_id)
 
 
-def on_incoming_audio_link_established(link) -> None:
+def _cancel_inbound_classify_timer(link_key: int) -> None:
+    timer = _inbound_classify_timers.pop(link_key, None)
+    if timer is not None:
+        try:
+            timer.cancel()
+        except Exception:
+            pass
+
+
+def _register_incoming_overlay_link(link) -> str:
     link_id = str(uuid.uuid4())
-    _audio_links_by_id[link_id] = {
+    _overlay_links_by_id[link_id] = {
         "link": link,
         "peerPresenceHash": "",
-        "peerCallHash": "",
         "incoming": True,
         "established": True,
+        "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
+        "last_activity_at": time.time(),
     }
-    configure_audio_link(link, link_id)
+    configure_overlay_link(link, link_id)
+    emit_overlay_link_state(link_id, _overlay_links_by_id[link_id], "incoming")
+    return link_id
 
 
-def on_packet_received(data, packet) -> None:
+def _schedule_inbound_classify_fallback(link) -> None:
+    link_key = id(link)
+
+    def fire() -> None:
+        with _state_lock:
+            if link_key not in _pending_inbound_classify_link_ids:
+                return
+            _pending_inbound_classify_link_ids.discard(link_key)
+        _cancel_inbound_classify_timer(link_key)
+        if get_overlay_link_id(link) is not None or get_audio_link_id(link) is not None:
+            return
+        log(
+            "[presence_bridge] WARNING inbound_link_classify_timeout defaulting_to_overlay "
+            f"link_obj={link_key}"
+        )
+        try:
+            _register_incoming_overlay_link(link)
+        except Exception as exc:
+            log(f"[presence_bridge] inbound_link_classify_timeout err={exc}")
+
+    timer = threading.Timer(_INBOUND_LINK_CLASSIFY_TIMEOUT_SEC, fire)
+    timer.daemon = True
+    _inbound_classify_timers[link_key] = timer
+    timer.start()
+
+
+def on_inbound_unified_link_closed(link) -> None:
+    link_key = id(link)
+    _cancel_inbound_classify_timer(link_key)
+    with _state_lock:
+        _pending_inbound_classify_link_ids.discard(link_key)
+    if get_overlay_link_id(link):
+        on_overlay_link_closed(link)
+    elif get_audio_link_id(link):
+        on_audio_link_closed(link)
+
+
+def on_inbound_link_first_packet(message, packet) -> None:
+    link = getattr(packet, "link", None)
+    if link is None:
+        return
+    link_key = id(link)
+    with _state_lock:
+        if link_key not in _pending_inbound_classify_link_ids:
+            return
+        _pending_inbound_classify_link_ids.discard(link_key)
+    _cancel_inbound_classify_timer(link_key)
+    try:
+        decoded = json.loads(message.decode("utf-8"))
+    except Exception as exc:
+        log(f"[presence_bridge] inbound_link_first_packet non-json err={exc}")
+        _register_incoming_overlay_link(link)
+        return
+    if not isinstance(decoded, dict):
+        _register_incoming_overlay_link(link)
+        return
+    if decoded.get("t") == _GROUP_AUDIO_WIRE_TYPE:
+        link_id = str(uuid.uuid4())
+        _audio_links_by_id[link_id] = {
+            "link": link,
+            "peerPresenceHash": "",
+            "peerDestinationHash": "",
+            "incoming": True,
+            "established": True,
+        }
+        configure_audio_link(link, link_id)
+        on_audio_link_packet(message, packet)
+        return
+    _register_incoming_overlay_link(link)
+    on_overlay_link_packet(message, packet)
+
+
+def on_incoming_unified_link_established(link) -> None:
+    link_key = id(link)
+    with _state_lock:
+        _pending_inbound_classify_link_ids.add(link_key)
+    link.set_link_closed_callback(on_inbound_unified_link_closed)
+    link.set_packet_callback(on_inbound_link_first_packet)
+    _schedule_inbound_classify_fallback(link)
+
+
+def on_hub_packet_received(data, packet) -> None:
     try:
         message = json.loads(data.decode("utf-8"))
     except Exception as exc:
-        log(f"[presence_bridge] invalid packet payload: {exc}")
+        log(f"[presence_bridge] invalid hub packet payload: {exc}")
         return
 
     if not isinstance(message, dict):
-        log("[presence_bridge] ignored non-object packet payload")
+        log("[presence_bridge] ignored non-object hub packet payload")
         return
-    _emit_presence_message(message)
-
-
-def on_call_packet_received(data, packet) -> None:
-    try:
-        message = json.loads(data.decode("utf-8"))
-    except Exception as exc:
-        log(f"[presence_bridge] invalid call packet payload: {exc}")
-        return
-
-    if not isinstance(message, dict):
-        log("[presence_bridge] ignored non-object call packet payload")
-        return
-    if message.get("t") == _GROUP_AUDIO_WIRE_TYPE:
+    t = message.get("t")
+    if t == _GROUP_AUDIO_WIRE_TYPE:
         room_id = message.get("R")
         data_b64 = message.get("d")
-        sender_call_hash = message.get("r")
+        sender_dest = message.get("r")
         if not isinstance(room_id, str) or not room_id:
             return
         if not isinstance(data_b64, str) or not data_b64:
             return
-        sender_call_hash = sender_call_hash if isinstance(sender_call_hash, str) else ""
+        sender_dest = sender_dest if isinstance(sender_dest, str) else ""
         try:
             raw_audio = base64.b64decode(data_b64, validate=True)
         except Exception:
-            log("[presence_bridge] invalid base64 in call packet audio payload")
+            log("[presence_bridge] invalid base64 in hub packet audio payload")
             return
-        peer_presence_hash = _resolve_peer_presence_hash_from_call_hash(sender_call_hash)
+        peer_presence_hash = _resolve_sender_peer_destination_hash(sender_dest)
         try:
             chunk = _encode_audio_batch_binary(
                 [
@@ -2433,22 +2465,25 @@ def on_call_packet_received(data, packet) -> None:
                         "",
                         room_id,
                         peer_presence_hash,
-                        sender_call_hash,
+                        sender_dest,
                         raw_audio,
                     )
                 ]
             )
-            _note_call_media_inbound(peer_presence_hash, sender_call_hash)
+            _note_call_media_inbound(peer_presence_hash, sender_dest)
             _emit_binary_audio(chunk)
         except Exception as exc:
             log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=encode-to-parent-failed err={exc}")
+        return
+    if isinstance(t, str) and t.startswith("PRESENCE_"):
+        _emit_presence_message(message)
         return
     _emit_call_bridge_message(message)
 
 
 def ensure_started(config_dir: str):
-    global _reticulum, _identity, _destination, _call_destination
-    global _announce_handler, _call_announce_handler
+    global _reticulum, _identity, _destination
+    global _announce_handler
 
     with _state_lock:
         if _destination is not None:
@@ -2474,24 +2509,10 @@ def ensure_started(config_dir: str):
             PRESENCE_VERSION,
         )
         _destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
-        _destination.set_packet_callback(on_packet_received)
-        _destination.set_link_established_callback(on_incoming_overlay_link_established)
+        _destination.set_packet_callback(on_hub_packet_received)
+        _destination.set_link_established_callback(on_incoming_unified_link_established)
         _announce_handler = PresenceAnnounceHandler(_destination.hash)
         RNS.Transport.register_announce_handler(_announce_handler)
-
-        _call_destination = RNS.Destination(
-            _identity,
-            RNS.Destination.IN,
-            RNS.Destination.SINGLE,
-            APP_NAMESPACE,
-            CALL_ASPECT,
-            CALL_VERSION,
-        )
-        _call_destination.set_proof_strategy(RNS.Destination.PROVE_NONE)
-        _call_destination.set_packet_callback(on_call_packet_received)
-        _call_destination.set_link_established_callback(on_incoming_audio_link_established)
-        _call_announce_handler = CallAnnounceHandler(_call_destination.hash)
-        RNS.Transport.register_announce_handler(_call_announce_handler)
         ensure_transport_monitor_started()
         return _destination
 
@@ -2505,22 +2526,16 @@ def handle_start(req_id: str, payload: Dict[str, Any]) -> None:
     try:
         destination = ensure_started(config_dir)
         announce_local_destination()
-        announce_call_local_destination()
         maybe_emit_transport_state(force=True)
         presence_hex = destination_hash_hex(destination.hash)
-        call_hex = (
-            destination_hash_hex(_call_destination.hash)
-            if _call_destination is not None
-            else ""
-        )
         emit_event(
             "ready",
-            {"destinationHash": presence_hex, "callDestinationHash": call_hex},
+            {"destinationHash": presence_hex},
         )
         emit_resp(
             req_id,
             True,
-            payload={"destinationHash": presence_hex, "callDestinationHash": call_hex},
+            payload={"destinationHash": presence_hex},
         )
         log(f"[presence_bridge] build={PRESENCE_BRIDGE_BUILD}")
     except Exception as exc:
@@ -2542,7 +2557,6 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         global _last_presence_wire
         _last_presence_wire = wire_bytes
         announce_local_destination()
-        announce_call_local_destination()
         for ph in list(_recent_presence_senders):
             ensure_known_peer_from_recall(ph)
         extra = payload.get("overlayNeighborHashes")
@@ -2662,7 +2676,7 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error="Missing peerPresenceHash or message")
         return
 
-    if _call_destination is None:
+    if _destination is None:
         emit_resp(
             req_id,
             False,
@@ -2684,7 +2698,7 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
 
     try:
         out = _normalize_json_numbers(dict(msg))
-        out["r"] = destination_hash_hex(_call_destination.hash)
+        out["r"] = destination_hash_hex(_destination.hash)
         wire_bytes = _call_wire_json_bytes(out)
         if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
             emit_resp(
@@ -2724,7 +2738,7 @@ def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error="Missing peerPresenceHash or message")
         return
 
-    if _call_destination is None:
+    if _destination is None:
         emit_resp(
             req_id,
             False,
@@ -2746,7 +2760,7 @@ def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
 
     try:
         out = _normalize_json_numbers(dict(msg))
-        out["r"] = destination_hash_hex(_call_destination.hash)
+        out["r"] = destination_hash_hex(_destination.hash)
         wire_bytes = _call_wire_json_bytes(out)
         if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
             emit_resp(
@@ -2783,7 +2797,7 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error="Missing peerPresenceHash")
         return
 
-    if _call_destination is None:
+    if _destination is None:
         emit_resp(
             req_id,
             False,
@@ -2817,7 +2831,7 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
             return
 
     try:
-        outbound = build_outbound_call_destination(peer_identity)
+        outbound = build_outbound_destination(peer_identity)
         link_id = str(uuid.uuid4())
         link = RNS.Link(
             outbound,
@@ -2827,7 +2841,7 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         _audio_links_by_id[link_id] = {
             "link": link,
             "peerPresenceHash": peer_hash,
-            "peerCallHash": destination_hash_hex(outbound.hash),
+            "peerDestinationHash": destination_hash_hex(outbound.hash),
             "incoming": False,
             "established": False,
         }
@@ -2870,7 +2884,7 @@ def handle_warm_group_audio_path(req_id: str, payload: Dict[str, Any]) -> None:
     if not peer_hash:
         emit_resp(req_id, False, error="Missing peerPresenceHash")
         return
-    if _destination is None or _call_destination is None:
+    if _destination is None:
         emit_resp(
             req_id,
             False,

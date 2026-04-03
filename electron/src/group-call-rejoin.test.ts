@@ -847,7 +847,7 @@ describe('Reticulum group audio transport', () => {
       roomId: 'room-1',
       data: Buffer.from([7, 8, 9]),
       peerPresenceHash: 'd:Q-peer',
-      peerCallHash: 'call-peer',
+      peerDestinationHash: 'call-peer',
       incoming: true,
     });
 
@@ -858,7 +858,7 @@ describe('Reticulum group audio transport', () => {
         transport: 'link',
         routeKey: 'link-1',
         peerPresenceHash: 'd:Q-peer',
-        peerCallHash: 'call-peer',
+        peerDestinationHash: 'call-peer',
         resolvedFromAddress: 'Q-peer',
         fromAddress: 'Q-peer',
       },
@@ -952,7 +952,7 @@ describe('Reticulum group audio transport', () => {
       roomId: 'room-1',
       data: Buffer.from([7, 8, 9]),
       peerPresenceHash: 'd:Q-peer',
-      peerCallHash: 'call-peer',
+      peerDestinationHash: 'call-peer',
       incoming: true,
     });
 
@@ -963,7 +963,7 @@ describe('Reticulum group audio transport', () => {
         transport: 'packet',
         routeKey: 'packet:d:Q-peer',
         peerPresenceHash: 'd:Q-peer',
-        peerCallHash: 'call-peer',
+        peerDestinationHash: 'call-peer',
         resolvedFromAddress: 'Q-peer',
         fromAddress: 'Q-peer',
       },

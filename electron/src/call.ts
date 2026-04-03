@@ -256,7 +256,7 @@ export class CallManager extends EventEmitter {
   private onReticulumCallMessage:
     | ((
         wire: Record<string, unknown>,
-        senderCallHash: string,
+        senderDestinationHash: string,
         peerPresenceHash: string
       ) => void)
     | null = null;
@@ -315,11 +315,15 @@ export class CallManager extends EventEmitter {
     if (!this.onReticulumCallMessage) {
       this.onReticulumCallMessage = (
         wire: Record<string, unknown>,
-        senderCallHash: string,
+        senderDestinationHash: string,
         peerPresenceHash: string
       ): void => {
         try {
-          this.onReticulumCallWire(wire, senderCallHash, peerPresenceHash);
+          this.onReticulumCallWire(
+            wire,
+            senderDestinationHash,
+            peerPresenceHash
+          );
         } catch (err) {
           loggerError('[Call] Reticulum wire error:', err);
         }
@@ -828,7 +832,7 @@ export class CallManager extends EventEmitter {
     env: CallRequestEnvelope,
     ctx:
       | { transport: 'mesh'; fromNodeId: string }
-      | { transport: 'reticulum'; senderCallHash: string }
+      | { transport: 'reticulum'; senderDestinationHash: string }
   ): void {
     if (this.activeCalls.has(env.callId)) return;
 
@@ -1069,7 +1073,7 @@ export class CallManager extends EventEmitter {
 
   private onReticulumCallWire(
     wire: Record<string, unknown>,
-    senderCallHash: string,
+    senderDestinationHash: string,
     peerPresenceHash: string
   ): void {
     const overlayMeta = this.parseReticulumOverlayMeta(wire);
@@ -1092,7 +1096,7 @@ export class CallManager extends EventEmitter {
     if (decoded.kind === 'invalid') return;
 
     if (decoded.kind === 'sdp_meta') {
-      this.sdpSession.onCs0(decoded.meta, senderCallHash);
+      this.sdpSession.onCs0(decoded.meta, senderDestinationHash);
       return;
     }
     if (decoded.kind === 'sdp_part') {
@@ -1104,18 +1108,18 @@ export class CallManager extends EventEmitter {
         part.x,
         part.n,
         part.p,
-        senderCallHash
+        senderDestinationHash
       );
       return;
     }
     if (decoded.kind === 'ck') {
-      this.sdpSession.onCkFromPeer(decoded.ck, senderCallHash);
+      this.sdpSession.onCkFromPeer(decoded.ck, senderDestinationHash);
       return;
     }
 
     const env = decoded.envelope;
     if (env.type === 'CALL_REQUEST') {
-      this.handleRequestReticulum(senderCallHash, env);
+      this.handleRequestReticulum(senderDestinationHash, env);
       return;
     }
 
@@ -1140,7 +1144,7 @@ export class CallManager extends EventEmitter {
   }
 
   private handleRequestReticulum(
-    senderCallHash: string,
+    senderDestinationHash: string,
     env: CallRequestEnvelope
   ): void {
     if (this.localAddresses.size === 0) return;
@@ -1197,7 +1201,7 @@ export class CallManager extends EventEmitter {
         try {
           this.applyVerifiedIncomingRequest(env, {
             transport: 'reticulum',
-            senderCallHash,
+            senderDestinationHash,
           });
         } catch (err) {
           loggerError('[Call] Error applying CALL_REQUEST (RT):', err);

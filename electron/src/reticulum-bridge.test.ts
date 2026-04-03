@@ -152,7 +152,7 @@ describe('ReticulumBridge group audio support', () => {
       linkId: '',
       roomId: 'room-1',
       peerPresenceHash: 'peer-hash',
-      peerCallHash: 'call-hash',
+      peerDestinationHash: 'call-hash',
     });
     expect(Buffer.compare(decoded[0]!.payload, Buffer.from([7, 7]))).toBe(0);
   });
@@ -257,7 +257,7 @@ describe('ReticulumBridge group audio support', () => {
         linkId: '',
         roomId: 'room-1',
         peerPresenceHash: 'peer-hash',
-        peerCallHash: 'call-hash',
+        peerDestinationHash: 'call-hash',
         payload: Buffer.from([4, 5, 6]),
       },
     ]);
@@ -270,7 +270,7 @@ describe('ReticulumBridge group audio support', () => {
         roomId: 'room-1',
         data: Buffer.from([4, 5, 6]),
         peerPresenceHash: 'peer-hash',
-        peerCallHash: 'call-hash',
+        peerDestinationHash: 'call-hash',
         incoming: true,
       },
     ]);

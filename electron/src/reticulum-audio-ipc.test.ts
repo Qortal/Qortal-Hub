@@ -16,7 +16,7 @@ describe('reticulum-audio-ipc', () => {
     expect(frames[0]!.linkId).toBe('link-uuid-1');
     expect(frames[0]!.roomId).toBe('room-a');
     expect(frames[0]!.peerPresenceHash).toBe('');
-    expect(frames[0]!.peerCallHash).toBe('');
+    expect(frames[0]!.peerDestinationHash).toBe('');
     expect(Buffer.compare(frames[0]!.payload, payload)).toBe(0);
   });
 
@@ -27,13 +27,13 @@ describe('reticulum-audio-ipc', () => {
         linkId: 'L1',
         roomId: 'r1',
         peerPresenceHash: 'a'.repeat(64),
-        peerCallHash: 'b'.repeat(32),
+        peerDestinationHash: 'b'.repeat(32),
         payload,
       },
     ]);
     const frames = decodeReticulumAudioMessage(wire);
     expect(frames[0]!.peerPresenceHash).toHaveLength(64);
-    expect(frames[0]!.peerCallHash).toHaveLength(32);
+    expect(frames[0]!.peerDestinationHash).toHaveLength(32);
   });
 
   it('round-trips multiple frames in one batch', () => {

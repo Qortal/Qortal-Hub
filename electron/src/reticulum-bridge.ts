@@ -146,7 +146,7 @@ type BridgeEventFrame =
   | {
       type: 'event';
       event: 'ready';
-      payload?: { destinationHash?: string; callDestinationHash?: string };
+      payload?: { destinationHash?: string };
     }
   | {
       type: 'event';
@@ -174,7 +174,7 @@ type BridgeEventFrame =
       event: 'call_message';
       payload?: {
         wire?: Record<string, unknown>;
-        senderCallHash?: string;
+        senderDestinationHash?: string;
         peerPresenceHash?: string;
       };
     }
@@ -183,7 +183,7 @@ type BridgeEventFrame =
       event: 'group_call_message';
       payload?: {
         wire?: Record<string, unknown>;
-        senderCallHash?: string;
+        senderDestinationHash?: string;
         peerPresenceHash?: string;
       };
     }
@@ -193,7 +193,7 @@ type BridgeEventFrame =
       payload?: {
         linkId?: string;
         peerPresenceHash?: string;
-        peerCallHash?: string;
+        peerDestinationHash?: string;
         incoming?: boolean;
       };
     }
@@ -203,7 +203,7 @@ type BridgeEventFrame =
       payload?: {
         linkId?: string;
         peerPresenceHash?: string;
-        peerCallHash?: string;
+        peerDestinationHash?: string;
         incoming?: boolean;
         reason?: string;
       };
@@ -364,7 +364,7 @@ export type ReticulumGroupAudioPacketPayload = {
   roomId: string;
   data: Buffer;
   peerPresenceHash: string;
-  peerCallHash: string;
+  peerDestinationHash: string;
   incoming: boolean;
 };
 
@@ -374,7 +374,7 @@ type QueuedAudioFrame = {
   linkId: string;
   roomId: string;
   peerPresenceHash: string;
-  peerCallHash: string;
+  peerDestinationHash: string;
   data: Buffer;
   queuedAtMs: number;
   sizeBytes: number;
@@ -452,10 +452,8 @@ export class ReticulumBridge
     reachability: 'disconnected',
   };
   private lastDegradedReason: string | undefined;
-  /** Local presence destination hash (RNS); set on `ready` event from Python. */
+  /** Local hub destination hash (RNS); set on `ready` event from Python. */
   private localPresenceDestinationHash: string | undefined;
-  /** Local call destination hash (RNS); set on `ready` event from Python. */
-  private localCallDestinationHash: string | undefined;
   /** Overlay control-plane links reporting `established` from Python `overlay_link_state`. */
   private overlayEstablishedLinkIds = new Set<string>();
 
@@ -539,12 +537,11 @@ export class ReticulumBridge
       child.kill();
     }
     this.localPresenceDestinationHash = undefined;
-    this.localCallDestinationHash = undefined;
   }
 
   /**
-   * Send one compact call-signaling frame to a peer (presence destination hash).
-   * Python injects `r` (local call destination hash) before transmit.
+   * Send one compact call-signaling frame to a peer (destination hash).
+   * Python injects `r` (local destination hash) before transmit.
    */
   async sendCall(
     peerPresenceHash: string,
@@ -644,10 +641,6 @@ export class ReticulumBridge
     return this.sendDetailed('warm_group_audio_path', { peerPresenceHash });
   }
 
-  getLocalCallDestinationHash(): string | undefined {
-    return this.localCallDestinationHash;
-  }
-
   /**
    * Queue Opus (or other) payload for fd3 binary IPC. Non-blocking; may drop oldest
    * frames when the queue is full. Listen for `group-audio-send-failed` for RNS errors.
@@ -663,7 +656,7 @@ export class ReticulumBridge
       linkId,
       roomId,
       peerPresenceHash: '',
-      peerCallHash: '',
+      peerDestinationHash: '',
       data,
     });
   }
@@ -672,7 +665,7 @@ export class ReticulumBridge
     peerPresenceHash: string,
     roomId: string,
     data: Buffer,
-    peerCallHash = ''
+    peerDestinationHash = ''
   ): ReticulumEnqueueGroupAudioResult {
     const normalizedPeerPresenceHash = peerPresenceHash.trim().toLowerCase();
     if (!normalizedPeerPresenceHash) {
@@ -684,7 +677,7 @@ export class ReticulumBridge
       linkId: '',
       roomId,
       peerPresenceHash: normalizedPeerPresenceHash,
-      peerCallHash: peerCallHash.trim().toLowerCase(),
+      peerDestinationHash: peerDestinationHash.trim().toLowerCase(),
       data,
     });
   }
@@ -1156,7 +1149,7 @@ export class ReticulumBridge
         const lid = Buffer.from(next.linkId, 'utf8');
         const rid = Buffer.from(next.roomId, 'utf8');
         const pph = Buffer.from(next.peerPresenceHash, 'utf8');
-        const pch = Buffer.from(next.peerCallHash, 'utf8');
+        const pch = Buffer.from(next.peerDestinationHash, 'utf8');
         const frameBody =
           1 +
           lid.length +
@@ -1179,7 +1172,7 @@ export class ReticulumBridge
           linkId: next.linkId,
           roomId: next.roomId,
           peerPresenceHash: next.peerPresenceHash,
-          peerCallHash: next.peerCallHash,
+          peerDestinationHash: next.peerDestinationHash,
           payload: next.data,
         });
         bodyBudget = nextBody;
@@ -1286,7 +1279,7 @@ export class ReticulumBridge
           const routeKey =
             transport === 'link'
               ? f.linkId
-              : `packet:${(f.peerPresenceHash || f.peerCallHash || 'unknown').trim().toLowerCase()}`;
+              : `packet:${(f.peerPresenceHash || f.peerDestinationHash || 'unknown').trim().toLowerCase()}`;
           const pkt: ReticulumGroupAudioPacketPayload = {
             linkId: f.linkId,
             routeKey,
@@ -1294,7 +1287,7 @@ export class ReticulumBridge
             roomId: f.roomId,
             data: Buffer.from(f.payload),
             peerPresenceHash: f.peerPresenceHash ?? '',
-            peerCallHash: f.peerCallHash ?? '',
+            peerDestinationHash: f.peerDestinationHash ?? '',
             incoming: true,
           };
           this.emit('group-audio-packet', pkt);
@@ -1352,12 +1345,8 @@ export class ReticulumBridge
           typeof frame.payload?.destinationHash === 'string'
             ? frame.payload.destinationHash
             : undefined;
-        this.localCallDestinationHash =
-          typeof frame.payload?.callDestinationHash === 'string'
-            ? frame.payload.callDestinationHash
-            : undefined;
         loggerLog(
-          `[ReticulumBridge] Ready destination=${frame.payload?.destinationHash ?? 'unknown'} call=${frame.payload?.callDestinationHash ?? 'unknown'}`
+          `[ReticulumBridge] Ready destination=${frame.payload?.destinationHash ?? 'unknown'}`
         );
         this.emit('ready');
         return;
@@ -1391,26 +1380,26 @@ export class ReticulumBridge
       }
       case 'call_message': {
         const wire = frame.payload?.wire;
-        const senderCallHash = frame.payload?.senderCallHash;
+        const senderDestinationHash = frame.payload?.senderDestinationHash;
         const peerPresenceHash = frame.payload?.peerPresenceHash;
         if (!wire || typeof wire !== 'object') return;
         this.emit(
           'call-message',
           wire as Record<string, unknown>,
-          typeof senderCallHash === 'string' ? senderCallHash : '',
+          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
           typeof peerPresenceHash === 'string' ? peerPresenceHash : ''
         );
         return;
       }
       case 'group_call_message': {
         const wire = frame.payload?.wire;
-        const senderCallHash = frame.payload?.senderCallHash;
+        const senderDestinationHash = frame.payload?.senderDestinationHash;
         const peerPresenceHash = frame.payload?.peerPresenceHash;
         if (!wire || typeof wire !== 'object') return;
         this.emit(
           'group-call-message',
           wire as Record<string, unknown>,
-          typeof senderCallHash === 'string' ? senderCallHash : '',
+          typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
           typeof peerPresenceHash === 'string' ? peerPresenceHash : ''
         );
         return;
@@ -1424,9 +1413,9 @@ export class ReticulumBridge
             typeof frame.payload?.peerPresenceHash === 'string'
               ? frame.payload.peerPresenceHash
               : '',
-          peerCallHash:
-            typeof frame.payload?.peerCallHash === 'string'
-              ? frame.payload.peerCallHash
+          peerDestinationHash:
+            typeof frame.payload?.peerDestinationHash === 'string'
+              ? frame.payload.peerDestinationHash
               : '',
           incoming: frame.payload?.incoming === true,
         });
@@ -1441,9 +1430,9 @@ export class ReticulumBridge
             typeof frame.payload?.peerPresenceHash === 'string'
               ? frame.payload.peerPresenceHash
               : '',
-          peerCallHash:
-            typeof frame.payload?.peerCallHash === 'string'
-              ? frame.payload.peerCallHash
+          peerDestinationHash:
+            typeof frame.payload?.peerDestinationHash === 'string'
+              ? frame.payload.peerDestinationHash
               : '',
           incoming: frame.payload?.incoming === true,
           reason:
@@ -1636,7 +1625,6 @@ export class ReticulumBridge
     this.state = 'degraded';
     this.lastDegradedReason = reason;
     this.localPresenceDestinationHash = undefined;
-    this.localCallDestinationHash = undefined;
     this.connectivitySnapshot = {
       ...this.connectivitySnapshot,
       bridgeState: 'degraded',

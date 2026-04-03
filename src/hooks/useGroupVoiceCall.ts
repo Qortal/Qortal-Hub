@@ -8956,7 +8956,7 @@ export function useGroupVoiceCall(uiActive = false) {
           transport,
           routeKey,
           peerPresenceHash,
-          peerCallHash,
+          peerDestinationHash,
           resolvedFromAddress,
         } = payload as {
           data: Uint8Array;
@@ -8964,7 +8964,7 @@ export function useGroupVoiceCall(uiActive = false) {
           transport?: 'link' | 'packet';
           routeKey?: string;
           peerPresenceHash?: string;
-          peerCallHash?: string;
+          peerDestinationHash?: string;
           resolvedFromAddress?: string | null;
         };
         metricsRef.current.recordRelayReceived();
@@ -8992,8 +8992,10 @@ export function useGroupVoiceCall(uiActive = false) {
             routeKey: typeof routeKey === 'string' ? routeKey : null,
             peerPresenceHash:
               typeof peerPresenceHash === 'string' ? peerPresenceHash : null,
-            peerCallHash:
-              typeof peerCallHash === 'string' ? peerCallHash : null,
+            peerDestinationHash:
+              typeof peerDestinationHash === 'string'
+                ? peerDestinationHash
+                : null,
             sizeBytes: data.byteLength,
           });
         }

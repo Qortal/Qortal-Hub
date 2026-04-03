@@ -27,8 +27,8 @@ export type ReticulumAudioFrame = {
   roomId: string;
   /** Outbound from Electron: omit or empty. Inbound from bridge: peer presence hash hex. */
   peerPresenceHash?: string;
-  /** Inbound: peer call hash hex. */
-  peerCallHash?: string;
+  /** Inbound: peer destination hash hex (`r` on GCA wire). */
+  peerDestinationHash?: string;
   payload: Buffer;
 };
 
@@ -62,7 +62,7 @@ export function encodeReticulumAudioBatch(frames: ReticulumAudioFrame[]): Buffer
     const lid = Buffer.from(f.linkId, 'utf8');
     const rid = Buffer.from(f.roomId, 'utf8');
     const pph = Buffer.from(f.peerPresenceHash ?? '', 'utf8');
-    const pch = Buffer.from(f.peerCallHash ?? '', 'utf8');
+    const pch = Buffer.from(f.peerDestinationHash ?? '', 'utf8');
     if (
       lid.length > RETICULUM_AUDIO_MAX_LINK_ID_LEN ||
       rid.length > RETICULUM_AUDIO_MAX_ROOM_ID_LEN ||
@@ -97,7 +97,7 @@ export function encodeReticulumAudioBatch(frames: ReticulumAudioFrame[]): Buffer
     const lid = Buffer.from(f.linkId, 'utf8');
     const rid = Buffer.from(f.roomId, 'utf8');
     const pph = Buffer.from(f.peerPresenceHash ?? '', 'utf8');
-    const pch = Buffer.from(f.peerCallHash ?? '', 'utf8');
+    const pch = Buffer.from(f.peerDestinationHash ?? '', 'utf8');
     body[o++] = lid.length;
     lid.copy(body, o);
     o += lid.length;
@@ -185,9 +185,9 @@ export function decodeReticulumAudioMessage(buf: Buffer): ReticulumAudioFrame[] 
     if (o >= body.length) throw new ReticulumAudioIpcError('truncated pch');
     const cl = body[o++];
     if (cl > RETICULUM_AUDIO_MAX_HASH_LEN || o + cl > body.length) {
-      throw new ReticulumAudioIpcError('bad peer call hash');
+      throw new ReticulumAudioIpcError('bad peer destination hash');
     }
-    const peerCallHash = body.subarray(o, o + cl).toString('utf8');
+    const peerDestinationHash = body.subarray(o, o + cl).toString('utf8');
     o += cl;
 
     if (o + 2 > body.length) throw new ReticulumAudioIpcError('truncated len');
@@ -198,7 +198,7 @@ export function decodeReticulumAudioMessage(buf: Buffer): ReticulumAudioFrame[] 
     }
     const payload = Buffer.from(body.subarray(o, o + plen));
     o += plen;
-    out.push({ linkId, roomId, peerPresenceHash, peerCallHash, payload });
+    out.push({ linkId, roomId, peerPresenceHash, peerDestinationHash, payload });
   }
   if (o !== body.length) {
     throw new ReticulumAudioIpcError('leftover bytes in body');

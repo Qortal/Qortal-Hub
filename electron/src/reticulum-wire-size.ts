@@ -4,7 +4,7 @@
  */
 
 /**
- * The Python bridge injects `r` (sender call destination hash) — 32 bytes → 64 hex chars.
+ * The Python bridge injects `r` (local hub destination hash hex) — 32 bytes → 64 hex chars.
  * Measure frames with the same length so pre-send size matches wire_bytes in
  * presence_bridge.py. Stay under RNS.Packet.ENCRYPTED_MDU (~383); `handle_send_*`
  * compares `len(wire_bytes)` to that MDU (not 350).
