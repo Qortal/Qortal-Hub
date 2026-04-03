@@ -333,8 +333,8 @@ const RELAY_INGRESS_PEER = '__relay__';
  * cold. Mirror `topology-startup-warm` (non-root → root) by requesting path recovery toward
  * each peer that sends toward the root after sustained outbound or key age.
  */
-const ROOT_INBOUND_WARM_MIN_RELAY_SENT = 48;
-const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 3_000;
+const ROOT_INBOUND_WARM_MIN_RELAY_SENT = 24;
+const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 1_500;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
@@ -4043,6 +4043,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const snapWarm = metricsRef.current.getSnapshot();
       const targetsWarm = getReticulumTransportTargets(myAddrTopo, topo);
+      // Outbound packet path can resolve (resolutions > 0) while inbound from root is still
+      // zero — do not require cold path stats; dedupe via warmKey prevents spam.
       if (
         role !== 'root-forwarder' &&
         roomKeyRef.current &&
@@ -4050,8 +4052,7 @@ export function useGroupVoiceCall(uiActive = false) {
         topo.rootForwarder !== myAddrTopo &&
         targetsWarm.includes(topo.rootForwarder) &&
         (snapWarm.packetsReceived ?? 0) === 0 &&
-        (snapWarm.packetsDecoded ?? 0) === 0 &&
-        (snapWarm.reticulumAudioPacketPathResolutions ?? 0) === 0
+        (snapWarm.packetsDecoded ?? 0) === 0
       ) {
         const warmKey = `${joinGenerationRef.current ?? 0}:${topo.rootForwarder}`;
         if (startupReticulumPathWarmKeyRef.current !== warmKey) {
@@ -6319,6 +6320,30 @@ export function useGroupVoiceCall(uiActive = false) {
         armKeyDistributionGateAndRun(() =>
           distributeRoomKey(roomKeyRef.current!)
         );
+      } else if (!caseCRootBecomeHolder && userInfo?.address) {
+        const root = topologyRef.current?.rootForwarder?.trim() ?? '';
+        const myAddr = userInfo.address;
+        if (
+          root &&
+          root !== myAddr &&
+          participantsRef.current.has(root)
+        ) {
+          const warmKey = `${joinGenerationRef.current ?? 0}:${root}`;
+          if (startupReticulumPathWarmKeyRef.current !== warmKey) {
+            startupReticulumPathWarmKeyRef.current = warmKey;
+            gcallDiagnosticsPush('info', '[GCall] postKeyRootPathWarm', {
+              towardRoot: root.slice(0, 12),
+            });
+            queueMicrotask(() => {
+              if (roomKeyRef.current !== null) {
+                requestMediaRecoveryForPeerRef.current(
+                  root,
+                  'post-key-root-path-warm'
+                );
+              }
+            });
+          }
+        }
       }
     },
     [
@@ -8584,6 +8609,38 @@ export function useGroupVoiceCall(uiActive = false) {
         }
 
         maybeSendRosterLearnedTargetedKey(address, publicKey);
+
+        if (!wasExisting && roomKeyRef.current && userInfo?.address) {
+          const myAddr = userInfo.address;
+          const root = topologyRef.current?.rootForwarder?.trim() ?? '';
+          if (root && address !== myAddr) {
+            if (myAddr === root) {
+              const k = `${joinGenerationRef.current ?? 0}:${address}`;
+              if (!rootInboundWarmFiredRef.current.has(k)) {
+                rootInboundWarmFiredRef.current.add(k);
+                gcallDiagnosticsPush('info', '[GCall] peerJoinedInboundPathWarm', {
+                  peer: address.slice(0, 12),
+                });
+                requestMediaRecoveryForPeerRef.current(
+                  address,
+                  'peer-joined-inbound-warm'
+                );
+              }
+            } else if (root !== myAddr) {
+              const warmKey = `${joinGenerationRef.current ?? 0}:${root}`;
+              if (startupReticulumPathWarmKeyRef.current !== warmKey) {
+                startupReticulumPathWarmKeyRef.current = warmKey;
+                gcallDiagnosticsPush('info', '[GCall] peerJoinedStartupPathWarm', {
+                  towardRoot: root.slice(0, 12),
+                });
+                requestMediaRecoveryForPeerRef.current(
+                  root,
+                  'peer-joined-startup-warm'
+                );
+              }
+            }
+          }
+        }
 
         // Re-announce ourselves to the newly discovered peer so they learn about us.
         // Peers who joined before the flood may have missed our GC_JOIN; re-sends fix that.
