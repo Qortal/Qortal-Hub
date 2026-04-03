@@ -315,12 +315,24 @@ export interface PlayoutMetricTickOpts {
   deltaMs?: number;
 }
 
+/** Renderer-side packet drop attribution (see `recordPacketDroppedWithReason`). */
+export type GroupCallPacketDropReason =
+  | 'pending-decrypt'
+  | 'startup-gate'
+  | 'decode-failure'
+  | 'decoder-throw';
+
 export interface GroupCallMetricsSnapshot {
   role: RouterRole;
   packetsReceived: number;
   packetsForwarded: number;
   packetsDecoded: number;
   packetsDropped: number;
+  /** Sub-counts; sum should match `packetsDropped` when all drops use `recordPacketDroppedWithReason`. */
+  packetsDroppedPendingDecrypt: number;
+  packetsDroppedStartupGate: number;
+  packetsDroppedDecodeFailure: number;
+  packetsDroppedDecoderThrow: number;
   relayPacketsSent: number;
   relayPacketsReceived: number;
   /** Wall time (ms) of last legacy relay send or receive; 0 = none this session. */
@@ -458,6 +470,11 @@ export interface GroupCallWindowMetrics {
   startAt: number;
   endAt: number;
   durationMs: number;
+  packetsDropped: number;
+  packetsDroppedPendingDecrypt: number;
+  packetsDroppedStartupGate: number;
+  packetsDroppedDecodeFailure: number;
+  packetsDroppedDecoderThrow: number;
   jitterUnderruns: number;
   missingFrames: number;
   concealmentTicks: number;
@@ -908,6 +925,11 @@ interface ResourceCounts {
 }
 
 interface WindowCounterSet {
+  packetsDropped: number;
+  packetsDroppedPendingDecrypt: number;
+  packetsDroppedStartupGate: number;
+  packetsDroppedDecodeFailure: number;
+  packetsDroppedDecoderThrow: number;
   jitterUnderruns: number;
   missingFrames: number;
   concealmentTicks: number;
@@ -967,6 +989,11 @@ function percentile(
 
 function emptyWindowCounters(): WindowCounterSet {
   return {
+    packetsDropped: 0,
+    packetsDroppedPendingDecrypt: 0,
+    packetsDroppedStartupGate: 0,
+    packetsDroppedDecodeFailure: 0,
+    packetsDroppedDecoderThrow: 0,
     jitterUnderruns: 0,
     missingFrames: 0,
     concealmentTicks: 0,
@@ -993,6 +1020,10 @@ export class GroupCallPerformanceTracker {
     packetsForwarded: 0,
     packetsDecoded: 0,
     packetsDropped: 0,
+    packetsDroppedPendingDecrypt: 0,
+    packetsDroppedStartupGate: 0,
+    packetsDroppedDecodeFailure: 0,
+    packetsDroppedDecoderThrow: 0,
     relayPacketsSent: 0,
     relayPacketsReceived: 0,
     lastRelayActivityAtMs: 0,
@@ -1191,6 +1222,34 @@ export class GroupCallPerformanceTracker {
 
   recordPacketDropped(count = 1): void {
     this.snapshot.packetsDropped += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordPacketDroppedWithReason(
+    reason: GroupCallPacketDropReason,
+    count = 1
+  ): void {
+    if (count <= 0) return;
+    this.snapshot.packetsDropped += count;
+    this.windowCounters.packetsDropped += count;
+    switch (reason) {
+      case 'pending-decrypt':
+        this.snapshot.packetsDroppedPendingDecrypt += count;
+        this.windowCounters.packetsDroppedPendingDecrypt += count;
+        break;
+      case 'startup-gate':
+        this.snapshot.packetsDroppedStartupGate += count;
+        this.windowCounters.packetsDroppedStartupGate += count;
+        break;
+      case 'decode-failure':
+        this.snapshot.packetsDroppedDecodeFailure += count;
+        this.windowCounters.packetsDroppedDecodeFailure += count;
+        break;
+      case 'decoder-throw':
+        this.snapshot.packetsDroppedDecoderThrow += count;
+        this.windowCounters.packetsDroppedDecoderThrow += count;
+        break;
+    }
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -1720,6 +1779,10 @@ export class GroupCallPerformanceTracker {
       packetsForwarded: 0,
       packetsDecoded: 0,
       packetsDropped: 0,
+      packetsDroppedPendingDecrypt: 0,
+      packetsDroppedStartupGate: 0,
+      packetsDroppedDecodeFailure: 0,
+      packetsDroppedDecoderThrow: 0,
       relayPacketsSent: 0,
       relayPacketsReceived: 0,
       lastRelayActivityAtMs: 0,
@@ -1906,6 +1969,14 @@ export class GroupCallPerformanceTracker {
       startAt: this.windowStartedAtMs,
       endAt,
       durationMs: roundMetric(durationMs),
+      packetsDropped: this.windowCounters.packetsDropped,
+      packetsDroppedPendingDecrypt:
+        this.windowCounters.packetsDroppedPendingDecrypt,
+      packetsDroppedStartupGate: this.windowCounters.packetsDroppedStartupGate,
+      packetsDroppedDecodeFailure:
+        this.windowCounters.packetsDroppedDecodeFailure,
+      packetsDroppedDecoderThrow:
+        this.windowCounters.packetsDroppedDecoderThrow,
       jitterUnderruns: this.windowCounters.jitterUnderruns,
       missingFrames: this.windowCounters.missingFrames,
       concealmentTicks: this.windowCounters.concealmentTicks,

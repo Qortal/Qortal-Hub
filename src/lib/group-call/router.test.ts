@@ -658,6 +658,11 @@ describe('group-call router helpers', () => {
     const window = tracker.captureWindowMetrics('me', 60_000);
 
     expect(window.receivingPeer).toBe('me');
+    expect(window.packetsDropped).toBe(0);
+    expect(window.packetsDroppedPendingDecrypt).toBe(0);
+    expect(window.packetsDroppedStartupGate).toBe(0);
+    expect(window.packetsDroppedDecodeFailure).toBe(0);
+    expect(window.packetsDroppedDecoderThrow).toBe(0);
     expect(window.relayDwellFraction).toBe(1);
     expect(window.missingFrames).toBe(3);
     expect(window.jitterUnderruns).toBe(2);

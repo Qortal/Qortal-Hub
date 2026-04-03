@@ -16,6 +16,8 @@ import {
   Box,
   Chip,
   IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
   CircularProgress,
   Tooltip,
@@ -47,6 +49,7 @@ import {
   shortAddr,
 } from './qortalGroupCallParticipantUi';
 import { getGroupCallTransportSummary } from '../../lib/group-call/router';
+import type { GroupCallAudioQualityProfile } from '../../lib/group-call/groupCallAudioProfile';
 import { CallAudioSettingsButton } from '../Chat/CallAudioDeviceSelectors';
 
 const BG_MAIN = '#313338';
@@ -81,6 +84,8 @@ export function QortalGroupVoiceCallStage() {
     memberPrimaryNames,
     memberGateGroupName,
     exportGroupCallDiagnostics,
+    audioQualityProfile,
+    setAudioQualityProfile,
   } = useGroupCallContext();
 
   const [diagExporting, setDiagExporting] = useState(false);
@@ -783,9 +788,42 @@ export function QortalGroupVoiceCallStage() {
             right: 24,
             display: 'flex',
             alignItems: 'center',
-            gap: 0.5,
+            gap: 1,
           }}
         >
+          <Tooltip
+            title={
+              audioQualityProfile === 'high-stability'
+                ? 'Prioritize smooth audio (slightly higher latency). Applies on next capture start for bitrate; jitter updates live.'
+                : 'Prioritize lowest latency. Applies on next capture start for bitrate; jitter updates live.'
+            }
+          >
+            <ToggleButtonGroup
+              size="small"
+              exclusive
+              value={audioQualityProfile}
+              onChange={(_e, v: GroupCallAudioQualityProfile | null) => {
+                if (v) setAudioQualityProfile(v);
+              }}
+              sx={{
+                '& .MuiToggleButton-root': {
+                  px: 1,
+                  py: 0.25,
+                  fontSize: 11,
+                  textTransform: 'none',
+                  color: TEXT_MUTED,
+                  borderColor: BORDER_SUB,
+                  '&.Mui-selected': {
+                    bgcolor: alpha('#5865f2', 0.35),
+                    color: '#fff',
+                  },
+                },
+              }}
+            >
+              <ToggleButton value="low-latency">Low latency</ToggleButton>
+              <ToggleButton value="high-stability">Stable</ToggleButton>
+            </ToggleButtonGroup>
+          </Tooltip>
           <CallAudioSettingsButton
             iconButtonSize="medium"
             IconComponent={SettingsIcon}

@@ -7,7 +7,7 @@
  *
  * Audio pipeline:
  *   Microphone → CaptureWorkletNode (audio-worklet thread, VAD + 960-sample framing)
- *   → port.postMessage { frame, vad } → AudioEncoder (Opus ~24kbps, main thread)
+ *   → port.postMessage { frame, vad } → AudioEncoder (Opus bitrate from quality profile, main thread)
  *   → packet framing (v2: metadata inside secretbox; v1 decode fallback) → Reticulum
  *   Forwarder → decrypt-reencrypt skipped; forwarder routes encrypted bytes only
  *   Receiver ← Reticulum forwarder → jitter buffer (depth below) → drain tick from
@@ -67,6 +67,13 @@ import {
   sameAddressList,
   type RouterTopology,
 } from '../lib/group-call/router';
+import {
+  GCALL_AUDIO_QUALITY_PROFILE_KEY,
+  getGroupCallAudioTuning,
+  readGroupCallAudioProfile,
+  writeGroupCallAudioProfile,
+  type GroupCallAudioQualityProfile,
+} from '../lib/group-call/groupCallAudioProfile';
 import { compareGroupCallElectionAddresses } from '../lib/group-call/election-order';
 import {
   ACTIVE_SPEAKER_GAIN,
@@ -199,6 +206,7 @@ interface IncomingKeyRequestPayload {
 
 const OPUS_SAMPLE_RATE = 48000;
 const OPUS_CHANNELS = 1;
+/** Low-latency reference bitrate; active profile uses `getGroupCallAudioTuning`. */
 const OPUS_BITRATE = 24_000;
 const OPUS_FRAME_DURATION_MS = 20;
 const OPUS_FRAME_SAMPLES = (OPUS_SAMPLE_RATE * OPUS_FRAME_DURATION_MS) / 1000; // 960
@@ -215,6 +223,7 @@ const JITTER_DECODE_BURST_MAX = 5;
 /** Adaptive playout target (main thread → group-playout-processor). */
 const ADAPTIVE_BASE_TARGET_MS = 100;
 const ADAPTIVE_MIN_TARGET_MS = 100;
+/** Low-latency defaults; active profile overrides via `audioTuningRef`. */
 const ADAPTIVE_MAX_TARGET_MS = 180;
 const ADAPTIVE_SEVERE_MAX_TARGET_MS = 240;
 const ADAPTIVE_JITTER_K = 2.0;
@@ -236,7 +245,7 @@ const GCALL_WASM_FEC_ENV_OFF =
   import.meta.env.VITE_GCALL_WASM_FEC === '0';
 const GCALL_WASM_FEC_EXTRA_HOLD_FRAMES = 1;
 const GCALL_WASM_FEC_MAX_PCM_PER_TICK = 10;
-/** Above this seq gap, reset Opus decoder before processing the next packet. */
+/** Low-latency default; profile may raise for high-stability (`getGroupCallAudioTuning`). */
 const GCALL_WASM_FEC_MAX_GAP_RESET = 32;
 
 function readGcallWasmFecDesired(): boolean {
@@ -1351,8 +1360,25 @@ class JitterBuffer {
   private primed = false;
   /** Raw seq gap for the last pop (for WASM FEC); cleared by consumeLastRawGapAfterPop. */
   private lastRawGapAfterPop = 0;
+  private jitterBufferSize: number;
+  private jitterStartBufferSize: number;
 
-  constructor(private readonly extraHoldFrames = 0) {}
+  constructor(
+    private readonly extraHoldFrames = 0,
+    tuning?: { jitterBufferSize: number; jitterStartBufferSize: number }
+  ) {
+    this.jitterBufferSize = tuning?.jitterBufferSize ?? JITTER_BUFFER_SIZE;
+    this.jitterStartBufferSize =
+      tuning?.jitterStartBufferSize ?? JITTER_START_BUFFER_SIZE;
+  }
+
+  applyJitterTuning(tuning: {
+    jitterBufferSize: number;
+    jitterStartBufferSize: number;
+  }): void {
+    this.jitterBufferSize = tuning.jitterBufferSize;
+    this.jitterStartBufferSize = tuning.jitterStartBufferSize;
+  }
 
   /** Pop-side gap detection: call after pop; returns missed frame count since last pop. */
   consumePendingMissedFrames(): number {
@@ -1375,7 +1401,7 @@ class JitterBuffer {
       opusFrame,
       receivedAt: performance.now(),
     });
-    const maxEntries = JITTER_BUFFER_SIZE * 2;
+    const maxEntries = this.jitterBufferSize * 2;
     if (this.entries.length > maxEntries) {
       this.entries.splice(0, this.entries.length - maxEntries);
     }
@@ -1390,7 +1416,7 @@ class JitterBuffer {
 
   /** Returns next frame to play, or null if buffer not ready. */
   pop(): Uint8Array | null {
-    const base = this.primed ? 1 : JITTER_START_BUFFER_SIZE;
+    const base = this.primed ? 1 : this.jitterStartBufferSize;
     const threshold = base + this.extraHoldFrames;
     if (this.entries.length < threshold) return null;
     const entry = this.entries.shift();
@@ -1410,7 +1436,7 @@ class JitterBuffer {
   }
 
   hasReadyFrame(): boolean {
-    const base = this.primed ? 1 : JITTER_START_BUFFER_SIZE;
+    const base = this.primed ? 1 : this.jitterStartBufferSize;
     return this.entries.length >= base + this.extraHoldFrames;
   }
 
@@ -1574,6 +1600,9 @@ export function useGroupVoiceCall(uiActive = false) {
   // Per-source decoders and jitter buffers
   const decoderMapRef = useRef<Map<string, AudioDecoder>>(new Map());
   const jitterMapRef = useRef<Map<string, JitterBuffer>>(new Map());
+  const [audioQualityProfile, setAudioQualityProfile] =
+    useState<GroupCallAudioQualityProfile>(() => readGroupCallAudioProfile());
+  const audioTuningRef = useRef(getGroupCallAudioTuning(audioQualityProfile));
   const gcallWasmFecDesiredRef = useRef(readGcallWasmFecDesired());
   const gcallWasmFecActiveRef = useRef(false);
   const opusFecWorkerRef = useRef<Worker | null>(null);
@@ -1824,6 +1853,30 @@ export function useGroupVoiceCall(uiActive = false) {
     null
   );
   const lastWindowMetricsRef = useRef<GroupCallWindowMetrics | null>(null);
+
+  useEffect(() => {
+    audioTuningRef.current = getGroupCallAudioTuning(audioQualityProfile);
+    writeGroupCallAudioProfile(audioQualityProfile);
+    for (const jb of jitterMapRef.current.values()) {
+      jb.applyJitterTuning({
+        jitterBufferSize: audioTuningRef.current.jitterBufferSize,
+        jitterStartBufferSize: audioTuningRef.current.jitterStartBufferSize,
+      });
+    }
+  }, [audioQualityProfile]);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== GCALL_AUDIO_QUALITY_PROFILE_KEY || e.newValue == null)
+        return;
+      if (e.newValue === 'low-latency' || e.newValue === 'high-stability') {
+        setAudioQualityProfile(e.newValue);
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   /** Batches UI updates when mesh relay fires at high rate. */
   const relayMetricsFlushTimerRef = useRef<ReturnType<
     typeof setTimeout
@@ -2052,8 +2105,8 @@ export function useGroupVoiceCall(uiActive = false) {
             recoveryProfile === 'recovery' ||
             (recoveryAssessment.shouldEscalate &&
               pressureAssessment.shouldTightenRecovery)
-              ? ADAPTIVE_SEVERE_MAX_TARGET_MS
-              : ADAPTIVE_MAX_TARGET_MS,
+              ? audioTuningRef.current.adaptiveSevereMaxTargetMs
+              : audioTuningRef.current.adaptiveMaxTargetMs,
         };
       });
     },
@@ -2490,20 +2543,22 @@ export function useGroupVoiceCall(uiActive = false) {
   );
 
   const buildGroupCallTuningSnapshot = useCallback(() => {
+    const tuning = audioTuningRef.current;
     return {
+      audioQualityProfile,
       dcProfiles: {
         lowLatency: { ordered: false, maxRetransmits: 1 },
         recovery: { ordered: false, maxRetransmits: 3 },
       },
-      jitterBufferSize: JITTER_BUFFER_SIZE,
-      jitterStartBufferSize: JITTER_START_BUFFER_SIZE,
+      jitterBufferSize: tuning.jitterBufferSize,
+      jitterStartBufferSize: tuning.jitterStartBufferSize,
       jitterEmptyHysteresisTicks: JITTER_EMPTY_HYSTERESIS_TICKS,
       jitterDecodeBurstMax: JITTER_DECODE_BURST_MAX,
       adaptive: {
         baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
         minTargetMs: ADAPTIVE_MIN_TARGET_MS,
-        maxTargetMs: ADAPTIVE_MAX_TARGET_MS,
-        severeMaxTargetMs: ADAPTIVE_SEVERE_MAX_TARGET_MS,
+        maxTargetMs: tuning.adaptiveMaxTargetMs,
+        severeMaxTargetMs: tuning.adaptiveSevereMaxTargetMs,
         jitterK: ADAPTIVE_JITTER_K,
         alphaUp: ADAPTIVE_ALPHA_UP,
         alphaDown: ADAPTIVE_ALPHA_DOWN,
@@ -2519,24 +2574,25 @@ export function useGroupVoiceCall(uiActive = false) {
         concealmentFadeSamples: 120,
       },
       opus: {
-        bitrate: OPUS_BITRATE,
+        bitrate: tuning.opusBitrate,
         frameDurationMs: OPUS_FRAME_DURATION_MS,
-        expectedPacketLossPercent: OPUS_EXPECTED_PACKETLOSS_PERCENT,
+        expectedPacketLossPercent: tuning.opusExpectedPacketLossPercent,
         inBandFecRequested: true,
         inBandFecSupportChecked: opusInBandFecSupportCheckedRef.current,
         inBandFecEnabled: opusInBandFecEnabledRef.current,
       },
+      wasmFecMaxGapReset: tuning.wasmFecMaxGapReset,
       pendingDecryptTtlMs: PENDING_DECRYPT_TTL_MS,
       keyDistribution: {
         timeoutMs: KEY_DIST_GATE_TIMEOUT_MS,
         preEncryptOpusRingFrames: KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES,
       },
       estimatedPrerollFloorMs:
-        JITTER_BUFFER_SIZE * OPUS_FRAME_DURATION_MS + ADAPTIVE_MIN_TARGET_MS,
+        tuning.jitterBufferSize * OPUS_FRAME_DURATION_MS + ADAPTIVE_MIN_TARGET_MS,
       acceptOnlyRecoveryPath: true,
       decoderPlcEnabled: false,
     };
-  }, []);
+  }, [audioQualityProfile]);
 
   const logTuningSnapshotIfChanged = useCallback(() => {
     const snapshot = buildGroupCallTuningSnapshot();
@@ -2558,6 +2614,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const diagnosticSources = buildWindowDiagnosticSources(windowMetrics);
       const windowPayload = {
         reason,
+        audioQualityProfile,
         ...windowMetrics,
         sources: diagnosticSources,
       };
@@ -2565,7 +2622,12 @@ export function useGroupVoiceCall(uiActive = false) {
       gcallDiagnosticsPush('info', '[GCall] groupCallWindowMetrics', windowPayload);
       return windowMetrics;
     },
-    [buildWindowDiagnosticSources, evaluateWindowMediaRecovery, userInfo?.address]
+    [
+      audioQualityProfile,
+      buildWindowDiagnosticSources,
+      evaluateWindowMediaRecovery,
+      userInfo?.address,
+    ]
   );
 
   const tickAdaptivePlayoutTargets = useCallback((): number => {
@@ -2607,10 +2669,11 @@ export function useGroupVoiceCall(uiActive = false) {
         ingressPeerAddress && ingressPeerAddress !== RELAY_INGRESS_PEER
           ? peerRecoveryProfileRef.current.get(ingressPeerAddress) === 'recovery'
           : false;
+      const tuning = audioTuningRef.current;
       const adaptiveMaxTargetMs =
         severeWindowSource || ingressPeerRecovery
-          ? ADAPTIVE_SEVERE_MAX_TARGET_MS
-          : ADAPTIVE_MAX_TARGET_MS;
+          ? tuning.adaptiveSevereMaxTargetMs
+          : tuning.adaptiveMaxTargetMs;
 
       const ideal = computeAdaptiveIdealTargetMs({
         baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
@@ -3245,7 +3308,7 @@ export function useGroupVoiceCall(uiActive = false) {
     for (const [id, p] of m) {
       if (nowMs - p.startedAt > PENDING_DECRYPT_TTL_MS) {
         m.delete(id);
-        metricsRef.current.recordPacketDropped();
+        metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
       }
     }
   }, []);
@@ -3263,7 +3326,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       if (oldestId === null) break;
       m.delete(oldestId);
-      metricsRef.current.recordPacketDropped();
+      metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
     }
   }, []);
 
@@ -3284,7 +3347,7 @@ export function useGroupVoiceCall(uiActive = false) {
             startupMediaGateUntilMs: startupMediaGateUntilRef.current,
           })
         ) {
-          metricsRef.current.recordPacketDropped();
+          metricsRef.current.recordPacketDroppedWithReason('startup-gate');
           metricsRef.current.recordIncomingPacketDuration(
             performance.now() - startedAt
           );
@@ -3308,7 +3371,7 @@ export function useGroupVoiceCall(uiActive = false) {
           return;
         }
         decryptFailureStreakRef.current += 1;
-        metricsRef.current.recordPacketDropped();
+        metricsRef.current.recordPacketDroppedWithReason('decode-failure');
         metricsRef.current.recordIncomingPacketDuration(
           performance.now() - startedAt
         );
@@ -3463,8 +3526,13 @@ export function useGroupVoiceCall(uiActive = false) {
 
       let jb = jitterMapRef.current.get(sourceAddr);
       if (!jb) {
+        const tun = audioTuningRef.current;
         jb = new JitterBuffer(
-          gcallWasmFecDesiredRef.current ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0
+          gcallWasmFecDesiredRef.current ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0,
+          {
+            jitterBufferSize: tun.jitterBufferSize,
+            jitterStartBufferSize: tun.jitterStartBufferSize,
+          }
         );
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
@@ -3511,7 +3579,7 @@ export function useGroupVoiceCall(uiActive = false) {
             startupMediaGateUntilMs: startupMediaGateUntilRef.current,
           })
         ) {
-          metricsRef.current.recordPacketDropped();
+          metricsRef.current.recordPacketDroppedWithReason('startup-gate');
           metricsRef.current.recordIncomingPacketDuration(
             performance.now() - startedAt
           );
@@ -3535,7 +3603,7 @@ export function useGroupVoiceCall(uiActive = false) {
           return;
         }
         decryptFailureStreakRef.current += 1;
-        metricsRef.current.recordPacketDropped();
+        metricsRef.current.recordPacketDroppedWithReason('decode-failure');
         metricsRef.current.recordIncomingPacketDuration(
           performance.now() - startedAt
         );
@@ -4607,11 +4675,12 @@ export function useGroupVoiceCall(uiActive = false) {
           error: (e: any) => console.error('[GCall] AudioEncoder error:', e),
         });
 
+        const encTuning = audioTuningRef.current;
         const baseEncoderConfig = {
           codec: 'opus',
           sampleRate: OPUS_SAMPLE_RATE,
           numberOfChannels: OPUS_CHANNELS,
-          bitrate: OPUS_BITRATE,
+          bitrate: encTuning.opusBitrate,
         };
         const fecEncoderConfig = {
           ...baseEncoderConfig,
@@ -4619,7 +4688,7 @@ export function useGroupVoiceCall(uiActive = false) {
             application: 'voip',
             signal: 'voice',
             frameDuration: OPUS_FRAME_DURATION_MS * 1000,
-            packetlossperc: OPUS_EXPECTED_PACKETLOSS_PERCENT,
+            packetlossperc: encTuning.opusExpectedPacketLossPercent,
             useinbandfec: true,
             usedtx: false,
           },
@@ -4642,7 +4711,7 @@ export function useGroupVoiceCall(uiActive = false) {
             debugWarn('[GCall] Opus in-band FEC unsupported by encoder config', {
               codec: 'opus',
               frameDurationMs: OPUS_FRAME_DURATION_MS,
-              expectedPacketLossPercent: OPUS_EXPECTED_PACKETLOSS_PERCENT,
+              expectedPacketLossPercent: encTuning.opusExpectedPacketLossPercent,
             });
           }
         } catch (err) {
@@ -5510,7 +5579,7 @@ export function useGroupVoiceCall(uiActive = false) {
         if (gcallWasmFecActiveRef.current) {
           void getOrCreateDecoder(addr);
           const rawGap = jb.consumeLastRawGapAfterPop();
-          if (rawGap > GCALL_WASM_FEC_MAX_GAP_RESET) {
+          if (rawGap > audioTuningRef.current.wasmFecMaxGapReset) {
             opusFecWorkerRef.current?.postMessage({
               type: 'reset',
               sourceAddr: addr,
@@ -5531,7 +5600,7 @@ export function useGroupVoiceCall(uiActive = false) {
               });
               decoder.decode(chunk);
             } catch (e) {
-              metricsRef.current.recordPacketDropped();
+              metricsRef.current.recordPacketDroppedWithReason('decoder-throw');
               debugWarn('[GCall] decoder.decode threw:', e);
             }
           } else if (!decoder) {
@@ -9217,6 +9286,8 @@ export function useGroupVoiceCall(uiActive = false) {
     roomId: roomIdRef.current,
     memberPrimaryNames,
     memberGateGroupName,
+    audioQualityProfile,
+    setAudioQualityProfile,
   };
 }
 
