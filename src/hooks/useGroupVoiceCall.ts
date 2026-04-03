@@ -6903,6 +6903,46 @@ export function useGroupVoiceCall(uiActive = false) {
     []
   );
 
+  /**
+   * Main can adopt root `callSessionId` / generation from GC_KEY(_ROTATE) before the
+   * renderer receives `gcall:key`. Sync refs so GC_KEY_REQUEST signatures match main
+   * and recovery is not stuck on a stale local UUID pair.
+   */
+  const syncCallSessionFromMainForKeyRecovery = useCallback(async () => {
+    const roomId = roomIdRef.current;
+    if (!roomId || roomKeyRef.current !== null) return;
+    const api = window.groupCall?.getRoomBootstrapState;
+    if (typeof api !== 'function') return;
+    try {
+      const state = await api(roomId);
+      if (!state?.callSessionId || roomId !== roomIdRef.current) return;
+      const mainCs = state.callSessionId.trim();
+      const mainGen = (state.mediaSessionGeneration ?? 1) >>> 0;
+      const localCs = callSessionIdRef.current.trim();
+      const localGen = mediaSessionGenerationRef.current >>> 0;
+      if (!mainCs) return;
+      if (mainGen > localGen) {
+        callSessionIdRef.current = mainCs;
+        mediaSessionGenerationRef.current = mainGen;
+        gcallDiagnosticsPush('info', '[GCall] sessionIdentitySyncedFromMain', {
+          reason: 'newer-generation',
+          mainGen,
+          localGen,
+        });
+        return;
+      }
+      if (mainGen === localGen && mainCs !== localCs) {
+        callSessionIdRef.current = mainCs;
+        gcallDiagnosticsPush('info', '[GCall] sessionIdentitySyncedFromMain', {
+          reason: 'same-generation-uuid',
+          localGen,
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   /** Group API members ∪ in-call participants — used for Reticulum GC_* fanout in main. */
   const getQortalReticulumFanoutAddressSet = useCallback((): Set<string> => {
     return new Set([
@@ -7275,7 +7315,11 @@ export function useGroupVoiceCall(uiActive = false) {
             })),
             lastSeen: bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs,
           };
-          if (bootstrapState.callSessionId && !roomKeyRef.current) {
+          if (
+            bootstrapState.callSessionId &&
+            !roomKeyRef.current &&
+            !bootstrapState.fromRecentCache
+          ) {
             callSessionIdRef.current = bootstrapState.callSessionId;
             mediaSessionGenerationRef.current =
               (bootstrapState.mediaSessionGeneration ?? 1) >>> 0;
@@ -7965,6 +8009,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 }
                 keyRecoveryTargetCursorRef.current = 0;
                 const sendFirstKeyRequest = async () => {
+                  await syncCallSessionFromMainForKeyRecovery();
                   const topo = topologyRef.current;
                   const root = topo?.rootForwarder ?? '';
                   const standby = topo?.standbyForwarder ?? '';
@@ -8120,6 +8165,9 @@ export function useGroupVoiceCall(uiActive = false) {
           return;
         }
         const noKey = roomKeyRef.current === null;
+        if (noKey) {
+          await syncCallSessionFromMainForKeyRecovery();
+        }
         const repeatedFailures =
           decryptFailureStreakRef.current >=
           KEY_RECOVERY_FAILURE_STREAK_THRESHOLD;
@@ -8986,6 +9034,7 @@ export function useGroupVoiceCall(uiActive = false) {
     ensureAudioCaptureStarted,
     reconcileParticipantsFromMainRoster,
     syncDecryptWorkerRoomKey,
+    syncCallSessionFromMainForKeyRecovery,
     maybeSendRosterLearnedTargetedKey,
     uiActive,
     userInfo?.address,
