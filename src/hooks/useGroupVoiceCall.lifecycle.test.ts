@@ -22,9 +22,11 @@ import {
   shouldDelayPostJoinRosterElection,
   shouldEscalateRoomWideKeyRecovery,
   shouldIgnoreParticipantLeftEvent,
+  shouldIgnoreRedundantRoomKeyDelivery,
   shouldMintRootSessionKeyImmediately,
   shouldAllowSimultaneousJoinKeyFallback,
   shouldSendCachedQuitLeave,
+  shouldSuppressStartupDecodeFailure,
   shouldSubscribeToJoinedGroupCallEvents,
   shouldStartGroupCallAudioCapture,
 } from './useGroupVoiceCall';
@@ -106,10 +108,25 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
-  it('mints a root session key immediately only for cold-start rooms', () => {
+  it('mints a root session key only after the startup authority wait expires', () => {
     expect(
       shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
         otherParticipantCount: 0,
+        nowMs: 1_000,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
+        otherParticipantCount: 0,
+        nowMs: 1_300,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 0,
         decryptFailureStreak: 0,
@@ -118,7 +135,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
 
     expect(
       shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
         otherParticipantCount: 2,
+        nowMs: 1_000,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 0,
         decryptFailureStreak: 0,
@@ -127,7 +147,37 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
 
     expect(
       shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
         otherParticipantCount: 2,
+        nowMs: 2_500,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
+        otherParticipantCount: 0,
+        nowMs: 2_500,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
+        hasOccupiedRoomEvidence: true,
+        hydratedRemoteParticipantCount: 2,
+        bootstrapHasTopology: true,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
+        otherParticipantCount: 2,
+        nowMs: 1_300,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 1,
         lastRemoteDecodeAtMs: 0,
         decryptFailureStreak: 0,
@@ -136,7 +186,35 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
 
     expect(
       shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
+        otherParticipantCount: 0,
+        nowMs: 6_000,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 5_000,
+        decryptFailureStreak: 0,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
+        otherParticipantCount: 0,
+        nowMs: 6_000,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
+        trustedRemoteRoot: 'root-a',
+      })
+    ).toBe(false);
+
+    expect(
+      shouldMintRootSessionKeyImmediately({
+        myAddress: 'self',
         otherParticipantCount: 2,
+        nowMs: 6_000,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 5000,
         decryptFailureStreak: 0,
@@ -147,9 +225,12 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
   it('reuses or reacquires keys on session-updated without minting in occupied rooms', () => {
     expect(
       getSessionUpdatedKeyRecoveryAction({
+        myAddress: 'self',
         isLocalRoot: true,
         hasOwnedRoomKey: false,
         otherParticipantCount: 0,
+        nowMs: 1_300,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 0,
         decryptFailureStreak: 0,
@@ -158,9 +239,12 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
 
     expect(
       getSessionUpdatedKeyRecoveryAction({
+        myAddress: 'self',
         isLocalRoot: true,
         hasOwnedRoomKey: true,
         otherParticipantCount: 2,
+        nowMs: 1_300,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 10,
         decryptFailureStreak: 0,
@@ -169,9 +253,12 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
 
     expect(
       getSessionUpdatedKeyRecoveryAction({
+        myAddress: 'self',
         isLocalRoot: true,
         hasOwnedRoomKey: false,
         otherParticipantCount: 2,
+        nowMs: 1_000,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 10,
         decryptFailureStreak: 3,
@@ -180,9 +267,27 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
 
     expect(
       getSessionUpdatedKeyRecoveryAction({
+        myAddress: 'self',
+        isLocalRoot: true,
+        hasOwnedRoomKey: false,
+        otherParticipantCount: 2,
+        nowMs: 2_000,
+        authoritySettleUntilMs: 1_200,
+        pendingVerifiedKeyCount: 0,
+        lastRemoteDecodeAtMs: 0,
+        decryptFailureStreak: 0,
+        hasOccupiedRoomEvidence: true,
+      })
+    ).toBe('mint-immediately');
+
+    expect(
+      getSessionUpdatedKeyRecoveryAction({
+        myAddress: 'self',
         isLocalRoot: false,
         hasOwnedRoomKey: false,
         otherParticipantCount: 2,
+        nowMs: 1_300,
+        authoritySettleUntilMs: 1_200,
         pendingVerifiedKeyCount: 0,
         lastRemoteDecodeAtMs: 10,
         decryptFailureStreak: 3,
@@ -556,6 +661,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         repeatedFailures: true,
         noRecentDecode: false,
         recentlyHealthyRemoteSourceCount: healthyCount,
+        withinPostKeyGrace: false,
+        prolongedNoRecentDecode: false,
       })
     ).toBe(false);
 
@@ -565,6 +672,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         repeatedFailures: true,
         noRecentDecode: false,
         recentlyHealthyRemoteSourceCount: 0,
+        withinPostKeyGrace: false,
+        prolongedNoRecentDecode: false,
       })
     ).toBe(true);
 
@@ -574,8 +683,97 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         repeatedFailures: false,
         noRecentDecode: false,
         recentlyHealthyRemoteSourceCount: healthyCount,
+        withinPostKeyGrace: false,
+        prolongedNoRecentDecode: false,
       })
     ).toBe(true);
+
+    expect(
+      shouldEscalateRoomWideKeyRecovery({
+        hasRoomKey: true,
+        repeatedFailures: false,
+        noRecentDecode: true,
+        recentlyHealthyRemoteSourceCount: 0,
+        withinPostKeyGrace: true,
+        prolongedNoRecentDecode: false,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldEscalateRoomWideKeyRecovery({
+        hasRoomKey: true,
+        repeatedFailures: false,
+        noRecentDecode: true,
+        recentlyHealthyRemoteSourceCount: 0,
+        withinPostKeyGrace: false,
+        prolongedNoRecentDecode: false,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldEscalateRoomWideKeyRecovery({
+        hasRoomKey: true,
+        repeatedFailures: false,
+        noRecentDecode: true,
+        recentlyHealthyRemoteSourceCount: 0,
+        withinPostKeyGrace: false,
+        prolongedNoRecentDecode: true,
+      })
+    ).toBe(true);
+  });
+
+  it('ignores redundant room key deliveries for installed or in-flight identities', () => {
+    expect(
+      shouldIgnoreRedundantRoomKeyDelivery({
+        hasInstalledRoomKey: true,
+        payloadCallSessionId: 'session-1',
+        localCallSessionId: 'session-1',
+        payloadMediaSessionGeneration: 1,
+        localMediaSessionGeneration: 1,
+        payloadKeyCommitment: 'commitment-1',
+        installedKeyCommitment: 'commitment-1',
+        sameIdentityInstallInFlight: false,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldIgnoreRedundantRoomKeyDelivery({
+        hasInstalledRoomKey: false,
+        payloadCallSessionId: 'session-1',
+        localCallSessionId: 'session-1',
+        payloadMediaSessionGeneration: 1,
+        localMediaSessionGeneration: 1,
+        payloadKeyCommitment: 'commitment-1',
+        installedKeyCommitment: null,
+        sameIdentityInstallInFlight: true,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldIgnoreRedundantRoomKeyDelivery({
+        hasInstalledRoomKey: true,
+        payloadCallSessionId: 'session-2',
+        localCallSessionId: 'session-1',
+        payloadMediaSessionGeneration: 1,
+        localMediaSessionGeneration: 1,
+        payloadKeyCommitment: 'commitment-1',
+        installedKeyCommitment: 'commitment-1',
+        sameIdentityInstallInFlight: false,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldIgnoreRedundantRoomKeyDelivery({
+        hasInstalledRoomKey: true,
+        payloadCallSessionId: 'session-1',
+        localCallSessionId: 'session-1',
+        payloadMediaSessionGeneration: 2,
+        localMediaSessionGeneration: 1,
+        payloadKeyCommitment: 'commitment-1',
+        installedKeyCommitment: 'commitment-1',
+        sameIdentityInstallInFlight: false,
+      })
+    ).toBe(false);
   });
 
   it('allows the trusted current root to replace a stale installed session during recovery', () => {
@@ -592,6 +790,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         lastRemoteDecodeAtMs: 1_000,
         nowMs: 6_000,
         noDecodeWindowMs: 4_000,
+        startupGraceUntilMs: 0,
       })
     ).toBe(true);
 
@@ -608,8 +807,26 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         lastRemoteDecodeAtMs: 1_000,
         nowMs: 6_000,
         noDecodeWindowMs: 4_000,
+        startupGraceUntilMs: 0,
       })
     ).toBe(false);
+
+    expect(
+      shouldAdoptTrustedRootSessionDuringRecovery({
+        hasInstalledRoomKey: true,
+        senderAddress: 'root',
+        currentRoot: 'root',
+        payloadCallSessionId: 'root-session',
+        localCallSessionId: 'stale-session',
+        payloadMediaSessionGeneration: 1,
+        localMediaSessionGeneration: 1,
+        decryptFailureStreak: 0,
+        lastRemoteDecodeAtMs: 2_000,
+        nowMs: 5_200,
+        noDecodeWindowMs: 3_000,
+        startupGraceUntilMs: 6_000,
+      })
+    ).toBe(true);
 
     expect(
       shouldAdoptTrustedRootSessionDuringRecovery({
@@ -624,6 +841,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         lastRemoteDecodeAtMs: 5_500,
         nowMs: 6_000,
         noDecodeWindowMs: 4_000,
+        startupGraceUntilMs: 0,
       })
     ).toBe(false);
 
@@ -640,6 +858,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         lastRemoteDecodeAtMs: 5_500,
         nowMs: 6_000,
         noDecodeWindowMs: 4_000,
+        startupGraceUntilMs: 0,
       })
     ).toBe(true);
   });
@@ -809,7 +1028,59 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         nowMs: 10_000,
         authoritySettleUntilMs: 20_000,
       })
+    ).toBe(false);
+
+    expect(
+      shouldAllowSimultaneousJoinKeyFallback({
+        myAddress: 'self',
+        otherParticipantCount: 0,
+        trustedRemoteRoot: null,
+        conflictingRemoteRoot: null,
+        nowMs: 20_100,
+        authoritySettleUntilMs: 20_000,
+      })
     ).toBe(true);
+
+    expect(
+      shouldAllowSimultaneousJoinKeyFallback({
+        myAddress: 'self',
+        otherParticipantCount: 2,
+        trustedRemoteRoot: null,
+        conflictingRemoteRoot: null,
+        nowMs: 10_000,
+        authoritySettleUntilMs: 9_000,
+        pendingVerifiedKeyCount: 1,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldAllowSimultaneousJoinKeyFallback({
+        myAddress: 'self',
+        otherParticipantCount: 2,
+        trustedRemoteRoot: null,
+        conflictingRemoteRoot: null,
+        nowMs: 10_000,
+        authoritySettleUntilMs: 9_000,
+        lastRemoteDecodeAtMs: 7_500,
+        recentMediaEvidenceWindowMs: 3_000,
+      })
+    ).toBe(false);
+  });
+
+  it('suppresses hard decode failure handling only during the short startup gate', () => {
+    expect(
+      shouldSuppressStartupDecodeFailure({
+        nowMs: 1_000,
+        startupMediaGateUntilMs: 1_200,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldSuppressStartupDecodeFailure({
+        nowMs: 1_000,
+        startupMediaGateUntilMs: 900,
+      })
+    ).toBe(false);
   });
 
   it('does not promote standby root on heartbeat silence alone while transport is healthy', () => {

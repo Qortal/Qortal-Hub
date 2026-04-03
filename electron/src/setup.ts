@@ -2405,8 +2405,25 @@ ipcMain.handle(
     if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
       return { success: false, error: 'payload-too-large' };
     }
-    const ok = mgr.sendAudio(roomId, toAddress, buf);
-    return ok ? { success: true } : { success: false, error: 'relay-rejected' };
+    const result = mgr.sendAudio(roomId, toAddress, buf);
+    if (result.success) {
+      return { success: true, diagnostics: result.diagnostics };
+    }
+    return {
+      success: false,
+      error: ('error' in result ? result.error : undefined) ?? 'relay-rejected',
+      diagnostics: result.diagnostics,
+    };
+  }
+);
+
+ipcMain.handle(
+  'gcall:requestPeerMediaRecovery',
+  async (_event, roomId: string, address: string, reason: string) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.requestPeerMediaRecovery(roomId, address, reason);
+    return { success: true };
   }
 );
 
@@ -2578,6 +2595,7 @@ ipcMain.handle('gcall:getPendingKeyMetrics', async () => {
 
 ipcMain.on('gcall:subscribe', (event) => {
   gcallSubscribers.add(event.sender);
+  getGroupCallManager()?.replayRetainedVerifiedKeyStatesTo(event.sender);
 });
 ipcMain.on('gcall:unsubscribe', (event) => {
   gcallSubscribers.delete(event.sender);

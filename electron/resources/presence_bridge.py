@@ -135,6 +135,20 @@ _CMD_QUEUE_MAX = 256
 _AUDIO_DECODED_QUEUE_MAX = 48
 _JSON_OUT_QUEUE_MAX = 2048
 _AUDIO_BINARY_OUT_QUEUE_MAX = 128
+_AUDIO_BATCH_STALE_SECONDS = 0.75
+_AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS = 2
+_AUDIO_MAX_BATCHES_PER_EXECUTOR_PASS = 8
+_AUDIO_BACKLOG_BATCH_STEP = 2
+_AUDIO_BACKLOG_CMD_TIMEOUT_SECONDS = 0.005
+_AUDIO_QUEUE_STATE_MIN_INTERVAL_SECONDS = 0.5
+_PACKET_PATH_IDLE_REQUEST_COOLDOWN_SECONDS = 5.0
+_PACKET_PATH_ACTIVE_REQUEST_COOLDOWN_SECONDS = 0.75
+_PACKET_PATH_FRESH_SECONDS = 3.0
+_PACKET_PATH_RECENT_FAILURE_SECONDS = 2.0
+_PACKET_PATH_AWAIT_SECONDS = 0.12
+_PACKET_PATH_IDLE_AWAIT_SECONDS = 0.02
+_PACKET_PATH_WARMING_TIMEOUTS_BEFORE_FAILING = 2
+_PACKET_PATH_INBOUND_FRESH_SECONDS = 3.0
 
 _shutdown = threading.Event()
 _json_line_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
@@ -153,10 +167,21 @@ _audio_in_f: Optional[IO[bytes]] = None
 _audio_drops_ingress = 0
 _audio_drops_json_out = 0
 _audio_drops_binary_out = 0
+_audio_stale_drops = 0
+_audio_packet_send_failures = 0
+_audio_packet_path_requests = 0
+_audio_packet_path_resolutions = 0
+_audio_packet_path_timeouts = 0
+_audio_packet_fresh_sends = 0
+_audio_packet_stale_sends = 0
+_audio_packet_unknown_sends = 0
+_audio_queue_state_last_emit = 0.0
+_audio_queue_state_dirty = False
 # One-shot narrowing logs (grep target=reticulum-audio-ipc stage=…)
 _audio_ipc_fd3_first_batch_ok_logged = False
 _audio_ipc_rns_first_send_ok_logged = False
 _audio_ipc_fd4_first_chunk_logged = False
+_call_media_path_state: Dict[str, Dict[str, Any]] = {}
 
 # Compact group-call control on call aspect (see electron/src/group-call-wire-reticulum.ts).
 _GROUP_CALL_WIRE_TYPES = frozenset(
@@ -196,6 +221,7 @@ def _queue_json_line(frame: Dict[str, Any]) -> None:
         _json_line_queue.put_nowait(frame)
     except queue.Full:
         _audio_drops_json_out += 1
+        _mark_audio_queue_state_dirty()
         if _audio_drops_json_out % 200 == 1:
             log(
                 f"[presence_bridge] json_out_queue full drops={_audio_drops_json_out}"
@@ -222,10 +248,47 @@ def emit_event(event: str, payload: Optional[Dict[str, Any]] = None) -> None:
     _queue_json_line(frame)
 
 
+def _mark_audio_queue_state_dirty() -> None:
+    global _audio_queue_state_dirty
+    _audio_queue_state_dirty = True
+
+
+def _emit_audio_queue_state(force: bool = False) -> None:
+    global _audio_queue_state_dirty, _audio_queue_state_last_emit
+    now = time.monotonic()
+    if not force and not _audio_queue_state_dirty:
+        return
+    if not force and now - _audio_queue_state_last_emit < _AUDIO_QUEUE_STATE_MIN_INTERVAL_SECONDS:
+        return
+    _audio_queue_state_last_emit = now
+    _audio_queue_state_dirty = False
+    emit_event(
+        "group_audio_queue_state",
+        {
+            "decodedQueueDepth": _audio_decoded_queue.qsize(),
+            "decodedQueueMax": _AUDIO_DECODED_QUEUE_MAX,
+            "decodedQueueDrops": _audio_drops_ingress,
+            "binaryOutQueueDepth": _audio_binary_out_queue.qsize(),
+            "binaryOutQueueMax": _AUDIO_BINARY_OUT_QUEUE_MAX,
+            "binaryOutQueueDrops": _audio_drops_binary_out,
+            "jsonOutQueueDrops": _audio_drops_json_out,
+            "staleDrops": _audio_stale_drops,
+            "packetSendFailures": _audio_packet_send_failures,
+            "packetPathRequests": _audio_packet_path_requests,
+            "packetPathResolutions": _audio_packet_path_resolutions,
+            "packetPathTimeouts": _audio_packet_path_timeouts,
+            "packetFreshSends": _audio_packet_fresh_sends,
+            "packetStaleSends": _audio_packet_stale_sends,
+            "packetUnknownSends": _audio_packet_unknown_sends,
+        },
+    )
+
+
 def _emit_binary_audio(chunk: bytes) -> None:
     global _audio_drops_binary_out, _audio_ipc_fd4_first_chunk_logged
     try:
         _audio_binary_out_queue.put_nowait(chunk)
+        _mark_audio_queue_state_dirty()
         if not _audio_ipc_fd4_first_chunk_logged:
             _audio_ipc_fd4_first_chunk_logged = True
             log(
@@ -234,6 +297,7 @@ def _emit_binary_audio(chunk: bytes) -> None:
             )
     except queue.Full:
         _audio_drops_binary_out += 1
+        _mark_audio_queue_state_dirty()
         if _audio_drops_binary_out % 100 == 1:
             log(
                 f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=binary-out-queue-full drops={_audio_drops_binary_out}"
@@ -296,14 +360,16 @@ def _parse_audio_batch_body(body: bytes) -> list:
         o += 1
         if pl > AUDIO_MAX_HASH_LEN or o + pl > len(body):
             raise ValueError("bad pph")
-        o += pl  # peer presence hash — unused on parent→child sends
+        peer_presence_hash = body[o : o + pl].decode("utf-8")
+        o += pl
         if o >= len(body):
             raise ValueError("truncated")
         cl = body[o]
         o += 1
         if cl > AUDIO_MAX_HASH_LEN or o + cl > len(body):
             raise ValueError("bad pch")
-        o += cl  # peer call hash — unused on send path
+        peer_call_hash = body[o : o + cl].decode("utf-8")
+        o += cl
         if o + 2 > len(body):
             raise ValueError("truncated plen")
         plen = int.from_bytes(body[o : o + 2], "big")
@@ -312,7 +378,7 @@ def _parse_audio_batch_body(body: bytes) -> list:
             raise ValueError("bad payload")
         raw = bytes(body[o : o + plen])
         o += plen
-        out.append((link_id, room_id, raw))
+        out.append((link_id, room_id, peer_presence_hash, peer_call_hash, raw))
     if o != len(body):
         raise ValueError("leftover")
     return out
@@ -361,87 +427,210 @@ def _encode_audio_batch_binary(
 
 
 def _process_audio_batch(frames: list) -> None:
-    """frames: list of (link_id, room_id, raw_opus_bytes)"""
-    global _audio_ipc_rns_first_send_ok_logged
-    for link_id, room_id, raw in frames:
-        state = get_audio_link_state(link_id)
-        if state is None:
+    """frames: list of (link_id, room_id, peer_presence_hash, peer_call_hash, raw_opus_bytes)"""
+    global _audio_ipc_rns_first_send_ok_logged, _audio_packet_send_failures
+    global _audio_packet_fresh_sends, _audio_packet_stale_sends, _audio_packet_unknown_sends
+    for link_id, room_id, peer_presence_hash, peer_call_hash, raw in frames:
+        if link_id:
+            state = get_audio_link_state(link_id)
+            if state is None:
+                emit_event(
+                    "group_audio_send_failed",
+                    {
+                        "linkId": link_id,
+                        "reason": "unknown_link_id",
+                        "code": "unknown_link_id",
+                        "transport": "link",
+                    },
+                )
+                continue
+            if state.get("established") is not True:
+                emit_event(
+                    "group_audio_send_failed",
+                    {
+                        "linkId": link_id,
+                        "peerPresenceHash": str(state.get("peerPresenceHash") or ""),
+                        "reason": "audio_link_not_ready",
+                        "code": "audio_link_not_ready",
+                        "transport": "link",
+                    },
+                )
+                continue
+            link = state.get("link")
+            if link is None:
+                emit_event(
+                    "group_audio_send_failed",
+                    {
+                        "linkId": link_id,
+                        "peerPresenceHash": str(state.get("peerPresenceHash") or ""),
+                        "reason": "unknown_link_id",
+                        "code": "unknown_link_id",
+                        "transport": "link",
+                    },
+                )
+                continue
+            try:
+                data_b64 = base64.b64encode(raw).decode("ascii")
+                wire_bytes = make_group_audio_wire(room_id, data_b64)
+                max_wire_bytes = _MAX_ENCRYPTED_WIRE_BYTES
+                try:
+                    link_mdu = link.get_mdu()
+                    if isinstance(link_mdu, int) and link_mdu > 0:
+                        max_wire_bytes = link_mdu
+                except Exception:
+                    pass
+                if len(wire_bytes) > max_wire_bytes:
+                    emit_event(
+                        "group_audio_send_failed",
+                        {
+                            "linkId": link_id,
+                            "peerPresenceHash": str(state.get("peerPresenceHash") or ""),
+                            "reason": "audio_payload_too_large",
+                            "code": "audio_payload_too_large",
+                            "transport": "link",
+                        },
+                    )
+                    continue
+                packet = RNS.Packet(link, wire_bytes, create_receipt=False)
+                result = packet.send()
+                if result is False:
+                    _audio_packet_send_failures += 1
+                    _mark_audio_queue_state_dirty()
+                    emit_event(
+                        "group_audio_send_failed",
+                        {
+                            "linkId": link_id,
+                            "peerPresenceHash": str(state.get("peerPresenceHash") or ""),
+                            "reason": "packet_send_false",
+                            "code": "packet_send_false",
+                            "transport": "link",
+                        },
+                    )
+                else:
+                    if not _audio_ipc_rns_first_send_ok_logged:
+                        _audio_ipc_rns_first_send_ok_logged = True
+                        log(
+                            f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-first-packet-send-ok "
+                            f"link_prefix={link_id[:8] if len(link_id) >= 8 else link_id} bytes_wire={len(wire_bytes)}"
+                        )
+                continue
+            except Exception as exc:
+                _audio_packet_send_failures += 1
+                _mark_audio_queue_state_dirty()
+                emit_event(
+                    "group_audio_send_failed",
+                    {
+                        "linkId": link_id,
+                        "peerPresenceHash": str(state.get("peerPresenceHash") or ""),
+                        "reason": "exception",
+                        "code": "exception",
+                        "error": str(exc),
+                        "transport": "link",
+                    },
+                )
+                continue
+
+        peer_hash = str(peer_presence_hash or "").strip().lower()
+        if not peer_hash:
             emit_event(
                 "group_audio_send_failed",
                 {
-                    "linkId": link_id,
-                    "reason": "unknown_link_id",
-                    "code": "unknown_link_id",
+                    "reason": "unknown_peer_presence_hash",
+                    "code": "unknown_peer_presence_hash",
+                    "transport": "packet",
                 },
             )
             continue
-        if state.get("established") is not True:
+        peer_identity = _get_verified_peer_identity(peer_hash)
+        if peer_identity is None:
             emit_event(
                 "group_audio_send_failed",
                 {
-                    "linkId": link_id,
-                    "reason": "audio_link_not_ready",
-                    "code": "audio_link_not_ready",
-                },
-            )
-            continue
-        link = state.get("link")
-        if link is None:
-            emit_event(
-                "group_audio_send_failed",
-                {
-                    "linkId": link_id,
-                    "reason": "unknown_link_id",
-                    "code": "unknown_link_id",
+                    "peerPresenceHash": peer_hash,
+                    "reason": "unknown_peer_presence_hash",
+                    "code": "unknown_peer_presence_hash",
+                    "transport": "packet",
                 },
             )
             continue
         try:
-            data_b64 = base64.b64encode(raw).decode("ascii")
-            wire_bytes = make_group_audio_wire(room_id, data_b64)
-            max_wire_bytes = _MAX_ENCRYPTED_WIRE_BYTES
-            try:
-                link_mdu = link.get_mdu()
-                if isinstance(link_mdu, int) and link_mdu > 0:
-                    max_wire_bytes = link_mdu
-            except Exception:
-                pass
-            if len(wire_bytes) > max_wire_bytes:
+            outbound = build_outbound_call_destination(peer_identity)
+            destination_hash = outbound.hash
+            path_state, path_ready = _ensure_call_media_path(
+                peer_hash,
+                destination_hash,
+                active_call=True,
+                allow_wait=True,
+                reason="audio_send",
+            )
+            if path_state == "fresh":
+                _audio_packet_fresh_sends += 1
+            elif path_state in ("stale", "warming"):
+                _audio_packet_stale_sends += 1
+            else:
+                _audio_packet_unknown_sends += 1
+            _mark_audio_queue_state_dirty()
+            if not path_ready:
                 emit_event(
                     "group_audio_send_failed",
                     {
-                        "linkId": link_id,
-                        "reason": "audio_payload_too_large",
-                        "code": "audio_payload_too_large",
+                        "peerPresenceHash": peer_hash,
+                        "reason": "path_request_timeout",
+                        "code": "path_request_timeout",
+                        "pathState": path_state,
+                        "transport": "packet",
                     },
                 )
                 continue
-            packet = RNS.Packet(link, wire_bytes, create_receipt=False)
-            result = packet.send()
-            if result is False:
+            data_b64 = base64.b64encode(raw).decode("ascii")
+            wire_bytes = make_group_audio_wire(room_id, data_b64)
+            if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
                 emit_event(
                     "group_audio_send_failed",
                     {
-                        "linkId": link_id,
-                        "reason": "packet_send_false",
-                        "code": "packet_send_false",
+                        "peerPresenceHash": peer_hash,
+                        "reason": "audio_payload_too_large",
+                        "code": "audio_payload_too_large",
+                        "transport": "packet",
                     },
                 )
-            else:
-                if not _audio_ipc_rns_first_send_ok_logged:
-                    _audio_ipc_rns_first_send_ok_logged = True
-                    log(
-                        f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-first-packet-send-ok "
-                        f"link_prefix={link_id[:8] if len(link_id) >= 8 else link_id} bytes_wire={len(wire_bytes)}"
-                    )
+                continue
+            packet = RNS.Packet(outbound, wire_bytes, create_receipt=False)
+            result = packet.send()
+            if result is False:
+                _audio_packet_send_failures += 1
+                _note_call_media_send_result(peer_hash, False)
+                _mark_audio_queue_state_dirty()
+                emit_event(
+                    "group_audio_send_failed",
+                    {
+                        "peerPresenceHash": peer_hash,
+                        "reason": "packet_send_false",
+                        "code": "packet_send_false",
+                        "transport": "packet",
+                    },
+                )
+                continue
+            _note_call_media_send_result(peer_hash, True)
+            if not _audio_ipc_rns_first_send_ok_logged:
+                _audio_ipc_rns_first_send_ok_logged = True
+                target = str(peer_call_hash or destination_hash_hex(destination_hash))
+                log(
+                    f"[presence_bridge] {_AUDIO_IPC_LOG} stage=rns-first-packet-send-ok "
+                    f"packet_peer={target[:16]} bytes_wire={len(wire_bytes)}"
+                )
         except Exception as exc:
+            _audio_packet_send_failures += 1
+            _note_call_media_send_result(peer_hash, False)
+            _mark_audio_queue_state_dirty()
             emit_event(
                 "group_audio_send_failed",
                 {
-                    "linkId": link_id,
+                    "peerPresenceHash": peer_hash,
                     "reason": "exception",
                     "code": "exception",
                     "error": str(exc),
+                    "transport": "packet",
                 },
             )
 
@@ -525,9 +714,13 @@ def _audio_in_reader_loop() -> None:
                 f"frames={nframes}"
             )
         try:
-            _audio_decoded_queue.put_nowait(frames)
+            _audio_decoded_queue.put_nowait((time.monotonic(), frames))
+            _mark_audio_queue_state_dirty()
+            _emit_audio_queue_state()
         except queue.Full:
             _audio_drops_ingress += 1
+            _mark_audio_queue_state_dirty()
+            _emit_audio_queue_state()
             if _audio_drops_ingress % 100 == 1:
                 log(
                     f"[presence_bridge] {_AUDIO_IPC_LOG} fd3=decoded-queue-full drops={_audio_drops_ingress}"
@@ -535,30 +728,63 @@ def _audio_in_reader_loop() -> None:
 
 
 def _rns_executor_loop() -> None:
+    global _audio_stale_drops
     while True:
         drained_audio = False
+        drained_batches = 0
+        decoded_backlog = 0
         try:
-            while True:
-                batch = _audio_decoded_queue.get_nowait()
-                _process_audio_batch(batch)
+            decoded_backlog = _audio_decoded_queue.qsize()
+            batch_budget = min(
+                _AUDIO_MAX_BATCHES_PER_EXECUTOR_PASS,
+                _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS
+                + max(0, decoded_backlog // _AUDIO_BACKLOG_BATCH_STEP),
+            )
+            while drained_batches < batch_budget:
+                queued = _audio_decoded_queue.get_nowait()
+                if queued is None:
+                    break
+                queued_at, batch = queued
+                batch_age = time.monotonic() - queued_at
+                if batch_age > _AUDIO_BATCH_STALE_SECONDS:
+                    _audio_stale_drops += len(batch)
+                    _mark_audio_queue_state_dirty()
+                else:
+                    _process_audio_batch(batch)
                 drained_audio = True
+                drained_batches += 1
         except queue.Empty:
             pass
         if drained_audio:
-            continue
+            _mark_audio_queue_state_dirty()
+            _emit_audio_queue_state()
         try:
-            message = _cmd_queue_bounded.get(timeout=0.05)
+            if not _cmd_queue_bounded.empty():
+                message = _cmd_queue_bounded.get_nowait()
+            elif not _audio_decoded_queue.empty():
+                if _shutdown.is_set() and _cmd_queue_bounded.empty():
+                    continue
+                _emit_audio_queue_state()
+                time.sleep(_AUDIO_BACKLOG_CMD_TIMEOUT_SECONDS)
+                continue
+            else:
+                message = _cmd_queue_bounded.get(timeout=0.05)
         except queue.Empty:
             if _shutdown.is_set() and _cmd_queue_bounded.empty() and _audio_decoded_queue.empty():
                 return
+            _emit_audio_queue_state()
             continue
         if message is None:
             try:
                 while True:
-                    batch = _audio_decoded_queue.get_nowait()
+                    queued = _audio_decoded_queue.get_nowait()
+                    if queued is None:
+                        continue
+                    _, batch = queued
                     _process_audio_batch(batch)
             except queue.Empty:
                 pass
+            _emit_audio_queue_state(force=True)
             return
         try:
             handle_command(message)
@@ -571,6 +797,7 @@ def _rns_executor_loop() -> None:
                     "detail": traceback.format_exc(limit=3),
                 },
             )
+        _emit_audio_queue_state()
 
 
 def log(message: str) -> None:
@@ -1018,6 +1245,296 @@ def _request_path_if_eligible(peer_key: str, h: bytes, nudge_budget: list[int]) 
         )
     except Exception as exc:
         log(f"[presence_bridge] target=presence-reticulum request_path_failed peer={peer_key}: {exc}")
+
+
+def _get_call_media_state(peer_hash: str) -> Dict[str, Any]:
+    state = _call_media_path_state.get(peer_hash)
+    if state is not None:
+        return state
+    state = {
+        "path_state": "unknown",
+        "destination_hash_hex": "",
+        "last_request_path_at": None,
+        "last_resolved_at": None,
+        "last_timeout_at": None,
+        "last_send_ok": None,
+        "last_send_fail": None,
+        "last_inbound_at": None,
+        "last_state_change_at": None,
+        "last_transition_reason": "",
+        "consecutive_timeouts": 0,
+    }
+    _call_media_path_state[peer_hash] = state
+    return state
+
+
+_CALL_MEDIA_PATH_ALLOWED_TRANSITIONS: Dict[str, set[str]] = {
+    "unknown": {"warming"},
+    "warming": {"fresh", "stale", "failing"},
+    "fresh": {"stale"},
+    "stale": {"warming", "failing", "fresh"},
+    "failing": {"recovering", "stale"},
+    "recovering": {"fresh", "failing", "stale"},
+}
+
+
+def _transition_call_media_path_state(
+    peer_hash: str, next_state: str, reason: str = ""
+) -> str:
+    state = _get_call_media_state(peer_hash)
+    current = str(state.get("path_state") or "unknown")
+    if current == next_state:
+        return current
+    allowed = _CALL_MEDIA_PATH_ALLOWED_TRANSITIONS.get(current, set())
+    if next_state not in allowed:
+        log(
+            "[presence_bridge] target=reticulum-audio-ipc packet_path_invalid_transition "
+            f"peer={peer_hash} current={current} next={next_state} reason={reason}"
+        )
+        return current
+    state["path_state"] = next_state
+    state["last_state_change_at"] = time.time()
+    state["last_transition_reason"] = reason
+    return next_state
+
+
+def _reset_call_media_state(
+    peer_hash: str, destination_hash: bytes, reason: str = "destination_changed"
+) -> Dict[str, Any]:
+    state = _get_call_media_state(peer_hash)
+    state["path_state"] = "unknown"
+    state["destination_hash_hex"] = destination_hash_hex(destination_hash)
+    state["last_request_path_at"] = None
+    state["last_resolved_at"] = None
+    state["last_timeout_at"] = None
+    state["last_send_ok"] = None
+    state["last_send_fail"] = None
+    state["last_inbound_at"] = None
+    state["last_state_change_at"] = time.time()
+    state["last_transition_reason"] = reason
+    state["consecutive_timeouts"] = 0
+    return state
+
+
+def _classify_call_media_path_state(peer_hash: str, destination_hash: bytes) -> str:
+    now = time.time()
+    state = _get_call_media_state(peer_hash)
+    dest_hex = destination_hash_hex(destination_hash)
+    if state.get("destination_hash_hex") != dest_hex:
+        state = _reset_call_media_state(peer_hash, destination_hash)
+    has_path = False
+    try:
+        has_path = bool(RNS.Transport.has_path(destination_hash))
+    except Exception:
+        has_path = False
+    if not has_path:
+        if str(state.get("path_state") or "unknown") == "unknown":
+            return "unknown"
+        return str(state.get("path_state") or "unknown")
+    last_send_ok = state.get("last_send_ok")
+    last_send_fail = state.get("last_send_fail")
+    last_inbound = state.get("last_inbound_at")
+    recent_ok = isinstance(last_send_ok, (int, float)) and (
+        now - float(last_send_ok)
+    ) <= _PACKET_PATH_FRESH_SECONDS
+    recent_inbound = isinstance(last_inbound, (int, float)) and (
+        now - float(last_inbound)
+    ) <= _PACKET_PATH_INBOUND_FRESH_SECONDS
+    recent_fail = isinstance(last_send_fail, (int, float)) and (
+        now - float(last_send_fail)
+    ) <= _PACKET_PATH_RECENT_FAILURE_SECONDS
+    if (recent_ok or recent_inbound) and not recent_fail:
+        return "fresh"
+    current = str(state.get("path_state") or "unknown")
+    if current in ("failing", "recovering"):
+        return current
+    return "stale"
+
+
+def _ensure_call_media_path(
+    peer_hash: str,
+    destination_hash: bytes,
+    *,
+    active_call: bool = True,
+    allow_wait: bool = True,
+    reason: str = "send",
+) -> tuple[str, bool]:
+    global _audio_packet_path_requests, _audio_packet_path_resolutions, _audio_packet_path_timeouts
+    state = _get_call_media_state(peer_hash)
+    dest_hex = destination_hash_hex(destination_hash)
+    if state.get("destination_hash_hex") != dest_hex:
+        state = _reset_call_media_state(peer_hash, destination_hash)
+    initial_state = _classify_call_media_path_state(peer_hash, destination_hash)
+    if initial_state == "fresh":
+        state["consecutive_timeouts"] = 0
+        return initial_state, True
+    if initial_state == "stale" and str(state.get("path_state") or "") == "fresh":
+        _transition_call_media_path_state(peer_hash, "stale", "fresh_expired")
+        initial_state = "stale"
+    now = time.time()
+    last_rp = state.get("last_request_path_at")
+    request_cooldown = (
+        _PACKET_PATH_ACTIVE_REQUEST_COOLDOWN_SECONDS
+        if active_call
+        else _PACKET_PATH_IDLE_REQUEST_COOLDOWN_SECONDS
+    )
+    should_request = not (
+        isinstance(last_rp, (int, float))
+        and (now - float(last_rp)) < request_cooldown
+    )
+    requested = False
+    if should_request:
+        current = str(state.get("path_state") or "unknown")
+        if current == "unknown":
+            _transition_call_media_path_state(peer_hash, "warming", f"{reason}:request_path")
+        elif current == "stale":
+            _transition_call_media_path_state(peer_hash, "warming", f"{reason}:refresh_path")
+        elif current == "failing":
+            _transition_call_media_path_state(peer_hash, "recovering", f"{reason}:recover_path")
+        try:
+            RNS.Transport.request_path(destination_hash)
+            state["last_request_path_at"] = now
+            _audio_packet_path_requests += 1
+            _mark_audio_queue_state_dirty()
+            requested = True
+        except Exception as exc:
+            log(
+                "[presence_bridge] target=reticulum-audio-ipc packet_path_request_failed "
+                f"peer={peer_hash} err={exc}"
+            )
+    resolved = False
+    await_seconds = _PACKET_PATH_AWAIT_SECONDS if active_call else _PACKET_PATH_IDLE_AWAIT_SECONDS
+    if allow_wait and await_seconds > 0:
+        try:
+            resolved = bool(RNS.Transport.await_path(destination_hash, await_seconds))
+        except Exception:
+            try:
+                resolved = bool(RNS.Transport.has_path(destination_hash))
+            except Exception:
+                resolved = False
+    else:
+        try:
+            resolved = bool(RNS.Transport.has_path(destination_hash))
+        except Exception:
+            resolved = False
+    if resolved:
+        current = str(state.get("path_state") or "unknown")
+        if current == "unknown":
+            _transition_call_media_path_state(peer_hash, "warming", f"{reason}:resolved")
+            current = "warming"
+        if current == "failing":
+            _transition_call_media_path_state(peer_hash, "recovering", f"{reason}:resolved")
+        _transition_call_media_path_state(peer_hash, "fresh", f"{reason}:resolved")
+        state["last_resolved_at"] = time.time()
+        state["consecutive_timeouts"] = 0
+        _audio_packet_path_resolutions += 1
+        _mark_audio_queue_state_dirty()
+        return str(state.get("path_state") or "fresh"), True
+    try:
+        resolved = bool(RNS.Transport.has_path(destination_hash))
+    except Exception:
+        resolved = False
+    if resolved:
+        current = str(state.get("path_state") or "unknown")
+        if current == "unknown":
+            _transition_call_media_path_state(peer_hash, "warming", f"{reason}:has_path")
+            current = "warming"
+        if current == "failing":
+            _transition_call_media_path_state(peer_hash, "recovering", f"{reason}:has_path")
+        _transition_call_media_path_state(peer_hash, "fresh", f"{reason}:has_path")
+        state["last_resolved_at"] = time.time()
+        state["consecutive_timeouts"] = 0
+        _audio_packet_path_resolutions += 1
+        _mark_audio_queue_state_dirty()
+        return str(state.get("path_state") or "fresh"), True
+    _audio_packet_path_timeouts += 1
+    state["last_timeout_at"] = time.time()
+    state["consecutive_timeouts"] = int(state.get("consecutive_timeouts") or 0) + 1
+    current = str(state.get("path_state") or "unknown")
+    if current == "warming":
+        _transition_call_media_path_state(peer_hash, "stale", f"{reason}:timeout")
+        current = "stale"
+    if current == "stale" and (
+        int(state.get("consecutive_timeouts") or 0)
+        >= _PACKET_PATH_WARMING_TIMEOUTS_BEFORE_FAILING
+    ):
+        _transition_call_media_path_state(peer_hash, "failing", f"{reason}:timeout")
+    elif current == "recovering":
+        _transition_call_media_path_state(peer_hash, "failing", f"{reason}:recover_timeout")
+    _mark_audio_queue_state_dirty()
+    return str(state.get("path_state") or initial_state), False
+
+
+def _note_call_media_inbound(peer_hash: str, sender_call_hash: str = "") -> None:
+    if not peer_hash:
+        return
+    state = _get_call_media_state(peer_hash)
+    now = time.time()
+    if sender_call_hash:
+        state["destination_hash_hex"] = str(sender_call_hash or "").strip().lower()
+    state["last_inbound_at"] = now
+    state["last_resolved_at"] = now
+    state["consecutive_timeouts"] = 0
+    current = str(state.get("path_state") or "unknown")
+    if current == "unknown":
+        _transition_call_media_path_state(peer_hash, "warming", "inbound_packet")
+        current = "warming"
+    if current == "failing":
+        _transition_call_media_path_state(peer_hash, "recovering", "inbound_packet")
+    if str(state.get("path_state") or "") in ("warming", "stale", "recovering"):
+        _transition_call_media_path_state(peer_hash, "fresh", "inbound_packet")
+
+
+def _note_call_media_send_result(peer_hash: str, ok: bool) -> None:
+    state = _get_call_media_state(peer_hash)
+    now = time.time()
+    if ok:
+        state["last_send_ok"] = now
+        state["last_resolved_at"] = now
+        state["consecutive_timeouts"] = 0
+        current = str(state.get("path_state") or "unknown")
+        if current == "unknown":
+            _transition_call_media_path_state(peer_hash, "warming", "send_ok")
+            current = "warming"
+        if current == "failing":
+            _transition_call_media_path_state(peer_hash, "recovering", "send_ok")
+        if str(state.get("path_state") or "") in ("warming", "stale", "recovering"):
+            _transition_call_media_path_state(peer_hash, "fresh", "send_ok")
+    else:
+        state["last_send_fail"] = now
+        current = str(state.get("path_state") or "unknown")
+        if current == "fresh":
+            _transition_call_media_path_state(peer_hash, "stale", "send_fail")
+            current = "stale"
+        if current == "stale":
+            _transition_call_media_path_state(peer_hash, "failing", "send_fail")
+
+
+def _warm_call_media_path_if_possible(
+    peer_hash: str,
+    *,
+    active_call: bool,
+    allow_wait: bool,
+    reason: str,
+) -> tuple[str, bool]:
+    peer_identity = _get_verified_peer_identity(peer_hash)
+    if peer_identity is None:
+        return "unknown", False
+    try:
+        outbound = build_outbound_call_destination(peer_identity)
+    except Exception as exc:
+        log(
+            "[presence_bridge] target=reticulum-audio-ipc packet_path_build_failed "
+            f"peer={peer_hash} err={exc}"
+        )
+        return "unknown", False
+    return _ensure_call_media_path(
+        peer_hash,
+        outbound.hash,
+        active_call=active_call,
+        allow_wait=allow_wait,
+        reason=reason,
+    )
 
 
 def identity_hash_hex(identity: Any) -> str:
@@ -1894,6 +2411,38 @@ def on_call_packet_received(data, packet) -> None:
     if not isinstance(message, dict):
         log("[presence_bridge] ignored non-object call packet payload")
         return
+    if message.get("t") == _GROUP_AUDIO_WIRE_TYPE:
+        room_id = message.get("R")
+        data_b64 = message.get("d")
+        sender_call_hash = message.get("r")
+        if not isinstance(room_id, str) or not room_id:
+            return
+        if not isinstance(data_b64, str) or not data_b64:
+            return
+        sender_call_hash = sender_call_hash if isinstance(sender_call_hash, str) else ""
+        try:
+            raw_audio = base64.b64decode(data_b64, validate=True)
+        except Exception:
+            log("[presence_bridge] invalid base64 in call packet audio payload")
+            return
+        peer_presence_hash = _resolve_peer_presence_hash_from_call_hash(sender_call_hash)
+        try:
+            chunk = _encode_audio_batch_binary(
+                [
+                    (
+                        "",
+                        room_id,
+                        peer_presence_hash,
+                        sender_call_hash,
+                        raw_audio,
+                    )
+                ]
+            )
+            _note_call_media_inbound(peer_presence_hash, sender_call_hash)
+            _emit_binary_audio(chunk)
+        except Exception as exc:
+            log(f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=encode-to-parent-failed err={exc}")
+        return
     _emit_call_bridge_message(message)
 
 
@@ -2013,6 +2562,12 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
             if len(hb) != 16:
                 continue
             _request_path_if_eligible(peer_hash, hb, nudge_budget)
+            _warm_call_media_path_if_possible(
+                peer_hash,
+                active_call=False,
+                allow_wait=False,
+                reason="publish_presence",
+            )
         local_hex = destination_hash_hex(_destination.hash)
         env_type = envelope.get("type") if isinstance(envelope.get("type"), str) else ""
         env_payload = envelope.get("payload")
@@ -2310,6 +2865,35 @@ def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error=str(exc))
 
 
+def handle_warm_group_audio_path(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_hash = str(payload.get("peerPresenceHash") or "").strip().lower()
+    if not peer_hash:
+        emit_resp(req_id, False, error="Missing peerPresenceHash")
+        return
+    if _destination is None or _call_destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+    path_state, ready = _warm_call_media_path_if_possible(
+        peer_hash,
+        active_call=True,
+        allow_wait=True,
+        reason="explicit_warm",
+    )
+    emit_resp(
+        req_id,
+        True,
+        payload={
+            "pathState": path_state,
+            "ready": ready,
+        },
+    )
+
+
 def handle_command(message: Dict[str, Any]) -> None:
     req_id = str(message.get("id") or "")
     action = message.get("action")
@@ -2345,6 +2929,8 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_open_group_audio_link(req_id, payload)
     elif action == "close_group_audio_link":
         handle_close_group_audio_link(req_id, payload)
+    elif action == "warm_group_audio_path":
+        handle_warm_group_audio_path(req_id, payload)
     else:
         emit_resp(req_id, False, error=f"Unknown action: {action}")
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   buildHierarchicalTopologyWithStickyRoot,
   assessGroupCallSourceStall,
+  assessReticulumAudioPressureWindow,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   buildTopologyAfterClusterPromotion,
@@ -350,6 +351,24 @@ describe('group-call router helpers', () => {
     tracker.recordRelayThrottleDrop(2);
     tracker.recordRelayCoalesceSuperseded(3);
     tracker.recordRelayIpcFailure(1);
+    tracker.recordReticulumAudioQueuePressureDrop(2);
+    tracker.recordReticulumAudioStaleDrop(1);
+    tracker.recordReticulumAudioLinkUnreadyDrop(1);
+    tracker.recordReticulumAudioPacketSendFailure(3);
+    tracker.recordReticulumAudioPacketPathActivity({
+      requests: 4,
+      resolutions: 3,
+      timeouts: 1,
+      freshSends: 8,
+      staleSends: 2,
+      unknownSends: 1,
+    });
+    tracker.setReticulumAudioQueueDepths({
+      pendingFrames: 4,
+      bridgeQueuedFrames: 7,
+      decodedQueueDepth: 5,
+      binaryOutQueueDepth: 2,
+    });
     tracker.recordIncomingPacketDuration(4);
     tracker.recordJitterTickDuration(2);
     tracker.recordJitterUnderrun(2);
@@ -374,6 +393,20 @@ describe('group-call router helpers', () => {
       relayThrottleDrops: 2,
       relayCoalesceSuperseded: 3,
       relayIpcFailures: 1,
+      reticulumAudioPendingFrames: 4,
+      reticulumAudioBridgeQueuedFrames: 7,
+      reticulumAudioDecodedQueueDepth: 5,
+      reticulumAudioBinaryOutQueueDepth: 2,
+      reticulumAudioQueuePressureDrops: 2,
+      reticulumAudioStaleDrops: 1,
+      reticulumAudioLinkUnreadyDrops: 1,
+      reticulumAudioPacketSendFailures: 3,
+      reticulumAudioPacketPathRequests: 4,
+      reticulumAudioPacketPathResolutions: 3,
+      reticulumAudioPacketPathTimeouts: 1,
+      reticulumAudioPacketFreshSends: 8,
+      reticulumAudioPacketStaleSends: 2,
+      reticulumAudioPacketUnknownSends: 1,
       lastRelayActivityAtMs: expect.any(Number),
       jitterUnderruns: 2,
       missingFrames: 2,
@@ -415,6 +448,8 @@ describe('group-call router helpers', () => {
         concealmentTicks: 338,
         avgPcmBufferedMs: 15.443,
         playoutOutsideTargetFraction: 0.985,
+        playoutUnderTargetFraction: 0.92,
+        avgPlayoutDeltaMs: -118,
         avgOpusBufferedMs: 22.965,
         maxOpusBufferedMs: 140,
         adaptiveTargetMedianMs: 180,
@@ -435,6 +470,8 @@ describe('group-call router helpers', () => {
         concealmentTicks: 1,
         avgPcmBufferedMs: 137.714,
         playoutOutsideTargetFraction: 0.466,
+        playoutUnderTargetFraction: 0.1,
+        avgPlayoutDeltaMs: -12,
         avgOpusBufferedMs: 20.726,
         maxOpusBufferedMs: 200,
         adaptiveTargetMedianMs: 101.335,
@@ -457,6 +494,8 @@ describe('group-call router helpers', () => {
         concealmentTicks: 479,
         avgPcmBufferedMs: 0.021,
         playoutOutsideTargetFraction: 1,
+        playoutUnderTargetFraction: 0,
+        avgPlayoutDeltaMs: 0,
         avgOpusBufferedMs: 0,
         maxOpusBufferedMs: 0,
         adaptiveTargetMedianMs: 0,
@@ -543,6 +582,8 @@ describe('group-call router helpers', () => {
         concealmentTicks: 0,
         avgPcmBufferedMs: 0,
         playoutOutsideTargetFraction: 0,
+        playoutUnderTargetFraction: 0,
+        avgPlayoutDeltaMs: 0,
         avgOpusBufferedMs: 0,
         maxOpusBufferedMs: 0,
         adaptiveTargetMedianMs: 0,
@@ -560,6 +601,32 @@ describe('group-call router helpers', () => {
     tracker.recordJitterUnderrun(2, 'alice');
     tracker.recordMissingFrames(3, 'alice');
     tracker.recordConcealmentTick(1, 'alice');
+    tracker.recordReticulumAudioQueuePressureDrop(2);
+    tracker.recordReticulumAudioStaleDrop(1);
+    tracker.recordReticulumAudioLinkUnreadyDrop(1);
+    tracker.recordReticulumAudioPacketSendFailure(2);
+    tracker.recordReticulumAudioPacketPathActivity({
+      requests: 3,
+      resolutions: 2,
+      timeouts: 1,
+      freshSends: 7,
+      staleSends: 2,
+      unknownSends: 1,
+    });
+    tracker.setReticulumAudioQueueDepths({
+      pendingFrames: 14,
+      bridgeQueuedFrames: 6,
+      decodedQueueDepth: 11,
+      binaryOutQueueDepth: 3,
+      queuePressureDropsLast5s: 2,
+      staleDropsLast5s: 1,
+      packetPathRequests: 3,
+      packetPathResolutions: 2,
+      packetPathTimeouts: 1,
+      packetFreshSends: 7,
+      packetStaleSends: 2,
+      packetUnknownSends: 1,
+    });
     tracker.recordPlayoutMetricTick(80, false, 'alice', { deltaMs: -5 });
     tracker.recordPlayoutMetricTick(120, true, 'alice', {
       outsideOver: true,
@@ -579,6 +646,19 @@ describe('group-call router helpers', () => {
     expect(window.relayDwellFraction).toBe(1);
     expect(window.missingFrames).toBe(3);
     expect(window.jitterUnderruns).toBe(2);
+    expect(window.reticulumAudioQueuePressureDrops).toBe(2);
+    expect(window.reticulumAudioStaleDrops).toBe(1);
+    expect(window.reticulumAudioLinkUnreadyDrops).toBe(1);
+    expect(window.reticulumAudioPacketSendFailures).toBe(2);
+    expect(window.reticulumAudioPacketPathRequests).toBe(3);
+    expect(window.reticulumAudioPacketPathResolutions).toBe(2);
+    expect(window.reticulumAudioPacketPathTimeouts).toBe(1);
+    expect(window.reticulumAudioPacketFreshSends).toBe(7);
+    expect(window.reticulumAudioPacketStaleSends).toBe(2);
+    expect(window.reticulumAudioPacketUnknownSends).toBe(1);
+    expect(window.reticulumAudioQueuePressureDropRatePerSec).toBe(0.033);
+    expect(window.reticulumAudioPendingFramesHighWater).toBe(14);
+    expect(window.reticulumAudioDecodedQueueDepthHighWater).toBe(11);
     expect(window.avgPcmBufferedMs).toBe(100);
     expect(window.playoutOutsideTargetFraction).toBe(0.5);
     expect(window.playoutUnderTargetFraction).toBe(0);
@@ -627,6 +707,32 @@ describe('group-call router helpers', () => {
     expect(second.playoutOutsideTargetFraction).toBe(0);
     expect(second.relayDwellFraction).toBe(0);
     vi.useRealTimers();
+  });
+
+  it('assesses reticulum queue-pressure windows separately from transport failure', () => {
+    expect(
+      assessReticulumAudioPressureWindow({
+        durationMs: 10_000,
+        reticulumAudioQueuePressureDrops: 90,
+        reticulumAudioStaleDrops: 3,
+        reticulumAudioLinkUnreadyDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathRequests: 0,
+        reticulumAudioPacketPathResolutions: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+        reticulumAudioPacketFreshSends: 0,
+        reticulumAudioPacketStaleSends: 0,
+        reticulumAudioPacketUnknownSends: 0,
+        reticulumAudioPendingFramesHighWater: 18,
+        reticulumAudioBridgeQueuedFramesHighWater: 9,
+        reticulumAudioDecodedQueueDepthHighWater: 16,
+        reticulumAudioBinaryOutQueueDepthHighWater: 4,
+      })
+    ).toEqual({
+      score: 9,
+      severe: true,
+      shouldTightenRecovery: true,
+    });
   });
 
   it('getGroupCallTransportSummary: DC when channels ready and no recent relay', () => {

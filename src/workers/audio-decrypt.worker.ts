@@ -5,14 +5,16 @@
  * Packet format: shared codec in ../lib/group-call/audioPacketCodec (v2 + v1 decode).
  *
  * Message protocol (main → worker):
- *   { type: 'setRoomKey', roomKey: ArrayBuffer }
- *   { type: 'clearRoomKey' }
+ *   { type: 'setRoomKey', roomKey: ArrayBuffer, keyVersion: number }
+ *   { type: 'clearRoomKey', keyVersion: number }
  *   { type: 'decrypt', id: number, buffer: ArrayBuffer } — buffer transferred
  *   { type: 'encrypt', id, sourceAddr, vad, seq, timestampMs, opusFrame } — opusFrame transferred
  *
  * Message protocol (worker → main):
  *   { type: 'result', id: number, decoded: DecryptResult | null }
  *   { type: 'encryptResult', id: number, packet: ArrayBuffer | null, error?: string }
+ *   { type: 'roomKeyApplied', keyVersion: number }
+ *   { type: 'roomKeyCleared', keyVersion: number }
  */
 
 import {
@@ -29,11 +31,12 @@ export interface DecryptResult {
 }
 
 let roomKeyBytes: Uint8Array | null = null;
+let roomKeyVersion = 0;
 
 self.onmessage = (
   e: MessageEvent<
-    | { type: 'setRoomKey'; roomKey: ArrayBuffer }
-    | { type: 'clearRoomKey' }
+    | { type: 'setRoomKey'; roomKey: ArrayBuffer; keyVersion: number }
+    | { type: 'clearRoomKey'; keyVersion: number }
     | { type: 'decrypt'; id: number; buffer: ArrayBuffer }
     | {
         type: 'encrypt';
@@ -49,11 +52,15 @@ self.onmessage = (
   const data = e.data;
   if (data.type === 'setRoomKey') {
     roomKeyBytes = new Uint8Array(data.roomKey);
+    roomKeyVersion = data.keyVersion >>> 0;
+    self.postMessage({ type: 'roomKeyApplied', keyVersion: roomKeyVersion });
     return;
   }
 
   if (data.type === 'clearRoomKey') {
     roomKeyBytes = null;
+    roomKeyVersion = data.keyVersion >>> 0;
+    self.postMessage({ type: 'roomKeyCleared', keyVersion: roomKeyVersion });
     return;
   }
 

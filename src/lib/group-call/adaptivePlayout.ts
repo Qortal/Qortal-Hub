@@ -57,5 +57,8 @@ export function stepSmoothedAdaptiveTargetMs(
   if (input.idealTargetMs > previousTargetMs) {
     return previousTargetMs + input.alphaUp * (input.idealTargetMs - previousTargetMs);
   }
-  return previousTargetMs + input.alphaDown * (input.idealTargetMs - previousTargetMs);
+  const fallingDeltaMs = previousTargetMs - input.idealTargetMs;
+  const alphaDown =
+    fallingDeltaMs > 40 ? Math.min(0.5, input.alphaDown * 1.5) : input.alphaDown;
+  return previousTargetMs + alphaDown * (input.idealTargetMs - previousTargetMs);
 }

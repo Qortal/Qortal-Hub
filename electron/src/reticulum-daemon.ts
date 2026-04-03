@@ -118,6 +118,7 @@ export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
       host: 'reticulum.qortal.link',
       port: 4444,
       interfaceType: 'BackboneInterface',
+      networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
     },
   ]);
 
@@ -262,9 +263,7 @@ instance_control_port = ${getReticulumControlPort()}
 `;
   if (meshSlice?.meshDiscoveryClient) {
     const autoconnectDiscoveredMax =
-      process.platform === 'darwin'
-        ? 0
-        : meshSlice.autoconnectDiscoveredMax;
+      process.platform === 'darwin' ? 0 : meshSlice.autoconnectDiscoveredMax;
     block += `discover_interfaces = yes
 autoconnect_discovered_interfaces = ${autoconnectDiscoveredMax}
 `;
@@ -732,13 +731,8 @@ function ensureBundledMeshResourceIfNeeded(options: {
   installErrorPrefix: string;
   installedMessage: string;
 }): EnsureMeshNetworkIdentityResult {
-  const {
-    dest,
-    source,
-    missingMessage,
-    installErrorPrefix,
-    installedMessage,
-  } = options;
+  const { dest, source, missingMessage, installErrorPrefix, installedMessage } =
+    options;
   if (fs.existsSync(dest)) {
     return { ok: true, created: false };
   }

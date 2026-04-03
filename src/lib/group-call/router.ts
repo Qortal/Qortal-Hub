@@ -364,6 +364,46 @@ export interface GroupCallMetricsSnapshot {
   relayCoalesceSuperseded: number;
   /** IPC/main rejected send (e.g. relay token bucket) or invoke threw. */
   relayIpcFailures: number;
+  /** Latest per-peer pending frames before main enqueues into bridge. */
+  reticulumAudioPendingFrames: number;
+  /** Session high-water mark for per-peer pending frames. */
+  reticulumAudioPendingFramesHighWater: number;
+  /** Latest queued frames waiting in the main-process bridge. */
+  reticulumAudioBridgeQueuedFrames: number;
+  /** Session high-water mark for main-process bridge queued frames. */
+  reticulumAudioBridgeQueuedFramesHighWater: number;
+  /** Latest decoded fd3 queue depth inside the Python bridge. */
+  reticulumAudioDecodedQueueDepth: number;
+  /** Session high-water mark for Python decoded queue depth. */
+  reticulumAudioDecodedQueueDepthHighWater: number;
+  /** Latest child→parent binary queue depth inside the Python bridge. */
+  reticulumAudioBinaryOutQueueDepth: number;
+  /** Session high-water mark for Python child→parent binary queue depth. */
+  reticulumAudioBinaryOutQueueDepthHighWater: number;
+  /** Counted send-path drops caused by queue pressure. */
+  reticulumAudioQueuePressureDrops: number;
+  /** Rolling 5-second queue-pressure drop count reported from the bridge. */
+  reticulumAudioQueuePressureDropsLast5s: number;
+  /** Counted send-path drops caused by stale queued audio. */
+  reticulumAudioStaleDrops: number;
+  /** Rolling 5-second stale-drop count reported from the bridge. */
+  reticulumAudioStaleDropsLast5s: number;
+  /** Link became unready while trying to enqueue/send audio. */
+  reticulumAudioLinkUnreadyDrops: number;
+  /** Reticulum packet send failures reported by the bridge. */
+  reticulumAudioPacketSendFailures: number;
+  /** Packet path requests emitted by the bridge. */
+  reticulumAudioPacketPathRequests: number;
+  /** Packet path resolutions observed by the bridge. */
+  reticulumAudioPacketPathResolutions: number;
+  /** Packet path timeouts observed by the bridge. */
+  reticulumAudioPacketPathTimeouts: number;
+  /** Sends issued while path looked fresh. */
+  reticulumAudioPacketFreshSends: number;
+  /** Sends issued while path looked stale/warming. */
+  reticulumAudioPacketStaleSends: number;
+  /** Sends issued while path state was unknown/failing. */
+  reticulumAudioPacketUnknownSends: number;
   mixerActiveSpeakerEstimate: number;
   mixerMasterGain: number;
   mixerCurrentReductionDb: number;
@@ -415,6 +455,23 @@ export interface GroupCallWindowMetrics {
   dcBackpressureDrops: number;
   dcBackoffDrops: number;
   dcSendErrorDrops: number;
+  reticulumAudioQueuePressureDrops: number;
+  reticulumAudioStaleDrops: number;
+  reticulumAudioLinkUnreadyDrops: number;
+  reticulumAudioPacketSendFailures: number;
+  reticulumAudioPacketPathRequests: number;
+  reticulumAudioPacketPathResolutions: number;
+  reticulumAudioPacketPathTimeouts: number;
+  reticulumAudioPacketFreshSends: number;
+  reticulumAudioPacketStaleSends: number;
+  reticulumAudioPacketUnknownSends: number;
+  reticulumAudioQueuePressureDropRatePerSec: number;
+  reticulumAudioStaleDropRatePerSec: number;
+  reticulumAudioPacketSendFailureRatePerSec: number;
+  reticulumAudioPendingFramesHighWater: number;
+  reticulumAudioBridgeQueuedFramesHighWater: number;
+  reticulumAudioDecodedQueueDepthHighWater: number;
+  reticulumAudioBinaryOutQueueDepthHighWater: number;
   relayDwellMs: number;
   relayDwellFraction: number;
   avgPcmBufferedMs: number;
@@ -437,6 +494,12 @@ export interface GroupCallSourceRecoveryAssessment {
   score: number;
   severe: boolean;
   shouldEscalate: boolean;
+}
+
+export interface GroupCallReticulumAudioPressureAssessment {
+  score: number;
+  severe: boolean;
+  shouldTightenRecovery: boolean;
 }
 
 export interface GroupCallSourceStallAssessmentInput {
@@ -516,15 +579,87 @@ export function assessGroupCallSourceWindowForRecovery(
   if (source.playoutOutsideTargetFraction >= 0.95) score += 2;
   else if (source.playoutOutsideTargetFraction >= 0.8) score += 1;
 
+  if ((source.playoutUnderTargetFraction ?? 0) >= 0.9) {
+    score += 3;
+    severe = true;
+  } else if ((source.playoutUnderTargetFraction ?? 0) >= 0.75) {
+    score += 2;
+  } else if ((source.playoutUnderTargetFraction ?? 0) >= 0.55) {
+    score += 1;
+  }
+
+  if ((source.avgPlayoutDeltaMs ?? 0) <= -100) {
+    score += 2;
+    severe = true;
+  } else if ((source.avgPlayoutDeltaMs ?? 0) <= -60) {
+    score += 1;
+  }
+
   if (source.adaptiveTargetP95Ms >= 170) score += 1;
-  if (source.avgPcmBufferedMs <= 20) score += 1;
+  if (source.avgPcmBufferedMs <= 20) {
+    score += 1;
+    severe = severe || (source.playoutUnderTargetFraction ?? 0) >= 0.75;
+  } else if (source.avgPcmBufferedMs <= 35) {
+    score += 1;
+  }
   if (source.avgOpusBufferedMs <= 25) score += 1;
+  else if (source.avgOpusBufferedMs <= 50) score += 1;
 
   return {
     activeSource: true,
     score,
     severe,
     shouldEscalate: severe || score >= 4,
+  };
+}
+
+export function assessReticulumAudioPressureWindow(
+  windowMetrics: Pick<
+    GroupCallWindowMetrics,
+    | 'durationMs'
+    | 'reticulumAudioQueuePressureDrops'
+    | 'reticulumAudioStaleDrops'
+    | 'reticulumAudioPacketSendFailures'
+    | 'reticulumAudioPendingFramesHighWater'
+    | 'reticulumAudioBridgeQueuedFramesHighWater'
+    | 'reticulumAudioDecodedQueueDepthHighWater'
+    | 'reticulumAudioBinaryOutQueueDepthHighWater'
+  >
+): GroupCallReticulumAudioPressureAssessment {
+  const durationSeconds = Math.max(1, windowMetrics.durationMs / 1000);
+  const queuePressureRate =
+    windowMetrics.reticulumAudioQueuePressureDrops / durationSeconds;
+  const staleDropRate = windowMetrics.reticulumAudioStaleDrops / durationSeconds;
+  let score = 0;
+  let severe = false;
+
+  if (queuePressureRate >= 8) {
+    score += 3;
+    severe = true;
+  } else if (queuePressureRate >= 3) {
+    score += 2;
+  } else if (queuePressureRate > 0) {
+    score += 1;
+  }
+
+  if (windowMetrics.reticulumAudioDecodedQueueDepthHighWater >= 16) {
+    score += 2;
+    severe = true;
+  } else if (windowMetrics.reticulumAudioDecodedQueueDepthHighWater >= 10) {
+    score += 1;
+  }
+
+  if (windowMetrics.reticulumAudioPendingFramesHighWater >= 18) score += 2;
+  else if (windowMetrics.reticulumAudioPendingFramesHighWater >= 12) score += 1;
+  if (windowMetrics.reticulumAudioBridgeQueuedFramesHighWater >= 8) score += 1;
+  if (windowMetrics.reticulumAudioBinaryOutQueueDepthHighWater >= 4) score += 1;
+  if (staleDropRate >= 1) score += 1;
+  if (windowMetrics.reticulumAudioPacketSendFailures > 0) score += 1;
+
+  return {
+    score,
+    severe,
+    shouldTightenRecovery: severe || score >= 4,
   };
 }
 
@@ -770,6 +905,16 @@ interface WindowCounterSet {
   dcBackpressureDrops: number;
   dcBackoffDrops: number;
   dcSendErrorDrops: number;
+  reticulumAudioQueuePressureDrops: number;
+  reticulumAudioStaleDrops: number;
+  reticulumAudioLinkUnreadyDrops: number;
+  reticulumAudioPacketSendFailures: number;
+  reticulumAudioPacketPathRequests: number;
+  reticulumAudioPacketPathResolutions: number;
+  reticulumAudioPacketPathTimeouts: number;
+  reticulumAudioPacketFreshSends: number;
+  reticulumAudioPacketStaleSends: number;
+  reticulumAudioPacketUnknownSends: number;
 }
 
 interface SourceWindowAccumulator {
@@ -819,6 +964,16 @@ function emptyWindowCounters(): WindowCounterSet {
     dcBackpressureDrops: 0,
     dcBackoffDrops: 0,
     dcSendErrorDrops: 0,
+    reticulumAudioQueuePressureDrops: 0,
+    reticulumAudioStaleDrops: 0,
+    reticulumAudioLinkUnreadyDrops: 0,
+    reticulumAudioPacketSendFailures: 0,
+    reticulumAudioPacketPathRequests: 0,
+    reticulumAudioPacketPathResolutions: 0,
+    reticulumAudioPacketPathTimeouts: 0,
+    reticulumAudioPacketFreshSends: 0,
+    reticulumAudioPacketStaleSends: 0,
+    reticulumAudioPacketUnknownSends: 0,
   };
 }
 
@@ -870,6 +1025,26 @@ export class GroupCallPerformanceTracker {
     relayThrottleDrops: 0,
     relayCoalesceSuperseded: 0,
     relayIpcFailures: 0,
+    reticulumAudioPendingFrames: 0,
+    reticulumAudioPendingFramesHighWater: 0,
+    reticulumAudioBridgeQueuedFrames: 0,
+    reticulumAudioBridgeQueuedFramesHighWater: 0,
+    reticulumAudioDecodedQueueDepth: 0,
+    reticulumAudioDecodedQueueDepthHighWater: 0,
+    reticulumAudioBinaryOutQueueDepth: 0,
+    reticulumAudioBinaryOutQueueDepthHighWater: 0,
+    reticulumAudioQueuePressureDrops: 0,
+    reticulumAudioQueuePressureDropsLast5s: 0,
+    reticulumAudioStaleDrops: 0,
+    reticulumAudioStaleDropsLast5s: 0,
+    reticulumAudioLinkUnreadyDrops: 0,
+    reticulumAudioPacketSendFailures: 0,
+    reticulumAudioPacketPathRequests: 0,
+    reticulumAudioPacketPathResolutions: 0,
+    reticulumAudioPacketPathTimeouts: 0,
+    reticulumAudioPacketFreshSends: 0,
+    reticulumAudioPacketStaleSends: 0,
+    reticulumAudioPacketUnknownSends: 0,
     mixerActiveSpeakerEstimate: 0,
     mixerMasterGain: 1,
     mixerCurrentReductionDb: 0,
@@ -924,6 +1099,10 @@ export class GroupCallPerformanceTracker {
   private windowOpusBufferedMsSum = 0;
   private windowOpusBufferedMsSamples = 0;
   private windowOpusBufferedMsMax = 0;
+  private windowReticulumAudioPendingFramesHighWater = 0;
+  private windowReticulumAudioBridgeQueuedFramesHighWater = 0;
+  private windowReticulumAudioDecodedQueueDepthHighWater = 0;
+  private windowReticulumAudioBinaryOutQueueDepthHighWater = 0;
   private sourceWindowStats = new Map<string, SourceWindowAccumulator>();
 
   private getSourceWindowAccumulator(
@@ -974,6 +1153,10 @@ export class GroupCallPerformanceTracker {
     this.windowOpusBufferedMsSum = 0;
     this.windowOpusBufferedMsSamples = 0;
     this.windowOpusBufferedMsMax = 0;
+    this.windowReticulumAudioPendingFramesHighWater = 0;
+    this.windowReticulumAudioBridgeQueuedFramesHighWater = 0;
+    this.windowReticulumAudioDecodedQueueDepthHighWater = 0;
+    this.windowReticulumAudioBinaryOutQueueDepthHighWater = 0;
     this.sourceWindowStats.clear();
   }
 
@@ -1041,6 +1224,186 @@ export class GroupCallPerformanceTracker {
 
   recordRelayIpcFailure(count = 1): void {
     this.snapshot.relayIpcFailures += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordReticulumAudioQueuePressureDrop(count = 1): void {
+    if (count <= 0) return;
+    this.snapshot.reticulumAudioQueuePressureDrops += count;
+    this.windowCounters.reticulumAudioQueuePressureDrops += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordReticulumAudioStaleDrop(count = 1): void {
+    if (count <= 0) return;
+    this.snapshot.reticulumAudioStaleDrops += count;
+    this.windowCounters.reticulumAudioStaleDrops += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordReticulumAudioLinkUnreadyDrop(count = 1): void {
+    if (count <= 0) return;
+    this.snapshot.reticulumAudioLinkUnreadyDrops += count;
+    this.windowCounters.reticulumAudioLinkUnreadyDrops += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordReticulumAudioPacketSendFailure(count = 1): void {
+    if (count <= 0) return;
+    this.snapshot.reticulumAudioPacketSendFailures += count;
+    this.windowCounters.reticulumAudioPacketSendFailures += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordReticulumAudioPacketPathActivity(activity: {
+    requests?: number;
+    resolutions?: number;
+    timeouts?: number;
+    freshSends?: number;
+    staleSends?: number;
+    unknownSends?: number;
+  }): void {
+    const requests = Math.max(0, Math.trunc(activity.requests ?? 0));
+    const resolutions = Math.max(0, Math.trunc(activity.resolutions ?? 0));
+    const timeouts = Math.max(0, Math.trunc(activity.timeouts ?? 0));
+    const freshSends = Math.max(0, Math.trunc(activity.freshSends ?? 0));
+    const staleSends = Math.max(0, Math.trunc(activity.staleSends ?? 0));
+    const unknownSends = Math.max(0, Math.trunc(activity.unknownSends ?? 0));
+    if (
+      requests === 0 &&
+      resolutions === 0 &&
+      timeouts === 0 &&
+      freshSends === 0 &&
+      staleSends === 0 &&
+      unknownSends === 0
+    ) {
+      return;
+    }
+    this.snapshot.reticulumAudioPacketPathRequests += requests;
+    this.snapshot.reticulumAudioPacketPathResolutions += resolutions;
+    this.snapshot.reticulumAudioPacketPathTimeouts += timeouts;
+    this.snapshot.reticulumAudioPacketFreshSends += freshSends;
+    this.snapshot.reticulumAudioPacketStaleSends += staleSends;
+    this.snapshot.reticulumAudioPacketUnknownSends += unknownSends;
+    this.windowCounters.reticulumAudioPacketPathRequests += requests;
+    this.windowCounters.reticulumAudioPacketPathResolutions += resolutions;
+    this.windowCounters.reticulumAudioPacketPathTimeouts += timeouts;
+    this.windowCounters.reticulumAudioPacketFreshSends += freshSends;
+    this.windowCounters.reticulumAudioPacketStaleSends += staleSends;
+    this.windowCounters.reticulumAudioPacketUnknownSends += unknownSends;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  setReticulumAudioQueueDepths(depths: {
+    pendingFrames?: number;
+    bridgeQueuedFrames?: number;
+    decodedQueueDepth?: number;
+    binaryOutQueueDepth?: number;
+    queuePressureDropsLast5s?: number;
+    staleDropsLast5s?: number;
+    packetPathRequests?: number;
+    packetPathResolutions?: number;
+    packetPathTimeouts?: number;
+    packetFreshSends?: number;
+    packetStaleSends?: number;
+    packetUnknownSends?: number;
+  }): void {
+    if (typeof depths.pendingFrames === 'number') {
+      const pendingFrames = Math.max(0, Math.trunc(depths.pendingFrames));
+      this.snapshot.reticulumAudioPendingFrames = pendingFrames;
+      this.snapshot.reticulumAudioPendingFramesHighWater = Math.max(
+        this.snapshot.reticulumAudioPendingFramesHighWater,
+        pendingFrames
+      );
+      this.windowReticulumAudioPendingFramesHighWater = Math.max(
+        this.windowReticulumAudioPendingFramesHighWater,
+        pendingFrames
+      );
+    }
+    if (typeof depths.bridgeQueuedFrames === 'number') {
+      const bridgeQueuedFrames = Math.max(0, Math.trunc(depths.bridgeQueuedFrames));
+      this.snapshot.reticulumAudioBridgeQueuedFrames = bridgeQueuedFrames;
+      this.snapshot.reticulumAudioBridgeQueuedFramesHighWater = Math.max(
+        this.snapshot.reticulumAudioBridgeQueuedFramesHighWater,
+        bridgeQueuedFrames
+      );
+      this.windowReticulumAudioBridgeQueuedFramesHighWater = Math.max(
+        this.windowReticulumAudioBridgeQueuedFramesHighWater,
+        bridgeQueuedFrames
+      );
+    }
+    if (typeof depths.decodedQueueDepth === 'number') {
+      const decodedQueueDepth = Math.max(0, Math.trunc(depths.decodedQueueDepth));
+      this.snapshot.reticulumAudioDecodedQueueDepth = decodedQueueDepth;
+      this.snapshot.reticulumAudioDecodedQueueDepthHighWater = Math.max(
+        this.snapshot.reticulumAudioDecodedQueueDepthHighWater,
+        decodedQueueDepth
+      );
+      this.windowReticulumAudioDecodedQueueDepthHighWater = Math.max(
+        this.windowReticulumAudioDecodedQueueDepthHighWater,
+        decodedQueueDepth
+      );
+    }
+    if (typeof depths.binaryOutQueueDepth === 'number') {
+      const binaryOutQueueDepth = Math.max(0, Math.trunc(depths.binaryOutQueueDepth));
+      this.snapshot.reticulumAudioBinaryOutQueueDepth = binaryOutQueueDepth;
+      this.snapshot.reticulumAudioBinaryOutQueueDepthHighWater = Math.max(
+        this.snapshot.reticulumAudioBinaryOutQueueDepthHighWater,
+        binaryOutQueueDepth
+      );
+      this.windowReticulumAudioBinaryOutQueueDepthHighWater = Math.max(
+        this.windowReticulumAudioBinaryOutQueueDepthHighWater,
+        binaryOutQueueDepth
+      );
+    }
+    if (typeof depths.queuePressureDropsLast5s === 'number') {
+      this.snapshot.reticulumAudioQueuePressureDropsLast5s = Math.max(
+        0,
+        Math.trunc(depths.queuePressureDropsLast5s)
+      );
+    }
+    if (typeof depths.staleDropsLast5s === 'number') {
+      this.snapshot.reticulumAudioStaleDropsLast5s = Math.max(
+        0,
+        Math.trunc(depths.staleDropsLast5s)
+      );
+    }
+    if (typeof depths.packetPathRequests === 'number') {
+      this.snapshot.reticulumAudioPacketPathRequests = Math.max(
+        0,
+        Math.trunc(depths.packetPathRequests)
+      );
+    }
+    if (typeof depths.packetPathResolutions === 'number') {
+      this.snapshot.reticulumAudioPacketPathResolutions = Math.max(
+        0,
+        Math.trunc(depths.packetPathResolutions)
+      );
+    }
+    if (typeof depths.packetPathTimeouts === 'number') {
+      this.snapshot.reticulumAudioPacketPathTimeouts = Math.max(
+        0,
+        Math.trunc(depths.packetPathTimeouts)
+      );
+    }
+    if (typeof depths.packetFreshSends === 'number') {
+      this.snapshot.reticulumAudioPacketFreshSends = Math.max(
+        0,
+        Math.trunc(depths.packetFreshSends)
+      );
+    }
+    if (typeof depths.packetStaleSends === 'number') {
+      this.snapshot.reticulumAudioPacketStaleSends = Math.max(
+        0,
+        Math.trunc(depths.packetStaleSends)
+      );
+    }
+    if (typeof depths.packetUnknownSends === 'number') {
+      this.snapshot.reticulumAudioPacketUnknownSends = Math.max(
+        0,
+        Math.trunc(depths.packetUnknownSends)
+      );
+    }
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -1389,6 +1752,26 @@ export class GroupCallPerformanceTracker {
       relayThrottleDrops: 0,
       relayCoalesceSuperseded: 0,
       relayIpcFailures: 0,
+      reticulumAudioPendingFrames: 0,
+      reticulumAudioPendingFramesHighWater: 0,
+      reticulumAudioBridgeQueuedFrames: 0,
+      reticulumAudioBridgeQueuedFramesHighWater: 0,
+      reticulumAudioDecodedQueueDepth: 0,
+      reticulumAudioDecodedQueueDepthHighWater: 0,
+      reticulumAudioBinaryOutQueueDepth: 0,
+      reticulumAudioBinaryOutQueueDepthHighWater: 0,
+      reticulumAudioQueuePressureDrops: 0,
+      reticulumAudioQueuePressureDropsLast5s: 0,
+      reticulumAudioStaleDrops: 0,
+      reticulumAudioStaleDropsLast5s: 0,
+      reticulumAudioLinkUnreadyDrops: 0,
+      reticulumAudioPacketSendFailures: 0,
+      reticulumAudioPacketPathRequests: 0,
+      reticulumAudioPacketPathResolutions: 0,
+      reticulumAudioPacketPathTimeouts: 0,
+      reticulumAudioPacketFreshSends: 0,
+      reticulumAudioPacketStaleSends: 0,
+      reticulumAudioPacketUnknownSends: 0,
       mixerActiveSpeakerEstimate: 0,
       mixerMasterGain: 1,
       mixerCurrentReductionDb: 0,
@@ -1520,6 +1903,42 @@ export class GroupCallPerformanceTracker {
       dcBackpressureDrops: this.windowCounters.dcBackpressureDrops,
       dcBackoffDrops: this.windowCounters.dcBackoffDrops,
       dcSendErrorDrops: this.windowCounters.dcSendErrorDrops,
+      reticulumAudioQueuePressureDrops:
+        this.windowCounters.reticulumAudioQueuePressureDrops,
+      reticulumAudioStaleDrops: this.windowCounters.reticulumAudioStaleDrops,
+      reticulumAudioLinkUnreadyDrops:
+        this.windowCounters.reticulumAudioLinkUnreadyDrops,
+      reticulumAudioPacketSendFailures:
+        this.windowCounters.reticulumAudioPacketSendFailures,
+      reticulumAudioPacketPathRequests:
+        this.windowCounters.reticulumAudioPacketPathRequests,
+      reticulumAudioPacketPathResolutions:
+        this.windowCounters.reticulumAudioPacketPathResolutions,
+      reticulumAudioPacketPathTimeouts:
+        this.windowCounters.reticulumAudioPacketPathTimeouts,
+      reticulumAudioPacketFreshSends:
+        this.windowCounters.reticulumAudioPacketFreshSends,
+      reticulumAudioPacketStaleSends:
+        this.windowCounters.reticulumAudioPacketStaleSends,
+      reticulumAudioPacketUnknownSends:
+        this.windowCounters.reticulumAudioPacketUnknownSends,
+      reticulumAudioQueuePressureDropRatePerSec: roundMetric(
+        this.windowCounters.reticulumAudioQueuePressureDrops / (durationMs / 1000)
+      ),
+      reticulumAudioStaleDropRatePerSec: roundMetric(
+        this.windowCounters.reticulumAudioStaleDrops / (durationMs / 1000)
+      ),
+      reticulumAudioPacketSendFailureRatePerSec: roundMetric(
+        this.windowCounters.reticulumAudioPacketSendFailures / (durationMs / 1000)
+      ),
+      reticulumAudioPendingFramesHighWater:
+        this.windowReticulumAudioPendingFramesHighWater,
+      reticulumAudioBridgeQueuedFramesHighWater:
+        this.windowReticulumAudioBridgeQueuedFramesHighWater,
+      reticulumAudioDecodedQueueDepthHighWater:
+        this.windowReticulumAudioDecodedQueueDepthHighWater,
+      reticulumAudioBinaryOutQueueDepthHighWater:
+        this.windowReticulumAudioBinaryOutQueueDepthHighWater,
       relayDwellMs: roundMetric(relayDwellMs),
       relayDwellFraction: roundMetric(relayDwellMs / durationMs),
       avgPcmBufferedMs: roundMetric(

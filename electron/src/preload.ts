@@ -1082,6 +1082,18 @@ try {
     sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
       ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
 
+    requestPeerMediaRecovery: async (
+      roomId: string,
+      address: string,
+      reason: string
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:requestPeerMediaRecovery',
+        roomId,
+        address,
+        reason
+      ) as Promise<{ success: boolean; error?: string }>,
+
     /** Send room media key (nacl.box encrypted) to a participant. */
     sendKey: async (
       roomId: string,

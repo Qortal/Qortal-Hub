@@ -55,6 +55,20 @@ describe('adaptivePlayout', () => {
     expect(worse).toBeGreaterThan(base);
   });
 
+  it('allows recovery boost to use the higher severe ceiling', () => {
+    expect(
+      computeAdaptiveIdealTargetMs({
+        baseTargetMs: 80,
+        minTargetMs: 80,
+        maxTargetMs: 240,
+        jitterMultiplier: 2.2,
+        jitterMs: 40,
+        lossPenaltyMs: 40,
+        playoutBoostMs: 60,
+      })
+    ).toBe(240);
+  });
+
   it('uses asymmetric smoothing for rising and falling targets', () => {
     expect(
       stepSmoothedAdaptiveTargetMs({
@@ -73,6 +87,17 @@ describe('adaptivePlayout', () => {
         alphaDown: 0.2,
       })
     ).toBe(112);
+  });
+
+  it('relaxes faster after a large target overshoot clears', () => {
+    expect(
+      stepSmoothedAdaptiveTargetMs({
+        idealTargetMs: 100,
+        previousTargetMs: 180,
+        alphaUp: 0.5,
+        alphaDown: 0.2,
+      })
+    ).toBe(156);
   });
 
   it('computes zero jitter for tiny samples and variance for real windows', () => {

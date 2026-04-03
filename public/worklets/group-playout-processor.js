@@ -15,21 +15,21 @@
 const RING_CAPACITY = 48000;
 const INITIAL_GATE_MS = 100;
 /** Start playout when buffered >= target minus this margin (scheduling / target-post jitter). */
-const START_GATE_TARGET_MARGIN_MS = 16;
+const START_GATE_TARGET_MARGIN_MS = 20;
 const DEFAULT_TARGET_MS = 100;
 const ERROR_CLAMP_MS = 80;
-const DEADZONE_MS = 8;
-const RATE_MIN = 0.985;
-const RATE_MAX = 1.012;
-const EMA_ALPHA = 0.04;
-const OUTSIDE_BAND_MS = 25;
+const DEADZONE_MS = 6;
+const RATE_MIN = 0.98;
+const RATE_MAX = 1.015;
+const EMA_ALPHA = 0.06;
+const OUTSIDE_BAND_MS = 35;
 /** Emergency rate path when |delta| exceeds band + this (aligned with KPI band). */
 const EMERGENCY_BAND_EXTRA_MS = 10;
 const METRICS_QUANTA = 47; // ~100ms at 48kHz/128
 /** If buffered PCM exceeds this, shed oldest down to release level (live voice latency bound). */
-const PCM_LATENCY_HARD_MS = 280;
+const PCM_LATENCY_HARD_MS = 320;
 /** Floor for post-shed target ms; release uses max(this, targetPlayoutMs + margin). */
-const PCM_LATENCY_RELEASE_MS = 200;
+const PCM_LATENCY_RELEASE_MS = 240;
 const TARGET_RELEASE_MARGIN_MS = 40;
 /** Tiered catch-up when buffer is far over adaptive target (before EMA). */
 const OVER_TARGET_TIER_STRONG_MS = 150;
@@ -67,7 +67,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
         return;
       }
       if (d?.type === 'target' && typeof d.targetPlayoutMs === 'number') {
-        this._targetPlayoutMs = Math.max(40, Math.min(250, d.targetPlayoutMs));
+        this._targetPlayoutMs = Math.max(40, Math.min(240, d.targetPlayoutMs));
       }
     };
   }
@@ -179,8 +179,10 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     const deltaMs = bufferedMs - this._targetPlayoutMs;
     const emergencyThresh = OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS;
     let targetRate;
-    if (deltaMs < -emergencyThresh) {
-      targetRate = 0.992;
+    if (deltaMs < -80) {
+      targetRate = 0.988;
+    } else if (deltaMs < -emergencyThresh) {
+      targetRate = 0.99;
     } else if (deltaMs > OVER_TARGET_TIER_STRONG_MS) {
       targetRate = RATE_MAX;
     } else if (deltaMs > OVER_TARGET_TIER_MID_MS) {
@@ -198,7 +200,9 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     }
     targetRate = Math.max(RATE_MIN, Math.min(RATE_MAX, targetRate));
 
-    this._smoothedRate += EMA_ALPHA * (targetRate - this._smoothedRate);
+    const alpha =
+      deltaMs < -80 ? 0.12 : deltaMs < -emergencyThresh ? 0.08 : EMA_ALPHA;
+    this._smoothedRate += alpha * (targetRate - this._smoothedRate);
     this._smoothedRate = Math.max(RATE_MIN, Math.min(RATE_MAX, this._smoothedRate));
 
     const rate = this._smoothedRate;
