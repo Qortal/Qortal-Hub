@@ -17,6 +17,7 @@ import type {
   CallRequestEnvelope,
   CallWireEnvelope,
 } from './call';
+import { deriveAddressFromPublicKey } from './presence';
 
 /** Same budget as `send_call` / `send_group_call` after Python injects `r`. */
 export const RT_CALL_MAX_JSON_BYTES = RT_RETICULUM_MAX_WIRE_JSON_BYTES;
@@ -66,21 +67,51 @@ function isHex64(s: unknown): s is string {
   return typeof s === 'string' && /^[0-9a-f]{64}$/i.test(s);
 }
 
+/**
+ * For `direct:…` 1:1 calls, `chatId` is redundant with overlay `U` (callee) once
+ * caller address is derived from `k`. Omit `h` on Reticulum CR.
+ * Caller address is omitted on the wire — derive from `k` (saves bytes vs MDU).
+ */
+export function peerAddressFromDirectVoiceChatId(
+  chatId: string,
+  fromAddress: string
+): string | null {
+  if (!chatId.startsWith('direct:')) return null;
+  const parts = chatId.slice('direct:'.length).split(':').filter(Boolean);
+  if (parts.length !== 2) return null;
+  const [p0, p1] = parts;
+  if (p0 === fromAddress) return p1;
+  if (p1 === fromAddress) return p0;
+  return null;
+}
+
+export function deriveDirectVoiceCallChatId(
+  addressA: string,
+  addressB: string
+): string {
+  return `direct:${[addressA, addressB].sort().join(':')}`;
+}
+
 /** Encode full call envelopes to compact wire (Python adds sender `r`). */
 export function encodeReticulumCallWire(
   env: CallWireEnvelope
 ): Record<string, unknown> | null {
   switch (env.type) {
-    case 'CALL_REQUEST':
-      return {
+    case 'CALL_REQUEST': {
+      const peer = peerAddressFromDirectVoiceChatId(env.chatId, env.fromAddress);
+      const compactDirect =
+        peer != null &&
+        deriveDirectVoiceCallChatId(env.fromAddress, peer) === env.chatId;
+      const base: Record<string, unknown> = {
         t: 'CR',
         i: env.callId,
-        a: env.fromAddress,
         k: env.fromPublicKey,
-        h: env.chatId,
         m: env.timestamp,
         g: env.signature,
       };
+      if (compactDirect) return base;
+      return { ...base, h: env.chatId };
+    }
     case 'CALL_ACCEPT':
       return {
         t: 'CA',
@@ -303,20 +334,37 @@ export function decodeReticulumCallWire(
 function parseCr(raw: Record<string, unknown>): CallRequestEnvelope | null {
   if (
     typeof raw.i !== 'string' ||
-    typeof raw.a !== 'string' ||
     typeof raw.k !== 'string' ||
-    typeof raw.h !== 'string' ||
     typeof raw.m !== 'number' ||
     typeof raw.g !== 'string'
   ) {
     return null;
   }
+  if (typeof raw.a === 'string') return null;
+
+  let fromAddress: string;
+  try {
+    fromAddress = deriveAddressFromPublicKey(raw.k);
+  } catch {
+    return null;
+  }
+
+  const h = raw.h;
+  let chatId: string;
+  if (typeof h === 'string' && h.length > 0) {
+    if (h.startsWith('direct:')) return null;
+    chatId = h;
+  } else {
+    if (typeof raw.U !== 'string' || !raw.U) return null;
+    chatId = deriveDirectVoiceCallChatId(fromAddress, raw.U);
+  }
+
   return {
     type: 'CALL_REQUEST',
     callId: raw.i,
-    fromAddress: raw.a,
+    fromAddress,
     fromPublicKey: raw.k,
-    chatId: raw.h,
+    chatId,
     timestamp: raw.m,
     signature: raw.g,
   };

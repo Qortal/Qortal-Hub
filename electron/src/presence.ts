@@ -240,6 +240,11 @@ export type ReticulumVerifiedPeerSnapshot = {
 const BASE58_ALPHABET =
   '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 
+/** Base58-encode raw bytes (e.g. Ed25519 public key). */
+export function encodeBytesBase58(bytes: Uint8Array): string {
+  return base58Encode(bytes);
+}
+
 function base58Encode(bytes: Uint8Array): string {
   const digits = [0];
   for (let i = 0; i < bytes.length; i++) {

@@ -2678,17 +2678,48 @@ export class GroupCallManager extends EventEmitter {
     return targets;
   }
 
+  private normalizePeerPresenceHashForAudio(ph: string): string {
+    return ph.trim().toLowerCase();
+  }
+
+  /**
+   * Map Reticulum route / presence hash to participant address.
+   * Falls back to scanning `room.participants` when audio peer state was
+   * evicted (e.g. sync before topology applied) so inbound packets still
+   * resolve and `gcall:audio` carries `fromAddress` for decode.
+   */
   private resolveReticulumAudioAddress(
     routeKey: string,
-    peerPresenceHash: string
+    peerPresenceHash: string,
+    roomId?: string
   ): string | null {
-    const byLinkId = routeKey
-      ? this.reticulumAudioAddressByLinkId.get(routeKey)
-      : undefined;
-    if (byLinkId) return byLinkId;
-    if (!peerPresenceHash) return null;
+    const rk = routeKey?.trim();
+    if (rk) {
+      const byLinkId = this.reticulumAudioAddressByLinkId.get(rk);
+      if (byLinkId) return byLinkId;
+    }
+    const want = this.normalizePeerPresenceHashForAudio(peerPresenceHash);
+    if (!want) return null;
     for (const [address, state] of this.reticulumAudioPeersByAddress) {
-      if (state.peerPresenceHash === peerPresenceHash) return address;
+      if (
+        this.normalizePeerPresenceHashForAudio(state.peerPresenceHash) === want
+      ) {
+        return address;
+      }
+    }
+    if (roomId) {
+      const room = this.rooms.get(roomId);
+      if (room) {
+        for (const addr of room.participants.keys()) {
+          const h = this.resolveReticulumPeerPresenceHash(addr);
+          if (
+            h &&
+            this.normalizePeerPresenceHashForAudio(h) === want
+          ) {
+            return addr;
+          }
+        }
+      }
     }
     return null;
   }
@@ -4122,8 +4153,12 @@ export class GroupCallManager extends EventEmitter {
     }
     const fromAddress = this.resolveReticulumAudioAddress(
       payload.routeKey ?? payload.linkId,
-      payload.peerPresenceHash
+      payload.peerPresenceHash,
+      payload.roomId
     );
+    if (fromAddress && !this.reticulumAudioPeersByAddress.has(fromAddress)) {
+      void this.ensureReticulumAudioPeerState(payload.roomId, fromAddress);
+    }
     if (fromAddress) {
       const state = this.reticulumAudioPeersByAddress.get(fromAddress);
       if (state) {
