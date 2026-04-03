@@ -328,6 +328,13 @@ const GCALL_CONNECTION_HINT_SEVERE_MS = 1200;
 const GCALL_CONNECTION_HINT_GOOD_MS = 4500;
 const SEND_PATH_DIAGNOSTIC_LOG_MIN_INTERVAL_MS = 5_000;
 const RELAY_INGRESS_PEER = '__relay__';
+/**
+ * Root has warmed outbound (relayPacketsSent) but packet-mode ingress from peers can still be
+ * cold. Mirror `topology-startup-warm` (non-root → root) by requesting path recovery toward
+ * each peer that sends toward the root after sustained outbound or key age.
+ */
+const ROOT_INBOUND_WARM_MIN_RELAY_SENT = 48;
+const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 3_000;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
@@ -1240,6 +1247,31 @@ export function getReticulumTransportTargets(
   return [...targets];
 }
 
+/**
+ * Peers whose uplink paths toward this node should be warmed when the root sees outbound
+ * media but no decoded ingress (asymmetric Reticulum packet paths).
+ */
+function getRootInboundWarmPeers(
+  myAddress: string,
+  topology: GroupTopology
+): string[] {
+  if (!myAddress) return [];
+  const topo = normalizeGroupTopologyClusters(topology);
+  const out = new Set<string>();
+  const sf = topo.standbyForwarder?.trim() ?? '';
+  if (sf && sf !== myAddress) out.add(sf);
+  for (const c of topo.clusters) {
+    if (c.forwarder === myAddress) {
+      for (const m of c.members) {
+        if (m && m !== myAddress) out.add(m);
+      }
+    } else if (c.forwarder && c.forwarder.trim() !== myAddress) {
+      out.add(c.forwarder.trim());
+    }
+  }
+  return [...out];
+}
+
 /** Standby promotion for non-root cluster forwarder failure (hierarchical rooms). */
 function findNonRootClusterStandbyDuty(
   myAddress: string,
@@ -1657,6 +1689,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const eagerStandbyNoKeyRecoveryFiredJoinGenRef = useRef<number | null>(null);
   /** One-shot reticulum path warm toward root per joinGen+root (startup C). */
   const startupReticulumPathWarmKeyRef = useRef<string>('');
+  /** Dedupe root→peer inbound path warm (`joinGen:peerAddress`). */
+  const rootInboundWarmFiredRef = useRef<Set<string>>(new Set());
 
   /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
@@ -4026,6 +4060,44 @@ export function useGroupVoiceCall(uiActive = false) {
             topo.rootForwarder,
             'topology-startup-warm'
           );
+        }
+      }
+
+      if (role === 'root-forwarder' && roomKeyRef.current && myAddrTopo) {
+        const pr = snapWarm.packetsReceived ?? 0;
+        const pd = snapWarm.packetsDecoded ?? 0;
+        if (pr === 0 && pd === 0) {
+          const relaySent = snapWarm.relayPacketsSent ?? 0;
+          const keyAgeMs =
+            roomKeyInstalledAtRef.current > 0
+              ? Date.now() - roomKeyInstalledAtRef.current
+              : 0;
+          const shouldWarmInbound =
+            relaySent >= ROOT_INBOUND_WARM_MIN_RELAY_SENT ||
+            keyAgeMs >= ROOT_INBOUND_WARM_MIN_KEY_AGE_MS;
+          if (shouldWarmInbound) {
+            const remoteCount = [...participantsRef.current.keys()].filter(
+              (a) => a !== myAddrTopo
+            ).length;
+            if (remoteCount > 0) {
+              const jg = joinGenerationRef.current ?? 0;
+              for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
+                if (!participantsRef.current.has(peer)) continue;
+                const dedupeKey = `${jg}:${peer}`;
+                if (rootInboundWarmFiredRef.current.has(dedupeKey)) continue;
+                rootInboundWarmFiredRef.current.add(dedupeKey);
+                gcallDiagnosticsPush('info', '[GCall] rootInboundPathWarm', {
+                  peer: peer.slice(0, 12),
+                  relaySent,
+                  keyAgeMs,
+                });
+                requestMediaRecoveryForPeerRef.current(
+                  peer,
+                  'topology-root-inbound-warm'
+                );
+              }
+            }
+          }
         }
       }
 
@@ -7604,6 +7676,7 @@ export function useGroupVoiceCall(uiActive = false) {
     lastRosterLearnedKeyDigestByAddrRef.current.clear();
     eagerStandbyNoKeyRecoveryFiredJoinGenRef.current = null;
     startupReticulumPathWarmKeyRef.current = '';
+    rootInboundWarmFiredRef.current.clear();
     lastRecoverySuppressionLogAtRef.current = 0;
     lastKeyRecoveryRequestAtRef.current = 0;
     lastKeyRecoveryRefreshAtRef.current = 0;
