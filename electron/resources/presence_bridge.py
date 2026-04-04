@@ -2137,6 +2137,10 @@ def on_overlay_link_remote_identified(link, identity) -> None:
     peer_hash = find_peer_hash_for_identity(identity)
     if peer_hash:
         state["peerPresenceHash"] = peer_hash
+    else:
+        peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+        if peer_hash and _valid_presence_destination_hash_hex(peer_hash):
+            _register_peer(peer_hash, identity, "inbound")
     emit_overlay_link_state(link_id, state, "identified")
 
 
@@ -2172,6 +2176,9 @@ def on_overlay_link_packet(message, packet) -> None:
             return
         if not existing:
             state["peerPresenceHash"] = r
+        remote_identity = link.get_remote_identity() if link is not None else None
+        if remote_identity is not None:
+            _register_peer(r, remote_identity, "inbound")
         emit_event(
             "overlay_hello",
             {"senderPresenceHash": r, "linkId": link_id},
