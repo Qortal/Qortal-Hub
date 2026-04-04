@@ -980,7 +980,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       )
     ).toEqual({
       acceptIncoming: true,
-      reason: 'rootForwarder-lexical',
+      reason: 'lastSeen-root-conflict',
     });
   });
 

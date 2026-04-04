@@ -74,7 +74,10 @@ import {
   writeGroupCallAudioProfile,
   type GroupCallAudioQualityProfile,
 } from '../lib/group-call/groupCallAudioProfile';
-import { compareGroupCallElectionAddresses } from '../lib/group-call/election-order';
+import {
+  compareGroupCallElectionAddresses,
+  compareRootForwardersSameEpoch,
+} from '../lib/group-call/election-order';
 import {
   ACTIVE_SPEAKER_GAIN,
   GAIN_SMOOTHING_TIME_CONSTANT_S,
@@ -1064,6 +1067,7 @@ export function chooseSameEpochTopologyWinner(
   electionDigests?: ReadonlyMap<string, string>
 ): { acceptIncoming: boolean; reason: string } {
   const decision = chooseRouterTopologyAuthority(current, incoming, {
+    roomId,
     compareRoots: (incomingRoot, currentRoot) => {
       const cachedComparison =
         electionDigests &&
@@ -1073,10 +1077,7 @@ export function chooseSameEpochTopologyWinner(
           electionDigests
         );
       if (typeof cachedComparison === 'number') return cachedComparison;
-      // Fallback should be rare; digest cache is populated anywhere we compute
-      // deterministic election order for this room.
-      void roomId;
-      return incomingRoot.localeCompare(currentRoot);
+      return compareRootForwardersSameEpoch(incomingRoot, currentRoot, roomId);
     },
   });
   return {

@@ -145,7 +145,7 @@ describe('chooseRouterTopologyAuthority', () => {
     });
   });
 
-  it('breaks same-epoch root conflicts symmetrically by election rank', () => {
+  it('breaks same-epoch root conflicts by higher lastSeen before election digest', () => {
     const current = {
       topologyEpoch: 8,
       rootForwarder: 'alpha',
@@ -170,7 +170,7 @@ describe('chooseRouterTopologyAuthority', () => {
       })
     ).toEqual({
       acceptIncoming: true,
-      reason: 'rootForwarder-lexical',
+      reason: 'lastSeen-root-conflict',
       winningRoot: 'beta',
     });
     expect(
@@ -192,7 +192,37 @@ describe('chooseRouterTopologyAuthority', () => {
         }
       )
     ).toEqual({
-      acceptIncoming: false,
+      acceptIncoming: true,
+      reason: 'lastSeen-root-conflict',
+      winningRoot: 'alpha',
+    });
+  });
+
+  it('uses election digest when same-epoch roots differ but lastSeen ties', () => {
+    const current = {
+      topologyEpoch: 8,
+      rootForwarder: 'alpha',
+      standbyForwarder: 'standby',
+      clusters: [],
+      lastSeen: 1_000,
+    };
+    const electionDigests = new Map<string, string>([
+      ['alpha', 'dd957904'],
+      ['beta', 'cdc71363'],
+    ]);
+    expect(
+      chooseRouterTopologyAuthority(
+        current,
+        { ...current, rootForwarder: 'beta' },
+        {
+          compareRoots: (incomingRoot, currentRoot) =>
+            electionDigests.get(incomingRoot)!.localeCompare(
+              electionDigests.get(currentRoot)!
+            ),
+        }
+      )
+    ).toEqual({
+      acceptIncoming: true,
       reason: 'rootForwarder-lexical',
       winningRoot: 'beta',
     });

@@ -1,3 +1,5 @@
+import { compareRootForwardersSameEpoch } from './election-order';
+
 export type RouterRole =
   | 'participant'
   | 'cluster-forwarder'
@@ -119,6 +121,7 @@ export type RouterTopologyAuthorityReason =
   | 'stale-epoch'
   | 'newer-epoch'
   | 'lastSeen'
+  | 'lastSeen-root-conflict'
   | 'rootForwarder-lexical'
   | 'same-topology';
 
@@ -130,6 +133,8 @@ export interface RouterTopologyAuthorityDecision {
 
 export interface RouterTopologyAuthorityOptions {
   compareRoots?: (incomingRoot: string, currentRoot: string) => number;
+  /** When set, same-epoch root tie-break uses syncRootElectionDigestHex (matches main process). */
+  roomId?: string;
 }
 
 /**
@@ -173,10 +178,33 @@ export function chooseRouterTopologyAuthority(
         winningRoot: currentRoot,
       };
     }
+    const incomingSeen =
+      typeof incoming.lastSeen === 'number' && Number.isFinite(incoming.lastSeen)
+        ? incoming.lastSeen
+        : null;
+    const currentSeen =
+      typeof current.lastSeen === 'number' && Number.isFinite(current.lastSeen)
+        ? current.lastSeen
+        : null;
+    if (
+      incomingSeen !== null &&
+      currentSeen !== null &&
+      incomingSeen !== currentSeen
+    ) {
+      const acceptIncoming = incomingSeen > currentSeen;
+      return {
+        acceptIncoming,
+        reason: 'lastSeen-root-conflict',
+        winningRoot: acceptIncoming ? incomingRoot : currentRoot,
+      };
+    }
     const compareRoots =
       opts?.compareRoots ??
-      ((nextRoot: string, existingRoot: string) =>
-        nextRoot.localeCompare(existingRoot));
+      (opts?.roomId
+        ? (nextRoot: string, existingRoot: string) =>
+            compareRootForwardersSameEpoch(nextRoot, existingRoot, opts.roomId!)
+        : (nextRoot: string, existingRoot: string) =>
+            nextRoot.localeCompare(existingRoot));
     const acceptIncoming = compareRoots(incomingRoot, currentRoot) < 0;
     return {
       acceptIncoming,

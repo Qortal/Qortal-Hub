@@ -692,6 +692,20 @@ export function chooseMainTopologyAuthority(
     if (currentRoot && !incomingRoot) {
       return { acceptIncoming: false, reason: 'rootForwarder-lexical' };
     }
+    const incomingSeen = incoming.lastSeen;
+    const currentSeen = current.lastSeen;
+    if (
+      typeof incomingSeen === 'number' &&
+      Number.isFinite(incomingSeen) &&
+      typeof currentSeen === 'number' &&
+      Number.isFinite(currentSeen) &&
+      incomingSeen !== currentSeen
+    ) {
+      return {
+        acceptIncoming: incomingSeen > currentSeen,
+        reason: 'lastSeen-root-conflict',
+      };
+    }
     const currentRank = sha256Hex(`${currentRoot}:${roomId}`);
     const incomingRank = sha256Hex(`${incomingRoot}:${roomId}`);
     return {
