@@ -1063,19 +1063,28 @@ export function registerReticulumIpcHandlers(): void {
             peer.address,
           ])
         );
-        return bridge
-          .getOverlayLinkSnapshots()
-          .filter((peer) => peer.incoming !== true)
-          .map((peer) => ({
+        const uniqueByHash = new Map<string, ReticulumOverlayPeerStatus>();
+        for (const peer of bridge.getOverlayLinkSnapshots()) {
+          if (peer.incoming === true) continue;
+          const peerHash = peer.peerPresenceHash.trim();
+          if (!peerHash) continue;
+          const peerKey = peerHash.toLowerCase();
+          const current = uniqueByHash.get(peerKey);
+          if (current && current.connectedAt <= peer.connectedAt) continue;
+          uniqueByHash.set(peerKey, {
             linkId: peer.linkId,
             peerPresenceHash: peer.peerPresenceHash,
-            ...(peersByHash.get(peer.peerPresenceHash.toLowerCase())
+            ...(peersByHash.get(peerKey)
               ? {
-                  address: peersByHash.get(peer.peerPresenceHash.toLowerCase()),
+                  address: peersByHash.get(peerKey),
                 }
               : {}),
             connectedAt: peer.connectedAt,
-          }));
+          });
+        }
+        return [...uniqueByHash.values()].sort(
+          (a, b) => a.connectedAt - b.connectedAt
+        );
       } catch (error) {
         loggerError('[Reticulum] Failed to collect overlay peer status:', error);
         return [];

@@ -27,7 +27,7 @@ export const RT_GCALL_MAX_WIRE_JSON_BYTES = RT_RETICULUM_MAX_WIRE_JSON_BYTES;
  * Bump when Reticulum group-call wire encoding changes; grep logs for this string to confirm rebuild.
  * Keep in sync with `PRESENCE_BRIDGE_BUILD` in `electron/resources/presence_bridge.py`.
  */
-export const GC_RETICULUM_WIRE_BUILD_MARKER = 'wire387-overlay-announce-retry-v1';
+export const GC_RETICULUM_WIRE_BUILD_MARKER = 'wire388-overlay-dedupe-v1';
 
 /** Max payload fragments for topology / key-rotate / SDP (defensive). */
 export const RT_GCALL_MAX_FRAGMENTS = 96;
