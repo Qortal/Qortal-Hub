@@ -381,6 +381,53 @@ declare global {
           };
         };
       }>;
+      sendAudioBatch?: (
+        roomId: string,
+        toAddresses: string[],
+        data: Uint8Array
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        diagnostics?: {
+          transport: 'link' | 'packet';
+          pendingFrames: number;
+          queuePressureDrops: number;
+          staleDrops: number;
+          linkUnreadyDrops: number;
+          packetSendFailures: number;
+          targetAddress?: string;
+          peerPresenceHash?: string;
+          routeKey?: string;
+          lastInboundAtMs?: number;
+          recoveryReason?: string;
+          recoveryHoldUntilMs?: number;
+          bridge?: {
+            bridgeQueuedFrames: number;
+            bridgeQueuedBytes: number;
+            bridgeBinaryWritesQueued: number;
+            bridgeWaitingForDrain: boolean;
+            perLinkQueuedFrames: number;
+            queuePressureDrops: number;
+            queuePressureDropsLast5s: number;
+            staleDrops: number;
+            staleDropsLast5s: number;
+            decodedQueueDepth: number;
+            decodedQueueMax: number;
+            decodedQueueDrops: number;
+            binaryOutQueueDepth: number;
+            binaryOutQueueMax: number;
+            binaryOutQueueDrops: number;
+            jsonOutQueueDrops: number;
+            packetSendFailures: number;
+            packetPathRequests: number;
+            packetPathResolutions: number;
+            packetPathTimeouts: number;
+            packetFreshSends: number;
+            packetStaleSends: number;
+            packetUnknownSends: number;
+          };
+        };
+      }>;
       requestPeerMediaRecovery?: (
         roomId: string,
         address: string,

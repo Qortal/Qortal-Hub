@@ -60,7 +60,7 @@ import {
   collectActiveSpeakers,
   disposeParticipantAudioState,
   evaluateActiveSpeaker,
-  forwardPacketForRole,
+  collectForwardRecipientsForRole,
   getGroupCallTransportSummary,
   isGroupCallTopologyDuplicateHeartbeat,
   reconcileParticipantSpeaking,
@@ -121,6 +121,14 @@ import {
   GcallPerfCollector,
   readGcallPerfEnabled,
 } from '../lib/group-call/gcall-perf';
+import {
+  buildOpusSendPressureTiers,
+  createOpusSendPressureControllerState,
+  GCALL_SEND_AUDIO_IPC_BATCH_SIZE,
+  isReticulumSendPressureSignal,
+  OPUS_SEND_PRESSURE_TICK_MS,
+  tickOpusSendPressureController,
+} from '../lib/group-call/opusSendPressure';
 import {
   filterRosterMapByMemberSet,
   passesGroupCallMemberGate,
@@ -2069,6 +2077,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
   useEffect(() => {
     audioTuningRef.current = getGroupCallAudioTuning(audioQualityProfile);
+    opusSendPressureStateRef.current = createOpusSendPressureControllerState();
+    opusEncoderLastConfiguredBitrateRef.current = null;
     writeGroupCallAudioProfile(audioQualityProfile);
     for (const jb of jitterMapRef.current.values()) {
       jb.applyJitterTuning({
@@ -2095,6 +2105,9 @@ export function useGroupVoiceCall(uiActive = false) {
     typeof setTimeout
   > | null>(null);
   const sendEncodedFrameRef = useRef<(opusFrame: Uint8Array) => void>(() => {});
+  const opusEncoderApplyBitrateRef = useRef<(bps: number) => void>(() => {});
+  const opusEncoderLastConfiguredBitrateRef = useRef<number | null>(null);
+  const opusSendPressureStateRef = useRef(createOpusSendPressureControllerState());
 
   const perfEnabled = gcallPerfEnabledRef.current;
   const recordPerfDuration = useCallback(
@@ -3317,6 +3330,194 @@ export function useGroupVoiceCall(uiActive = false) {
     }, 200);
   }, [flushMetrics]);
 
+  const ingestReticulumAudioSendDiagnostics = useCallback(
+    (
+      peerAddress: string,
+      res: {
+        success?: boolean;
+        error?: string;
+        diagnostics?: {
+          transport?: string;
+          pendingFrames?: number;
+          queuePressureDrops?: number;
+          staleDrops?: number;
+          linkUnreadyDrops?: number;
+          packetSendFailures?: number;
+          targetAddress?: string;
+          bridge?: {
+            bridgeQueuedFrames?: number;
+            bridgeWaitingForDrain?: boolean;
+            decodedQueueDepth?: number;
+            binaryOutQueueDepth?: number;
+            queuePressureDropsLast5s?: number;
+            staleDropsLast5s?: number;
+            queuePressureDrops?: number;
+            staleDrops?: number;
+            packetSendFailures?: number;
+            packetPathRequests?: number;
+            packetPathResolutions?: number;
+            packetPathTimeouts?: number;
+            packetFreshSends?: number;
+            packetStaleSends?: number;
+            packetUnknownSends?: number;
+          };
+        };
+      }
+    ) => {
+      const diagnostics = res?.diagnostics;
+      if (diagnostics) {
+        metricsRef.current.setReticulumAudioQueueDepths({
+          pendingFrames: diagnostics.pendingFrames,
+          bridgeQueuedFrames: diagnostics.bridge?.bridgeQueuedFrames,
+          bridgeWaitingForDrain: diagnostics.bridge?.bridgeWaitingForDrain,
+          decodedQueueDepth: diagnostics.bridge?.decodedQueueDepth,
+          binaryOutQueueDepth: diagnostics.bridge?.binaryOutQueueDepth,
+          queuePressureDropsLast5s:
+            diagnostics.bridge?.queuePressureDropsLast5s,
+          staleDropsLast5s: diagnostics.bridge?.staleDropsLast5s,
+          packetPathRequests: diagnostics.bridge?.packetPathRequests,
+          packetPathResolutions: diagnostics.bridge?.packetPathResolutions,
+          packetPathTimeouts: diagnostics.bridge?.packetPathTimeouts,
+          packetFreshSends: diagnostics.bridge?.packetFreshSends,
+          packetStaleSends: diagnostics.bridge?.packetStaleSends,
+          packetUnknownSends: diagnostics.bridge?.packetUnknownSends,
+        });
+        if (diagnostics.bridge) {
+          const last = lastReticulumAudioTotalsRef.current;
+          const queuePressureDelta = Math.max(
+            0,
+            diagnostics.bridge.queuePressureDrops - last.queuePressureDrops
+          );
+          const staleDelta = Math.max(
+            0,
+            diagnostics.bridge.staleDrops - last.staleDrops
+          );
+          const packetFailureDelta = Math.max(
+            0,
+            diagnostics.bridge.packetSendFailures - last.packetSendFailures
+          );
+          const packetPathRequestDelta = Math.max(
+            0,
+            diagnostics.bridge.packetPathRequests - last.packetPathRequests
+          );
+          const packetPathResolutionDelta = Math.max(
+            0,
+            diagnostics.bridge.packetPathResolutions - last.packetPathResolutions
+          );
+          const packetPathTimeoutDelta = Math.max(
+            0,
+            diagnostics.bridge.packetPathTimeouts - last.packetPathTimeouts
+          );
+          const packetFreshSendDelta = Math.max(
+            0,
+            diagnostics.bridge.packetFreshSends - last.packetFreshSends
+          );
+          const packetStaleSendDelta = Math.max(
+            0,
+            diagnostics.bridge.packetStaleSends - last.packetStaleSends
+          );
+          const packetUnknownSendDelta = Math.max(
+            0,
+            diagnostics.bridge.packetUnknownSends - last.packetUnknownSends
+          );
+          if (queuePressureDelta > 0) {
+            metricsRef.current.recordReticulumAudioQueuePressureDrop(
+              queuePressureDelta
+            );
+          }
+          if (staleDelta > 0) {
+            metricsRef.current.recordReticulumAudioStaleDrop(staleDelta);
+          }
+          if (packetFailureDelta > 0) {
+            metricsRef.current.recordReticulumAudioPacketSendFailure(
+              packetFailureDelta
+            );
+          }
+          if (packetPathTimeoutDelta > 0 || packetFailureDelta > 0) {
+            gcallDiagnosticsPush(
+              'warn',
+              '[GCall] reticulumPacketPathDegraded',
+              {
+                peerAddress,
+                packetPathTimeoutDelta,
+                packetFailureDelta,
+                pathRequests: diagnostics.bridge.packetPathRequests,
+                pathResolutions: diagnostics.bridge.packetPathResolutions,
+                pathTimeouts: diagnostics.bridge.packetPathTimeouts,
+                packetFreshSends: diagnostics.bridge.packetFreshSends,
+                packetStaleSends: diagnostics.bridge.packetStaleSends,
+                packetUnknownSends: diagnostics.bridge.packetUnknownSends,
+              }
+            );
+          }
+          metricsRef.current.recordReticulumAudioPacketPathActivity({
+            requests: packetPathRequestDelta,
+            resolutions: packetPathResolutionDelta,
+            timeouts: packetPathTimeoutDelta,
+            freshSends: packetFreshSendDelta,
+            staleSends: packetStaleSendDelta,
+            unknownSends: packetUnknownSendDelta,
+          });
+          lastReticulumAudioTotalsRef.current = {
+            queuePressureDrops: diagnostics.bridge.queuePressureDrops,
+            staleDrops: diagnostics.bridge.staleDrops,
+            packetSendFailures: diagnostics.bridge.packetSendFailures,
+            packetPathRequests: diagnostics.bridge.packetPathRequests,
+            packetPathResolutions: diagnostics.bridge.packetPathResolutions,
+            packetPathTimeouts: diagnostics.bridge.packetPathTimeouts,
+            packetFreshSends: diagnostics.bridge.packetFreshSends,
+            packetStaleSends: diagnostics.bridge.packetStaleSends,
+            packetUnknownSends: diagnostics.bridge.packetUnknownSends,
+          };
+        } else {
+          if ((diagnostics.queuePressureDrops ?? 0) > 0) {
+            metricsRef.current.recordReticulumAudioQueuePressureDrop(
+              diagnostics.queuePressureDrops ?? 0
+            );
+          }
+          if ((diagnostics.staleDrops ?? 0) > 0) {
+            metricsRef.current.recordReticulumAudioStaleDrop(
+              diagnostics.staleDrops ?? 0
+            );
+          }
+          if ((diagnostics.packetSendFailures ?? 0) > 0) {
+            metricsRef.current.recordReticulumAudioPacketSendFailure(
+              diagnostics.packetSendFailures ?? 0
+            );
+          }
+        }
+        if ((diagnostics.linkUnreadyDrops ?? 0) > 0) {
+          metricsRef.current.recordReticulumAudioLinkUnreadyDrop(
+            diagnostics.linkUnreadyDrops ?? 0
+          );
+        }
+      }
+      if (!res?.success) {
+        metricsRef.current.recordRelayIpcFailure(1);
+        gcallDiagnosticsPush('warn', '[GCall] reticulumAudioSendFailed', {
+          peerAddress: diagnostics?.targetAddress ?? peerAddress,
+          error: res?.error ?? 'unknown',
+          transport: diagnostics?.transport ?? 'packet',
+          pendingFrames: diagnostics?.pendingFrames ?? null,
+          packetSendFailures: diagnostics?.packetSendFailures ?? 0,
+          packetPathTimeouts: diagnostics?.bridge?.packetPathTimeouts ?? 0,
+          packetPathResolutions:
+            diagnostics?.bridge?.packetPathResolutions ?? 0,
+          packetPathRequests: diagnostics?.bridge?.packetPathRequests ?? 0,
+          routeKey: diagnostics?.routeKey ?? null,
+          peerPresenceHash: diagnostics?.peerPresenceHash ?? null,
+          lastInboundAgeMs:
+            typeof diagnostics?.lastInboundAtMs === 'number' &&
+            diagnostics.lastInboundAtMs > 0
+              ? Date.now() - diagnostics.lastInboundAtMs
+              : null,
+          recoveryReason: diagnostics?.recoveryReason ?? null,
+        });
+      }
+    },
+    []
+  );
+
   const startMetricsFlushLoop = useCallback(() => {
     if (metricsFlushTimerRef.current) return;
     metricsFlushTimerRef.current = setInterval(
@@ -3357,6 +3558,50 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!windowMetricsTimerRef.current) return;
     clearInterval(windowMetricsTimerRef.current);
     windowMetricsTimerRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!roomIdRef.current) return;
+      const snap = metricsRef.current.getSnapshot();
+      const pressured = isReticulumSendPressureSignal({
+        bridgeWaitingForDrain: snap.reticulumAudioBridgeWaitingForDrain,
+        bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
+        decodedQueueDepth: snap.reticulumAudioDecodedQueueDepth,
+        queuePressureDropsLast5s: snap.reticulumAudioQueuePressureDropsLast5s,
+        pendingFrames: snap.reticulumAudioPendingFrames,
+      });
+      const tiers = buildOpusSendPressureTiers(audioTuningRef.current.opusBitrate);
+      const result = tickOpusSendPressureController(
+        opusSendPressureStateRef.current,
+        tiers,
+        OPUS_SEND_PRESSURE_TICK_MS,
+        Date.now(),
+        pressured
+      );
+      opusSendPressureStateRef.current = result.state;
+      if (
+        result.targetBitrate !== opusEncoderLastConfiguredBitrateRef.current
+      ) {
+        opusEncoderApplyBitrateRef.current(result.targetBitrate);
+        opusEncoderLastConfiguredBitrateRef.current = result.targetBitrate;
+      }
+      if (result.tierChanged) {
+        gcallDiagnosticsPush('info', '[GCall] opusSendPressureTier', {
+          tierIndex: result.state.tierIndex,
+          bitrateBps: result.targetBitrate,
+          pressured,
+        });
+      }
+      if (result.maxPainEntered) {
+        gcallDiagnosticsPush('warn', '[GCall] opusSendPressureMaxPain', {
+          bitrateBps: result.targetBitrate,
+          bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
+          pendingFrames: snap.reticulumAudioPendingFrames,
+        });
+      }
+    }, OPUS_SEND_PRESSURE_TICK_MS);
+    return () => clearInterval(id);
   }, []);
 
   useEffect(() => {
@@ -3414,156 +3659,7 @@ export function useGroupVoiceCall(uiActive = false) {
       void window.groupCall
         .sendAudio(roomId, address, payload)
         .then((res) => {
-          const diagnostics = res?.diagnostics;
-          if (diagnostics) {
-            metricsRef.current.setReticulumAudioQueueDepths({
-              pendingFrames: diagnostics.pendingFrames,
-              bridgeQueuedFrames: diagnostics.bridge?.bridgeQueuedFrames,
-              decodedQueueDepth: diagnostics.bridge?.decodedQueueDepth,
-              binaryOutQueueDepth: diagnostics.bridge?.binaryOutQueueDepth,
-              queuePressureDropsLast5s:
-                diagnostics.bridge?.queuePressureDropsLast5s,
-              staleDropsLast5s: diagnostics.bridge?.staleDropsLast5s,
-              packetPathRequests: diagnostics.bridge?.packetPathRequests,
-              packetPathResolutions: diagnostics.bridge?.packetPathResolutions,
-              packetPathTimeouts: diagnostics.bridge?.packetPathTimeouts,
-              packetFreshSends: diagnostics.bridge?.packetFreshSends,
-              packetStaleSends: diagnostics.bridge?.packetStaleSends,
-              packetUnknownSends: diagnostics.bridge?.packetUnknownSends,
-            });
-            if (diagnostics.bridge) {
-              const last = lastReticulumAudioTotalsRef.current;
-              const queuePressureDelta = Math.max(
-                0,
-                diagnostics.bridge.queuePressureDrops - last.queuePressureDrops
-              );
-              const staleDelta = Math.max(
-                0,
-                diagnostics.bridge.staleDrops - last.staleDrops
-              );
-              const packetFailureDelta = Math.max(
-                0,
-                diagnostics.bridge.packetSendFailures - last.packetSendFailures
-              );
-              const packetPathRequestDelta = Math.max(
-                0,
-                diagnostics.bridge.packetPathRequests - last.packetPathRequests
-              );
-              const packetPathResolutionDelta = Math.max(
-                0,
-                diagnostics.bridge.packetPathResolutions -
-                  last.packetPathResolutions
-              );
-              const packetPathTimeoutDelta = Math.max(
-                0,
-                diagnostics.bridge.packetPathTimeouts - last.packetPathTimeouts
-              );
-              const packetFreshSendDelta = Math.max(
-                0,
-                diagnostics.bridge.packetFreshSends - last.packetFreshSends
-              );
-              const packetStaleSendDelta = Math.max(
-                0,
-                diagnostics.bridge.packetStaleSends - last.packetStaleSends
-              );
-              const packetUnknownSendDelta = Math.max(
-                0,
-                diagnostics.bridge.packetUnknownSends - last.packetUnknownSends
-              );
-              if (queuePressureDelta > 0) {
-                metricsRef.current.recordReticulumAudioQueuePressureDrop(
-                  queuePressureDelta
-                );
-              }
-              if (staleDelta > 0) {
-                metricsRef.current.recordReticulumAudioStaleDrop(staleDelta);
-              }
-              if (packetFailureDelta > 0) {
-                metricsRef.current.recordReticulumAudioPacketSendFailure(
-                  packetFailureDelta
-                );
-              }
-              if (packetPathTimeoutDelta > 0 || packetFailureDelta > 0) {
-                gcallDiagnosticsPush(
-                  'warn',
-                  '[GCall] reticulumPacketPathDegraded',
-                  {
-                    peerAddress: address,
-                    packetPathTimeoutDelta,
-                    packetFailureDelta,
-                    pathRequests: diagnostics.bridge.packetPathRequests,
-                    pathResolutions: diagnostics.bridge.packetPathResolutions,
-                    pathTimeouts: diagnostics.bridge.packetPathTimeouts,
-                    packetFreshSends: diagnostics.bridge.packetFreshSends,
-                    packetStaleSends: diagnostics.bridge.packetStaleSends,
-                    packetUnknownSends: diagnostics.bridge.packetUnknownSends,
-                  }
-                );
-              }
-              metricsRef.current.recordReticulumAudioPacketPathActivity({
-                requests: packetPathRequestDelta,
-                resolutions: packetPathResolutionDelta,
-                timeouts: packetPathTimeoutDelta,
-                freshSends: packetFreshSendDelta,
-                staleSends: packetStaleSendDelta,
-                unknownSends: packetUnknownSendDelta,
-              });
-              lastReticulumAudioTotalsRef.current = {
-                queuePressureDrops: diagnostics.bridge.queuePressureDrops,
-                staleDrops: diagnostics.bridge.staleDrops,
-                packetSendFailures: diagnostics.bridge.packetSendFailures,
-                packetPathRequests: diagnostics.bridge.packetPathRequests,
-                packetPathResolutions: diagnostics.bridge.packetPathResolutions,
-                packetPathTimeouts: diagnostics.bridge.packetPathTimeouts,
-                packetFreshSends: diagnostics.bridge.packetFreshSends,
-                packetStaleSends: diagnostics.bridge.packetStaleSends,
-                packetUnknownSends: diagnostics.bridge.packetUnknownSends,
-              };
-            } else {
-              if (diagnostics.queuePressureDrops > 0) {
-                metricsRef.current.recordReticulumAudioQueuePressureDrop(
-                  diagnostics.queuePressureDrops
-                );
-              }
-              if (diagnostics.staleDrops > 0) {
-                metricsRef.current.recordReticulumAudioStaleDrop(
-                  diagnostics.staleDrops
-                );
-              }
-              if (diagnostics.packetSendFailures > 0) {
-                metricsRef.current.recordReticulumAudioPacketSendFailure(
-                  diagnostics.packetSendFailures
-                );
-              }
-            }
-            if (diagnostics.linkUnreadyDrops > 0) {
-              metricsRef.current.recordReticulumAudioLinkUnreadyDrop(
-                diagnostics.linkUnreadyDrops
-              );
-            }
-          }
-          if (!res?.success) {
-            metricsRef.current.recordRelayIpcFailure(1);
-            gcallDiagnosticsPush('warn', '[GCall] reticulumAudioSendFailed', {
-              peerAddress: diagnostics?.targetAddress ?? address,
-              error: res?.error ?? 'unknown',
-              transport: diagnostics?.transport ?? 'packet',
-              pendingFrames: diagnostics?.pendingFrames ?? null,
-              packetSendFailures: diagnostics?.packetSendFailures ?? 0,
-              packetPathTimeouts: diagnostics?.bridge?.packetPathTimeouts ?? 0,
-              packetPathResolutions:
-                diagnostics?.bridge?.packetPathResolutions ?? 0,
-              packetPathRequests: diagnostics?.bridge?.packetPathRequests ?? 0,
-              routeKey: diagnostics?.routeKey ?? null,
-              peerPresenceHash: diagnostics?.peerPresenceHash ?? null,
-              lastInboundAgeMs:
-                typeof diagnostics?.lastInboundAtMs === 'number' &&
-                diagnostics.lastInboundAtMs > 0
-                  ? Date.now() - diagnostics.lastInboundAtMs
-                  : null,
-              recoveryReason: diagnostics?.recoveryReason ?? null,
-            });
-          }
+          ingestReticulumAudioSendDiagnostics(address, res);
         })
         .catch((error) => {
           metricsRef.current.recordRelayIpcFailure(1);
@@ -3574,7 +3670,69 @@ export function useGroupVoiceCall(uiActive = false) {
         });
       return true;
     },
-    [scheduleRelayMetricsFlush]
+    [ingestReticulumAudioSendDiagnostics, scheduleRelayMetricsFlush]
+  );
+
+  /** One encoded frame to N peers — chunked IPC batch (see `GCALL_SEND_AUDIO_IPC_BATCH_SIZE`). */
+  const sendPacketToPeerReticulumBatch = useCallback(
+    (addresses: string[], data: ArrayBuffer): number => {
+      const roomId = roomIdRef.current;
+      if (!roomId || addresses.length === 0) return 0;
+      const gc = window.groupCall;
+      if (!gc) return 0;
+      const payload = new Uint8Array(data.slice(0));
+      metricsRef.current.recordRelaySent();
+      scheduleRelayMetricsFlush();
+      const label = addresses[0] ?? '';
+      const sendBatch = gc.sendAudioBatch;
+      for (let i = 0; i < addresses.length; i += GCALL_SEND_AUDIO_IPC_BATCH_SIZE) {
+        const chunk = addresses.slice(i, i + GCALL_SEND_AUDIO_IPC_BATCH_SIZE);
+        if (typeof sendBatch === 'function') {
+          void sendBatch(roomId, chunk, payload)
+            .then((res) => {
+              ingestReticulumAudioSendDiagnostics(
+                chunk.length > 1 ? `${label}+${chunk.length}` : label,
+                res
+              );
+            })
+            .catch((error) => {
+              metricsRef.current.recordRelayIpcFailure(1);
+              gcallDiagnosticsPush(
+                'warn',
+                '[GCall] reticulumAudioSendException',
+                {
+                  peerAddress: label,
+                  batchSize: chunk.length,
+                  error:
+                    error instanceof Error ? error.message : String(error),
+                }
+              );
+            });
+        } else {
+          for (const addr of chunk) {
+            void gc
+              .sendAudio(roomId, addr, payload)
+              .then((res) => {
+                ingestReticulumAudioSendDiagnostics(addr, res);
+              })
+              .catch((error) => {
+                metricsRef.current.recordRelayIpcFailure(1);
+                gcallDiagnosticsPush(
+                  'warn',
+                  '[GCall] reticulumAudioSendException',
+                  {
+                    peerAddress: addr,
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  }
+                );
+              });
+          }
+        }
+      }
+      return addresses.length;
+    },
+    [ingestReticulumAudioSendDiagnostics, scheduleRelayMetricsFlush]
   );
 
   const sendPacketToPeer = useCallback(
@@ -3761,14 +3919,15 @@ export function useGroupVoiceCall(uiActive = false) {
           sourceAddr
         );
         if (isActiveSpeaker) {
-          const forwarded = forwardPacketForRole(
+          const recipients = collectForwardRecipientsForRole(
             role,
             topo,
             myAddress,
-            sourceAddr,
-            wireForForward,
-            sendPacketToPeer
+            sourceAddr
           );
+          const forwarded = recipients.length
+            ? sendPacketToPeerReticulumBatch(recipients, wireForForward)
+            : 0;
           if (forwarded > 0)
             metricsRef.current.recordPacketForwarded(forwarded);
         } else {
@@ -3843,7 +4002,7 @@ export function useGroupVoiceCall(uiActive = false) {
     [
       getForwardRecipientCountForDiagnostics,
       recordInterArrivalForPlayout,
-      sendPacketToPeer,
+      sendPacketToPeerReticulumBatch,
       updateMetricResourceCounts,
       userInfo?.address,
     ]
@@ -4791,6 +4950,9 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       encoderRef.current = null;
     }
+    opusEncoderApplyBitrateRef.current = () => {};
+    opusEncoderLastConfiguredBitrateRef.current = null;
+    opusSendPressureStateRef.current = createOpusSendPressureControllerState();
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       void audioContextRef.current.close();
       audioContextRef.current = null;
@@ -5034,6 +5196,32 @@ export function useGroupVoiceCall(uiActive = false) {
           });
         }
         encoder.configure(encoderConfig as unknown as AudioEncoderConfig);
+        opusEncoderLastConfiguredBitrateRef.current = encTuning.opusBitrate;
+        opusSendPressureStateRef.current = createOpusSendPressureControllerState();
+        const fecOpusStatic =
+          typeof encoderConfig.opus === 'object' && encoderConfig.opus !== null
+            ? (encoderConfig.opus as Record<string, unknown>)
+            : null;
+        opusEncoderApplyBitrateRef.current = (bps: number) => {
+          const enc = encoderRef.current;
+          if (!enc || enc.state === 'closed') return;
+          const base = {
+            codec: 'opus',
+            sampleRate: OPUS_SAMPLE_RATE,
+            numberOfChannels: OPUS_CHANNELS,
+            bitrate: bps,
+          };
+          const next = fecOpusStatic
+            ? { ...base, opus: fecOpusStatic }
+            : base;
+          try {
+            enc.configure(next as AudioEncoderConfig);
+          } catch (err) {
+            debugWarn('[GCall] Opus encoder bitrate reconfigure failed', {
+              error: err instanceof Error ? err.message : String(err ?? ''),
+            });
+          }
+        };
 
         // Load and instantiate the capture worklet (runs on the audio worklet thread)
         debugLog('[GCall] Loading capture worklet…');
@@ -5379,8 +5567,9 @@ export function useGroupVoiceCall(uiActive = false) {
       if (myRoleRef.current === 'root-forwarder' && topologyRef.current) {
         const topo = topologyRef.current;
         const myAddr = userInfo.address;
-        for (const addr of getReticulumTransportTargets(myAddr, topo)) {
-          sendPacketToPeerReticulum(addr, packet.buffer as ArrayBuffer);
+        const targets = getReticulumTransportTargets(myAddr, topo);
+        if (targets.length > 0) {
+          sendPacketToPeerReticulumBatch(targets, packet.buffer as ArrayBuffer);
         }
         return;
       }
@@ -5392,7 +5581,7 @@ export function useGroupVoiceCall(uiActive = false) {
         sendPacketToPeerReticulum(target, packet.buffer as ArrayBuffer);
       }
     },
-    [sendPacketToPeerReticulum, userInfo?.address]
+    [sendPacketToPeerReticulum, sendPacketToPeerReticulumBatch, userInfo?.address]
   );
 
   const sendEncodedFrame = useCallback(

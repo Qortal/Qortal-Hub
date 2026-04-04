@@ -11,6 +11,7 @@ import {
   collectActiveSpeakers,
   computeGroupCallDcTransportReady,
   disposeParticipantAudioState,
+  collectForwardRecipientsForRole,
   evaluateActiveSpeaker,
   forwardPacketForRole,
   getGroupCallTransportSummary,
@@ -348,6 +349,42 @@ describe('group-call router helpers', () => {
     );
     expect(clusterForwarded).toBe(1);
     expect(sends).toEqual(['root']);
+  });
+
+  it('collectForwardRecipientsForRole matches forwardPacketForRole recipient set', () => {
+    const topology = {
+      topologyEpoch: 1,
+      rootForwarder: 'root',
+      standbyForwarder: 'standby',
+      clusters: [
+        {
+          members: ['root', 'alice', 'bob'],
+          forwarder: 'root',
+          standby: 'standby',
+          standby2: 'bob',
+        },
+        {
+          members: ['cluster', 'charlie'],
+          forwarder: 'cluster',
+          standby: 'charlie',
+          standby2: '',
+        },
+      ],
+    };
+    const rootRecipients = collectForwardRecipientsForRole(
+      'root-forwarder',
+      topology,
+      'root',
+      'alice'
+    );
+    expect(rootRecipients.sort()).toEqual(['bob', 'cluster'].sort());
+    const clusterRecipients = collectForwardRecipientsForRole(
+      'cluster-forwarder',
+      topology,
+      'cluster',
+      'charlie'
+    );
+    expect(clusterRecipients).toEqual(['root']);
   });
 
   it('disposes participant audio resources safely', () => {

@@ -429,6 +429,8 @@ export interface GroupCallMetricsSnapshot {
   reticulumAudioBinaryOutQueueDepth: number;
   /** Session high-water mark for Python child→parent binary queue depth. */
   reticulumAudioBinaryOutQueueDepthHighWater: number;
+  /** Latest fd3 backpressure flag from bridge (align with main-process pressure). */
+  reticulumAudioBridgeWaitingForDrain: boolean;
   /** Counted send-path drops caused by queue pressure. */
   reticulumAudioQueuePressureDrops: number;
   /** Rolling 5-second queue-pressure drop count reported from the bridge. */
@@ -1101,6 +1103,7 @@ export class GroupCallPerformanceTracker {
     reticulumAudioDecodedQueueDepthHighWater: 0,
     reticulumAudioBinaryOutQueueDepth: 0,
     reticulumAudioBinaryOutQueueDepthHighWater: 0,
+    reticulumAudioBridgeWaitingForDrain: false,
     reticulumAudioQueuePressureDrops: 0,
     reticulumAudioQueuePressureDropsLast5s: 0,
     reticulumAudioStaleDrops: 0,
@@ -1393,6 +1396,7 @@ export class GroupCallPerformanceTracker {
   setReticulumAudioQueueDepths(depths: {
     pendingFrames?: number;
     bridgeQueuedFrames?: number;
+    bridgeWaitingForDrain?: boolean;
     decodedQueueDepth?: number;
     binaryOutQueueDepth?: number;
     queuePressureDropsLast5s?: number;
@@ -1427,6 +1431,9 @@ export class GroupCallPerformanceTracker {
         this.windowReticulumAudioBridgeQueuedFramesHighWater,
         bridgeQueuedFrames
       );
+    }
+    if (typeof depths.bridgeWaitingForDrain === 'boolean') {
+      this.snapshot.reticulumAudioBridgeWaitingForDrain = depths.bridgeWaitingForDrain;
     }
     if (typeof depths.decodedQueueDepth === 'number') {
       const decodedQueueDepth = Math.max(0, Math.trunc(depths.decodedQueueDepth));
@@ -1860,6 +1867,7 @@ export class GroupCallPerformanceTracker {
       reticulumAudioDecodedQueueDepthHighWater: 0,
       reticulumAudioBinaryOutQueueDepth: 0,
       reticulumAudioBinaryOutQueueDepthHighWater: 0,
+      reticulumAudioBridgeWaitingForDrain: false,
       reticulumAudioQueuePressureDrops: 0,
       reticulumAudioQueuePressureDropsLast5s: 0,
       reticulumAudioStaleDrops: 0,
@@ -2239,4 +2247,50 @@ export function forwardPacketForRole(
   }
 
   return forwarded;
+}
+
+/** Same recipient set as {@link forwardPacketForRole}, for per-frame batched `sendAudioBatch`. */
+export function collectForwardRecipientsForRole(
+  role: RouterRole,
+  topology: RouterTopology | null,
+  myAddress: string,
+  sourceAddr: string
+): string[] {
+  if (
+    !topology ||
+    (role !== 'cluster-forwarder' && role !== 'root-forwarder')
+  ) {
+    return [];
+  }
+
+  const out: string[] = [];
+
+  if (role === 'root-forwarder') {
+    for (const cluster of topology.clusters) {
+      if (cluster.forwarder === myAddress) {
+        for (const member of cluster.members) {
+          if (member === sourceAddr || member === myAddress) continue;
+          if (member) out.push(member);
+        }
+      } else if (cluster.forwarder) {
+        out.push(cluster.forwarder);
+      }
+    }
+    return out;
+  }
+
+  if (topology.rootForwarder && topology.rootForwarder !== myAddress) {
+    out.push(topology.rootForwarder);
+  }
+
+  for (const cluster of topology.clusters) {
+    if (cluster.forwarder !== myAddress) continue;
+    for (const member of cluster.members) {
+      if (member === sourceAddr || member === myAddress) continue;
+      if (member) out.push(member);
+    }
+    break;
+  }
+
+  return out;
 }

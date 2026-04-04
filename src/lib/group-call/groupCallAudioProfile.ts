@@ -13,6 +13,7 @@ export const GCALL_AUDIO_QUALITY_PROFILE_KEY = 'qortal:gcall-audio-profile';
 
 export interface GroupCallAudioTuning {
   readonly profile: GroupCallAudioQualityProfile;
+  /** Nominal uplink bitrate; send-pressure steps down from this (see `opusSendPressure.ts`). */
   readonly opusBitrate: number;
   readonly opusExpectedPacketLossPercent: number;
   readonly jitterBufferSize: number;

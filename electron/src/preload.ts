@@ -1096,6 +1096,13 @@ try {
     sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
       ipcRenderer.invoke('gcall:sendAudio', roomId, toAddress, data),
 
+    /** Same encoded frame to multiple peers in one IPC round-trip (chunked in renderer). */
+    sendAudioBatch: async (
+      roomId: string,
+      toAddresses: string[],
+      data: Uint8Array
+    ) => ipcRenderer.invoke('gcall:sendAudioBatch', roomId, toAddresses, data),
+
     requestPeerMediaRecovery: async (
       roomId: string,
       address: string,

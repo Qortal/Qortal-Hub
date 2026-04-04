@@ -111,10 +111,12 @@ const GC_RETICULUM_AUDIO_PENDING_FANOUT_SOFT_LIMIT = 3;
 const GC_RETICULUM_AUDIO_PENDING_HIGH_FANOUT_LIMIT = 12;
 const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS = 12;
 const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER = 4;
+/** Matches send-side pressure backoff: fair flush reschedules with this delay when bridge is pressured. */
 const GC_RETICULUM_AUDIO_FLUSH_RETRY_DELAY_MS = 5;
 const GC_RETICULUM_AUDIO_RECOVERY_HOLD_MS = 160;
 const GC_RETICULUM_AUDIO_RECOVERY_BUFFER_MAX_AGE_MS = 200;
 const GC_RETICULUM_AUDIO_RECOVERY_ACTION_COOLDOWN_MS = 1_000;
+/** Kept in sync with `RETICULUM_SEND_PRESSURE_*` in `src/lib/group-call/opusSendPressure.ts` (renderer ladder). */
 const GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES = 8;
 const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH = 12;
 const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS = 6;
@@ -553,6 +555,21 @@ type GcReticulumAudioSendResult =
       error: 'invalid-or-oversize-payload' | 'no-reticulum-route';
       diagnostics?: GcReticulumAudioSendDiagnostics;
     };
+
+function mergeGcReticulumAudioSendDiagnostics(
+  a: GcReticulumAudioSendDiagnostics,
+  b: GcReticulumAudioSendDiagnostics
+): GcReticulumAudioSendDiagnostics {
+  return {
+    transport: a.transport,
+    pendingFrames: Math.max(a.pendingFrames, b.pendingFrames),
+    queuePressureDrops: a.queuePressureDrops + b.queuePressureDrops,
+    staleDrops: a.staleDrops + b.staleDrops,
+    linkUnreadyDrops: a.linkUnreadyDrops + b.linkUnreadyDrops,
+    packetSendFailures: a.packetSendFailures + b.packetSendFailures,
+    bridge: (b.bridge ?? a.bridge) ?? a.bridge,
+  };
+}
 
 export interface GroupRoomTopologySnapshot {
   topologyEpoch: number;
@@ -4099,6 +4116,58 @@ export class GroupCallManager extends EventEmitter {
       success: true,
       diagnostics: this.buildReticulumAudioSendDiagnostics(state, toAddress, enqueueStats),
     };
+  }
+
+  /**
+   * Same payload to multiple peers — one IPC invoke from renderer; still per-peer enqueue/flush.
+   */
+  sendAudioBatch(
+    roomId: string,
+    toAddresses: string[],
+    data: Buffer
+  ): GcReticulumAudioSendResult {
+    if (!isValidGcAudioBuffer(data)) {
+      loggerWarn('[GCall] sendAudioBatch dropped: invalid or oversize payload');
+      return { success: false, error: 'invalid-or-oversize-payload' };
+    }
+    if (toAddresses.length === 0) {
+      return {
+        success: true,
+        diagnostics: {
+          transport: this.getReticulumAudioTransportKind(),
+          pendingFrames: 0,
+          queuePressureDrops: 0,
+          staleDrops: 0,
+          linkUnreadyDrops: 0,
+          packetSendFailures: 0,
+        },
+      };
+    }
+    let merged: GcReticulumAudioSendDiagnostics | null = null;
+    let allSuccess = true;
+    for (const toAddress of toAddresses) {
+      const r = this.sendAudio(roomId, toAddress, data);
+      if (r.success) {
+        merged = merged
+          ? mergeGcReticulumAudioSendDiagnostics(merged, r.diagnostics)
+          : r.diagnostics;
+      } else {
+        allSuccess = false;
+        if (r.diagnostics) {
+          merged = merged
+            ? mergeGcReticulumAudioSendDiagnostics(merged, r.diagnostics)
+            : r.diagnostics;
+        }
+      }
+    }
+    if (!allSuccess) {
+      return {
+        success: false,
+        error: 'no-reticulum-route',
+        diagnostics: merged,
+      };
+    }
+    return { success: true, diagnostics: merged! };
   }
 
   sendKey(

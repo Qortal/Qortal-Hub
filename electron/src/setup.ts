@@ -2431,6 +2431,36 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
+  'gcall:sendAudioBatch',
+  async (
+    _event,
+    roomId: string,
+    toAddresses: string[],
+    data: Buffer | Uint8Array
+  ) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data);
+    const GCALL_IPC_SEND_AUDIO_MAX_BYTES = 12_288;
+    if (buf.length > GCALL_IPC_SEND_AUDIO_MAX_BYTES) {
+      return { success: false, error: 'payload-too-large' };
+    }
+    if (!Array.isArray(toAddresses) || toAddresses.length === 0) {
+      return { success: true, diagnostics: undefined };
+    }
+    const result = mgr.sendAudioBatch(roomId, toAddresses, buf);
+    if (result.success) {
+      return { success: true, diagnostics: result.diagnostics };
+    }
+    return {
+      success: false,
+      error: ('error' in result ? result.error : undefined) ?? 'relay-rejected',
+      diagnostics: result.diagnostics,
+    };
+  }
+);
+
+ipcMain.handle(
   'gcall:requestPeerMediaRecovery',
   async (_event, roomId: string, address: string, reason: string) => {
     const mgr = getGroupCallManager();
