@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire380-rns-announce-45m-v1"
+PRESENCE_BRIDGE_BUILD = "wire383-gj-gi-split-rk-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -547,7 +547,7 @@ def _process_audio_batch(frames: list) -> None:
                 },
             )
             continue
-        peer_identity = _get_verified_peer_identity(peer_hash)
+        peer_identity = _get_group_audio_peer_identity(peer_hash)
         if peer_identity is None:
             emit_event(
                 "group_audio_send_failed",
@@ -998,7 +998,7 @@ def _register_peer(
             "ts_seed_until": None,
         }
     st = _peer_lifecycle[peer_key]
-    if source in ("inbound", "announce", "wire_kr"):
+    if source in ("inbound", "announce", "wire_kr", "gcall_join"):
         st["last_seen_inbound"] = now
     if source == "ts_seed":
         st["ts_seed_until"] = now + _PEER_TS_SEED_LEASE_SECONDS
@@ -1132,14 +1132,19 @@ def _resolve_overlay_neighbor_hashes(exclude_hashes: Optional[list[str]] = None)
     return out[:_OVERLAY_MAX_NEIGHBORS]
 
 
-def _is_verified_overlay_peer(peer_hash: str) -> bool:
-    return peer_hash in _verified_overlay_peers
+def _get_group_audio_peer_identity(peer_hash: str):
+    """RNS identity for group audio using join destination hash + recall.
 
-
-def _get_verified_peer_identity(peer_hash: str):
-    if not _is_verified_overlay_peer(peer_hash):
+    Group audio is keyed by the joiner's Reticulum destination hash from Electron; it does
+    not require membership in the verified-overlay snapshot from ``overlay_sync_state``."""
+    peer_key = str(peer_hash or "").strip().lower()
+    if not peer_key:
         return None
-    return _known_peers.get(peer_hash)
+    ident = _known_peers.get(peer_key)
+    if ident is not None:
+        return ident
+    ensure_known_peer_from_recall(peer_key, "ts_seed")
+    return _known_peers.get(peer_key)
 
 
 def _evict_lru_if_needed() -> None:
@@ -1245,6 +1250,43 @@ def _request_path_if_eligible(peer_key: str, h: bytes, nudge_budget: list[int]) 
         )
     except Exception as exc:
         log(f"[presence_bridge] target=presence-reticulum request_path_failed peer={peer_key}: {exc}")
+
+
+def _nudge_overlay_path_for_peer(peer_key: str) -> None:
+    """
+    Ask Reticulum to resolve a destination we need for overlay group_signal fanout.
+    Throttled; pairs with ensure_known_peer_from_recall on the next tick.
+    """
+    try:
+        h = bytes.fromhex(peer_key)
+    except ValueError:
+        return
+    if len(h) != 16:
+        return
+    now = time.time()
+    st = _peer_lifecycle.get(peer_key) or {}
+    last_rp = st.get("last_request_path_at")
+    if isinstance(last_rp, (int, float)) and (now - float(last_rp)) < _REQUEST_PATH_COOLDOWN_SECONDS:
+        return
+    try:
+        RNS.Transport.request_path(h)
+        if peer_key not in _peer_lifecycle:
+            _peer_lifecycle[peer_key] = {
+                "last_seen_inbound": None,
+                "last_send_ok": None,
+                "last_request_path_at": None,
+                "ts_seed_until": None,
+            }
+        _peer_lifecycle[peer_key]["last_request_path_at"] = now
+        log(
+            f"[presence_bridge] target=presence-reticulum overlay_path_nudge peer={peer_key} "
+            "reason=group_signal_unknown_peer"
+        )
+    except Exception as exc:
+        log(
+            f"[presence_bridge] target=presence-reticulum overlay_path_nudge_failed "
+            f"peer={peer_key}: {exc}"
+        )
 
 
 def _get_call_media_state(peer_hash: str) -> Dict[str, Any]:
@@ -1517,7 +1559,7 @@ def _warm_call_media_path_if_possible(
     allow_wait: bool,
     reason: str,
 ) -> tuple[str, bool]:
-    peer_identity = _get_verified_peer_identity(peer_hash)
+    peer_identity = _get_group_audio_peer_identity(peer_hash)
     if peer_identity is None:
         return "unknown", False
     try:
@@ -1840,16 +1882,11 @@ def _resolve_sender_peer_destination_hash(sender_hex: str) -> str:
         return ""
     if sender_hex in _known_peers:
         return sender_hex
-    try:
-        h = bytes.fromhex(sender_hex)
-    except ValueError:
-        return ""
-    if len(h) != 16:
-        return ""
-    recalled = RNS.Identity.recall(h)
-    if recalled is None:
-        return ""
-    return find_peer_hash_for_identity(recalled)
+    # Register via recall (same as presence inbound). Previously we only recalled and
+    # looked up find_peer_hash_for_identity, which stayed empty until another path registered.
+    if ensure_known_peer_from_recall(sender_hex, "inbound"):
+        return sender_hex
+    return ""
 
 
 def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = None) -> bool:
@@ -1952,6 +1989,8 @@ def _emit_call_bridge_message(
 ) -> bool:
     sender_r = message.get("r")
     sender_call_hash = sender_r if isinstance(sender_r, str) else ""
+    if sender_call_hash:
+        ensure_known_peer_from_recall(sender_call_hash.strip().lower(), "inbound")
     resolved_presence_hash = (
         peer_presence_hash
         if isinstance(peer_presence_hash, str) and peer_presence_hash
@@ -2803,16 +2842,15 @@ def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    if peer_hash not in _active_overlay_neighbors:
-        _ensure_overlay_link(peer_hash)
-    if peer_hash not in _known_peers:
-        emit_resp(
-            req_id,
-            False,
-            payload={"code": "unknown_peer_presence_hash"},
-            error="Unknown peer presence hash",
-        )
-        return
+    peer_key = peer_hash.strip().lower()
+    # Overlay fanout: best-effort recall for overlay links; do not reject with
+    # unknown_peer_presence_hash before attempting send (RNS may still lack identity).
+    ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _known_peers:
+        _nudge_overlay_path_for_peer(peer_key)
+        ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _active_overlay_neighbors:
+        _ensure_overlay_link(peer_key)
 
     try:
         out = _normalize_json_numbers(dict(msg))
@@ -2834,7 +2872,7 @@ def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
                 ),
             )
             return
-        if not _send_wire_to_overlay_peer(peer_hash.lower(), wire_bytes, "group_signal"):
+        if not _send_wire_to_overlay_peer(peer_key, wire_bytes, "group_signal"):
             emit_resp(
                 req_id,
                 False,
@@ -2862,7 +2900,8 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    peer_identity = _get_verified_peer_identity(peer_hash)
+    peer_key = peer_hash.strip().lower()
+    peer_identity = _get_group_audio_peer_identity(peer_key)
     if peer_identity is None:
         emit_resp(
             req_id,
@@ -2872,7 +2911,7 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    existing_link_id = _outgoing_audio_link_id_by_peer_hash.get(peer_hash)
+    existing_link_id = _outgoing_audio_link_id_by_peer_hash.get(peer_key)
     if existing_link_id:
         state = get_audio_link_state(existing_link_id)
         if state is not None:
@@ -2896,13 +2935,13 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         )
         _audio_links_by_id[link_id] = {
             "link": link,
-            "peerPresenceHash": peer_hash,
+            "peerPresenceHash": peer_key,
             "peerDestinationHash": destination_hash_hex(outbound.hash),
             "incoming": False,
             "established": False,
         }
         _audio_link_ids_by_object[id(link)] = link_id
-        _outgoing_audio_link_id_by_peer_hash[peer_hash] = link_id
+        _outgoing_audio_link_id_by_peer_hash[peer_key] = link_id
         emit_resp(
             req_id,
             True,
@@ -2933,6 +2972,76 @@ def handle_close_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, True)
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))
+
+
+def handle_get_local_identity_public_key(req_id: str, payload: Dict[str, Any]) -> None:
+    if _identity is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+    try:
+        pub = _identity.get_public_key()
+        if not isinstance(pub, bytes) or len(pub) != 64:
+            emit_resp(req_id, False, error="Unexpected identity public key length")
+            return
+        b64 = base64.b64encode(pub).decode("ascii")
+        emit_resp(req_id, True, payload={"publicKeyBase64": b64})
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_register_peer_identity(req_id: str, payload: Dict[str, Any]) -> None:
+    peer_hash = str(payload.get("peerPresenceHash") or "").strip().lower()
+    pk_b64 = payload.get("reticulumIdentityPublicKeyBase64")
+    if not peer_hash or not isinstance(pk_b64, str) or not pk_b64.strip():
+        emit_resp(req_id, False, error="Missing peerPresenceHash or reticulumIdentityPublicKeyBase64")
+        return
+    if _destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+    local_hex = destination_hash_hex(_destination.hash)
+    if peer_hash == local_hex:
+        emit_resp(req_id, False, error="Cannot register self")
+        return
+    try:
+        s = pk_b64.strip()
+        pad = "=" * ((4 - len(s) % 4) % 4)
+        pub_bytes = base64.b64decode(s + pad, validate=True)
+    except Exception:
+        emit_resp(req_id, False, error="Invalid base64")
+        return
+    if len(pub_bytes) != 64:
+        emit_resp(req_id, False, error="Bad public key length")
+        return
+    try:
+        ident = RNS.Identity(create_keys=False)
+        ident.load_public_key(pub_bytes)
+        outbound = RNS.Destination(
+            ident,
+            RNS.Destination.OUT,
+            RNS.Destination.SINGLE,
+            APP_NAMESPACE,
+            PRESENCE_ASPECT,
+            PRESENCE_VERSION,
+        )
+        derived = destination_hash_hex(outbound.hash)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+        return
+    if derived != peer_hash:
+        emit_resp(req_id, False, error="reticulum_public_key_hash_mismatch")
+        return
+    _register_peer(peer_hash, ident, "gcall_join")
+    emit_resp(req_id, True)
 
 
 def handle_warm_group_audio_path(req_id: str, payload: Dict[str, Any]) -> None:
@@ -3001,6 +3110,10 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_close_group_audio_link(req_id, payload)
     elif action == "warm_group_audio_path":
         handle_warm_group_audio_path(req_id, payload)
+    elif action == "get_local_identity_public_key":
+        handle_get_local_identity_public_key(req_id, payload)
+    elif action == "register_peer_identity":
+        handle_register_peer_identity(req_id, payload)
     else:
         emit_resp(req_id, False, error=f"Unknown action: {action}")
 

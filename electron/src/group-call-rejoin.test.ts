@@ -18,6 +18,9 @@ import {
 } from './group-call';
 import { encodeJoinWire } from './group-call-wire-reticulum';
 
+/** Valid RNS destination hash hex (32 chars) for GC_JOIN `d` / `reticulumDestinationHash`. */
+const TEST_D32 = 'a'.repeat(32);
+
 function reticulumAwarePresenceStub(): PresenceStub {
   return {
     on: () => {},
@@ -127,8 +130,22 @@ describe('recent room bootstrap state', () => {
         roomId: 'gcall-qortal-812',
         chatId: 'chat-812',
         participants: new Map([
-          ['Q-self', { publicKey: 'pk-self', joinedAt: 100 }],
-          ['Q-root', { publicKey: 'pk-root', joinedAt: 200 }],
+          [
+            'Q-self',
+            {
+              publicKey: 'pk-self',
+              joinedAt: 100,
+              reticulumDestinationHash: TEST_D32,
+            },
+          ],
+          [
+            'Q-root',
+            {
+              publicKey: 'pk-root',
+              joinedAt: 200,
+              reticulumDestinationHash: TEST_D32,
+            },
+          ],
         ]),
         topologyEpoch: 17,
         lastTopology: {
@@ -156,8 +173,18 @@ describe('recent room bootstrap state', () => {
       roomId: 'gcall-qortal-812',
       chatId: 'chat-812',
       participants: [
-        { address: 'Q-self', publicKey: 'pk-self', joinedAt: 100 },
-        { address: 'Q-root', publicKey: 'pk-root', joinedAt: 200 },
+        {
+          address: 'Q-self',
+          publicKey: 'pk-self',
+          joinedAt: 100,
+          reticulumDestinationHash: TEST_D32,
+        },
+        {
+          address: 'Q-root',
+          publicKey: 'pk-root',
+          joinedAt: 200,
+          reticulumDestinationHash: TEST_D32,
+        },
       ],
       topologyEpoch: 17,
       lastTopology: {
@@ -198,7 +225,8 @@ describe('recent room bootstrap state', () => {
       'Q-user1',
       'sig',
       'pk1',
-      100
+      100,
+      TEST_D32
     );
     manager.joinRoom(
       'gcall-qortal-812',
@@ -206,7 +234,8 @@ describe('recent room bootstrap state', () => {
       'Q-user2',
       'sig',
       'pk2',
-      200
+      200,
+      TEST_D32
     );
     manager.joinRoom(
       'gcall-qortal-812',
@@ -214,7 +243,8 @@ describe('recent room bootstrap state', () => {
       'Q-user3',
       'sig',
       'pk3',
-      300
+      300,
+      TEST_D32
     );
 
     manager.leaveRoom('gcall-qortal-812', 'Q-user3', 'sig', 'pk3', 400);
@@ -225,15 +255,23 @@ describe('recent room bootstrap state', () => {
       'Q-user3',
       'sig',
       'pk3',
-      500
+      500,
+      TEST_D32
     );
 
     expect(reticulumSent.length).toBeGreaterThan(0);
     expect(manager.getRoomParticipants('gcall-qortal-812')).toEqual([
-      { address: 'Q-user3', publicKey: 'pk3' },
+      { address: 'Q-user3', publicKey: 'pk3', reticulumDestinationHash: TEST_D32 },
     ]);
     expect(manager.getRoomBootstrapState('gcall-qortal-812')).toMatchObject({
-      participants: [{ address: 'Q-user3', publicKey: 'pk3', joinedAt: 500 }],
+      participants: [
+        {
+          address: 'Q-user3',
+          publicKey: 'pk3',
+          joinedAt: 500,
+          reticulumDestinationHash: TEST_D32,
+        },
+      ],
     });
   });
 
@@ -253,7 +291,8 @@ describe('recent room bootstrap state', () => {
       'Q-root',
       'sig',
       'pk-root',
-      t0
+      t0,
+      TEST_D32
     );
     manager.joinRoom(
       'gcall-qortal-812',
@@ -261,7 +300,8 @@ describe('recent room bootstrap state', () => {
       'Q-user2',
       'sig',
       'pk2',
-      t0 + 100
+      t0 + 100,
+      TEST_D32
     );
     manager.joinRoom(
       'gcall-qortal-812',
@@ -269,7 +309,8 @@ describe('recent room bootstrap state', () => {
       'Q-user3',
       'sig',
       'pk3',
-      t0 + 200
+      t0 + 200,
+      TEST_D32
     );
 
     manager.broadcastTopology(
@@ -301,14 +342,20 @@ describe('recent room bootstrap state', () => {
       'Q-user3',
       'sig',
       'pk3',
-      t0 + 500
+      t0 + 500,
+      TEST_D32
     );
 
     const bootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
 
     expect(bootstrap).toMatchObject({
       participants: [
-        { address: 'Q-user3', publicKey: 'pk3', joinedAt: t0 + 500 },
+        {
+          address: 'Q-user3',
+          publicKey: 'pk3',
+          joinedAt: t0 + 500,
+          reticulumDestinationHash: TEST_D32,
+        },
       ],
       topologyEpoch: 17,
       lastTopology: {
@@ -319,6 +366,68 @@ describe('recent room bootstrap state', () => {
       callSessionId: firstJoin.callSessionId,
       mediaSessionGeneration: firstJoin.mediaSessionGeneration,
     });
+  });
+
+  it('continues Reticulum overlay fanout when an earlier neighbor fails but a later one succeeds', async () => {
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    const manager = new GroupCallManager(
+      { send: () => {} } as any,
+      {
+        on: () => {},
+        off: () => {},
+        getRouteForAddress: (address: string) => ({
+          kind: 'reticulum' as const,
+          destinationHash: `d:${address}`,
+        }),
+        getReticulumActiveNeighborHashes: () => ['d:bad', 'd:good'],
+        getNodeIdForAddress: () => null,
+      } as any,
+      {
+        getState: () => 'ready',
+        sendGroupCallDetailed: async (
+          hash: string,
+          msg: Record<string, unknown>
+        ) => {
+          sent.push({ hash, msg });
+          if (hash === 'd:bad') {
+            return {
+              ok: false as const,
+              reason: 'packet-send-false' as const,
+              error: 'Packet send returned False',
+            };
+          }
+          return { ok: true as const };
+        },
+        sendGroupCall: async () => true,
+        warmGroupAudioPath: async () => ({ ok: true as const }),
+        openGroupAudioLink: async () => ({
+          ok: true as const,
+          linkId: 'stub-link',
+          established: true,
+        }),
+        closeGroupAudioLink: async () => ({ ok: true as const }),
+        on: () => {},
+        off: () => {},
+      } as any
+    );
+
+    manager.setQortalGroupReticulumTargets('gcall-qortal-812', ['Q-peer']);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sent.some((e) => e.hash === 'd:bad')).toBe(true);
+    expect(sent.some((e) => e.hash === 'd:good')).toBe(true);
+    expect(sent.some((e) => e.msg.t === 'GJ')).toBe(true);
   });
 
   it('retries first-contact Reticulum join fanout after unknown peer discovery lag', async () => {
@@ -359,7 +468,15 @@ describe('recent room bootstrap state', () => {
     );
 
     manager.setQortalGroupReticulumTargets('gcall-qortal-812', ['Q-peer']);
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-self', 'sig', 'pk', 100);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
 
     expect(attempts).toBeGreaterThanOrEqual(1);
     await vi.advanceTimersByTimeAsync(250);
@@ -404,7 +521,15 @@ describe('recent room bootstrap state', () => {
     (manager as any).verifyPool.verify = vi.fn(async () => true);
     manager.setLocalAddresses(['Q-self']);
     const now = Date.now();
-    manager.joinRoom('gcall-qortal-812', 'chat-812', 'Q-self', 'sig', 'pk', now);
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-self',
+      'sig',
+      'pk',
+      now,
+      TEST_D32
+    );
 
     bridge.emit(
       'group-call-message',
@@ -415,6 +540,7 @@ describe('recent room bootstrap state', () => {
         fromPublicKey: 'pk-peer',
         signature: 'sig-peer',
         timestamp: now + 1,
+        reticulumDestinationHash: 'b'.repeat(32),
       }),
       'call-peer',
       'd:Q-peer'
@@ -456,7 +582,15 @@ describe('retained verified key replay', () => {
       reticulumBridgeReadyStub([]) as any
     );
 
-    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk-self', 100);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk-self',
+      100,
+      TEST_D32
+    );
     manager.broadcastTopology(
       'room-1',
       {
@@ -515,7 +649,15 @@ describe('retained verified key replay', () => {
       reticulumBridgeReadyStub([]) as any
     );
 
-    manager.joinRoom('room-2', 'chat-2', 'Q-self', 'sig', 'pk-self', 100);
+    manager.joinRoom(
+      'room-2',
+      'chat-2',
+      'Q-self',
+      'sig',
+      'pk-self',
+      100,
+      TEST_D32
+    );
     manager.broadcastTopology(
       'room-2',
       {
@@ -641,7 +783,15 @@ describe('Reticulum group audio transport', () => {
     );
 
     manager.setLocalAddresses(['Q-self']);
-    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
 
     const ok = manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -737,7 +887,15 @@ describe('Reticulum group audio transport', () => {
     );
 
     manager.setLocalAddresses(['Q-self']);
-    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
 
     manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
     await new Promise<void>((resolve) => setImmediate(resolve));
@@ -837,7 +995,15 @@ describe('Reticulum group audio transport', () => {
 
     manager.start();
     manager.setLocalAddresses(['Q-self']);
-    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
     manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
     await Promise.resolve();
     await Promise.resolve();
@@ -940,7 +1106,15 @@ describe('Reticulum group audio transport', () => {
 
     manager.start();
     manager.setLocalAddresses(['Q-self']);
-    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
     manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
     await Promise.resolve();
     await Promise.resolve();
@@ -985,7 +1159,10 @@ describe('Reticulum group activity hints', () => {
       decodeGcReticulumActivityWire({ t: 'GA', g: 812.5, m: now }, now)
     ).toBeNull();
     expect(
-      decodeGcReticulumActivityWire({ t: 'GA', g: 812, m: now - 50_000 }, now)
+      decodeGcReticulumActivityWire(
+        { t: 'GA', g: 812, m: now - 130_000 },
+        now
+      )
     ).toBeNull();
   });
 
@@ -1032,6 +1209,7 @@ describe('Reticulum group activity hints', () => {
       fromPublicKey: 'pk-peer',
       signature: 'sig',
       timestamp: Date.now(),
+      reticulumDestinationHash: TEST_D32,
       hopsRemaining: 2,
     });
 

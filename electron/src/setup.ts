@@ -2281,26 +2281,39 @@ ipcMain.handle(
     signature: string,
     publicKey: string,
     timestamp: number,
+    reticulumDestinationHash: string,
     joinGeneration?: number,
-    topologyEpochFloor?: number
+    topologyEpochFloor?: number,
+    reticulumIdentityPublicKeyBase64?: string,
+    joinRkSignature?: string
   ) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    const session = mgr.joinRoom(
-      roomId,
-      chatId,
-      localAddress,
-      signature,
-      publicKey,
-      timestamp,
-      joinGeneration,
-      topologyEpochFloor
-    );
-    return {
-      success: true,
-      callSessionId: session.callSessionId,
-      mediaSessionGeneration: session.mediaSessionGeneration,
-    };
+    try {
+      const session = mgr.joinRoom(
+        roomId,
+        chatId,
+        localAddress,
+        signature,
+        publicKey,
+        timestamp,
+        reticulumDestinationHash,
+        joinGeneration,
+        topologyEpochFloor,
+        reticulumIdentityPublicKeyBase64,
+        joinRkSignature
+      );
+      return {
+        success: true,
+        callSessionId: session.callSessionId,
+        mediaSessionGeneration: session.mediaSessionGeneration,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 );
 

@@ -204,10 +204,75 @@ export function buildGcallDiagnosticsExportJson(params: {
   return JSON.stringify(payload, null, 2);
 }
 
-export function downloadGcallDiagnosticsJson(
+type GcallElectronFile = {
+  startStreamSave: (options: {
+    filename: string;
+    mimeType?: string;
+  }) => Promise<{ canceled?: boolean; filePath?: string }>;
+  writeChunk: (
+    filePath: string,
+    chunk: Uint8Array,
+    append: boolean
+  ) => Promise<void>;
+};
+
+function getGcallElectronFileApi(): GcallElectronFile | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const w = window as typeof window & { electron?: GcallElectronFile };
+  return w.electron?.startStreamSave ? w.electron : undefined;
+}
+
+/**
+ * Save diagnostics JSON via Electron native save dialog when available; otherwise
+ * File System Access `showSaveFilePicker`, then anchor download fallback.
+ */
+export async function downloadGcallDiagnosticsJson(
   json: string,
   filename = `qortal-gcall-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
-): void {
+): Promise<void> {
+  const electron = getGcallElectronFileApi();
+  if (electron) {
+    const saveResult = await electron.startStreamSave({
+      filename,
+      mimeType: 'application/json',
+    });
+    if (saveResult?.canceled || !saveResult?.filePath) return;
+    const encoder = new TextEncoder();
+    await electron.writeChunk(saveResult.filePath, encoder.encode(json), false);
+    return;
+  }
+
+  if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+    try {
+      const handle = await (
+        window as unknown as {
+          showSaveFilePicker: (opts: {
+            suggestedName: string;
+            types: {
+              description: string;
+              accept: Record<string, string[]>;
+            }[];
+          }) => Promise<FileSystemFileHandle>;
+        }
+      ).showSaveFilePicker({
+        suggestedName: filename,
+        types: [
+          {
+            description: 'JSON',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      return;
+    } catch (err: unknown) {
+      const name = err && typeof err === 'object' && 'name' in err ? String((err as Error).name) : '';
+      if (name === 'AbortError') return;
+    }
+  }
+
   const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

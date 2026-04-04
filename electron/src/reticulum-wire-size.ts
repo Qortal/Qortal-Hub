@@ -4,14 +4,16 @@
  */
 
 /**
- * The Python bridge injects `r` (local hub destination hash hex) — 32 bytes → 64 hex chars.
- * Measure frames with the same length so pre-send size matches wire_bytes in
- * presence_bridge.py. Stay under RNS.Packet.ENCRYPTED_MDU (~383); `handle_send_*`
- * compares `len(wire_bytes)` to that MDU (not 350).
+ * The Python bridge injects `r` via `destination_hash_hex(_destination.hash)` — RNS
+ * destination addresses are 16 bytes → 32 hex chars (see Reticulum manual).
+ * Must match that width so pre-send size matches `_call_wire_json_bytes` in
+ * presence_bridge.py. Align with `RNS.Packet.ENCRYPTED_MDU` (383 in typical builds);
+ * `handle_send_*` compares `len(wire_bytes)` to that MDU.
  */
-export const RT_RETICULUM_MAX_WIRE_JSON_BYTES = 378;
+export const RT_RETICULUM_MAX_WIRE_JSON_BYTES = 383;
 
-const BRIDGE_SENDER_HASH_PLACEHOLDER = '0'.repeat(64);
+/** Same length as real `r` on the wire (was incorrectly 64, over-counting by ~32 bytes). */
+const BRIDGE_SENDER_HASH_PLACEHOLDER = '0'.repeat(32);
 const OVERLAY_MESSAGE_ID_PLACEHOLDER = 'overlay000000';
 
 /**

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   RT_GCALL_MAX_WIRE_JSON_BYTES,
   decodeClusterHeartbeatWire,
+  decodeJoinIdentityWire,
   decodeJoinWire,
+  decodeJoinWireFailureReason,
   decodeKeyRequestFromGq1,
   decodeKeyWireFromGk1,
   decodeKeyRotateFromGr1,
@@ -10,6 +12,7 @@ import {
   decodeTopologyFromGt1,
   decodeTopologyWireSingle,
   encodeClusterHeartbeatWire,
+  encodeJoinIdentityWire,
   encodeJoinWire,
   encodeKeyRequestWire,
   encodeKeyWire,
@@ -24,16 +27,13 @@ import {
   parseGt0,
   parseGt1,
 } from './group-call-wire-reticulum';
-import { wireFitsReticulum } from './reticulum-wire-size';
+import {
+  byteLengthUtf8JsonWithBridgeSender,
+  wireFitsReticulum,
+} from './reticulum-wire-size';
 
 function bridgeWireJsonBytes(frame: Record<string, unknown>): number {
-  return Buffer.byteLength(
-    JSON.stringify({
-      ...frame,
-      r: '0'.repeat(64),
-    }),
-    'utf8'
-  );
+  return byteLengthUtf8JsonWithBridgeSender(frame);
 }
 
 describe('group-call-wire-reticulum', () => {
@@ -96,6 +96,7 @@ describe('group-call-wire-reticulum', () => {
   });
 
   it('round-trips compact join wire', () => {
+    const d32 = 'a'.repeat(32);
     const env = {
       type: 'GC_JOIN' as const,
       roomId: 'gcall-qortal-1',
@@ -104,10 +105,12 @@ describe('group-call-wire-reticulum', () => {
       fromPublicKey: 'pk',
       signature: 'sig',
       timestamp: 12_345,
+      reticulumDestinationHash: d32,
       joinGeneration: 7,
     };
     const w = encodeJoinWire(env);
     expect(w.t).toBe('GJ');
+    expect(w.d).toBe(d32);
     const back = decodeJoinWire(w as Record<string, unknown>);
     expect(back).toEqual({
       type: 'GC_JOIN',
@@ -117,8 +120,85 @@ describe('group-call-wire-reticulum', () => {
       fromPublicKey: 'pk',
       signature: 'sig',
       timestamp: 12_345,
+      reticulumDestinationHash: d32,
       joinGeneration: 7,
     });
+    expect(decodeJoinWireFailureReason(w as Record<string, unknown>)).toBeNull();
+  });
+
+  it('decodeJoinWireFailureReason explains bad d', () => {
+    const w = {
+      t: 'GJ',
+      R: 'r1',
+      H: 'h1',
+      a: 'Qa',
+      k: 'pk',
+      m: 1,
+      g: 'sig',
+      d: 'deadbeef',
+    };
+    expect(decodeJoinWire(w as Record<string, unknown>)).toBeNull();
+    expect(decodeJoinWireFailureReason(w as Record<string, unknown>)).toBe(
+      'bad_d_not_hex32(len=8)'
+    );
+  });
+
+  it('decodeJoinWire returns null without d', () => {
+    expect(
+      decodeJoinWire({
+        t: 'GJ',
+        R: 'gcall-qortal-1',
+        H: 'c1',
+        a: 'Qa',
+        k: 'pk',
+        m: 1,
+        g: 'sig',
+      } as Record<string, unknown>)
+    ).toBeNull();
+  });
+
+  it('GC_JOIN with required d fits Reticulum MDU (compact field sizes)', () => {
+    const d32 = 'a'.repeat(32);
+    const w = encodeJoinWire({
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+      fromAddress: 'Qa',
+      fromPublicKey: 'pk',
+      signature: 'sig',
+      timestamp: 12_345,
+      reticulumDestinationHash: d32,
+      joinGeneration: 7,
+    });
+    expect(wireFitsReticulum(w)).toBe(true);
+  });
+
+  it('GC_JOIN+GI split: GJ without rk and GI with unpadded rk both fit Reticulum MDU', () => {
+    const d32 = 'a'.repeat(32);
+    const rk = Buffer.alloc(64, 7).toString('base64');
+    const gj = encodeJoinWire({
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+      fromAddress: 'Qa',
+      fromPublicKey: 'pk',
+      signature: 'sig',
+      timestamp: 12_345,
+      reticulumDestinationHash: d32,
+      joinGeneration: 7,
+    });
+    expect(gj.rk).toBeUndefined();
+    expect(wireFitsReticulum(gj)).toBe(true);
+    const gi = encodeJoinIdentityWire({
+      fromAddress: 'Qa',
+      signature: 'sig_rk',
+      timestamp: 12_345,
+      reticulumDestinationHash: d32,
+      joinGeneration: 7,
+      reticulumIdentityPublicKeyBase64: rk,
+    });
+    expect(gi.t).toBe('GI');
+    expect(wireFitsReticulum(gi)).toBe(true);
+    const backGi = decodeJoinIdentityWire(gi as Record<string, unknown>);
+    expect(backGi?.reticulumIdentityPublicKeyBase64).toBe(rk.replace(/=+$/u, ''));
   });
 
   it('round-trips single-packet topology', () => {

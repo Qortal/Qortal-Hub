@@ -1,6 +1,8 @@
 /**
  * Compact Reticulum wire for group-call control messages.
  * Per-packet JSON budget: [reticulum-wire-size.ts](reticulum-wire-size.ts); fragmentation for large topology / keys.
+ * Root `GC_TOPOLOGY` heartbeats are sent from the renderer at `TOPOLOGY_HEARTBEAT_MS` in `useGroupVoiceCall.ts`
+ * (each tick may emit `GT` or many `GT0`/`GT1` fragments, then overlay fanout) — keep that interval moderate.
  */
 
 import * as nodeCrypto from 'crypto';
@@ -25,7 +27,7 @@ export const RT_GCALL_MAX_WIRE_JSON_BYTES = RT_RETICULUM_MAX_WIRE_JSON_BYTES;
  * Bump when Reticulum group-call wire encoding changes; grep logs for this string to confirm rebuild.
  * Keep in sync with `PRESENCE_BRIDGE_BUILD` in `electron/resources/presence_bridge.py`.
  */
-export const GC_RETICULUM_WIRE_BUILD_MARKER = 'wire380-rns-announce-45m-v1';
+export const GC_RETICULUM_WIRE_BUILD_MARKER = 'wire383-gj-gi-split-rk-v1';
 
 /** Max payload fragments for topology / key-rotate / SDP (defensive). */
 export const RT_GCALL_MAX_FRAGMENTS = 96;
@@ -40,14 +42,43 @@ function byteLengthUtf8Json(obj: Record<string, unknown>): number {
 
 export { byteLengthUtf8JsonWithBridgeSender };
 
-function isHex64(s: unknown): s is string {
+/** 64 hex chars (e.g. SHA-256 digest) — used for fragment `z` fields, not RNS addresses. */
+export function isHex64(s: unknown): s is string {
   return typeof s === 'string' && /^[0-9a-f]{64}$/i.test(s);
+}
+
+/** Reticulum/RNS destination address: 16 bytes, 32 hex chars (see Reticulum manual). */
+export function isRnsDestinationHashHex(s: unknown): s is string {
+  return typeof s === 'string' && /^[0-9a-f]{32}$/i.test(s);
+}
+
+/** RNS.Identity full public key: 64 bytes, standard or unpadded base64 (wire key `rk`). */
+export function isRnsIdentityPublicKeyBase64(s: unknown): s is string {
+  if (typeof s !== 'string' || s.length < 86 || s.length > 88) {
+    return false;
+  }
+  try {
+    const buf = Buffer.from(s, 'base64');
+    return buf.length === 64;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Strip base64 padding for wire (saves bytes); decoders must accept unpadded.
+ * `GC_JOIN_RK` signatures must sign this same string (see
+ * `normalizeRkBase64ForGcJoinRkSign` in useGroupVoiceCall.ts).
+ */
+export function normalizeRkBase64ForWire(rk: string): string {
+  return rk.replace(/=+$/u, '');
 }
 
 /** Wire types routed to `group_call_message` in presence_bridge.py */
 export const GROUP_CALL_RETICULUM_WIRE_TYPES = new Set<string>([
   'GA',
   'GJ',
+  'GI',
   'GL',
   'GH',
   'GK',
@@ -77,8 +108,13 @@ export function encodeJoinWire(env: {
   fromPublicKey: string;
   signature: string;
   timestamp: number;
+  /** Joiner's Reticulum destination hash (32 hex). Wire key `d`. */
+  reticulumDestinationHash: string;
+  /** RNS.Identity.get_public_key() as standard base64 (64 bytes). Wire key `rk`. */
+  reticulumIdentityPublicKeyBase64?: string;
   joinGeneration?: number;
 }): Record<string, unknown> {
+  const d = env.reticulumDestinationHash.trim().toLowerCase();
   const o: Record<string, unknown> = {
     t: 'GJ',
     R: env.roomId,
@@ -87,6 +123,48 @@ export function encodeJoinWire(env: {
     k: env.fromPublicKey,
     m: env.timestamp,
     g: env.signature,
+    d,
+  };
+  if (
+    typeof env.reticulumIdentityPublicKeyBase64 === 'string' &&
+    isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)
+  ) {
+    o.rk = env.reticulumIdentityPublicKeyBase64;
+  }
+  if (
+    typeof env.joinGeneration === 'number' &&
+    Number.isFinite(env.joinGeneration)
+  ) {
+    o.j = env.joinGeneration;
+  }
+  return o;
+}
+
+/**
+ * Second Reticulum frame for join: signed `GC_JOIN_RK` with RNS identity key only.
+ * Omits room/chat/publicKey on wire — receiver correlates to a verified GC_JOIN (GJ) by (a,m,d,j).
+ * `rk` is unpadded base64 to stay under ENCRYPTED_MDU with bridge `r`/`X`/`L`.
+ */
+export function encodeJoinIdentityWire(env: {
+  fromAddress: string;
+  signature: string;
+  timestamp: number;
+  reticulumDestinationHash: string;
+  reticulumIdentityPublicKeyBase64: string;
+  joinGeneration?: number;
+}): Record<string, unknown> {
+  const d = env.reticulumDestinationHash.trim().toLowerCase();
+  if (!isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)) {
+    throw new Error('encodeJoinIdentityWire: invalid reticulumIdentityPublicKeyBase64');
+  }
+  const rk = normalizeRkBase64ForWire(env.reticulumIdentityPublicKeyBase64);
+  const o: Record<string, unknown> = {
+    t: 'GI',
+    a: env.fromAddress,
+    m: env.timestamp,
+    g: env.signature,
+    d,
+    rk,
   };
   if (
     typeof env.joinGeneration === 'number' &&
@@ -97,6 +175,97 @@ export function encodeJoinWire(env: {
   return o;
 }
 
+export function decodeJoinIdentityWireFailureReason(
+  raw: Record<string, unknown>
+): string | null {
+  if (raw.t !== 'GI') return 'not_gi';
+  const a = raw.a;
+  const m = raw.m;
+  const g = raw.g;
+  const dRaw = raw.d;
+  const rkRaw = raw.rk;
+  const j = raw.j;
+  if (typeof a !== 'string') return 'bad_a';
+  if (typeof m !== 'number') return 'bad_m';
+  if (typeof g !== 'string') return 'bad_g';
+  if (typeof dRaw !== 'string') return 'bad_d';
+  if (!isRnsDestinationHashHex(dRaw)) return 'bad_d_hex';
+  if (typeof rkRaw !== 'string' || !isRnsIdentityPublicKeyBase64(rkRaw)) {
+    return 'bad_rk';
+  }
+  if (
+    j !== undefined &&
+    j !== null &&
+    (typeof j !== 'number' || !Number.isFinite(j))
+  ) {
+    return 'bad_j';
+  }
+  return null;
+}
+
+export function decodeJoinIdentityWire(raw: Record<string, unknown>): {
+  fromAddress: string;
+  signature: string;
+  timestamp: number;
+  reticulumDestinationHash: string;
+  reticulumIdentityPublicKeyBase64: string;
+  joinGeneration?: number;
+} | null {
+  if (decodeJoinIdentityWireFailureReason(raw) !== null) {
+    return null;
+  }
+  const a = raw.a as string;
+  const m = raw.m as number;
+  const g = raw.g as string;
+  const dRaw = raw.d as string;
+  const rkRaw = raw.rk as string;
+  const j = raw.j;
+  return {
+    fromAddress: a,
+    signature: g,
+    timestamp: m,
+    reticulumDestinationHash: dRaw.trim().toLowerCase(),
+    reticulumIdentityPublicKeyBase64: rkRaw,
+    ...(typeof j === 'number' && Number.isFinite(j) ? { joinGeneration: j } : {}),
+  };
+}
+
+/**
+ * When `decodeJoinWire` would return null, explains why (for diagnostics).
+ * Returns null if the wire is a valid GJ frame; otherwise a short reason code.
+ */
+export function decodeJoinWireFailureReason(
+  raw: Record<string, unknown>
+): string | null {
+  if (raw.t !== 'GJ') {
+    return 'not_gj';
+  }
+  const R = raw.R;
+  const H = raw.H;
+  const a = raw.a;
+  const k = raw.k;
+  const m = raw.m;
+  const g = raw.g;
+  const dRaw = raw.d;
+  const rkRaw = raw.rk;
+  if (typeof R !== 'string') return 'bad_R';
+  if (typeof H !== 'string') return 'bad_H';
+  if (typeof a !== 'string') return 'bad_a';
+  if (typeof k !== 'string') return 'bad_k';
+  if (typeof m !== 'number') return 'bad_m';
+  if (typeof g !== 'string') return 'bad_g';
+  if (typeof dRaw !== 'string') return 'bad_d_missing_or_not_string';
+  if (!isRnsDestinationHashHex(dRaw)) {
+    const t = String(dRaw).trim();
+    return `bad_d_not_hex32(len=${t.length})`;
+  }
+  if (rkRaw !== undefined && rkRaw !== null) {
+    if (typeof rkRaw !== 'string') return 'bad_rk_not_string';
+    if (!isRnsIdentityPublicKeyBase64(rkRaw)) return 'bad_rk_not_b64_64';
+  }
+  return null;
+}
+
 export function decodeJoinWire(raw: Record<string, unknown>): {
   type: 'GC_JOIN';
   roomId: string;
@@ -105,6 +274,8 @@ export function decodeJoinWire(raw: Record<string, unknown>): {
   fromPublicKey: string;
   signature: string;
   timestamp: number;
+  reticulumDestinationHash: string;
+  reticulumIdentityPublicKeyBase64?: string;
   joinGeneration?: number;
 } | null {
   if (raw.t !== 'GJ') return null;
@@ -114,15 +285,23 @@ export function decodeJoinWire(raw: Record<string, unknown>): {
   const k = raw.k;
   const m = raw.m;
   const g = raw.g;
+  const dRaw = raw.d;
+  const rkRaw = raw.rk;
   if (
     typeof R !== 'string' ||
     typeof H !== 'string' ||
     typeof a !== 'string' ||
     typeof k !== 'string' ||
     typeof m !== 'number' ||
-    typeof g !== 'string'
+    typeof g !== 'string' ||
+    !isRnsDestinationHashHex(dRaw)
   ) {
     return null;
+  }
+  if (rkRaw !== undefined && rkRaw !== null) {
+    if (typeof rkRaw !== 'string' || !isRnsIdentityPublicKeyBase64(rkRaw)) {
+      return null;
+    }
   }
   const j = raw.j;
   return {
@@ -133,6 +312,10 @@ export function decodeJoinWire(raw: Record<string, unknown>): {
     fromPublicKey: k,
     signature: g,
     timestamp: m,
+    reticulumDestinationHash: (dRaw as string).trim().toLowerCase(),
+    ...(typeof rkRaw === 'string' && isRnsIdentityPublicKeyBase64(rkRaw)
+      ? { reticulumIdentityPublicKeyBase64: rkRaw }
+      : {}),
     ...(typeof j === 'number' && Number.isFinite(j) ? { joinGeneration: j } : {}),
   };
 }
@@ -198,7 +381,7 @@ export function encodeClusterHeartbeatWire(env: {
   signature: string;
   timestamp: number;
 }): Record<string, unknown> {
-  // Reticulum JSON MDU (~378 bytes with bridge `r`/`X`/`L`): omit duplicate
+  // Reticulum JSON MDU (~383 bytes with bridge `r`/`X`/`L`): omit duplicate
   // `f` when clusterForwarder === fromAddress, and omit `k` (peers resolve pk
   // from roster). Verification still uses full signed fields from main.
   const w: Record<string, unknown> = {

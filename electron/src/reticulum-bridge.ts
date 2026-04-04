@@ -29,6 +29,24 @@ import {
 } from './reticulum-audio-ipc';
 import { GC_RETICULUM_WIRE_BUILD_MARKER } from './group-call-wire-reticulum';
 
+/**
+ * Python emits overlay_link_state after every overlay send with these traffic labels
+ * (presence_bridge._send_wire_to_overlay_peer). Logging each line is very noisy.
+ */
+const OVERLAY_LINK_PER_PACKET_REASONS = new Set([
+  'group_signal',
+  'presence_publish',
+  'presence_forward',
+  'call_signal',
+]);
+
+function shouldLogOverlayLinkStateEvent(reason: string): boolean {
+  if (OVERLAY_LINK_PER_PACKET_REASONS.has(reason)) return false;
+  if (reason === 'rx_presence') return false;
+  if (reason.startsWith('queued:')) return false;
+  return true;
+}
+
 type BridgeCmdFrame = {
   type: 'cmd';
   action:
@@ -42,7 +60,9 @@ type BridgeCmdFrame = {
     | 'send_group_call'
     | 'open_group_audio_link'
     | 'close_group_audio_link'
-    | 'warm_group_audio_path';
+    | 'warm_group_audio_path'
+    | 'get_local_identity_public_key'
+    | 'register_peer_identity';
   id: string;
   payload?: Record<string, unknown>;
 };
@@ -956,6 +976,94 @@ export class ReticulumBridge
     };
   }
 
+  /**
+   * Local hub destination hash (RNS hex), set when the bridge receives `ready` from Python.
+   * Used by group call join to sign GC_JOIN with a stable Reticulum identity.
+   */
+  getLocalDestinationHash(): string | undefined {
+    return this.localPresenceDestinationHash;
+  }
+
+  /**
+   * Wait for the bridge to expose the local destination hash. This keeps callers
+   * aligned with the actual bridge handshake instead of racing a one-shot field read.
+   */
+  async waitForLocalDestinationHash(
+    timeoutMs = 5_000
+  ): Promise<string | undefined> {
+    const normalize = (value?: string): string | undefined => {
+      if (typeof value !== 'string') return undefined;
+      const trimmed = value.trim().toLowerCase();
+      return trimmed.length > 0 ? trimmed : undefined;
+    };
+
+    const existing = normalize(this.localPresenceDestinationHash);
+    if (existing) return existing;
+
+    try {
+      await this.start();
+    } catch {
+      return normalize(this.localPresenceDestinationHash);
+    }
+
+    const afterStart = normalize(this.localPresenceDestinationHash);
+    if (afterStart) return afterStart;
+
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    while (Date.now() < deadline) {
+      const current = normalize(this.localPresenceDestinationHash);
+      if (current) return current;
+      if (this.state === 'degraded' || this.state === 'stopped') break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    return normalize(this.localPresenceDestinationHash);
+  }
+
+  /**
+   * RNS.Identity.get_public_key() as standard base64 (64 bytes); null if bridge not ready.
+   */
+  async getLocalIdentityPublicKeyBase64(): Promise<string | null> {
+    try {
+      await this.start();
+    } catch {
+      return null;
+    }
+    if (this.state !== 'ready') return null;
+    try {
+      const resp = await this.sendCommand('get_local_identity_public_key', {});
+      if (!resp.ok) return null;
+      const pk = resp.payload?.publicKeyBase64;
+      return typeof pk === 'string' && pk.length > 0 ? pk : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Register a peer's RNS public key from a verified GC_JOIN (`rk`) so overlay send can use them.
+   */
+  async registerPeerIdentityFromGroupJoin(
+    peerPresenceHash: string,
+    reticulumIdentityPublicKeyBase64: string
+  ): Promise<boolean> {
+    try {
+      await this.start();
+    } catch {
+      return false;
+    }
+    if (this.state !== 'ready') return false;
+    try {
+      const resp = await this.sendCommand('register_peer_identity', {
+        peerPresenceHash,
+        reticulumIdentityPublicKeyBase64,
+      });
+      return resp.ok === true;
+    } catch {
+      return false;
+    }
+  }
+
   private async spawnAndHandshake(): Promise<void> {
     const configDir = getReticulumConfigDir();
     const launch = resolveBridgeLaunch(configDir);
@@ -1326,6 +1434,17 @@ export class ReticulumBridge
     if (frame.type === 'resp') {
       const pending = this.pending.get(frame.id);
       if (!pending) return;
+      // `start` responds with the same destination hash as the `ready` event; applying
+      // it here covers ordering/chunking where the event line is processed after the resp.
+      if (frame.ok) {
+        const raw = frame.payload?.destinationHash;
+        if (typeof raw === 'string') {
+          const h = raw.trim().toLowerCase();
+          if (h.length > 0) {
+            this.localPresenceDestinationHash = h;
+          }
+        }
+      }
       clearTimeout(pending.timer);
       this.pending.delete(frame.id);
       pending.resolve(frame);
@@ -1555,9 +1674,11 @@ export class ReticulumBridge
           typeof frame.payload?.queuedPackets === 'number'
             ? frame.payload.queuedPackets
             : 0;
-        loggerLog(
-          `[ReticulumBridge] overlay-link link_id=${linkId} peer=${peerPresenceHash || 'unknown'} incoming=${frame.payload?.incoming === true ? 'yes' : 'no'} established=${frame.payload?.established === true ? 'yes' : 'no'} queued=${queuedPackets}${reason ? ` reason=${reason}` : ''}`
-        );
+        if (shouldLogOverlayLinkStateEvent(reason)) {
+          loggerLog(
+            `[ReticulumBridge] overlay-link link_id=${linkId} peer=${peerPresenceHash || 'unknown'} incoming=${frame.payload?.incoming === true ? 'yes' : 'no'} established=${frame.payload?.established === true ? 'yes' : 'no'} queued=${queuedPackets}${reason ? ` reason=${reason}` : ''}`
+          );
+        }
         const established = frame.payload?.established === true;
         if (established) {
           this.overlayEstablishedLinkIds.add(linkId);

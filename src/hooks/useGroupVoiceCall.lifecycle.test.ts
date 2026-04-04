@@ -1232,7 +1232,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(
       shouldPromoteStandbyRootAfterHeartbeatTimeout({
         heartbeatSilentMs: 4_000,
-        heartbeatTimeoutMs: 3_200,
+        heartbeatTimeoutMs: 11_000,
         rootPeerRequiresReconnect: false,
       })
     ).toBe(false);
@@ -1241,8 +1241,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
   it('promotes standby root only once heartbeat is stale and the root peer needs reconnect', () => {
     expect(
       shouldPromoteStandbyRootAfterHeartbeatTimeout({
-        heartbeatSilentMs: 4_000,
-        heartbeatTimeoutMs: 3_200,
+        heartbeatSilentMs: 12_000,
+        heartbeatTimeoutMs: 11_000,
         rootPeerRequiresReconnect: true,
       })
     ).toBe(true);

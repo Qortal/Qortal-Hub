@@ -70,6 +70,14 @@ declare global {
         error?: string;
         created?: boolean;
       }>;
+      /** Local Reticulum hub destination hash (hex); null if bridge not ready. */
+      reticulumGetLocalDestinationHash?: () => Promise<{
+        destinationHash: string | null;
+      }>;
+      /** RNS.Identity public key (64 bytes, standard base64); null if bridge not ready. */
+      reticulumGetLocalIdentityPublicKeyBase64?: () => Promise<{
+        publicKeyBase64: string | null;
+      }>;
     };
     videoServer?: {
       start: (port?: number) => Promise<{ success: boolean; port?: number; error?: string }>;
@@ -299,8 +307,11 @@ declare global {
         signature: string,
         publicKey: string,
         timestamp: number,
+        reticulumDestinationHash: string,
         joinGeneration?: number,
-        topologyEpochFloor?: number
+        topologyEpochFloor?: number,
+        reticulumIdentityPublicKeyBase64?: string,
+        joinRkSignature?: string
       ) => Promise<{
         success: boolean;
         error?: string;

@@ -308,7 +308,7 @@ export function buildManagedReticulumConfig(
   const ifaceBody = ifaceParts.join('\n\n');
   return `${renderReticulumHeader(slice)}
 [logging]
-loglevel = 7
+loglevel = 4
 
 [interfaces]
 ${ifaceBody}
@@ -1033,6 +1033,78 @@ export function registerReticulumIpcHandlers(): void {
           ...base,
           reason: base.reason ?? 'Unable to read Reticulum bridge status',
         };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'reticulum:getLocalDestinationHash',
+    async (): Promise<{
+      destinationHash: string | null;
+    }> => {
+      try {
+        const { getReticulumBridge, startReticulumBridge } =
+          (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
+        let bridge = getReticulumBridge();
+        if (!bridge) {
+          try {
+            bridge = await startReticulumBridge();
+          } catch (error) {
+            loggerError(
+              '[Reticulum] Failed to start bridge for local destination hash:',
+              error
+            );
+            bridge = null;
+          }
+        }
+        const h = bridge
+          ? await bridge.waitForLocalDestinationHash(5_000)
+          : undefined;
+        return {
+          destinationHash:
+            typeof h === 'string' && h.length > 0
+              ? h.trim().toLowerCase()
+              : null,
+        };
+      } catch (error) {
+        loggerError('[Reticulum] getLocalDestinationHash failed:', error);
+        return { destinationHash: null };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'reticulum:getLocalIdentityPublicKeyBase64',
+    async (): Promise<{
+      publicKeyBase64: string | null;
+    }> => {
+      try {
+        const { getReticulumBridge, startReticulumBridge } =
+          (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
+        let bridge = getReticulumBridge();
+        if (!bridge) {
+          try {
+            bridge = await startReticulumBridge();
+          } catch (error) {
+            loggerError(
+              '[Reticulum] Failed to start bridge for local identity public key:',
+              error
+            );
+            bridge = null;
+          }
+        }
+        const pk = bridge
+          ? await bridge.getLocalIdentityPublicKeyBase64()
+          : null;
+        return {
+          publicKeyBase64: typeof pk === 'string' && pk.length > 0 ? pk : null,
+        };
+      } catch (error) {
+        loggerError(
+          '[Reticulum] getLocalIdentityPublicKeyBase64 failed:',
+          error
+        );
+        return { publicKeyBase64: null };
       }
     }
   );

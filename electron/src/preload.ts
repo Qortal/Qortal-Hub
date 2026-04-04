@@ -311,6 +311,14 @@ try {
         error?: string;
         created?: boolean;
       }>,
+    reticulumGetLocalDestinationHash: () =>
+      ipcRenderer.invoke('reticulum:getLocalDestinationHash') as Promise<{
+        destinationHash: string | null;
+      }>,
+    reticulumGetLocalIdentityPublicKeyBase64: () =>
+      ipcRenderer.invoke('reticulum:getLocalIdentityPublicKeyBase64') as Promise<{
+        publicKeyBase64: string | null;
+      }>,
   });
 
   // Expose other utility functions
@@ -1000,8 +1008,11 @@ try {
       signature: string,
       publicKey: string,
       timestamp: number,
+      reticulumDestinationHash: string,
       joinGeneration?: number,
-      topologyEpochFloor?: number
+      topologyEpochFloor?: number,
+      reticulumIdentityPublicKeyBase64?: string,
+      joinRkSignature?: string
     ) =>
       ipcRenderer.invoke(
         'gcall:join',
@@ -1011,8 +1022,11 @@ try {
         signature,
         publicKey,
         timestamp,
+        reticulumDestinationHash,
         joinGeneration,
-        topologyEpochFloor
+        topologyEpochFloor,
+        reticulumIdentityPublicKeyBase64,
+        joinRkSignature
       ) as Promise<{
         success: boolean;
         error?: string;

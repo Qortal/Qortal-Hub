@@ -120,6 +120,7 @@
   "group_call_members_fetch_failed": "Could not load group members.",
   "group_call_not_member": "Only group members can join this call.",
   "group_call_presence_offline": "Switch your status to online to join a group voice call.",
+  "group_call_reticulum_not_ready": "Reticulum is not ready yet. Wait a moment and try joining again.",
   "group_call_stage_title": "Group voice call",
   "group_call_participants": "Participants",
   "group_call_chat_sidebar": "Chat",

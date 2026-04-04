@@ -39,7 +39,10 @@ import type {
 import { VerifyWorkerPool } from './verify-worker-pool';
 import {
   decodeClusterHeartbeatWire,
+  decodeJoinIdentityWire,
+  decodeJoinIdentityWireFailureReason,
   decodeJoinWire,
+  decodeJoinWireFailureReason,
   decodeKeyRequestFromGq1,
   decodeKeyRequestWireSingle,
   decodeKeyRotateFromGr1,
@@ -50,6 +53,7 @@ import {
   decodeTopologyFromGt1,
   decodeTopologyWireSingle,
   encodeClusterHeartbeatWire,
+  encodeJoinIdentityWire,
   encodeJoinWire,
   encodeKeyRequestWire,
   encodeKeyRotateWire,
@@ -58,6 +62,8 @@ import {
   encodeTopologyWire,
   GC_RETICULUM_WIRE_BUILD_MARKER,
   isGroupCallReticulumWireType,
+  isRnsDestinationHashHex,
+  isRnsIdentityPublicKeyBase64,
   parseGk0,
   parseGk1,
   parseGq0,
@@ -68,7 +74,11 @@ import {
   parseGt1,
 } from './group-call-wire-reticulum';
 import type { GrFragmentMeta, GkFragmentMeta, GtFragmentMeta } from './group-call-wire-reticulum';
-import { wireFitsReticulum } from './reticulum-wire-size';
+import {
+  byteLengthUtf8JsonWithBridgeSender,
+  RT_RETICULUM_MAX_WIRE_JSON_BYTES,
+  wireFitsReticulum,
+} from './reticulum-wire-size';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -85,8 +95,9 @@ const GC_JOIN_MAX_FUTURE_SKEW_MS = 30_000;
 /** Max age of GC_JOIN `timestamp` vs local `now` (for tests and diagnostics). */
 export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
 
-const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 15_000;
-const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 40_000;
+const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
+/** Must exceed heartbeat interval so peers do not drop `GA` as stale between beats. */
+const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 120_000;
 const GC_RETICULUM_ACTIVITY_MAX_FUTURE_SKEW_MS = 30_000;
 /** Inbound fragment reassembly buffers for Reticulum group-call control. */
 const GC_RETICULUM_REASM_TTL_MS = 45_000;
@@ -113,8 +124,14 @@ type ReticulumMediaTransportKind = 'link' | 'packet';
 
 const GC_RETICULUM_PACKET_MEDIA_ENABLED = true;
 const GC_RETICULUM_PACKET_MEDIA_KEEP_AUDIO_LINKS = true;
-const GC_RETICULUM_OVERLAY_HOPS = 4;
+const GC_RETICULUM_OVERLAY_HOPS = 3;
 const GC_RETICULUM_OVERLAY_SEEN_TTL_MS = 120_000;
+/** Same TTL as overlay id: logical duplicate may reappear after cache expiry. */
+const GC_RETICULUM_OVERLAY_CONTENT_DEDUP_TTL_MS = 120_000;
+/** Cap RAM if many unique payloads arrive (sweeps expired first). */
+const GC_RETICULUM_OVERLAY_CONTENT_DEDUP_MAX = 8192;
+/** Full scan for expired content-hash entries at most this often (idle traffic still frees memory). */
+const GC_RETICULUM_OVERLAY_CONTENT_DEDUP_SWEEP_MIN_MS = 60_000;
 
 type GcReticulumRetryKind =
   | 'join'
@@ -321,9 +338,27 @@ export interface GcJoinEnvelope {
   fromPublicKey: string;
   signature: string;
   timestamp: number;
+  /** Joiner's Reticulum destination hash (32 hex, RNS 16-byte address); signed and on wire as `d`. */
+  reticulumDestinationHash: string;
+  /** RNS.Identity public key (64 bytes, standard base64). Wire `rk`; registers peer in bridge when verified. */
+  reticulumIdentityPublicKeyBase64?: string;
   /** Per logical join session; stable across mesh re-announces from the same client. */
   joinGeneration?: number;
   hopsRemaining?: number;
+}
+
+/** Signed companion to split-wire GC_JOIN: carries RNS `rk` when GJ alone would exceed ENCRYPTED_MDU. */
+export interface GcJoinRkEnvelope {
+  type: 'GC_JOIN_RK';
+  roomId: string;
+  chatId: string;
+  fromAddress: string;
+  fromPublicKey: string;
+  signature: string;
+  timestamp: number;
+  reticulumDestinationHash: string;
+  reticulumIdentityPublicKeyBase64: string;
+  joinGeneration?: number;
 }
 
 export interface GcLeaveEnvelope {
@@ -437,6 +472,10 @@ export type GcEnvelope =
 interface RoomParticipant {
   publicKey: string;
   joinedAt: number;
+  /** From signed GC_JOIN (compact wire `d`). */
+  reticulumDestinationHash: string;
+  /** From signed GC_JOIN wire `rk` when present. */
+  reticulumIdentityPublicKeyBase64?: string;
 }
 
 interface GroupRoom {
@@ -574,6 +613,10 @@ export function buildGroupRoomBootstrapState(
       address,
       publicKey: p.publicKey,
       joinedAt: p.joinedAt,
+      reticulumDestinationHash: p.reticulumDestinationHash,
+      ...(p.reticulumIdentityPublicKeyBase64
+        ? { reticulumIdentityPublicKeyBase64: p.reticulumIdentityPublicKeyBase64 }
+        : {}),
     })),
     topologyEpoch: room.topologyEpoch,
     lastTopology: room.lastTopology
@@ -784,11 +827,20 @@ function buildGcClusterHeartbeatSignedFields(
   };
 }
 
+/** Buffer GI (join identity) until matching GJ is verified, or GJ context until GI arrives. */
+const GC_JOIN_RK_PENDING_TTL_MS = 120_000;
+
 /** Jobs waiting on off-thread Ed25519 verification */
 type GcVerifyPending =
   | {
       kind: 'join';
       env: GcJoinEnvelope;
+      fromNodeId?: string;
+      peerPresenceHash?: string;
+    }
+  | {
+      kind: 'join_rk';
+      env: GcJoinRkEnvelope;
       fromNodeId?: string;
       peerPresenceHash?: string;
     }
@@ -852,6 +904,33 @@ type RetainedVerifiedKeyState = {
   deliveryKind: 'live' | 'retained-state';
   replayReason?: 'subscribe';
 };
+
+/**
+ * Serialize for gossip dedup: same logical payload must hash equal even if `X`/`L`/`r` differ.
+ * (`r` is sender hash injected by presence_bridge; `X`/`L` are overlay routing.)
+ */
+function stableJsonStringifyForDedup(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => stableJsonStringifyForDedup(v)).join(',')}]`;
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys
+    .map((k) => `${JSON.stringify(k)}:${stableJsonStringifyForDedup(obj[k])}`)
+    .join(',')}}`;
+}
+
+function hashReticulumWireForContentDedup(wire: Record<string, unknown>): string {
+  const copy = { ...wire };
+  delete copy.X;
+  delete copy.L;
+  delete copy.r;
+  const body = stableJsonStringifyForDedup(copy);
+  return nodeCrypto.createHash('sha256').update(body, 'utf8').digest('hex');
+}
 
 // ── GroupCallManager ────────────────────────────────────────────────────────── ──────────────────────────────────────────────────────────
 
@@ -971,6 +1050,37 @@ export class GroupCallManager extends EventEmitter {
   private lastStaleTopologyLogAt = 0;
   /** Key `reason:fromAddress` → last log time for throttled GC_JOIN drop messages */
   private joinDropLogAt = new Map<string, number>();
+  /** Throttle noisy GC_JOIN / GJ wire diagnostics (decode, overlay dedup). */
+  private gcJoinWireDebugLogAt = new Map<string, number>();
+  /**
+   * After verified GJ without rk (split path): correlate GI by (a|m|d|j) for GC_JOIN_RK verify.
+   */
+  private pendingJoinRkContextByKey = new Map<
+    string,
+    {
+      roomId: string;
+      chatId: string;
+      fromPublicKey: string;
+      expiresAt: number;
+    }
+  >();
+  /** GI arrived before matching GJ was verified. */
+  private pendingJoinRkBeforeGjByKey = new Map<
+    string,
+    {
+      decoded: {
+        fromAddress: string;
+        signature: string;
+        timestamp: number;
+        reticulumDestinationHash: string;
+        reticulumIdentityPublicKeyBase64: string;
+        joinGeneration?: number;
+      };
+      fromNodeId?: string;
+      peerPresenceHash?: string;
+      expiresAt: number;
+    }
+  >();
   /** roomId → last warn time when broadcastTopology ran before joinRoom created the room */
   private broadcastTopologyNoRoomLogAt = new Map<string, number>();
 
@@ -987,6 +1097,9 @@ export class GroupCallManager extends EventEmitter {
   private pendingKeyExpiredLogAt = new Map<string, number>();
   private reticulumFailureLogAt = new Map<string, number>();
   private seenReticulumOverlayIds = new Map<string, number>();
+  /** SHA-256 hex → expiry (wall ms): drop relay + local handling if we already saw this payload. */
+  private seenReticulumWireContentHashes = new Map<string, number>();
+  private lastReticulumWireContentHashSweepAt = 0;
 
   /** Numeric Qortal group ids (from renderer) to derive sidebar call indicators. */
   private watchedQortalGroupNumericIds = new Set<number>();
@@ -1072,7 +1185,22 @@ export class GroupCallManager extends EventEmitter {
     this.reticulumPeerPresenceHashByAddress.set(address, peerPresenceHash);
   }
 
+  /**
+   * Hash to pass to the Reticulum bridge (overlay send, group audio, etc.).
+   * Prefer the verified GC_JOIN identity hash from room state: it matches
+   * `register_peer_identity` / Python `_known_peers`. Presence route can
+   * reflect the wire sender (transport) when those differ, which would cause
+   * `unknown_peer_presence_hash` if resolved before participant state.
+   */
   private resolveReticulumPeerPresenceHash(address: string): string | null {
+    for (const room of this.rooms.values()) {
+      const p = room.participants.get(address);
+      if (p?.reticulumDestinationHash) {
+        const h = p.reticulumDestinationHash.trim().toLowerCase();
+        this.rememberReticulumPeerPresenceHash(address, h);
+        return h;
+      }
+    }
     const route = this.presence.getRouteForAddress(address);
     if (route?.kind === 'reticulum') {
       this.rememberReticulumPeerPresenceHash(address, route.destinationHash);
@@ -1196,6 +1324,10 @@ export class GroupCallManager extends EventEmitter {
       loggerLog(
         `[GCall] Dropped GC_JOIN: invalid signature from ${job.env.fromAddress}`
       );
+    } else if (job.kind === 'join_rk') {
+      loggerLog(
+        `[GCall] Dropped GC_JOIN_RK: invalid signature from ${job.env.fromAddress}`
+      );
     } else if (job.kind === 'leave') {
       loggerLog(
         `[GCall] Dropped GC_LEAVE: invalid signature from ${job.env.fromAddress}`
@@ -1287,13 +1419,42 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private applyVerifiedJobSync(job: GcVerifyPending): void {
-    this.rememberReticulumPeerPresenceHash(
-      job.env.fromAddress,
-      job.peerPresenceHash
-    );
+    if (job.kind === 'join') {
+      const env = job.env;
+      const signed = env.reticulumDestinationHash.trim().toLowerCase();
+      const transport = job.peerPresenceHash?.trim().toLowerCase();
+      if (transport && signed && transport !== signed) {
+        this.logGcJoinDropThrottled(
+          env.fromAddress,
+          'join_hash_mismatch_transport',
+          `[GCall] GC_JOIN reticulumDestinationHash differs from transport sender for ${env.fromAddress} — identity hash kept for bridge cache (matches register_peer_identity)`
+        );
+      }
+      this.rememberReticulumPeerPresenceHash(env.fromAddress, signed);
+    } else if (job.kind === 'join_rk') {
+      const env = job.env;
+      const signed = env.reticulumDestinationHash.trim().toLowerCase();
+      const transport = job.peerPresenceHash?.trim().toLowerCase();
+      if (transport && signed && transport !== signed) {
+        this.logGcJoinDropThrottled(
+          env.fromAddress,
+          'join_hash_mismatch_transport',
+          `[GCall] GC_JOIN_RK reticulumDestinationHash differs from transport sender for ${env.fromAddress} — identity hash kept for bridge cache (matches register_peer_identity)`
+        );
+      }
+      this.rememberReticulumPeerPresenceHash(env.fromAddress, signed);
+    } else {
+      this.rememberReticulumPeerPresenceHash(
+        job.env.fromAddress,
+        job.peerPresenceHash
+      );
+    }
     switch (job.kind) {
       case 'join':
         this.applyVerifiedJoin(job.env, job.fromNodeId);
+        break;
+      case 'join_rk':
+        this.applyVerifiedJoinRk(job.env, job.fromNodeId);
         break;
       case 'leave':
         this.applyVerifiedLeave(job.env);
@@ -1397,6 +1558,8 @@ export class GroupCallManager extends EventEmitter {
     this.transportHealthByRoom.clear();
     this.recentRoomStateByRoomId.clear();
     this.seenReticulumOverlayIds.clear();
+    this.seenReticulumWireContentHashes.clear();
+    this.lastReticulumWireContentHashSweepAt = 0;
     if (this.qortalActivityEmitTimer) {
       clearTimeout(this.qortalActivityEmitTimer);
       this.qortalActivityEmitTimer = null;
@@ -1722,6 +1885,15 @@ export class GroupCallManager extends EventEmitter {
     loggerLog(message);
   }
 
+  /** Rate-limited debug for GJ wire paths (not keyed by fromAddress). */
+  private logGcJoinWireDebugThrottled(dedupeKey: string, message: string): void {
+    const now = Date.now();
+    const last = this.gcJoinWireDebugLogAt.get(dedupeKey) ?? 0;
+    if (now - last < GC_JOIN_DROP_LOG_MIN_MS) return;
+    this.gcJoinWireDebugLogAt.set(dedupeKey, now);
+    loggerLog(message);
+  }
+
   private sweepExpiredReticulumReassembly(now: number): void {
     for (const m of [
       this.reticulumTopoReasm,
@@ -1846,6 +2018,52 @@ export class GroupCallManager extends EventEmitter {
     return true;
   }
 
+  private sweepExpiredReticulumWireContentHashes(now: number): void {
+    for (const [h, expiresAt] of this.seenReticulumWireContentHashes) {
+      if (expiresAt <= now) this.seenReticulumWireContentHashes.delete(h);
+    }
+  }
+
+  /** Drops expired entries periodically so the map does not sit full of dead TTLs during idle periods. */
+  private maybeSweepReticulumWireContentHashes(now: number): void {
+    if (
+      now - this.lastReticulumWireContentHashSweepAt <
+      GC_RETICULUM_OVERLAY_CONTENT_DEDUP_SWEEP_MIN_MS
+    ) {
+      return;
+    }
+    this.lastReticulumWireContentHashSweepAt = now;
+    this.sweepExpiredReticulumWireContentHashes(now);
+  }
+
+  private rememberReticulumWireContentHash(hash: string): void {
+    const now = Date.now();
+    this.seenReticulumWireContentHashes.set(
+      hash,
+      now + GC_RETICULUM_OVERLAY_CONTENT_DEDUP_TTL_MS
+    );
+    this.sweepExpiredReticulumWireContentHashes(now);
+    while (
+      this.seenReticulumWireContentHashes.size >
+      GC_RETICULUM_OVERLAY_CONTENT_DEDUP_MAX
+    ) {
+      const first = this.seenReticulumWireContentHashes.keys().next().value;
+      if (first === undefined) break;
+      this.seenReticulumWireContentHashes.delete(first);
+    }
+  }
+
+  private hasSeenReticulumWireContentHash(hash: string): boolean {
+    const now = Date.now();
+    const expiresAt = this.seenReticulumWireContentHashes.get(hash);
+    if (typeof expiresAt !== 'number') return false;
+    if (expiresAt <= now) {
+      this.seenReticulumWireContentHashes.delete(hash);
+      return false;
+    }
+    return true;
+  }
+
   private async broadcastReticulumFramesViaOverlay(
     frames: Record<string, unknown>[],
     excludePeerHashes: string[] = []
@@ -1867,18 +2085,42 @@ export class GroupCallManager extends EventEmitter {
     if (neighbors.length === 0) {
       return { ok: false, reason: 'no-route' };
     }
+    /** True if at least one overlay neighbor received every frame (gossip delivered). */
+    let anyPeerFullDelivery = false;
+    let lastFailure: Extract<ReticulumSendResult, { ok: false }> | null = null;
     for (const peerHash of neighbors) {
+      let peerDeliveredAllFrames = true;
       for (const frame of frames) {
         const result: ReticulumSendResult = await bridge.sendGroupCallDetailed(
           peerHash,
           frame
         );
-        if (!result.ok) {
-          return result;
+        if (result.ok === false) {
+          peerDeliveredAllFrames = false;
+          lastFailure = result;
+          const wireT = frame['t'];
+          const wireHint =
+            typeof wireT === 'string' ? ` wire=${wireT}` : '';
+          loggerWarn(
+            `[GCall] Reticulum overlay fanout send failed peer=${peerHash.slice(0, 16)}… reason=${result.reason}${result.error ? ` error=${result.error}` : ''}${wireHint}`
+          );
         }
       }
+      if (peerDeliveredAllFrames) {
+        anyPeerFullDelivery = true;
+      }
     }
-    return { ok: true };
+    if (anyPeerFullDelivery) {
+      return { ok: true };
+    }
+    if (lastFailure) {
+      return lastFailure;
+    }
+    return {
+      ok: false,
+      reason: 'packet-send-false',
+      error: 'Overlay fanout had no successful delivery',
+    };
   }
 
   private async sendReticulumFramesToHash(
@@ -2181,10 +2423,39 @@ export class GroupCallManager extends EventEmitter {
     senderDestinationHash: string,
     peerPresenceHash: string
   ): void {
+    const now = Date.now();
+    this.maybeSweepReticulumWireContentHashes(now);
+
     const overlayMeta = this.parseReticulumOverlayMeta(wire);
     if (overlayMeta) {
-      if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId)) return;
+      if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId)) {
+        if (wire.t === 'GJ') {
+          const room =
+            typeof wire.R === 'string' ? wire.R : String(wire.R ?? '?');
+          this.logGcJoinWireDebugThrottled(
+            `gj_overlay_dup:${overlayMeta.overlayId}`,
+            `[GCall] Dropped GJ (duplicate overlay X, replay): room=${room} X=${overlayMeta.overlayId.slice(0, 24)}…`
+          );
+        }
+        return;
+      }
+      let contentHash: string;
+      try {
+        contentHash = hashReticulumWireForContentDedup(wire);
+      } catch {
+        contentHash = '';
+      }
+      if (contentHash !== '' && this.hasSeenReticulumWireContentHash(contentHash)) {
+        const t =
+          typeof wire.t === 'string' ? wire.t : String(wire.t ?? '?');
+        this.logGcJoinWireDebugThrottled(
+          `overlay_payload_dup:${contentHash.slice(0, 16)}:${t}`,
+          `[GCall] Dropped Reticulum wire (duplicate overlay payload, same as prior X): t=${t} h=${contentHash.slice(0, 16)}…`
+        );
+        return;
+      }
       this.rememberReticulumOverlayId(overlayMeta.overlayId);
+      if (contentHash !== '') this.rememberReticulumWireContentHash(contentHash);
       if (overlayMeta.hopsRemaining > 0) {
         const forwarded = {
           ...wire,
@@ -2196,7 +2467,6 @@ export class GroupCallManager extends EventEmitter {
         ).then(() => {});
       }
     }
-    const now = Date.now();
     this.sweepExpiredReticulumReassembly(now);
 
     const t = wire.t;
@@ -2219,8 +2489,55 @@ export class GroupCallManager extends EventEmitter {
 
     if (t === 'GJ') {
       const env = decodeJoinWire(wire);
-      if (!env) return;
+      if (!env) {
+        const why = decodeJoinWireFailureReason(wire);
+        const room =
+          typeof wire.R === 'string' ? wire.R : String(wire.R ?? '?');
+        const from =
+          typeof wire.a === 'string' ? wire.a : String(wire.a ?? '?');
+        this.logGcJoinWireDebugThrottled(
+          `gj_decode:${why ?? 'unknown'}:${room}:${from}`,
+          `[GCall] Dropped GJ (decodeJoinWire failed): reason=${why ?? 'unknown'} room=${room} from=${from} peerPresenceHash=${peerPresenceHash ? `${peerPresenceHash.slice(0, 16)}…` : 'none'}`
+        );
+        return;
+      }
       this.handleJoin(env as GcJoinEnvelope, syntheticFrom, peerPresenceHash);
+      return;
+    }
+    if (t === 'GI') {
+      const decoded = decodeJoinIdentityWire(wire);
+      if (!decoded) {
+        const why = decodeJoinIdentityWireFailureReason(wire);
+        const from =
+          typeof wire.a === 'string' ? wire.a : String(wire.a ?? '?');
+        this.logGcJoinWireDebugThrottled(
+          `gi_decode:${why ?? 'unknown'}:${from}`,
+          `[GCall] Dropped GI (decodeJoinIdentityWire failed): reason=${why ?? 'unknown'} from=${from} peerPresenceHash=${peerPresenceHash ? `${peerPresenceHash.slice(0, 16)}…` : 'none'}`
+        );
+        return;
+      }
+      const preRej = gcJoinTimestampRejectReason(decoded.timestamp, now);
+      if (preRej === 'expired') {
+        this.logGcJoinDropThrottled(
+          decoded.fromAddress,
+          'expired_pre_verify',
+          `[GCall] Dropped GC_JOIN_RK: expired from ${decoded.fromAddress} (pre-verify)`
+        );
+        return;
+      }
+      if (preRej === 'future') {
+        this.logGcJoinDropThrottled(
+          decoded.fromAddress,
+          'future_timestamp',
+          `[GCall] Dropped GC_JOIN_RK: future timestamp from ${decoded.fromAddress} (pre-verify)`
+        );
+        return;
+      }
+      this.processJoinIdentityVerify(
+        decoded,
+        syntheticFrom,
+        peerPresenceHash
+      );
       return;
     }
     if (t === 'GL') {
@@ -2364,7 +2681,6 @@ export class GroupCallManager extends EventEmitter {
     }
 
     if (
-      t === 'GI' ||
       t === 'GX' ||
       t === 'GO' ||
       t === 'GE' ||
@@ -2392,10 +2708,39 @@ export class GroupCallManager extends EventEmitter {
     signature: string,
     publicKey: string,
     timestamp: number,
+    reticulumDestinationHash: string,
     joinGeneration?: number,
     /** Defensive lower bound after same-room rejoin — not canonical epoch (see mergeRoomTopologyEpochWithFloor). */
-    topologyEpochFloor?: number
+    topologyEpochFloor?: number,
+    /** RNS.Identity public key (64 bytes standard base64); optional when wire budget tight. */
+    reticulumIdentityPublicKeyBase64?: string,
+    /** Signature for `GC_JOIN_RK` (second Reticulum frame) when `reticulumIdentityPublicKeyBase64` is set. */
+    joinRkSignature?: string
   ): { callSessionId: string; mediaSessionGeneration: number } {
+    if (!isRnsDestinationHashHex(reticulumDestinationHash)) {
+      throw new Error('Invalid or missing reticulumDestinationHash for GC_JOIN');
+    }
+    if (
+      reticulumIdentityPublicKeyBase64 !== undefined &&
+      reticulumIdentityPublicKeyBase64 !== '' &&
+      !isRnsIdentityPublicKeyBase64(reticulumIdentityPublicKeyBase64)
+    ) {
+      throw new Error('Invalid reticulumIdentityPublicKeyBase64 for GC_JOIN');
+    }
+    const rkPresent =
+      Boolean(reticulumIdentityPublicKeyBase64) &&
+      isRnsIdentityPublicKeyBase64(reticulumIdentityPublicKeyBase64!);
+    if (rkPresent) {
+      if (
+        typeof joinRkSignature !== 'string' ||
+        joinRkSignature.trim() === ''
+      ) {
+        throw new Error(
+          'joinRkSignature required when reticulumIdentityPublicKeyBase64 is set'
+        );
+      }
+    }
+    const destNorm = reticulumDestinationHash.trim().toLowerCase();
     let room = this.rooms.get(roomId);
     if (!room) {
       const recent = this.getFreshRecentRoomState(roomId);
@@ -2437,7 +2782,17 @@ export class GroupCallManager extends EventEmitter {
         topologyEpochFloor
       );
     }
-    room.participants.set(localAddress, { publicKey, joinedAt: timestamp });
+    const rk =
+      reticulumIdentityPublicKeyBase64 &&
+      isRnsIdentityPublicKeyBase64(reticulumIdentityPublicKeyBase64)
+        ? reticulumIdentityPublicKeyBase64
+        : undefined;
+    room.participants.set(localAddress, {
+      publicKey,
+      joinedAt: timestamp,
+      reticulumDestinationHash: destNorm,
+      ...(rk ? { reticulumIdentityPublicKeyBase64: rk } : {}),
+    });
 
     const env: GcJoinEnvelope = {
       type: 'GC_JOIN',
@@ -2447,21 +2802,56 @@ export class GroupCallManager extends EventEmitter {
       fromPublicKey: publicKey,
       signature,
       timestamp,
+      reticulumDestinationHash: destNorm,
+      ...(rk ? { reticulumIdentityPublicKeyBase64: rk } : {}),
       ...(joinGeneration !== undefined ? { joinGeneration } : {}),
     };
-    const joinWire = encodeJoinWire(env);
-    if (!wireFitsReticulum(joinWire)) {
-      loggerWarn(
-        `[GCall] Skipping GC_JOIN (Reticulum) for room ${roomId}: wire exceeds Reticulum limit`
-      );
+    if (rk) {
+      const joinOnly = encodeJoinWire({
+        ...env,
+        reticulumIdentityPublicKeyBase64: undefined,
+      });
+      const giWire = encodeJoinIdentityWire({
+        fromAddress: localAddress,
+        signature: joinRkSignature!,
+        timestamp,
+        reticulumDestinationHash: destNorm,
+        ...(joinGeneration !== undefined ? { joinGeneration } : {}),
+        reticulumIdentityPublicKeyBase64: rk,
+      });
+      const bGj = byteLengthUtf8JsonWithBridgeSender(joinOnly);
+      const bGi = byteLengthUtf8JsonWithBridgeSender(giWire);
+      if (!wireFitsReticulum(joinOnly) || !wireFitsReticulum(giWire)) {
+        loggerWarn(
+          `[GCall] Skipping GC_JOIN split (Reticulum) for room ${roomId}: wire exceeds limit (GJ=${bGj} GI=${bGi} bytes > ${RT_RETICULUM_MAX_WIRE_JSON_BYTES})`
+        );
+      } else {
+        this.fanoutReticulumWire(
+          roomId,
+          [joinOnly, giWire],
+          new Set([localAddress]),
+          'join'
+        );
+        loggerLog(
+          `[GCall] Sent GC_JOIN+GI (Reticulum) for room ${roomId}`
+        );
+      }
     } else {
-      this.fanoutReticulumWire(
-        roomId,
-        [joinWire],
-        new Set([localAddress]),
-        'join'
-      );
-      loggerLog(`[GCall] Sent GC_JOIN (Reticulum) for room ${roomId}`);
+      const joinWire = encodeJoinWire(env);
+      if (!wireFitsReticulum(joinWire)) {
+        const bytes = byteLengthUtf8JsonWithBridgeSender(joinWire);
+        loggerWarn(
+          `[GCall] Skipping GC_JOIN (Reticulum) for room ${roomId}: wire exceeds Reticulum limit (${bytes} bytes > ${RT_RETICULUM_MAX_WIRE_JSON_BYTES}; shorten chatId/publicKey/signature or reduce fields)`
+        );
+      } else {
+        this.fanoutReticulumWire(
+          roomId,
+          [joinWire],
+          new Set([localAddress]),
+          'join'
+        );
+        loggerLog(`[GCall] Sent GC_JOIN (Reticulum) for room ${roomId}`);
+      }
     }
     this.flushPendingKeyForRoom(roomId);
     this.scheduleQortalGroupCallActivityEmit(true);
@@ -2700,6 +3090,35 @@ export class GroupCallManager extends EventEmitter {
   }
 
   /**
+   * Inbound Reticulum payloads may carry the wire sender hash (transport) while
+   * `resolveReticulumPeerPresenceHash` prefers the verified join identity hash.
+   * Match either against participant, presence route, or the address cache.
+   */
+  private addressMatchesWirePeerPresenceHash(
+    wantNormalized: string,
+    address: string
+  ): boolean {
+    const w = wantNormalized.trim().toLowerCase();
+    if (!w || !address) return false;
+    for (const room of this.rooms.values()) {
+      const p = room.participants.get(address);
+      const d = p?.reticulumDestinationHash?.trim().toLowerCase();
+      if (d && d === w) return true;
+    }
+    const route = this.presence.getRouteForAddress(address);
+    if (route?.kind === 'reticulum') {
+      const rh = route.destinationHash.trim().toLowerCase();
+      if (rh === w) return true;
+    }
+    const cached = this.reticulumPeerPresenceHashByAddress
+      .get(address)
+      ?.trim()
+      .toLowerCase();
+    if (cached && cached === w) return true;
+    return false;
+  }
+
+  /**
    * Map Reticulum route / presence hash to participant address.
    * Falls back to scanning `room.participants` when audio peer state was
    * evicted (e.g. sync before topology applied) so inbound packets still
@@ -2720,7 +3139,8 @@ export class GroupCallManager extends EventEmitter {
     if (!want) return null;
     for (const [address, state] of this.reticulumAudioPeersByAddress) {
       if (
-        this.normalizePeerPresenceHashForAudio(state.peerPresenceHash) === want
+        this.normalizePeerPresenceHashForAudio(state.peerPresenceHash) === want ||
+        this.addressMatchesWirePeerPresenceHash(want, address)
       ) {
         return address;
       }
@@ -2728,11 +3148,7 @@ export class GroupCallManager extends EventEmitter {
     const matchParticipantsInRoom = (room: GroupRoom | undefined): string | null => {
       if (!room) return null;
       for (const addr of room.participants.keys()) {
-        const h = this.resolveReticulumPeerPresenceHash(addr);
-        if (
-          h &&
-          this.normalizePeerPresenceHashForAudio(h) === want
-        ) {
+        if (this.addressMatchesWirePeerPresenceHash(want, addr)) {
           return addr;
         }
       }
@@ -3812,8 +4228,12 @@ export class GroupCallManager extends EventEmitter {
     fromNodeId?: string,
     peerPresenceHash?: string
   ): void {
-    const nowJoin = Date.now();
     if (!this.hasLocalRoomInterest(env.roomId)) {
+      this.logGcJoinDropThrottled(
+        env.fromAddress,
+        'no_local_room_yet',
+        `[GCall] Ignored GC_JOIN (no local room yet — joinRoom not completed or wrong roomId): room=${env.roomId} from=${env.fromAddress}`
+      );
       return;
     }
 
@@ -3844,6 +4264,14 @@ export class GroupCallManager extends EventEmitter {
         fromAddress: env.fromAddress,
         fromPublicKey: env.fromPublicKey,
         timestamp: env.timestamp,
+        reticulumDestinationHash: env.reticulumDestinationHash.trim().toLowerCase(),
+        ...(env.reticulumIdentityPublicKeyBase64 &&
+        isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)
+          ? {
+              reticulumIdentityPublicKeyBase64:
+                env.reticulumIdentityPublicKeyBase64,
+            }
+          : {}),
         ...(typeof env.joinGeneration === 'number' &&
         Number.isFinite(env.joinGeneration)
           ? { joinGeneration: env.joinGeneration }
@@ -3854,6 +4282,224 @@ export class GroupCallManager extends EventEmitter {
       env.fromAddress,
       { kind: 'join', env, fromNodeId, peerPresenceHash }
     );
+  }
+
+  private registerPeerIdentityFromJoinWire(env: GcJoinEnvelope): void {
+    if (!env.reticulumIdentityPublicKeyBase64) return;
+    if (!isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)) {
+      return;
+    }
+    if (this.localAddresses.has(env.fromAddress)) {
+      return;
+    }
+    const bridge = this.reticulumBridge;
+    if (!bridge) return;
+    void bridge
+      .registerPeerIdentityFromGroupJoin(
+        env.reticulumDestinationHash.trim().toLowerCase(),
+        env.reticulumIdentityPublicKeyBase64
+      )
+      .catch((err) => {
+        loggerWarn(
+          `[GCall] registerPeerIdentityFromGroupJoin failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      });
+  }
+
+  private joinIdentityKey(
+    fromAddress: string,
+    timestamp: number,
+    destHash: string,
+    joinGeneration?: number
+  ): string {
+    const d = destHash.trim().toLowerCase();
+    const j =
+      typeof joinGeneration === 'number' && Number.isFinite(joinGeneration)
+        ? String(joinGeneration >>> 0)
+        : 'n';
+    return `${fromAddress}|${timestamp}|${d}|${j}`;
+  }
+
+  private pruneJoinRkPendingMaps(): void {
+    const now = Date.now();
+    for (const [k, v] of this.pendingJoinRkContextByKey) {
+      if (v.expiresAt < now) this.pendingJoinRkContextByKey.delete(k);
+    }
+    for (const [k, v] of this.pendingJoinRkBeforeGjByKey) {
+      if (v.expiresAt < now) this.pendingJoinRkBeforeGjByKey.delete(k);
+    }
+  }
+
+  private notePendingJoinRkAfterVerifiedGj(env: GcJoinEnvelope): void {
+    if (env.reticulumIdentityPublicKeyBase64) return;
+    this.pruneJoinRkPendingMaps();
+    const key = this.joinIdentityKey(
+      env.fromAddress,
+      env.timestamp,
+      env.reticulumDestinationHash,
+      env.joinGeneration
+    );
+    this.pendingJoinRkContextByKey.set(key, {
+      roomId: env.roomId,
+      chatId: env.chatId,
+      fromPublicKey: env.fromPublicKey,
+      expiresAt: Date.now() + GC_JOIN_RK_PENDING_TTL_MS,
+    });
+    const buf = this.pendingJoinRkBeforeGjByKey.get(key);
+    if (buf) {
+      this.pendingJoinRkBeforeGjByKey.delete(key);
+      this.processJoinIdentityVerify(
+        buf.decoded,
+        buf.fromNodeId,
+        buf.peerPresenceHash
+      );
+    }
+  }
+
+  private processJoinIdentityVerify(
+    decoded: {
+      fromAddress: string;
+      signature: string;
+      timestamp: number;
+      reticulumDestinationHash: string;
+      reticulumIdentityPublicKeyBase64: string;
+      joinGeneration?: number;
+    },
+    fromNodeId?: string,
+    peerPresenceHash?: string
+  ): void {
+    this.pruneJoinRkPendingMaps();
+    const key = this.joinIdentityKey(
+      decoded.fromAddress,
+      decoded.timestamp,
+      decoded.reticulumDestinationHash,
+      decoded.joinGeneration
+    );
+    const ctx = this.pendingJoinRkContextByKey.get(key);
+    if (!ctx || ctx.expiresAt < Date.now()) {
+      this.pendingJoinRkBeforeGjByKey.set(key, {
+        decoded,
+        fromNodeId,
+        peerPresenceHash,
+        expiresAt: Date.now() + GC_JOIN_RK_PENDING_TTL_MS,
+      });
+      return;
+    }
+    if (!this.hasLocalRoomInterest(ctx.roomId)) {
+      return;
+    }
+    const env: GcJoinRkEnvelope = {
+      type: 'GC_JOIN_RK',
+      roomId: ctx.roomId,
+      chatId: ctx.chatId,
+      fromAddress: decoded.fromAddress,
+      fromPublicKey: ctx.fromPublicKey,
+      signature: decoded.signature,
+      timestamp: decoded.timestamp,
+      reticulumDestinationHash: decoded.reticulumDestinationHash.trim().toLowerCase(),
+      reticulumIdentityPublicKeyBase64: decoded.reticulumIdentityPublicKeyBase64,
+      joinGeneration: decoded.joinGeneration,
+    };
+    this.enqueueJoinRkVerify(env, fromNodeId, peerPresenceHash);
+  }
+
+  private enqueueJoinRkVerify(
+    env: GcJoinRkEnvelope,
+    fromNodeId?: string,
+    peerPresenceHash?: string
+  ): void {
+    const fields: Record<string, unknown> = {
+      type: env.type,
+      roomId: env.roomId,
+      chatId: env.chatId,
+      fromAddress: env.fromAddress,
+      fromPublicKey: env.fromPublicKey,
+      timestamp: env.timestamp,
+      reticulumDestinationHash: env.reticulumDestinationHash,
+      reticulumIdentityPublicKeyBase64: env.reticulumIdentityPublicKeyBase64,
+    };
+    if (
+      typeof env.joinGeneration === 'number' &&
+      Number.isFinite(env.joinGeneration)
+    ) {
+      fields.joinGeneration = env.joinGeneration;
+    }
+    const job: GcVerifyPending = {
+      kind: 'join_rk',
+      env,
+      fromNodeId,
+      peerPresenceHash,
+    };
+    this.enqueueVerify(
+      fields,
+      env.signature,
+      env.fromPublicKey,
+      env.fromAddress,
+      job
+    );
+  }
+
+  private applyVerifiedJoinRk(
+    env: GcJoinRkEnvelope,
+    fromNodeId?: string
+  ): void {
+    const now = Date.now();
+    const postRej = gcJoinTimestampRejectReason(env.timestamp, now);
+    if (postRej === 'expired') {
+      this.logGcJoinDropThrottled(
+        env.fromAddress,
+        'expired_post_verify',
+        `[GCall] Dropped GC_JOIN_RK: expired from ${env.fromAddress}`
+      );
+      return;
+    }
+    if (postRej === 'future') {
+      this.logGcJoinDropThrottled(
+        env.fromAddress,
+        'future_timestamp_post',
+        `[GCall] Dropped GC_JOIN_RK: future timestamp from ${env.fromAddress}`
+      );
+      return;
+    }
+    if (!this.hasLocalRoomInterest(env.roomId)) {
+      return;
+    }
+    if (fromNodeId) {
+      this.participantNodeIds.set(env.fromAddress, fromNodeId);
+    }
+    if (!isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)) {
+      return;
+    }
+    for (const [roomId, room] of this.rooms) {
+      if (roomId !== env.roomId) continue;
+      const existing = room.participants.get(env.fromAddress);
+      if (!existing) {
+        return;
+      }
+      room.participants.set(env.fromAddress, {
+        publicKey: existing.publicKey,
+        joinedAt: existing.joinedAt,
+        reticulumDestinationHash: env.reticulumDestinationHash.trim().toLowerCase(),
+        reticulumIdentityPublicKeyBase64: env.reticulumIdentityPublicKeyBase64,
+      });
+      break;
+    }
+    const joinForRegister: GcJoinEnvelope = {
+      type: 'GC_JOIN',
+      roomId: env.roomId,
+      chatId: env.chatId,
+      fromAddress: env.fromAddress,
+      fromPublicKey: env.fromPublicKey,
+      signature: env.signature,
+      timestamp: env.timestamp,
+      reticulumDestinationHash: env.reticulumDestinationHash,
+      reticulumIdentityPublicKeyBase64: env.reticulumIdentityPublicKeyBase64,
+      joinGeneration: env.joinGeneration,
+    };
+    this.registerPeerIdentityFromJoinWire(joinForRegister);
+    this.syncReticulumAudioLinks();
   }
 
   private applyVerifiedJoin(env: GcJoinEnvelope, fromNodeId?: string): void {
@@ -3894,11 +4540,30 @@ export class GroupCallManager extends EventEmitter {
           room.participants.set(env.fromAddress, {
             publicKey: env.fromPublicKey,
             joinedAt: env.timestamp,
+            reticulumDestinationHash: env.reticulumDestinationHash.trim().toLowerCase(),
+            ...(env.reticulumIdentityPublicKeyBase64 &&
+            isRnsIdentityPublicKeyBase64(env.reticulumIdentityPublicKeyBase64)
+              ? {
+                  reticulumIdentityPublicKeyBase64:
+                    env.reticulumIdentityPublicKeyBase64,
+                }
+              : {}),
           });
+          if (!env.reticulumIdentityPublicKeyBase64) {
+            this.notePendingJoinRkAfterVerifiedGj(env);
+          }
+        } else {
+          this.logGcJoinDropThrottled(
+            env.fromAddress,
+            'stale_join_ts',
+            `[GCall] Skipped GC_JOIN participant update (stale joinTs vs existing): from=${env.fromAddress} room=${env.roomId} incomingTs=${env.timestamp} existingJoinedAt=${existing?.joinedAt ?? 'n/a'}`
+          );
         }
         break;
       }
     }
+
+    this.registerPeerIdentityFromJoinWire(env);
 
     // Only notify the renderer when the local client is actively in this room.
     if (this.hasLocalRoomInterest(env.roomId)) {
@@ -4521,12 +5186,21 @@ export class GroupCallManager extends EventEmitter {
 
   getRoomParticipants(
     roomId: string
-  ): Array<{ address: string; publicKey: string }> {
+  ): Array<{
+    address: string;
+    publicKey: string;
+    reticulumDestinationHash: string;
+    reticulumIdentityPublicKeyBase64?: string;
+  }> {
     const room = this.rooms.get(roomId);
     if (!room) return [];
     return [...room.participants.entries()].map(([address, p]) => ({
       address,
       publicKey: p.publicKey,
+      reticulumDestinationHash: p.reticulumDestinationHash,
+      ...(p.reticulumIdentityPublicKeyBase64
+        ? { reticulumIdentityPublicKeyBase64: p.reticulumIdentityPublicKeyBase64 }
+        : {}),
     }));
   }
 
