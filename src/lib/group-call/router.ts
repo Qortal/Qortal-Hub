@@ -472,6 +472,10 @@ export interface GroupCallMetricsSnapshot {
   rootFailoverPromotionCount: number;
   /** This node applied higher epoch / lost cluster.forwarder and demoted forwarding. */
   clusterForwarderDemotionCount: number;
+  /** Latest in-flight decrypt-worker job count (main-thread map until `result`). */
+  pendingDecryptDepth: number;
+  /** Session high-water for {@link pendingDecryptDepth}. */
+  pendingDecryptDepthHighWater: number;
 }
 
 export interface GroupCallSourceWindowMetrics {
@@ -505,6 +509,10 @@ export interface GroupCallWindowMetrics {
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
+  /** Max in-flight decrypt jobs observed during this metrics window. */
+  pendingDecryptDepthHighWater: number;
+  /** `packetsDroppedPendingDecrypt` per second over the window. */
+  packetsDroppedPendingDecryptRatePerSec: number;
   jitterUnderruns: number;
   missingFrames: number;
   concealmentTicks: number;
@@ -680,12 +688,16 @@ export function assessReticulumAudioPressureWindow(
     | 'reticulumAudioBridgeQueuedFramesHighWater'
     | 'reticulumAudioDecodedQueueDepthHighWater'
     | 'reticulumAudioBinaryOutQueueDepthHighWater'
+    | 'packetsDroppedPendingDecrypt'
+    | 'pendingDecryptDepthHighWater'
   >
 ): GroupCallReticulumAudioPressureAssessment {
   const durationSeconds = Math.max(1, windowMetrics.durationMs / 1000);
   const queuePressureRate =
     windowMetrics.reticulumAudioQueuePressureDrops / durationSeconds;
   const staleDropRate = windowMetrics.reticulumAudioStaleDrops / durationSeconds;
+  const pendingDecryptDropRate =
+    windowMetrics.packetsDroppedPendingDecrypt / durationSeconds;
   let score = 0;
   let severe = false;
 
@@ -711,6 +723,24 @@ export function assessReticulumAudioPressureWindow(
   if (windowMetrics.reticulumAudioBinaryOutQueueDepthHighWater >= 4) score += 1;
   if (staleDropRate >= 1) score += 1;
   if (windowMetrics.reticulumAudioPacketSendFailures > 0) score += 1;
+
+  if (pendingDecryptDropRate >= 8) {
+    score += 3;
+    severe = true;
+  } else if (pendingDecryptDropRate >= 3) {
+    score += 2;
+  } else if (pendingDecryptDropRate > 0) {
+    score += 1;
+  }
+  const pdhw = windowMetrics.pendingDecryptDepthHighWater ?? 0;
+  if (pdhw >= 90) {
+    score += 2;
+    severe = true;
+  } else if (pdhw >= 64) {
+    score += 2;
+  } else if (pdhw >= 32) {
+    score += 1;
+  }
 
   return {
     score,
@@ -1129,6 +1159,8 @@ export class GroupCallPerformanceTracker {
     clusterFailoverPromotionCount: 0,
     rootFailoverPromotionCount: 0,
     clusterForwarderDemotionCount: 0,
+    pendingDecryptDepth: 0,
+    pendingDecryptDepthHighWater: 0,
   };
 
   private incomingPacketSamples = 0;
@@ -1174,6 +1206,7 @@ export class GroupCallPerformanceTracker {
   private windowReticulumAudioBridgeQueuedFramesHighWater = 0;
   private windowReticulumAudioDecodedQueueDepthHighWater = 0;
   private windowReticulumAudioBinaryOutQueueDepthHighWater = 0;
+  private windowPendingDecryptDepthHighWater = 0;
   private sourceWindowStats = new Map<string, SourceWindowAccumulator>();
 
   private getSourceWindowAccumulator(
@@ -1228,6 +1261,7 @@ export class GroupCallPerformanceTracker {
     this.windowReticulumAudioBridgeQueuedFramesHighWater = 0;
     this.windowReticulumAudioDecodedQueueDepthHighWater = 0;
     this.windowReticulumAudioBinaryOutQueueDepthHighWater = 0;
+    this.windowPendingDecryptDepthHighWater = 0;
     this.sourceWindowStats.clear();
   }
 
@@ -1281,6 +1315,21 @@ export class GroupCallPerformanceTracker {
         this.windowCounters.packetsDroppedDecoderThrow += count;
         break;
     }
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /** Track decrypt-worker backlog depth (call after enqueue/dequeue/sweep). */
+  recordPendingDecryptDepth(depth: number): void {
+    const d = Math.max(0, Math.trunc(depth));
+    this.snapshot.pendingDecryptDepth = d;
+    this.snapshot.pendingDecryptDepthHighWater = Math.max(
+      this.snapshot.pendingDecryptDepthHighWater,
+      d
+    );
+    this.windowPendingDecryptDepthHighWater = Math.max(
+      this.windowPendingDecryptDepthHighWater,
+      d
+    );
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -1893,6 +1942,8 @@ export class GroupCallPerformanceTracker {
       clusterFailoverPromotionCount: 0,
       rootFailoverPromotionCount: 0,
       clusterForwarderDemotionCount: 0,
+      pendingDecryptDepth: 0,
+      pendingDecryptDepthHighWater: 0,
     };
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;
@@ -2013,6 +2064,10 @@ export class GroupCallPerformanceTracker {
         this.windowCounters.packetsDroppedDecodeFailure,
       packetsDroppedDecoderThrow:
         this.windowCounters.packetsDroppedDecoderThrow,
+      pendingDecryptDepthHighWater: this.windowPendingDecryptDepthHighWater,
+      packetsDroppedPendingDecryptRatePerSec: roundMetric(
+        this.windowCounters.packetsDroppedPendingDecrypt / (durationMs / 1000)
+      ),
       jitterUnderruns: this.windowCounters.jitterUnderruns,
       missingFrames: this.windowCounters.missingFrames,
       concealmentTicks: this.windowCounters.concealmentTicks,

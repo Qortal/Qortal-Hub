@@ -721,6 +721,8 @@ describe('group-call router helpers', () => {
 
     tracker.recordAdaptiveTargetSample('bob', 95);
     tracker.recordOpusBufferedMetric('bob', 40);
+    tracker.recordPendingDecryptDepth(50);
+    tracker.recordPendingDecryptDepth(40);
 
     const window = tracker.captureWindowMetrics('me', 60_000);
 
@@ -730,6 +732,8 @@ describe('group-call router helpers', () => {
     expect(window.packetsDroppedStartupGate).toBe(0);
     expect(window.packetsDroppedDecodeFailure).toBe(0);
     expect(window.packetsDroppedDecoderThrow).toBe(0);
+    expect(window.pendingDecryptDepthHighWater).toBe(50);
+    expect(window.packetsDroppedPendingDecryptRatePerSec).toBe(0);
     expect(window.relayDwellFraction).toBe(1);
     expect(window.missingFrames).toBe(3);
     expect(window.jitterUnderruns).toBe(2);
@@ -814,9 +818,32 @@ describe('group-call router helpers', () => {
         reticulumAudioBridgeQueuedFramesHighWater: 9,
         reticulumAudioDecodedQueueDepthHighWater: 16,
         reticulumAudioBinaryOutQueueDepthHighWater: 4,
+        packetsDroppedPendingDecrypt: 0,
+        pendingDecryptDepthHighWater: 0,
       })
     ).toEqual({
       score: 9,
+      severe: true,
+      shouldTightenRecovery: true,
+    });
+  });
+
+  it('assesses pending-decrypt backlog as pressure', () => {
+    expect(
+      assessReticulumAudioPressureWindow({
+        durationMs: 10_000,
+        reticulumAudioQueuePressureDrops: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPendingFramesHighWater: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
+        reticulumAudioDecodedQueueDepthHighWater: 0,
+        reticulumAudioBinaryOutQueueDepthHighWater: 0,
+        packetsDroppedPendingDecrypt: 40,
+        pendingDecryptDepthHighWater: 95,
+      })
+    ).toEqual({
+      score: 4,
       severe: true,
       shouldTightenRecovery: true,
     });

@@ -93,6 +93,8 @@ function baseSnapshot(
     clusterFailoverPromotionCount: 0,
     rootFailoverPromotionCount: 0,
     clusterForwarderDemotionCount: 0,
+    pendingDecryptDepth: 0,
+    pendingDecryptDepthHighWater: 0,
     ...overrides,
   };
 }

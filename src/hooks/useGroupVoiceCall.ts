@@ -356,6 +356,12 @@ const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
 const PENDING_DECRYPT_MAX = 96;
 /** Drop pending decrypt entries older than this (worker stuck / lost result). */
 const PENDING_DECRYPT_TTL_MS = 500;
+/** While `globalRecoveryUntilMsRef` is active, allow deeper queues and older entries. */
+const PENDING_DECRYPT_RECOVERY_MAX = 192;
+const PENDING_DECRYPT_RECOVERY_TTL_MS = 1000;
+/** Log when pending decrypt depth crosses these (throttled). */
+const PENDING_DECRYPT_DEPTH_LOG_THRESHOLDS = [32, 64] as const;
+const PENDING_DECRYPT_DEPTH_LOG_MIN_INTERVAL_MS = 5_000;
 /** Treat playout as active only shortly after real packets or while Opus is still queued. */
 const PLAYOUT_ACTIVITY_WINDOW_MS = 400;
 /** Avoid reconnect storms when repeated bad media windows hit the same transport leg. */
@@ -1970,6 +1976,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
     >()
   );
+  const lastPendingDecryptDepthWarnAtRef = useRef(0);
   /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
   const decryptWorkerKeyVersionRef = useRef(0);
@@ -2865,6 +2872,9 @@ export function useGroupVoiceCall(uiActive = false) {
       },
       wasmFecMaxGapReset: tuning.wasmFecMaxGapReset,
       pendingDecryptTtlMs: PENDING_DECRYPT_TTL_MS,
+      pendingDecryptRecoveryTtlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
+      pendingDecryptMax: PENDING_DECRYPT_MAX,
+      pendingDecryptRecoveryMax: PENDING_DECRYPT_RECOVERY_MAX,
       keyDistribution: {
         timeoutMs: KEY_DIST_GATE_TIMEOUT_MS,
         preEncryptOpusRingFrames: KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES,
@@ -3743,34 +3753,80 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const flushPendingDecryptMap = useCallback(() => {
     pendingDecryptsRef.current.clear();
+    metricsRef.current.recordPendingDecryptDepth(0);
   }, []);
 
-  const sweepStalePendingDecrypts = useCallback((nowMs: number) => {
-    const m = pendingDecryptsRef.current;
-    for (const [id, p] of m) {
-      if (nowMs - p.startedAt > PENDING_DECRYPT_TTL_MS) {
-        m.delete(id);
-        metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
-      }
+  const getPendingDecryptLimits = useCallback((): {
+    max: number;
+    ttlMs: number;
+  } => {
+    const recovery = Date.now() < globalRecoveryUntilMsRef.current;
+    return {
+      max: recovery ? PENDING_DECRYPT_RECOVERY_MAX : PENDING_DECRYPT_MAX,
+      ttlMs: recovery ? PENDING_DECRYPT_RECOVERY_TTL_MS : PENDING_DECRYPT_TTL_MS,
+    };
+  }, []);
+
+  const logPendingDecryptDepthIfNeeded = useCallback((depth: number) => {
+    const threshold =
+      [...PENDING_DECRYPT_DEPTH_LOG_THRESHOLDS]
+        .reverse()
+        .find((t) => depth >= t) ?? null;
+    if (threshold === null) return;
+    const now = Date.now();
+    if (
+      now - lastPendingDecryptDepthWarnAtRef.current <
+      PENDING_DECRYPT_DEPTH_LOG_MIN_INTERVAL_MS
+    ) {
+      return;
     }
+    lastPendingDecryptDepthWarnAtRef.current = now;
+    gcallDiagnosticsPush('info', '[GCall] pendingDecryptDepthHigh', {
+      depth,
+      threshold,
+      recovery: Date.now() < globalRecoveryUntilMsRef.current,
+    });
   }, []);
 
-  const ensurePendingDecryptCap = useCallback(() => {
-    const m = pendingDecryptsRef.current;
-    while (m.size >= PENDING_DECRYPT_MAX) {
-      let oldestId: number | null = null;
-      let oldestT = Infinity;
+  const recordPendingDecryptDepth = useCallback((depth: number) => {
+    metricsRef.current.recordPendingDecryptDepth(depth);
+    logPendingDecryptDepthIfNeeded(depth);
+  }, [logPendingDecryptDepthIfNeeded]);
+
+  const sweepStalePendingDecrypts = useCallback(
+    (nowMs: number, ttlMs: number) => {
+      const m = pendingDecryptsRef.current;
       for (const [id, p] of m) {
-        if (p.startedAt < oldestT) {
-          oldestT = p.startedAt;
-          oldestId = id;
+        if (nowMs - p.startedAt > ttlMs) {
+          m.delete(id);
+          metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
         }
       }
-      if (oldestId === null) break;
-      m.delete(oldestId);
-      metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
-    }
-  }, []);
+      recordPendingDecryptDepth(m.size);
+    },
+    [recordPendingDecryptDepth]
+  );
+
+  const ensurePendingDecryptCap = useCallback(
+    (max: number) => {
+      const m = pendingDecryptsRef.current;
+      while (m.size >= max) {
+        let oldestId: number | null = null;
+        let oldestT = Infinity;
+        for (const [id, p] of m) {
+          if (p.startedAt < oldestT) {
+            oldestT = p.startedAt;
+            oldestId = id;
+          }
+        }
+        if (oldestId === null) break;
+        m.delete(oldestId);
+        metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
+      }
+      recordPendingDecryptDepth(m.size);
+    },
+    [recordPendingDecryptDepth]
+  );
 
   /** After decrypt (worker or sync): authenticated gating, forward opaque wire, jitter. */
   const applyPostDecryptList = useCallback(
@@ -4118,12 +4174,17 @@ export function useGroupVoiceCall(uiActive = false) {
       ) {
         return; // same key — no-op
       }
+      const hadPreviousKey = prev !== null;
       lastWorkerRoomKeyRef.current = new Uint8Array(roomKey);
       if (!decryptWorkerRef.current) return; // sync path served; no worker to notify
+      if (hadPreviousKey) {
+        flushPendingDecryptMap();
+      }
       const keyVersion = ++decryptWorkerKeyVersionRef.current;
       gcallDiagnosticsPush('info', '[GCall] workerRoomKeySyncRequested', {
         keyVersion,
         roomKeyInstalledAtMs: roomKeyInstalledAtRef.current || null,
+        flushedPendingDecrypt: hadPreviousKey,
       });
       const roomKeyCopy = roomKey.slice().buffer;
       decryptWorkerRef.current.postMessage(
@@ -5993,13 +6054,14 @@ export function useGroupVoiceCall(uiActive = false) {
 
       // Retain DC buffer for opaque forward after decrypt; never transfer this reference.
       const wireForForward = data;
-      sweepStalePendingDecrypts(startedAt);
+      const decryptLimits = getPendingDecryptLimits();
+      sweepStalePendingDecrypts(startedAt, decryptLimits.ttlMs);
 
       const workerReady =
         decryptWorkerAppliedKeyVersionRef.current ===
         decryptWorkerKeyVersionRef.current;
       if (decryptWorkerRef.current && workerReady) {
-        ensurePendingDecryptCap();
+        ensurePendingDecryptCap(decryptLimits.max);
         const id = decryptIdRef.current++;
         const workerBuffer = data.slice(0);
         pendingDecryptsRef.current.set(id, {
@@ -6009,6 +6071,7 @@ export function useGroupVoiceCall(uiActive = false) {
           ingressPeerAddress,
           workerKeyVersion: decryptWorkerKeyVersionRef.current,
         });
+        recordPendingDecryptDepth(pendingDecryptsRef.current.size);
         decryptWorkerRef.current.postMessage(
           { type: 'decrypt', id, buffer: workerBuffer },
           [workerBuffer]
@@ -6043,7 +6106,9 @@ export function useGroupVoiceCall(uiActive = false) {
     [
       applyPostDecryptList,
       ensurePendingDecryptCap,
+      getPendingDecryptLimits,
       incrementPerfCounter,
+      recordPendingDecryptDepth,
       recordPerfDuration,
       sweepStalePendingDecrypts,
     ]
@@ -7501,6 +7566,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       const pending = pendingDecryptsRef.current.get(id);
       pendingDecryptsRef.current.delete(id);
+      recordPendingDecryptDepth(pendingDecryptsRef.current.size);
       if (!pending) {
         recordPerfDuration(
           'decryptWorkerHandlerMs',
@@ -7579,6 +7645,7 @@ export function useGroupVoiceCall(uiActive = false) {
     dispatchEncodedPacket,
     incrementPerfCounter,
     logSendPathDiagnostic,
+    recordPendingDecryptDepth,
     recordPerfDuration,
     syncDecryptWorkerRoomKey,
   ]);
