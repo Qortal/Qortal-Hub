@@ -156,6 +156,10 @@ import {
   rawConnectionStressLevel,
   type GroupCallLocalConnectionHint,
 } from '../lib/group-call/groupCallLocalConnectionHint';
+import {
+  buildRootInboundWarmDedupeKeys,
+  clearRootInboundWarmDedupeForPeer,
+} from '../lib/group-call/rootInboundWarmDedupe';
 
 const naclApi = nacl as any;
 
@@ -4929,7 +4933,10 @@ export function useGroupVoiceCall(uiActive = false) {
                 const jg = joinGenerationRef.current ?? 0;
                 for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
                   if (!participantsRef.current.has(peer)) continue;
-                  const dedupeKey = `${jg}:${peer}`;
+                  const { warmKey: dedupeKey } = buildRootInboundWarmDedupeKeys(
+                    jg,
+                    peer
+                  );
                   if (rootInboundWarmFiredRef.current.has(dedupeKey)) continue;
                   rootInboundWarmFiredRef.current.add(dedupeKey);
                   gcallDiagnosticsPush('info', '[GCall] rootInboundPathWarm', {
@@ -4964,7 +4971,8 @@ export function useGroupVoiceCall(uiActive = false) {
                   const jg = joinGenerationRef.current ?? 0;
                   for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
                     if (!participantsRef.current.has(peer)) continue;
-                    const dedupeKey = `${jg}:stress:${peer}`;
+                    const { stressKey: dedupeKey } =
+                      buildRootInboundWarmDedupeKeys(jg, peer);
                     if (rootInboundStressWarmFiredRef.current.has(dedupeKey))
                       continue;
                     rootInboundStressWarmFiredRef.current.add(dedupeKey);
@@ -9721,7 +9729,10 @@ export function useGroupVoiceCall(uiActive = false) {
             const root = topologyRef.current?.rootForwarder?.trim() ?? '';
             if (root && address !== myAddr) {
               if (myAddr === root) {
-                const k = `${joinGenerationRef.current ?? 0}:${address}`;
+                const { warmKey: k } = buildRootInboundWarmDedupeKeys(
+                  joinGenerationRef.current ?? 0,
+                  address
+                );
                 if (!rootInboundWarmFiredRef.current.has(k)) {
                   rootInboundWarmFiredRef.current.add(k);
                   gcallDiagnosticsPush(
@@ -9735,6 +9746,11 @@ export function useGroupVoiceCall(uiActive = false) {
                     address,
                     'peer-joined-inbound-warm'
                   );
+                  globalRecoveryUntilMsRef.current = Math.max(
+                    globalRecoveryUntilMsRef.current,
+                    Date.now() + ADAPTIVE_RECOVERY_COOLDOWN_MS
+                  );
+                  recomputeAdaptiveNetworkMode();
                 }
               } else if (root !== myAddr) {
                 const warmKey = `${joinGenerationRef.current ?? 0}:${root}`;
@@ -9883,6 +9899,12 @@ export function useGroupVoiceCall(uiActive = false) {
           roomId,
           address,
         });
+        clearRootInboundWarmDedupeForPeer(
+          joinGenerationRef.current ?? 0,
+          address,
+          rootInboundWarmFiredRef.current,
+          rootInboundStressWarmFiredRef.current
+        );
         disposeParticipantAudio(address);
         participantsRef.current.delete(address);
         setActiveSpeakers((prev) =>
