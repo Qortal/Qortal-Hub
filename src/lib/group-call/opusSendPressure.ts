@@ -34,6 +34,18 @@ export const RETICULUM_SEND_PRESSURE_DECODED_QUEUE_DEPTH = 12;
 /** Must match `GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS` (rolling 5s count) */
 export const RETICULUM_SEND_PRESSURE_QUEUE_DROPS_LAST5S = 6;
 
+/** Stricter bridge queue threshold when fanning out (forwarder roles). */
+export const RETICULUM_SEND_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER = 6;
+
+/** Stricter decoded queue threshold for forwarders. */
+export const RETICULUM_SEND_PRESSURE_DECODED_QUEUE_DEPTH_FORWARDER = 10;
+
+/** Stricter rolling drop count for forwarders. */
+export const RETICULUM_SEND_PRESSURE_QUEUE_DROPS_LAST5S_FORWARDER = 5;
+
+/** Stricter pending frames threshold for forwarders. */
+export const RETICULUM_SEND_PRESSURE_PENDING_FRAMES_FORWARDER = 10;
+
 /** Renderer pending frames threshold (aligned with window pressure heuristics). */
 export const RETICULUM_SEND_PRESSURE_PENDING_FRAMES = 12;
 
@@ -74,6 +86,31 @@ export function isReticulumSendPressureSignal(
   if (s.queuePressureDropsLast5s >= RETICULUM_SEND_PRESSURE_QUEUE_DROPS_LAST5S)
     return true;
   if ((s.pendingFrames ?? 0) >= RETICULUM_SEND_PRESSURE_PENDING_FRAMES) return true;
+  return false;
+}
+
+/** Earlier pressure entry for root/cluster/standby forwarders (fan-out uplink). */
+export function isReticulumSendPressureSignalForwarder(
+  s: ReticulumSendPressureSnapshot
+): boolean {
+  if (s.bridgeWaitingForDrain === true) return true;
+  if (
+    s.bridgeQueuedFrames >= RETICULUM_SEND_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER
+  )
+    return true;
+  if (
+    s.decodedQueueDepth >= RETICULUM_SEND_PRESSURE_DECODED_QUEUE_DEPTH_FORWARDER
+  )
+    return true;
+  if (
+    s.queuePressureDropsLast5s >=
+    RETICULUM_SEND_PRESSURE_QUEUE_DROPS_LAST5S_FORWARDER
+  )
+    return true;
+  if (
+    (s.pendingFrames ?? 0) >= RETICULUM_SEND_PRESSURE_PENDING_FRAMES_FORWARDER
+  )
+    return true;
   return false;
 }
 

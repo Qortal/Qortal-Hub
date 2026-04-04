@@ -3,6 +3,7 @@ import {
   buildOpusSendPressureTiers,
   createOpusSendPressureControllerState,
   isReticulumSendPressureSignal,
+  isReticulumSendPressureSignalForwarder,
   OPUS_SEND_PRESSURE_ENTER_MS,
   OPUS_SEND_PRESSURE_EXIT_MS,
   OPUS_SEND_PRESSURE_MIN_BITRATE,
@@ -60,6 +61,25 @@ describe('isReticulumSendPressureSignal', () => {
         decodedQueueDepth: 0,
         queuePressureDropsLast5s: 0,
         pendingFrames: 12,
+      })
+    ).toBe(true);
+  });
+});
+
+describe('isReticulumSendPressureSignalForwarder', () => {
+  it('enters pressure earlier than participant thresholds', () => {
+    expect(
+      isReticulumSendPressureSignal({
+        bridgeQueuedFrames: 7,
+        decodedQueueDepth: 0,
+        queuePressureDropsLast5s: 0,
+      })
+    ).toBe(false);
+    expect(
+      isReticulumSendPressureSignalForwarder({
+        bridgeQueuedFrames: 7,
+        decodedQueueDepth: 0,
+        queuePressureDropsLast5s: 0,
       })
     ).toBe(true);
   });

@@ -8,6 +8,7 @@ import {
   hasOccupiedRoomEvidenceForJoin,
   getTrustedRootForRejoinElection,
   getReticulumTransportTargets,
+  getPredictiveWarmPeers,
   getSessionUpdatedKeyRecoveryAction,
   getPostJoinHydratedParticipants,
   isCurrentGroupCallAudioStartupToken,
@@ -395,6 +396,12 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(getReticulumTransportTargets('Q-standby', topology)).toEqual([
       'Q-root',
     ]);
+
+    const predictiveRoot = getPredictiveWarmPeers('Q-root', topology);
+    expect(new Set(predictiveRoot).size).toBe(predictiveRoot.length);
+    for (const p of getReticulumTransportTargets('Q-root', topology)) {
+      expect(predictiveRoot).toContain(p);
+    }
   });
 
   it('hydrates only missing remote participants from the main roster after join', () => {

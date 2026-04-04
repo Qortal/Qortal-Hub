@@ -99,6 +99,13 @@ import {
   computeAdaptiveJitterMs,
   stepSmoothedAdaptiveTargetMs,
 } from '../lib/group-call/adaptivePlayout';
+import { computePathQualityScoreV1 } from '../lib/group-call/pathQualityScore';
+import {
+  createWorstIsolationHysteresisState,
+  effectivePlayoutMaxTargetMs,
+  pickSecondIsolationCandidate,
+  stepWorstIsolationHysteresis,
+} from '../lib/group-call/gcallPlayoutPolicy';
 import {
   decodeAudioPackets,
   encodeAudioPacketV2,
@@ -126,6 +133,7 @@ import {
   createOpusSendPressureControllerState,
   GCALL_SEND_AUDIO_IPC_BATCH_SIZE,
   isReticulumSendPressureSignal,
+  isReticulumSendPressureSignalForwarder,
   OPUS_SEND_PRESSURE_TICK_MS,
   tickOpusSendPressureController,
 } from '../lib/group-call/opusSendPressure';
@@ -388,6 +396,13 @@ const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 1_500;
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
 const WINDOW_METRICS_INTERVAL_MS = 60_000;
+/** Max predictive path warms per rolling 10s (guard against path churn). */
+const GCALL_PREDICTIVE_WARM_MAX_PER_10S = 5;
+/** Min ms between predictive warms toward the same peer. */
+const MIN_PREDICTIVE_WARM_SAME_PEER_MS = 60_000;
+/** Root stress-tier inbound warm when media flows but path metrics are poor. */
+const ROOT_INBOUND_STRESS_MIN_TIMEOUTS = 2;
+const ROOT_INBOUND_STRESS_MIN_STALE_RATIO = 0.12;
 const GCALL_PERF_TICK_BUDGET_WARN_MS = 6;
 /** v3: callSessionId + mediaSessionGeneration + keyCommitment (matches main process). */
 const GCALL_KEY_MESSAGE_VERSION = 3;
@@ -1353,6 +1368,31 @@ function getRootInboundWarmPeers(
   return [...out];
 }
 
+/**
+ * Union of inbound-warm peers and transport targets for predictive path pre-warm (N-way).
+ */
+export function getPredictiveWarmPeers(
+  myAddress: string,
+  topology: GroupTopology
+): string[] {
+  const out = new Set<string>();
+  for (const p of getRootInboundWarmPeers(myAddress, topology)) out.add(p);
+  for (const p of getReticulumTransportTargets(myAddress, topology)) out.add(p);
+  return [...out].filter((p) => p && p !== myAddress);
+}
+
+function sortPeersForPredictiveWarm(
+  peers: string[],
+  activeSet: Set<string>
+): string[] {
+  return [...peers].sort((a, b) => {
+    const aa = activeSet.has(a) ? 1 : 0;
+    const bb = activeSet.has(b) ? 1 : 0;
+    if (bb !== aa) return bb - aa;
+    return a.localeCompare(b);
+  });
+}
+
 /** Standby promotion for non-root cluster forwarder failure (hierarchical rooms). */
 function findNonRootClusterStandbyDuty(
   myAddress: string,
@@ -1924,6 +1964,20 @@ export function useGroupVoiceCall(uiActive = false) {
   const jitterDrainReactTickCountRef = useRef(0);
   const jitterFirstDrainLoggedRef = useRef(false);
   const activeJitterSourcesRef = useRef<Set<string>>(new Set());
+  /** Ordered tags for the current metrics window (flushed in emitWindowMetrics). */
+  const gcallWindowDiagnosticTagsRef = useRef<
+    Array<{ ts: number; type: string; detail?: unknown }>
+  >([]);
+  const pathQualityScoreEmaV1Ref = useRef<number | null>(null);
+  const lastPeerRouteKeyRef = useRef<Map<string, string>>(new Map());
+  const predictiveWarmHistoryRef = useRef<Array<{ at: number; peer: string }>>(
+    []
+  );
+  const lastPredictiveWarmAtPeerRef = useRef<Map<string, number>>(new Map());
+  const rootInboundStressWarmFiredRef = useRef<Set<string>>(new Set());
+  const worstIsolationHysteresisRef = useRef(
+    createWorstIsolationHysteresisState()
+  );
   const emptyJitterDrainTicksRef = useRef<Map<string, number>>(new Map());
   /** Bumps before each async topology election (join or leave); stale continuations no-op after await. */
   const topologyAsyncGenRef = useRef(0);
@@ -2906,9 +2960,26 @@ export function useGroupVoiceCall(uiActive = false) {
       lastWindowMetricsRef.current = windowMetrics;
       evaluateWindowMediaRecovery(windowMetrics);
       const diagnosticSources = buildWindowDiagnosticSources(windowMetrics);
+      const pathQuality = computePathQualityScoreV1(
+        windowMetrics,
+        pathQualityScoreEmaV1Ref.current
+      );
+      pathQualityScoreEmaV1Ref.current = pathQuality.pathQualityScoreEmaV1;
+      const tagBuf = gcallWindowDiagnosticTagsRef.current;
+      const tags = tagBuf.splice(0, tagBuf.length);
+      const remoteParticipants = [...participantsRef.current.keys()].filter(
+        (a) => a && a !== receivingPeer
+      ).length;
       const windowPayload = {
         reason,
         audioQualityProfile,
+        windowMetricsIntervalMs: WINDOW_METRICS_INTERVAL_MS,
+        role: myRoleRef.current,
+        participantCount: participantsRef.current.size,
+        activeRemoteSourceCount: activeJitterSourcesRef.current.size,
+        remoteParticipantCount: remoteParticipants,
+        diagnosticTags: tags,
+        ...pathQuality,
         ...windowMetrics,
         sources: diagnosticSources,
       };
@@ -2918,6 +2989,15 @@ export function useGroupVoiceCall(uiActive = false) {
         '[GCall] groupCallWindowMetrics',
         windowPayload
       );
+      if (windowMetrics.packetsDroppedPendingDecrypt > 0) {
+        gcallDiagnosticsPush('warn', '[GCall] windowPendingDecryptDrops', {
+          packetsDroppedPendingDecrypt: windowMetrics.packetsDroppedPendingDecrypt,
+          packetsDroppedPendingDecryptRatePerSec:
+            windowMetrics.packetsDroppedPendingDecryptRatePerSec,
+          pendingDecryptDepthHighWater:
+            windowMetrics.pendingDecryptDepthHighWater,
+        });
+      }
       return windowMetrics;
     },
     [
@@ -2937,6 +3017,21 @@ export function useGroupVoiceCall(uiActive = false) {
         : 0;
     let postCount = 0;
     incrementPerfCounter('adaptiveRuns');
+    const win = lastWindowMetricsRef.current;
+    worstIsolationHysteresisRef.current = stepWorstIsolationHysteresis(
+      worstIsolationHysteresisRef.current,
+      win?.worstSourceAddr ?? null,
+      wallNow
+    );
+    const committedWorst = worstIsolationHysteresisRef.current.committedAddr;
+    const isolationSecond =
+      committedWorst && win?.sources
+        ? pickSecondIsolationCandidate(win.sources, committedWorst)
+        : null;
+    const worstIsolationSet = new Set<string>();
+    if (committedWorst) worstIsolationSet.add(committedWorst);
+    if (isolationSecond) worstIsolationSet.add(isolationSecond);
+
     for (const addr of activeJitterSourcesRef.current) {
       const node = playbackWorkletsRef.current.get(addr);
       if (!node) continue;
@@ -2970,10 +3065,15 @@ export function useGroupVoiceCall(uiActive = false) {
             'recovery'
           : false;
       const tuning = audioTuningRef.current;
-      const adaptiveMaxTargetMs =
-        severeWindowSource || ingressPeerRecovery
-          ? tuning.adaptiveSevereMaxTargetMs
-          : tuning.adaptiveMaxTargetMs;
+      const isolateThisSource =
+        severeWindowSource && worstIsolationSet.has(addr);
+      const useSevereCeiling = ingressPeerRecovery || isolateThisSource;
+      const adaptiveMaxTargetMs = effectivePlayoutMaxTargetMs({
+        profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
+        profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
+        useSevereCeiling,
+        activeSourceCount: activeJitterSourcesRef.current.size,
+      });
 
       const ideal = computeAdaptiveIdealTargetMs({
         baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
@@ -2995,7 +3095,10 @@ export function useGroupVoiceCall(uiActive = false) {
       metricsRef.current.recordAdaptiveTargetSample(addr, smooth);
       if (
         smooth >= adaptiveMaxTargetMs - 10 &&
-        (jitterMs >= 20 || lossPenalty >= 8 || severeWindowSource)
+        (jitterMs >= 20 ||
+          lossPenalty >= 8 ||
+          severeWindowSource ||
+          isolateThisSource)
       ) {
         const lastLoggedAt = lastPlayoutStressLogAtRef.current.get(addr) ?? 0;
         if (wallNow - lastLoggedAt >= 5_000) {
@@ -3008,6 +3111,7 @@ export function useGroupVoiceCall(uiActive = false) {
             lossPenaltyMs: lossPenalty,
             ingressPeerRecovery,
             severeWindowSource,
+            worstPeerIsolation: isolateThisSource,
             playoutBoostMs,
           });
         }
@@ -3354,6 +3458,7 @@ export function useGroupVoiceCall(uiActive = false) {
           linkUnreadyDrops?: number;
           packetSendFailures?: number;
           targetAddress?: string;
+          routeKey?: string;
           bridge?: {
             bridgeQueuedFrames?: number;
             bridgeWaitingForDrain?: boolean;
@@ -3501,6 +3606,25 @@ export function useGroupVoiceCall(uiActive = false) {
             diagnostics.linkUnreadyDrops ?? 0
           );
         }
+        const rk = diagnostics.routeKey;
+        if (typeof rk === 'string' && peerAddress) {
+          const prev = lastPeerRouteKeyRef.current.get(peerAddress);
+          if (prev !== undefined && prev !== rk) {
+            gcallWindowDiagnosticTagsRef.current.push({
+              ts: Date.now(),
+              type: 'path-route-change',
+              detail: {
+                peer: truncateGcallDiagAddress(peerAddress),
+                prevRouteKey: prev.slice(0, 32),
+                nextRouteKey: rk.slice(0, 32),
+              },
+            });
+            gcallDiagnosticsPush('info', '[GCall] pathRouteKeyChanged', {
+              peerAddress: truncateGcallDiagAddress(peerAddress),
+            });
+          }
+          lastPeerRouteKeyRef.current.set(peerAddress, rk);
+        }
       }
       if (!res?.success) {
         metricsRef.current.recordRelayIpcFailure(1);
@@ -3574,14 +3698,26 @@ export function useGroupVoiceCall(uiActive = false) {
     const id = setInterval(() => {
       if (!roomIdRef.current) return;
       const snap = metricsRef.current.getSnapshot();
-      const pressured = isReticulumSendPressureSignal({
+      const forwarderRole =
+        myRoleRef.current === 'root-forwarder' ||
+        myRoleRef.current === 'cluster-forwarder' ||
+        myRoleRef.current === 'standby-forwarder';
+      const pressureSnap = {
         bridgeWaitingForDrain: snap.reticulumAudioBridgeWaitingForDrain,
         bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
         decodedQueueDepth: snap.reticulumAudioDecodedQueueDepth,
         queuePressureDropsLast5s: snap.reticulumAudioQueuePressureDropsLast5s,
         pendingFrames: snap.reticulumAudioPendingFrames,
-      });
-      const tiers = buildOpusSendPressureTiers(audioTuningRef.current.opusBitrate);
+      };
+      const pressured = forwarderRole
+        ? isReticulumSendPressureSignalForwarder(pressureSnap)
+        : isReticulumSendPressureSignal(pressureSnap);
+      const forwarderFanout =
+        forwarderRole && (snap.packetsForwarded ?? 0) > 0;
+      const nominalBitrate = Math.round(
+        audioTuningRef.current.opusBitrate * (forwarderFanout ? 0.92 : 1)
+      );
+      const tiers = buildOpusSendPressureTiers(nominalBitrate);
       const result = tickOpusSendPressureController(
         opusSendPressureStateRef.current,
         tiers,
@@ -4268,6 +4404,38 @@ export function useGroupVoiceCall(uiActive = false) {
     );
   };
 
+  const maybePredictiveWarmPeers = useCallback((topo: GroupTopology) => {
+    const myAddress = userInfo?.address ?? '';
+    if (!myAddress || !roomKeyRef.current) return;
+    const peers = getPredictiveWarmPeers(myAddress, topo);
+    if (peers.length === 0) return;
+    const sorted = sortPeersForPredictiveWarm(
+      peers,
+      activeJitterSourcesRef.current
+    );
+    const now = Date.now();
+    predictiveWarmHistoryRef.current = predictiveWarmHistoryRef.current.filter(
+      (e) => now - e.at < 10_000
+    );
+    for (const peer of sorted) {
+      if (!participantsRef.current.has(peer)) continue;
+      if (
+        now - (lastPredictiveWarmAtPeerRef.current.get(peer) ?? 0) <
+        MIN_PREDICTIVE_WARM_SAME_PEER_MS
+      ) {
+        continue;
+      }
+      if (predictiveWarmHistoryRef.current.length >= GCALL_PREDICTIVE_WARM_MAX_PER_10S)
+        break;
+      lastPredictiveWarmAtPeerRef.current.set(peer, now);
+      predictiveWarmHistoryRef.current.push({ at: now, peer });
+      gcallDiagnosticsPush('info', '[GCall] predictivePathWarm', {
+        peer: truncateGcallDiagAddress(peer),
+      });
+      requestMediaRecoveryForPeerRef.current(peer, 'topology-predictive-warm');
+    }
+  }, [userInfo?.address]);
+
   // ── Forwarder heartbeat ────────────────────────────────────────────────────
 
   const stopClusterHeartbeat = useCallback(() => {
@@ -4373,6 +4541,7 @@ export function useGroupVoiceCall(uiActive = false) {
     (topology: GroupTopology) => {
       const topo = normalizeGroupTopologyClusters(topology);
       const prevTopo = topologyRef.current;
+      const prevRole = myRoleRef.current;
       const myAddress = userInfo?.address ?? '';
 
       if (topo.topologyEpoch < localEpochRef.current) {
@@ -4567,8 +4736,36 @@ export function useGroupVoiceCall(uiActive = false) {
         prevEpoch: prevTopo?.topologyEpoch ?? null,
         prevRoot: prevTopo?.rootForwarder ?? null,
       });
+      if (prevTopo) {
+        if (
+          prevTopo.rootForwarder !== topo.rootForwarder ||
+          prevTopo.standbyForwarder !== topo.standbyForwarder ||
+          prevTopo.topologyEpoch !== topo.topologyEpoch
+        ) {
+          gcallWindowDiagnosticTagsRef.current.push({
+            ts: Date.now(),
+            type: 'topology-change',
+            detail: {
+              prevRoot: prevTopo.rootForwarder,
+              root: topo.rootForwarder,
+              prevStandby: prevTopo.standbyForwarder,
+              standby: topo.standbyForwarder,
+              prevEpoch: prevTopo.topologyEpoch,
+              epoch: topo.topologyEpoch,
+            },
+          });
+        }
+      }
       myRoleRef.current = role;
       metricsRef.current.setRole(role);
+
+      if (prevRole !== role) {
+        gcallWindowDiagnosticTagsRef.current.push({
+          ts: Date.now(),
+          type: 'role-change',
+          detail: { from: prevRole, to: role },
+        });
+      }
 
       setMyRole((prev) => (prev !== role ? role : prev));
       const newLabel: TopologyLabel =
@@ -4688,8 +4885,47 @@ export function useGroupVoiceCall(uiActive = false) {
               }
             }
           }
+        } else {
+          const wm = lastWindowMetricsRef.current;
+          if (wm) {
+            const timeouts = wm.reticulumAudioPacketPathTimeouts;
+            const denom = Math.max(
+              1,
+              wm.reticulumAudioPacketFreshSends + wm.reticulumAudioPacketStaleSends
+            );
+            const staleRatio = wm.reticulumAudioPacketStaleSends / denom;
+            const stress =
+              timeouts >= ROOT_INBOUND_STRESS_MIN_TIMEOUTS ||
+              staleRatio >= ROOT_INBOUND_STRESS_MIN_STALE_RATIO;
+            if (stress) {
+              const remoteCount = [...participantsRef.current.keys()].filter(
+                (a) => a !== myAddrTopo
+              ).length;
+              if (remoteCount > 0) {
+                const jg = joinGenerationRef.current ?? 0;
+                for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
+                  if (!participantsRef.current.has(peer)) continue;
+                  const dedupeKey = `${jg}:stress:${peer}`;
+                  if (rootInboundStressWarmFiredRef.current.has(dedupeKey))
+                    continue;
+                  rootInboundStressWarmFiredRef.current.add(dedupeKey);
+                  gcallDiagnosticsPush('info', '[GCall] rootInboundStressPathWarm', {
+                    peer: peer.slice(0, 12),
+                    timeouts,
+                    staleRatio: Math.round(staleRatio * 1000) / 1000,
+                  });
+                  requestMediaRecoveryForPeerRef.current(
+                    peer,
+                    'topology-root-inbound-stress-warm'
+                  );
+                }
+              }
+            }
+          }
         }
       }
+
+      maybePredictiveWarmPeers(topo);
 
       if (isTestingStableRoomKey) {
         clearAuthoritativeKeyGrace();
@@ -4701,6 +4937,7 @@ export function useGroupVoiceCall(uiActive = false) {
     [
       clearAuthoritativeKeyGrace,
       flushMetrics,
+      maybePredictiveWarmPeers,
       startClusterHeartbeat,
       startTopologyHeartbeat,
       stopClusterHeartbeat,
@@ -8445,6 +8682,13 @@ export function useGroupVoiceCall(uiActive = false) {
       eagerStandbyNoKeyRecoveryFiredJoinGenRef.current = null;
       startupReticulumPathWarmKeyRef.current = '';
       rootInboundWarmFiredRef.current.clear();
+      rootInboundStressWarmFiredRef.current.clear();
+      gcallWindowDiagnosticTagsRef.current.length = 0;
+      pathQualityScoreEmaV1Ref.current = null;
+      lastPeerRouteKeyRef.current.clear();
+      predictiveWarmHistoryRef.current = [];
+      lastPredictiveWarmAtPeerRef.current.clear();
+      worstIsolationHysteresisRef.current = createWorstIsolationHysteresisState();
       lastRecoverySuppressionLogAtRef.current = 0;
       lastKeyRecoveryRequestAtRef.current = 0;
       lastKeyRecoveryRefreshAtRef.current = 0;
@@ -9363,6 +9607,14 @@ export function useGroupVoiceCall(uiActive = false) {
               ...(incomingGen !== undefined
                 ? { joinGeneration: incomingGen }
                 : {}),
+            });
+            gcallWindowDiagnosticTagsRef.current.push({
+              ts: Date.now(),
+              type: 'participant-joined',
+              detail: {
+                address: truncateGcallDiagAddress(address),
+                joinGeneration: incomingGen ?? null,
+              },
             });
             setParticipants((prev) => {
               if (prev.some((p) => p.address === address)) return prev;
