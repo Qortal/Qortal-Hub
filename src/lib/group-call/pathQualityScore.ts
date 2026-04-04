@@ -1,7 +1,11 @@
 /**
  * Provisional v1 path quality score for Reticulum packet paths (session/window aggregates).
  * Weights are tunable; keep field names stable for diagnostics.
+ *
+ * When the bridge exposes per-peer path counters, emit `pathQualityPeerCoverage: 'per_peer'`
+ * and populate per-peer scores; until then diagnostics use the session aggregate only.
  */
+export const PATH_QUALITY_PEER_COVERAGE_SESSION = 'session_aggregate' as const;
 
 import type { GroupCallWindowMetrics } from './router';
 

@@ -6,6 +6,8 @@ import {
   stepWorstIsolationHysteresis,
   createWorstIsolationHysteresisState,
   pickSecondIsolationCandidate,
+  computeMicroWidenExtraMsV1,
+  varianceOfSliceMs2,
 } from './gcallPlayoutPolicy';
 
 describe('gcallPlayoutPolicy', () => {
@@ -75,6 +77,53 @@ describe('gcallPlayoutPolicy', () => {
     ];
     const second = pickSecondIsolationCandidate(sources, 'alice');
     expect(second).toBe('bob');
+  });
+
+  it('softens severe ceiling when isolationCeilingSoftened', () => {
+    // Use profile caps below global cap so the softened vs severe distinction is visible.
+    const severe = effectivePlayoutMaxTargetMs({
+      profileAdaptiveMaxMs: 120,
+      profileAdaptiveSevereMaxMs: 140,
+      useSevereCeiling: true,
+      activeSourceCount: 1,
+      isolationCeilingSoftened: true,
+    });
+    const full = effectivePlayoutMaxTargetMs({
+      profileAdaptiveMaxMs: 120,
+      profileAdaptiveSevereMaxMs: 140,
+      useSevereCeiling: true,
+      activeSourceCount: 1,
+    });
+    expect(severe).toBeLessThan(full);
+    expect(severe).toBe(130);
+    expect(full).toBe(140);
+  });
+
+  it('micro-widen v1 eligible when variance rises vs baseline segment', () => {
+    const baselineSeg = Array.from({ length: 15 }, (_, i) => 20 + (i % 3) * 0.2);
+    const currentSeg = Array.from({ length: 15 }, (_, i) => 20 + i * 1.5);
+    const ring = [...baselineSeg, ...currentSeg];
+    const r = computeMicroWidenExtraMsV1({
+      interArrivalSamplesMs: ring,
+      M: 15,
+      epsilon: 0.05,
+      Wms: 8,
+    });
+    expect(r.eligible).toBe(true);
+    expect(r.extraMs).toBe(8);
+    expect(r.currentVarMs2).toBeGreaterThan(r.effectiveBaselineVarMs2 * 1.05);
+  });
+
+  it('micro-widen v1 not eligible with fewer than 2M samples', () => {
+    const r = computeMicroWidenExtraMsV1({
+      interArrivalSamplesMs: [20, 21, 20],
+      M: 15,
+    });
+    expect(r.eligible).toBe(false);
+  });
+
+  it('varianceOfSliceMs2 matches population variance', () => {
+    expect(varianceOfSliceMs2([2, 4])).toBe(1);
   });
 
   it('returns null for second when gap is large', () => {

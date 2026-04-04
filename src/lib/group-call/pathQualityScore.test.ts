@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   computePathQualityScoreV1,
+  PATH_QUALITY_PEER_COVERAGE_SESSION,
   ratiosFromPathWindowFields,
 } from './pathQualityScore';
 
 describe('pathQualityScore', () => {
+  it('exports session peer coverage sentinel until per-peer path metrics exist', () => {
+    expect(PATH_QUALITY_PEER_COVERAGE_SESSION).toBe('session_aggregate');
+  });
+
   it('computes dimensionless ratios with safe denominators', () => {
     const r = ratiosFromPathWindowFields({
       reticulumAudioPacketPathResolutions: 8,

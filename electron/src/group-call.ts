@@ -120,6 +120,13 @@ const GC_RETICULUM_AUDIO_RECOVERY_ACTION_COOLDOWN_MS = 1_000;
 const GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES = 8;
 const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH = 12;
 const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS = 6;
+/**
+ * Mirror of `RETICULUM_SEND_PRESSURE_*_FORWARDER` in opusSendPressure.ts — optional stricter
+ * thresholds when the sender is a forwarder (fan-out uplink).
+ */
+const GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER = 6;
+const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH_FORWARDER = 10;
+const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS_FORWARDER = 5;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_TIMEOUTS = 4;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
@@ -3574,14 +3581,24 @@ export class GroupCallManager extends EventEmitter {
   }
 
   private isReticulumAudioBridgePressured(
-    snapshot: ReticulumAudioQueueSnapshot | null | undefined
+    snapshot: ReticulumAudioQueueSnapshot | null | undefined,
+    forwarder = false
   ): boolean {
     if (!snapshot) return false;
+    const bq = forwarder
+      ? GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER
+      : GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES;
+    const dq = forwarder
+      ? GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH_FORWARDER
+      : GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH;
+    const dr = forwarder
+      ? GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS_FORWARDER
+      : GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS;
     return (
       snapshot.bridgeWaitingForDrain ||
-      snapshot.bridgeQueuedFrames >= GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES ||
-      snapshot.decodedQueueDepth >= GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH ||
-      snapshot.queuePressureDropsLast5s >= GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS
+      snapshot.bridgeQueuedFrames >= bq ||
+      snapshot.decodedQueueDepth >= dq ||
+      snapshot.queuePressureDropsLast5s >= dr
     );
   }
 

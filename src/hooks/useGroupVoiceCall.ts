@@ -99,10 +99,19 @@ import {
   computeAdaptiveJitterMs,
   stepSmoothedAdaptiveTargetMs,
 } from '../lib/group-call/adaptivePlayout';
-import { computePathQualityScoreV1 } from '../lib/group-call/pathQualityScore';
+import {
+  computePathQualityScoreV1,
+  PATH_QUALITY_PEER_COVERAGE_SESSION,
+} from '../lib/group-call/pathQualityScore';
 import {
   createWorstIsolationHysteresisState,
+  computeMicroWidenExtraMsV1,
   effectivePlayoutMaxTargetMs,
+  GCALL_TOPOLOGY_SETTLE_MS,
+  MICRO_WIDEN_EPSILON,
+  MICRO_WIDEN_M,
+  MICRO_WIDEN_V1_ID,
+  MICRO_WIDEN_W_MS,
   pickSecondIsolationCandidate,
   stepWorstIsolationHysteresis,
 } from '../lib/group-call/gcallPlayoutPolicy';
@@ -1978,6 +1987,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const worstIsolationHysteresisRef = useRef(
     createWorstIsolationHysteresisState()
   );
+  /** Wall clock ms until which topology settle suppresses warm / micro-widen / hysteresis steps. */
+  const topologySettleUntilMsRef = useRef(0);
+  const lastMicroWidenDiagAtRef = useRef(0);
   const emptyJitterDrainTicksRef = useRef<Map<string, number>>(new Map());
   /** Bumps before each async topology election (join or leave); stale continuations no-op after await. */
   const topologyAsyncGenRef = useRef(0);
@@ -2401,6 +2413,7 @@ export function useGroupVoiceCall(uiActive = false) {
         return {
           ...source,
           ...ingressDiagnostic,
+          topologyEpoch: topologyRef.current?.topologyEpoch ?? null,
           recoveryAssessment,
           recoveryProfile,
           senderPressureAssessment: pressureAssessment,
@@ -2978,6 +2991,8 @@ export function useGroupVoiceCall(uiActive = false) {
         participantCount: participantsRef.current.size,
         activeRemoteSourceCount: activeJitterSourcesRef.current.size,
         remoteParticipantCount: remoteParticipants,
+        topologyEpoch: topologyRef.current?.topologyEpoch ?? null,
+        pathQualityPeerCoverage: PATH_QUALITY_PEER_COVERAGE_SESSION,
         diagnosticTags: tags,
         ...pathQuality,
         ...windowMetrics,
@@ -3011,6 +3026,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const tickAdaptivePlayoutTargets = useCallback((): number => {
     const now = performance.now();
     const wallNow = Date.now();
+    const topologySettling = wallNow < topologySettleUntilMsRef.current;
     const playoutBoostMs =
       wallNow < globalRecoveryUntilMsRef.current
         ? ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS
@@ -3018,11 +3034,13 @@ export function useGroupVoiceCall(uiActive = false) {
     let postCount = 0;
     incrementPerfCounter('adaptiveRuns');
     const win = lastWindowMetricsRef.current;
-    worstIsolationHysteresisRef.current = stepWorstIsolationHysteresis(
-      worstIsolationHysteresisRef.current,
-      win?.worstSourceAddr ?? null,
-      wallNow
-    );
+    if (!topologySettling) {
+      worstIsolationHysteresisRef.current = stepWorstIsolationHysteresis(
+        worstIsolationHysteresisRef.current,
+        win?.worstSourceAddr ?? null,
+        wallNow
+      );
+    }
     const committedWorst = worstIsolationHysteresisRef.current.committedAddr;
     const isolationSecond =
       committedWorst && win?.sources
@@ -3068,14 +3086,20 @@ export function useGroupVoiceCall(uiActive = false) {
       const isolateThisSource =
         severeWindowSource && worstIsolationSet.has(addr);
       const useSevereCeiling = ingressPeerRecovery || isolateThisSource;
+      const lastVadAt = lastVadTrueAtRef.current.get(addr) ?? 0;
+      const isActiveSpeakerForAddr =
+        lastVadAt > 0 && wallNow - lastVadAt < ACTIVE_SPEAKER_WINDOW_MS;
+      const isolationCeilingSoftened =
+        Boolean(isolateThisSource) && isActiveSpeakerForAddr;
       const adaptiveMaxTargetMs = effectivePlayoutMaxTargetMs({
         profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
         profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
         useSevereCeiling,
+        isolationCeilingSoftened,
         activeSourceCount: activeJitterSourcesRef.current.size,
       });
 
-      const ideal = computeAdaptiveIdealTargetMs({
+      let ideal = computeAdaptiveIdealTargetMs({
         baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
         minTargetMs: ADAPTIVE_MIN_TARGET_MS,
         maxTargetMs: adaptiveMaxTargetMs,
@@ -3084,6 +3108,32 @@ export function useGroupVoiceCall(uiActive = false) {
         lossPenaltyMs: lossPenalty,
         playoutBoostMs,
       });
+
+      if (!topologySettling && !severeWindowSource) {
+        const micro = computeMicroWidenExtraMsV1({
+          interArrivalSamplesMs: samples,
+          M: MICRO_WIDEN_M,
+          epsilon: MICRO_WIDEN_EPSILON,
+          Wms: MICRO_WIDEN_W_MS,
+        });
+        if (micro.eligible) {
+          ideal = Math.min(ideal + micro.extraMs, adaptiveMaxTargetMs);
+          if (wallNow - lastMicroWidenDiagAtRef.current >= 5_000) {
+            lastMicroWidenDiagAtRef.current = wallNow;
+            gcallDiagnosticsPush('info', '[GCall] microWidenV1', {
+              microWidenTriggered: true,
+              v1: MICRO_WIDEN_V1_ID,
+              M: MICRO_WIDEN_M,
+              epsilon: MICRO_WIDEN_EPSILON,
+              W: MICRO_WIDEN_W_MS,
+              currentVar: micro.currentVarMs2,
+              baselineVar: micro.rawBaselineVarMs2,
+              effectiveBaselineVar: micro.effectiveBaselineVarMs2,
+              sourceAddr: truncateGcallDiagAddress(addr),
+            });
+          }
+        }
+      }
 
       const smooth = stepSmoothedAdaptiveTargetMs({
         idealTargetMs: ideal,
@@ -4404,37 +4454,41 @@ export function useGroupVoiceCall(uiActive = false) {
     );
   };
 
-  const maybePredictiveWarmPeers = useCallback((topo: GroupTopology) => {
-    const myAddress = userInfo?.address ?? '';
-    if (!myAddress || !roomKeyRef.current) return;
-    const peers = getPredictiveWarmPeers(myAddress, topo);
-    if (peers.length === 0) return;
-    const sorted = sortPeersForPredictiveWarm(
-      peers,
-      activeJitterSourcesRef.current
-    );
-    const now = Date.now();
-    predictiveWarmHistoryRef.current = predictiveWarmHistoryRef.current.filter(
-      (e) => now - e.at < 10_000
-    );
-    for (const peer of sorted) {
-      if (!participantsRef.current.has(peer)) continue;
-      if (
-        now - (lastPredictiveWarmAtPeerRef.current.get(peer) ?? 0) <
-        MIN_PREDICTIVE_WARM_SAME_PEER_MS
-      ) {
-        continue;
+  const maybePredictiveWarmPeers = useCallback(
+    (topo: GroupTopology, mayWarmTransport: boolean) => {
+      const myAddress = userInfo?.address ?? '';
+      if (!myAddress || !roomKeyRef.current) return;
+      if (!mayWarmTransport) return;
+      const peers = getPredictiveWarmPeers(myAddress, topo);
+      if (peers.length === 0) return;
+      const sorted = sortPeersForPredictiveWarm(
+        peers,
+        activeJitterSourcesRef.current
+      );
+      const now = Date.now();
+      predictiveWarmHistoryRef.current = predictiveWarmHistoryRef.current.filter(
+        (e) => now - e.at < 10_000
+      );
+      for (const peer of sorted) {
+        if (!participantsRef.current.has(peer)) continue;
+        if (
+          now - (lastPredictiveWarmAtPeerRef.current.get(peer) ?? 0) <
+          MIN_PREDICTIVE_WARM_SAME_PEER_MS
+        ) {
+          continue;
+        }
+        if (predictiveWarmHistoryRef.current.length >= GCALL_PREDICTIVE_WARM_MAX_PER_10S)
+          break;
+        lastPredictiveWarmAtPeerRef.current.set(peer, now);
+        predictiveWarmHistoryRef.current.push({ at: now, peer });
+        gcallDiagnosticsPush('info', '[GCall] predictivePathWarm', {
+          peer: truncateGcallDiagAddress(peer),
+        });
+        requestMediaRecoveryForPeerRef.current(peer, 'topology-predictive-warm');
       }
-      if (predictiveWarmHistoryRef.current.length >= GCALL_PREDICTIVE_WARM_MAX_PER_10S)
-        break;
-      lastPredictiveWarmAtPeerRef.current.set(peer, now);
-      predictiveWarmHistoryRef.current.push({ at: now, peer });
-      gcallDiagnosticsPush('info', '[GCall] predictivePathWarm', {
-        peer: truncateGcallDiagAddress(peer),
-      });
-      requestMediaRecoveryForPeerRef.current(peer, 'topology-predictive-warm');
-    }
-  }, [userInfo?.address]);
+    },
+    [userInfo?.address]
+  );
 
   // ── Forwarder heartbeat ────────────────────────────────────────────────────
 
@@ -4640,7 +4694,11 @@ export function useGroupVoiceCall(uiActive = false) {
         lastObservedEpochRef.current,
         topo.topologyEpoch
       );
+      const wallNowTopology = Date.now();
+      /** Previous settle window must have elapsed before aggressive transport warms run. */
+      const mayWarmTransport = wallNowTopology >= topologySettleUntilMsRef.current;
       topologyRef.current = topo;
+      topologySettleUntilMsRef.current = wallNowTopology + GCALL_TOPOLOGY_SETTLE_MS;
       if (
         prevTopo?.rootForwarder !== topo.rootForwarder ||
         prevTopo?.topologyEpoch !== topo.topologyEpoch
@@ -4827,77 +4885,43 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
 
-      const snapWarm = metricsRef.current.getSnapshot();
-      const targetsWarm = getReticulumTransportTargets(myAddrTopo, topo);
-      // Outbound packet path can resolve (resolutions > 0) while inbound from root is still
-      // zero — do not require cold path stats; dedupe via warmKey prevents spam.
-      if (
-        role !== 'root-forwarder' &&
-        roomKeyRef.current &&
-        topo.rootForwarder &&
-        topo.rootForwarder !== myAddrTopo &&
-        targetsWarm.includes(topo.rootForwarder) &&
-        (snapWarm.packetsReceived ?? 0) === 0 &&
-        (snapWarm.packetsDecoded ?? 0) === 0
-      ) {
-        const warmKey = `${joinGenerationRef.current ?? 0}:${topo.rootForwarder}`;
-        if (startupReticulumPathWarmKeyRef.current !== warmKey) {
-          startupReticulumPathWarmKeyRef.current = warmKey;
-          requestMediaRecoveryForPeerRef.current(
-            topo.rootForwarder,
-            'topology-startup-warm'
-          );
-        }
-      }
-
-      if (role === 'root-forwarder' && roomKeyRef.current && myAddrTopo) {
-        const pr = snapWarm.packetsReceived ?? 0;
-        const pd = snapWarm.packetsDecoded ?? 0;
-        if (pr === 0 && pd === 0) {
-          const relaySent = snapWarm.relayPacketsSent ?? 0;
-          const keyAgeMs =
-            roomKeyInstalledAtRef.current > 0
-              ? Date.now() - roomKeyInstalledAtRef.current
-              : 0;
-          const shouldWarmInbound =
-            relaySent >= ROOT_INBOUND_WARM_MIN_RELAY_SENT ||
-            keyAgeMs >= ROOT_INBOUND_WARM_MIN_KEY_AGE_MS;
-          if (shouldWarmInbound) {
-            const remoteCount = [...participantsRef.current.keys()].filter(
-              (a) => a !== myAddrTopo
-            ).length;
-            if (remoteCount > 0) {
-              const jg = joinGenerationRef.current ?? 0;
-              for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
-                if (!participantsRef.current.has(peer)) continue;
-                const dedupeKey = `${jg}:${peer}`;
-                if (rootInboundWarmFiredRef.current.has(dedupeKey)) continue;
-                rootInboundWarmFiredRef.current.add(dedupeKey);
-                gcallDiagnosticsPush('info', '[GCall] rootInboundPathWarm', {
-                  peer: peer.slice(0, 12),
-                  relaySent,
-                  keyAgeMs,
-                });
-                requestMediaRecoveryForPeerRef.current(
-                  peer,
-                  'topology-root-inbound-warm'
-                );
-              }
-            }
-          }
-        } else {
-          const wm = lastWindowMetricsRef.current;
-          if (wm) {
-            const timeouts = wm.reticulumAudioPacketPathTimeouts;
-            const denom = Math.max(
-              1,
-              wm.reticulumAudioPacketFreshSends + wm.reticulumAudioPacketStaleSends
+      if (mayWarmTransport) {
+        const snapWarm = metricsRef.current.getSnapshot();
+        const targetsWarm = getReticulumTransportTargets(myAddrTopo, topo);
+        // Outbound packet path can resolve (resolutions > 0) while inbound from root is still
+        // zero — do not require cold path stats; dedupe via warmKey prevents spam.
+        if (
+          role !== 'root-forwarder' &&
+          roomKeyRef.current &&
+          topo.rootForwarder &&
+          topo.rootForwarder !== myAddrTopo &&
+          targetsWarm.includes(topo.rootForwarder) &&
+          (snapWarm.packetsReceived ?? 0) === 0 &&
+          (snapWarm.packetsDecoded ?? 0) === 0
+        ) {
+          const warmKey = `${joinGenerationRef.current ?? 0}:${topo.rootForwarder}`;
+          if (startupReticulumPathWarmKeyRef.current !== warmKey) {
+            startupReticulumPathWarmKeyRef.current = warmKey;
+            requestMediaRecoveryForPeerRef.current(
+              topo.rootForwarder,
+              'topology-startup-warm'
             );
-            const staleRatio = wm.reticulumAudioPacketStaleSends / denom;
-            const stress =
-              timeouts >= ROOT_INBOUND_STRESS_MIN_TIMEOUTS ||
-              staleRatio >= ROOT_INBOUND_STRESS_MIN_STALE_RATIO;
-            if (stress) {
+          }
+        }
+
+        if (role === 'root-forwarder' && roomKeyRef.current && myAddrTopo) {
+          const pr = snapWarm.packetsReceived ?? 0;
+          const pd = snapWarm.packetsDecoded ?? 0;
+          if (pr === 0 && pd === 0) {
+            const relaySent = snapWarm.relayPacketsSent ?? 0;
+            const keyAgeMs =
+              roomKeyInstalledAtRef.current > 0
+                ? Date.now() - roomKeyInstalledAtRef.current
+                : 0;
+            const shouldWarmInbound =
+              relaySent >= ROOT_INBOUND_WARM_MIN_RELAY_SENT ||
+              keyAgeMs >= ROOT_INBOUND_WARM_MIN_KEY_AGE_MS;
+            if (shouldWarmInbound) {
               const remoteCount = [...participantsRef.current.keys()].filter(
                 (a) => a !== myAddrTopo
               ).length;
@@ -4905,19 +4929,55 @@ export function useGroupVoiceCall(uiActive = false) {
                 const jg = joinGenerationRef.current ?? 0;
                 for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
                   if (!participantsRef.current.has(peer)) continue;
-                  const dedupeKey = `${jg}:stress:${peer}`;
-                  if (rootInboundStressWarmFiredRef.current.has(dedupeKey))
-                    continue;
-                  rootInboundStressWarmFiredRef.current.add(dedupeKey);
-                  gcallDiagnosticsPush('info', '[GCall] rootInboundStressPathWarm', {
+                  const dedupeKey = `${jg}:${peer}`;
+                  if (rootInboundWarmFiredRef.current.has(dedupeKey)) continue;
+                  rootInboundWarmFiredRef.current.add(dedupeKey);
+                  gcallDiagnosticsPush('info', '[GCall] rootInboundPathWarm', {
                     peer: peer.slice(0, 12),
-                    timeouts,
-                    staleRatio: Math.round(staleRatio * 1000) / 1000,
+                    relaySent,
+                    keyAgeMs,
                   });
                   requestMediaRecoveryForPeerRef.current(
                     peer,
-                    'topology-root-inbound-stress-warm'
+                    'topology-root-inbound-warm'
                   );
+                }
+              }
+            }
+          } else {
+            const wm = lastWindowMetricsRef.current;
+            if (wm) {
+              const timeouts = wm.reticulumAudioPacketPathTimeouts;
+              const denom = Math.max(
+                1,
+                wm.reticulumAudioPacketFreshSends + wm.reticulumAudioPacketStaleSends
+              );
+              const staleRatio = wm.reticulumAudioPacketStaleSends / denom;
+              const stress =
+                timeouts >= ROOT_INBOUND_STRESS_MIN_TIMEOUTS ||
+                staleRatio >= ROOT_INBOUND_STRESS_MIN_STALE_RATIO;
+              if (stress) {
+                const remoteCount = [...participantsRef.current.keys()].filter(
+                  (a) => a !== myAddrTopo
+                ).length;
+                if (remoteCount > 0) {
+                  const jg = joinGenerationRef.current ?? 0;
+                  for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
+                    if (!participantsRef.current.has(peer)) continue;
+                    const dedupeKey = `${jg}:stress:${peer}`;
+                    if (rootInboundStressWarmFiredRef.current.has(dedupeKey))
+                      continue;
+                    rootInboundStressWarmFiredRef.current.add(dedupeKey);
+                    gcallDiagnosticsPush('info', '[GCall] rootInboundStressPathWarm', {
+                      peer: peer.slice(0, 12),
+                      timeouts,
+                      staleRatio: Math.round(staleRatio * 1000) / 1000,
+                    });
+                    requestMediaRecoveryForPeerRef.current(
+                      peer,
+                      'topology-root-inbound-stress-warm'
+                    );
+                  }
                 }
               }
             }
@@ -4925,7 +4985,7 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
 
-      maybePredictiveWarmPeers(topo);
+      maybePredictiveWarmPeers(topo, mayWarmTransport);
 
       if (isTestingStableRoomKey) {
         clearAuthoritativeKeyGrace();
@@ -8689,6 +8749,8 @@ export function useGroupVoiceCall(uiActive = false) {
       predictiveWarmHistoryRef.current = [];
       lastPredictiveWarmAtPeerRef.current.clear();
       worstIsolationHysteresisRef.current = createWorstIsolationHysteresisState();
+      topologySettleUntilMsRef.current = 0;
+      lastMicroWidenDiagAtRef.current = 0;
       lastRecoverySuppressionLogAtRef.current = 0;
       lastKeyRecoveryRequestAtRef.current = 0;
       lastKeyRecoveryRefreshAtRef.current = 0;
