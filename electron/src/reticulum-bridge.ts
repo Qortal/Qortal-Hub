@@ -38,6 +38,8 @@ const OVERLAY_LINK_PER_PACKET_REASONS = new Set([
   'presence_publish',
   'presence_forward',
   'call_signal',
+  'overlay_hello',
+  'rx_overlay_hello',
 ]);
 
 function shouldLogOverlayLinkStateEvent(reason: string): boolean {
@@ -284,6 +286,14 @@ type BridgeEventFrame =
     }
   | {
       type: 'event';
+      event: 'overlay_hello';
+      payload?: {
+        senderPresenceHash?: string;
+        linkId?: string;
+      };
+    }
+  | {
+      type: 'event';
       event: 'error';
       payload?: { code?: string; message?: string; detail?: string };
     }
@@ -501,12 +511,17 @@ export class ReticulumBridge
       peerHash: string;
       reason?: string;
     }) => handlers.onOverlayLinkClosed?.(payload);
+    const onOverlayHello = (payload: {
+      peerHash: string;
+      linkId?: string;
+    }) => handlers.onOverlayHello?.(payload);
 
     this.on('ready', onReady);
     this.on('degraded', onDegraded);
     this.on('presence-envelope', onEnvelope);
     this.on('candidate-peer-discovered', onCandidatePeerDiscovered);
     this.on('overlay-link-closed', onOverlayLinkClosed);
+    this.on('overlay-hello', onOverlayHello);
 
     return () => {
       this.off('ready', onReady);
@@ -514,6 +529,7 @@ export class ReticulumBridge
       this.off('presence-envelope', onEnvelope);
       this.off('candidate-peer-discovered', onCandidatePeerDiscovered);
       this.off('overlay-link-closed', onOverlayLinkClosed);
+      this.off('overlay-hello', onOverlayHello);
     };
   }
 
@@ -1734,6 +1750,17 @@ export class ReticulumBridge
           reason,
           queuedPackets,
           closedByReticulum: frame.payload?.closedByReticulum === true,
+        });
+        return;
+      }
+      case 'overlay_hello': {
+        const sender = frame.payload?.senderPresenceHash;
+        if (typeof sender !== 'string' || !sender.trim()) return;
+        const linkId =
+          typeof frame.payload?.linkId === 'string' ? frame.payload.linkId : undefined;
+        this.emit('overlay-hello', {
+          peerHash: sender.trim().toLowerCase(),
+          ...(linkId ? { linkId } : {}),
         });
         return;
       }

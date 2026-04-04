@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire383-gj-gi-split-rk-v1"
+PRESENCE_BRIDGE_BUILD = "wire384-overlay-hello-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -123,6 +123,9 @@ _overlay_link_ids_by_object: Dict[int, str] = {}
 _outgoing_overlay_link_id_by_peer_hash: Dict[str, str] = {}
 _TRANSPORT_MONITOR_INTERVAL_SECONDS = 5.0
 _OVERLAY_PENDING_PACKET_LIMIT = 24
+_OVERLAY_HELLO_WIRE_TYPE = "OVERLAY_HELLO"
+_OVERLAY_HELLO_MAX_INLINE_RETRIES = 5
+_OVERLAY_HELLO_FLUSH_MAX_ATTEMPTS = 8
 
 # Binary audio IPC (fd 3 parent→child, fd 4 child→parent). Must match electron/src/reticulum-audio-ipc.ts.
 # Diagnostics: grep logs for "target=reticulum-audio-ipc" (fd open, parse, drops, first bytes).
@@ -1794,7 +1797,90 @@ def _send_packet_on_link(link, wire_bytes: bytes, log_target: str) -> bool:
         return False
 
 
+def _valid_presence_destination_hash_hex(peer_hash: str) -> bool:
+    h = str(peer_hash or "").strip().lower()
+    if len(h) != 32:
+        return False
+    try:
+        bytes.fromhex(h)
+    except ValueError:
+        return False
+    return True
+
+
+def _build_overlay_hello_wire_bytes() -> Optional[bytes]:
+    if _destination is None:
+        return None
+    wire = {
+        "t": _OVERLAY_HELLO_WIRE_TYPE,
+        "r": destination_hash_hex(_destination.hash),
+        "v": 1,
+    }
+    return json.dumps(wire, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def _try_send_overlay_hello_payload(link_id: str, wire_bytes: bytes) -> bool:
+    state = get_overlay_link_state(link_id)
+    if state is None or state.get("established") is not True:
+        return False
+    link = state.get("link")
+    if link is None:
+        return False
+    return _send_packet_on_link(
+        link,
+        wire_bytes,
+        "target=presence-reticulum overlay_hello",
+    )
+
+
+def _flush_overlay_hello_pending(link_id: str) -> None:
+    """Retry HELLO outside maxlen pending_packets (not queued with bulk traffic)."""
+    state = get_overlay_link_state(link_id)
+    if state is None or state.get("established") is not True:
+        return
+    wire = state.get("overlay_hello_wire")
+    if not isinstance(wire, (bytes, bytearray)) or len(wire) == 0:
+        return
+    attempts = state.get("overlay_hello_flush_attempts")
+    if not isinstance(attempts, int) or attempts < 0:
+        attempts = 0
+    if attempts >= _OVERLAY_HELLO_FLUSH_MAX_ATTEMPTS:
+        return
+    if _try_send_overlay_hello_payload(link_id, bytes(wire)):
+        state.pop("overlay_hello_wire", None)
+        state.pop("overlay_hello_flush_attempts", None)
+        emit_overlay_link_state(link_id, state, "overlay_hello")
+    else:
+        state["overlay_hello_flush_attempts"] = attempts + 1
+
+
+def _send_overlay_hello_after_outbound_establish(link_id: str) -> None:
+    """Send OVERLAY_HELLO once link is up; never use pending_packets deque."""
+    state = get_overlay_link_state(link_id)
+    if state is None or state.get("incoming") is True:
+        return
+    wire_bytes = _build_overlay_hello_wire_bytes()
+    if wire_bytes is None:
+        return
+    for _ in range(_OVERLAY_HELLO_MAX_INLINE_RETRIES):
+        if _try_send_overlay_hello_payload(link_id, wire_bytes):
+            st = get_overlay_link_state(link_id)
+            if st is not None:
+                st.pop("overlay_hello_wire", None)
+                st.pop("overlay_hello_flush_attempts", None)
+                emit_overlay_link_state(link_id, st, "overlay_hello")
+            return
+    state = get_overlay_link_state(link_id)
+    if state is not None:
+        state["overlay_hello_wire"] = bytes(wire_bytes)
+        state["overlay_hello_flush_attempts"] = 0
+
+
 def _flush_overlay_link_pending(link_id: str) -> None:
+    state = get_overlay_link_state(link_id)
+    if state is None or state.get("established") is not True:
+        return
+    _flush_overlay_hello_pending(link_id)
     state = get_overlay_link_state(link_id)
     if state is None or state.get("established") is not True:
         return
@@ -2071,6 +2157,27 @@ def on_overlay_link_packet(message, packet) -> None:
         return
     state["last_activity_at"] = time.time()
     t = decoded.get("t")
+    if t == _OVERLAY_HELLO_WIRE_TYPE:
+        r_raw = decoded.get("r")
+        r = str(r_raw).strip().lower() if isinstance(r_raw, str) else ""
+        if not _valid_presence_destination_hash_hex(r):
+            log("[presence_bridge] ignored OVERLAY_HELLO invalid r")
+            return
+        existing = str(state.get("peerPresenceHash") or "").strip().lower()
+        if existing and existing != r:
+            log(
+                "[presence_bridge] ignored OVERLAY_HELLO r mismatch "
+                f"link={link_id} r={r[:16]}..."
+            )
+            return
+        if not existing:
+            state["peerPresenceHash"] = r
+        emit_event(
+            "overlay_hello",
+            {"senderPresenceHash": r, "linkId": link_id},
+        )
+        emit_overlay_link_state(link_id, state, "rx_overlay_hello")
+        return
     if isinstance(t, str) and t.startswith("PRESENCE_"):
         if _emit_presence_message(decoded, link_id):
             peer_hash = str(decoded.get("r") or "").strip().lower()
@@ -2108,6 +2215,7 @@ def on_outgoing_overlay_link_established(link) -> None:
     except Exception as exc:
         log(f"[presence_bridge] overlay link identify failed link={link_id}: {exc}")
     emit_overlay_link_state(link_id, state, "established")
+    _send_overlay_hello_after_outbound_establish(link_id)
     _flush_overlay_link_pending(link_id)
 
 

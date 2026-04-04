@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { PresenceManager, RETICULUM_OVERLAY_MAX_NEIGHBORS } from './presence';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  PresenceManager,
+  RETICULUM_HELLO_FANOUT_HINT_TTL_MS,
+  RETICULUM_OVERLAY_MAX_NEIGHBORS,
+} from './presence';
 
 function promoteVerifiedPeers(
   manager: PresenceManager,
@@ -66,5 +70,37 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
       ...hashes.slice(1, RETICULUM_OVERLAY_MAX_NEIGHBORS),
       hashes[RETICULUM_OVERLAY_MAX_NEIGHBORS],
     ]);
+  });
+});
+
+describe('PresenceManager OVERLAY_HELLO fanout hints', () => {
+  const helloHash = '0123456789abcdef0123456789abcdef';
+
+  it('adds hello hint to publish fanout when under the 16 cap', () => {
+    const manager = new PresenceManager();
+    const t = Date.now();
+    manager.noteReticulumHelloFanoutHint(helloHash, t);
+    expect(manager.getReticulumActiveNeighborHashes()).toContain(helloHash);
+  });
+
+  it('does not add hello hint when verified peers already fill 16 slots', () => {
+    const manager = new PresenceManager();
+    promoteVerifiedPeers(manager, RETICULUM_OVERLAY_MAX_NEIGHBORS);
+    expect(manager.getReticulumActiveNeighborHashes().length).toBe(
+      RETICULUM_OVERLAY_MAX_NEIGHBORS
+    );
+    manager.noteReticulumHelloFanoutHint(helloHash, Date.now());
+    expect(manager.getReticulumActiveNeighborHashes()).not.toContain(helloHash);
+  });
+
+  it('drops expired hello hints by TTL', () => {
+    const manager = new PresenceManager();
+    const t0 = 1_000_000;
+    vi.setSystemTime(t0);
+    manager.noteReticulumHelloFanoutHint(helloHash, t0);
+    expect(manager.getReticulumActiveNeighborHashes()).toContain(helloHash);
+    vi.setSystemTime(t0 + RETICULUM_HELLO_FANOUT_HINT_TTL_MS + 1);
+    expect(manager.getReticulumActiveNeighborHashes()).not.toContain(helloHash);
+    vi.useRealTimers();
   });
 });

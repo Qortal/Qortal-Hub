@@ -473,6 +473,31 @@ describe('ReticulumBridge group audio support', () => {
 
     expect(seen).toEqual([{ peerHash: 'peer-hash', reason: 'closed' }]);
   });
+
+  it('emits overlay-hello for overlay_hello bridge events', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const seen: unknown[] = [];
+    bridge.on('overlay-hello', (payload) => {
+      seen.push(payload);
+    });
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_hello',
+      payload: {
+        senderPresenceHash: '0123456789abcdef0123456789abcdef',
+        linkId: 'link-uuid',
+      },
+    });
+
+    expect(seen).toEqual([
+      {
+        peerHash: '0123456789abcdef0123456789abcdef',
+        linkId: 'link-uuid',
+      },
+    ]);
+  });
 });
 
 describe('ReticulumBridge publish_presence payload', () => {
