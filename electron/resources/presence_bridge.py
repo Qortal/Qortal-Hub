@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire386-overlay-hello-bootstrap-v1"
+PRESENCE_BRIDGE_BUILD = "wire387-overlay-announce-retry-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -1733,6 +1733,7 @@ class PresenceAnnounceHandler:
         )
         _register_peer(peer_hash, announced_identity, "announce")
         _mark_candidate_peer(peer_hash, "announce")
+        _retry_pending_overlay_connect_on_announce(peer_hash)
 
 
 def build_outbound_destination(peer_identity):
@@ -1995,6 +1996,41 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
             f"[presence_bridge] target=presence-reticulum overlay_link_connect_failed peer={peer_key}: {exc}"
         )
         return None
+
+
+def _retry_pending_overlay_connect_on_announce(peer_hash: str) -> None:
+    """If an outbound reverse dial started before path resolution, retry it after announce arrives."""
+    peer_key = str(peer_hash or "").strip().lower()
+    if not peer_key:
+        return
+    existing_link_id = _outgoing_overlay_link_id_by_peer_hash.get(peer_key)
+    if not existing_link_id:
+        return
+    existing = get_overlay_link_state(existing_link_id)
+    if existing is None:
+        _outgoing_overlay_link_id_by_peer_hash.pop(peer_key, None)
+        return
+    if existing.get("incoming") is True or existing.get("established") is True:
+        return
+    link = existing.get("link")
+    if link is not None:
+        try:
+            link.set_link_closed_callback(None)
+        except Exception:
+            pass
+        try:
+            link.teardown()
+        except Exception:
+            pass
+    stale_state = remove_overlay_link(existing_link_id)
+    if stale_state is not None:
+        stale_state["established"] = False
+        emit_overlay_link_state(existing_link_id, stale_state, "announce_retry")
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_link_retry_on_announce "
+            f"peer={peer_key} previous_link={existing_link_id}"
+        )
+    _ensure_overlay_link(peer_key)
 
 
 def _sync_overlay_links() -> None:
