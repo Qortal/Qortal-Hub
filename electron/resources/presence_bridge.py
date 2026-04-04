@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire385-presence-forward-origin-v1"
+PRESENCE_BRIDGE_BUILD = "wire386-overlay-hello-bootstrap-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -50,6 +50,7 @@ _PEER_TS_SEED_LEASE_SECONDS = 300
 _MAX_KNOWN_PEERS = 256
 _REQUEST_PATH_COOLDOWN_SECONDS = 90.0
 _MAX_PATH_NUDGES_PER_PUBLISH = 5
+_HELLO_BOOTSTRAP_ANNOUNCE_COOLDOWN_SECONDS = 10.0
 _KR_MISMATCH_LOGGED: set[str] = set()
 _OVERLAY_MAX_NEIGHBORS = 16
 _CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
@@ -65,6 +66,7 @@ _inbound_classify_timers: Dict[int, threading.Timer] = {}
 RNS_ANNOUNCE_INTERVAL_SEC = 45 * 60
 _rns_auth_announced: bool = False
 _rns_periodic_announce_timer: Optional[threading.Timer] = None
+_last_hello_bootstrap_announce_at: float = 0.0
 
 
 def qortal_base58_decode(s: str) -> bytes:
@@ -1292,6 +1294,20 @@ def _nudge_overlay_path_for_peer(peer_key: str) -> None:
         )
 
 
+def _bootstrap_reverse_overlay_path_from_hello(peer_key: str) -> None:
+    """Kick path discovery immediately after HELLO so reverse dial needn't wait for next heartbeat."""
+    peer_key = str(peer_key or "").strip().lower()
+    if not _valid_presence_destination_hash_hex(peer_key):
+        return
+    try:
+        h = bytes.fromhex(peer_key)
+    except ValueError:
+        return
+    if len(h) != 16:
+        return
+    _request_path_if_eligible(peer_key, h, [1])
+
+
 def _get_call_media_state(peer_hash: str) -> Dict[str, Any]:
     state = _call_media_path_state.get(peer_hash)
     if state is not None:
@@ -1863,6 +1879,9 @@ def _flush_overlay_hello_pending(link_id: str) -> None:
             "[presence_bridge] target=presence-reticulum overlay_hello_retry_ok "
             f"link={link_id} peer={state.get('peerPresenceHash') or 'unknown'}"
         )
+        _maybe_announce_local_destination_for_overlay_bootstrap(
+            "overlay_hello_retry_ok", str(state.get("peerPresenceHash") or "")
+        )
         emit_overlay_link_state(link_id, state, "overlay_hello")
     else:
         state["overlay_hello_flush_attempts"] = attempts + 1
@@ -1895,6 +1914,9 @@ def _send_overlay_hello_after_outbound_establish(link_id: str) -> None:
                 log(
                     "[presence_bridge] target=presence-reticulum overlay_hello_send_ok "
                     f"link={link_id} peer={st.get('peerPresenceHash') or 'unknown'}"
+                )
+                _maybe_announce_local_destination_for_overlay_bootstrap(
+                    "overlay_hello_send_ok", str(st.get("peerPresenceHash") or "")
                 )
                 emit_overlay_link_state(link_id, st, "overlay_hello")
             return
@@ -2250,6 +2272,7 @@ def on_overlay_link_packet(message, packet) -> None:
                 "[presence_bridge] target=presence-reticulum overlay_hello_bind_identity "
                 f"link={link_id} sender={r}"
             )
+        _bootstrap_reverse_overlay_path_from_hello(r)
         emit_event(
             "overlay_hello",
             {"senderPresenceHash": r, "linkId": link_id},
@@ -2375,6 +2398,23 @@ def announce_local_destination() -> None:
     log(
         "[presence_bridge] announced local destination "
         + destination_hash_hex(_destination.hash)
+    )
+
+
+def _maybe_announce_local_destination_for_overlay_bootstrap(
+    reason: str, peer_hash: str = ""
+) -> None:
+    global _last_hello_bootstrap_announce_at
+    if _destination is None or not _rns_auth_announced:
+        return
+    now = time.time()
+    if (now - _last_hello_bootstrap_announce_at) < _HELLO_BOOTSTRAP_ANNOUNCE_COOLDOWN_SECONDS:
+        return
+    _last_hello_bootstrap_announce_at = now
+    announce_local_destination()
+    log(
+        "[presence_bridge] target=presence-reticulum overlay_bootstrap_announce "
+        f"reason={reason} peer={str(peer_hash or '').strip().lower() or 'unknown'}"
     )
 
 
