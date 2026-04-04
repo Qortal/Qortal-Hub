@@ -1738,7 +1738,12 @@ export function attachPresenceListeners(
       const bridge = getReticulumBridge();
       if (!bridge || bridge.getState() !== 'ready') return;
       void bridge
-        .forwardPresence(envelope, hops - 1, [route.destinationHash])
+        .forwardPresence(
+          envelope,
+          hops - 1,
+          [route.viaDestinationHash ?? route.destinationHash],
+          route.destinationHash
+        )
         .catch(() => {});
     }
   );

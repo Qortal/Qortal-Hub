@@ -163,6 +163,7 @@ export type PresenceRoute =
   | {
       kind: 'reticulum';
       destinationHash: string;
+      viaDestinationHash?: string;
       linkId?: string;
       overlayHopsRemaining?: number;
     };
@@ -192,7 +193,12 @@ function describePresenceRoute(route: PresenceRoute | null | undefined): string 
   if (!route) return 'none';
   if (route.kind === 'local') return 'local';
   if (route.kind === 'mesh-node') return `mesh-node:${route.id}`;
-  return `reticulum:${route.destinationHash}${route.linkId ? `#${route.linkId}` : ''}`;
+  const via =
+    typeof route.viaDestinationHash === 'string' &&
+    route.viaDestinationHash !== route.destinationHash
+      ? ` via=${route.viaDestinationHash}`
+      : '';
+  return `reticulum:${route.destinationHash}${route.linkId ? `#${route.linkId}` : ''}${via}`;
 }
 
 function describePresenceEnvelope(
@@ -560,7 +566,7 @@ function routeToLegacyPeerIds(route: PresenceRoute): {
     case 'reticulum':
       return {
         originNodeId: `reticulum:${route.destinationHash}`,
-        viaPeerId: `reticulum:${route.destinationHash}`,
+        viaPeerId: `reticulum:${route.viaDestinationHash ?? route.destinationHash}`,
       };
   }
 }

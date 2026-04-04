@@ -498,6 +498,58 @@ describe('ReticulumBridge group audio support', () => {
       },
     ]);
   });
+
+  it('emits presence-envelope with origin and via hashes from forwarded presence', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const seen: Array<{ envelope: unknown; route: unknown }> = [];
+    bridge.on('presence-envelope', (envelope, route) => {
+      seen.push({ envelope, route });
+    });
+
+    const envelope: PresenceEnvelope = {
+      id: 'e-forwarded',
+      type: 'PRESENCE_ANNOUNCE',
+      senderAddress: 'Q-forwarded',
+      timestamp: 1234,
+      payload: {
+        address: 'Q-forwarded',
+        publicKey: 'pk-forwarded',
+        sessionId: 'sid-forwarded',
+        status: 'online',
+        clientVersion: '1',
+      },
+      signature: 'sig-forwarded',
+    };
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'presence_message',
+      payload: {
+        envelope,
+        route: {
+          kind: 'reticulum',
+          destinationHash: 'origin-hash',
+          viaDestinationHash: 'via-hash',
+          overlayHopsRemaining: 2,
+          linkId: 'link-forwarded',
+        },
+      },
+    });
+
+    expect(seen).toEqual([
+      {
+        envelope,
+        route: {
+          kind: 'reticulum',
+          destinationHash: 'origin-hash',
+          viaDestinationHash: 'via-hash',
+          overlayHopsRemaining: 2,
+          linkId: 'link-forwarded',
+        },
+      },
+    ]);
+  });
 });
 
 describe('ReticulumBridge publish_presence payload', () => {
@@ -587,6 +639,47 @@ describe('ReticulumBridge publish_presence payload', () => {
         'aa112233445566778899aabbccddeeff',
         'bb00112233445566778899aabbccddee',
       ],
+    });
+  });
+
+  it('forwards presence with original sender hash and previous-hop exclusion', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: 'forward-1',
+      ok: true,
+      payload: {},
+    }));
+
+    const envelope: PresenceEnvelope = {
+      id: 'e3',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: 'addr3',
+      timestamp: Date.now(),
+      payload: {
+        address: 'addr3',
+        publicKey: 'pk3',
+        sessionId: 'sid3',
+        status: 'online',
+      },
+      signature: 'sig3',
+    };
+
+    await bridge.forwardPresence(
+      envelope,
+      1,
+      ['via-hash-1'],
+      'origin-hash-1'
+    );
+
+    expect(internal.sendCommand).toHaveBeenCalledWith('forward_presence', {
+      envelope,
+      overlayHopsRemaining: 1,
+      excludeDestinationHashes: ['via-hash-1'],
+      originalSenderHash: 'origin-hash-1',
     });
   });
 });

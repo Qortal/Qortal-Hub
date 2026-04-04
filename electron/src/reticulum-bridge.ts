@@ -370,6 +370,7 @@ function toPresenceRoute(raw: unknown): PresenceRoute | null {
   const route = raw as {
     kind?: unknown;
     destinationHash?: unknown;
+    viaDestinationHash?: unknown;
     linkId?: unknown;
     overlayHopsRemaining?: unknown;
   };
@@ -379,6 +380,9 @@ function toPresenceRoute(raw: unknown): PresenceRoute | null {
   return {
     kind: 'reticulum',
     destinationHash: route.destinationHash,
+    ...(typeof route.viaDestinationHash === 'string'
+      ? { viaDestinationHash: route.viaDestinationHash }
+      : {}),
     ...(typeof route.linkId === 'string' ? { linkId: route.linkId } : {}),
     ...(typeof route.overlayHopsRemaining === 'number'
       ? { overlayHopsRemaining: route.overlayHopsRemaining }
@@ -956,7 +960,8 @@ export class ReticulumBridge
   async forwardPresence(
     envelope: PresenceEnvelope,
     overlayHopsRemaining: number,
-    excludeDestinationHashes: string[] = []
+    excludeDestinationHashes: string[] = [],
+    originalSenderHash?: string
   ): Promise<boolean> {
     await this.start();
     if (this.state !== 'ready') return false;
@@ -964,6 +969,9 @@ export class ReticulumBridge
       envelope,
       overlayHopsRemaining,
       excludeDestinationHashes,
+      ...(typeof originalSenderHash === 'string'
+        ? { originalSenderHash }
+        : {}),
     });
     return resp.ok;
   }
@@ -1517,10 +1525,10 @@ export class ReticulumBridge
             ? (envelope.payload as { address: string }).address
             : 'unknown';
         loggerLog(
-          `[ReticulumBridge] Inbound ${envelope.type} from ${peerAddr} via ${route.destinationHash}`
+          `[ReticulumBridge] Inbound ${envelope.type} from ${peerAddr} via ${route.viaDestinationHash ?? route.destinationHash} origin ${route.destinationHash}`
         );
         loggerLog(
-          `[ReticulumBridge] target=presence-reticulum rx=bridge_in type=${envelope.type} peer_addr=${peerAddr} sender_hash=${route.destinationHash} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'}`
+          `[ReticulumBridge] target=presence-reticulum rx=bridge_in type=${envelope.type} peer_addr=${peerAddr} sender_hash=${route.destinationHash} via_hash=${route.viaDestinationHash ?? route.destinationHash} envelope_id=${envelope.id ?? 'n/a'} env_ts=${typeof envelope.timestamp === 'number' ? envelope.timestamp : 'n/a'}`
         );
         this.emit('presence-envelope', envelope, route);
         return;

@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire384-overlay-hello-v1"
+PRESENCE_BRIDGE_BUILD = "wire385-presence-forward-origin-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -2023,6 +2023,7 @@ def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = Non
     timestamp = message.get("m")
     signature = message.get("g")
     sender_hash = message.get("r")
+    origin_hash = message.get("o")
     overlay_hops_remaining = message.get("q")
 
     if (
@@ -2037,6 +2038,17 @@ def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = Non
     ):
         log("[presence_bridge] ignored malformed presence packet")
         return False
+    sender_hash = sender_hash.strip().lower()
+    if not _valid_presence_destination_hash_hex(sender_hash):
+        log("[presence_bridge] ignored malformed presence packet sender_hash")
+        return False
+    origin_peer_hash = sender_hash
+    if isinstance(origin_hash, str) and origin_hash.strip():
+        candidate_origin_hash = origin_hash.strip().lower()
+        if not _valid_presence_destination_hash_hex(candidate_origin_hash):
+            log("[presence_bridge] ignored malformed presence packet origin_hash")
+            return False
+        origin_peer_hash = candidate_origin_hash
 
     payload: Dict[str, Any] = {
         "address": address,
@@ -2063,14 +2075,15 @@ def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = Non
         "signature": signature,
     }
 
-    peer_key = sender_hash.lower()
-    _recent_presence_senders.append(peer_key)
-    ensure_known_peer_from_recall(peer_key)
-    if peer_key not in _known_peers:
-        ensure_known_peer_from_wire_kr(public_key, sender_hash)
-    if peer_key in _known_peers:
+    _recent_presence_senders.append(sender_hash)
+    ensure_known_peer_from_recall(sender_hash)
+    if origin_peer_hash != sender_hash:
+        ensure_known_peer_from_recall(origin_peer_hash)
+    if origin_peer_hash not in _known_peers:
+        ensure_known_peer_from_wire_kr(public_key, origin_peer_hash)
+    if origin_peer_hash in _known_peers:
         st = _peer_lifecycle.setdefault(
-            peer_key,
+            origin_peer_hash,
             {
                 "last_seen_inbound": None,
                 "last_send_ok": None,
@@ -2084,16 +2097,18 @@ def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = Non
         if isinstance(lease, (int, float)) and now < float(lease):
             log(
                 "[presence_bridge] target=presence-reticulum ts_seed_confirmed "
-                f"peer={peer_key[:24]}..."
+                f"peer={origin_peer_hash[:24]}..."
             )
 
     route: Dict[str, Any] = {
         "kind": "reticulum",
-        "destinationHash": sender_hash,
+        "destinationHash": origin_peer_hash,
         "overlayHopsRemaining": overlay_hops_remaining
         if isinstance(overlay_hops_remaining, int)
         else 0,
     }
+    if origin_peer_hash != sender_hash:
+        route["viaDestinationHash"] = sender_hash
     if link_id:
         route["linkId"] = link_id
     emit_event(
@@ -2104,7 +2119,9 @@ def _emit_presence_message(message: Dict[str, Any], link_id: Optional[str] = Non
         },
     )
     log(
-        f"[presence_bridge] received presence packet sender={sender_hash} envelope_type={envelope.get('type')} size={len(_call_wire_json_bytes(message))}"
+        "[presence_bridge] received presence packet "
+        f"sender={origin_peer_hash} via={sender_hash} "
+        f"envelope_type={envelope.get('type')} size={len(_call_wire_json_bytes(message))}"
     )
     return True
 
@@ -2314,13 +2331,16 @@ def _send_wire_to_overlay_peer(
 
 
 def make_presence_wire(
-    envelope: Dict[str, Any], overlay_hops_remaining: Optional[int] = None
+    envelope: Dict[str, Any],
+    overlay_hops_remaining: Optional[int] = None,
+    origin_sender_hash: Optional[str] = None,
 ) -> bytes:
     if _destination is None:
         raise RuntimeError("Local destination not initialised")
     payload = envelope.get("payload")
     if not isinstance(payload, dict):
         raise RuntimeError("Presence envelope missing payload")
+    local_sender_hash = destination_hash_hex(_destination.hash)
 
     wire = {
         "t": envelope.get("type"),
@@ -2330,8 +2350,15 @@ def make_presence_wire(
         "n": payload.get("sessionId"),
         "m": envelope.get("timestamp"),
         "g": envelope.get("signature"),
-        "r": destination_hash_hex(_destination.hash),
+        "r": local_sender_hash,
     }
+    if isinstance(origin_sender_hash, str):
+        origin_peer_hash = origin_sender_hash.strip().lower()
+        if origin_peer_hash:
+            if not _valid_presence_destination_hash_hex(origin_peer_hash):
+                raise RuntimeError("Invalid originalSenderHash")
+            if origin_peer_hash != local_sender_hash:
+                wire["o"] = origin_peer_hash
     if "status" in payload:
         wire["s"] = payload.get("status")
     if "clientVersion" in payload:
@@ -2899,8 +2926,16 @@ def handle_forward_presence(req_id: str, payload: Dict[str, Any]) -> None:
         if isinstance(exclude_raw, list)
         else []
     )
+    origin_sender_hash = payload.get("originalSenderHash")
+    if origin_sender_hash is not None and not isinstance(origin_sender_hash, str):
+        emit_resp(req_id, False, error="Invalid originalSenderHash")
+        return
     try:
-        wire_bytes = make_presence_wire(envelope, hops_remaining)
+        wire_bytes = make_presence_wire(
+            envelope,
+            hops_remaining,
+            origin_sender_hash=origin_sender_hash,
+        )
         _sync_overlay_links()
         peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
         for peer_hash in peer_hashes:
