@@ -1752,7 +1752,13 @@ def remove_overlay_link(link_id: str) -> Optional[Dict[str, Any]]:
     return state
 
 
-def emit_overlay_link_state(link_id: str, state: Dict[str, Any], reason: str = "") -> None:
+def emit_overlay_link_state(
+    link_id: str,
+    state: Dict[str, Any],
+    reason: str = "",
+    *,
+    closed_by_reticulum: bool = False,
+) -> None:
     emit_event(
         "overlay_link_state",
         {
@@ -1762,6 +1768,7 @@ def emit_overlay_link_state(link_id: str, state: Dict[str, Any], reason: str = "
             "established": state.get("established") is True,
             "reason": reason,
             "queuedPackets": len(state.get("pending_packets") or []),
+            "closedByReticulum": closed_by_reticulum,
         },
     )
 
@@ -2026,10 +2033,12 @@ def on_overlay_link_closed(link) -> None:
     if state is None:
         return
     state["established"] = False
-    emit_overlay_link_state(link_id, state, reason)
-    peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
-    if peer_hash and peer_hash in _active_overlay_neighbors:
-        _ensure_overlay_link(peer_hash)
+    emit_overlay_link_state(
+        link_id,
+        state,
+        reason,
+        closed_by_reticulum=True,
+    )
 
 
 def on_overlay_link_remote_identified(link, identity) -> None:

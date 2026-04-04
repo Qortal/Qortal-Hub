@@ -519,6 +519,13 @@ export type ReticulumDaemonStatus = {
   overlayLinksConnected?: number;
 };
 
+export type ReticulumOverlayPeerStatus = {
+  linkId: string;
+  peerPresenceHash: string;
+  address?: string;
+  connectedAt: number;
+};
+
 export type ReticulumPythonLaunchPlan =
   | {
       cmd: string;
@@ -1033,6 +1040,45 @@ export function registerReticulumIpcHandlers(): void {
           ...base,
           reason: base.reason ?? 'Unable to read Reticulum bridge status',
         };
+      }
+    }
+  );
+
+  ipcMain.handle(
+    'reticulum:getOverlayPeers',
+    async (): Promise<ReticulumOverlayPeerStatus[]> => {
+      try {
+        const [{ getReticulumBridge }, { getPresenceManager }] = (await Promise.all([
+          import('./reticulum-bridge'),
+          import('./presence'),
+        ])) as [
+          typeof import('./reticulum-bridge'),
+          typeof import('./presence'),
+        ];
+        const bridge = getReticulumBridge();
+        if (!bridge) return [];
+        const peersByHash = new Map(
+          (getPresenceManager()?.getReticulumVerifiedPeers() ?? []).map((peer) => [
+            peer.destinationHash.toLowerCase(),
+            peer.address,
+          ])
+        );
+        return bridge
+          .getOverlayLinkSnapshots()
+          .filter((peer) => peer.incoming !== true)
+          .map((peer) => ({
+            linkId: peer.linkId,
+            peerPresenceHash: peer.peerPresenceHash,
+            ...(peersByHash.get(peer.peerPresenceHash.toLowerCase())
+              ? {
+                  address: peersByHash.get(peer.peerPresenceHash.toLowerCase()),
+                }
+              : {}),
+            connectedAt: peer.connectedAt,
+          }));
+      } catch (error) {
+        loggerError('[Reticulum] Failed to collect overlay peer status:', error);
+        return [];
       }
     }
   );

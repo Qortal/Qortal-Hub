@@ -162,6 +162,13 @@ export type ReticulumOverlayVerifiedPeer = {
   lastSeen: number;
 };
 
+export type ReticulumOverlayLinkSnapshot = {
+  linkId: string;
+  peerPresenceHash: string;
+  incoming: boolean;
+  connectedAt: number;
+};
+
 type BridgeEventFrame =
   | {
       type: 'event';
@@ -272,6 +279,7 @@ type BridgeEventFrame =
         established?: boolean;
         reason?: string;
         queuedPackets?: number;
+        closedByReticulum?: boolean;
       };
     }
   | {
@@ -476,6 +484,7 @@ export class ReticulumBridge
   private localPresenceDestinationHash: string | undefined;
   /** Overlay control-plane links reporting `established` from Python `overlay_link_state`. */
   private overlayEstablishedLinkIds = new Set<string>();
+  private overlayLinkSnapshots = new Map<string, ReticulumOverlayLinkSnapshot>();
 
   subscribe(handlers: PresenceTransportHandlers): () => void {
     const onReady = () => handlers.onReady?.();
@@ -488,17 +497,23 @@ export class ReticulumBridge
       peerHash: string;
       source?: string;
     }) => handlers.onCandidatePeerDiscovered?.(payload);
+    const onOverlayLinkClosed = (payload: {
+      peerHash: string;
+      reason?: string;
+    }) => handlers.onOverlayLinkClosed?.(payload);
 
     this.on('ready', onReady);
     this.on('degraded', onDegraded);
     this.on('presence-envelope', onEnvelope);
     this.on('candidate-peer-discovered', onCandidatePeerDiscovered);
+    this.on('overlay-link-closed', onOverlayLinkClosed);
 
     return () => {
       this.off('ready', onReady);
       this.off('degraded', onDegraded);
       this.off('presence-envelope', onEnvelope);
       this.off('candidate-peer-discovered', onCandidatePeerDiscovered);
+      this.off('overlay-link-closed', onOverlayLinkClosed);
     };
   }
 
@@ -974,6 +989,12 @@ export class ReticulumBridge
       overlayLinksConnected: this.overlayEstablishedLinkIds.size,
       ...(this.lastDegradedReason ? { reason: this.lastDegradedReason } : {}),
     };
+  }
+
+  getOverlayLinkSnapshots(): ReticulumOverlayLinkSnapshot[] {
+    return [...this.overlayLinkSnapshots.values()].sort(
+      (a, b) => a.connectedAt - b.connectedAt
+    );
   }
 
   /**
@@ -1455,6 +1476,8 @@ export class ReticulumBridge
       case 'ready':
         this.state = 'ready';
         this.lastDegradedReason = undefined;
+        this.overlayEstablishedLinkIds.clear();
+        this.overlayLinkSnapshots.clear();
         this.connectivitySnapshot = {
           ...this.connectivitySnapshot,
           bridgeState: 'ready',
@@ -1682,8 +1705,26 @@ export class ReticulumBridge
         const established = frame.payload?.established === true;
         if (established) {
           this.overlayEstablishedLinkIds.add(linkId);
+          const existing = this.overlayLinkSnapshots.get(linkId);
+          this.overlayLinkSnapshots.set(linkId, {
+            linkId,
+            peerPresenceHash: peerPresenceHash || existing?.peerPresenceHash || '',
+            incoming: frame.payload?.incoming === true,
+            connectedAt: existing?.connectedAt ?? Date.now(),
+          });
         } else {
           this.overlayEstablishedLinkIds.delete(linkId);
+          this.overlayLinkSnapshots.delete(linkId);
+        }
+        if (
+          frame.payload?.closedByReticulum === true &&
+          frame.payload?.incoming !== true &&
+          peerPresenceHash
+        ) {
+          this.emit('overlay-link-closed', {
+            peerHash: peerPresenceHash,
+            reason,
+          });
         }
         this.emit('overlay-link-state', {
           linkId,
@@ -1692,6 +1733,7 @@ export class ReticulumBridge
           established,
           reason,
           queuedPackets,
+          closedByReticulum: frame.payload?.closedByReticulum === true,
         });
         return;
       }
@@ -1746,6 +1788,8 @@ export class ReticulumBridge
     this.state = 'degraded';
     this.lastDegradedReason = reason;
     this.localPresenceDestinationHash = undefined;
+    this.overlayEstablishedLinkIds.clear();
+    this.overlayLinkSnapshots.clear();
     this.connectivitySnapshot = {
       ...this.connectivitySnapshot,
       bridgeState: 'degraded',

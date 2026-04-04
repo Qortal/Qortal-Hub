@@ -173,6 +173,10 @@ export interface PresenceTransportHandlers {
     peerHash: string;
     source?: string;
   }) => void;
+  onOverlayLinkClosed?: (payload: {
+    peerHash: string;
+    reason?: string;
+  }) => void;
 }
 
 export interface PresenceTransport {
@@ -615,7 +619,7 @@ export class PresenceManager extends EventEmitter {
   private presenceTooOldGlobalLogAt = 0;
   private reticulumCandidates = new Map<string, ReticulumCandidatePeer>();
   private verifiedReticulumPeers = new Map<string, VerifiedReticulumPeer>();
-  /** Verified-only overlay neighbors (cryptographic proof), sorted by recency. */
+  /** Verified overlay peers admitted into the 16-slot mesh. */
   private activeReticulumNeighborHashes: string[] = [];
   /**
    * Reticulum publish/forward fanout: verified neighbors first, then candidate
@@ -928,7 +932,7 @@ export class PresenceManager extends EventEmitter {
     const now = Date.now();
     this.pruneReticulumOverlayState(now);
     return [...this.verifiedReticulumPeers.values()]
-      .sort((a, b) => b.lastSeen - a.lastSeen)
+      .sort((a, b) => a.verifiedAt - b.verifiedAt || b.lastSeen - a.lastSeen)
       .map((peer) => ({
         destinationHash: peer.destinationHash,
         address: peer.address,
@@ -938,8 +942,8 @@ export class PresenceManager extends EventEmitter {
 
   /**
    * Destination hashes for Reticulum overlay fanout (publish, forward, call/group
-   * signaling gossip): verified peers first, then unverified candidates filling
-   * remaining slots until the cap — so cold-start can reach announces before proof.
+   * signaling gossip): admitted verified mesh peers first, then unverified
+   * candidates filling remaining slots until the cap for cold-start bootstrap.
    */
   getReticulumActiveNeighborHashes(
     excludeDestinationHashes: string[] = []
@@ -963,6 +967,25 @@ export class PresenceManager extends EventEmitter {
     const now = Date.now();
     this.pruneReticulumOverlayState(now);
     return [...this.activeReticulumNeighborHashes];
+  }
+
+  noteReticulumOverlayLinkClosed(
+    destinationHash: string,
+    reason?: string,
+    now: number = Date.now()
+  ): void {
+    const hash = destinationHash.trim().toLowerCase();
+    if (!hash) return;
+    const wasVerified = this.verifiedReticulumPeers.delete(hash);
+    const wasActive = this.activeReticulumNeighborHashes.includes(hash);
+    if (!wasVerified && !wasActive) return;
+    loggerLog(
+      `[Presence] Reticulum overlay slot released sender_hash=${hash}${reason ? ` reason=${reason}` : ''}`
+    );
+    const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
+    if (wasVerified || wasActive || neighborsChanged) {
+      this.emitReticulumOverlayChanged();
+    }
   }
 
   noteReticulumCandidateDiscovered(
@@ -1271,6 +1294,12 @@ export class PresenceManager extends EventEmitter {
     });
   }
 
+  /**
+   * Marks a Reticulum sender as a verified Qortal overlay peer after valid signed
+   * presence. Latches once per destination hash: further envelopes on the same link do
+   * not re-run mesh recompute or bridge sync — the overlay identity is stable for the
+   * connection lifetime until {@link noteReticulumOverlayLinkClosed}.
+   */
   private promoteVerifiedReticulumPeer(
     destinationHash: string,
     address: string,
@@ -1280,11 +1309,20 @@ export class PresenceManager extends EventEmitter {
     if (!hash || !address) return;
     this.reticulumCandidates.delete(hash);
     const existing = this.verifiedReticulumPeers.get(hash);
+    if (existing) {
+      this.verifiedReticulumPeers.set(hash, {
+        destinationHash: hash,
+        address: existing.address,
+        lastSeen: now,
+        verifiedAt: existing.verifiedAt,
+      });
+      return;
+    }
     this.verifiedReticulumPeers.set(hash, {
       destinationHash: hash,
       address,
       lastSeen: now,
-      verifiedAt: existing?.verifiedAt ?? now,
+      verifiedAt: now,
     });
     this.recomputeReticulumActiveNeighbors(now);
     this.emit('reticulum-peer-verified', {
@@ -1303,24 +1341,6 @@ export class PresenceManager extends EventEmitter {
         changed = true;
       }
     }
-    const liveHashes = new Set<string>();
-    for (const session of this.sessions.values()) {
-      if (session.route.kind !== 'reticulum') continue;
-      if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
-      liveHashes.add(session.route.destinationHash.toLowerCase());
-    }
-    for (const [hash, peer] of [...this.verifiedReticulumPeers.entries()]) {
-      if (!liveHashes.has(hash)) {
-        this.verifiedReticulumPeers.delete(hash);
-        changed = true;
-        continue;
-      }
-      const aggregate = this.getAddressAggregate(peer.address, now);
-      if (aggregate.liveSessionCount === 0) {
-        this.verifiedReticulumPeers.delete(hash);
-        changed = true;
-      }
-    }
     const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
     if (changed || neighborsChanged) {
       this.emitReticulumOverlayChanged();
@@ -1328,21 +1348,20 @@ export class PresenceManager extends EventEmitter {
   }
 
   private recomputeReticulumActiveNeighbors(now: number): boolean {
-    const verifiedSorted = [...this.verifiedReticulumPeers.values()]
-      .filter((peer) => {
-        const aggregate = this.getAddressAggregate(peer.address, now);
-        return (
-          aggregate.liveSessionCount > 0 &&
-          aggregate.route?.kind === 'reticulum' &&
-          aggregate.route.destinationHash.toLowerCase() ===
-            peer.destinationHash.toLowerCase()
-        );
-      })
-      .sort((a, b) => b.lastSeen - a.lastSeen);
-
-    const nextVerified = verifiedSorted
-      .slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
-      .map((peer) => peer.destinationHash);
+    const nextVerified = this.activeReticulumNeighborHashes.filter((hash) =>
+      this.verifiedReticulumPeers.has(hash)
+    );
+    if (nextVerified.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
+      const seen = new Set(nextVerified.map((hash) => hash.toLowerCase()));
+      const waitingVerified = [...this.verifiedReticulumPeers.values()]
+        .filter((peer) => !seen.has(peer.destinationHash.toLowerCase()))
+        .sort((a, b) => a.verifiedAt - b.verifiedAt || b.lastSeen - a.lastSeen);
+      for (const peer of waitingVerified) {
+        if (nextVerified.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
+        nextVerified.push(peer.destinationHash);
+        seen.add(peer.destinationHash.toLowerCase());
+      }
+    }
 
     const verifiedChanged =
       nextVerified.length !== this.activeReticulumNeighborHashes.length ||
@@ -1454,6 +1473,9 @@ function subscribePresenceTransport(
     },
     onCandidatePeerDiscovered: ({ peerHash, source }) => {
       manager.noteReticulumCandidateDiscovered(peerHash, source ?? transport.kind);
+    },
+    onOverlayLinkClosed: ({ peerHash, reason }) => {
+      manager.noteReticulumOverlayLinkClosed(peerHash, reason);
     },
     onReady: () => {
       const cached = manager.getLastLocalEnvelope();

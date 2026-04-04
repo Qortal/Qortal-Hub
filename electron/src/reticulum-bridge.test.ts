@@ -369,10 +369,19 @@ describe('ReticulumBridge group audio support', () => {
         established: true,
         reason: 'established',
         queuedPackets: 2,
+        closedByReticulum: false,
       },
     });
 
     expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(1);
+    expect(bridge.getOverlayLinkSnapshots()).toEqual([
+      {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: false,
+        connectedAt: expect.any(Number),
+      },
+    ]);
 
     internal.handleFrame({
       type: 'event',
@@ -384,10 +393,12 @@ describe('ReticulumBridge group audio support', () => {
         established: false,
         reason: 'pruned',
         queuedPackets: 0,
+        closedByReticulum: false,
       },
     });
 
     expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(0);
+    expect(bridge.getOverlayLinkSnapshots()).toEqual([]);
 
     expect(seen).toEqual([
       {
@@ -397,6 +408,7 @@ describe('ReticulumBridge group audio support', () => {
         established: true,
         reason: 'established',
         queuedPackets: 2,
+        closedByReticulum: false,
       },
       {
         linkId: 'overlay-1',
@@ -405,8 +417,61 @@ describe('ReticulumBridge group audio support', () => {
         established: false,
         reason: 'pruned',
         queuedPackets: 0,
+        closedByReticulum: false,
       },
     ]);
+  });
+
+  it('emits overlay-link-closed only for Reticulum-driven outgoing closes', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const seen: unknown[] = [];
+
+    bridge.on('overlay-link-closed', (payload) => {
+      seen.push(payload);
+    });
+
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-1',
+        peerPresenceHash: 'peer-hash',
+        incoming: false,
+        established: false,
+        reason: 'closed',
+        queuedPackets: 0,
+        closedByReticulum: true,
+      },
+    });
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-2',
+        peerPresenceHash: 'peer-hash-2',
+        incoming: true,
+        established: false,
+        reason: 'closed',
+        queuedPackets: 0,
+        closedByReticulum: true,
+      },
+    });
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-3',
+        peerPresenceHash: 'peer-hash-3',
+        incoming: false,
+        established: false,
+        reason: 'pruned',
+        queuedPackets: 0,
+        closedByReticulum: false,
+      },
+    });
+
+    expect(seen).toEqual([{ peerHash: 'peer-hash', reason: 'closed' }]);
   });
 });
 

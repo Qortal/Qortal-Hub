@@ -291,6 +291,15 @@ try {
         hubSummary?: string;
         overlayLinksConnected?: number;
       }>,
+    reticulumGetOverlayPeers: () =>
+      ipcRenderer.invoke('reticulum:getOverlayPeers') as Promise<
+        Array<{
+          linkId: string;
+          peerPresenceHash: string;
+          address?: string;
+          connectedAt: number;
+        }>
+      >,
     reticulumGetMeshStatus: () =>
       ipcRenderer.invoke('reticulum:getMeshStatus') as Promise<{
         enabled: boolean;

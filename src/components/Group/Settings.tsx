@@ -13,6 +13,12 @@ import {
   Stack,
   styled,
   Switch,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   useTheme,
 } from '@mui/material';
@@ -91,6 +97,14 @@ type ReticulumStatus = {
   configuredHubInterfaces?: number;
   onlineHubInterfaces?: number;
   hubSummary?: string;
+  overlayLinksConnected?: number;
+};
+
+type ReticulumOverlayPeerStatus = {
+  linkId: string;
+  peerPresenceHash: string;
+  address?: string;
+  connectedAt: number;
 };
 
 type ReticulumMeshSettingsStatus = {
@@ -127,6 +141,20 @@ function formatReticulumMode(status: ReticulumStatus | null): string {
   return 'Unavailable';
 }
 
+function formatElapsedDuration(connectedAt: number, now: number): string {
+  const totalSeconds = Math.max(0, Math.floor((now - connectedAt) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  }
+  return `${seconds}s`;
+}
+
 export const Settings = ({ open, setOpen, rawWallet }) => {
   const [checked, setChecked] = useState(false);
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
@@ -135,8 +163,12 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [platform, setPlatform] = useState<string>('');
   const [reticulumStatus, setReticulumStatus] =
     useState<ReticulumStatus | null>(null);
+  const [reticulumOverlayPeers, setReticulumOverlayPeers] = useState<
+    ReticulumOverlayPeerStatus[]
+  >([]);
   const [reticulumMeshStatus, setReticulumMeshStatus] =
     useState<ReticulumMeshSettingsStatus | null>(null);
+  const [overlayDurationNow, setOverlayDurationNow] = useState(() => Date.now());
   const setOnlineAddresses = useSetAtom(onlineAddressesAtom);
   const setStatusMap = useSetAtom(statusMapAtom);
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
@@ -243,6 +275,14 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         });
       }
     }
+    if (typeof window.electronAPI?.reticulumGetOverlayPeers === 'function') {
+      try {
+        const peers = await window.electronAPI.reticulumGetOverlayPeers();
+        setReticulumOverlayPeers(peers);
+      } catch {
+        setReticulumOverlayPeers([]);
+      }
+    }
     if (typeof window.electronAPI?.reticulumGetMeshStatus === 'function') {
       try {
         const mesh = await window.electronAPI.reticulumGetMeshStatus();
@@ -307,6 +347,17 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
       window.clearInterval(timer);
     };
   }, [loadReticulumStatus, open]);
+
+  useEffect(() => {
+    if (!open || reticulumOverlayPeers.length === 0) return;
+    setOverlayDurationNow(Date.now());
+    const timer = window.setInterval(() => {
+      setOverlayDurationNow(Date.now());
+    }, 1000);
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [open, reticulumOverlayPeers.length]);
 
   const handleCloseActionChange = useCallback(
     async (value: CloseAction) => {
@@ -384,7 +435,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
           }}
         >
           <Box
-            sx={{ maxWidth: 560, mx: 'auto', py: 3, px: 1, width: '100%' }}
+            sx={{ maxWidth: 760, mx: 'auto', py: 3, px: 1, width: '100%' }}
           >
 
             {/* Notifications */}
@@ -568,8 +619,79 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                     {typeof reticulumStatus?.transportEnabled === 'boolean'
                       ? ` · Transport ${reticulumStatus.transportEnabled ? 'on' : 'off'}`
                       : ''}
+                    {typeof reticulumStatus?.overlayLinksConnected === 'number'
+                      ? ` · Overlay links ${reticulumStatus.overlayLinksConnected}`
+                      : ''}
                     {reticulumStatus?.pid ? ` · PID ${reticulumStatus.pid}` : ''}
                   </Typography>
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="caption" component="div" color="text.disabled">
+                      Overlay peers
+                    </Typography>
+                    {reticulumOverlayPeers.length === 0 ? (
+                      <Typography
+                        variant="caption"
+                        component="div"
+                        color="text.disabled"
+                        sx={{ mt: 0.5 }}
+                      >
+                        No outgoing overlay peers connected.
+                      </Typography>
+                    ) : (
+                      <TableContainer
+                        sx={{
+                          mt: 0.75,
+                          border: 1,
+                          borderColor: alpha(theme.palette.divider, 0.4),
+                          borderRadius: 1.5,
+                          overflowX: 'auto',
+                        }}
+                      >
+                        <Table size="small" aria-label="overlay peers table">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Peer hash</TableCell>
+                              <TableCell>Address</TableCell>
+                              <TableCell align="right">Connected</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {reticulumOverlayPeers.map((peer) => (
+                              <TableRow key={peer.linkId}>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: 'monospace',
+                                    fontSize: '0.75rem',
+                                    wordBreak: 'break-all',
+                                  }}
+                                >
+                                  {peer.peerPresenceHash}
+                                </TableCell>
+                                <TableCell
+                                  sx={{
+                                    fontFamily: peer.address ? 'inherit' : 'monospace',
+                                    fontSize: '0.75rem',
+                                    wordBreak: 'break-all',
+                                  }}
+                                >
+                                  {peer.address || 'Unknown'}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{ whiteSpace: 'nowrap', fontSize: '0.75rem' }}
+                                >
+                                  {formatElapsedDuration(
+                                    peer.connectedAt,
+                                    overlayDurationNow
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+                  </Box>
                 </Box>
                 <Box
                   sx={{

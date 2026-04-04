@@ -52,6 +52,14 @@ declare global {
         hubSummary?: string;
         overlayLinksConnected?: number;
       }>;
+      reticulumGetOverlayPeers?: () => Promise<
+        Array<{
+          linkId: string;
+          peerPresenceHash: string;
+          address?: string;
+          connectedAt: number;
+        }>
+      >;
       reticulumGetMeshStatus?: () => Promise<{
         enabled: boolean;
         listenPort: number;
