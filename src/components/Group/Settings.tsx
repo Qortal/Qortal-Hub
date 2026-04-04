@@ -163,6 +163,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [platform, setPlatform] = useState<string>('');
   const [reticulumStatus, setReticulumStatus] =
     useState<ReticulumStatus | null>(null);
+  const [reticulumLocalDestinationHash, setReticulumLocalDestinationHash] =
+    useState<string | null>(null);
   const [reticulumOverlayPeers, setReticulumOverlayPeers] = useState<
     ReticulumOverlayPeerStatus[]
   >([]);
@@ -289,6 +291,14 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
         setReticulumMeshStatus(mesh);
       } catch {
         setReticulumMeshStatus(null);
+      }
+    }
+    if (typeof window.electronAPI?.reticulumGetLocalDestinationHash === 'function') {
+      try {
+        const result = await window.electronAPI.reticulumGetLocalDestinationHash();
+        setReticulumLocalDestinationHash(result?.destinationHash ?? null);
+      } catch {
+        setReticulumLocalDestinationHash(null);
       }
     }
   }, []);
@@ -623,6 +633,19 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                       ? ` · Overlay links ${reticulumStatus.overlayLinksConnected}`
                       : ''}
                     {reticulumStatus?.pid ? ` · PID ${reticulumStatus.pid}` : ''}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    component="div"
+                    color="text.disabled"
+                    sx={{
+                      mt: 0.5,
+                      fontFamily: 'monospace',
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    Destination hash:{' '}
+                    {reticulumLocalDestinationHash ?? 'Unavailable'}
                   </Typography>
                   <Box sx={{ mt: 1 }}>
                     <Typography variant="caption" component="div" color="text.disabled">

@@ -1758,6 +1758,9 @@ export class ReticulumBridge
         if (typeof sender !== 'string' || !sender.trim()) return;
         const linkId =
           typeof frame.payload?.linkId === 'string' ? frame.payload.linkId : undefined;
+        loggerLog(
+          `[ReticulumBridge] target=presence-reticulum rx=overlay_hello sender_hash=${sender.trim().toLowerCase()} link_id=${linkId ?? 'unknown'}`
+        );
         this.emit('overlay-hello', {
           peerHash: sender.trim().toLowerCase(),
           ...(linkId ? { linkId } : {}),

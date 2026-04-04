@@ -1369,8 +1369,13 @@ export class PresenceManager extends EventEmitter {
   noteReticulumHelloFanoutHint(destinationHash: string, now: number = Date.now()): void {
     const hash = destinationHash.trim().toLowerCase();
     if (!hash) return;
+    const beforePublish = [...this.activeReticulumPublishHashes];
     this.helloFanoutHints.set(hash, { lastSeen: now });
     const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
+    const accepted = this.activeReticulumPublishHashes.includes(hash);
+    loggerLog(
+      `[Presence] target=presence-reticulum overlay_hello_hint sender_hash=${hash} accepted=${accepted ? 'yes' : 'no'} publish_before=${beforePublish.length} publish_after=${this.activeReticulumPublishHashes.length}${accepted ? '' : ' reason=fanout_full_or_duplicate'}`
+    );
     if (neighborsChanged) {
       this.emitReticulumOverlayChanged();
     }

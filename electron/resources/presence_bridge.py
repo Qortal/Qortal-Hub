@@ -1845,13 +1845,32 @@ def _flush_overlay_hello_pending(link_id: str) -> None:
     if not isinstance(attempts, int) or attempts < 0:
         attempts = 0
     if attempts >= _OVERLAY_HELLO_FLUSH_MAX_ATTEMPTS:
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_hello_give_up "
+            f"link={link_id} peer={state.get('peerPresenceHash') or 'unknown'} "
+            f"attempts={attempts}"
+        )
         return
+    log(
+        "[presence_bridge] target=presence-reticulum overlay_hello_retry "
+        f"link={link_id} peer={state.get('peerPresenceHash') or 'unknown'} "
+        f"attempt={attempts + 1}/{_OVERLAY_HELLO_FLUSH_MAX_ATTEMPTS}"
+    )
     if _try_send_overlay_hello_payload(link_id, bytes(wire)):
         state.pop("overlay_hello_wire", None)
         state.pop("overlay_hello_flush_attempts", None)
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_hello_retry_ok "
+            f"link={link_id} peer={state.get('peerPresenceHash') or 'unknown'}"
+        )
         emit_overlay_link_state(link_id, state, "overlay_hello")
     else:
         state["overlay_hello_flush_attempts"] = attempts + 1
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_hello_retry_fail "
+            f"link={link_id} peer={state.get('peerPresenceHash') or 'unknown'} "
+            f"attempts={state['overlay_hello_flush_attempts']}"
+        )
 
 
 def _send_overlay_hello_after_outbound_establish(link_id: str) -> None:
@@ -1862,18 +1881,31 @@ def _send_overlay_hello_after_outbound_establish(link_id: str) -> None:
     wire_bytes = _build_overlay_hello_wire_bytes()
     if wire_bytes is None:
         return
+    log(
+        "[presence_bridge] target=presence-reticulum overlay_hello_send "
+        f"link={link_id} peer={state.get('peerPresenceHash') or 'unknown'} "
+        f"bytes={len(wire_bytes)}"
+    )
     for _ in range(_OVERLAY_HELLO_MAX_INLINE_RETRIES):
         if _try_send_overlay_hello_payload(link_id, wire_bytes):
             st = get_overlay_link_state(link_id)
             if st is not None:
                 st.pop("overlay_hello_wire", None)
                 st.pop("overlay_hello_flush_attempts", None)
+                log(
+                    "[presence_bridge] target=presence-reticulum overlay_hello_send_ok "
+                    f"link={link_id} peer={st.get('peerPresenceHash') or 'unknown'}"
+                )
                 emit_overlay_link_state(link_id, st, "overlay_hello")
             return
     state = get_overlay_link_state(link_id)
     if state is not None:
         state["overlay_hello_wire"] = bytes(wire_bytes)
         state["overlay_hello_flush_attempts"] = 0
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_hello_send_deferred "
+            f"link={link_id} peer={state.get('peerPresenceHash') or 'unknown'}"
+        )
 
 
 def _flush_overlay_link_pending(link_id: str) -> None:
@@ -2137,10 +2169,23 @@ def on_overlay_link_remote_identified(link, identity) -> None:
     peer_hash = find_peer_hash_for_identity(identity)
     if peer_hash:
         state["peerPresenceHash"] = peer_hash
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_remote_identified "
+            f"link={link_id} peer={peer_hash} source=known_identity"
+        )
     else:
         peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
         if peer_hash and _valid_presence_destination_hash_hex(peer_hash):
             _register_peer(peer_hash, identity, "inbound")
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_remote_identified "
+                f"link={link_id} peer={peer_hash} source=hello_bound"
+            )
+        else:
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_remote_identified "
+                f"link={link_id} peer=unknown source=unbound"
+            )
     emit_overlay_link_state(link_id, state, "identified")
 
 
@@ -2177,8 +2222,17 @@ def on_overlay_link_packet(message, packet) -> None:
         if not existing:
             state["peerPresenceHash"] = r
         remote_identity = link.get_remote_identity() if link is not None else None
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_hello_rx "
+            f"link={link_id} sender={r} existing_peer={existing or 'none'} "
+            f"remote_identity={'yes' if remote_identity is not None else 'no'}"
+        )
         if remote_identity is not None:
             _register_peer(r, remote_identity, "inbound")
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_hello_bind_identity "
+                f"link={link_id} sender={r}"
+            )
         emit_event(
             "overlay_hello",
             {"senderPresenceHash": r, "linkId": link_id},
