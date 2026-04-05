@@ -3,6 +3,9 @@
  *
  * Burst limits apply after key sync, participant join, or topology transitions that extend
  * global recovery — see staged escalation in `gcallAudioEscalation.ts` / `useGroupVoiceCall`.
+ *
+ * **Field tuning:** Prefer signals from the **same export window** as jitter QA (`exportWindowMetrics`);
+ * session-level drops/high-water can diverge (see `GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT` in `gcall-diagnostics.ts`).
  */
 
 export const PENDING_DECRYPT_MAX = 96;

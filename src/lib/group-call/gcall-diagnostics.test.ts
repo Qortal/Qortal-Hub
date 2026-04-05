@@ -10,6 +10,9 @@ import {
   GCALL_TRANSPORT_TRIAD_INTERPRETATION,
   GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
   GCALL_TWO_WAY_JITTER_BASELINE_HINT,
+  GCALL_PHASE0_CLASSIFICATION_HINT,
+  GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT,
+  GCALL_PHASE5_PAIRED_VERIFICATION_HINT,
 } from './gcall-diagnostics';
 
 describe('gcall-diagnostics', () => {
@@ -157,6 +160,34 @@ describe('gcall-diagnostics', () => {
     const parsed = JSON.parse(json) as { twoWayJitterVerificationHint: string };
     expect(parsed.twoWayJitterVerificationHint).toBe(
       GCALL_TWO_WAY_JITTER_BASELINE_HINT
+    );
+  });
+
+  it('export JSON includes remediation protocol hints (phases 0, 2, 5)', () => {
+    const json = buildGcallDiagnosticsExportJson({
+      context: {
+        buildMode: 'test',
+        appVersionLabel: '0.0.0',
+        userAgent: 'vitest',
+        roomId: null,
+        chatId: null,
+        roomState: null,
+        myAddressTruncated: null,
+      },
+      liveMetricsSnapshot: {},
+      exportWindowMetrics: {},
+    });
+    const parsed = JSON.parse(json) as {
+      phase0ClassificationHint: string;
+      phase2PendingDecryptWindowHint: string;
+      phase5PairedVerificationHint: string;
+    };
+    expect(parsed.phase0ClassificationHint).toBe(GCALL_PHASE0_CLASSIFICATION_HINT);
+    expect(parsed.phase2PendingDecryptWindowHint).toBe(
+      GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT
+    );
+    expect(parsed.phase5PairedVerificationHint).toBe(
+      GCALL_PHASE5_PAIRED_VERIFICATION_HINT
     );
   });
 

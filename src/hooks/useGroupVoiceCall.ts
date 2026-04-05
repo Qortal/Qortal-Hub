@@ -359,7 +359,7 @@ const ADAPTIVE_SEVERE_MAX_TARGET_MS = 240;
 const ADAPTIVE_JITTER_K = 2.0;
 const ADAPTIVE_ALPHA_UP = 0.4;
 /** Faster smoothed-target rise for single-remote recovery (2-way jitter plan). */
-const ADAPTIVE_ALPHA_UP_SINGLE_REMOTE_RECOVERY = 0.45;
+const ADAPTIVE_ALPHA_UP_SINGLE_REMOTE_RECOVERY = 0.5;
 const ADAPTIVE_ALPHA_DOWN = 0.28;
 /** Stickier downward decay when session network mode is recovery (see playout plan). */
 const ADAPTIVE_ALPHA_DOWN_RECOVERY = 0.18;
@@ -3865,6 +3865,8 @@ export function useGroupVoiceCall(uiActive = false) {
     async (opts?: { download?: boolean; clipboard?: boolean }) => {
       const windowMetrics = emitWindowMetrics('manual');
       flushMetrics();
+      // Yield before large JSON stringify so decrypt/jitter main-thread work can run (remediation Phase 1).
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
       const live = metricsRef.current.getSnapshot();
       const webrtcStats = await gcallDiagnosticsCollectRtcStats([]);
       const context: GcallDiagExportContext = {

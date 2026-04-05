@@ -50,6 +50,12 @@ export interface GcallDiagExportPayload {
   twoWayDecryptVerificationHint: string;
   /** QA hint for 2-way jitter/playout paired exports (see `GCALL_TWO_WAY_JITTER_BASELINE_HINT`). */
   twoWayJitterVerificationHint: string;
+  /** Phase 0: per-peer classification before N===1/adaptive policy changes (see `GCALL_PHASE0_CLASSIFICATION_HINT`). */
+  phase0ClassificationHint: string;
+  /** Phase 2: pending-decrypt tuning vs session aggregates (see `GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT`). */
+  phase2PendingDecryptWindowHint: string;
+  /** Phase 5: paired verification + merge bar (see `GCALL_PHASE5_PAIRED_VERIFICATION_HINT`). */
+  phase5PairedVerificationHint: string;
   /**
    * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
    * Present when group-call perf is enabled (default on).
@@ -84,6 +90,33 @@ export const GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT =
 export const GCALL_TWO_WAY_JITTER_BASELINE_HINT =
   'Paired 2-way jitter: compare jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction; ' +
   'provisional pass (steady speech): jitterNotReadyFraction under 0.35 (window), median buffer at least ~0.45× adaptive target; see bufferEnforceActive / recoveryJitterGeometryApplied in events.';
+
+/**
+ * Phase 0: classify each peer before changing N===1/adaptive constants. **Primary** (and optional
+ * **secondary**) class must come from the **same failing segment** as subjective QA (`exportWindowMetrics`),
+ * not a whole-session impression. Classes: stall-dominated, decrypt-dominated, transport-dominated,
+ * policy-dominated. **Do not** ship N===1/adaptive policy tweaks unless **policy-dominated is primary**;
+ * address the primary bucket first when mixed.
+ */
+export const GCALL_PHASE0_CLASSIFICATION_HINT =
+  'Phase 0: assign each peer a primary class (optional secondary if mixed) from the **same failing window** used for subjective QA, not session-wide averages. ' +
+  'Classes: stall-dominated (longTasks), decrypt-dominated (pendingDecrypt drops/depth with calm triad), transport-dominated (transport triad hot), policy-dominated (bad jitter bars with low stalls/decrypt/triad). ' +
+  'Gate: no N===1/adaptive tuning until classified; Phases 3–4 only when policy-dominated is **primary**.';
+
+/**
+ * Phase 2: use **exportWindowMetrics** (aligned bad segment) for decrypt drop rate / depth; session-level
+ * totals can diverge from the window used for jitter bars.
+ */
+export const GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT =
+  'Phase 2: drive pending-decrypt tuning from **exportWindowMetrics** and the same failing QA window; do not rely on session aggregates alone (they can diverge from the window).';
+
+/**
+ * Phase 5: both peers must pass bars for merge success; keep **root vs standby** role pairing consistent
+ * with baseline when comparing before/after.
+ */
+export const GCALL_PHASE5_PAIRED_VERIFICATION_HINT =
+  'Phase 5: a fix is not successful if one peer passes provisional bars and the other fails; compare paired exports. ' +
+  'When possible, verify with the **same topology roles** as baseline (root forwarder vs standby forwarder per machine) so role load does not confound before/after.';
 
 export function extractTransportTriadFromLiveMetrics(
   live: unknown
@@ -271,6 +304,9 @@ export function buildGcallDiagnosticsExportJson(params: {
     transportTriadSnapshot: triad ? redactDeep(triad) : null,
     twoWayDecryptVerificationHint: GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
     twoWayJitterVerificationHint: GCALL_TWO_WAY_JITTER_BASELINE_HINT,
+    phase0ClassificationHint: GCALL_PHASE0_CLASSIFICATION_HINT,
+    phase2PendingDecryptWindowHint: GCALL_PHASE2_PENDING_DECRYPT_WINDOW_HINT,
+    phase5PairedVerificationHint: GCALL_PHASE5_PAIRED_VERIFICATION_HINT,
     gcallPerfSnapshot:
       params.gcallPerfSnapshot !== undefined
         ? redactDeep(params.gcallPerfSnapshot)

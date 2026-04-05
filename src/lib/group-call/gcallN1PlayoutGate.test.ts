@@ -34,7 +34,7 @@ describe('gcallN1PlayoutGate', () => {
 
   it('computeN1TierBurstCap', () => {
     expect(computeN1TierBurstCap('deep', 11)).toBe(1);
-    expect(computeN1TierBurstCap('moderate', 11)).toBe(3);
+    expect(computeN1TierBurstCap('moderate', 11)).toBe(4);
     expect(computeN1TierBurstCap('normal', 11)).toBe(11);
   });
 });

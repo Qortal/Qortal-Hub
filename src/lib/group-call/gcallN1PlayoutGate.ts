@@ -21,8 +21,8 @@ export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
 /** Tier A: deep deficit — very aggressive throttle (typically 1 decode/tick max). */
 export const GCALL_N1_RATIO_DEEP = 0.3;
 
-/** Tier B: moderate throttle upper edge. */
-export const GCALL_N1_RATIO_MODERATE = 0.5;
+/** Tier B: moderate throttle upper edge (below this band = moderate; above = normal burst). */
+export const GCALL_N1_RATIO_MODERATE = 0.48;
 
 /** Throttle [GCall] bufferEnforceActive diagnostics (ms per source). */
 export const GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS = 2000;
@@ -66,6 +66,6 @@ export function computeN1TierBurstCap(
   scaledBurstCap: number
 ): number {
   if (tier === 'deep') return 1;
-  if (tier === 'moderate') return Math.min(3, scaledBurstCap);
+  if (tier === 'moderate') return Math.min(4, scaledBurstCap);
   return scaledBurstCap;
 }
