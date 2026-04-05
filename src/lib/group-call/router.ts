@@ -430,6 +430,10 @@ export interface GroupCallMetricsSnapshot {
   relayDwellMs: number;
   relayDwellFraction: number;
   adaptiveNetworkMode: 'low-latency' | 'recovery';
+  /**
+   * Worst playout starvation severity across sources (last adaptive playout tick pass).
+   */
+  playoutStarvationWorstSeverity: 'none' | 'mild' | 'strong';
   /** Fallback relay throttled (RELAY_FALLBACK_MIN_INTERVAL_MS) — frame not sent yet. */
   relayThrottleDrops: number;
   /** Superseded pending relay payload (newest-frame-wins coalescing). */
@@ -539,6 +543,8 @@ export interface GroupCallSourceWindowMetrics {
   adaptiveTargetMedianMs: number;
   adaptiveTargetP95Ms: number;
   adaptiveTargetMaxMs: number;
+  /** Playout metric samples for this source in the metrics window (starvation min-sample gate). */
+  playoutMetricTicks?: number;
   wasmFecPlcFrames?: number;
   wasmFecAttempts?: number;
   wasmFecSuccessCoarse?: number;
@@ -1172,6 +1178,7 @@ export class GroupCallPerformanceTracker {
     relayDwellMs: 0,
     relayDwellFraction: 0,
     adaptiveNetworkMode: 'low-latency',
+    playoutStarvationWorstSeverity: 'none',
     relayThrottleDrops: 0,
     relayCoalesceSuperseded: 0,
     relayIpcFailures: 0,
@@ -1849,6 +1856,13 @@ export class GroupCallPerformanceTracker {
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
+  setPlayoutStarvationWorstSeverity(
+    severity: 'none' | 'mild' | 'strong'
+  ): void {
+    this.snapshot.playoutStarvationWorstSeverity = severity;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
   recordTransportMode(mode: GroupCallTransportMode, now = Date.now()): void {
     if (mode !== this.transportMode) {
       if (this.transportMode === 'relay') {
@@ -2068,6 +2082,7 @@ export class GroupCallPerformanceTracker {
       relayDwellMs: 0,
       relayDwellFraction: 0,
       adaptiveNetworkMode: 'low-latency',
+      playoutStarvationWorstSeverity: 'none',
       relayThrottleDrops: 0,
       relayCoalesceSuperseded: 0,
       relayIpcFailures: 0,
@@ -2215,6 +2230,7 @@ export class GroupCallPerformanceTracker {
             percentile(stats.adaptiveTargetSamples, 0.95)
           ),
           adaptiveTargetMaxMs: roundMetric(adaptiveTargetMaxMs),
+          playoutMetricTicks: stats.playoutTicks,
           wasmFecPlcFrames: stats.wasmFecPlcFrames,
           wasmFecAttempts: stats.wasmFecAttempts,
           wasmFecSuccessCoarse: stats.wasmFecSuccessCoarse,

@@ -58,6 +58,7 @@ function baseSnapshot(
     relayDwellMs: 0,
     relayDwellFraction: 0,
     adaptiveNetworkMode: 'low-latency',
+    playoutStarvationWorstSeverity: 'none',
     relayThrottleDrops: 0,
     relayCoalesceSuperseded: 0,
     relayIpcFailures: 0,

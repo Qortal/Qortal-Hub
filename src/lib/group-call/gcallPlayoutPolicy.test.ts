@@ -36,6 +36,23 @@ describe('gcallPlayoutPolicy', () => {
     expect(nWay).toBeLessThanOrEqual(220);
   });
 
+  it('adds starvation ceiling lift before global cap', () => {
+    const base = effectivePlayoutMaxTargetMs({
+      profileAdaptiveMaxMs: 220,
+      profileAdaptiveSevereMaxMs: 280,
+      useSevereCeiling: false,
+      activeSourceCount: 1,
+      starvationCeilingLiftMs: 40,
+    });
+    const noLift = effectivePlayoutMaxTargetMs({
+      profileAdaptiveMaxMs: 220,
+      profileAdaptiveSevereMaxMs: 280,
+      useSevereCeiling: false,
+      activeSourceCount: 1,
+    });
+    expect(base).toBe(noLift + 40);
+  });
+
   it('commits worst isolation after hold period', () => {
     let s = createWorstIsolationHysteresisState();
     s = stepWorstIsolationHysteresis(s, 'alice', 0);

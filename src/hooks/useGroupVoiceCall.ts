@@ -119,6 +119,19 @@ import {
   stepWorstIsolationHysteresis,
 } from '../lib/group-call/gcallPlayoutPolicy';
 import {
+  classifyStrongStarvationCandidate,
+  computeBufferAdequacy,
+  computeMildEntryCandidate,
+  GCALL_STARVATION_EXIT_COOLDOWN_MS,
+  hasPlayoutStarvationMinSample,
+  starvationAlphaForSeverity,
+  starvationCeilingLiftForSeverity,
+  stepPlayoutStarvationSeverity,
+  worstPlayoutStarvationSeverity,
+  type PlayoutStarvationSeverity,
+  type PlayoutStarvationSeverityReason,
+} from '../lib/group-call/gcallPlayoutStarvation';
+import {
   decodeAudioPackets,
   encodeAudioPacketV2,
   type DecodedAudioPacket,
@@ -2076,6 +2089,13 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastSourceStallLogAtRef = useRef<Map<string, number>>(new Map());
   const lastForwarderGateLogAtRef = useRef<Map<string, number>>(new Map());
   const lastPlayoutStressLogAtRef = useRef<Map<string, number>>(new Map());
+  const playoutStarvationSeverityRef = useRef<
+    Map<string, PlayoutStarvationSeverity>
+  >(new Map());
+  const playoutStarvationCooldownUntilRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const lastPlayoutStarvationDiagAtRef = useRef<Map<string, number>>(new Map());
   /** Wall timestamps of decrypt batches per source (for forwarder suppression diagnostics). */
   const forwardPacketRecvTimestampsRef = useRef<Map<string, number[]>>(
     new Map()
@@ -3130,6 +3150,8 @@ export function useGroupVoiceCall(uiActive = false) {
     if (committedWorst) worstIsolationSet.add(committedWorst);
     if (isolationSecond) worstIsolationSet.add(isolationSecond);
 
+    let playoutStarvationWorst: PlayoutStarvationSeverity = 'none';
+
     for (const addr of activeJitterSourcesRef.current) {
       const node = playbackWorkletsRef.current.get(addr);
       if (!node) continue;
@@ -3150,6 +3172,17 @@ export function useGroupVoiceCall(uiActive = false) {
         lastWindowMetricsRef.current?.sources.find(
           (source) => source.sourceAddr === addr
         ) ?? null;
+      const windowDurationMs = lastWindowMetricsRef.current?.durationMs ?? 0;
+      const prevStarvationSev: PlayoutStarvationSeverity =
+        playoutStarvationSeverityRef.current.get(addr) ?? 'none';
+      let cooldownUntilMs =
+        playoutStarvationCooldownUntilRef.current.get(addr) ?? 0;
+      if (wallNow >= cooldownUntilMs && cooldownUntilMs > 0) {
+        playoutStarvationCooldownUntilRef.current.delete(addr);
+        cooldownUntilMs = 0;
+      }
+      const starvationCooldownActive =
+        wallNow < (playoutStarvationCooldownUntilRef.current.get(addr) ?? 0);
       const previousWindowPressure = lastWindowMetricsRef.current
         ? assessReticulumAudioPressureWindow(lastWindowMetricsRef.current)
         : null;
@@ -3177,12 +3210,68 @@ export function useGroupVoiceCall(uiActive = false) {
         lastVadAt > 0 && wallNow - lastVadAt < ACTIVE_SPEAKER_WINDOW_MS;
       const isolationCeilingSoftened =
         Boolean(isolateThisSource) && isActiveSpeakerForAddr;
+
+      const smoothedTargetMsForAdequacy =
+        smoothedPlayoutTargetRef.current.get(addr) ?? ADAPTIVE_BASE_TARGET_MS;
+      const playoutMetricTicks = previousWindowSource?.playoutMetricTicks ?? 0;
+      const starvationHasMinSample =
+        previousWindowSource !== null &&
+        hasPlayoutStarvationMinSample({
+          windowDurationMs,
+          playoutMetricTicks,
+        });
+      let bufferAdequacy = 1;
+      let nextStarvationSev: PlayoutStarvationSeverity = prevStarvationSev;
+      let starvationSeverityReason: PlayoutStarvationSeverityReason = 'none';
+      if (starvationHasMinSample && previousWindowSource) {
+        bufferAdequacy = computeBufferAdequacy({
+          avgPcmBufferedMs: previousWindowSource.avgPcmBufferedMs,
+          smoothedTargetMs: smoothedTargetMsForAdequacy,
+        });
+        const strongMeta = classifyStrongStarvationCandidate(
+          previousWindowSource,
+          bufferAdequacy
+        );
+        const mildCandidate = computeMildEntryCandidate(
+          bufferAdequacy,
+          strongMeta.strong
+        );
+        const stepped = stepPlayoutStarvationSeverity({
+          held: prevStarvationSev,
+          bufferAdequacy,
+          strongMeta,
+          mildCandidate,
+        });
+        nextStarvationSev = stepped.next;
+        starvationSeverityReason = stepped.severityReason;
+        if (
+          (prevStarvationSev === 'strong' || prevStarvationSev === 'mild') &&
+          nextStarvationSev === 'none'
+        ) {
+          playoutStarvationCooldownUntilRef.current.set(
+            addr,
+            wallNow + GCALL_STARVATION_EXIT_COOLDOWN_MS
+          );
+        }
+        if (nextStarvationSev !== 'none') {
+          playoutStarvationCooldownUntilRef.current.delete(addr);
+        }
+      }
+      playoutStarvationSeverityRef.current.set(addr, nextStarvationSev);
+      playoutStarvationWorst = worstPlayoutStarvationSeverity(
+        playoutStarvationWorst,
+        nextStarvationSev
+      );
+      const starvationLiftMs =
+        starvationCeilingLiftForSeverity(nextStarvationSev);
+
       let adaptiveMaxTargetMs = effectivePlayoutMaxTargetMs({
         profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
         profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
         useSevereCeiling,
         isolationCeilingSoftened,
         activeSourceCount: activeJitterSourcesRef.current.size,
+        starvationCeilingLiftMs: starvationLiftMs,
       });
       if (failSafeStateRef.current.active) {
         adaptiveMaxTargetMs = Math.min(
@@ -3227,12 +3316,42 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
 
+      const alphaStarved = starvationAlphaForSeverity(
+        nextStarvationSev,
+        ADAPTIVE_ALPHA_UP,
+        ADAPTIVE_ALPHA_DOWN
+      );
+      let alphaUp = alphaStarved.alphaUp;
+      let alphaDown = alphaStarved.alphaDown;
+      if (nextStarvationSev === 'none' && starvationCooldownActive) {
+        alphaDown = Math.min(ADAPTIVE_ALPHA_DOWN, 0.2);
+      }
+
       const smooth = stepSmoothedAdaptiveTargetMs({
         idealTargetMs: ideal,
         previousTargetMs: smoothedPlayoutTargetRef.current.get(addr),
-        alphaUp: ADAPTIVE_ALPHA_UP,
-        alphaDown: ADAPTIVE_ALPHA_DOWN,
+        alphaUp,
+        alphaDown,
       });
+
+      const lastStarvDiag = lastPlayoutStarvationDiagAtRef.current.get(addr) ?? 0;
+      const starvationDiagThrottleMs = 5_000;
+      const shouldStarvationDiag =
+        prevStarvationSev !== nextStarvationSev ||
+        (nextStarvationSev !== 'none' &&
+          wallNow - lastStarvDiag >= starvationDiagThrottleMs);
+      if (shouldStarvationDiag && starvationHasMinSample) {
+        lastPlayoutStarvationDiagAtRef.current.set(addr, wallNow);
+        gcallDiagnosticsPush('info', '[GCall] playoutStarvation', {
+          sourceAddr: truncateGcallDiagAddress(addr),
+          severity: nextStarvationSev,
+          severityReason: starvationSeverityReason,
+          starvationLiftAppliedMs: starvationLiftMs,
+          bufferAdequacy,
+          targetMs: smoothedTargetMsForAdequacy,
+          avgPcmBufferedMs: previousWindowSource?.avgPcmBufferedMs ?? null,
+        });
+      }
       smoothedPlayoutTargetRef.current.set(addr, smooth);
       metricsRef.current.recordAdaptiveTargetSample(addr, smooth);
       if (
@@ -3279,6 +3398,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSentPlayoutTargetRef.current.set(addr, smooth);
       lastPlayoutTargetPostAtRef.current.set(addr, now);
     }
+    metricsRef.current.setPlayoutStarvationWorstSeverity(playoutStarvationWorst);
     if (postCount > 0) {
       incrementPerfCounter('adaptivePosts', postCount);
     }
@@ -3987,6 +4107,9 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSourceGapLogAtRef.current.delete(address);
       lastSourceStallLogAtRef.current.delete(address);
       lastForwarderGateLogAtRef.current.delete(address);
+      playoutStarvationSeverityRef.current.delete(address);
+      playoutStarvationCooldownUntilRef.current.delete(address);
+      lastPlayoutStarvationDiagAtRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
       playbackWorkletSetupPromisesRef.current.delete(address);
       wasmFecJobQueueRef.current.delete(address);

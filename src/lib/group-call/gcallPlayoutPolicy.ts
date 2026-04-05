@@ -104,7 +104,10 @@ export function effectivePlayoutMaxTargetMs(input: {
    * profile max and severe instead of full severe (product: do not nuke speech).
    */
   isolationCeilingSoftened?: boolean;
+  /** Mode 2 playout starvation: extra headroom (ms), applied before global cap. */
+  starvationCeilingLiftMs?: number;
 }): number {
+  const lift = input.starvationCeilingLiftMs ?? 0;
   const base = input.useSevereCeiling
     ? input.isolationCeilingSoftened
       ? input.profileAdaptiveMaxMs +
@@ -113,7 +116,7 @@ export function effectivePlayoutMaxTargetMs(input: {
       : input.profileAdaptiveSevereMaxMs
     : input.profileAdaptiveMaxMs;
   const extra = diminishingPlayoutExtraMs(input.activeSourceCount);
-  return Math.min(base, GCALL_GLOBAL_PLAYOUT_CAP_MS + extra);
+  return Math.min(base + lift, GCALL_GLOBAL_PLAYOUT_CAP_MS + extra + lift);
 }
 
 export interface WorstIsolationHysteresisState {
