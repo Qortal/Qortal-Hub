@@ -8,6 +8,7 @@ import {
   buildGcallDiagnosticsExportJson,
   extractTransportTriadFromLiveMetrics,
   GCALL_TRANSPORT_TRIAD_INTERPRETATION,
+  GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
 } from './gcall-diagnostics';
 
 describe('gcall-diagnostics', () => {
@@ -116,6 +117,26 @@ describe('gcall-diagnostics', () => {
       reticulumAudioBridgeQueuedFramesHighWater: 3,
       reticulumAudioBinaryOutQueueDepthHighWater: 2,
     });
+  });
+
+  it('export JSON includes 2-way decrypt verification hint', () => {
+    const json = buildGcallDiagnosticsExportJson({
+      context: {
+        buildMode: 'test',
+        appVersionLabel: '0.0.0',
+        userAgent: 'vitest',
+        roomId: null,
+        chatId: null,
+        roomState: null,
+        myAddressTruncated: null,
+      },
+      liveMetricsSnapshot: {},
+      exportWindowMetrics: {},
+    });
+    const parsed = JSON.parse(json) as { twoWayDecryptVerificationHint: string };
+    expect(parsed.twoWayDecryptVerificationHint).toBe(
+      GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT
+    );
   });
 
   it('extractTransportTriadFromLiveMetrics pulls bridge triad fields', () => {

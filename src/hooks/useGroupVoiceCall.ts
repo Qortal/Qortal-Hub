@@ -167,6 +167,7 @@ import {
   gcallDiagnosticsCollectRtcStats,
   gcallDiagnosticsIngestConsoleArgs,
   gcallDiagnosticsPush,
+  GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
   setGcallDiagnosticsSuppressInfo,
   truncateGcallDiagAddress,
   type GcallDiagExportContext,
@@ -205,6 +206,9 @@ import {
   PENDING_DECRYPT_OVERLOAD_EXIT,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
+  PENDING_DECRYPT_SUSTAINED_ARM_COOLDOWN_MS,
+  PENDING_DECRYPT_SUSTAINED_ARM_DEPTH,
+  PENDING_DECRYPT_SUSTAINED_ARM_MS,
   PENDING_DECRYPT_TTL_MS,
   slewBurstMaxTowardRequested,
 } from '../lib/group-call/pendingDecryptLimits';
@@ -393,7 +397,7 @@ function readGcallWasmFecDesired(): boolean {
  * frames continuously while the mic is open, so ingress rate is not a speech proxy).
  * Start at 700ms; if logs still show suppression with `lastVadAgeMs` just above this, try 800ms.
  */
-const FORWARD_VAD_HANGOVER_MS = 700;
+const FORWARD_VAD_HANGOVER_MS = 800;
 
 /**
  * Root liveness window for standby promotion. Must stay >2× TOPOLOGY_HEARTBEAT_MS so one
@@ -2052,6 +2056,11 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastBurstMaxSlewAtMsRef = useRef(Date.now());
   const peakDepthSamplesRef = useRef<Array<{ t: number; d: number }>>([]);
   const peakDepthRecentRef = useRef(0);
+  /** First wall time depth stayed >= PENDING_DECRYPT_SUSTAINED_ARM_DEPTH; reset when depth drops. */
+  const pendingDecryptSustainedGteArmDepthSinceRef = useRef<number | null>(
+    null
+  );
+  const lastPendingDecryptSustainedBurstArmAtRef = useRef(0);
   const lastIngressPacketsRef = useRef({ received: 0, atMs: 0 });
   const decryptOverloadStateRef = useRef({
     active: false,
@@ -2418,6 +2427,7 @@ export function useGroupVoiceCall(uiActive = false) {
       tickBudgetBreachCount: breaches.length,
       tickBudgetBreachP95Ms: percentileSample(breaches, 0.95),
       tickBudgetBreachMaxMs: breaches.length > 0 ? Math.max(...breaches) : 0,
+      twoWayDecryptVerificationHint: GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
     });
   }, []);
 
@@ -4199,6 +4209,7 @@ export function useGroupVoiceCall(uiActive = false) {
         peerCount,
         ingressPacketsPerSec: ingressPps,
         peakDepthRecent: peakDepthRecentRef.current,
+        isForwarder: forwarderRole,
       });
 
       const burstWindow = wallNow < decryptBurstUntilMsRef.current;
@@ -4511,8 +4522,31 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         recomputeAdaptiveNetworkMode();
       }
+
+      if (depth < PENDING_DECRYPT_SUSTAINED_ARM_DEPTH) {
+        pendingDecryptSustainedGteArmDepthSinceRef.current = null;
+      } else {
+        if (pendingDecryptSustainedGteArmDepthSinceRef.current === null) {
+          pendingDecryptSustainedGteArmDepthSinceRef.current = now;
+        }
+        const sustainedSince = pendingDecryptSustainedGteArmDepthSinceRef.current;
+        if (
+          sustainedSince !== null &&
+          now - sustainedSince >= PENDING_DECRYPT_SUSTAINED_ARM_MS &&
+          now - lastPendingDecryptSustainedBurstArmAtRef.current >=
+            PENDING_DECRYPT_SUSTAINED_ARM_COOLDOWN_MS
+        ) {
+          armDecryptBurstRecoveryWindow('pending-decrypt-sustained');
+          lastPendingDecryptSustainedBurstArmAtRef.current = now;
+          pendingDecryptSustainedGteArmDepthSinceRef.current = null;
+        }
+      }
     },
-    [logPendingDecryptDepthIfNeeded, recomputeAdaptiveNetworkMode]
+    [
+      armDecryptBurstRecoveryWindow,
+      logPendingDecryptDepthIfNeeded,
+      recomputeAdaptiveNetworkMode,
+    ]
   );
 
   const sweepStalePendingDecrypts = useCallback(
@@ -8752,7 +8786,9 @@ export function useGroupVoiceCall(uiActive = false) {
   // ── Decrypt Worker lifecycle ──────────────────────────────────────────────
 
   /** Create the off-thread decrypt Worker and attach its message handler.
-   *  Called at join time; the Worker is terminated in cleanup(). */
+   *  Called at join time; the Worker is terminated in cleanup().
+   *  Hot path: `applyPostDecrypt` / `applyPostDecryptList` stay synchronous; defer only
+   *  non-critical diagnostics (e.g. stale-key drop log) off the completion microtask. */
   const setupDecryptWorker = useCallback(() => {
     if (decryptWorkerRef.current) return; // already running
     lastWorkerRoomKeyRef.current = null;
@@ -8857,9 +8893,13 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
       if (pending.workerKeyVersion !== decryptWorkerKeyVersionRef.current) {
-        gcallDiagnosticsPush('info', '[GCall] staleWorkerDecryptDropped', {
-          pendingWorkerKeyVersion: pending.workerKeyVersion,
-          currentWorkerKeyVersion: decryptWorkerKeyVersionRef.current,
+        const pendingKv = pending.workerKeyVersion;
+        const currentKv = decryptWorkerKeyVersionRef.current;
+        queueMicrotask(() => {
+          gcallDiagnosticsPush('info', '[GCall] staleWorkerDecryptDropped', {
+            pendingWorkerKeyVersion: pendingKv,
+            currentWorkerKeyVersion: currentKv,
+          });
         });
         metricsRef.current.recordStaleWorkerDecryptDrop(1);
         recordPerfDuration(
@@ -9268,6 +9308,8 @@ export function useGroupVoiceCall(uiActive = false) {
         lastBurstMaxSlewAtMsRef.current = Date.now();
         peakDepthSamplesRef.current = [];
         peakDepthRecentRef.current = 0;
+        pendingDecryptSustainedGteArmDepthSinceRef.current = null;
+        lastPendingDecryptSustainedBurstArmAtRef.current = 0;
         lastIngressPacketsRef.current = { received: 0, atMs: 0 };
         decryptOverloadStateRef.current = {
           active: false,
@@ -9726,6 +9768,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastBurstMaxSlewAtMsRef.current = Date.now();
       peakDepthSamplesRef.current = [];
       peakDepthRecentRef.current = 0;
+      pendingDecryptSustainedGteArmDepthSinceRef.current = null;
+      lastPendingDecryptSustainedBurstArmAtRef.current = 0;
       lastIngressPacketsRef.current = { received: 0, atMs: 0 };
       decryptOverloadStateRef.current = {
         active: false,

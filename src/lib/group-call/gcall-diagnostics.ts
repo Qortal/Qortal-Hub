@@ -46,6 +46,8 @@ export interface GcallDiagExportPayload {
     reticulumAudioBridgeQueuedFramesHighWater: number;
     reticulumAudioBinaryOutQueueDepthHighWater: number;
   } | null;
+  /** QA hint for 2-way pending-decrypt vs long-task correlation (see `GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT`). */
+  twoWayDecryptVerificationHint: string;
   /**
    * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
    * Present when group-call perf is enabled (default on).
@@ -65,6 +67,16 @@ export const GCALL_TRANSPORT_TRIAD_INTERPRETATION =
   '`reticulumAudioBridgeQueuedFramesHighWater`: high-water of frames queued in the main-process bridge toward Reticulum. ' +
   '`reticulumAudioBinaryOutQueueDepthHighWater`: high-water of the Python child→parent binary queue (fd3 path). ' +
   'If this triad spikes together with decrypt symptoms, tune upstream delivery first; if the triad is calm but `packetsDroppedPendingDecrypt` / `pendingDecryptDepthHighWater` are high, focus on the renderer decrypt path.';
+
+/**
+ * 2-way / pending-decrypt field triage: correlate `gcallPerf.longTasks.recent` time ranges with
+ * `packetsDroppedPendingDecrypt` / depth spikes; read transport triad on the same export.
+ * Provisional pass bar (steady 2-way speech): `packetsDroppedPendingDecryptRatePerSec` under 1.0/s
+ * averaged over the export window.
+ */
+export const GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT =
+  'Correlate pending-decrypt stress with gcallPerf.longTasks (timestamps) and transportTriadSnapshot; ' +
+  'pass bar for sustained 2-way speech: packetsDroppedPendingDecryptRatePerSec < 1.0/s (window average).';
 
 export function extractTransportTriadFromLiveMetrics(
   live: unknown
@@ -250,6 +262,7 @@ export function buildGcallDiagnosticsExportJson(params: {
     exportWindowMetrics: redactDeep(params.exportWindowMetrics),
     transportTriadInterpretation: GCALL_TRANSPORT_TRIAD_INTERPRETATION,
     transportTriadSnapshot: triad ? redactDeep(triad) : null,
+    twoWayDecryptVerificationHint: GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
     gcallPerfSnapshot:
       params.gcallPerfSnapshot !== undefined
         ? redactDeep(params.gcallPerfSnapshot)

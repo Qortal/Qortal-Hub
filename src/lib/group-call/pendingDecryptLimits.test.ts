@@ -90,6 +90,23 @@ describe('computeRequestedBurstMaxFromSignals', () => {
     expect(r).toBeGreaterThanOrEqual(PENDING_DECRYPT_BURST_NOMINAL_BASE);
     expect(r).toBeLessThanOrEqual(GLOBAL_MAX_BURST_MAX);
   });
+
+  it('adds forwarder boost when isForwarder is true', () => {
+    // Signals above nominal floor but below GLOBAL cap so +24 is visible (not swallowed by floor/cap).
+    const base = computeRequestedBurstMaxFromSignals({
+      peerCount: 10,
+      ingressPacketsPerSec: 0,
+      peakDepthRecent: 127,
+      isForwarder: false,
+    });
+    const boosted = computeRequestedBurstMaxFromSignals({
+      peerCount: 10,
+      ingressPacketsPerSec: 0,
+      peakDepthRecent: 127,
+      isForwarder: true,
+    });
+    expect(boosted - base).toBe(24);
+  });
 });
 
 describe('slewBurstMaxTowardRequested', () => {

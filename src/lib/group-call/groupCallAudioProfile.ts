@@ -59,6 +59,7 @@ export const GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES = Math.max(
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN = 10;
 /** Recovery mode: minimum frames before first drain when unprimed — Phase C upstream. */
 export const GCALL_RECOVERY_JITTER_START_MIN = 9;
+// Single-remote (N===1) recovery jitter floor bump: deferred until 2-way decrypt/main-thread work is validated; not tier-2 duplicate without product sign-off.
 /** Phase D tier-2: recovery + multi-source (N>=2); default on unless `readGcallJitterTier2OptOut()`. */
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2 = 12;
 export const GCALL_RECOVERY_JITTER_START_MIN_TIER2 = 10;

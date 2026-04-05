@@ -8,8 +8,19 @@
 export const PENDING_DECRYPT_MAX = 96;
 export const PENDING_DECRYPT_TTL_MS = 500;
 
-export const PENDING_DECRYPT_RECOVERY_MAX = 192;
+/**
+ * Recovery-mode cap (outside burst window). Staged increase from 192 for 2-way pending-decrypt
+ * saturation; judge by drop rate reduction, not high-water alone (see 2-way stability plan).
+ */
+export const PENDING_DECRYPT_RECOVERY_MAX = 224;
 export const PENDING_DECRYPT_RECOVERY_TTL_MS = 1000;
+
+/** Sustained depth at/above this arms `decryptBurstRecoveryWindow` (see useGroupVoiceCall). */
+export const PENDING_DECRYPT_SUSTAINED_ARM_DEPTH = 160;
+/** Wall time depth must stay at/above {@link PENDING_DECRYPT_SUSTAINED_ARM_DEPTH} before arming. */
+export const PENDING_DECRYPT_SUSTAINED_ARM_MS = 250;
+/** Min interval between `pending-decrypt-sustained` burst arms. */
+export const PENDING_DECRYPT_SUSTAINED_ARM_COOLDOWN_MS = 30_000;
 
 /** Extra headroom and TTL only while `decryptBurstUntilMs` is in the future. */
 export const PENDING_DECRYPT_BURST_EXTEND_MS = 5000;
@@ -58,6 +69,8 @@ export interface PendingDecryptBurstSignals {
   ingressPacketsPerSec: number;
   /** Rolling peak depth over a short window (e.g. 2s). */
   peakDepthRecent: number;
+  /** Root/cluster forwarder aggregates more ingress; modest boost to requested burst cap. */
+  isForwarder?: boolean;
 }
 
 /**
@@ -69,11 +82,13 @@ export function computeRequestedBurstMaxFromSignals(
   const peers = Math.max(0, Math.floor(s.peerCount));
   const pps = Math.min(120, Math.max(0, s.ingressPacketsPerSec));
   const depth = Math.max(0, s.peakDepthRecent);
+  const forwarderBoost = s.isForwarder ? 24 : 0;
   const raw =
     PENDING_DECRYPT_BURST_NOMINAL_BASE * 0.55 +
     peers * 6 +
     pps * 0.85 +
-    depth * 0.9;
+    depth * 0.9 +
+    forwarderBoost;
   const rounded = Math.round(raw);
   return Math.min(
     GLOBAL_MAX_BURST_MAX,
