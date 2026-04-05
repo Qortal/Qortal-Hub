@@ -73,12 +73,19 @@ import {
   GCALL_JITTER_SOFT_UNPRIME_MS,
   GCALL_RECOVERY_JITTER_APPLY_DWELL_MS,
   GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS,
+  GCALL_THIN_JITTER_BUFFER_FRAMES,
+  computeSoftUnprimeMsForTier2,
   getEffectiveJitterTuning,
   getGroupCallAudioTuning,
   readGroupCallAudioProfile,
   writeGroupCallAudioProfile,
   type GroupCallAudioQualityProfile,
 } from '../lib/group-call/groupCallAudioProfile';
+import {
+  computeGlobalDecodeBudget,
+  computeOrderedDrainAddresses,
+  computePerSourceCap,
+} from '../lib/group-call/gcallJitterDrainPhaseD';
 import {
   compareGroupCallElectionAddresses,
   compareRootForwardersSameEpoch,
@@ -1687,8 +1694,10 @@ class JitterBuffer {
   private lastPlayedSeq = -1;
   private pendingMissedSeq = 0;
   private primed = false;
-  /** When buffer became empty after `pop`; delays resetting `primed` (Phase C soft un-prime). */
+  /** When buffer became empty after `pop`; delays resetting `primed` (Phase C/D soft un-prime). */
   private emptySinceMs: number | null = null;
+  /** Phase D: scaled via `setSoftUnprimeMs` (tier-2 multi-source). */
+  private softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
   /** Raw seq gap for the last pop (for WASM FEC); cleared by consumeLastRawGapAfterPop. */
   private lastRawGapAfterPop = 0;
   private jitterBufferSize: number;
@@ -1711,6 +1720,12 @@ class JitterBuffer {
     this.jitterStartBufferSize = tuning.jitterStartBufferSize;
   }
 
+  setSoftUnprimeMs(ms: number): void {
+    if (ms > 0 && Number.isFinite(ms)) {
+      this.softUnprimeMs = ms;
+    }
+  }
+
   private checkSoftUnprime(): void {
     if (this.emptySinceMs === null) return;
     if (this.entries.length > 0) {
@@ -1719,7 +1734,7 @@ class JitterBuffer {
     }
     if (
       this.primed &&
-      performance.now() - this.emptySinceMs >= GCALL_JITTER_SOFT_UNPRIME_MS
+      performance.now() - this.emptySinceMs >= this.softUnprimeMs
     ) {
       this.primed = false;
       this.emptySinceMs = null;
@@ -1805,6 +1820,7 @@ class JitterBuffer {
     this.primed = false;
     this.emptySinceMs = null;
     this.lastRawGapAfterPop = 0;
+    this.softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
   }
 }
 
@@ -1965,6 +1981,12 @@ export function useGroupVoiceCall(uiActive = false) {
   const exitDebounceStartRef = useRef<number | null>(null);
   const lastJitterTickTotalMsRef = useRef(0);
   const lastRecoveryJitterGeometryLogAtRef = useRef(0);
+  /** Phase D: rotate drain source order each tick (Set order alone can starve peers). */
+  const jitterDrainRotationTickRef = useRef(0);
+  /** Phase D: underrun EMA per source for multi-source drain ordering. */
+  const jitterUnderrunEmaRef = useRef<Map<string, number>>(new Map());
+  /** Dedup `applyJitterTuning` when effective geometry unchanged (tier-2 vs N). */
+  const lastEffectiveJitterKeyRef = useRef<string>('');
   const [audioQualityProfile, setAudioQualityProfile] =
     useState<GroupCallAudioQualityProfile>(() => readGroupCallAudioProfile());
   const audioTuningRef = useRef(getGroupCallAudioTuning(audioQualityProfile));
@@ -2289,9 +2311,21 @@ export function useGroupVoiceCall(uiActive = false) {
     writeGroupCallAudioProfile(audioQualityProfile);
     const mode =
       jitterGeomAppliedRef.current === 'recovery' ? 'recovery' : 'low-latency';
-    const effective = getEffectiveJitterTuning(audioTuningRef.current, mode);
+    const n = activeJitterSourcesRef.current.size;
+    const effective =
+      mode === 'recovery'
+        ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
+            tier2MultiSource: n >= 2,
+            activeSourceCount: n,
+          })
+        : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
+    lastEffectiveJitterKeyRef.current = `${effective.jitterBufferSize}|${effective.jitterStartBufferSize}|${mode}`;
     for (const jb of jitterMapRef.current.values()) {
       jb.applyJitterTuning(effective);
+    }
+    const softMs = computeSoftUnprimeMsForTier2(n);
+    for (const jb of jitterMapRef.current.values()) {
+      jb.setSoftUnprimeMs(softMs);
     }
   }, [audioQualityProfile]);
 
@@ -3034,12 +3068,27 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const buildGroupCallTuningSnapshot = useCallback(() => {
     const tuning = audioTuningRef.current;
+    const n = activeJitterSourcesRef.current.size;
+    const mode =
+      jitterGeomAppliedRef.current === 'recovery' ? 'recovery' : 'low-latency';
+    const effectiveJitter =
+      mode === 'recovery'
+        ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
+            tier2MultiSource: n >= 2,
+            activeSourceCount: n,
+          })
+        : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
     return {
       audioQualityProfile,
       dcProfiles: {
         lowLatency: { ordered: false, maxRetransmits: 1 },
         recovery: { ordered: false, maxRetransmits: 3 },
       },
+      jitterGeomApplied: jitterGeomAppliedRef.current,
+      effectiveJitterBufferSize: effectiveJitter.jitterBufferSize,
+      effectiveJitterStartBufferSize: effectiveJitter.jitterStartBufferSize,
+      activeJitterSourceCount: n,
+      jitterDrainRotationIndex: jitterDrainRotationTickRef.current,
       jitterBufferSize: tuning.jitterBufferSize,
       jitterStartBufferSize: tuning.jitterStartBufferSize,
       jitterEmptyHysteresisTicks: JITTER_EMPTY_HYSTERESIS_TICKS,
@@ -4681,11 +4730,22 @@ export function useGroupVoiceCall(uiActive = false) {
           jitterGeomAppliedRef.current === 'recovery'
             ? 'recovery'
             : 'low-latency';
-        const effective = getEffectiveJitterTuning(audioTuningRef.current, mode);
+        const nForTuning = Math.max(
+          activeJitterSourcesRef.current.size,
+          jitterMapRef.current.size + 1
+        );
+        const effective =
+          mode === 'recovery'
+            ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
+                tier2MultiSource: nForTuning >= 2,
+                activeSourceCount: nForTuning,
+              })
+            : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
         jb = new JitterBuffer(
           gcallWasmFecDesiredRef.current ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0,
           effective
         );
+        jb.setSoftUnprimeMs(computeSoftUnprimeMsForTier2(nForTuning));
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
       }
@@ -6988,13 +7048,15 @@ export function useGroupVoiceCall(uiActive = false) {
           jitterGeomAppliedRef.current = 'recovery';
           recoveryDwellStartRef.current = null;
           exitDebounceStartRef.current = null;
+          const nSnap = activeJitterSourcesRef.current.size;
           const effective = getEffectiveJitterTuning(
             audioTuningRef.current,
-            'recovery'
+            'recovery',
+            {
+              tier2MultiSource: nSnap >= 2,
+              activeSourceCount: nSnap,
+            }
           );
-          for (const jb of jitterMapRef.current.values()) {
-            jb.applyJitterTuning(effective);
-          }
           const logNow = Date.now();
           if (logNow - lastRecoveryJitterGeometryLogAtRef.current >= 15_000) {
             lastRecoveryJitterGeometryLogAtRef.current = logNow;
@@ -7018,16 +7080,33 @@ export function useGroupVoiceCall(uiActive = false) {
         ) {
           jitterGeomAppliedRef.current = 'profile';
           exitDebounceStartRef.current = null;
-          const effective = getEffectiveJitterTuning(
-            audioTuningRef.current,
-            'low-latency'
-          );
-          for (const jb of jitterMapRef.current.values()) {
-            jb.applyJitterTuning(effective);
-          }
         }
       } else {
         exitDebounceStartRef.current = null;
+      }
+    }
+
+    {
+      const n = activeJitterSourcesRef.current.size;
+      const mode =
+        jitterGeomAppliedRef.current === 'recovery' ? 'recovery' : 'low-latency';
+      const eff =
+        mode === 'recovery'
+          ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
+              tier2MultiSource: n >= 2,
+              activeSourceCount: n,
+            })
+          : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
+      const key = `${eff.jitterBufferSize}|${eff.jitterStartBufferSize}|${mode}`;
+      if (key !== lastEffectiveJitterKeyRef.current) {
+        lastEffectiveJitterKeyRef.current = key;
+        for (const jb of jitterMapRef.current.values()) {
+          jb.applyJitterTuning(eff);
+        }
+      }
+      const softMs = computeSoftUnprimeMsForTier2(n);
+      for (const jb of jitterMapRef.current.values()) {
+        jb.setSoftUnprimeMs(softMs);
       }
     }
 
@@ -7068,11 +7147,29 @@ export function useGroupVoiceCall(uiActive = false) {
       scaledBurstCap = Math.min(scaledBurstCap, 8);
     }
 
-    for (const addr of [...activeJitterSourcesRef.current]) {
+    const sourceCountForDrain = activeJitterSourcesRef.current.size;
+    const usePhaseDDrain = sourceCountForDrain >= 2;
+    const perSourceCap = computePerSourceCap(scaledBurstCap, sourceCountForDrain);
+    let globalDecodesLeft = usePhaseDDrain
+      ? computeGlobalDecodeBudget(sourceCountForDrain, perSourceCap)
+      : Number.MAX_SAFE_INTEGER;
+
+    const addrsOrdered = usePhaseDDrain
+      ? computeOrderedDrainAddresses(
+          [...activeJitterSourcesRef.current],
+          (a) => jitterMapRef.current.get(a),
+          jitterUnderrunEmaRef.current,
+          jitterDrainRotationTickRef.current++
+        )
+      : [...activeJitterSourcesRef.current];
+
+    for (const addr of addrsOrdered) {
       const jb = jitterMapRef.current.get(addr);
       if (!jb || !jb.hasReadyFrame()) {
         if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
           metricsRef.current.recordJitterUnderrun(1, addr);
+          const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
+          jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
           metricsRef.current.recordOpusBufferedMetric(
             addr,
             jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
@@ -7087,20 +7184,39 @@ export function useGroupVoiceCall(uiActive = false) {
         continue;
       }
       emptyJitterDrainTicksRef.current.set(addr, 0);
+      const initialBuffered = jb.getBufferedFrames();
+      const boostSlot =
+        usePhaseDDrain &&
+        jb.hasReadyFrame() &&
+        initialBuffered <= GCALL_THIN_JITTER_BUFFER_FRAMES
+          ? 1
+          : 0;
+      const maxBurstPerSourceThisTick = usePhaseDDrain
+        ? perSourceCap + boostSlot
+        : scaledBurstCap;
       let missedThisTick = 0;
       let burst = 0;
-      while (burst < scaledBurstCap) {
+      while (
+        burst < scaledBurstCap &&
+        (!usePhaseDDrain || globalDecodesLeft > 0)
+      ) {
         const bufferedFrames = jb.getBufferedFrames();
         const effectiveBurstMax = Math.min(
           scaledBurstCap,
           Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
         );
-        if (burst >= effectiveBurstMax) break;
+        const capForThisSource = usePhaseDDrain
+          ? Math.min(effectiveBurstMax, maxBurstPerSourceThisTick)
+          : effectiveBurstMax;
+        if (burst >= capForThisSource) break;
         if (!jb.hasReadyFrame()) break;
         const frame = jb.pop();
         if (!frame) break;
         missedThisTick += jb.consumePendingMissedFrames();
         burst++;
+        if (usePhaseDDrain) {
+          globalDecodesLeft -= 1;
+        }
         if (!jitterFirstDrainLoggedRef.current) {
           jitterFirstDrainLoggedRef.current = true;
           debugLog(
@@ -9334,6 +9450,9 @@ export function useGroupVoiceCall(uiActive = false) {
       decoderMapRef.current.clear();
       jitterMapRef.current.clear();
       jitterGeomAppliedRef.current = 'profile';
+      lastEffectiveJitterKeyRef.current = '';
+      jitterDrainRotationTickRef.current = 0;
+      jitterUnderrunEmaRef.current.clear();
       recoveryDwellStartRef.current = null;
       exitDebounceStartRef.current = null;
       lastJitterTickTotalMsRef.current = 0;

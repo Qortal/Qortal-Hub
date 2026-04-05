@@ -1,7 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN,
+  GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2,
   GCALL_RECOVERY_JITTER_START_MIN,
+  GCALL_RECOVERY_JITTER_START_MIN_TIER2,
   getEffectiveJitterTuning,
   getGroupCallAudioTuning,
 } from './groupCallAudioProfile';
@@ -25,6 +27,37 @@ describe('getEffectiveJitterTuning', () => {
   it('bumps high-stability profile up to recovery floors', () => {
     const t = getGroupCallAudioTuning('high-stability');
     const e = getEffectiveJitterTuning(t, 'recovery');
+    expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN);
+    expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN);
+  });
+});
+
+describe('getEffectiveJitterTuning tier-2 (Phase D)', () => {
+  afterEach(() => {
+    try {
+      localStorage.removeItem('gcallJitterTier2');
+    } catch {
+      /* ignore */
+    }
+  });
+
+  it('tier-2 floors when flag on, recovery, and N>=2', () => {
+    localStorage.setItem('gcallJitterTier2', '1');
+    const t = getGroupCallAudioTuning('low-latency');
+    const e = getEffectiveJitterTuning(t, 'recovery', {
+      tier2MultiSource: true,
+      activeSourceCount: 2,
+    });
+    expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2);
+    expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN_TIER2);
+  });
+
+  it('stays phase-C when tier-2 flag off', () => {
+    const t = getGroupCallAudioTuning('low-latency');
+    const e = getEffectiveJitterTuning(t, 'recovery', {
+      tier2MultiSource: true,
+      activeSourceCount: 2,
+    });
     expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN);
     expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN);
   });

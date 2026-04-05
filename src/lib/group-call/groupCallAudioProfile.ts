@@ -59,25 +59,85 @@ export const GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES = Math.max(
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN = 10;
 /** Recovery mode: minimum frames before first drain when unprimed — Phase C upstream. */
 export const GCALL_RECOVERY_JITTER_START_MIN = 9;
+/** Phase D tier-2: recovery + multi-source (N>=2) optional floors. */
+export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2 = 12;
+export const GCALL_RECOVERY_JITTER_START_MIN_TIER2 = 10;
 /** Require `adaptiveNetworkMode === 'recovery'` this long before deepening jitter (ms). */
 export const GCALL_RECOVERY_JITTER_APPLY_DWELL_MS = 200;
 /** Require non-recovery this long before reverting jitter geometry (ms). */
 export const GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS = 125;
-/** Delay resetting `primed` after last pop empties the jitter buffer (ms). */
+/** Base delay resetting `primed` after last pop empties the jitter buffer (ms). Phase C/D. */
 export const GCALL_JITTER_SOFT_UNPRIME_MS = 50;
+
+/** Phase D: boost decode when physical depth is at or below this (frames). */
+export const GCALL_THIN_JITTER_BUFFER_FRAMES = 2;
+
+/**
+ * Enable Phase D tier-2 geometry (12/10) + scaled soft un-prime. Default off — set
+ * `VITE_GCALL_JITTER_TIER2=1` or `localStorage gcallJitterTier2=1`.
+ */
+export function readGcallJitterTier2Enabled(): boolean {
+  try {
+    if (
+      typeof import.meta !== 'undefined' &&
+      import.meta.env &&
+      import.meta.env.VITE_GCALL_JITTER_TIER2 === '1'
+    ) {
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (
+      typeof localStorage !== 'undefined' &&
+      localStorage.getItem('gcallJitterTier2') === '1'
+    ) {
+      return true;
+    }
+  } catch {
+    /* private mode */
+  }
+  return false;
+}
+
+export interface EffectiveJitterTuningOpts {
+  /** Tier-2 floors when recovery + multi-source (requires activeSourceCount >= 2). */
+  tier2MultiSource?: boolean;
+  activeSourceCount?: number;
+}
 
 /**
  * Deeper jitter geometry in recovery so Opus ingress can match adaptive playout targets.
  * Identity when `adaptiveNetworkMode` is not recovery.
+ * Phase D: optional tier-2 when `tier2MultiSource` and `activeSourceCount >= 2`.
  */
 export function getEffectiveJitterTuning(
   tuning: GroupCallAudioTuning,
-  adaptiveNetworkMode: 'low-latency' | 'recovery'
+  adaptiveNetworkMode: 'low-latency' | 'recovery',
+  opts?: EffectiveJitterTuningOpts
 ): { jitterBufferSize: number; jitterStartBufferSize: number } {
   if (adaptiveNetworkMode !== 'recovery') {
     return {
       jitterBufferSize: tuning.jitterBufferSize,
       jitterStartBufferSize: tuning.jitterStartBufferSize,
+    };
+  }
+  const n = opts?.activeSourceCount ?? 0;
+  const tier2 =
+    Boolean(opts?.tier2MultiSource) &&
+    readGcallJitterTier2Enabled() &&
+    n >= 2;
+  if (tier2) {
+    return {
+      jitterBufferSize: Math.max(
+        tuning.jitterBufferSize,
+        GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2
+      ),
+      jitterStartBufferSize: Math.max(
+        tuning.jitterStartBufferSize,
+        GCALL_RECOVERY_JITTER_START_MIN_TIER2
+      ),
     };
   }
   return {
@@ -90,6 +150,14 @@ export function getEffectiveJitterTuning(
       GCALL_RECOVERY_JITTER_START_MIN
     ),
   };
+}
+
+/** Phase D: scaled soft un-prime when tier-2 path active (multi-source). */
+export function computeSoftUnprimeMsForTier2(activeSourceCount: number): number {
+  if (activeSourceCount < 2 || !readGcallJitterTier2Enabled()) {
+    return GCALL_JITTER_SOFT_UNPRIME_MS;
+  }
+  return GCALL_JITTER_SOFT_UNPRIME_MS + (activeSourceCount - 1) * 20;
 }
 
 export function getGroupCallAudioTuning(
