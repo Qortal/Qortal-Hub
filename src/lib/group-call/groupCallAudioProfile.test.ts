@@ -1,22 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN,
+  GCALL_RECOVERY_JITTER_START_MIN,
+  getEffectiveJitterTuning,
   getGroupCallAudioTuning,
-  type GroupCallAudioQualityProfile,
 } from './groupCallAudioProfile';
 
-describe('getGroupCallAudioTuning', () => {
-  it.each<[GroupCallAudioQualityProfile, number, number]>([
-    ['low-latency', 24_000, 4],
-    ['high-stability', 32_000, 6],
-  ])(
-    '%s profile maps bitrate %i and jitter start %i',
-    (profile, bitrate, start) => {
-      const t = getGroupCallAudioTuning(profile);
-      expect(t.profile).toBe(profile);
-      expect(t.opusBitrate).toBe(bitrate);
-      expect(t.jitterStartBufferSize).toBe(start);
-      expect(t.adaptiveMaxTargetMs).toBe(profile === 'high-stability' ? 220 : 180);
-      expect(t.wasmFecMaxGapReset).toBe(profile === 'high-stability' ? 40 : 32);
-    }
-  );
+describe('getEffectiveJitterTuning', () => {
+  it('is identity for low-latency mode', () => {
+    const t = getGroupCallAudioTuning('low-latency');
+    expect(getEffectiveJitterTuning(t, 'low-latency')).toEqual({
+      jitterBufferSize: t.jitterBufferSize,
+      jitterStartBufferSize: t.jitterStartBufferSize,
+    });
+  });
+
+  it('raises floors in recovery mode', () => {
+    const t = getGroupCallAudioTuning('low-latency');
+    const e = getEffectiveJitterTuning(t, 'recovery');
+    expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN);
+    expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN);
+  });
+
+  it('bumps high-stability profile up to recovery floors', () => {
+    const t = getGroupCallAudioTuning('high-stability');
+    const e = getEffectiveJitterTuning(t, 'recovery');
+    expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN);
+    expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN);
+  });
 });

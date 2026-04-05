@@ -416,6 +416,14 @@ export interface GroupCallMetricsSnapshot {
   playoutRateFractionBelow1: number;
   /** Fraction of playout metric ticks with rate &lt; 0.97. */
   playoutRateFractionBelow097: number;
+  /** Rolling mean of per-drain-tick mean jitter depth (Opus frames) across active sources. */
+  jitterBufferDepthFramesMean: number;
+  /** Session high-water: max per-tick worst depth across active sources (Opus frames). */
+  jitterBufferDepthFramesWorst: number;
+  /** Fraction of drain-tick source samples where `!hasReadyFrame()`. */
+  jitterNotReadyFraction: number;
+  /** Fraction of drain-tick source samples where jitter buffer had zero frames. */
+  jitterRawEmptyFraction: number;
   lastUpdatedAt: number;
   /** Present-tense: DataChannels needed for this role are open (set in useGroupVoiceCall flush). */
   dcTransportReady?: boolean;
@@ -615,6 +623,14 @@ export interface GroupCallWindowMetrics {
   playoutRateFractionBelow1: number;
   /** Fraction of playout ticks with rate &lt; 0.97. */
   playoutRateFractionBelow097: number;
+  /** Mean of per-drain-tick mean jitter depth (Opus frames) in this window. */
+  jitterBufferDepthFramesMean: number;
+  /** Max per-tick worst jitter depth (Opus frames) in this window. */
+  jitterBufferDepthFramesWorst: number;
+  /** Fraction of drain-tick source samples with `!hasReadyFrame()`. */
+  jitterNotReadyFraction: number;
+  /** Fraction of drain-tick source samples with empty jitter buffer. */
+  jitterRawEmptyFraction: number;
   worstSourceAddr: string | null;
   worstAdaptiveTargetMs: number;
   sources: GroupCallSourceWindowMetrics[];
@@ -1175,6 +1191,10 @@ export class GroupCallPerformanceTracker {
     avgPlayoutRate: 1,
     playoutRateFractionBelow1: 0,
     playoutRateFractionBelow097: 0,
+    jitterBufferDepthFramesMean: 0,
+    jitterBufferDepthFramesWorst: 0,
+    jitterNotReadyFraction: 0,
+    jitterRawEmptyFraction: 0,
     lastUpdatedAt: 0,
     pcConnectedTransitions: 0,
     pcDisconnectedTransitions: 0,
@@ -1262,6 +1282,20 @@ export class GroupCallPerformanceTracker {
   private incomingPacketTotalMs = 0;
   private jitterTickSamples = 0;
   private jitterTickTotalMs = 0;
+
+  private jitterDrainTicksSession = 0;
+  private jitterDepthMeanTickSumSession = 0;
+  private jitterDepthWorstTickMaxSession = 0;
+  private jitterNotReadySlotsSession = 0;
+  private jitterSlotSamplesSession = 0;
+  private jitterRawEmptySlotsSession = 0;
+
+  private windowJitterDrainTicks = 0;
+  private windowJitterDepthMeanTickSum = 0;
+  private windowJitterDepthWorstMax = 0;
+  private windowJitterNotReadySlots = 0;
+  private windowJitterSlotSamples = 0;
+  private windowJitterRawEmptySlots = 0;
 
   private playoutMetricTicks = 0;
   private playoutOutsideTicks = 0;
@@ -1369,6 +1403,12 @@ export class GroupCallPerformanceTracker {
     this.windowReticulumAudioDecodedQueueDepthHighWater = 0;
     this.windowReticulumAudioBinaryOutQueueDepthHighWater = 0;
     this.windowPendingDecryptDepthHighWater = 0;
+    this.windowJitterDrainTicks = 0;
+    this.windowJitterDepthMeanTickSum = 0;
+    this.windowJitterDepthWorstMax = 0;
+    this.windowJitterNotReadySlots = 0;
+    this.windowJitterSlotSamples = 0;
+    this.windowJitterRawEmptySlots = 0;
     this.sourceWindowStats.clear();
   }
 
@@ -2043,6 +2083,57 @@ export class GroupCallPerformanceTracker {
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
+  /**
+   * One sample per jitter drain tick: aggregate depth / starvation across active sources.
+   */
+  recordJitterDrainTelemetry(sample: {
+    sourceCount: number;
+    depthSum: number;
+    worstDepth: number;
+    notReadyCount: number;
+    rawEmptyCount: number;
+  }): void {
+    const n = sample.sourceCount;
+    if (!Number.isFinite(n) || n <= 0) return;
+    const tickMean = sample.depthSum / n;
+    this.jitterDrainTicksSession++;
+    this.jitterDepthMeanTickSumSession += tickMean;
+    this.jitterDepthWorstTickMaxSession = Math.max(
+      this.jitterDepthWorstTickMaxSession,
+      sample.worstDepth
+    );
+    this.jitterNotReadySlotsSession += sample.notReadyCount;
+    this.jitterSlotSamplesSession += n;
+    this.jitterRawEmptySlotsSession += sample.rawEmptyCount;
+
+    this.windowJitterDrainTicks++;
+    this.windowJitterDepthMeanTickSum += tickMean;
+    this.windowJitterDepthWorstMax = Math.max(
+      this.windowJitterDepthWorstMax,
+      sample.worstDepth
+    );
+    this.windowJitterNotReadySlots += sample.notReadyCount;
+    this.windowJitterSlotSamples += n;
+    this.windowJitterRawEmptySlots += sample.rawEmptyCount;
+
+    this.snapshot.jitterBufferDepthFramesMean = roundMetric(
+      this.jitterDepthMeanTickSumSession /
+        Math.max(1, this.jitterDrainTicksSession)
+    );
+    this.snapshot.jitterBufferDepthFramesWorst = roundMetric(
+      this.jitterDepthWorstTickMaxSession
+    );
+    this.snapshot.jitterNotReadyFraction = roundMetric(
+      this.jitterNotReadySlotsSession /
+        Math.max(1, this.jitterSlotSamplesSession)
+    );
+    this.snapshot.jitterRawEmptyFraction = roundMetric(
+      this.jitterRawEmptySlotsSession /
+        Math.max(1, this.jitterSlotSamplesSession)
+    );
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
   setResourceCounts(counts: ResourceCounts): void {
     this.snapshot.decoderCount = counts.decoders;
     this.snapshot.playbackNodeCount = counts.playbackNodes;
@@ -2121,6 +2212,10 @@ export class GroupCallPerformanceTracker {
       avgPlayoutRate: 1,
       playoutRateFractionBelow1: 0,
       playoutRateFractionBelow097: 0,
+      jitterBufferDepthFramesMean: 0,
+      jitterBufferDepthFramesWorst: 0,
+      jitterNotReadyFraction: 0,
+      jitterRawEmptyFraction: 0,
       lastUpdatedAt: now,
       pcConnectedTransitions: 0,
       pcDisconnectedTransitions: 0,
@@ -2206,6 +2301,12 @@ export class GroupCallPerformanceTracker {
     this.incomingPacketTotalMs = 0;
     this.jitterTickSamples = 0;
     this.jitterTickTotalMs = 0;
+    this.jitterDrainTicksSession = 0;
+    this.jitterDepthMeanTickSumSession = 0;
+    this.jitterDepthWorstTickMaxSession = 0;
+    this.jitterNotReadySlotsSession = 0;
+    this.jitterSlotSamplesSession = 0;
+    this.jitterRawEmptySlotsSession = 0;
     this.playoutMetricTicks = 0;
     this.playoutOutsideTicks = 0;
     this.playoutUnderTicks = 0;
@@ -2409,6 +2510,22 @@ export class GroupCallPerformanceTracker {
       playoutRateFractionBelow097: roundMetric(
         this.windowPlayoutRateSamples > 0
           ? this.windowPlayoutRateTicksBelow097 / this.windowPlayoutRateSamples
+          : 0
+      ),
+      jitterBufferDepthFramesMean: roundMetric(
+        this.windowJitterDrainTicks > 0
+          ? this.windowJitterDepthMeanTickSum / this.windowJitterDrainTicks
+          : 0
+      ),
+      jitterBufferDepthFramesWorst: roundMetric(this.windowJitterDepthWorstMax),
+      jitterNotReadyFraction: roundMetric(
+        this.windowJitterSlotSamples > 0
+          ? this.windowJitterNotReadySlots / this.windowJitterSlotSamples
+          : 0
+      ),
+      jitterRawEmptyFraction: roundMetric(
+        this.windowJitterSlotSamples > 0
+          ? this.windowJitterRawEmptySlots / this.windowJitterSlotSamples
           : 0
       ),
       avgOpusBufferedMs: roundMetric(

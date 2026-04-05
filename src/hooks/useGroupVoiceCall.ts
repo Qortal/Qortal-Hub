@@ -70,6 +70,10 @@ import {
 } from '../lib/group-call/router';
 import {
   GCALL_AUDIO_QUALITY_PROFILE_KEY,
+  GCALL_JITTER_SOFT_UNPRIME_MS,
+  GCALL_RECOVERY_JITTER_APPLY_DWELL_MS,
+  GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS,
+  getEffectiveJitterTuning,
   getGroupCallAudioTuning,
   readGroupCallAudioProfile,
   writeGroupCallAudioProfile,
@@ -312,6 +316,10 @@ const JITTER_EMPTY_HYSTERESIS_TICKS = 3;
 const JITTER_DECODE_BURST_MAX_DEFAULT = 5;
 /** Extra decode frames per drain tick when session is in recovery (Phase C upstream assist). */
 const JITTER_DECODE_BURST_MAX_RECOVERY = 6;
+/** Upper cap for backlog-scaled burst (`base + floor(bufferedFrames/2)`). Phase C. */
+const JITTER_DECODE_BURST_SCALED_MAX = 11;
+/** When previous jitter tick exceeded this duration (ms), cap scaled burst for safety. */
+const JITTER_DECODE_BURST_TICK_TOTAL_SOFT_THRESHOLD_MS = 12;
 
 /** Adaptive playout target (main thread → group-playout-processor). */
 const ADAPTIVE_BASE_TARGET_MS = 100;
@@ -1679,6 +1687,8 @@ class JitterBuffer {
   private lastPlayedSeq = -1;
   private pendingMissedSeq = 0;
   private primed = false;
+  /** When buffer became empty after `pop`; delays resetting `primed` (Phase C soft un-prime). */
+  private emptySinceMs: number | null = null;
   /** Raw seq gap for the last pop (for WASM FEC); cleared by consumeLastRawGapAfterPop. */
   private lastRawGapAfterPop = 0;
   private jitterBufferSize: number;
@@ -1701,6 +1711,21 @@ class JitterBuffer {
     this.jitterStartBufferSize = tuning.jitterStartBufferSize;
   }
 
+  private checkSoftUnprime(): void {
+    if (this.emptySinceMs === null) return;
+    if (this.entries.length > 0) {
+      this.emptySinceMs = null;
+      return;
+    }
+    if (
+      this.primed &&
+      performance.now() - this.emptySinceMs >= GCALL_JITTER_SOFT_UNPRIME_MS
+    ) {
+      this.primed = false;
+      this.emptySinceMs = null;
+    }
+  }
+
   /** Pop-side gap detection: call after pop; returns missed frame count since last pop. */
   consumePendingMissedFrames(): number {
     const m = this.pendingMissedSeq;
@@ -1709,6 +1734,7 @@ class JitterBuffer {
   }
 
   push(seq: number, opusFrame: Uint8Array): void {
+    this.checkSoftUnprime();
     if (seq <= this.lastPlayedSeq) return; // already played or older
     let insertAt = this.entries.length;
     while (insertAt > 0) {
@@ -1722,6 +1748,7 @@ class JitterBuffer {
       opusFrame,
       receivedAt: performance.now(),
     });
+    this.emptySinceMs = null;
     const maxEntries = this.jitterBufferSize * 2;
     if (this.entries.length > maxEntries) {
       this.entries.splice(0, this.entries.length - maxEntries);
@@ -1737,6 +1764,7 @@ class JitterBuffer {
 
   /** Returns next frame to play, or null if buffer not ready. */
   pop(): Uint8Array | null {
+    this.checkSoftUnprime();
     const base = this.primed ? 1 : this.jitterStartBufferSize;
     const threshold = base + this.extraHoldFrames;
     if (this.entries.length < threshold) return null;
@@ -1752,11 +1780,16 @@ class JitterBuffer {
       this.lastRawGapAfterPop = 0;
     }
     this.lastPlayedSeq = entry.seq;
-    if (this.entries.length === 0) this.primed = false;
+    if (this.entries.length === 0) {
+      this.emptySinceMs = performance.now();
+    } else {
+      this.emptySinceMs = null;
+    }
     return entry.opusFrame;
   }
 
   hasReadyFrame(): boolean {
+    this.checkSoftUnprime();
     const base = this.primed ? 1 : this.jitterStartBufferSize;
     return this.entries.length >= base + this.extraHoldFrames;
   }
@@ -1770,6 +1803,7 @@ class JitterBuffer {
     this.lastPlayedSeq = -1;
     this.pendingMissedSeq = 0;
     this.primed = false;
+    this.emptySinceMs = null;
     this.lastRawGapAfterPop = 0;
   }
 }
@@ -1925,6 +1959,12 @@ export function useGroupVoiceCall(uiActive = false) {
   // Per-source decoders and jitter buffers
   const decoderMapRef = useRef<Map<string, AudioDecoder>>(new Map());
   const jitterMapRef = useRef<Map<string, JitterBuffer>>(new Map());
+  /** Effective jitter geometry applied to all `JitterBuffer`s (profile vs recovery floors). */
+  const jitterGeomAppliedRef = useRef<'profile' | 'recovery'>('profile');
+  const recoveryDwellStartRef = useRef<number | null>(null);
+  const exitDebounceStartRef = useRef<number | null>(null);
+  const lastJitterTickTotalMsRef = useRef(0);
+  const lastRecoveryJitterGeometryLogAtRef = useRef(0);
   const [audioQualityProfile, setAudioQualityProfile] =
     useState<GroupCallAudioQualityProfile>(() => readGroupCallAudioProfile());
   const audioTuningRef = useRef(getGroupCallAudioTuning(audioQualityProfile));
@@ -2247,11 +2287,11 @@ export function useGroupVoiceCall(uiActive = false) {
     opusSendPressureStateRef.current = createOpusSendPressureControllerState();
     opusEncoderLastConfiguredBitrateRef.current = null;
     writeGroupCallAudioProfile(audioQualityProfile);
+    const mode =
+      jitterGeomAppliedRef.current === 'recovery' ? 'recovery' : 'low-latency';
+    const effective = getEffectiveJitterTuning(audioTuningRef.current, mode);
     for (const jb of jitterMapRef.current.values()) {
-      jb.applyJitterTuning({
-        jitterBufferSize: audioTuningRef.current.jitterBufferSize,
-        jitterStartBufferSize: audioTuningRef.current.jitterStartBufferSize,
-      });
+      jb.applyJitterTuning(effective);
     }
   }, [audioQualityProfile]);
 
@@ -3382,7 +3422,7 @@ export function useGroupVoiceCall(uiActive = false) {
         ADAPTIVE_ALPHA_UP,
         baseAlphaDown
       );
-      let alphaUp = alphaStarved.alphaUp;
+      const alphaUp = alphaStarved.alphaUp;
       let alphaDown = alphaStarved.alphaDown;
       if (nextStarvationSev === 'none' && starvationCooldownActive) {
         alphaDown = Math.min(baseAlphaDown, 0.2);
@@ -4637,13 +4677,14 @@ export function useGroupVoiceCall(uiActive = false) {
 
       let jb = jitterMapRef.current.get(sourceAddr);
       if (!jb) {
-        const tun = audioTuningRef.current;
+        const mode =
+          jitterGeomAppliedRef.current === 'recovery'
+            ? 'recovery'
+            : 'low-latency';
+        const effective = getEffectiveJitterTuning(audioTuningRef.current, mode);
         jb = new JitterBuffer(
           gcallWasmFecDesiredRef.current ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0,
-          {
-            jitterBufferSize: tun.jitterBufferSize,
-            jitterStartBufferSize: tun.jitterStartBufferSize,
-          }
+          effective
         );
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
@@ -6931,10 +6972,102 @@ export function useGroupVoiceCall(uiActive = false) {
       prefetchMs = performance.now() - prefetchStartedAt;
     }
     const drainStartedAt = performance.now();
-    const jitterDecodeBurstMax =
-      metricsRef.current.getSnapshot().adaptiveNetworkMode === 'recovery'
-        ? JITTER_DECODE_BURST_MAX_RECOVERY
-        : JITTER_DECODE_BURST_MAX_DEFAULT;
+    const nowWall = performance.now();
+    const modeSnap = metricsRef.current.getSnapshot().adaptiveNetworkMode;
+    const inRecovery = modeSnap === 'recovery';
+
+    if (jitterGeomAppliedRef.current === 'profile') {
+      if (inRecovery) {
+        if (recoveryDwellStartRef.current === null) {
+          recoveryDwellStartRef.current = nowWall;
+        }
+        if (
+          nowWall - recoveryDwellStartRef.current >=
+          GCALL_RECOVERY_JITTER_APPLY_DWELL_MS
+        ) {
+          jitterGeomAppliedRef.current = 'recovery';
+          recoveryDwellStartRef.current = null;
+          exitDebounceStartRef.current = null;
+          const effective = getEffectiveJitterTuning(
+            audioTuningRef.current,
+            'recovery'
+          );
+          for (const jb of jitterMapRef.current.values()) {
+            jb.applyJitterTuning(effective);
+          }
+          const logNow = Date.now();
+          if (logNow - lastRecoveryJitterGeometryLogAtRef.current >= 15_000) {
+            lastRecoveryJitterGeometryLogAtRef.current = logNow;
+            gcallDiagnosticsPush('info', '[GCall] recoveryJitterGeometryApplied', {
+              jitterBufferSize: effective.jitterBufferSize,
+              jitterStartBufferSize: effective.jitterStartBufferSize,
+            });
+          }
+        }
+      } else {
+        recoveryDwellStartRef.current = null;
+      }
+    } else {
+      if (!inRecovery) {
+        if (exitDebounceStartRef.current === null) {
+          exitDebounceStartRef.current = nowWall;
+        }
+        if (
+          nowWall - exitDebounceStartRef.current >=
+          GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS
+        ) {
+          jitterGeomAppliedRef.current = 'profile';
+          exitDebounceStartRef.current = null;
+          const effective = getEffectiveJitterTuning(
+            audioTuningRef.current,
+            'low-latency'
+          );
+          for (const jb of jitterMapRef.current.values()) {
+            jb.applyJitterTuning(effective);
+          }
+        }
+      } else {
+        exitDebounceStartRef.current = null;
+      }
+    }
+
+    let depthSum = 0;
+    let worstDepth = 0;
+    let notReadyCount = 0;
+    let rawEmptyCount = 0;
+    let telemSourceCount = 0;
+    for (const addr of activeJitterSourcesRef.current) {
+      const jb = jitterMapRef.current.get(addr);
+      if (!jb) continue;
+      const d = jb.getBufferedFrames();
+      depthSum += d;
+      worstDepth = Math.max(worstDepth, d);
+      if (!jb.hasReadyFrame()) notReadyCount++;
+      if (d === 0) rawEmptyCount++;
+      telemSourceCount++;
+    }
+    if (telemSourceCount > 0) {
+      metricsRef.current.recordJitterDrainTelemetry({
+        sourceCount: telemSourceCount,
+        depthSum,
+        worstDepth,
+        notReadyCount,
+        rawEmptyCount,
+      });
+    }
+
+    const isRecovery = inRecovery;
+    const burstBase = isRecovery
+      ? JITTER_DECODE_BURST_MAX_RECOVERY
+      : JITTER_DECODE_BURST_MAX_DEFAULT;
+    let scaledBurstCap = JITTER_DECODE_BURST_SCALED_MAX;
+    if (
+      lastJitterTickTotalMsRef.current >=
+      JITTER_DECODE_BURST_TICK_TOTAL_SOFT_THRESHOLD_MS
+    ) {
+      scaledBurstCap = Math.min(scaledBurstCap, 8);
+    }
+
     for (const addr of [...activeJitterSourcesRef.current]) {
       const jb = jitterMapRef.current.get(addr);
       if (!jb || !jb.hasReadyFrame()) {
@@ -6956,7 +7089,14 @@ export function useGroupVoiceCall(uiActive = false) {
       emptyJitterDrainTicksRef.current.set(addr, 0);
       let missedThisTick = 0;
       let burst = 0;
-      while (burst < jitterDecodeBurstMax && jb.hasReadyFrame()) {
+      while (burst < scaledBurstCap) {
+        const bufferedFrames = jb.getBufferedFrames();
+        const effectiveBurstMax = Math.min(
+          scaledBurstCap,
+          Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
+        );
+        if (burst >= effectiveBurstMax) break;
+        if (!jb.hasReadyFrame()) break;
         const frame = jb.pop();
         if (!frame) break;
         missedThisTick += jb.consumePendingMissedFrames();
@@ -7075,6 +7215,7 @@ export function useGroupVoiceCall(uiActive = false) {
       reactMs = performance.now() - reactStartedAt;
     }
     const tickTotalMs = performance.now() - tickStartedAt;
+    lastJitterTickTotalMsRef.current = tickTotalMs;
     metricsRef.current.recordJitterTickDuration(tickTotalMs);
     recordPerfDuration('tickTotalMs', tickTotalMs);
     recordPerfDuration('drainPrefetchMs', prefetchMs);
@@ -9192,6 +9333,10 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       decoderMapRef.current.clear();
       jitterMapRef.current.clear();
+      jitterGeomAppliedRef.current = 'profile';
+      recoveryDwellStartRef.current = null;
+      exitDebounceStartRef.current = null;
+      lastJitterTickTotalMsRef.current = 0;
       activeJitterSourcesRef.current.clear();
       emptyJitterDrainTicksRef.current.clear();
       lastRecvAtRef.current.clear();

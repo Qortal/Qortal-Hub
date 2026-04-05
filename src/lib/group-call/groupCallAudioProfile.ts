@@ -55,6 +55,43 @@ export const GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES = Math.max(
   HIGH_STABILITY_BASE.adaptiveSevereMaxTargetMs
 );
 
+/** Recovery mode: minimum Opus reorder window (frames) before push trim — Phase C upstream. */
+export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN = 10;
+/** Recovery mode: minimum frames before first drain when unprimed — Phase C upstream. */
+export const GCALL_RECOVERY_JITTER_START_MIN = 9;
+/** Require `adaptiveNetworkMode === 'recovery'` this long before deepening jitter (ms). */
+export const GCALL_RECOVERY_JITTER_APPLY_DWELL_MS = 200;
+/** Require non-recovery this long before reverting jitter geometry (ms). */
+export const GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS = 125;
+/** Delay resetting `primed` after last pop empties the jitter buffer (ms). */
+export const GCALL_JITTER_SOFT_UNPRIME_MS = 50;
+
+/**
+ * Deeper jitter geometry in recovery so Opus ingress can match adaptive playout targets.
+ * Identity when `adaptiveNetworkMode` is not recovery.
+ */
+export function getEffectiveJitterTuning(
+  tuning: GroupCallAudioTuning,
+  adaptiveNetworkMode: 'low-latency' | 'recovery'
+): { jitterBufferSize: number; jitterStartBufferSize: number } {
+  if (adaptiveNetworkMode !== 'recovery') {
+    return {
+      jitterBufferSize: tuning.jitterBufferSize,
+      jitterStartBufferSize: tuning.jitterStartBufferSize,
+    };
+  }
+  return {
+    jitterBufferSize: Math.max(
+      tuning.jitterBufferSize,
+      GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN
+    ),
+    jitterStartBufferSize: Math.max(
+      tuning.jitterStartBufferSize,
+      GCALL_RECOVERY_JITTER_START_MIN
+    ),
+  };
+}
+
 export function getGroupCallAudioTuning(
   profile: GroupCallAudioQualityProfile
 ): GroupCallAudioTuning {
