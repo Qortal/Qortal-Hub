@@ -1,7 +1,16 @@
 import type { GroupCallSourceWindowMetrics } from './router';
+import { GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES } from './groupCallAudioProfile';
 
-/** Hard ceiling on playout target growth for multi-party calls (ms). */
-export const GCALL_GLOBAL_PLAYOUT_CAP_MS = 150;
+/**
+ * Upper envelope for `effectivePlayoutMaxTargetMs` (ms). Must be >= max profile
+ * `adaptiveSevereMaxTargetMs` so high-stability / severe ceilings are reachable.
+ */
+export const GCALL_GLOBAL_PLAYOUT_CAP_MS = GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES;
+
+/** Temporary ceiling lift when micro-widen v1 detects rising inter-arrival variance (ms). */
+export const MICRO_WIDEN_CEILING_LIFT_MS = 50;
+/** How long micro-widen ceiling lift stays active after last eligible tick (ms). */
+export const MICRO_WIDEN_CEILING_TTL_MS = 2500;
 
 /** After a topology commit, suppress aggressive warm / hysteresis advances for this long (wall clock ms). */
 export const GCALL_TOPOLOGY_SETTLE_MS = 500;
@@ -104,10 +113,13 @@ export function effectivePlayoutMaxTargetMs(input: {
    * profile max and severe instead of full severe (product: do not nuke speech).
    */
   isolationCeilingSoftened?: boolean;
-  /** Mode 2 playout starvation: extra headroom (ms), applied before global cap. */
-  starvationCeilingLiftMs?: number;
+  /**
+   * Combined dynamic ceiling lift (ms): caller should pass `max(starvationLift, microWidenLift)`,
+   * not the sum of both.
+   */
+  dynamicCeilingLiftMs?: number;
 }): number {
-  const lift = input.starvationCeilingLiftMs ?? 0;
+  const lift = input.dynamicCeilingLiftMs ?? 0;
   const base = input.useSevereCeiling
     ? input.isolationCeilingSoftened
       ? input.profileAdaptiveMaxMs +

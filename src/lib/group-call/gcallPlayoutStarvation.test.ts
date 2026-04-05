@@ -42,7 +42,8 @@ describe('gcallPlayoutStarvation', () => {
   it('classifies strong-A when adequacy below strong entry', () => {
     const r = classifyStrongStarvationCandidate(
       baseSource({ playoutUnderTargetFraction: 0, avgPlayoutDeltaMs: 0 }),
-      0.25
+      0.25,
+      0
     );
     expect(r).toEqual({ strong: true, reason: 'strong-A' });
   });
@@ -53,9 +54,22 @@ describe('gcallPlayoutStarvation', () => {
         playoutUnderTargetFraction: 0.9,
         avgPlayoutDeltaMs: -10,
       }),
-      0.35
+      0.35,
+      0
     );
     expect(r).toEqual({ strong: true, reason: 'strong-B' });
+  });
+
+  it('classifies strong-C when middling adequacy stress is sustained', () => {
+    const r = classifyStrongStarvationCandidate(
+      baseSource({
+        playoutUnderTargetFraction: 0.6,
+        avgPlayoutDeltaMs: -40,
+      }),
+      0.65,
+      2
+    );
+    expect(r).toEqual({ strong: true, reason: 'strong-C' });
   });
 
   it('does not classify strong-B without stress signals', () => {
@@ -64,7 +78,8 @@ describe('gcallPlayoutStarvation', () => {
         playoutUnderTargetFraction: 0.2,
         avgPlayoutDeltaMs: -10,
       }),
-      0.35
+      0.35,
+      0
     );
     expect(r.strong).toBe(false);
   });

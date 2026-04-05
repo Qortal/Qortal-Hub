@@ -13,6 +13,11 @@ export const GCALL_STARVATION_STRONG_B_ADEQUACY_MAX = 0.5;
 export const GCALL_STARVATION_STRONG_B_MIN_UNDER_TARGET_FRAC = 0.85;
 export const GCALL_STARVATION_STRONG_B_PLAYOUT_DELTA_MS_THRESHOLD = -60;
 
+/** Middling buffer adequacy: bad under-target fraction + delta without adequacy in strong-B band. */
+export const GCALL_STARVATION_STRONG_C_MIN_UNDER_TARGET_FRAC = 0.5;
+export const GCALL_STARVATION_STRONG_C_MAX_PLAYOUT_DELTA_MS = -30;
+export const GCALL_STARVATION_STRONG_C_SUSTAINED_WINDOWS = 2;
+
 /** Min window duration (ms) before starvation is evaluated (OR min ticks below). */
 export const GCALL_STARVATION_MIN_PLAYOUT_ACTIVE_MS = 500;
 /**
@@ -38,7 +43,27 @@ export type PlayoutStarvationSeverityReason =
   | 'none'
   | 'strong-A'
   | 'strong-B'
+  | 'strong-C'
   | 'mild-adequacy';
+
+/** Consecutive windows with strong-C conditions; reset when conditions break. */
+export function strongCStarvationStreakTick(
+  prevStreak: number,
+  source: Pick<
+    GroupCallSourceWindowMetrics,
+    'playoutUnderTargetFraction' | 'avgPlayoutDeltaMs'
+  >
+): number {
+  const ut = source.playoutUnderTargetFraction ?? 0;
+  const delta = source.avgPlayoutDeltaMs ?? 0;
+  if (
+    ut > GCALL_STARVATION_STRONG_C_MIN_UNDER_TARGET_FRAC &&
+    delta < GCALL_STARVATION_STRONG_C_MAX_PLAYOUT_DELTA_MS
+  ) {
+    return prevStreak + 1;
+  }
+  return 0;
+}
 
 export function computeBufferAdequacy(input: {
   avgPcmBufferedMs: number;
@@ -67,8 +92,9 @@ export function classifyStrongStarvationCandidate(
     GroupCallSourceWindowMetrics,
     'playoutUnderTargetFraction' | 'avgPlayoutDeltaMs'
   >,
-  bufferAdequacy: number
-): { strong: boolean; reason: 'strong-A' | 'strong-B' | null } {
+  bufferAdequacy: number,
+  strongCStreak: number
+): { strong: boolean; reason: 'strong-A' | 'strong-B' | 'strong-C' | null } {
   const ut = source.playoutUnderTargetFraction ?? 0;
   const delta = source.avgPlayoutDeltaMs ?? 0;
   if (bufferAdequacy < GCALL_STARVATION_STRONG_ADEQUACY_ENTRY) {
@@ -85,6 +111,9 @@ export function classifyStrongStarvationCandidate(
       return { strong: true, reason: 'strong-B' };
     }
   }
+  if (strongCStreak >= GCALL_STARVATION_STRONG_C_SUSTAINED_WINDOWS) {
+    return { strong: true, reason: 'strong-C' };
+  }
   return { strong: false, reason: null };
 }
 
@@ -99,7 +128,10 @@ export function computeMildEntryCandidate(
 export function stepPlayoutStarvationSeverity(input: {
   held: PlayoutStarvationSeverity;
   bufferAdequacy: number;
-  strongMeta: { strong: boolean; reason: 'strong-A' | 'strong-B' | null };
+  strongMeta: {
+    strong: boolean;
+    reason: 'strong-A' | 'strong-B' | 'strong-C' | null;
+  };
   mildCandidate: boolean;
 }): { next: PlayoutStarvationSeverity; severityReason: PlayoutStarvationSeverityReason } {
   const { held, bufferAdequacy, strongMeta, mildCandidate } = input;
@@ -121,7 +153,9 @@ export function stepPlayoutStarvationSeverity(input: {
       severityReason:
         bufferAdequacy < GCALL_STARVATION_STRONG_ADEQUACY_ENTRY
           ? 'strong-A'
-          : 'strong-B',
+          : bufferAdequacy < GCALL_STARVATION_MILD_ADEQUACY_ENTRY
+            ? 'strong-B'
+            : 'strong-C',
     };
   }
 

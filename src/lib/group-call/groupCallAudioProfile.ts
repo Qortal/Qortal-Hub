@@ -46,6 +46,15 @@ const HIGH_STABILITY_BASE = {
   wasmFecMaxGapReset: 42,
 } as const;
 
+/**
+ * Max `adaptiveSevereMaxTargetMs` across all profiles. Global playout ceiling in
+ * `gcallPlayoutPolicy` must be >= this so profile caps are not clamped below intent.
+ */
+export const GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES = Math.max(
+  LOW_LATENCY_BASE.adaptiveSevereMaxTargetMs,
+  HIGH_STABILITY_BASE.adaptiveSevereMaxTargetMs
+);
+
 export function getGroupCallAudioTuning(
   profile: GroupCallAudioQualityProfile
 ): GroupCallAudioTuning {

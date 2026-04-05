@@ -24,7 +24,7 @@ describe('gcallPlayoutPolicy', () => {
       useSevereCeiling: false,
       activeSourceCount: 1,
     });
-    expect(low).toBeLessThanOrEqual(150);
+    expect(low).toBe(220);
 
     const nWay = effectivePlayoutMaxTargetMs({
       profileAdaptiveMaxMs: 220,
@@ -32,17 +32,17 @@ describe('gcallPlayoutPolicy', () => {
       useSevereCeiling: false,
       activeSourceCount: 8,
     });
-    expect(nWay).toBeGreaterThanOrEqual(150);
+    expect(nWay).toBeGreaterThanOrEqual(220);
     expect(nWay).toBeLessThanOrEqual(220);
   });
 
-  it('adds starvation ceiling lift before global cap', () => {
+  it('adds dynamic ceiling lift before global cap', () => {
     const base = effectivePlayoutMaxTargetMs({
       profileAdaptiveMaxMs: 220,
       profileAdaptiveSevereMaxMs: 280,
       useSevereCeiling: false,
       activeSourceCount: 1,
-      starvationCeilingLiftMs: 40,
+      dynamicCeilingLiftMs: 40,
     });
     const noLift = effectivePlayoutMaxTargetMs({
       profileAdaptiveMaxMs: 220,
@@ -51,6 +51,32 @@ describe('gcallPlayoutPolicy', () => {
       activeSourceCount: 1,
     });
     expect(base).toBe(noLift + 40);
+  });
+
+  it('uses one combined dynamic lift (caller passes max of starvation vs micro-widen)', () => {
+    const noLift = effectivePlayoutMaxTargetMs({
+      profileAdaptiveMaxMs: 220,
+      profileAdaptiveSevereMaxMs: 280,
+      useSevereCeiling: false,
+      activeSourceCount: 1,
+    });
+    const maxLift = effectivePlayoutMaxTargetMs({
+      profileAdaptiveMaxMs: 220,
+      profileAdaptiveSevereMaxMs: 280,
+      useSevereCeiling: false,
+      activeSourceCount: 1,
+      dynamicCeilingLiftMs: 50,
+    });
+    const wronglySummed = effectivePlayoutMaxTargetMs({
+      profileAdaptiveMaxMs: 220,
+      profileAdaptiveSevereMaxMs: 280,
+      useSevereCeiling: false,
+      activeSourceCount: 1,
+      dynamicCeilingLiftMs: 90,
+    });
+    expect(maxLift - noLift).toBe(50);
+    expect(wronglySummed - noLift).toBe(90);
+    expect(maxLift).toBeLessThan(wronglySummed);
   });
 
   it('commits worst isolation after hold period', () => {

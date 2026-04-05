@@ -111,6 +111,8 @@ import {
   computeMicroWidenExtraMsV1,
   effectivePlayoutMaxTargetMs,
   GCALL_TOPOLOGY_SETTLE_MS,
+  MICRO_WIDEN_CEILING_LIFT_MS,
+  MICRO_WIDEN_CEILING_TTL_MS,
   MICRO_WIDEN_EPSILON,
   MICRO_WIDEN_M,
   MICRO_WIDEN_V1_ID,
@@ -127,6 +129,7 @@ import {
   starvationAlphaForSeverity,
   starvationCeilingLiftForSeverity,
   stepPlayoutStarvationSeverity,
+  strongCStarvationStreakTick,
   worstPlayoutStarvationSeverity,
   type PlayoutStarvationSeverity,
   type PlayoutStarvationSeverityReason,
@@ -316,6 +319,13 @@ const ADAPTIVE_SEVERE_MAX_TARGET_MS = 240;
 const ADAPTIVE_JITTER_K = 2.0;
 const ADAPTIVE_ALPHA_UP = 0.4;
 const ADAPTIVE_ALPHA_DOWN = 0.28;
+/** Stickier downward decay when session network mode is recovery (see playout plan). */
+const ADAPTIVE_ALPHA_DOWN_RECOVERY = 0.18;
+/** When smoothed target is high and jitter stays calm, allow faster decay toward ideal. */
+const GCALL_DECAY_GUARD_HIGH_TARGET_MS = 220;
+const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
+const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
+const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
 const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
@@ -2096,6 +2106,10 @@ export function useGroupVoiceCall(uiActive = false) {
     new Map()
   );
   const lastPlayoutStarvationDiagAtRef = useRef<Map<string, number>>(new Map());
+  const microWidenCeilingLiftUntilRef = useRef<Map<string, number>>(new Map());
+  const strongCStreakRef = useRef<Map<string, number>>(new Map());
+  const decayGuardCalmStartRef = useRef<Map<string, number>>(new Map());
+  const decayGuardDiagLoggedRef = useRef<Set<string>>(new Set());
   /** Wall timestamps of decrypt batches per source (for forwarder suppression diagnostics). */
   const forwardPacketRecvTimestampsRef = useRef<Map<string, number[]>>(
     new Map()
@@ -3126,6 +3140,12 @@ export function useGroupVoiceCall(uiActive = false) {
   const tickAdaptivePlayoutTargets = useCallback((): number => {
     const now = performance.now();
     const wallNow = Date.now();
+    const adaptiveNetworkMode =
+      metricsRef.current.getSnapshot().adaptiveNetworkMode;
+    const baseAlphaDown =
+      adaptiveNetworkMode === 'recovery'
+        ? ADAPTIVE_ALPHA_DOWN_RECOVERY
+        : ADAPTIVE_ALPHA_DOWN;
     const topologySettling = wallNow < topologySettleUntilMsRef.current;
     const playoutBoostMs =
       wallNow < globalRecoveryUntilMsRef.current
@@ -3228,10 +3248,23 @@ export function useGroupVoiceCall(uiActive = false) {
           avgPcmBufferedMs: previousWindowSource.avgPcmBufferedMs,
           smoothedTargetMs: smoothedTargetMsForAdequacy,
         });
+        const prevStrongCStreak = strongCStreakRef.current.get(addr) ?? 0;
+        const strongCStreak = strongCStarvationStreakTick(
+          prevStrongCStreak,
+          previousWindowSource
+        );
+        strongCStreakRef.current.set(addr, strongCStreak);
         const strongMeta = classifyStrongStarvationCandidate(
           previousWindowSource,
-          bufferAdequacy
+          bufferAdequacy,
+          strongCStreak
         );
+        if (
+          strongMeta.reason === 'strong-A' ||
+          strongMeta.reason === 'strong-B'
+        ) {
+          strongCStreakRef.current.set(addr, 0);
+        }
         const mildCandidate = computeMildEntryCandidate(
           bufferAdequacy,
           strongMeta.strong
@@ -3265,13 +3298,41 @@ export function useGroupVoiceCall(uiActive = false) {
       const starvationLiftMs =
         starvationCeilingLiftForSeverity(nextStarvationSev);
 
+      const microWiden = computeMicroWidenExtraMsV1({
+        interArrivalSamplesMs: samples,
+        M: MICRO_WIDEN_M,
+        epsilon: MICRO_WIDEN_EPSILON,
+        Wms: MICRO_WIDEN_W_MS,
+      });
+      let microWidenCeilingLiftMs = 0;
+      if (!topologySettling && !severeWindowSource) {
+        if (microWiden.eligible) {
+          microWidenCeilingLiftUntilRef.current.set(
+            addr,
+            wallNow + MICRO_WIDEN_CEILING_TTL_MS
+          );
+        }
+      }
+      const microCeilingUntil =
+        microWidenCeilingLiftUntilRef.current.get(addr) ?? 0;
+      if (wallNow < microCeilingUntil) {
+        microWidenCeilingLiftMs = MICRO_WIDEN_CEILING_LIFT_MS;
+      } else if (microCeilingUntil > 0) {
+        microWidenCeilingLiftUntilRef.current.delete(addr);
+      }
+
+      const dynamicCeilingLiftMs = Math.max(
+        starvationLiftMs,
+        microWidenCeilingLiftMs
+      );
+
       let adaptiveMaxTargetMs = effectivePlayoutMaxTargetMs({
         profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
         profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
         useSevereCeiling,
         isolationCeilingSoftened,
         activeSourceCount: activeJitterSourcesRef.current.size,
-        starvationCeilingLiftMs: starvationLiftMs,
+        dynamicCeilingLiftMs,
       });
       if (failSafeStateRef.current.active) {
         adaptiveMaxTargetMs = Math.min(
@@ -3291,14 +3352,8 @@ export function useGroupVoiceCall(uiActive = false) {
       });
 
       if (!topologySettling && !severeWindowSource) {
-        const micro = computeMicroWidenExtraMsV1({
-          interArrivalSamplesMs: samples,
-          M: MICRO_WIDEN_M,
-          epsilon: MICRO_WIDEN_EPSILON,
-          Wms: MICRO_WIDEN_W_MS,
-        });
-        if (micro.eligible) {
-          ideal = Math.min(ideal + micro.extraMs, adaptiveMaxTargetMs);
+        if (microWiden.eligible) {
+          ideal = Math.min(ideal + microWiden.extraMs, adaptiveMaxTargetMs);
           if (wallNow - lastMicroWidenDiagAtRef.current >= 5_000) {
             lastMicroWidenDiagAtRef.current = wallNow;
             gcallDiagnosticsPush('info', '[GCall] microWidenV1', {
@@ -3307,9 +3362,11 @@ export function useGroupVoiceCall(uiActive = false) {
               M: MICRO_WIDEN_M,
               epsilon: MICRO_WIDEN_EPSILON,
               W: MICRO_WIDEN_W_MS,
-              currentVar: micro.currentVarMs2,
-              baselineVar: micro.rawBaselineVarMs2,
-              effectiveBaselineVar: micro.effectiveBaselineVarMs2,
+              microWidenCeilingLiftMs,
+              dynamicCeilingLiftMs,
+              currentVar: microWiden.currentVarMs2,
+              baselineVar: microWiden.rawBaselineVarMs2,
+              effectiveBaselineVar: microWiden.effectiveBaselineVarMs2,
               sourceAddr: truncateGcallDiagAddress(addr),
             });
           }
@@ -3319,12 +3376,42 @@ export function useGroupVoiceCall(uiActive = false) {
       const alphaStarved = starvationAlphaForSeverity(
         nextStarvationSev,
         ADAPTIVE_ALPHA_UP,
-        ADAPTIVE_ALPHA_DOWN
+        baseAlphaDown
       );
       let alphaUp = alphaStarved.alphaUp;
       let alphaDown = alphaStarved.alphaDown;
       if (nextStarvationSev === 'none' && starvationCooldownActive) {
-        alphaDown = Math.min(ADAPTIVE_ALPHA_DOWN, 0.2);
+        alphaDown = Math.min(baseAlphaDown, 0.2);
+      }
+
+      let calmStart = decayGuardCalmStartRef.current.get(addr);
+      if (
+        smoothedTargetMsForAdequacy > GCALL_DECAY_GUARD_HIGH_TARGET_MS &&
+        jitterMs < GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS
+      ) {
+        if (calmStart === undefined) {
+          decayGuardCalmStartRef.current.set(addr, wallNow);
+          calmStart = wallNow;
+        }
+      } else {
+        decayGuardCalmStartRef.current.delete(addr);
+        decayGuardDiagLoggedRef.current.delete(addr);
+        calmStart = undefined;
+      }
+      const decayGuardActive =
+        calmStart !== undefined &&
+        wallNow - calmStart >= GCALL_DECAY_GUARD_CALM_DURATION_MS;
+      if (decayGuardActive) {
+        alphaDown = Math.max(alphaDown, GCALL_DECAY_GUARD_ALPHA_DOWN);
+        if (!decayGuardDiagLoggedRef.current.has(addr)) {
+          decayGuardDiagLoggedRef.current.add(addr);
+          gcallDiagnosticsPush('info', '[GCall] decayGuardActivated', {
+            reason: 'calm-jitter-high-target',
+            sourceAddr: truncateGcallDiagAddress(addr),
+            smooth: smoothedTargetMsForAdequacy,
+            jitterMs,
+          });
+        }
       }
 
       const smooth = stepSmoothedAdaptiveTargetMs({
@@ -3347,6 +3434,8 @@ export function useGroupVoiceCall(uiActive = false) {
           severity: nextStarvationSev,
           severityReason: starvationSeverityReason,
           starvationLiftAppliedMs: starvationLiftMs,
+          microWidenCeilingLiftMs,
+          dynamicCeilingLiftMs,
           bufferAdequacy,
           targetMs: smoothedTargetMsForAdequacy,
           avgPcmBufferedMs: previousWindowSource?.avgPcmBufferedMs ?? null,
@@ -4110,6 +4199,10 @@ export function useGroupVoiceCall(uiActive = false) {
       playoutStarvationSeverityRef.current.delete(address);
       playoutStarvationCooldownUntilRef.current.delete(address);
       lastPlayoutStarvationDiagAtRef.current.delete(address);
+      microWidenCeilingLiftUntilRef.current.delete(address);
+      strongCStreakRef.current.delete(address);
+      decayGuardCalmStartRef.current.delete(address);
+      decayGuardDiagLoggedRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
       playbackWorkletSetupPromisesRef.current.delete(address);
       wasmFecJobQueueRef.current.delete(address);
