@@ -48,6 +48,8 @@ export interface GcallDiagExportPayload {
   } | null;
   /** QA hint for 2-way pending-decrypt vs long-task correlation (see `GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT`). */
   twoWayDecryptVerificationHint: string;
+  /** QA hint for 2-way jitter/playout paired exports (see `GCALL_TWO_WAY_JITTER_BASELINE_HINT`). */
+  twoWayJitterVerificationHint: string;
   /**
    * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
    * Present when group-call perf is enabled (default on).
@@ -77,6 +79,11 @@ export const GCALL_TRANSPORT_TRIAD_INTERPRETATION =
 export const GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT =
   'Correlate pending-decrypt stress with gcallPerf.longTasks (timestamps) and transportTriadSnapshot; ' +
   'pass bar for sustained 2-way speech: packetsDroppedPendingDecryptRatePerSec < 1.0/s (window average).';
+
+/** Paired before/after: jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction; provisional pass jitterNotReady window under 0.35, median buffer about 0.45× target or better; watch bufferEnforceActive tier logs. */
+export const GCALL_TWO_WAY_JITTER_BASELINE_HINT =
+  'Paired 2-way jitter: compare jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction; ' +
+  'provisional pass (steady speech): jitterNotReadyFraction under 0.35 (window), median buffer at least ~0.45× adaptive target; see bufferEnforceActive / recoveryJitterGeometryApplied in events.';
 
 export function extractTransportTriadFromLiveMetrics(
   live: unknown
@@ -263,6 +270,7 @@ export function buildGcallDiagnosticsExportJson(params: {
     transportTriadInterpretation: GCALL_TRANSPORT_TRIAD_INTERPRETATION,
     transportTriadSnapshot: triad ? redactDeep(triad) : null,
     twoWayDecryptVerificationHint: GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
+    twoWayJitterVerificationHint: GCALL_TWO_WAY_JITTER_BASELINE_HINT,
     gcallPerfSnapshot:
       params.gcallPerfSnapshot !== undefined
         ? redactDeep(params.gcallPerfSnapshot)

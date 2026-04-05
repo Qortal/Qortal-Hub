@@ -1,0 +1,71 @@
+/**
+ * Single-remote (N===1) recovery playout gating: preroll min-ms, buffer-vs-target tier,
+ * and helpers shared with tests. See 2-way jitter playout plan.
+ */
+
+/** Initial stall escape: no ingress this long → allow one minimal decode (ms). */
+export const GCALL_N1_STALL_ESCAPE_MS = 300;
+
+/** Min start buffer before "preroll satisfied" (ms), lower bound of clamp. */
+export const GCALL_N1_MIN_START_MS_FLOOR = 180;
+
+/** Upper clamp for min-start ms (avoid extreme targets). */
+export const GCALL_N1_MIN_START_MS_CEIL = 280;
+
+/** Micro-accumulation after refill when preroll already satisfied (ms). */
+export const GCALL_N1_ACCUMULATION_MS = 75;
+
+/** Denominator floor for r = bufferMs / max(target, floor) — matches adaptive min order. */
+export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
+
+/** Tier A: deep deficit — very aggressive throttle (typically 1 decode/tick max). */
+export const GCALL_N1_RATIO_DEEP = 0.3;
+
+/** Tier B: moderate throttle upper edge. */
+export const GCALL_N1_RATIO_MODERATE = 0.5;
+
+/** Throttle [GCall] bufferEnforceActive diagnostics (ms per source). */
+export const GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS = 2000;
+
+export type GcallN1BufferEnforceTier = 'deep' | 'moderate' | 'normal';
+
+export function computeN1MinStartMs(smoothedTargetMs: number): number {
+  const t = Number.isFinite(smoothedTargetMs) ? smoothedTargetMs : GCALL_N1_MIN_TARGET_MS_FLOOR;
+  return Math.max(
+    GCALL_N1_MIN_START_MS_FLOOR,
+    Math.min(t, GCALL_N1_MIN_START_MS_CEIL)
+  );
+}
+
+export function computeN1BufferRatio(
+  opusBufferedMs: number,
+  smoothedTargetMs: number
+): { ratio: number; denomMs: number } {
+  const denomMs = Math.max(
+    Number.isFinite(smoothedTargetMs) ? smoothedTargetMs : GCALL_N1_MIN_TARGET_MS_FLOOR,
+    GCALL_N1_MIN_TARGET_MS_FLOOR
+  );
+  const ratio =
+    denomMs > 0 ? opusBufferedMs / denomMs : opusBufferedMs > 0 ? 1 : 0;
+  return { ratio, denomMs };
+}
+
+export function computeN1BufferEnforceTier(
+  ratio: number
+): GcallN1BufferEnforceTier {
+  if (ratio < GCALL_N1_RATIO_DEEP) return 'deep';
+  if (ratio <= GCALL_N1_RATIO_MODERATE) return 'moderate';
+  return 'normal';
+}
+
+/**
+ * Effective scaled burst cap for N===1 tier (upper bound; caller still clamps in loop).
+ */
+export function computeN1TierBurstCap(
+  tier: GcallN1BufferEnforceTier,
+  scaledBurstCap: number
+): number {
+  if (tier === 'deep') return 1;
+  if (tier === 'moderate') return Math.min(3, scaledBurstCap);
+  return scaledBurstCap;
+}

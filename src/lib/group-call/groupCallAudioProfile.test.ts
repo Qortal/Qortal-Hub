@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN,
+  GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE,
   GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2,
   GCALL_RECOVERY_JITTER_START_MIN,
+  GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE,
   GCALL_RECOVERY_JITTER_START_MIN_TIER2,
   getEffectiveJitterTuning,
   getGroupCallAudioTuning,
@@ -29,6 +31,13 @@ describe('getEffectiveJitterTuning', () => {
     const e = getEffectiveJitterTuning(t, 'recovery');
     expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN);
     expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN);
+  });
+
+  it('uses single-remote intermediate floors when recovery and N===1', () => {
+    const t = getGroupCallAudioTuning('low-latency');
+    const e = getEffectiveJitterTuning(t, 'recovery', { activeSourceCount: 1 });
+    expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE);
+    expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE);
   });
 });
 

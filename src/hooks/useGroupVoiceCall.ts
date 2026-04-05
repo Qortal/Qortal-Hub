@@ -168,11 +168,22 @@ import {
   gcallDiagnosticsIngestConsoleArgs,
   gcallDiagnosticsPush,
   GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
+  GCALL_TWO_WAY_JITTER_BASELINE_HINT,
   setGcallDiagnosticsSuppressInfo,
   truncateGcallDiagAddress,
   type GcallDiagExportContext,
 } from '../lib/group-call/gcall-diagnostics';
 import packageJson from '../../package.json';
+import {
+  computeN1BufferEnforceTier,
+  computeN1BufferRatio,
+  computeN1MinStartMs,
+  computeN1TierBurstCap,
+  GCALL_N1_ACCUMULATION_MS,
+  GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS,
+  GCALL_N1_STALL_ESCAPE_MS,
+  type GcallN1BufferEnforceTier,
+} from '../lib/group-call/gcallN1PlayoutGate';
 import {
   GcallPerfCollector,
   readGcallPerfEnabled,
@@ -347,6 +358,8 @@ const ADAPTIVE_MAX_TARGET_MS = 180;
 const ADAPTIVE_SEVERE_MAX_TARGET_MS = 240;
 const ADAPTIVE_JITTER_K = 2.0;
 const ADAPTIVE_ALPHA_UP = 0.4;
+/** Faster smoothed-target rise for single-remote recovery (2-way jitter plan). */
+const ADAPTIVE_ALPHA_UP_SINGLE_REMOTE_RECOVERY = 0.45;
 const ADAPTIVE_ALPHA_DOWN = 0.28;
 /** Stickier downward decay when session network mode is recovery (see playout plan). */
 const ADAPTIVE_ALPHA_DOWN_RECOVERY = 0.18;
@@ -2181,6 +2194,18 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
   const interArrivalSamplesRef = useRef<Map<string, number[]>>(new Map());
   const smoothedPlayoutTargetRef = useRef<Map<string, number>>(new Map());
+  /** `performance.now()` of last Opus push into jitter (N===1 stall escape). */
+  const lastJitterOpusPushPerfRef = useRef<Map<string, number>>(new Map());
+  /** Preroll satisfied once bufferMs >= minStartMs for this source. */
+  const jitterPrerollSatisfiedRef = useRef<Map<string, boolean>>(new Map());
+  /** While `performance.now() < value`, N===1 accumulation caps burst (disabled during preroll). */
+  const jitterAccumulationUntilPerfRef = useRef<Map<string, number>>(new Map());
+  /** Last stall-escape minimal decode time (`performance.now()`). */
+  const lastStallEscapePerfRef = useRef<Map<string, number>>(new Map());
+  const lastBufferEnforceLogAtRef = useRef<Map<string, number>>(new Map());
+  const lastBufferEnforceTierRef = useRef<
+    Map<string, GcallN1BufferEnforceTier | null>
+  >(new Map());
   const lastSentPlayoutTargetRef = useRef<Map<string, number>>(new Map());
   const lastPlayoutTargetPostAtRef = useRef<Map<string, number>>(new Map());
   /** Seq-gap count accumulated during last drain tick per source (feeds loss term). */
@@ -2428,6 +2453,7 @@ export function useGroupVoiceCall(uiActive = false) {
       tickBudgetBreachP95Ms: percentileSample(breaches, 0.95),
       tickBudgetBreachMaxMs: breaches.length > 0 ? Math.max(...breaches) : 0,
       twoWayDecryptVerificationHint: GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
+      twoWayJitterVerificationHint: GCALL_TWO_WAY_JITTER_BASELINE_HINT,
     });
   }, []);
 
@@ -3536,10 +3562,16 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
 
+      const alphaUpForSmooth =
+        activeJitterSourcesRef.current.size === 1 &&
+        adaptiveNetworkMode === 'recovery' &&
+        nextStarvationSev === 'none'
+          ? Math.max(alphaUp, ADAPTIVE_ALPHA_UP_SINGLE_REMOTE_RECOVERY)
+          : alphaUp;
       const smooth = stepSmoothedAdaptiveTargetMs({
         idealTargetMs: ideal,
         previousTargetMs: smoothedPlayoutTargetRef.current.get(addr),
-        alphaUp,
+        alphaUp: alphaUpForSmooth,
         alphaDown,
       });
 
@@ -4811,8 +4843,22 @@ export function useGroupVoiceCall(uiActive = false) {
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
       }
+      const beforeFrames = jb.getBufferedFrames();
       for (const decoded of decodedList) {
         jb.push(decoded.seq, decoded.opusFrame);
+      }
+      const perfNow = performance.now();
+      lastJitterOpusPushPerfRef.current.set(sourceAddr, perfNow);
+      if (
+        beforeFrames === 0 &&
+        jb.getBufferedFrames() > 0 &&
+        activeJitterSourcesRef.current.size <= 1 &&
+        jitterPrerollSatisfiedRef.current.get(sourceAddr)
+      ) {
+        jitterAccumulationUntilPerfRef.current.set(
+          sourceAddr,
+          perfNow + GCALL_N1_ACCUMULATION_MS
+        );
       }
       recordInterArrivalForPlayout(sourceAddr, receivedAt);
       metricsRef.current.recordOpusBufferedMetric(
@@ -7125,6 +7171,7 @@ export function useGroupVoiceCall(uiActive = false) {
             gcallDiagnosticsPush('info', '[GCall] recoveryJitterGeometryApplied', {
               jitterBufferSize: effective.jitterBufferSize,
               jitterStartBufferSize: effective.jitterStartBufferSize,
+              singleRemote: nSnap === 1,
             });
           }
         }
@@ -7318,6 +7365,10 @@ export function useGroupVoiceCall(uiActive = false) {
         addr,
         jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
       );
+      if (jb.getBufferedFrames() === 0) {
+        jitterPrerollSatisfiedRef.current.delete(addr);
+        jitterAccumulationUntilPerfRef.current.delete(addr);
+      }
       if (!jb.hasReadyFrame()) {
         const emptyTicks =
           (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
@@ -7333,7 +7384,126 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!starvationEnabled) {
       for (const addr of addrsOrdered) {
         const jb = jitterMapRef.current.get(addr);
-        if (!jb || !jb.hasReadyFrame()) {
+        const n1SingleRemote = sourceCountForDrain === 1 && isRecovery;
+        const perfWall = performance.now();
+
+        if (!jb) {
+          const emptyTicks =
+            (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
+          emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
+          if (emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+            activeJitterSourcesRef.current.delete(addr);
+          }
+          continue;
+        }
+
+        const opusMsPre = jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS;
+        const smoothedTarget =
+          smoothedPlayoutTargetRef.current.get(addr) ?? ADAPTIVE_BASE_TARGET_MS;
+        const minStartMs = n1SingleRemote
+          ? computeN1MinStartMs(smoothedTarget)
+          : 0;
+        if (n1SingleRemote && opusMsPre >= minStartMs) {
+          jitterPrerollSatisfiedRef.current.set(addr, true);
+        }
+        const prerollActive =
+          n1SingleRemote &&
+          jitterPrerollSatisfiedRef.current.get(addr) !== true;
+
+        const { ratio: n1Ratio, denomMs: n1DenomMs } = computeN1BufferRatio(
+          opusMsPre,
+          smoothedTarget
+        );
+        const n1Tier = n1SingleRemote
+          ? computeN1BufferEnforceTier(n1Ratio)
+          : ('normal' as const);
+        let n1ScaledCap = n1SingleRemote
+          ? computeN1TierBurstCap(n1Tier, scaledBurstCap)
+          : scaledBurstCap;
+
+        if (n1SingleRemote && !prerollActive) {
+          const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
+          if (perfWall < accUntil) {
+            n1ScaledCap = Math.min(n1ScaledCap, 1);
+          }
+        }
+
+        if (n1SingleRemote) {
+          const lastTier = lastBufferEnforceTierRef.current.get(addr) ?? null;
+          const nowLog = Date.now();
+          const lastLog = lastBufferEnforceLogAtRef.current.get(addr) ?? 0;
+          const tierChanged = lastTier !== n1Tier;
+          const logDue =
+            tierChanged ||
+            nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS;
+          if (logDue && (n1Tier !== 'normal' || prerollActive)) {
+            lastBufferEnforceTierRef.current.set(addr, n1Tier);
+            lastBufferEnforceLogAtRef.current.set(addr, nowLog);
+            gcallDiagnosticsPush('info', '[GCall] bufferEnforceActive', {
+              sourceAddr: truncateGcallDiagAddress(addr),
+              bufferMs: Math.round(opusMsPre),
+              targetMs: Math.round(smoothedTarget),
+              denomMs: Math.round(n1DenomMs),
+              ratio: Math.round(n1Ratio * 1000) / 1000,
+              tier: n1Tier,
+              prerollActive,
+            });
+          } else if (n1Tier === 'normal' && !prerollActive) {
+            lastBufferEnforceTierRef.current.set(addr, n1Tier);
+          }
+        }
+
+        const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
+        const lastEsc = lastStallEscapePerfRef.current.get(addr) ?? 0;
+        const stallEscapeAllowed =
+          n1SingleRemote &&
+          prerollActive &&
+          opusMsPre < minStartMs &&
+          jb.hasReadyFrame() &&
+          lastPush > 0 &&
+          perfWall - lastPush > GCALL_N1_STALL_ESCAPE_MS &&
+          perfWall - lastEsc >= GCALL_N1_STALL_ESCAPE_MS;
+
+        if (
+          n1SingleRemote &&
+          prerollActive &&
+          opusMsPre < minStartMs &&
+          !stallEscapeAllowed
+        ) {
+          if (!jb.hasReadyFrame()) {
+            if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
+              metricsRef.current.recordJitterUnderrun(1, addr);
+              const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
+              jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
+              metricsRef.current.recordOpusBufferedMetric(
+                addr,
+                jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+              );
+            }
+            const emptyTicks =
+              (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
+            emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
+            if (emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+              activeJitterSourcesRef.current.delete(addr);
+            }
+          } else {
+            metricsRef.current.recordOpusBufferedMetric(
+              addr,
+              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+            );
+            emptyJitterDrainTicksRef.current.set(addr, 0);
+          }
+          continue;
+        }
+
+        if (stallEscapeAllowed) {
+          lastStallEscapePerfRef.current.set(addr, perfWall);
+          const missedEsc = decodeOneJitterFrame(addr, jb) ?? 0;
+          runUnderrunAndMetricsTail(addr, jb, missedEsc);
+          continue;
+        }
+
+        if (!jb.hasReadyFrame()) {
           if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
             metricsRef.current.recordJitterUnderrun(1, addr);
             const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
@@ -7361,16 +7531,16 @@ export function useGroupVoiceCall(uiActive = false) {
             : 0;
         const maxBurstPerSourceThisTick = usePhaseDDrain
           ? perSourceCap + boostSlot
-          : scaledBurstCap;
+          : n1ScaledCap;
         let missedThisTick = 0;
         let burst = 0;
         while (
-          burst < scaledBurstCap &&
+          burst < n1ScaledCap &&
           (!usePhaseDDrain || globalDecodesLeft > 0)
         ) {
           const bufferedFrames = jb.getBufferedFrames();
           const effectiveBurstMax = Math.min(
-            scaledBurstCap,
+            n1ScaledCap,
             Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
           );
           const capForThisSource = usePhaseDDrain
@@ -9735,6 +9905,12 @@ export function useGroupVoiceCall(uiActive = false) {
       lastJitterTickTotalMsRef.current = 0;
       activeJitterSourcesRef.current.clear();
       emptyJitterDrainTicksRef.current.clear();
+      lastJitterOpusPushPerfRef.current.clear();
+      jitterPrerollSatisfiedRef.current.clear();
+      jitterAccumulationUntilPerfRef.current.clear();
+      lastStallEscapePerfRef.current.clear();
+      lastBufferEnforceLogAtRef.current.clear();
+      lastBufferEnforceTierRef.current.clear();
       gcallStarvationTicksSinceProtectedRef.current.clear();
       gcallStarvationOpusHistRef.current.clear();
       gcallStarvationProtectedExitStreakRef.current.clear();

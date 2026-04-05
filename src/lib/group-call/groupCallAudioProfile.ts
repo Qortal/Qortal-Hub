@@ -59,7 +59,9 @@ export const GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES = Math.max(
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN = 10;
 /** Recovery mode: minimum frames before first drain when unprimed — Phase C upstream. */
 export const GCALL_RECOVERY_JITTER_START_MIN = 9;
-// Single-remote (N===1) recovery jitter floor bump: deferred until 2-way decrypt/main-thread work is validated; not tier-2 duplicate without product sign-off.
+/** Single-remote recovery (N===1, non–tier-2): between Phase C and tier-2 — 2-way playout plan. */
+export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE = 11;
+export const GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE = 10;
 /** Phase D tier-2: recovery + multi-source (N>=2); default on unless `readGcallJitterTier2OptOut()`. */
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2 = 12;
 export const GCALL_RECOVERY_JITTER_START_MIN_TIER2 = 10;
@@ -142,6 +144,18 @@ export function getEffectiveJitterTuning(
       jitterStartBufferSize: Math.max(
         tuning.jitterStartBufferSize,
         GCALL_RECOVERY_JITTER_START_MIN_TIER2
+      ),
+    };
+  }
+  if (n === 1) {
+    return {
+      jitterBufferSize: Math.max(
+        tuning.jitterBufferSize,
+        GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE
+      ),
+      jitterStartBufferSize: Math.max(
+        tuning.jitterStartBufferSize,
+        GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE
       ),
     };
   }
