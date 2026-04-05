@@ -110,6 +110,7 @@ import {
   createWorstIsolationHysteresisState,
   computeMicroWidenExtraMsV1,
   effectivePlayoutMaxTargetMs,
+  GCALL_GLOBAL_PLAYOUT_CAP_MS,
   GCALL_TOPOLOGY_SETTLE_MS,
   MICRO_WIDEN_CEILING_LIFT_MS,
   MICRO_WIDEN_CEILING_TTL_MS,
@@ -308,7 +309,9 @@ const JITTER_START_BUFFER_SIZE = 4;
 const JITTER_EMPTY_HYSTERESIS_TICKS = 3;
 
 /** Max Opus frames decoded per remote source per jitter scheduler tick (burst catch-up). */
-const JITTER_DECODE_BURST_MAX = 5;
+const JITTER_DECODE_BURST_MAX_DEFAULT = 5;
+/** Extra decode frames per drain tick when session is in recovery (Phase C upstream assist). */
+const JITTER_DECODE_BURST_MAX_RECOVERY = 6;
 
 /** Adaptive playout target (main thread → group-playout-processor). */
 const ADAPTIVE_BASE_TARGET_MS = 100;
@@ -2110,6 +2113,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const strongCStreakRef = useRef<Map<string, number>>(new Map());
   const decayGuardCalmStartRef = useRef<Map<string, number>>(new Map());
   const decayGuardDiagLoggedRef = useRef<Set<string>>(new Set());
+  const lastPanicZoneDiagAtRef = useRef<Map<string, number>>(new Map());
   /** Wall timestamps of decrypt batches per source (for forwarder suppression diagnostics). */
   const forwardPacketRecvTimestampsRef = useRef<Map<string, number[]>>(
     new Map()
@@ -2999,7 +3003,7 @@ export function useGroupVoiceCall(uiActive = false) {
       jitterBufferSize: tuning.jitterBufferSize,
       jitterStartBufferSize: tuning.jitterStartBufferSize,
       jitterEmptyHysteresisTicks: JITTER_EMPTY_HYSTERESIS_TICKS,
-      jitterDecodeBurstMax: JITTER_DECODE_BURST_MAX,
+      jitterDecodeBurstMax: JITTER_DECODE_BURST_MAX_DEFAULT,
       adaptive: {
         baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
         minTargetMs: ADAPTIVE_MIN_TARGET_MS,
@@ -4203,6 +4207,7 @@ export function useGroupVoiceCall(uiActive = false) {
       strongCStreakRef.current.delete(address);
       decayGuardCalmStartRef.current.delete(address);
       decayGuardDiagLoggedRef.current.delete(address);
+      lastPanicZoneDiagAtRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
       playbackWorkletSetupPromisesRef.current.delete(address);
       wasmFecJobQueueRef.current.delete(address);
@@ -6533,7 +6538,10 @@ export function useGroupVoiceCall(uiActive = false) {
           RECENT_SPEAKER_WINDOW_MS
         );
         const playNode = new AudioWorkletNode(ctx, 'group-playout-processor', {
-          processorOptions: { sourceAddr },
+          processorOptions: {
+            sourceAddr,
+            maxPlayoutTargetMs: GCALL_GLOBAL_PLAYOUT_CAP_MS,
+          },
         } as AudioWorkletNodeOptions);
         const speakerGain = ctx.createGain();
         speakerGain.gain.value = computePerSpeakerGainTarget({
@@ -6553,6 +6561,8 @@ export function useGroupVoiceCall(uiActive = false) {
             sourceAddr?: string;
             bufferedMs?: number;
             targetPlayoutMs?: number;
+            rate?: number;
+            panicZoneEntered?: boolean;
             outsideBand?: boolean;
             outsideBandUnder?: boolean;
             outsideBandOver?: boolean;
@@ -6565,6 +6575,18 @@ export function useGroupVoiceCall(uiActive = false) {
           if (typeof d.bufferedMs !== 'number') return;
           if (!d.playoutStarted) return;
           if (!isSourcePlayoutActive(sourceAddr)) return;
+          const wallNow = Date.now();
+          if (d.panicZoneEntered) {
+            const lastP = lastPanicZoneDiagAtRef.current.get(sourceAddr) ?? 0;
+            if (wallNow - lastP >= 5_000) {
+              lastPanicZoneDiagAtRef.current.set(sourceAddr, wallNow);
+              gcallDiagnosticsPush('info', '[GCall] panicZoneActivated', {
+                bufferMs: d.bufferedMs,
+                targetPlayoutMs: d.targetPlayoutMs,
+                sourceAddr: truncateGcallDiagAddress(sourceAddr),
+              });
+            }
+          }
           metricsRef.current.recordPlayoutMetricTick(
             d.bufferedMs,
             !!d.outsideBand,
@@ -6575,6 +6597,10 @@ export function useGroupVoiceCall(uiActive = false) {
               deltaMs:
                 typeof d.deltaMs === 'number' && Number.isFinite(d.deltaMs)
                   ? d.deltaMs
+                  : undefined,
+              playoutRate:
+                typeof d.rate === 'number' && Number.isFinite(d.rate)
+                  ? d.rate
                   : undefined,
             }
           );
@@ -6905,6 +6931,10 @@ export function useGroupVoiceCall(uiActive = false) {
       prefetchMs = performance.now() - prefetchStartedAt;
     }
     const drainStartedAt = performance.now();
+    const jitterDecodeBurstMax =
+      metricsRef.current.getSnapshot().adaptiveNetworkMode === 'recovery'
+        ? JITTER_DECODE_BURST_MAX_RECOVERY
+        : JITTER_DECODE_BURST_MAX_DEFAULT;
     for (const addr of [...activeJitterSourcesRef.current]) {
       const jb = jitterMapRef.current.get(addr);
       if (!jb || !jb.hasReadyFrame()) {
@@ -6926,7 +6956,7 @@ export function useGroupVoiceCall(uiActive = false) {
       emptyJitterDrainTicksRef.current.set(addr, 0);
       let missedThisTick = 0;
       let burst = 0;
-      while (burst < JITTER_DECODE_BURST_MAX && jb.hasReadyFrame()) {
+      while (burst < jitterDecodeBurstMax && jb.hasReadyFrame()) {
         const frame = jb.pop();
         if (!frame) break;
         missedThisTick += jb.consumePendingMissedFrames();

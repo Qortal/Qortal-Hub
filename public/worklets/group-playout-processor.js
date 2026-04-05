@@ -1,46 +1,67 @@
 /**
  * group-playout-processor — adaptive PCM playout for group voice (per remote speaker).
  *
- * PCM-only bufferedMs; fractional read with clamp + deadzone + EMA-smoothed rate.
- * Startup: silence until bufferedMs >= max(INITIAL_GATE_MS, target - START_GATE_TARGET_MARGIN_MS)
- * so playout does not begin far below the active adaptive target.
- * Latency cap: every audio quantum (including before playout starts), if buffered PCM exceeds
- * PCM_LATENCY_HARD_MS, discard oldest samples until <= max(PCM_LATENCY_RELEASE_MS, target+40)
- * so one bursty peer cannot accumulate 500ms+ queues (interactive voice).
- * When |bufferedMs - target| is large, tiered over-target rates (80ms / 150ms steps) before EMA.
- * Concealment: reuse short tail with gentler fade.
- * Posts { type:'gcallPlayoutMetrics', ... } periodically for main-thread metrics
- * (outsideBand, outsideBandUnder, outsideBandOver, deltaMs).
+ * PCM-only bufferedMs; fractional read with clamp + EMA-smoothed rate.
+ * Under-target: tiered slowdown (delta-based) + optional panic (buffer hysteresis + dwell cap).
+ * Startup: silence until bufferedMs >= max(INITIAL_GATE_MS, target - START_GATE_TARGET_MARGIN_MS).
+ * Latency cap: shed when buffered PCM exceeds PCM_LATENCY_HARD_MS.
+ * maxPlayoutTargetMs in processorOptions must stay aligned with GCALL_GLOBAL_PLAYOUT_CAP_MS on main.
  */
 const RING_CAPACITY = 48000;
 const INITIAL_GATE_MS = 100;
-/** Start playout when buffered >= target minus this margin (scheduling / target-post jitter). */
 const START_GATE_TARGET_MARGIN_MS = 20;
 const DEFAULT_TARGET_MS = 100;
 const ERROR_CLAMP_MS = 80;
 const DEADZONE_MS = 6;
+/** Minimum playback rate (over-target catch-up); under-target/panic may go lower. */
 const RATE_MIN = 0.98;
 const RATE_MAX = 1.015;
-const EMA_ALPHA = 0.06;
+const EMA_ALPHA_SLOW = 0.06;
+const EMA_ALPHA_FAST = 0.2;
 const OUTSIDE_BAND_MS = 35;
-/** Emergency rate path when |delta| exceeds band + this (aligned with KPI band). */
 const EMERGENCY_BAND_EXTRA_MS = 10;
-const METRICS_QUANTA = 47; // ~100ms at 48kHz/128
-/** If buffered PCM exceeds this, shed oldest down to release level (live voice latency bound). */
+const METRICS_QUANTA = 47;
 const PCM_LATENCY_HARD_MS = 320;
-/** Floor for post-shed target ms; release uses max(this, targetPlayoutMs + margin). */
 const PCM_LATENCY_RELEASE_MS = 240;
 const TARGET_RELEASE_MARGIN_MS = 40;
-/** Tiered catch-up when buffer is far over adaptive target (before EMA). */
 const OVER_TARGET_TIER_STRONG_MS = 150;
 const OVER_TARGET_TIER_MID_MS = 80;
-const CONCEALMENT_TAIL_SAMPLES = 240; // 5ms @ 48kHz
+const CONCEALMENT_TAIL_SAMPLES = 240;
 const CONCEALMENT_FADE_SAMPLES = 240;
+
+/** Align with main-thread gcallPlayoutPolicy global cap (max severe across profiles). */
+const DEFAULT_MAX_PLAYOUT_TARGET_MS = 280;
+
+/** Under-target tiers (deltaMs = bufferedMs - target). */
+const UNDER_TIER_DEEP_MS = -120;
+const UNDER_TIER_MID_MS = -80;
+const UNDER_TIER_SHALLOW_MS = -45;
+const UNDER_RATE_DEEP = 0.94;
+const UNDER_RATE_MID = 0.96;
+const UNDER_RATE_SHALLOW = 0.98;
+
+/** Panic: absolute PCM depth (hysteresis + dwell). */
+const PANIC_ENTER_MS = 60;
+const PANIC_EXIT_MS = 78;
+const PANIC_RATE = 0.915;
+const PANIC_DWELL_MS = 2500;
+const PANIC_RELAX_BLEND_MS = 500;
 
 class GroupPlayoutProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
     this._sourceAddr = options.processorOptions?.sourceAddr ?? '';
+    this._maxPlayoutTargetMs =
+      typeof options.processorOptions?.maxPlayoutTargetMs === 'number' &&
+      Number.isFinite(options.processorOptions.maxPlayoutTargetMs)
+        ? Math.max(
+            80,
+            Math.min(
+              DEFAULT_MAX_PLAYOUT_TARGET_MS,
+              options.processorOptions.maxPlayoutTargetMs
+            )
+          )
+        : DEFAULT_MAX_PLAYOUT_TARGET_MS;
 
     this._ring = new Float32Array(RING_CAPACITY);
     this._writePos = 0;
@@ -51,6 +72,10 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     this._smoothedRate = 1;
     this._targetPlayoutMs = DEFAULT_TARGET_MS;
     this._playoutStarted = false;
+
+    this._inPanic = false;
+    this._panicSamplesInPanic = 0;
+    this._panicZoneEnteredPending = false;
 
     this._lastTail = new Float32Array(CONCEALMENT_TAIL_SAMPLES);
     this._lastTailLen = 0;
@@ -67,7 +92,10 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
         return;
       }
       if (d?.type === 'target' && typeof d.targetPlayoutMs === 'number') {
-        this._targetPlayoutMs = Math.max(40, Math.min(240, d.targetPlayoutMs));
+        this._targetPlayoutMs = Math.max(
+          40,
+          Math.min(this._maxPlayoutTargetMs, d.targetPlayoutMs)
+        );
       }
     };
   }
@@ -131,10 +159,6 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     }
   }
 
-  /**
-   * Drop oldest PCM if queue exceeds hard cap; target release tracks adaptive target.
-   * Runs every quantum, including before startup gate, to avoid pre-roll explosion.
-   */
   _shedExcessPcmLatency(sampleRateHz) {
     const bufferedMs = (this._available / sampleRateHz) * 1000;
     if (bufferedMs <= PCM_LATENCY_HARD_MS) return;
@@ -148,6 +172,77 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       this._advanceReadInt(toDrop);
       this._readFrac = 0;
     }
+  }
+
+  /** Tier rate from delta only (under-target path). */
+  _underTierRate(deltaMs) {
+    if (deltaMs < UNDER_TIER_DEEP_MS) return UNDER_RATE_DEEP;
+    if (deltaMs < UNDER_TIER_MID_MS) return UNDER_RATE_MID;
+    if (deltaMs < UNDER_TIER_SHALLOW_MS) return UNDER_RATE_SHALLOW;
+    return 1;
+  }
+
+  _computeRawTargetRate(bufferedMs, deltaMs, quantum, sampleRateHz) {
+    const emergencyThresh = OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS;
+
+    if (this._playoutStarted) {
+      if (!this._inPanic && bufferedMs < PANIC_ENTER_MS) {
+        this._inPanic = true;
+        this._panicSamplesInPanic = 0;
+        this._panicZoneEnteredPending = true;
+      } else if (this._inPanic && bufferedMs > PANIC_EXIT_MS) {
+        this._inPanic = false;
+        this._panicSamplesInPanic = 0;
+      }
+      if (this._inPanic) {
+        this._panicSamplesInPanic += quantum;
+      }
+    }
+
+    const panicMs =
+      sampleRateHz > 0
+        ? (this._panicSamplesInPanic / sampleRateHz) * 1000
+        : 0;
+    const tierUnder = this._underTierRate(deltaMs);
+
+    if (this._inPanic && this._playoutStarted) {
+      if (panicMs < PANIC_DWELL_MS) {
+        return { targetRate: PANIC_RATE, inPanic: true, panicZoneEntered: false };
+      }
+      const t = Math.min(
+        1,
+        Math.max(0, (panicMs - PANIC_DWELL_MS) / PANIC_RELAX_BLEND_MS)
+      );
+      const blended = PANIC_RATE * (1 - t) + tierUnder * t;
+      return { targetRate: blended, inPanic: true, panicZoneEntered: false };
+    }
+
+    if (deltaMs < UNDER_TIER_DEEP_MS) {
+      return { targetRate: UNDER_RATE_DEEP, inPanic: false, panicZoneEntered: false };
+    }
+    if (deltaMs < UNDER_TIER_MID_MS) {
+      return { targetRate: UNDER_RATE_MID, inPanic: false, panicZoneEntered: false };
+    }
+    if (deltaMs < UNDER_TIER_SHALLOW_MS) {
+      return { targetRate: UNDER_RATE_SHALLOW, inPanic: false, panicZoneEntered: false };
+    }
+    if (deltaMs > OVER_TARGET_TIER_STRONG_MS) {
+      return { targetRate: RATE_MAX, inPanic: false, panicZoneEntered: false };
+    }
+    if (deltaMs > OVER_TARGET_TIER_MID_MS) {
+      return { targetRate: 1.01, inPanic: false, panicZoneEntered: false };
+    }
+    if (deltaMs > emergencyThresh) {
+      return { targetRate: 1.008, inPanic: false, panicZoneEntered: false };
+    }
+    let errorMs = Math.max(
+      -ERROR_CLAMP_MS,
+      Math.min(ERROR_CLAMP_MS, deltaMs)
+    );
+    if (Math.abs(errorMs) < DEADZONE_MS) errorMs = 0;
+    const k = 0.000125;
+    const tr = 1 + Math.max(-0.01, Math.min(0.01, errorMs * k));
+    return { targetRate: tr, inPanic: false, panicZoneEntered: false };
   }
 
   process(_inputs, outputs) {
@@ -170,40 +265,34 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       if (bufferedMs < startGateMs) {
         output.fill(0);
         this._concealCursor = 0;
-        this._maybePostMetrics(bufferedMs, quantum, false);
+        this._maybePostMetrics(bufferedMs, quantum, false, 1, false, false);
         return true;
       }
       this._playoutStarted = true;
     }
 
     const deltaMs = bufferedMs - this._targetPlayoutMs;
-    const emergencyThresh = OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS;
-    let targetRate;
-    if (deltaMs < -80) {
-      targetRate = 0.988;
-    } else if (deltaMs < -emergencyThresh) {
-      targetRate = 0.99;
-    } else if (deltaMs > OVER_TARGET_TIER_STRONG_MS) {
-      targetRate = RATE_MAX;
-    } else if (deltaMs > OVER_TARGET_TIER_MID_MS) {
-      targetRate = 1.01;
-    } else if (deltaMs > emergencyThresh) {
-      targetRate = 1.008;
-    } else {
-      let errorMs = Math.max(
-        -ERROR_CLAMP_MS,
-        Math.min(ERROR_CLAMP_MS, deltaMs)
-      );
-      if (Math.abs(errorMs) < DEADZONE_MS) errorMs = 0;
-      const k = 0.000125;
-      targetRate = 1 + Math.max(-0.01, Math.min(0.01, errorMs * k));
-    }
-    targetRate = Math.max(RATE_MIN, Math.min(RATE_MAX, targetRate));
+    const raw = this._computeRawTargetRate(
+      bufferedMs,
+      deltaMs,
+      quantum,
+      sampleRateHz
+    );
+    let targetRate = raw.targetRate;
+    targetRate = Math.min(RATE_MAX, targetRate);
+    const floorR = raw.inPanic ? 0.9 : RATE_MIN;
+    targetRate = Math.max(floorR, targetRate);
 
-    const alpha =
-      deltaMs < -80 ? 0.12 : deltaMs < -emergencyThresh ? 0.08 : EMA_ALPHA;
+    const underStress =
+      raw.inPanic ||
+      deltaMs < UNDER_TIER_SHALLOW_MS ||
+      deltaMs > OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS;
+    const alpha = underStress ? EMA_ALPHA_FAST : EMA_ALPHA_SLOW;
     this._smoothedRate += alpha * (targetRate - this._smoothedRate);
-    this._smoothedRate = Math.max(RATE_MIN, Math.min(RATE_MAX, this._smoothedRate));
+    this._smoothedRate = Math.max(
+      raw.inPanic ? 0.9 : RATE_MIN,
+      Math.min(RATE_MAX, this._smoothedRate)
+    );
 
     const rate = this._smoothedRate;
 
@@ -224,7 +313,9 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     this._maybePostMetrics(
       (this._available / sampleRateHz) * 1000,
       quantum,
-      this._concealedThisBlock
+      this._concealedThisBlock,
+      rate,
+      raw.inPanic
     );
     return true;
   }
@@ -241,7 +332,13 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     return sample * g * g;
   }
 
-  _maybePostMetrics(bufferedMs, quantum, concealmentUsed) {
+  _maybePostMetrics(
+    bufferedMs,
+    quantum,
+    concealmentUsed,
+    smoothedRate,
+    panicActive
+  ) {
     this._metricsQuantumCount++;
     if (this._metricsQuantumCount < METRICS_QUANTA) return;
     this._metricsQuantumCount = 0;
@@ -251,12 +348,16 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     const outsideBandOver =
       this._playoutStarted && deltaMs > OUTSIDE_BAND_MS;
     const outside = outsideBandUnder || outsideBandOver;
+    const panicZoneEntered = this._panicZoneEnteredPending;
+    this._panicZoneEnteredPending = false;
     this.port.postMessage({
       type: 'gcallPlayoutMetrics',
       sourceAddr: this._sourceAddr,
       bufferedMs,
       targetPlayoutMs: this._targetPlayoutMs,
-      rate: this._smoothedRate,
+      rate: smoothedRate,
+      panicActive: !!panicActive,
+      panicZoneEntered: !!panicZoneEntered,
       outsideBand: outside,
       outsideBandUnder,
       outsideBandOver,

@@ -362,6 +362,8 @@ export interface PlayoutMetricTickOpts {
   outsideUnder?: boolean;
   outsideOver?: boolean;
   deltaMs?: number;
+  /** Smoothed playback rate from group-playout-processor (EMA). */
+  playoutRate?: number;
 }
 
 /** Renderer-side packet drop attribution (see `recordPacketDroppedWithReason`). */
@@ -408,6 +410,12 @@ export interface GroupCallMetricsSnapshot {
   playoutOverTargetFraction: number;
   /** Mean (bufferedMs - targetMs) over ticks that reported deltaMs. */
   avgPlayoutDeltaMs: number;
+  /** Rolling mean smoothed playout rate (1 = real-time). */
+  avgPlayoutRate: number;
+  /** Fraction of playout metric ticks with rate &lt; 1.0. */
+  playoutRateFractionBelow1: number;
+  /** Fraction of playout metric ticks with rate &lt; 0.97. */
+  playoutRateFractionBelow097: number;
   lastUpdatedAt: number;
   /** Present-tense: DataChannels needed for this role are open (set in useGroupVoiceCall flush). */
   dcTransportReady?: boolean;
@@ -601,6 +609,12 @@ export interface GroupCallWindowMetrics {
   adaptiveTargetMedianMs: number;
   adaptiveTargetP95Ms: number;
   adaptiveTargetMaxMs: number;
+  /** Mean smoothed playout rate over the window (ticks with rate samples). */
+  avgPlayoutRate: number;
+  /** Fraction of playout ticks with rate &lt; 1.0. */
+  playoutRateFractionBelow1: number;
+  /** Fraction of playout ticks with rate &lt; 0.97. */
+  playoutRateFractionBelow097: number;
   worstSourceAddr: string | null;
   worstAdaptiveTargetMs: number;
   sources: GroupCallSourceWindowMetrics[];
@@ -1158,6 +1172,9 @@ export class GroupCallPerformanceTracker {
     playoutUnderTargetFraction: 0,
     playoutOverTargetFraction: 0,
     avgPlayoutDeltaMs: 0,
+    avgPlayoutRate: 1,
+    playoutRateFractionBelow1: 0,
+    playoutRateFractionBelow097: 0,
     lastUpdatedAt: 0,
     pcConnectedTransitions: 0,
     pcDisconnectedTransitions: 0,
@@ -1277,6 +1294,14 @@ export class GroupCallPerformanceTracker {
   private windowPlayoutDeltaMsSamples = 0;
   private windowPlayoutBufferedMsSum = 0;
   private windowPlayoutBufferedMsSamples = 0;
+  private playoutRateSum = 0;
+  private playoutRateSamples = 0;
+  private playoutRateTicksBelow1 = 0;
+  private playoutRateTicksBelow097 = 0;
+  private windowPlayoutRateSum = 0;
+  private windowPlayoutRateSamples = 0;
+  private windowPlayoutRateTicksBelow1 = 0;
+  private windowPlayoutRateTicksBelow097 = 0;
   private windowOpusBufferedMsSum = 0;
   private windowOpusBufferedMsSamples = 0;
   private windowOpusBufferedMsMax = 0;
@@ -1332,6 +1357,10 @@ export class GroupCallPerformanceTracker {
     this.windowPlayoutDeltaMsSamples = 0;
     this.windowPlayoutBufferedMsSum = 0;
     this.windowPlayoutBufferedMsSamples = 0;
+    this.windowPlayoutRateSum = 0;
+    this.windowPlayoutRateSamples = 0;
+    this.windowPlayoutRateTicksBelow1 = 0;
+    this.windowPlayoutRateTicksBelow097 = 0;
     this.windowOpusBufferedMsSum = 0;
     this.windowOpusBufferedMsSamples = 0;
     this.windowOpusBufferedMsMax = 0;
@@ -1914,6 +1943,24 @@ export class GroupCallPerformanceTracker {
     this.snapshot.avgPlayoutDeltaMs = roundMetric(
       this.playoutDeltaMsSum / Math.max(1, this.playoutDeltaMsSamples)
     );
+    if (
+      typeof opts?.playoutRate === 'number' &&
+      Number.isFinite(opts.playoutRate)
+    ) {
+      this.playoutRateSum += opts.playoutRate;
+      this.playoutRateSamples++;
+      if (opts.playoutRate < 1) this.playoutRateTicksBelow1++;
+      if (opts.playoutRate < 0.97) this.playoutRateTicksBelow097++;
+      this.snapshot.avgPlayoutRate = roundMetric(
+        this.playoutRateSum / Math.max(1, this.playoutRateSamples)
+      );
+      this.snapshot.playoutRateFractionBelow1 = roundMetric(
+        this.playoutRateTicksBelow1 / Math.max(1, this.playoutRateSamples)
+      );
+      this.snapshot.playoutRateFractionBelow097 = roundMetric(
+        this.playoutRateTicksBelow097 / Math.max(1, this.playoutRateSamples)
+      );
+    }
     this.windowPlayoutMetricTicks++;
     if (outsideTargetBand) this.windowPlayoutOutsideTicks++;
     if (opts?.outsideUnder) this.windowPlayoutUnderTicks++;
@@ -1924,6 +1971,15 @@ export class GroupCallPerformanceTracker {
     }
     this.windowPlayoutBufferedMsSum += bufferedMs;
     this.windowPlayoutBufferedMsSamples++;
+    if (
+      typeof opts?.playoutRate === 'number' &&
+      Number.isFinite(opts.playoutRate)
+    ) {
+      this.windowPlayoutRateSum += opts.playoutRate;
+      this.windowPlayoutRateSamples++;
+      if (opts.playoutRate < 1) this.windowPlayoutRateTicksBelow1++;
+      if (opts.playoutRate < 0.97) this.windowPlayoutRateTicksBelow097++;
+    }
     if (sourceAddr) {
       const source = this.getSourceWindowAccumulator(sourceAddr);
       source.playoutTicks++;
@@ -2062,6 +2118,9 @@ export class GroupCallPerformanceTracker {
       playoutUnderTargetFraction: 0,
       playoutOverTargetFraction: 0,
       avgPlayoutDeltaMs: 0,
+      avgPlayoutRate: 1,
+      playoutRateFractionBelow1: 0,
+      playoutRateFractionBelow097: 0,
       lastUpdatedAt: now,
       pcConnectedTransitions: 0,
       pcDisconnectedTransitions: 0,
@@ -2155,6 +2214,10 @@ export class GroupCallPerformanceTracker {
     this.playoutDeltaMsSamples = 0;
     this.playoutBufferedMsSum = 0;
     this.playoutBufferedMsSamples = 0;
+    this.playoutRateSum = 0;
+    this.playoutRateSamples = 0;
+    this.playoutRateTicksBelow1 = 0;
+    this.playoutRateTicksBelow097 = 0;
     this.recoverySamples = 0;
     this.recoveryTotalMs = 0;
     this.mixerReductionSamples = 0;
@@ -2332,6 +2395,21 @@ export class GroupCallPerformanceTracker {
       avgPlayoutDeltaMs: roundMetric(
         this.windowPlayoutDeltaMsSum /
           Math.max(1, this.windowPlayoutDeltaMsSamples)
+      ),
+      avgPlayoutRate: roundMetric(
+        this.windowPlayoutRateSamples > 0
+          ? this.windowPlayoutRateSum / this.windowPlayoutRateSamples
+          : 1
+      ),
+      playoutRateFractionBelow1: roundMetric(
+        this.windowPlayoutRateSamples > 0
+          ? this.windowPlayoutRateTicksBelow1 / this.windowPlayoutRateSamples
+          : 0
+      ),
+      playoutRateFractionBelow097: roundMetric(
+        this.windowPlayoutRateSamples > 0
+          ? this.windowPlayoutRateTicksBelow097 / this.windowPlayoutRateSamples
+          : 0
       ),
       avgOpusBufferedMs: roundMetric(
         this.windowOpusBufferedMsSum /
