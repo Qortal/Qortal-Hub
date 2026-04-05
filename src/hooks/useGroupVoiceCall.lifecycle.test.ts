@@ -991,6 +991,35 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     });
   });
 
+  it('keeps incumbent root on same-epoch conflict when lastSeen deltas are within sticky window', () => {
+    const base = {
+      topologyEpoch: 8,
+      standbyForwarder: 'standby',
+      clusters: [],
+      timestamp: 100,
+    };
+    expect(
+      chooseSameEpochTopologyWinner(
+        { ...base, rootForwarder: 'alpha', lastSeen: 1_000 },
+        { ...base, rootForwarder: 'beta', lastSeen: 1_080 },
+        'gcall-qortal-812'
+      )
+    ).toEqual({
+      acceptIncoming: false,
+      reason: 'lastSeen-root-conflict-sticky',
+    });
+    expect(
+      chooseSameEpochTopologyWinner(
+        { ...base, rootForwarder: 'alpha', lastSeen: 1_000 },
+        { ...base, rootForwarder: 'beta', lastSeen: 1_200 },
+        'gcall-qortal-812'
+      )
+    ).toEqual({
+      acceptIncoming: true,
+      reason: 'lastSeen-root-conflict',
+    });
+  });
+
   it('still refreshes same-root duplicate heartbeats by lastSeen', () => {
     const current: GroupTopology = {
       topologyEpoch: 8,

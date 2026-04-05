@@ -32,6 +32,11 @@ export interface GcallDiagExportPayload {
   liveMetricsSnapshot: unknown;
   /** Last closed window from manual capture during export (may be empty if none). */
   exportWindowMetrics: unknown;
+  /**
+   * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
+   * Present when group-call perf is enabled (default on).
+   */
+  gcallPerfSnapshot?: unknown;
   events: GcallDiagEvent[];
   webrtcStats?: Record<string, unknown>;
 }
@@ -185,6 +190,7 @@ export function buildGcallDiagnosticsExportJson(params: {
   context: GcallDiagExportContext;
   liveMetricsSnapshot: unknown;
   exportWindowMetrics: unknown;
+  gcallPerfSnapshot?: unknown;
   webrtcStats?: Record<string, unknown>;
 }): string {
   const payload: GcallDiagExportPayload = {
@@ -193,6 +199,10 @@ export function buildGcallDiagnosticsExportJson(params: {
     context: { ...params.context },
     liveMetricsSnapshot: redactDeep(params.liveMetricsSnapshot),
     exportWindowMetrics: redactDeep(params.exportWindowMetrics),
+    gcallPerfSnapshot:
+      params.gcallPerfSnapshot !== undefined
+        ? redactDeep(params.gcallPerfSnapshot)
+        : undefined,
     events: events.map((e) => ({
       ...e,
       payload: redactDeep(e.payload),

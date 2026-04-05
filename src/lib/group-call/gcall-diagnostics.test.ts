@@ -50,12 +50,15 @@ describe('gcall-diagnostics', () => {
       },
       liveMetricsSnapshot: { packetsReceived: 1 },
       exportWindowMetrics: { durationMs: 1000 },
+      gcallPerfSnapshot: { series: { tickTotalMs: { count: 1 } } },
     });
     const parsed = JSON.parse(json) as {
       schemaVersion: number;
+      gcallPerfSnapshot?: { series: { tickTotalMs: { count: number } } };
       events: { payload: { sourceAddr: string } }[];
     };
     expect(parsed.schemaVersion).toBe(1);
+    expect(parsed.gcallPerfSnapshot?.series?.tickTotalMs?.count).toBe(1);
     expect(parsed.events[0].payload.sourceAddr).toBe('QcrJnv…Prc3');
   });
 });

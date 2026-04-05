@@ -199,6 +199,38 @@ describe('chooseRouterTopologyAuthority', () => {
     });
   });
 
+  it('optionally keeps incumbent root when same-epoch lastSeen differs within a sticky window', () => {
+    const current = {
+      topologyEpoch: 8,
+      rootForwarder: 'alpha',
+      standbyForwarder: 'standby',
+      clusters: [],
+      lastSeen: 1_000,
+    };
+    expect(
+      chooseRouterTopologyAuthority(
+        current,
+        { ...current, rootForwarder: 'beta', lastSeen: 1_080 },
+        { roomId: 'r', sameEpochRootConflictStickyMs: 150 }
+      )
+    ).toEqual({
+      acceptIncoming: false,
+      reason: 'lastSeen-root-conflict-sticky',
+      winningRoot: 'alpha',
+    });
+    expect(
+      chooseRouterTopologyAuthority(
+        current,
+        { ...current, rootForwarder: 'beta', lastSeen: 1_200 },
+        { roomId: 'r', sameEpochRootConflictStickyMs: 150 }
+      )
+    ).toEqual({
+      acceptIncoming: true,
+      reason: 'lastSeen-root-conflict',
+      winningRoot: 'beta',
+    });
+  });
+
   it('uses election digest when same-epoch roots differ but lastSeen ties', () => {
     const current = {
       topologyEpoch: 8,

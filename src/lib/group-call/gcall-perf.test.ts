@@ -1,8 +1,38 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GcallPerfCollector,
+  readGcallPerfEnabled,
   summarizePerfSeries,
 } from './gcall-perf';
+
+describe('readGcallPerfEnabled', () => {
+  beforeEach(() => {
+    localStorage.removeItem('qortal:gcall-perf');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('defaults to true (no localStorage)', () => {
+    expect(readGcallPerfEnabled()).toBe(true);
+  });
+
+  it('is false when localStorage opts out', () => {
+    localStorage.setItem('qortal:gcall-perf', '0');
+    expect(readGcallPerfEnabled()).toBe(false);
+  });
+
+  it('is false when localStorage is off', () => {
+    localStorage.setItem('qortal:gcall-perf', 'off');
+    expect(readGcallPerfEnabled()).toBe(false);
+  });
+
+  it('is true when localStorage is 1', () => {
+    localStorage.setItem('qortal:gcall-perf', '1');
+    expect(readGcallPerfEnabled()).toBe(true);
+  });
+});
 
 describe('gcall-perf', () => {
   it('summarizes avg, max, and p95 from recent samples', () => {

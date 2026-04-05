@@ -15,6 +15,7 @@ import {
   shouldApplyVerifiedLeaveToParticipant,
   shouldIgnoreLeaveForLocalAddress,
   shouldRefreshParticipantFromVerifiedJoin,
+  shouldHoldAudioForReticulumRecoveryReason,
 } from './group-call';
 import { encodeJoinWire } from './group-call-wire-reticulum';
 
@@ -1462,5 +1463,40 @@ describe('shouldDelayPresenceEvictionForHealthyTransport', () => {
         staleAfterMs: 15_000,
       })
     ).toBe(false);
+  });
+});
+
+describe('shouldHoldAudioForReticulumRecoveryReason', () => {
+  it('returns false for path-warm and topology-tagged warm reasons', () => {
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason('topology-startup-warm')
+    ).toBe(false);
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason('topology-root-inbound-warm')
+    ).toBe(false);
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason(
+        'topology-root-inbound-stress-warm'
+      )
+    ).toBe(false);
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason('topology-predictive-warm')
+    ).toBe(false);
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason('peer-joined-inbound-warm')
+    ).toBe(false);
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason('peer-joined-startup-warm')
+    ).toBe(false);
+  });
+
+  it('returns true for stall and window recovery reasons', () => {
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason('window-media-recovery')
+    ).toBe(true);
+    expect(
+      shouldHoldAudioForReticulumRecoveryReason('live-source-stall')
+    ).toBe(true);
+    expect(shouldHoldAudioForReticulumRecoveryReason('')).toBe(true);
   });
 });

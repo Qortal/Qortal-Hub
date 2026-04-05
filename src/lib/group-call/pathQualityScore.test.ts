@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   computePathQualityScoreV1,
+  computePerSourcePlayoutPathQualityV1,
+  PATH_QUALITY_PEER_COVERAGE_PER_SOURCE_PLAYOUT,
   PATH_QUALITY_PEER_COVERAGE_SESSION,
   ratiosFromPathWindowFields,
 } from './pathQualityScore';
@@ -8,6 +10,25 @@ import {
 describe('pathQualityScore', () => {
   it('exports session peer coverage sentinel until per-peer path metrics exist', () => {
     expect(PATH_QUALITY_PEER_COVERAGE_SESSION).toBe('session_aggregate');
+    expect(PATH_QUALITY_PEER_COVERAGE_PER_SOURCE_PLAYOUT).toBe(
+      'per_source_playout'
+    );
+  });
+
+  it('scores per-source playout stress from missing frames and underruns', () => {
+    const good = computePerSourcePlayoutPathQualityV1(
+      { missingFrames: 0, jitterUnderruns: 0, concealmentTicks: 0 },
+      10_000
+    );
+    expect(good.playoutPathQualityScoreV1).toBe(1);
+    expect(good.missingFramesPerSec).toBe(0);
+
+    const bad = computePerSourcePlayoutPathQualityV1(
+      { missingFrames: 250, jitterUnderruns: 10, concealmentTicks: 5 },
+      10_000
+    );
+    expect(bad.missingFramesPerSec).toBe(25);
+    expect(bad.playoutPathQualityScoreV1).toBeLessThan(0.5);
   });
 
   it('computes dimensionless ratios with safe denominators', () => {

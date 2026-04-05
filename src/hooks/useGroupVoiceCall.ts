@@ -54,6 +54,7 @@ import {
   buildSingleClusterTopologyWithStickyRoot,
   buildTopologyAfterClusterPromotion,
   chooseRouterTopologyAuthority,
+  DEFAULT_SAME_EPOCH_ROOT_CONFLICT_STICKY_MS,
   GroupCallPerformanceTracker,
   hasGroupCallSourceWindowMediaActivity,
   type GroupCallWindowMetrics,
@@ -101,6 +102,8 @@ import {
 } from '../lib/group-call/adaptivePlayout';
 import {
   computePathQualityScoreV1,
+  computePerSourcePlayoutPathQualityV1,
+  PATH_QUALITY_PEER_COVERAGE_PER_SOURCE_PLAYOUT,
   PATH_QUALITY_PEER_COVERAGE_SESSION,
 } from '../lib/group-call/pathQualityScore';
 import {
@@ -338,7 +341,7 @@ const FORWARDER_TIMEOUT_CHECK_MS = 1_000;
 const STANDBY_FAILOVER_POLL_MS = 250;
 
 /** Coalesce burst participant-joined/left into one topology election + key pass. */
-const TOPOLOGY_ELECTION_DEBOUNCE_MS = 80;
+const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 /** Min time between mesh GC_JOIN re-announces (same joinGeneration, new timestamp). */
 const MESH_REANNOUNCE_MIN_INTERVAL_MS = 2_000;
 /** Keep a recently heartbeating remote root sticky across same-room rejoin long enough
@@ -1106,10 +1109,12 @@ export function chooseSameEpochTopologyWinner(
   current: GroupTopology,
   incoming: GroupTopology,
   roomId: string,
-  electionDigests?: ReadonlyMap<string, string>
+  electionDigests?: ReadonlyMap<string, string>,
+  sameEpochRootConflictStickyMs: number = DEFAULT_SAME_EPOCH_ROOT_CONFLICT_STICKY_MS
 ): { acceptIncoming: boolean; reason: string } {
   const decision = chooseRouterTopologyAuthority(current, incoming, {
     roomId,
+    sameEpochRootConflictStickyMs,
     compareRoots: (incomingRoot, currentRoot) => {
       const cachedComparison =
         electionDigests &&
@@ -1902,6 +1907,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastTuningSnapshotJsonRef = useRef('');
   const opusInBandFecEnabledRef = useRef(false);
   const opusInBandFecSupportCheckedRef = useRef(false);
+  const opusFecCapabilityDiagLoggedRef = useRef(false);
   const handleIncomingAudioPacketRef = useRef<
     (data: ArrayBuffer, fromAddress: string) => void
   >(() => {});
@@ -1963,6 +1969,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const gcallPerfEnabledRef = useRef(readGcallPerfEnabled());
   const gcallPerfRef = useRef(new GcallPerfCollector());
   const tickBudgetBreachesRef = useRef<number[]>([]);
+  const tickBudgetBreachesMonotonicRef = useRef(0);
+  const lastTickBudgetBreachesAtWindowEmitRef = useRef(0);
 
   // IPC unsubscribe function
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -2977,6 +2985,16 @@ export function useGroupVoiceCall(uiActive = false) {
       lastWindowMetricsRef.current = windowMetrics;
       evaluateWindowMediaRecovery(windowMetrics);
       const diagnosticSources = buildWindowDiagnosticSources(windowMetrics);
+      const perSourcePlayoutPathQuality = diagnosticSources.map((row) => ({
+        sourceAddr: row.sourceAddr,
+        ingressPeerAddress: row.ingressPeerAddress,
+        ...computePerSourcePlayoutPathQualityV1(row, windowMetrics.durationMs),
+      }));
+      const tickBudgetBreachesInWindow =
+        tickBudgetBreachesMonotonicRef.current -
+        lastTickBudgetBreachesAtWindowEmitRef.current;
+      lastTickBudgetBreachesAtWindowEmitRef.current =
+        tickBudgetBreachesMonotonicRef.current;
       const pathQuality = computePathQualityScoreV1(
         windowMetrics,
         pathQualityScoreEmaV1Ref.current
@@ -2996,7 +3014,18 @@ export function useGroupVoiceCall(uiActive = false) {
         activeRemoteSourceCount: activeJitterSourcesRef.current.size,
         remoteParticipantCount: remoteParticipants,
         topologyEpoch: topologyRef.current?.topologyEpoch ?? null,
-        pathQualityPeerCoverage: PATH_QUALITY_PEER_COVERAGE_SESSION,
+        pathQualityPeerCoverage:
+          windowMetrics.sources.length > 0
+            ? PATH_QUALITY_PEER_COVERAGE_PER_SOURCE_PLAYOUT
+            : PATH_QUALITY_PEER_COVERAGE_SESSION,
+        perSourcePlayoutPathQuality,
+        tickBudgetPlayoutCorrelation: {
+          tickBudgetBreachesInWindow,
+          windowMissingFrames: windowMetrics.missingFrames,
+          windowMissingFramesPerSec:
+            windowMetrics.missingFrames /
+            Math.max(0.001, windowMetrics.durationMs / 1000),
+        },
         diagnosticTags: tags,
         ...pathQuality,
         ...windowMetrics,
@@ -3433,6 +3462,7 @@ export function useGroupVoiceCall(uiActive = false) {
         context,
         liveMetricsSnapshot: live,
         exportWindowMetrics: windowMetrics,
+        gcallPerfSnapshot: snapshotGcallPerfStats(),
         webrtcStats,
       });
       if (opts?.clipboard) {
@@ -3445,7 +3475,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       return json;
     },
-    [emitWindowMetrics, flushMetrics]
+    [emitWindowMetrics, flushMetrics, snapshotGcallPerfStats]
   );
 
   const exportGroupCallDiagnosticsRef = useRef(exportGroupCallDiagnostics);
@@ -3978,10 +4008,20 @@ export function useGroupVoiceCall(uiActive = false) {
     });
   }, []);
 
-  const recordPendingDecryptDepth = useCallback((depth: number) => {
-    metricsRef.current.recordPendingDecryptDepth(depth);
-    logPendingDecryptDepthIfNeeded(depth);
-  }, [logPendingDecryptDepthIfNeeded]);
+  const recordPendingDecryptDepth = useCallback(
+    (depth: number) => {
+      metricsRef.current.recordPendingDecryptDepth(depth);
+      logPendingDecryptDepthIfNeeded(depth);
+      if (depth >= 64) {
+        globalRecoveryUntilMsRef.current = Math.max(
+          globalRecoveryUntilMsRef.current,
+          Date.now() + ADAPTIVE_RECOVERY_COOLDOWN_MS
+        );
+        recomputeAdaptiveNetworkMode();
+      }
+    },
+    [logPendingDecryptDepthIfNeeded, recomputeAdaptiveNetworkMode]
+  );
 
   const sweepStalePendingDecrypts = useCallback(
     (nowMs: number, ttlMs: number) => {
@@ -4702,7 +4742,13 @@ export function useGroupVoiceCall(uiActive = false) {
       /** Previous settle window must have elapsed before aggressive transport warms run. */
       const mayWarmTransport = wallNowTopology >= topologySettleUntilMsRef.current;
       topologyRef.current = topo;
-      topologySettleUntilMsRef.current = wallNowTopology + GCALL_TOPOLOGY_SETTLE_MS;
+      let topologySettleMs = GCALL_TOPOLOGY_SETTLE_MS;
+      if (prevTopo && prevTopo.rootForwarder !== topo.rootForwarder) {
+        topologySettleMs = GCALL_TOPOLOGY_SETTLE_MS * 2;
+        worstIsolationHysteresisRef.current =
+          createWorstIsolationHysteresisState();
+      }
+      topologySettleUntilMsRef.current = wallNowTopology + topologySettleMs;
       if (
         prevTopo?.rootForwarder !== topo.rootForwarder ||
         prevTopo?.topologyEpoch !== topo.topologyEpoch
@@ -4827,6 +4873,20 @@ export function useGroupVoiceCall(uiActive = false) {
           type: 'role-change',
           detail: { from: prevRole, to: role },
         });
+      }
+
+      if (
+        !prevTopo ||
+        prevTopo.rootForwarder !== topo.rootForwarder ||
+        prevTopo.topologyEpoch !== topo.topologyEpoch ||
+        prevTopo.standbyForwarder !== topo.standbyForwarder ||
+        prevRole !== role
+      ) {
+        globalRecoveryUntilMsRef.current = Math.max(
+          globalRecoveryUntilMsRef.current,
+          Date.now() + ADAPTIVE_RECOVERY_COOLDOWN_MS
+        );
+        recomputeAdaptiveNetworkMode();
       }
 
       setMyRole((prev) => (prev !== role ? role : prev));
@@ -5006,6 +5066,7 @@ export function useGroupVoiceCall(uiActive = false) {
       clearAuthoritativeKeyGrace,
       flushMetrics,
       maybePredictiveWarmPeers,
+      recomputeAdaptiveNetworkMode,
       startClusterHeartbeat,
       startTopologyHeartbeat,
       stopClusterHeartbeat,
@@ -5562,6 +5623,14 @@ export function useGroupVoiceCall(uiActive = false) {
           });
         }
         encoder.configure(encoderConfig as unknown as AudioEncoderConfig);
+        if (!opusFecCapabilityDiagLoggedRef.current) {
+          opusFecCapabilityDiagLoggedRef.current = true;
+          gcallDiagnosticsPush('info', '[GCall] opusInBandFecEncoder', {
+            checked: opusInBandFecSupportCheckedRef.current,
+            enabled: opusInBandFecEnabledRef.current,
+            packetlossperc: encTuning.opusExpectedPacketLossPercent,
+          });
+        }
         opusEncoderLastConfiguredBitrateRef.current = encTuning.opusBitrate;
         opusSendPressureStateRef.current = createOpusSendPressureControllerState();
         const fecOpusStatic =
@@ -6619,6 +6688,7 @@ export function useGroupVoiceCall(uiActive = false) {
       incrementPerfCounter('reactSpeakerUpdates');
     }
     if (tickTotalMs >= GCALL_PERF_TICK_BUDGET_WARN_MS) {
+      tickBudgetBreachesMonotonicRef.current += 1;
       tickBudgetBreachesRef.current.push(tickTotalMs);
       if (tickBudgetBreachesRef.current.length > 512) {
         tickBudgetBreachesRef.current.splice(
@@ -8244,6 +8314,9 @@ export function useGroupVoiceCall(uiActive = false) {
         gcallDiagnosticsClear();
         gcallPerfRef.current.reset();
         tickBudgetBreachesRef.current.length = 0;
+        tickBudgetBreachesMonotonicRef.current = 0;
+        lastTickBudgetBreachesAtWindowEmitRef.current = 0;
+        opusFecCapabilityDiagLoggedRef.current = false;
         // Reset epoch floor when joining a different room; keep it for same-room rejoin
         // so the rejoining node broadcasts an epoch ≥ the room's current epoch.
         if (roomId !== lastRoomIdRef.current) {

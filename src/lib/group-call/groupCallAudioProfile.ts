@@ -36,12 +36,14 @@ const LOW_LATENCY_BASE = {
 
 const HIGH_STABILITY_BASE = {
   opusBitrate: 32_000,
-  opusExpectedPacketLossPercent: 12,
+  /** Slightly higher than low-latency so WebCodecs Opus `packetlossperc` + WASM FEC ladder tolerate measured mesh loss. */
+  opusExpectedPacketLossPercent: 14,
   jitterBufferSize: 6,
   jitterStartBufferSize: 6,
   adaptiveMaxTargetMs: 220,
   adaptiveSevereMaxTargetMs: 280,
-  wasmFecMaxGapReset: 40,
+  /** Wider seq-gap tolerance before WASM FEC worker reset under high-stability profile. */
+  wasmFecMaxGapReset: 42,
 } as const;
 
 export function getGroupCallAudioTuning(

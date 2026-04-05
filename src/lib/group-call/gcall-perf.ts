@@ -28,21 +28,27 @@ const GCALL_PERF_STORAGE_KEY = 'qortal:gcall-perf';
 const RECENT_SAMPLE_LIMIT = 512;
 const LONG_TASK_LIMIT = 40;
 
+/**
+ * GCall perf (tick timing, counters, long-task observer, `window.__qortalGCallPerfStats`)
+ * is **on by default** so diagnostics exports include full perf without tester setup.
+ *
+ * Opt out: `localStorage.setItem('qortal:gcall-perf', '0')` or build with `VITE_GCALL_PERF=0`.
+ */
 export function readGcallPerfEnabled(): boolean {
   if (
     typeof import.meta !== 'undefined' &&
     import.meta.env &&
-    import.meta.env.VITE_GCALL_PERF === '1'
+    import.meta.env.VITE_GCALL_PERF === '0'
   ) {
-    return true;
+    return false;
   }
   try {
-    return (
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem(GCALL_PERF_STORAGE_KEY) === '1'
-    );
+    if (typeof localStorage === 'undefined') return true;
+    const v = localStorage.getItem(GCALL_PERF_STORAGE_KEY);
+    if (v === '0' || v === 'off') return false;
+    return true;
   } catch {
-    return false;
+    return true;
   }
 }
 

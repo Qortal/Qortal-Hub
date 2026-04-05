@@ -122,6 +122,7 @@ export type RouterTopologyAuthorityReason =
   | 'newer-epoch'
   | 'lastSeen'
   | 'lastSeen-root-conflict'
+  | 'lastSeen-root-conflict-sticky'
   | 'rootForwarder-lexical'
   | 'same-topology';
 
@@ -135,7 +136,16 @@ export interface RouterTopologyAuthorityOptions {
   compareRoots?: (incomingRoot: string, currentRoot: string) => number;
   /** When set, same-epoch root tie-break uses syncRootElectionDigestHex (matches main process). */
   roomId?: string;
+  /**
+   * When same-epoch roots differ and both frames carry `lastSeen`, ignore `lastSeen` ordering
+   * if the timestamps are within this window (ms) and keep the incumbent root instead.
+   * Reduces flip-flops from clock skew / bursty GC_TOPOLOGY; 0 disables.
+   */
+  sameEpochRootConflictStickyMs?: number;
 }
+
+/** Default for {@link RouterTopologyAuthorityOptions.sameEpochRootConflictStickyMs}. */
+export const DEFAULT_SAME_EPOCH_ROOT_CONFLICT_STICKY_MS = 150;
 
 /**
  * Resolve conflicting topology candidates with a symmetric rule that every peer
@@ -191,6 +201,17 @@ export function chooseRouterTopologyAuthority(
       currentSeen !== null &&
       incomingSeen !== currentSeen
     ) {
+      const stickyMs = opts?.sameEpochRootConflictStickyMs ?? 0;
+      if (
+        stickyMs > 0 &&
+        Math.abs(incomingSeen - currentSeen) < stickyMs
+      ) {
+        return {
+          acceptIncoming: false,
+          reason: 'lastSeen-root-conflict-sticky',
+          winningRoot: currentRoot,
+        };
+      }
       const acceptIncoming = incomingSeen > currentSeen;
       return {
         acceptIncoming,

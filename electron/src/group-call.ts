@@ -111,6 +111,24 @@ const GC_RETICULUM_AUDIO_PENDING_FANOUT_SOFT_LIMIT = 3;
 const GC_RETICULUM_AUDIO_PENDING_HIGH_FANOUT_LIMIT = 12;
 const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS = 12;
 const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER = 4;
+/** When local node is any forwarder or within post-recovery boost, scale flush caps (see getReticulumAudioFlushLimits). */
+const GC_RETICULUM_AUDIO_FLUSH_SCALE_FACTOR = 3;
+const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS_CAP = 48;
+const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER_CAP = 12;
+/** After renderer-requested media recovery, temporarily allow deeper flush (matches ADAPTIVE_RECOVERY_COOLDOWN_MS in renderer). */
+const GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS = 8_000;
+/**
+ * Path warm / topology recovery reasons: do not set recovery hold (avoids 200ms pending max-age
+ * during route churn). See getReticulumAudioPendingMaxAgeMs when recoveryHoldUntilMs is active.
+ */
+const GC_RETICULUM_RECOVERY_HOLD_AUDIO_FALSE_REASONS = new Set<string>([
+  'topology-startup-warm',
+  'topology-root-inbound-warm',
+  'topology-root-inbound-stress-warm',
+  'topology-predictive-warm',
+  'peer-joined-inbound-warm',
+  'peer-joined-startup-warm',
+]);
 /** Matches send-side pressure backoff: fair flush reschedules with this delay when bridge is pressured. */
 const GC_RETICULUM_AUDIO_FLUSH_RETRY_DELAY_MS = 5;
 const GC_RETICULUM_AUDIO_RECOVERY_HOLD_MS = 160;
@@ -168,6 +186,12 @@ const GC_RETICULUM_RETRYABLE_FAILURES = new Set<GcReticulumSendFailureReason>([
   'no-route',
   'no-targets',
 ]);
+
+/** Exported for unit tests — whether recovery should apply short pending max-age hold. */
+export function shouldHoldAudioForReticulumRecoveryReason(reason: string): boolean {
+  const r = reason.trim().toLowerCase();
+  return !GC_RETICULUM_RECOVERY_HOLD_AUDIO_FALSE_REASONS.has(r);
+}
 
 export type GcJoinTimestampRejectReason = 'expired' | 'future';
 
@@ -1014,6 +1038,8 @@ export class GroupCallManager extends EventEmitter {
   private reticulumAudioFlushScheduled = false;
   private reticulumAudioFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private reticulumAudioFlushCursor = 0;
+  /** Wall clock ms until which flush caps are scaled after media recovery (see GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS). */
+  private reticulumAudioFlushBoostUntilMs = 0;
 
   private presenceExpiredHandler: (address: string) => void;
   private onReticulumGroupCallMessage:
@@ -1683,13 +1709,19 @@ export class GroupCallManager extends EventEmitter {
     const normalizedAddress = address.trim();
     const normalizedReason = reason.trim() || 'renderer-recovery';
     if (!normalizedRoomId || !normalizedAddress) return;
+    const holdAudio = shouldHoldAudioForReticulumRecoveryReason(normalizedReason);
+    const now = Date.now();
+    this.reticulumAudioFlushBoostUntilMs = Math.max(
+      this.reticulumAudioFlushBoostUntilMs,
+      now + GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS
+    );
     this.requestReticulumAudioRecovery(
       normalizedRoomId,
       normalizedAddress,
       normalizedReason,
       {
         force: true,
-        holdAudio: true,
+        holdAudio,
       }
     );
   }
@@ -3602,6 +3634,52 @@ export class GroupCallManager extends EventEmitter {
     );
   }
 
+  /** True if any local address is root-forwarder or cluster forwarder in an active room. */
+  private isLocalAddressAnyForwarder(): boolean {
+    for (const room of this.rooms.values()) {
+      const topo = room.lastTopology;
+      if (!topo) continue;
+      const root = topo.rootForwarder?.trim();
+      if (root) {
+        for (const addr of this.localAddresses) {
+          if (addr === root) return true;
+        }
+      }
+      for (const cluster of topo.clusters ?? []) {
+        const fw = cluster.forwarder?.trim();
+        if (fw && this.localAddresses.has(fw)) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Scale Reticulum audio flush caps when local node fans out (forwarder) or shortly after
+   * renderer-requested media recovery, so pending queues drain faster toward the bridge.
+   */
+  private getReticulumAudioFlushLimits(): {
+    maxPerPass: number;
+    maxPerPeer: number;
+  } {
+    let pass = GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS;
+    let peer = GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER;
+    const now = Date.now();
+    const boost =
+      now < this.reticulumAudioFlushBoostUntilMs ||
+      this.isLocalAddressAnyForwarder();
+    if (boost) {
+      pass = Math.min(
+        GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS_CAP,
+        pass * GC_RETICULUM_AUDIO_FLUSH_SCALE_FACTOR
+      );
+      peer = Math.min(
+        GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER_CAP,
+        peer * GC_RETICULUM_AUDIO_FLUSH_SCALE_FACTOR
+      );
+    }
+    return { maxPerPass: pass, maxPerPeer: peer };
+  }
+
   private scheduleReticulumAudioFlush(delayMs = 0): void {
     const normalizedDelayMs = Math.max(0, Math.ceil(delayMs));
     if (this.reticulumAudioFlushScheduled) {
@@ -3859,19 +3937,19 @@ export class GroupCallManager extends EventEmitter {
     const startIndex = preferredAddress
       ? 0
       : this.reticulumAudioFlushCursor % Math.max(1, addresses.length);
+    const { maxPerPass, maxPerPeer } = this.getReticulumAudioFlushLimits();
     let totalFramesEnqueued = 0;
     let bridgePressured = false;
     let nextDelayMs = 0;
     let diagnostics = this.buildReticulumAudioSendDiagnostics(undefined);
     for (
       let offset = 0;
-      offset < addresses.length &&
-      totalFramesEnqueued < GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS;
+      offset < addresses.length && totalFramesEnqueued < maxPerPass;
       offset++
     ) {
       const address = addresses[(startIndex + offset) % addresses.length]!;
       const flushed = this.flushPendingReticulumAudioForAddress(address, {
-        maxFrames: GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER,
+        maxFrames: maxPerPeer,
         stopOnPressure: true,
       });
       if (!flushed) continue;

@@ -4,10 +4,18 @@
  *
  * When the bridge exposes per-peer path counters, emit `pathQualityPeerCoverage: 'per_peer'`
  * and populate per-peer scores; until then diagnostics use the session aggregate only.
+ *
+ * `per_source_playout` uses renderer playout/jitter window stats per remote source (ingress
+ * correlation is attached separately in diagnostics).
  */
 export const PATH_QUALITY_PEER_COVERAGE_SESSION = 'session_aggregate' as const;
+export const PATH_QUALITY_PEER_COVERAGE_PER_SOURCE_PLAYOUT =
+  'per_source_playout' as const;
 
-import type { GroupCallWindowMetrics } from './router';
+import type {
+  GroupCallSourceWindowMetrics,
+  GroupCallWindowMetrics,
+} from './router';
 
 export const PATH_QUALITY_V1_ALPHA = 0.15;
 export const PATH_QUALITY_V1_BETA = 0.1;
@@ -97,4 +105,25 @@ export function computePathQualityScoreV1(
     beta,
     gamma,
   };
+}
+
+/** Per-remote-source playout stress (0 = bad, 1 = good) for diagnostics when Reticulum has no per-leg path counters. */
+export function computePerSourcePlayoutPathQualityV1(
+  source: Pick<
+    GroupCallSourceWindowMetrics,
+    'missingFrames' | 'jitterUnderruns' | 'concealmentTicks'
+  >,
+  durationMs: number
+): { playoutPathQualityScoreV1: number; missingFramesPerSec: number } {
+  const durSec = Math.max(0.001, durationMs / 1000);
+  const missingFramesPerSec = source.missingFrames / durSec;
+  const juPerSec = source.jitterUnderruns / durSec;
+  const ctPerSec = source.concealmentTicks / durSec;
+  const raw =
+    1 -
+    0.025 * missingFramesPerSec -
+    0.05 * juPerSec -
+    0.01 * ctPerSec;
+  const playoutPathQualityScoreV1 = Math.max(0, Math.min(1, raw));
+  return { playoutPathQualityScoreV1, missingFramesPerSec };
 }
