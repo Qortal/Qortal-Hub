@@ -761,6 +761,7 @@ describe('group-call router helpers', () => {
     expect(window.receivingPeer).toBe('me');
     expect(window.packetsDropped).toBe(0);
     expect(window.packetsDroppedPendingDecrypt).toBe(0);
+    expect(window.packetsDroppedStaleWorkerDecrypt).toBe(0);
     expect(window.packetsDroppedStartupGate).toBe(0);
     expect(window.packetsDroppedDecodeFailure).toBe(0);
     expect(window.packetsDroppedDecoderThrow).toBe(0);
@@ -812,6 +813,16 @@ describe('group-call router helpers', () => {
       }),
     ]);
     vi.useRealTimers();
+  });
+
+  it('records stale worker decrypt drops in snapshot and window', () => {
+    const tracker = new GroupCallPerformanceTracker();
+    tracker.recordStaleWorkerDecryptDrop(2);
+    expect(tracker.getSnapshot().packetsDroppedStaleWorkerDecrypt).toBe(2);
+    expect(tracker.getSnapshot().packetsDropped).toBe(2);
+    const w = tracker.captureWindowMetrics('me', 5_000);
+    expect(w.packetsDroppedStaleWorkerDecrypt).toBe(2);
+    expect(w.packetsDropped).toBe(2);
   });
 
   it('resets window-only ratios after capture', () => {

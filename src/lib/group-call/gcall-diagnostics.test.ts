@@ -6,6 +6,8 @@ import {
   gcallDiagnosticsPushMetricsThrottled,
   truncateGcallDiagAddress,
   buildGcallDiagnosticsExportJson,
+  extractTransportTriadFromLiveMetrics,
+  GCALL_TRANSPORT_TRIAD_INTERPRETATION,
 } from './gcall-diagnostics';
 
 describe('gcall-diagnostics', () => {
@@ -60,5 +62,73 @@ describe('gcall-diagnostics', () => {
     expect(parsed.schemaVersion).toBe(1);
     expect(parsed.gcallPerfSnapshot?.series?.tickTotalMs?.count).toBe(1);
     expect(parsed.events[0].payload.sourceAddr).toBe('QcrJnv…Prc3');
+  });
+
+  it('export JSON includes transport triad interpretation and snapshot when live metrics have fields', () => {
+    const json = buildGcallDiagnosticsExportJson({
+      context: {
+        buildMode: 'test',
+        appVersionLabel: '0.0.0',
+        userAgent: 'vitest',
+        roomId: null,
+        chatId: null,
+        roomState: null,
+        myAddressTruncated: null,
+      },
+      liveMetricsSnapshot: { packetsReceived: 1 },
+      exportWindowMetrics: {},
+    });
+    const parsed = JSON.parse(json) as {
+      transportTriadInterpretation: string;
+      transportTriadSnapshot: unknown;
+    };
+    expect(parsed.transportTriadInterpretation).toBe(
+      GCALL_TRANSPORT_TRIAD_INTERPRETATION
+    );
+    expect(parsed.transportTriadSnapshot).toBeNull();
+
+    const json2 = buildGcallDiagnosticsExportJson({
+      context: {
+        buildMode: 'test',
+        appVersionLabel: '0.0.0',
+        userAgent: 'vitest',
+        roomId: null,
+        chatId: null,
+        roomState: null,
+        myAddressTruncated: null,
+      },
+      liveMetricsSnapshot: {
+        reticulumAudioBridgeWaitingForDrain: false,
+        reticulumAudioBridgeQueuedFramesHighWater: 3,
+        reticulumAudioBinaryOutQueueDepthHighWater: 2,
+      },
+      exportWindowMetrics: {},
+    });
+    const parsed2 = JSON.parse(json2) as {
+      transportTriadSnapshot: {
+        reticulumAudioBridgeWaitingForDrain: boolean;
+        reticulumAudioBridgeQueuedFramesHighWater: number;
+        reticulumAudioBinaryOutQueueDepthHighWater: number;
+      };
+    };
+    expect(parsed2.transportTriadSnapshot).toEqual({
+      reticulumAudioBridgeWaitingForDrain: false,
+      reticulumAudioBridgeQueuedFramesHighWater: 3,
+      reticulumAudioBinaryOutQueueDepthHighWater: 2,
+    });
+  });
+
+  it('extractTransportTriadFromLiveMetrics pulls bridge triad fields', () => {
+    expect(
+      extractTransportTriadFromLiveMetrics({
+        reticulumAudioBridgeWaitingForDrain: true,
+        reticulumAudioBridgeQueuedFramesHighWater: 12,
+        reticulumAudioBinaryOutQueueDepthHighWater: 7,
+      })
+    ).toEqual({
+      reticulumAudioBridgeWaitingForDrain: true,
+      reticulumAudioBridgeQueuedFramesHighWater: 12,
+      reticulumAudioBinaryOutQueueDepthHighWater: 7,
+    });
   });
 });

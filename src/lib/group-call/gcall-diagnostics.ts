@@ -33,6 +33,20 @@ export interface GcallDiagExportPayload {
   /** Last closed window from manual capture during export (may be empty if none). */
   exportWindowMetrics: unknown;
   /**
+   * How to read `transportTriadSnapshot` with decrypt/backlog metrics: if the triad is
+   * elevated together, suspect Node/bridge/daemon delivery before blaming decrypt-only limits.
+   */
+  transportTriadInterpretation: string;
+  /**
+   * Subset of live metrics for field triage: bridge backpressure, main bridge queue HW,
+   * Python binary-out queue HW (same window as `liveMetricsSnapshot`).
+   */
+  transportTriadSnapshot: {
+    reticulumAudioBridgeWaitingForDrain: boolean;
+    reticulumAudioBridgeQueuedFramesHighWater: number;
+    reticulumAudioBinaryOutQueueDepthHighWater: number;
+  } | null;
+  /**
    * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
    * Present when group-call perf is enabled (default on).
    */
@@ -43,6 +57,32 @@ export interface GcallDiagExportPayload {
 
 const MAX_EVENTS = 900;
 const METRICS_THROTTLE_MS = 8000;
+
+/** Shipped with exports so QA can interpret bridge vs daemon vs decrypt without a wiki. */
+export const GCALL_TRANSPORT_TRIAD_INTERPRETATION =
+  'Read these three together before blaming a single layer. ' +
+  '`reticulumAudioBridgeWaitingForDrain`: main-process bridge is waiting for the Python side to drain (backpressure). ' +
+  '`reticulumAudioBridgeQueuedFramesHighWater`: high-water of frames queued in the main-process bridge toward Reticulum. ' +
+  '`reticulumAudioBinaryOutQueueDepthHighWater`: high-water of the Python child→parent binary queue (fd3 path). ' +
+  'If this triad spikes together with decrypt symptoms, tune upstream delivery first; if the triad is calm but `packetsDroppedPendingDecrypt` / `pendingDecryptDepthHighWater` are high, focus on the renderer decrypt path.';
+
+export function extractTransportTriadFromLiveMetrics(
+  live: unknown
+): GcallDiagExportPayload['transportTriadSnapshot'] {
+  if (!live || typeof live !== 'object') return null;
+  const m = live as Record<string, unknown>;
+  const drain = m.reticulumAudioBridgeWaitingForDrain;
+  const bridgeHw = m.reticulumAudioBridgeQueuedFramesHighWater;
+  const binaryHw = m.reticulumAudioBinaryOutQueueDepthHighWater;
+  if (typeof drain !== 'boolean') return null;
+  if (typeof bridgeHw !== 'number' || !Number.isFinite(bridgeHw)) return null;
+  if (typeof binaryHw !== 'number' || !Number.isFinite(binaryHw)) return null;
+  return {
+    reticulumAudioBridgeWaitingForDrain: drain,
+    reticulumAudioBridgeQueuedFramesHighWater: Math.max(0, Math.trunc(bridgeHw)),
+    reticulumAudioBinaryOutQueueDepthHighWater: Math.max(0, Math.trunc(binaryHw)),
+  };
+}
 
 const events: GcallDiagEvent[] = [];
 let lastMetricsPushAt = 0;
@@ -193,12 +233,15 @@ export function buildGcallDiagnosticsExportJson(params: {
   gcallPerfSnapshot?: unknown;
   webrtcStats?: Record<string, unknown>;
 }): string {
+  const triad = extractTransportTriadFromLiveMetrics(params.liveMetricsSnapshot);
   const payload: GcallDiagExportPayload = {
     schemaVersion: 1,
     exportedAtMs: Date.now(),
     context: { ...params.context },
     liveMetricsSnapshot: redactDeep(params.liveMetricsSnapshot),
     exportWindowMetrics: redactDeep(params.exportWindowMetrics),
+    transportTriadInterpretation: GCALL_TRANSPORT_TRIAD_INTERPRETATION,
+    transportTriadSnapshot: triad ? redactDeep(triad) : null,
     gcallPerfSnapshot:
       params.gcallPerfSnapshot !== undefined
         ? redactDeep(params.gcallPerfSnapshot)

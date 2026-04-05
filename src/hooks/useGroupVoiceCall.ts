@@ -150,6 +150,16 @@ import {
   tickOpusSendPressureController,
 } from '../lib/group-call/opusSendPressure';
 import {
+  computePendingDecryptLimits,
+  PENDING_DECRYPT_BURST_EXTEND_MS,
+  PENDING_DECRYPT_BURST_MAX,
+  PENDING_DECRYPT_BURST_TTL_MS,
+  PENDING_DECRYPT_MAX,
+  PENDING_DECRYPT_RECOVERY_MAX,
+  PENDING_DECRYPT_RECOVERY_TTL_MS,
+  PENDING_DECRYPT_TTL_MS,
+} from '../lib/group-call/pendingDecryptLimits';
+import {
   filterRosterMapByMemberSet,
   passesGroupCallMemberGate,
 } from '../lib/group-call/gcall-member-gate';
@@ -376,13 +386,6 @@ const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 /** Set to "1" in localStorage for verbose mic/capture logs (or enable qortal:gcall-debug). */
 const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
 
-/** Max queued decrypt jobs awaiting worker result; oldest dropped under pressure. */
-const PENDING_DECRYPT_MAX = 96;
-/** Drop pending decrypt entries older than this (worker stuck / lost result). */
-const PENDING_DECRYPT_TTL_MS = 500;
-/** While `globalRecoveryUntilMsRef` is active, allow deeper queues and older entries. */
-const PENDING_DECRYPT_RECOVERY_MAX = 192;
-const PENDING_DECRYPT_RECOVERY_TTL_MS = 1000;
 /** Log when pending decrypt depth crosses these (throttled). */
 const PENDING_DECRYPT_DEPTH_LOG_THRESHOLDS = [32, 64] as const;
 const PENDING_DECRYPT_DEPTH_LOG_MIN_INTERVAL_MS = 5_000;
@@ -1925,6 +1928,8 @@ export function useGroupVoiceCall(uiActive = false) {
     new Map()
   );
   const globalRecoveryUntilMsRef = useRef<number>(0);
+  /** Short decrypt-queue burst window after key sync or participant join (see `computePendingDecryptLimits`). */
+  const decryptBurstUntilMsRef = useRef<number>(0);
   /** True only while this node generated the current roomKey (as root-forwarder initiator).
    *  Cleared when root is lost so a re-promoted node never redistributes a foreign key. */
   const isOurKeyRef = useRef(false);
@@ -2954,6 +2959,9 @@ export function useGroupVoiceCall(uiActive = false) {
       pendingDecryptRecoveryTtlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
       pendingDecryptMax: PENDING_DECRYPT_MAX,
       pendingDecryptRecoveryMax: PENDING_DECRYPT_RECOVERY_MAX,
+      pendingDecryptBurstExtendMs: PENDING_DECRYPT_BURST_EXTEND_MS,
+      pendingDecryptBurstMax: PENDING_DECRYPT_BURST_MAX,
+      pendingDecryptBurstTtlMs: PENDING_DECRYPT_BURST_TTL_MS,
       keyDistribution: {
         timeoutMs: KEY_DIST_GATE_TIMEOUT_MS,
         preEncryptOpusRingFrames: KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES,
@@ -3980,11 +3988,24 @@ export function useGroupVoiceCall(uiActive = false) {
     max: number;
     ttlMs: number;
   } => {
-    const recovery = Date.now() < globalRecoveryUntilMsRef.current;
-    return {
-      max: recovery ? PENDING_DECRYPT_RECOVERY_MAX : PENDING_DECRYPT_MAX,
-      ttlMs: recovery ? PENDING_DECRYPT_RECOVERY_TTL_MS : PENDING_DECRYPT_TTL_MS,
-    };
+    const now = Date.now();
+    return computePendingDecryptLimits(
+      now,
+      globalRecoveryUntilMsRef.current,
+      decryptBurstUntilMsRef.current
+    );
+  }, []);
+
+  const armDecryptBurstRecoveryWindow = useCallback((reason: string) => {
+    const until = Date.now() + PENDING_DECRYPT_BURST_EXTEND_MS;
+    decryptBurstUntilMsRef.current = Math.max(
+      decryptBurstUntilMsRef.current,
+      until
+    );
+    gcallDiagnosticsPush('info', '[GCall] decryptBurstRecoveryWindow', {
+      reason,
+      untilMs: until,
+    });
   }, []);
 
   const logPendingDecryptDepthIfNeeded = useCallback((depth: number) => {
@@ -4004,7 +4025,8 @@ export function useGroupVoiceCall(uiActive = false) {
     gcallDiagnosticsPush('info', '[GCall] pendingDecryptDepthHigh', {
       depth,
       threshold,
-      recovery: Date.now() < globalRecoveryUntilMsRef.current,
+      recovery: now < globalRecoveryUntilMsRef.current,
+      decryptBurst: now < decryptBurstUntilMsRef.current,
     });
   }, []);
 
@@ -7890,6 +7912,7 @@ export function useGroupVoiceCall(uiActive = false) {
         gcallDiagnosticsPush('info', '[GCall] workerRoomKeySyncApplied', {
           keyVersion,
         });
+        armDecryptBurstRecoveryWindow('workerRoomKeySyncApplied');
         recordPerfDuration(
           'decryptWorkerHandlerMs',
           performance.now() - handlerStartedAt
@@ -7954,6 +7977,7 @@ export function useGroupVoiceCall(uiActive = false) {
           pendingWorkerKeyVersion: pending.workerKeyVersion,
           currentWorkerKeyVersion: decryptWorkerKeyVersionRef.current,
         });
+        metricsRef.current.recordStaleWorkerDecryptDrop(1);
         recordPerfDuration(
           'decryptWorkerHandlerMs',
           performance.now() - handlerStartedAt
@@ -8020,6 +8044,7 @@ export function useGroupVoiceCall(uiActive = false) {
     dispatchEncodedPacket,
     incrementPerfCounter,
     logSendPathDiagnostic,
+    armDecryptBurstRecoveryWindow,
     recordPendingDecryptDepth,
     recordPerfDuration,
     syncDecryptWorkerRoomKey,
@@ -8354,6 +8379,7 @@ export function useGroupVoiceCall(uiActive = false) {
         forwardPacketRecvTimestampsRef.current.clear();
         lastSendPathDiagnosticAtRef.current.clear();
         globalRecoveryUntilMsRef.current = 0;
+        decryptBurstUntilMsRef.current = 0;
         mainJoinReadyRef.current = false;
         setRoomState('joining');
         metricsRef.current.reset();
@@ -8783,6 +8809,7 @@ export function useGroupVoiceCall(uiActive = false) {
       peerMediaRecoveryLastActionAtRef.current.clear();
       lastSendPathDiagnosticAtRef.current.clear();
       globalRecoveryUntilMsRef.current = 0;
+      decryptBurstUntilMsRef.current = 0;
       clearAuthoritativeKeyGrace();
 
       // Terminate the decrypt Worker (sync clears pending + worker key)
@@ -9915,6 +9942,7 @@ export function useGroupVoiceCall(uiActive = false) {
             }
           }
 
+          armDecryptBurstRecoveryWindow('participant-joined');
           requestTopologyElectionFlush('participant-joined');
         };
 
@@ -10401,6 +10429,7 @@ export function useGroupVoiceCall(uiActive = false) {
     ensureAudioCaptureStarted,
     reconcileParticipantsFromMainRoster,
     syncDecryptWorkerRoomKey,
+    armDecryptBurstRecoveryWindow,
     syncCallSessionFromMainForKeyRecovery,
     maybeSendRosterLearnedTargetedKey,
     installTestingStableRoomKey,

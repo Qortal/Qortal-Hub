@@ -379,6 +379,8 @@ export interface GroupCallMetricsSnapshot {
   packetsDropped: number;
   /** Sub-counts; sum should match `packetsDropped` when all drops use `recordPacketDroppedWithReason`. */
   packetsDroppedPendingDecrypt: number;
+  /** Decrypt worker returned after key rotation; pending job discarded (not TTL/cap). */
+  packetsDroppedStaleWorkerDecrypt: number;
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
@@ -527,6 +529,7 @@ export interface GroupCallWindowMetrics {
   durationMs: number;
   packetsDropped: number;
   packetsDroppedPendingDecrypt: number;
+  packetsDroppedStaleWorkerDecrypt: number;
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
@@ -1008,6 +1011,7 @@ interface ResourceCounts {
 interface WindowCounterSet {
   packetsDropped: number;
   packetsDroppedPendingDecrypt: number;
+  packetsDroppedStaleWorkerDecrypt: number;
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
@@ -1072,6 +1076,7 @@ function emptyWindowCounters(): WindowCounterSet {
   return {
     packetsDropped: 0,
     packetsDroppedPendingDecrypt: 0,
+    packetsDroppedStaleWorkerDecrypt: 0,
     packetsDroppedStartupGate: 0,
     packetsDroppedDecodeFailure: 0,
     packetsDroppedDecoderThrow: 0,
@@ -1102,6 +1107,7 @@ export class GroupCallPerformanceTracker {
     packetsDecoded: 0,
     packetsDropped: 0,
     packetsDroppedPendingDecrypt: 0,
+    packetsDroppedStaleWorkerDecrypt: 0,
     packetsDroppedStartupGate: 0,
     packetsDroppedDecodeFailure: 0,
     packetsDroppedDecoderThrow: 0,
@@ -1351,6 +1357,16 @@ export class GroupCallPerformanceTracker {
       this.windowPendingDecryptDepthHighWater,
       d
     );
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /** Worker returned after key version changed; pending decrypt job was discarded. */
+  recordStaleWorkerDecryptDrop(count = 1): void {
+    if (count <= 0) return;
+    this.snapshot.packetsDropped += count;
+    this.windowCounters.packetsDropped += count;
+    this.snapshot.packetsDroppedStaleWorkerDecrypt += count;
+    this.windowCounters.packetsDroppedStaleWorkerDecrypt += count;
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -1885,6 +1901,7 @@ export class GroupCallPerformanceTracker {
       packetsDecoded: 0,
       packetsDropped: 0,
       packetsDroppedPendingDecrypt: 0,
+      packetsDroppedStaleWorkerDecrypt: 0,
       packetsDroppedStartupGate: 0,
       packetsDroppedDecodeFailure: 0,
       packetsDroppedDecoderThrow: 0,
@@ -2080,6 +2097,8 @@ export class GroupCallPerformanceTracker {
       packetsDropped: this.windowCounters.packetsDropped,
       packetsDroppedPendingDecrypt:
         this.windowCounters.packetsDroppedPendingDecrypt,
+      packetsDroppedStaleWorkerDecrypt:
+        this.windowCounters.packetsDroppedStaleWorkerDecrypt,
       packetsDroppedStartupGate: this.windowCounters.packetsDroppedStartupGate,
       packetsDroppedDecodeFailure:
         this.windowCounters.packetsDroppedDecodeFailure,
