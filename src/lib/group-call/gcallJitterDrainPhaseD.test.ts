@@ -3,6 +3,10 @@ import {
   computeGlobalDecodeBudget,
   computeOrderedDrainAddresses,
   computePerSourceCap,
+  computeProtectedDecodeCap,
+  computeProtectedDecodeCapForBreach,
+  isCollapsedForStarvation,
+  starvationRecoveryBarSatisfied,
 } from './gcallJitterDrainPhaseD';
 
 describe('computePerSourceCap', () => {
@@ -19,6 +23,69 @@ describe('computeGlobalDecodeBudget', () => {
     expect(computeGlobalDecodeBudget(3, 6)).toBe(16);
     expect(computeGlobalDecodeBudget(2, 6)).toBe(12);
     expect(computeGlobalDecodeBudget(1, 11)).toBe(11);
+  });
+});
+
+describe('computeProtectedDecodeCap', () => {
+  it('is min(8, ceil(globalBudget * 0.5))', () => {
+    expect(computeProtectedDecodeCap(16)).toBe(8);
+    expect(computeProtectedDecodeCap(10)).toBe(5);
+    expect(computeProtectedDecodeCap(3)).toBe(2);
+  });
+
+  it('adds bounded headroom for multi-breach', () => {
+    expect(computeProtectedDecodeCapForBreach(16, 1)).toBe(8);
+    expect(computeProtectedDecodeCapForBreach(16, 2)).toBe(10);
+  });
+});
+
+describe('starvationRecoveryBarSatisfied', () => {
+  it('requires depth floor', () => {
+    expect(
+      starvationRecoveryBarSatisfied({
+        bufferedFrames: 2,
+        opusBufferedMs: 200,
+        minOpusLastMTicks: 0,
+        adaptiveTargetMedianMs: 100,
+      })
+    ).toBe(false);
+  });
+
+  it('accepts (2b) when opus >= beta * target', () => {
+    expect(
+      starvationRecoveryBarSatisfied({
+        bufferedFrames: 3,
+        opusBufferedMs: 40,
+        minOpusLastMTicks: 0,
+        adaptiveTargetMedianMs: 100,
+      })
+    ).toBe(true);
+  });
+});
+
+describe('isCollapsedForStarvation', () => {
+  it('detects thin buffer or opus below beta * target', () => {
+    expect(
+      isCollapsedForStarvation({
+        bufferedFrames: 2,
+        opusBufferedMs: 40,
+        adaptiveTargetMedianMs: 200,
+      })
+    ).toBe(true);
+    expect(
+      isCollapsedForStarvation({
+        bufferedFrames: 5,
+        opusBufferedMs: 60,
+        adaptiveTargetMedianMs: 200,
+      })
+    ).toBe(true);
+    expect(
+      isCollapsedForStarvation({
+        bufferedFrames: 5,
+        opusBufferedMs: 80,
+        adaptiveTargetMedianMs: 200,
+      })
+    ).toBe(false);
   });
 });
 

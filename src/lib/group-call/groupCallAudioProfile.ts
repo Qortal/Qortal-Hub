@@ -59,7 +59,7 @@ export const GCALL_MAX_ADAPTIVE_SEVERE_MS_ACROSS_PROFILES = Math.max(
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN = 10;
 /** Recovery mode: minimum frames before first drain when unprimed — Phase C upstream. */
 export const GCALL_RECOVERY_JITTER_START_MIN = 9;
-/** Phase D tier-2: recovery + multi-source (N>=2) optional floors. */
+/** Phase D tier-2: recovery + multi-source (N>=2); default on unless `readGcallJitterTier2OptOut()`. */
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2 = 12;
 export const GCALL_RECOVERY_JITTER_START_MIN_TIER2 = 10;
 /** Require `adaptiveNetworkMode === 'recovery'` this long before deepening jitter (ms). */
@@ -73,15 +73,16 @@ export const GCALL_JITTER_SOFT_UNPRIME_MS = 50;
 export const GCALL_THIN_JITTER_BUFFER_FRAMES = 2;
 
 /**
- * Enable Phase D tier-2 geometry (12/10) + scaled soft un-prime. Default off — set
- * `VITE_GCALL_JITTER_TIER2=1` or `localStorage gcallJitterTier2=1`.
+ * Opt out of Phase D tier-2 geometry (12/10) + scaled soft un-prime for local debugging.
+ * Shipped behavior: tier-2 is on for recovery + multi-source unless disabled via
+ * `VITE_GCALL_JITTER_TIER2=0` or `localStorage gcallJitterTier2=0`.
  */
-export function readGcallJitterTier2Enabled(): boolean {
+export function readGcallJitterTier2OptOut(): boolean {
   try {
     if (
       typeof import.meta !== 'undefined' &&
       import.meta.env &&
-      import.meta.env.VITE_GCALL_JITTER_TIER2 === '1'
+      import.meta.env.VITE_GCALL_JITTER_TIER2 === '0'
     ) {
       return true;
     }
@@ -91,7 +92,7 @@ export function readGcallJitterTier2Enabled(): boolean {
   try {
     if (
       typeof localStorage !== 'undefined' &&
-      localStorage.getItem('gcallJitterTier2') === '1'
+      localStorage.getItem('gcallJitterTier2') === '0'
     ) {
       return true;
     }
@@ -99,6 +100,11 @@ export function readGcallJitterTier2Enabled(): boolean {
     /* private mode */
   }
   return false;
+}
+
+/** @deprecated Use readGcallJitterTier2OptOut — tier-2 defaults on for recovery multi-source. */
+export function readGcallJitterTier2Enabled(): boolean {
+  return !readGcallJitterTier2OptOut();
 }
 
 export interface EffectiveJitterTuningOpts {
@@ -110,7 +116,7 @@ export interface EffectiveJitterTuningOpts {
 /**
  * Deeper jitter geometry in recovery so Opus ingress can match adaptive playout targets.
  * Identity when `adaptiveNetworkMode` is not recovery.
- * Phase D: optional tier-2 when `tier2MultiSource` and `activeSourceCount >= 2`.
+ * Phase D: tier-2 when `tier2MultiSource`, `activeSourceCount >= 2`, and not opted out.
  */
 export function getEffectiveJitterTuning(
   tuning: GroupCallAudioTuning,
@@ -125,9 +131,7 @@ export function getEffectiveJitterTuning(
   }
   const n = opts?.activeSourceCount ?? 0;
   const tier2 =
-    Boolean(opts?.tier2MultiSource) &&
-    readGcallJitterTier2Enabled() &&
-    n >= 2;
+    Boolean(opts?.tier2MultiSource) && !readGcallJitterTier2OptOut() && n >= 2;
   if (tier2) {
     return {
       jitterBufferSize: Math.max(
@@ -152,9 +156,18 @@ export function getEffectiveJitterTuning(
   };
 }
 
-/** Phase D: scaled soft un-prime when tier-2 path active (multi-source). */
-export function computeSoftUnprimeMsForTier2(activeSourceCount: number): number {
-  if (activeSourceCount < 2 || !readGcallJitterTier2Enabled()) {
+/**
+ * Phase D: scaled soft un-prime when tier-2 path active (recovery + multi-source, unless opt-out).
+ */
+export function computeSoftUnprimeMsForTier2(
+  activeSourceCount: number,
+  recoveryMultiSource: boolean
+): number {
+  if (
+    activeSourceCount < 2 ||
+    !recoveryMultiSource ||
+    readGcallJitterTier2OptOut()
+  ) {
     return GCALL_JITTER_SOFT_UNPRIME_MS;
   }
   return GCALL_JITTER_SOFT_UNPRIME_MS + (activeSourceCount - 1) * 20;

@@ -85,6 +85,13 @@ import {
   computeGlobalDecodeBudget,
   computeOrderedDrainAddresses,
   computePerSourceCap,
+  computeProtectedDecodeCapForBreach,
+  GCALL_JITTER_STARVATION_MAX_TICKS_WITHOUT_PROTECTED_SERVICE,
+  GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS,
+  GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN,
+  GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS,
+  isCollapsedForStarvation,
+  starvationRecoveryBarSatisfied,
 } from '../lib/group-call/gcallJitterDrainPhaseD';
 import {
   compareGroupCallElectionAddresses,
@@ -2135,6 +2142,15 @@ export function useGroupVoiceCall(uiActive = false) {
   const topologySettleUntilMsRef = useRef(0);
   const lastMicroWidenDiagAtRef = useRef(0);
   const emptyJitterDrainTicksRef = useRef<Map<string, number>>(new Map());
+  /** Workstream 3: starvation SLA + recovery-bar (recovery + multi-source only). */
+  const gcallStarvationTicksSinceProtectedRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const gcallStarvationOpusHistRef = useRef<Map<string, number[]>>(new Map());
+  const gcallStarvationProtectedExitStreakRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const gcallStarvationProtectedModeRef = useRef<Set<string>>(new Set());
   /** Bumps before each async topology election (join or leave); stale continuations no-op after await. */
   const topologyAsyncGenRef = useRef(0);
   const topologyDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
@@ -2323,7 +2339,10 @@ export function useGroupVoiceCall(uiActive = false) {
     for (const jb of jitterMapRef.current.values()) {
       jb.applyJitterTuning(effective);
     }
-    const softMs = computeSoftUnprimeMsForTier2(n);
+    const softMs = computeSoftUnprimeMsForTier2(
+      n,
+      jitterGeomAppliedRef.current === 'recovery'
+    );
     for (const jb of jitterMapRef.current.values()) {
       jb.setSoftUnprimeMs(softMs);
     }
@@ -4298,6 +4317,10 @@ export function useGroupVoiceCall(uiActive = false) {
       decayGuardDiagLoggedRef.current.delete(address);
       lastPanicZoneDiagAtRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
+      gcallStarvationTicksSinceProtectedRef.current.delete(address);
+      gcallStarvationOpusHistRef.current.delete(address);
+      gcallStarvationProtectedExitStreakRef.current.delete(address);
+      gcallStarvationProtectedModeRef.current.delete(address);
       playbackWorkletSetupPromisesRef.current.delete(address);
       wasmFecJobQueueRef.current.delete(address);
       wasmFecInflightRef.current.delete(address);
@@ -4745,7 +4768,12 @@ export function useGroupVoiceCall(uiActive = false) {
           gcallWasmFecDesiredRef.current ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0,
           effective
         );
-        jb.setSoftUnprimeMs(computeSoftUnprimeMsForTier2(nForTuning));
+        jb.setSoftUnprimeMs(
+          computeSoftUnprimeMsForTier2(
+            nForTuning,
+            jitterGeomAppliedRef.current === 'recovery'
+          )
+        );
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
       }
@@ -7104,7 +7132,10 @@ export function useGroupVoiceCall(uiActive = false) {
           jb.applyJitterTuning(eff);
         }
       }
-      const softMs = computeSoftUnprimeMsForTier2(n);
+      const softMs = computeSoftUnprimeMsForTier2(
+        n,
+        jitterGeomAppliedRef.current === 'recovery'
+      );
       for (const jb of jitterMapRef.current.values()) {
         jb.setSoftUnprimeMs(softMs);
       }
@@ -7154,6 +7185,10 @@ export function useGroupVoiceCall(uiActive = false) {
       ? computeGlobalDecodeBudget(sourceCountForDrain, perSourceCap)
       : Number.MAX_SAFE_INTEGER;
 
+    // Align with D3: same recovery geometry phase as tier-2 (post-dwell), not metric-only recovery.
+    const starvationEnabled =
+      usePhaseDDrain && jitterGeomAppliedRef.current === 'recovery';
+
     const addrsOrdered = usePhaseDDrain
       ? computeOrderedDrainAddresses(
           [...activeJitterSourcesRef.current],
@@ -7163,109 +7198,67 @@ export function useGroupVoiceCall(uiActive = false) {
         )
       : [...activeJitterSourcesRef.current];
 
-    for (const addr of addrsOrdered) {
-      const jb = jitterMapRef.current.get(addr);
-      if (!jb || !jb.hasReadyFrame()) {
-        if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
-          metricsRef.current.recordJitterUnderrun(1, addr);
-          const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
-          jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
-          metricsRef.current.recordOpusBufferedMetric(
-            addr,
-            jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
-          );
-        }
-        const emptyTicks =
-          (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
-        emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
-        if (!jb || emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
-          activeJitterSourcesRef.current.delete(addr);
-        }
-        continue;
-      }
-      emptyJitterDrainTicksRef.current.set(addr, 0);
-      const initialBuffered = jb.getBufferedFrames();
-      const boostSlot =
-        usePhaseDDrain &&
-        jb.hasReadyFrame() &&
-        initialBuffered <= GCALL_THIN_JITTER_BUFFER_FRAMES
-          ? 1
-          : 0;
-      const maxBurstPerSourceThisTick = usePhaseDDrain
-        ? perSourceCap + boostSlot
-        : scaledBurstCap;
-      let missedThisTick = 0;
-      let burst = 0;
-      while (
-        burst < scaledBurstCap &&
-        (!usePhaseDDrain || globalDecodesLeft > 0)
-      ) {
-        const bufferedFrames = jb.getBufferedFrames();
-        const effectiveBurstMax = Math.min(
-          scaledBurstCap,
-          Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
+    const decodeOneJitterFrame = (addr: string, jb: JitterBuffer): number | null => {
+      if (!jb.hasReadyFrame()) return null;
+      const frame = jb.pop();
+      if (!frame) return null;
+      const missedInc = jb.consumePendingMissedFrames();
+      if (!jitterFirstDrainLoggedRef.current) {
+        jitterFirstDrainLoggedRef.current = true;
+        debugLog(
+          '[GCall] Jitter drain first pop for',
+          addr.slice(0, 12),
+          '— frame bytes:',
+          frame.byteLength
         );
-        const capForThisSource = usePhaseDDrain
-          ? Math.min(effectiveBurstMax, maxBurstPerSourceThisTick)
-          : effectiveBurstMax;
-        if (burst >= capForThisSource) break;
-        if (!jb.hasReadyFrame()) break;
-        const frame = jb.pop();
-        if (!frame) break;
-        missedThisTick += jb.consumePendingMissedFrames();
-        burst++;
-        if (usePhaseDDrain) {
-          globalDecodesLeft -= 1;
-        }
-        if (!jitterFirstDrainLoggedRef.current) {
-          jitterFirstDrainLoggedRef.current = true;
-          debugLog(
-            '[GCall] Jitter drain first pop for',
-            addr.slice(0, 12),
-            '— frame bytes:',
-            frame.byteLength
-          );
-          debugLog('[GCall] Decoder input frame view for', addr.slice(0, 12), {
-            byteOffset: frame.byteOffset,
-            byteLength: frame.byteLength,
-            bufferByteLength: frame.buffer.byteLength,
+        debugLog('[GCall] Decoder input frame view for', addr.slice(0, 12), {
+          byteOffset: frame.byteOffset,
+          byteLength: frame.byteLength,
+          bufferByteLength: frame.buffer.byteLength,
+        });
+      }
+      if (gcallWasmFecActiveRef.current) {
+        void getOrCreateDecoder(addr);
+        const rawGap = jb.consumeLastRawGapAfterPop();
+        if (rawGap > audioTuningRef.current.wasmFecMaxGapReset) {
+          opusFecWorkerRef.current?.postMessage({
+            type: 'reset',
+            sourceAddr: addr,
           });
         }
-        if (gcallWasmFecActiveRef.current) {
-          void getOrCreateDecoder(addr);
-          const rawGap = jb.consumeLastRawGapAfterPop();
-          if (rawGap > audioTuningRef.current.wasmFecMaxGapReset) {
-            opusFecWorkerRef.current?.postMessage({
-              type: 'reset',
-              sourceAddr: addr,
+        const gapForWorker = Math.min(rawGap, 48);
+        const packetCopy = new Uint8Array(frame.byteLength);
+        packetCopy.set(frame);
+        enqueueWasmFecDecode(addr, packetCopy, gapForWorker);
+      } else {
+        const decoder = getOrCreateDecoder(addr);
+        if (decoder && decoder.state !== 'closed') {
+          try {
+            const chunk = new (window as any).EncodedAudioChunk({
+              type: 'key',
+              timestamp: performance.now() * 1000,
+              data: frame,
             });
+            decoder.decode(chunk);
+          } catch (e) {
+            metricsRef.current.recordPacketDroppedWithReason('decoder-throw');
+            debugWarn('[GCall] decoder.decode threw:', e);
           }
-          const gapForWorker = Math.min(rawGap, 48);
-          const packetCopy = new Uint8Array(frame.byteLength);
-          packetCopy.set(frame);
-          enqueueWasmFecDecode(addr, packetCopy, gapForWorker);
-        } else {
-          const decoder = getOrCreateDecoder(addr);
-          if (decoder && decoder.state !== 'closed') {
-            try {
-              const chunk = new (window as any).EncodedAudioChunk({
-                type: 'key',
-                timestamp: performance.now() * 1000,
-                data: frame,
-              });
-              decoder.decode(chunk);
-            } catch (e) {
-              metricsRef.current.recordPacketDroppedWithReason('decoder-throw');
-              debugWarn('[GCall] decoder.decode threw:', e);
-            }
-          } else if (!decoder) {
-            debugWarn(
-              '[GCall] getOrCreateDecoder returned null for',
-              addr.slice(0, 12)
-            );
-          }
+        } else if (!decoder) {
+          debugWarn(
+            '[GCall] getOrCreateDecoder returned null for',
+            addr.slice(0, 12)
+          );
         }
       }
+      return missedInc;
+    };
+
+    const runUnderrunAndMetricsTail = (
+      addr: string,
+      jb: JitterBuffer,
+      missedThisTick: number
+    ) => {
       if (missedThisTick > 0) {
         metricsRef.current.recordMissingFrames(missedThisTick, addr);
         const nextMissed =
@@ -7300,6 +7293,248 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       } else {
         emptyJitterDrainTicksRef.current.set(addr, 0);
+      }
+    };
+
+    if (!starvationEnabled) {
+      for (const addr of addrsOrdered) {
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb || !jb.hasReadyFrame()) {
+          if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
+            metricsRef.current.recordJitterUnderrun(1, addr);
+            const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
+            jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
+            metricsRef.current.recordOpusBufferedMetric(
+              addr,
+              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+            );
+          }
+          const emptyTicks =
+            (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
+          emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
+          if (!jb || emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+            activeJitterSourcesRef.current.delete(addr);
+          }
+          continue;
+        }
+        emptyJitterDrainTicksRef.current.set(addr, 0);
+        const initialBuffered = jb.getBufferedFrames();
+        const boostSlot =
+          usePhaseDDrain &&
+          jb.hasReadyFrame() &&
+          initialBuffered <= GCALL_THIN_JITTER_BUFFER_FRAMES
+            ? 1
+            : 0;
+        const maxBurstPerSourceThisTick = usePhaseDDrain
+          ? perSourceCap + boostSlot
+          : scaledBurstCap;
+        let missedThisTick = 0;
+        let burst = 0;
+        while (
+          burst < scaledBurstCap &&
+          (!usePhaseDDrain || globalDecodesLeft > 0)
+        ) {
+          const bufferedFrames = jb.getBufferedFrames();
+          const effectiveBurstMax = Math.min(
+            scaledBurstCap,
+            Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
+          );
+          const capForThisSource = usePhaseDDrain
+            ? Math.min(effectiveBurstMax, maxBurstPerSourceThisTick)
+            : effectiveBurstMax;
+          if (burst >= capForThisSource) break;
+          const m = decodeOneJitterFrame(addr, jb);
+          if (m === null) break;
+          missedThisTick += m;
+          burst++;
+          if (usePhaseDDrain) {
+            globalDecodesLeft -= 1;
+          }
+        }
+        runUnderrunAndMetricsTail(addr, jb, missedThisTick);
+      }
+    } else {
+      const readyAtStart = new Set<string>();
+      const drainStartInfo = new Map<
+        string,
+        { initialBuffered: number; boostSlot: number }
+      >();
+
+      for (const addr of addrsOrdered) {
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb || !jb.hasReadyFrame()) {
+          if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
+            metricsRef.current.recordJitterUnderrun(1, addr);
+            const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
+            jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
+            metricsRef.current.recordOpusBufferedMetric(
+              addr,
+              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+            );
+          }
+          const emptyTicks =
+            (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
+          emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
+          if (!jb || emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+            activeJitterSourcesRef.current.delete(addr);
+          }
+          continue;
+        }
+        emptyJitterDrainTicksRef.current.set(addr, 0);
+        const initialBuffered = jb.getBufferedFrames();
+        const boostSlot =
+          usePhaseDDrain &&
+          jb.hasReadyFrame() &&
+          initialBuffered <= GCALL_THIN_JITTER_BUFFER_FRAMES
+            ? 1
+            : 0;
+        drainStartInfo.set(addr, { initialBuffered, boostSlot });
+        readyAtStart.add(addr);
+      }
+
+      for (const addr of activeJitterSourcesRef.current) {
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb) continue;
+        const targetMs =
+          smoothedPlayoutTargetRef.current.get(addr) ??
+          audioTuningRef.current.adaptiveMaxTargetMs;
+        const frames = jb.getBufferedFrames();
+        const opusMs = frames * OPUS_FRAME_DURATION_MS;
+        if (
+          isCollapsedForStarvation({
+            bufferedFrames: frames,
+            opusBufferedMs: opusMs,
+            adaptiveTargetMedianMs: targetMs,
+          })
+        ) {
+          gcallStarvationProtectedModeRef.current.add(addr);
+        }
+      }
+
+      const protectedAddrs = [...gcallStarvationProtectedModeRef.current].filter(
+        (a) => activeJitterSourcesRef.current.has(a)
+      );
+      const slaNearBreachCount = protectedAddrs.filter(
+        (a) =>
+          (gcallStarvationTicksSinceProtectedRef.current.get(a) ?? 0) >=
+          GCALL_JITTER_STARVATION_MAX_TICKS_WITHOUT_PROTECTED_SERVICE - 1
+      ).length;
+      const protectedCap = computeProtectedDecodeCapForBreach(
+        globalDecodesLeft,
+        Math.max(1, slaNearBreachCount)
+      );
+      let protectedUsed = 0;
+      const burstThisTickByAddr = new Map<string, number>();
+
+      while (
+        protectedUsed < protectedCap &&
+        globalDecodesLeft > 0 &&
+        protectedAddrs.length > 0
+      ) {
+        let progressed = false;
+        for (const addr of protectedAddrs) {
+          if (protectedUsed >= protectedCap || globalDecodesLeft <= 0) break;
+          if (!readyAtStart.has(addr)) continue;
+          const jb = jitterMapRef.current.get(addr);
+          if (!jb || !jb.hasReadyFrame()) continue;
+          const burst = burstThisTickByAddr.get(addr) ?? 0;
+          const bufferedFrames = jb.getBufferedFrames();
+          const effectiveBurstMax = Math.min(
+            scaledBurstCap,
+            Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
+          );
+          const relaxedCap = Math.min(effectiveBurstMax, scaledBurstCap);
+          if (burst >= relaxedCap) continue;
+          const m = decodeOneJitterFrame(addr, jb);
+          if (m === null) continue;
+          burstThisTickByAddr.set(addr, burst + 1);
+          protectedUsed++;
+          globalDecodesLeft--;
+          progressed = true;
+        }
+        if (!progressed) break;
+      }
+
+      for (const addr of addrsOrdered) {
+        if (!readyAtStart.has(addr)) continue;
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb) continue;
+        const info = drainStartInfo.get(addr);
+        if (!info) continue;
+        const maxBurstPerSourceThisTick = usePhaseDDrain
+          ? perSourceCap + info.boostSlot
+          : scaledBurstCap;
+        let missedThisTick = 0;
+        let burst = burstThisTickByAddr.get(addr) ?? 0;
+        while (
+          burst < scaledBurstCap &&
+          (!usePhaseDDrain || globalDecodesLeft > 0)
+        ) {
+          const bufferedFrames = jb.getBufferedFrames();
+          const effectiveBurstMax = Math.min(
+            scaledBurstCap,
+            Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
+          );
+          const capForThisSource = usePhaseDDrain
+            ? Math.min(effectiveBurstMax, maxBurstPerSourceThisTick)
+            : effectiveBurstMax;
+          if (burst >= capForThisSource) break;
+          const m = decodeOneJitterFrame(addr, jb);
+          if (m === null) break;
+          missedThisTick += m;
+          burst++;
+          burstThisTickByAddr.set(addr, burst);
+          if (usePhaseDDrain) {
+            globalDecodesLeft -= 1;
+          }
+        }
+        runUnderrunAndMetricsTail(addr, jb, missedThisTick);
+      }
+
+      for (const addr of activeJitterSourcesRef.current) {
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb) continue;
+        const targetMs =
+          smoothedPlayoutTargetRef.current.get(addr) ??
+          audioTuningRef.current.adaptiveMaxTargetMs;
+        const frames = jb.getBufferedFrames();
+        const opusMs = frames * OPUS_FRAME_DURATION_MS;
+        const hist = gcallStarvationOpusHistRef.current.get(addr) ?? [];
+        const troughBefore = hist.length ? Math.min(...hist) : opusMs;
+        const recoveryBar = starvationRecoveryBarSatisfied({
+          bufferedFrames: frames,
+          opusBufferedMs: opusMs,
+          minOpusLastMTicks: troughBefore,
+          adaptiveTargetMedianMs: targetMs,
+        });
+        const inProtected = gcallStarvationProtectedModeRef.current.has(addr);
+        if (recoveryBar) {
+          gcallStarvationTicksSinceProtectedRef.current.set(addr, 0);
+        } else if (inProtected || isCollapsedForStarvation({
+            bufferedFrames: frames,
+            opusBufferedMs: opusMs,
+            adaptiveTargetMedianMs: targetMs,
+          })) {
+          const prev =
+            gcallStarvationTicksSinceProtectedRef.current.get(addr) ?? 0;
+          gcallStarvationTicksSinceProtectedRef.current.set(addr, prev + 1);
+        }
+        const nextHist = [...hist, opusMs].slice(
+          -GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS
+        );
+        gcallStarvationOpusHistRef.current.set(addr, nextHist);
+
+        if (frames >= GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN) {
+          const streak =
+            (gcallStarvationProtectedExitStreakRef.current.get(addr) ?? 0) + 1;
+          gcallStarvationProtectedExitStreakRef.current.set(addr, streak);
+          if (streak >= GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS) {
+            gcallStarvationProtectedModeRef.current.delete(addr);
+            gcallStarvationProtectedExitStreakRef.current.set(addr, 0);
+          }
+        } else {
+          gcallStarvationProtectedExitStreakRef.current.set(addr, 0);
+        }
       }
     }
     drainMs = performance.now() - drainStartedAt;
@@ -9458,6 +9693,10 @@ export function useGroupVoiceCall(uiActive = false) {
       lastJitterTickTotalMsRef.current = 0;
       activeJitterSourcesRef.current.clear();
       emptyJitterDrainTicksRef.current.clear();
+      gcallStarvationTicksSinceProtectedRef.current.clear();
+      gcallStarvationOpusHistRef.current.clear();
+      gcallStarvationProtectedExitStreakRef.current.clear();
+      gcallStarvationProtectedModeRef.current.clear();
       lastRecvAtRef.current.clear();
       lastSuccessfulRemoteDecodeAtBySourceRef.current.clear();
       sourceIngressPeerRef.current.clear();

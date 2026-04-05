@@ -3,8 +3,80 @@
  * See multi-source jitter fairness plan (per-source cap f(N), global ceiling, ordering).
  */
 
-/** Hard ceiling on total Opus decodes per ~20ms drain tick (tunable in field). */
+/**
+ * Hard ceiling on total Opus decodes per ~20ms drain tick (tunable in field).
+ * Bump only after D3 + starvation protection are validated in the field; gate on
+ * per-source spread / worst-source underruns (fairness), not aggregate not-ready alone.
+ */
 export const MAX_GLOBAL_DECODES_PER_TICK = 16;
+
+/** SLA: max consecutive drain ticks in starvation without recovery-bar satisfaction (~100ms @ 20ms/tick). */
+export const GCALL_JITTER_STARVATION_MAX_TICKS_WITHOUT_PROTECTED_SERVICE = 5;
+/** Recovery bar: minimum jitter depth (frames) before SLA may reset. */
+export const GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN = 3;
+/** Recovery bar (2a): opus buffer must improve by this many ms vs trough over last M ticks. */
+export const GCALL_JITTER_STARVATION_RECOVERY_IMPROVE_DELTA_MS = 20;
+/** Recovery bar: lookback window length (drain ticks) for trough min. */
+export const GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS = 3;
+/** Recovery bar (2b): fraction of adaptive target median (ms). */
+export const GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET = 0.35;
+/** De-escalation: consecutive ticks at/above depth floor before exiting protected scheduling. */
+export const GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS = 3;
+
+/**
+ * Protected decode budget per tick: at most half of global decode budget, never more than 8.
+ * Scales when globalBudget or MAX_GLOBAL_DECODES_PER_TICK changes.
+ */
+export function computeProtectedDecodeCap(globalBudget: number): number {
+  const g = Math.max(1, Math.floor(globalBudget));
+  return Math.min(8, Math.ceil(g * 0.5));
+}
+
+/**
+ * When multiple sources are simultaneously near SLA breach, allow extra combined protected
+ * headroom while staying bounded by global budget.
+ */
+export function computeProtectedDecodeCapForBreach(
+  globalBudget: number,
+  slaNearBreachCount: number
+): number {
+  const base = computeProtectedDecodeCap(globalBudget);
+  if (slaNearBreachCount <= 1) return base;
+  const g = Math.max(1, Math.floor(globalBudget));
+  const extra = (slaNearBreachCount - 1) * 2;
+  return Math.min(g, base + extra);
+}
+
+export function starvationRecoveryBarSatisfied(input: {
+  bufferedFrames: number;
+  opusBufferedMs: number;
+  minOpusLastMTicks: number;
+  adaptiveTargetMedianMs: number;
+}): boolean {
+  if (input.bufferedFrames < GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN) {
+    return false;
+  }
+  const improveA =
+    input.opusBufferedMs >=
+    input.minOpusLastMTicks + GCALL_JITTER_STARVATION_RECOVERY_IMPROVE_DELTA_MS;
+  const improveB =
+    input.opusBufferedMs >=
+    input.adaptiveTargetMedianMs * GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET;
+  return improveA || improveB;
+}
+
+/** Collapsed vs adaptive target — needs protected scheduling when true (recovery multi-source). */
+export function isCollapsedForStarvation(input: {
+  bufferedFrames: number;
+  opusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+}): boolean {
+  return (
+    input.bufferedFrames < GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN ||
+    input.opusBufferedMs <
+      input.adaptiveTargetMedianMs * GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET
+  );
+}
 
 export function computePerSourceCap(scaledBurstCap: number, n: number): number {
   const N = Math.max(1, n);

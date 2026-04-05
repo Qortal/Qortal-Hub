@@ -41,8 +41,7 @@ describe('getEffectiveJitterTuning tier-2 (Phase D)', () => {
     }
   });
 
-  it('tier-2 floors when flag on, recovery, and N>=2', () => {
-    localStorage.setItem('gcallJitterTier2', '1');
+  it('tier-2 floors by default when recovery and N>=2', () => {
     const t = getGroupCallAudioTuning('low-latency');
     const e = getEffectiveJitterTuning(t, 'recovery', {
       tier2MultiSource: true,
@@ -52,7 +51,8 @@ describe('getEffectiveJitterTuning tier-2 (Phase D)', () => {
     expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN_TIER2);
   });
 
-  it('stays phase-C when tier-2 flag off', () => {
+  it('stays phase-C when tier-2 explicitly opted out', () => {
+    localStorage.setItem('gcallJitterTier2', '0');
     const t = getGroupCallAudioTuning('low-latency');
     const e = getEffectiveJitterTuning(t, 'recovery', {
       tier2MultiSource: true,
