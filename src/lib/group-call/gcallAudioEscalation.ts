@@ -26,6 +26,8 @@ import {
   PENDING_DECRYPT_OVERLOAD_ENTER,
   PENDING_DECRYPT_OVERLOAD_EXIT,
   PENDING_DECRYPT_OVERLOAD_EXIT_HOLD_MS,
+  PENDING_DECRYPT_OVERLOAD_LONG_TASK_MIN_DEPTH,
+  PENDING_DECRYPT_OVERLOAD_WARM_DEPTH,
 } from './pendingDecryptLimits';
 
 const GCALL_FAIL_SAFE_STORAGE_KEY = 'qortal:gcall-audio-failsafe';
@@ -45,15 +47,32 @@ export interface DecryptOverloadState {
   exitBelowSinceMs: number | null;
 }
 
+export interface DecryptOverloadSignals {
+  /** True if pending depth is climbing vs the prior sample (trend, not a static threshold). */
+  risingTrend?: boolean;
+  /** True when recent main-thread long tasks / stall pressure warrants receive-path shedding. */
+  longTaskPressure?: boolean;
+}
+
 /**
- * Hysteresis: enter when depth > enter; exit only when depth < exit for holdMs continuously.
+ * Hysteresis: enter when depth > enter (or warm-depth + rising trend, or long-task pressure above min depth);
+ * exit only when depth < exit for holdMs continuously.
  */
 export function stepDecryptOverloadState(
   prev: DecryptOverloadState,
   depth: number,
-  nowMs: number
+  nowMs: number,
+  signals?: DecryptOverloadSignals
 ): DecryptOverloadState {
-  if (depth > PENDING_DECRYPT_OVERLOAD_ENTER) {
+  const enterStandard = depth > PENDING_DECRYPT_OVERLOAD_ENTER;
+  const enterWarmRising =
+    depth > PENDING_DECRYPT_OVERLOAD_WARM_DEPTH &&
+    Boolean(signals?.risingTrend);
+  const enterLongTask =
+    Boolean(signals?.longTaskPressure) &&
+    depth > PENDING_DECRYPT_OVERLOAD_LONG_TASK_MIN_DEPTH;
+
+  if (enterStandard || enterWarmRising || enterLongTask) {
     return { active: true, exitBelowSinceMs: null };
   }
   if (depth < PENDING_DECRYPT_OVERLOAD_EXIT) {

@@ -58,14 +58,22 @@ export function computeN1BufferEnforceTier(
   return 'normal';
 }
 
+export interface ComputeN1TierBurstCapOpts {
+  /** When true, allow 2 decodes/tick in deep tier under recovery (main-thread stalls starve buffer). */
+  recoverySingleRemote?: boolean;
+}
+
 /**
  * Effective scaled burst cap for N===1 tier (upper bound; caller still clamps in loop).
  */
 export function computeN1TierBurstCap(
   tier: GcallN1BufferEnforceTier,
-  scaledBurstCap: number
+  scaledBurstCap: number,
+  opts?: ComputeN1TierBurstCapOpts
 ): number {
-  if (tier === 'deep') return 1;
+  if (tier === 'deep') {
+    return opts?.recoverySingleRemote ? 2 : 1;
+  }
   if (tier === 'moderate') return Math.min(4, scaledBurstCap);
   return scaledBurstCap;
 }

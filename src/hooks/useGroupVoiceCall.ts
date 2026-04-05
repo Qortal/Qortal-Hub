@@ -207,6 +207,9 @@ import {
   computeRequestedBurstMaxFromSignals,
   FAIL_SAFE_JITTER_FLOOR_FRAMES,
   FAIL_SAFE_PLAYOUT_TARGET_MAX_MS,
+  GCALL_DECRYPT_APPLY_BUDGET_MS,
+  GCALL_DECRYPT_APPLY_MAX_PER_TURN,
+  GCALL_JITTER_DRAIN_TICK_BUDGET_MS,
   GCALL_OPUS_SEND_PRESSURE_MIN_BITRATE,
   PENDING_DECRYPT_BURST_EXTEND_MS,
   PENDING_DECRYPT_BURST_MAX,
@@ -215,6 +218,7 @@ import {
   PENDING_DECRYPT_MAX,
   PENDING_DECRYPT_NEWEST_FIRST_DEPTH,
   PENDING_DECRYPT_OVERLOAD_EXIT,
+  PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
   PENDING_DECRYPT_SUSTAINED_ARM_COOLDOWN_MS,
@@ -2248,6 +2252,26 @@ export function useGroupVoiceCall(uiActive = false) {
       }
     >()
   );
+  /** Completed decrypt work awaiting applyPostDecryptList (worker thread delivers faster than main can apply). */
+  const pendingDecryptApplyQueueRef = useRef<
+    {
+      wireForForward: ArrayBuffer;
+      decodedList: DecodedAudioPacket[];
+      startedAt: number;
+      receivedAt: number;
+      ingressPeerAddress: string;
+    }[]
+  >([]);
+  /** Pending setTimeout/postTask continuation for {@link pendingDecryptApplyQueueRef} drain. */
+  const decryptApplyDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  /** Prior sample for depth trend (overload entry). */
+  const previousDepthForOverloadRef = useRef(0);
+  /** Updated on Opus send-pressure interval from gcall perf (long-task burst / heavy frames). */
+  const overloadLongTaskPressureRef = useRef(false);
+  /** Last cumulative longTask count at escalation interval (delta = stall pressure). */
+  const lastLongTaskCountAtIntervalRef = useRef(0);
   const lastPendingDecryptDepthWarnAtRef = useRef(0);
   /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
@@ -4263,6 +4287,15 @@ export function useGroupVoiceCall(uiActive = false) {
         );
       }
 
+      const perfSnap = snapshotGcallPerfStats();
+      const prevLt = lastLongTaskCountAtIntervalRef.current;
+      const ltDelta = perfSnap.longTasks.count - prevLt;
+      lastLongTaskCountAtIntervalRef.current = perfSnap.longTasks.count;
+      const recentHeavy = perfSnap.longTasks.recent.some(
+        (e) => e.duration >= 50
+      );
+      overloadLongTaskPressureRef.current = ltDelta >= 2 || recentHeavy;
+
       const receivingShedding =
         decryptOverloadStateRef.current.active ||
         peakDepthRecentRef.current >= PENDING_DECRYPT_NEWEST_FIRST_DEPTH;
@@ -4321,7 +4354,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
     }, OPUS_SEND_PRESSURE_TICK_MS);
     return () => clearInterval(id);
-  }, []);
+  }, [snapshotGcallPerfStats]);
 
   useEffect(() => {
     uiActiveRef.current = uiActive;
@@ -4534,10 +4567,19 @@ export function useGroupVoiceCall(uiActive = false) {
       while (q.length > 0 && q[0]!.t < now - 2000) q.shift();
       peakDepthRecentRef.current = q.reduce((m, x) => Math.max(m, x.d), 0);
 
+      const prevDepth = previousDepthForOverloadRef.current;
+      previousDepthForOverloadRef.current = depth;
+      const risingTrend =
+        depth > prevDepth + PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA;
+
       decryptOverloadStateRef.current = stepDecryptOverloadState(
         decryptOverloadStateRef.current,
         depth,
-        now
+        now,
+        {
+          risingTrend,
+          longTaskPressure: overloadLongTaskPressureRef.current,
+        }
       );
       setGcallDiagnosticsSuppressInfo(decryptOverloadStateRef.current.active);
 
@@ -4970,6 +5012,62 @@ export function useGroupVoiceCall(uiActive = false) {
       );
     },
     [applyPostDecryptList]
+  );
+
+  const flushDecryptApplyQueue = useCallback(() => {
+    if (decryptApplyDrainTimerRef.current !== null) {
+      clearTimeout(decryptApplyDrainTimerRef.current);
+      decryptApplyDrainTimerRef.current = null;
+    }
+    const deadline = performance.now() + GCALL_DECRYPT_APPLY_BUDGET_MS;
+    const q = pendingDecryptApplyQueueRef.current;
+    let applied = 0;
+    while (
+      q.length > 0 &&
+      performance.now() < deadline &&
+      applied < GCALL_DECRYPT_APPLY_MAX_PER_TURN
+    ) {
+      const job = q.shift()!;
+      applyPostDecryptList(
+        job.wireForForward,
+        job.decodedList,
+        job.startedAt,
+        job.receivedAt,
+        job.ingressPeerAddress
+      );
+      applied++;
+    }
+    if (q.length > 0) {
+      decryptApplyDrainTimerRef.current = setTimeout(() => {
+        decryptApplyDrainTimerRef.current = null;
+        flushDecryptApplyQueue();
+      }, 0);
+    }
+  }, [applyPostDecryptList]);
+
+  const enqueueDecryptApply = useCallback(
+    (job: {
+      wireForForward: ArrayBuffer;
+      decodedList: DecodedAudioPacket[];
+      startedAt: number;
+      receivedAt: number;
+      ingressPeerAddress: string;
+    }) => {
+      const q = pendingDecryptApplyQueueRef.current;
+      if (q.length === 0 && job.decodedList.length === 1) {
+        applyPostDecryptList(
+          job.wireForForward,
+          job.decodedList,
+          job.startedAt,
+          job.receivedAt,
+          job.ingressPeerAddress
+        );
+        return;
+      }
+      q.push(job);
+      flushDecryptApplyQueue();
+    },
+    [applyPostDecryptList, flushDecryptApplyQueue]
   );
 
   const syncDecryptWorkerRoomKey = useCallback(
@@ -7116,6 +7214,8 @@ export function useGroupVoiceCall(uiActive = false) {
    *  ring absorb variance. */
   const runJitterDrainTick = useCallback(() => {
     const tickStartedAt = performance.now();
+    const jitterTickBudgetDeadline =
+      tickStartedAt + GCALL_JITTER_DRAIN_TICK_BUDGET_MS;
     const activeSourceCount = activeJitterSourcesRef.current.size;
     let prefetchMs = 0;
     let drainMs = 0;
@@ -7131,6 +7231,9 @@ export function useGroupVoiceCall(uiActive = false) {
         ...activeJitterSourcesRef.current,
       ]);
       for (const addr of prefetchAddrs) {
+        if (performance.now() >= jitterTickBudgetDeadline) {
+          break;
+        }
         postWasmFecBatchToPlayout(
           addr,
           GCALL_EMPTY_PCM,
@@ -7420,7 +7523,10 @@ export function useGroupVoiceCall(uiActive = false) {
           ? computeN1BufferEnforceTier(n1Ratio)
           : ('normal' as const);
         let n1ScaledCap = n1SingleRemote
-          ? computeN1TierBurstCap(n1Tier, scaledBurstCap)
+          ? computeN1TierBurstCap(n1Tier, scaledBurstCap, {
+              recoverySingleRemote:
+                n1SingleRemote && jitterGeomAppliedRef.current === 'recovery',
+            })
           : scaledBurstCap;
 
         if (n1SingleRemote && !prerollActive) {
@@ -8959,8 +9065,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
   /** Create the off-thread decrypt Worker and attach its message handler.
    *  Called at join time; the Worker is terminated in cleanup().
-   *  Hot path: `applyPostDecrypt` / `applyPostDecryptList` stay synchronous; defer only
-   *  non-critical diagnostics (e.g. stale-key drop log) off the completion microtask. */
+   *  Successful decrypt results go through `enqueueDecryptApply` (wall-time–budgeted drain + fast
+   *  single-frame path). Decode failures still use `applyPostDecrypt` synchronously. */
   const setupDecryptWorker = useCallback(() => {
     if (decryptWorkerRef.current) return; // already running
     lastWorkerRoomKeyRef.current = null;
@@ -9095,13 +9201,13 @@ export function useGroupVoiceCall(uiActive = false) {
             opusFrame: new Uint8Array(raw.opusFrame),
           });
         }
-        applyPostDecryptList(
+        enqueueDecryptApply({
           wireForForward,
-          list,
+          decodedList: list,
           startedAt,
           receivedAt,
-          ingressPeerAddress
-        );
+          ingressPeerAddress,
+        });
         recordPerfDuration(
           'decryptWorkerHandlerMs',
           performance.now() - handlerStartedAt
@@ -9118,13 +9224,27 @@ export function useGroupVoiceCall(uiActive = false) {
             opusFrame: new Uint8Array(raw.opusFrame),
           }
         : null;
-      applyPostDecrypt(
+      if (!decoded) {
+        applyPostDecrypt(
+          wireForForward,
+          null,
+          startedAt,
+          receivedAt,
+          ingressPeerAddress
+        );
+        recordPerfDuration(
+          'decryptWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
+        return;
+      }
+      enqueueDecryptApply({
         wireForForward,
-        decoded,
+        decodedList: [decoded],
         startedAt,
         receivedAt,
-        ingressPeerAddress
-      );
+        ingressPeerAddress,
+      });
       recordPerfDuration(
         'decryptWorkerHandlerMs',
         performance.now() - handlerStartedAt
@@ -9138,6 +9258,7 @@ export function useGroupVoiceCall(uiActive = false) {
     applyPostDecrypt,
     applyPostDecryptList,
     dispatchEncodedPacket,
+    enqueueDecryptApply,
     incrementPerfCounter,
     logSendPathDiagnostic,
     armDecryptBurstRecoveryWindow,
@@ -9434,6 +9555,9 @@ export function useGroupVoiceCall(uiActive = false) {
         chatIdRef.current = chatId;
         gcallDiagnosticsClear();
         gcallPerfRef.current.reset();
+        lastLongTaskCountAtIntervalRef.current = 0;
+        overloadLongTaskPressureRef.current = false;
+        previousDepthForOverloadRef.current = 0;
         tickBudgetBreachesRef.current.length = 0;
         tickBudgetBreachesMonotonicRef.current = 0;
         lastTickBudgetBreachesAtWindowEmitRef.current = 0;
@@ -9962,6 +10086,15 @@ export function useGroupVoiceCall(uiActive = false) {
       lastGcallEscalationTickAtMsRef.current = 0;
       setGcallDiagnosticsSuppressInfo(false);
       clearAuthoritativeKeyGrace();
+
+      if (decryptApplyDrainTimerRef.current) {
+        clearTimeout(decryptApplyDrainTimerRef.current);
+        decryptApplyDrainTimerRef.current = null;
+      }
+      pendingDecryptApplyQueueRef.current.length = 0;
+      previousDepthForOverloadRef.current = 0;
+      overloadLongTaskPressureRef.current = false;
+      lastLongTaskCountAtIntervalRef.current = 0;
 
       // Terminate the decrypt Worker (sync clears pending + worker key)
       if (decryptWorkerRef.current) {

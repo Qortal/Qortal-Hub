@@ -7,6 +7,8 @@ import {
   PENDING_DECRYPT_OVERLOAD_ENTER,
   PENDING_DECRYPT_OVERLOAD_EXIT,
   PENDING_DECRYPT_OVERLOAD_EXIT_HOLD_MS,
+  PENDING_DECRYPT_OVERLOAD_LONG_TASK_MIN_DEPTH,
+  PENDING_DECRYPT_OVERLOAD_WARM_DEPTH,
 } from './pendingDecryptLimits';
 
 describe('stepDecryptOverloadState', () => {
@@ -15,6 +17,36 @@ describe('stepDecryptOverloadState', () => {
       { active: false, exitBelowSinceMs: null },
       PENDING_DECRYPT_OVERLOAD_ENTER + 1,
       1000
+    );
+    expect(s.active).toBe(true);
+  });
+
+  it('enters on warm depth with rising trend', () => {
+    const s = stepDecryptOverloadState(
+      { active: false, exitBelowSinceMs: null },
+      PENDING_DECRYPT_OVERLOAD_WARM_DEPTH + 1,
+      1000,
+      { risingTrend: true }
+    );
+    expect(s.active).toBe(true);
+  });
+
+  it('does not enter on warm depth without rising trend', () => {
+    const s = stepDecryptOverloadState(
+      { active: false, exitBelowSinceMs: null },
+      PENDING_DECRYPT_OVERLOAD_WARM_DEPTH + 1,
+      1000,
+      { risingTrend: false }
+    );
+    expect(s.active).toBe(false);
+  });
+
+  it('enters on long-task pressure above min depth', () => {
+    const s = stepDecryptOverloadState(
+      { active: false, exitBelowSinceMs: null },
+      PENDING_DECRYPT_OVERLOAD_LONG_TASK_MIN_DEPTH + 1,
+      1000,
+      { longTaskPressure: true }
     );
     expect(s.active).toBe(true);
   });

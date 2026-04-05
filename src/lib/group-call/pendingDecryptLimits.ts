@@ -45,6 +45,21 @@ export const PENDING_DECRYPT_OVERLOAD_ENTER = 160;
 export const PENDING_DECRYPT_OVERLOAD_EXIT = 100;
 export const PENDING_DECRYPT_OVERLOAD_EXIT_HOLD_MS = 500;
 
+/** Earlier overload entry when depth is rising (paired with {@link PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA}). */
+export const PENDING_DECRYPT_OVERLOAD_WARM_DEPTH = 96;
+/** Depth must increase by at least this vs previous sample to count as “rising” for overload. */
+export const PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA = 8;
+/** Minimum depth for long-task–driven overload entry (stall pressure path). */
+export const PENDING_DECRYPT_OVERLOAD_LONG_TASK_MIN_DEPTH = 80;
+
+/** Wall-time budget per macrotask for applying decrypt worker results on the main thread (ms). */
+export const GCALL_DECRYPT_APPLY_BUDGET_MS = 6;
+/** Safety cap on decrypt applies per macrotask (after time budget). */
+export const GCALL_DECRYPT_APPLY_MAX_PER_TURN = 24;
+
+/** Soft ceiling for one jitter drain tick (prefetch + decode + adaptive); FEC prefetch yields first (ms). */
+export const GCALL_JITTER_DRAIN_TICK_BUDGET_MS = 14;
+
 /** Newest-first / receive-path shedding policy engages at this depth (aligns with overload entry). */
 export const PENDING_DECRYPT_NEWEST_FIRST_DEPTH = PENDING_DECRYPT_OVERLOAD_ENTER;
 
