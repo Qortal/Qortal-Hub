@@ -492,6 +492,9 @@ declare global {
         roomId: string,
         healthyPeerAddresses: string[]
       ) => Promise<{ success: boolean }>;
+      reportGcallAudioEscalation?: (opts: {
+        failSafeActive?: boolean;
+      }) => Promise<{ success: boolean; error?: string }>;
       getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
       getRoomBootstrapState?: (roomId: string) => Promise<{
         roomId: string;

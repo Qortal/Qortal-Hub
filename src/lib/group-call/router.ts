@@ -499,6 +499,29 @@ export interface GroupCallMetricsSnapshot {
   pendingDecryptDepth: number;
   /** Session high-water for {@link pendingDecryptDepth}. */
   pendingDecryptDepthHighWater: number;
+
+  /** Cumulative ms in decrypt burst window tier (session). */
+  gcallAudioBurstWindowCumulativeMs: number;
+  /** Cumulative ms in decrypt overload (stage 4). */
+  gcallAudioOverloadCumulativeMs: number;
+  /** Cumulative ms with ingress pacing tier &gt; 0 (Opus send-pressure). */
+  gcallAudioIngressPacingCumulativeMs: number;
+  /** Cumulative ms with extra flush boost / stage-5 escalation active (renderer estimate). */
+  gcallAudioStage5BoostCumulativeMs: number;
+  /** Cumulative ms in fail-safe mode (optional stage 6). */
+  gcallAudioFailSafeCumulativeMs: number;
+  /** Last completed continuous stint in burst window (ms). */
+  gcallAudioBurstWindowLastStintMs: number;
+  gcallAudioOverloadLastStintMs: number;
+  gcallAudioIngressPacingLastStintMs: number;
+  gcallAudioStage5BoostLastStintMs: number;
+  gcallAudioFailSafeLastStintMs: number;
+  /** Session entry counts (flapping indicator). */
+  gcallAudioBurstWindowEntries: number;
+  gcallAudioOverloadEntries: number;
+  gcallAudioIngressPacingEntries: number;
+  gcallAudioStage5BoostEntries: number;
+  gcallAudioFailSafeEntries: number;
 }
 
 export interface GroupCallSourceWindowMetrics {
@@ -1188,7 +1211,28 @@ export class GroupCallPerformanceTracker {
     clusterForwarderDemotionCount: 0,
     pendingDecryptDepth: 0,
     pendingDecryptDepthHighWater: 0,
+    gcallAudioBurstWindowCumulativeMs: 0,
+    gcallAudioOverloadCumulativeMs: 0,
+    gcallAudioIngressPacingCumulativeMs: 0,
+    gcallAudioStage5BoostCumulativeMs: 0,
+    gcallAudioFailSafeCumulativeMs: 0,
+    gcallAudioBurstWindowLastStintMs: 0,
+    gcallAudioOverloadLastStintMs: 0,
+    gcallAudioIngressPacingLastStintMs: 0,
+    gcallAudioStage5BoostLastStintMs: 0,
+    gcallAudioFailSafeLastStintMs: 0,
+    gcallAudioBurstWindowEntries: 0,
+    gcallAudioOverloadEntries: 0,
+    gcallAudioIngressPacingEntries: 0,
+    gcallAudioStage5BoostEntries: 0,
+    gcallAudioFailSafeEntries: 0,
   };
+
+  private gcallStageBurstStintStart: number | null = null;
+  private gcallStageOverloadStintStart: number | null = null;
+  private gcallStageIngressStintStart: number | null = null;
+  private gcallStage5StintStart: number | null = null;
+  private gcallStageFailSafeStintStart: number | null = null;
 
   private incomingPacketSamples = 0;
   private incomingPacketTotalMs = 0;
@@ -1360,7 +1404,88 @@ export class GroupCallPerformanceTracker {
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
+  /**
+   * Time-in-stage metrics (cumulative session ms, last completed stint, entry counts).
+   * Call on a fixed cadence (e.g. Opus send-pressure tick) with wall-clock delta.
+   */
+  tickGcallAudioStageMetrics(
+    deltaMs: number,
+    active: {
+      burstWindow: boolean;
+      overload: boolean;
+      ingressPacing: boolean;
+      stage5Boost: boolean;
+      failSafe: boolean;
+    }
+  ): void {
+    const d = Math.max(0, deltaMs);
+    const now = Date.now();
+
+    if (active.burstWindow) {
+      if (this.gcallStageBurstStintStart === null) {
+        this.gcallStageBurstStintStart = now;
+        this.snapshot.gcallAudioBurstWindowEntries++;
+      }
+      this.snapshot.gcallAudioBurstWindowCumulativeMs += d;
+    } else if (this.gcallStageBurstStintStart !== null) {
+      this.snapshot.gcallAudioBurstWindowLastStintMs =
+        now - this.gcallStageBurstStintStart;
+      this.gcallStageBurstStintStart = null;
+    }
+
+    if (active.overload) {
+      if (this.gcallStageOverloadStintStart === null) {
+        this.gcallStageOverloadStintStart = now;
+        this.snapshot.gcallAudioOverloadEntries++;
+      }
+      this.snapshot.gcallAudioOverloadCumulativeMs += d;
+    } else if (this.gcallStageOverloadStintStart !== null) {
+      this.snapshot.gcallAudioOverloadLastStintMs =
+        now - this.gcallStageOverloadStintStart;
+      this.gcallStageOverloadStintStart = null;
+    }
+
+    if (active.ingressPacing) {
+      if (this.gcallStageIngressStintStart === null) {
+        this.gcallStageIngressStintStart = now;
+        this.snapshot.gcallAudioIngressPacingEntries++;
+      }
+      this.snapshot.gcallAudioIngressPacingCumulativeMs += d;
+    } else if (this.gcallStageIngressStintStart !== null) {
+      this.snapshot.gcallAudioIngressPacingLastStintMs =
+        now - this.gcallStageIngressStintStart;
+      this.gcallStageIngressStintStart = null;
+    }
+
+    if (active.stage5Boost) {
+      if (this.gcallStage5StintStart === null) {
+        this.gcallStage5StintStart = now;
+        this.snapshot.gcallAudioStage5BoostEntries++;
+      }
+      this.snapshot.gcallAudioStage5BoostCumulativeMs += d;
+    } else if (this.gcallStage5StintStart !== null) {
+      this.snapshot.gcallAudioStage5BoostLastStintMs =
+        now - this.gcallStage5StintStart;
+      this.gcallStage5StintStart = null;
+    }
+
+    if (active.failSafe) {
+      if (this.gcallStageFailSafeStintStart === null) {
+        this.gcallStageFailSafeStintStart = now;
+        this.snapshot.gcallAudioFailSafeEntries++;
+      }
+      this.snapshot.gcallAudioFailSafeCumulativeMs += d;
+    } else if (this.gcallStageFailSafeStintStart !== null) {
+      this.snapshot.gcallAudioFailSafeLastStintMs =
+        now - this.gcallStageFailSafeStintStart;
+      this.gcallStageFailSafeStintStart = null;
+    }
+
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
   /** Worker returned after key version changed; pending decrypt job was discarded. */
+
   recordStaleWorkerDecryptDrop(count = 1): void {
     if (count <= 0) return;
     this.snapshot.packetsDropped += count;
@@ -1982,7 +2107,27 @@ export class GroupCallPerformanceTracker {
       clusterForwarderDemotionCount: 0,
       pendingDecryptDepth: 0,
       pendingDecryptDepthHighWater: 0,
+      gcallAudioBurstWindowCumulativeMs: 0,
+      gcallAudioOverloadCumulativeMs: 0,
+      gcallAudioIngressPacingCumulativeMs: 0,
+      gcallAudioStage5BoostCumulativeMs: 0,
+      gcallAudioFailSafeCumulativeMs: 0,
+      gcallAudioBurstWindowLastStintMs: 0,
+      gcallAudioOverloadLastStintMs: 0,
+      gcallAudioIngressPacingLastStintMs: 0,
+      gcallAudioStage5BoostLastStintMs: 0,
+      gcallAudioFailSafeLastStintMs: 0,
+      gcallAudioBurstWindowEntries: 0,
+      gcallAudioOverloadEntries: 0,
+      gcallAudioIngressPacingEntries: 0,
+      gcallAudioStage5BoostEntries: 0,
+      gcallAudioFailSafeEntries: 0,
     };
+    this.gcallStageBurstStintStart = null;
+    this.gcallStageOverloadStintStart = null;
+    this.gcallStageIngressStintStart = null;
+    this.gcallStage5StintStart = null;
+    this.gcallStageFailSafeStintStart = null;
     this.incomingPacketSamples = 0;
     this.incomingPacketTotalMs = 0;
     this.jitterTickSamples = 0;

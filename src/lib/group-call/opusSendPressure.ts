@@ -14,7 +14,13 @@
  * limits oscillation between tier increases.
  */
 
-/** Minimum Opus bitrate when stepped down under pressure (do not go below). */
+import { GCALL_INGRESS_PACING_MAX_MS } from './pendingDecryptLimits';
+
+/**
+ * Ladder floor for tier *differentiation* (distinct steps). Encoder apply uses
+ * {@link GCALL_OPUS_SEND_PRESSURE_MIN_BITRATE} in `useGroupVoiceCall` so the live bitrate never
+ * goes below 24 kbps (group-call policy).
+ */
 export const OPUS_SEND_PRESSURE_MIN_BITRATE = 10_000;
 
 /** Fractions of nominal bitrate for pressure tiers (nominal → pressure_1 → … → floor). */
@@ -137,6 +143,8 @@ export interface OpusSendPressureControllerState {
   /** At lowest tier while pressure still active (controlled drops elsewhere). */
   maxPain: boolean;
   lastMaxPainLogAtMs: number;
+  /** Wall time when tierIndex last became &gt; 0 (ingress pacing max duration). */
+  ingressPacingSinceMs: number | null;
 }
 
 export function createOpusSendPressureControllerState(): OpusSendPressureControllerState {
@@ -147,6 +155,7 @@ export function createOpusSendPressureControllerState(): OpusSendPressureControl
     lastStepUpAtMs: 0,
     maxPain: false,
     lastMaxPainLogAtMs: 0,
+    ingressPacingSinceMs: null,
   };
 }
 
@@ -160,6 +169,14 @@ export interface OpusSendPressureTickResult {
   maxPainEntered: boolean;
 }
 
+export interface OpusSendPressureTickOpts {
+  /**
+   * When receive-path is already shedding (overload / newest-first), do not step worse than this
+   * tier index (e.g. 1 = stay at mild pressure).
+   */
+  maxTierIndex?: number;
+}
+
 /**
  * Advance pressure controller. Call on a fixed cadence (e.g. 250ms) with live snapshot + nominal tiers.
  */
@@ -168,7 +185,8 @@ export function tickOpusSendPressureController(
   tiers: readonly number[],
   deltaMs: number,
   nowMs: number,
-  pressured: boolean
+  pressured: boolean,
+  opts?: OpusSendPressureTickOpts
 ): OpusSendPressureTickResult {
   if (tiers.length === 0) {
     return {
@@ -182,6 +200,10 @@ export function tickOpusSendPressureController(
   let tierChanged = false;
   let maxPainEntered = false;
   const maxIx = tiers.length - 1;
+  const capIx =
+    opts?.maxTierIndex !== undefined
+      ? Math.min(maxIx, Math.max(0, opts.maxTierIndex))
+      : maxIx;
   state.tierIndex = Math.min(Math.max(0, state.tierIndex), maxIx);
 
   if (pressured) {
@@ -189,11 +211,11 @@ export function tickOpusSendPressureController(
     state.pressureAccumMs += deltaMs;
     if (state.pressureAccumMs >= OPUS_SEND_PRESSURE_ENTER_MS) {
       state.pressureAccumMs = 0;
-      if (state.tierIndex < maxIx) {
+      if (state.tierIndex < capIx) {
         state.tierIndex++;
         tierChanged = true;
       }
-      if (state.tierIndex >= maxIx) {
+      if (state.tierIndex >= capIx) {
         if (!state.maxPain) {
           state.maxPain = true;
           maxPainEntered = true;
@@ -217,6 +239,30 @@ export function tickOpusSendPressureController(
   }
 
   state.tierIndex = Math.min(Math.max(0, state.tierIndex), maxIx);
+  if (state.tierIndex > capIx) {
+    state.tierIndex = capIx;
+    tierChanged = true;
+  }
+
+  if (state.tierIndex > 0 && state.ingressPacingSinceMs === null) {
+    state.ingressPacingSinceMs = nowMs;
+  }
+  if (state.tierIndex === 0) {
+    state.ingressPacingSinceMs = null;
+  }
+  if (
+    state.tierIndex > 0 &&
+    state.ingressPacingSinceMs !== null &&
+    nowMs - state.ingressPacingSinceMs >= GCALL_INGRESS_PACING_MAX_MS
+  ) {
+    state.tierIndex = 0;
+    state.pressureAccumMs = 0;
+    state.cleanAccumMs = 0;
+    state.maxPain = false;
+    state.ingressPacingSinceMs = null;
+    if (!tierChanged) tierChanged = true;
+  }
+
   const targetBitrate = tiers[state.tierIndex]!;
 
   return {

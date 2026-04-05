@@ -145,11 +145,19 @@ function safeClonePayload(payload: unknown): unknown {
   }
 }
 
+/** When true, `gcallDiagnosticsPush('info', ...)` is dropped (overload / stage-4 work reduction). */
+let gcallDiagnosticsSuppressInfo = false;
+
+export function setGcallDiagnosticsSuppressInfo(suppress: boolean): void {
+  gcallDiagnosticsSuppressInfo = suppress;
+}
+
 export function gcallDiagnosticsPush(
   level: GcallDiagLevel,
   tag: string,
   payload: unknown
 ): void {
+  if (gcallDiagnosticsSuppressInfo && level === 'info') return;
   events.push({
     t: Date.now(),
     level,

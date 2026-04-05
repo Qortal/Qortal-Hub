@@ -1124,6 +1124,12 @@ try {
         reason
       ) as Promise<{ success: boolean; error?: string }>,
 
+    reportGcallAudioEscalation: async (opts: { failSafeActive?: boolean }) =>
+      ipcRenderer.invoke(
+        'gcall:reportGcallAudioEscalation',
+        opts
+      ) as Promise<{ success: boolean; error?: string }>,
+
     /** Send room media key (nacl.box encrypted) to a participant. */
     sendKey: async (
       roomId: string,

@@ -117,6 +117,12 @@ const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS_CAP = 48;
 const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER_CAP = 12;
 /** After renderer-requested media recovery, temporarily allow deeper flush (matches ADAPTIVE_RECOVERY_COOLDOWN_MS in renderer). */
 const GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS = 8_000;
+/** Stage-5 flush boost re-escalation cooldown (renderer-aligned). */
+const STAGE5_REESCALATION_COOLDOWN_MS = 2_000;
+const STAGE5_BYPASS_BRIDGE_WAITING_MS = 500;
+const STAGE5_BYPASS_BINARY_OUT_HW = 8;
+const STAGE5_BYPASS_BINARY_OUT_DWELL_MS = 1_000;
+const STAGE5_BYPASS_QUEUE_PRESSURE_LAST5S = 6;
 /**
  * Path warm / topology recovery reasons: do not set recovery hold (avoids 200ms pending max-age
  * during route churn). See getReticulumAudioPendingMaxAgeMs when recoveryHoldUntilMs is active.
@@ -1040,6 +1046,12 @@ export class GroupCallManager extends EventEmitter {
   private reticulumAudioFlushCursor = 0;
   /** Wall clock ms until which flush caps are scaled after media recovery (see GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS). */
   private reticulumAudioFlushBoostUntilMs = 0;
+  /** Renderer-reported fail-safe clamps aggressive main-process flush (optional stage 6). */
+  private gcallAudioFailSafeActive = false;
+  private bridgeWaitingForDrainSinceMs: number | null = null;
+  private binaryOutHighPressureSinceMs: number | null = null;
+  private lastStage5FlushBoostAtMs = 0;
+  private lastStage5FlushBoostPacketFailures = 0;
 
   private presenceExpiredHandler: (address: string) => void;
   private onReticulumGroupCallMessage:
@@ -1700,6 +1712,35 @@ export class GroupCallManager extends EventEmitter {
     });
   }
 
+  /** Renderer-reported staged escalation (fail-safe clamps aggressive flush in `getReticulumAudioFlushLimits`). */
+  reportGcallAudioEscalation(opts: { failSafeActive?: boolean }): void {
+    this.gcallAudioFailSafeActive = opts.failSafeActive === true;
+  }
+
+  private refreshReticulumAudioPressureDwell(): void {
+    const snap = this.reticulumBridge?.getAudioQueueSnapshot();
+    const now = Date.now();
+    if (!snap) {
+      this.bridgeWaitingForDrainSinceMs = null;
+      this.binaryOutHighPressureSinceMs = null;
+      return;
+    }
+    if (snap.bridgeWaitingForDrain) {
+      if (this.bridgeWaitingForDrainSinceMs === null) {
+        this.bridgeWaitingForDrainSinceMs = now;
+      }
+    } else {
+      this.bridgeWaitingForDrainSinceMs = null;
+    }
+    if (snap.binaryOutQueueDepth >= STAGE5_BYPASS_BINARY_OUT_HW) {
+      if (this.binaryOutHighPressureSinceMs === null) {
+        this.binaryOutHighPressureSinceMs = now;
+      }
+    } else {
+      this.binaryOutHighPressureSinceMs = null;
+    }
+  }
+
   requestPeerMediaRecovery(
     roomId: string,
     address: string,
@@ -1711,10 +1752,30 @@ export class GroupCallManager extends EventEmitter {
     if (!normalizedRoomId || !normalizedAddress) return;
     const holdAudio = shouldHoldAudioForReticulumRecoveryReason(normalizedReason);
     const now = Date.now();
-    this.reticulumAudioFlushBoostUntilMs = Math.max(
-      this.reticulumAudioFlushBoostUntilMs,
-      now + GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS
-    );
+    this.refreshReticulumAudioPressureDwell();
+    const snap = this.reticulumBridge?.getAudioQueueSnapshot();
+    const sinceLast = now - this.lastStage5FlushBoostAtMs;
+    const bypassCooldown =
+      (this.bridgeWaitingForDrainSinceMs !== null &&
+        now - this.bridgeWaitingForDrainSinceMs >= STAGE5_BYPASS_BRIDGE_WAITING_MS) ||
+      (this.binaryOutHighPressureSinceMs !== null &&
+        now - this.binaryOutHighPressureSinceMs >= STAGE5_BYPASS_BINARY_OUT_DWELL_MS) ||
+      (snap != null &&
+        snap.queuePressureDropsLast5s >= STAGE5_BYPASS_QUEUE_PRESSURE_LAST5S &&
+        snap.bridgeQueuedFrames >= GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES) ||
+      (snap != null && snap.packetSendFailures > this.lastStage5FlushBoostPacketFailures);
+    const extendFlushBoost =
+      sinceLast >= STAGE5_REESCALATION_COOLDOWN_MS || bypassCooldown;
+    if (extendFlushBoost) {
+      this.reticulumAudioFlushBoostUntilMs = Math.max(
+        this.reticulumAudioFlushBoostUntilMs,
+        now + GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS
+      );
+      this.lastStage5FlushBoostAtMs = now;
+      if (snap) {
+        this.lastStage5FlushBoostPacketFailures = snap.packetSendFailures;
+      }
+    }
     this.requestReticulumAudioRecovery(
       normalizedRoomId,
       normalizedAddress,
@@ -3661,8 +3722,34 @@ export class GroupCallManager extends EventEmitter {
     maxPerPass: number;
     maxPerPeer: number;
   } {
+    this.refreshReticulumAudioPressureDwell();
+    const snap = this.reticulumBridge?.getAudioQueueSnapshot();
     let pass = GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS;
     let peer = GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER;
+    if (snap) {
+      const bq = snap.bridgeQueuedFrames;
+      const bin = snap.binaryOutQueueDepth;
+      const dec = snap.decodedQueueDepth;
+      const pressure = Math.min(1, (bq + bin * 2 + dec) / 48);
+      const passSpan =
+        GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS_CAP -
+        GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS;
+      const peerSpan =
+        GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER_CAP -
+        GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER;
+      pass = Math.round(
+        Math.min(
+          GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS_CAP,
+          pass + passSpan * pressure * 0.6
+        )
+      );
+      peer = Math.round(
+        Math.min(
+          GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER_CAP,
+          peer + peerSpan * pressure * 0.6
+        )
+      );
+    }
     const now = Date.now();
     const boost =
       now < this.reticulumAudioFlushBoostUntilMs ||
@@ -3675,6 +3762,16 @@ export class GroupCallManager extends EventEmitter {
       peer = Math.min(
         GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER_CAP,
         peer * GC_RETICULUM_AUDIO_FLUSH_SCALE_FACTOR
+      );
+    }
+    if (this.gcallAudioFailSafeActive) {
+      pass = Math.min(
+        pass,
+        Math.round(GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS * 1.5)
+      );
+      peer = Math.min(
+        peer,
+        Math.round(GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER * 1.5)
       );
     }
     return { maxPerPass: pass, maxPerPeer: peer };

@@ -2476,6 +2476,16 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
+  'gcall:reportGcallAudioEscalation',
+  async (_event, opts: { failSafeActive?: boolean }) => {
+    const mgr = getGroupCallManager();
+    if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+    mgr.reportGcallAudioEscalation(opts ?? {});
+    return { success: true };
+  }
+);
+
+ipcMain.handle(
   'gcall:sendKey',
   async (
     _event,

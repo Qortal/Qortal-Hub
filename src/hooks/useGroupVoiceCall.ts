@@ -132,6 +132,7 @@ import {
   gcallDiagnosticsCollectRtcStats,
   gcallDiagnosticsIngestConsoleArgs,
   gcallDiagnosticsPush,
+  setGcallDiagnosticsSuppressInfo,
   truncateGcallDiagAddress,
   type GcallDiagExportContext,
 } from '../lib/group-call/gcall-diagnostics';
@@ -150,14 +151,27 @@ import {
   tickOpusSendPressureController,
 } from '../lib/group-call/opusSendPressure';
 import {
+  readGcallAudioFailSafeEnabled,
+  stepFailSafeState,
+  stepDecryptOverloadState,
+} from '../lib/group-call/gcallAudioEscalation';
+import {
   computePendingDecryptLimits,
+  computeRequestedBurstMaxFromSignals,
+  FAIL_SAFE_JITTER_FLOOR_FRAMES,
+  FAIL_SAFE_PLAYOUT_TARGET_MAX_MS,
+  GCALL_OPUS_SEND_PRESSURE_MIN_BITRATE,
   PENDING_DECRYPT_BURST_EXTEND_MS,
   PENDING_DECRYPT_BURST_MAX,
+  PENDING_DECRYPT_BURST_NOMINAL_BASE,
   PENDING_DECRYPT_BURST_TTL_MS,
   PENDING_DECRYPT_MAX,
+  PENDING_DECRYPT_NEWEST_FIRST_DEPTH,
+  PENDING_DECRYPT_OVERLOAD_EXIT,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
   PENDING_DECRYPT_TTL_MS,
+  slewBurstMaxTowardRequested,
 } from '../lib/group-call/pendingDecryptLimits';
 import {
   filterRosterMapByMemberSet,
@@ -393,6 +407,11 @@ const PENDING_DECRYPT_DEPTH_LOG_MIN_INTERVAL_MS = 5_000;
 const PLAYOUT_ACTIVITY_WINDOW_MS = 400;
 /** Avoid reconnect storms when repeated bad media windows hit the same transport leg. */
 const MEDIA_RECOVERY_ACTION_COOLDOWN_MS = 45_000;
+/** Reasons that extend main-process flush boost (stage 5) — not path-warm probes. */
+const STAGE5_FLUSH_BOOST_REASONS = new Set([
+  'live-source-stall',
+  'window-media-recovery',
+]);
 const SOURCE_GAP_LOG_MIN_INTERVAL_MS = 5_000;
 const SOURCE_STALL_MIN_AGE_MS = 8_000;
 const SOURCE_STALL_LOG_MIN_INTERVAL_MS = 5_000;
@@ -1930,6 +1949,26 @@ export function useGroupVoiceCall(uiActive = false) {
   const globalRecoveryUntilMsRef = useRef<number>(0);
   /** Short decrypt-queue burst window after key sync or participant join (see `computePendingDecryptLimits`). */
   const decryptBurstUntilMsRef = useRef<number>(0);
+  /**
+   * Staged audio escalation (single transition: `runGcallAudioEscalationTransition` + overload in
+   * `recordPendingDecryptDepth`). See `gcallAudioEscalation.ts` for the ownership table.
+   */
+  const effectiveBurstMaxRef = useRef(PENDING_DECRYPT_BURST_NOMINAL_BASE);
+  const lastBurstMaxSlewAtMsRef = useRef(Date.now());
+  const peakDepthSamplesRef = useRef<Array<{ t: number; d: number }>>([]);
+  const peakDepthRecentRef = useRef(0);
+  const lastIngressPacketsRef = useRef({ received: 0, atMs: 0 });
+  const decryptOverloadStateRef = useRef({
+    active: false,
+    exitBelowSinceMs: null as number | null,
+  });
+  const failSafeStateRef = useRef({
+    active: false,
+    overloadSinceMs: null as number | null,
+    enteredAtMs: null as number | null,
+  });
+  const stage5FlushBoostUntilMsRef = useRef(0);
+  const lastGcallEscalationTickAtMsRef = useRef(0);
   /** True only while this node generated the current roomKey (as root-forwarder initiator).
    *  Cleared when root is lost so a re-promoted node never redistributes a foreign key. */
   const isOurKeyRef = useRef(false);
@@ -3096,7 +3135,13 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!node) continue;
 
       const samples = interArrivalSamplesRef.current.get(addr) ?? [];
-      const jitterMs = computeAdaptiveJitterMs(samples);
+      let jitterMs = computeAdaptiveJitterMs(samples);
+      if (failSafeStateRef.current.active) {
+        jitterMs = Math.max(
+          jitterMs,
+          FAIL_SAFE_JITTER_FLOOR_FRAMES * OPUS_FRAME_DURATION_MS
+        );
+      }
 
       const missed = lastDrainMissedRef.current.get(addr) ?? 0;
       lastDrainMissedRef.current.set(addr, 0);
@@ -3132,13 +3177,19 @@ export function useGroupVoiceCall(uiActive = false) {
         lastVadAt > 0 && wallNow - lastVadAt < ACTIVE_SPEAKER_WINDOW_MS;
       const isolationCeilingSoftened =
         Boolean(isolateThisSource) && isActiveSpeakerForAddr;
-      const adaptiveMaxTargetMs = effectivePlayoutMaxTargetMs({
+      let adaptiveMaxTargetMs = effectivePlayoutMaxTargetMs({
         profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
         profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
         useSevereCeiling,
         isolationCeilingSoftened,
         activeSourceCount: activeJitterSourcesRef.current.size,
       });
+      if (failSafeStateRef.current.active) {
+        adaptiveMaxTargetMs = Math.min(
+          adaptiveMaxTargetMs,
+          FAIL_SAFE_PLAYOUT_TARGET_MAX_MS
+        );
+      }
 
       let ideal = computeAdaptiveIdealTargetMs({
         baseTargetMs: ADAPTIVE_BASE_TARGET_MS,
@@ -3789,6 +3840,7 @@ export function useGroupVoiceCall(uiActive = false) {
   useEffect(() => {
     const id = setInterval(() => {
       if (!roomIdRef.current) return;
+      const wallNow = Date.now();
       const snap = metricsRef.current.getSnapshot();
       const forwarderRole =
         myRoleRef.current === 'root-forwarder' ||
@@ -3810,33 +3862,96 @@ export function useGroupVoiceCall(uiActive = false) {
         audioTuningRef.current.opusBitrate * (forwarderFanout ? 0.92 : 1)
       );
       const tiers = buildOpusSendPressureTiers(nominalBitrate);
+
+      const ingress = lastIngressPacketsRef.current;
+      if (ingress.atMs === 0) {
+        ingress.atMs = wallNow;
+        ingress.received = snap.packetsReceived;
+      }
+      const dtSec = Math.max(0.001, (wallNow - ingress.atMs) / 1000);
+      const ingressPps = (snap.packetsReceived - ingress.received) / dtSec;
+      ingress.atMs = wallNow;
+      ingress.received = snap.packetsReceived;
+
+      const peerCount = Math.max(0, participantsRef.current.size - 1);
+      const requested = computeRequestedBurstMaxFromSignals({
+        peerCount,
+        ingressPacketsPerSec: ingressPps,
+        peakDepthRecent: peakDepthRecentRef.current,
+      });
+
+      const burstWindow = wallNow < decryptBurstUntilMsRef.current;
+      const slewDt = Math.max(0, wallNow - lastBurstMaxSlewAtMsRef.current);
+      lastBurstMaxSlewAtMsRef.current = wallNow;
+      if (burstWindow) {
+        effectiveBurstMaxRef.current = slewBurstMaxTowardRequested(
+          effectiveBurstMaxRef.current,
+          requested,
+          slewDt
+        );
+      } else {
+        effectiveBurstMaxRef.current = slewBurstMaxTowardRequested(
+          effectiveBurstMaxRef.current,
+          PENDING_DECRYPT_RECOVERY_MAX,
+          0
+        );
+      }
+
+      const receivingShedding =
+        decryptOverloadStateRef.current.active ||
+        peakDepthRecentRef.current >= PENDING_DECRYPT_NEWEST_FIRST_DEPTH;
+
       const result = tickOpusSendPressureController(
         opusSendPressureStateRef.current,
         tiers,
         OPUS_SEND_PRESSURE_TICK_MS,
-        Date.now(),
-        pressured
+        wallNow,
+        pressured,
+        receivingShedding ? { maxTierIndex: 1 } : undefined
       );
       opusSendPressureStateRef.current = result.state;
-      if (
-        result.targetBitrate !== opusEncoderLastConfiguredBitrateRef.current
-      ) {
-        opusEncoderApplyBitrateRef.current(result.targetBitrate);
-        opusEncoderLastConfiguredBitrateRef.current = result.targetBitrate;
+      const appliedBitrate = Math.max(
+        GCALL_OPUS_SEND_PRESSURE_MIN_BITRATE,
+        result.targetBitrate
+      );
+      if (appliedBitrate !== opusEncoderLastConfiguredBitrateRef.current) {
+        opusEncoderApplyBitrateRef.current(appliedBitrate);
+        opusEncoderLastConfiguredBitrateRef.current = appliedBitrate;
       }
       if (result.tierChanged) {
         gcallDiagnosticsPush('info', '[GCall] opusSendPressureTier', {
           tierIndex: result.state.tierIndex,
-          bitrateBps: result.targetBitrate,
+          bitrateBps: appliedBitrate,
           pressured,
         });
       }
       if (result.maxPainEntered) {
         gcallDiagnosticsPush('warn', '[GCall] opusSendPressureMaxPain', {
-          bitrateBps: result.targetBitrate,
+          bitrateBps: appliedBitrate,
           bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
           pendingFrames: snap.reticulumAudioPendingFrames,
         });
+      }
+
+      const lastTick = lastGcallEscalationTickAtMsRef.current;
+      const stageDelta =
+        lastTick > 0
+          ? Math.min(2000, Math.max(0, wallNow - lastTick))
+          : OPUS_SEND_PRESSURE_TICK_MS;
+      lastGcallEscalationTickAtMsRef.current = wallNow;
+      metricsRef.current.tickGcallAudioStageMetrics(stageDelta, {
+        burstWindow,
+        overload: decryptOverloadStateRef.current.active,
+        ingressPacing: result.state.tierIndex > 0,
+        stage5Boost: wallNow < stage5FlushBoostUntilMsRef.current,
+        failSafe: failSafeStateRef.current.active,
+      });
+
+      const report = window.groupCall?.reportGcallAudioEscalation;
+      if (typeof report === 'function') {
+        void report({
+          failSafeActive: failSafeStateRef.current.active,
+        }).catch(() => {});
       }
     }, OPUS_SEND_PRESSURE_TICK_MS);
     return () => clearInterval(id);
@@ -3992,7 +4107,8 @@ export function useGroupVoiceCall(uiActive = false) {
     return computePendingDecryptLimits(
       now,
       globalRecoveryUntilMsRef.current,
-      decryptBurstUntilMsRef.current
+      decryptBurstUntilMsRef.current,
+      effectiveBurstMaxRef.current
     );
   }, []);
 
@@ -4034,10 +4150,31 @@ export function useGroupVoiceCall(uiActive = false) {
     (depth: number) => {
       metricsRef.current.recordPendingDecryptDepth(depth);
       logPendingDecryptDepthIfNeeded(depth);
+      const now = Date.now();
+      const q = peakDepthSamplesRef.current;
+      q.push({ t: now, d: depth });
+      while (q.length > 0 && q[0]!.t < now - 2000) q.shift();
+      peakDepthRecentRef.current = q.reduce((m, x) => Math.max(m, x.d), 0);
+
+      decryptOverloadStateRef.current = stepDecryptOverloadState(
+        decryptOverloadStateRef.current,
+        depth,
+        now
+      );
+      setGcallDiagnosticsSuppressInfo(decryptOverloadStateRef.current.active);
+
+      failSafeStateRef.current = stepFailSafeState(failSafeStateRef.current, {
+        failSafeEnabled: readGcallAudioFailSafeEnabled(),
+        overloadActive: decryptOverloadStateRef.current.active,
+        depth,
+        exitDepth: PENDING_DECRYPT_OVERLOAD_EXIT,
+        nowMs: now,
+      });
+
       if (depth >= 64) {
         globalRecoveryUntilMsRef.current = Math.max(
           globalRecoveryUntilMsRef.current,
-          Date.now() + ADAPTIVE_RECOVERY_COOLDOWN_MS
+          now + ADAPTIVE_RECOVERY_COOLDOWN_MS
         );
         recomputeAdaptiveNetworkMode();
       }
@@ -4503,6 +4640,13 @@ export function useGroupVoiceCall(uiActive = false) {
     const roomId = roomIdRef.current;
     const requestPeerMediaRecovery = window.groupCall?.requestPeerMediaRecovery;
     if (!roomId || typeof requestPeerMediaRecovery !== 'function') return;
+    if (STAGE5_FLUSH_BOOST_REASONS.has(reason)) {
+      const until = Date.now() + ADAPTIVE_RECOVERY_COOLDOWN_MS;
+      stage5FlushBoostUntilMsRef.current = Math.max(
+        stage5FlushBoostUntilMsRef.current,
+        until
+      );
+    }
     gcallDiagnosticsPush('warn', '[GCall] peerMediaRecoveryRequested', {
       peerAddress,
       reason,
@@ -4909,6 +5053,7 @@ export function useGroupVoiceCall(uiActive = false) {
           Date.now() + ADAPTIVE_RECOVERY_COOLDOWN_MS
         );
         recomputeAdaptiveNetworkMode();
+        armDecryptBurstRecoveryWindow('topology-global-recovery');
       }
 
       setMyRole((prev) => (prev !== role ? role : prev));
@@ -5085,6 +5230,7 @@ export function useGroupVoiceCall(uiActive = false) {
       flushMetrics();
     },
     [
+      armDecryptBurstRecoveryWindow,
       clearAuthoritativeKeyGrace,
       flushMetrics,
       maybePredictiveWarmPeers,
@@ -8380,6 +8526,23 @@ export function useGroupVoiceCall(uiActive = false) {
         lastSendPathDiagnosticAtRef.current.clear();
         globalRecoveryUntilMsRef.current = 0;
         decryptBurstUntilMsRef.current = 0;
+        effectiveBurstMaxRef.current = PENDING_DECRYPT_BURST_NOMINAL_BASE;
+        lastBurstMaxSlewAtMsRef.current = Date.now();
+        peakDepthSamplesRef.current = [];
+        peakDepthRecentRef.current = 0;
+        lastIngressPacketsRef.current = { received: 0, atMs: 0 };
+        decryptOverloadStateRef.current = {
+          active: false,
+          exitBelowSinceMs: null,
+        };
+        failSafeStateRef.current = {
+          active: false,
+          overloadSinceMs: null,
+          enteredAtMs: null,
+        };
+        stage5FlushBoostUntilMsRef.current = 0;
+        lastGcallEscalationTickAtMsRef.current = 0;
+        setGcallDiagnosticsSuppressInfo(false);
         mainJoinReadyRef.current = false;
         setRoomState('joining');
         metricsRef.current.reset();
@@ -8810,6 +8973,23 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSendPathDiagnosticAtRef.current.clear();
       globalRecoveryUntilMsRef.current = 0;
       decryptBurstUntilMsRef.current = 0;
+      effectiveBurstMaxRef.current = PENDING_DECRYPT_BURST_NOMINAL_BASE;
+      lastBurstMaxSlewAtMsRef.current = Date.now();
+      peakDepthSamplesRef.current = [];
+      peakDepthRecentRef.current = 0;
+      lastIngressPacketsRef.current = { received: 0, atMs: 0 };
+      decryptOverloadStateRef.current = {
+        active: false,
+        exitBelowSinceMs: null,
+      };
+      failSafeStateRef.current = {
+        active: false,
+        overloadSinceMs: null,
+        enteredAtMs: null,
+      };
+      stage5FlushBoostUntilMsRef.current = 0;
+      lastGcallEscalationTickAtMsRef.current = 0;
+      setGcallDiagnosticsSuppressInfo(false);
       clearAuthoritativeKeyGrace();
 
       // Terminate the decrypt Worker (sync clears pending + worker key)
