@@ -35,6 +35,7 @@ import {
 import { CallAudioSettingsButton } from '../Chat/CallAudioDeviceSelectors';
 import { getPrimaryNameForAvatar } from './groupApi';
 import { useTranslation } from 'react-i18next';
+import { DirectVoiceDebugPanel } from './DirectVoiceDebugPanel';
 
 const BG_RAIL = '#2b2d31';
 const TEXT_MUTED = '#949ba4';
@@ -98,25 +99,11 @@ export function DirectVoiceCallDock() {
         mode: 'connecting' as const,
       };
     }
-    if (audioMode === 'media') {
+    if (audioMode === 'reticulum') {
       return {
-        label: 'WebRTC',
-        tooltip: 'Direct UDP audio',
-        mode: 'webrtc' as const,
-      };
-    }
-    if (audioMode === 'datachannel') {
-      return {
-        label: 'DataCh',
-        tooltip: 'WebRTC data channel audio',
-        mode: 'datachannel' as const,
-      };
-    }
-    if (audioMode === 'relay') {
-      return {
-        label: 'Relay',
-        tooltip: 'P2P relay audio',
-        mode: 'relay' as const,
+        label: 'Reticulum',
+        tooltip: 'Encrypted voice over Reticulum',
+        mode: 'reticulum' as const,
       };
     }
     return {
@@ -138,6 +125,8 @@ export function DirectVoiceCallDock() {
   if (!activeDirect) return null;
 
   return (
+    <>
+    <DirectVoiceDebugPanel />
     <Box
       sx={{
         alignSelf: 'stretch',
@@ -197,13 +186,11 @@ export function DirectVoiceCallDock() {
             fontSize: 9,
             fontWeight: 600,
             bgcolor:
-              transport.mode === 'relay'
-                ? alpha('#f59e0b', 0.35)
-                : transport.mode === 'connecting'
-                  ? alpha('#94a3b8', 0.35)
-                  : transport.mode === 'datachannel'
-                    ? alpha(theme.palette.primary.main, 0.4)
-                    : alpha('#22c55e', 0.35),
+              transport.mode === 'connecting'
+                ? alpha('#94a3b8', 0.35)
+                : transport.mode === 'reticulum'
+                  ? alpha(theme.palette.primary.main, 0.4)
+                  : alpha('#94a3b8', 0.35),
             color: '#dbdee1',
             '& .MuiChip-label': { px: 0.5, overflow: 'hidden' },
           }}
@@ -332,8 +319,9 @@ export function DirectVoiceCallDock() {
           }}
         >
           <CallEndRoundedIcon sx={{ fontSize: 22 }} />
-        </IconButton>
-      </Tooltip>
+      </IconButton>
+    </Tooltip>
     </Box>
+    </>
   );
 }

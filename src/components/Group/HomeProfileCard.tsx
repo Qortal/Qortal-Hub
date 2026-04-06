@@ -119,8 +119,8 @@ export const HomeProfileCard = () => {
     { value: 'offline', label: 'Offline', color: '#9e9e9e' },
   ];
 
-  // Show "Offline" whenever: P2P is disabled, user chose offline, or not yet online.
-  const showAsOffline = !isP2PEnabled || myStatus === 'offline' || !isSelfOnline;
+  // Show "Offline" when user chose offline or not yet online (presence); P2P toggle does not gate the badge.
+  const showAsOffline = myStatus === 'offline' || !isSelfOnline;
 
   const handleCopyAddress = () => {
     if (!address) return;

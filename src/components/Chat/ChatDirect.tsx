@@ -1531,24 +1531,7 @@ export const ChatDirect = ({
           >
             In call — {fmtCallDuration(callDuration)}
           </Typography>
-          {audioMode === 'media' && (
-            <Typography
-              variant="caption"
-              sx={{
-                backgroundColor: '#22c55e',
-                borderRadius: 1,
-                color: '#fff',
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                px: 0.75,
-                py: 0.2,
-              }}
-            >
-              WebRTC
-            </Typography>
-          )}
-          {audioMode === 'datachannel' && (
+          {audioMode === 'reticulum' && (
             <Typography
               variant="caption"
               sx={{
@@ -1562,24 +1545,7 @@ export const ChatDirect = ({
                 py: 0.2,
               }}
             >
-              DataChannel
-            </Typography>
-          )}
-          {audioMode === 'relay' && (
-            <Typography
-              variant="caption"
-              sx={{
-                backgroundColor: '#f59e0b',
-                borderRadius: 1,
-                color: '#fff',
-                fontSize: 10,
-                fontWeight: 600,
-                letterSpacing: 0.3,
-                px: 0.75,
-                py: 0.2,
-              }}
-            >
-              Relay
+              Reticulum
             </Typography>
           )}
           <CallAudioSettingsButton />

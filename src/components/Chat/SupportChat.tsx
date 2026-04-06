@@ -1655,24 +1655,7 @@ export function SupportChat() {
           </Typography>
 
           {/* Transport mode badge */}
-          {audioMode === 'media' && (
-            <Typography
-              variant="caption"
-              sx={{
-                px: 0.75,
-                py: 0.2,
-                borderRadius: 1,
-                backgroundColor: '#22c55e',
-                color: '#fff',
-                fontWeight: 600,
-                fontSize: 10,
-                letterSpacing: 0.3,
-              }}
-            >
-              WebRTC
-            </Typography>
-          )}
-          {audioMode === 'datachannel' && (
+          {audioMode === 'reticulum' && (
             <Typography
               variant="caption"
               sx={{
@@ -1686,24 +1669,7 @@ export function SupportChat() {
                 letterSpacing: 0.3,
               }}
             >
-              DataChannel
-            </Typography>
-          )}
-          {audioMode === 'relay' && (
-            <Typography
-              variant="caption"
-              sx={{
-                px: 0.75,
-                py: 0.2,
-                borderRadius: 1,
-                backgroundColor: '#f59e0b',
-                color: '#fff',
-                fontWeight: 600,
-                fontSize: 10,
-                letterSpacing: 0.3,
-              }}
-            >
-              Relay
+              Reticulum
             </Typography>
           )}
 

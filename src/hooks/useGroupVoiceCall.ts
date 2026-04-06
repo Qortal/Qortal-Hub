@@ -14,7 +14,7 @@
  *   gcall-jitter-scheduler AudioWorklet (~20ms audio clock) → AudioDecoder (Opus)
  *   → PlaybackWorkletNode per speaker (audio-worklet thread, ring-buffer playback)
  *
- * Jitter: JITTER_BUFFER_SIZE frames @ 20ms each adds end-to-end latency but absorbs
+ * Jitter: ~6 frames @ 20ms each adds end-to-end latency but absorbs
  * network burstiness, decrypt-worker delay, and main-thread variance after postMessage
  * from the scheduler worklet.
  *
@@ -70,7 +70,6 @@ import {
 } from '../lib/group-call/router';
 import {
   GCALL_AUDIO_QUALITY_PROFILE_KEY,
-  GCALL_JITTER_SOFT_UNPRIME_MS,
   GCALL_RECOVERY_JITTER_APPLY_DWELL_MS,
   GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS,
   GCALL_THIN_JITTER_BUFFER_FRAMES,
@@ -159,6 +158,19 @@ import {
   type DecodedAudioPacket,
 } from '../lib/group-call/audioPacketCodec';
 import { buildMediaKeyCommitmentHex } from '../lib/group-call/mediaKeyCommitment';
+import { JitterBuffer } from '../lib/group-call/gcallJitterBuffer';
+import {
+  createGcallJitterBufferForIngress,
+  GCALL_EMPTY_PCM,
+  GCALL_WASM_FEC_EXTRA_HOLD_FRAMES,
+  GCALL_WASM_FEC_EMPTY_STATS,
+  GcallOpusFecPlayoutPipeline,
+  OPUS_CHANNELS,
+  OPUS_FRAME_DURATION_MS,
+  OPUS_FRAME_SAMPLES,
+  OPUS_SAMPLE_RATE,
+  readGcallWasmFecDesired,
+} from '../lib/group-call/gcallSharedVoiceProcessing';
 import {
   buildGcallDiagnosticsExportJson,
   copyGcallDiagnosticsToClipboard,
@@ -339,17 +351,7 @@ interface IncomingKeyRequestPayload {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const OPUS_SAMPLE_RATE = 48000;
-const OPUS_CHANNELS = 1;
-/** Low-latency reference bitrate; active profile uses `getGroupCallAudioTuning`. */
-const OPUS_BITRATE = 24_000;
-const OPUS_FRAME_DURATION_MS = 20;
-const OPUS_FRAME_SAMPLES = (OPUS_SAMPLE_RATE * OPUS_FRAME_DURATION_MS) / 1000; // 960
-const OPUS_EXPECTED_PACKETLOSS_PERCENT = 10;
-
 /** Minimum Opus frames queued before decode drain starts (20ms per frame). Playout also gates on PCM depth in worklet. */
-const JITTER_BUFFER_SIZE = 6; // ~120ms — paired with maxRetransmits:1 to reclaim headroom
-const JITTER_START_BUFFER_SIZE = 4;
 const JITTER_EMPTY_HYSTERESIS_TICKS = 3;
 
 /** Max Opus frames decoded per remote source per jitter scheduler tick (burst catch-up). */
@@ -388,35 +390,6 @@ const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
 const ADAPTIVE_LOSS_MS_CAP = 12;
-
-/**
- * libopus WASM FEC decode path is **always desired** (dev and prod). If the worker fails to
- * load, the hook falls back to WebCodecs. Emergency disable only: `VITE_GCALL_WASM_FEC=0` or
- * `localStorage gcallWasmFec=0` (reload app after changing localStorage).
- */
-const GCALL_WASM_FEC_ENV_OFF =
-  typeof import.meta !== 'undefined' &&
-  import.meta.env &&
-  import.meta.env.VITE_GCALL_WASM_FEC === '0';
-const GCALL_WASM_FEC_EXTRA_HOLD_FRAMES = 1;
-const GCALL_WASM_FEC_MAX_PCM_PER_TICK = 10;
-/** Low-latency default; profile may raise for high-stability (`getGroupCallAudioTuning`). */
-const GCALL_WASM_FEC_MAX_GAP_RESET = 32;
-
-function readGcallWasmFecDesired(): boolean {
-  if (GCALL_WASM_FEC_ENV_OFF) return false;
-  try {
-    if (
-      typeof localStorage !== 'undefined' &&
-      localStorage.getItem('gcallWasmFec') === '0'
-    ) {
-      return false;
-    }
-  } catch {
-    /* private mode */
-  }
-  return true;
-}
 
 /**
  * After capture VAD goes false, keep treating the source as "speaking" for relay for this long.
@@ -546,13 +519,6 @@ const STARTUP_AUTHORITY_WAIT_MS = 500;
 const STARTUP_SESSION_CONVERGENCE_GRACE_MS = 6_000;
 const STARTUP_MEDIA_SUPPRESSION_MS = 350;
 const RECENT_REMOTE_MEDIA_EVIDENCE_MS = 6_000;
-const GCALL_WASM_FEC_EMPTY_STATS = Object.freeze({
-  plcFrames: 0,
-  fecAttempts: 0,
-  fecSuccessCoarse: 0,
-});
-const GCALL_EMPTY_PCM = new Float32Array(0);
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 /** Encode a Uint8Array to base64 without spreading into function arguments.
@@ -1807,187 +1773,7 @@ async function signReticulumJoinSplit(params: {
   return { joinSig, joinRkSig };
 }
 
-// ── Jitter buffer ──────────────────────────────────────────────────────────────
-
-interface JitterEntry {
-  seq: number;
-  opusFrame: Uint8Array;
-  receivedAt: number;
-}
-
-/** Contiguous WASM decode output; `consumedFrames` already posted to the playout worklet. */
-interface WasmFecPcmSlab {
-  pcm: Float32Array;
-  frameCount: number;
-  consumedFrames: number;
-}
-
-export function computeJitterReadyThresholdFrames(opts: {
-  primed: boolean;
-  jitterStartBufferSize: number;
-  extraHoldFrames?: number;
-  steadyPrimedHoldFrames?: number;
-}): number {
-  const extraHoldFrames = Math.max(0, opts.extraHoldFrames ?? 0);
-  const steadyPrimedHoldFrames = Math.max(0, opts.steadyPrimedHoldFrames ?? 0);
-  const base = opts.primed ? 1 + steadyPrimedHoldFrames : opts.jitterStartBufferSize;
-  return base + extraHoldFrames;
-}
-
-class JitterBuffer {
-  private entries: JitterEntry[] = [];
-  private lastPlayedSeq = -1;
-  private pendingMissedSeq = 0;
-  private primed = false;
-  /** When buffer became empty after `pop`; delays resetting `primed` (Phase C/D soft un-prime). */
-  private emptySinceMs: number | null = null;
-  /** Phase D: scaled via `setSoftUnprimeMs` (tier-2 multi-source). */
-  private softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
-  /** Exact-1-remote steady-state floor after priming; keeps the Opus side off the 1-frame edge. */
-  private steadyPrimedHoldFrames = 0;
-  /** Raw seq gap for the last pop (for WASM FEC); cleared by consumeLastRawGapAfterPop. */
-  private lastRawGapAfterPop = 0;
-  private jitterBufferSize: number;
-  private jitterStartBufferSize: number;
-
-  constructor(
-    private readonly extraHoldFrames = 0,
-    tuning?: { jitterBufferSize: number; jitterStartBufferSize: number }
-  ) {
-    this.jitterBufferSize = tuning?.jitterBufferSize ?? JITTER_BUFFER_SIZE;
-    this.jitterStartBufferSize =
-      tuning?.jitterStartBufferSize ?? JITTER_START_BUFFER_SIZE;
-  }
-
-  applyJitterTuning(tuning: {
-    jitterBufferSize: number;
-    jitterStartBufferSize: number;
-  }): void {
-    this.jitterBufferSize = tuning.jitterBufferSize;
-    this.jitterStartBufferSize = tuning.jitterStartBufferSize;
-  }
-
-  setSoftUnprimeMs(ms: number): void {
-    if (ms > 0 && Number.isFinite(ms)) {
-      this.softUnprimeMs = ms;
-    }
-  }
-
-  setSteadyPrimedHoldFrames(frames: number): void {
-    if (Number.isFinite(frames)) {
-      this.steadyPrimedHoldFrames = Math.max(0, Math.trunc(frames));
-    }
-  }
-
-  private checkSoftUnprime(): void {
-    if (this.emptySinceMs === null) return;
-    if (this.entries.length > 0) {
-      this.emptySinceMs = null;
-      return;
-    }
-    if (
-      this.primed &&
-      performance.now() - this.emptySinceMs >= this.softUnprimeMs
-    ) {
-      this.primed = false;
-      this.emptySinceMs = null;
-    }
-  }
-
-  /** Pop-side gap detection: call after pop; returns missed frame count since last pop. */
-  consumePendingMissedFrames(): number {
-    const m = this.pendingMissedSeq;
-    this.pendingMissedSeq = 0;
-    return m;
-  }
-
-  push(seq: number, opusFrame: Uint8Array): void {
-    this.checkSoftUnprime();
-    if (seq <= this.lastPlayedSeq) return; // already played or older
-    let insertAt = this.entries.length;
-    while (insertAt > 0) {
-      const prev = this.entries[insertAt - 1];
-      if (prev.seq === seq) return; // duplicate
-      if (prev.seq < seq) break;
-      insertAt--;
-    }
-    this.entries.splice(insertAt, 0, {
-      seq,
-      opusFrame,
-      receivedAt: performance.now(),
-    });
-    this.emptySinceMs = null;
-    const maxEntries = this.jitterBufferSize * 2;
-    if (this.entries.length > maxEntries) {
-      this.entries.splice(0, this.entries.length - maxEntries);
-    }
-  }
-
-  /** Raw (mod 65536) seq gap before the frame just popped; 0 if first packet or no prior seq. */
-  consumeLastRawGapAfterPop(): number {
-    const g = this.lastRawGapAfterPop;
-    this.lastRawGapAfterPop = 0;
-    return g;
-  }
-
-  /** Returns next frame to play, or null if buffer not ready. */
-  pop(): Uint8Array | null {
-    this.checkSoftUnprime();
-    const threshold = computeJitterReadyThresholdFrames({
-      primed: this.primed,
-      jitterStartBufferSize: this.jitterStartBufferSize,
-      extraHoldFrames: this.extraHoldFrames,
-      steadyPrimedHoldFrames: this.steadyPrimedHoldFrames,
-    });
-    if (this.entries.length < threshold) return null;
-    const entry = this.entries.shift();
-    if (!entry) return null;
-    this.primed = true;
-    if (this.lastPlayedSeq >= 0) {
-      const expected = (this.lastPlayedSeq + 1) & 0xffff;
-      const gap = (entry.seq - expected + 65536) % 65536;
-      this.lastRawGapAfterPop = gap;
-      if (gap > 0 && gap <= 48) this.pendingMissedSeq += gap;
-    } else {
-      this.lastRawGapAfterPop = 0;
-    }
-    this.lastPlayedSeq = entry.seq;
-    if (this.entries.length === 0) {
-      this.emptySinceMs = performance.now();
-    } else {
-      this.emptySinceMs = null;
-    }
-    return entry.opusFrame;
-  }
-
-  hasReadyFrame(): boolean {
-    this.checkSoftUnprime();
-    return (
-      this.entries.length >=
-      computeJitterReadyThresholdFrames({
-        primed: this.primed,
-        jitterStartBufferSize: this.jitterStartBufferSize,
-        extraHoldFrames: this.extraHoldFrames,
-        steadyPrimedHoldFrames: this.steadyPrimedHoldFrames,
-      })
-    );
-  }
-
-  getBufferedFrames(): number {
-    return this.entries.length;
-  }
-
-  clear(): void {
-    this.entries = [];
-    this.lastPlayedSeq = -1;
-    this.pendingMissedSeq = 0;
-    this.primed = false;
-    this.emptySinceMs = null;
-    this.lastRawGapAfterPop = 0;
-    this.softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
-    this.steadyPrimedHoldFrames = 0;
-  }
-}
+export { computeJitterReadyThresholdFrames } from '../lib/group-call/gcallJitterBuffer';
 
 // ── Main hook ──────────────────────────────────────────────────────────────────
 
@@ -2158,13 +1944,6 @@ export function useGroupVoiceCall(uiActive = false) {
   const gcallWasmFecDesiredRef = useRef(readGcallWasmFecDesired());
   const gcallWasmFecActiveRef = useRef(false);
   const opusFecWorkerRef = useRef<Worker | null>(null);
-  const opusFecRequestIdRef = useRef(0);
-  const wasmFecInflightRef = useRef(new Map<string, boolean>());
-  const wasmFecJobQueueRef = useRef(
-    new Map<string, { packet: Uint8Array; gap: number }[]>()
-  );
-  const wasmFecDeferredPcmRef = useRef(new Map<string, WasmFecPcmSlab[]>());
-  const wasmFecPcmPostedThisTickRef = useRef(new Map<string, number>());
   /** Last time we received any decoded media packet per source. */
   const lastRecvAtRef = useRef<Map<string, number>>(new Map());
   /** Latest ingress transport peer for each logical speaker source. */
@@ -2505,6 +2284,16 @@ export function useGroupVoiceCall(uiActive = false) {
   const processPendingVerifiedKeysRef = useRef<() => void>(() => {});
   const maybeRequestKeyRecoveryRef = useRef<(reason: string) => void>(() => {});
   const metricsRef = useRef(new GroupCallPerformanceTracker());
+  const wasmFecPipelineRef = useRef<GcallOpusFecPlayoutPipeline | null>(null);
+  const getWasmFecPipeline = useCallback(() => {
+    if (!wasmFecPipelineRef.current) {
+      wasmFecPipelineRef.current = new GcallOpusFecPlayoutPipeline(
+        (addr) => playbackWorkletsRef.current.get(addr),
+        (addr, stats) => metricsRef.current.recordWasmFecDecodeStats(addr, stats)
+      );
+    }
+    return wasmFecPipelineRef.current;
+  }, []);
   const lastReticulumAudioTotalsRef = useRef({
     queuePressureDrops: 0,
     staleDrops: 0,
@@ -4716,17 +4505,14 @@ export function useGroupVoiceCall(uiActive = false) {
       gcallStarvationProtectedExitStreakRef.current.delete(address);
       gcallStarvationProtectedModeRef.current.delete(address);
       playbackWorkletSetupPromisesRef.current.delete(address);
-      wasmFecJobQueueRef.current.delete(address);
-      wasmFecInflightRef.current.delete(address);
-      wasmFecDeferredPcmRef.current.delete(address);
-      wasmFecPcmPostedThisTickRef.current.delete(address);
+      getWasmFecPipeline().removeSource(address);
       opusFecWorkerRef.current?.postMessage({
         type: 'dispose',
         sourceAddr: address,
       });
       updateMetricResourceCounts();
     },
-    [updateMetricResourceCounts]
+    [getWasmFecPipeline, updateMetricResourceCounts]
   );
 
   const sendPacketToPeerReticulum = useCallback(
@@ -5183,23 +4969,16 @@ export function useGroupVoiceCall(uiActive = false) {
           activeJitterSourcesRef.current.size,
           jitterMapRef.current.size + 1
         );
-        const effective =
-          mode === 'recovery'
-            ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
-                tier2MultiSource: nForTuning >= 2,
-                activeSourceCount: nForTuning,
-              })
-            : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
-        jb = new JitterBuffer(
-          gcallWasmFecDesiredRef.current ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0,
-          effective
-        );
-        jb.setSoftUnprimeMs(
-          computeSoftUnprimeMsForTier2(
-            nForTuning,
-            jitterGeomAppliedRef.current === 'recovery'
-          )
-        );
+        jb = createGcallJitterBufferForIngress({
+          tuning: audioTuningRef.current,
+          adaptiveNetworkMode: mode,
+          extraHoldFrames: gcallWasmFecDesiredRef.current
+            ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES
+            : 0,
+          activeSourceCount: nForTuning,
+          tier2MultiSource: nForTuning >= 2,
+          applySteadyPrimedHoldNow: false,
+        });
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
       }
@@ -7299,105 +7078,27 @@ export function useGroupVoiceCall(uiActive = false) {
       },
       recordStats = true
     ) => {
-      const playNode = playbackWorkletsRef.current.get(sourceAddr);
-      const queue = wasmFecDeferredPcmRef.current.get(sourceAddr) ?? [];
-      wasmFecDeferredPcmRef.current.delete(sourceAddr);
-
-      if (frameCount > 0) {
-        const expectedLen = frameCount * OPUS_FRAME_SAMPLES;
-        if (pcm.length !== expectedLen) {
-          console.error('[GCall] opus-fec batch length mismatch', {
-            sourceAddr: sourceAddr.slice(0, 12),
-            frameCount,
-            pcmLength: pcm.length,
-            expectedLen,
-          });
-          if (queue.length > 0)
-            wasmFecDeferredPcmRef.current.set(sourceAddr, queue);
-          return;
-        }
-        queue.push({ pcm, frameCount, consumedFrames: 0 });
-      }
-
-      if (!playNode) {
-        if (queue.length > 0)
-          wasmFecDeferredPcmRef.current.set(sourceAddr, queue);
-        return;
-      }
-
-      let posted = wasmFecPcmPostedThisTickRef.current.get(sourceAddr) ?? 0;
-      let deferredTick = false;
-
-      outer: while (queue.length > 0) {
-        const slab = queue[0];
-        while (slab.consumedFrames < slab.frameCount) {
-          if (posted >= GCALL_WASM_FEC_MAX_PCM_PER_TICK) {
-            wasmFecDeferredPcmRef.current.set(sourceAddr, queue);
-            deferredTick = true;
-            break outer;
-          }
-          const o = slab.consumedFrames * OPUS_FRAME_SAMPLES;
-          const chunk = new Float32Array(OPUS_FRAME_SAMPLES);
-          chunk.set(slab.pcm.subarray(o, o + OPUS_FRAME_SAMPLES));
-          playNode.port.postMessage({ pcm: chunk }, [chunk.buffer]);
-          slab.consumedFrames++;
-          posted++;
-        }
-        queue.shift();
-      }
-
-      wasmFecPcmPostedThisTickRef.current.set(sourceAddr, posted);
-      if (
-        recordStats &&
-        (stats.plcFrames > 0 ||
-          stats.fecAttempts > 0 ||
-          stats.fecSuccessCoarse > 0 ||
-          deferredTick)
-      ) {
-        metricsRef.current.recordWasmFecDecodeStats(sourceAddr, {
-          ...stats,
-          deferredPcmTick: deferredTick,
-        });
-      }
+      getWasmFecPipeline().postBatch(sourceAddr, pcm, frameCount, stats, recordStats);
     },
-    []
+    [getWasmFecPipeline]
   );
 
-  const pumpWasmFecQueue = useCallback((sourceAddr: string) => {
-    if (wasmFecInflightRef.current.get(sourceAddr)) return;
-    const w = opusFecWorkerRef.current;
-    if (!w) return;
-    const q = wasmFecJobQueueRef.current.get(sourceAddr);
-    if (!q || q.length === 0) return;
-    const job = q.shift()!;
-    if (q.length === 0) wasmFecJobQueueRef.current.delete(sourceAddr);
-    else wasmFecJobQueueRef.current.set(sourceAddr, q);
-    wasmFecInflightRef.current.set(sourceAddr, true);
-    const requestId = ++opusFecRequestIdRef.current;
-    const buf = job.packet.buffer.slice(
-      job.packet.byteOffset,
-      job.packet.byteOffset + job.packet.byteLength
-    );
-    w.postMessage(
-      {
-        type: 'decode' as const,
-        requestId,
-        sourceAddr,
-        packet: buf,
-        gap: job.gap,
-      },
-      [buf]
-    );
-  }, []);
+  const pumpWasmFecQueue = useCallback(
+    (sourceAddr: string) => {
+      const w = opusFecWorkerRef.current;
+      if (!w) return;
+      getWasmFecPipeline().pump(w, sourceAddr);
+    },
+    [getWasmFecPipeline]
+  );
 
   const enqueueWasmFecDecode = useCallback(
     (sourceAddr: string, packet: Uint8Array, gap: number) => {
-      const q = wasmFecJobQueueRef.current.get(sourceAddr) ?? [];
-      q.push({ packet, gap });
-      wasmFecJobQueueRef.current.set(sourceAddr, q);
-      pumpWasmFecQueue(sourceAddr);
+      const w = opusFecWorkerRef.current;
+      if (!w) return;
+      getWasmFecPipeline().enqueueDecode(w, sourceAddr, packet, gap);
     },
-    [pumpWasmFecQueue]
+    [getWasmFecPipeline]
   );
 
   const getOrCreateDecoder = useCallback(
@@ -7563,11 +7264,11 @@ export function useGroupVoiceCall(uiActive = false) {
     incrementPerfCounter('drainTicks');
     if (gcallWasmFecActiveRef.current) {
       const prefetchStartedAt = performance.now();
-      wasmFecPcmPostedThisTickRef.current.clear();
-      const prefetchAddrs = new Set([
-        ...wasmFecDeferredPcmRef.current.keys(),
-        ...activeJitterSourcesRef.current,
-      ]);
+      const pipeline = getWasmFecPipeline();
+      pipeline.clearPostedThisTick();
+      const prefetchAddrs = pipeline.prefetchAddressSet(
+        activeJitterSourcesRef.current
+      );
       for (const addr of prefetchAddrs) {
         if (performance.now() >= jitterTickBudgetDeadline) {
           break;
@@ -8315,6 +8016,7 @@ export function useGroupVoiceCall(uiActive = false) {
     enqueueWasmFecDecode,
     getSourceIngressDiagnostic,
     getOrCreateDecoder,
+    getWasmFecPipeline,
     incrementPerfCounter,
     isSourcePlayoutActive,
     postWasmFecBatchToPlayout,
@@ -8364,7 +8066,7 @@ export function useGroupVoiceCall(uiActive = false) {
         incrementPerfCounter('opusFecWorkerErrors');
         console.error('[GCall] opus-fec worker:', d.message);
         if (d.sourceAddr) {
-          wasmFecInflightRef.current.delete(d.sourceAddr);
+          getWasmFecPipeline().completeInflight(d.sourceAddr);
           pumpWasmFecQueueRef.current(d.sourceAddr);
         }
         recordPerfDuration(
@@ -8381,7 +8083,7 @@ export function useGroupVoiceCall(uiActive = false) {
         return;
       }
       incrementPerfCounter('opusFecWorkerDecodedBatches');
-      wasmFecInflightRef.current.delete(d.sourceAddr);
+      getWasmFecPipeline().completeInflight(d.sourceAddr);
       postWasmFecBatchToPlayoutRef.current(
         d.sourceAddr,
         d.pcm,
@@ -8403,11 +8105,10 @@ export function useGroupVoiceCall(uiActive = false) {
     return () => {
       gcallWasmFecActiveRef.current = false;
       opusFecWorkerRef.current = null;
-      wasmFecInflightRef.current.clear();
-      wasmFecJobQueueRef.current.clear();
+      getWasmFecPipeline().resetAll();
       w.terminate();
     };
-  }, [incrementPerfCounter, recordPerfDuration]);
+  }, [getWasmFecPipeline, incrementPerfCounter, recordPerfDuration]);
 
   useEffect(() => {
     if (roomState !== 'connected') {
@@ -9952,10 +9653,11 @@ export function useGroupVoiceCall(uiActive = false) {
             p2pOutboundPeers: rs.p2pOutboundPeers ?? 0,
             p2pInboundPeers: rs.p2pInboundPeers ?? 0,
           });
-          if (p2pHealth !== 'good') {
-            setGcallJoinError('p2p_health_not_good');
-            return;
-          }
+          //TODO: PUT BACK
+          // if (p2pHealth !== 'good') {
+          //   setGcallJoinError('p2p_health_not_good');
+          //   return;
+          // }
         } catch {
           setGcallJoinError('p2p_health_not_good');
           return;

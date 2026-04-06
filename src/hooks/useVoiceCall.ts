@@ -1,27 +1,11 @@
 /**
- * useVoiceCall — three-tier P2P voice call hook.
+ * useVoiceCall — direct (1:1) voice over Reticulum only.
  *
- * Three audio transport tiers are tried in order:
- *
- *   Tier 1 — WebRTC media (addTrack)
- *     Direct UDP audio stream.  ~80% of user pairs succeed.
- *     Activated when RTCPeerConnection fires 'ontrack'.
- *
- *   Tier 2 — WebRTC DataChannel (Opus binary)
- *     Same RTCPeerConnection and ICE path as Tier 1.
- *     Activated 2 s after ICE 'connected' if ontrack hasn't fired.
- *     Binary ArrayBuffer frames: no base64, no IPC round-trip.
- *
- *   Tier 3 — P2P TCP relay (CALL_AUDIO)
- *     Completely independent of WebRTC.
- *     Activated 8 s after call acceptance if ICE never reaches 'connected'
- *     (decentralized peer STUN may slow ICE gather; Tier 3 remains the reliability floor).
- *     Opus frames → base64 → window.call.sendAudio → P2P relay.
- *
- * Signaling (CALL_REQUEST / OFFER / ANSWER / ICE / HANGUP) always flows
- * through window.call IPC → main process → P2P mesh.
- *
- * Caller is responsible for signing CALL_REQUEST before calling initiateCall().
+ * Signaling (CALL_REQUEST / ACCEPT / REJECT / HANGUP) uses window.call IPC → P2P mesh.
+ * Media uses the same path as group calls: GC_JOIN → GC_KEY → encrypted packets →
+ * window.groupCall.sendAudio → Reticulum (no WebRTC, no mesh CALL_AUDIO relay).
+ * Inbound: decode → `gcall-jitter-scheduler` drain → Opus decode → `group-playout-processor`
+ * (same as useGroupVoiceCall), not ad-hoc BufferSource playback.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -35,59 +19,98 @@ import {
   userInfoAtom,
 } from '../atoms/global';
 import { isDirectVoiceCallChatId } from '../lib/call/directVoiceCallChatId';
+import {
+  buildDmVoiceRoomId,
+  fetchLocalReticulumDestinationHash,
+  GCALL_KEY_MESSAGE_VERSION,
+  joinDirectVoiceReticulumRoom,
+  leaveDirectVoiceReticulumRoom,
+  sendDirectVoiceRoomKey,
+  isDmVoiceRoomId,
+} from '../lib/call/directVoiceReticulumMedia';
+import {
+  clearDirectVoiceUiLogs,
+  pushDirectVoiceUiLog,
+} from '../lib/call/directVoiceUiLog';
 import i18n from '../i18n/i18n';
 import {
   applyCallAudioOutput,
   getUserAudioStreamForCall,
 } from '../lib/call/audioDevices';
 import {
-  enqueueBufferedCallSignal,
-  takeDrainableBufferedCallSignals,
-  type BufferedCallSignal,
-  type BufferedCallSignalType,
-} from '../lib/call/signalQueue';
-import { scheduleLogIceServerSourcesForPeer } from '../lib/webrtc/iceCandidateStats';
-import { getInitialIceServersFromHub } from '../lib/webrtc/stunBootstrap';
+  decodeAudioPackets,
+  encodeAudioPacketV2,
+} from '../lib/group-call/audioPacketCodec';
+import {
+  getGroupCallAudioTuning,
+  readGroupCallAudioProfile,
+} from '../lib/group-call/groupCallAudioProfile';
+import {
+  createDmPeerRecoveryState,
+  dmMarkPeerStable,
+  dmMarkPeerUnstable,
+  dmRecomputeAdaptiveNetworkMode,
+} from '../lib/group-call/gcallDmPeerRecovery';
+import {
+  createInitialReticulumAudioTotals,
+  ingestDmReticulumSendResultIntoMetrics,
+  type GcReticulumAudioSendResult,
+  type LastReticulumAudioTotals,
+} from '../lib/group-call/gcallDmReticulumSendDiagnostics';
+import { tickSinglePeerAdaptivePlayoutTarget } from '../lib/group-call/gcallSinglePeerAdaptivePlayout';
+import { buildMediaKeyCommitmentHex } from '../lib/group-call/mediaKeyCommitment';
+import {
+  buildOpusSendPressureTiers,
+  createOpusSendPressureControllerState,
+  isReticulumSendPressureSignal,
+  OPUS_SEND_PRESSURE_TICK_MS,
+  tickOpusSendPressureController,
+} from '../lib/group-call/opusSendPressure';
+import { GCALL_OPUS_SEND_PRESSURE_MIN_BITRATE } from '../lib/group-call/pendingDecryptLimits';
+import { GroupCallPerformanceTracker } from '../lib/group-call/router';
+import { DmVoiceGcallInboundPlayout } from '../lib/call/dmVoiceGcallInboundPlayout';
+import {
+  OPUS_CHANNELS,
+  OPUS_FRAME_DURATION_MS,
+  OPUS_FRAME_SAMPLES,
+  OPUS_SAMPLE_RATE,
+} from '../lib/group-call/gcallVoiceAudioConstants';
 
-// ── ICE server configuration ──────────────────────────────────────────────────
-// Electron: sync bootstrap from window.hub (preload), refined via hub.getIceServers().
+const DM_INTER_ARRIVAL_MAX_SAMPLES = 40;
+const DM_ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS = 400;
 
-function initialIceServersFromEnvironment(): RTCIceServer[] {
-  return getInitialIceServersFromHub().map((s) => ({ urls: s.urls }));
+/** Payload from main `gcall:key` (DM voice callee path). */
+type GcallKeyEventPayload = {
+  roomId?: string;
+  recipientAddress?: string;
+  encryptedKey?: string;
+  verified?: boolean;
+  keyMessageVersion?: number;
+  callSessionId?: string;
+  mediaSessionGeneration?: number;
+  keyCommitment?: string;
+  fromAddress?: string;
+};
+
+/** Float32 PCM → Int16 for WebCodecs AudioData (matches group call). */
+function float32ToInt16(f32: Float32Array): Int16Array {
+  const i16 = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++) {
+    i16[i] = Math.max(-32768, Math.min(32767, Math.round(f32[i]! * 32767)));
+  }
+  return i16;
 }
 
-// ── Timing constants ──────────────────────────────────────────────────────────
-
-/** After ICE connects, wait this long for ontrack before switching to DataChannel. */
-const DATACHANNEL_ACTIVATION_MS = 2_000;
-
-/** After call acceptance, wait this long for ICE before switching to TCP relay. */
-const ICE_FAILURE_TIMEOUT_MS = 8_000;
-
-/** Jitter buffer: drop audio frames older than this many ms. */
-const JITTER_DROP_MS = 300;
-
-/** DataChannel frame size in ms. */
-const DC_FRAME_MS = 20;
-
-/** Relay frame size in ms (larger = fewer relay messages). */
-const RELAY_FRAME_MS = 40;
-
-/** Sample rate for AudioContext capture and DataChannel frames. */
-const AUDIO_SAMPLE_RATE = 48_000;
-
-async function sha256HexUtf8(text: string): Promise<string> {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+function uint8ToBase64Local(bytes: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]!);
+  return btoa(s);
 }
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export type CallState = 'idle' | 'calling' | 'ringing' | 'connected' | 'ended';
-export type AudioMode = 'media' | 'datachannel' | 'relay' | null;
+
+/** Reticulum/group-call media only (legacy UI read `audioMode`). */
+export type AudioMode = 'reticulum' | null;
 
 export interface IncomingCall {
   callId: string;
@@ -99,11 +122,9 @@ export interface UseVoiceCallReturn {
   callState: CallState;
   audioMode: AudioMode;
   isMuted: boolean;
-  /** When false, remote call audio is not played locally (mic unaffected). */
   hearCall: boolean;
-  callDuration: number; // seconds
+  callDuration: number;
   incomingCall: IncomingCall | null;
-  /** chatId of the in-flight or active call (outbound set at initiate; inbound set on accept). */
   activeCallChatId: string | null;
   initiateCall: (
     targetAddress: string,
@@ -118,53 +139,20 @@ export interface UseVoiceCallReturn {
   toggleHearCall: () => void;
 }
 
-// ── Inline PCM codec (no external dependency) ────────────────────────────────
-//
-// Converts between the AudioContext's native Float32 PCM and compact Int16 PCM
-// wire format.  Int16 is half the size of Float32 and is the standard wire
-// format for voice (G.711 / raw PCM telephony).
-//
-// Tier 2 (DataChannel): 48 kHz Int16 → ~96 KB/s — fine for direct WebRTC.
-// Tier 3 (TCP relay):   16 kHz Int16 → ~32 KB/s before base64 — acceptable.
-
-const RELAY_SAMPLE_RATE = 16_000; // downsampled for TCP relay
-
-const pcmCodec = {
-  /** Float32 PCM → Int16 ArrayBuffer. */
-  encode(pcm: Float32Array): ArrayBuffer {
-    const buf = new ArrayBuffer(pcm.length * 2);
-    const view = new DataView(buf);
-    for (let i = 0; i < pcm.length; i++) {
-      const s = Math.max(-1, Math.min(1, pcm[i]));
-      view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-    }
-    return buf;
-  },
-
-  /** Int16 ArrayBuffer → Float32 PCM. */
-  decode(buf: ArrayBuffer): Float32Array {
-    const view = new DataView(buf);
-    const len = Math.floor(buf.byteLength / 2);
-    const pcm = new Float32Array(len);
-    for (let i = 0; i < len; i++) {
-      pcm[i] = view.getInt16(i * 2, true) / 0x7fff;
-    }
-    return pcm;
-  },
-
-  /** Downsample Float32 PCM from srcRate to dstRate (integer ratio required). */
-  downsample(pcm: Float32Array, srcRate: number, dstRate: number): Float32Array {
-    if (srcRate === dstRate) return pcm;
-    const ratio = srcRate / dstRate;
-    const out = new Float32Array(Math.floor(pcm.length / ratio));
-    for (let i = 0; i < out.length; i++) {
-      out[i] = pcm[Math.floor(i * ratio)];
-    }
-    return out;
-  },
-};
-
-// ── Hook ──────────────────────────────────────────────────────────────────────
+async function signPresenceFields(
+  fields: Record<string, unknown>,
+  publicKey: string
+): Promise<{ signature: string; publicKey: string }> {
+  try {
+    const res = await (window as any).sendMessage('signPresenceMessage', fields, 10_000);
+    return {
+      signature: (res?.signature as string) ?? '',
+      publicKey,
+    };
+  } catch {
+    return { signature: '', publicKey };
+  }
+}
 
 export function useVoiceCall(): UseVoiceCallReturn {
   const userInfo = useAtomValue(userInfoAtom);
@@ -189,74 +177,101 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const setCallAudioDevicesRef = useRef(setCallAudioDevices);
   setCallAudioDevicesRef.current = setCallAudioDevices;
 
-  // ── Refs (do not re-render on change) ──────────────────────────────────────
   const callIdRef = useRef<string | null>(null);
   const callStateRef = useRef<CallState>('idle');
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const dcRef = useRef<RTCDataChannel | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  /** Remote (Tier 2/3) PCM playback — inserted before `AudioContext.destination`. */
-  const remotePlaybackGainRef = useRef<GainNode | null>(null);
-  const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const iceFailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dcActivateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioModeRef = useRef<AudioMode>(null);
-  const relaySeqRef = useRef(0);
-  // Jitter buffer: Map<seq, { ts: number; data: Uint8Array }>
-  const jitterBufferRef = useRef<Map<number, { ts: number; data: Uint8Array }>>(new Map());
   const incomingCallRef = useRef<IncomingCall | null>(null);
   const blockedAddressesRef = useRef(blockedAddresses);
   blockedAddressesRef.current = blockedAddresses;
   const dmFriendsByAddressRef = useRef(dmFriendsByAddress);
   dmFriendsByAddressRef.current = dmFriendsByAddress;
-  const pendingSignalsRef = useRef<BufferedCallSignal[]>([]);
-  const outboundSetupCallIdRef = useRef<string | null>(null);
-  const inboundSetupCallIdRef = useRef<string | null>(null);
 
-  /** ICE servers for RTCPeerConnection (decentralized STUN + bootstrap); refined via IPC. */
-  const iceServersRef = useRef<RTCIceServer[]>(initialIceServersFromEnvironment());
-  /** STUN `urls` strings used for last PC — reported to main for score feedback. */
-  const lastStunBundleRef = useRef<string[]>([]);
+  const publicKeyRef = useRef(userInfo?.publicKey ?? '');
+  useEffect(() => {
+    publicKeyRef.current = userInfo?.publicKey ?? '';
+  }, [userInfo?.publicKey]);
 
-  /** Tier 2/3 mic capture graph (ScriptProcessor) — torn down on mic swap / teardown. */
-  const tier23CaptureRef = useRef<{
-    source: MediaStreamAudioSourceNode;
-    processor: ScriptProcessorNode;
-  } | null>(null);
+  const isOutboundCallRef = useRef(false);
+  const dmRoomIdRef = useRef<string | null>(null);
+  /** If `gcall:key` arrives before `dmRoomIdRef` is set (should be rare after room precompute). */
+  const pendingDmVoiceGcallKeyRef = useRef<GcallKeyEventPayload | null>(null);
+  const peerAddressRef = useRef<string | null>(null);
+  const callSessionIdRef = useRef<string | null>(null);
+  const mediaGenRef = useRef(1);
+  const roomKeyRef = useRef<Uint8Array | null>(null);
+  const audioSeqRef = useRef(0);
+  const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const encoderRef = useRef<AudioEncoder | null>(null);
+  const captureWorkletRef = useRef<AudioWorkletNode | null>(null);
+  const keepAliveGainRef = useRef<GainNode | null>(null);
+  const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const remotePlaybackGainRef = useRef<GainNode | null>(null);
+  const dmInboundPlayoutRef = useRef<DmVoiceGcallInboundPlayout | null>(null);
+
+  const metricsRef = useRef(new GroupCallPerformanceTracker());
+  const lastReticulumAudioTotalsRef = useRef<LastReticulumAudioTotals>(
+    createInitialReticulumAudioTotals()
+  );
+  const dmPeerRecoveryStateRef = useRef(createDmPeerRecoveryState());
+  const opusSendPressureStateRef = useRef(createOpusSendPressureControllerState());
+  const opusEncoderApplyBitrateRef = useRef<(bps: number) => void>(() => {});
+  const opusEncoderLastConfiguredBitrateRef = useRef<number | null>(null);
+  const lastGcallEscalationTickAtMsRef = useRef(0);
+  const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
+  const interArrivalSamplesRef = useRef<Map<string, number[]>>(new Map());
+  const recentPlayoutHealthSamplesRef = useRef<
+    { atMs: number; bufferedMs: number; underTarget: boolean }[]
+  >([]);
+  const recentJitterUnderrunAtRef = useRef<number[]>([]);
+  const smoothedPlayoutTargetRef = useRef<number | undefined>(undefined);
+  const lastSentPlayoutTargetRef = useRef<number | undefined>(undefined);
+  const lastPlayoutTargetPostAtRef = useRef(0);
+  const lastDrainMissedAccumRef = useRef(0);
+  const decayGuardCalmStartMsRef = useRef<number | undefined>(undefined);
+  const microWidenCeilingLiftUntilMsRef = useRef(0);
+  const tickDmAdaptivePlayoutRef = useRef<() => void>(() => {});
+
+  const reticulumSessionActiveRef = useRef(false);
+  /** Serialized so a late `leaveRoom` cannot run after the next `joinRoom` for the same `dmv:` room. */
+  const reticulumTeardownChainRef = useRef<Promise<void>>(Promise.resolve());
+
+  /** DM voice UI log: throttled gcall:audio + one-shot warnings */
+  const dmVoiceAudioPacketCountRef = useRef(0);
+  const dmVoiceLastAudioUiLogAtRef = useRef(0);
+  const dmVoiceNoFromAddressLoggedRef = useRef(false);
+  const dmVoicePeerMismatchLoggedRef = useRef(false);
+  const dmVoiceFirstOutboundAudioLoggedRef = useRef(false);
 
   const isMutedRef = useRef(isMuted);
   isMutedRef.current = isMuted;
   const hearCallRef = useRef(hearCall);
   hearCallRef.current = hearCall;
 
-  /** Skip the first input-device effect after connect (stream already matches prefs from setup). */
   const inputSwapSeededRef = useRef(false);
   const prevInputPrefRef = useRef<string | null | undefined>(undefined);
 
-  // Stable ref for the local public key — avoids re-creating sign-dependent
-  // callbacks whenever userInfo updates.
-  const publicKeyRef = useRef(userInfo?.publicKey ?? '');
+  const activeCallChatIdRef = useRef<string | null>(null);
   useEffect(() => {
-    publicKeyRef.current = userInfo?.publicKey ?? '';
-  }, [userInfo?.publicKey]);
+    activeCallChatIdRef.current = activeCallChatId;
+  }, [activeCallChatId]);
 
-  useEffect(() => {
-    const w = window as Window & {
-      hub?: { getIceServers?: () => Promise<{ urls: string }[]> };
-    };
-    if (!w.hub?.getIceServers) return;
-    const pull = (): void => {
-      w.hub?.getIceServers?.()?.then((list) => {
-        if (Array.isArray(list) && list.length > 0) {
-          iceServersRef.current = list.map((s) => ({ urls: s.urls }));
-        }
-      }).catch(() => {});
-    };
-    pull();
-    const id = setInterval(pull, 120_000);
-    return () => clearInterval(id);
-  }, []);
+  const handleIncomingAudioPacketRef = useRef<
+    (data: ArrayBuffer, fromAddress: string) => void
+  >(() => {});
+  const applyDecryptedRoomKeyRef = useRef<
+    (
+      payload: {
+        callSessionId: string;
+        mediaSessionGeneration: number;
+        keyCommitment: string;
+        fromAddress: string;
+      },
+      decryptedKeyB64: string
+    ) => Promise<void>
+  >(async () => {});
+  const startReticulumCaptureRef = useRef<() => Promise<void>>(async () => {});
 
   const updateCallState = useCallback((nextState: CallState) => {
     callStateRef.current = nextState;
@@ -268,108 +283,122 @@ export function useVoiceCall(): UseVoiceCallReturn {
     setIncomingCall(nextIncomingCall);
   }, []);
 
-  /**
-   * Sign a small set of fields via the wallet's Ed25519 key.
-   * Uses a ref for the public key so this callback is stable (no deps).
-   */
-  const signFields = useCallback(
-    async (fields: Record<string, unknown>): Promise<{ signature: string; publicKey: string }> => {
-      try {
-        const res = await (window as any).sendMessage('signPresenceMessage', fields, 10_000);
-        return {
-          signature: (res?.signature as string) ?? '',
-          publicKey: publicKeyRef.current,
-        };
-      } catch {
-        return { signature: '', publicKey: publicKeyRef.current };
-      }
-    },
-    [] // stable — reads publicKeyRef.current at call time
-  );
+  const resetDmVoiceMediaSession = useCallback(() => {
+    metricsRef.current = new GroupCallPerformanceTracker();
+    lastReticulumAudioTotalsRef.current = createInitialReticulumAudioTotals();
+    dmPeerRecoveryStateRef.current = createDmPeerRecoveryState();
+    opusSendPressureStateRef.current = createOpusSendPressureControllerState();
+    opusEncoderLastConfiguredBitrateRef.current = null;
+    lastGcallEscalationTickAtMsRef.current = 0;
+    lastPacketArrivalAtRef.current.clear();
+    interArrivalSamplesRef.current.clear();
+    recentPlayoutHealthSamplesRef.current = [];
+    recentJitterUnderrunAtRef.current = [];
+    smoothedPlayoutTargetRef.current = undefined;
+    lastSentPlayoutTargetRef.current = undefined;
+    lastPlayoutTargetPostAtRef.current = 0;
+    lastDrainMissedAccumRef.current = 0;
+    decayGuardCalmStartMsRef.current = undefined;
+    microWidenCeilingLiftUntilMsRef.current = 0;
+  }, []);
 
-  // ── Cleanup ────────────────────────────────────────────────────────────────
-
-  const clearTimers = useCallback(() => {
-    if (iceFailTimerRef.current) {
-      clearTimeout(iceFailTimerRef.current);
-      iceFailTimerRef.current = null;
-    }
-    if (dcActivateTimerRef.current) {
-      clearTimeout(dcActivateTimerRef.current);
-      dcActivateTimerRef.current = null;
-    }
+  const clearDurationTimer = useCallback(() => {
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current);
       durationTimerRef.current = null;
     }
   }, []);
 
-  const resetPendingSignals = useCallback(() => {
-    pendingSignalsRef.current = [];
-    outboundSetupCallIdRef.current = null;
-    inboundSetupCallIdRef.current = null;
-  }, []);
-
-  const stopTier23Capture = useCallback(() => {
-    const g = tier23CaptureRef.current;
-    if (g) {
+  const stopCapturePipeline = useCallback(() => {
+    try {
+      micSourceRef.current?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    micSourceRef.current = null;
+    try {
+      captureWorkletRef.current?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    captureWorkletRef.current = null;
+    try {
+      keepAliveGainRef.current?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    keepAliveGainRef.current = null;
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
+    micStreamRef.current = null;
+    const enc = encoderRef.current;
+    if (enc && enc.state !== 'closed') {
       try {
-        g.source.disconnect();
-        g.processor.disconnect();
+        enc.close();
       } catch {
         /* ignore */
       }
-      tier23CaptureRef.current = null;
     }
+    encoderRef.current = null;
+    opusEncoderApplyBitrateRef.current = () => {};
+    opusEncoderLastConfiguredBitrateRef.current = null;
+    void audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
   }, []);
 
-  const teardownRTC = useCallback(() => {
-    stopTier23Capture();
-    dcRef.current?.close();
-    dcRef.current = null;
-    pcRef.current?.close();
-    pcRef.current = null;
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
-    localStreamRef.current = null;
-    audioCtxRef.current?.close().catch(() => {});
-    audioCtxRef.current = null;
-    remotePlaybackGainRef.current = null;
-    jitterBufferRef.current.clear();
-    relaySeqRef.current = 0;
-    resetPendingSignals();
-  }, [resetPendingSignals, stopTier23Capture]);
+  const teardownReticulumMediaInner = useCallback(async () => {
+    await dmInboundPlayoutRef.current?.stop();
+    dmInboundPlayoutRef.current = null;
+    stopCapturePipeline();
+
+    const roomId = dmRoomIdRef.current;
+    const addr = userInfo?.address;
+    const pk = userInfo?.publicKey ?? '';
+    if (roomId && addr && reticulumSessionActiveRef.current) {
+      reticulumSessionActiveRef.current = false;
+      await leaveDirectVoiceReticulumRoom({
+        roomId,
+        address: addr,
+        publicKey: pk,
+      }).catch(() => {});
+    }
+
+    dmRoomIdRef.current = null;
+    pendingDmVoiceGcallKeyRef.current = null;
+    peerAddressRef.current = null;
+    callSessionIdRef.current = null;
+    roomKeyRef.current = null;
+    mediaGenRef.current = 1;
+    audioSeqRef.current = 0;
+    resetDmVoiceMediaSession();
+    setAudioMode(null);
+  }, [resetDmVoiceMediaSession, stopCapturePipeline, userInfo?.address, userInfo?.publicKey]);
+
+  const enqueueTeardownReticulumMedia = useCallback(() => {
+    reticulumTeardownChainRef.current = reticulumTeardownChainRef.current
+      .then(() => teardownReticulumMediaInner())
+      .catch(() => {});
+    return reticulumTeardownChainRef.current;
+  }, [teardownReticulumMediaInner]);
 
   const endCall = useCallback(
     (sendHangup = false) => {
       const id = callIdRef.current;
-      if (id) {
-        const w = window as Window & {
-          hub?: {
-            reportStunCallOutcome?: (u: string[], s: boolean) => Promise<unknown>;
-          };
-        };
-        const urls = lastStunBundleRef.current;
-        const mode = audioModeRef.current;
-        const stunHelped = mode === 'media' || mode === 'datachannel';
-        if (w.hub?.reportStunCallOutcome && urls.length > 0) {
-          void w.hub.reportStunCallOutcome(urls, stunHelped);
-        }
-      }
-      clearTimers();
-      teardownRTC();
+      clearDurationTimer();
+      enqueueTeardownReticulumMedia();
       if (sendHangup && id) {
         const timestamp = Date.now();
-        signFields({ type: 'CALL_HANGUP', callId: id, timestamp })
-          .then(({ signature, publicKey }) => {
-            (window as any).call?.hangup(id, signature, publicKey, timestamp).catch(() => {});
-          })
-          .catch(() => {});
+        void signPresenceFields(
+          { type: 'CALL_HANGUP', callId: id, timestamp },
+          publicKeyRef.current
+        ).then(({ signature, publicKey }) => {
+          (window as any).call?.hangup(id, signature, publicKey, timestamp).catch(() => {});
+        });
       }
       callIdRef.current = null;
-      audioModeRef.current = null;
+      isOutboundCallRef.current = false;
+      activeCallChatIdRef.current = null;
       setActiveCallChatId(null);
       updateCallState('ended');
-      setAudioMode(null);
       setCallDuration(0);
       setIsMuted(false);
       setHearCallState(true);
@@ -377,38 +406,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
       updateIncomingCall(null);
       inputSwapSeededRef.current = false;
       prevInputPrefRef.current = undefined;
-      // Reset to idle after a brief moment so UI can show "ended" state
       setTimeout(() => updateCallState('idle'), 1_500);
     },
-    [clearTimers, signFields, teardownRTC, updateCallState, updateIncomingCall]
+    [clearDurationTimer, enqueueTeardownReticulumMedia, updateCallState, updateIncomingCall]
   );
-
-  // ── Duration timer ─────────────────────────────────────────────────────────
-
-  const startDurationTimer = useCallback(() => {
-    setCallDuration(0);
-    durationTimerRef.current = setInterval(
-      () => setCallDuration((d) => d + 1),
-      1_000
-    );
-  }, []);
-
-  // ── Audio playback (Tier 2 & 3) ───────────────────────────────────────────
-
-  const ensureAudioContext = useCallback((): AudioContext => {
-    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-      const ctx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
-      audioCtxRef.current = ctx;
-      void applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
-        audioContext: ctx,
-      }).then(({ clearPersistedOutput }) => {
-        if (clearPersistedOutput) {
-          setCallAudioDevicesRef.current((p) => ({ ...p, outputDeviceId: null }));
-        }
-      });
-    }
-    return audioCtxRef.current;
-  }, []);
 
   const connectRemotePcmToOutput = useCallback((ctx: AudioContext): GainNode => {
     let g = remotePlaybackGainRef.current;
@@ -421,484 +422,737 @@ export function useVoiceCall(): UseVoiceCallReturn {
     return g;
   }, []);
 
-  const playPcmFrame = useCallback(
-    (pcm: Float32Array, sampleRate = AUDIO_SAMPLE_RATE) => {
-      const ctx = ensureAudioContext();
-      const buffer = ctx.createBuffer(1, pcm.length, sampleRate);
-      buffer.copyToChannel(pcm, 0);
-      const src = ctx.createBufferSource();
-      src.buffer = buffer;
-      src.connect(connectRemotePcmToOutput(ctx));
-      src.start();
-    },
-    [connectRemotePcmToOutput, ensureAudioContext]
-  );
-
-  // ── DataChannel audio capture (Tier 2) ────────────────────────────────────
-
-  const startDataChannelCapture = useCallback(() => {
-    if (!localStreamRef.current || !dcRef.current) return;
-
-    stopTier23Capture();
-    const ctx = ensureAudioContext();
-    const src = ctx.createMediaStreamSource(localStreamRef.current);
-    const frameSize = Math.floor((DC_FRAME_MS / 1000) * AUDIO_SAMPLE_RATE);
-
-    // ScriptProcessorNode is deprecated but universally supported.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const processor = (ctx as any).createScriptProcessor(frameSize, 1, 1);
-    processor.onaudioprocess = (e: AudioProcessingEvent) => {
-      if (dcRef.current?.readyState !== 'open') return;
-      const pcm = e.inputBuffer.getChannelData(0);
-      const encoded = pcmCodec.encode(new Float32Array(pcm));
-      dcRef.current.send(encoded);
-    };
-    src.connect(processor);
-    processor.connect(ctx.destination);
-    tier23CaptureRef.current = { source: src, processor };
-  }, [ensureAudioContext, stopTier23Capture]);
-
-  // ── TCP relay audio capture (Tier 3) ──────────────────────────────────────
-
-  const startRelayCapture = useCallback(() => {
-    if (!localStreamRef.current) return;
-
-    stopTier23Capture();
-    const ctx = ensureAudioContext();
-    const src = ctx.createMediaStreamSource(localStreamRef.current);
-    // Use a larger frame at the relay sample rate to reduce relay message rate.
-    const captureFrameSize = Math.floor((RELAY_FRAME_MS / 1000) * AUDIO_SAMPLE_RATE);
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const processor = (ctx as any).createScriptProcessor(captureFrameSize, 1, 1);
-    processor.onaudioprocess = (e: AudioProcessingEvent) => {
-      const callId = callIdRef.current;
-      if (!callId) return;
-      const pcm48k = new Float32Array(e.inputBuffer.getChannelData(0));
-      // Downsample to relay sample rate to cut bandwidth ~3×.
-      const pcm16k = pcmCodec.downsample(pcm48k, AUDIO_SAMPLE_RATE, RELAY_SAMPLE_RATE);
-      const encoded = pcmCodec.encode(pcm16k);
-      // Convert to base64 for JSON wire transport.
-      const bytes = new Uint8Array(encoded);
-      let b64 = '';
-      for (let i = 0; i < bytes.length; i++) b64 += String.fromCharCode(bytes[i]);
-      const b64str = btoa(b64);
-      const seq = ++relaySeqRef.current;
-      (window as any).call?.sendAudio(callId, seq, b64str).catch(() => {});
-    };
-    src.connect(processor);
-    processor.connect(ctx.destination);
-    tier23CaptureRef.current = { source: src, processor };
-  }, [ensureAudioContext, stopTier23Capture]);
-
-  // ── DataChannel setup ──────────────────────────────────────────────────────
-
-  const setupDataChannel = useCallback(
-    (dc: RTCDataChannel) => {
-      dcRef.current = dc;
-
-      dc.onopen = () => {
-        if (audioModeRef.current !== 'media') {
-          audioModeRef.current = 'datachannel';
-          setAudioMode('datachannel');
-          startDataChannelCapture();
+  const handleIncomingAudioPacketCb = useCallback(
+    (data: ArrayBuffer, fromAddress: string) => {
+      if (!roomKeyRef.current) return;
+      const my = userInfo?.address ?? '';
+      if (!fromAddress || fromAddress === my) {
+        if (!fromAddress && !dmVoiceNoFromAddressLoggedRef.current) {
+          dmVoiceNoFromAddressLoggedRef.current = true;
+          pushDirectVoiceUiLog('warn', 'drop inbound audio: empty fromAddress');
         }
-      };
+        return;
+      }
+      const peer = peerAddressRef.current;
+      if (peer && fromAddress !== peer) {
+        if (!dmVoicePeerMismatchLoggedRef.current) {
+          dmVoicePeerMismatchLoggedRef.current = true;
+          pushDirectVoiceUiLog('warn', 'drop inbound audio: fromAddress !== peer', {
+            fromTrunc: fromAddress.slice(0, 8),
+            peerTrunc: peer.slice(0, 8),
+          });
+        }
+        return;
+      }
 
-      dc.onmessage = async (e) => {
-        const buf: ArrayBuffer =
-          e.data instanceof ArrayBuffer
-            ? e.data
-            : await (e.data as Blob).arrayBuffer();
-        const pcm = pcmCodec.decode(buf);
-        playPcmFrame(pcm, AUDIO_SAMPLE_RATE);
-      };
+      const receivedAt = performance.now();
+      metricsRef.current.recordPacketReceived();
+      const last = lastPacketArrivalAtRef.current.get(fromAddress);
+      lastPacketArrivalAtRef.current.set(fromAddress, receivedAt);
+      if (last !== undefined) {
+        const delta = receivedAt - last;
+        if (delta > 0 && delta <= 2000) {
+          let arr = interArrivalSamplesRef.current.get(fromAddress);
+          if (!arr) {
+            arr = [];
+            interArrivalSamplesRef.current.set(fromAddress, arr);
+          }
+          arr.push(delta);
+          while (arr.length > DM_INTER_ARRIVAL_MAX_SAMPLES) arr.shift();
+        }
+      }
 
-      dc.onerror = () => {};
+      const list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
+      dmInboundPlayoutRef.current?.pushDecoded(list);
     },
-    [startDataChannelCapture, playPcmFrame]
+    [userInfo?.address]
   );
+  handleIncomingAudioPacketRef.current = handleIncomingAudioPacketCb;
 
-  const applyBufferedSignal = useCallback(
-    async (
-      pc: RTCPeerConnection,
-      signal: BufferedCallSignal
-    ) => {
-      if (signal.type === 'offer') {
-        await pc.setRemoteDescription(
-          new RTCSessionDescription({ type: 'offer', sdp: signal.data as string })
-        );
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        const answerTs = Date.now();
-        const answerSdp = answer.sdp ?? '';
-        const answerHash = await sha256HexUtf8(answerSdp);
-        const { signature: ansSig, publicKey: ansKey } = await signFields({
-          type: 'CALL_ANSWER',
-          callId: signal.callId,
-          timestamp: answerTs,
-          sdpHash: answerHash,
+  /** Install room key from caller (callee) after decryptBoxWithMyKey. */
+  const applyDecryptedRoomKey = useCallback(
+    async (payload: {
+      callSessionId: string;
+      mediaSessionGeneration: number;
+      keyCommitment: string;
+      fromAddress: string;
+    }, decryptedKeyB64: string) => {
+      const raw = atob(decryptedKeyB64);
+      const keyBytes = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) keyBytes[i] = raw.charCodeAt(i);
+      if (keyBytes.length !== 32) {
+        pushDirectVoiceUiLog('warn', 'room key wrong length after decrypt', {
+          len: keyBytes.length,
         });
-        await (window as any).call?.sendSignal(
-          signal.callId,
-          'answer',
-          answerSdp,
-          ansSig,
-          ansKey,
-          answerTs,
-          answerHash
-        );
+        return;
+      }
+      const expected = await buildMediaKeyCommitmentHex(
+        keyBytes,
+        payload.callSessionId,
+        payload.mediaSessionGeneration >>> 0
+      );
+      if (expected !== payload.keyCommitment) {
+        pushDirectVoiceUiLog('warn', 'room key commitment mismatch', {
+          expectedTrunc: expected.slice(0, 12),
+          gotTrunc: String(payload.keyCommitment).slice(0, 12),
+        });
+        return;
+      }
+      const peer = peerAddressRef.current;
+      if (peer && payload.fromAddress !== peer) {
+        pushDirectVoiceUiLog('warn', 'room key fromAddress !== peer', {
+          fromTrunc: payload.fromAddress.slice(0, 8),
+          peerTrunc: peer.slice(0, 8),
+        });
         return;
       }
 
-      if (signal.type === 'answer') {
-        await pc.setRemoteDescription(
-          new RTCSessionDescription({ type: 'answer', sdp: signal.data as string })
-        );
-        return;
-      }
-
-      if (signal.data) {
-        await pc
-          .addIceCandidate(new RTCIceCandidate(signal.data as RTCIceCandidateInit))
-          .catch(() => {});
-      }
+      resetDmVoiceMediaSession();
+      roomKeyRef.current = keyBytes;
+      callSessionIdRef.current = payload.callSessionId;
+      mediaGenRef.current = payload.mediaSessionGeneration >>> 0;
+      setAudioMode('reticulum');
+      setCallAudioWireNonce((n) => n + 1);
+      pushDirectVoiceUiLog('log', 'room key applied', {
+        sessionTrunc: String(payload.callSessionId).slice(0, 8),
+        mediaGen: payload.mediaSessionGeneration ?? 1,
+      });
     },
-    [signFields]
+    [resetDmVoiceMediaSession]
+  );
+  applyDecryptedRoomKeyRef.current = applyDecryptedRoomKey;
+
+  const sendEncodedFrame = useCallback(
+    (opusFrame: Uint8Array) => {
+      const rk = roomKeyRef.current;
+      const my = userInfo?.address;
+      const roomId = dmRoomIdRef.current;
+      const peer = peerAddressRef.current;
+      const gc = (window as any).groupCall;
+      if (!rk || !my || !roomId || !peer || !gc?.sendAudio) return;
+      if (isMutedRef.current) return;
+
+      const seq = (++audioSeqRef.current) & 0xffff;
+      const ts = Date.now() & 0xffffffff;
+      let packet: Uint8Array;
+      try {
+        packet = encodeAudioPacketV2(my, true, seq, ts, opusFrame, rk);
+      } catch (e) {
+        pushDirectVoiceUiLog('warn', 'encodeAudioPacketV2 failed', { err: String(e) });
+        return;
+      }
+      if (!dmVoiceFirstOutboundAudioLoggedRef.current) {
+        dmVoiceFirstOutboundAudioLoggedRef.current = true;
+        pushDirectVoiceUiLog('log', 'first outbound audio packet', {
+          roomTrunc: roomId.slice(0, 24),
+          peerTrunc: peer.slice(0, 8),
+          bytes: packet.byteLength,
+        });
+      }
+      metricsRef.current.recordRelaySent();
+      void gc
+        .sendAudio(roomId, peer, packet)
+        .then((res: GcReticulumAudioSendResult) => {
+          ingestDmReticulumSendResultIntoMetrics(
+            metricsRef.current,
+            lastReticulumAudioTotalsRef,
+            peer,
+            res ?? {}
+          );
+        })
+        .catch(() => {
+          metricsRef.current.recordRelayIpcFailure(1);
+        });
+    },
+    [userInfo?.address]
   );
 
-  const drainPendingSignals = useCallback(async () => {
-    const pc = pcRef.current;
-    const activeCallId = callIdRef.current;
-    if (!pc || !activeCallId || pendingSignalsRef.current.length === 0) return;
-
-    let remaining = pendingSignalsRef.current.filter(
-      (signal) => signal.callId === activeCallId
-    );
-    const otherCalls = pendingSignalsRef.current.filter(
-      (signal) => signal.callId !== activeCallId
-    );
-
-    let guard = 0;
-    while (remaining.length > 0 && guard < 10) {
-      guard++;
-      const hasRemoteDescription = Boolean(
-        pc.remoteDescription || pc.pendingRemoteDescription
-      );
-      const nextBatch = takeDrainableBufferedCallSignals(
-        remaining,
-        hasRemoteDescription
-      );
-      if (nextBatch.ready.length === 0) break;
-      remaining = nextBatch.remaining;
-      for (const signal of nextBatch.ready) {
-        if (signal.callId !== callIdRef.current) return;
-        await applyBufferedSignal(pc, signal);
-      }
+  const tickDmAdaptivePlayout = useCallback(() => {
+    const peer = peerAddressRef.current;
+    const play = dmInboundPlayoutRef.current?.getPlaybackWorkletNode();
+    if (!peer || !play) return;
+    const now = performance.now();
+    const wallNow = Date.now();
+    const tuning = getGroupCallAudioTuning(readGroupCallAudioProfile());
+    const snap = metricsRef.current.getSnapshot();
+    const missed = lastDrainMissedAccumRef.current;
+    lastDrainMissedAccumRef.current = 0;
+    const peerRecovery =
+      dmPeerRecoveryStateRef.current.peerRecoveryProfile.get(peer) === 'recovery';
+    const pressureSnap = {
+      bridgeWaitingForDrain: snap.reticulumAudioBridgeWaitingForDrain,
+      bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
+      decodedQueueDepth: snap.reticulumAudioDecodedQueueDepth,
+      queuePressureDropsLast5s: snap.reticulumAudioQueuePressureDropsLast5s,
+      pendingFrames: snap.reticulumAudioPendingFrames,
+    };
+    const pressureShouldTightenRecovery =
+      isReticulumSendPressureSignal(pressureSnap);
+    const globalBoost = wallNow < dmPeerRecoveryStateRef.current.globalRecoveryUntilMs;
+    const samples = interArrivalSamplesRef.current.get(peer) ?? [];
+    const out = tickSinglePeerAdaptivePlayoutTarget({
+      now,
+      wallNow,
+      tuning,
+      interArrivalSamplesMs: samples,
+      missedFramesThisTick: missed,
+      adaptiveNetworkMode: snap.adaptiveNetworkMode,
+      globalRecoveryBoostActive: globalBoost,
+      pressureShouldTightenRecovery,
+      ingressPeerRecovery: peerRecovery,
+      failSafeActive: false,
+      recentPlayoutHealthSamples: recentPlayoutHealthSamplesRef.current,
+      recentUnderrunTimesMs: recentJitterUnderrunAtRef.current,
+      smoothedPlayoutTargetMs: smoothedPlayoutTargetRef.current,
+      lastSentPlayoutTargetMs: lastSentPlayoutTargetRef.current,
+      lastPlayoutTargetPostAt: lastPlayoutTargetPostAtRef.current,
+      microWidenCeilingLiftUntilMs: microWidenCeilingLiftUntilMsRef.current,
+      decayGuardCalmStartMs: decayGuardCalmStartMsRef.current,
+    });
+    smoothedPlayoutTargetRef.current = out.smoothMs;
+    lastSentPlayoutTargetRef.current = out.lastSentMs;
+    lastPlayoutTargetPostAtRef.current = out.lastPostAt;
+    decayGuardCalmStartMsRef.current = out.nextDecayGuardCalmStartMs;
+    microWidenCeilingLiftUntilMsRef.current = out.nextMicroWidenCeilingLiftUntilMs;
+    if (out.posted) {
+      play.port.postMessage({ type: 'target', targetPlayoutMs: out.smoothMs });
     }
+    metricsRef.current.recordAdaptiveTargetSample(peer, out.smoothMs);
+  }, []);
+  tickDmAdaptivePlayoutRef.current = tickDmAdaptivePlayout;
 
-    pendingSignalsRef.current = [...otherCalls, ...remaining];
-  }, [applyBufferedSignal]);
+  const startReticulumCapture = useCallback(async () => {
+    if (!userInfo?.address || !roomKeyRef.current) return;
+    if (encoderRef.current && encoderRef.current.state !== 'closed') return;
 
-  // ── RTCPeerConnection factory ──────────────────────────────────────────────
-
-  const createPeerConnection = useCallback((): RTCPeerConnection => {
-    const servers = iceServersRef.current;
-    lastStunBundleRef.current = servers
-      .map((s) => (typeof s.urls === 'string' ? s.urls : s.urls[0]))
-      .filter((u): u is string => typeof u === 'string' && u.length > 0);
-    const pc = new RTCPeerConnection({ iceServers: servers });
-
-    // ICE candidates → send via signaling
-    pc.onicecandidate = (e) => {
-      const callId = callIdRef.current;
-      if (e.candidate) {
-        console.log('[ICE] local candidate:', e.candidate.type, e.candidate.protocol, e.candidate.address, e.candidate.port);
-      } else {
-        console.log('[ICE] local candidate gathering complete');
-      }
-      if (!callId) return;
-      (window as any).call
-        ?.sendSignal(callId, 'ice', e.candidate ? e.candidate.toJSON() : null)
-        .catch(() => {});
-    };
-
-    pc.onicecandidateerror = (e: RTCPeerConnectionIceErrorEvent) => {
-      console.error('[ICE] candidate error — code:', e.errorCode, '| text:', e.errorText, '| url:', e.url, '| addr:', e.address, e.port);
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      console.log('[ICE] connection state →', pc.iceConnectionState);
-    };
-
-    pc.onicegatheringstatechange = () => {
-      console.log('[ICE] gathering state →', pc.iceGatheringState);
-      if (pc.iceGatheringState === 'complete') {
-        scheduleLogIceServerSourcesForPeer(pc, '[ICE]');
-      }
-    };
-
-    // Tier 1: remote audio track arrived.
-    // Chrome fires ontrack at setRemoteDescription time, before ICE fully connects.
-    // Cancel the ICE-failure fallback timer here — if ICE genuinely fails afterwards
-    // pc.connectionState === 'failed' will handle it via onconnectionstatechange.
-    pc.ontrack = (e) => {
-      console.log('[ICE] ontrack fired — activating Tier 1 (WebRTC media)');
-      clearTimeout(iceFailTimerRef.current!);
-      iceFailTimerRef.current = null;
-      clearTimeout(dcActivateTimerRef.current!);
-      dcActivateTimerRef.current = null;
-      audioModeRef.current = 'media';
-      setAudioMode('media');
-
-      // Attach to an <audio> element for playback
-      let audio = document.getElementById(
-        '__qortal_call_audio__'
-      ) as HTMLAudioElement | null;
-      if (!audio) {
-        audio = document.createElement('audio');
-        audio.id = '__qortal_call_audio__';
-        audio.autoplay = true;
-        audio.style.display = 'none';
-        document.body.appendChild(audio);
-      }
-      audio.srcObject = e.streams[0] ?? null;
-      audio.muted = !hearCallRef.current;
-      void applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
-        audioElement: audio,
-      }).then(({ clearPersistedOutput }) => {
-        if (clearPersistedOutput) {
-          setCallAudioDevicesRef.current((p) => ({ ...p, outputDeviceId: null }));
-        }
-      });
-    };
-
-    pc.onconnectionstatechange = () => {
-      console.log('[ICE] pc.connectionState →', pc.connectionState);
-      if (pc.connectionState === 'connected') {
-        clearTimeout(iceFailTimerRef.current!);
-        iceFailTimerRef.current = null;
-
-        if (!audioModeRef.current) {
-          console.log('[ICE] connected, no ontrack yet — waiting', DATACHANNEL_ACTIVATION_MS, 'ms for DataChannel');
-          // ICE connected but no ontrack yet — start DataChannel activation timer
-          dcActivateTimerRef.current = setTimeout(() => {
-            if (audioModeRef.current !== 'media') {
-              console.log('[ICE] DataChannel activation timer fired — dc.readyState:', dcRef.current?.readyState);
-              audioModeRef.current = 'datachannel';
-              setAudioMode('datachannel');
-              // DataChannel may already be open; if so, startDataChannelCapture
-              if (dcRef.current?.readyState === 'open') {
-                startDataChannelCapture();
-              }
-            }
-          }, DATACHANNEL_ACTIVATION_MS);
-        }
-      } else if (
-        pc.connectionState === 'failed' ||
-        pc.connectionState === 'disconnected'
-      ) {
-        console.warn('[ICE] connection', pc.connectionState, '— falling back to Relay (Tier 3)');
-        // If ICE truly failed, switch to relay unconditionally — even if ontrack fired
-        // earlier (Chrome fires ontrack at SDP time; without ICE the track carries no audio).
-        if (audioModeRef.current !== 'relay') {
-          audioModeRef.current = 'relay';
-          setAudioMode('relay');
-          startRelayCapture();
-        }
-      }
-    };
-
-    return pc;
-  }, [startDataChannelCapture, startRelayCapture]);
-
-  // ── User media ─────────────────────────────────────────────────────────────
-
-  const getUserAudio = useCallback(async (): Promise<MediaStream | null> => {
-    const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(
-      callAudioPrefsRef.current.inputDeviceId
-    );
-    if (clearedStaleInputDevice) {
+    const gum = await getUserAudioStreamForCall(callAudioPrefsRef.current.inputDeviceId);
+    if (gum.clearedStaleInputDevice) {
       setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
     }
-    if (stream) {
-      localStreamRef.current = stream;
-    } else {
-      console.error('[Call] getUserMedia failed');
+    const stream = gum.stream;
+    if (!stream) {
+      console.error('[DM voice] getUserMedia failed');
+      pushDirectVoiceUiLog('warn', 'getUserMedia returned no stream');
+      return;
     }
-    return stream;
-  }, [setCallAudioDevices]);
+    micStreamRef.current = stream;
 
-  const swapVoiceCallInput = useCallback(
-    async (deviceId: string | null) => {
-      if (callStateRef.current !== 'connected') return;
-      if (!localStreamRef.current) return;
+    const ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
+    audioCtxRef.current = ctx;
+    const outApply = await applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
+      audioContext: ctx,
+    });
+    if (outApply.clearPersistedOutput) {
+      setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
+    }
 
-      const curTrack = localStreamRef.current.getAudioTracks()[0];
-      const curId = curTrack?.getSettings?.().deviceId;
-      if (deviceId != null && curId === deviceId) return;
-
-      const mode = audioModeRef.current;
-      const pc = pcRef.current;
-
-      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(deviceId);
-      if (clearedStaleInputDevice) {
-        setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
+    const encoder = new (window as any).AudioEncoder({
+      output: (chunk: { copyTo: (b: Uint8Array) => void; byteLength: number }) => {
+        const frame = new Uint8Array(chunk.byteLength);
+        chunk.copyTo(frame);
+        sendEncodedFrame(frame);
+      },
+      error: (e: unknown) => {
+        console.error('[DM voice] AudioEncoder error:', e);
+        pushDirectVoiceUiLog('warn', 'AudioEncoder error', { err: String(e) });
+      },
+    });
+    const encTuning = getGroupCallAudioTuning(readGroupCallAudioProfile());
+    const baseEncoderConfig = {
+      codec: 'opus',
+      sampleRate: OPUS_SAMPLE_RATE,
+      numberOfChannels: OPUS_CHANNELS,
+      bitrate: encTuning.opusBitrate,
+    };
+    const fecEncoderConfig = {
+      ...baseEncoderConfig,
+      opus: {
+        application: 'voip',
+        signal: 'voice',
+        frameDuration: OPUS_FRAME_DURATION_MS * 1000,
+        packetlossperc: encTuning.opusExpectedPacketLossPercent,
+        useinbandfec: true,
+        usedtx: false,
+      },
+    };
+    let encoderConfig: Record<string, unknown> = baseEncoderConfig;
+    try {
+      const AudioEncoderCtor = (window as any).AudioEncoder;
+      const supportResult = await AudioEncoderCtor?.isConfigSupported?.(fecEncoderConfig);
+      if (supportResult?.supported) {
+        encoderConfig =
+          (supportResult.config as Record<string, unknown> | undefined) ??
+          (fecEncoderConfig as Record<string, unknown>);
+      } else {
+        encoderConfig = baseEncoderConfig;
       }
-      if (!stream) return;
-
-      const newTrack = stream.getAudioTracks()[0];
-      if (!newTrack) return;
-
-      newTrack.enabled = !isMutedRef.current;
-
-      if (mode === 'media' && pc) {
-        const sender = pc.getSenders().find((s) => s.track?.kind === 'audio');
-        if (sender) {
-          await sender.replaceTrack(newTrack);
-        }
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-        localStreamRef.current = stream;
-        return;
+    } catch {
+      encoderConfig = baseEncoderConfig;
+    }
+    encoder.configure(encoderConfig as any);
+    encoderRef.current = encoder;
+    opusEncoderLastConfiguredBitrateRef.current = encTuning.opusBitrate;
+    opusSendPressureStateRef.current = createOpusSendPressureControllerState();
+    const fecOpusStatic =
+      typeof encoderConfig.opus === 'object' && encoderConfig.opus !== null
+        ? (encoderConfig.opus as Record<string, unknown>)
+        : null;
+    opusEncoderApplyBitrateRef.current = (bps: number) => {
+      const enc = encoderRef.current;
+      if (!enc || enc.state === 'closed') return;
+      const base = {
+        codec: 'opus',
+        sampleRate: OPUS_SAMPLE_RATE,
+        numberOfChannels: OPUS_CHANNELS,
+        bitrate: bps,
+      };
+      const next = fecOpusStatic ? { ...base, opus: fecOpusStatic } : base;
+      try {
+        enc.configure(next as any);
+      } catch {
+        /* ignore */
       }
+    };
 
-      if (mode === 'datachannel' || mode === 'relay') {
-        stopTier23Capture();
-        localStreamRef.current.getTracks().forEach((t) => t.stop());
-        localStreamRef.current = stream;
-        if (mode === 'datachannel') {
-          startDataChannelCapture();
-        } else {
-          startRelayCapture();
-        }
-        return;
-      }
+    await ctx.audioWorklet.addModule('/worklets/capture-processor.js');
+    const captureNode = new AudioWorkletNode(ctx, 'capture-processor');
+    captureWorkletRef.current = captureNode;
 
-      // Connected but audio tier not chosen yet — keep localStreamRef aligned for the upcoming tier.
-      localStreamRef.current.getTracks().forEach((t) => t.stop());
-      localStreamRef.current = stream;
-    },
-    [
-      setCallAudioDevices,
-      startDataChannelCapture,
-      startRelayCapture,
-      stopTier23Capture,
-    ]
-  );
+    const keepAlive = ctx.createGain();
+    keepAlive.gain.value = 0.0001;
+    keepAliveGainRef.current = keepAlive;
 
-  // ── Outbound call setup ────────────────────────────────────────────────────
-
-  const setupOutboundCall = useCallback(
-    async (callId: string) => {
-      const stream = await getUserAudio();
-      if (!stream) {
-        endCall();
-        return false;
-      }
-
-      const pc = createPeerConnection();
-      pcRef.current = pc;
-
-      // Tier 1: add local audio track
-      stream.getAudioTracks().forEach((t) => pc.addTrack(t, stream));
-
-      // Tier 2: create DataChannel on same connection
-      const dc = pc.createDataChannel('audio', {
-        ordered: false,
-        maxRetransmits: 0,
+    captureNode.port.onmessage = (ev: MessageEvent) => {
+      const d = ev.data as { frame?: Float32Array; vad?: boolean };
+      const frame = d?.frame;
+      const enc = encoderRef.current;
+      if (!frame || !enc || enc.state === 'closed') return;
+      const f32 = frame instanceof Float32Array ? frame : new Float32Array(frame);
+      const i16 = float32ToInt16(f32);
+      const audioData = new (window as any).AudioData({
+        format: 's16',
+        sampleRate: OPUS_SAMPLE_RATE,
+        numberOfFrames: OPUS_FRAME_SAMPLES,
+        numberOfChannels: OPUS_CHANNELS,
+        timestamp: performance.now() * 1000,
+        data: i16,
       });
-      setupDataChannel(dc);
+      try {
+        enc.encode(audioData);
+        audioData.close();
+      } catch {
+        audioData.close();
+      }
+    };
 
-      // ICE failure fallback — only fires if ontrack hasn't already cancelled it
-      iceFailTimerRef.current = setTimeout(() => {
-        if (
-          pc.connectionState !== 'connected' &&
-          pc.connectionState !== 'completed' &&
-          audioModeRef.current !== 'media' &&
-          audioModeRef.current !== 'datachannel'
-        ) {
-          console.warn('[ICE] 8s timeout — ICE never connected (outbound). pc.connectionState:', pc.connectionState, '| iceConnectionState:', pc.iceConnectionState, '→ activating Relay (Tier 3)');
-          audioModeRef.current = 'relay';
-          setAudioMode('relay');
-          startRelayCapture();
-        }
-      }, ICE_FAILURE_TIMEOUT_MS);
+    const source = ctx.createMediaStreamSource(stream);
+    micSourceRef.current = source;
+    source.connect(captureNode);
+    source.connect(keepAlive);
+    keepAlive.connect(ctx.destination);
+    captureNode.port.postMessage({ type: 'mute', muted: isMutedRef.current });
 
-      // Create SDP offer
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      const offerTs = Date.now();
-      const offerSdp = offer.sdp ?? '';
-      const offerHash = await sha256HexUtf8(offerSdp);
-      const { signature: offerSig, publicKey: offerKey } = await signFields({
-        type: 'CALL_OFFER',
-        callId,
-        timestamp: offerTs,
-        sdpHash: offerHash,
-      });
-      await (window as any).call?.sendSignal(
-        callId,
-        'offer',
-        offerSdp,
-        offerSig,
-        offerKey,
-        offerTs,
-        offerHash
-      );
-      await drainPendingSignals();
-      setCallAudioWireNonce((n) => n + 1);
-      return true;
-    },
-    [createPeerConnection, drainPendingSignals, endCall, getUserAudio, setupDataChannel, startRelayCapture, signFields]
-  );
-
-  // ── Inbound call setup ─────────────────────────────────────────────────────
-
-  const setupInboundCall = useCallback(
-    async (callId: string) => {
-      const stream = await getUserAudio();
-      if (!stream) {
-        const rejectTs = Date.now();
-        const { signature: rSig, publicKey: rKey } = await signFields({
-          type: 'CALL_REJECT', callId, timestamp: rejectTs,
+    const peerAddr = peerAddressRef.current;
+    if (peerAddr) {
+      await dmInboundPlayoutRef.current?.stop();
+      const playout = new DmVoiceGcallInboundPlayout();
+      dmInboundPlayoutRef.current = playout;
+      try {
+        await playout.start(ctx, peerAddr, connectRemotePcmToOutput(ctx), {
+          metricsRef,
+          afterDrain: ({ missedFramesThisTick }) => {
+            lastDrainMissedAccumRef.current += missedFramesThisTick;
+            if (missedFramesThisTick > 0) {
+              metricsRef.current.recordJitterUnderrun(1, peerAddr);
+              const perfNow = performance.now();
+              recentJitterUnderrunAtRef.current = [
+                ...recentJitterUnderrunAtRef.current.filter(
+                  (t) => perfNow - t <= DM_ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+                ),
+                perfNow,
+              ];
+            }
+            tickDmAdaptivePlayoutRef.current();
+          },
+          onPlayoutWorkletMessage: (d) => {
+            if (d?.type !== 'gcallPlayoutMetrics') return;
+            if (typeof d.bufferedMs !== 'number') return;
+            if (!d.playoutStarted) return;
+            const perfNow = performance.now();
+            recentPlayoutHealthSamplesRef.current = [
+              ...recentPlayoutHealthSamplesRef.current.filter(
+                (s) => perfNow - s.atMs <= DM_ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+              ),
+              {
+                atMs: perfNow,
+                bufferedMs: d.bufferedMs,
+                underTarget: !!d.outsideBandUnder,
+              },
+            ];
+            metricsRef.current.recordPlayoutMetricTick(
+              d.bufferedMs,
+              !!d.outsideBand,
+              peerAddr,
+              {
+                outsideUnder: !!d.outsideBandUnder,
+                outsideOver: !!d.outsideBandOver,
+                deltaMs:
+                  typeof d.deltaMs === 'number' && Number.isFinite(d.deltaMs)
+                    ? d.deltaMs
+                    : undefined,
+                playoutRate:
+                  typeof d.rate === 'number' && Number.isFinite(d.rate)
+                    ? d.rate
+                    : undefined,
+              }
+            );
+          },
         });
-        await (window as any).call?.reject(callId, 'media unavailable', rSig, rKey, rejectTs);
-        endCall();
-        return false;
+      } catch (e) {
+        pushDirectVoiceUiLog('warn', 'DM inbound playout start failed', {
+          err: String(e),
+        });
+      }
+    }
+  }, [
+    connectRemotePcmToOutput,
+    sendEncodedFrame,
+    setCallAudioDevices,
+    userInfo?.address,
+  ]);
+  startReticulumCaptureRef.current = startReticulumCapture;
+
+  /** Decrypt + apply room key (shared by live `gcall:key` and queued pending). */
+  const handleDmVoiceGcallKeyPayload = useCallback(
+    async (p: GcallKeyEventPayload) => {
+      const myAddr = userInfo?.address;
+      if (!myAddr) {
+        pushDirectVoiceUiLog('warn', 'gcall:key ignored (no local address)');
+        return;
+      }
+      if (p.recipientAddress !== myAddr) {
+        pushDirectVoiceUiLog('warn', 'gcall:key ignored (recipient mismatch)', {
+          expectedTrunc: myAddr.slice(0, 8),
+          gotTrunc: String(p.recipientAddress ?? '').slice(0, 8),
+        });
+        return;
+      }
+      if (p.verified !== true || p.keyMessageVersion !== GCALL_KEY_MESSAGE_VERSION) {
+        pushDirectVoiceUiLog('warn', 'gcall:key rejected (verify/version)', {
+          verified: p.verified,
+          ver: p.keyMessageVersion,
+        });
+        return;
+      }
+      if (!p.encryptedKey || !p.callSessionId || !p.keyCommitment) {
+        pushDirectVoiceUiLog('warn', 'gcall:key missing fields', {
+          hasEnc: !!p.encryptedKey,
+          hasSession: !!p.callSessionId,
+          hasCommit: !!p.keyCommitment,
+        });
+        return;
       }
 
-      const pc = createPeerConnection();
-      pcRef.current = pc;
+      pushDirectVoiceUiLog('log', 'gcall:key decrypt…', {
+        fromTrunc: (p.fromAddress ?? '').slice(0, 8),
+        sessionTrunc: String(p.callSessionId).slice(0, 8),
+      });
 
-      stream.getAudioTracks().forEach((t) => pc.addTrack(t, stream));
+      const combined = atob(p.encryptedKey);
+      const u8 = new Uint8Array(combined.length);
+      for (let i = 0; i < combined.length; i++) u8[i] = combined.charCodeAt(i);
+      const ephemeralPKb64 = uint8ToBase64Local(u8.slice(0, 32));
+      const nonceb64 = uint8ToBase64Local(u8.slice(32, 56));
+      const ciphertextb64 = uint8ToBase64Local(u8.slice(56));
 
-      // Callee listens for DataChannel created by caller
-      pc.ondatachannel = (e) => setupDataChannel(e.channel);
-
-      // ICE failure fallback — only fires if ontrack hasn't already cancelled it
-      iceFailTimerRef.current = setTimeout(() => {
-        if (
-          pc.connectionState !== 'connected' &&
-          pc.connectionState !== 'completed' &&
-          audioModeRef.current !== 'media' &&
-          audioModeRef.current !== 'datachannel'
-        ) {
-          console.warn('[ICE] 8s timeout — ICE never connected (inbound). pc.connectionState:', pc.connectionState, '| iceConnectionState:', pc.iceConnectionState, '→ activating Relay (Tier 3)');
-          audioModeRef.current = 'relay';
-          setAudioMode('relay');
-          startRelayCapture();
+      try {
+        const result = await (window as any).sendMessage(
+          'decryptBoxWithMyKey',
+          {
+            ephemeralPublicKey: ephemeralPKb64,
+            nonce: nonceb64,
+            ciphertext: ciphertextb64,
+          },
+          10_000
+        );
+        if (result?.decryptedKey) {
+          await applyDecryptedRoomKeyRef.current(
+            {
+              callSessionId: p.callSessionId,
+              mediaSessionGeneration: p.mediaSessionGeneration ?? 1,
+              keyCommitment: p.keyCommitment,
+              fromAddress: p.fromAddress ?? '',
+            },
+            result.decryptedKey as string
+          );
+          if (callStateRef.current === 'connected' && roomKeyRef.current) {
+            pushDirectVoiceUiLog('log', 'starting capture after key');
+            await startReticulumCaptureRef.current();
+          }
+        } else {
+          pushDirectVoiceUiLog('warn', 'decryptBoxWithMyKey returned no decryptedKey');
         }
-      }, ICE_FAILURE_TIMEOUT_MS);
-      return true;
+      } catch (e) {
+        console.error('[DM voice] key decrypt failed', e);
+        pushDirectVoiceUiLog('warn', 'decryptBoxWithMyKey failed', { err: String(e) });
+      }
     },
-    [createPeerConnection, endCall, getUserAudio, setupDataChannel, startRelayCapture, signFields]
+    [userInfo?.address]
   );
 
-  // ── window.call event listener ─────────────────────────────────────────────
+  const flushPendingDmVoiceGcallKey = useCallback(
+    (roomId: string) => {
+      const pending = pendingDmVoiceGcallKeyRef.current;
+      if (!pending) return;
+      if (pending.roomId !== roomId) {
+        pushDirectVoiceUiLog('warn', 'discarding pending gcall:key (roomId != session)', {
+          pendingTrunc: String(pending.roomId ?? '').slice(0, 24),
+          sessionTrunc: roomId.slice(0, 24),
+        });
+        pendingDmVoiceGcallKeyRef.current = null;
+        return;
+      }
+      pendingDmVoiceGcallKeyRef.current = null;
+      pushDirectVoiceUiLog('log', 'gcall:key applying queued pending');
+      void handleDmVoiceGcallKeyPayload(pending);
+    },
+    [handleDmVoiceGcallKeyPayload]
+  );
+
+  /** After CALL_ACCEPT / call:accepted: join GC room, exchange key, start capture. */
+  const startReticulumMediaSession = useCallback(async () => {
+    await reticulumTeardownChainRef.current.catch(() => {});
+    clearDirectVoiceUiLogs();
+    dmVoiceAudioPacketCountRef.current = 0;
+    dmVoiceLastAudioUiLogAtRef.current = 0;
+    dmVoiceNoFromAddressLoggedRef.current = false;
+    dmVoicePeerMismatchLoggedRef.current = false;
+    dmVoiceFirstOutboundAudioLoggedRef.current = false;
+
+    const chatId = activeCallChatIdRef.current;
+    const myAddr = userInfo?.address;
+    const myPk = userInfo?.publicKey ?? '';
+    const peer = peerAddressRef.current;
+    if (!chatId || !myAddr || !peer || !isDirectVoiceCallChatId(chatId)) {
+      pushDirectVoiceUiLog('warn', 'startReticulumMediaSession aborted: bad inputs', {
+        hasChat: !!chatId,
+        hasAddr: !!myAddr,
+        hasPeer: !!peer,
+      });
+      endCall(false);
+      return;
+    }
+
+    const roomId = await buildDmVoiceRoomId(chatId);
+    if (dmRoomIdRef.current && dmRoomIdRef.current !== roomId) {
+      pushDirectVoiceUiLog('warn', 'DM room id mismatch (precomputed vs build)', {
+        preTrunc: dmRoomIdRef.current.slice(0, 24),
+        builtTrunc: roomId.slice(0, 24),
+      });
+    }
+    dmRoomIdRef.current = roomId;
+    flushPendingDmVoiceGcallKey(roomId);
+
+    pushDirectVoiceUiLog('log', 'media session start', {
+      outbound: isOutboundCallRef.current,
+      roomTrunc: roomId.slice(0, 32),
+      peerTrunc: peer.slice(0, 8),
+    });
+
+    const retHash = await fetchLocalReticulumDestinationHash();
+    if (!retHash) {
+      pushDirectVoiceUiLog('warn', 'Reticulum destination hash unavailable');
+      setInfoSnackGlobal({
+        type: 'info',
+        message: i18n.t('core:voice_call.failed') ?? 'Voice call failed (Reticulum not ready)',
+      });
+      setOpenSnackGlobal(true);
+      endCall(true);
+      return;
+    }
+    pushDirectVoiceUiLog('log', 'Reticulum hash ok', { hashTrunc: retHash.slice(0, 8) });
+
+    const joinRes = await joinDirectVoiceReticulumRoom({
+      roomId,
+      chatId,
+      address: myAddr,
+      publicKey: myPk,
+      reticulumDestinationHash: retHash,
+    });
+
+    if (!joinRes.success || !joinRes.callSessionId) {
+      pushDirectVoiceUiLog('warn', 'GC_JOIN failed', {
+        error: joinRes.error ?? 'unknown',
+        success: joinRes.success,
+      });
+      setInfoSnackGlobal({
+        type: 'info',
+        message: i18n.t('core:voice_call.failed') ?? 'Voice call failed (could not join media room)',
+      });
+      setOpenSnackGlobal(true);
+      endCall(true);
+      return;
+    }
+
+    pushDirectVoiceUiLog('log', 'GC_JOIN ok', {
+      sessionTrunc: joinRes.callSessionId.slice(0, 8),
+      mediaGen: joinRes.mediaSessionGeneration ?? 1,
+    });
+
+    callSessionIdRef.current = joinRes.callSessionId;
+    mediaGenRef.current = (joinRes.mediaSessionGeneration ?? 1) >>> 0;
+    reticulumSessionActiveRef.current = true;
+
+    const csid = joinRes.callSessionId;
+    const mgen = mediaGenRef.current;
+
+    if (isOutboundCallRef.current) {
+      const roomKey = new Uint8Array(32);
+      crypto.getRandomValues(roomKey);
+      roomKeyRef.current = roomKey;
+
+      const friendPk = dmFriendsByAddressRef.current[peer]?.publicKey ?? '';
+      if (!friendPk) {
+        pushDirectVoiceUiLog('warn', 'no friend publicKey for peer (cannot send GC_KEY)', {
+          peerTrunc: peer.slice(0, 8),
+        });
+        endCall(true);
+        return;
+      }
+
+      const ok = await sendDirectVoiceRoomKey({
+        roomId,
+        toAddress: peer,
+        fromAddress: myAddr,
+        fromPublicKey: myPk,
+        roomKey,
+        callSessionId: csid,
+        mediaSessionGeneration: mgen,
+        recipientPublicKey: friendPk,
+      });
+      if (!ok) {
+        pushDirectVoiceUiLog('warn', 'sendDirectVoiceRoomKey failed');
+        endCall(true);
+        return;
+      }
+      pushDirectVoiceUiLog('log', 'GC_KEY sent to peer');
+      setAudioMode('reticulum');
+      await startReticulumCapture();
+    } else {
+      /* Callee: wait for gcall:key — if key already received, capture may start from handler */
+      pushDirectVoiceUiLog('log', 'callee: waiting for gcall:key (or capture if key ready)');
+      if (roomKeyRef.current) {
+        setAudioMode('reticulum');
+        await startReticulumCapture();
+      }
+    }
+  }, [
+    endCall,
+    flushPendingDmVoiceGcallKey,
+    setInfoSnackGlobal,
+    setOpenSnackGlobal,
+    startReticulumCapture,
+    userInfo?.address,
+    userInfo?.publicKey,
+  ]);
+
+  useEffect(() => {
+    const gc = (window as any).groupCall;
+    if (!gc?.onEvent) return;
+
+    const unsub = gc.onEvent(async (event: string, payload: unknown) => {
+      if (event === 'gcall:key') {
+        const p = payload as GcallKeyEventPayload;
+        pushDirectVoiceUiLog('log', 'gcall:key rx', {
+          roomTrunc: String(p.roomId ?? '').slice(0, 24),
+          toTrunc: String(p.recipientAddress ?? '').slice(0, 8),
+          verified: p.verified,
+          ver: p.keyMessageVersion,
+        });
+        if (!isDmVoiceRoomId(p.roomId)) {
+          pushDirectVoiceUiLog('warn', 'gcall:key ignored (not a DM voice room id)', {
+            roomId: p.roomId,
+          });
+          return;
+        }
+        const curRoom = dmRoomIdRef.current;
+        if (!curRoom) {
+          pendingDmVoiceGcallKeyRef.current = p;
+          pushDirectVoiceUiLog(
+            'log',
+            'gcall:key queued (dm room id not set yet — will match after join)'
+          );
+          return;
+        }
+        if (p.roomId !== curRoom) {
+          pushDirectVoiceUiLog('warn', 'gcall:key ignored (roomId mismatch)', {
+            eventTrunc: String(p.roomId).slice(0, 24),
+            expectedTrunc: curRoom.slice(0, 24),
+          });
+          return;
+        }
+        void handleDmVoiceGcallKeyPayload(p);
+        return;
+      }
+
+      if (event === 'gcall:audio') {
+        const p = payload as {
+          roomId?: string;
+          data?: ArrayBuffer | { buffer: ArrayBuffer };
+          fromAddress?: string;
+        };
+        if (!isDmVoiceRoomId(p.roomId) || p.roomId !== dmRoomIdRef.current) return;
+        let buf: ArrayBuffer | null = null;
+        const raw = p.data;
+        if (raw instanceof ArrayBuffer) buf = raw;
+        else if (raw && typeof raw === 'object' && 'buffer' in raw) {
+          const b = raw as { buffer: ArrayBuffer; byteOffset?: number; byteLength?: number };
+          buf = b.buffer.slice(b.byteOffset ?? 0, (b.byteOffset ?? 0) + (b.byteLength ?? 0));
+        }
+        if (!buf) return;
+
+        const fromAddr = p.fromAddress ?? '';
+        if (!fromAddr && !dmVoiceNoFromAddressLoggedRef.current) {
+          dmVoiceNoFromAddressLoggedRef.current = true;
+          pushDirectVoiceUiLog(
+            'warn',
+            'gcall:audio missing fromAddress (inbound handler may drop)'
+          );
+        }
+
+        dmVoiceAudioPacketCountRef.current += 1;
+        const now = Date.now();
+        if (now - dmVoiceLastAudioUiLogAtRef.current >= 2500) {
+          dmVoiceLastAudioUiLogAtRef.current = now;
+          pushDirectVoiceUiLog(
+            'log',
+            'gcall:audio rx (throttled)',
+            {
+              packets: dmVoiceAudioPacketCountRef.current,
+              bytes: buf.byteLength,
+              hasFrom: fromAddr.length > 0,
+            },
+            'debug'
+          );
+        }
+
+        handleIncomingAudioPacketRef.current(buf, fromAddr);
+      }
+    });
+    return unsub;
+  }, [handleDmVoiceGcallKeyPayload, userInfo?.address]);
+
+  const startDurationTimer = useCallback(() => {
+    setCallDuration(0);
+    durationTimerRef.current = setInterval(() => setCallDuration((d) => d + 1), 1_000);
+  }, []);
 
   useEffect(() => {
     const callAPI = (window as any).call;
-    if (!callAPI) return;
+    if (!callAPI) {
+      console.warn('[DM voice] window.call is undefined — call IPC unavailable');
+      return;
+    }
 
     const handleEvent = async (event: string, payload: unknown) => {
       const p = payload as Record<string, unknown>;
@@ -911,11 +1165,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
           const rejectIncoming = async (reason: string) => {
             const rejectTs = Date.now();
-            const { signature, publicKey } = await signFields({
-              type: 'CALL_REJECT',
-              callId: incCallId,
-              timestamp: rejectTs,
-            });
+            const { signature, publicKey } = await signPresenceFields(
+              { type: 'CALL_REJECT', callId: incCallId, timestamp: rejectTs },
+              publicKeyRef.current
+            );
             await (window as any).call?.reject(
               incCallId,
               reason,
@@ -936,7 +1189,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
             }
           }
 
-          if (callStateRef.current !== 'idle') break; // already in a call
+          if (callStateRef.current !== 'idle') break;
           updateIncomingCall({
             callId: incCallId,
             fromAddress: incFrom,
@@ -949,20 +1202,41 @@ export function useVoiceCall(): UseVoiceCallReturn {
         case 'call:accepted': {
           if (
             callIdRef.current !== p.callId ||
-            callStateRef.current !== 'calling' ||
-            outboundSetupCallIdRef.current === p.callId
-          )
+            callStateRef.current !== 'calling'
+          ) {
+            pushDirectVoiceUiLog('warn', 'call:accepted ignored (wrong callId or state)', {
+              expectedCallId: callIdRef.current,
+              gotCallId: p.callId,
+              state: callStateRef.current,
+            });
             break;
-          outboundSetupCallIdRef.current = p.callId as string;
-          updateCallState('connected');
-          startDurationTimer();
-          try {
-            await setupOutboundCall(p.callId as string);
-          } finally {
-            if (outboundSetupCallIdRef.current === p.callId) {
-              outboundSetupCallIdRef.current = null;
+          }
+          await reticulumTeardownChainRef.current.catch(() => {});
+          const chatIdForRoom = activeCallChatIdRef.current;
+          if (chatIdForRoom && isDirectVoiceCallChatId(chatIdForRoom)) {
+            try {
+              const roomId = await buildDmVoiceRoomId(chatIdForRoom);
+              dmRoomIdRef.current = roomId;
+              flushPendingDmVoiceGcallKey(roomId);
+              pushDirectVoiceUiLog('log', 'DM voice room id ready (caller)', {
+                roomTrunc: roomId.slice(0, 32),
+              });
+            } catch (e) {
+              pushDirectVoiceUiLog('warn', 'buildDmVoiceRoomId failed (caller)', {
+                err: String(e),
+              });
+              endCall(false);
+              break;
             }
           }
+          pushDirectVoiceUiLog('log', 'call:accepted — starting Reticulum media session');
+          updateCallState('connected');
+          startDurationTimer();
+          void startReticulumMediaSession().catch((e) => {
+            pushDirectVoiceUiLog('warn', 'startReticulumMediaSession rejected', {
+              err: String(e),
+            });
+          });
           break;
         }
 
@@ -980,24 +1254,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
           break;
         }
 
-        case 'call:signal': {
-          if (callIdRef.current !== p.callId) break;
-          pendingSignalsRef.current = enqueueBufferedCallSignal(
-            pendingSignalsRef.current,
-            {
-              callId: p.callId as string,
-              type: p.type as BufferedCallSignalType,
-              data: p.data,
-            }
-          );
-          await drainPendingSignals();
-          break;
-        }
-
         case 'call:hangup': {
           const hid = p.callId as string;
-          // Outbound / connected: callIdRef is set from initiate or accept.
-          // Inbound ringing: callIdRef is still null — match pending incoming instead.
           const matchesOutboundOrActive = callIdRef.current === hid;
           const matchesRingingIncoming =
             callStateRef.current === 'ringing' &&
@@ -1006,57 +1264,44 @@ export function useVoiceCall(): UseVoiceCallReturn {
           endCall(false);
           break;
         }
-
-        case 'call:audio': {
-          // Tier 3 relay frame
-          if (callIdRef.current !== p.callId) break;
-          const ts = Date.now();
-          const seq = p.seq as number;
-
-          // Drop stale frames
-          const oldest = ts - JITTER_DROP_MS;
-          for (const [s, v] of jitterBufferRef.current) {
-            if (v.ts < oldest) jitterBufferRef.current.delete(s);
-          }
-
-          const raw = atob(p.data as string);
-          const bytes = new Uint8Array(raw.length);
-          for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-
-          jitterBufferRef.current.set(seq, { ts, data: bytes });
-          const pcm = pcmCodec.decode(bytes.buffer);
-          playPcmFrame(pcm, RELAY_SAMPLE_RATE);
-          break;
-        }
       }
     };
 
     const unsubscribe = callAPI.onEvent(handleEvent);
     return unsubscribe;
   }, [
-    drainPendingSignals,
     endCall,
-    playPcmFrame,
-    setupOutboundCall,
-    signFields,
-    startDurationTimer,
-    updateCallState,
-    updateIncomingCall,
+    flushPendingDmVoiceGcallKey,
     setInfoSnackGlobal,
     setOpenSnackGlobal,
+    startDurationTimer,
+    startReticulumMediaSession,
+    updateCallState,
+    updateIncomingCall,
   ]);
 
-  // ── Register local address with call manager ───────────────────────────────
+  useEffect(() => {
+    const w = window as Window & {
+      call?: { onEvent?: unknown };
+      groupCall?: { onEvent?: unknown };
+    };
+    if (!w.call?.onEvent) {
+      console.warn(
+        '[DM voice] window.call.onEvent is missing — call signaling will not work (not running in Electron shell?)'
+      );
+    }
+    if (!w.groupCall?.onEvent) {
+      console.warn(
+        '[DM voice] window.groupCall.onEvent is missing — Reticulum DM media will not work'
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const addr = userInfo?.address;
     if (!addr) return;
-    (window as any).call
-      ?.setLocalAddresses([addr])
-      .catch(() => {});
+    void (window as any).call?.setLocalAddresses?.([addr])?.catch?.(() => {});
   }, [userInfo?.address]);
-
-  // ── Public actions ─────────────────────────────────────────────────────────
 
   const initiateCall = useCallback(
     async (
@@ -1083,7 +1328,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
         timestamp,
       });
 
+      isOutboundCallRef.current = true;
+      peerAddressRef.current = targetAddress;
       callIdRef.current = callId;
+      activeCallChatIdRef.current = chatId;
       setActiveCallChatId(chatId);
       updateCallState('calling');
 
@@ -1098,78 +1346,118 @@ export function useVoiceCall(): UseVoiceCallReturn {
       );
 
       if (!result?.success) {
+        pushDirectVoiceUiLog('warn', 'call.initiate failed', {
+          result: result ?? null,
+        });
+        isOutboundCallRef.current = false;
+        peerAddressRef.current = null;
         callIdRef.current = null;
+        activeCallChatIdRef.current = null;
         setActiveCallChatId(null);
-        resetPendingSignals();
         updateCallState('idle');
+      } else {
+        pushDirectVoiceUiLog('log', 'call.initiate ok (waiting for peer)', {
+          callIdTrunc: callId.slice(0, 8),
+          chatIdTrunc: chatId.slice(0, 24),
+        });
       }
     },
-    [resetPendingSignals, updateCallState, userInfo?.address, userInfo?.publicKey]
+    [updateCallState, userInfo?.address, userInfo?.publicKey]
   );
 
   const acceptCall = useCallback(async () => {
     const incoming = incomingCallRef.current;
     if (!incoming || callStateRef.current !== 'ringing') return;
-    if (inboundSetupCallIdRef.current === incoming.callId) return;
 
-    inboundSetupCallIdRef.current = incoming.callId;
+    await reticulumTeardownChainRef.current.catch(() => {});
+
+    isOutboundCallRef.current = false;
+    peerAddressRef.current = incoming.fromAddress;
     callIdRef.current = incoming.callId;
     const acceptedChatId = incoming.chatId;
     updateIncomingCall(null);
 
-    try {
-      const setupOk = await setupInboundCall(incoming.callId);
-      if (!setupOk) return;
+    activeCallChatIdRef.current = acceptedChatId;
+    setActiveCallChatId(acceptedChatId);
 
-      setActiveCallChatId(acceptedChatId);
-      updateCallState('connected');
-      startDurationTimer();
-
-      const acceptTs = Date.now();
-      const { signature, publicKey } = await signFields({
-        type: 'CALL_ACCEPT', callId: incoming.callId, timestamp: acceptTs,
-      });
-      await (window as any).call?.accept(incoming.callId, signature, publicKey, acceptTs);
-      await drainPendingSignals();
-    } finally {
-      if (inboundSetupCallIdRef.current === incoming.callId) {
-        inboundSetupCallIdRef.current = null;
+    if (isDirectVoiceCallChatId(acceptedChatId)) {
+      try {
+        const roomId = await buildDmVoiceRoomId(acceptedChatId);
+        dmRoomIdRef.current = roomId;
+        flushPendingDmVoiceGcallKey(roomId);
+        pushDirectVoiceUiLog('log', 'DM voice room id ready (callee)', {
+          roomTrunc: roomId.slice(0, 32),
+        });
+      } catch (e) {
+        pushDirectVoiceUiLog('warn', 'buildDmVoiceRoomId failed (callee)', {
+          err: String(e),
+        });
+        endCall(false);
+        return;
       }
     }
-  }, [drainPendingSignals, setupInboundCall, signFields, startDurationTimer, updateCallState, updateIncomingCall]);
+
+    updateCallState('connected');
+    startDurationTimer();
+
+    const acceptTs = Date.now();
+    const { signature, publicKey } = await signPresenceFields(
+      { type: 'CALL_ACCEPT', callId: incoming.callId, timestamp: acceptTs },
+      publicKeyRef.current
+    );
+    await (window as any).call?.accept(incoming.callId, signature, publicKey, acceptTs);
+
+    pushDirectVoiceUiLog('log', 'incoming call accepted — starting Reticulum media session');
+    void startReticulumMediaSession().catch((e) => {
+      pushDirectVoiceUiLog('warn', 'startReticulumMediaSession rejected', {
+        err: String(e),
+      });
+    });
+  }, [
+    endCall,
+    flushPendingDmVoiceGcallKey,
+    startDurationTimer,
+    startReticulumMediaSession,
+    updateCallState,
+    updateIncomingCall,
+  ]);
 
   const rejectCall = useCallback(async () => {
     const incoming = incomingCallRef.current;
     if (!incoming) return;
     updateIncomingCall(null);
-    resetPendingSignals();
     updateCallState('idle');
 
     const rejectTs = Date.now();
-    const { signature, publicKey } = await signFields({
-      type: 'CALL_REJECT', callId: incoming.callId, timestamp: rejectTs,
-    });
-    await (window as any).call?.reject(incoming.callId, 'rejected', signature, publicKey, rejectTs);
-  }, [resetPendingSignals, signFields, updateCallState, updateIncomingCall]);
+    const { signature, publicKey } = await signPresenceFields(
+      { type: 'CALL_REJECT', callId: incoming.callId, timestamp: rejectTs },
+      publicKeyRef.current
+    );
+    await (window as any).call?.reject(
+      incoming.callId,
+      'rejected',
+      signature,
+      publicKey,
+      rejectTs
+    );
+  }, [updateCallState, updateIncomingCall]);
 
   const hangUp = useCallback(() => {
     endCall(true);
   }, [endCall]);
 
   const toggleMute = useCallback(() => {
-    localStreamRef.current?.getAudioTracks().forEach((t) => {
-      t.enabled = !t.enabled;
+    const next = !isMutedRef.current;
+    micStreamRef.current?.getAudioTracks().forEach((t) => {
+      t.enabled = !next;
     });
-    setIsMuted((m) => !m);
+    captureWorkletRef.current?.port.postMessage({ type: 'mute', muted: next });
+    setIsMuted(next);
   }, []);
 
   const setHearCall = useCallback((hear: boolean) => {
     hearCallRef.current = hear;
     setHearCallState(hear);
-    const el = document.getElementById(
-      '__qortal_call_audio__'
-    ) as HTMLAudioElement | null;
-    if (el) el.muted = !hear;
     const g = remotePlaybackGainRef.current;
     const ctx = audioCtxRef.current;
     if (g && ctx && ctx.state !== 'closed') {
@@ -1187,13 +1475,54 @@ export function useVoiceCall(): UseVoiceCallReturn {
     setHearCall(!hearCallRef.current);
   }, [setHearCall]);
 
+  const swapVoiceCallInput = useCallback(
+    async (deviceId: string | null) => {
+      if (callStateRef.current !== 'connected') return;
+      if (!micStreamRef.current || !roomKeyRef.current) return;
+
+      const curTrack = micStreamRef.current.getAudioTracks()[0];
+      const curId = curTrack?.getSettings?.().deviceId;
+      if (deviceId != null && curId === deviceId) return;
+
+      const { stream, clearedStaleInputDevice } = await getUserAudioStreamForCall(deviceId);
+      if (clearedStaleInputDevice) {
+        setCallAudioDevices((prev) => ({ ...prev, inputDeviceId: null }));
+      }
+      if (!stream) return;
+
+      const newTrack = stream.getAudioTracks()[0];
+      if (!newTrack) return;
+      newTrack.enabled = !isMutedRef.current;
+
+      try {
+        micSourceRef.current?.disconnect();
+      } catch {
+        /* ignore */
+      }
+      micStreamRef.current.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = stream;
+
+      const ctx = audioCtxRef.current;
+      const captureNode = captureWorkletRef.current;
+      const keepAlive = keepAliveGainRef.current;
+      if (ctx && captureNode && keepAlive) {
+        const newSource = ctx.createMediaStreamSource(stream);
+        micSourceRef.current = newSource;
+        newSource.connect(captureNode);
+        newSource.connect(keepAlive);
+        captureNode.port.postMessage({ type: 'mute', muted: isMutedRef.current });
+      }
+    },
+    [setCallAudioDevices]
+  );
+
   useEffect(() => {
     if (callState !== 'connected') {
       inputSwapSeededRef.current = false;
       prevInputPrefRef.current = undefined;
       return;
     }
-    if (!localStreamRef.current) return;
+    if (!micStreamRef.current) return;
     const want = callAudioDevices.inputDeviceId;
     if (!inputSwapSeededRef.current) {
       inputSwapSeededRef.current = true;
@@ -1211,7 +1540,6 @@ export function useVoiceCall(): UseVoiceCallReturn {
       const out = callAudioDevices.outputDeviceId;
       const r = await applyCallAudioOutput(out, {
         audioContext: audioCtxRef.current,
-        audioElement: document.getElementById('__qortal_call_audio__') as HTMLAudioElement | null,
       });
       if (r.clearPersistedOutput) {
         setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
@@ -1219,14 +1547,71 @@ export function useVoiceCall(): UseVoiceCallReturn {
     })();
   }, [callState, callAudioDevices.outputDeviceId, callAudioWireNonce, setCallAudioDevices]);
 
-  // ── Cleanup on unmount ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => {
+      const peer = peerAddressRef.current;
+      if (!peer || !roomKeyRef.current) return;
+      const wallNow = Date.now();
+      const snap = metricsRef.current.getSnapshot();
+      const pressureSnap = {
+        bridgeWaitingForDrain: snap.reticulumAudioBridgeWaitingForDrain,
+        bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
+        decodedQueueDepth: snap.reticulumAudioDecodedQueueDepth,
+        queuePressureDropsLast5s: snap.reticulumAudioQueuePressureDropsLast5s,
+        pendingFrames: snap.reticulumAudioPendingFrames,
+      };
+      const pressured = isReticulumSendPressureSignal(pressureSnap);
+      const encTuning = getGroupCallAudioTuning(readGroupCallAudioProfile());
+      const nominalBitrate = Math.round(encTuning.opusBitrate);
+      const tiers = buildOpusSendPressureTiers(nominalBitrate);
+      const result = tickOpusSendPressureController(
+        opusSendPressureStateRef.current,
+        tiers,
+        OPUS_SEND_PRESSURE_TICK_MS,
+        wallNow,
+        pressured,
+        undefined
+      );
+      opusSendPressureStateRef.current = result.state;
+      const appliedBitrate = Math.max(
+        GCALL_OPUS_SEND_PRESSURE_MIN_BITRATE,
+        result.targetBitrate
+      );
+      if (appliedBitrate !== opusEncoderLastConfiguredBitrateRef.current) {
+        opusEncoderApplyBitrateRef.current(appliedBitrate);
+        opusEncoderLastConfiguredBitrateRef.current = appliedBitrate;
+      }
+      if (pressured) {
+        dmMarkPeerUnstable(dmPeerRecoveryStateRef.current, peer, 1);
+      } else {
+        dmMarkPeerStable(dmPeerRecoveryStateRef.current, peer);
+      }
+      dmRecomputeAdaptiveNetworkMode(dmPeerRecoveryStateRef.current, (m) =>
+        metricsRef.current.setAdaptiveNetworkMode(m)
+      );
+      const lastTick = lastGcallEscalationTickAtMsRef.current;
+      const stageDelta =
+        lastTick > 0
+          ? Math.min(2000, Math.max(0, wallNow - lastTick))
+          : OPUS_SEND_PRESSURE_TICK_MS;
+      lastGcallEscalationTickAtMsRef.current = wallNow;
+      metricsRef.current.tickGcallAudioStageMetrics(stageDelta, {
+        burstWindow: false,
+        overload: false,
+        ingressPacing: result.state.tierIndex > 0,
+        stage5Boost: false,
+        failSafe: false,
+      });
+    }, OPUS_SEND_PRESSURE_TICK_MS);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     return () => {
-      clearTimers();
-      teardownRTC();
+      clearDurationTimer();
+      enqueueTeardownReticulumMedia();
     };
-  }, [clearTimers, teardownRTC]);
+  }, [clearDurationTimer, enqueueTeardownReticulumMedia]);
 
   return {
     callState,

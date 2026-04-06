@@ -4,10 +4,9 @@
  * Implements fully decentralized voice-call signaling on top of the existing
  * P2P mesh.  All CALL_* messages are ephemeral (never stored to disk).
  *
- * Three-tier audio transport (handled entirely in the renderer):
- *   Tier 1 — WebRTC media (addTrack) — direct UDP, ~80% of pairs
- *   Tier 2 — WebRTC DataChannel (Opus binary) — same ICE path, no base64
- *   Tier 3 — CALL_AUDIO over P2P TCP relay — last resort, 100% coverage
+ * Direct-call **media** is sent in the renderer via group-call Reticulum (`useVoiceCall`
+ * + `GroupCallManager`). This module may still relay legacy CALL_AUDIO; the current
+ * desktop UI does not use that path for voice.
  *
  * This module handles only the signaling layer:
  *   - CALL_REQUEST / ACCEPT / REJECT — call setup

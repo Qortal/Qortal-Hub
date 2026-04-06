@@ -1707,7 +1707,7 @@ export function AgentSupportDashboard() {
                 color: 'text.secondary',
               }}
             >
-              {audioMode === 'media' ? 'WebRTC' : audioMode === 'datachannel' ? 'DataCh' : 'Relay'}
+              {audioMode === 'reticulum' ? 'Reticulum' : '…'}
             </Typography>
             <CallAudioSettingsButton />
             <Tooltip title={isMuted ? 'Unmute' : 'Mute'}>

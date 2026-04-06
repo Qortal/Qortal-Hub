@@ -74,6 +74,7 @@ import {
   parseGt1,
 } from './group-call-wire-reticulum';
 import type { GrFragmentMeta, GkFragmentMeta, GtFragmentMeta } from './group-call-wire-reticulum';
+import { compactDmVoiceJoinWireChatId } from './dm-voice-wire';
 import {
   byteLengthUtf8JsonWithBridgeSender,
   RT_RETICULUM_MAX_WIRE_JSON_BYTES,
@@ -936,6 +937,8 @@ const BROADCAST_TOPOLOGY_NO_ROOM_LOG_MIN_MS = 10_000;
 
 /** Buffer GC_KEY / GC_KEY_ROTATE until joinRoom creates GroupRoom (ordering fix). */
 const PENDING_KEY_TTL_MS = 10_000;
+/** Buffer inbound GC_JOIN until joinRoom registers the room (align with GC_JOIN_RK pending TTL). */
+const PENDING_GC_JOIN_BEFORE_JOIN_ROOM_MS = 120_000;
 /** Throttle "unknown room" logs when we cannot buffer (invalid / stale vs pending). */
 const GC_UNKNOWN_ROOM_KEY_LOG_MIN_MS = 60_000;
 /** Throttle diagnostic when pending key expires before join. */
@@ -1162,6 +1165,16 @@ export class GroupCallManager extends EventEmitter {
 
   /** GC_KEY / GC_KEY_ROTATE before joinRoom — one slot per roomId (strict generation merge). */
   private pendingKeyByRoom = new Map<string, PendingKeyEntry>();
+  /** GC_JOIN / GJ before joinRoom registered `roomId` (race: peer sends join first). */
+  private pendingGcJoinBeforeJoinRoom = new Map<
+    string,
+    Array<{
+      env: GcJoinEnvelope;
+      fromNodeId?: string;
+      peerPresenceHash?: string;
+      deadlineMs: number;
+    }>
+  >();
   /** Latest verified authoritative key state retained per room+local recipient for subscribe-time replay. */
   private retainedVerifiedKeyStateByRoomAndRecipient = new Map<
     string,
@@ -1628,6 +1641,7 @@ export class GroupCallManager extends EventEmitter {
     this.joinDropLogAt.clear();
     this.broadcastTopologyNoRoomLogAt.clear();
     this.pendingKeyByRoom.clear();
+    this.pendingGcJoinBeforeJoinRoom.clear();
     this.retainedVerifiedKeyStateByRoomAndRecipient.clear();
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
@@ -1917,6 +1931,51 @@ export class GroupCallManager extends EventEmitter {
       this.handleKeyRotate(pending.env);
     }
     this.pendingKeyFlushSuccess++;
+  }
+
+  private sweepExpiredPendingGcJoin(now: number = Date.now()): void {
+    if (this.pendingGcJoinBeforeJoinRoom.size === 0) return;
+    for (const [roomId, list] of [...this.pendingGcJoinBeforeJoinRoom]) {
+      const alive = list.filter((e) => e.deadlineMs > now);
+      if (alive.length === 0) this.pendingGcJoinBeforeJoinRoom.delete(roomId);
+      else if (alive.length !== list.length)
+        this.pendingGcJoinBeforeJoinRoom.set(roomId, alive);
+    }
+  }
+
+  private enqueuePendingGcJoinBeforeJoinRoom(
+    env: GcJoinEnvelope,
+    fromNodeId?: string,
+    peerPresenceHash?: string
+  ): void {
+    const roomId = env.roomId;
+    const now = Date.now();
+    const deadlineMs = now + PENDING_GC_JOIN_BEFORE_JOIN_ROOM_MS;
+    let list = this.pendingGcJoinBeforeJoinRoom.get(roomId) ?? [];
+    list = list.filter((e) => e.deadlineMs > now);
+    const filtered = list.filter((e) => e.env.fromAddress !== env.fromAddress);
+    filtered.push({ env, fromNodeId, peerPresenceHash, deadlineMs });
+    const MAX_PENDING_GC_JOIN_PER_ROOM = 16;
+    if (filtered.length > MAX_PENDING_GC_JOIN_PER_ROOM) {
+      filtered.splice(0, filtered.length - MAX_PENDING_GC_JOIN_PER_ROOM);
+    }
+    this.pendingGcJoinBeforeJoinRoom.set(roomId, filtered);
+    this.logGcJoinDropThrottled(
+      env.fromAddress,
+      'queued_until_join',
+      `[GCall] Queued GC_JOIN (await joinRoom) for room ${roomId} from ${env.fromAddress}`
+    );
+  }
+
+  private flushPendingGcJoinForRoom(roomId: string): void {
+    const pending = this.pendingGcJoinBeforeJoinRoom.get(roomId);
+    if (!pending || pending.length === 0) return;
+    this.pendingGcJoinBeforeJoinRoom.delete(roomId);
+    const now = Date.now();
+    for (const item of pending) {
+      if (now > item.deadlineMs) continue;
+      this.handleJoin(item.env, item.fromNodeId, item.peerPresenceHash);
+    }
   }
 
   private hasLocalRoomInterest(roomId: string): boolean {
@@ -2925,10 +2984,11 @@ export class GroupCallManager extends EventEmitter {
       ...(rk ? { reticulumIdentityPublicKeyBase64: rk } : {}),
     });
 
+    const wireChatId = compactDmVoiceJoinWireChatId(roomId, chatId);
     const env: GcJoinEnvelope = {
       type: 'GC_JOIN',
       roomId,
-      chatId,
+      chatId: wireChatId,
       fromAddress: localAddress,
       fromPublicKey: publicKey,
       signature,
@@ -2984,6 +3044,7 @@ export class GroupCallManager extends EventEmitter {
         loggerLog(`[GCall] Sent GC_JOIN (Reticulum) for room ${roomId}`);
       }
     }
+    this.flushPendingGcJoinForRoom(roomId);
     this.flushPendingKeyForRoom(roomId);
     this.scheduleQortalGroupCallActivityEmit(true);
     this.flushReticulumGroupActivityHeartbeats(roomId);
@@ -3034,6 +3095,7 @@ export class GroupCallManager extends EventEmitter {
     }
     if (room) this.rememberRecentRoomState(room, timestamp);
     this.pendingKeyByRoom.delete(roomId);
+    this.pendingGcJoinBeforeJoinRoom.delete(roomId);
     this.clearRetainedVerifiedKeyStatesForRoom(roomId);
     this.rooms.delete(roomId);
     this.qortalReticulumTargetsByRoomId.delete(roomId);
@@ -3250,6 +3312,30 @@ export class GroupCallManager extends EventEmitter {
   }
 
   /**
+   * 1:1 DM voice rooms use `dmv:` + 18 hex chars of sha256(directChatId). When inbound Reticulum
+   * audio arrives with an empty or unmapped `peerPresenceHash`, infer the peer from `GroupRoom.chatId`.
+   */
+  private resolveDmVoicePeerFromRoomId(roomId: string | undefined | null): string | null {
+    if (!roomId) return null;
+    if (!roomId.startsWith('dmv:')) return null;
+
+    const room = this.rooms.get(roomId);
+    const directChatId = room?.chatId;
+    if (directChatId?.startsWith('direct:')) {
+      const body = directChatId.slice('direct:'.length);
+      const parts = body.split(':').filter(Boolean);
+      if (parts.length === 2) {
+        const [a, b] = parts;
+        for (const local of this.localAddresses) {
+          if (local === a) return b;
+          if (local === b) return a;
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
    * Map Reticulum route / presence hash to participant address.
    * Falls back to scanning `room.participants` when audio peer state was
    * evicted (e.g. sync before topology applied) so inbound packets still
@@ -3267,7 +3353,9 @@ export class GroupCallManager extends EventEmitter {
       if (byLinkId) return byLinkId;
     }
     const want = this.normalizePeerPresenceHashForAudio(peerPresenceHash);
-    if (!want) return null;
+    if (!want) {
+      return this.resolveDmVoicePeerFromRoomId(roomId);
+    }
     for (const [address, state] of this.reticulumAudioPeersByAddress) {
       if (
         this.normalizePeerPresenceHashForAudio(state.peerPresenceHash) === want ||
@@ -3294,7 +3382,7 @@ export class GroupCallManager extends EventEmitter {
         if (hit) return hit;
       }
     }
-    return null;
+    return this.resolveDmVoicePeerFromRoomId(roomId);
   }
 
   private findRoomIdContainingParticipant(address: string): string | null {
@@ -4479,6 +4567,8 @@ export class GroupCallManager extends EventEmitter {
   ): void {
     if (!GC_MESSAGE_TYPES.has(env.type)) return;
     if (this.pendingKeyByRoom.size > 0) this.sweepExpiredPendingKeys();
+    if (this.pendingGcJoinBeforeJoinRoom.size > 0)
+      this.sweepExpiredPendingGcJoin();
 
     switch (env.type) {
       case 'GC_JOIN':
@@ -4503,12 +4593,10 @@ export class GroupCallManager extends EventEmitter {
     fromNodeId?: string,
     peerPresenceHash?: string
   ): void {
+    if (this.pendingGcJoinBeforeJoinRoom.size > 0)
+      this.sweepExpiredPendingGcJoin();
     if (!this.hasLocalRoomInterest(env.roomId)) {
-      this.logGcJoinDropThrottled(
-        env.fromAddress,
-        'no_local_room_yet',
-        `[GCall] Ignored GC_JOIN (no local room yet — joinRoom not completed or wrong roomId): room=${env.roomId} from=${env.fromAddress}`
-      );
+      this.enqueuePendingGcJoinBeforeJoinRoom(env, fromNodeId, peerPresenceHash);
       return;
     }
 
@@ -4842,9 +4930,12 @@ export class GroupCallManager extends EventEmitter {
 
     // Only notify the renderer when the local client is actively in this room.
     if (this.hasLocalRoomInterest(env.roomId)) {
+      const roomRow = this.rooms.get(env.roomId);
+      const chatIdForEmit =
+        roomRow?.chatId?.startsWith('direct:') ? roomRow.chatId : env.chatId;
       this.emit('gcall:participant-joined', {
         roomId: env.roomId,
-        chatId: env.chatId,
+        chatId: chatIdForEmit,
         address: env.fromAddress,
         publicKey: env.fromPublicKey,
         timestamp: env.timestamp,
