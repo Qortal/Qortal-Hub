@@ -177,13 +177,13 @@ import {
 } from '../lib/group-call/gcall-diagnostics';
 import packageJson from '../../package.json';
 import {
-  computeN1BufferEnforceTier,
   computeN1BufferRatio,
   computeN1MinStartMs,
   computeN1TierBurstCap,
   GCALL_N1_ACCUMULATION_MS,
   GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS,
   GCALL_N1_STALL_ESCAPE_MS,
+  stepN1BufferEnforceTier,
   type GcallN1BufferEnforceTier,
 } from '../lib/group-call/gcallN1PlayoutGate';
 import {
@@ -376,6 +376,7 @@ const GCALL_DECAY_GUARD_HIGH_TARGET_MS = 147;
 const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
+const GCALL_STABLE_RECOVERY_ALPHA_DOWN = 0.34;
 const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
@@ -463,6 +464,14 @@ const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 
 const ADAPTIVE_RECOVERY_SCORE_THRESHOLD = 3;
 const ADAPTIVE_RECOVERY_COOLDOWN_MS = 12_000;
+const ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS = 400;
+const ADAPTIVE_RECOVERY_MIN_DWELL_MS = 250;
+const ADAPTIVE_RECOVERY_REENTRY_COOLDOWN_MS = 300;
+const ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS = 120;
+const ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX = 0.2;
+const ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS = 2;
+const ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION = 0.45;
+const ADAPTIVE_RECOVERY_SEVERE_UNDERRUNS = 4;
 const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 20;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
@@ -618,6 +627,85 @@ export function clearAdaptiveGroupCallPlayoutMaps(maps: {
   maps.lastSentPlayoutTarget.clear();
   maps.lastPlayoutTargetPostAt.clear();
   maps.lastDrainMissed.clear();
+}
+
+export interface RecoveryPlayoutHealthSample {
+  atMs: number;
+  bufferedMs: number;
+  underTarget: boolean;
+}
+
+export interface RecentRecoveryStabilitySummary {
+  sampleCount: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  underrunCount: number;
+  stable: boolean;
+  severeInstability: boolean;
+}
+
+export function summarizeRecentRecoveryStability(opts: {
+  samples: readonly RecoveryPlayoutHealthSample[];
+  underrunTimesMs: readonly number[];
+  nowMs: number;
+  windowMs: number;
+  minBufferedMs?: number;
+  maxUnderTargetFraction?: number;
+  maxUnderruns?: number;
+  severeUnderTargetFraction?: number;
+  severeUnderruns?: number;
+}): RecentRecoveryStabilitySummary {
+  const minBufferedMs =
+    opts.minBufferedMs ?? ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS;
+  const maxUnderTargetFraction =
+    opts.maxUnderTargetFraction ?? ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX;
+  const maxUnderruns = opts.maxUnderruns ?? ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS;
+  const severeUnderTargetFraction =
+    opts.severeUnderTargetFraction ??
+    ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION;
+  const severeUnderruns =
+    opts.severeUnderruns ?? ADAPTIVE_RECOVERY_SEVERE_UNDERRUNS;
+  const windowStartMs = opts.nowMs - Math.max(1, opts.windowMs);
+  const samples = opts.samples.filter((sample) => sample.atMs >= windowStartMs);
+  const underrunCount = opts.underrunTimesMs.filter(
+    (atMs) => atMs >= windowStartMs
+  ).length;
+  const sampleCount = samples.length;
+  const avgPcmBufferedMs =
+    sampleCount > 0
+      ? samples.reduce((sum, sample) => sum + sample.bufferedMs, 0) / sampleCount
+      : 0;
+  const playoutUnderTargetFraction =
+    sampleCount > 0
+      ? samples.reduce(
+          (sum, sample) => sum + (sample.underTarget ? 1 : 0),
+          0
+        ) / sampleCount
+      : 0;
+  const stable =
+    sampleCount >= 2 &&
+    avgPcmBufferedMs > minBufferedMs &&
+    playoutUnderTargetFraction < maxUnderTargetFraction &&
+    underrunCount <= maxUnderruns;
+  const severeInstability =
+    underrunCount >= severeUnderruns ||
+    (sampleCount >= 2 &&
+      playoutUnderTargetFraction >= severeUnderTargetFraction);
+  return {
+    sampleCount,
+    avgPcmBufferedMs,
+    playoutUnderTargetFraction,
+    underrunCount,
+    stable,
+    severeInstability,
+  };
+}
+
+export function shouldBypassRecoveryReentryCooldown(opts: {
+  severity: number;
+  severeInstability: boolean;
+}): boolean {
+  return opts.severity >= 3 || opts.severeInstability;
 }
 
 /**
@@ -2047,6 +2135,11 @@ export function useGroupVoiceCall(uiActive = false) {
     Map<string, 'low-latency' | 'recovery'>
   >(new Map());
   const peerInstabilityScoreRef = useRef<Map<string, number>>(new Map());
+  const peerRecoveryEnteredAtRef = useRef<Map<string, number>>(new Map());
+  const peerRecoveryStableSinceRef = useRef<Map<string, number>>(new Map());
+  const peerRecoveryReentryBlockedUntilRef = useRef<Map<string, number>>(
+    new Map()
+  );
   const peerMediaRecoveryBreachRef = useRef<Map<string, number>>(new Map());
   const peerMediaStallBreachRef = useRef<Map<string, number>>(new Map());
   const peerMediaRecoveryLastActionAtRef = useRef<Map<string, number>>(
@@ -2188,6 +2281,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
   const interArrivalSamplesRef = useRef<Map<string, number[]>>(new Map());
   const smoothedPlayoutTargetRef = useRef<Map<string, number>>(new Map());
+  const recentPlayoutHealthSamplesRef = useRef<
+    Map<string, RecoveryPlayoutHealthSample[]>
+  >(new Map());
+  const recentJitterUnderrunAtRef = useRef<Map<string, number[]>>(new Map());
   /** `performance.now()` of last Opus push into jitter (N===1 stall escape). */
   const lastJitterOpusPushPerfRef = useRef<Map<string, number>>(new Map());
   /** Preroll satisfied once bufferMs >= minStartMs for this source. */
@@ -2515,15 +2612,34 @@ export function useGroupVoiceCall(uiActive = false) {
   }, []);
 
   const markPeerUnstable = useCallback(
-    (address: string, severity = 1) => {
+    (
+      address: string,
+      severity = 1,
+      opts?: { bypassReentryCooldown?: boolean; nowMs?: number }
+    ) => {
+      const nowMs = opts?.nowMs ?? Date.now();
       const prev = peerInstabilityScoreRef.current.get(address) ?? 0;
       const next = Math.min(10, prev + Math.max(1, Math.floor(severity)));
       peerInstabilityScoreRef.current.set(address, next);
       if (next >= ADAPTIVE_RECOVERY_SCORE_THRESHOLD) {
+        const reentryBlockedUntil =
+          peerRecoveryReentryBlockedUntilRef.current.get(address) ?? 0;
+        if (
+          reentryBlockedUntil > nowMs &&
+          !opts?.bypassReentryCooldown &&
+          peerRecoveryProfileRef.current.get(address) !== 'recovery'
+        ) {
+          recomputeAdaptiveNetworkMode();
+          return;
+        }
+        if (peerRecoveryProfileRef.current.get(address) !== 'recovery') {
+          peerRecoveryEnteredAtRef.current.set(address, nowMs);
+        }
+        peerRecoveryStableSinceRef.current.delete(address);
         peerRecoveryProfileRef.current.set(address, 'recovery');
         globalRecoveryUntilMsRef.current = Math.max(
           globalRecoveryUntilMsRef.current,
-          Date.now() + ADAPTIVE_RECOVERY_COOLDOWN_MS
+          nowMs + ADAPTIVE_RECOVERY_COOLDOWN_MS
         );
       }
       recomputeAdaptiveNetworkMode();
@@ -2532,20 +2648,100 @@ export function useGroupVoiceCall(uiActive = false) {
   );
 
   const markPeerStable = useCallback(
-    (address: string) => {
+    (
+      address: string,
+      opts?: { allowRecoveryExit?: boolean; nowMs?: number }
+    ) => {
+      const nowMs = opts?.nowMs ?? Date.now();
       const prev = peerInstabilityScoreRef.current.get(address) ?? 0;
       const next = Math.max(0, prev - 1);
       peerInstabilityScoreRef.current.set(address, next);
       if (
         next === 0 &&
         peerRecoveryProfileRef.current.get(address) === 'recovery' &&
-        Date.now() >= globalRecoveryUntilMsRef.current
+        (opts?.allowRecoveryExit || nowMs >= globalRecoveryUntilMsRef.current)
       ) {
         peerRecoveryProfileRef.current.set(address, 'low-latency');
+        peerRecoveryEnteredAtRef.current.delete(address);
+        peerRecoveryStableSinceRef.current.delete(address);
+        peerRecoveryReentryBlockedUntilRef.current.set(
+          address,
+          nowMs + ADAPTIVE_RECOVERY_REENTRY_COOLDOWN_MS
+        );
+        if (
+          ![...peerRecoveryProfileRef.current.values()].some(
+            (profile) => profile === 'recovery'
+          )
+        ) {
+          globalRecoveryUntilMsRef.current = Math.min(
+            globalRecoveryUntilMsRef.current,
+            nowMs
+          );
+        }
       }
       recomputeAdaptiveNetworkMode();
     },
     [recomputeAdaptiveNetworkMode]
+  );
+
+  const summarizePeerRecentRecoveryStability = useCallback(
+    (peerAddress: string, nowMs: number) => {
+      const sourceAddrs = [...activeJitterSourcesRef.current].filter(
+        (sourceAddr) => sourceIngressPeerRef.current.get(sourceAddr) === peerAddress
+      );
+      const samples = sourceAddrs.flatMap(
+        (sourceAddr) => recentPlayoutHealthSamplesRef.current.get(sourceAddr) ?? []
+      );
+      const underrunTimesMs = sourceAddrs.flatMap(
+        (sourceAddr) => recentJitterUnderrunAtRef.current.get(sourceAddr) ?? []
+      );
+      return summarizeRecentRecoveryStability({
+        samples,
+        underrunTimesMs,
+        nowMs,
+        windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
+      });
+    },
+    []
+  );
+
+  const updatePeerRecoveryStability = useCallback(
+    (nowMs: number) => {
+      const pressureAssessment = lastWindowMetricsRef.current
+        ? assessReticulumAudioPressureWindow(lastWindowMetricsRef.current)
+        : null;
+      for (const [peerAddress, profile] of peerRecoveryProfileRef.current.entries()) {
+        if (profile !== 'recovery') {
+          peerRecoveryStableSinceRef.current.delete(peerAddress);
+          continue;
+        }
+        const summary = summarizePeerRecentRecoveryStability(peerAddress, nowMs);
+        const enteredAt =
+          peerRecoveryEnteredAtRef.current.get(peerAddress) ?? nowMs;
+        const canExit =
+          nowMs - enteredAt >= ADAPTIVE_RECOVERY_MIN_DWELL_MS &&
+          pressureAssessment?.shouldTightenRecovery !== true &&
+          summary.stable;
+        if (!canExit) {
+          peerRecoveryStableSinceRef.current.delete(peerAddress);
+          continue;
+        }
+        const stableSince =
+          peerRecoveryStableSinceRef.current.get(peerAddress) ?? nowMs;
+        if (!peerRecoveryStableSinceRef.current.has(peerAddress)) {
+          peerRecoveryStableSinceRef.current.set(peerAddress, nowMs);
+          continue;
+        }
+        if (nowMs - stableSince < ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS) {
+          continue;
+        }
+        markPeerStable(peerAddress, {
+          allowRecoveryExit: true,
+          nowMs: Date.now(),
+        });
+      }
+    },
+    [markPeerStable, summarizePeerRecentRecoveryStability]
   );
 
   const isSourcePlayoutActive = useCallback(
@@ -2788,7 +2984,12 @@ export function useGroupVoiceCall(uiActive = false) {
                 : Math.ceil(entry.score / 4)
           )
         );
-        markPeerUnstable(peerAddress, severity);
+        markPeerUnstable(peerAddress, severity, {
+          bypassReentryCooldown: shouldBypassRecoveryReentryCooldown({
+            severity,
+            severeInstability: entry.severe,
+          }),
+        });
 
         const breaches =
           (peerMediaStallBreachRef.current.get(peerAddress) ?? 0) + 1;
@@ -2892,7 +3093,19 @@ export function useGroupVoiceCall(uiActive = false) {
                 : Math.ceil(entry.score / 4)
           )
         );
-        markPeerUnstable(peerAddress, severity);
+        const recentSummary = summarizePeerRecentRecoveryStability(
+          peerAddress,
+          performance.now()
+        );
+        markPeerUnstable(peerAddress, severity, {
+          bypassReentryCooldown: shouldBypassRecoveryReentryCooldown({
+            severity,
+            severeInstability:
+              entry.severe ||
+              pressureAssessment.severe ||
+              recentSummary.severeInstability,
+          }),
+        });
 
         const breaches =
           (peerMediaRecoveryBreachRef.current.get(peerAddress) ?? 0) + 1;
@@ -2913,7 +3126,12 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     },
-    [getSourceIngressDiagnostic, markPeerUnstable, recomputeAdaptiveNetworkMode]
+    [
+      getSourceIngressDiagnostic,
+      markPeerUnstable,
+      recomputeAdaptiveNetworkMode,
+      summarizePeerRecentRecoveryStability,
+    ]
   );
 
   const getForwardRecipientCountForDiagnostics = useCallback(
@@ -3395,6 +3613,12 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const smoothedTargetMsForAdequacy =
         smoothedPlayoutTargetRef.current.get(addr) ?? ADAPTIVE_BASE_TARGET_MS;
+      const recentStability = summarizeRecentRecoveryStability({
+        samples: recentPlayoutHealthSamplesRef.current.get(addr) ?? [],
+        underrunTimesMs: recentJitterUnderrunAtRef.current.get(addr) ?? [],
+        nowMs: now,
+        windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
+      });
       const playoutMetricTicks = previousWindowSource?.playoutMetricTicks ?? 0;
       const starvationHasMinSample =
         previousWindowSource !== null &&
@@ -3575,6 +3799,13 @@ export function useGroupVoiceCall(uiActive = false) {
           });
         }
       }
+      if (
+        adaptiveNetworkMode === 'recovery' &&
+        previousWindowPressure?.shouldTightenRecovery !== true &&
+        recentStability.stable
+      ) {
+        alphaDown = Math.max(alphaDown, GCALL_STABLE_RECOVERY_ALPHA_DOWN);
+      }
 
       const alphaUpForSmooth =
         activeJitterSourcesRef.current.size === 1 &&
@@ -3587,10 +3818,9 @@ export function useGroupVoiceCall(uiActive = false) {
         previousTargetMs: smoothedPlayoutTargetRef.current.get(addr),
         alphaUp: alphaUpForSmooth,
         alphaDown,
+        maxTargetMs: adaptiveMaxTargetMs,
       });
-      // Ideal is clamped to adaptiveMaxTargetMs, but the EMA can sit above the ceiling for many
-      // ticks when the ceiling drops or severe/normal flips — clamp so metrics + worklet match policy.
-      const smooth = Math.min(smoothRaw, adaptiveMaxTargetMs);
+      const smooth = smoothRaw;
 
       const lastStarvDiag = lastPlayoutStarvationDiagAtRef.current.get(addr) ?? 0;
       const starvationDiagThrottleMs = 5_000;
@@ -4377,6 +4607,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPacketArrivalAtRef.current.delete(address);
       interArrivalSamplesRef.current.delete(address);
       smoothedPlayoutTargetRef.current.delete(address);
+      recentPlayoutHealthSamplesRef.current.delete(address);
+      recentJitterUnderrunAtRef.current.delete(address);
       lastSentPlayoutTargetRef.current.delete(address);
       lastPlayoutTargetPostAtRef.current.delete(address);
       lastDrainMissedRef.current.delete(address);
@@ -6882,6 +7114,19 @@ export function useGroupVoiceCall(uiActive = false) {
           if (!d.playoutStarted) return;
           if (!isSourcePlayoutActive(sourceAddr)) return;
           const wallNow = Date.now();
+          const perfNow = performance.now();
+          const recentPlayoutSamples = (
+            recentPlayoutHealthSamplesRef.current.get(sourceAddr) ?? []
+          ).filter(
+            (sample) =>
+              perfNow - sample.atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+          );
+          recentPlayoutSamples.push({
+            atMs: perfNow,
+            bufferedMs: d.bufferedMs,
+            underTarget: !!d.outsideBandUnder,
+          });
+          recentPlayoutHealthSamplesRef.current.set(sourceAddr, recentPlayoutSamples);
           if (d.panicZoneEntered) {
             const lastP = lastPanicZoneDiagAtRef.current.get(sourceAddr) ?? 0;
             if (wallNow - lastP >= 5_000) {
@@ -7351,6 +7596,7 @@ export function useGroupVoiceCall(uiActive = false) {
         rawEmptyCount,
       });
     }
+    updatePeerRecoveryStability(nowWall);
 
     const isRecovery = inRecovery;
     const burstBase = isRecovery
@@ -7519,9 +7765,11 @@ export function useGroupVoiceCall(uiActive = false) {
           opusMsPre,
           smoothedTarget
         );
+        const previousN1Tier = lastBufferEnforceTierRef.current.get(addr) ?? null;
         const n1Tier = n1SingleRemote
-          ? computeN1BufferEnforceTier(n1Ratio)
+          ? stepN1BufferEnforceTier(previousN1Tier, n1Ratio)
           : ('normal' as const);
+        lastBufferEnforceTierRef.current.set(addr, n1SingleRemote ? n1Tier : null);
         let n1ScaledCap = n1SingleRemote
           ? computeN1TierBurstCap(n1Tier, scaledBurstCap, {
               recoverySingleRemote:
@@ -7537,15 +7785,13 @@ export function useGroupVoiceCall(uiActive = false) {
         }
 
         if (n1SingleRemote) {
-          const lastTier = lastBufferEnforceTierRef.current.get(addr) ?? null;
           const nowLog = Date.now();
           const lastLog = lastBufferEnforceLogAtRef.current.get(addr) ?? 0;
-          const tierChanged = lastTier !== n1Tier;
+          const tierChanged = previousN1Tier !== n1Tier;
           const logDue =
             tierChanged ||
             nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS;
           if (logDue && (n1Tier !== 'normal' || prerollActive)) {
-            lastBufferEnforceTierRef.current.set(addr, n1Tier);
             lastBufferEnforceLogAtRef.current.set(addr, nowLog);
             gcallDiagnosticsPush('info', '[GCall] bufferEnforceActive', {
               sourceAddr: truncateGcallDiagAddress(addr),
@@ -7556,8 +7802,6 @@ export function useGroupVoiceCall(uiActive = false) {
               tier: n1Tier,
               prerollActive,
             });
-          } else if (n1Tier === 'normal' && !prerollActive) {
-            lastBufferEnforceTierRef.current.set(addr, n1Tier);
           }
         }
 
@@ -7581,6 +7825,14 @@ export function useGroupVoiceCall(uiActive = false) {
           if (!jb.hasReadyFrame()) {
             if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
               metricsRef.current.recordJitterUnderrun(1, addr);
+              const recentUnderruns = (
+                recentJitterUnderrunAtRef.current.get(addr) ?? []
+              ).filter(
+                (atMs) =>
+                  perfWall - atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+              );
+              recentUnderruns.push(perfWall);
+              recentJitterUnderrunAtRef.current.set(addr, recentUnderruns);
               const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
               jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
               metricsRef.current.recordOpusBufferedMetric(
@@ -7614,6 +7866,13 @@ export function useGroupVoiceCall(uiActive = false) {
         if (!jb.hasReadyFrame()) {
           if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
             metricsRef.current.recordJitterUnderrun(1, addr);
+            const recentUnderruns = (
+              recentJitterUnderrunAtRef.current.get(addr) ?? []
+            ).filter(
+              (atMs) => perfWall - atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+            );
+            recentUnderruns.push(perfWall);
+            recentJitterUnderrunAtRef.current.set(addr, recentUnderruns);
             const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
             jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
             metricsRef.current.recordOpusBufferedMetric(
@@ -7677,6 +7936,13 @@ export function useGroupVoiceCall(uiActive = false) {
         if (!jb || !jb.hasReadyFrame()) {
           if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
             metricsRef.current.recordJitterUnderrun(1, addr);
+            const recentUnderruns = (
+              recentJitterUnderrunAtRef.current.get(addr) ?? []
+            ).filter(
+              (atMs) => nowWall - atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+            );
+            recentUnderruns.push(nowWall);
+            recentJitterUnderrunAtRef.current.set(addr, recentUnderruns);
             const prevEma = jitterUnderrunEmaRef.current.get(addr) ?? 0;
             jitterUnderrunEmaRef.current.set(addr, prevEma * 0.9 + 0.1);
             metricsRef.current.recordOpusBufferedMetric(
@@ -7927,6 +8193,7 @@ export function useGroupVoiceCall(uiActive = false) {
     recordPerfDurationPerSource,
     tickAdaptivePlayoutTargets,
     tickPlaybackMixTargets,
+    updatePeerRecoveryStability,
   ]);
 
   runJitterDrainTickRef.current = runJitterDrainTick;
@@ -10052,6 +10319,8 @@ export function useGroupVoiceCall(uiActive = false) {
         lastPlayoutTargetPostAt: lastPlayoutTargetPostAtRef.current,
         lastDrainMissed: lastDrainMissedRef.current,
       });
+      recentPlayoutHealthSamplesRef.current.clear();
+      recentJitterUnderrunAtRef.current.clear();
       lastSourceGapLogAtRef.current.clear();
       lastSourceStallLogAtRef.current.clear();
       lastForwarderGateLogAtRef.current.clear();
@@ -10060,6 +10329,9 @@ export function useGroupVoiceCall(uiActive = false) {
 
       peerRecoveryProfileRef.current.clear();
       peerInstabilityScoreRef.current.clear();
+      peerRecoveryEnteredAtRef.current.clear();
+      peerRecoveryStableSinceRef.current.clear();
+      peerRecoveryReentryBlockedUntilRef.current.clear();
       peerMediaRecoveryBreachRef.current.clear();
       peerMediaStallBreachRef.current.clear();
       peerMediaRecoveryLastActionAtRef.current.clear();

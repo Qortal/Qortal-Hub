@@ -20,6 +20,7 @@ import {
   shouldAcceptKeyRecoveryRequestGeneration,
   shouldAdoptTrustedRootSessionDuringRecovery,
   shouldApplyJoinSessionSnapshot,
+  shouldBypassRecoveryReentryCooldown,
   shouldContinueAfterParticipantJoinRefresh,
   shouldDelayPostJoinRosterElection,
   shouldEscalateRoomWideKeyRecovery,
@@ -32,6 +33,7 @@ import {
   shouldSuppressStartupDecodeFailure,
   shouldSubscribeToJoinedGroupCallEvents,
   shouldStartGroupCallAudioCapture,
+  summarizeRecentRecoveryStability,
 } from './useGroupVoiceCall';
 import type { GroupTopology } from '../lib/group-call/types';
 
@@ -83,6 +85,55 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(lastSentPlayoutTarget.size).toBe(0);
     expect(lastPlayoutTargetPostAt.size).toBe(0);
     expect(lastDrainMissed.size).toBe(0);
+  });
+
+  it('summarizes recent recovery stability from existing playout signals', () => {
+    expect(
+      summarizeRecentRecoveryStability({
+        nowMs: 1_000,
+        windowMs: 400,
+        samples: [
+          { atMs: 700, bufferedMs: 130, underTarget: false },
+          { atMs: 850, bufferedMs: 140, underTarget: false },
+          { atMs: 980, bufferedMs: 125, underTarget: false },
+        ],
+        underrunTimesMs: [650],
+      }).stable
+    ).toBe(true);
+
+    const unstable = summarizeRecentRecoveryStability({
+      nowMs: 1_000,
+      windowMs: 400,
+      samples: [
+        { atMs: 700, bufferedMs: 95, underTarget: true },
+        { atMs: 850, bufferedMs: 90, underTarget: true },
+        { atMs: 980, bufferedMs: 100, underTarget: false },
+      ],
+      underrunTimesMs: [700, 760, 810, 900],
+    });
+    expect(unstable.stable).toBe(false);
+    expect(unstable.severeInstability).toBe(true);
+  });
+
+  it('allows severe instability to bypass recovery re-entry cooldown', () => {
+    expect(
+      shouldBypassRecoveryReentryCooldown({
+        severity: 2,
+        severeInstability: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldBypassRecoveryReentryCooldown({
+        severity: 3,
+        severeInstability: false,
+      })
+    ).toBe(true);
+    expect(
+      shouldBypassRecoveryReentryCooldown({
+        severity: 1,
+        severeInstability: true,
+      })
+    ).toBe(true);
   });
 
   it('only seeds join session state before the root session is adopted', () => {

@@ -20,9 +20,13 @@ export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
 
 /** Tier A: deep deficit — very aggressive throttle (typically 1 decode/tick max). */
 export const GCALL_N1_RATIO_DEEP = 0.3;
+export const GCALL_N1_RATIO_DEEP_ENTER = 0.28;
+export const GCALL_N1_RATIO_DEEP_EXIT = 0.34;
 
 /** Tier B: moderate throttle upper edge (below this band = moderate; above = normal burst). */
 export const GCALL_N1_RATIO_MODERATE = 0.48;
+export const GCALL_N1_RATIO_MODERATE_ENTER = 0.46;
+export const GCALL_N1_RATIO_MODERATE_EXIT = 0.52;
 
 /** Throttle [GCall] bufferEnforceActive diagnostics (ms per source). */
 export const GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS = 2000;
@@ -56,6 +60,27 @@ export function computeN1BufferEnforceTier(
   if (ratio < GCALL_N1_RATIO_DEEP) return 'deep';
   if (ratio <= GCALL_N1_RATIO_MODERATE) return 'moderate';
   return 'normal';
+}
+
+export function stepN1BufferEnforceTier(
+  previousTier: GcallN1BufferEnforceTier | null,
+  ratio: number
+): GcallN1BufferEnforceTier {
+  if (previousTier === 'deep') {
+    if (ratio <= GCALL_N1_RATIO_DEEP_EXIT) return 'deep';
+    return ratio < GCALL_N1_RATIO_MODERATE_EXIT ? 'moderate' : 'normal';
+  }
+  if (previousTier === 'moderate') {
+    if (ratio < GCALL_N1_RATIO_DEEP_ENTER) return 'deep';
+    if (ratio <= GCALL_N1_RATIO_MODERATE_EXIT) return 'moderate';
+    return 'normal';
+  }
+  if (previousTier === 'normal') {
+    if (ratio < GCALL_N1_RATIO_DEEP_ENTER) return 'deep';
+    if (ratio < GCALL_N1_RATIO_MODERATE_ENTER) return 'moderate';
+    return 'normal';
+  }
+  return computeN1BufferEnforceTier(ratio);
 }
 
 export interface ComputeN1TierBurstCapOpts {

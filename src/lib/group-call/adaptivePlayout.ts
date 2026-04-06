@@ -13,6 +13,7 @@ export interface AdaptiveSmoothedTargetInput {
   previousTargetMs?: number;
   alphaUp: number;
   alphaDown: number;
+  maxTargetMs?: number;
 }
 
 export function clampAdaptiveTargetMs(
@@ -54,11 +55,19 @@ export function stepSmoothedAdaptiveTargetMs(
   input: AdaptiveSmoothedTargetInput
 ): number {
   const previousTargetMs = input.previousTargetMs ?? input.idealTargetMs;
+  const clampMax = (valueMs: number) =>
+    typeof input.maxTargetMs === 'number' && Number.isFinite(input.maxTargetMs)
+      ? Math.min(valueMs, input.maxTargetMs)
+      : valueMs;
   if (input.idealTargetMs > previousTargetMs) {
-    return previousTargetMs + input.alphaUp * (input.idealTargetMs - previousTargetMs);
+    return clampMax(
+      previousTargetMs + input.alphaUp * (input.idealTargetMs - previousTargetMs)
+    );
   }
   const fallingDeltaMs = previousTargetMs - input.idealTargetMs;
   const alphaDown =
     fallingDeltaMs > 40 ? Math.min(0.5, input.alphaDown * 1.5) : input.alphaDown;
-  return previousTargetMs + alphaDown * (input.idealTargetMs - previousTargetMs);
+  return clampMax(
+    previousTargetMs + alphaDown * (input.idealTargetMs - previousTargetMs)
+  );
 }

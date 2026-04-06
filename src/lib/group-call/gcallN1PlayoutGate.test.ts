@@ -4,6 +4,7 @@ import {
   computeN1BufferRatio,
   computeN1MinStartMs,
   computeN1TierBurstCap,
+  stepN1BufferEnforceTier,
   GCALL_N1_RATIO_DEEP,
   GCALL_N1_RATIO_MODERATE,
 } from './gcallN1PlayoutGate';
@@ -31,6 +32,17 @@ describe('gcallN1PlayoutGate', () => {
       'moderate'
     );
     expect(computeN1BufferEnforceTier(0.6)).toBe('normal');
+  });
+
+  it('stepN1BufferEnforceTier adds hysteresis around the boundaries', () => {
+    expect(stepN1BufferEnforceTier('deep', 0.33)).toBe('deep');
+    expect(stepN1BufferEnforceTier('deep', 0.4)).toBe('moderate');
+    expect(stepN1BufferEnforceTier('moderate', 0.3)).toBe('moderate');
+    expect(stepN1BufferEnforceTier('moderate', 0.27)).toBe('deep');
+    expect(stepN1BufferEnforceTier('moderate', 0.5)).toBe('moderate');
+    expect(stepN1BufferEnforceTier('moderate', 0.53)).toBe('normal');
+    expect(stepN1BufferEnforceTier('normal', 0.47)).toBe('normal');
+    expect(stepN1BufferEnforceTier('normal', 0.45)).toBe('moderate');
   });
 
   it('computeN1TierBurstCap', () => {

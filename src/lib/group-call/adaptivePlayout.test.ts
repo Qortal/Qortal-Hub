@@ -100,6 +100,18 @@ describe('adaptivePlayout', () => {
     ).toBe(116);
   });
 
+  it('clamps the smoothed target to the current max ceiling', () => {
+    expect(
+      stepSmoothedAdaptiveTargetMs({
+        idealTargetMs: 140,
+        previousTargetMs: 180,
+        alphaUp: 0.5,
+        alphaDown: 0.2,
+        maxTargetMs: 130,
+      })
+    ).toBe(130);
+  });
+
   it('computes zero jitter for tiny samples and variance for real windows', () => {
     expect(computeAdaptiveJitterMs([])).toBe(0);
     expect(computeAdaptiveJitterMs([20, 20])).toBe(0);
