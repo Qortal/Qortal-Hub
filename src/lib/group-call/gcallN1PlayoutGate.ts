@@ -6,11 +6,11 @@
 /** Initial stall escape: no ingress this long → allow one minimal decode (ms). */
 export const GCALL_N1_STALL_ESCAPE_MS = 300;
 
-/** Min start buffer before "preroll satisfied" (ms), lower bound of clamp — below low-latency adaptive max (115). */
+/** Min start buffer before "preroll satisfied" (ms), lower bound of clamp — below low-latency adaptive max (120). */
 export const GCALL_N1_MIN_START_MS_FLOOR = 100;
 
 /** Upper clamp for min-start ms (align with max severe across profiles). */
-export const GCALL_N1_MIN_START_MS_CEIL = 180;
+export const GCALL_N1_MIN_START_MS_CEIL = 185;
 
 /** Micro-accumulation after refill when preroll already satisfied (ms). */
 export const GCALL_N1_ACCUMULATION_MS = 75;

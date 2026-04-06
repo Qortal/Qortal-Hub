@@ -361,7 +361,7 @@ const ADAPTIVE_BASE_TARGET_MS = 100;
 const ADAPTIVE_MIN_TARGET_MS = 100;
 /** Low-latency defaults; active profile overrides via `audioTuningRef`. */
 /** Fallback when tuning missing; align with `LOW_LATENCY_BASE` in groupCallAudioProfile. */
-const ADAPTIVE_MAX_TARGET_MS = 115;
+const ADAPTIVE_MAX_TARGET_MS = 120;
 const ADAPTIVE_SEVERE_MAX_TARGET_MS = 170;
 const ADAPTIVE_JITTER_K = 2.0;
 const ADAPTIVE_ALPHA_UP = 0.32;
@@ -371,8 +371,8 @@ const ADAPTIVE_ALPHA_DOWN = 0.28;
 /** Stickier downward decay when session network mode is recovery (see playout plan). */
 const ADAPTIVE_ALPHA_DOWN_RECOVERY = 0.18;
 /** When smoothed target is high and jitter stays calm, allow faster decay toward ideal. */
-/** Scaled with low-latency adaptive max (~115 vs original 180): 220 * 115/180 ≈ 141. */
-const GCALL_DECAY_GUARD_HIGH_TARGET_MS = 141;
+/** Scaled with low-latency adaptive max (~120 vs original 180): 220 * 120/180 ≈ 147. */
+const GCALL_DECAY_GUARD_HIGH_TARGET_MS = 147;
 const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;

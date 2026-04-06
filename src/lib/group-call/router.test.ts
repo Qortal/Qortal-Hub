@@ -566,9 +566,9 @@ describe('group-call router helpers', () => {
         avgPlayoutDeltaMs: -118,
         avgOpusBufferedMs: 22.965,
         maxOpusBufferedMs: 140,
-        adaptiveTargetMedianMs: 115,
-        adaptiveTargetP95Ms: 115,
-        adaptiveTargetMaxMs: 115,
+        adaptiveTargetMedianMs: 120,
+        adaptiveTargetP95Ms: 120,
+        adaptiveTargetMaxMs: 120,
       })
     ).toMatchObject({
       activeSource: true,

@@ -8,9 +8,9 @@ import {
 
 describe('adaptivePlayout', () => {
   it('clamps the ideal target into the configured range', () => {
-    expect(clampAdaptiveTargetMs(40, 80, 115)).toBe(80);
-    expect(clampAdaptiveTargetMs(220, 80, 115)).toBe(115);
-    expect(clampAdaptiveTargetMs(120, 80, 115)).toBe(115);
+    expect(clampAdaptiveTargetMs(40, 80, 120)).toBe(80);
+    expect(clampAdaptiveTargetMs(220, 80, 120)).toBe(120);
+    expect(clampAdaptiveTargetMs(130, 80, 120)).toBe(120);
   });
 
   it('shows the BASE < MIN dead-zone until jitter or boost escapes the floor', () => {
@@ -18,7 +18,7 @@ describe('adaptivePlayout', () => {
       computeAdaptiveIdealTargetMs({
         baseTargetMs: 60,
         minTargetMs: 80,
-        maxTargetMs: 115,
+        maxTargetMs: 120,
         jitterMultiplier: 2.5,
         jitterMs: 0,
       })
@@ -28,7 +28,7 @@ describe('adaptivePlayout', () => {
       computeAdaptiveIdealTargetMs({
         baseTargetMs: 60,
         minTargetMs: 80,
-        maxTargetMs: 115,
+        maxTargetMs: 120,
         jitterMultiplier: 2.5,
         jitterMs: 10,
       })
@@ -39,7 +39,7 @@ describe('adaptivePlayout', () => {
     const base = computeAdaptiveIdealTargetMs({
       baseTargetMs: 80,
       minTargetMs: 80,
-      maxTargetMs: 135,
+      maxTargetMs: 120,
       jitterMultiplier: 2.2,
       jitterMs: 5,
       lossPenaltyMs: 4,
@@ -47,7 +47,7 @@ describe('adaptivePlayout', () => {
     const worse = computeAdaptiveIdealTargetMs({
       baseTargetMs: 80,
       minTargetMs: 80,
-      maxTargetMs: 135,
+      maxTargetMs: 120,
       jitterMultiplier: 2.2,
       jitterMs: 18,
       lossPenaltyMs: 10,
@@ -93,11 +93,11 @@ describe('adaptivePlayout', () => {
     expect(
       stepSmoothedAdaptiveTargetMs({
         idealTargetMs: 100,
-        previousTargetMs: 115,
+        previousTargetMs: 120,
         alphaUp: 0.5,
         alphaDown: 0.2,
       })
-    ).toBe(112);
+    ).toBe(116);
   });
 
   it('computes zero jitter for tiny samples and variance for real windows', () => {

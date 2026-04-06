@@ -29,8 +29,8 @@ const LOW_LATENCY_BASE = {
   opusExpectedPacketLossPercent: 10,
   jitterBufferSize: 6,
   jitterStartBufferSize: 4,
-  /** Align adaptive ceiling with steady-state Opus depth (~50–60ms typical). */
-  adaptiveMaxTargetMs: 115,
+  /** Balance: below old ~180ms runaway, above ~105ms which forced chronic under-target playout. */
+  adaptiveMaxTargetMs: 120,
   adaptiveSevereMaxTargetMs: 170,
   wasmFecMaxGapReset: 32,
 } as const;
@@ -41,8 +41,8 @@ const HIGH_STABILITY_BASE = {
   opusExpectedPacketLossPercent: 14,
   jitterBufferSize: 6,
   jitterStartBufferSize: 6,
-  adaptiveMaxTargetMs: 140,
-  adaptiveSevereMaxTargetMs: 180,
+  adaptiveMaxTargetMs: 145,
+  adaptiveSevereMaxTargetMs: 185,
   /** Wider seq-gap tolerance before WASM FEC worker reset under high-stability profile. */
   wasmFecMaxGapReset: 42,
 } as const;

@@ -11,14 +11,15 @@ import {
 describe('gcallN1PlayoutGate', () => {
   it('computeN1MinStartMs clamps to floor/ceil', () => {
     expect(computeN1MinStartMs(50)).toBe(100);
-    expect(computeN1MinStartMs(140)).toBe(140);
-    expect(computeN1MinStartMs(400)).toBe(180);
+    expect(computeN1MinStartMs(120)).toBe(120);
+    expect(computeN1MinStartMs(145)).toBe(145);
+    expect(computeN1MinStartMs(400)).toBe(185);
   });
 
   it('computeN1BufferRatio uses max target floor', () => {
-    const a = computeN1BufferRatio(45, 140);
-    expect(a.denomMs).toBe(140);
-    expect(a.ratio).toBeCloseTo(45 / 140, 5);
+    const a = computeN1BufferRatio(45, 145);
+    expect(a.denomMs).toBe(145);
+    expect(a.ratio).toBeCloseTo(45 / 145, 5);
     const b = computeN1BufferRatio(50, 0);
     expect(b.denomMs).toBe(100);
     expect(b.ratio).toBe(0.5);

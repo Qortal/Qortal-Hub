@@ -19,34 +19,34 @@ describe('gcallPlayoutPolicy', () => {
 
   it('caps effective max by global cap + extra vs profile', () => {
     const low = effectivePlayoutMaxTargetMs({
-      profileAdaptiveMaxMs: 140,
-      profileAdaptiveSevereMaxMs: 180,
+      profileAdaptiveMaxMs: 145,
+      profileAdaptiveSevereMaxMs: 185,
       useSevereCeiling: false,
       activeSourceCount: 1,
     });
-    expect(low).toBe(140);
+    expect(low).toBe(145);
 
     const nWay = effectivePlayoutMaxTargetMs({
-      profileAdaptiveMaxMs: 140,
-      profileAdaptiveSevereMaxMs: 180,
+      profileAdaptiveMaxMs: 145,
+      profileAdaptiveSevereMaxMs: 185,
       useSevereCeiling: false,
       activeSourceCount: 8,
     });
-    expect(nWay).toBeGreaterThanOrEqual(140);
-    expect(nWay).toBeLessThanOrEqual(140);
+    expect(nWay).toBeGreaterThanOrEqual(145);
+    expect(nWay).toBeLessThanOrEqual(145);
   });
 
   it('adds dynamic ceiling lift before global cap', () => {
     const base = effectivePlayoutMaxTargetMs({
-      profileAdaptiveMaxMs: 140,
-      profileAdaptiveSevereMaxMs: 180,
+      profileAdaptiveMaxMs: 145,
+      profileAdaptiveSevereMaxMs: 185,
       useSevereCeiling: false,
       activeSourceCount: 1,
       dynamicCeilingLiftMs: 40,
     });
     const noLift = effectivePlayoutMaxTargetMs({
-      profileAdaptiveMaxMs: 140,
-      profileAdaptiveSevereMaxMs: 180,
+      profileAdaptiveMaxMs: 145,
+      profileAdaptiveSevereMaxMs: 185,
       useSevereCeiling: false,
       activeSourceCount: 1,
     });
@@ -55,21 +55,21 @@ describe('gcallPlayoutPolicy', () => {
 
   it('uses one combined dynamic lift (caller passes max of starvation vs micro-widen)', () => {
     const noLift = effectivePlayoutMaxTargetMs({
-      profileAdaptiveMaxMs: 140,
-      profileAdaptiveSevereMaxMs: 180,
+      profileAdaptiveMaxMs: 145,
+      profileAdaptiveSevereMaxMs: 185,
       useSevereCeiling: false,
       activeSourceCount: 1,
     });
     const maxLift = effectivePlayoutMaxTargetMs({
-      profileAdaptiveMaxMs: 140,
-      profileAdaptiveSevereMaxMs: 180,
+      profileAdaptiveMaxMs: 145,
+      profileAdaptiveSevereMaxMs: 185,
       useSevereCeiling: false,
       activeSourceCount: 1,
       dynamicCeilingLiftMs: 50,
     });
     const wronglySummed = effectivePlayoutMaxTargetMs({
-      profileAdaptiveMaxMs: 140,
-      profileAdaptiveSevereMaxMs: 180,
+      profileAdaptiveMaxMs: 145,
+      profileAdaptiveSevereMaxMs: 185,
       useSevereCeiling: false,
       activeSourceCount: 1,
       dynamicCeilingLiftMs: 90,
