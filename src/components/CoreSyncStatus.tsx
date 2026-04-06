@@ -11,13 +11,19 @@ import { useAtom } from 'jotai';
 import { nodeInfosAtom } from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
 import { isLocalNodeUrl } from '../constants/constants';
+import { computeP2pHealth, type P2pHealthLevel } from '../lib/p2pHealth';
+
+export type { P2pHealthLevel };
 
 export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
-  const [overlayLinksConnected, setOverlayLinksConnected] = useState<number | null>(
-    null
-  );
+  const [p2pOutboundPeers, setP2pOutboundPeers] = useState<number | null>(null);
+  const [p2pInboundPeers, setP2pInboundPeers] = useState<number | null>(null);
+  const [connectedRemoteInterfaces, setConnectedRemoteInterfaces] = useState<
+    number | null
+  >(null);
+  const [p2pHealth, setP2pHealth] = useState<P2pHealthLevel | null>(null);
 
   const [nodeBase, setNodeBase] = useState(getBaseApiReact());
   const isUsingGateway = nodeBase?.includes('ext-node.qortal.link') ?? false;
@@ -47,27 +53,49 @@ export const CoreSyncStatus = () => {
       }
     };
 
-    const fetchOverlayLinks = async () => {
+    const fetchP2pReticulumStatus = async () => {
       const api = window.electronAPI;
       if (typeof api?.reticulumGetStatus !== 'function') {
-        setOverlayLinksConnected(null);
+        setP2pOutboundPeers(null);
+        setP2pInboundPeers(null);
+        setConnectedRemoteInterfaces(null);
+        setP2pHealth(null);
         return;
       }
       try {
         const status = await api.reticulumGetStatus();
-        if (typeof status.overlayLinksConnected === 'number') {
-          setOverlayLinksConnected(status.overlayLinksConnected);
-        } else {
-          setOverlayLinksConnected(null);
-        }
+        const out =
+          typeof status.p2pOutboundPeers === 'number' ? status.p2pOutboundPeers : null;
+        const inn =
+          typeof status.p2pInboundPeers === 'number' ? status.p2pInboundPeers : null;
+        setP2pOutboundPeers(out);
+        setP2pInboundPeers(inn);
+        setConnectedRemoteInterfaces(
+          typeof status.onlineRemoteHubInterfaces === 'number'
+            ? status.onlineRemoteHubInterfaces
+            : null
+        );
+        const hubs = status.onlineRemoteHubInterfaces ?? 0;
+        const outbound = status.p2pOutboundPeers ?? 0;
+        const inbound = status.p2pInboundPeers ?? 0;
+        setP2pHealth(
+          computeP2pHealth({
+            onlineRemoteHubInterfaces: hubs,
+            p2pOutboundPeers: outbound,
+            p2pInboundPeers: inbound,
+          })
+        );
       } catch {
-        setOverlayLinksConnected(null);
+        setP2pOutboundPeers(null);
+        setP2pInboundPeers(null);
+        setConnectedRemoteInterfaces(null);
+        setP2pHealth(null);
       }
     };
 
     const tick = () => {
       void getCoreInfos();
-      void fetchOverlayLinks();
+      void fetchP2pReticulumStatus();
     };
 
     tick();
@@ -173,10 +201,55 @@ export const CoreSyncStatus = () => {
             </span>
           </h4>
 
-          {overlayLinksConnected !== null && (
+          {connectedRemoteInterfaces !== null && (
             <h4 className="lineHeight">
-              {t('core:core.overlay_links', { postProcess: 'capitalizeFirstChar' })}:{' '}
-              <span style={{ color: '#03a9f4' }}>{overlayLinksConnected}</span>
+              {t('core:core.connected_remote_interfaces', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              :{' '}
+              <span style={{ color: '#03a9f4' }}>
+                {connectedRemoteInterfaces}
+              </span>
+            </h4>
+          )}
+
+          {p2pOutboundPeers !== null && p2pInboundPeers !== null && (
+            <>
+              <h4 className="lineHeight">
+                {t('core:core.p2p_outbound_peers', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                :{' '}
+                <span style={{ color: '#03a9f4' }}>{p2pOutboundPeers}</span>
+              </h4>
+              <h4 className="lineHeight">
+                {t('core:core.p2p_inbound_peers', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+                :{' '}
+                <span style={{ color: '#03a9f4' }}>{p2pInboundPeers}</span>
+              </h4>
+            </>
+          )}
+
+          {p2pHealth !== null && (
+            <h4 className="lineHeight">
+              {t('core:core.p2p_health', { postProcess: 'capitalizeFirstChar' })}:{' '}
+              <span
+                style={{
+                  color:
+                    p2pHealth === 'bad'
+                      ? theme.palette.error.main
+                      : p2pHealth === 'low'
+                        ? theme.palette.warning.main
+                        : theme.palette.success.main,
+                  fontWeight: 600,
+                }}
+              >
+                {t(`core:core.p2p_health_${p2pHealth}`, {
+                  postProcess: 'capitalizeFirstChar',
+                })}
+              </span>
             </h4>
           )}
 

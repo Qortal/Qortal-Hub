@@ -322,8 +322,6 @@ export const Group = ({
     joinGroupCall,
     leaveGroupCall,
     roomId: gcallActiveRoomId,
-    gcallJoinError,
-    clearGcallJoinError,
   } = useGroupCallContext();
   const qcallMinimized = useAtomValue(qortalGroupVoiceCallMinimizedAtom);
   const setQcallMinimized = useSetAtom(qortalGroupVoiceCallMinimizedAtom);
@@ -370,29 +368,6 @@ export const Group = ({
     selectedGroup?.groupName,
     setQcallMinimized,
   ]);
-
-  useEffect(() => {
-    if (!gcallJoinError) return;
-    const message =
-      gcallJoinError === 'members_fetch_failed'
-        ? t('core:group_call_members_fetch_failed', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        : gcallJoinError === 'presence_offline'
-          ? t('core:group_call_presence_offline', {
-              postProcess: 'capitalizeFirstChar',
-            })
-          : gcallJoinError === 'reticulum_not_ready'
-            ? t('core:group_call_reticulum_not_ready', {
-                postProcess: 'capitalizeFirstChar',
-              })
-            : t('core:group_call_not_member', {
-                postProcess: 'capitalizeFirstChar',
-              });
-    setInfoSnack({ type: 'error', message });
-    setOpenSnack(true);
-    clearGcallJoinError();
-  }, [gcallJoinError, clearGcallJoinError, t]);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);

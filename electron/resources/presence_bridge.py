@@ -51,6 +51,7 @@ _MAX_KNOWN_PEERS = 256
 _REQUEST_PATH_COOLDOWN_SECONDS = 90.0
 _MAX_PATH_NUDGES_PER_PUBLISH = 5
 _HELLO_BOOTSTRAP_ANNOUNCE_COOLDOWN_SECONDS = 10.0
+_NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 5 * 60
 _KR_MISMATCH_LOGGED: set[str] = set()
 _OVERLAY_MAX_NEIGHBORS = 16
 _CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
@@ -67,6 +68,7 @@ RNS_ANNOUNCE_INTERVAL_SEC = 45 * 60
 _rns_auth_announced: bool = False
 _rns_periodic_announce_timer: Optional[threading.Timer] = None
 _last_hello_bootstrap_announce_at: float = 0.0
+_last_no_verified_peers_announce_at: float = 0.0
 
 
 def qortal_base58_decode(s: str) -> bytes:
@@ -847,6 +849,7 @@ def summarize_transport_state(payload: Dict[str, Any]) -> str:
     return (
         f"{payload.get('reachability')} "
         f"hubs={payload.get('onlineHubInterfaces', 0)}/{payload.get('configuredHubInterfaces', 0)} "
+        f"remote_hubs={payload.get('onlineRemoteHubInterfaces', 0)}/{payload.get('configuredRemoteHubInterfaces', 0)} "
         f"transport={'on' if payload.get('transportEnabled') else 'off'}"
     )
 
@@ -858,6 +861,8 @@ def collect_transport_state() -> Dict[str, Any]:
             "transportEnabled": False,
             "configuredHubInterfaces": 0,
             "onlineHubInterfaces": 0,
+            "configuredRemoteHubInterfaces": 0,
+            "onlineRemoteHubInterfaces": 0,
             "hubSummary": "Reticulum bridge not started",
             "reason": "Reticulum bridge not started",
             "meshListenOnline": False,
@@ -887,7 +892,14 @@ def collect_transport_state() -> Dict[str, Any]:
         in ("TCPClientInterface", "BackboneInterface", "BackboneClientInterface")
         and not _is_mesh_listen_inbound_backbone_client(item)
     ]
+    # Outbound bootstrap hubs only — exclude local mesh listen (same Backbone type on Linux).
+    remote_hub_interfaces = [
+        item
+        for item in hub_interfaces
+        if not _is_qortal_mesh_listen_name(str(item.get("name") or ""))
+    ]
     online_hubs = [item for item in hub_interfaces if item.get("online")]
+    online_remote_hubs = [item for item in remote_hub_interfaces if item.get("online")]
     local_auto_online = any(
         item.get("online") and item.get("type") == "AutoInterface"
         for item in normalised
@@ -930,6 +942,8 @@ def collect_transport_state() -> Dict[str, Any]:
         "transportEnabled": "transport_id" in stats,
         "configuredHubInterfaces": len(hub_interfaces),
         "onlineHubInterfaces": len(online_hubs),
+        "configuredRemoteHubInterfaces": len(remote_hub_interfaces),
+        "onlineRemoteHubInterfaces": len(online_remote_hubs),
         "hubSummary": hub_summary,
         "meshListenOnline": mesh_listen_online,
     }
@@ -946,6 +960,8 @@ def maybe_emit_transport_state(force: bool = False) -> None:
             "transportEnabled": False,
             "configuredHubInterfaces": 0,
             "onlineHubInterfaces": 0,
+            "configuredRemoteHubInterfaces": 0,
+            "onlineRemoteHubInterfaces": 0,
             "hubSummary": "Unable to read Reticulum interface stats",
             "reason": str(exc),
             "meshListenOnline": False,
@@ -985,6 +1001,13 @@ def destination_hash_hex(destination_hash: bytes) -> str:
     return destination_hash.hex()
 
 
+def _local_presence_hash_hex() -> Optional[str]:
+    """Hex of local RNS destination; skip overlay links and fanout to ourselves."""
+    if _destination is None:
+        return None
+    return destination_hash_hex(_destination.hash)
+
+
 def _register_peer(
     peer_key: str,
     peer_identity: Any,
@@ -992,6 +1015,16 @@ def _register_peer(
 ) -> None:
     """Register identity for fanout; updates lifecycle by source."""
     global _known_peers, _peer_lifecycle
+    peer_key = str(peer_key or "").strip().lower()
+    if not peer_key:
+        return
+    local_hex = _local_presence_hash_hex()
+    if local_hex and peer_key == local_hex:
+        log(
+            "[presence_bridge] target=presence-reticulum skip_register_peer_self "
+            f"source={source}"
+        )
+        return
     is_new = peer_key not in _known_peers
     _known_peers[peer_key] = peer_identity
     now = time.time()
@@ -1018,6 +1051,10 @@ def _register_peer(
 
 
 def _mark_candidate_peer(peer_key: str, source: str) -> None:
+    peer_key = str(peer_key or "").strip().lower()
+    local_hex = _local_presence_hash_hex()
+    if local_hex and peer_key == local_hex:
+        return
     now = time.time()
     existing = _candidate_peers.get(peer_key) or {}
     peer = {
@@ -1087,6 +1124,7 @@ def _set_verified_overlay_peers(
     verified_peers: list[Dict[str, Any]], active_neighbor_hashes: list[str]
 ) -> None:
     global _verified_overlay_peers, _active_overlay_neighbors
+    local_hex = _local_presence_hash_hex()
     next_verified: Dict[str, Dict[str, Any]] = {}
     for peer in verified_peers:
         if not isinstance(peer, dict):
@@ -1095,6 +1133,8 @@ def _set_verified_overlay_peers(
         address = str(peer.get("address") or "").strip()
         last_seen = peer.get("lastSeen")
         if not peer_hash or not address or not isinstance(last_seen, (int, float)):
+            continue
+        if local_hex and peer_hash == local_hex:
             continue
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
@@ -1108,6 +1148,8 @@ def _set_verified_overlay_peers(
     for raw_hash in active_neighbor_hashes[:_OVERLAY_MAX_NEIGHBORS]:
         peer_hash = str(raw_hash or "").strip().lower()
         if not peer_hash:
+            continue
+        if local_hex and peer_hash == local_hex:
             continue
         if peer_hash not in _known_peers:
             ensure_known_peer_from_recall(peer_hash, "ts_seed")
@@ -1127,9 +1169,12 @@ def _resolve_overlay_neighbor_hashes(exclude_hashes: Optional[list[str]] = None)
     exclude = {
         str(h).strip().lower() for h in (exclude_hashes or []) if str(h).strip()
     }
+    local_hex = _local_presence_hash_hex()
     out: list[str] = []
     for peer_hash in list(_active_overlay_neighbors.keys()):
         if peer_hash in exclude:
+            continue
+        if local_hex and peer_hash == local_hex:
             continue
         if peer_hash not in _known_peers:
             continue
@@ -1962,6 +2007,13 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
     peer_key = str(peer_hash or "").strip().lower()
     if not peer_key:
         return None
+    local_hex = _local_presence_hash_hex()
+    if local_hex and peer_key == local_hex:
+        log(
+            "[presence_bridge] target=presence-reticulum overlay_link_skipped_self "
+            f"peer={peer_key}"
+        )
+        return None
     link_id = ""
     state: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -2013,6 +2065,9 @@ def _retry_pending_overlay_connect_on_announce(peer_hash: str) -> None:
     """If an outbound reverse dial started before path resolution, retry it after announce arrives."""
     peer_key = str(peer_hash or "").strip().lower()
     if not peer_key:
+        return
+    local_hex = _local_presence_hash_hex()
+    if local_hex and peer_key == local_hex:
         return
     link = None
     existing_link_id = ""
@@ -2303,6 +2358,13 @@ def on_overlay_link_packet(message, packet) -> None:
         if not _valid_presence_destination_hash_hex(r):
             log("[presence_bridge] ignored OVERLAY_HELLO invalid r")
             return
+        local_hex = _local_presence_hash_hex()
+        if local_hex and r == local_hex:
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_hello_ignored_self "
+                f"link={link_id}"
+            )
+            return
         existing = str(state.get("peerPresenceHash") or "").strip().lower()
         if existing and existing != r:
             log(
@@ -2453,6 +2515,28 @@ def announce_local_destination() -> None:
     )
 
 
+def _maybe_announce_local_destination_no_verified_overlay_peers() -> None:
+    """Extra RNS announce when overlay has no verified peers (same as auth/periodic). 5 min cooldown."""
+    global _last_no_verified_peers_announce_at
+    if _destination is None or not _rns_auth_announced:
+        return
+    if len(_verified_overlay_peers) > 0:
+        return
+    now = time.time()
+    if (now - _last_no_verified_peers_announce_at) < _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS:
+        return
+    try:
+        announce_local_destination()
+    except Exception as exc:
+        log(f"[presence_bridge] rns announce no_verified_overlay_peers failed: {exc}")
+        return
+    _last_no_verified_peers_announce_at = now
+    log(
+        "[presence_bridge] target=presence-reticulum no_verified_overlay_peers "
+        f"cooldown_sec={_NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS}"
+    )
+
+
 def _maybe_announce_local_destination_for_overlay_bootstrap(
     reason: str, peer_hash: str = ""
 ) -> None:
@@ -2479,7 +2563,7 @@ def _cancel_rns_periodic_announce_timer() -> None:
 
 
 def _rns_periodic_announce_fire() -> None:
-    global _rns_periodic_announce_timer
+    global _rns_periodic_announce_timer, _last_no_verified_peers_announce_at
     _rns_periodic_announce_timer = None
     if _shutdown.is_set():
         return
@@ -2493,6 +2577,7 @@ def _rns_periodic_announce_fire() -> None:
                 f"interval={RNS_ANNOUNCE_INTERVAL_SEC}s "
                 + destination_hash_hex(_destination.hash)
             )
+            _last_no_verified_peers_announce_at = time.time()
         except Exception as exc:
             log(f"[presence_bridge] rns announce periodic failed: {exc}")
     _schedule_rns_periodic_announce_timer()
@@ -2508,8 +2593,9 @@ def _schedule_rns_periodic_announce_timer() -> None:
 
 
 def _rns_announce_on_auth_session_end() -> None:
-    global _rns_auth_announced
+    global _rns_auth_announced, _last_no_verified_peers_announce_at
     _rns_auth_announced = False
+    _last_no_verified_peers_announce_at = 0.0
     _cancel_rns_periodic_announce_timer()
 
 
@@ -2934,7 +3020,7 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
         return
 
     try:
-        global _last_presence_wire, _rns_auth_announced
+        global _last_presence_wire, _rns_auth_announced, _last_no_verified_peers_announce_at
         env_type = envelope.get("type") if isinstance(envelope.get("type"), str) else ""
         if env_type == "PRESENCE_OFFLINE":
             _rns_announce_on_auth_session_end()
@@ -2947,6 +3033,7 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
                 )
                 _rns_auth_announced = True
                 _schedule_rns_periodic_announce_timer()
+                _last_no_verified_peers_announce_at = time.time()
 
         wire_bytes = make_presence_wire(envelope, _OVERLAY_DEFAULT_HOPS)
         _last_presence_wire = wire_bytes
@@ -3053,6 +3140,7 @@ def handle_overlay_sync_state(req_id: str, payload: Dict[str, Any]) -> None:
     active = active_raw if isinstance(active_raw, list) else []
     _set_verified_overlay_peers(verified, [str(h) for h in active])
     _sync_overlay_links()
+    _maybe_announce_local_destination_no_verified_overlay_peers()
     emit_resp(req_id, True)
 
 

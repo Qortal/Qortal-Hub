@@ -187,6 +187,8 @@ export interface PresenceTransport {
   readonly kind: 'mesh-node' | 'reticulum';
   publish(envelope: PresenceEnvelope): Promise<boolean> | boolean;
   subscribe(handlers: PresenceTransportHandlers): () => void;
+  /** Reticulum local destination hash (hex); used to exclude self from overlay fanout. */
+  getLocalDestinationHash?: () => string | undefined;
 }
 
 function describePresenceRoute(route: PresenceRoute | null | undefined): string {
@@ -641,6 +643,9 @@ export class PresenceManager extends EventEmitter {
    */
   private helloFanoutHints = new Map<string, { lastSeen: number }>();
 
+  /** Local Reticulum destination hash (lowercase hex); set when Reticulum transport is ready. */
+  private localReticulumDestinationHash: string | null = null;
+
   private verifyPool = new VerifyWorkerPool(
     'presence',
     PRESENCE_VERIFY_WORKER_COUNT,
@@ -675,6 +680,40 @@ export class PresenceManager extends EventEmitter {
    *  connected peers so they learn about the local user immediately. */
   getLastLocalEnvelope(): PresenceEnvelope | null {
     return this.lastLocalEnvelope;
+  }
+
+  /**
+   * Called when the Reticulum bridge exposes the local destination hash (or clears on degrade).
+   * Removes self from overlay fanout so we never treat our own hash as a peer.
+   */
+  setLocalReticulumDestinationHash(hex: string | null): void {
+    const next = hex?.trim().toLowerCase() ?? null;
+    if (next === this.localReticulumDestinationHash) return;
+    this.localReticulumDestinationHash = next;
+    this.pruneSelfFromReticulumOverlayState();
+    const changed = this.recomputeReticulumActiveNeighbors(Date.now());
+    if (changed) {
+      this.emitReticulumOverlayChanged();
+    }
+  }
+
+  private isSelfReticulumHash(hash: string): boolean {
+    const local = this.localReticulumDestinationHash;
+    if (!local) return false;
+    return hash.trim().toLowerCase() === local;
+  }
+
+  private pruneSelfFromReticulumOverlayState(): void {
+    const local = this.localReticulumDestinationHash;
+    if (!local) return;
+    const had = this.verifiedReticulumPeers.delete(local);
+    const hadCand = this.reticulumCandidates.delete(local);
+    const hadHello = this.helloFanoutHints.delete(local);
+    if (had || hadCand || hadHello) {
+      loggerLog(
+        `[Presence] Removed local destination hash from overlay peers (self) ${local}`
+      );
+    }
   }
 
   // ── Message handling ────────────────────────────────────────────────────────
@@ -934,10 +973,10 @@ export class PresenceManager extends EventEmitter {
       if (session.route.kind !== 'reticulum') continue;
       if (now - session.lastSeen > PRESENCE_SESSION_TIMEOUT_MS) continue;
       const h = session.route.destinationHash;
-      if (typeof h === 'string' && h.length > 0 && !seen.has(h)) {
-        seen.add(h);
-        out.push(h);
-      }
+      if (typeof h !== 'string' || h.length === 0 || seen.has(h)) continue;
+      if (this.isSelfReticulumHash(h)) continue;
+      seen.add(h);
+      out.push(h);
     }
     return out;
   }
@@ -946,6 +985,7 @@ export class PresenceManager extends EventEmitter {
     const now = Date.now();
     this.pruneReticulumOverlayState(now);
     return [...this.verifiedReticulumPeers.values()]
+      .filter((peer) => !this.isSelfReticulumHash(peer.destinationHash))
       .sort((a, b) => a.verifiedAt - b.verifiedAt || b.lastSeen - a.lastSeen)
       .map((peer) => ({
         destinationHash: peer.destinationHash,
@@ -964,7 +1004,9 @@ export class PresenceManager extends EventEmitter {
   ): string[] {
     const now = Date.now();
     this.pruneReticulumOverlayState(now);
-    const base = this.activeReticulumPublishHashes;
+    const base = this.activeReticulumPublishHashes.filter(
+      (h) => !this.isSelfReticulumHash(h)
+    );
     if (excludeDestinationHashes.length === 0) {
       return [...base];
     }
@@ -980,7 +1022,7 @@ export class PresenceManager extends EventEmitter {
   getReticulumVerifiedNeighborHashes(): string[] {
     const now = Date.now();
     this.pruneReticulumOverlayState(now);
-    return [...this.activeReticulumNeighborHashes];
+    return this.activeReticulumNeighborHashes.filter((h) => !this.isSelfReticulumHash(h));
   }
 
   noteReticulumOverlayLinkClosed(
@@ -1010,6 +1052,7 @@ export class PresenceManager extends EventEmitter {
   ): void {
     const hash = destinationHash.trim().toLowerCase();
     if (!hash) return;
+    if (this.isSelfReticulumHash(hash)) return;
     const existing = this.reticulumCandidates.get(hash);
     const peer: ReticulumCandidatePeer = {
       destinationHash: hash,
@@ -1322,6 +1365,7 @@ export class PresenceManager extends EventEmitter {
   ): void {
     const hash = destinationHash.trim().toLowerCase();
     if (!hash || !address) return;
+    if (this.isSelfReticulumHash(hash)) return;
     this.reticulumCandidates.delete(hash);
     this.helloFanoutHints.delete(hash);
     const existing = this.verifiedReticulumPeers.get(hash);
@@ -1375,6 +1419,7 @@ export class PresenceManager extends EventEmitter {
   noteReticulumHelloFanoutHint(destinationHash: string, now: number = Date.now()): void {
     const hash = destinationHash.trim().toLowerCase();
     if (!hash) return;
+    if (this.isSelfReticulumHash(hash)) return;
     const beforePublish = [...this.activeReticulumPublishHashes];
     this.helloFanoutHints.set(hash, { lastSeen: now });
     const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
@@ -1388,8 +1433,9 @@ export class PresenceManager extends EventEmitter {
   }
 
   private recomputeReticulumActiveNeighbors(now: number): boolean {
-    const nextVerified = this.activeReticulumNeighborHashes.filter((hash) =>
-      this.verifiedReticulumPeers.has(hash)
+    const nextVerified = this.activeReticulumNeighborHashes.filter(
+      (hash) =>
+        !this.isSelfReticulumHash(hash) && this.verifiedReticulumPeers.has(hash)
     );
     if (nextVerified.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
       const seen = new Set(nextVerified.map((hash) => hash.toLowerCase()));
@@ -1398,6 +1444,7 @@ export class PresenceManager extends EventEmitter {
         .sort((a, b) => a.verifiedAt - b.verifiedAt || b.lastSeen - a.lastSeen);
       for (const peer of waitingVerified) {
         if (nextVerified.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
+        if (this.isSelfReticulumHash(peer.destinationHash)) continue;
         nextVerified.push(peer.destinationHash);
         seen.add(peer.destinationHash.toLowerCase());
       }
@@ -1418,6 +1465,7 @@ export class PresenceManager extends EventEmitter {
       const cand = [...this.reticulumCandidates.values()]
         .filter(
           (c) =>
+            !this.isSelfReticulumHash(c.destinationHash) &&
             now <= c.proofDeadlineAt &&
             !seen.has(c.destinationHash.toLowerCase())
         )
@@ -1432,6 +1480,7 @@ export class PresenceManager extends EventEmitter {
       const helloEligible = [...this.helloFanoutHints.entries()]
         .filter(
           ([h, hint]) =>
+            !this.isSelfReticulumHash(h) &&
             now - hint.lastSeen <= RETICULUM_HELLO_FANOUT_HINT_TTL_MS &&
             !seen.has(h.toLowerCase())
         )
@@ -1535,6 +1584,11 @@ function subscribePresenceTransport(
       manager.noteReticulumHelloFanoutHint(peerHash);
     },
     onReady: () => {
+      if (transport.kind === 'reticulum' && typeof transport.getLocalDestinationHash === 'function') {
+        manager.setLocalReticulumDestinationHash(
+          transport.getLocalDestinationHash() ?? null
+        );
+      }
       const cached = manager.getLastLocalEnvelope();
       loggerLog(
         `[Presence] Transport ready kind=${transport.kind} cached_local_envelope=${cached ? 'yes' : 'no'}`
@@ -1546,10 +1600,22 @@ function subscribePresenceTransport(
     },
     onDegraded: () => {
       loggerLog(`[Presence] Transport degraded kind=${transport.kind}`);
+      if (transport.kind === 'reticulum') {
+        manager.setLocalReticulumDestinationHash(null);
+      }
       manager.invalidateTransportRoutes(transport.kind);
     },
   });
   presenceTransportUnsubscribers.push(unsubscribe);
+  if (
+    transport.kind === 'reticulum' &&
+    typeof transport.getLocalDestinationHash === 'function'
+  ) {
+    const h = transport.getLocalDestinationHash();
+    if (h) {
+      manager.setLocalReticulumDestinationHash(h);
+    }
+  }
 }
 
 async function republishCachedPresenceToTransport(

@@ -96,6 +96,8 @@ type ReticulumStatus = {
   transportEnabled?: boolean;
   configuredHubInterfaces?: number;
   onlineHubInterfaces?: number;
+  configuredRemoteHubInterfaces?: number;
+  onlineRemoteHubInterfaces?: number;
   hubSummary?: string;
   overlayLinksConnected?: number;
 };
@@ -625,6 +627,10 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                     {typeof reticulumStatus?.onlineHubInterfaces === 'number' &&
                     typeof reticulumStatus?.configuredHubInterfaces === 'number'
                       ? ` · Hubs ${reticulumStatus.onlineHubInterfaces}/${reticulumStatus.configuredHubInterfaces}`
+                      : ''}
+                    {typeof reticulumStatus?.onlineRemoteHubInterfaces === 'number' &&
+                    typeof reticulumStatus?.configuredRemoteHubInterfaces === 'number'
+                      ? ` · Remote hubs ${reticulumStatus.onlineRemoteHubInterfaces}/${reticulumStatus.configuredRemoteHubInterfaces}`
                       : ''}
                     {typeof reticulumStatus?.transportEnabled === 'boolean'
                       ? ` · Transport ${reticulumStatus.transportEnabled ? 'on' : 'off'}`

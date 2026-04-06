@@ -288,8 +288,13 @@ try {
         transportEnabled?: boolean;
         configuredHubInterfaces?: number;
         onlineHubInterfaces?: number;
+        configuredRemoteHubInterfaces?: number;
+        onlineRemoteHubInterfaces?: number;
         hubSummary?: string;
         overlayLinksConnected?: number;
+        p2pOutboundPeers?: number;
+        p2pInboundPeers?: number;
+        verifiedOverlayPeerCount?: number;
       }>,
     reticulumGetOverlayPeers: () =>
       ipcRenderer.invoke('reticulum:getOverlayPeers') as Promise<

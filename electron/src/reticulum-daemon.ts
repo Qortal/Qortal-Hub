@@ -514,9 +514,17 @@ export type ReticulumDaemonStatus = {
   transportEnabled?: boolean;
   configuredHubInterfaces?: number;
   onlineHubInterfaces?: number;
+  configuredRemoteHubInterfaces?: number;
+  onlineRemoteHubInterfaces?: number;
   hubSummary?: string;
   /** Established overlay (presence/signaling) RNS.Link count from the Python bridge. */
   overlayLinksConnected?: number;
+  /** Established overlay links we initiated (outbound). */
+  p2pOutboundPeers?: number;
+  /** Established overlay links accepted inbound (incoming). */
+  p2pInboundPeers?: number;
+  /** Identity-verified Reticulum overlay peers (signed presence). */
+  verifiedOverlayPeerCount?: number;
 };
 
 export type ReticulumOverlayPeerStatus = {
@@ -1016,11 +1024,26 @@ export function registerReticulumIpcHandlers(): void {
         }
       }
       try {
-        const { getReticulumBridge } =
-          (await import('./reticulum-bridge')) as typeof import('./reticulum-bridge');
+        const [{ getReticulumBridge }, { getPresenceManager }] = (await Promise.all([
+          import('./reticulum-bridge'),
+          import('./presence'),
+        ])) as [
+          typeof import('./reticulum-bridge'),
+          typeof import('./presence'),
+        ];
         const bridge = getReticulumBridge();
         const bridgeStatus = bridge?.getConnectivitySnapshot();
         if (!bridgeStatus) return base;
+        const verifiedOverlayPeerCount =
+          getPresenceManager()?.getReticulumVerifiedPeers().length ?? 0;
+        let p2pOutboundPeers = 0;
+        let p2pInboundPeers = 0;
+        if (bridge) {
+          for (const snap of bridge.getOverlayLinkSnapshots()) {
+            if (snap.incoming) p2pInboundPeers += 1;
+            else p2pOutboundPeers += 1;
+          }
+        }
         return {
           ...base,
           bridgeState: bridgeStatus.bridgeState,
@@ -1028,7 +1051,12 @@ export function registerReticulumIpcHandlers(): void {
           transportEnabled: bridgeStatus.transportEnabled,
           configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
           onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
+          configuredRemoteHubInterfaces: bridgeStatus.configuredRemoteHubInterfaces,
+          onlineRemoteHubInterfaces: bridgeStatus.onlineRemoteHubInterfaces,
           hubSummary: bridgeStatus.hubSummary,
+          verifiedOverlayPeerCount,
+          p2pOutboundPeers,
+          p2pInboundPeers,
           ...(typeof bridgeStatus.overlayLinksConnected === 'number'
             ? { overlayLinksConnected: bridgeStatus.overlayLinksConnected }
             : {}),

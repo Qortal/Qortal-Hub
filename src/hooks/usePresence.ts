@@ -20,8 +20,44 @@ const HEARTBEAT_INTERVAL_MS = 25_000;
 const IDLE_TIMEOUT_MS = 30 * 60 * 1_000; // 30 minutes
 const IDLE_CHECK_INTERVAL_MS = 60_000;    // check once per minute
 const CLIENT_VERSION = '1.0.0';
+/** Wait for outbound Reticulum hub (excludes local mesh listen) before first announce. */
+const REMOTE_RETICULUM_HUB_POLL_MS = 500;
+const REMOTE_RETICULUM_HUB_MAX_WAIT_MS = 90_000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+type RemoteHubWaitResult = 'ready' | 'cancelled' | 'timeout';
+
+/**
+ * Blocks until `onlineRemoteHubInterfaces >= 1` or timeout. Skipped when not in Electron.
+ * @returns `cancelled` if `shouldCancel` is true before announcing; `timeout` if hubs never came up.
+ */
+async function waitForOnlineRemoteReticulumHub(
+  shouldCancel: () => boolean
+): Promise<RemoteHubWaitResult> {
+  const getStatus = window.electronAPI?.reticulumGetStatus;
+  if (typeof getStatus !== 'function') {
+    return 'ready';
+  }
+  const deadline = Date.now() + REMOTE_RETICULUM_HUB_MAX_WAIT_MS;
+  while (Date.now() < deadline) {
+    if (shouldCancel()) return 'cancelled';
+    try {
+      const status = await getStatus();
+      const n = status.onlineRemoteHubInterfaces ?? 0;
+      if (n >= 1) return 'ready';
+    } catch {
+      // Bridge may be warming up; retry.
+    }
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, REMOTE_RETICULUM_HUB_POLL_MS);
+    });
+  }
+  console.warn(
+    '[Presence] Timed out waiting for a remote Reticulum hub; announcing presence anyway.'
+  );
+  return 'timeout';
+}
 
 async function signPresenceFields(
   fields: Record<string, unknown>
@@ -67,7 +103,8 @@ export function statusDotColor(status: string | null): string {
 
 /**
  * Manages the full presence lifecycle for the authenticated local user:
- *   • Announces presence immediately after login.
+ *   • Announces presence after login once at least one remote Reticulum hub is up
+ *     (waits up to 90s, then announces anyway).
  *   • Sends a heartbeat every 25 s to keep the session alive.
  *   • Sends an offline notice when the user logs out, the component unmounts,
  *     or the user explicitly picks "Offline" in the status picker.
@@ -328,6 +365,11 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
       }
 
       isAppearedOfflineRef.current = false;
+      const hubWait = await waitForOnlineRemoteReticulumHub(() => cancelled);
+      if (hubWait === 'cancelled') return;
+      if (cancelled) return;
+      if (myStatusRef.current === 'offline') return;
+
       sendAnnounce();
       stopHeartbeat();
       heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
@@ -353,10 +395,18 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
         sendOfflineCallback();
       }
     } else if (isAppearedOfflineRef.current) {
-      isAppearedOfflineRef.current = false;
-      sendAnnounce();
-      stopHeartbeat();
-      heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+      void (async () => {
+        const hubWait = await waitForOnlineRemoteReticulumHub(
+          () =>
+            !isAuthenticatedRef.current || myStatusRef.current === 'offline'
+        );
+        if (hubWait === 'cancelled') return;
+        if (!isAuthenticatedRef.current || myStatusRef.current === 'offline') return;
+        isAppearedOfflineRef.current = false;
+        sendAnnounce();
+        stopHeartbeat();
+        heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+      })();
     } else {
       const timer = setTimeout(sendHeartbeat, 300);
       return () => clearTimeout(timer);

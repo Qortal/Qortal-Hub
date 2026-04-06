@@ -247,6 +247,7 @@ import {
   buildRootInboundWarmDedupeKeys,
   clearRootInboundWarmDedupeForPeer,
 } from '../lib/group-call/rootInboundWarmDedupe';
+import { computeP2pHealth } from '../lib/p2pHealth';
 
 const naclApi = nacl as any;
 
@@ -9937,6 +9938,27 @@ export function useGroupVoiceCall(uiActive = false) {
           memberSetFetchedAtRef.current = 0;
           setMemberPrimaryNames({});
           setMemberGateGroupName('');
+        }
+
+        const electronApi = window.electronAPI;
+        if (typeof electronApi?.reticulumGetStatus !== 'function') {
+          setGcallJoinError('p2p_health_not_good');
+          return;
+        }
+        try {
+          const rs = await electronApi.reticulumGetStatus();
+          const p2pHealth = computeP2pHealth({
+            onlineRemoteHubInterfaces: rs.onlineRemoteHubInterfaces ?? 0,
+            p2pOutboundPeers: rs.p2pOutboundPeers ?? 0,
+            p2pInboundPeers: rs.p2pInboundPeers ?? 0,
+          });
+          if (p2pHealth !== 'good') {
+            setGcallJoinError('p2p_health_not_good');
+            return;
+          }
+        } catch {
+          setGcallJoinError('p2p_health_not_good');
+          return;
         }
 
         debugLog(

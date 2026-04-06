@@ -150,6 +150,9 @@ export type ReticulumConnectivitySnapshot = {
   transportEnabled?: boolean;
   configuredHubInterfaces?: number;
   onlineHubInterfaces?: number;
+  /** TCP/Backbone outbound hubs; excludes local Qortal Hub Mesh Listen. */
+  configuredRemoteHubInterfaces?: number;
+  onlineRemoteHubInterfaces?: number;
   hubSummary?: string;
   reason?: string;
   /** Mesh listen section is online; RNS may report short or long interface names (presence_bridge matches substring). */
@@ -305,6 +308,8 @@ type BridgeEventFrame =
         transportEnabled?: boolean;
         configuredHubInterfaces?: number;
         onlineHubInterfaces?: number;
+        configuredRemoteHubInterfaces?: number;
+        onlineRemoteHubInterfaces?: number;
         hubSummary?: string;
         reason?: string;
         meshListenOnline?: boolean;
@@ -1802,6 +1807,14 @@ export class ReticulumBridge
             typeof frame.payload?.onlineHubInterfaces === 'number'
               ? frame.payload.onlineHubInterfaces
               : undefined,
+          configuredRemoteHubInterfaces:
+            typeof frame.payload?.configuredRemoteHubInterfaces === 'number'
+              ? frame.payload.configuredRemoteHubInterfaces
+              : undefined,
+          onlineRemoteHubInterfaces:
+            typeof frame.payload?.onlineRemoteHubInterfaces === 'number'
+              ? frame.payload.onlineRemoteHubInterfaces
+              : undefined,
           hubSummary:
             typeof frame.payload?.hubSummary === 'string'
               ? frame.payload.hubSummary
@@ -1813,7 +1826,7 @@ export class ReticulumBridge
           meshListenOnline: frame.payload?.meshListenOnline === true,
         };
         loggerLog(
-          `[ReticulumBridge] Transport state=${this.connectivitySnapshot.reachability} hubs=${this.connectivitySnapshot.onlineHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredHubInterfaces ?? 0} transport=${this.connectivitySnapshot.transportEnabled === true ? 'on' : 'off'} meshListenOnline=${this.connectivitySnapshot.meshListenOnline === true ? 'on' : 'off'}`
+          `[ReticulumBridge] Transport state=${this.connectivitySnapshot.reachability} hubs=${this.connectivitySnapshot.onlineHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredHubInterfaces ?? 0} remote_hubs=${this.connectivitySnapshot.onlineRemoteHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredRemoteHubInterfaces ?? 0} transport=${this.connectivitySnapshot.transportEnabled === true ? 'on' : 'off'} meshListenOnline=${this.connectivitySnapshot.meshListenOnline === true ? 'on' : 'off'}`
         );
         this.emit('transport-state', this.getConnectivitySnapshot());
         return;
