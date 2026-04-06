@@ -3,6 +3,7 @@ import {
   computeN1BufferEnforceTier,
   computeN1BufferRatio,
   computeN1MinStartMs,
+  computeN1SteadyMinHoldMs,
   computeN1SteadyTierBurstCap,
   computeN1TierBurstCap,
   stepN1SteadyBufferEnforceTier,
@@ -17,6 +18,13 @@ describe('gcallN1PlayoutGate', () => {
     expect(computeN1MinStartMs(120)).toBe(120);
     expect(computeN1MinStartMs(145)).toBe(145);
     expect(computeN1MinStartMs(400)).toBe(185);
+  });
+
+  it('computeN1SteadyMinHoldMs keeps a small steady-state reserve', () => {
+    expect(computeN1SteadyMinHoldMs(0)).toBe(30);
+    expect(computeN1SteadyMinHoldMs(120)).toBe(36);
+    expect(computeN1SteadyMinHoldMs(145)).toBe(40);
+    expect(computeN1SteadyMinHoldMs(400)).toBe(40);
   });
 
   it('computeN1BufferRatio uses max target floor', () => {
@@ -68,8 +76,8 @@ describe('gcallN1PlayoutGate', () => {
   });
 
   it('computeN1SteadyTierBurstCap is gentler than recovery shaping', () => {
-    expect(computeN1SteadyTierBurstCap('deep', 11)).toBe(8);
-    expect(computeN1SteadyTierBurstCap('moderate', 11)).toBe(9);
-    expect(computeN1SteadyTierBurstCap('normal', 11)).toBe(11);
+    expect(computeN1SteadyTierBurstCap('deep', 11)).toBe(2);
+    expect(computeN1SteadyTierBurstCap('moderate', 11)).toBe(4);
+    expect(computeN1SteadyTierBurstCap('normal', 11)).toBe(6);
   });
 });

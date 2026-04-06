@@ -15,8 +15,15 @@ export const GCALL_N1_MIN_START_MS_CEIL = 185;
 /** Micro-accumulation after refill when preroll already satisfied (ms). */
 export const GCALL_N1_ACCUMULATION_MS = 75;
 
+/** Short refill accumulation outside recovery so 2-way steady state does not collapse back to 1 frame. */
+export const GCALL_N1_STEADY_ACCUMULATION_MS = 40;
+
 /** Denominator floor for r = bufferMs / max(target, floor) — matches adaptive min order. */
 export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
+
+/** Small steady-state reserve for exact-1-remote calls after recovery exits. */
+export const GCALL_N1_STEADY_MIN_HOLD_MS_FLOOR = 20;
+export const GCALL_N1_STEADY_MIN_HOLD_MS_CEIL = 40;
 
 /** Tier A: deep deficit — very aggressive throttle (typically 1 decode/tick max). */
 export const GCALL_N1_RATIO_DEEP = 0.3;
@@ -42,6 +49,19 @@ export function computeN1MinStartMs(smoothedTargetMs: number): number {
   return Math.max(
     GCALL_N1_MIN_START_MS_FLOOR,
     Math.min(t, GCALL_N1_MIN_START_MS_CEIL)
+  );
+}
+
+export function computeN1SteadyMinHoldMs(smoothedTargetMs: number): number {
+  const t = Math.max(
+    Number.isFinite(smoothedTargetMs)
+      ? smoothedTargetMs
+      : GCALL_N1_MIN_TARGET_MS_FLOOR,
+    GCALL_N1_MIN_TARGET_MS_FLOOR
+  );
+  return Math.max(
+    GCALL_N1_STEADY_MIN_HOLD_MS_FLOOR,
+    Math.min(GCALL_N1_STEADY_MIN_HOLD_MS_CEIL, Math.round(t * 0.3))
   );
 }
 
@@ -132,7 +152,7 @@ export function computeN1SteadyTierBurstCap(
   tier: GcallN1BufferEnforceTier,
   scaledBurstCap: number
 ): number {
-  if (tier === 'deep') return Math.min(8, scaledBurstCap);
-  if (tier === 'moderate') return Math.min(9, scaledBurstCap);
-  return scaledBurstCap;
+  if (tier === 'deep') return Math.min(2, scaledBurstCap);
+  if (tier === 'moderate') return Math.min(4, scaledBurstCap);
+  return Math.min(6, scaledBurstCap);
 }

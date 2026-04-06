@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bumpGroupCallAudioSessionToken,
   chooseSameEpochTopologyWinner,
+  computeJitterReadyThresholdFrames,
   countRecentlyHealthyRemoteSources,
   computeSteadyTargetDecayThresholdMs,
   clearAdaptiveGroupCallPlayoutMaps,
@@ -159,6 +160,36 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         adaptiveNetworkMode: 'recovery',
       })
     ).toBe(147);
+  });
+
+  it('keeps the normal startup threshold when the jitter buffer is not primed', () => {
+    expect(
+      computeJitterReadyThresholdFrames({
+        primed: false,
+        jitterStartBufferSize: 6,
+        extraHoldFrames: 0,
+        steadyPrimedHoldFrames: 1,
+      })
+    ).toBe(6);
+  });
+
+  it('adds a one-frame steady floor after priming for exact-1-remote calls', () => {
+    expect(
+      computeJitterReadyThresholdFrames({
+        primed: true,
+        jitterStartBufferSize: 6,
+        extraHoldFrames: 0,
+        steadyPrimedHoldFrames: 1,
+      })
+    ).toBe(2);
+    expect(
+      computeJitterReadyThresholdFrames({
+        primed: true,
+        jitterStartBufferSize: 6,
+        extraHoldFrames: 1,
+        steadyPrimedHoldFrames: 1,
+      })
+    ).toBe(3);
   });
 
   it('only seeds join session state before the root session is adopted', () => {

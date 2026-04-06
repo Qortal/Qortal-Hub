@@ -180,9 +180,11 @@ import {
   computeN1SteadyTierBurstCap,
   computeN1BufferRatio,
   computeN1MinStartMs,
+  computeN1SteadyMinHoldMs,
   computeN1TierBurstCap,
   GCALL_N1_ACCUMULATION_MS,
   GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS,
+  GCALL_N1_STEADY_ACCUMULATION_MS,
   GCALL_N1_STALL_ESCAPE_MS,
   stepN1BufferEnforceTier,
   stepN1SteadyBufferEnforceTier,
@@ -1819,6 +1821,18 @@ interface WasmFecPcmSlab {
   consumedFrames: number;
 }
 
+export function computeJitterReadyThresholdFrames(opts: {
+  primed: boolean;
+  jitterStartBufferSize: number;
+  extraHoldFrames?: number;
+  steadyPrimedHoldFrames?: number;
+}): number {
+  const extraHoldFrames = Math.max(0, opts.extraHoldFrames ?? 0);
+  const steadyPrimedHoldFrames = Math.max(0, opts.steadyPrimedHoldFrames ?? 0);
+  const base = opts.primed ? 1 + steadyPrimedHoldFrames : opts.jitterStartBufferSize;
+  return base + extraHoldFrames;
+}
+
 class JitterBuffer {
   private entries: JitterEntry[] = [];
   private lastPlayedSeq = -1;
@@ -1828,6 +1842,8 @@ class JitterBuffer {
   private emptySinceMs: number | null = null;
   /** Phase D: scaled via `setSoftUnprimeMs` (tier-2 multi-source). */
   private softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
+  /** Exact-1-remote steady-state floor after priming; keeps the Opus side off the 1-frame edge. */
+  private steadyPrimedHoldFrames = 0;
   /** Raw seq gap for the last pop (for WASM FEC); cleared by consumeLastRawGapAfterPop. */
   private lastRawGapAfterPop = 0;
   private jitterBufferSize: number;
@@ -1853,6 +1869,12 @@ class JitterBuffer {
   setSoftUnprimeMs(ms: number): void {
     if (ms > 0 && Number.isFinite(ms)) {
       this.softUnprimeMs = ms;
+    }
+  }
+
+  setSteadyPrimedHoldFrames(frames: number): void {
+    if (Number.isFinite(frames)) {
+      this.steadyPrimedHoldFrames = Math.max(0, Math.trunc(frames));
     }
   }
 
@@ -1910,8 +1932,12 @@ class JitterBuffer {
   /** Returns next frame to play, or null if buffer not ready. */
   pop(): Uint8Array | null {
     this.checkSoftUnprime();
-    const base = this.primed ? 1 : this.jitterStartBufferSize;
-    const threshold = base + this.extraHoldFrames;
+    const threshold = computeJitterReadyThresholdFrames({
+      primed: this.primed,
+      jitterStartBufferSize: this.jitterStartBufferSize,
+      extraHoldFrames: this.extraHoldFrames,
+      steadyPrimedHoldFrames: this.steadyPrimedHoldFrames,
+    });
     if (this.entries.length < threshold) return null;
     const entry = this.entries.shift();
     if (!entry) return null;
@@ -1935,8 +1961,15 @@ class JitterBuffer {
 
   hasReadyFrame(): boolean {
     this.checkSoftUnprime();
-    const base = this.primed ? 1 : this.jitterStartBufferSize;
-    return this.entries.length >= base + this.extraHoldFrames;
+    return (
+      this.entries.length >=
+      computeJitterReadyThresholdFrames({
+        primed: this.primed,
+        jitterStartBufferSize: this.jitterStartBufferSize,
+        extraHoldFrames: this.extraHoldFrames,
+        steadyPrimedHoldFrames: this.steadyPrimedHoldFrames,
+      })
+    );
   }
 
   getBufferedFrames(): number {
@@ -1951,6 +1984,7 @@ class JitterBuffer {
     this.emptySinceMs = null;
     this.lastRawGapAfterPop = 0;
     this.softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
+    this.steadyPrimedHoldFrames = 0;
   }
 }
 
@@ -5177,13 +5211,22 @@ export function useGroupVoiceCall(uiActive = false) {
       if (
         beforeFrames === 0 &&
         jb.getBufferedFrames() > 0 &&
-        activeJitterSourcesRef.current.size <= 1 &&
-        jitterPrerollSatisfiedRef.current.get(sourceAddr)
+        activeJitterSourcesRef.current.size <= 1
       ) {
-        jitterAccumulationUntilPerfRef.current.set(
-          sourceAddr,
-          perfNow + GCALL_N1_ACCUMULATION_MS
-        );
+        const recoverySingleRemote =
+          jitterGeomAppliedRef.current === 'recovery' &&
+          jitterPrerollSatisfiedRef.current.get(sourceAddr) === true;
+        const steadySingleRemote =
+          jitterGeomAppliedRef.current !== 'recovery' && jb.hasReadyFrame();
+        if (recoverySingleRemote || steadySingleRemote) {
+          jitterAccumulationUntilPerfRef.current.set(
+            sourceAddr,
+            perfNow +
+              (recoverySingleRemote
+                ? GCALL_N1_ACCUMULATION_MS
+                : GCALL_N1_STEADY_ACCUMULATION_MS)
+          );
+        }
       }
       recordInterArrivalForPlayout(sourceAddr, receivedAt);
       metricsRef.current.recordOpusBufferedMetric(
@@ -7616,8 +7659,10 @@ export function useGroupVoiceCall(uiActive = false) {
         n,
         jitterGeomAppliedRef.current === 'recovery'
       );
+      const steadyPrimedHoldFrames = !inRecovery && n === 1 ? 1 : 0;
       for (const jb of jitterMapRef.current.values()) {
         jb.setSoftUnprimeMs(softMs);
+        jb.setSteadyPrimedHoldFrames(steadyPrimedHoldFrames);
       }
     }
 
@@ -7809,6 +7854,9 @@ export function useGroupVoiceCall(uiActive = false) {
         const minStartMs = n1RecoverySingleRemote
           ? computeN1MinStartMs(smoothedTarget)
           : 0;
+        const steadyMinHoldMs = n1SteadySingleRemote
+          ? computeN1SteadyMinHoldMs(smoothedTarget)
+          : 0;
         if (n1RecoverySingleRemote && opusMsPre >= minStartMs) {
           jitterPrerollSatisfiedRef.current.set(addr, true);
         }
@@ -7841,7 +7889,7 @@ export function useGroupVoiceCall(uiActive = false) {
             ? computeN1SteadyTierBurstCap(n1Tier, scaledBurstCap)
           : scaledBurstCap;
 
-        if (n1RecoverySingleRemote && !prerollActive) {
+        if ((n1RecoverySingleRemote && !prerollActive) || n1SteadySingleRemote) {
           const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
           if (perfWall < accUntil) {
             n1ScaledCap = Math.min(n1ScaledCap, 1);
@@ -7871,6 +7919,13 @@ export function useGroupVoiceCall(uiActive = false) {
 
         const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
         const lastEsc = lastStallEscapePerfRef.current.get(addr) ?? 0;
+        const steadyHoldActive =
+          n1SteadySingleRemote &&
+          n1Tier !== 'normal' &&
+          opusMsPre < steadyMinHoldMs &&
+          jb.hasReadyFrame() &&
+          lastPush > 0 &&
+          perfWall - lastPush <= GCALL_N1_STALL_ESCAPE_MS;
         const stallEscapeAllowed =
           n1RecoverySingleRemote &&
           prerollActive &&
@@ -7924,6 +7979,15 @@ export function useGroupVoiceCall(uiActive = false) {
           lastStallEscapePerfRef.current.set(addr, perfWall);
           const missedEsc = decodeOneJitterFrame(addr, jb) ?? 0;
           runUnderrunAndMetricsTail(addr, jb, missedEsc);
+          continue;
+        }
+
+        if (steadyHoldActive) {
+          metricsRef.current.recordOpusBufferedMetric(
+            addr,
+            jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+          );
+          emptyJitterDrainTicksRef.current.set(addr, 0);
           continue;
         }
 
