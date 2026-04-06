@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   GcallPerfCollector,
   readGcallPerfEnabled,
@@ -10,11 +10,7 @@ describe('readGcallPerfEnabled', () => {
     localStorage.removeItem('qortal:gcall-perf');
   });
 
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
-  it('defaults to true (no localStorage)', () => {
+  it('defaults to true in development when localStorage is unset (vitest runs as dev; production defaults off)', () => {
     expect(readGcallPerfEnabled()).toBe(true);
   });
 
@@ -66,6 +62,18 @@ describe('gcall-perf', () => {
     expect(snapshot.longTasks.maxMs).toBe(24);
     expect(snapshot.longTasks.recent[0]?.name).toBe('self');
     expect(snapshot.meta?.roomState).toBe('connected');
+  });
+
+  it('getLongTaskPressure reports count and recentHeavy without building a full snapshot', () => {
+    const perf = new GcallPerfCollector();
+    perf.recordLongTask({ startTime: 0, duration: 40, name: 'a' });
+    perf.recordLongTask({ startTime: 0, duration: 55, name: 'b' });
+    const p = perf.getLongTaskPressure();
+    expect(p.count).toBe(2);
+    expect(p.recentHeavy).toBe(true);
+    const snap = perf.snapshot();
+    expect(snap.series).toEqual({});
+    expect(snap.longTasks.count).toBe(2);
   });
 
   it('reset clears previous measurements', () => {

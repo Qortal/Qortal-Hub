@@ -53,7 +53,7 @@ export const PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA = 8;
 export const PENDING_DECRYPT_OVERLOAD_LONG_TASK_MIN_DEPTH = 80;
 
 /** Wall-time budget per macrotask for applying decrypt worker results on the main thread (ms). */
-export const GCALL_DECRYPT_APPLY_BUDGET_MS = 6;
+export const GCALL_DECRYPT_APPLY_BUDGET_MS = 7;
 /** Safety cap on decrypt applies per macrotask (after time budget). */
 export const GCALL_DECRYPT_APPLY_MAX_PER_TURN = 24;
 

@@ -1,6 +1,16 @@
 /**
  * In-memory ring buffer for group-call diagnostics + redacted JSON export.
  * Used by useGroupVoiceCall (ingest) and export UI / window.__qortalGCallExportDiagnostics.
+ *
+ * **Audio-safe vs QA telemetry**
+ * - **Console (`debugLog` in the hook):** gated by `isGcallDebugEnabled()` (`localStorage qortal:gcall-debug=1`).
+ *   No steady `[GCall] metrics` console work unless that flag is set.
+ * - **Ring buffer:** in **production**, recording is **off** unless `localStorage qortal:gcall-diagnostics=1`,
+ *   or `qortal:gcall-debug=1`, or `qortal:gcall-mic-debug=1`. In **development**, ring capture defaults **on**
+ *   unless `qortal:gcall-diagnostics` is `0`/`off`.
+ * - **gcall-perf** (tick stats + long-task observer): **off** in production builds by default; opt in with
+ *   `qortal:gcall-perf=1`. Full `GcallPerfCollector.snapshot()` runs on diagnostics **export** or via
+ *   `window.__qortalGCallPerfStats` when perf is enabled — not on the live call interval.
  */
 
 export type GcallDiagLevel = 'log' | 'warn' | 'info';
@@ -58,7 +68,7 @@ export interface GcallDiagExportPayload {
   phase5PairedVerificationHint: string;
   /**
    * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
-   * Present when group-call perf is enabled (default on).
+   * Present when group-call perf is enabled (off in production by default; opt in via `qortal:gcall-perf`).
    */
   gcallPerfSnapshot?: unknown;
   events: GcallDiagEvent[];
@@ -67,6 +77,54 @@ export interface GcallDiagExportPayload {
 
 const MAX_EVENTS = 900;
 const METRICS_THROTTLE_MS = 8000;
+
+const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
+const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
+/** When set to `1`/`on` in production, enables ring-buffer capture without full console debug. */
+const GCALL_DIAGNOSTICS_RING_STORAGE_KEY = 'qortal:gcall-diagnostics';
+
+/** Verbose GCall console + ingest from `debugLog` / `debugWarn` in useGroupVoiceCall. */
+export function isGcallDebugEnabled(): boolean {
+  try {
+    return localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function isGcallMicDebugEnabled(): boolean {
+  try {
+    return (
+      localStorage.getItem(GCALL_MIC_DEBUG_STORAGE_KEY) === '1' ||
+      localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1'
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether diagnostics **ring** events are recorded. Prefer **dropping** pushes when false (hot path).
+ * Export still works: live metrics + perf snapshot are attached at export time from current state.
+ */
+export function readGcallDiagnosticsRingEnabled(): boolean {
+  const prod =
+    typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.PROD === true;
+  try {
+    if (prod) {
+      const v = localStorage.getItem(GCALL_DIAGNOSTICS_RING_STORAGE_KEY);
+      if (v === '1' || v === 'on') return true;
+      return isGcallDebugEnabled() || isGcallMicDebugEnabled();
+    }
+    const v = localStorage.getItem(GCALL_DIAGNOSTICS_RING_STORAGE_KEY);
+    if (v === '0' || v === 'off') return false;
+    return true;
+  } catch {
+    return !prod;
+  }
+}
 
 /** Shipped with exports so QA can interpret bridge vs daemon vs decrypt without a wiki. */
 export const GCALL_TRANSPORT_TRIAD_INTERPRETATION =
@@ -181,22 +239,6 @@ function redactDeep(value: unknown, depth = 0): unknown {
   return String(value);
 }
 
-function safeClonePayload(payload: unknown): unknown {
-  try {
-    return JSON.parse(
-      JSON.stringify(payload, (_k, v) =>
-        typeof v === 'bigint' ? v.toString() : v
-      )
-    );
-  } catch {
-    try {
-      return redactDeep(payload);
-    } catch {
-      return { _unserializable: String(payload) };
-    }
-  }
-}
-
 /** When true, `gcallDiagnosticsPush('info', ...)` is dropped (overload / stage-4 work reduction). */
 let gcallDiagnosticsSuppressInfo = false;
 
@@ -209,12 +251,14 @@ export function gcallDiagnosticsPush(
   tag: string,
   payload: unknown
 ): void {
+  if (!readGcallDiagnosticsRingEnabled()) return;
   if (gcallDiagnosticsSuppressInfo && level === 'info') return;
   events.push({
     t: Date.now(),
     level,
     tag,
-    payload: safeClonePayload(payload),
+    /** Copy-on-export via `redactDeep` in `buildGcallDiagnosticsExportJson`; avoid JSON clone on hot path. */
+    payload,
   });
   if (events.length > MAX_EVENTS) {
     events.splice(0, events.length - MAX_EVENTS);
@@ -244,6 +288,7 @@ export function gcallDiagnosticsIngestConsoleArgs(
   level: GcallDiagLevel,
   args: unknown[]
 ): void {
+  if (!readGcallDiagnosticsRingEnabled()) return;
   const head = args[0];
   if (typeof head !== 'string' || !head.startsWith('[GCall]')) return;
 
@@ -301,7 +346,9 @@ export function buildGcallDiagnosticsExportJson(params: {
     liveMetricsSnapshot: redactDeep(params.liveMetricsSnapshot),
     exportWindowMetrics: redactDeep(params.exportWindowMetrics),
     transportTriadInterpretation: GCALL_TRANSPORT_TRIAD_INTERPRETATION,
-    transportTriadSnapshot: triad ? redactDeep(triad) : null,
+    transportTriadSnapshot: triad
+      ? (redactDeep(triad) as GcallDiagExportPayload['transportTriadSnapshot'])
+      : null,
     twoWayDecryptVerificationHint: GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
     twoWayJitterVerificationHint: GCALL_TWO_WAY_JITTER_BASELINE_HINT,
     phase0ClassificationHint: GCALL_PHASE0_CLASSIFICATION_HINT,

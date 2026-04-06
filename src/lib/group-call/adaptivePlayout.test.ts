@@ -8,9 +8,9 @@ import {
 
 describe('adaptivePlayout', () => {
   it('clamps the ideal target into the configured range', () => {
-    expect(clampAdaptiveTargetMs(40, 80, 180)).toBe(80);
-    expect(clampAdaptiveTargetMs(220, 80, 180)).toBe(180);
-    expect(clampAdaptiveTargetMs(120, 80, 180)).toBe(120);
+    expect(clampAdaptiveTargetMs(40, 80, 115)).toBe(80);
+    expect(clampAdaptiveTargetMs(220, 80, 115)).toBe(115);
+    expect(clampAdaptiveTargetMs(120, 80, 115)).toBe(115);
   });
 
   it('shows the BASE < MIN dead-zone until jitter or boost escapes the floor', () => {
@@ -18,7 +18,7 @@ describe('adaptivePlayout', () => {
       computeAdaptiveIdealTargetMs({
         baseTargetMs: 60,
         minTargetMs: 80,
-        maxTargetMs: 180,
+        maxTargetMs: 115,
         jitterMultiplier: 2.5,
         jitterMs: 0,
       })
@@ -28,7 +28,7 @@ describe('adaptivePlayout', () => {
       computeAdaptiveIdealTargetMs({
         baseTargetMs: 60,
         minTargetMs: 80,
-        maxTargetMs: 180,
+        maxTargetMs: 115,
         jitterMultiplier: 2.5,
         jitterMs: 10,
       })
@@ -39,7 +39,7 @@ describe('adaptivePlayout', () => {
     const base = computeAdaptiveIdealTargetMs({
       baseTargetMs: 80,
       minTargetMs: 80,
-      maxTargetMs: 180,
+      maxTargetMs: 135,
       jitterMultiplier: 2.2,
       jitterMs: 5,
       lossPenaltyMs: 4,
@@ -47,7 +47,7 @@ describe('adaptivePlayout', () => {
     const worse = computeAdaptiveIdealTargetMs({
       baseTargetMs: 80,
       minTargetMs: 80,
-      maxTargetMs: 180,
+      maxTargetMs: 135,
       jitterMultiplier: 2.2,
       jitterMs: 18,
       lossPenaltyMs: 10,
@@ -60,13 +60,13 @@ describe('adaptivePlayout', () => {
       computeAdaptiveIdealTargetMs({
         baseTargetMs: 80,
         minTargetMs: 80,
-        maxTargetMs: 240,
+        maxTargetMs: 170,
         jitterMultiplier: 2.2,
         jitterMs: 40,
         lossPenaltyMs: 40,
         playoutBoostMs: 60,
       })
-    ).toBe(240);
+    ).toBe(170);
   });
 
   it('uses asymmetric smoothing for rising and falling targets', () => {
@@ -93,11 +93,11 @@ describe('adaptivePlayout', () => {
     expect(
       stepSmoothedAdaptiveTargetMs({
         idealTargetMs: 100,
-        previousTargetMs: 180,
+        previousTargetMs: 115,
         alphaUp: 0.5,
         alphaDown: 0.2,
       })
-    ).toBe(156);
+    ).toBe(112);
   });
 
   it('computes zero jitter for tiny samples and variance for real windows', () => {

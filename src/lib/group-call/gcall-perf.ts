@@ -29,10 +29,12 @@ const RECENT_SAMPLE_LIMIT = 512;
 const LONG_TASK_LIMIT = 40;
 
 /**
- * GCall perf (tick timing, counters, long-task observer, `window.__qortalGCallPerfStats`)
- * is **on by default** so diagnostics exports include full perf without tester setup.
+ * GCall perf (tick timing, counters, long-task observer, `window.__qortalGCallPerfStats`).
  *
- * Opt out: `localStorage.setItem('qortal:gcall-perf', '0')` or build with `VITE_GCALL_PERF=0`.
+ * - **Production:** default **off** (no observer, no tick recording) to keep the audio path light.
+ *   Opt in: `localStorage.setItem('qortal:gcall-perf', '1')` (or `'on'`).
+ * - **Development:** default **on** unless opted out.
+ * - Build override: `VITE_GCALL_PERF=0` forces off.
  */
 export function readGcallPerfEnabled(): boolean {
   if (
@@ -42,13 +44,18 @@ export function readGcallPerfEnabled(): boolean {
   ) {
     return false;
   }
+  const prod =
+    typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.PROD === true;
   try {
-    if (typeof localStorage === 'undefined') return true;
+    if (typeof localStorage === 'undefined') return !prod;
     const v = localStorage.getItem(GCALL_PERF_STORAGE_KEY);
     if (v === '0' || v === 'off') return false;
-    return true;
+    if (v === '1' || v === 'on') return true;
+    return !prod;
   } catch {
-    return true;
+    return !prod;
   }
 }
 
@@ -131,6 +138,15 @@ export class GcallPerfCollector {
     if (this.longTasks.length > LONG_TASK_LIMIT) {
       this.longTasks.splice(0, this.longTasks.length - LONG_TASK_LIMIT);
     }
+  }
+
+  /**
+   * Long-task pressure for live overload signals **without** building a full `snapshot()`
+   * (no per-series p95 sorts). Safe to call from intervals during a call.
+   */
+  getLongTaskPressure(): { count: number; recentHeavy: boolean } {
+    const recentHeavy = this.longTasks.some((e) => e.duration >= 50);
+    return { count: this.longTaskCount, recentHeavy };
   }
 
   snapshot(meta?: Record<string, unknown>): GcallPerfSnapshot {

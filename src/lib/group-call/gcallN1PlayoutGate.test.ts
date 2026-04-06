@@ -10,15 +10,15 @@ import {
 
 describe('gcallN1PlayoutGate', () => {
   it('computeN1MinStartMs clamps to floor/ceil', () => {
-    expect(computeN1MinStartMs(50)).toBe(180);
-    expect(computeN1MinStartMs(220)).toBe(220);
-    expect(computeN1MinStartMs(400)).toBe(280);
+    expect(computeN1MinStartMs(50)).toBe(100);
+    expect(computeN1MinStartMs(140)).toBe(140);
+    expect(computeN1MinStartMs(400)).toBe(180);
   });
 
   it('computeN1BufferRatio uses max target floor', () => {
-    const a = computeN1BufferRatio(45, 220);
-    expect(a.denomMs).toBe(220);
-    expect(a.ratio).toBeCloseTo(45 / 220, 5);
+    const a = computeN1BufferRatio(45, 140);
+    expect(a.denomMs).toBe(140);
+    expect(a.ratio).toBeCloseTo(45 / 140, 5);
     const b = computeN1BufferRatio(50, 0);
     expect(b.denomMs).toBe(100);
     expect(b.ratio).toBe(0.5);
@@ -36,8 +36,8 @@ describe('gcallN1PlayoutGate', () => {
     expect(computeN1TierBurstCap('deep', 11)).toBe(1);
     expect(
       computeN1TierBurstCap('deep', 11, { recoverySingleRemote: true })
-    ).toBe(2);
-    expect(computeN1TierBurstCap('moderate', 11)).toBe(4);
+    ).toBe(4);
+    expect(computeN1TierBurstCap('moderate', 11)).toBe(6);
     expect(computeN1TierBurstCap('normal', 11)).toBe(11);
   });
 });

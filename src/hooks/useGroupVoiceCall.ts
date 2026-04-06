@@ -167,6 +167,8 @@ import {
   gcallDiagnosticsCollectRtcStats,
   gcallDiagnosticsIngestConsoleArgs,
   gcallDiagnosticsPush,
+  isGcallDebugEnabled,
+  isGcallMicDebugEnabled,
   GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
   GCALL_TWO_WAY_JITTER_BASELINE_HINT,
   setGcallDiagnosticsSuppressInfo,
@@ -346,9 +348,9 @@ const JITTER_START_BUFFER_SIZE = 4;
 const JITTER_EMPTY_HYSTERESIS_TICKS = 3;
 
 /** Max Opus frames decoded per remote source per jitter scheduler tick (burst catch-up). */
-const JITTER_DECODE_BURST_MAX_DEFAULT = 5;
+const JITTER_DECODE_BURST_MAX_DEFAULT = 8;
 /** Extra decode frames per drain tick when session is in recovery (Phase C upstream assist). */
-const JITTER_DECODE_BURST_MAX_RECOVERY = 6;
+const JITTER_DECODE_BURST_MAX_RECOVERY = 9;
 /** Upper cap for backlog-scaled burst (`base + floor(bufferedFrames/2)`). Phase C. */
 const JITTER_DECODE_BURST_SCALED_MAX = 11;
 /** When previous jitter tick exceeded this duration (ms), cap scaled burst for safety. */
@@ -358,17 +360,19 @@ const JITTER_DECODE_BURST_TICK_TOTAL_SOFT_THRESHOLD_MS = 12;
 const ADAPTIVE_BASE_TARGET_MS = 100;
 const ADAPTIVE_MIN_TARGET_MS = 100;
 /** Low-latency defaults; active profile overrides via `audioTuningRef`. */
-const ADAPTIVE_MAX_TARGET_MS = 180;
-const ADAPTIVE_SEVERE_MAX_TARGET_MS = 240;
+/** Fallback when tuning missing; align with `LOW_LATENCY_BASE` in groupCallAudioProfile. */
+const ADAPTIVE_MAX_TARGET_MS = 115;
+const ADAPTIVE_SEVERE_MAX_TARGET_MS = 170;
 const ADAPTIVE_JITTER_K = 2.0;
-const ADAPTIVE_ALPHA_UP = 0.4;
+const ADAPTIVE_ALPHA_UP = 0.32;
 /** Faster smoothed-target rise for single-remote recovery (2-way jitter plan). */
 const ADAPTIVE_ALPHA_UP_SINGLE_REMOTE_RECOVERY = 0.5;
 const ADAPTIVE_ALPHA_DOWN = 0.28;
 /** Stickier downward decay when session network mode is recovery (see playout plan). */
 const ADAPTIVE_ALPHA_DOWN_RECOVERY = 0.18;
 /** When smoothed target is high and jitter stays calm, allow faster decay toward ideal. */
-const GCALL_DECAY_GUARD_HIGH_TARGET_MS = 220;
+/** Scaled with low-latency adaptive max (~115 vs original 180): 220 * 115/180 ≈ 141. */
+const GCALL_DECAY_GUARD_HIGH_TARGET_MS = 141;
 const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
@@ -458,17 +462,12 @@ const MAX_ACTIVE_SPEAKERS_LOCAL = 2;
 const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 
 const ADAPTIVE_RECOVERY_SCORE_THRESHOLD = 3;
-const ADAPTIVE_RECOVERY_COOLDOWN_MS = 8_000;
+const ADAPTIVE_RECOVERY_COOLDOWN_MS = 12_000;
 const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 20;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
 const PERF_LOG_INTERVAL_MS = 10_000;
 const TRANSPORT_HEALTH_REPORT_INTERVAL_MS = 5_000;
-/** Legacy: was used to gate `[GCall]` logs; group-call diagnostics are always on now. */
-const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
-/** Set to "1" in localStorage for verbose mic/capture logs (or enable qortal:gcall-debug). */
-const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
-
 /** Log when pending decrypt depth crosses these (throttled). */
 const PENDING_DECRYPT_DEPTH_LOG_THRESHOLDS = [32, 64] as const;
 const PENDING_DECRYPT_DEPTH_LOG_MIN_INTERVAL_MS = 5_000;
@@ -560,17 +559,6 @@ function base64ToUint8(b64: string): Uint8Array {
   return out;
 }
 
-function isMicCaptureDebugEnabled(): boolean {
-  try {
-    return (
-      localStorage.getItem(GCALL_MIC_DEBUG_STORAGE_KEY) === '1' ||
-      localStorage.getItem(GCALL_DEBUG_STORAGE_KEY) === '1'
-    );
-  } catch {
-    return false;
-  }
-}
-
 function percentileSample(values: readonly number[], pct: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -580,17 +568,19 @@ function percentileSample(values: readonly number[], pct: number): number {
 
 /** Verbose mic pipeline logs when qortal:gcall-mic-debug=1 or qortal:gcall-debug=1 */
 function micDebugLog(...args: unknown[]): void {
-  if (!isMicCaptureDebugEnabled()) return;
+  if (!isGcallMicDebugEnabled()) return;
   console.info('[GCall][mic]', ...args);
   gcallDiagnosticsPush('info', '[GCall][mic]', { parts: args });
 }
 
 function debugLog(...args: unknown[]): void {
+  if (!isGcallDebugEnabled()) return;
   console.log(...args);
   gcallDiagnosticsIngestConsoleArgs('log', args);
 }
 
 function debugWarn(...args: unknown[]): void {
+  if (!isGcallDebugEnabled()) return;
   console.warn(...args);
   gcallDiagnosticsIngestConsoleArgs('warn', args);
 }
@@ -3493,10 +3483,10 @@ export function useGroupVoiceCall(uiActive = false) {
         microWidenCeilingLiftUntilRef.current.delete(addr);
       }
 
-      const dynamicCeilingLiftMs = Math.max(
-        starvationLiftMs,
-        microWidenCeilingLiftMs
-      );
+      // Do not add starvation/micro-widen *ceiling* lift here: it reintroduces ~175–185ms
+      // effective ceilings (e.g. profile max + 40 starvation or +50 micro-widen TTL), undoing Pass-1
+      // profile cuts. Starvation still adjusts alpha; micro-widen still nudges `ideal` below.
+      const dynamicCeilingLiftMs = 0;
 
       let adaptiveMaxTargetMs = effectivePlayoutMaxTargetMs({
         profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
@@ -3592,12 +3582,15 @@ export function useGroupVoiceCall(uiActive = false) {
         nextStarvationSev === 'none'
           ? Math.max(alphaUp, ADAPTIVE_ALPHA_UP_SINGLE_REMOTE_RECOVERY)
           : alphaUp;
-      const smooth = stepSmoothedAdaptiveTargetMs({
+      const smoothRaw = stepSmoothedAdaptiveTargetMs({
         idealTargetMs: ideal,
         previousTargetMs: smoothedPlayoutTargetRef.current.get(addr),
         alphaUp: alphaUpForSmooth,
         alphaDown,
       });
+      // Ideal is clamped to adaptiveMaxTargetMs, but the EMA can sit above the ceiling for many
+      // ticks when the ceiling drops or severe/normal flips — clamp so metrics + worklet match policy.
+      const smooth = Math.min(smoothRaw, adaptiveMaxTargetMs);
 
       const lastStarvDiag = lastPlayoutStarvationDiagAtRef.current.get(addr) ?? 0;
       const starvationDiagThrottleMs = 5_000;
@@ -3672,6 +3665,11 @@ export function useGroupVoiceCall(uiActive = false) {
     return postCount;
   }, [incrementPerfCounter]);
 
+  /**
+   * Pushes transport/UI metrics into React state. If profiling shows this competes with audio,
+   * an optional follow-up is to coalesce `setMetrics` / adaptive recomputation to a slower cadence
+   * while keeping ref-only paths hot (not implemented here).
+   */
   const flushMetrics = useCallback(() => {
     recomputeAdaptiveNetworkMode();
     updateMetricResourceCounts();
@@ -4287,14 +4285,13 @@ export function useGroupVoiceCall(uiActive = false) {
         );
       }
 
-      const perfSnap = snapshotGcallPerfStats();
+      const longP = gcallPerfEnabledRef.current
+        ? gcallPerfRef.current.getLongTaskPressure()
+        : { count: 0, recentHeavy: false };
       const prevLt = lastLongTaskCountAtIntervalRef.current;
-      const ltDelta = perfSnap.longTasks.count - prevLt;
-      lastLongTaskCountAtIntervalRef.current = perfSnap.longTasks.count;
-      const recentHeavy = perfSnap.longTasks.recent.some(
-        (e) => e.duration >= 50
-      );
-      overloadLongTaskPressureRef.current = ltDelta >= 2 || recentHeavy;
+      const ltDelta = longP.count - prevLt;
+      lastLongTaskCountAtIntervalRef.current = longP.count;
+      overloadLongTaskPressureRef.current = ltDelta >= 2 || longP.recentHeavy;
 
       const receivingShedding =
         decryptOverloadStateRef.current.active ||
@@ -4354,7 +4351,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
     }, OPUS_SEND_PRESSURE_TICK_MS);
     return () => clearInterval(id);
-  }, [snapshotGcallPerfStats]);
+  }, []);
 
   useEffect(() => {
     uiActiveRef.current = uiActive;
@@ -6208,7 +6205,7 @@ export function useGroupVoiceCall(uiActive = false) {
           return;
         }
 
-        if (isMicCaptureDebugEnabled()) {
+        if (isGcallMicDebugEnabled()) {
           const tracks = stream.getAudioTracks();
           console.info(
             '[GCall][mic] getUserMedia ok — audio tracks:',
@@ -6401,7 +6398,7 @@ export function useGroupVoiceCall(uiActive = false) {
             frame: Float32Array;
             vad: boolean;
           };
-          if (isMicCaptureDebugEnabled() && micDebugWorkletSamples < 8) {
+          if (isGcallMicDebugEnabled() && micDebugWorkletSamples < 8) {
             micDebugWorkletSamples++;
             let sumSq = 0;
             for (let i = 0; i < frame.length; i++) sumSq += frame[i] * frame[i];
@@ -6532,7 +6529,7 @@ export function useGroupVoiceCall(uiActive = false) {
           closeContext(ctx);
         }
         console.error('[GCall] Audio capture failed:', err);
-        if (isMicCaptureDebugEnabled()) {
+        if (isGcallMicDebugEnabled()) {
           const name =
             err && typeof err === 'object' && 'name' in err
               ? String((err as Error).name)
@@ -7338,7 +7335,10 @@ export function useGroupVoiceCall(uiActive = false) {
       const d = jb.getBufferedFrames();
       depthSum += d;
       worstDepth = Math.max(worstDepth, d);
-      if (!jb.hasReadyFrame()) notReadyCount++;
+      const opusBufferedMs = d * OPUS_FRAME_DURATION_MS;
+      // Critical-only notReady for jitterNotReadyFraction: starvation vs strict !hasReadyFrame().
+      const criticalNotReady = d <= 1 || opusBufferedMs < 20;
+      if (criticalNotReady) notReadyCount++;
       if (d === 0) rawEmptyCount++;
       telemSourceCount++;
     }
@@ -7361,7 +7361,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastJitterTickTotalMsRef.current >=
       JITTER_DECODE_BURST_TICK_TOTAL_SOFT_THRESHOLD_MS
     ) {
-      scaledBurstCap = Math.min(scaledBurstCap, 8);
+      scaledBurstCap = Math.min(scaledBurstCap, 10);
     }
 
     const sourceCountForDrain = activeJitterSourcesRef.current.size;

@@ -7,6 +7,8 @@ import {
   truncateGcallDiagAddress,
   buildGcallDiagnosticsExportJson,
   extractTransportTriadFromLiveMetrics,
+  isGcallDebugEnabled,
+  readGcallDiagnosticsRingEnabled,
   GCALL_TRANSPORT_TRIAD_INTERPRETATION,
   GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT,
   GCALL_TWO_WAY_JITTER_BASELINE_HINT,
@@ -18,6 +20,25 @@ import {
 describe('gcall-diagnostics', () => {
   beforeEach(() => {
     gcallDiagnosticsClear();
+    localStorage.removeItem('qortal:gcall-debug');
+    localStorage.removeItem('qortal:gcall-diagnostics');
+    localStorage.removeItem('qortal:gcall-mic-debug');
+  });
+
+  it('isGcallDebugEnabled is false without qortal:gcall-debug', () => {
+    expect(isGcallDebugEnabled()).toBe(false);
+  });
+
+  it('isGcallDebugEnabled is true when qortal:gcall-debug is 1', () => {
+    localStorage.setItem('qortal:gcall-debug', '1');
+    expect(isGcallDebugEnabled()).toBe(true);
+  });
+
+  it('readGcallDiagnosticsRingEnabled is false in dev when qortal:gcall-diagnostics is 0', () => {
+    localStorage.setItem('qortal:gcall-diagnostics', '0');
+    expect(readGcallDiagnosticsRingEnabled()).toBe(false);
+    gcallDiagnosticsPush('log', '[GCall] dropped', { n: 1 });
+    expect(gcallDiagnosticsGetEvents().length).toBe(0);
   });
 
   it('truncates long base58-like addresses', () => {

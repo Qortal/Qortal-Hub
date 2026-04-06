@@ -6,11 +6,11 @@
 /** Initial stall escape: no ingress this long → allow one minimal decode (ms). */
 export const GCALL_N1_STALL_ESCAPE_MS = 300;
 
-/** Min start buffer before "preroll satisfied" (ms), lower bound of clamp. */
-export const GCALL_N1_MIN_START_MS_FLOOR = 180;
+/** Min start buffer before "preroll satisfied" (ms), lower bound of clamp — below low-latency adaptive max (115). */
+export const GCALL_N1_MIN_START_MS_FLOOR = 100;
 
-/** Upper clamp for min-start ms (avoid extreme targets). */
-export const GCALL_N1_MIN_START_MS_CEIL = 280;
+/** Upper clamp for min-start ms (align with max severe across profiles). */
+export const GCALL_N1_MIN_START_MS_CEIL = 180;
 
 /** Micro-accumulation after refill when preroll already satisfied (ms). */
 export const GCALL_N1_ACCUMULATION_MS = 75;
@@ -59,7 +59,7 @@ export function computeN1BufferEnforceTier(
 }
 
 export interface ComputeN1TierBurstCapOpts {
-  /** When true, allow 2 decodes/tick in deep tier under recovery (main-thread stalls starve buffer). */
+  /** When true, allow extra decodes/tick in deep tier under recovery (main-thread stalls starve buffer). */
   recoverySingleRemote?: boolean;
 }
 
@@ -72,8 +72,8 @@ export function computeN1TierBurstCap(
   opts?: ComputeN1TierBurstCapOpts
 ): number {
   if (tier === 'deep') {
-    return opts?.recoverySingleRemote ? 2 : 1;
+    return opts?.recoverySingleRemote ? 4 : 1;
   }
-  if (tier === 'moderate') return Math.min(4, scaledBurstCap);
+  if (tier === 'moderate') return Math.min(6, scaledBurstCap);
   return scaledBurstCap;
 }

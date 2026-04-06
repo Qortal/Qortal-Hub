@@ -29,8 +29,9 @@ const LOW_LATENCY_BASE = {
   opusExpectedPacketLossPercent: 10,
   jitterBufferSize: 6,
   jitterStartBufferSize: 4,
-  adaptiveMaxTargetMs: 180,
-  adaptiveSevereMaxTargetMs: 240,
+  /** Align adaptive ceiling with steady-state Opus depth (~50–60ms typical). */
+  adaptiveMaxTargetMs: 115,
+  adaptiveSevereMaxTargetMs: 170,
   wasmFecMaxGapReset: 32,
 } as const;
 
@@ -40,8 +41,8 @@ const HIGH_STABILITY_BASE = {
   opusExpectedPacketLossPercent: 14,
   jitterBufferSize: 6,
   jitterStartBufferSize: 6,
-  adaptiveMaxTargetMs: 220,
-  adaptiveSevereMaxTargetMs: 280,
+  adaptiveMaxTargetMs: 140,
+  adaptiveSevereMaxTargetMs: 180,
   /** Wider seq-gap tolerance before WASM FEC worker reset under high-stability profile. */
   wasmFecMaxGapReset: 42,
 } as const;
@@ -60,15 +61,15 @@ export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN = 10;
 /** Recovery mode: minimum frames before first drain when unprimed — Phase C upstream. */
 export const GCALL_RECOVERY_JITTER_START_MIN = 9;
 /** Single-remote recovery (N===1, non–tier-2): between Phase C and tier-2 — 2-way playout plan. */
-export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE = 11;
-export const GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE = 10;
+export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_SINGLE_REMOTE = 12;
+export const GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE = 11;
 /** Phase D tier-2: recovery + multi-source (N>=2); default on unless `readGcallJitterTier2OptOut()`. */
 export const GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN_TIER2 = 12;
 export const GCALL_RECOVERY_JITTER_START_MIN_TIER2 = 10;
 /** Require `adaptiveNetworkMode === 'recovery'` this long before deepening jitter (ms). */
-export const GCALL_RECOVERY_JITTER_APPLY_DWELL_MS = 200;
+export const GCALL_RECOVERY_JITTER_APPLY_DWELL_MS = 250;
 /** Require non-recovery this long before reverting jitter geometry (ms). */
-export const GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS = 125;
+export const GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS = 260;
 /** Base delay resetting `primed` after last pop empties the jitter buffer (ms). Phase C/D. */
 export const GCALL_JITTER_SOFT_UNPRIME_MS = 50;
 
