@@ -177,6 +177,7 @@ import {
 } from '../lib/group-call/gcall-diagnostics';
 import packageJson from '../../package.json';
 import {
+  computeN1SteadyTierBurstCap,
   computeN1BufferRatio,
   computeN1MinStartMs,
   computeN1TierBurstCap,
@@ -184,6 +185,7 @@ import {
   GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS,
   GCALL_N1_STALL_ESCAPE_MS,
   stepN1BufferEnforceTier,
+  stepN1SteadyBufferEnforceTier,
   type GcallN1BufferEnforceTier,
 } from '../lib/group-call/gcallN1PlayoutGate';
 import {
@@ -377,6 +379,8 @@ const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
 const GCALL_STABLE_RECOVERY_ALPHA_DOWN = 0.34;
+const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.36;
+const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 12;
 const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
@@ -706,6 +710,26 @@ export function shouldBypassRecoveryReentryCooldown(opts: {
   severeInstability: boolean;
 }): boolean {
   return opts.severity >= 3 || opts.severeInstability;
+}
+
+export function computeSteadyTargetDecayThresholdMs(opts: {
+  adaptiveMaxTargetMs: number;
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+}): number {
+  if (
+    opts.activeSourceCount === 1 &&
+    opts.adaptiveNetworkMode !== 'recovery'
+  ) {
+    return Math.min(
+      GCALL_DECAY_GUARD_HIGH_TARGET_MS,
+      Math.max(
+        ADAPTIVE_BASE_TARGET_MS + 20,
+        opts.adaptiveMaxTargetMs - GCALL_STEADY_TARGET_DECAY_HEADROOM_MS
+      )
+    );
+  }
+  return GCALL_DECAY_GUARD_HIGH_TARGET_MS;
 }
 
 /**
@@ -2297,6 +2321,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastBufferEnforceTierRef = useRef<
     Map<string, GcallN1BufferEnforceTier | null>
   >(new Map());
+  const lastBufferEnforceModeRef = useRef<
+    Map<string, 'recovery' | 'steady' | null>
+  >(new Map());
   const lastSentPlayoutTargetRef = useRef<Map<string, number>>(new Map());
   const lastPlayoutTargetPostAtRef = useRef<Map<string, number>>(new Map());
   /** Seq-gap count accumulated during last drain tick per source (feeds loss term). */
@@ -3605,6 +3632,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const isolateThisSource =
         severeWindowSource && worstIsolationSet.has(addr);
       const useSevereCeiling = ingressPeerRecovery || isolateThisSource;
+      const activeSourceCount = activeJitterSourcesRef.current.size;
       const lastVadAt = lastVadTrueAtRef.current.get(addr) ?? 0;
       const isActiveSpeakerForAddr =
         lastVadAt > 0 && wallNow - lastVadAt < ACTIVE_SPEAKER_WINDOW_MS;
@@ -3717,7 +3745,7 @@ export function useGroupVoiceCall(uiActive = false) {
         profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
         useSevereCeiling,
         isolationCeilingSoftened,
-        activeSourceCount: activeJitterSourcesRef.current.size,
+        activeSourceCount,
         dynamicCeilingLiftMs,
       });
       if (failSafeStateRef.current.active) {
@@ -3770,10 +3798,25 @@ export function useGroupVoiceCall(uiActive = false) {
         alphaDown = Math.min(baseAlphaDown, 0.2);
       }
 
+      const stableSingleRemoteLowLatency =
+        activeSourceCount === 1 &&
+        adaptiveNetworkMode !== 'recovery' &&
+        previousWindowPressure?.shouldTightenRecovery !== true &&
+        !severeWindowSource &&
+        !ingressPeerRecovery &&
+        recentStability.stable;
+      const steadyTargetDecayThresholdMs = computeSteadyTargetDecayThresholdMs({
+        adaptiveMaxTargetMs,
+        activeSourceCount,
+        adaptiveNetworkMode,
+      });
       let calmStart = decayGuardCalmStartRef.current.get(addr);
       if (
-        smoothedTargetMsForAdequacy > GCALL_DECAY_GUARD_HIGH_TARGET_MS &&
-        jitterMs < GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS
+        smoothedTargetMsForAdequacy > steadyTargetDecayThresholdMs &&
+        jitterMs < GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS &&
+        (activeSourceCount !== 1 ||
+          adaptiveNetworkMode === 'recovery' ||
+          stableSingleRemoteLowLatency)
       ) {
         if (calmStart === undefined) {
           decayGuardCalmStartRef.current.set(addr, wallNow);
@@ -3806,9 +3849,15 @@ export function useGroupVoiceCall(uiActive = false) {
       ) {
         alphaDown = Math.max(alphaDown, GCALL_STABLE_RECOVERY_ALPHA_DOWN);
       }
+      if (
+        stableSingleRemoteLowLatency &&
+        smoothedTargetMsForAdequacy > steadyTargetDecayThresholdMs
+      ) {
+        alphaDown = Math.max(alphaDown, GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN);
+      }
 
       const alphaUpForSmooth =
-        activeJitterSourcesRef.current.size === 1 &&
+        activeSourceCount === 1 &&
         adaptiveNetworkMode === 'recovery' &&
         nextStarvationSev === 'none'
           ? Math.max(alphaUp, ADAPTIVE_ALPHA_UP_SINGLE_REMOTE_RECOVERY)
@@ -4612,6 +4661,9 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSentPlayoutTargetRef.current.delete(address);
       lastPlayoutTargetPostAtRef.current.delete(address);
       lastDrainMissedRef.current.delete(address);
+      lastBufferEnforceLogAtRef.current.delete(address);
+      lastBufferEnforceTierRef.current.delete(address);
+      lastBufferEnforceModeRef.current.delete(address);
       lastSourceGapLogAtRef.current.delete(address);
       lastSourceStallLogAtRef.current.delete(address);
       lastForwarderGateLogAtRef.current.delete(address);
@@ -7735,7 +7787,10 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!starvationEnabled) {
       for (const addr of addrsOrdered) {
         const jb = jitterMapRef.current.get(addr);
-        const n1SingleRemote = sourceCountForDrain === 1 && isRecovery;
+        const n1RecoverySingleRemote = sourceCountForDrain === 1 && isRecovery;
+        const n1SteadySingleRemote = sourceCountForDrain === 1 && !isRecovery;
+        const singleRemoteShapingMode: 'recovery' | 'steady' | null =
+          n1RecoverySingleRemote ? 'recovery' : n1SteadySingleRemote ? 'steady' : null;
         const perfWall = performance.now();
 
         if (!jb) {
@@ -7751,40 +7806,49 @@ export function useGroupVoiceCall(uiActive = false) {
         const opusMsPre = jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS;
         const smoothedTarget =
           smoothedPlayoutTargetRef.current.get(addr) ?? ADAPTIVE_BASE_TARGET_MS;
-        const minStartMs = n1SingleRemote
+        const minStartMs = n1RecoverySingleRemote
           ? computeN1MinStartMs(smoothedTarget)
           : 0;
-        if (n1SingleRemote && opusMsPre >= minStartMs) {
+        if (n1RecoverySingleRemote && opusMsPre >= minStartMs) {
           jitterPrerollSatisfiedRef.current.set(addr, true);
         }
         const prerollActive =
-          n1SingleRemote &&
+          n1RecoverySingleRemote &&
           jitterPrerollSatisfiedRef.current.get(addr) !== true;
 
         const { ratio: n1Ratio, denomMs: n1DenomMs } = computeN1BufferRatio(
           opusMsPre,
           smoothedTarget
         );
-        const previousN1Tier = lastBufferEnforceTierRef.current.get(addr) ?? null;
-        const n1Tier = n1SingleRemote
+        const previousN1Mode = lastBufferEnforceModeRef.current.get(addr) ?? null;
+        const previousN1Tier =
+          previousN1Mode === singleRemoteShapingMode
+            ? (lastBufferEnforceTierRef.current.get(addr) ?? null)
+            : null;
+        const n1Tier = n1RecoverySingleRemote
           ? stepN1BufferEnforceTier(previousN1Tier, n1Ratio)
+          : n1SteadySingleRemote
+            ? stepN1SteadyBufferEnforceTier(previousN1Tier, n1Ratio)
           : ('normal' as const);
-        lastBufferEnforceTierRef.current.set(addr, n1SingleRemote ? n1Tier : null);
-        let n1ScaledCap = n1SingleRemote
+        lastBufferEnforceTierRef.current.set(addr, singleRemoteShapingMode ? n1Tier : null);
+        lastBufferEnforceModeRef.current.set(addr, singleRemoteShapingMode);
+        let n1ScaledCap = n1RecoverySingleRemote
           ? computeN1TierBurstCap(n1Tier, scaledBurstCap, {
               recoverySingleRemote:
-                n1SingleRemote && jitterGeomAppliedRef.current === 'recovery',
+                n1RecoverySingleRemote && jitterGeomAppliedRef.current === 'recovery',
             })
+          : n1SteadySingleRemote
+            ? computeN1SteadyTierBurstCap(n1Tier, scaledBurstCap)
           : scaledBurstCap;
 
-        if (n1SingleRemote && !prerollActive) {
+        if (n1RecoverySingleRemote && !prerollActive) {
           const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
           if (perfWall < accUntil) {
             n1ScaledCap = Math.min(n1ScaledCap, 1);
           }
         }
 
-        if (n1SingleRemote) {
+        if (n1RecoverySingleRemote) {
           const nowLog = Date.now();
           const lastLog = lastBufferEnforceLogAtRef.current.get(addr) ?? 0;
           const tierChanged = previousN1Tier !== n1Tier;
@@ -7808,7 +7872,7 @@ export function useGroupVoiceCall(uiActive = false) {
         const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
         const lastEsc = lastStallEscapePerfRef.current.get(addr) ?? 0;
         const stallEscapeAllowed =
-          n1SingleRemote &&
+          n1RecoverySingleRemote &&
           prerollActive &&
           opusMsPre < minStartMs &&
           jb.hasReadyFrame() &&
@@ -7817,7 +7881,7 @@ export function useGroupVoiceCall(uiActive = false) {
           perfWall - lastEsc >= GCALL_N1_STALL_ESCAPE_MS;
 
         if (
-          n1SingleRemote &&
+          n1RecoverySingleRemote &&
           prerollActive &&
           opusMsPre < minStartMs &&
           !stallEscapeAllowed
@@ -10304,6 +10368,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastStallEscapePerfRef.current.clear();
       lastBufferEnforceLogAtRef.current.clear();
       lastBufferEnforceTierRef.current.clear();
+      lastBufferEnforceModeRef.current.clear();
       gcallStarvationTicksSinceProtectedRef.current.clear();
       gcallStarvationOpusHistRef.current.clear();
       gcallStarvationProtectedExitStreakRef.current.clear();

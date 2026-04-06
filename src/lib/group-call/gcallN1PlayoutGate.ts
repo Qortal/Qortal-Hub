@@ -22,11 +22,15 @@ export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
 export const GCALL_N1_RATIO_DEEP = 0.3;
 export const GCALL_N1_RATIO_DEEP_ENTER = 0.28;
 export const GCALL_N1_RATIO_DEEP_EXIT = 0.34;
+export const GCALL_N1_RATIO_DEEP_ENTER_STEADY = 0.22;
+export const GCALL_N1_RATIO_DEEP_EXIT_STEADY = 0.28;
 
 /** Tier B: moderate throttle upper edge (below this band = moderate; above = normal burst). */
 export const GCALL_N1_RATIO_MODERATE = 0.48;
 export const GCALL_N1_RATIO_MODERATE_ENTER = 0.46;
 export const GCALL_N1_RATIO_MODERATE_EXIT = 0.52;
+export const GCALL_N1_RATIO_MODERATE_ENTER_STEADY = 0.38;
+export const GCALL_N1_RATIO_MODERATE_EXIT_STEADY = 0.44;
 
 /** Throttle [GCall] bufferEnforceActive diagnostics (ms per source). */
 export const GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS = 2000;
@@ -83,6 +87,27 @@ export function stepN1BufferEnforceTier(
   return computeN1BufferEnforceTier(ratio);
 }
 
+export function stepN1SteadyBufferEnforceTier(
+  previousTier: GcallN1BufferEnforceTier | null,
+  ratio: number
+): GcallN1BufferEnforceTier {
+  if (previousTier === 'deep') {
+    if (ratio <= GCALL_N1_RATIO_DEEP_EXIT_STEADY) return 'deep';
+    return ratio < GCALL_N1_RATIO_MODERATE_EXIT_STEADY ? 'moderate' : 'normal';
+  }
+  if (previousTier === 'moderate') {
+    if (ratio < GCALL_N1_RATIO_DEEP_ENTER_STEADY) return 'deep';
+    if (ratio <= GCALL_N1_RATIO_MODERATE_EXIT_STEADY) return 'moderate';
+    return 'normal';
+  }
+  if (previousTier === 'normal') {
+    if (ratio < GCALL_N1_RATIO_DEEP_ENTER_STEADY) return 'deep';
+    if (ratio < GCALL_N1_RATIO_MODERATE_ENTER_STEADY) return 'moderate';
+    return 'normal';
+  }
+  return computeN1BufferEnforceTier(ratio);
+}
+
 export interface ComputeN1TierBurstCapOpts {
   /** When true, allow extra decodes/tick in deep tier under recovery (main-thread stalls starve buffer). */
   recoverySingleRemote?: boolean;
@@ -100,5 +125,14 @@ export function computeN1TierBurstCap(
     return opts?.recoverySingleRemote ? 4 : 1;
   }
   if (tier === 'moderate') return Math.min(6, scaledBurstCap);
+  return scaledBurstCap;
+}
+
+export function computeN1SteadyTierBurstCap(
+  tier: GcallN1BufferEnforceTier,
+  scaledBurstCap: number
+): number {
+  if (tier === 'deep') return Math.min(8, scaledBurstCap);
+  if (tier === 'moderate') return Math.min(9, scaledBurstCap);
   return scaledBurstCap;
 }

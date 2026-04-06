@@ -3,6 +3,7 @@ import {
   bumpGroupCallAudioSessionToken,
   chooseSameEpochTopologyWinner,
   countRecentlyHealthyRemoteSources,
+  computeSteadyTargetDecayThresholdMs,
   clearAdaptiveGroupCallPlayoutMaps,
   getConflictingRootForAuthorityWait,
   hasOccupiedRoomEvidenceForJoin,
@@ -134,6 +135,30 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeInstability: true,
       })
     ).toBe(true);
+  });
+
+  it('lowers the calm-decay threshold for stable single-remote low-latency calls', () => {
+    expect(
+      computeSteadyTargetDecayThresholdMs({
+        adaptiveMaxTargetMs: 145,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+      })
+    ).toBe(133);
+    expect(
+      computeSteadyTargetDecayThresholdMs({
+        adaptiveMaxTargetMs: 145,
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'low-latency',
+      })
+    ).toBe(147);
+    expect(
+      computeSteadyTargetDecayThresholdMs({
+        adaptiveMaxTargetMs: 145,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+      })
+    ).toBe(147);
   });
 
   it('only seeds join session state before the root session is adopted', () => {
