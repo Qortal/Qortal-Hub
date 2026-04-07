@@ -280,7 +280,7 @@ declare global {
       ) => () => void;
       /** Subscribe to the "all presence cleared" event (fired when P2P is disabled). */
       onCleared: (cb: () => void) => () => void;
-      /** Subscribe to the "P2P started" event (fired when P2P is re-enabled). */
+      /** Subscribe to the "presence transport ready" event (fired after transport start or wake recovery). */
       onStarted: (cb: () => void) => () => void;
     };
 

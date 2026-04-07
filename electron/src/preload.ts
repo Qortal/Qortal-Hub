@@ -628,7 +628,7 @@ try {
       return () => ipcRenderer.removeListener('presence:cleared', handler);
     },
 
-    /** Subscribe to the "P2P started" event (fired when P2P is re-enabled). */
+    /** Subscribe to the "presence transport ready" event (fired after transport start or wake recovery). */
     onStarted: (cb: () => void) => {
       const handler = () => cb();
       ipcRenderer.on('presence:started', handler);

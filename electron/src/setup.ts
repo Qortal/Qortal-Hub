@@ -1480,6 +1480,10 @@ function broadcastToSet(
   }
 }
 
+export function notifyPresenceTransportReady(): void {
+  broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
+}
+
 /** Stores the options used when P2P was last started so the IPC toggle can
  *  restart with the same ports, seeds, etc. */
 let lastP2POptions: P2PNetworkOptions = {};
@@ -1599,7 +1603,7 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     );
     const cm = await startChatManager(network, sharedDbPath);
     attachChatListeners(cm);
-    broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
+    notifyPresenceTransportReady();
     return {
       success: true,
       port: network.getPort(),

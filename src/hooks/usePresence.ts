@@ -510,9 +510,15 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
       });
     });
 
+    const unsubscribeStarted = window.presence.onStarted?.(() => {
+      if (!isAuthenticatedRef.current) return;
+      void sendAnnounce();
+    });
+
     return () => {
       unsubscribe();
       unsubscribeCleared?.();
+      unsubscribeStarted?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
