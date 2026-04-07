@@ -1071,7 +1071,7 @@ export const ChatDirect = ({
             {t('core:action.new.chat', { postProcess: 'capitalizeFirstChar' })}
           </Typography>
         )}
-        {!isNewChat && selectedDirect?.address && window.chat && (
+        {!isNewChat && selectedDirect?.address && (
           <Box
             sx={{
               alignItems: 'center',

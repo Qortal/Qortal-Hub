@@ -55,6 +55,7 @@ import {
   stopReticulumBridge,
 } from './reticulum-bridge';
 import { getPresenceManager } from './presence';
+import { isDisabledLegacy } from './feature-flags';
 
 import * as net from 'net';
 
@@ -328,45 +329,49 @@ async function setupMultiInstanceUserData(
   // gated by the legacy P2P mesh setting.
   await ensureReticulumManagersStarted();
 
-  // Each instance gets a unique P2P and API port derived from its index so
-  // multiple instances can run side-by-side on the same machine.
-  // Instance 0: P2P=62391, API=62490
-  // Instance 1: P2P=62392, API=62491  … and so on.
-  const p2pPort = DEFAULT_P2P_PORT + instanceIndex;
-  const apiPort = DEFAULT_API_PORT + instanceIndex;
+  if (!isDisabledLegacy) {
+    // Each instance gets a unique P2P and API port derived from its index so
+    // multiple instances can run side-by-side on the same machine.
+    // Instance 0: P2P=62391, API=62490
+    // Instance 1: P2P=62392, API=62491  … and so on.
+    const p2pPort = DEFAULT_P2P_PORT + instanceIndex;
+    const apiPort = DEFAULT_API_PORT + instanceIndex;
 
-  // All instances share one SQLite database in a fixed directory under
-  // appData (the common parent of all per-instance userData paths).
-  const sharedDbDir = path.join(app.getPath('appData'), 'qortal-shared');
-  fs.mkdirSync(sharedDbDir, { recursive: true });
-  const sharedDbPath = path.join(sharedDbDir, 'chat.db');
+    // All instances share one SQLite database in a fixed directory under
+    // appData (the common parent of all per-instance userData paths).
+    const sharedDbDir = path.join(app.getPath('appData'), 'qortal-shared');
+    fs.mkdirSync(sharedDbDir, { recursive: true });
+    const sharedDbPath = path.join(sharedDbDir, 'chat.db');
 
-  const p2pOptions = {
-    port: p2pPort,
-    apiPort,
-    initialPeers: [...HUB_P2P_BOOTSTRAP_SEEDS],
-    dbPath: sharedDbPath,
-  };
-  setLastP2POptions(p2pOptions);
+    const p2pOptions = {
+      port: p2pPort,
+      apiPort,
+      initialPeers: [...HUB_P2P_BOOTSTRAP_SEEDS],
+      dbPath: sharedDbPath,
+    };
+    setLastP2POptions(p2pOptions);
 
-  // Auto-start the P2P network unless the user has disabled it in settings.
-  const appSettings = await readAppSettings();
-  if (appSettings.p2pEnabled !== false) {
-    try {
-      const p2pNetwork = await startP2PNetwork(p2pOptions);
-      attachP2PListeners(p2pNetwork);
-      await startDecentralizedStunAfterP2P(p2pNetwork, p2pOptions);
-      loggerLog(`[P2P] Auto-started on port ${p2pPort}`);
+    // Auto-start the P2P network unless the user has disabled it in settings.
+    const appSettings = await readAppSettings();
+    if (appSettings.p2pEnabled !== false) {
+      try {
+        const p2pNetwork = await startP2PNetwork(p2pOptions);
+        attachP2PListeners(p2pNetwork);
+        await startDecentralizedStunAfterP2P(p2pNetwork, p2pOptions);
+        loggerLog(`[P2P] Auto-started on port ${p2pPort}`);
 
-      // Start the chat manager backed by the shared SQLite database.
-      const cm = await startChatManager(p2pNetwork, sharedDbPath);
-      attachChatListeners(cm);
-      loggerLog('[Chat] Manager auto-started.');
-    } catch (err) {
-      loggerError('[P2P] Auto-start failed:', err);
+        // Start the chat manager backed by the shared SQLite database.
+        const cm = await startChatManager(p2pNetwork, sharedDbPath);
+        attachChatListeners(cm);
+        loggerLog('[Chat] Manager auto-started.');
+      } catch (err) {
+        loggerError('[P2P] Auto-start failed:', err);
+      }
+    } else {
+      loggerLog('[P2P] Disabled by user setting — skipping auto-start.');
     }
   } else {
-    loggerLog('[P2P] Disabled by user setting — skipping auto-start.');
+    loggerLog('[Legacy] Legacy P2P, chat, and STUN startup are disabled by feature flag.');
   }
 
   // Also set on main window session (same as default when no partition; ensures activate/recreate path is covered)

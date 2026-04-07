@@ -7,7 +7,6 @@ import {
   isOnlineAtomFamily,
   myStatusAtom,
   onlineAddressesAtom,
-  p2pEnabledAtom,
   SelectableStatus,
   statusAtomFamily,
   statusMapAtom,
@@ -155,7 +154,6 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
   const userInfo = useAtomValue(userInfoAtom);
   const setOnlineAddresses = useSetAtom(onlineAddressesAtom);
   const setStatusMap = useSetAtom(statusMapAtom);
-  const setP2pEnabled = useSetAtom(p2pEnabledAtom);
   const [myStatus, setMyStatus] = useAtom(myStatusAtom);
   const setIsIdle = useSetAtom(isIdleAtom);
 
@@ -469,12 +467,6 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
   useEffect(() => {
     if (!window.presence) return;
 
-    // Seed the p2pEnabled flag from persisted settings so the badge reflects
-    // the correct state immediately on mount (before any network activity).
-    (window.electronAPI as any)?.getAppSettings?.().then((settings: { p2pEnabled?: boolean } | undefined) => {
-      setP2pEnabled(settings?.p2pEnabled !== false);
-    });
-
     window.presence.getAllOnline().then((sessions) => {
       const snapshot = buildPresenceSnapshot(sessions);
       setOnlineAddresses(snapshot.onlineAddresses);
@@ -515,18 +507,12 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
       unstable_batchedUpdates(() => {
         setOnlineAddresses(new Set());
         setStatusMap(new Map());
-        setP2pEnabled(false);
       });
-    });
-
-    const unsubscribeStarted = window.presence.onStarted?.(() => {
-      setP2pEnabled(true);
     });
 
     return () => {
       unsubscribe();
       unsubscribeCleared?.();
-      unsubscribeStarted?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

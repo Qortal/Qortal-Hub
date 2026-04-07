@@ -21,6 +21,7 @@ import {
   unmapTcpPort,
   unmapUdpPort,
 } from './upnp-nat';
+import { isDisabledLegacy } from './feature-flags';
 
 export const DEFAULT_P2P_PORT = 62391;
 export const DEFAULT_MAX_PEERS = 16;
@@ -316,7 +317,9 @@ export class P2PNetwork extends EventEmitter {
     this.setupUPnP(); // fire-and-forget — UPnP failure must never block startup
     this.scheduleSeenCleanup();
     this.schedulePing();
-    this.startApiServer();
+    if (!isDisabledLegacy) {
+      this.startApiServer();
+    }
 
     // Load previously-discovered peers from the shared DB before seeding so
     // all instances share the same bootstrap pool.
@@ -1319,6 +1322,7 @@ export class P2PNetwork extends EventEmitter {
   // ── Local HTTP API ────────────────────────────────────────────────────────
 
   private startApiServer(): void {
+    if (isDisabledLegacy) return;
     const now = () => Date.now();
 
     const connectedPeers = (): PeerRecord[] =>

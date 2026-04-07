@@ -20,6 +20,7 @@ import { AppsDevModeNavBar } from '../Apps/AppsDevModeNavBar';
 import { executeEvent } from '../../utils/events';
 import { appHeighOffsetPx } from './CustomTitleBar';
 import HeadsetMicRoundedIcon from '@mui/icons-material/HeadsetMicRounded';
+import { isDisabledLegacy } from '../../constants/featureFlags';
 
 export const DesktopSideBar = ({
   goToHome,
@@ -232,36 +233,38 @@ export const DesktopSideBar = ({
           width: 'auto',
         }}
       >
-        <Box sx={{ alignSelf: 'center', mb: 1 }}>
-          <Tooltip
-            title="Support Chat"
-            placement="right"
-          >
-            <ButtonBase
-              sx={{
-                borderRadius: '8px',
-                height: '44px',
-                width: '44px',
-                ...(isSupportChatOpen && {
-                  backgroundColor: theme.palette.action.selected,
-                }),
-                '&:hover': {
-                  backgroundColor: theme.palette.action.hover,
-                },
-              }}
-              onClick={() => setIsSupportChatOpen((v) => !v)}
+        {!isDisabledLegacy && (
+          <Box sx={{ alignSelf: 'center', mb: 1 }}>
+            <Tooltip
+              title="Support Chat"
+              placement="right"
             >
-              <HeadsetMicRoundedIcon
+              <ButtonBase
                 sx={{
-                  color: isSupportChatOpen
-                    ? theme.palette.text.primary
-                    : theme.palette.text.secondary,
-                  fontSize: 26,
+                  borderRadius: '8px',
+                  height: '44px',
+                  width: '44px',
+                  ...(isSupportChatOpen && {
+                    backgroundColor: theme.palette.action.selected,
+                  }),
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover,
+                  },
                 }}
-              />
-            </ButtonBase>
-          </Tooltip>
-        </Box>
+                onClick={() => setIsSupportChatOpen((v) => !v)}
+              >
+                <HeadsetMicRoundedIcon
+                  sx={{
+                    color: isSupportChatOpen
+                      ? theme.palette.text.primary
+                      : theme.palette.text.secondary,
+                    fontSize: 26,
+                  }}
+                />
+              </ButtonBase>
+            </Tooltip>
+          </Box>
+        )}
 
         <Box sx={{ alignSelf: 'left' }}>
           <LanguageSelector />

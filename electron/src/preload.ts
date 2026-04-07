@@ -5,6 +5,7 @@ import { log as loggerLog, error as loggerError } from './logger';
 loggerLog('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
 import { buildBootstrapIceServers } from './stun-bootstrap';
+import { isDisabledLegacy } from './feature-flags';
 
 function parseHubBootstrapSeedsFromArgv(): string[] {
   const prefix = '--hub-p2p-seeds=';
@@ -24,9 +25,9 @@ function parseHubBootstrapSeedsFromArgv(): string[] {
   return [];
 }
 
-const hubP2pBootstrapIceServers = buildBootstrapIceServers(
-  parseHubBootstrapSeedsFromArgv()
-);
+const hubP2pBootstrapIceServers = isDisabledLegacy
+  ? []
+  : buildBootstrapIceServers(parseHubBootstrapSeedsFromArgv());
 
 type PresenceUpdatePayload = {
   address: string;
@@ -496,47 +497,49 @@ try {
     },
   });
 
-  // P2P Network API
-  contextBridge.exposeInMainWorld('p2pNetwork', {
-    start: async (options?: {
-      port?: number;
-      maxPeers?: number;
-      initialPeers?: string[];
-    }) => ipcRenderer.invoke('p2p:start', options),
+  if (!isDisabledLegacy) {
+    // P2P Network API
+    contextBridge.exposeInMainWorld('p2pNetwork', {
+      start: async (options?: {
+        port?: number;
+        maxPeers?: number;
+        initialPeers?: string[];
+      }) => ipcRenderer.invoke('p2p:start', options),
 
-    stop: async () => ipcRenderer.invoke('p2p:stop'),
+      stop: async () => ipcRenderer.invoke('p2p:stop'),
 
-    send: async (to: string | null, data: unknown) =>
-      ipcRenderer.invoke('p2p:send', to, data),
+      send: async (to: string | null, data: unknown) =>
+        ipcRenderer.invoke('p2p:send', to, data),
 
-    getPeers: async () => ipcRenderer.invoke('p2p:getPeers'),
+      getPeers: async () => ipcRenderer.invoke('p2p:getPeers'),
 
-    getStatus: async () => ipcRenderer.invoke('p2p:getStatus'),
+      getStatus: async () => ipcRenderer.invoke('p2p:getStatus'),
 
-    addPeer: async (addr: string) => ipcRenderer.invoke('p2p:addPeer', addr),
+      addPeer: async (addr: string) => ipcRenderer.invoke('p2p:addPeer', addr),
 
-    /** Subscribe to incoming messages. Returns an unsubscribe function. */
-    onMessage: (cb: (payload: { id: string; from: string; via?: string; to?: string; data: unknown }) => void) => {
-      const handler = (_e: unknown, payload: unknown) => cb(payload as any);
-      ipcRenderer.on('p2p:message', handler);
-      ipcRenderer.send('p2p:message:subscribe');
-      return () => {
-        ipcRenderer.removeListener('p2p:message', handler);
-        ipcRenderer.send('p2p:message:unsubscribe');
-      };
-    },
+      /** Subscribe to incoming messages. Returns an unsubscribe function. */
+      onMessage: (cb: (payload: { id: string; from: string; via?: string; to?: string; data: unknown }) => void) => {
+        const handler = (_e: unknown, payload: unknown) => cb(payload as any);
+        ipcRenderer.on('p2p:message', handler);
+        ipcRenderer.send('p2p:message:subscribe');
+        return () => {
+          ipcRenderer.removeListener('p2p:message', handler);
+          ipcRenderer.send('p2p:message:unsubscribe');
+        };
+      },
 
-    /** Subscribe to peer connect/disconnect events. Returns an unsubscribe function. */
-    onPeerChange: (cb: (payload: { type: 'connected' | 'disconnected'; id: string }) => void) => {
-      const handler = (_e: unknown, payload: unknown) => cb(payload as any);
-      ipcRenderer.on('p2p:peerChange', handler);
-      ipcRenderer.send('p2p:peerChange:subscribe');
-      return () => {
-        ipcRenderer.removeListener('p2p:peerChange', handler);
-        ipcRenderer.send('p2p:peerChange:unsubscribe');
-      };
-    },
-  });
+      /** Subscribe to peer connect/disconnect events. Returns an unsubscribe function. */
+      onPeerChange: (cb: (payload: { type: 'connected' | 'disconnected'; id: string }) => void) => {
+        const handler = (_e: unknown, payload: unknown) => cb(payload as any);
+        ipcRenderer.on('p2p:peerChange', handler);
+        ipcRenderer.send('p2p:peerChange:subscribe');
+        return () => {
+          ipcRenderer.removeListener('p2p:peerChange', handler);
+          ipcRenderer.send('p2p:peerChange:unsubscribe');
+        };
+      },
+    });
+  }
 
   // Presence API — see electron/src/presence.ts for full type definitions.
   //   1. Generate sessionId (crypto.randomUUID())
@@ -635,249 +638,251 @@ try {
 
   ipcRenderer.send('test-ipc');
 
-  // ── Chat API ────────────────────────────────────────────────────────────────
-  //
-  // Renderer responsibilities for sending a message:
-  //   1. Generate a UUID for the event id.
-  //   2. Compute seq = (lastKnownSeqForAuthorInChat + 1).
-  //   3. Build canonical signed-data:
-  //        { authorAddress, authorPublicKey, chatId, content, eventType,
-  //          id, seq, timestamp }
-  //      (plus replyTo / targetId if present, keys sorted alphabetically)
-  //   4. Sign with nacl.sign.detached(canonicalBytes, privateKeyBytes).
-  //   5. Base58-encode the signature.
-  //   6. Call window.chat.sendEvent({ type: 'CHAT_EVENT', event: { ...fields, signature } }).
-  //
-  // chatId conventions:
-  //   DM:    [addrA, addrB].sort().join(':')   e.g. "Qaddr1:Qaddr2"
-  //   Group: "group:" + numericGroupId         e.g. "group:12345"
-  contextBridge.exposeInMainWorld('chat', {
-    /**
-     * Send a signed ChatEventEnvelope (message, edit, delete, or reaction).
-     * The renderer must sign the event before calling this.
-     * Returns { success: boolean }.
-     */
-    sendEvent: async (envelope: unknown) =>
-      ipcRenderer.invoke('chat:sendEvent', envelope),
+  if (!isDisabledLegacy) {
+    // ── Chat API ──────────────────────────────────────────────────────────────
+    //
+    // Renderer responsibilities for sending a message:
+    //   1. Generate a UUID for the event id.
+    //   2. Compute seq = (lastKnownSeqForAuthorInChat + 1).
+    //   3. Build canonical signed-data:
+    //        { authorAddress, authorPublicKey, chatId, content, eventType,
+    //          id, seq, timestamp }
+    //      (plus replyTo / targetId if present, keys sorted alphabetically)
+    //   4. Sign with nacl.sign.detached(canonicalBytes, privateKeyBytes).
+    //   5. Base58-encode the signature.
+    //   6. Call window.chat.sendEvent({ type: 'CHAT_EVENT', event: { ...fields, signature } }).
+    //
+    // chatId conventions:
+    //   DM:    [addrA, addrB].sort().join(':')   e.g. "Qaddr1:Qaddr2"
+    //   Group: "group:" + numericGroupId         e.g. "group:12345"
+    contextBridge.exposeInMainWorld('chat', {
+      /**
+       * Send a signed ChatEventEnvelope (message, edit, delete, or reaction).
+       * The renderer must sign the event before calling this.
+       * Returns { success: boolean }.
+       */
+      sendEvent: async (envelope: unknown) =>
+        ipcRenderer.invoke('chat:sendEvent', envelope),
 
-    /**
-     * Subscribe the local user to a chat.
-     * Announces subscription to peers and requests a sync so missed
-     * messages are recovered.  Returns { success: boolean }.
-     */
-    subscribe: async (chatId: string) =>
-      ipcRenderer.invoke('chat:subscribe', chatId),
+      /**
+       * Subscribe the local user to a chat.
+       * Announces subscription to peers and requests a sync so missed
+       * messages are recovered.  Returns { success: boolean }.
+       */
+      subscribe: async (chatId: string) =>
+        ipcRenderer.invoke('chat:subscribe', chatId),
 
-    /** Unsubscribe the local user from a chat. */
-    unsubscribe: async (chatId: string) =>
-      ipcRenderer.invoke('chat:unsubscribe', chatId),
+      /** Unsubscribe the local user from a chat. */
+      unsubscribe: async (chatId: string) =>
+        ipcRenderer.invoke('chat:unsubscribe', chatId),
 
-    /**
-     * Broadcast a typing indicator for a chat.
-     * Ephemeral — not stored.  Returns { success: boolean }.
-     */
-    sendTyping: async (chatId: string, authorAddress: string) =>
-      ipcRenderer.invoke('chat:sendTyping', chatId, authorAddress),
+      /**
+       * Broadcast a typing indicator for a chat.
+       * Ephemeral — not stored.  Returns { success: boolean }.
+       */
+      sendTyping: async (chatId: string, authorAddress: string) =>
+        ipcRenderer.invoke('chat:sendTyping', chatId, authorAddress),
 
-    /**
-     * Retrieve message history for a chat.
-     * Pass `beforeTimestamp` for reverse-scroll pagination.
-     * Returns ChatEvent[].
-     */
-    getHistory: async (chatId: string, limit: number, beforeTimestamp?: number) =>
-      ipcRenderer.invoke('chat:getHistory', chatId, limit, beforeTimestamp),
+      /**
+       * Retrieve message history for a chat.
+       * Pass `beforeTimestamp` for reverse-scroll pagination.
+       * Returns ChatEvent[].
+       */
+      getHistory: async (chatId: string, limit: number, beforeTimestamp?: number) =>
+        ipcRenderer.invoke('chat:getHistory', chatId, limit, beforeTimestamp),
 
-    /**
-     * Returns a summary of every known chat (last event + unread count).
-     * Returns ChatSummary[].
-     */
-    getSummaries: async () => ipcRenderer.invoke('chat:getSummaries'),
+      /**
+       * Returns a summary of every known chat (last event + unread count).
+       * Returns ChatSummary[].
+       */
+      getSummaries: async () => ipcRenderer.invoke('chat:getSummaries'),
 
-    /**
-     * Advance the read watermark for a chat.
-     * Events with timestamp ≤ upToTimestamp are marked read.
-     */
-    markRead: async (chatId: string, upToTimestamp: number) =>
-      ipcRenderer.invoke('chat:markRead', chatId, upToTimestamp),
+      /**
+       * Advance the read watermark for a chat.
+       * Events with timestamp ≤ upToTimestamp are marked read.
+       */
+      markRead: async (chatId: string, upToTimestamp: number) =>
+        ipcRenderer.invoke('chat:markRead', chatId, upToTimestamp),
 
-    /**
-     * Register the local user's Qortal address(es).
-     * The chat manager uses this to auto-accept incoming DMs.
-     * Call on login with the user's address; call with [] on logout.
-     */
-    setLocalAddresses: async (addresses: string[]) =>
-      ipcRenderer.invoke('chat:setLocalAddresses', addresses),
+      /**
+       * Register the local user's Qortal address(es).
+       * The chat manager uses this to auto-accept incoming DMs.
+       * Call on login with the user's address; call with [] on logout.
+       */
+      setLocalAddresses: async (addresses: string[]) =>
+        ipcRenderer.invoke('chat:setLocalAddresses', addresses),
 
-    /**
-     * Clear the support-queue rate-limit map.
-     * Call when an agent logs out so re-knocks from users are not silently
-     * dropped when the agent logs back in.
-     */
-    clearQueueRateLimit: async () =>
-      ipcRenderer.invoke('chat:clearQueueRateLimit'),
+      /**
+       * Clear the support-queue rate-limit map.
+       * Call when an agent logs out so re-knocks from users are not silently
+       * dropped when the agent logs back in.
+       */
+      clearQueueRateLimit: async () =>
+        ipcRenderer.invoke('chat:clearQueueRateLimit'),
 
-    /** Returns the chatIds the local node is currently subscribed to. */
-    getSubscriptions: async () => ipcRenderer.invoke('chat:getSubscriptions'),
+      /** Returns the chatIds the local node is currently subscribed to. */
+      getSubscriptions: async () => ipcRenderer.invoke('chat:getSubscriptions'),
 
-    /**
-     * Subscribe to incoming chat events (messages, edits, deletes, reactions).
-     * `cb` receives `{ event: ChatEvent }`.
-     * Returns an unsubscribe function.
-     */
-    onEvent: (cb: (payload: { event: unknown }) => void) => {
-      ensureChatEventSubscribed();
-      chatEventSubscribers.add(cb as (payload: ChatEventPayload) => void);
-      return () => {
-        chatEventSubscribers.delete(cb as (payload: ChatEventPayload) => void);
-        maybeUnsubscribeChatEvent();
-      };
-    },
+      /**
+       * Subscribe to incoming chat events (messages, edits, deletes, reactions).
+       * `cb` receives `{ event: ChatEvent }`.
+       * Returns an unsubscribe function.
+       */
+      onEvent: (cb: (payload: { event: unknown }) => void) => {
+        ensureChatEventSubscribed();
+        chatEventSubscribers.add(cb as (payload: ChatEventPayload) => void);
+        return () => {
+          chatEventSubscribers.delete(cb as (payload: ChatEventPayload) => void);
+          maybeUnsubscribeChatEvent();
+        };
+      },
 
-    /** Subscribe to incoming chat events for one chatId only. */
-    onEventForChat: (
-      chatId: string,
-      cb: (payload: { event: unknown }) => void
-    ) => {
-      ensureChatEventSubscribed();
-      const unsubscribeScoped = addChatScopedSubscriber(
-        chatEventSubscribersByChatId,
-        chatId,
-        cb as (payload: ChatEventPayload) => void
-      );
-      return () => {
-        unsubscribeScoped();
-        maybeUnsubscribeChatEvent();
-      };
-    },
+      /** Subscribe to incoming chat events for one chatId only. */
+      onEventForChat: (
+        chatId: string,
+        cb: (payload: { event: unknown }) => void
+      ) => {
+        ensureChatEventSubscribed();
+        const unsubscribeScoped = addChatScopedSubscriber(
+          chatEventSubscribersByChatId,
+          chatId,
+          cb as (payload: ChatEventPayload) => void
+        );
+        return () => {
+          unsubscribeScoped();
+          maybeUnsubscribeChatEvent();
+        };
+      },
 
-    /**
-     * Subscribe to typing indicator events.
-     * `cb` receives `{ chatId: string; authorAddress: string }`.
-     * Returns an unsubscribe function.
-     * Both 'chat:typing' (started) and 'chat:typingStopped' are forwarded
-     * with an additional `active` boolean field for convenience.
-     */
-    onTyping: (
-      cb: (payload: {
-        chatId: string;
-        authorAddress: string;
-        active: boolean;
-      }) => void
-    ) => {
-      ensureChatTypingSubscribed();
-      chatTypingSubscribers.add(cb as (payload: ChatTypingPayload) => void);
-      return () => {
-        chatTypingSubscribers.delete(cb as (payload: ChatTypingPayload) => void);
-        maybeUnsubscribeChatTyping();
-      };
-    },
+      /**
+       * Subscribe to typing indicator events.
+       * `cb` receives `{ chatId: string; authorAddress: string }`.
+       * Returns an unsubscribe function.
+       * Both 'chat:typing' (started) and 'chat:typingStopped' are forwarded
+       * with an additional `active` boolean field for convenience.
+       */
+      onTyping: (
+        cb: (payload: {
+          chatId: string;
+          authorAddress: string;
+          active: boolean;
+        }) => void
+      ) => {
+        ensureChatTypingSubscribed();
+        chatTypingSubscribers.add(cb as (payload: ChatTypingPayload) => void);
+        return () => {
+          chatTypingSubscribers.delete(cb as (payload: ChatTypingPayload) => void);
+          maybeUnsubscribeChatTyping();
+        };
+      },
 
-    /** Subscribe to typing indicators for one chatId only. */
-    onTypingForChat: (
-      chatId: string,
-      cb: (payload: {
-        chatId: string;
-        authorAddress: string;
-        active: boolean;
-      }) => void
-    ) => {
-      ensureChatTypingSubscribed();
-      const unsubscribeScoped = addChatScopedSubscriber(
-        chatTypingSubscribersByChatId,
-        chatId,
-        cb as (payload: ChatTypingPayload) => void
-      );
-      return () => {
-        unsubscribeScoped();
-        maybeUnsubscribeChatTyping();
-      };
-    },
+      /** Subscribe to typing indicators for one chatId only. */
+      onTypingForChat: (
+        chatId: string,
+        cb: (payload: {
+          chatId: string;
+          authorAddress: string;
+          active: boolean;
+        }) => void
+      ) => {
+        ensureChatTypingSubscribed();
+        const unsubscribeScoped = addChatScopedSubscriber(
+          chatTypingSubscribersByChatId,
+          chatId,
+          cb as (payload: ChatTypingPayload) => void
+        );
+        return () => {
+          unsubscribeScoped();
+          maybeUnsubscribeChatTyping();
+        };
+      },
 
-    /**
-     * Persist and broadcast read receipts for a batch of event IDs.
-     * Call when the local user has seen events authored by others.
-     */
-    sendReadReceipt: async (
-      chatId: string,
-      eventIds: string[],
-      readerAddress: string
-    ) =>
-      ipcRenderer.invoke(
-        'chat:sendReadReceipt',
-        chatId,
-        eventIds,
-        readerAddress
-      ),
+      /**
+       * Persist and broadcast read receipts for a batch of event IDs.
+       * Call when the local user has seen events authored by others.
+       */
+      sendReadReceipt: async (
+        chatId: string,
+        eventIds: string[],
+        readerAddress: string
+      ) =>
+        ipcRenderer.invoke(
+          'chat:sendReadReceipt',
+          chatId,
+          eventIds,
+          readerAddress
+        ),
 
-    /**
-     * Query-scoped receipt loading.
-     * Pass exactly the event IDs currently held in renderer memory;
-     * the backend returns receipts only for those IDs.
-     * Returns Record<eventId, readerAddress[]>.
-     */
-    getReadReceipts: async (chatId: string, eventIds: string[]) =>
-      ipcRenderer.invoke('chat:getReadReceipts', chatId, eventIds),
+      /**
+       * Query-scoped receipt loading.
+       * Pass exactly the event IDs currently held in renderer memory;
+       * the backend returns receipts only for those IDs.
+       * Returns Record<eventId, readerAddress[]>.
+       */
+      getReadReceipts: async (chatId: string, eventIds: string[]) =>
+        ipcRenderer.invoke('chat:getReadReceipts', chatId, eventIds),
 
-    /**
-     * Fetch the encrypted attachment blob for an event.
-     * Returns the base64 ciphertext string, or null if not locally available.
-     * Used for lazy-loading history images that were not included in
-     * getHistory results (attachment data is kept in a separate table).
-     */
-    getAttachment: async (eventId: string) =>
-      ipcRenderer.invoke('chat:getAttachment', eventId),
+      /**
+       * Fetch the encrypted attachment blob for an event.
+       * Returns the base64 ciphertext string, or null if not locally available.
+       * Used for lazy-loading history images that were not included in
+       * getHistory results (attachment data is kept in a separate table).
+       */
+      getAttachment: async (eventId: string) =>
+        ipcRenderer.invoke('chat:getAttachment', eventId),
 
-    /**
-     * Subscribe to incoming read receipt events.
-     * `cb` receives `{ chatId, readerAddress, eventIds }`.
-     * Returns an unsubscribe function.
-     */
-    onRead: (
-      cb: (payload: {
-        chatId: string;
-        readerAddress: string;
-        eventIds: string[];
-      }) => void
-    ) => {
-      ensureChatReadSubscribed();
-      chatReadSubscribers.add(cb as (payload: ChatReadPayload) => void);
-      return () => {
-        chatReadSubscribers.delete(cb as (payload: ChatReadPayload) => void);
-        maybeUnsubscribeChatRead();
-      };
-    },
+      /**
+       * Subscribe to incoming read receipt events.
+       * `cb` receives `{ chatId, readerAddress, eventIds }`.
+       * Returns an unsubscribe function.
+       */
+      onRead: (
+        cb: (payload: {
+          chatId: string;
+          readerAddress: string;
+          eventIds: string[];
+        }) => void
+      ) => {
+        ensureChatReadSubscribed();
+        chatReadSubscribers.add(cb as (payload: ChatReadPayload) => void);
+        return () => {
+          chatReadSubscribers.delete(cb as (payload: ChatReadPayload) => void);
+          maybeUnsubscribeChatRead();
+        };
+      },
 
-    /** Subscribe to read receipts for one chatId only. */
-    onReadForChat: (
-      chatId: string,
-      cb: (payload: {
-        chatId: string;
-        readerAddress: string;
-        eventIds: string[];
-      }) => void
-    ) => {
-      ensureChatReadSubscribed();
-      const unsubscribeScoped = addChatScopedSubscriber(
-        chatReadSubscribersByChatId,
-        chatId,
-        cb as (payload: ChatReadPayload) => void
-      );
-      return () => {
-        unsubscribeScoped();
-        maybeUnsubscribeChatRead();
-      };
-    },
-  });
+      /** Subscribe to read receipts for one chatId only. */
+      onReadForChat: (
+        chatId: string,
+        cb: (payload: {
+          chatId: string;
+          readerAddress: string;
+          eventIds: string[];
+        }) => void
+      ) => {
+        ensureChatReadSubscribed();
+        const unsubscribeScoped = addChatScopedSubscriber(
+          chatReadSubscribersByChatId,
+          chatId,
+          cb as (payload: ChatReadPayload) => void
+        );
+        return () => {
+          unsubscribeScoped();
+          maybeUnsubscribeChatRead();
+        };
+      },
+    });
 
-  contextBridge.exposeInMainWorld('hub', {
-    getBootstrapIceServers: () => hubP2pBootstrapIceServers,
-    getIceServers: () =>
-      ipcRenderer.invoke('hub:getIceServers') as Promise<{ urls: string }[]>,
-    reportStunCallOutcome: (stunUrls: string[], success: boolean) =>
-      ipcRenderer.invoke('hub:reportStunCallOutcome', stunUrls, success),
-    reportObservedStunSources: (stunUrls: string[]) =>
-      ipcRenderer.invoke('hub:reportObservedStunSources', stunUrls),
-  });
+    contextBridge.exposeInMainWorld('hub', {
+      getBootstrapIceServers: () => hubP2pBootstrapIceServers,
+      getIceServers: () =>
+        ipcRenderer.invoke('hub:getIceServers') as Promise<{ urls: string }[]>,
+      reportStunCallOutcome: (stunUrls: string[], success: boolean) =>
+        ipcRenderer.invoke('hub:reportStunCallOutcome', stunUrls, success),
+      reportObservedStunSources: (stunUrls: string[]) =>
+        ipcRenderer.invoke('hub:reportObservedStunSources', stunUrls),
+    });
+  }
 
   // ── Call API ─────────────────────────────────────────────────────────────────
   //

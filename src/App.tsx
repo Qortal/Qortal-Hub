@@ -118,6 +118,7 @@ import {
   CustomTitleBar,
   CUSTOM_TITLE_BAR_HEIGHT,
 } from './components/Desktop/CustomTitleBar';
+import { isDisabledLegacy } from './constants/featureFlags';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 
 // Re-export for consumers that still import from App
@@ -1065,12 +1066,12 @@ function App() {
                 />
               </Suspense>
 
-              {/* P2P support chat — agents see the dashboard, regular users see SupportChat */}
-              {SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
-                <AgentSupportDashboard />
-              ) : (
-                <SupportChat />
-              )}
+              {!isDisabledLegacy &&
+                (SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (
+                  <AgentSupportDashboard />
+                ) : (
+                  <SupportChat />
+                ))}
 
               {/* Group voice call — parallel system using GROUP_SUPPORT_ADDRESSES */}
               {/* {GROUP_SUPPORT_ADDRESSES.includes(userInfo?.address as any) ? (

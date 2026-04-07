@@ -97,6 +97,7 @@ import {
   startReticulumMeshCoordinator,
   stopReticulumMeshCoordinator,
 } from './reticulum-mesh';
+import { isDisabledLegacy } from './feature-flags';
 
 const AdmZip = require('adm-zip');
 const fs = require('fs');
@@ -743,7 +744,7 @@ export interface AppSettings {
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
   closeAction: 'ask',
-  p2pEnabled: true,
+  p2pEnabled: !isDisabledLegacy,
   reticulumMeshUpnpEnabled: true,
 };
 
@@ -761,8 +762,14 @@ export async function readAppSettings(): Promise<AppSettings> {
         ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
           ? (parsed.closeAction as CloseAction)
           : DEFAULT_APP_SETTINGS.closeAction,
-      p2pEnabled: parsed.p2pEnabled === false ? false : true,
-      legacyPublicStunFallback: parsed.legacyPublicStunFallback === true,
+      p2pEnabled: isDisabledLegacy
+        ? false
+        : parsed.p2pEnabled === false
+          ? false
+          : true,
+      legacyPublicStunFallback: isDisabledLegacy
+        ? false
+        : parsed.legacyPublicStunFallback === true,
       reticulumMeshUpnpEnabled:
         parsed.reticulumMeshUpnpEnabled === false ? false : true,
     };
@@ -939,16 +946,28 @@ ipcMain.handle(
   'appSettings:set',
   async (_event, partial: Partial<AppSettings>) => {
     const current = await readAppSettings();
-    const next: AppSettings = { ...current, ...partial };
+    const next: AppSettings = {
+      ...current,
+      ...partial,
+      ...(isDisabledLegacy
+        ? {
+            p2pEnabled: false,
+            legacyPublicStunFallback: false,
+          }
+        : {}),
+    };
     await writeAppSettings(next);
-    getStunCoordinator()?.setLegacyPublicStunFallback(
-      next.legacyPublicStunFallback === true
-    );
+    if (!isDisabledLegacy) {
+      getStunCoordinator()?.setLegacyPublicStunFallback(
+        next.legacyPublicStunFallback === true
+      );
+    }
     return next;
   }
 );
 
 ipcMain.handle('hub:getIceServers', async () => {
+  if (isDisabledLegacy) return [];
   const c = getStunCoordinator();
   if (!c) return [];
   return await new Promise<{ urls: string }[]>((resolve, reject) => {
@@ -980,6 +999,7 @@ ipcMain.handle('hub:getIceServers', async () => {
 ipcMain.handle(
   'hub:reportStunCallOutcome',
   async (_event, urls: unknown, success: unknown) => {
+    if (isDisabledLegacy) return { ok: false };
     const c = getStunCoordinator();
     if (!c) return { ok: false };
     if (!Array.isArray(urls)) return { ok: false };
@@ -996,6 +1016,7 @@ ipcMain.handle(
 ipcMain.handle(
   'hub:reportObservedStunSources',
   async (_event, urls: unknown) => {
+    if (isDisabledLegacy) return { ok: false };
     const c = getStunCoordinator();
     if (!c) return { ok: false };
     if (!Array.isArray(urls)) return { ok: false };
@@ -1493,6 +1514,7 @@ export async function startDecentralizedStunAfterP2P(
   network: NonNullable<ReturnType<typeof getP2PNetwork>>,
   opts: P2PNetworkOptions
 ): Promise<void> {
+  if (isDisabledLegacy) return;
   const chatDb =
     opts.dbPath ?? join(app.getPath('appData'), 'qortal-shared', 'chat.db');
   const stunPath = join(dirname(chatDb), 'stun-cache.db');
@@ -1556,6 +1578,9 @@ export async function ensureReticulumManagersStarted(): Promise<void> {
 }
 
 ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
+  if (isDisabledLegacy) {
+    return { success: false, error: 'Legacy networking is disabled' };
+  }
   try {
     // Re-use the last known options if none supplied (e.g. from the settings toggle).
     const opts =
@@ -1587,6 +1612,9 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
 });
 
 ipcMain.handle('p2p:stop', async () => {
+  if (isDisabledLegacy) {
+    return { success: true };
+  }
   try {
     stopP2PNetwork();
     stopChatManager();
@@ -1598,6 +1626,9 @@ ipcMain.handle('p2p:stop', async () => {
 });
 
 ipcMain.handle('p2p:send', async (_event, to: string | null, data: unknown) => {
+  if (isDisabledLegacy) {
+    return { success: false, error: 'Legacy networking is disabled' };
+  }
   const network = getP2PNetwork();
   if (!network) return { success: false, error: 'P2P network is not running' };
   try {
@@ -1609,11 +1640,15 @@ ipcMain.handle('p2p:send', async (_event, to: string | null, data: unknown) => {
 });
 
 ipcMain.handle('p2p:getPeers', async () => {
+  if (isDisabledLegacy) return [];
   const network = getP2PNetwork();
   return network ? network.getPeers() : [];
 });
 
 ipcMain.handle('p2p:getStatus', async () => {
+  if (isDisabledLegacy) {
+    return { running: false, port: null, peerId: null, connectedPeers: 0 };
+  }
   const network = getP2PNetwork();
   if (!network)
     return { running: false, port: null, peerId: null, connectedPeers: 0 };
@@ -1626,6 +1661,9 @@ ipcMain.handle('p2p:getStatus', async () => {
 });
 
 ipcMain.handle('p2p:addPeer', async (_event, addr: string) => {
+  if (isDisabledLegacy) {
+    return { success: false, error: 'Legacy networking is disabled' };
+  }
   const network = getP2PNetwork();
   if (!network) return { success: false, error: 'P2P network is not running' };
   network.addPeer(addr);
