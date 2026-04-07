@@ -1256,6 +1256,10 @@ def _resolve_overlay_neighbor_hashes(exclude_hashes: Optional[list[str]] = None)
             continue
         if peer_hash not in _known_peers:
             continue
+        # Refresh the active-neighbor lease on real fanout use. Overlay sync from
+        # Electron is event-driven, so steady 25 s presence heartbeats must keep a
+        # healthy neighbor from aging out after the 30 s grace window.
+        _active_overlay_neighbors[peer_hash] = now
         out.append(peer_hash)
     return out[:_OVERLAY_MAX_NEIGHBORS]
 
