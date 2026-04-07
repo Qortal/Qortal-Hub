@@ -149,7 +149,8 @@ AUDIO_MAX_HASH_LEN = 128
 
 _CMD_QUEUE_MAX = 256
 _AUDIO_DECODED_QUEUE_MAX = 48
-_JSON_OUT_QUEUE_MAX = 2048
+_JSON_RESP_OUT_QUEUE_MAX = 512
+_JSON_EVENT_OUT_QUEUE_MAX = 2048
 _AUDIO_BINARY_OUT_QUEUE_MAX = 128
 _AUDIO_BATCH_STALE_SECONDS = 0.75
 _AUDIO_MIN_BATCHES_PER_EXECUTOR_PASS = 2
@@ -167,8 +168,11 @@ _PACKET_PATH_WARMING_TIMEOUTS_BEFORE_FAILING = 2
 _PACKET_PATH_INBOUND_FRESH_SECONDS = 3.0
 
 _shutdown = threading.Event()
-_json_line_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
-    maxsize=_JSON_OUT_QUEUE_MAX
+_json_resp_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
+    maxsize=_JSON_RESP_OUT_QUEUE_MAX
+)
+_json_event_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
+    maxsize=_JSON_EVENT_OUT_QUEUE_MAX
 )
 _audio_binary_out_queue: "queue.Queue[Optional[bytes]]" = queue.Queue(
     maxsize=_AUDIO_BINARY_OUT_QUEUE_MAX
@@ -231,21 +235,30 @@ _GROUP_CALL_WIRE_TYPES = frozenset(
 )
 
 
-def _queue_json_line(frame: Dict[str, Any]) -> None:
+def _queue_json_event_line(frame: Dict[str, Any]) -> None:
     global _audio_drops_json_out
     try:
-        _json_line_queue.put_nowait(frame)
+        _json_event_queue.put_nowait(frame)
     except queue.Full:
         _audio_drops_json_out += 1
         _mark_audio_queue_state_dirty()
         if _audio_drops_json_out % 200 == 1:
             log(
-                f"[presence_bridge] json_out_queue full drops={_audio_drops_json_out}"
+                f"[presence_bridge] json_event_queue full drops={_audio_drops_json_out}"
             )
 
 
+def _queue_json_resp_line(frame: Dict[str, Any]) -> None:
+    while not _shutdown.is_set():
+        try:
+            _json_resp_queue.put(frame, timeout=0.05)
+            return
+        except queue.Full:
+            continue
+
+
 def emit(frame: Dict[str, Any]) -> None:
-    _queue_json_line(frame)
+    _queue_json_event_line(frame)
 
 
 def emit_resp(req_id: str, ok: bool, payload: Optional[Dict[str, Any]] = None, error: Optional[str] = None) -> None:
@@ -254,14 +267,14 @@ def emit_resp(req_id: str, ok: bool, payload: Optional[Dict[str, Any]] = None, e
         frame["payload"] = payload
     if error is not None:
         frame["error"] = error
-    _queue_json_line(frame)
+    _queue_json_resp_line(frame)
 
 
 def emit_event(event: str, payload: Optional[Dict[str, Any]] = None) -> None:
     frame: Dict[str, Any] = {"type": "event", "event": event}
     if payload is not None:
         frame["payload"] = payload
-    _queue_json_line(frame)
+    _queue_json_event_line(frame)
 
 
 def _mark_audio_queue_state_dirty() -> None:
@@ -576,7 +589,7 @@ def _process_audio_batch(frames: list) -> None:
                 peer_hash,
                 destination_hash,
                 active_call=True,
-                allow_wait=True,
+                allow_wait=False,
                 reason="audio_send",
             )
             if path_state == "fresh":
@@ -652,10 +665,47 @@ def _process_audio_batch(frames: list) -> None:
 
 
 def _stdout_writer_loop() -> None:
+    resp_closed = False
+    event_closed = False
     while True:
-        frame = _json_line_queue.get()
-        if frame is None:
+        if not resp_closed:
+            try:
+                frame = _json_resp_queue.get_nowait()
+            except queue.Empty:
+                frame = None
+            else:
+                if frame is None:
+                    resp_closed = True
+                else:
+                    sys.stdout.write(json.dumps(frame, separators=(",", ":")) + "\n")
+                    sys.stdout.flush()
+                    continue
+
+        if resp_closed and event_closed:
             break
+
+        if not resp_closed:
+            try:
+                frame = _json_resp_queue.get(timeout=0.01)
+            except queue.Empty:
+                frame = None
+            else:
+                if frame is None:
+                    resp_closed = True
+                else:
+                    sys.stdout.write(json.dumps(frame, separators=(",", ":")) + "\n")
+                    sys.stdout.flush()
+                    continue
+
+        if event_closed:
+            continue
+        try:
+            frame = _json_event_queue.get(timeout=0.05)
+        except queue.Empty:
+            continue
+        if frame is None:
+            event_closed = True
+            continue
         sys.stdout.write(json.dumps(frame, separators=(",", ":")) + "\n")
         sys.stdout.flush()
 
@@ -3607,7 +3657,11 @@ def main() -> None:
     _cmd_queue_bounded.put(None)
     rns_thread.join(timeout=60.0)
     try:
-        _json_line_queue.put_nowait(None)
+        _json_resp_queue.put(None, timeout=0.1)
+    except queue.Full:
+        pass
+    try:
+        _json_event_queue.put_nowait(None)
     except queue.Full:
         pass
     stdout_thread.join(timeout=10.0)

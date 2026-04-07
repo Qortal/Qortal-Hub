@@ -83,6 +83,7 @@ export type ReticulumSendFailureReason =
   | 'bridge-not-ready'
   | 'bridge-timeout'
   | 'bridge-exception'
+  | 'bridge-overloaded'
   | 'bridge-not-started'
   | 'unknown-peer-presence-hash'
   | 'wire-too-large'
@@ -317,14 +318,26 @@ type BridgeEventFrame =
       };
     }
 type PendingRequest = {
+  action: BridgeCmdFrame['action'];
+  priority: BridgeCmdPriority;
   resolve: (frame: BridgeRespFrame) => void;
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
 
+type BridgeCmdPriority = 'high' | 'normal' | 'low';
+
+type QueuedCommand = {
+  id: string;
+  wire: string;
+  priority: BridgeCmdPriority;
+};
+
 type BridgeState = 'stopped' | 'starting' | 'ready' | 'degraded';
 
 const REQUEST_TIMEOUT_MS = 10_000;
+const CONTROL_PENDING_MAX = 512;
+const CONTROL_LOW_PRIORITY_PENDING_MAX = 128;
 const HEARTBEAT_MIN_INTERVAL_MS = 10_000;
 const ANNOUNCE_DEDUP_WINDOW_MS = 1_000;
 const RESTART_DELAY_MS = 2_000;
@@ -405,6 +418,18 @@ function semanticPresenceKey(envelope: PresenceEnvelope): string {
   });
 }
 
+function commandPriorityForAction(action: BridgeCmdFrame['action']): BridgeCmdPriority {
+  switch (action) {
+    case 'publish_presence':
+    case 'forward_presence':
+    case 'overlay_sync_state':
+    case 'overlay_note_candidate_failure':
+      return 'low';
+    default:
+      return 'high';
+  }
+}
+
 export type ReticulumGroupAudioPacketPayload = {
   linkId: string;
   routeKey: string;
@@ -438,7 +463,9 @@ export class ReticulumBridge
   private desiredRunning = false;
   private state: BridgeState = 'stopped';
   private stdoutBuffer = '';
-  private writeQueue: string[] = [];
+  private highPriorityWriteQueue: QueuedCommand[] = [];
+  private normalPriorityWriteQueue: QueuedCommand[] = [];
+  private lowPriorityWriteQueue: QueuedCommand[] = [];
   private waitingForDrain = false;
   /** Pending frames before encoding to binary batches, stored per target for round-robin fairness. */
   private audioFrameQueues = new Map<string, QueuedAudioFrame[]>();
@@ -571,7 +598,9 @@ export class ReticulumBridge
       pending.reject(new Error('Reticulum bridge stopped'));
     }
     this.pending.clear();
-    this.writeQueue = [];
+    this.highPriorityWriteQueue = [];
+    this.normalPriorityWriteQueue = [];
+    this.lowPriorityWriteQueue = [];
     this.waitingForDrain = false;
     this.audioFrameQueues.clear();
     this.audioQueuedLinkOrder = [];
@@ -1230,6 +1259,19 @@ export class ReticulumBridge
       });
     }
 
+    const priority = commandPriorityForAction(action);
+    const totalPending = this.pending.size;
+    const lowPriorityPending = this.countPendingRequestsByPriority('low');
+    if (totalPending >= CONTROL_PENDING_MAX) {
+      return Promise.resolve(this.makeOverloadedResponse(action));
+    }
+    if (
+      priority === 'low' &&
+      lowPriorityPending >= CONTROL_LOW_PRIORITY_PENDING_MAX
+    ) {
+      return Promise.resolve(this.makeOverloadedResponse(action));
+    }
+
     const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const frame: BridgeCmdFrame = { type: 'cmd', action, id, payload };
     const wire = JSON.stringify(frame) + '\n';
@@ -1239,23 +1281,82 @@ export class ReticulumBridge
         this.pending.delete(id);
         reject(new Error(`Reticulum bridge request timed out: ${action}`));
       }, REQUEST_TIMEOUT_MS);
-      this.pending.set(id, { resolve, reject, timer });
-      this.writeQueue.push(wire);
+      this.pending.set(id, { action, priority, resolve, reject, timer });
+      this.enqueueCommand({ id, wire, priority });
       this.flushWriteQueue();
     });
   }
 
   private flushWriteQueue(): void {
     if (!this.child || this.waitingForDrain) return;
-    while (this.writeQueue.length > 0) {
-      const frame = this.writeQueue[0];
-      const ok = this.child.stdin.write(frame);
+    while (true) {
+      const frame = this.dequeueNextCommand();
+      if (!frame) return;
+      const ok = this.child.stdin.write(frame.wire);
       if (!ok) {
         this.waitingForDrain = true;
         return;
       }
-      this.writeQueue.shift();
     }
+  }
+
+  private makeOverloadedResponse(
+    action: BridgeCmdFrame['action']
+  ): BridgeRespFrame {
+    return {
+      type: 'resp',
+      id: 'overloaded',
+      ok: false,
+      payload: {
+        code: 'bridge_overloaded',
+        action,
+      },
+      error: `Reticulum bridge queue overloaded: ${action}`,
+    };
+  }
+
+  private countPendingRequestsByPriority(priority: BridgeCmdPriority): number {
+    let count = 0;
+    for (const pending of this.pending.values()) {
+      if (pending.priority === priority) {
+        count += 1;
+      }
+    }
+    return count;
+  }
+
+  private enqueueCommand(entry: QueuedCommand): void {
+    switch (entry.priority) {
+      case 'high':
+        this.highPriorityWriteQueue.push(entry);
+        return;
+      case 'normal':
+        this.normalPriorityWriteQueue.push(entry);
+        return;
+      case 'low':
+        this.lowPriorityWriteQueue.push(entry);
+        return;
+    }
+  }
+
+  private dequeueNextCommand(): QueuedCommand | null {
+    for (const queue of [
+      this.highPriorityWriteQueue,
+      this.normalPriorityWriteQueue,
+      this.lowPriorityWriteQueue,
+    ]) {
+      while (queue.length > 0) {
+        const next = queue.shift() ?? null;
+        if (!next) {
+          break;
+        }
+        if (!this.pending.has(next.id)) {
+          continue;
+        }
+        return next;
+      }
+    }
+    return null;
   }
 
   private scheduleAudioOutFlush(): void {
@@ -1870,7 +1971,9 @@ export class ReticulumBridge
       pending.reject(new Error(reason ?? 'Reticulum bridge degraded'));
     }
     this.pending.clear();
-    this.writeQueue = [];
+    this.highPriorityWriteQueue = [];
+    this.normalPriorityWriteQueue = [];
+    this.lowPriorityWriteQueue = [];
     this.waitingForDrain = false;
     this.audioFrameQueues.clear();
     this.audioQueuedLinkOrder = [];
@@ -1951,6 +2054,7 @@ export class ReticulumBridge
 
   private mapSendFailureReason(frame: BridgeRespFrame): ReticulumSendFailureReason {
     const code = frame.payload?.code;
+    if (code === 'bridge_overloaded') return 'bridge-overloaded';
     if (code === 'bridge_not_started') return 'bridge-not-started';
     if (code === 'unknown_peer_presence_hash')
       return 'unknown-peer-presence-hash';

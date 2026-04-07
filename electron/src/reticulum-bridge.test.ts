@@ -81,6 +81,107 @@ describe('ReticulumBridge group audio support', () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it('rejects excess low-priority commands with an overload response', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.child = {
+      exitCode: null,
+      killed: false,
+      kill: vi.fn(),
+      stdin: { write: vi.fn(() => true) },
+    };
+    internal.waitingForDrain = true;
+    const queued: Promise<unknown>[] = [];
+
+    for (let i = 0; i < 128; i += 1) {
+      queued.push(internal.sendCommand('publish_presence', { seq: i }));
+    }
+
+    const resp = await internal.sendCommand('publish_presence', { seq: 999 });
+
+    expect(resp).toMatchObject({
+      ok: false,
+      error: 'Reticulum bridge queue overloaded: publish_presence',
+      payload: { code: 'bridge_overloaded', action: 'publish_presence' },
+    });
+
+    bridge.stop();
+    await Promise.allSettled(queued);
+  });
+
+  it('prioritizes critical control commands ahead of low-priority traffic', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const writes: Array<{ id: string; action: string }> = [];
+    internal.child = {
+      exitCode: null,
+      killed: false,
+      kill: vi.fn(),
+      stdin: {
+        write: vi.fn((wire: string) => {
+          const frame = JSON.parse(wire);
+          writes.push({ id: frame.id, action: frame.action });
+          return true;
+        }),
+      },
+    };
+    internal.waitingForDrain = true;
+
+    const low = internal.sendCommand('publish_presence', { seq: 1 });
+    const high = internal.sendCommand('send_call', { seq: 2 });
+
+    internal.waitingForDrain = false;
+    internal.flushWriteQueue();
+
+    expect(writes.map((entry) => entry.action)).toEqual([
+      'send_call',
+      'publish_presence',
+    ]);
+
+    for (const entry of writes) {
+      internal.handleFrame({ type: 'resp', id: entry.id, ok: true });
+    }
+    await expect(high).resolves.toMatchObject({ ok: true });
+    await expect(low).resolves.toMatchObject({ ok: true });
+
+    bridge.stop();
+  });
+
+  it('does not re-send a control frame after backpressure drain', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const writes: Array<{ id: string; action: string }> = [];
+    let firstWrite = true;
+    internal.child = {
+      exitCode: null,
+      killed: false,
+      kill: vi.fn(),
+      stdin: {
+        write: vi.fn((wire: string) => {
+          const frame = JSON.parse(wire);
+          writes.push({ id: frame.id, action: frame.action });
+          if (firstWrite) {
+            firstWrite = false;
+            return false;
+          }
+          return true;
+        }),
+      },
+    };
+
+    const pending = internal.sendCommand('send_call', { seq: 1 });
+
+    expect(writes.map((entry) => entry.action)).toEqual(['send_call']);
+    internal.waitingForDrain = false;
+    internal.flushWriteQueue();
+    expect(writes.map((entry) => entry.action)).toEqual(['send_call']);
+
+    internal.handleFrame({ type: 'resp', id: writes[0]!.id, ok: true });
+    await expect(pending).resolves.toMatchObject({ ok: true });
+
+    bridge.stop();
+  });
+
   it('enqueueGroupAudio returns not-ready when bridge is down', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;

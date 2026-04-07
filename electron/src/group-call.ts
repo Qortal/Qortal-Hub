@@ -190,6 +190,7 @@ const GC_RETICULUM_RETRYABLE_FAILURES = new Set<GcReticulumSendFailureReason>([
   'bridge-not-ready',
   'bridge-timeout',
   'bridge-exception',
+  'bridge-overloaded',
   'bridge-not-started',
   'unknown-peer-presence-hash',
   'packet-send-false',
