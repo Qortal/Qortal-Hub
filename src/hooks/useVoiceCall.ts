@@ -538,6 +538,39 @@ export function useVoiceCall(): UseVoiceCallReturn {
     return g;
   }, []);
 
+  const prepareCallAudioContext = useCallback(async (): Promise<AudioContext | null> => {
+    let ctx = audioCtxRef.current;
+    if (!ctx || ctx.state === 'closed') {
+      ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
+      audioCtxRef.current = ctx;
+    }
+
+    const outApply = await applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
+      audioContext: ctx,
+    });
+    if (outApply.clearPersistedOutput) {
+      setCallAudioDevices((prev) => ({ ...prev, outputDeviceId: null }));
+    }
+
+    if (ctx.state !== 'running') {
+      try {
+        await ctx.resume();
+      } catch (e) {
+        pushDirectVoiceUiLog('warn', 'AudioContext resume failed', {
+          err: String(e),
+          state: ctx.state,
+        });
+      }
+      if (ctx.state !== 'running') {
+        pushDirectVoiceUiLog('warn', 'AudioContext not running after resume', {
+          state: ctx.state,
+        });
+      }
+    }
+
+    return ctx;
+  }, [setCallAudioDevices]);
+
   const handleIncomingAudioPacketCb = useCallback(
     (data: ArrayBuffer, fromAddress: string) => {
       if (!roomKeyRef.current) return;
@@ -897,13 +930,12 @@ export function useVoiceCall(): UseVoiceCallReturn {
     }
     micStreamRef.current = stream;
 
-    const ctx = new AudioContext({ sampleRate: OPUS_SAMPLE_RATE });
-    audioCtxRef.current = ctx;
-    const outApply = await applyCallAudioOutput(callAudioPrefsRef.current.outputDeviceId, {
-      audioContext: ctx,
-    });
-    if (outApply.clearPersistedOutput) {
-      setCallAudioDevices((p) => ({ ...p, outputDeviceId: null }));
+    const ctx = await prepareCallAudioContext();
+    if (!ctx || ctx.state === 'closed') {
+      pushDirectVoiceUiLog('warn', 'AudioContext unavailable for capture');
+      micStreamRef.current?.getTracks().forEach((t) => t.stop());
+      micStreamRef.current = null;
+      return;
     }
 
     const encoder = new (window as any).AudioEncoder({
@@ -1077,8 +1109,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
     }
   }, [
     connectRemotePcmToOutput,
+    prepareCallAudioContext,
     sendEncodedFrame,
-    setCallAudioDevices,
     userInfo?.address,
   ]);
   startReticulumCaptureRef.current = startReticulumCapture;
@@ -1593,6 +1625,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
         timestamp,
       });
 
+      await prepareCallAudioContext();
+
       isOutboundCallRef.current = true;
       peerAddressRef.current = targetAddress;
       callIdRef.current = callId;
@@ -1627,7 +1661,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
         });
       }
     },
-    [updateCallState, userInfo?.address, userInfo?.publicKey]
+    [prepareCallAudioContext, updateCallState, userInfo?.address, userInfo?.publicKey]
   );
 
   const acceptCall = useCallback(async () => {
@@ -1635,6 +1669,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     if (!incoming || callStateRef.current !== 'ringing') return;
 
     await reticulumTeardownChainRef.current.catch(() => {});
+    await prepareCallAudioContext();
 
     isOutboundCallRef.current = false;
     peerAddressRef.current = incoming.fromAddress;
@@ -1683,6 +1718,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     flushPendingDmVoiceGcallKey,
     startDurationTimer,
     startReticulumMediaSession,
+    prepareCallAudioContext,
     updateCallState,
     updateIncomingCall,
   ]);

@@ -15,6 +15,55 @@ describe('useVoiceCall', () => {
     vi.restoreAllMocks();
   });
 
+  it('prepares and resumes the audio context when initiating a direct call', async () => {
+    const resume = vi.fn(async () => {});
+    class MockAudioContext {
+      state: AudioContextState = 'suspended';
+      sampleRate = 48_000;
+      baseLatency = 0;
+      constructor(_: AudioContextOptions) {}
+      resume = vi.fn(async () => {
+        this.state = 'running';
+        await resume();
+      });
+      close = vi.fn(async () => {
+        this.state = 'closed';
+      });
+    }
+
+    Object.assign(window as any, {
+      AudioContext: MockAudioContext,
+      call: {
+        onEvent: vi.fn(() => vi.fn()),
+        setLocalAddresses: vi.fn(async () => ({ success: true })),
+        initiate: vi.fn(async () => ({ success: true })),
+        hangup: vi.fn(async () => ({ success: true })),
+      },
+      groupCall: { onEvent: vi.fn(() => vi.fn()) },
+      sendMessage: vi.fn(async () => ({ signature: 'sig' })),
+    });
+
+    const myAddr = 'Qme';
+    const peerAddr = 'Qpeer';
+    const chatId = buildDirectVoiceCallChatId(myAddr, peerAddr);
+    const store = createStore();
+    store.set(userInfoAtom, { address: myAddr, publicKey: 'pub' });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Provider store={store}>{children}</Provider>
+    );
+
+    const { result } = renderHook(() => useVoiceCall(), { wrapper });
+
+    await act(async () => {
+      await result.current.initiateCall(peerAddr, chatId, async () => ({
+        signature: 'sig',
+        publicKey: 'pub',
+      }));
+    });
+
+    expect(resume).toHaveBeenCalledTimes(1);
+  });
+
   it('starts in idle state', () => {
     Object.assign(window as any, {
       call: { onEvent: vi.fn(() => vi.fn()), setLocalAddresses: vi.fn() },
@@ -183,5 +232,77 @@ describe('useVoiceCall', () => {
       fromAddress: peerAddr,
       chatId: buildDirectVoiceCallChatId(myAddr, peerAddr),
     });
+  });
+
+  it('prepares and resumes the audio context when accepting a direct call', async () => {
+    let eventHandler: ((event: string, payload: unknown) => void | Promise<void>) | null = null;
+    const resume = vi.fn(async () => {});
+    class MockAudioContext {
+      state: AudioContextState = 'suspended';
+      sampleRate = 48_000;
+      baseLatency = 0;
+      constructor(_: AudioContextOptions) {}
+      resume = vi.fn(async () => {
+        this.state = 'running';
+        await resume();
+      });
+      close = vi.fn(async () => {
+        this.state = 'closed';
+      });
+    }
+
+    const callApi = {
+      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
+        eventHandler = cb;
+        return vi.fn();
+      }),
+      setLocalAddresses: vi.fn(async () => ({ success: true })),
+      accept: vi.fn(async () => ({ success: true })),
+      hangup: vi.fn(async () => ({ success: true })),
+    };
+
+    Object.assign(window as any, {
+      AudioContext: MockAudioContext,
+      call: callApi,
+      groupCall: {
+        onEvent: vi.fn(() => vi.fn()),
+        join: vi.fn(async () => ({ success: false, error: 'test-stop' })),
+        setLocalAddresses: vi.fn(async () => {}),
+      },
+      sendMessage: vi.fn(async (type: string) => {
+        if (type === 'signPresenceMessage') {
+          return { signature: 'sig' };
+        }
+        return { signature: 'sig' };
+      }),
+    });
+
+    const myAddr = 'Qme';
+    const peerAddr = 'Qbuddy';
+    const store = createStore();
+    store.set(userInfoAtom, { address: myAddr, publicKey: 'pub' });
+    store.set(blockedAddressesAtom, {});
+    store.set(dmFriendsByAddressAtom, {
+      [peerAddr]: { publicKey: 'pk', addedAt: 1 },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Provider store={store}>{children}</Provider>
+    );
+
+    const { result } = renderHook(() => useVoiceCall(), { wrapper });
+
+    await act(async () => {
+      await eventHandler?.('call:incoming', {
+        callId: 'call-ok',
+        fromAddress: peerAddr,
+        chatId: buildDirectVoiceCallChatId(myAddr, peerAddr),
+      });
+    });
+
+    await act(async () => {
+      await result.current.acceptCall();
+    });
+
+    expect(resume).toHaveBeenCalledTimes(1);
   });
 });
