@@ -1732,6 +1732,14 @@ def identity_hash_hex(identity: Any) -> str:
     return ""
 
 
+def derive_presence_destination_hash_for_identity(identity: Any) -> str:
+    try:
+        outbound = build_outbound_destination(identity)
+    except Exception:
+        return ""
+    return destination_hash_hex(outbound.hash)
+
+
 def find_peer_hash_for_identity(identity: Any) -> str:
     identity_hash = identity_hash_hex(identity)
     if not identity_hash:
@@ -1768,6 +1776,26 @@ def ensure_known_peer_from_recall(
         return False
     recalled = RNS.Identity.recall(h)
     if recalled is None:
+        return False
+    try:
+        derived = derive_presence_destination_hash_for_identity(recalled)
+    except Exception as exc:
+        log(
+            "[presence_bridge] target=presence-reticulum recall_build_failed "
+            f"peer={peer_key} err={exc}"
+        )
+        return False
+    if not derived:
+        log(
+            "[presence_bridge] target=presence-reticulum recall_build_failed "
+            f"peer={peer_key} err=empty_derived_hash"
+        )
+        return False
+    if derived != peer_key:
+        log(
+            "[presence_bridge] target=presence-reticulum recall_hash_mismatch "
+            f"peer={peer_key} derived={derived}"
+        )
         return False
     _register_peer(peer_key, recalled, registration_source)
     return True
@@ -2111,6 +2139,23 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
             if peer_identity is None:
                 return None
             outbound = build_outbound_destination(peer_identity)
+            outbound_hash = destination_hash_hex(outbound.hash)
+            if local_hex and outbound_hash == local_hex:
+                log(
+                    "[presence_bridge] target=presence-reticulum overlay_link_rejected_self_identity "
+                    f"peer={peer_key} derived={outbound_hash}"
+                )
+                _known_peers.pop(peer_key, None)
+                _peer_lifecycle.pop(peer_key, None)
+                return None
+            if outbound_hash != peer_key:
+                log(
+                    "[presence_bridge] target=presence-reticulum overlay_link_hash_mismatch "
+                    f"peer={peer_key} derived={outbound_hash}"
+                )
+                _known_peers.pop(peer_key, None)
+                _peer_lifecycle.pop(peer_key, None)
+                return None
             link_id = str(uuid.uuid4())
             link = RNS.Link(
                 outbound,
@@ -2394,6 +2439,30 @@ def on_overlay_link_remote_identified(link, identity) -> None:
     state = get_overlay_link_state(link_id)
     if state is None:
         return
+    derived_peer_hash = derive_presence_destination_hash_for_identity(identity)
+    local_hex = _local_presence_hash_hex()
+    if derived_peer_hash:
+        expected = str(state.get("peerPresenceHash") or "").strip().lower()
+        if local_hex and derived_peer_hash == local_hex:
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_remote_identified_self "
+                f"link={link_id} expected={expected or 'unknown'}"
+            )
+            try:
+                link.teardown()
+            except Exception:
+                pass
+            return
+        if expected and derived_peer_hash != expected:
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_remote_identified_mismatch "
+                f"link={link_id} expected={expected} derived={derived_peer_hash}"
+            )
+            try:
+                link.teardown()
+            except Exception:
+                pass
+            return
     peer_hash = find_peer_hash_for_identity(identity)
     if peer_hash:
         state["peerPresenceHash"] = peer_hash

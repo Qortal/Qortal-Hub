@@ -1611,6 +1611,7 @@ export function registerReticulumIpcHandlers(): void {
           ];
         const bridge = getReticulumBridge();
         if (!bridge) return [];
+        const localHash = bridge.getLocalDestinationHash()?.trim().toLowerCase() ?? '';
         const peersByHash = new Map(
           (getPresenceManager()?.getReticulumVerifiedPeers() ?? []).map(
             (peer) => [peer.destinationHash.toLowerCase(), peer.address]
@@ -1622,6 +1623,7 @@ export function registerReticulumIpcHandlers(): void {
           const peerHash = peer.peerPresenceHash.trim();
           if (!peerHash) continue;
           const peerKey = peerHash.toLowerCase();
+          if (localHash && peerKey === localHash) continue;
           const current = uniqueByHash.get(peerKey);
           if (current && current.connectedAt <= peer.connectedAt) continue;
           uniqueByHash.set(peerKey, {
