@@ -825,6 +825,116 @@ describe('Reticulum group audio transport', () => {
     );
   });
 
+  it('buffers audio until the verified Reticulum identity hash is known', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => ({
+        bridgeQueuedFrames: 0,
+        bridgeQueuedBytes: 0,
+        bridgeBinaryWritesQueued: 0,
+        bridgeWaitingForDrain: false,
+        perLinkQueuedFrames: 0,
+        queuePressureDrops: 0,
+        queuePressureDropsLast5s: 0,
+        staleDrops: 0,
+        staleDropsLast5s: 0,
+        decodedQueueDepth: 0,
+        decodedQueueMax: 48,
+        decodedQueueDrops: 0,
+        binaryOutQueueDepth: 0,
+        binaryOutQueueMax: 128,
+        binaryOutQueueDrops: 0,
+        jsonOutQueueDrops: 0,
+        packetSendFailures: 0,
+        packetPathRequests: 0,
+        packetPathResolutions: 0,
+        packetPathTimeouts: 0,
+        packetFreshSends: 0,
+        packetStaleSends: 0,
+        packetUnknownSends: 0,
+      }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      {
+        send: () => {},
+      } as any,
+      {
+        on: () => {},
+        off: () => {},
+        getRouteForAddress: () => null,
+        getReticulumActiveNeighborHashes: () => [],
+        getNodeIdForAddress: () => null,
+      } as any,
+      bridge as any
+    );
+
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
+
+    const first = manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+
+    expect(first).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        targetAddress: 'Q-peer',
+        pendingFrames: 1,
+        recoveryReason: 'awaiting-reticulum-identity',
+      }),
+    });
+    expect(bridge.enqueuePacketGroupAudio).not.toHaveBeenCalled();
+
+    (manager as any).rememberReticulumPeerPresenceHash('Q-peer', TEST_D32);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(bridge.warmGroupAudioPath).toHaveBeenCalledWith(TEST_D32);
+    expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledWith(
+      TEST_D32,
+      'room-1',
+      Buffer.from([1, 2, 3]),
+      ''
+    );
+  });
+
   it('falls back to the audio link when packet path never resolves', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {

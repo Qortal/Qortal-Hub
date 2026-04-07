@@ -110,6 +110,9 @@ const GC_RETICULUM_AUDIO_PENDING_MIN_TOTAL_FRAMES = 12;
 const GC_RETICULUM_AUDIO_PENDING_FRAMES_PER_ACTIVE_PEER = 6;
 const GC_RETICULUM_AUDIO_PENDING_FANOUT_SOFT_LIMIT = 3;
 const GC_RETICULUM_AUDIO_PENDING_HIGH_FANOUT_LIMIT = 12;
+const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_FRAMES = 6;
+const GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_AGE_MS = 300;
+const GC_RETICULUM_AUDIO_PREROUTE_RETRY_DELAY_MS = 30;
 const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PASS = 12;
 const GC_RETICULUM_AUDIO_FLUSH_MAX_FRAMES_PER_PEER = 4;
 /** When local node is any forwarder or within post-recovery boost, scale flush caps (see getReticulumAudioFlushLimits). */
@@ -542,6 +545,14 @@ interface ReticulumAudioPendingFrame {
   roomId: string;
   data: Buffer;
   enqueuedAtMs: number;
+}
+
+interface ReticulumAudioAwaitingRouteState {
+  address: string;
+  rooms: Set<string>;
+  pending: ReticulumAudioPendingFrame[];
+  recoveryReason: string;
+  retryTimer: ReturnType<typeof setTimeout> | null;
 }
 
 interface ReticulumAudioPeerState {
@@ -1042,6 +1053,10 @@ export class GroupCallManager extends EventEmitter {
   private participantNodeIds = new Map<string, string>();
   /** Fallback address → peer presence hash learned from verified inbound Reticulum traffic. */
   private reticulumPeerPresenceHashByAddress = new Map<string, string>();
+  private reticulumAudioAwaitingRouteByAddress = new Map<
+    string,
+    ReticulumAudioAwaitingRouteState
+  >();
   private reticulumAudioPeersByAddress = new Map<string, ReticulumAudioPeerState>();
   private reticulumAudioAddressByLinkId = new Map<string, string>();
   private reticulumAudioFlushScheduled = false;
@@ -1272,6 +1287,7 @@ export class GroupCallManager extends EventEmitter {
   ): void {
     if (!address || !peerPresenceHash) return;
     this.reticulumPeerPresenceHashByAddress.set(address, peerPresenceHash);
+    this.promoteAwaitingRouteReticulumAudio(address);
   }
 
   /**
@@ -1626,6 +1642,10 @@ export class GroupCallManager extends EventEmitter {
     this.presenceEvictionTimers.clear();
     this.participantNodeIds.clear();
     this.reticulumPeerPresenceHashByAddress.clear();
+    for (const state of this.reticulumAudioAwaitingRouteByAddress.values()) {
+      if (state.retryTimer) clearTimeout(state.retryTimer);
+    }
+    this.reticulumAudioAwaitingRouteByAddress.clear();
     this.reticulumAudioPeersByAddress.clear();
     this.reticulumAudioAddressByLinkId.clear();
     this.reticulumAudioFlushScheduled = false;
@@ -3092,6 +3112,7 @@ export class GroupCallManager extends EventEmitter {
       );
       this.participantNodeIds.delete(localAddress);
       this.reticulumPeerPresenceHashByAddress.delete(localAddress);
+      this.clearAwaitingRouteReticulumAudio(localAddress);
     }
     if (room) this.rememberRecentRoomState(room, timestamp);
     this.pendingKeyByRoom.delete(roomId);
@@ -3688,6 +3709,7 @@ export class GroupCallManager extends EventEmitter {
       this.setReticulumAudioTransport(address, state, transport);
     }
     state.rooms.add(roomId);
+    this.promoteAwaitingRouteReticulumAudio(address, state);
     if (this.shouldMaintainReticulumAudioLink(state)) {
       void this.openReticulumAudioLinkForAddress(address);
     }
@@ -3698,6 +3720,144 @@ export class GroupCallManager extends EventEmitter {
       });
     }
     return state;
+  }
+
+  private clearAwaitingRouteReticulumAudio(
+    address: string,
+    state?: ReticulumAudioAwaitingRouteState
+  ): void {
+    const current = state ?? this.reticulumAudioAwaitingRouteByAddress.get(address);
+    if (!current) return;
+    if (current.retryTimer) {
+      clearTimeout(current.retryTimer);
+      current.retryTimer = null;
+    }
+    this.reticulumAudioAwaitingRouteByAddress.delete(address);
+  }
+
+  private scheduleAwaitingRouteReticulumAudioRetry(
+    address: string,
+    delayMs = GC_RETICULUM_AUDIO_PREROUTE_RETRY_DELAY_MS
+  ): void {
+    const state = this.reticulumAudioAwaitingRouteByAddress.get(address);
+    if (!state || state.retryTimer || state.pending.length === 0) return;
+    const timer = setTimeout(() => {
+      const latest = this.reticulumAudioAwaitingRouteByAddress.get(address);
+      if (latest) latest.retryTimer = null;
+      this.retryAwaitingRouteReticulumAudio(address);
+    }, Math.max(1, delayMs));
+    timer.unref?.();
+    state.retryTimer = timer;
+  }
+
+  private bufferReticulumAudioAwaitingRoute(
+    roomId: string,
+    address: string,
+    data: Buffer
+  ): { queuePressureDrops: number; staleDrops: number; pendingFrames: number } {
+    const now = Date.now();
+    let state = this.reticulumAudioAwaitingRouteByAddress.get(address);
+    if (!state) {
+      state = {
+        address,
+        rooms: new Set<string>(),
+        pending: [],
+        recoveryReason: 'awaiting-reticulum-identity',
+        retryTimer: null,
+      };
+      this.reticulumAudioAwaitingRouteByAddress.set(address, state);
+    }
+    state.rooms.add(roomId);
+    let staleDrops = 0;
+    while (
+      state.pending.length > 0 &&
+      now - state.pending[0]!.enqueuedAtMs > GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_AGE_MS
+    ) {
+      state.pending.shift();
+      staleDrops++;
+    }
+    state.pending.push({ roomId, data: Buffer.from(data), enqueuedAtMs: now });
+    let queuePressureDrops = 0;
+    while (state.pending.length > GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_FRAMES) {
+      state.pending.shift();
+      queuePressureDrops++;
+    }
+    this.scheduleAwaitingRouteReticulumAudioRetry(address);
+    return {
+      queuePressureDrops,
+      staleDrops,
+      pendingFrames: state.pending.length,
+    };
+  }
+
+  private promoteAwaitingRouteReticulumAudio(
+    address: string,
+    state?: ReticulumAudioPeerState
+  ): void {
+    const buffered = this.reticulumAudioAwaitingRouteByAddress.get(address);
+    if (!buffered || buffered.pending.length === 0) {
+      if (buffered) this.clearAwaitingRouteReticulumAudio(address, buffered);
+      return;
+    }
+    const targetState =
+      state ??
+      (() => {
+        for (const roomId of buffered.rooms) {
+          if (!this.rooms.has(roomId)) continue;
+          const ensured = this.ensureReticulumAudioPeerState(roomId, address);
+          if (ensured) return ensured;
+        }
+        return null;
+      })();
+    if (this.reticulumAudioAwaitingRouteByAddress.get(address) !== buffered) {
+      return;
+    }
+    if (!targetState) {
+      this.scheduleAwaitingRouteReticulumAudioRetry(address);
+      return;
+    }
+    const now = Date.now();
+    for (const pending of buffered.pending) {
+      if (now - pending.enqueuedAtMs > GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_AGE_MS) {
+        continue;
+      }
+      this.enqueuePendingReticulumAudio(targetState, pending.roomId, pending.data);
+    }
+    this.clearAwaitingRouteReticulumAudio(address, buffered);
+    this.scheduleReticulumAudioFlush();
+  }
+
+  private retryAwaitingRouteReticulumAudio(address: string): void {
+    const state = this.reticulumAudioAwaitingRouteByAddress.get(address);
+    if (!state) return;
+    const now = Date.now();
+    while (
+      state.pending.length > 0 &&
+      now - state.pending[0]!.enqueuedAtMs > GC_RETICULUM_AUDIO_PREROUTE_PENDING_MAX_AGE_MS
+    ) {
+      state.pending.shift();
+    }
+    if (state.pending.length === 0) {
+      this.clearAwaitingRouteReticulumAudio(address, state);
+      return;
+    }
+    for (const roomId of [...state.rooms]) {
+      if (!this.rooms.has(roomId)) {
+        state.rooms.delete(roomId);
+        continue;
+      }
+      const ensured = this.ensureReticulumAudioPeerState(roomId, address);
+      if (!ensured) continue;
+      if (ensured.transport === 'packet' || ensured.established) {
+        this.flushReticulumAudioQueuesFair(address);
+      }
+      return;
+    }
+    if (state.rooms.size === 0) {
+      this.clearAwaitingRouteReticulumAudio(address, state);
+      return;
+    }
+    this.scheduleAwaitingRouteReticulumAudioRetry(address);
   }
 
   private getReticulumAudioPendingTotalFrames(): number {
@@ -4360,18 +4520,22 @@ export class GroupCallManager extends EventEmitter {
     }
     const state = this.ensureReticulumAudioPeerState(roomId, toAddress);
     if (!state) {
-      loggerWarn(`[GCall] sendAudio dropped: no Reticulum route for ${toAddress}`);
+      const buffered = this.bufferReticulumAudioAwaitingRoute(roomId, toAddress, data);
+      this.logReticulumFailureThrottled(
+        `audio-awaiting-route:${roomId}:${toAddress}`,
+        `[GCall] sendAudio buffered awaiting Reticulum identity for ${toAddress}`
+      );
       return {
-        success: false,
-        error: 'no-reticulum-route',
+        success: true,
         diagnostics: {
           transport: this.getReticulumAudioTransportKind(),
-          pendingFrames: 0,
-          queuePressureDrops: 0,
-          staleDrops: 0,
+          pendingFrames: buffered.pendingFrames,
+          queuePressureDrops: buffered.queuePressureDrops,
+          staleDrops: buffered.staleDrops,
           linkUnreadyDrops: 0,
           packetSendFailures: 0,
           targetAddress: toAddress,
+          recoveryReason: 'awaiting-reticulum-identity',
         },
       };
     }
@@ -5020,6 +5184,7 @@ export class GroupCallManager extends EventEmitter {
     }
     this.participantNodeIds.delete(address);
     this.reticulumPeerPresenceHashByAddress.delete(address);
+    this.clearAwaitingRouteReticulumAudio(address);
     if (hadLocalInterest) {
       this.emit('gcall:participant-left', { roomId, address, isAbrupt });
     }

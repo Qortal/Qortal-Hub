@@ -5,6 +5,7 @@ import {
   computeJitterReadyThresholdFrames,
   getRecoveryStabilityThresholds,
   countRecentlyHealthyRemoteSources,
+  computeN1AccumulationDecodeCap,
   computeSteadyTargetDecayThresholdMs,
   clearAdaptiveGroupCallPlayoutMaps,
   getConflictingRootForAuthorityWait,
@@ -30,6 +31,7 @@ import {
   shouldAccelerateMultiSourceRecoveryDecay,
   shouldAccelerateSingleRemoteRecoveryDecay,
   shouldDropActiveJitterSource,
+  shouldRelaxSingleRemoteWindowRecovery,
   shouldIgnoreParticipantLeftEvent,
   shouldIgnoreRedundantRoomKeyDelivery,
   shouldMintRootSessionKeyImmediately,
@@ -296,6 +298,72 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
           stable: false,
           severeInstability: false,
         },
+      })
+    ).toBe(false);
+  });
+
+  it('holds a deep single-frame recovery source so N===1 can re-accumulate', () => {
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        opusBufferedMs: 20,
+        tier: 'deep',
+      })
+    ).toBe(0);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        opusBufferedMs: 40,
+        tier: 'deep',
+      })
+    ).toBe(1);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: false,
+        opusBufferedMs: 20,
+        tier: 'deep',
+      })
+    ).toBe(1);
+  });
+
+  it('relaxes single-remote window recovery when the receiver already has usable reserve', () => {
+    expect(
+      shouldRelaxSingleRemoteWindowRecovery({
+        activeSourceCount: 1,
+        shouldTightenRecovery: false,
+        avgOpusBufferedMs: 117,
+        adaptiveTargetMedianMs: 183,
+        avgPcmBufferedMs: 100,
+        playoutUnderTargetFraction: 0.58,
+        avgPlayoutDeltaMs: -78,
+        concealmentTicks: 87,
+      })
+    ).toBe(true);
+    expect(
+      shouldRelaxSingleRemoteWindowRecovery({
+        activeSourceCount: 1,
+        shouldTightenRecovery: false,
+        avgOpusBufferedMs: 60,
+        adaptiveTargetMedianMs: 165,
+        avgPcmBufferedMs: 35,
+        playoutUnderTargetFraction: 0.88,
+        avgPlayoutDeltaMs: -146,
+        concealmentTicks: 133,
+      })
+    ).toBe(false);
+    expect(
+      shouldRelaxSingleRemoteWindowRecovery({
+        activeSourceCount: 2,
+        shouldTightenRecovery: false,
+        avgOpusBufferedMs: 117,
+        adaptiveTargetMedianMs: 183,
+        avgPcmBufferedMs: 100,
+        playoutUnderTargetFraction: 0.58,
+        avgPlayoutDeltaMs: -78,
+        concealmentTicks: 87,
       })
     ).toBe(false);
   });

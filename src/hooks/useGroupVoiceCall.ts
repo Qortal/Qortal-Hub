@@ -786,6 +786,46 @@ export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
   );
 }
 
+export function computeN1AccumulationDecodeCap(opts: {
+  accumulationActive: boolean;
+  recoverySingleRemote: boolean;
+  opusBufferedMs: number;
+  tier: GcallN1BufferEnforceTier;
+}): number | null {
+  if (!opts.accumulationActive) return null;
+  if (
+    opts.recoverySingleRemote &&
+    opts.tier === 'deep' &&
+    opts.opusBufferedMs <= OPUS_FRAME_DURATION_MS
+  ) {
+    return 0;
+  }
+  return 1;
+}
+
+export function shouldRelaxSingleRemoteWindowRecovery(opts: {
+  activeSourceCount: number;
+  shouldTightenRecovery: boolean;
+  avgOpusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  avgPlayoutDeltaMs: number;
+  concealmentTicks: number;
+}): boolean {
+  const target = Math.max(1, opts.adaptiveTargetMedianMs);
+  const opusAdequacy = opts.avgOpusBufferedMs / target;
+  return (
+    opts.activeSourceCount === 1 &&
+    !opts.shouldTightenRecovery &&
+    opusAdequacy >= 0.55 &&
+    opts.avgPcmBufferedMs >= ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE - 5 &&
+    opts.playoutUnderTargetFraction <= 0.6 &&
+    opts.avgPlayoutDeltaMs >= -80 &&
+    opts.concealmentTicks <= 100
+  );
+}
+
 /**
  * `join()` should seed renderer session state only on the first local join.
  * After that, the root-owned media session identity is authoritative and must
@@ -2985,9 +3025,15 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       const peerScores = new Map<
         string,
-        { score: number; severe: boolean; degradedSources: number }
+        {
+          score: number;
+          severe: boolean;
+          degradedSources: number;
+          relaxedSingleRemote: boolean;
+        }
       >();
       const activePeers = new Set<string>();
+      const singleRemoteWindow = windowMetrics.sources.length === 1;
       for (const source of windowMetrics.sources) {
         const ingressPeer = getSourceIngressDiagnostic(
           source.sourceAddr
@@ -3011,7 +3057,18 @@ export function useGroupVoiceCall(uiActive = false) {
           score: 0,
           severe: false,
           degradedSources: 0,
+          relaxedSingleRemote: false,
         };
+        const relaxedSingleRemote = shouldRelaxSingleRemoteWindowRecovery({
+          activeSourceCount: singleRemoteWindow ? 1 : windowMetrics.sources.length,
+          shouldTightenRecovery: pressureAssessment.shouldTightenRecovery,
+          avgOpusBufferedMs: source.avgOpusBufferedMs,
+          adaptiveTargetMedianMs: source.adaptiveTargetMedianMs,
+          avgPcmBufferedMs: source.avgPcmBufferedMs,
+          playoutUnderTargetFraction: source.playoutUnderTargetFraction ?? 0,
+          avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
+          concealmentTicks: source.concealmentTicks,
+        });
         prev.score += assessment.score;
         prev.severe =
           prev.severe ||
@@ -3019,6 +3076,7 @@ export function useGroupVoiceCall(uiActive = false) {
           (assessment.shouldEscalate &&
             pressureAssessment.shouldTightenRecovery);
         prev.degradedSources++;
+        prev.relaxedSingleRemote = prev.relaxedSingleRemote || relaxedSingleRemote;
         peerScores.set(ingressPeer, prev);
       }
 
@@ -3052,6 +3110,21 @@ export function useGroupVoiceCall(uiActive = false) {
           peerAddress,
           performance.now()
         );
+        if (entry.relaxedSingleRemote && !recentSummary.severeInstability) {
+          markPeerStable(peerAddress, {
+            allowRecoveryExit: true,
+            nowMs: Date.now(),
+          });
+          const prevBreaches =
+            peerMediaRecoveryBreachRef.current.get(peerAddress) ?? 0;
+          if (prevBreaches > 0) {
+            peerMediaRecoveryBreachRef.current.set(
+              peerAddress,
+              prevBreaches - 1
+            );
+          }
+          continue;
+        }
         markPeerUnstable(peerAddress, severity, {
           bypassReentryCooldown: shouldBypassRecoveryReentryCooldown({
             severity,
@@ -3083,6 +3156,7 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [
       getSourceIngressDiagnostic,
+      markPeerStable,
       markPeerUnstable,
       recomputeAdaptiveNetworkMode,
       summarizePeerRecentRecoveryStability,
@@ -7864,12 +7938,24 @@ export function useGroupVoiceCall(uiActive = false) {
 
         const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
         const accumulationActive = perfWall < accUntil;
-        if (
-          (n1RecoverySingleRemote && !prerollActive) ||
-          n1SteadySingleRemote
-        ) {
-          if (accumulationActive) {
-            n1ScaledCap = Math.min(n1ScaledCap, 1);
+        const accumulationDecodeCap =
+          (n1RecoverySingleRemote && !prerollActive) || n1SteadySingleRemote
+            ? computeN1AccumulationDecodeCap({
+                accumulationActive,
+                recoverySingleRemote: n1RecoverySingleRemote,
+                opusBufferedMs: opusMsPre,
+                tier: n1Tier,
+              })
+            : null;
+        if (accumulationDecodeCap !== null) {
+          n1ScaledCap = Math.min(n1ScaledCap, accumulationDecodeCap);
+          if (accumulationDecodeCap === 0) {
+            gcallDiagnosticsPush('info', '[GCall] n1RecoveryAccumulationHold', {
+              sourceAddr: truncateGcallDiagAddress(addr),
+              bufferMs: Math.round(opusMsPre),
+              targetMs: Math.round(smoothedTarget),
+              tier: n1Tier,
+            });
           }
         }
 
