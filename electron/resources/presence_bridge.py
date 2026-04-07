@@ -3255,9 +3255,14 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
         )
         return
 
-    if peer_hash not in _active_overlay_neighbors:
-        _ensure_overlay_link(peer_hash)
-    if peer_hash not in _known_peers:
+    peer_key = peer_hash.strip().lower()
+    ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _known_peers:
+        _nudge_overlay_path_for_peer(peer_key)
+        ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _active_overlay_neighbors:
+        _ensure_overlay_link(peer_key)
+    if peer_key not in _known_peers:
         emit_resp(
             req_id,
             False,
@@ -3288,7 +3293,7 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
             return
         if len(wire_bytes) > 600:
             log(f"[presence_bridge] warning call packet len={len(wire_bytes)}")
-        if not _send_wire_to_overlay_peer(peer_hash.lower(), wire_bytes, "call_signal"):
+        if not _send_wire_to_overlay_peer(peer_key, wire_bytes, "call_signal"):
             emit_resp(
                 req_id,
                 False,

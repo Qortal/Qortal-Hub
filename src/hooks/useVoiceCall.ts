@@ -22,6 +22,7 @@ import { isDirectVoiceCallChatId } from '../lib/call/directVoiceCallChatId';
 import {
   buildDmVoiceRoomId,
   fetchLocalReticulumDestinationHash,
+  fetchLocalReticulumIdentityPublicKeyBase64,
   GCALL_KEY_MESSAGE_VERSION,
   joinDirectVoiceReticulumRoom,
   leaveDirectVoiceReticulumRoom,
@@ -391,6 +392,36 @@ export function useVoiceCall(): UseVoiceCallReturn {
     microWidenCeilingLiftUntilMsRef.current = 0;
     lastDmPeerMediaRecoveryRequestAtRef.current = 0;
   }, []);
+
+  const requestDmPeerMediaWarmup = useCallback(
+    (roomId: string, reason: string, opts?: { ignoreCooldown?: boolean }) => {
+      const gc = (window as any).groupCall;
+      const peer = peerAddressRef.current;
+      if (
+        !roomId ||
+        !peer ||
+        typeof gc?.requestPeerMediaRecovery !== 'function'
+      ) {
+        return;
+      }
+      const now = Date.now();
+      if (
+        !opts?.ignoreCooldown &&
+        now - lastDmPeerMediaRecoveryRequestAtRef.current <
+          DM_MEDIA_RECOVERY_REQUEST_COOLDOWN_MS
+      ) {
+        return;
+      }
+      lastDmPeerMediaRecoveryRequestAtRef.current = now;
+      pushDirectVoiceUiLog('log', 'requestPeerMediaRecovery', {
+        roomTrunc: roomId.slice(0, 24),
+        peerTrunc: peer.slice(0, 8),
+        reason,
+      });
+      void gc.requestPeerMediaRecovery(roomId, peer, reason).catch(() => {});
+    },
+    []
+  );
 
   const clearDurationTimer = useCallback(() => {
     if (durationTimerRef.current) {
@@ -1265,12 +1296,21 @@ export function useVoiceCall(): UseVoiceCallReturn {
     }
     pushDirectVoiceUiLog('log', 'Reticulum hash ok', { hashTrunc: retHash.slice(0, 8) });
 
+    const reticulumIdentityPublicKeyBase64 =
+      await fetchLocalReticulumIdentityPublicKeyBase64();
+    if (reticulumIdentityPublicKeyBase64) {
+      pushDirectVoiceUiLog('log', 'Reticulum identity key ok');
+    } else {
+      pushDirectVoiceUiLog('log', 'Reticulum identity key unavailable; using join-only GC_JOIN');
+    }
+
     const joinRes = await joinDirectVoiceReticulumRoom({
       roomId,
       chatId,
       address: myAddr,
       publicKey: myPk,
       reticulumDestinationHash: retHash,
+      reticulumIdentityPublicKeyBase64,
     });
 
     if (!joinRes.success || !joinRes.callSessionId) {
@@ -1295,6 +1335,9 @@ export function useVoiceCall(): UseVoiceCallReturn {
     callSessionIdRef.current = joinRes.callSessionId;
     mediaGenRef.current = (joinRes.mediaSessionGeneration ?? 1) >>> 0;
     reticulumSessionActiveRef.current = true;
+    requestDmPeerMediaWarmup(roomId, 'dm-call-start', {
+      ignoreCooldown: true,
+    });
     setupDecryptWorker();
 
     const csid = joinRes.callSessionId;
@@ -1344,6 +1387,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   }, [
     endCall,
     flushPendingDmVoiceGcallKey,
+    requestDmPeerMediaWarmup,
     setInfoSnackGlobal,
     setOpenSnackGlobal,
     startReticulumCapture,
@@ -1358,6 +1402,28 @@ export function useVoiceCall(): UseVoiceCallReturn {
     if (!gc?.onEvent) return;
 
     const unsub = gc.onEvent(async (event: string, payload: unknown) => {
+      if (event === 'gcall:participant-joined') {
+        const p = payload as {
+          roomId?: string;
+          address?: string;
+        };
+        const curRoom = dmRoomIdRef.current;
+        const peer = peerAddressRef.current;
+        if (
+          isDmVoiceRoomId(p.roomId) &&
+          curRoom &&
+          p.roomId === curRoom &&
+          typeof p.address === 'string' &&
+          peer &&
+          p.address === peer
+        ) {
+          requestDmPeerMediaWarmup(curRoom, 'dm-peer-joined', {
+            ignoreCooldown: true,
+          });
+        }
+        return;
+      }
+
       if (event === 'gcall:key') {
         const p = payload as GcallKeyEventPayload;
         pushDirectVoiceUiLog('log', 'gcall:key rx', {
@@ -1437,7 +1503,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       }
     });
     return unsub;
-  }, [handleDmVoiceGcallKeyPayload, userInfo?.address]);
+  }, [handleDmVoiceGcallKeyPayload, requestDmPeerMediaWarmup, userInfo?.address]);
 
   const startDurationTimer = useCallback(() => {
     setCallDuration(0);

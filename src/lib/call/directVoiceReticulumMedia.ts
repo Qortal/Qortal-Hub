@@ -85,6 +85,31 @@ export async function fetchLocalReticulumDestinationHash(): Promise<string | nul
   return null;
 }
 
+/** RNS.Identity public key (64 bytes, standard base64) for GC_JOIN wire `rk`; optional. */
+export async function fetchLocalReticulumIdentityPublicKeyBase64(): Promise<
+  string | null
+> {
+  const fn = (
+    window as Window & {
+      electronAPI?: {
+        reticulumGetLocalIdentityPublicKeyBase64?: () => Promise<{
+          publicKeyBase64: string | null;
+        }>;
+      };
+    }
+  ).electronAPI?.reticulumGetLocalIdentityPublicKeyBase64;
+  if (typeof fn !== 'function') {
+    return null;
+  }
+  try {
+    const j = await fn();
+    const raw = j?.publicKeyBase64;
+    return typeof raw === 'string' && raw.length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 async function signGroupCallFields(
   fields: Record<string, unknown>
 ): Promise<string> {
@@ -146,6 +171,10 @@ export function encryptRoomKeyForPeer(
   return uint8ToBase64(combined);
 }
 
+function normalizeRkBase64ForGcJoinRkSign(rk: string): string {
+  return rk.replace(/=+$/u, '');
+}
+
 export async function signGcJoin(params: {
   roomId: string;
   chatId: string;
@@ -155,10 +184,11 @@ export async function signGcJoin(params: {
   /** Omitted for DM voice to keep GC_JOIN under Reticulum MDU (wire has no `j`). */
   joinGeneration?: number;
   reticulumDestinationHash: string;
-}): Promise<string> {
+  reticulumIdentityPublicKeyBase64?: string | null;
+}): Promise<{ joinSig: string; joinRkSig?: string } | null> {
   const wireChatId = compactDmVoiceJoinWireChatId(params.roomId, params.chatId);
   const jg = params.joinGeneration;
-  return signGroupCallFields({
+  const joinSig = await signGroupCallFields({
     type: 'GC_JOIN',
     roomId: params.roomId,
     chatId: wireChatId,
@@ -167,7 +197,27 @@ export async function signGcJoin(params: {
     timestamp: params.timestamp,
     reticulumDestinationHash: params.reticulumDestinationHash,
     ...(typeof jg === 'number' && Number.isFinite(jg) ? { joinGeneration: jg } : {}),
-  });
+  }).catch(() => '');
+  if (!joinSig) return null;
+  if (!params.reticulumIdentityPublicKeyBase64) {
+    return { joinSig };
+  }
+  const rkForSign = normalizeRkBase64ForGcJoinRkSign(
+    params.reticulumIdentityPublicKeyBase64
+  );
+  const joinRkSig = await signGroupCallFields({
+    type: 'GC_JOIN_RK',
+    roomId: params.roomId,
+    chatId: wireChatId,
+    fromAddress: params.fromAddress,
+    fromPublicKey: params.fromPublicKey,
+    timestamp: params.timestamp,
+    reticulumDestinationHash: params.reticulumDestinationHash,
+    reticulumIdentityPublicKeyBase64: rkForSign,
+    ...(typeof jg === 'number' && Number.isFinite(jg) ? { joinGeneration: jg } : {}),
+  }).catch(() => '');
+  if (!joinRkSig) return null;
+  return { joinSig, joinRkSig };
 }
 
 export async function joinDirectVoiceReticulumRoom(opts: {
@@ -176,6 +226,7 @@ export async function joinDirectVoiceReticulumRoom(opts: {
   address: string;
   publicKey: string;
   reticulumDestinationHash: string;
+  reticulumIdentityPublicKeyBase64?: string | null;
 }): Promise<{
   success: boolean;
   callSessionId?: string;
@@ -187,16 +238,16 @@ export async function joinDirectVoiceReticulumRoom(opts: {
     return { success: false, error: 'groupCall unavailable' };
   }
   const ts = Date.now();
-  const sig = await signGcJoin({
+  const signatures = await signGcJoin({
     roomId: opts.roomId,
     chatId: opts.chatId,
     fromAddress: opts.address,
     fromPublicKey: opts.publicKey,
     timestamp: ts,
-    joinGeneration: opts.joinGeneration,
     reticulumDestinationHash: opts.reticulumDestinationHash,
-  }).catch(() => '');
-  if (!sig) {
+    reticulumIdentityPublicKeyBase64: opts.reticulumIdentityPublicKeyBase64,
+  });
+  if (!signatures?.joinSig) {
     return { success: false, error: 'join-sign-failed' };
   }
   await gc.setLocalAddresses?.([opts.address]).catch(() => {});
@@ -204,14 +255,14 @@ export async function joinDirectVoiceReticulumRoom(opts: {
     opts.roomId,
     opts.chatId,
     opts.address,
-    sig,
+    signatures.joinSig,
     opts.publicKey,
     ts,
     opts.reticulumDestinationHash,
     undefined,
     0,
-    undefined,
-    undefined
+    opts.reticulumIdentityPublicKeyBase64 ?? undefined,
+    signatures.joinRkSig
   );
   return res;
 }

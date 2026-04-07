@@ -21,6 +21,10 @@ const CALL_REQUEST_TTL_MS = 60_000;
 const RETICULUM_OVERLAY_SEEN_TTL_MS = 60_000;
 const CALL_VERIFY_WORKER_COUNT = 2;
 const CALL_MAX_PENDING_VERIFY = 512;
+const CALL_WIRE_REQUEST = 'CR';
+const CALL_WIRE_ACCEPT = 'CA';
+const CALL_WIRE_REJECT = 'CX';
+const CALL_WIRE_HANGUP = 'CH';
 
 export type CallNetworkType =
   | 'CALL_REQUEST'
@@ -34,6 +38,146 @@ export const CALL_MESSAGE_TYPES = new Set<string>([
   'CALL_REJECT',
   'CALL_HANGUP',
 ]);
+
+function buildDirectCallChatId(addressA: string, addressB: string): string {
+  return `direct:${[addressA, addressB].sort().join(':')}`;
+}
+
+function encodeCallWire(env: CallWireEnvelope): Record<string, unknown> {
+  switch (env.type) {
+    case 'CALL_REQUEST': {
+      const wire: Record<string, unknown> = {
+        t: CALL_WIRE_REQUEST,
+        c: env.callId,
+        a: env.fromAddress,
+        k: env.fromPublicKey,
+        g: env.signature,
+        m: env.timestamp,
+      };
+      // For direct calls the chatId is derivable from sender + overlay target address,
+      // so omit it to stay under Reticulum's encrypted MDU.
+      if (!env.chatId.startsWith('direct:')) {
+        wire.H = env.chatId;
+      }
+      return wire;
+    }
+    case 'CALL_ACCEPT':
+      return {
+        t: CALL_WIRE_ACCEPT,
+        c: env.callId,
+        k: env.fromPublicKey,
+        g: env.signature,
+        m: env.timestamp,
+      };
+    case 'CALL_REJECT':
+      return {
+        t: CALL_WIRE_REJECT,
+        c: env.callId,
+        ...(typeof env.reason === 'string' && env.reason.length > 0
+          ? { e: env.reason }
+          : {}),
+        k: env.fromPublicKey,
+        g: env.signature,
+        m: env.timestamp,
+      };
+    case 'CALL_HANGUP':
+      return {
+        t: CALL_WIRE_HANGUP,
+        c: env.callId,
+        k: env.fromPublicKey,
+        g: env.signature,
+        m: env.timestamp,
+      };
+    default:
+      return {};
+  }
+}
+
+function decodeCompactCallWire(
+  wire: Record<string, unknown>
+): CallWireEnvelope | null {
+  const t = wire.t;
+  switch (t) {
+    case CALL_WIRE_REQUEST: {
+      if (
+        typeof wire.c !== 'string' ||
+        typeof wire.a !== 'string' ||
+        typeof wire.k !== 'string' ||
+        typeof wire.g !== 'string' ||
+        typeof wire.m !== 'number'
+      ) {
+        return null;
+      }
+      const chatId =
+        typeof wire.H === 'string'
+          ? wire.H
+          : typeof wire.U === 'string' && wire.U.length > 0
+            ? buildDirectCallChatId(wire.a, wire.U)
+            : null;
+      if (!chatId) return null;
+      return {
+        type: 'CALL_REQUEST',
+        callId: wire.c,
+        fromAddress: wire.a,
+        fromPublicKey: wire.k,
+        chatId,
+        signature: wire.g,
+        timestamp: wire.m,
+      };
+    }
+    case CALL_WIRE_ACCEPT:
+      if (
+        typeof wire.c !== 'string' ||
+        typeof wire.k !== 'string' ||
+        typeof wire.g !== 'string' ||
+        typeof wire.m !== 'number'
+      ) {
+        return null;
+      }
+      return {
+        type: 'CALL_ACCEPT',
+        callId: wire.c,
+        fromPublicKey: wire.k,
+        signature: wire.g,
+        timestamp: wire.m,
+      };
+    case CALL_WIRE_REJECT:
+      if (
+        typeof wire.c !== 'string' ||
+        typeof wire.k !== 'string' ||
+        typeof wire.g !== 'string' ||
+        typeof wire.m !== 'number'
+      ) {
+        return null;
+      }
+      return {
+        type: 'CALL_REJECT',
+        callId: wire.c,
+        ...(typeof wire.e === 'string' ? { reason: wire.e } : {}),
+        fromPublicKey: wire.k,
+        signature: wire.g,
+        timestamp: wire.m,
+      };
+    case CALL_WIRE_HANGUP:
+      if (
+        typeof wire.c !== 'string' ||
+        typeof wire.k !== 'string' ||
+        typeof wire.g !== 'string' ||
+        typeof wire.m !== 'number'
+      ) {
+        return null;
+      }
+      return {
+        type: 'CALL_HANGUP',
+        callId: wire.c,
+        fromPublicKey: wire.k,
+        signature: wire.g,
+        timestamp: wire.m,
+      };
+    default:
+      return null;
+  }
+}
 
 export interface CallRequestEnvelope {
   type: 'CALL_REQUEST';
@@ -575,6 +719,8 @@ export class CallManager extends EventEmitter {
   private parseCallEnvelope(
     wire: Record<string, unknown>
   ): CallWireEnvelope | null {
+    const compact = decodeCompactCallWire(wire);
+    if (compact) return compact;
     return typeof wire.type === 'string' && CALL_MESSAGE_TYPES.has(wire.type)
       ? (wire as unknown as CallWireEnvelope)
       : null;
@@ -658,7 +804,7 @@ export class CallManager extends EventEmitter {
       return;
     }
     const overlayWire = this.attachReticulumOverlayMeta(
-      { ...env },
+      encodeCallWire(env),
       targetAddress,
       CALL_MAX_HOPS
     );

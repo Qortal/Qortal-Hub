@@ -825,4 +825,91 @@ describe('ReticulumBridge publish_presence payload', () => {
       originalSenderHash: 'origin-hash-1',
     });
   });
+
+  it('suppresses repeated heartbeats with the same semantic status inside the minimum interval', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: 'hb-1',
+      ok: true,
+      payload: {},
+    }));
+
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+
+    const envelope: PresenceEnvelope = {
+      id: 'heartbeat-1',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: 'addr-hb',
+      timestamp: 1_000,
+      payload: {
+        address: 'addr-hb',
+        publicKey: 'pk-hb',
+        sessionId: 'sid-hb',
+        status: 'online',
+      },
+      signature: 'sig-hb',
+    };
+
+    await bridge.publish(envelope);
+    await bridge.publish({
+      ...envelope,
+      id: 'heartbeat-2',
+      timestamp: 1_100,
+    });
+
+    expect(internal.sendCommand).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('does not suppress heartbeat transmission when the status changes inside the minimum interval', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: 'hb-2',
+      ok: true,
+      payload: {},
+    }));
+
+    vi.useFakeTimers();
+    vi.setSystemTime(2_000);
+
+    await bridge.publish({
+      id: 'heartbeat-online',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: 'addr-hb2',
+      timestamp: 2_000,
+      payload: {
+        address: 'addr-hb2',
+        publicKey: 'pk-hb2',
+        sessionId: 'sid-hb2',
+        status: 'online',
+      },
+      signature: 'sig-hb2',
+    });
+
+    await bridge.publish({
+      id: 'heartbeat-busy',
+      type: 'PRESENCE_HEARTBEAT',
+      senderAddress: 'addr-hb2',
+      timestamp: 2_100,
+      payload: {
+        address: 'addr-hb2',
+        publicKey: 'pk-hb2',
+        sessionId: 'sid-hb2',
+        status: 'busy',
+      },
+      signature: 'sig-hb2b',
+    });
+
+    expect(internal.sendCommand).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
 });

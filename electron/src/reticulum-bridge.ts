@@ -521,6 +521,7 @@ export class ReticulumBridge
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private statePromise: Promise<void> | null = null;
   private lastHeartbeatSentAt = 0;
+  private lastHeartbeatSemanticKey: string | null = null;
   private lastSemanticPresence = new Map<string, number>();
   private connectivitySnapshot: ReticulumConnectivitySnapshot = {
     bridgeState: 'stopped',
@@ -938,12 +939,17 @@ export class ReticulumBridge
     if (this.state !== 'ready') return false;
 
     if (envelope.type === 'PRESENCE_HEARTBEAT') {
+      const semanticKey = semanticPresenceKey(envelope);
       const now = Date.now();
-      if (now - this.lastHeartbeatSentAt < HEARTBEAT_MIN_INTERVAL_MS) {
+      if (
+        now - this.lastHeartbeatSentAt < HEARTBEAT_MIN_INTERVAL_MS &&
+        semanticKey === this.lastHeartbeatSemanticKey
+      ) {
         loggerLog('[ReticulumBridge] Suppressed heartbeat due to minimum interval');
         return true;
       }
       this.lastHeartbeatSentAt = now;
+      this.lastHeartbeatSemanticKey = semanticKey;
     } else {
       const semanticKey = semanticPresenceKey(envelope);
       const lastSentAt = this.lastSemanticPresence.get(semanticKey) ?? 0;

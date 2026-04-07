@@ -3,6 +3,10 @@ import { EventEmitter } from 'events';
 import { CallManager } from './call';
 import { GroupCallManager } from './group-call';
 import {
+  RT_RETICULUM_MAX_WIRE_JSON_BYTES,
+  byteLengthUtf8JsonWithBridgeSender,
+} from './reticulum-wire-size';
+import {
   buildEnvelope,
   setPresenceManagerTransports,
   startPresenceManager,
@@ -14,7 +18,9 @@ class CallBridgeStub extends EventEmitter {
     return 'ready';
   }
 
-  sendCall = vi.fn(async () => true);
+  sendCall = vi.fn(
+    async (_peerHash: string, _message: Record<string, unknown>) => true
+  );
 }
 
 class GroupBridgeStub extends EventEmitter {
@@ -22,8 +28,13 @@ class GroupBridgeStub extends EventEmitter {
     return 'ready';
   }
 
-  sendGroupCall = vi.fn(async () => true);
-  sendGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+  sendGroupCall = vi.fn(
+    async (_peerHash: string, _message: Record<string, unknown>) => true
+  );
+  sendGroupCallDetailed = vi.fn(
+    async (_peerHash: string, _message: Record<string, unknown>) =>
+      ({ ok: true as const })
+  );
 }
 
 class PresenceTransportStub {
@@ -210,6 +221,81 @@ describe('Reticulum manager late bridge binding', () => {
     ).resolves.toBe('call-2');
     expect(bridge.sendCall).toHaveBeenCalledTimes(1);
     manager.stop();
+  });
+
+  it('compacts realistic direct call requests to fit Reticulum wire limits', async () => {
+    const presence = presenceStub();
+    presence.getRouteForAddress.mockReturnValue({
+      kind: 'reticulum',
+      destinationHash: 'a'.repeat(32),
+    });
+    presence.getReticulumActiveNeighborHashes.mockReturnValue(['b'.repeat(32)]);
+    const bridge = new CallBridgeStub();
+    const manager = new CallManager(presence as any, bridge as any);
+
+    const local = `Q${'a'.repeat(33)}`;
+    const peer = `Q${'b'.repeat(33)}`;
+    const chatId = `direct:${[local, peer].sort().join(':')}`;
+    const signature = 'S'.repeat(88);
+    const publicKey = 'P'.repeat(44);
+    const callId = '123e4567-e89b-12d3-a456-426614174000';
+
+    manager.start();
+    await expect(
+      manager.initiateCall(
+        peer,
+        chatId,
+        local,
+        signature,
+        publicKey,
+        callId,
+        Date.now()
+      )
+    ).resolves.toBe(callId);
+
+    expect(bridge.sendCall).toHaveBeenCalledTimes(1);
+    const firstSendCall = vi.mocked(bridge.sendCall).mock.calls[0];
+    expect(firstSendCall).toBeDefined();
+    const sentWire = firstSendCall![1] as Record<string, unknown>;
+    expect(sentWire).toMatchObject({
+      t: 'CR',
+      c: callId,
+      a: local,
+      k: publicKey,
+      g: signature,
+    });
+    expect(sentWire).not.toHaveProperty('H');
+    expect(sentWire).not.toHaveProperty('type');
+    expect(byteLengthUtf8JsonWithBridgeSender(sentWire)).toBeLessThanOrEqual(
+      RT_RETICULUM_MAX_WIRE_JSON_BYTES
+    );
+    manager.stop();
+  });
+
+  it('reconstructs direct chatId from compact inbound call wire', () => {
+    const manager = new CallManager(presenceStub() as any, null);
+    const local = `Q${'a'.repeat(33)}`;
+    const peer = `Q${'b'.repeat(33)}`;
+
+    const parsed = (manager as any).parseCallEnvelope({
+      t: 'CR',
+      c: '123e4567-e89b-12d3-a456-426614174000',
+      a: peer,
+      k: 'P'.repeat(44),
+      g: 'S'.repeat(88),
+      m: 1775545146838,
+      U: local,
+    });
+
+    expect(parsed).toEqual({
+      type: 'CALL_REQUEST',
+      callId: '123e4567-e89b-12d3-a456-426614174000',
+      fromAddress: peer,
+      fromPublicKey: 'P'.repeat(44),
+      chatId: `direct:${[local, peer].sort().join(':')}`,
+      signature: 'S'.repeat(88),
+      timestamp: 1775545146838,
+    });
   });
 
   it('attaches and detaches GroupCallManager bridge listeners after start', () => {

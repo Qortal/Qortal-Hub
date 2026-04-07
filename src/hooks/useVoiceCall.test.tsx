@@ -7,6 +7,7 @@ import {
   dmFriendsByAddressAtom,
   userInfoAtom,
 } from '../atoms/global';
+import { buildDmVoiceRoomId } from '../lib/call/directVoiceReticulumMedia';
 import { buildDirectVoiceCallChatId } from '../lib/call/directVoiceCallChatId';
 import { useVoiceCall } from './useVoiceCall';
 
@@ -304,5 +305,111 @@ describe('useVoiceCall', () => {
     });
 
     expect(resume).toHaveBeenCalledTimes(1);
+  });
+
+  it('requests shared group-call media recovery warm-up for the DM peer on join and peer-joined', async () => {
+    let callEventHandler:
+      | ((event: string, payload: unknown) => void | Promise<void>)
+      | null = null;
+    let gcallEventHandler:
+      | ((event: string, payload: unknown) => void | Promise<void>)
+      | null = null;
+
+    const callApi = {
+      onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
+        callEventHandler = cb;
+        return vi.fn();
+      }),
+      setLocalAddresses: vi.fn(async () => ({ success: true })),
+      accept: vi.fn(async () => ({ success: true })),
+      hangup: vi.fn(async () => ({ success: true })),
+    };
+    const requestPeerMediaRecovery = vi.fn(async () => ({ success: true }));
+    const join = vi.fn(async () => ({
+      success: true,
+      callSessionId: 'call-session',
+      mediaSessionGeneration: 1,
+    }));
+
+    Object.assign(window as any, {
+      AudioContext: class MockAudioContext {
+        state: AudioContextState = 'running';
+        sampleRate = 48_000;
+        baseLatency = 0;
+        constructor(_: AudioContextOptions) {}
+        resume = vi.fn(async () => {});
+        close = vi.fn(async () => {
+          this.state = 'closed';
+        });
+      },
+      call: callApi,
+      groupCall: {
+        onEvent: vi.fn((cb: (event: string, payload: unknown) => void | Promise<void>) => {
+          gcallEventHandler = cb;
+          return vi.fn();
+        }),
+        join,
+        setLocalAddresses: vi.fn(async () => {}),
+        requestPeerMediaRecovery,
+      },
+      electronAPI: {
+        reticulumGetLocalDestinationHash: vi.fn(async () => ({
+          destinationHash: 'a'.repeat(32),
+        })),
+        reticulumGetLocalIdentityPublicKeyBase64: vi.fn(async () => ({
+          publicKeyBase64: 'cmV0aWN1bHVtLWlkZW50aXR5',
+        })),
+      },
+      sendMessage: vi.fn(async () => ({ signature: 'sig' })),
+    });
+
+    const myAddr = 'Qme';
+    const peerAddr = 'Qbuddy';
+    const chatId = buildDirectVoiceCallChatId(myAddr, peerAddr);
+    const roomId = await buildDmVoiceRoomId(chatId);
+    const store = createStore();
+    store.set(userInfoAtom, { address: myAddr, publicKey: 'pub' });
+    store.set(blockedAddressesAtom, {});
+    store.set(dmFriendsByAddressAtom, {
+      [peerAddr]: { publicKey: 'pk', addedAt: 1 },
+    });
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <Provider store={store}>{children}</Provider>
+    );
+
+    const { result } = renderHook(() => useVoiceCall(), { wrapper });
+
+    await act(async () => {
+      await callEventHandler?.('call:incoming', {
+        callId: 'call-ok',
+        fromAddress: peerAddr,
+        chatId,
+      });
+    });
+
+    await act(async () => {
+      await result.current.acceptCall();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(join).toHaveBeenCalled();
+    expect(requestPeerMediaRecovery).toHaveBeenCalledWith(
+      roomId,
+      peerAddr,
+      'dm-call-start'
+    );
+
+    await act(async () => {
+      await gcallEventHandler?.('gcall:participant-joined', {
+        roomId,
+        address: peerAddr,
+      });
+    });
+
+    expect(requestPeerMediaRecovery).toHaveBeenCalledWith(
+      roomId,
+      peerAddr,
+      'dm-peer-joined'
+    );
   });
 });

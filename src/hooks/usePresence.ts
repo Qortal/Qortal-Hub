@@ -101,6 +101,38 @@ export function statusDotColor(status: string | null): string {
   return '#44b700'; // online or any non-null fallback
 }
 
+export function buildPresenceSnapshot(
+  sessions: PresenceSession[]
+): {
+  onlineAddresses: Set<string>;
+  statusMap: Map<string, UserStatus>;
+} {
+  const onlineAddresses = new Set<string>();
+  const latestStatusByAddress = new Map<
+    string,
+    { status: UserStatus; lastSeen: number }
+  >();
+
+  for (const session of sessions) {
+    onlineAddresses.add(session.address);
+    const nextStatus = session.status as UserStatus;
+    const previous = latestStatusByAddress.get(session.address);
+    if (!previous || session.lastSeen > previous.lastSeen) {
+      latestStatusByAddress.set(session.address, {
+        status: nextStatus,
+        lastSeen: session.lastSeen,
+      });
+    }
+  }
+
+  const statusMap = new Map<string, UserStatus>();
+  for (const [address, value] of latestStatusByAddress.entries()) {
+    statusMap.set(address, value.status);
+  }
+
+  return { onlineAddresses, statusMap };
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────────────
 
 /**
@@ -444,16 +476,9 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
     });
 
     window.presence.getAllOnline().then((sessions) => {
-      const addressSet = new Set<string>();
-      const statusMap = new Map<string, UserStatus>();
-      for (const s of sessions) {
-        addressSet.add(s.address);
-        if (!statusMap.has(s.address)) {
-          statusMap.set(s.address, s.status as UserStatus);
-        }
-      }
-      setOnlineAddresses(addressSet);
-      setStatusMap(statusMap);
+      const snapshot = buildPresenceSnapshot(sessions);
+      setOnlineAddresses(snapshot.onlineAddresses);
+      setStatusMap(snapshot.statusMap);
     });
 
     const applyPresenceUpdates = (
