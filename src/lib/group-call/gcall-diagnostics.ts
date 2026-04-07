@@ -144,10 +144,10 @@ export const GCALL_TWO_WAY_DECRYPT_VERIFICATION_HINT =
   'Correlate pending-decrypt stress with gcallPerf.longTasks (timestamps) and transportTriadSnapshot; ' +
   'pass bar for sustained 2-way speech: packetsDroppedPendingDecryptRatePerSec < 1.0/s (window average).';
 
-/** Paired before/after: jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction; provisional pass jitterNotReady window under 0.35, median buffer about 0.45× target or better; watch bufferEnforceActive tier logs. */
+/** Paired before/after: jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction, playoutOutsideTargetFraction, avgPlayoutDeltaMs, and playoutRateFractionBelow1; watch bufferEnforceActive tier logs in steady/recovery modes. */
 export const GCALL_TWO_WAY_JITTER_BASELINE_HINT =
-  'Paired 2-way jitter: compare jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction; ' +
-  'provisional pass (steady speech): jitterNotReadyFraction under 0.35 (window), median buffer at least ~0.45× adaptive target; see bufferEnforceActive / recoveryJitterGeometryApplied in events.';
+  'Paired 2-way jitter: compare jitterNotReadyFraction, avgOpusBufferedMs vs adaptiveTargetMedianMs, playoutUnderTargetFraction, playoutOutsideTargetFraction, avgPlayoutDeltaMs, and playoutRateFractionBelow1; ' +
+  'provisional pass (steady speech): jitterNotReadyFraction under 0.35 (window), median buffer at least ~0.45× adaptive target; see steady/recovery bufferEnforceActive and recoveryJitterGeometryApplied in events.';
 
 /**
  * Phase 0: classify each peer before changing N===1/adaptive constants. **Primary** (and optional

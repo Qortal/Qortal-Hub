@@ -6,6 +6,16 @@
 /** Initial stall escape: no ingress this long → allow one minimal decode (ms). */
 export const GCALL_N1_STALL_ESCAPE_MS = 300;
 
+/**
+ * If a live recovery source stays stuck below full preroll for this long, allow it to leave
+ * preroll early rather than remaining silent indefinitely.
+ */
+export const GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS = 180;
+/** Treat pushes newer than this as evidence that the source is still actively trickling in. */
+export const GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS = 120;
+/** Minimum queued Opus needed before early preroll release is allowed. */
+export const GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS = 20;
+
 /** Min start buffer before "preroll satisfied" (ms), lower bound of clamp — below low-latency adaptive max (120). */
 export const GCALL_N1_MIN_START_MS_FLOOR = 100;
 
@@ -15,8 +25,8 @@ export const GCALL_N1_MIN_START_MS_CEIL = 185;
 /** Micro-accumulation after refill when preroll already satisfied (ms). */
 export const GCALL_N1_ACCUMULATION_MS = 75;
 
-/** Short refill accumulation outside recovery so 2-way steady state does not collapse back to 1 frame. */
-export const GCALL_N1_STEADY_ACCUMULATION_MS = 40;
+/** Short refill accumulation outside recovery so 2-way steady state does not collapse back to 1 frame. Keep it brief so refill does not push usable audio past playout deadlines. */
+export const GCALL_N1_STEADY_ACCUMULATION_MS = 30;
 
 /** Denominator floor for r = bufferMs / max(target, floor) — matches adaptive min order. */
 export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
@@ -36,8 +46,8 @@ export const GCALL_N1_RATIO_DEEP_EXIT_STEADY = 0.28;
 export const GCALL_N1_RATIO_MODERATE = 0.48;
 export const GCALL_N1_RATIO_MODERATE_ENTER = 0.46;
 export const GCALL_N1_RATIO_MODERATE_EXIT = 0.52;
-export const GCALL_N1_RATIO_MODERATE_ENTER_STEADY = 0.38;
-export const GCALL_N1_RATIO_MODERATE_EXIT_STEADY = 0.44;
+export const GCALL_N1_RATIO_MODERATE_ENTER_STEADY = 0.36;
+export const GCALL_N1_RATIO_MODERATE_EXIT_STEADY = 0.42;
 
 /** Throttle [GCall] bufferEnforceActive diagnostics (ms per source). */
 export const GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS = 2000;
@@ -62,6 +72,20 @@ export function computeN1SteadyMinHoldMs(smoothedTargetMs: number): number {
   return Math.max(
     GCALL_N1_STEADY_MIN_HOLD_MS_FLOOR,
     Math.min(GCALL_N1_STEADY_MIN_HOLD_MS_CEIL, Math.round(t * 0.3))
+  );
+}
+
+export function shouldForceN1RecoveryPrerollSatisfied(input: {
+  blockedForMs: number;
+  lastPushAgeMs: number;
+  opusBufferedMs: number;
+  sourceActive: boolean;
+}): boolean {
+  return (
+    input.sourceActive &&
+    input.blockedForMs >= GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS &&
+    input.lastPushAgeMs <= GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS &&
+    input.opusBufferedMs >= GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS
   );
 }
 
@@ -153,6 +177,6 @@ export function computeN1SteadyTierBurstCap(
   scaledBurstCap: number
 ): number {
   if (tier === 'deep') return Math.min(2, scaledBurstCap);
-  if (tier === 'moderate') return Math.min(4, scaledBurstCap);
-  return Math.min(6, scaledBurstCap);
+  if (tier === 'moderate') return Math.min(5, scaledBurstCap);
+  return Math.min(7, scaledBurstCap);
 }

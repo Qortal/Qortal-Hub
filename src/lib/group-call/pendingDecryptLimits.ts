@@ -132,9 +132,10 @@ export function computePendingDecryptLimits(
   nowMs: number,
   globalRecoveryUntilMs: number,
   decryptBurstUntilMs: number,
-  effectiveBurstMax: number
+  effectiveBurstMax: number,
+  overloadActive = false
 ): { max: number; ttlMs: number } {
-  if (nowMs < decryptBurstUntilMs) {
+  if (nowMs < decryptBurstUntilMs || overloadActive) {
     const max = Math.min(
       GLOBAL_MAX_BURST_MAX,
       Math.max(PENDING_DECRYPT_RECOVERY_MAX + 1, Math.floor(effectiveBurstMax))

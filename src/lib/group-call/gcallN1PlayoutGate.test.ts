@@ -3,6 +3,7 @@ import {
   computeN1BufferEnforceTier,
   computeN1BufferRatio,
   computeN1MinStartMs,
+  shouldForceN1RecoveryPrerollSatisfied,
   computeN1SteadyMinHoldMs,
   computeN1SteadyTierBurstCap,
   computeN1TierBurstCap,
@@ -25,6 +26,33 @@ describe('gcallN1PlayoutGate', () => {
     expect(computeN1SteadyMinHoldMs(120)).toBe(36);
     expect(computeN1SteadyMinHoldMs(145)).toBe(40);
     expect(computeN1SteadyMinHoldMs(400)).toBe(40);
+  });
+
+  it('allows recovery preroll to release early for a live thin source', () => {
+    expect(
+      shouldForceN1RecoveryPrerollSatisfied({
+        blockedForMs: 200,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 20,
+        sourceActive: true,
+      })
+    ).toBe(true);
+    expect(
+      shouldForceN1RecoveryPrerollSatisfied({
+        blockedForMs: 120,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 20,
+        sourceActive: true,
+      })
+    ).toBe(false);
+    expect(
+      shouldForceN1RecoveryPrerollSatisfied({
+        blockedForMs: 200,
+        lastPushAgeMs: 180,
+        opusBufferedMs: 20,
+        sourceActive: true,
+      })
+    ).toBe(false);
   });
 
   it('computeN1BufferRatio uses max target floor', () => {
@@ -60,9 +88,9 @@ describe('gcallN1PlayoutGate', () => {
     expect(stepN1SteadyBufferEnforceTier('deep', 0.3)).toBe('moderate');
     expect(stepN1SteadyBufferEnforceTier('moderate', 0.23)).toBe('moderate');
     expect(stepN1SteadyBufferEnforceTier('moderate', 0.21)).toBe('deep');
-    expect(stepN1SteadyBufferEnforceTier('moderate', 0.43)).toBe('moderate');
-    expect(stepN1SteadyBufferEnforceTier('moderate', 0.45)).toBe('normal');
-    expect(stepN1SteadyBufferEnforceTier('normal', 0.4)).toBe('normal');
+    expect(stepN1SteadyBufferEnforceTier('moderate', 0.41)).toBe('moderate');
+    expect(stepN1SteadyBufferEnforceTier('moderate', 0.43)).toBe('normal');
+    expect(stepN1SteadyBufferEnforceTier('normal', 0.36)).toBe('normal');
     expect(stepN1SteadyBufferEnforceTier('normal', 0.35)).toBe('moderate');
   });
 
@@ -77,7 +105,7 @@ describe('gcallN1PlayoutGate', () => {
 
   it('computeN1SteadyTierBurstCap is gentler than recovery shaping', () => {
     expect(computeN1SteadyTierBurstCap('deep', 11)).toBe(2);
-    expect(computeN1SteadyTierBurstCap('moderate', 11)).toBe(4);
-    expect(computeN1SteadyTierBurstCap('normal', 11)).toBe(6);
+    expect(computeN1SteadyTierBurstCap('moderate', 11)).toBe(5);
+    expect(computeN1SteadyTierBurstCap('normal', 11)).toBe(7);
   });
 });

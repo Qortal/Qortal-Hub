@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computePhaseDSourceBurstBonus,
   computeGlobalDecodeBudget,
   computeOrderedDrainAddresses,
   computePerSourceCap,
   computeProtectedDecodeCap,
   computeProtectedDecodeCapForBreach,
   isCollapsedForStarvation,
+  isNearCollapsedForStarvation,
+  shouldEnterProtectedMode,
+  shouldExitProtectedMode,
   starvationRecoveryBarSatisfied,
 } from './gcallJitterDrainPhaseD';
 
@@ -61,6 +65,18 @@ describe('starvationRecoveryBarSatisfied', () => {
       })
     ).toBe(true);
   });
+
+  it('keeps the recovery bar blocked while playout starvation is still strong', () => {
+    expect(
+      starvationRecoveryBarSatisfied({
+        bufferedFrames: 4,
+        opusBufferedMs: 60,
+        minOpusLastMTicks: 20,
+        adaptiveTargetMedianMs: 100,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+  });
 });
 
 describe('isCollapsedForStarvation', () => {
@@ -86,6 +102,109 @@ describe('isCollapsedForStarvation', () => {
         adaptiveTargetMedianMs: 200,
       })
     ).toBe(false);
+  });
+});
+
+describe('shouldEnterProtectedMode', () => {
+  it('keeps collapsed sources protected regardless of severity', () => {
+    expect(
+      shouldEnterProtectedMode({
+        collapsed: true,
+        starvationSeverity: 'none',
+      })
+    ).toBe(true);
+  });
+
+  it('protects strongly starved sources even before opus reserve collapses', () => {
+    expect(
+      shouldEnterProtectedMode({
+        collapsed: false,
+        starvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldEnterProtectedMode({
+        collapsed: false,
+        starvationSeverity: 'mild',
+      })
+    ).toBe(false);
+  });
+
+  it('protects mildly starved sources once they are near collapse', () => {
+    expect(
+      shouldEnterProtectedMode({
+        collapsed: false,
+        nearCollapsed: true,
+        starvationSeverity: 'mild',
+      })
+    ).toBe(true);
+  });
+});
+
+describe('isNearCollapsedForStarvation', () => {
+  it('trips before full collapse when the source is still very thin', () => {
+    expect(
+      isNearCollapsedForStarvation({
+        bufferedFrames: 4,
+        opusBufferedMs: 80,
+        adaptiveTargetMedianMs: 200,
+      })
+    ).toBe(true);
+    expect(
+      isNearCollapsedForStarvation({
+        bufferedFrames: 5,
+        opusBufferedMs: 120,
+        adaptiveTargetMedianMs: 200,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('shouldExitProtectedMode', () => {
+  it('waits for playout starvation to fully clear before exiting protected mode', () => {
+    expect(
+      shouldExitProtectedMode({
+        bufferedFrames: 4,
+        recoveryBarSatisfied: true,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(false);
+    expect(
+      shouldExitProtectedMode({
+        bufferedFrames: 4,
+        recoveryBarSatisfied: true,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(true);
+  });
+});
+
+describe('computePhaseDSourceBurstBonus', () => {
+  it('gives extra help to protected thin sources without boosting healthy ones', () => {
+    expect(
+      computePhaseDSourceBurstBonus({
+        initialBufferedFrames: 2,
+        thinBufferThresholdFrames: 2,
+        protectedMode: true,
+        starvationSeverity: 'mild',
+      })
+    ).toBe(2);
+    expect(
+      computePhaseDSourceBurstBonus({
+        initialBufferedFrames: 2,
+        thinBufferThresholdFrames: 2,
+        protectedMode: false,
+        starvationSeverity: 'none',
+      })
+    ).toBe(1);
+    expect(
+      computePhaseDSourceBurstBonus({
+        initialBufferedFrames: 5,
+        thinBufferThresholdFrames: 2,
+        protectedMode: true,
+        starvationSeverity: 'strong',
+      })
+    ).toBe(0);
   });
 });
 

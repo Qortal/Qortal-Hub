@@ -20,6 +20,8 @@ export const GCALL_JITTER_STARVATION_RECOVERY_IMPROVE_DELTA_MS = 20;
 export const GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS = 3;
 /** Recovery bar (2b): fraction of adaptive target median (ms). */
 export const GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET = 0.35;
+/** Earlier warning band: protect thin sources before full collapse during multi-source recovery. */
+export const GCALL_JITTER_STARVATION_NEAR_COLLAPSE_BETA_TARGET = 0.5;
 /** De-escalation: consecutive ticks at/above depth floor before exiting protected scheduling. */
 export const GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS = 3;
 
@@ -52,7 +54,11 @@ export function starvationRecoveryBarSatisfied(input: {
   opusBufferedMs: number;
   minOpusLastMTicks: number;
   adaptiveTargetMedianMs: number;
+  playoutStarvationSeverity?: 'none' | 'mild' | 'strong';
 }): boolean {
+  if (input.playoutStarvationSeverity === 'strong') {
+    return false;
+  }
   if (input.bufferedFrames < GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN) {
     return false;
   }
@@ -76,6 +82,63 @@ export function isCollapsedForStarvation(input: {
     input.opusBufferedMs <
       input.adaptiveTargetMedianMs * GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET
   );
+}
+
+export function isNearCollapsedForStarvation(input: {
+  bufferedFrames: number;
+  opusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+}): boolean {
+  return (
+    input.bufferedFrames <= GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN + 1 ||
+    input.opusBufferedMs <
+      input.adaptiveTargetMedianMs *
+        GCALL_JITTER_STARVATION_NEAR_COLLAPSE_BETA_TARGET
+  );
+}
+
+/**
+ * Multi-source recovery can be playout-starved even when Opus reserve still looks healthy.
+ * Promote sources with proven strong starvation into protected scheduling before the buffer
+ * fully collapses so they can recover PCM/playout deadlines sooner.
+ */
+export function shouldEnterProtectedMode(input: {
+  collapsed: boolean;
+  nearCollapsed?: boolean;
+  starvationSeverity: 'none' | 'mild' | 'strong';
+}): boolean {
+  return (
+    input.collapsed ||
+    input.starvationSeverity === 'strong' ||
+    (input.nearCollapsed === true && input.starvationSeverity === 'mild')
+  );
+}
+
+export function shouldExitProtectedMode(input: {
+  bufferedFrames: number;
+  recoveryBarSatisfied: boolean;
+  playoutStarvationSeverity: 'none' | 'mild' | 'strong';
+}): boolean {
+  return (
+    input.recoveryBarSatisfied &&
+    input.bufferedFrames >= GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN &&
+    input.playoutStarvationSeverity === 'none'
+  );
+}
+
+export function computePhaseDSourceBurstBonus(input: {
+  initialBufferedFrames: number;
+  thinBufferThresholdFrames: number;
+  protectedMode: boolean;
+  starvationSeverity: 'none' | 'mild' | 'strong';
+}): number {
+  if (input.initialBufferedFrames > input.thinBufferThresholdFrames) {
+    return 0;
+  }
+  if (input.protectedMode || input.starvationSeverity === 'strong') {
+    return 2;
+  }
+  return 1;
 }
 
 export function computePerSourceCap(scaledBurstCap: number, n: number): number {

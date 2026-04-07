@@ -100,6 +100,35 @@ export function diminishingPlayoutExtraMs(activeSourceCount: number): number {
 }
 
 /**
+ * Multi-source recovery can become self-defeating when the target ceiling stays pinned near the
+ * single-peer severe cap while 3-4 remotes share the same decode budget. Clamp the ceiling back
+ * toward the profile max so starved peers can recover to a realistic target.
+ */
+export function computeRecoveryMultiSourceTargetMaxMs(input: {
+  profileAdaptiveMaxMs: number;
+  profileAdaptiveSevereMaxMs: number;
+  activeSourceCount: number;
+  starvationSeverity: 'none' | 'mild' | 'strong';
+  isolatedSource?: boolean;
+}): number | null {
+  const n = Math.max(1, input.activeSourceCount);
+  if (n < 3) return null;
+  const baseExtraMs = n >= 4 ? 12 : 16;
+  const starvationBonusMs =
+    input.starvationSeverity === 'strong'
+      ? 8
+      : input.starvationSeverity === 'mild'
+        ? 4
+        : 0;
+  const isolationBonusMs = input.isolatedSource ? 4 : 0;
+  return Math.min(
+    input.profileAdaptiveSevereMaxMs,
+    input.profileAdaptiveMaxMs +
+      Math.min(24, baseExtraMs + starvationBonusMs + isolationBonusMs)
+  );
+}
+
+/**
  * Effective ceiling for adaptive playout max target: profile cap, global cap, and
  * diminishing margin vs participant count.
  */

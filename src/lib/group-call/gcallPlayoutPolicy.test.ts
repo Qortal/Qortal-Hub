@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GroupCallSourceWindowMetrics } from './router';
 import {
+  computeRecoveryMultiSourceTargetMaxMs,
   diminishingPlayoutExtraMs,
   effectivePlayoutMaxTargetMs,
   stepWorstIsolationHysteresis,
@@ -34,6 +35,34 @@ describe('gcallPlayoutPolicy', () => {
     });
     expect(nWay).toBeGreaterThanOrEqual(145);
     expect(nWay).toBeLessThanOrEqual(145);
+  });
+
+  it('clamps multi-source recovery targets back toward realistic group-call ceilings', () => {
+    expect(
+      computeRecoveryMultiSourceTargetMaxMs({
+        profileAdaptiveMaxMs: 145,
+        profileAdaptiveSevereMaxMs: 185,
+        activeSourceCount: 2,
+        starvationSeverity: 'none',
+      })
+    ).toBe(null);
+    expect(
+      computeRecoveryMultiSourceTargetMaxMs({
+        profileAdaptiveMaxMs: 145,
+        profileAdaptiveSevereMaxMs: 185,
+        activeSourceCount: 4,
+        starvationSeverity: 'none',
+      })
+    ).toBe(157);
+    expect(
+      computeRecoveryMultiSourceTargetMaxMs({
+        profileAdaptiveMaxMs: 145,
+        profileAdaptiveSevereMaxMs: 185,
+        activeSourceCount: 4,
+        starvationSeverity: 'strong',
+        isolatedSource: true,
+      })
+    ).toBe(169);
   });
 
   it('adds dynamic ceiling lift before global cap', () => {

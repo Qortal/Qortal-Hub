@@ -78,6 +78,16 @@ describe('computePendingDecryptLimits', () => {
       ttlMs: PENDING_DECRYPT_BURST_TTL_MS,
     });
   });
+
+  it('uses dynamic burst limits while decrypt overload is active', () => {
+    const now = 10_000;
+    expect(
+      computePendingDecryptLimits(now, 0, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE, true)
+    ).toEqual({
+      max: PENDING_DECRYPT_BURST_NOMINAL_BASE,
+      ttlMs: PENDING_DECRYPT_BURST_TTL_MS,
+    });
+  });
 });
 
 describe('computeRequestedBurstMaxFromSignals', () => {

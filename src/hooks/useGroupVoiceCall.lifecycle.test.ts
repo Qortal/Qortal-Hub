@@ -3,6 +3,7 @@ import {
   bumpGroupCallAudioSessionToken,
   chooseSameEpochTopologyWinner,
   computeJitterReadyThresholdFrames,
+  getRecoveryStabilityThresholds,
   countRecentlyHealthyRemoteSources,
   computeSteadyTargetDecayThresholdMs,
   clearAdaptiveGroupCallPlayoutMaps,
@@ -26,6 +27,9 @@ import {
   shouldContinueAfterParticipantJoinRefresh,
   shouldDelayPostJoinRosterElection,
   shouldEscalateRoomWideKeyRecovery,
+  shouldAccelerateMultiSourceRecoveryDecay,
+  shouldAccelerateSingleRemoteRecoveryDecay,
+  shouldDropActiveJitterSource,
   shouldIgnoreParticipantLeftEvent,
   shouldIgnoreRedundantRoomKeyDelivery,
   shouldMintRootSessionKeyImmediately,
@@ -138,14 +142,27 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(true);
   });
 
-  it('lowers the calm-decay threshold for stable single-remote low-latency calls', () => {
+  it('uses looser recovery-exit thresholds for exact-1-remote calls', () => {
+    expect(getRecoveryStabilityThresholds(1)).toEqual({
+      minBufferedMs: 105,
+      maxUnderTargetFraction: 0.35,
+      maxUnderruns: 4,
+    });
+    expect(getRecoveryStabilityThresholds(2)).toEqual({
+      minBufferedMs: 120,
+      maxUnderTargetFraction: 0.2,
+      maxUnderruns: 2,
+    });
+  });
+
+  it('keeps more headroom before calm decay accelerates in stable single-remote low-latency calls', () => {
     expect(
       computeSteadyTargetDecayThresholdMs({
         adaptiveMaxTargetMs: 145,
         activeSourceCount: 1,
         adaptiveNetworkMode: 'low-latency',
       })
-    ).toBe(133);
+    ).toBe(137);
     expect(
       computeSteadyTargetDecayThresholdMs({
         adaptiveMaxTargetMs: 145,
@@ -190,6 +207,97 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         steadyPrimedHoldFrames: 1,
       })
     ).toBe(3);
+  });
+
+  it('keeps a jitter source active while inbound audio is still recent', () => {
+    expect(
+      shouldDropActiveJitterSource({
+        emptyTicks: 3,
+        playoutActive: true,
+      })
+    ).toBe(false);
+    expect(
+      shouldDropActiveJitterSource({
+        emptyTicks: 3,
+        playoutActive: false,
+      })
+    ).toBe(true);
+  });
+
+  it('accelerates decay for chronically under-target multi-source recovery peers', () => {
+    expect(
+      shouldAccelerateMultiSourceRecoveryDecay({
+        activeSourceCount: 4,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'strong',
+        bufferAdequacy: 0.4,
+        avgPlayoutDeltaMs: -85,
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+      })
+    ).toBe(true);
+    expect(
+      shouldAccelerateMultiSourceRecoveryDecay({
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'strong',
+        bufferAdequacy: 0.4,
+        avgPlayoutDeltaMs: -85,
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldAccelerateMultiSourceRecoveryDecay({
+        activeSourceCount: 4,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'mild',
+        bufferAdequacy: 0.8,
+        avgPlayoutDeltaMs: -20,
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+      })
+    ).toBe(false);
+  });
+
+  it('accelerates decay for single-remote recovery once playout is mostly stable', () => {
+    expect(
+      shouldAccelerateSingleRemoteRecoveryDecay({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+        recentStability: {
+          sampleCount: 3,
+          avgPcmBufferedMs: 130,
+          playoutUnderTargetFraction: 0.2,
+          underrunCount: 3,
+          stable: true,
+          severeInstability: false,
+        },
+      })
+    ).toBe(true);
+    expect(
+      shouldAccelerateSingleRemoteRecoveryDecay({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+        recentStability: {
+          sampleCount: 2,
+          avgPcmBufferedMs: 90,
+          playoutUnderTargetFraction: 0.2,
+          underrunCount: 1,
+          stable: false,
+          severeInstability: false,
+        },
+      })
+    ).toBe(false);
   });
 
   it('only seeds join session state before the root session is adopted', () => {

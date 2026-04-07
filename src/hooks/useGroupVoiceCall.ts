@@ -81,15 +81,18 @@ import {
   type GroupCallAudioQualityProfile,
 } from '../lib/group-call/groupCallAudioProfile';
 import {
+  computePhaseDSourceBurstBonus,
   computeGlobalDecodeBudget,
   computeOrderedDrainAddresses,
   computePerSourceCap,
   computeProtectedDecodeCapForBreach,
   GCALL_JITTER_STARVATION_MAX_TICKS_WITHOUT_PROTECTED_SERVICE,
   GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS,
-  GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN,
   GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS,
   isCollapsedForStarvation,
+  isNearCollapsedForStarvation,
+  shouldEnterProtectedMode,
+  shouldExitProtectedMode,
   starvationRecoveryBarSatisfied,
 } from '../lib/group-call/gcallJitterDrainPhaseD';
 import {
@@ -124,6 +127,7 @@ import {
   PATH_QUALITY_PEER_COVERAGE_SESSION,
 } from '../lib/group-call/pathQualityScore';
 import {
+  computeRecoveryMultiSourceTargetMaxMs,
   createWorstIsolationHysteresisState,
   computeMicroWidenExtraMsV1,
   effectivePlayoutMaxTargetMs,
@@ -196,6 +200,7 @@ import {
   computeN1TierBurstCap,
   GCALL_N1_ACCUMULATION_MS,
   GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS,
+  shouldForceN1RecoveryPrerollSatisfied,
   GCALL_N1_STEADY_ACCUMULATION_MS,
   GCALL_N1_STALL_ESCAPE_MS,
   stepN1BufferEnforceTier,
@@ -384,8 +389,10 @@ const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
 const GCALL_STABLE_RECOVERY_ALPHA_DOWN = 0.34;
-const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.36;
-const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 12;
+const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.32;
+const GCALL_MULTI_SOURCE_RECOVERY_ALPHA_DOWN = 0.42;
+const GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN = 0.4;
+const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 8;
 const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
@@ -450,6 +457,9 @@ const ADAPTIVE_RECOVERY_REENTRY_COOLDOWN_MS = 300;
 const ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS = 120;
 const ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX = 0.2;
 const ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS = 2;
+const ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE = 105;
+const ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE = 0.35;
+const ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS_SINGLE_REMOTE = 4;
 const ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION = 0.45;
 const ADAPTIVE_RECOVERY_SEVERE_UNDERRUNS = 4;
 const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 20;
@@ -617,6 +627,30 @@ export interface RecentRecoveryStabilitySummary {
   severeInstability: boolean;
 }
 
+export interface RecoveryStabilityThresholds {
+  minBufferedMs: number;
+  maxUnderTargetFraction: number;
+  maxUnderruns: number;
+}
+
+export function getRecoveryStabilityThresholds(
+  activeSourceCount: number
+): RecoveryStabilityThresholds {
+  if (activeSourceCount === 1) {
+    return {
+      minBufferedMs: ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE,
+      maxUnderTargetFraction:
+        ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE,
+      maxUnderruns: ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS_SINGLE_REMOTE,
+    };
+  }
+  return {
+    minBufferedMs: ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS,
+    maxUnderTargetFraction: ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX,
+    maxUnderruns: ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS,
+  };
+}
+
 export function summarizeRecentRecoveryStability(opts: {
   samples: readonly RecoveryPlayoutHealthSample[];
   underrunTimesMs: readonly number[];
@@ -632,7 +666,8 @@ export function summarizeRecentRecoveryStability(opts: {
     opts.minBufferedMs ?? ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS;
   const maxUnderTargetFraction =
     opts.maxUnderTargetFraction ?? ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX;
-  const maxUnderruns = opts.maxUnderruns ?? ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS;
+  const maxUnderruns =
+    opts.maxUnderruns ?? ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS;
   const severeUnderTargetFraction =
     opts.severeUnderTargetFraction ??
     ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION;
@@ -646,14 +681,13 @@ export function summarizeRecentRecoveryStability(opts: {
   const sampleCount = samples.length;
   const avgPcmBufferedMs =
     sampleCount > 0
-      ? samples.reduce((sum, sample) => sum + sample.bufferedMs, 0) / sampleCount
+      ? samples.reduce((sum, sample) => sum + sample.bufferedMs, 0) /
+        sampleCount
       : 0;
   const playoutUnderTargetFraction =
     sampleCount > 0
-      ? samples.reduce(
-          (sum, sample) => sum + (sample.underTarget ? 1 : 0),
-          0
-        ) / sampleCount
+      ? samples.reduce((sum, sample) => sum + (sample.underTarget ? 1 : 0), 0) /
+        sampleCount
       : 0;
   const stable =
     sampleCount >= 2 &&
@@ -686,10 +720,7 @@ export function computeSteadyTargetDecayThresholdMs(opts: {
   activeSourceCount: number;
   adaptiveNetworkMode: 'low-latency' | 'recovery';
 }): number {
-  if (
-    opts.activeSourceCount === 1 &&
-    opts.adaptiveNetworkMode !== 'recovery'
-  ) {
+  if (opts.activeSourceCount === 1 && opts.adaptiveNetworkMode !== 'recovery') {
     return Math.min(
       GCALL_DECAY_GUARD_HIGH_TARGET_MS,
       Math.max(
@@ -699,6 +730,60 @@ export function computeSteadyTargetDecayThresholdMs(opts: {
     );
   }
   return GCALL_DECAY_GUARD_HIGH_TARGET_MS;
+}
+
+export function shouldDropActiveJitterSource(opts: {
+  emptyTicks: number;
+  playoutActive: boolean;
+  hysteresisTicks?: number;
+}): boolean {
+  const hysteresisTicks = opts.hysteresisTicks ?? JITTER_EMPTY_HYSTERESIS_TICKS;
+  return opts.emptyTicks >= hysteresisTicks && !opts.playoutActive;
+}
+
+export function shouldAccelerateMultiSourceRecoveryDecay(opts: {
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  starvationSeverity: PlayoutStarvationSeverity;
+  bufferAdequacy: number;
+  avgPlayoutDeltaMs: number;
+  shouldTightenRecovery: boolean;
+  severeWindowSource: boolean;
+  ingressPeerRecovery: boolean;
+}): boolean {
+  return (
+    opts.activeSourceCount >= 3 &&
+    opts.adaptiveNetworkMode === 'recovery' &&
+    opts.starvationSeverity !== 'none' &&
+    opts.bufferAdequacy < 0.65 &&
+    opts.avgPlayoutDeltaMs <= -40 &&
+    !opts.shouldTightenRecovery &&
+    !opts.severeWindowSource &&
+    !opts.ingressPeerRecovery
+  );
+}
+
+export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  shouldTightenRecovery: boolean;
+  severeWindowSource: boolean;
+  ingressPeerRecovery: boolean;
+  recentStability: RecentRecoveryStabilitySummary;
+}): boolean {
+  return (
+    opts.activeSourceCount === 1 &&
+    opts.adaptiveNetworkMode === 'recovery' &&
+    !opts.shouldTightenRecovery &&
+    !opts.severeWindowSource &&
+    !opts.ingressPeerRecovery &&
+    !opts.recentStability.severeInstability &&
+    opts.recentStability.sampleCount >= 2 &&
+    opts.recentStability.avgPcmBufferedMs >=
+      ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE &&
+    opts.recentStability.playoutUnderTargetFraction <=
+      ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE
+  );
 }
 
 /**
@@ -2127,6 +2212,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastJitterOpusPushPerfRef = useRef<Map<string, number>>(new Map());
   /** Preroll satisfied once bufferMs >= minStartMs for this source. */
   const jitterPrerollSatisfiedRef = useRef<Map<string, boolean>>(new Map());
+  /** While recovery preroll is blocked with a live thin source, track how long we have been stuck. */
+  const n1RecoveryPrerollBlockedSincePerfRef = useRef<Map<string, number>>(
+    new Map()
+  );
   /** While `performance.now() < value`, N===1 accumulation caps burst (disabled during preroll). */
   const jitterAccumulationUntilPerfRef = useRef<Map<string, number>>(new Map());
   /** Last stall-escape minimal decode time (`performance.now()`). */
@@ -2191,9 +2280,9 @@ export function useGroupVoiceCall(uiActive = false) {
     }[]
   >([]);
   /** Pending setTimeout/postTask continuation for {@link pendingDecryptApplyQueueRef} drain. */
-  const decryptApplyDrainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
-    null
-  );
+  const decryptApplyDrainTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
   /** Prior sample for depth trend (overload entry). */
   const previousDepthForOverloadRef = useRef(0);
   /** Updated on Opus send-pressure interval from gcall perf (long-task burst / heavy frames). */
@@ -2289,7 +2378,8 @@ export function useGroupVoiceCall(uiActive = false) {
     if (!wasmFecPipelineRef.current) {
       wasmFecPipelineRef.current = new GcallOpusFecPlayoutPipeline(
         (addr) => playbackWorkletsRef.current.get(addr),
-        (addr, stats) => metricsRef.current.recordWasmFecDecodeStats(addr, stats)
+        (addr, stats) =>
+          metricsRef.current.recordWasmFecDecodeStats(addr, stats)
       );
     }
     return wasmFecPipelineRef.current;
@@ -2363,7 +2453,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const sendEncodedFrameRef = useRef<(opusFrame: Uint8Array) => void>(() => {});
   const opusEncoderApplyBitrateRef = useRef<(bps: number) => void>(() => {});
   const opusEncoderLastConfiguredBitrateRef = useRef<number | null>(null);
-  const opusSendPressureStateRef = useRef(createOpusSendPressureControllerState());
+  const opusSendPressureStateRef = useRef(
+    createOpusSendPressureControllerState()
+  );
 
   const perfEnabled = gcallPerfEnabledRef.current;
   const recordPerfDuration = useCallback(
@@ -2538,10 +2630,13 @@ export function useGroupVoiceCall(uiActive = false) {
   const summarizePeerRecentRecoveryStability = useCallback(
     (peerAddress: string, nowMs: number) => {
       const sourceAddrs = [...activeJitterSourcesRef.current].filter(
-        (sourceAddr) => sourceIngressPeerRef.current.get(sourceAddr) === peerAddress
+        (sourceAddr) =>
+          sourceIngressPeerRef.current.get(sourceAddr) === peerAddress
       );
+      const thresholds = getRecoveryStabilityThresholds(sourceAddrs.length);
       const samples = sourceAddrs.flatMap(
-        (sourceAddr) => recentPlayoutHealthSamplesRef.current.get(sourceAddr) ?? []
+        (sourceAddr) =>
+          recentPlayoutHealthSamplesRef.current.get(sourceAddr) ?? []
       );
       const underrunTimesMs = sourceAddrs.flatMap(
         (sourceAddr) => recentJitterUnderrunAtRef.current.get(sourceAddr) ?? []
@@ -2551,6 +2646,9 @@ export function useGroupVoiceCall(uiActive = false) {
         underrunTimesMs,
         nowMs,
         windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
+        minBufferedMs: thresholds.minBufferedMs,
+        maxUnderTargetFraction: thresholds.maxUnderTargetFraction,
+        maxUnderruns: thresholds.maxUnderruns,
       });
     },
     []
@@ -2561,12 +2659,18 @@ export function useGroupVoiceCall(uiActive = false) {
       const pressureAssessment = lastWindowMetricsRef.current
         ? assessReticulumAudioPressureWindow(lastWindowMetricsRef.current)
         : null;
-      for (const [peerAddress, profile] of peerRecoveryProfileRef.current.entries()) {
+      for (const [
+        peerAddress,
+        profile,
+      ] of peerRecoveryProfileRef.current.entries()) {
         if (profile !== 'recovery') {
           peerRecoveryStableSinceRef.current.delete(peerAddress);
           continue;
         }
-        const summary = summarizePeerRecentRecoveryStability(peerAddress, nowMs);
+        const summary = summarizePeerRecentRecoveryStability(
+          peerAddress,
+          nowMs
+        );
         const enteredAt =
           peerRecoveryEnteredAtRef.current.get(peerAddress) ?? nowMs;
         const canExit =
@@ -3351,7 +3455,8 @@ export function useGroupVoiceCall(uiActive = false) {
       );
       if (windowMetrics.packetsDroppedPendingDecrypt > 0) {
         gcallDiagnosticsPush('warn', '[GCall] windowPendingDecryptDrops', {
-          packetsDroppedPendingDecrypt: windowMetrics.packetsDroppedPendingDecrypt,
+          packetsDroppedPendingDecrypt:
+            windowMetrics.packetsDroppedPendingDecrypt,
           packetsDroppedPendingDecryptRatePerSec:
             windowMetrics.packetsDroppedPendingDecryptRatePerSec,
           pendingDecryptDepthHighWater:
@@ -3437,6 +3542,8 @@ export function useGroupVoiceCall(uiActive = false) {
       const previousWindowPressure = lastWindowMetricsRef.current
         ? assessReticulumAudioPressureWindow(lastWindowMetricsRef.current)
         : null;
+      const shouldTightenRecovery =
+        previousWindowPressure?.shouldTightenRecovery === true;
       const previousWindowAssessment =
         previousWindowSource !== null
           ? assessGroupCallSourceWindowForRecovery(previousWindowSource)
@@ -3444,8 +3551,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const severeWindowSource =
         previousWindowAssessment !== null &&
         (previousWindowAssessment.severe ||
-          (previousWindowAssessment.shouldEscalate &&
-            previousWindowPressure?.shouldTightenRecovery === true));
+          (previousWindowAssessment.shouldEscalate && shouldTightenRecovery));
       const ingressPeerAddress = sourceIngressPeerRef.current.get(addr) ?? null;
       const ingressPeerRecovery =
         ingressPeerAddress && ingressPeerAddress !== RELAY_INGRESS_PEER
@@ -3572,6 +3678,24 @@ export function useGroupVoiceCall(uiActive = false) {
         activeSourceCount,
         dynamicCeilingLiftMs,
       });
+      const multiSourceRecoveryTargetMaxMs = computeRecoveryMultiSourceTargetMaxMs({
+        profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
+        profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
+        activeSourceCount,
+        starvationSeverity: nextStarvationSev,
+        isolatedSource: isolateThisSource,
+      });
+      if (
+        adaptiveNetworkMode === 'recovery' &&
+        multiSourceRecoveryTargetMaxMs !== null &&
+        !shouldTightenRecovery &&
+        !ingressPeerRecovery
+      ) {
+        adaptiveMaxTargetMs = Math.min(
+          adaptiveMaxTargetMs,
+          multiSourceRecoveryTargetMaxMs
+        );
+      }
       if (failSafeStateRef.current.active) {
         adaptiveMaxTargetMs = Math.min(
           adaptiveMaxTargetMs,
@@ -3621,11 +3745,38 @@ export function useGroupVoiceCall(uiActive = false) {
       if (nextStarvationSev === 'none' && starvationCooldownActive) {
         alphaDown = Math.min(baseAlphaDown, 0.2);
       }
+      const acceleratedMultiSourceDecay =
+        previousWindowSource !== null &&
+        shouldAccelerateMultiSourceRecoveryDecay({
+          activeSourceCount,
+          adaptiveNetworkMode,
+          starvationSeverity: nextStarvationSev,
+          bufferAdequacy,
+          avgPlayoutDeltaMs: previousWindowSource.avgPlayoutDeltaMs,
+          shouldTightenRecovery,
+          severeWindowSource,
+          ingressPeerRecovery,
+        });
+      if (acceleratedMultiSourceDecay) {
+        alphaDown = Math.max(alphaDown, GCALL_MULTI_SOURCE_RECOVERY_ALPHA_DOWN);
+      }
+      const acceleratedSingleRemoteRecoveryDecay =
+        shouldAccelerateSingleRemoteRecoveryDecay({
+          activeSourceCount,
+          adaptiveNetworkMode,
+          shouldTightenRecovery,
+          severeWindowSource,
+          ingressPeerRecovery,
+          recentStability,
+        });
+      if (acceleratedSingleRemoteRecoveryDecay) {
+        alphaDown = Math.max(alphaDown, GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN);
+      }
 
       const stableSingleRemoteLowLatency =
         activeSourceCount === 1 &&
         adaptiveNetworkMode !== 'recovery' &&
-        previousWindowPressure?.shouldTightenRecovery !== true &&
+        !shouldTightenRecovery &&
         !severeWindowSource &&
         !ingressPeerRecovery &&
         recentStability.stable;
@@ -3668,7 +3819,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       if (
         adaptiveNetworkMode === 'recovery' &&
-        previousWindowPressure?.shouldTightenRecovery !== true &&
+        !shouldTightenRecovery &&
         recentStability.stable
       ) {
         alphaDown = Math.max(alphaDown, GCALL_STABLE_RECOVERY_ALPHA_DOWN);
@@ -3695,7 +3846,8 @@ export function useGroupVoiceCall(uiActive = false) {
       });
       const smooth = smoothRaw;
 
-      const lastStarvDiag = lastPlayoutStarvationDiagAtRef.current.get(addr) ?? 0;
+      const lastStarvDiag =
+        lastPlayoutStarvationDiagAtRef.current.get(addr) ?? 0;
       const starvationDiagThrottleMs = 5_000;
       const shouldStarvationDiag =
         prevStarvationSev !== nextStarvationSev ||
@@ -3710,6 +3862,9 @@ export function useGroupVoiceCall(uiActive = false) {
           starvationLiftAppliedMs: starvationLiftMs,
           microWidenCeilingLiftMs,
           dynamicCeilingLiftMs,
+          acceleratedMultiSourceDecay,
+          acceleratedSingleRemoteRecoveryDecay,
+          multiSourceRecoveryTargetMaxMs,
           bufferAdequacy,
           targetMs: smoothedTargetMsForAdequacy,
           avgPcmBufferedMs: previousWindowSource?.avgPcmBufferedMs ?? null,
@@ -3761,7 +3916,9 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSentPlayoutTargetRef.current.set(addr, smooth);
       lastPlayoutTargetPostAtRef.current.set(addr, now);
     }
-    metricsRef.current.setPlayoutStarvationWorstSeverity(playoutStarvationWorst);
+    metricsRef.current.setPlayoutStarvationWorstSeverity(
+      playoutStarvationWorst
+    );
     if (postCount > 0) {
       incrementPerfCounter('adaptivePosts', postCount);
     }
@@ -4150,7 +4307,8 @@ export function useGroupVoiceCall(uiActive = false) {
           );
           const packetPathResolutionDelta = Math.max(
             0,
-            diagnostics.bridge.packetPathResolutions - last.packetPathResolutions
+            diagnostics.bridge.packetPathResolutions -
+              last.packetPathResolutions
           );
           const packetPathTimeoutDelta = Math.max(
             0,
@@ -4346,8 +4504,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const pressured = forwarderRole
         ? isReticulumSendPressureSignalForwarder(pressureSnap)
         : isReticulumSendPressureSignal(pressureSnap);
-      const forwarderFanout =
-        forwarderRole && (snap.packetsForwarded ?? 0) > 0;
+      const forwarderFanout = forwarderRole && (snap.packetsForwarded ?? 0) > 0;
       const nominalBitrate = Math.round(
         audioTuningRef.current.opusBitrate * (forwarderFanout ? 0.92 : 1)
       );
@@ -4374,7 +4531,9 @@ export function useGroupVoiceCall(uiActive = false) {
       const burstWindow = wallNow < decryptBurstUntilMsRef.current;
       const slewDt = Math.max(0, wallNow - lastBurstMaxSlewAtMsRef.current);
       lastBurstMaxSlewAtMsRef.current = wallNow;
-      if (burstWindow) {
+      const dynamicBurstActive =
+        burstWindow || decryptOverloadStateRef.current.active;
+      if (dynamicBurstActive) {
         effectiveBurstMaxRef.current = slewBurstMaxTowardRequested(
           effectiveBurstMaxRef.current,
           requested,
@@ -4482,6 +4641,7 @@ export function useGroupVoiceCall(uiActive = false) {
       smoothedPlayoutTargetRef.current.delete(address);
       recentPlayoutHealthSamplesRef.current.delete(address);
       recentJitterUnderrunAtRef.current.delete(address);
+      n1RecoveryPrerollBlockedSincePerfRef.current.delete(address);
       lastSentPlayoutTargetRef.current.delete(address);
       lastPlayoutTargetPostAtRef.current.delete(address);
       lastDrainMissedRef.current.delete(address);
@@ -4551,7 +4711,11 @@ export function useGroupVoiceCall(uiActive = false) {
       scheduleRelayMetricsFlush();
       const label = addresses[0] ?? '';
       const sendBatch = gc.sendAudioBatch;
-      for (let i = 0; i < addresses.length; i += GCALL_SEND_AUDIO_IPC_BATCH_SIZE) {
+      for (
+        let i = 0;
+        i < addresses.length;
+        i += GCALL_SEND_AUDIO_IPC_BATCH_SIZE
+      ) {
         const chunk = addresses.slice(i, i + GCALL_SEND_AUDIO_IPC_BATCH_SIZE);
         if (typeof sendBatch === 'function') {
           void sendBatch(roomId, chunk, payload)
@@ -4569,8 +4733,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 {
                   peerAddress: label,
                   batchSize: chunk.length,
-                  error:
-                    error instanceof Error ? error.message : String(error),
+                  error: error instanceof Error ? error.message : String(error),
                 }
               );
             });
@@ -4621,7 +4784,8 @@ export function useGroupVoiceCall(uiActive = false) {
       now,
       globalRecoveryUntilMsRef.current,
       decryptBurstUntilMsRef.current,
-      effectiveBurstMaxRef.current
+      effectiveBurstMaxRef.current,
+      decryptOverloadStateRef.current.active
     );
   }, []);
 
@@ -4674,6 +4838,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const risingTrend =
         depth > prevDepth + PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA;
 
+      const previousOverloadActive = decryptOverloadStateRef.current.active;
       decryptOverloadStateRef.current = stepDecryptOverloadState(
         decryptOverloadStateRef.current,
         depth,
@@ -4683,6 +4848,12 @@ export function useGroupVoiceCall(uiActive = false) {
           longTaskPressure: overloadLongTaskPressureRef.current,
         }
       );
+      if (!previousOverloadActive && decryptOverloadStateRef.current.active) {
+        effectiveBurstMaxRef.current = Math.max(
+          effectiveBurstMaxRef.current,
+          PENDING_DECRYPT_BURST_NOMINAL_BASE
+        );
+      }
       setGcallDiagnosticsSuppressInfo(decryptOverloadStateRef.current.active);
 
       failSafeStateRef.current = stepFailSafeState(failSafeStateRef.current, {
@@ -4707,7 +4878,8 @@ export function useGroupVoiceCall(uiActive = false) {
         if (pendingDecryptSustainedGteArmDepthSinceRef.current === null) {
           pendingDecryptSustainedGteArmDepthSinceRef.current = now;
         }
-        const sustainedSince = pendingDecryptSustainedGteArmDepthSinceRef.current;
+        const sustainedSince =
+          pendingDecryptSustainedGteArmDepthSinceRef.current;
         if (
           sustainedSince !== null &&
           now - sustainedSince >= PENDING_DECRYPT_SUSTAINED_ARM_MS &&
@@ -5310,9 +5482,8 @@ export function useGroupVoiceCall(uiActive = false) {
         activeJitterSourcesRef.current
       );
       const now = Date.now();
-      predictiveWarmHistoryRef.current = predictiveWarmHistoryRef.current.filter(
-        (e) => now - e.at < 10_000
-      );
+      predictiveWarmHistoryRef.current =
+        predictiveWarmHistoryRef.current.filter((e) => now - e.at < 10_000);
       for (const peer of sorted) {
         if (!participantsRef.current.has(peer)) continue;
         if (
@@ -5321,14 +5492,20 @@ export function useGroupVoiceCall(uiActive = false) {
         ) {
           continue;
         }
-        if (predictiveWarmHistoryRef.current.length >= GCALL_PREDICTIVE_WARM_MAX_PER_10S)
+        if (
+          predictiveWarmHistoryRef.current.length >=
+          GCALL_PREDICTIVE_WARM_MAX_PER_10S
+        )
           break;
         lastPredictiveWarmAtPeerRef.current.set(peer, now);
         predictiveWarmHistoryRef.current.push({ at: now, peer });
         gcallDiagnosticsPush('info', '[GCall] predictivePathWarm', {
           peer: truncateGcallDiagAddress(peer),
         });
-        requestMediaRecoveryForPeerRef.current(peer, 'topology-predictive-warm');
+        requestMediaRecoveryForPeerRef.current(
+          peer,
+          'topology-predictive-warm'
+        );
       }
     },
     [userInfo?.address]
@@ -5540,7 +5717,8 @@ export function useGroupVoiceCall(uiActive = false) {
       );
       const wallNowTopology = Date.now();
       /** Previous settle window must have elapsed before aggressive transport warms run. */
-      const mayWarmTransport = wallNowTopology >= topologySettleUntilMsRef.current;
+      const mayWarmTransport =
+        wallNowTopology >= topologySettleUntilMsRef.current;
       topologyRef.current = topo;
       let topologySettleMs = GCALL_TOPOLOGY_SETTLE_MS;
       if (prevTopo && prevTopo.rootForwarder !== topo.rootForwarder) {
@@ -5818,7 +5996,8 @@ export function useGroupVoiceCall(uiActive = false) {
               const timeouts = wm.reticulumAudioPacketPathTimeouts;
               const denom = Math.max(
                 1,
-                wm.reticulumAudioPacketFreshSends + wm.reticulumAudioPacketStaleSends
+                wm.reticulumAudioPacketFreshSends +
+                  wm.reticulumAudioPacketStaleSends
               );
               const staleRatio = wm.reticulumAudioPacketStaleSends / denom;
               const stress =
@@ -5830,18 +6009,25 @@ export function useGroupVoiceCall(uiActive = false) {
                 ).length;
                 if (remoteCount > 0) {
                   const jg = joinGenerationRef.current ?? 0;
-                  for (const peer of getRootInboundWarmPeers(myAddrTopo, topo)) {
+                  for (const peer of getRootInboundWarmPeers(
+                    myAddrTopo,
+                    topo
+                  )) {
                     if (!participantsRef.current.has(peer)) continue;
                     const { stressKey: dedupeKey } =
                       buildRootInboundWarmDedupeKeys(jg, peer);
                     if (rootInboundStressWarmFiredRef.current.has(dedupeKey))
                       continue;
                     rootInboundStressWarmFiredRef.current.add(dedupeKey);
-                    gcallDiagnosticsPush('info', '[GCall] rootInboundStressPathWarm', {
-                      peer: peer.slice(0, 12),
-                      timeouts,
-                      staleRatio: Math.round(staleRatio * 1000) / 1000,
-                    });
+                    gcallDiagnosticsPush(
+                      'info',
+                      '[GCall] rootInboundStressPathWarm',
+                      {
+                        peer: peer.slice(0, 12),
+                        timeouts,
+                        staleRatio: Math.round(staleRatio * 1000) / 1000,
+                      }
+                    );
                     requestMediaRecoveryForPeerRef.current(
                       peer,
                       'topology-root-inbound-stress-warm'
@@ -6434,7 +6620,8 @@ export function useGroupVoiceCall(uiActive = false) {
           });
         }
         opusEncoderLastConfiguredBitrateRef.current = encTuning.opusBitrate;
-        opusSendPressureStateRef.current = createOpusSendPressureControllerState();
+        opusSendPressureStateRef.current =
+          createOpusSendPressureControllerState();
         const fecOpusStatic =
           typeof encoderConfig.opus === 'object' && encoderConfig.opus !== null
             ? (encoderConfig.opus as Record<string, unknown>)
@@ -6448,9 +6635,7 @@ export function useGroupVoiceCall(uiActive = false) {
             numberOfChannels: OPUS_CHANNELS,
             bitrate: bps,
           };
-          const next = fecOpusStatic
-            ? { ...base, opus: fecOpusStatic }
-            : base;
+          const next = fecOpusStatic ? { ...base, opus: fecOpusStatic } : base;
           try {
             enc.configure(next as AudioEncoderConfig);
           } catch (err) {
@@ -6818,7 +7003,11 @@ export function useGroupVoiceCall(uiActive = false) {
         sendPacketToPeerReticulum(target, packet.buffer as ArrayBuffer);
       }
     },
-    [sendPacketToPeerReticulum, sendPacketToPeerReticulumBatch, userInfo?.address]
+    [
+      sendPacketToPeerReticulum,
+      sendPacketToPeerReticulumBatch,
+      userInfo?.address,
+    ]
   );
 
   const sendEncodedFrame = useCallback(
@@ -7001,7 +7190,10 @@ export function useGroupVoiceCall(uiActive = false) {
             bufferedMs: d.bufferedMs,
             underTarget: !!d.outsideBandUnder,
           });
-          recentPlayoutHealthSamplesRef.current.set(sourceAddr, recentPlayoutSamples);
+          recentPlayoutHealthSamplesRef.current.set(
+            sourceAddr,
+            recentPlayoutSamples
+          );
           if (d.panicZoneEntered) {
             const lastP = lastPanicZoneDiagAtRef.current.get(sourceAddr) ?? 0;
             if (wallNow - lastP >= 5_000) {
@@ -7078,7 +7270,13 @@ export function useGroupVoiceCall(uiActive = false) {
       },
       recordStats = true
     ) => {
-      getWasmFecPipeline().postBatch(sourceAddr, pcm, frameCount, stats, recordStats);
+      getWasmFecPipeline().postBatch(
+        sourceAddr,
+        pcm,
+        frameCount,
+        stats,
+        recordStats
+      );
     },
     [getWasmFecPipeline]
   );
@@ -7312,11 +7510,15 @@ export function useGroupVoiceCall(uiActive = false) {
           const logNow = Date.now();
           if (logNow - lastRecoveryJitterGeometryLogAtRef.current >= 15_000) {
             lastRecoveryJitterGeometryLogAtRef.current = logNow;
-            gcallDiagnosticsPush('info', '[GCall] recoveryJitterGeometryApplied', {
-              jitterBufferSize: effective.jitterBufferSize,
-              jitterStartBufferSize: effective.jitterStartBufferSize,
-              singleRemote: nSnap === 1,
-            });
+            gcallDiagnosticsPush(
+              'info',
+              '[GCall] recoveryJitterGeometryApplied',
+              {
+                jitterBufferSize: effective.jitterBufferSize,
+                jitterStartBufferSize: effective.jitterStartBufferSize,
+                singleRemote: nSnap === 1,
+              }
+            );
           }
         }
       } else {
@@ -7342,7 +7544,9 @@ export function useGroupVoiceCall(uiActive = false) {
     {
       const n = activeJitterSourcesRef.current.size;
       const mode =
-        jitterGeomAppliedRef.current === 'recovery' ? 'recovery' : 'low-latency';
+        jitterGeomAppliedRef.current === 'recovery'
+          ? 'recovery'
+          : 'low-latency';
       const eff =
         mode === 'recovery'
           ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
@@ -7411,7 +7615,10 @@ export function useGroupVoiceCall(uiActive = false) {
 
     const sourceCountForDrain = activeJitterSourcesRef.current.size;
     const usePhaseDDrain = sourceCountForDrain >= 2;
-    const perSourceCap = computePerSourceCap(scaledBurstCap, sourceCountForDrain);
+    const perSourceCap = computePerSourceCap(
+      scaledBurstCap,
+      sourceCountForDrain
+    );
     let globalDecodesLeft = usePhaseDDrain
       ? computeGlobalDecodeBudget(sourceCountForDrain, perSourceCap)
       : Number.MAX_SAFE_INTEGER;
@@ -7429,7 +7636,10 @@ export function useGroupVoiceCall(uiActive = false) {
         )
       : [...activeJitterSourcesRef.current];
 
-    const decodeOneJitterFrame = (addr: string, jb: JitterBuffer): number | null => {
+    const decodeOneJitterFrame = (
+      addr: string,
+      jb: JitterBuffer
+    ): number | null => {
       if (!jb.hasReadyFrame()) return null;
       const frame = jb.pop();
       if (!frame) return null;
@@ -7523,7 +7733,12 @@ export function useGroupVoiceCall(uiActive = false) {
         const emptyTicks =
           (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
         emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
-        if (emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+        if (
+          shouldDropActiveJitterSource({
+            emptyTicks,
+            playoutActive: isSourcePlayoutActive(addr),
+          })
+        ) {
           activeJitterSourcesRef.current.delete(addr);
         }
       } else {
@@ -7537,14 +7752,23 @@ export function useGroupVoiceCall(uiActive = false) {
         const n1RecoverySingleRemote = sourceCountForDrain === 1 && isRecovery;
         const n1SteadySingleRemote = sourceCountForDrain === 1 && !isRecovery;
         const singleRemoteShapingMode: 'recovery' | 'steady' | null =
-          n1RecoverySingleRemote ? 'recovery' : n1SteadySingleRemote ? 'steady' : null;
+          n1RecoverySingleRemote
+            ? 'recovery'
+            : n1SteadySingleRemote
+              ? 'steady'
+              : null;
         const perfWall = performance.now();
 
         if (!jb) {
           const emptyTicks =
             (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
           emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
-          if (emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+          if (
+            shouldDropActiveJitterSource({
+              emptyTicks,
+              playoutActive: false,
+            })
+          ) {
             activeJitterSourcesRef.current.delete(addr);
           }
           continue;
@@ -7561,8 +7785,9 @@ export function useGroupVoiceCall(uiActive = false) {
           : 0;
         if (n1RecoverySingleRemote && opusMsPre >= minStartMs) {
           jitterPrerollSatisfiedRef.current.set(addr, true);
+          n1RecoveryPrerollBlockedSincePerfRef.current.delete(addr);
         }
-        const prerollActive =
+        let prerollActive =
           n1RecoverySingleRemote &&
           jitterPrerollSatisfiedRef.current.get(addr) !== true;
 
@@ -7570,7 +7795,8 @@ export function useGroupVoiceCall(uiActive = false) {
           opusMsPre,
           smoothedTarget
         );
-        const previousN1Mode = lastBufferEnforceModeRef.current.get(addr) ?? null;
+        const previousN1Mode =
+          lastBufferEnforceModeRef.current.get(addr) ?? null;
         const previousN1Tier =
           previousN1Mode === singleRemoteShapingMode
             ? (lastBufferEnforceTierRef.current.get(addr) ?? null)
@@ -7579,63 +7805,131 @@ export function useGroupVoiceCall(uiActive = false) {
           ? stepN1BufferEnforceTier(previousN1Tier, n1Ratio)
           : n1SteadySingleRemote
             ? stepN1SteadyBufferEnforceTier(previousN1Tier, n1Ratio)
-          : ('normal' as const);
-        lastBufferEnforceTierRef.current.set(addr, singleRemoteShapingMode ? n1Tier : null);
+            : ('normal' as const);
+        lastBufferEnforceTierRef.current.set(
+          addr,
+          singleRemoteShapingMode ? n1Tier : null
+        );
         lastBufferEnforceModeRef.current.set(addr, singleRemoteShapingMode);
         let n1ScaledCap = n1RecoverySingleRemote
           ? computeN1TierBurstCap(n1Tier, scaledBurstCap, {
               recoverySingleRemote:
-                n1RecoverySingleRemote && jitterGeomAppliedRef.current === 'recovery',
+                n1RecoverySingleRemote &&
+                jitterGeomAppliedRef.current === 'recovery',
             })
           : n1SteadySingleRemote
             ? computeN1SteadyTierBurstCap(n1Tier, scaledBurstCap)
-          : scaledBurstCap;
+            : scaledBurstCap;
 
-        if ((n1RecoverySingleRemote && !prerollActive) || n1SteadySingleRemote) {
-          const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
-          if (perfWall < accUntil) {
+        const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
+        const lastPushAgeMs =
+          lastPush > 0 ? perfWall - lastPush : Number.POSITIVE_INFINITY;
+        const lastEsc = lastStallEscapePerfRef.current.get(addr) ?? 0;
+        const playoutActive = isSourcePlayoutActive(addr, tickStartedAt);
+        let prerollBlockedForMs = 0;
+        if (
+          n1RecoverySingleRemote &&
+          prerollActive &&
+          opusMsPre < minStartMs &&
+          jb.hasReadyFrame()
+        ) {
+          const blockedSince =
+            n1RecoveryPrerollBlockedSincePerfRef.current.get(addr) ?? perfWall;
+          n1RecoveryPrerollBlockedSincePerfRef.current.set(addr, blockedSince);
+          prerollBlockedForMs = perfWall - blockedSince;
+          if (
+            shouldForceN1RecoveryPrerollSatisfied({
+              blockedForMs: prerollBlockedForMs,
+              lastPushAgeMs,
+              opusBufferedMs: opusMsPre,
+              sourceActive: playoutActive,
+            })
+          ) {
+            jitterPrerollSatisfiedRef.current.set(addr, true);
+            n1RecoveryPrerollBlockedSincePerfRef.current.delete(addr);
+            prerollActive = false;
+            prerollBlockedForMs = 0;
+            gcallDiagnosticsPush('info', '[GCall] recoveryPrerollReleasedEarly', {
+              sourceAddr: truncateGcallDiagAddress(addr),
+              bufferMs: Math.round(opusMsPre),
+              minStartMs: Math.round(minStartMs),
+              targetMs: Math.round(smoothedTarget),
+              blockedForMs: Math.round(perfWall - blockedSince),
+              lastPushAgeMs: Math.round(lastPushAgeMs),
+            });
+          }
+        } else {
+          n1RecoveryPrerollBlockedSincePerfRef.current.delete(addr);
+        }
+
+        const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
+        const accumulationActive = perfWall < accUntil;
+        if (
+          (n1RecoverySingleRemote && !prerollActive) ||
+          n1SteadySingleRemote
+        ) {
+          if (accumulationActive) {
             n1ScaledCap = Math.min(n1ScaledCap, 1);
           }
         }
 
-        if (n1RecoverySingleRemote) {
-          const nowLog = Date.now();
-          const lastLog = lastBufferEnforceLogAtRef.current.get(addr) ?? 0;
-          const tierChanged = previousN1Tier !== n1Tier;
-          const logDue =
-            tierChanged ||
-            nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS;
-          if (logDue && (n1Tier !== 'normal' || prerollActive)) {
-            lastBufferEnforceLogAtRef.current.set(addr, nowLog);
-            gcallDiagnosticsPush('info', '[GCall] bufferEnforceActive', {
-              sourceAddr: truncateGcallDiagAddress(addr),
-              bufferMs: Math.round(opusMsPre),
-              targetMs: Math.round(smoothedTarget),
-              denomMs: Math.round(n1DenomMs),
-              ratio: Math.round(n1Ratio * 1000) / 1000,
-              tier: n1Tier,
-              prerollActive,
-            });
-          }
-        }
-
-        const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
-        const lastEsc = lastStallEscapePerfRef.current.get(addr) ?? 0;
         const steadyHoldActive =
           n1SteadySingleRemote &&
           n1Tier !== 'normal' &&
           opusMsPre < steadyMinHoldMs &&
           jb.hasReadyFrame() &&
           lastPush > 0 &&
-          perfWall - lastPush <= GCALL_N1_STALL_ESCAPE_MS;
+          lastPushAgeMs <= GCALL_N1_STALL_ESCAPE_MS;
         const stallEscapeAllowed =
           n1RecoverySingleRemote &&
           prerollActive &&
           opusMsPre < minStartMs &&
           jb.hasReadyFrame() &&
           lastPush > 0 &&
-          perfWall - lastPush > GCALL_N1_STALL_ESCAPE_MS &&
+          lastPushAgeMs > GCALL_N1_STALL_ESCAPE_MS &&
           perfWall - lastEsc >= GCALL_N1_STALL_ESCAPE_MS;
+
+        if (singleRemoteShapingMode) {
+          const nowLog = Date.now();
+          const lastLog = lastBufferEnforceLogAtRef.current.get(addr) ?? 0;
+          const tierChanged = previousN1Tier !== n1Tier;
+          const modeChanged = previousN1Mode !== singleRemoteShapingMode;
+          const logDue =
+            modeChanged ||
+            tierChanged ||
+            nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS;
+          if (
+            logDue &&
+            (n1Tier !== 'normal' ||
+              prerollActive ||
+              accumulationActive ||
+              steadyHoldActive)
+          ) {
+            lastBufferEnforceLogAtRef.current.set(addr, nowLog);
+            gcallDiagnosticsPush('info', '[GCall] bufferEnforceActive', {
+              mode: singleRemoteShapingMode,
+              sourceAddr: truncateGcallDiagAddress(addr),
+              bufferMs: Math.round(opusMsPre),
+              targetMs: Math.round(smoothedTarget),
+              denomMs: Math.round(n1DenomMs),
+              ratio: Math.round(n1Ratio * 1000) / 1000,
+              tier: n1Tier,
+              decodeCap: n1ScaledCap,
+              prerollActive,
+              prerollBlockedForMs: prerollActive
+                ? Math.round(prerollBlockedForMs)
+                : 0,
+              accumulationActive,
+              accumulationRemainingMs: accumulationActive
+                ? Math.max(0, Math.round(accUntil - perfWall))
+                : 0,
+              steadyHoldActive,
+              steadyHoldMs: n1SteadySingleRemote
+                ? Math.round(steadyMinHoldMs)
+                : 0,
+            });
+          }
+        }
 
         if (
           n1RecoverySingleRemote &&
@@ -7664,7 +7958,12 @@ export function useGroupVoiceCall(uiActive = false) {
             const emptyTicks =
               (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
             emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
-            if (emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+            if (
+              shouldDropActiveJitterSource({
+                emptyTicks,
+                playoutActive: isSourcePlayoutActive(addr, tickStartedAt),
+              })
+            ) {
               activeJitterSourcesRef.current.delete(addr);
             }
           } else {
@@ -7699,7 +7998,8 @@ export function useGroupVoiceCall(uiActive = false) {
             const recentUnderruns = (
               recentJitterUnderrunAtRef.current.get(addr) ?? []
             ).filter(
-              (atMs) => perfWall - atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+              (atMs) =>
+                perfWall - atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
             );
             recentUnderruns.push(perfWall);
             recentJitterUnderrunAtRef.current.set(addr, recentUnderruns);
@@ -7713,7 +8013,13 @@ export function useGroupVoiceCall(uiActive = false) {
           const emptyTicks =
             (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
           emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
-          if (!jb || emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+          if (
+            !jb ||
+            shouldDropActiveJitterSource({
+              emptyTicks,
+              playoutActive: isSourcePlayoutActive(addr, tickStartedAt),
+            })
+          ) {
             activeJitterSourcesRef.current.delete(addr);
           }
           continue;
@@ -7758,7 +8064,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const readyAtStart = new Set<string>();
       const drainStartInfo = new Map<
         string,
-        { initialBuffered: number; boostSlot: number }
+        { initialBuffered: number }
       >();
 
       for (const addr of addrsOrdered) {
@@ -7769,7 +8075,8 @@ export function useGroupVoiceCall(uiActive = false) {
             const recentUnderruns = (
               recentJitterUnderrunAtRef.current.get(addr) ?? []
             ).filter(
-              (atMs) => nowWall - atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
+              (atMs) =>
+                nowWall - atMs <= ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS
             );
             recentUnderruns.push(nowWall);
             recentJitterUnderrunAtRef.current.set(addr, recentUnderruns);
@@ -7783,20 +8090,20 @@ export function useGroupVoiceCall(uiActive = false) {
           const emptyTicks =
             (emptyJitterDrainTicksRef.current.get(addr) ?? 0) + 1;
           emptyJitterDrainTicksRef.current.set(addr, emptyTicks);
-          if (!jb || emptyTicks >= JITTER_EMPTY_HYSTERESIS_TICKS) {
+          if (
+            !jb ||
+            shouldDropActiveJitterSource({
+              emptyTicks,
+              playoutActive: isSourcePlayoutActive(addr, tickStartedAt),
+            })
+          ) {
             activeJitterSourcesRef.current.delete(addr);
           }
           continue;
         }
         emptyJitterDrainTicksRef.current.set(addr, 0);
         const initialBuffered = jb.getBufferedFrames();
-        const boostSlot =
-          usePhaseDDrain &&
-          jb.hasReadyFrame() &&
-          initialBuffered <= GCALL_THIN_JITTER_BUFFER_FRAMES
-            ? 1
-            : 0;
-        drainStartInfo.set(addr, { initialBuffered, boostSlot });
+        drainStartInfo.set(addr, { initialBuffered });
         readyAtStart.add(addr);
       }
 
@@ -7808,20 +8115,43 @@ export function useGroupVoiceCall(uiActive = false) {
           audioTuningRef.current.adaptiveMaxTargetMs;
         const frames = jb.getBufferedFrames();
         const opusMs = frames * OPUS_FRAME_DURATION_MS;
+        const collapsedForStarvation = isCollapsedForStarvation({
+          bufferedFrames: frames,
+          opusBufferedMs: opusMs,
+          adaptiveTargetMedianMs: targetMs,
+        });
+        const nearCollapsedForStarvation = isNearCollapsedForStarvation({
+          bufferedFrames: frames,
+          opusBufferedMs: opusMs,
+          adaptiveTargetMedianMs: targetMs,
+        });
+        const starvationSeverity =
+          playoutStarvationSeverityRef.current.get(addr) ?? 'none';
         if (
-          isCollapsedForStarvation({
-            bufferedFrames: frames,
-            opusBufferedMs: opusMs,
-            adaptiveTargetMedianMs: targetMs,
+          shouldEnterProtectedMode({
+            collapsed: collapsedForStarvation,
+            nearCollapsed: nearCollapsedForStarvation,
+            starvationSeverity,
           })
         ) {
+          if (!gcallStarvationProtectedModeRef.current.has(addr)) {
+            gcallDiagnosticsPush('info', '[GCall] multiSourceProtectedModeEnter', {
+              sourceAddr: truncateGcallDiagAddress(addr),
+              starvationSeverity,
+              collapsedForStarvation,
+              nearCollapsedForStarvation,
+              bufferedFrames: frames,
+              opusBufferedMs: Math.round(opusMs),
+              targetMs: Math.round(targetMs),
+            });
+          }
           gcallStarvationProtectedModeRef.current.add(addr);
         }
       }
 
-      const protectedAddrs = [...gcallStarvationProtectedModeRef.current].filter(
-        (a) => activeJitterSourcesRef.current.has(a)
-      );
+      const protectedAddrs = [
+        ...gcallStarvationProtectedModeRef.current,
+      ].filter((a) => activeJitterSourcesRef.current.has(a));
       const slaNearBreachCount = protectedAddrs.filter(
         (a) =>
           (gcallStarvationTicksSinceProtectedRef.current.get(a) ?? 0) >=
@@ -7869,8 +8199,17 @@ export function useGroupVoiceCall(uiActive = false) {
         if (!jb) continue;
         const info = drainStartInfo.get(addr);
         if (!info) continue;
+        const starvationSeverity =
+          playoutStarvationSeverityRef.current.get(addr) ?? 'none';
+        const protectedMode = gcallStarvationProtectedModeRef.current.has(addr);
+        const burstBonus = computePhaseDSourceBurstBonus({
+          initialBufferedFrames: info.initialBuffered,
+          thinBufferThresholdFrames: GCALL_THIN_JITTER_BUFFER_FRAMES,
+          protectedMode,
+          starvationSeverity,
+        });
         const maxBurstPerSourceThisTick = usePhaseDDrain
-          ? perSourceCap + info.boostSlot
+          ? perSourceCap + burstBonus
           : scaledBurstCap;
         let missedThisTick = 0;
         let burst = burstThisTickByAddr.get(addr) ?? 0;
@@ -7914,15 +8253,20 @@ export function useGroupVoiceCall(uiActive = false) {
           opusBufferedMs: opusMs,
           minOpusLastMTicks: troughBefore,
           adaptiveTargetMedianMs: targetMs,
+          playoutStarvationSeverity:
+            playoutStarvationSeverityRef.current.get(addr) ?? 'none',
         });
         const inProtected = gcallStarvationProtectedModeRef.current.has(addr);
         if (recoveryBar) {
           gcallStarvationTicksSinceProtectedRef.current.set(addr, 0);
-        } else if (inProtected || isCollapsedForStarvation({
+        } else if (
+          inProtected ||
+          isCollapsedForStarvation({
             bufferedFrames: frames,
             opusBufferedMs: opusMs,
             adaptiveTargetMedianMs: targetMs,
-          })) {
+          })
+        ) {
           const prev =
             gcallStarvationTicksSinceProtectedRef.current.get(addr) ?? 0;
           gcallStarvationTicksSinceProtectedRef.current.set(addr, prev + 1);
@@ -7932,13 +8276,28 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         gcallStarvationOpusHistRef.current.set(addr, nextHist);
 
-        if (frames >= GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN) {
+        const starvationSeverity =
+          playoutStarvationSeverityRef.current.get(addr) ?? 'none';
+        if (
+          shouldExitProtectedMode({
+            bufferedFrames: frames,
+            recoveryBarSatisfied: recoveryBar,
+            playoutStarvationSeverity: starvationSeverity,
+          })
+        ) {
           const streak =
             (gcallStarvationProtectedExitStreakRef.current.get(addr) ?? 0) + 1;
           gcallStarvationProtectedExitStreakRef.current.set(addr, streak);
           if (streak >= GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS) {
             gcallStarvationProtectedModeRef.current.delete(addr);
             gcallStarvationProtectedExitStreakRef.current.set(addr, 0);
+            gcallDiagnosticsPush('info', '[GCall] multiSourceProtectedModeExit', {
+              sourceAddr: truncateGcallDiagAddress(addr),
+              bufferedFrames: frames,
+              opusBufferedMs: Math.round(opusMs),
+              targetMs: Math.round(targetMs),
+              starvationSeverity,
+            });
           }
         } else {
           gcallStarvationProtectedExitStreakRef.current.set(addr, 0);
@@ -9654,10 +10013,10 @@ export function useGroupVoiceCall(uiActive = false) {
             p2pInboundPeers: rs.p2pInboundPeers ?? 0,
           });
           //TODO: PUT BACK
-          // if (p2pHealth !== 'good') {
-          //   setGcallJoinError('p2p_health_not_good');
-          //   return;
-          // }
+          if (p2pHealth !== 'good') {
+            setGcallJoinError('p2p_health_not_good');
+            return;
+          }
         } catch {
           setGcallJoinError('p2p_health_not_good');
           return;
@@ -10152,6 +10511,7 @@ export function useGroupVoiceCall(uiActive = false) {
       emptyJitterDrainTicksRef.current.clear();
       lastJitterOpusPushPerfRef.current.clear();
       jitterPrerollSatisfiedRef.current.clear();
+      n1RecoveryPrerollBlockedSincePerfRef.current.clear();
       jitterAccumulationUntilPerfRef.current.clear();
       lastStallEscapePerfRef.current.clear();
       lastBufferEnforceLogAtRef.current.clear();
@@ -10265,7 +10625,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPeerRouteKeyRef.current.clear();
       predictiveWarmHistoryRef.current = [];
       lastPredictiveWarmAtPeerRef.current.clear();
-      worstIsolationHysteresisRef.current = createWorstIsolationHysteresisState();
+      worstIsolationHysteresisRef.current =
+        createWorstIsolationHysteresisState();
       topologySettleUntilMsRef.current = 0;
       lastMicroWidenDiagAtRef.current = 0;
       lastRecoverySuppressionLogAtRef.current = 0;

@@ -120,6 +120,13 @@ export const DEFAULT_RETICULUM_HUBS: readonly ReticulumHubEndpoint[] =
       interfaceType: 'BackboneInterface',
       networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
     },
+    {
+      name: 'Crowetic Reticulum Hub 2',
+      host: 'reticulum2.qortal.link',
+      port: 4444,
+      interfaceType: 'BackboneInterface',
+      networkName: RETICULUM_QORTAL_HUB_NETWORK_NAME,
+    },
   ]);
 
 let child: ChildProcessWithoutNullStreams | null = null;
@@ -1024,13 +1031,14 @@ export function registerReticulumIpcHandlers(): void {
         }
       }
       try {
-        const [{ getReticulumBridge }, { getPresenceManager }] = (await Promise.all([
-          import('./reticulum-bridge'),
-          import('./presence'),
-        ])) as [
-          typeof import('./reticulum-bridge'),
-          typeof import('./presence'),
-        ];
+        const [{ getReticulumBridge }, { getPresenceManager }] =
+          (await Promise.all([
+            import('./reticulum-bridge'),
+            import('./presence'),
+          ])) as [
+            typeof import('./reticulum-bridge'),
+            typeof import('./presence'),
+          ];
         const bridge = getReticulumBridge();
         const bridgeStatus = bridge?.getConnectivitySnapshot();
         if (!bridgeStatus) return base;
@@ -1051,7 +1059,8 @@ export function registerReticulumIpcHandlers(): void {
           transportEnabled: bridgeStatus.transportEnabled,
           configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
           onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
-          configuredRemoteHubInterfaces: bridgeStatus.configuredRemoteHubInterfaces,
+          configuredRemoteHubInterfaces:
+            bridgeStatus.configuredRemoteHubInterfaces,
           onlineRemoteHubInterfaces: bridgeStatus.onlineRemoteHubInterfaces,
           hubSummary: bridgeStatus.hubSummary,
           verifiedOverlayPeerCount,
@@ -1076,20 +1085,20 @@ export function registerReticulumIpcHandlers(): void {
     'reticulum:getOverlayPeers',
     async (): Promise<ReticulumOverlayPeerStatus[]> => {
       try {
-        const [{ getReticulumBridge }, { getPresenceManager }] = (await Promise.all([
-          import('./reticulum-bridge'),
-          import('./presence'),
-        ])) as [
-          typeof import('./reticulum-bridge'),
-          typeof import('./presence'),
-        ];
+        const [{ getReticulumBridge }, { getPresenceManager }] =
+          (await Promise.all([
+            import('./reticulum-bridge'),
+            import('./presence'),
+          ])) as [
+            typeof import('./reticulum-bridge'),
+            typeof import('./presence'),
+          ];
         const bridge = getReticulumBridge();
         if (!bridge) return [];
         const peersByHash = new Map(
-          (getPresenceManager()?.getReticulumVerifiedPeers() ?? []).map((peer) => [
-            peer.destinationHash.toLowerCase(),
-            peer.address,
-          ])
+          (getPresenceManager()?.getReticulumVerifiedPeers() ?? []).map(
+            (peer) => [peer.destinationHash.toLowerCase(), peer.address]
+          )
         );
         const uniqueByHash = new Map<string, ReticulumOverlayPeerStatus>();
         for (const peer of bridge.getOverlayLinkSnapshots()) {
@@ -1114,7 +1123,10 @@ export function registerReticulumIpcHandlers(): void {
           (a, b) => a.connectedAt - b.connectedAt
         );
       } catch (error) {
-        loggerError('[Reticulum] Failed to collect overlay peer status:', error);
+        loggerError(
+          '[Reticulum] Failed to collect overlay peer status:',
+          error
+        );
         return [];
       }
     }
