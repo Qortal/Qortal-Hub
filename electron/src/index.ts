@@ -4,7 +4,7 @@ import {
   setupElectronDeepLinking,
 } from '@capacitor-community/electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, MenuItem, dialog, session } from 'electron';
+import { app, MenuItem, dialog, powerMonitor, session } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
@@ -40,6 +40,7 @@ import {
   registerReticulumAppInstance,
   registerReticulumIpcHandlers,
   setReticulumInstanceIndex,
+  restartBundledReticulumDaemonAndWaitReady,
   startBundledReticulumDaemon,
   stopSharedReticulumDaemon,
 } from './reticulum-daemon';
@@ -50,8 +51,10 @@ import {
 } from './reticulum-mesh';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
 import {
+  getReticulumBridge,
   stopReticulumBridge,
 } from './reticulum-bridge';
+import { getPresenceManager } from './presence';
 
 import * as net from 'net';
 
@@ -77,6 +80,10 @@ export function setIsQuitting(value: boolean) {
 }
 
 let shutdownHandled = false;
+let reticulumWakeRecovery: Promise<void> | null = null;
+let lastReticulumWakeRecoveryAt = 0;
+
+const RETICULUM_WAKE_RECOVERY_DEBOUNCE_MS = 15_000;
 
 function performAppShutdown(reason: string): void {
   if (shutdownHandled) {
@@ -96,6 +103,67 @@ function performAppShutdown(reason: string): void {
   }
   flushPersistentStore();
   flushChatStore();
+}
+
+async function recoverReticulumAfterWake(source: string): Promise<void> {
+  if (isQuitting) {
+    return;
+  }
+
+  const now = Date.now();
+  if (
+    !reticulumWakeRecovery &&
+    now - lastReticulumWakeRecoveryAt < RETICULUM_WAKE_RECOVERY_DEBOUNCE_MS
+  ) {
+    loggerLog(
+      `[Reticulum] Skipping duplicate wake recovery source=${source}`
+    );
+    return;
+  }
+
+  if (reticulumWakeRecovery) {
+    loggerLog(
+      `[Reticulum] Wake recovery already in progress source=${source}`
+    );
+    return reticulumWakeRecovery;
+  }
+
+  lastReticulumWakeRecoveryAt = now;
+  const announceEligible = Boolean(
+    getPresenceManager()?.getLastLocalEnvelope()
+  );
+
+  reticulumWakeRecovery = (async () => {
+    loggerLog(
+      `[Reticulum] Wake recovery started source=${source} announceEligible=${announceEligible ? 'yes' : 'no'}`
+    );
+
+    try {
+      stopReticulumBridge();
+
+      try {
+        await restartBundledReticulumDaemonAndWaitReady();
+      } catch (error) {
+        loggerError(
+          '[Reticulum] Wake recovery daemon restart failed; retrying bridge startup anyway:',
+          error
+        );
+      }
+
+      await ensureReticulumManagersStarted();
+
+      const bridgeState = getReticulumBridge()?.getState() ?? 'stopped';
+      loggerLog(
+        `[Reticulum] Wake recovery complete source=${source} announceEligible=${announceEligible ? 'yes' : 'no'} bridgeState=${bridgeState}`
+      );
+    } catch (error) {
+      loggerError('[Reticulum] Wake recovery failed:', error);
+    } finally {
+      reticulumWakeRecovery = null;
+    }
+  })();
+
+  return reticulumWakeRecovery;
 }
 
 // Define our menu templates (these are optional)
@@ -310,6 +378,10 @@ async function setupMultiInstanceUserData(
   // Start update checks
   checkForUpdates();
   setInterval(checkForUpdates, 24 * 60 * 60 * 1000);
+
+  powerMonitor.on('resume', () => {
+    void recoverReticulumAfterWake('powerMonitor:resume');
+  });
 })();
 
 // Set isQuitting flag before the app quits
