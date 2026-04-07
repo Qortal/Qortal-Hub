@@ -38,6 +38,7 @@ import {
   getUserAudioStreamForCall,
 } from '../lib/call/audioDevices';
 import {
+  type DecodedAudioPacket,
   decodeAudioPackets,
   encodeAudioPacketV2,
 } from '../lib/group-call/audioPacketCodec';
@@ -75,9 +76,19 @@ import {
   OPUS_FRAME_SAMPLES,
   OPUS_SAMPLE_RATE,
 } from '../lib/group-call/gcallVoiceAudioConstants';
+import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 
 const DM_INTER_ARRIVAL_MAX_SAMPLES = 40;
 const DM_ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS = 400;
+const DM_MEDIA_RECOVERY_REQUEST_COOLDOWN_MS = 4_000;
+
+type DmDecryptWorkerDecoded = {
+  sourceAddr: string;
+  vad: boolean;
+  seq: number;
+  timestampMs: number;
+  opusFrame: ArrayBuffer;
+};
 
 /** Payload from main `gcall:key` (DM voice callee path). */
 type GcallKeyEventPayload = {
@@ -243,6 +254,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const dmVoiceNoFromAddressLoggedRef = useRef(false);
   const dmVoicePeerMismatchLoggedRef = useRef(false);
   const dmVoiceFirstOutboundAudioLoggedRef = useRef(false);
+  const isSpeakingRef = useRef(false);
 
   const isMutedRef = useRef(isMuted);
   isMutedRef.current = isMuted;
@@ -272,6 +284,19 @@ export function useVoiceCall(): UseVoiceCallReturn {
     ) => Promise<void>
   >(async () => {});
   const startReticulumCaptureRef = useRef<() => Promise<void>>(async () => {});
+  const decryptWorkerRef = useRef<Worker | null>(null);
+  const decryptWorkerKeyVersionRef = useRef(0);
+  const decryptWorkerAppliedKeyVersionRef = useRef(0);
+  const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
+  const decryptIdRef = useRef(0);
+  const encryptIdRef = useRef(0);
+  const pendingDecryptByIdRef = useRef(
+    new Map<number, { fromAddress: string; keyVersion: number }>()
+  );
+  const pendingEncryptByIdRef = useRef(
+    new Map<number, { roomId: string; peer: string; keyVersion: number }>()
+  );
+  const lastDmPeerMediaRecoveryRequestAtRef = useRef(0);
 
   const updateCallState = useCallback((nextState: CallState) => {
     callStateRef.current = nextState;
@@ -282,6 +307,70 @@ export function useVoiceCall(): UseVoiceCallReturn {
     incomingCallRef.current = nextIncomingCall;
     setIncomingCall(nextIncomingCall);
   }, []);
+
+  const clearPendingWorkerJobs = useCallback(() => {
+    pendingDecryptByIdRef.current.clear();
+    pendingEncryptByIdRef.current.clear();
+  }, []);
+
+  const sendEncryptedDmAudioPacket = useCallback(
+    (roomId: string, peer: string, packet: Uint8Array) => {
+      const gc = (window as any).groupCall;
+      if (!gc?.sendAudio) return;
+      metricsRef.current.recordRelaySent();
+      void gc
+        .sendAudio(roomId, peer, packet)
+        .then((res: GcReticulumAudioSendResult) => {
+          ingestDmReticulumSendResultIntoMetrics(
+            metricsRef.current,
+            lastReticulumAudioTotalsRef,
+            peer,
+            res ?? {}
+          );
+        })
+        .catch(() => {
+          metricsRef.current.recordRelayIpcFailure(1);
+        });
+    },
+    []
+  );
+
+  const syncDecryptWorkerRoomKey = useCallback(
+    (roomKey: Uint8Array | null) => {
+      if (!roomKey) {
+        lastWorkerRoomKeyRef.current = null;
+        clearPendingWorkerJobs();
+        if (decryptWorkerRef.current) {
+          const keyVersion = ++decryptWorkerKeyVersionRef.current;
+          decryptWorkerAppliedKeyVersionRef.current = 0;
+          decryptWorkerRef.current.postMessage({
+            type: 'clearRoomKey',
+            keyVersion,
+          });
+        }
+        return;
+      }
+      const prev = lastWorkerRoomKeyRef.current;
+      if (
+        prev &&
+        prev.length === roomKey.length &&
+        prev.every((b, i) => b === roomKey[i])
+      ) {
+        return;
+      }
+      lastWorkerRoomKeyRef.current = new Uint8Array(roomKey);
+      clearPendingWorkerJobs();
+      if (!decryptWorkerRef.current) return;
+      const keyVersion = ++decryptWorkerKeyVersionRef.current;
+      decryptWorkerAppliedKeyVersionRef.current = 0;
+      const roomKeyCopy = roomKey.slice().buffer;
+      decryptWorkerRef.current.postMessage(
+        { type: 'setRoomKey', roomKey: roomKeyCopy, keyVersion },
+        [roomKeyCopy]
+      );
+    },
+    [clearPendingWorkerJobs]
+  );
 
   const resetDmVoiceMediaSession = useCallback(() => {
     metricsRef.current = new GroupCallPerformanceTracker();
@@ -300,6 +389,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     lastDrainMissedAccumRef.current = 0;
     decayGuardCalmStartMsRef.current = undefined;
     microWidenCeilingLiftUntilMsRef.current = 0;
+    lastDmPeerMediaRecoveryRequestAtRef.current = 0;
   }, []);
 
   const clearDurationTimer = useCallback(() => {
@@ -353,6 +443,10 @@ export function useVoiceCall(): UseVoiceCallReturn {
     const roomId = dmRoomIdRef.current;
     const addr = userInfo?.address;
     const pk = userInfo?.publicKey ?? '';
+    const gc = (window as any).groupCall;
+    if (roomId && typeof gc?.reportTransportHealth === 'function') {
+      await gc.reportTransportHealth(roomId, []).catch(() => {});
+    }
     if (roomId && addr && reticulumSessionActiveRef.current) {
       reticulumSessionActiveRef.current = false;
       await leaveDirectVoiceReticulumRoom({
@@ -366,12 +460,34 @@ export function useVoiceCall(): UseVoiceCallReturn {
     pendingDmVoiceGcallKeyRef.current = null;
     peerAddressRef.current = null;
     callSessionIdRef.current = null;
+    syncDecryptWorkerRoomKey(null);
+    if (decryptWorkerRef.current) {
+      try {
+        decryptWorkerRef.current.terminate();
+      } catch {
+        /* ignore */
+      }
+      decryptWorkerRef.current = null;
+    }
+    decryptIdRef.current = 0;
+    encryptIdRef.current = 0;
+    decryptWorkerKeyVersionRef.current = 0;
+    decryptWorkerAppliedKeyVersionRef.current = 0;
+    clearPendingWorkerJobs();
     roomKeyRef.current = null;
     mediaGenRef.current = 1;
     audioSeqRef.current = 0;
+    isSpeakingRef.current = false;
     resetDmVoiceMediaSession();
     setAudioMode(null);
-  }, [resetDmVoiceMediaSession, stopCapturePipeline, userInfo?.address, userInfo?.publicKey]);
+  }, [
+    clearPendingWorkerJobs,
+    resetDmVoiceMediaSession,
+    stopCapturePipeline,
+    syncDecryptWorkerRoomKey,
+    userInfo?.address,
+    userInfo?.publicKey,
+  ]);
 
   const enqueueTeardownReticulumMedia = useCallback(() => {
     reticulumTeardownChainRef.current = reticulumTeardownChainRef.current
@@ -462,12 +578,132 @@ export function useVoiceCall(): UseVoiceCallReturn {
         }
       }
 
+      const workerReady =
+        decryptWorkerAppliedKeyVersionRef.current ===
+        decryptWorkerKeyVersionRef.current;
+      if (decryptWorkerRef.current && workerReady) {
+        const id = decryptIdRef.current++;
+        pendingDecryptByIdRef.current.set(id, {
+          fromAddress,
+          keyVersion: decryptWorkerKeyVersionRef.current,
+        });
+        const workerBuffer = data.slice(0);
+        decryptWorkerRef.current.postMessage(
+          { type: 'decrypt', id, buffer: workerBuffer },
+          [workerBuffer]
+        );
+        return;
+      }
+
       const list = decodeAudioPackets(new Uint8Array(data), roomKeyRef.current);
       dmInboundPlayoutRef.current?.pushDecoded(list);
     },
     [userInfo?.address]
   );
   handleIncomingAudioPacketRef.current = handleIncomingAudioPacketCb;
+
+  const setupDecryptWorker = useCallback(() => {
+    if (decryptWorkerRef.current) return;
+    lastWorkerRoomKeyRef.current = null;
+    const worker = new AudioDecryptWorker();
+    decryptWorkerRef.current = worker;
+    decryptIdRef.current = 0;
+    encryptIdRef.current = 0;
+
+    worker.onmessage = (
+      e: MessageEvent<{
+        type: 'result' | 'encryptResult' | 'roomKeyApplied' | 'roomKeyCleared';
+        id?: number;
+        keyVersion?: number;
+        decoded?: DmDecryptWorkerDecoded | null;
+        decodedMulti?: DmDecryptWorkerDecoded[];
+        packet?: ArrayBuffer | null;
+        error?: string;
+      }>
+    ) => {
+      if (e.data.type === 'roomKeyApplied') {
+        decryptWorkerAppliedKeyVersionRef.current = Math.max(
+          decryptWorkerAppliedKeyVersionRef.current,
+          e.data.keyVersion ?? 0
+        );
+        return;
+      }
+      if (e.data.type === 'roomKeyCleared') {
+        decryptWorkerAppliedKeyVersionRef.current = 0;
+        return;
+      }
+      if (e.data.type === 'encryptResult') {
+        const id = e.data.id;
+        if (typeof id !== 'number') return;
+        const pending = pendingEncryptByIdRef.current.get(id);
+        pendingEncryptByIdRef.current.delete(id);
+        if (!pending) return;
+        if (pending.keyVersion !== decryptWorkerKeyVersionRef.current) return;
+        if (!e.data.packet) {
+          if (e.data.error === 'missing-room-key' && roomKeyRef.current) {
+            syncDecryptWorkerRoomKey(roomKeyRef.current);
+          }
+          pushDirectVoiceUiLog('warn', 'encrypt worker returned empty packet', {
+            err: e.data.error ?? 'unknown',
+          });
+          return;
+        }
+        if (!dmVoiceFirstOutboundAudioLoggedRef.current) {
+          dmVoiceFirstOutboundAudioLoggedRef.current = true;
+          pushDirectVoiceUiLog('log', 'first outbound audio packet', {
+            roomTrunc: pending.roomId.slice(0, 24),
+            peerTrunc: pending.peer.slice(0, 8),
+            bytes: e.data.packet.byteLength,
+          });
+        }
+        sendEncryptedDmAudioPacket(
+          pending.roomId,
+          pending.peer,
+          new Uint8Array(e.data.packet)
+        );
+        return;
+      }
+      if (e.data.type !== 'result') return;
+      const id = e.data.id;
+      if (typeof id !== 'number') return;
+      const pending = pendingDecryptByIdRef.current.get(id);
+      pendingDecryptByIdRef.current.delete(id);
+      if (!pending) return;
+      if (pending.keyVersion !== decryptWorkerKeyVersionRef.current) return;
+      const multi = e.data.decodedMulti;
+      if (multi && multi.length > 0) {
+        const decodedList: DecodedAudioPacket[] = multi
+          .filter((item) => item.sourceAddr === pending.fromAddress)
+          .map((item) => ({
+            sourceAddr: item.sourceAddr,
+            vad: item.vad,
+            seq: item.seq,
+            timestampMs: item.timestampMs,
+            opusFrame: new Uint8Array(item.opusFrame),
+          }));
+        if (decodedList.length > 0) {
+          dmInboundPlayoutRef.current?.pushDecoded(decodedList);
+        }
+        return;
+      }
+      const decoded = e.data.decoded;
+      if (!decoded || decoded.sourceAddr !== pending.fromAddress) return;
+      dmInboundPlayoutRef.current?.pushDecoded([
+        {
+          sourceAddr: decoded.sourceAddr,
+          vad: decoded.vad,
+          seq: decoded.seq,
+          timestampMs: decoded.timestampMs,
+          opusFrame: new Uint8Array(decoded.opusFrame),
+        },
+      ]);
+    };
+
+    worker.onerror = (err) => {
+      console.error('[DM voice] AudioDecryptWorker error:', err);
+    };
+    syncDecryptWorkerRoomKey(roomKeyRef.current);
+  }, [sendEncryptedDmAudioPacket, syncDecryptWorkerRoomKey]);
 
   /** Install room key from caller (callee) after decryptBoxWithMyKey. */
   const applyDecryptedRoomKey = useCallback(
@@ -511,6 +747,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       roomKeyRef.current = keyBytes;
       callSessionIdRef.current = payload.callSessionId;
       mediaGenRef.current = payload.mediaSessionGeneration >>> 0;
+      syncDecryptWorkerRoomKey(keyBytes);
       setAudioMode('reticulum');
       setCallAudioWireNonce((n) => n + 1);
       pushDirectVoiceUiLog('log', 'room key applied', {
@@ -518,7 +755,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
         mediaGen: payload.mediaSessionGeneration ?? 1,
       });
     },
-    [resetDmVoiceMediaSession]
+    [resetDmVoiceMediaSession, syncDecryptWorkerRoomKey]
   );
   applyDecryptedRoomKeyRef.current = applyDecryptedRoomKey;
 
@@ -534,9 +771,45 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
       const seq = (++audioSeqRef.current) & 0xffff;
       const ts = Date.now() & 0xffffffff;
+      const workerReady =
+        decryptWorkerAppliedKeyVersionRef.current ===
+        decryptWorkerKeyVersionRef.current;
+      if (decryptWorkerRef.current && workerReady) {
+        const frameBuffer =
+          opusFrame.byteOffset === 0 &&
+          opusFrame.byteLength === opusFrame.buffer.byteLength
+            ? opusFrame.buffer
+            : opusFrame.slice().buffer;
+        const id = encryptIdRef.current++;
+        pendingEncryptByIdRef.current.set(id, {
+          roomId,
+          peer,
+          keyVersion: decryptWorkerKeyVersionRef.current,
+        });
+        decryptWorkerRef.current.postMessage(
+          {
+            type: 'encrypt',
+            id,
+            sourceAddr: my,
+            vad: isSpeakingRef.current,
+            seq,
+            timestampMs: ts,
+            opusFrame: frameBuffer,
+          },
+          [frameBuffer]
+        );
+        return;
+      }
       let packet: Uint8Array;
       try {
-        packet = encodeAudioPacketV2(my, true, seq, ts, opusFrame, rk);
+        packet = encodeAudioPacketV2(
+          my,
+          isSpeakingRef.current,
+          seq,
+          ts,
+          opusFrame,
+          rk
+        );
       } catch (e) {
         pushDirectVoiceUiLog('warn', 'encodeAudioPacketV2 failed', { err: String(e) });
         return;
@@ -549,22 +822,9 @@ export function useVoiceCall(): UseVoiceCallReturn {
           bytes: packet.byteLength,
         });
       }
-      metricsRef.current.recordRelaySent();
-      void gc
-        .sendAudio(roomId, peer, packet)
-        .then((res: GcReticulumAudioSendResult) => {
-          ingestDmReticulumSendResultIntoMetrics(
-            metricsRef.current,
-            lastReticulumAudioTotalsRef,
-            peer,
-            res ?? {}
-          );
-        })
-        .catch(() => {
-          metricsRef.current.recordRelayIpcFailure(1);
-        });
+      sendEncryptedDmAudioPacket(roomId, peer, packet);
     },
-    [userInfo?.address]
+    [sendEncryptedDmAudioPacket, userInfo?.address]
   );
 
   const tickDmAdaptivePlayout = useCallback(() => {
@@ -727,6 +987,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       const frame = d?.frame;
       const enc = encoderRef.current;
       if (!frame || !enc || enc.state === 'closed') return;
+      isSpeakingRef.current = d?.vad === true;
       const f32 = frame instanceof Float32Array ? frame : new Float32Array(frame);
       const i16 = float32ToInt16(f32);
       const audioData = new (window as any).AudioData({
@@ -1002,6 +1263,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     callSessionIdRef.current = joinRes.callSessionId;
     mediaGenRef.current = (joinRes.mediaSessionGeneration ?? 1) >>> 0;
     reticulumSessionActiveRef.current = true;
+    setupDecryptWorker();
 
     const csid = joinRes.callSessionId;
     const mgen = mediaGenRef.current;
@@ -1010,6 +1272,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
       const roomKey = new Uint8Array(32);
       crypto.getRandomValues(roomKey);
       roomKeyRef.current = roomKey;
+      syncDecryptWorkerRoomKey(roomKey);
 
       const friendPk = dmFriendsByAddressRef.current[peer]?.publicKey ?? '';
       if (!friendPk) {
@@ -1052,6 +1315,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
     setInfoSnackGlobal,
     setOpenSnackGlobal,
     startReticulumCapture,
+    setupDecryptWorker,
+    syncDecryptWorkerRoomKey,
     userInfo?.address,
     userInfo?.publicKey,
   ]);
@@ -1550,7 +1815,8 @@ export function useVoiceCall(): UseVoiceCallReturn {
   useEffect(() => {
     const id = setInterval(() => {
       const peer = peerAddressRef.current;
-      if (!peer || !roomKeyRef.current) return;
+      const roomId = dmRoomIdRef.current;
+      if (!peer || !roomKeyRef.current || !roomId) return;
       const wallNow = Date.now();
       const snap = metricsRef.current.getSnapshot();
       const pressureSnap = {
@@ -1561,6 +1827,12 @@ export function useVoiceCall(): UseVoiceCallReturn {
         pendingFrames: snap.reticulumAudioPendingFrames,
       };
       const pressured = isReticulumSendPressureSignal(pressureSnap);
+      const gc = (window as any).groupCall;
+      if (typeof gc?.reportTransportHealth === 'function') {
+        void gc
+          .reportTransportHealth(roomId, pressured ? [] : [peer])
+          .catch(() => {});
+      }
       const encTuning = getGroupCallAudioTuning(readGroupCallAudioProfile());
       const nominalBitrate = Math.round(encTuning.opusBitrate);
       const tiers = buildOpusSendPressureTiers(nominalBitrate);
@@ -1583,6 +1855,16 @@ export function useVoiceCall(): UseVoiceCallReturn {
       }
       if (pressured) {
         dmMarkPeerUnstable(dmPeerRecoveryStateRef.current, peer, 1);
+        if (
+          typeof gc?.requestPeerMediaRecovery === 'function' &&
+          wallNow - lastDmPeerMediaRecoveryRequestAtRef.current >=
+            DM_MEDIA_RECOVERY_REQUEST_COOLDOWN_MS
+        ) {
+          lastDmPeerMediaRecoveryRequestAtRef.current = wallNow;
+          void gc
+            .requestPeerMediaRecovery(roomId, peer, 'dm-send-pressure')
+            .catch(() => {});
+        }
       } else {
         dmMarkPeerStable(dmPeerRecoveryStateRef.current, peer);
       }
