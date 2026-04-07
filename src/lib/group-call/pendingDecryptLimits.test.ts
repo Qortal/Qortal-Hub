@@ -6,6 +6,8 @@ import {
   PENDING_DECRYPT_BURST_NOMINAL_BASE,
   PENDING_DECRYPT_BURST_TTL_MS,
   PENDING_DECRYPT_MAX,
+  PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX,
+  PENDING_DECRYPT_OVERLOAD_MAX,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
   PENDING_DECRYPT_TTL_MS,
@@ -84,8 +86,21 @@ describe('computePendingDecryptLimits', () => {
     expect(
       computePendingDecryptLimits(now, 0, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE, true)
     ).toEqual({
-      max: PENDING_DECRYPT_BURST_NOMINAL_BASE,
-      ttlMs: PENDING_DECRYPT_BURST_TTL_MS,
+      max: PENDING_DECRYPT_OVERLOAD_MAX,
+      ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
+    });
+    expect(
+      computePendingDecryptLimits(
+        now,
+        0,
+        0,
+        GLOBAL_MAX_BURST_MAX,
+        true,
+        PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX
+      )
+    ).toEqual({
+      max: PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX,
+      ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
     });
   });
 });

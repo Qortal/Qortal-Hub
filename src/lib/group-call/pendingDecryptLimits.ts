@@ -44,6 +44,10 @@ export const BURST_MAX_SLEW_UP_PER_SEC = 48;
 export const PENDING_DECRYPT_OVERLOAD_ENTER = 160;
 export const PENDING_DECRYPT_OVERLOAD_EXIT = 100;
 export const PENDING_DECRYPT_OVERLOAD_EXIT_HOLD_MS = 500;
+/** Clamp pending decrypt more aggressively once overload is active to force shedding. */
+export const PENDING_DECRYPT_OVERLOAD_MAX = 176;
+/** Forwarders fan out every source; clamp even harder during overload. */
+export const PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX = 144;
 
 /** Earlier overload entry when depth is rising (paired with {@link PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA}). */
 export const PENDING_DECRYPT_OVERLOAD_WARM_DEPTH = 96;
@@ -133,9 +137,19 @@ export function computePendingDecryptLimits(
   globalRecoveryUntilMs: number,
   decryptBurstUntilMs: number,
   effectiveBurstMax: number,
-  overloadActive = false
+  overloadActive = false,
+  overloadMax = PENDING_DECRYPT_OVERLOAD_MAX
 ): { max: number; ttlMs: number } {
-  if (nowMs < decryptBurstUntilMs || overloadActive) {
+  if (overloadActive) {
+    return {
+      max: Math.min(
+        overloadMax,
+        Math.max(PENDING_DECRYPT_MAX, Math.floor(effectiveBurstMax))
+      ),
+      ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
+    };
+  }
+  if (nowMs < decryptBurstUntilMs) {
     const max = Math.min(
       GLOBAL_MAX_BURST_MAX,
       Math.max(PENDING_DECRYPT_RECOVERY_MAX + 1, Math.floor(effectiveBurstMax))

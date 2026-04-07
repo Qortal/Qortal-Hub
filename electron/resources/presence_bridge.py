@@ -56,6 +56,7 @@ _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 5 * 60
 _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
 _OVERLAY_MAX_NEIGHBORS = 16
+_OVERLAY_NEIGHBOR_GRACE_SECONDS = 30.0
 _CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
 _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
@@ -1126,7 +1127,10 @@ def _set_verified_overlay_peers(
     verified_peers: list[Dict[str, Any]], active_neighbor_hashes: list[str]
 ) -> None:
     global _verified_overlay_peers, _active_overlay_neighbors
+    now = time.time()
     local_hex = _local_presence_hash_hex()
+    prev_verified = dict(_verified_overlay_peers)
+    prev_neighbors = dict(_active_overlay_neighbors)
     next_verified: Dict[str, Dict[str, Any]] = {}
     for peer in verified_peers:
         if not isinstance(peer, dict):
@@ -1158,11 +1162,28 @@ def _set_verified_overlay_peers(
         if peer_hash not in _known_peers:
             continue
         # Fanout list from TS: verified neighbors plus candidate backfill (bootstrap).
-        next_neighbors[peer_hash] = time.time()
+        next_neighbors[peer_hash] = now
+    retained_neighbors = 0
+    for peer_hash, seen_at in prev_neighbors.items():
+        if len(next_neighbors) >= _OVERLAY_MAX_NEIGHBORS:
+            break
+        if peer_hash in next_neighbors:
+            continue
+        if not isinstance(seen_at, (int, float)):
+            continue
+        if now - float(seen_at) > _OVERLAY_NEIGHBOR_GRACE_SECONDS:
+            continue
+        if peer_hash not in _known_peers:
+            continue
+        if peer_hash not in next_verified and peer_hash not in prev_verified:
+            continue
+        next_neighbors[peer_hash] = float(seen_at)
+        retained_neighbors += 1
     _active_overlay_neighbors = next_neighbors
     log(
         "[presence_bridge] target=presence-reticulum overlay_sync "
-        f"verified={len(_verified_overlay_peers)} publish_fanout={len(_active_overlay_neighbors)}"
+        f"verified={len(_verified_overlay_peers)} publish_fanout={len(_active_overlay_neighbors)} "
+        f"retained={retained_neighbors}"
     )
 
 
@@ -1172,8 +1193,13 @@ def _resolve_overlay_neighbor_hashes(exclude_hashes: Optional[list[str]] = None)
         str(h).strip().lower() for h in (exclude_hashes or []) if str(h).strip()
     }
     local_hex = _local_presence_hash_hex()
+    now = time.time()
     out: list[str] = []
     for peer_hash in list(_active_overlay_neighbors.keys()):
+        seen_at = _active_overlay_neighbors.get(peer_hash)
+        if isinstance(seen_at, (int, float)) and now - float(seen_at) > _OVERLAY_NEIGHBOR_GRACE_SECONDS:
+            _active_overlay_neighbors.pop(peer_hash, None)
+            continue
         if peer_hash in exclude:
             continue
         if local_hex and peer_hash == local_hex:

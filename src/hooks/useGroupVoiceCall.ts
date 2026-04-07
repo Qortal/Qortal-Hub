@@ -241,6 +241,8 @@ import {
   PENDING_DECRYPT_MAX,
   PENDING_DECRYPT_NEWEST_FIRST_DEPTH,
   PENDING_DECRYPT_OVERLOAD_EXIT,
+  PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX,
+  PENDING_DECRYPT_OVERLOAD_MAX,
   PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
@@ -4865,12 +4867,19 @@ export function useGroupVoiceCall(uiActive = false) {
     ttlMs: number;
   } => {
     const now = Date.now();
+    const forwarderRole =
+      myRoleRef.current === 'root-forwarder' ||
+      myRoleRef.current === 'cluster-forwarder' ||
+      myRoleRef.current === 'standby-forwarder';
     return computePendingDecryptLimits(
       now,
       globalRecoveryUntilMsRef.current,
       decryptBurstUntilMsRef.current,
       effectiveBurstMaxRef.current,
-      decryptOverloadStateRef.current.active
+      decryptOverloadStateRef.current.active,
+      forwarderRole
+        ? PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX
+        : PENDING_DECRYPT_OVERLOAD_MAX
     );
   }, []);
 
@@ -4934,9 +4943,15 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       );
       if (!previousOverloadActive && decryptOverloadStateRef.current.active) {
-        effectiveBurstMaxRef.current = Math.max(
+        const overloadClampMax =
+          myRoleRef.current === 'root-forwarder' ||
+          myRoleRef.current === 'cluster-forwarder' ||
+          myRoleRef.current === 'standby-forwarder'
+            ? PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX
+            : PENDING_DECRYPT_OVERLOAD_MAX;
+        effectiveBurstMaxRef.current = Math.min(
           effectiveBurstMaxRef.current,
-          PENDING_DECRYPT_BURST_NOMINAL_BASE
+          overloadClampMax
         );
       }
       setGcallDiagnosticsSuppressInfo(decryptOverloadStateRef.current.active);
