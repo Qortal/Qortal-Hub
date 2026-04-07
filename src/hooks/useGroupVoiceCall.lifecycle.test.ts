@@ -250,10 +250,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeWindowSource: false,
         ingressPeerRecovery: false,
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldAccelerateMultiSourceRecoveryDecay({
-        activeSourceCount: 4,
+        activeSourceCount: 2,
         adaptiveNetworkMode: 'recovery',
         starvationSeverity: 'mild',
         bufferAdequacy: 0.8,
@@ -300,6 +300,23 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         },
       })
     ).toBe(false);
+    expect(
+      shouldAccelerateSingleRemoteRecoveryDecay({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+        recentStability: {
+          sampleCount: 3,
+          avgPcmBufferedMs: 154,
+          playoutUnderTargetFraction: 0.38,
+          underrunCount: 2,
+          stable: false,
+          severeInstability: false,
+        },
+      })
+    ).toBe(true);
   });
 
   it('holds a deep single-frame recovery source so N===1 can re-accumulate', () => {
@@ -354,6 +371,18 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         concealmentTicks: 133,
       })
     ).toBe(false);
+    expect(
+      shouldRelaxSingleRemoteWindowRecovery({
+        activeSourceCount: 1,
+        shouldTightenRecovery: false,
+        avgOpusBufferedMs: 52,
+        adaptiveTargetMedianMs: 176,
+        avgPcmBufferedMs: 154,
+        playoutUnderTargetFraction: 0.35,
+        avgPlayoutDeltaMs: -23,
+        concealmentTicks: 3,
+      })
+    ).toBe(true);
     expect(
       shouldRelaxSingleRemoteWindowRecovery({
         activeSourceCount: 2,

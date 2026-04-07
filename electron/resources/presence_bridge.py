@@ -52,6 +52,8 @@ _REQUEST_PATH_COOLDOWN_SECONDS = 90.0
 _MAX_PATH_NUDGES_PER_PUBLISH = 5
 _HELLO_BOOTSTRAP_ANNOUNCE_COOLDOWN_SECONDS = 10.0
 _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 5 * 60
+# Extra RNS announce while verified overlay peer count is below this (same cooldown as legacy "no peers" path).
+_MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
 _OVERLAY_MAX_NEIGHBORS = 16
 _CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
@@ -2515,12 +2517,12 @@ def announce_local_destination() -> None:
     )
 
 
-def _maybe_announce_local_destination_no_verified_overlay_peers() -> None:
-    """Extra RNS announce when overlay has no verified peers (same as auth/periodic). 5 min cooldown."""
+def _maybe_announce_local_destination_low_verified_overlay_peers() -> None:
+    """Extra RNS announce when verified overlay peers < MIN (same as auth/periodic). 5 min cooldown."""
     global _last_no_verified_peers_announce_at
     if _destination is None or not _rns_auth_announced:
         return
-    if len(_verified_overlay_peers) > 0:
+    if len(_verified_overlay_peers) >= _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE:
         return
     now = time.time()
     if (now - _last_no_verified_peers_announce_at) < _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS:
@@ -2528,11 +2530,13 @@ def _maybe_announce_local_destination_no_verified_overlay_peers() -> None:
     try:
         announce_local_destination()
     except Exception as exc:
-        log(f"[presence_bridge] rns announce no_verified_overlay_peers failed: {exc}")
+        log(f"[presence_bridge] rns announce low_verified_overlay_peers failed: {exc}")
         return
     _last_no_verified_peers_announce_at = now
     log(
-        "[presence_bridge] target=presence-reticulum no_verified_overlay_peers "
+        "[presence_bridge] target=presence-reticulum low_verified_overlay_peers "
+        f"verified={len(_verified_overlay_peers)} "
+        f"min_skip={_MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE} "
         f"cooldown_sec={_NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS}"
     )
 
@@ -3140,7 +3144,7 @@ def handle_overlay_sync_state(req_id: str, payload: Dict[str, Any]) -> None:
     active = active_raw if isinstance(active_raw, list) else []
     _set_verified_overlay_peers(verified, [str(h) for h in active])
     _sync_overlay_links()
-    _maybe_announce_local_destination_no_verified_overlay_peers()
+    _maybe_announce_local_destination_low_verified_overlay_peers()
     emit_resp(req_id, True)
 
 

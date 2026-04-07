@@ -20,7 +20,8 @@ const HEARTBEAT_INTERVAL_MS = 25_000;
 const IDLE_TIMEOUT_MS = 30 * 60 * 1_000; // 30 minutes
 const IDLE_CHECK_INTERVAL_MS = 60_000;    // check once per minute
 const CLIENT_VERSION = '1.0.0';
-/** Wait for outbound Reticulum hub (excludes local mesh listen) before first announce. */
+/** Wait for outbound Reticulum hubs (excludes local mesh listen) before first announce. */
+const REMOTE_RETICULUM_HUB_MIN_ONLINE = 2;
 const REMOTE_RETICULUM_HUB_POLL_MS = 500;
 const REMOTE_RETICULUM_HUB_MAX_WAIT_MS = 90_000;
 
@@ -29,7 +30,8 @@ const REMOTE_RETICULUM_HUB_MAX_WAIT_MS = 90_000;
 type RemoteHubWaitResult = 'ready' | 'cancelled' | 'timeout';
 
 /**
- * Blocks until `onlineRemoteHubInterfaces >= 1` or timeout. Skipped when not in Electron.
+ * Blocks until `onlineRemoteHubInterfaces >= REMOTE_RETICULUM_HUB_MIN_ONLINE` or timeout.
+ * Skipped when not in Electron.
  * @returns `cancelled` if `shouldCancel` is true before announcing; `timeout` if hubs never came up.
  */
 async function waitForOnlineRemoteReticulumHub(
@@ -45,7 +47,7 @@ async function waitForOnlineRemoteReticulumHub(
     try {
       const status = await getStatus();
       const n = status.onlineRemoteHubInterfaces ?? 0;
-      if (n >= 1) return 'ready';
+      if (n >= REMOTE_RETICULUM_HUB_MIN_ONLINE) return 'ready';
     } catch {
       // Bridge may be warming up; retry.
     }
@@ -54,7 +56,7 @@ async function waitForOnlineRemoteReticulumHub(
     });
   }
   console.warn(
-    '[Presence] Timed out waiting for a remote Reticulum hub; announcing presence anyway.'
+    `[Presence] Timed out waiting for ${REMOTE_RETICULUM_HUB_MIN_ONLINE} remote Reticulum hubs; announcing presence anyway.`
   );
   return 'timeout';
 }
@@ -103,7 +105,7 @@ export function statusDotColor(status: string | null): string {
 
 /**
  * Manages the full presence lifecycle for the authenticated local user:
- *   • Announces presence after login once at least one remote Reticulum hub is up
+ *   • Announces presence after login once at least two remote Reticulum hubs are up
  *     (waits up to 90s, then announces anyway).
  *   • Sends a heartbeat every 25 s to keep the session alive.
  *   • Sends an offline notice when the user logs out, the component unmounts,

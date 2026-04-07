@@ -752,7 +752,7 @@ export function shouldAccelerateMultiSourceRecoveryDecay(opts: {
   ingressPeerRecovery: boolean;
 }): boolean {
   return (
-    opts.activeSourceCount >= 3 &&
+    opts.activeSourceCount >= 2 &&
     opts.adaptiveNetworkMode === 'recovery' &&
     opts.starvationSeverity !== 'none' &&
     opts.bufferAdequacy < 0.65 &&
@@ -771,6 +771,8 @@ export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
   ingressPeerRecovery: boolean;
   recentStability: RecentRecoveryStabilitySummary;
 }): boolean {
+  const maxUnderTargetFraction =
+    ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE + 0.05;
   return (
     opts.activeSourceCount === 1 &&
     opts.adaptiveNetworkMode === 'recovery' &&
@@ -781,8 +783,7 @@ export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
     opts.recentStability.sampleCount >= 2 &&
     opts.recentStability.avgPcmBufferedMs >=
       ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE &&
-    opts.recentStability.playoutUnderTargetFraction <=
-      ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE
+    opts.recentStability.playoutUnderTargetFraction <= maxUnderTargetFraction
   );
 }
 
@@ -815,10 +816,16 @@ export function shouldRelaxSingleRemoteWindowRecovery(opts: {
 }): boolean {
   const target = Math.max(1, opts.adaptiveTargetMedianMs);
   const opusAdequacy = opts.avgOpusBufferedMs / target;
+  const thinButUsableReserve =
+    opts.avgPcmBufferedMs >=
+      ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE + 35 &&
+    opts.playoutUnderTargetFraction <= 0.4 &&
+    opts.avgPlayoutDeltaMs >= -35 &&
+    opts.concealmentTicks <= 25;
   return (
     opts.activeSourceCount === 1 &&
     !opts.shouldTightenRecovery &&
-    opusAdequacy >= 0.55 &&
+    (opusAdequacy >= 0.3 || thinButUsableReserve) &&
     opts.avgPcmBufferedMs >= ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE - 5 &&
     opts.playoutUnderTargetFraction <= 0.6 &&
     opts.avgPlayoutDeltaMs >= -80 &&
@@ -3626,17 +3633,22 @@ export function useGroupVoiceCall(uiActive = false) {
         previousWindowAssessment !== null &&
         (previousWindowAssessment.severe ||
           (previousWindowAssessment.shouldEscalate && shouldTightenRecovery));
+      const tuning = audioTuningRef.current;
+      const isolateThisSource =
+        severeWindowSource && worstIsolationSet.has(addr);
+      const activeSourceCount = activeJitterSourcesRef.current.size;
       const ingressPeerAddress = sourceIngressPeerRef.current.get(addr) ?? null;
-      const ingressPeerRecovery =
+      const ingressPeerRecoveryRaw =
         ingressPeerAddress && ingressPeerAddress !== RELAY_INGRESS_PEER
           ? peerRecoveryProfileRef.current.get(ingressPeerAddress) ===
             'recovery'
           : false;
-      const tuning = audioTuningRef.current;
-      const isolateThisSource =
-        severeWindowSource && worstIsolationSet.has(addr);
+      // In 1-on-1, the only ingress peer is the remote we are already evaluating.
+      // Treating that as external recovery pressure keeps the source pinned at a
+      // severe ceiling and blocks the faster decay path that should let it recover.
+      const ingressPeerRecovery =
+        activeSourceCount >= 2 && ingressPeerRecoveryRaw;
       const useSevereCeiling = ingressPeerRecovery || isolateThisSource;
-      const activeSourceCount = activeJitterSourcesRef.current.size;
       const lastVadAt = lastVadTrueAtRef.current.get(addr) ?? 0;
       const isActiveSpeakerForAddr =
         lastVadAt > 0 && wallNow - lastVadAt < ACTIVE_SPEAKER_WINDOW_MS;
@@ -3762,8 +3774,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (
         adaptiveNetworkMode === 'recovery' &&
         multiSourceRecoveryTargetMaxMs !== null &&
-        !shouldTightenRecovery &&
-        !ingressPeerRecovery
+        !shouldTightenRecovery
       ) {
         adaptiveMaxTargetMs = Math.min(
           adaptiveMaxTargetMs,

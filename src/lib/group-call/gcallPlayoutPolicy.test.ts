@@ -42,10 +42,27 @@ describe('gcallPlayoutPolicy', () => {
       computeRecoveryMultiSourceTargetMaxMs({
         profileAdaptiveMaxMs: 145,
         profileAdaptiveSevereMaxMs: 185,
-        activeSourceCount: 2,
+        activeSourceCount: 1,
         starvationSeverity: 'none',
       })
     ).toBe(null);
+    expect(
+      computeRecoveryMultiSourceTargetMaxMs({
+        profileAdaptiveMaxMs: 145,
+        profileAdaptiveSevereMaxMs: 185,
+        activeSourceCount: 2,
+        starvationSeverity: 'none',
+      })
+    ).toBe(155);
+    expect(
+      computeRecoveryMultiSourceTargetMaxMs({
+        profileAdaptiveMaxMs: 145,
+        profileAdaptiveSevereMaxMs: 185,
+        activeSourceCount: 2,
+        starvationSeverity: 'strong',
+        isolatedSource: true,
+      })
+    ).toBe(164);
     expect(
       computeRecoveryMultiSourceTargetMaxMs({
         profileAdaptiveMaxMs: 145,

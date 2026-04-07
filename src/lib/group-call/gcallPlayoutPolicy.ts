@@ -101,8 +101,8 @@ export function diminishingPlayoutExtraMs(activeSourceCount: number): number {
 
 /**
  * Multi-source recovery can become self-defeating when the target ceiling stays pinned near the
- * single-peer severe cap while 3-4 remotes share the same decode budget. Clamp the ceiling back
- * toward the profile max so starved peers can recover to a realistic target.
+ * single-peer severe cap while 2-4 remotes share the same decode budget. A 3-way call presents
+ * as 2 active remotes on each receiver, so clamp those ceilings too.
  */
 export function computeRecoveryMultiSourceTargetMaxMs(input: {
   profileAdaptiveMaxMs: number;
@@ -112,19 +112,24 @@ export function computeRecoveryMultiSourceTargetMaxMs(input: {
   isolatedSource?: boolean;
 }): number | null {
   const n = Math.max(1, input.activeSourceCount);
-  if (n < 3) return null;
-  const baseExtraMs = n >= 4 ? 12 : 16;
+  if (n < 2) return null;
+  const baseExtraMs = n >= 4 ? 12 : n === 3 ? 16 : 10;
   const starvationBonusMs =
     input.starvationSeverity === 'strong'
-      ? 8
+      ? n === 2
+        ? 6
+        : 8
       : input.starvationSeverity === 'mild'
-        ? 4
+        ? n === 2
+          ? 3
+          : 4
         : 0;
-  const isolationBonusMs = input.isolatedSource ? 4 : 0;
+  const isolationBonusMs = input.isolatedSource ? (n === 2 ? 3 : 4) : 0;
+  const maxExtraMs = n === 2 ? 20 : 24;
   return Math.min(
     input.profileAdaptiveSevereMaxMs,
     input.profileAdaptiveMaxMs +
-      Math.min(24, baseExtraMs + starvationBonusMs + isolationBonusMs)
+      Math.min(maxExtraMs, baseExtraMs + starvationBonusMs + isolationBonusMs)
   );
 }
 
