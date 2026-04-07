@@ -45,23 +45,7 @@ function baseSnapshot(
     jitterNotReadyFraction: 0,
     jitterRawEmptyFraction: 0,
     lastUpdatedAt: 0,
-    dcTransportReady: true,
-    pcConnectedTransitions: 0,
-    pcDisconnectedTransitions: 0,
-    pcFailedTransitions: 0,
-    pcClosedTransitions: 0,
-    dcOpenCount: 0,
-    dcCloseCount: 0,
-    dcErrorCount: 0,
-    iceRestartAttempts: 0,
-    iceRestartSuccesses: 0,
-    reconnectAttempts: 0,
-    persistentDisconnectTeardowns: 0,
-    avgRecoveryMs: 0,
-    maxRecoveryMs: 0,
-    dcBackpressureDrops: 0,
-    dcBackoffDrops: 0,
-    dcSendErrorDrops: 0,
+    transportReady: true,
     relayDwellMs: 0,
     relayDwellFraction: 0,
     adaptiveNetworkMode: 'low-latency',
@@ -138,8 +122,8 @@ describe('rawConnectionStressLevel', () => {
     ).toBe(1);
   });
 
-  it('returns 1 when dc not ready', () => {
-    expect(rawConnectionStressLevel(baseSnapshot({ dcTransportReady: false }))).toBe(1);
+  it('returns 1 when transport is not ready', () => {
+    expect(rawConnectionStressLevel(baseSnapshot({ transportReady: false }))).toBe(1);
   });
 });
 

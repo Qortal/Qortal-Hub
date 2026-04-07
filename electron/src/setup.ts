@@ -254,7 +254,7 @@ export class ElectronCapacitorApp {
     });
     this.mainWindowState.manage(this.MainWindow);
 
-    // Allow microphone access for WebRTC voice calls.
+    // Allow microphone access for voice calls.
     const summarizeMediaPermissionDetails = (
       details: unknown
     ): Record<string, unknown> => {
@@ -1507,28 +1507,64 @@ export async function startDecentralizedStunAfterP2P(
   }
 }
 
-ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
-  try {
-    clearLateReticulumBridgeRecovery();
-    // Re-use the last known options if none supplied (e.g. from the settings toggle).
-    const opts =
-      options && Object.keys(options).length > 0 ? options : lastP2POptions;
-    lastP2POptions = opts;
-    const network = await startP2PNetwork(opts);
-    attachP2PListeners(network);
-    await startDecentralizedStunAfterP2P(network, opts);
-    let bridgeTransport = getReticulumBridge();
+export async function ensureReticulumManagersStarted(): Promise<void> {
+  let bridgeTransport = getReticulumBridge();
+  if (!bridgeTransport) {
     try {
       bridgeTransport = await startReticulumBridge();
     } catch (err) {
       loggerError('[ReticulumBridge] Failed to start:', err);
-      bridgeTransport = null;
-      registerLateReticulumBridgeRecovery(network);
+      bridgeTransport = getReticulumBridge();
+      if (bridgeTransport) {
+        registerLateReticulumBridgeRecovery();
+      }
     }
-    // (Re-)start the presence manager wired to the new network instance.
-    stopPresenceManager();
-    const pm = startPresenceManager(bridgeTransport ? [bridgeTransport] : []);
+  }
+
+  if (bridgeTransport && bridgeTransport.getState() !== 'ready') {
+    registerLateReticulumBridgeRecovery();
+  }
+
+  let pm = getPresenceManager();
+  const transports = bridgeTransport ? [bridgeTransport] : [];
+  if (pm) {
+    setPresenceManagerTransports(transports);
+    void syncReticulumOverlayStateToBridge(pm);
+  } else {
+    pm = startPresenceManager(transports);
     attachPresenceListeners(pm);
+  }
+
+  const callMgr = getCallManager();
+  if (callMgr) {
+    callMgr.setReticulumBridge(bridgeTransport);
+  } else {
+    const startedCallMgr = startCallManager(pm, bridgeTransport);
+    attachCallListeners(startedCallMgr);
+  }
+
+  const gcallMgr = getGroupCallManager();
+  if (gcallMgr) {
+    gcallMgr.setReticulumBridge(bridgeTransport);
+  } else {
+    const startedGcallMgr = startGroupCallManager(pm, bridgeTransport);
+    attachGroupCallListeners(startedGcallMgr);
+  }
+
+  stopReticulumMeshCoordinator();
+  startReticulumMeshCoordinator(getReticulumBridge());
+}
+
+ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
+  try {
+    // Re-use the last known options if none supplied (e.g. from the settings toggle).
+    const opts =
+      options && Object.keys(options).length > 0 ? options : lastP2POptions;
+    lastP2POptions = opts;
+    await ensureReticulumManagersStarted();
+    const network = await startP2PNetwork(opts);
+    attachP2PListeners(network);
+    await startDecentralizedStunAfterP2P(network, opts);
     // (Re-)start the chat manager backed by the shared SQLite database.
     stopChatManager();
     const sharedDbPath = join(
@@ -1538,18 +1574,6 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
     );
     const cm = await startChatManager(network, sharedDbPath);
     attachChatListeners(cm);
-    // (Re-)start the call manager wired to the network + presence manager.
-    stopCallManager();
-    const callMgr = startCallManager(network, pm, bridgeTransport);
-    attachCallListeners(callMgr);
-    // (Re-)start the group call manager.
-    stopGroupCallManager();
-    const gcallMgr = startGroupCallManager(network, pm, bridgeTransport);
-    attachGroupCallListeners(gcallMgr);
-    stopReticulumMeshCoordinator();
-    startReticulumMeshCoordinator(getReticulumBridge());
-    // Notify renderers that P2P / presence is live again.
-    flushPresenceUpdates();
     broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
     return {
       success: true,
@@ -1564,17 +1588,8 @@ ipcMain.handle('p2p:start', async (_event, options?: P2PNetworkOptions) => {
 
 ipcMain.handle('p2p:stop', async () => {
   try {
-    clearLateReticulumBridgeRecovery();
-    stopReticulumMeshCoordinator();
     stopP2PNetwork();
-    queuedPresenceUpdates.clear();
-    flushPresenceUpdates();
-    broadcastToSet(presenceUpdateSubscribers, 'presence:cleared', {});
-    stopReticulumBridge();
-    stopPresenceManager();
     stopChatManager();
-    stopCallManager();
-    stopGroupCallManager();
     return { success: true };
   } catch (err) {
     loggerError('[P2P] Failed to stop:', err);
@@ -1755,9 +1770,7 @@ export function clearLateReticulumBridgeRecovery(): void {
   lateReticulumRecoveryCleanup = null;
 }
 
-export function registerLateReticulumBridgeRecovery(
-  network: NonNullable<ReturnType<typeof getP2PNetwork>>
-): void {
+export function registerLateReticulumBridgeRecovery(): void {
   clearLateReticulumBridgeRecovery();
   const bridge = getReticulumBridge();
   if (!bridge) {
@@ -1780,7 +1793,7 @@ export function registerLateReticulumBridgeRecovery(
     }
 
     loggerLog(
-      '[ReticulumBridge] Bridge became ready after startup timeout; updating presence transport and restarting call/group-call managers'
+      '[ReticulumBridge] Bridge became ready after startup timeout; updating presence transport and rebinding call/group-call managers'
     );
     let pm = getPresenceManager();
     if (pm) {
@@ -1790,14 +1803,20 @@ export function registerLateReticulumBridgeRecovery(
       pm = startPresenceManager([currentBridge]);
       attachPresenceListeners(pm);
     }
-    stopCallManager();
-    const callMgr = startCallManager(network, pm, currentBridge);
-    attachCallListeners(callMgr);
-    stopGroupCallManager();
-    const gcallMgr = startGroupCallManager(network, pm, currentBridge);
-    attachGroupCallListeners(gcallMgr);
-    flushPresenceUpdates();
-    broadcastToSet(presenceUpdateSubscribers, 'presence:started', {});
+    const callMgr = getCallManager();
+    if (callMgr) {
+      callMgr.setReticulumBridge(currentBridge);
+    } else {
+      attachCallListeners(startCallManager(pm, currentBridge));
+    }
+    const gcallMgr = getGroupCallManager();
+    if (gcallMgr) {
+      gcallMgr.setReticulumBridge(currentBridge);
+    } else {
+      attachGroupCallListeners(startGroupCallManager(pm, currentBridge));
+    }
+    stopReticulumMeshCoordinator();
+    startReticulumMeshCoordinator(currentBridge);
   };
 
   if (bridge.getState() === 'ready') {
@@ -2108,9 +2127,7 @@ export function attachCallListeners(
   manager.on('call:incoming', forward('call:incoming'));
   manager.on('call:accepted', forward('call:accepted'));
   manager.on('call:rejected', forward('call:rejected'));
-  manager.on('call:signal', forward('call:signal'));
   manager.on('call:hangup', forward('call:hangup'));
-  manager.on('call:audio', forward('call:audio'));
 }
 
 ipcMain.handle(
@@ -2190,46 +2207,6 @@ ipcMain.handle(
     return { success: true };
   }
 );
-
-ipcMain.handle(
-  'call:sendSignal',
-  async (
-    _event,
-    callId: string,
-    type: 'offer' | 'answer' | 'ice',
-    data: unknown,
-    signature?: string,
-    publicKey?: string,
-    timestamp?: number,
-    sdpHash?: string
-  ) => {
-    const mgr = getCallManager();
-    if (!mgr) return { success: false, error: 'Call manager not running' };
-    mgr.sendSignal(callId, type, data, signature, publicKey, timestamp, sdpHash);
-    return { success: true };
-  }
-);
-
-ipcMain.handle(
-  'call:sendAudio',
-  async (_event, callId: string, seq: number, data: string) => {
-    const mgr = getCallManager();
-    if (!mgr) return { success: false, error: 'Call manager not running' };
-    mgr.sendAudioChunk(callId, seq, data);
-    return { success: true };
-  }
-);
-
-ipcMain.handle('call:getPublicIpPeers', async () => {
-  const network = getP2PNetwork();
-  return network ? network.getPublicIpPeers() : [];
-});
-
-ipcMain.handle('call:whoami', async () => {
-  const network = getP2PNetwork();
-  if (!network) return null;
-  return network.askWhoAmI();
-});
 
 ipcMain.handle(
   'call:setLocalAddresses',

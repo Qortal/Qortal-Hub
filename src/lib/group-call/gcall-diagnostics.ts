@@ -307,36 +307,11 @@ export function gcallDiagnosticsIngestConsoleArgs(
   gcallDiagnosticsPush(level, tag, payload);
 }
 
-export async function gcallDiagnosticsCollectRtcStats(
-  peerEntries: Iterable<readonly [string, { pc: RTCPeerConnection }]>
-): Promise<Record<string, unknown>> {
-  const out: Record<string, unknown> = {};
-  for (const [addr, entry] of peerEntries) {
-    const key = truncateGcallDiagAddress(addr);
-    try {
-      const report = await entry.pc.getStats();
-      const rows: unknown[] = [];
-      report.forEach((r) => {
-        try {
-          rows.push(JSON.parse(JSON.stringify(r)));
-        } catch {
-          rows.push({ type: (r as { type?: string }).type, id: (r as { id?: string }).id });
-        }
-      });
-      out[key] = rows;
-    } catch (e) {
-      out[key] = { error: String(e) };
-    }
-  }
-  return out;
-}
-
 export function buildGcallDiagnosticsExportJson(params: {
   context: GcallDiagExportContext;
   liveMetricsSnapshot: unknown;
   exportWindowMetrics: unknown;
   gcallPerfSnapshot?: unknown;
-  webrtcStats?: Record<string, unknown>;
 }): string {
   const triad = extractTransportTriadFromLiveMetrics(params.liveMetricsSnapshot);
   const payload: GcallDiagExportPayload = {
@@ -362,9 +337,6 @@ export function buildGcallDiagnosticsExportJson(params: {
       ...e,
       payload: redactDeep(e.payload),
     })),
-    webrtcStats: params.webrtcStats
-      ? (redactDeep(params.webrtcStats) as Record<string, unknown>)
-      : undefined,
   };
   return JSON.stringify(payload, null, 2);
 }

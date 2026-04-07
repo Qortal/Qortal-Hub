@@ -22,12 +22,8 @@ import {
   setupContentSecurityPolicy,
   setupReloadWatcher,
   attachP2PListeners,
-  attachPresenceListeners,
   attachChatListeners,
-  attachCallListeners,
-  attachGroupCallListeners,
-  clearLateReticulumBridgeRecovery,
-  registerLateReticulumBridgeRecovery,
+  ensureReticulumManagersStarted,
   setLastP2POptions,
   startDecentralizedStunAfterP2P,
 } from './setup';
@@ -36,10 +32,7 @@ import {
   DEFAULT_P2P_PORT,
   DEFAULT_API_PORT,
 } from './p2p-network';
-import { startPresenceManager } from './presence';
 import { startChatManager, flushChatStore } from './chat';
-import { startCallManager } from './call';
-import { startGroupCallManager } from './group-call';
 import { readAppSettings } from './setup';
 import {
   planReticulumAppQuit,
@@ -57,9 +50,7 @@ import {
 } from './reticulum-mesh';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
 import {
-  startReticulumBridge,
   stopReticulumBridge,
-  getReticulumBridge,
 } from './reticulum-bridge';
 
 import * as net from 'net';
@@ -265,67 +256,44 @@ async function setupMultiInstanceUserData(
 
   startBundledReticulumDaemon();
 
+  // Presence, direct calls, group calls, and the Reticulum bridge are no longer
+  // gated by the legacy P2P mesh setting.
+  await ensureReticulumManagersStarted();
+
+  // Each instance gets a unique P2P and API port derived from its index so
+  // multiple instances can run side-by-side on the same machine.
+  // Instance 0: P2P=62391, API=62490
+  // Instance 1: P2P=62392, API=62491  … and so on.
+  const p2pPort = DEFAULT_P2P_PORT + instanceIndex;
+  const apiPort = DEFAULT_API_PORT + instanceIndex;
+
+  // All instances share one SQLite database in a fixed directory under
+  // appData (the common parent of all per-instance userData paths).
+  const sharedDbDir = path.join(app.getPath('appData'), 'qortal-shared');
+  fs.mkdirSync(sharedDbDir, { recursive: true });
+  const sharedDbPath = path.join(sharedDbDir, 'chat.db');
+
+  const p2pOptions = {
+    port: p2pPort,
+    apiPort,
+    initialPeers: [...HUB_P2P_BOOTSTRAP_SEEDS],
+    dbPath: sharedDbPath,
+  };
+  setLastP2POptions(p2pOptions);
+
   // Auto-start the P2P network unless the user has disabled it in settings.
   const appSettings = await readAppSettings();
   if (appSettings.p2pEnabled !== false) {
     try {
-      // Each instance gets a unique P2P and API port derived from its index so
-      // multiple instances can run side-by-side on the same machine.
-      // Instance 0: P2P=62391, API=62490
-      // Instance 1: P2P=62392, API=62491  … and so on.
-      const p2pPort = DEFAULT_P2P_PORT + instanceIndex;
-      const apiPort = DEFAULT_API_PORT + instanceIndex;
-
-      // All instances share one SQLite database in a fixed directory under
-      // appData (the common parent of all per-instance userData paths).
-      const sharedDbDir = path.join(app.getPath('appData'), 'qortal-shared');
-      fs.mkdirSync(sharedDbDir, { recursive: true });
-      const sharedDbPath = path.join(sharedDbDir, 'chat.db');
-
-      const p2pOptions = {
-        port: p2pPort,
-        apiPort,
-        initialPeers: [...HUB_P2P_BOOTSTRAP_SEEDS],
-        dbPath: sharedDbPath,
-      };
-      // Persist the options so the settings toggle can restart with the same config.
-      setLastP2POptions(p2pOptions);
       const p2pNetwork = await startP2PNetwork(p2pOptions);
       attachP2PListeners(p2pNetwork);
       await startDecentralizedStunAfterP2P(p2pNetwork, p2pOptions);
       loggerLog(`[P2P] Auto-started on port ${p2pPort}`);
-      clearLateReticulumBridgeRecovery();
-
-      let bridgeTransport = null;
-      try {
-        bridgeTransport = await startReticulumBridge();
-      } catch (err) {
-        loggerError('[ReticulumBridge] Auto-start failed:', err);
-        registerLateReticulumBridgeRecovery(p2pNetwork);
-      }
-
-      // Presence before mesh coordinator so getPresenceManager() is non-null when
-      // ReticulumMeshCoordinator.start() seeds fanout probes and runs maintenance.
-      const pm = startPresenceManager(bridgeTransport ? [bridgeTransport] : []);
-      attachPresenceListeners(pm);
-      loggerLog('[Presence] Manager auto-started.');
-
-      startReticulumMeshCoordinator(getReticulumBridge());
 
       // Start the chat manager backed by the shared SQLite database.
       const cm = await startChatManager(p2pNetwork, sharedDbPath);
       attachChatListeners(cm);
       loggerLog('[Chat] Manager auto-started.');
-
-      // Start the call manager wired to the network and presence manager.
-      const callMgr = startCallManager(p2pNetwork, pm, bridgeTransport);
-      attachCallListeners(callMgr);
-      loggerLog('[Call] Manager auto-started.');
-
-      // Start the group call manager.
-      const gcallMgr = startGroupCallManager(p2pNetwork, pm, bridgeTransport);
-      attachGroupCallListeners(gcallMgr);
-      loggerLog('[GCall] Manager auto-started.');
     } catch (err) {
       loggerError('[P2P] Auto-start failed:', err);
     }

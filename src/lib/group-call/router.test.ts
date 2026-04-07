@@ -9,7 +9,6 @@ import {
   chooseRouterTopologyAuthority,
   GroupCallPerformanceTracker,
   collectActiveSpeakers,
-  computeGroupCallDcTransportReady,
   disposeParticipantAudioState,
   collectForwardRecipientsForRole,
   evaluateActiveSpeaker,
@@ -18,7 +17,6 @@ import {
   groupCallTopologyStructureFingerprint,
   hasGroupCallSourceWindowMediaActivity,
   isGroupCallTopologyDuplicateHeartbeat,
-  isGroupCallWebRtcPeerInactive,
   promoteClusterOfficersRow,
   reconcileParticipantSpeaking,
   sameAddressList,
@@ -628,7 +626,7 @@ describe('group-call router helpers', () => {
     expect(
       assessGroupCallSourceStall({
         sourceExpected: true,
-        dcTransportReady: true,
+        transportReady: true,
         ingressPeerConnected: true,
         lastRecvAgeMs: 15_000,
         opusBufferedMs: 0,
@@ -647,7 +645,7 @@ describe('group-call router helpers', () => {
     expect(
       assessGroupCallSourceStall({
         sourceExpected: true,
-        dcTransportReady: true,
+        transportReady: true,
         ingressPeerConnected: true,
         lastRecvAgeMs: 15_000,
         opusBufferedMs: 0,
@@ -670,7 +668,7 @@ describe('group-call router helpers', () => {
     expect(
       assessGroupCallSourceStall({
         sourceExpected: true,
-        dcTransportReady: true,
+        transportReady: true,
         ingressPeerConnected: true,
         lastRecvAgeMs: 20_000,
         opusBufferedMs: 0,
@@ -836,7 +834,7 @@ describe('group-call router helpers', () => {
     expect(first.playoutOutsideTargetFraction).toBe(1);
     expect(first.relayDwellFraction).toBe(1);
 
-    tracker.recordTransportMode('datachannel', 1_000);
+    tracker.recordTransportMode('reticulum', 1_000);
     const second = tracker.captureWindowMetrics('me', 2_000);
     expect(second.playoutOutsideTargetFraction).toBe(0);
     expect(second.relayDwellFraction).toBe(0);
@@ -892,49 +890,31 @@ describe('group-call router helpers', () => {
     });
   });
 
-  it('getGroupCallTransportSummary: DC when channels ready and no recent relay', () => {
+  it('getGroupCallTransportSummary: Reticulum when transport is ready and no recent relay', () => {
     expect(
       getGroupCallTransportSummary(
         {
           relayPacketsSent: 5,
           relayPacketsReceived: 0,
           lastRelayActivityAtMs: 1_000,
-          dcTransportReady: true,
+          transportReady: true,
         },
         5_000
       )
     ).toMatchObject({
-      mode: 'datachannel',
-      label: 'Data channel',
+      mode: 'reticulum',
+      label: 'Reticulum',
     });
   });
 
-  it('getGroupCallTransportSummary: DC wins when ready even if relay was recent', () => {
+  it('getGroupCallTransportSummary: Reticulum wins when ready even if relay was recent', () => {
     expect(
       getGroupCallTransportSummary(
         {
           relayPacketsSent: 1,
           relayPacketsReceived: 0,
           lastRelayActivityAtMs: 4_000,
-          dcTransportReady: true,
-        },
-        5_000
-      )
-    ).toMatchObject({
-      mode: 'datachannel',
-      label: 'Data channel',
-    });
-  });
-
-  it('getGroupCallTransportSummary: reports Reticulum when configured as primary transport', () => {
-    expect(
-      getGroupCallTransportSummary(
-        {
-          relayPacketsSent: 0,
-          relayPacketsReceived: 0,
-          lastRelayActivityAtMs: 0,
-          dcTransportReady: true,
-          mediaTransport: 'reticulum',
+          transportReady: true,
         },
         5_000
       )
@@ -951,7 +931,7 @@ describe('group-call router helpers', () => {
           relayPacketsSent: 0,
           relayPacketsReceived: 0,
           lastRelayActivityAtMs: 0,
-          dcTransportReady: false,
+          transportReady: false,
         },
         5_000
       )
@@ -959,35 +939,6 @@ describe('group-call router helpers', () => {
       mode: 'connecting',
       label: 'Connecting…',
     });
-  });
-
-  it('computeGroupCallDcTransportReady: root requires downstream DC to each member', () => {
-    const topo = {
-      topologyEpoch: 1,
-      rootForwarder: 'root',
-      standbyForwarder: 'b',
-      clusters: [
-        { members: ['root', 'a', 'b'], forwarder: 'root', standby: 'b', standby2: 'a' },
-      ],
-    };
-    expect(
-      computeGroupCallDcTransportReady('root-forwarder', 'root', topo, () => false, false)
-    ).toBe(false);
-    expect(
-      computeGroupCallDcTransportReady('root-forwarder', 'root', topo, (addr) => addr === 'a' || addr === 'b', false)
-    ).toBe(true);
-    expect(computeGroupCallDcTransportReady('participant', 'a', topo, () => false, false)).toBe(false);
-    expect(computeGroupCallDcTransportReady('participant', 'a', topo, () => false, true)).toBe(true);
-  });
-
-  it('isGroupCallWebRtcPeerInactive: disconnected/connecting are not inactive', () => {
-    expect(isGroupCallWebRtcPeerInactive(undefined)).toBe(true);
-    expect(isGroupCallWebRtcPeerInactive('failed')).toBe(true);
-    expect(isGroupCallWebRtcPeerInactive('closed')).toBe(true);
-    expect(isGroupCallWebRtcPeerInactive('disconnected')).toBe(false);
-    expect(isGroupCallWebRtcPeerInactive('connecting')).toBe(false);
-    expect(isGroupCallWebRtcPeerInactive('connected')).toBe(false);
-    expect(isGroupCallWebRtcPeerInactive('new')).toBe(false);
   });
 
   it('duplicate topology heartbeat: same epoch+structure despite member order', () => {

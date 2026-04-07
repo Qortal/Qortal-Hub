@@ -34,7 +34,6 @@ import {
   userInfoAtom,
 } from '../../atoms/global';
 import { useGroupCallContext } from '../../contexts/GroupCallContext';
-import { getGroupCallTransportSummary } from '../../lib/group-call/router';
 import {
   addrHue,
   initialsFromDisplayLabel,
@@ -110,14 +109,18 @@ export function QortalGroupVoiceCallDock() {
     if (roomState === 'connected' && !mediaViable) {
       return {
         mode: 'connecting' as const,
-        label: t('core:group_call_connecting_audio', {
-          postProcess: 'capitalizeFirstChar',
-        }),
+        label: 'Reticulum',
         tooltip:
-          'Room key and audio path are still establishing; you may not hear others yet.',
+          'Reticulum audio is still establishing; you may not hear others yet.',
       };
     }
-    return getGroupCallTransportSummary(metrics, Date.now());
+    void metrics;
+    void transportTick;
+    return {
+      mode: 'reticulum' as const,
+      label: 'Reticulum',
+      tooltip: 'Encrypted voice over Reticulum',
+    };
   }, [roomState, mediaViable, metrics, transportTick, t]);
 
   const title =
@@ -229,11 +232,9 @@ export function QortalGroupVoiceCallDock() {
             fontSize: 9,
             fontWeight: 600,
             bgcolor:
-              transport.mode === 'relay'
-                ? alpha('#f59e0b', 0.35)
-                : transport.mode === 'connecting'
-                  ? alpha('#94a3b8', 0.35)
-                  : alpha('#22c55e', 0.35),
+              transport.mode === 'connecting'
+                ? alpha('#94a3b8', 0.35)
+                : alpha('#22c55e', 0.35),
             color: '#dbdee1',
             '& .MuiChip-label': { px: 0.5, overflow: 'hidden' },
           }}

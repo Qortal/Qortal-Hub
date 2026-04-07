@@ -29,12 +29,12 @@ export function rawConnectionStressLevel(
 
   if (severePlayback || severeRelay || severeRecoveryRelay) return 2;
 
-  const warnDc = m.dcTransportReady === false;
+  const warnTransport = m.transportReady === false;
   const warnRelay = relay >= 0.06;
   const warnRecovery = recovery;
   const warnPlayback = outside >= 0.38 && buf >= 170;
 
-  if (warnDc || warnRelay || warnRecovery || warnPlayback) return 1;
+  if (warnTransport || warnRelay || warnRecovery || warnPlayback) return 1;
 
   return 0;
 }

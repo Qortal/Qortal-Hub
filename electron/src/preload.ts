@@ -881,6 +881,8 @@ try {
 
   // ── Call API ─────────────────────────────────────────────────────────────────
   //
+  // Direct 1:1 call signaling uses Reticulum only.
+  //
   // Renderer responsibilities for initiating a call:
   //   1. Build canonical signed-data:
   //        { callId, chatId, fromAddress, fromPublicKey, timestamp, type: 'CALL_REQUEST' }
@@ -926,50 +928,6 @@ try {
     hangup: async (callId: string, signature: string, publicKey: string, timestamp: number) =>
       ipcRenderer.invoke('call:hangup', callId, signature, publicKey, timestamp),
 
-    /**
-     * Forward a WebRTC signal to the remote peer.
-     * `type` must be 'offer', 'answer', or 'ice'.
-     * `data` is the SDP string (offer/answer) or RTCIceCandidateInit (ice).
-     * For 'offer' and 'answer', signature/publicKey/timestamp are required.
-     */
-    sendSignal: async (
-      callId: string,
-      type: 'offer' | 'answer' | 'ice',
-      data: unknown,
-      signature?: string,
-      publicKey?: string,
-      timestamp?: number,
-      sdpHash?: string
-    ) =>
-      ipcRenderer.invoke(
-        'call:sendSignal',
-        callId,
-        type,
-        data,
-        signature,
-        publicKey,
-        timestamp,
-        sdpHash
-      ),
-
-    /**
-     * Send a Tier-3 audio chunk over the P2P relay.
-     * `data` is a base64-encoded Opus frame.
-     */
-    sendAudio: async (callId: string, seq: number, data: string) =>
-      ipcRenderer.invoke('call:sendAudio', callId, seq, data),
-
-    /** Returns peers with public IPs that can serve as relay candidates. */
-    getPublicIpPeers: async () =>
-      ipcRenderer.invoke('call:getPublicIpPeers'),
-
-    /**
-     * Ask directly-connected P2P peers for this node's public IP:port.
-     * Returns { ip, port } or null if no peers respond within 3 s.
-     */
-    whoami: async (): Promise<{ ip: string; port: number } | null> =>
-      ipcRenderer.invoke('call:whoami'),
-
     /** Register the local user's address with the call manager. */
     setLocalAddresses: async (addresses: string[]) =>
       ipcRenderer.invoke('call:setLocalAddresses', addresses),
@@ -986,9 +944,7 @@ try {
         'call:incoming',
         'call:accepted',
         'call:rejected',
-        'call:signal',
         'call:hangup',
-        'call:audio',
       ] as const;
 
       const handlers: Map<string, (...args: unknown[]) => void> = new Map();

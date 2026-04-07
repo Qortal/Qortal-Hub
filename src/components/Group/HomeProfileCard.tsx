@@ -34,7 +34,6 @@ import {
 import {
   onlineAddressesAtom,
   isIdleAtom,
-  p2pEnabledAtom,
   type SelectableStatus,
 } from '../../atoms/presence';
 import { statusDotColor, useMyStatus, useStatus } from '../../hooks/usePresence';
@@ -106,7 +105,6 @@ export const HomeProfileCard = () => {
   const [myStatus, setMyStatus] = useMyStatus();
   const isIdle = useAtomValue(isIdleAtom);
   const onlineAddresses = useAtomValue(onlineAddressesAtom);
-  const isP2PEnabled = useAtomValue(p2pEnabledAtom);
   const totalOnline = onlineAddresses.size;
 
   const [statusMenuAnchor, setStatusMenuAnchor] =
@@ -298,14 +296,10 @@ export const HomeProfileCard = () => {
           </Typography>
 
           {/* Clickable status label opens the status picker */}
-          <Tooltip
-            title={isP2PEnabled ? 'Change status' : 'Enable Hub P2P to change status'}
-            disableInteractive
-          >
+          <Tooltip title="Change status" disableInteractive>
             <span>
               <ButtonBase
-                onClick={(e) => isP2PEnabled && setStatusMenuAnchor(e.currentTarget)}
-                disabled={!isP2PEnabled}
+                onClick={(e) => setStatusMenuAnchor(e.currentTarget)}
                 sx={{ borderRadius: '4px', mt: '2px' }}
               >
                 <Typography
@@ -318,7 +312,7 @@ export const HomeProfileCard = () => {
                     fontSize: '0.72rem',
                     fontWeight: 500,
                     px: '2px',
-                    '&:hover': { opacity: isP2PEnabled ? 0.8 : 1 },
+                    '&:hover': { opacity: 0.8 },
                   }}
                 >
                   {showAsOffline

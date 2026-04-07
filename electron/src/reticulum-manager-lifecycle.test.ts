@@ -9,10 +9,6 @@ import {
   stopPresenceManager,
 } from './presence';
 
-class P2PStub extends EventEmitter {
-  send = vi.fn();
-}
-
 class CallBridgeStub extends EventEmitter {
   getState(): 'ready' {
     return 'ready';
@@ -143,7 +139,6 @@ describe('Reticulum manager late bridge binding', () => {
 
   it('attaches and detaches the CallManager bridge listener after start', () => {
     const manager = new CallManager(
-      new P2PStub() as any,
       presenceStub() as any,
       null
     );
@@ -164,9 +159,61 @@ describe('Reticulum manager late bridge binding', () => {
     expect(secondBridge.listenerCount('call-message')).toBe(0);
   });
 
+  it('does not initiate direct calls over a mesh-only route', async () => {
+    vi.useFakeTimers();
+    const presence = presenceStub();
+    presence.getRouteForAddress.mockReturnValue({
+      kind: 'mesh-node',
+      id: 'mesh-peer',
+    });
+    const bridge = new CallBridgeStub();
+    const manager = new CallManager(presence as any, bridge as any);
+
+    manager.start();
+    const pending = manager.initiateCall(
+      'Q-peer',
+      'direct:Q-local:Q-peer',
+      'Q-local',
+      'sig',
+      'pub',
+      'call-1',
+      Date.now()
+    );
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    await expect(pending).resolves.toBeNull();
+    expect(bridge.sendCall).not.toHaveBeenCalled();
+    manager.stop();
+  });
+
+  it('initiates direct calls over Reticulum when a route is present', async () => {
+    const presence = presenceStub();
+    presence.getRouteForAddress.mockReturnValue({
+      kind: 'reticulum',
+      destinationHash: 'a'.repeat(32),
+    });
+    presence.getReticulumActiveNeighborHashes.mockReturnValue(['b'.repeat(32)]);
+    const bridge = new CallBridgeStub();
+    const manager = new CallManager(presence as any, bridge as any);
+
+    manager.start();
+    await expect(
+      manager.initiateCall(
+        'Q-peer',
+        'direct:Q-local:Q-peer',
+        'Q-local',
+        'sig',
+        'pub',
+        'call-2',
+        Date.now()
+      )
+    ).resolves.toBe('call-2');
+    expect(bridge.sendCall).toHaveBeenCalledTimes(1);
+    manager.stop();
+  });
+
   it('attaches and detaches GroupCallManager bridge listeners after start', () => {
     const manager = new GroupCallManager(
-      new P2PStub() as any,
       presenceStub() as any,
       null
     );

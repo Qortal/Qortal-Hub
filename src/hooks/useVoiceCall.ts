@@ -1,9 +1,9 @@
 /**
  * useVoiceCall — direct (1:1) voice over Reticulum only.
  *
- * Signaling (CALL_REQUEST / ACCEPT / REJECT / HANGUP) uses window.call IPC → P2P mesh.
+ * Signaling (CALL_REQUEST / ACCEPT / REJECT / HANGUP) uses window.call IPC → Reticulum.
  * Media uses the same path as group calls: GC_JOIN → GC_KEY → encrypted packets →
- * window.groupCall.sendAudio → Reticulum (no WebRTC, no mesh CALL_AUDIO relay).
+ * window.groupCall.sendAudio → Reticulum (no WebRTC, no legacy CALL_AUDIO relay).
  * Inbound: decode → `gcall-jitter-scheduler` drain → Opus decode → `group-playout-processor`
  * (same as useGroupVoiceCall), not ad-hoc BufferSource playback.
  */

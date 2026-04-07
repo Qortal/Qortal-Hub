@@ -220,9 +220,6 @@ describe('recent room bootstrap state', () => {
     const reticulumSent: Array<{ hash: string; msg: Record<string, unknown> }> =
       [];
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub(reticulumSent) as any
     );
@@ -286,9 +283,6 @@ describe('recent room bootstrap state', () => {
   it('preserves cached topology and session on rejoin without reviving cached participants', () => {
     const t0 = Date.now();
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub([]) as any
     );
@@ -379,7 +373,6 @@ describe('recent room bootstrap state', () => {
   it('continues Reticulum overlay fanout when an earlier neighbor fails but a later one succeeds', async () => {
     const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
     const manager = new GroupCallManager(
-      { send: () => {} } as any,
       {
         on: () => {},
         off: () => {},
@@ -443,7 +436,6 @@ describe('recent room bootstrap state', () => {
     const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
     let attempts = 0;
     const manager = new GroupCallManager(
-      { send: () => {} } as any,
       reticulumAwarePresenceStub() as any,
       {
         getState: () => 'ready',
@@ -514,7 +506,6 @@ describe('recent room bootstrap state', () => {
 
     const bridge = new ReticulumBridgeStub();
     const manager = new GroupCallManager(
-      { send: () => {} } as any,
       {
         on: () => {},
         off: () => {},
@@ -585,7 +576,6 @@ describe('recent room bootstrap state', () => {
 describe('retained verified key replay', () => {
   it('replays the latest retained authoritative key state to a late subscriber', () => {
     const manager = new GroupCallManager(
-      { send: () => {} } as any,
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub([]) as any
     );
@@ -652,7 +642,6 @@ describe('retained verified key replay', () => {
 
   it('drops retained verified key replay after authoritative root changes', () => {
     const manager = new GroupCallManager(
-      { send: () => {} } as any,
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub([]) as any
     );
@@ -783,9 +772,6 @@ describe('Reticulum group audio transport', () => {
 
     const bridge = new ReticulumAudioBridgeStub();
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       bridge as any
     );
@@ -887,9 +873,6 @@ describe('Reticulum group audio transport', () => {
 
     const bridge = new ReticulumAudioBridgeStub();
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       {
         on: () => {},
         off: () => {},
@@ -997,9 +980,6 @@ describe('Reticulum group audio transport', () => {
 
     const bridge = new ReticulumAudioBridgeStub();
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       bridge as any
     );
@@ -1100,9 +1080,6 @@ describe('Reticulum group audio transport', () => {
 
     const bridge = new ReticulumAudioBridgeStub();
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       bridge as any
     );
@@ -1211,9 +1188,6 @@ describe('Reticulum group audio transport', () => {
 
     const bridge = new ReticulumAudioBridgeStub();
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       bridge as any
     );
@@ -1324,9 +1298,6 @@ describe('Reticulum group audio transport', () => {
 
     const bridge = new ReticulumAudioBridgeStub();
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       bridge as any
     );
@@ -1429,9 +1400,6 @@ describe('Reticulum group activity hints', () => {
 
   it('feeds valid Reticulum hints into watched group activity snapshots', () => {
     const manager = new GroupCallManager(
-      {
-        send: () => {},
-      } as any,
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub([]) as any
     );
@@ -1452,11 +1420,6 @@ describe('Reticulum group activity hints', () => {
   it('ignores relayed mesh control traffic for watched sidebar activity', () => {
     const relayed: unknown[] = [];
     const manager = new GroupCallManager(
-      {
-        send: (_nodeId: string | null, payload: unknown) => {
-          relayed.push(payload);
-        },
-      } as any,
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub([]) as any
     );

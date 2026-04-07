@@ -1,8 +1,8 @@
 /**
- * Group Call protocol for the Qortal Hub P2P network.
+ * Group Call protocol for the Qortal Hub Reticulum transport.
  *
- * Implements fully decentralized group voice call signaling on top of the
- * existing P2P mesh.  All GC_* messages are ephemeral (never stored to disk).
+ * Implements fully decentralized group voice call signaling over Reticulum.
+ * All GC_* messages are ephemeral (never stored to disk).
  *
  * Architecture (handled entirely in the renderer):
  *   - Adaptive topology: ≤10 members → single forwarder, 11-50 → hierarchical
@@ -26,7 +26,6 @@ import {
   error as loggerError,
   warn as loggerWarn,
 } from './logger';
-import type { P2PNetwork } from './p2p-network';
 import type { PresenceManager } from './presence';
 import type {
   ReticulumBridge,
@@ -1017,12 +1016,11 @@ export function getReticulumOverlayLogicalDedupeKey(
 let _instance: GroupCallManager | null = null;
 
 export function startGroupCallManager(
-  p2p: P2PNetwork,
   presence: PresenceManager,
   reticulumBridge?: ReticulumBridge | null
 ): GroupCallManager {
   if (_instance) _instance.stop();
-  _instance = new GroupCallManager(p2p, presence, reticulumBridge ?? null);
+  _instance = new GroupCallManager(presence, reticulumBridge ?? null);
   _instance.start();
   return _instance;
 }
@@ -1039,7 +1037,6 @@ export function getGroupCallManager(): GroupCallManager | null {
 }
 
 export class GroupCallManager extends EventEmitter {
-  private p2p: P2PNetwork;
   private presence: PresenceManager;
   private reticulumBridge: ReticulumBridge | null;
   private started = false;
@@ -1265,12 +1262,10 @@ export class GroupCallManager extends EventEmitter {
   }
 
   constructor(
-    p2p: P2PNetwork,
     presence: PresenceManager,
     reticulumBridge?: ReticulumBridge | null
   ) {
     super();
-    this.p2p = p2p;
     this.presence = presence;
     this.reticulumBridge = reticulumBridge ?? null;
 

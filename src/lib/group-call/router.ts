@@ -425,24 +425,8 @@ export interface GroupCallMetricsSnapshot {
   /** Fraction of drain-tick source samples where jitter buffer had zero frames. */
   jitterRawEmptyFraction: number;
   lastUpdatedAt: number;
-  /** Present-tense: DataChannels needed for this role are open (set in useGroupVoiceCall flush). */
-  dcTransportReady?: boolean;
-  pcConnectedTransitions: number;
-  pcDisconnectedTransitions: number;
-  pcFailedTransitions: number;
-  pcClosedTransitions: number;
-  dcOpenCount: number;
-  dcCloseCount: number;
-  dcErrorCount: number;
-  iceRestartAttempts: number;
-  iceRestartSuccesses: number;
-  reconnectAttempts: number;
-  persistentDisconnectTeardowns: number;
-  avgRecoveryMs: number;
-  maxRecoveryMs: number;
-  dcBackpressureDrops: number;
-  dcBackoffDrops: number;
-  dcSendErrorDrops: number;
+  /** Present-tense: Reticulum transport needed for this role is ready (set in useGroupVoiceCall flush). */
+  transportReady?: boolean;
   relayDwellMs: number;
   relayDwellFraction: number;
   adaptiveNetworkMode: 'low-latency' | 'recovery';
@@ -585,9 +569,6 @@ export interface GroupCallWindowMetrics {
   jitterUnderruns: number;
   missingFrames: number;
   concealmentTicks: number;
-  dcBackpressureDrops: number;
-  dcBackoffDrops: number;
-  dcSendErrorDrops: number;
   reticulumAudioQueuePressureDrops: number;
   reticulumAudioStaleDrops: number;
   reticulumAudioLinkUnreadyDrops: number;
@@ -651,7 +632,7 @@ export interface GroupCallReticulumAudioPressureAssessment {
 
 export interface GroupCallSourceStallAssessmentInput {
   sourceExpected: boolean;
-  dcTransportReady: boolean;
+  transportReady: boolean;
   ingressPeerConnected: boolean;
   lastRecvAgeMs: number;
   opusBufferedMs: number;
@@ -842,7 +823,7 @@ export function assessGroupCallSourceStall(
   input: GroupCallSourceStallAssessmentInput
 ): GroupCallSourceStallAssessment {
   const activeSource = input.sourceExpected && input.hadRecentMediaWindow;
-  if (!activeSource || !input.dcTransportReady || !input.ingressPeerConnected) {
+  if (!activeSource || !input.transportReady || !input.ingressPeerConnected) {
     return {
       activeSource,
       stalled: false,
@@ -914,7 +895,7 @@ export function assessGroupCallSourceStall(
   };
 }
 
-/** Mesh relay must be this recent (ms) to show "P2P relay" instead of Data channel. */
+/** Legacy relay must be this recent (ms) to show "P2P relay" instead of Connecting. */
 export const GROUP_CALL_RELAY_INDICATOR_STALE_MS = 2_500;
 
 /** Compare-only fingerprint: normalize cluster/member order so duplicate topology heartbeats match. */
@@ -938,8 +919,7 @@ export function groupCallTopologyStructureFingerprint(
 }
 
 /**
- * Same local epoch and same structure as previous topology → skip redundant React state updates
- * but still run WebRTC ensure on each root heartbeat.
+ * Same local epoch and same structure as previous topology → skip redundant React state updates.
  */
 export function isGroupCallTopologyDuplicateHeartbeat(
   prev: RouterTopology | null,
@@ -954,95 +934,35 @@ export function isGroupCallTopologyDuplicateHeartbeat(
   );
 }
 
-/** True when the hook should open a new RTCPeerConnection (no PC or terminal ICE state). */
-export function isGroupCallWebRtcPeerInactive(
-  connectionState: string | undefined
-): boolean {
-  return (
-    connectionState === undefined ||
-    connectionState === 'failed' ||
-    connectionState === 'closed'
-  );
-}
-
-/**
- * How many cluster members may be in the middle of a DC handshake (e.g. re-joining)
- * before the root-forwarder's transport indicator downgrades to "relay".
- * Setting this to 1 prevents a single reconnecting peer from keeping the whole
- * transport mode stuck in relay while all other legs are healthy.
- */
-export const DC_TRANSPORT_RECONNECT_TOLERANCE = 1;
-
-/**
- * Whether required WebRTC DataChannels are open for the current role (upload path for non-root;
- * all downstream peers for root forwarder).
- */
-export function computeGroupCallDcTransportReady(
-  role: RouterRole,
-  myAddress: string,
-  topology: RouterTopology | null,
-  peerDcOpen: (address: string) => boolean,
-  upstreamDcOpen: boolean
-): boolean {
-  if (!topology) return false;
-  if (role === 'root-forwarder') {
-    // Tolerate up to DC_TRANSPORT_RECONNECT_TOLERANCE members mid-handshake so that
-    // a single re-joining peer does not keep the entire transport indicator in
-    // "relay" mode while the other legs are healthy.
-    let closedCount = 0;
-    for (const cluster of topology.clusters) {
-      if (cluster.forwarder !== myAddress) continue;
-      for (const member of cluster.members) {
-        if (member === myAddress) continue;
-        if (!peerDcOpen(member)) closedCount++;
-      }
-    }
-    return closedCount <= DC_TRANSPORT_RECONNECT_TOLERANCE;
-  }
-  return upstreamDcOpen;
-}
-
 export type GroupCallTransportMode =
-  | 'datachannel'
   | 'reticulum'
   | 'relay'
   | 'connecting';
-export type GroupCallPrimaryTransport = 'datachannel' | 'reticulum';
 
 /**
- * Live transport indicator: DataChannels when role-required DCs are ready; else recent mesh relay;
- * else connecting. dcTransportReady wins over a brief relay burst during reconnect.
+ * Live transport indicator: Reticulum when the role-required transport is ready;
+ * else recent legacy relay; else connecting.
  */
 export function getGroupCallTransportSummary(
   m: Pick<
     GroupCallMetricsSnapshot,
     'relayPacketsSent' | 'relayPacketsReceived' | 'lastRelayActivityAtMs'
   > & {
-    dcTransportReady?: boolean;
-    mediaTransport?: GroupCallPrimaryTransport;
+    transportReady?: boolean;
   },
   now: number = Date.now()
 ): { mode: GroupCallTransportMode; label: string; tooltip: string } {
   const staleMs = GROUP_CALL_RELAY_INDICATOR_STALE_MS;
   const recentRelay =
     m.lastRelayActivityAtMs > 0 && now - m.lastRelayActivityAtMs <= staleMs;
-  const dcReady = m.dcTransportReady === true;
-  const mediaTransport = m.mediaTransport ?? 'datachannel';
+  const transportReady = m.transportReady === true;
 
-  if (dcReady) {
-    if (mediaTransport === 'reticulum') {
-      return {
-        mode: 'reticulum',
-        label: 'Reticulum',
-        tooltip:
-          'Reticulum audio links are up for this role and are carrying group-call media.',
-      };
-    }
+  if (transportReady) {
     return {
-      mode: 'datachannel',
-      label: 'Data channel',
+      mode: 'reticulum',
+      label: 'Reticulum',
       tooltip:
-        'WebRTC DataChannels are up for this role. Mesh relay may still be used briefly for other legs during recovery.',
+        'Reticulum audio links are up for this role and are carrying group-call media.',
     };
   }
   if (recentRelay) {
@@ -1057,7 +977,7 @@ export function getGroupCallTransportSummary(
     mode: 'connecting',
     label: 'Connecting…',
     tooltip:
-      'WebRTC DataChannels are not all open yet; mesh relay may be used briefly when you speak.',
+      'Reticulum transport for this role is not ready yet; legacy relay may be used briefly when you speak.',
   };
 }
 
@@ -1077,9 +997,6 @@ interface WindowCounterSet {
   jitterUnderruns: number;
   missingFrames: number;
   concealmentTicks: number;
-  dcBackpressureDrops: number;
-  dcBackoffDrops: number;
-  dcSendErrorDrops: number;
   reticulumAudioQueuePressureDrops: number;
   reticulumAudioStaleDrops: number;
   reticulumAudioLinkUnreadyDrops: number;
@@ -1142,9 +1059,6 @@ function emptyWindowCounters(): WindowCounterSet {
     jitterUnderruns: 0,
     missingFrames: 0,
     concealmentTicks: 0,
-    dcBackpressureDrops: 0,
-    dcBackoffDrops: 0,
-    dcSendErrorDrops: 0,
     reticulumAudioQueuePressureDrops: 0,
     reticulumAudioStaleDrops: 0,
     reticulumAudioLinkUnreadyDrops: 0,
@@ -1196,22 +1110,6 @@ export class GroupCallPerformanceTracker {
     jitterNotReadyFraction: 0,
     jitterRawEmptyFraction: 0,
     lastUpdatedAt: 0,
-    pcConnectedTransitions: 0,
-    pcDisconnectedTransitions: 0,
-    pcFailedTransitions: 0,
-    pcClosedTransitions: 0,
-    dcOpenCount: 0,
-    dcCloseCount: 0,
-    dcErrorCount: 0,
-    iceRestartAttempts: 0,
-    iceRestartSuccesses: 0,
-    reconnectAttempts: 0,
-    persistentDisconnectTeardowns: 0,
-    avgRecoveryMs: 0,
-    maxRecoveryMs: 0,
-    dcBackpressureDrops: 0,
-    dcBackoffDrops: 0,
-    dcSendErrorDrops: 0,
     relayDwellMs: 0,
     relayDwellFraction: 0,
     adaptiveNetworkMode: 'low-latency',
@@ -1305,8 +1203,6 @@ export class GroupCallPerformanceTracker {
   private playoutDeltaMsSamples = 0;
   private playoutBufferedMsSum = 0;
   private playoutBufferedMsSamples = 0;
-  private recoverySamples = 0;
-  private recoveryTotalMs = 0;
   private mixerReductionSamples = 0;
   private mixerReductionTotalDb = 0;
   private mixerHeavyReductionSamples = 0;
@@ -1849,77 +1745,6 @@ export class GroupCallPerformanceTracker {
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
-  recordPcConnectionStateTransition(state: RTCPeerConnectionState): void {
-    if (state === 'connected') this.snapshot.pcConnectedTransitions++;
-    else if (state === 'disconnected')
-      this.snapshot.pcDisconnectedTransitions++;
-    else if (state === 'failed') this.snapshot.pcFailedTransitions++;
-    else if (state === 'closed') this.snapshot.pcClosedTransitions++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordDcOpen(): void {
-    this.snapshot.dcOpenCount++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordDcClose(): void {
-    this.snapshot.dcCloseCount++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordDcError(): void {
-    this.snapshot.dcErrorCount++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordIceRestartAttempt(): void {
-    this.snapshot.iceRestartAttempts++;
-    this.snapshot.reconnectAttempts++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordIceRestartSuccess(): void {
-    this.snapshot.iceRestartSuccesses++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordPersistentDisconnectTeardown(): void {
-    this.snapshot.persistentDisconnectTeardowns++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordRecoveryDuration(durationMs: number): void {
-    if (!Number.isFinite(durationMs) || durationMs <= 0) return;
-    this.recoverySamples++;
-    this.recoveryTotalMs += durationMs;
-    this.snapshot.avgRecoveryMs = roundMetric(
-      this.recoveryTotalMs / Math.max(1, this.recoverySamples)
-    );
-    this.snapshot.maxRecoveryMs = roundMetric(
-      Math.max(this.snapshot.maxRecoveryMs, durationMs)
-    );
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordDcBackpressureDrop(): void {
-    this.snapshot.dcBackpressureDrops++;
-    this.windowCounters.dcBackpressureDrops++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordDcBackoffDrop(): void {
-    this.snapshot.dcBackoffDrops++;
-    this.windowCounters.dcBackoffDrops++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
-  recordDcSendErrorDrop(): void {
-    this.snapshot.dcSendErrorDrops++;
-    this.windowCounters.dcSendErrorDrops++;
-    this.snapshot.lastUpdatedAt = Date.now();
-  }
-
   setAdaptiveNetworkMode(mode: 'low-latency' | 'recovery'): void {
     this.snapshot.adaptiveNetworkMode = mode;
     this.snapshot.lastUpdatedAt = Date.now();
@@ -2217,22 +2042,6 @@ export class GroupCallPerformanceTracker {
       jitterNotReadyFraction: 0,
       jitterRawEmptyFraction: 0,
       lastUpdatedAt: now,
-      pcConnectedTransitions: 0,
-      pcDisconnectedTransitions: 0,
-      pcFailedTransitions: 0,
-      pcClosedTransitions: 0,
-      dcOpenCount: 0,
-      dcCloseCount: 0,
-      dcErrorCount: 0,
-      iceRestartAttempts: 0,
-      iceRestartSuccesses: 0,
-      reconnectAttempts: 0,
-      persistentDisconnectTeardowns: 0,
-      avgRecoveryMs: 0,
-      maxRecoveryMs: 0,
-      dcBackpressureDrops: 0,
-      dcBackoffDrops: 0,
-      dcSendErrorDrops: 0,
       relayDwellMs: 0,
       relayDwellFraction: 0,
       adaptiveNetworkMode: 'low-latency',
@@ -2436,9 +2245,6 @@ export class GroupCallPerformanceTracker {
       jitterUnderruns: this.windowCounters.jitterUnderruns,
       missingFrames: this.windowCounters.missingFrames,
       concealmentTicks: this.windowCounters.concealmentTicks,
-      dcBackpressureDrops: this.windowCounters.dcBackpressureDrops,
-      dcBackoffDrops: this.windowCounters.dcBackoffDrops,
-      dcSendErrorDrops: this.windowCounters.dcSendErrorDrops,
       reticulumAudioQueuePressureDrops:
         this.windowCounters.reticulumAudioQueuePressureDrops,
       reticulumAudioStaleDrops: this.windowCounters.reticulumAudioStaleDrops,

@@ -303,10 +303,6 @@ declare global {
       accept: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       reject: (callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       hangup: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      sendSignal: (callId: string, type: 'offer' | 'answer' | 'ice', data: unknown, signature?: string, publicKey?: string, timestamp?: number, sdpHash?: string) => Promise<{ success: boolean }>;
-      sendAudio: (callId: string, seq: number, data: string) => Promise<{ success: boolean }>;
-      getPublicIpPeers: () => Promise<Array<{ id: string; ip: string; port: number }>>;
-      whoami: () => Promise<{ ip: string; port: number } | null>;
       setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
     };

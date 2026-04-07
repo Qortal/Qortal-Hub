@@ -432,28 +432,6 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
     }
   }, [myStatus, isAuthenticated, userInfo?.address]);
 
-  // ── Re-announce when a new peer connects ─────────────────────────────────
-
-  useEffect(() => {
-    if (!window.p2pNetwork || !isAuthenticated) return;
-
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const unsubscribe = window.p2pNetwork.onPeerChange(({ type }) => {
-      if (type !== 'connected') return;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        debounceTimer = null;
-        if (myStatusRef.current !== 'offline') sendHeartbeat();
-      }, 1_000);
-    });
-
-    return () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      unsubscribe();
-    };
-  }, [isAuthenticated, sendHeartbeat]);
-
   // ── Subscribe to network presence updates ────────────────────────────────
 
   useEffect(() => {

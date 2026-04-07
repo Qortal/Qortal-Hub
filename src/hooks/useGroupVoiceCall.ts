@@ -180,7 +180,6 @@ import {
   copyGcallDiagnosticsToClipboard,
   downloadGcallDiagnosticsJson,
   gcallDiagnosticsClear,
-  gcallDiagnosticsCollectRtcStats,
   gcallDiagnosticsIngestConsoleArgs,
   gcallDiagnosticsPush,
   isGcallDebugEnabled,
@@ -295,7 +294,7 @@ export type MyRole =
   | 'cluster-forwarder'
   | 'root-forwarder'
   | 'standby-forwarder';
-export type TopologyLabel = 'SFU' | 'Hierarchical';
+export type TopologyLabel = 'Reticulum';
 
 /** Optional member-list gate for Qortal group calls (API: `/groups/members/:id?limit=0`). */
 export type JoinGroupCallOptions = {
@@ -579,7 +578,7 @@ function debugWarn(...args: unknown[]): void {
   gcallDiagnosticsIngestConsoleArgs('warn', args);
 }
 
-/** Best-effort succeeded candidate-pair line from getStats (helps spot relay vs host/srflx). */
+/** Start capture only once the Reticulum audio pipeline is idle. */
 export function shouldStartGroupCallAudioCapture(opts: {
   pipelineActive: boolean;
   startupInFlight: boolean;
@@ -1937,7 +1936,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<MyRole>('participant');
   const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
-  const [topologyLabel, setTopologyLabel] = useState<TopologyLabel>('SFU');
+  const [topologyLabel, setTopologyLabel] = useState<TopologyLabel>('Reticulum');
   const [metrics, setMetrics] = useState(() =>
     new GroupCallPerformanceTracker().getSnapshot()
   );
@@ -2868,7 +2867,7 @@ export function useGroupVoiceCall(uiActive = false) {
   );
 
   const evaluateLiveSourceStalls = useCallback(
-    (dcTransportReady: boolean) => {
+    (transportReady: boolean) => {
       const nowPerf = performance.now();
       const nowMs = Date.now();
       const lastWindowSourceMap = new Map(
@@ -2919,7 +2918,7 @@ export function useGroupVoiceCall(uiActive = false) {
         const previousWindow = lastWindowSourceMap.get(sourceAddr);
         const assessment = assessGroupCallSourceStall({
           sourceExpected: isSourceExpectedForDiagnostics(sourceAddr),
-          dcTransportReady,
+          transportReady,
           ingressPeerConnected,
           lastRecvAgeMs,
           opusBufferedMs,
@@ -2945,7 +2944,7 @@ export function useGroupVoiceCall(uiActive = false) {
             opusBufferedMs,
             adaptiveTargetMs,
             adaptiveTargetIdleAgeMs: Math.round(adaptiveTargetIdleAgeMs),
-            dcTransportReady,
+            transportReady,
             recentlyVadActive:
               nowMs - (lastVadTrueAtRef.current.get(sourceAddr) ?? 0) <
               SOURCE_STALL_MIN_AGE_MS,
@@ -4023,7 +4022,7 @@ export function useGroupVoiceCall(uiActive = false) {
     logTuningSnapshotIfChanged();
     const preMode = metricsRef.current.getSnapshot();
     const myAddress = userInfo?.address ?? '';
-    const dcTransportReady =
+    const transportReady =
       Boolean(
         roomStateRef.current === 'connected' &&
         topologyRef.current &&
@@ -4036,13 +4035,12 @@ export function useGroupVoiceCall(uiActive = false) {
       relayPacketsSent: preMode.relayPacketsSent,
       relayPacketsReceived: preMode.relayPacketsReceived,
       lastRelayActivityAtMs: preMode.lastRelayActivityAtMs,
-      dcTransportReady,
-      mediaTransport: 'reticulum',
+      transportReady,
     });
     metricsRef.current.recordTransportMode(transport.mode);
     const base = metricsRef.current.getSnapshot();
-    const snapshot = { ...base, dcTransportReady };
-    evaluateLiveSourceStalls(dcTransportReady);
+    const snapshot = { ...base, transportReady };
+    evaluateLiveSourceStalls(transportReady);
     if (uiActiveRef.current || roomStateRef.current !== 'idle') {
       setMetrics((prev) => {
         const prevEntries = Object.entries(prev) as Array<[string, unknown]>;
@@ -4237,7 +4235,6 @@ export function useGroupVoiceCall(uiActive = false) {
       // Yield before large JSON stringify so decrypt/jitter main-thread work can run (remediation Phase 1).
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
       const live = metricsRef.current.getSnapshot();
-      const webrtcStats = await gcallDiagnosticsCollectRtcStats([]);
       const context: GcallDiagExportContext = {
         buildMode: import.meta.env.MODE,
         appVersionLabel: packageJson.version,
@@ -4256,7 +4253,6 @@ export function useGroupVoiceCall(uiActive = false) {
         liveMetricsSnapshot: live,
         exportWindowMetrics: windowMetrics,
         gcallPerfSnapshot: snapshotGcallPerfStats(),
-        webrtcStats,
       });
       if (opts?.clipboard) {
         await copyGcallDiagnosticsToClipboard(json);
@@ -5969,8 +5965,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
 
       setMyRole((prev) => (prev !== role ? role : prev));
-      const newLabel: TopologyLabel =
-        topo.clusters.length > 1 ? 'Hierarchical' : 'SFU';
+      const newLabel: TopologyLabel = 'Reticulum';
       setTopologyLabel((prev) => (prev !== newLabel ? newLabel : prev));
 
       setParticipants((prev) => {
