@@ -3,6 +3,7 @@ import {
   PresenceManager,
   RETICULUM_HELLO_FANOUT_HINT_TTL_MS,
   RETICULUM_OVERLAY_MAX_NEIGHBORS,
+  RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS,
 } from './presence';
 
 function promoteVerifiedPeers(
@@ -57,11 +58,32 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
     );
   });
 
-  it('releases a closed slot and admits the next verified peer', () => {
+  it('retains a recently closed verified slot long enough to recover without churn', () => {
     const manager = new PresenceManager();
     const hashes = promoteVerifiedPeers(manager, RETICULUM_OVERLAY_MAX_NEIGHBORS + 1);
 
-    manager.noteReticulumOverlayLinkClosed(hashes[0], 'closed', 9_999);
+    vi.useFakeTimers();
+    vi.setSystemTime(9_999);
+    manager.noteReticulumOverlayLinkClosed(hashes[0], 'closed');
+
+    expect(manager.getReticulumVerifiedPeers().map((peer) => peer.destinationHash)).toEqual(
+      hashes
+    );
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(
+      hashes.slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
+    );
+
+    vi.useRealTimers();
+  });
+
+  it('releases a closed verified slot after the grace window expires', () => {
+    const manager = new PresenceManager();
+    const hashes = promoteVerifiedPeers(manager, RETICULUM_OVERLAY_MAX_NEIGHBORS + 1);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(9_999);
+    manager.noteReticulumOverlayLinkClosed(hashes[0], 'closed');
+    vi.setSystemTime(9_999 + RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS + 1);
 
     expect(manager.getReticulumVerifiedPeers().map((peer) => peer.destinationHash)).toEqual(
       hashes.slice(1)
@@ -70,6 +92,29 @@ describe('PresenceManager Reticulum overlay mesh slots', () => {
       ...hashes.slice(1, RETICULUM_OVERLAY_MAX_NEIGHBORS),
       hashes[RETICULUM_OVERLAY_MAX_NEIGHBORS],
     ]);
+
+    vi.useRealTimers();
+  });
+
+  it('clears close-grace retention as soon as the peer is re-verified', () => {
+    const manager = new PresenceManager();
+    const hashes = promoteVerifiedPeers(manager, RETICULUM_OVERLAY_MAX_NEIGHBORS + 1);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(9_999);
+    manager.noteReticulumOverlayLinkClosed(hashes[0], 'closed');
+    vi.setSystemTime(10_100);
+    (manager as any).promoteVerifiedReticulumPeer(hashes[0], 'Q-address-00', 10_100);
+    vi.setSystemTime(10_100 + RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS + 1);
+
+    expect(manager.getReticulumVerifiedPeers().map((peer) => peer.destinationHash)).toEqual(
+      hashes
+    );
+    expect(manager.getReticulumVerifiedNeighborHashes()).toEqual(
+      hashes.slice(0, RETICULUM_OVERLAY_MAX_NEIGHBORS)
+    );
+
+    vi.useRealTimers();
   });
 });
 

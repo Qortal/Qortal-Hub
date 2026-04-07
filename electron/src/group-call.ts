@@ -163,12 +163,12 @@ const GC_RETICULUM_PACKET_MEDIA_ENABLED = true;
 const GC_RETICULUM_PACKET_MEDIA_KEEP_AUDIO_LINKS = true;
 const GC_RETICULUM_OVERLAY_HOPS = 3;
 const GC_RETICULUM_OVERLAY_SEEN_TTL_MS = 120_000;
-/** Same TTL as overlay id: logical duplicate may reappear after cache expiry. */
-const GC_RETICULUM_OVERLAY_CONTENT_DEDUP_TTL_MS = 120_000;
-/** Cap RAM if many unique payloads arrive (sweeps expired first). */
-const GC_RETICULUM_OVERLAY_CONTENT_DEDUP_MAX = 8192;
-/** Full scan for expired content-hash entries at most this often (idle traffic still frees memory). */
-const GC_RETICULUM_OVERLAY_CONTENT_DEDUP_SWEEP_MIN_MS = 60_000;
+/** Short-lived logical-message dedupe: suppress same authored message while allowing retries to recover soon. */
+const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_TTL_MS = 30_000;
+/** Cap RAM if many unique logical keys arrive (sweeps expired first). */
+const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_MAX = 8192;
+/** Full scan for expired logical-key entries at most this often (idle traffic still frees memory). */
+const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_SWEEP_MIN_MS = 30_000;
 
 type GcReticulumRetryKind =
   | 'join'
@@ -987,31 +987,28 @@ type RetainedVerifiedKeyState = {
   replayReason?: 'subscribe';
 };
 
-/**
- * Serialize for gossip dedup: same logical payload must hash equal even if `X`/`L`/`r` differ.
- * (`r` is sender hash injected by presence_bridge; `X`/`L` are overlay routing.)
- */
-function stableJsonStringifyForDedup(value: unknown): string {
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value);
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((v) => stableJsonStringifyForDedup(v)).join(',')}]`;
-  }
-  const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
-  return `{${keys
-    .map((k) => `${JSON.stringify(k)}:${stableJsonStringifyForDedup(obj[k])}`)
-    .join(',')}}`;
-}
+export function getReticulumOverlayLogicalDedupeKey(
+  wire: Record<string, unknown>
+): string | null {
+  const t = typeof wire.t === 'string' ? wire.t : null;
+  if (!t) return null;
+  const z = typeof wire.z === 'string' ? wire.z : null;
+  const x =
+    typeof wire.x === 'number' && Number.isFinite(wire.x)
+      ? Math.max(0, Math.trunc(wire.x))
+      : null;
+  const g = typeof wire.g === 'string' ? wire.g : null;
 
-function hashReticulumWireForContentDedup(wire: Record<string, unknown>): string {
-  const copy = { ...wire };
-  delete copy.X;
-  delete copy.L;
-  delete copy.r;
-  const body = stableJsonStringifyForDedup(copy);
-  return nodeCrypto.createHash('sha256').update(body, 'utf8').digest('hex');
+  if (z && x !== null) {
+    return `${t}:z:${z}:x:${x}`;
+  }
+  if (z) {
+    return `${t}:z:${z}`;
+  }
+  if (g) {
+    return `${t}:g:${g}`;
+  }
+  return null;
 }
 
 // ── GroupCallManager ────────────────────────────────────────────────────────── ──────────────────────────────────────────────────────────
@@ -1201,9 +1198,9 @@ export class GroupCallManager extends EventEmitter {
   private pendingKeyExpiredLogAt = new Map<string, number>();
   private reticulumFailureLogAt = new Map<string, number>();
   private seenReticulumOverlayIds = new Map<string, number>();
-  /** SHA-256 hex → expiry (wall ms): drop relay + local handling if we already saw this payload. */
-  private seenReticulumWireContentHashes = new Map<string, number>();
-  private lastReticulumWireContentHashSweepAt = 0;
+  /** Logical message key → expiry (wall ms): suppress short-lived duplicate relays of the same authored message. */
+  private seenReticulumWireLogicalKeys = new Map<string, number>();
+  private lastReticulumWireLogicalKeySweepAt = 0;
 
   /** Numeric Qortal group ids (from renderer) to derive sidebar call indicators. */
   private watchedQortalGroupNumericIds = new Set<number>();
@@ -1668,8 +1665,8 @@ export class GroupCallManager extends EventEmitter {
     this.transportHealthByRoom.clear();
     this.recentRoomStateByRoomId.clear();
     this.seenReticulumOverlayIds.clear();
-    this.seenReticulumWireContentHashes.clear();
-    this.lastReticulumWireContentHashSweepAt = 0;
+    this.seenReticulumWireLogicalKeys.clear();
+    this.lastReticulumWireLogicalKeySweepAt = 0;
     if (this.qortalActivityEmitTimer) {
       clearTimeout(this.qortalActivityEmitTimer);
       this.qortalActivityEmitTimer = null;
@@ -2228,47 +2225,44 @@ export class GroupCallManager extends EventEmitter {
     return true;
   }
 
-  private sweepExpiredReticulumWireContentHashes(now: number): void {
-    for (const [h, expiresAt] of this.seenReticulumWireContentHashes) {
-      if (expiresAt <= now) this.seenReticulumWireContentHashes.delete(h);
+  private sweepExpiredReticulumWireLogicalKeys(now: number): void {
+    for (const [key, expiresAt] of this.seenReticulumWireLogicalKeys) {
+      if (expiresAt <= now) this.seenReticulumWireLogicalKeys.delete(key);
     }
   }
 
   /** Drops expired entries periodically so the map does not sit full of dead TTLs during idle periods. */
-  private maybeSweepReticulumWireContentHashes(now: number): void {
+  private maybeSweepReticulumWireLogicalKeys(now: number): void {
     if (
-      now - this.lastReticulumWireContentHashSweepAt <
-      GC_RETICULUM_OVERLAY_CONTENT_DEDUP_SWEEP_MIN_MS
+      now - this.lastReticulumWireLogicalKeySweepAt <
+      GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_SWEEP_MIN_MS
     ) {
       return;
     }
-    this.lastReticulumWireContentHashSweepAt = now;
-    this.sweepExpiredReticulumWireContentHashes(now);
+    this.lastReticulumWireLogicalKeySweepAt = now;
+    this.sweepExpiredReticulumWireLogicalKeys(now);
   }
 
-  private rememberReticulumWireContentHash(hash: string): void {
+  private rememberReticulumWireLogicalKey(key: string): void {
     const now = Date.now();
-    this.seenReticulumWireContentHashes.set(
-      hash,
-      now + GC_RETICULUM_OVERLAY_CONTENT_DEDUP_TTL_MS
+    this.seenReticulumWireLogicalKeys.set(
+      key,
+      now + GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_TTL_MS
     );
-    this.sweepExpiredReticulumWireContentHashes(now);
-    while (
-      this.seenReticulumWireContentHashes.size >
-      GC_RETICULUM_OVERLAY_CONTENT_DEDUP_MAX
-    ) {
-      const first = this.seenReticulumWireContentHashes.keys().next().value;
+    this.sweepExpiredReticulumWireLogicalKeys(now);
+    while (this.seenReticulumWireLogicalKeys.size > GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_MAX) {
+      const first = this.seenReticulumWireLogicalKeys.keys().next().value;
       if (first === undefined) break;
-      this.seenReticulumWireContentHashes.delete(first);
+      this.seenReticulumWireLogicalKeys.delete(first);
     }
   }
 
-  private hasSeenReticulumWireContentHash(hash: string): boolean {
+  private hasSeenReticulumWireLogicalKey(key: string): boolean {
     const now = Date.now();
-    const expiresAt = this.seenReticulumWireContentHashes.get(hash);
+    const expiresAt = this.seenReticulumWireLogicalKeys.get(key);
     if (typeof expiresAt !== 'number') return false;
     if (expiresAt <= now) {
-      this.seenReticulumWireContentHashes.delete(hash);
+      this.seenReticulumWireLogicalKeys.delete(key);
       return false;
     }
     return true;
@@ -2634,7 +2628,7 @@ export class GroupCallManager extends EventEmitter {
     peerPresenceHash: string
   ): void {
     const now = Date.now();
-    this.maybeSweepReticulumWireContentHashes(now);
+    this.maybeSweepReticulumWireLogicalKeys(now);
 
     const overlayMeta = this.parseReticulumOverlayMeta(wire);
     if (overlayMeta) {
@@ -2649,23 +2643,18 @@ export class GroupCallManager extends EventEmitter {
         }
         return;
       }
-      let contentHash: string;
-      try {
-        contentHash = hashReticulumWireForContentDedup(wire);
-      } catch {
-        contentHash = '';
-      }
-      if (contentHash !== '' && this.hasSeenReticulumWireContentHash(contentHash)) {
+      const logicalKey = getReticulumOverlayLogicalDedupeKey(wire);
+      if (logicalKey !== null && this.hasSeenReticulumWireLogicalKey(logicalKey)) {
         const t =
           typeof wire.t === 'string' ? wire.t : String(wire.t ?? '?');
         this.logGcJoinWireDebugThrottled(
-          `overlay_payload_dup:${contentHash.slice(0, 16)}:${t}`,
-          `[GCall] Dropped Reticulum wire (duplicate overlay payload, same as prior X): t=${t} h=${contentHash.slice(0, 16)}…`
+          `overlay_logical_dup:${logicalKey}`,
+          `[GCall] Dropped Reticulum wire (duplicate logical message across overlay replays): t=${t} key=${logicalKey.slice(0, 48)}…`
         );
         return;
       }
       this.rememberReticulumOverlayId(overlayMeta.overlayId);
-      if (contentHash !== '') this.rememberReticulumWireContentHash(contentHash);
+      if (logicalKey !== null) this.rememberReticulumWireLogicalKey(logicalKey);
       if (overlayMeta.hopsRemaining > 0) {
         const forwarded = {
           ...wire,

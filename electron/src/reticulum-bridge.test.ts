@@ -8,6 +8,7 @@ vi.mock('electron', () => ({
 
 vi.mock('./reticulum-daemon', () => ({
   getReticulumConfigDir: () => '/tmp/qortal-reticulum-test',
+  persistReticulumSharedTransportState: vi.fn(),
   resolveReticulumPythonLaunch: () => ({
     error: 'not-used-in-test',
   }),
@@ -25,6 +26,7 @@ import {
   decodeReticulumAudioMessage,
   encodeReticulumAudioBatch,
 } from './reticulum-audio-ipc';
+import { persistReticulumSharedTransportState } from './reticulum-daemon';
 import { base58Decode, getPresenceManager } from './presence';
 import type { PresenceEnvelope } from './presence';
 import { ReticulumBridge } from './reticulum-bridge';
@@ -308,6 +310,7 @@ describe('ReticulumBridge group audio support', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     const seen: Array<Record<string, unknown>> = [];
+    vi.mocked(persistReticulumSharedTransportState).mockClear();
 
     bridge.on('transport-state', (payload) => {
       seen.push(payload as Record<string, unknown>);
@@ -354,6 +357,39 @@ describe('ReticulumBridge group audio support', () => {
         overlayLinksConnected: 0,
       },
     ]);
+    expect(persistReticulumSharedTransportState).toHaveBeenCalledWith({
+      reachability: 'hub-connected',
+      transportEnabled: false,
+      configuredHubInterfaces: 2,
+      onlineHubInterfaces: 1,
+      configuredRemoteHubInterfaces: 2,
+      onlineRemoteHubInterfaces: 1,
+      hubSummary: 'Hub A=online, Hub B=offline',
+    });
+  });
+
+  it('does not overwrite shared transport cache with interface-stat collector failures', () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    vi.mocked(persistReticulumSharedTransportState).mockClear();
+
+    internal.state = 'ready';
+    internal.handleFrame({
+      type: 'event',
+      event: 'transport_state',
+      payload: {
+        reachability: 'unknown',
+        transportEnabled: false,
+        configuredHubInterfaces: 0,
+        onlineHubInterfaces: 0,
+        configuredRemoteHubInterfaces: 0,
+        onlineRemoteHubInterfaces: 0,
+        hubSummary: 'Unable to read Reticulum interface stats',
+        reason: 'shared-client stats unsupported',
+      },
+    });
+
+    expect(persistReticulumSharedTransportState).not.toHaveBeenCalled();
   });
 
   it('emits overlay link lifecycle snapshots from JSON events', () => {

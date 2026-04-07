@@ -42,10 +42,13 @@ import { startCallManager } from './call';
 import { startGroupCallManager } from './group-call';
 import { readAppSettings } from './setup';
 import {
+  planReticulumAppQuit,
+  recoverReticulumStateForAppLaunch,
+  registerReticulumAppInstance,
   registerReticulumIpcHandlers,
   setReticulumInstanceIndex,
   startBundledReticulumDaemon,
-  stopBundledReticulumDaemon,
+  stopSharedReticulumDaemon,
 } from './reticulum-daemon';
 import {
   registerReticulumMeshIpcHandlers,
@@ -80,6 +83,28 @@ export let isQuitting = false;
 // Function to set the quitting flag
 export function setIsQuitting(value: boolean) {
   isQuitting = value;
+}
+
+let shutdownHandled = false;
+
+function performAppShutdown(reason: string): void {
+  if (shutdownHandled) {
+    return;
+  }
+  shutdownHandled = true;
+  loggerLog(`[App] Shutdown reason=${reason}`);
+  stopReticulumMeshCoordinator();
+  stopReticulumBridge();
+  const quitPlan = planReticulumAppQuit();
+  if (quitPlan.shouldStopSharedDaemon) {
+    stopSharedReticulumDaemon();
+  } else {
+    loggerLog(
+      `[Reticulum] Preserving shared rnsd because ${quitPlan.otherActiveInstances} other app instance(s) remain active`
+    );
+  }
+  flushPersistentStore();
+  flushChatStore();
 }
 
 // Define our menu templates (these are optional)
@@ -211,6 +236,13 @@ async function setupMultiInstanceUserData(
 (async () => {
   const instanceIndex = await setupMultiInstanceUserData();
   setReticulumInstanceIndex(instanceIndex);
+  const recovery = recoverReticulumStateForAppLaunch(instanceIndex);
+  if (recovery.orphanedDaemonFound) {
+    loggerLog(
+      `[Reticulum] Startup recovery orphanedDaemonStopped=${recovery.orphanedDaemonStopped} daemonStateCleared=${recovery.daemonStateCleared}`
+    );
+  }
+  registerReticulumAppInstance(instanceIndex);
 
   await app.whenReady();
 
@@ -315,12 +347,16 @@ async function setupMultiInstanceUserData(
 // Set isQuitting flag before the app quits
 app.on('before-quit', () => {
   setIsQuitting(true);
-  stopReticulumMeshCoordinator();
-  stopReticulumBridge();
-  stopBundledReticulumDaemon();
-  flushPersistentStore();
-  flushChatStore();
+  performAppShutdown('before-quit');
 });
+
+for (const signal of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(signal, () => {
+    setIsQuitting(true);
+    performAppShutdown(signal);
+    app.exit(0);
+  });
+}
 
 // Handle when all of our windows are close (platforms have their own expectations).
 app.on('window-all-closed', function () {

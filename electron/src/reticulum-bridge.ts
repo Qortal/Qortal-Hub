@@ -12,6 +12,7 @@ import type {
 import { buildPresenceSignedFields, getPresenceManager } from './presence';
 import {
   getReticulumConfigDir,
+  persistReticulumSharedTransportState,
   resolveReticulumPythonLaunch,
   type ReticulumBridgeState,
   type ReticulumReachability,
@@ -1789,6 +1790,14 @@ export class ReticulumBridge
         return;
       }
       case 'transport_state': {
+        const hubSummary =
+          typeof frame.payload?.hubSummary === 'string'
+            ? frame.payload.hubSummary
+            : undefined;
+        const reason =
+          typeof frame.payload?.reason === 'string'
+            ? frame.payload.reason
+            : undefined;
         const reachability = frame.payload?.reachability;
         this.connectivitySnapshot = {
           bridgeState: this.state,
@@ -1815,16 +1824,24 @@ export class ReticulumBridge
             typeof frame.payload?.onlineRemoteHubInterfaces === 'number'
               ? frame.payload.onlineRemoteHubInterfaces
               : undefined,
-          hubSummary:
-            typeof frame.payload?.hubSummary === 'string'
-              ? frame.payload.hubSummary
-              : undefined,
-          reason:
-            typeof frame.payload?.reason === 'string'
-              ? frame.payload.reason
-              : undefined,
+          hubSummary,
+          reason,
           meshListenOnline: frame.payload?.meshListenOnline === true,
         };
+        if (hubSummary !== 'Unable to read Reticulum interface stats') {
+          persistReticulumSharedTransportState({
+            reachability: this.connectivitySnapshot.reachability,
+            transportEnabled: this.connectivitySnapshot.transportEnabled,
+            configuredHubInterfaces: this.connectivitySnapshot.configuredHubInterfaces,
+            onlineHubInterfaces: this.connectivitySnapshot.onlineHubInterfaces,
+            configuredRemoteHubInterfaces:
+              this.connectivitySnapshot.configuredRemoteHubInterfaces,
+            onlineRemoteHubInterfaces:
+              this.connectivitySnapshot.onlineRemoteHubInterfaces,
+            hubSummary: this.connectivitySnapshot.hubSummary,
+            ...(reason ? { reason } : {}),
+          });
+        }
         loggerLog(
           `[ReticulumBridge] Transport state=${this.connectivitySnapshot.reachability} hubs=${this.connectivitySnapshot.onlineHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredHubInterfaces ?? 0} remote_hubs=${this.connectivitySnapshot.onlineRemoteHubInterfaces ?? 0}/${this.connectivitySnapshot.configuredRemoteHubInterfaces ?? 0} transport=${this.connectivitySnapshot.transportEnabled === true ? 'on' : 'off'} meshListenOnline=${this.connectivitySnapshot.meshListenOnline === true ? 'on' : 'off'}`
         );

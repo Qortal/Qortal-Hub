@@ -62,6 +62,10 @@ const RETICULUM_CONFIG_FILENAME = 'config';
 const MANAGED_CONFIG_MARKER = '# Managed by Qortal Hub';
 const DEFAULT_CONFIG_SENTINEL = '# This is the default Reticulum config file.';
 const RETICULUM_SHARED_INSTANCE_NAME = 'qortal-hub-shared';
+const RETICULUM_SHARED_STATE_DIRNAME = 'qortal-shared';
+const RETICULUM_APP_INSTANCE_REGISTRY_FILENAME = 'reticulum-app-instances.json';
+const RETICULUM_SHARED_DAEMON_STATE_FILENAME = 'reticulum-daemon-state.json';
+const RETICULUM_SHARED_TRANSPORT_STATE_FILENAME = 'reticulum-transport-state.json';
 const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
@@ -70,6 +74,34 @@ const RETICULUM_SHARED_INSTANCE_READY_POLL_MS = 150;
 const RETICULUM_LOOPBACK_HOST = '127.0.0.1';
 
 export type ReticulumDaemonMode = 'frozen' | 'venv' | 'system' | null;
+export type ReticulumAppInstanceRecord = {
+  appPid: number;
+  instanceIndex: number;
+  startedAt: number;
+};
+export type ReticulumAppQuitPlan = {
+  otherActiveInstances: number;
+  remainingActiveInstances: number;
+  shouldStopSharedDaemon: boolean;
+};
+export type ReticulumAppLaunchRecovery = {
+  activeInstances: number;
+  orphanedDaemonFound: boolean;
+  orphanedDaemonStopped: boolean;
+  daemonStateCleared: boolean;
+};
+export type ReticulumSharedTransportState = {
+  reachability: ReticulumReachability;
+  transportEnabled?: boolean;
+  configuredHubInterfaces?: number;
+  onlineHubInterfaces?: number;
+  configuredRemoteHubInterfaces?: number;
+  onlineRemoteHubInterfaces?: number;
+  hubSummary?: string;
+  reason?: string;
+  updatedAt: number;
+  sourceInstanceIndex: number;
+};
 export type ReticulumReachability =
   | 'unknown'
   | 'lan-only'
@@ -133,8 +165,44 @@ let child: ChildProcessWithoutNullStreams | null = null;
 let lastStartMode: ReticulumDaemonMode = null;
 let reticulumInstanceIndex = 0;
 
+type ReticulumSharedDaemonState = {
+  pid: number;
+  ownerAppPid: number;
+  ownerInstanceIndex: number;
+  startedAt: number;
+  configDir: string;
+  mode: ReticulumDaemonMode;
+};
+
 export function getReticulumConfigDir(): string {
   return path.join(app.getPath('userData'), 'reticulum');
+}
+
+function getReticulumSharedStateDir(): string {
+  const dir = path.join(app.getPath('appData'), RETICULUM_SHARED_STATE_DIRNAME);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function getReticulumAppInstanceRegistryPath(): string {
+  return path.join(
+    getReticulumSharedStateDir(),
+    RETICULUM_APP_INSTANCE_REGISTRY_FILENAME
+  );
+}
+
+export function getReticulumSharedDaemonStatePath(): string {
+  return path.join(
+    getReticulumSharedStateDir(),
+    RETICULUM_SHARED_DAEMON_STATE_FILENAME
+  );
+}
+
+export function getReticulumSharedTransportStatePath(): string {
+  return path.join(
+    getReticulumSharedStateDir(),
+    RETICULUM_SHARED_TRANSPORT_STATE_FILENAME
+  );
 }
 
 export function setReticulumInstanceIndex(index: number): void {
@@ -143,6 +211,375 @@ export function setReticulumInstanceIndex(index: number): void {
 
 export function getReticulumInstanceIndex(): number {
   return reticulumInstanceIndex;
+}
+
+function isPidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    const code =
+      typeof err === 'object' && err && 'code' in err
+        ? String((err as { code?: unknown }).code ?? '')
+        : '';
+    return code === 'EPERM';
+  }
+}
+
+function readJsonFile<T>(filePath: string): T | null {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeJsonFile(filePath: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
+}
+
+function normalizeReticulumAppInstanceRecord(
+  raw: unknown
+): ReticulumAppInstanceRecord | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const candidate = raw as Record<string, unknown>;
+  const appPid = candidate.appPid;
+  const instanceIndex = candidate.instanceIndex;
+  const startedAt = candidate.startedAt;
+  if (
+    !Number.isInteger(appPid) ||
+    !Number.isInteger(instanceIndex) ||
+    typeof startedAt !== 'number' ||
+    !Number.isFinite(startedAt)
+  ) {
+    return null;
+  }
+  return {
+    appPid: Number(appPid),
+    instanceIndex: Number(instanceIndex),
+    startedAt: Number(startedAt),
+  };
+}
+
+function readReticulumAppInstanceRegistry(): ReticulumAppInstanceRecord[] {
+  const raw = readJsonFile<unknown>(getReticulumAppInstanceRegistryPath());
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .map((entry) => normalizeReticulumAppInstanceRecord(entry))
+    .filter((entry): entry is ReticulumAppInstanceRecord => entry !== null);
+}
+
+function writeReticulumAppInstanceRegistry(
+  entries: ReticulumAppInstanceRecord[]
+): void {
+  const filePath = getReticulumAppInstanceRegistryPath();
+  if (entries.length === 0) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  writeJsonFile(filePath, entries);
+}
+
+function pruneReticulumAppInstances(
+  entries: ReticulumAppInstanceRecord[]
+): ReticulumAppInstanceRecord[] {
+  return entries.filter(
+    (entry, index, arr) =>
+      isPidAlive(entry.appPid) &&
+      arr.findIndex((other) => other.appPid === entry.appPid) === index
+  );
+}
+
+export function getReticulumActiveAppInstances(): ReticulumAppInstanceRecord[] {
+  const pruned = pruneReticulumAppInstances(readReticulumAppInstanceRegistry());
+  writeReticulumAppInstanceRegistry(pruned);
+  return pruned;
+}
+
+export function registerReticulumAppInstance(
+  instanceIndex = reticulumInstanceIndex,
+  appPid = process.pid
+): ReticulumAppInstanceRecord[] {
+  const entries = pruneReticulumAppInstances(readReticulumAppInstanceRegistry());
+  const next = entries.filter((entry) => entry.appPid !== appPid);
+  next.push({
+    appPid,
+    instanceIndex: Math.max(0, Math.trunc(instanceIndex)),
+    startedAt: Date.now(),
+  });
+  next.sort((a, b) => a.instanceIndex - b.instanceIndex || a.appPid - b.appPid);
+  writeReticulumAppInstanceRegistry(next);
+  return next;
+}
+
+export function unregisterReticulumAppInstance(
+  appPid = process.pid
+): ReticulumAppInstanceRecord[] {
+  const entries = pruneReticulumAppInstances(readReticulumAppInstanceRegistry());
+  const next = entries.filter((entry) => entry.appPid !== appPid);
+  writeReticulumAppInstanceRegistry(next);
+  return next;
+}
+
+export function planReticulumAppQuit(appPid = process.pid): ReticulumAppQuitPlan {
+  const remaining = unregisterReticulumAppInstance(appPid);
+  return {
+    otherActiveInstances: remaining.length,
+    remainingActiveInstances: remaining.length,
+    shouldStopSharedDaemon: remaining.length === 0,
+  };
+}
+
+function normalizeReticulumSharedDaemonState(
+  raw: unknown
+): ReticulumSharedDaemonState | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const candidate = raw as Record<string, unknown>;
+  const pid = candidate.pid;
+  const ownerAppPid = candidate.ownerAppPid;
+  const ownerInstanceIndex = candidate.ownerInstanceIndex;
+  const startedAt = candidate.startedAt;
+  const configDir = candidate.configDir;
+  const mode = candidate.mode;
+  if (
+    !Number.isInteger(pid) ||
+    !Number.isInteger(ownerAppPid) ||
+    !Number.isInteger(ownerInstanceIndex) ||
+    typeof startedAt !== 'number' ||
+    !Number.isFinite(startedAt) ||
+    typeof configDir !== 'string' ||
+    configDir.length === 0 ||
+    !(
+      mode === 'frozen' ||
+      mode === 'venv' ||
+      mode === 'system' ||
+      mode === null
+    )
+  ) {
+    return null;
+  }
+  return {
+    pid: Number(pid),
+    ownerAppPid: Number(ownerAppPid),
+    ownerInstanceIndex: Number(ownerInstanceIndex),
+    startedAt: Number(startedAt),
+    configDir,
+    mode: mode as ReticulumDaemonMode,
+  };
+}
+
+function readReticulumSharedDaemonState(): ReticulumSharedDaemonState | null {
+  return normalizeReticulumSharedDaemonState(
+    readJsonFile<unknown>(getReticulumSharedDaemonStatePath())
+  );
+}
+
+function clearReticulumSharedDaemonState(expectedPid?: number): void {
+  const filePath = getReticulumSharedDaemonStatePath();
+  if (typeof expectedPid === 'number') {
+    const current = readReticulumSharedDaemonState();
+    if (!current || current.pid !== expectedPid) {
+      return;
+    }
+  }
+  try {
+    fs.unlinkSync(filePath);
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistReticulumSharedDaemonState(pid: number): void {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return;
+  }
+  writeJsonFile(getReticulumSharedDaemonStatePath(), {
+    pid,
+    ownerAppPid: process.pid,
+    ownerInstanceIndex: reticulumInstanceIndex,
+    startedAt: Date.now(),
+    configDir: getReticulumConfigDir(),
+    mode: lastStartMode,
+  } satisfies ReticulumSharedDaemonState);
+}
+
+function normalizeReticulumSharedTransportState(
+  raw: unknown
+): ReticulumSharedTransportState | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const candidate = raw as Record<string, unknown>;
+  const reachability = candidate.reachability;
+  const updatedAt = candidate.updatedAt;
+  const sourceInstanceIndex = candidate.sourceInstanceIndex;
+  if (
+    !(
+      reachability === 'unknown' ||
+      reachability === 'lan-only' ||
+      reachability === 'hub-connected' ||
+      reachability === 'disconnected'
+    ) ||
+    typeof updatedAt !== 'number' ||
+    !Number.isFinite(updatedAt) ||
+    !Number.isInteger(sourceInstanceIndex)
+  ) {
+    return null;
+  }
+  const out: ReticulumSharedTransportState = {
+    reachability,
+    updatedAt,
+    sourceInstanceIndex: Number(sourceInstanceIndex),
+  };
+  if (typeof candidate.transportEnabled === 'boolean') {
+    out.transportEnabled = candidate.transportEnabled;
+  }
+  if (typeof candidate.configuredHubInterfaces === 'number') {
+    out.configuredHubInterfaces = candidate.configuredHubInterfaces;
+  }
+  if (typeof candidate.onlineHubInterfaces === 'number') {
+    out.onlineHubInterfaces = candidate.onlineHubInterfaces;
+  }
+  if (typeof candidate.configuredRemoteHubInterfaces === 'number') {
+    out.configuredRemoteHubInterfaces = candidate.configuredRemoteHubInterfaces;
+  }
+  if (typeof candidate.onlineRemoteHubInterfaces === 'number') {
+    out.onlineRemoteHubInterfaces = candidate.onlineRemoteHubInterfaces;
+  }
+  if (typeof candidate.hubSummary === 'string') {
+    out.hubSummary = candidate.hubSummary;
+  }
+  if (typeof candidate.reason === 'string') {
+    out.reason = candidate.reason;
+  }
+  return out;
+}
+
+export function readReticulumSharedTransportState():
+  | ReticulumSharedTransportState
+  | null {
+  return normalizeReticulumSharedTransportState(
+    readJsonFile<unknown>(getReticulumSharedTransportStatePath())
+  );
+}
+
+export function persistReticulumSharedTransportState(
+  state: Omit<ReticulumSharedTransportState, 'updatedAt' | 'sourceInstanceIndex'>
+): void {
+  writeJsonFile(getReticulumSharedTransportStatePath(), {
+    ...state,
+    updatedAt: Date.now(),
+    sourceInstanceIndex: reticulumInstanceIndex,
+  } satisfies ReticulumSharedTransportState);
+}
+
+function shouldFallbackToSharedTransportState(
+  bridgeStatus: Partial<ReticulumDaemonStatus> & {
+    overlayLinksConnected?: number;
+    hubSummary?: string;
+    reason?: string;
+  }
+): boolean {
+  if (bridgeStatus.hubSummary === 'Unable to read Reticulum interface stats') {
+    return true;
+  }
+  return (
+    bridgeStatus.bridgeState === 'ready' &&
+    typeof bridgeStatus.overlayLinksConnected === 'number' &&
+    bridgeStatus.overlayLinksConnected > 0 &&
+    bridgeStatus.reachability === 'unknown' &&
+    bridgeStatus.configuredHubInterfaces === 0 &&
+    bridgeStatus.onlineHubInterfaces === 0
+  );
+}
+
+function signalReticulumPid(
+  pid: number,
+  signal: NodeJS.Signals | undefined,
+  context: string
+): boolean {
+  try {
+    if (process.platform === 'win32') {
+      process.kill(pid);
+    } else if (signal) {
+      process.kill(pid, signal);
+    } else {
+      process.kill(pid);
+    }
+    loggerLog(`[Reticulum] Signaled rnsd pid=${pid} context=${context}`);
+    return true;
+  } catch (err) {
+    loggerError(`[Reticulum] Failed to signal rnsd pid=${pid} context=${context}:`, err);
+    return false;
+  }
+}
+
+export function recoverReticulumStateForAppLaunch(
+  instanceIndex = reticulumInstanceIndex
+): ReticulumAppLaunchRecovery {
+  const activeInstances = getReticulumActiveAppInstances();
+  const state = readReticulumSharedDaemonState();
+  let orphanedDaemonFound = false;
+  let orphanedDaemonStopped = false;
+  let daemonStateCleared = false;
+
+  if (!state) {
+    return {
+      activeInstances: activeInstances.length,
+      orphanedDaemonFound,
+      orphanedDaemonStopped,
+      daemonStateCleared,
+    };
+  }
+
+  if (!isPidAlive(state.pid)) {
+    clearReticulumSharedDaemonState(state.pid);
+    daemonStateCleared = true;
+    loggerLog(
+      `[Reticulum] Cleared stale shared daemon state for dead pid=${state.pid}`
+    );
+    return {
+      activeInstances: activeInstances.length,
+      orphanedDaemonFound,
+      orphanedDaemonStopped,
+      daemonStateCleared,
+    };
+  }
+
+  if (instanceIndex === 0 && activeInstances.length === 0) {
+    orphanedDaemonFound = true;
+    orphanedDaemonStopped = signalReticulumPid(
+      state.pid,
+      process.platform === 'win32' ? undefined : 'SIGTERM',
+      'startup-recovery'
+    );
+    clearReticulumSharedDaemonState(state.pid);
+    daemonStateCleared = true;
+  }
+
+  return {
+    activeInstances: activeInstances.length,
+    orphanedDaemonFound,
+    orphanedDaemonStopped,
+    daemonStateCleared,
+  };
 }
 
 function getReticulumSharedInstancePort(): number {
@@ -808,22 +1245,46 @@ export function ensureMeshNetworkPassphraseIfNeeded(): EnsureMeshNetworkIdentity
 
 export function getReticulumDaemonStatus(): ReticulumDaemonStatus {
   const running = child !== null && child.exitCode === null && !child.killed;
+  if (running) {
+    return {
+      running: true,
+      pid: child?.pid,
+      mode: lastStartMode,
+      configDir: getReticulumConfigDir(),
+      reachability: 'unknown',
+    };
+  }
+  const sharedState = readReticulumSharedDaemonState();
+  if (sharedState) {
+    if (isPidAlive(sharedState.pid)) {
+      return {
+        running: true,
+        pid: sharedState.pid,
+        mode: sharedState.mode,
+        configDir: sharedState.configDir,
+        reachability: 'unknown',
+      };
+    }
+    clearReticulumSharedDaemonState(sharedState.pid);
+  }
   return {
-    running,
-    pid: child?.pid,
+    running: false,
+    pid: undefined,
     mode: lastStartMode,
     configDir: getReticulumConfigDir(),
-    reachability: running ? 'unknown' : 'disconnected',
+    reachability: 'disconnected',
   };
 }
 
 export function stopBundledReticulumDaemon(): void {
   if (!child) return;
   if (child.exitCode !== null || child.killed) {
+    clearReticulumSharedDaemonState(child.pid);
     child = null;
     lastStartMode = null;
     return;
   }
+  const childPid = child.pid;
   try {
     if (process.platform === 'win32') {
       child.kill();
@@ -833,8 +1294,33 @@ export function stopBundledReticulumDaemon(): void {
   } catch (e) {
     loggerError('[Reticulum] Failed to signal child:', e);
   }
+  clearReticulumSharedDaemonState(childPid);
   child = null;
   lastStartMode = null;
+}
+
+export function stopSharedReticulumDaemon(): void {
+  if (child && child.exitCode === null && !child.killed) {
+    stopBundledReticulumDaemon();
+    return;
+  }
+  const state = readReticulumSharedDaemonState();
+  if (!state) {
+    return;
+  }
+  if (!isPidAlive(state.pid)) {
+    clearReticulumSharedDaemonState(state.pid);
+    return;
+  }
+  if (
+    signalReticulumPid(
+      state.pid,
+      process.platform === 'win32' ? undefined : 'SIGTERM',
+      'last-app-instance-exit'
+    )
+  ) {
+    clearReticulumSharedDaemonState(state.pid);
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -988,12 +1474,16 @@ export function startBundledReticulumDaemon(): void {
     });
     child = subprocess;
     lastStartMode = plan.mode;
+    if (typeof subprocess.pid === 'number') {
+      persistReticulumSharedDaemonState(subprocess.pid);
+    }
 
     subprocess.stdout.on('data', (d) => emitReticulumLog('stdout', d));
     subprocess.stderr.on('data', (d) => emitReticulumLog('stderr', d));
     subprocess.on('error', (err) => {
       loggerError('[Reticulum] Process error:', err);
       appendReticulumFileLog(`Process error: ${String(err)}`);
+      clearReticulumSharedDaemonState(subprocess.pid);
       if (child === subprocess) child = null;
       lastStartMode = null;
     });
@@ -1001,6 +1491,7 @@ export function startBundledReticulumDaemon(): void {
       const msg = `[Reticulum] exited code=${code} signal=${signal ?? ''}`;
       loggerLog(msg);
       appendReticulumFileLog(msg);
+      clearReticulumSharedDaemonState(subprocess.pid);
       if (child === subprocess) child = null;
       lastStartMode = null;
     });
@@ -1052,24 +1543,49 @@ export function registerReticulumIpcHandlers(): void {
             else p2pOutboundPeers += 1;
           }
         }
+        const transportFallback =
+          getReticulumInstanceIndex() > 0 &&
+          shouldFallbackToSharedTransportState({
+            bridgeState: bridgeStatus.bridgeState,
+            reachability: bridgeStatus.reachability,
+            configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
+            onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
+            overlayLinksConnected: bridgeStatus.overlayLinksConnected,
+            hubSummary: bridgeStatus.hubSummary,
+            reason: bridgeStatus.reason,
+          })
+            ? readReticulumSharedTransportState()
+            : null;
+        const resolvedReachability =
+          transportFallback?.reachability ?? bridgeStatus.reachability;
         return {
           ...base,
           bridgeState: bridgeStatus.bridgeState,
-          reachability: bridgeStatus.reachability,
-          transportEnabled: bridgeStatus.transportEnabled,
-          configuredHubInterfaces: bridgeStatus.configuredHubInterfaces,
-          onlineHubInterfaces: bridgeStatus.onlineHubInterfaces,
+          reachability: resolvedReachability,
+          transportEnabled:
+            transportFallback?.transportEnabled ?? bridgeStatus.transportEnabled,
+          configuredHubInterfaces:
+            transportFallback?.configuredHubInterfaces ??
+            bridgeStatus.configuredHubInterfaces,
+          onlineHubInterfaces:
+            transportFallback?.onlineHubInterfaces ??
+            bridgeStatus.onlineHubInterfaces,
           configuredRemoteHubInterfaces:
+            transportFallback?.configuredRemoteHubInterfaces ??
             bridgeStatus.configuredRemoteHubInterfaces,
-          onlineRemoteHubInterfaces: bridgeStatus.onlineRemoteHubInterfaces,
-          hubSummary: bridgeStatus.hubSummary,
+          onlineRemoteHubInterfaces:
+            transportFallback?.onlineRemoteHubInterfaces ??
+            bridgeStatus.onlineRemoteHubInterfaces,
+          hubSummary: transportFallback?.hubSummary ?? bridgeStatus.hubSummary,
           verifiedOverlayPeerCount,
           p2pOutboundPeers,
           p2pInboundPeers,
           ...(typeof bridgeStatus.overlayLinksConnected === 'number'
             ? { overlayLinksConnected: bridgeStatus.overlayLinksConnected }
             : {}),
-          ...(bridgeStatus.reason ? { reason: bridgeStatus.reason } : {}),
+          ...((transportFallback?.reason ?? bridgeStatus.reason)
+            ? { reason: transportFallback?.reason ?? bridgeStatus.reason }
+            : {}),
         };
       } catch (error) {
         loggerError('[Reticulum] Failed to collect bridge status:', error);

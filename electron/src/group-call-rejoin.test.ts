@@ -7,6 +7,7 @@ import {
   GC_JOIN_MAX_AGE_MS,
   decodeGcReticulumActivityWire,
   gcJoinTimestampRejectReason,
+  getReticulumOverlayLogicalDedupeKey,
   getLocalSessionBreakMediaSessionGeneration,
   GroupCallManager,
   isRecentRoomStateFresh,
@@ -1490,6 +1491,52 @@ describe('Reticulum group activity hints', () => {
 
     expect(relayed.length).toBe(0);
     expect(manager.setWatchedQortalGroupIds([812])).toEqual({});
+  });
+});
+
+describe('getReticulumOverlayLogicalDedupeKey', () => {
+  it('uses the signature for single-frame signed wires', () => {
+    expect(
+      getReticulumOverlayLogicalDedupeKey({
+        t: 'GJ',
+        g: 'sig-1',
+        X: 'overlay-a',
+        L: 3,
+        r: 'peer-hash',
+      })
+    ).toBe('GJ:g:sig-1');
+  });
+
+  it('uses the fragment digest and part index for multipart payload frames', () => {
+    expect(
+      getReticulumOverlayLogicalDedupeKey({
+        t: 'GT0',
+        z: 'digest-1',
+        X: 'overlay-a',
+        L: 3,
+      })
+    ).toBe('GT0:z:digest-1');
+    expect(
+      getReticulumOverlayLogicalDedupeKey({
+        t: 'GT1',
+        z: 'digest-1',
+        x: 2,
+        X: 'overlay-b',
+        L: 2,
+      })
+    ).toBe('GT1:z:digest-1:x:2');
+  });
+
+  it('does not dedupe unsigned activity hints by logical body', () => {
+    expect(
+      getReticulumOverlayLogicalDedupeKey({
+        t: 'GA',
+        g: 812,
+        m: 1000,
+        X: 'overlay-a',
+        L: 3,
+      })
+    ).toBeNull();
   });
 });
 

@@ -28,6 +28,8 @@ const PRESENCE_CLEANUP_INTERVAL_MS = 15_000;
 const RETICULUM_ROUTE_TTL_MS = 45_000;
 const PRESENCE_TOO_OLD_LOG_MIN_MS = 5_000;
 export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
+/** Keep a verified overlay peer sticky across transient local link loss. */
+export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 30_000;
 /** HELLO-derived fanout hints expire if not refreshed (non-verified bootstrap). */
 export const RETICULUM_HELLO_FANOUT_HINT_TTL_MS = 10 * 60_000;
 const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 45_000;
@@ -242,6 +244,7 @@ type VerifiedReticulumPeer = {
   address: string;
   lastSeen: number;
   verifiedAt: number;
+  linkClosedAt: number | null;
 };
 
 export type ReticulumVerifiedPeerSnapshot = {
@@ -1033,11 +1036,20 @@ export class PresenceManager extends EventEmitter {
     const hash = destinationHash.trim().toLowerCase();
     if (!hash) return;
     const removedHelloHint = this.helloFanoutHints.delete(hash);
-    const wasVerified = this.verifiedReticulumPeers.delete(hash);
+    const existingVerified = this.verifiedReticulumPeers.get(hash);
+    const wasVerified = Boolean(existingVerified);
     const wasActive = this.activeReticulumNeighborHashes.includes(hash);
     if (!wasVerified && !wasActive && !removedHelloHint) return;
+    if (existingVerified) {
+      this.verifiedReticulumPeers.set(hash, {
+        ...existingVerified,
+        lastSeen: Math.max(existingVerified.lastSeen, now),
+        linkClosedAt: now,
+      });
+      this.noteReticulumCandidateDiscovered(hash, 'overlay-link-closed', now);
+    }
     loggerLog(
-      `[Presence] Reticulum overlay slot released sender_hash=${hash}${reason ? ` reason=${reason}` : ''}`
+      `[Presence] Reticulum overlay peer closed sender_hash=${hash}${reason ? ` reason=${reason}` : ''}${wasVerified ? ' retained=yes' : ''}`
     );
     const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
     if (wasVerified || wasActive || neighborsChanged) {
@@ -1355,8 +1367,8 @@ export class PresenceManager extends EventEmitter {
   /**
    * Marks a Reticulum sender as a verified Qortal overlay peer after valid signed
    * presence. Latches once per destination hash: further envelopes on the same link do
-   * not re-run mesh recompute or bridge sync — the overlay identity is stable for the
-   * connection lifetime until {@link noteReticulumOverlayLinkClosed}.
+   * not re-run mesh recompute or bridge sync — the overlay identity stays sticky across
+   * brief link churn until {@link noteReticulumOverlayLinkClosed} ages out.
    */
   private promoteVerifiedReticulumPeer(
     destinationHash: string,
@@ -1375,6 +1387,7 @@ export class PresenceManager extends EventEmitter {
         address: existing.address,
         lastSeen: now,
         verifiedAt: existing.verifiedAt,
+        linkClosedAt: null,
       });
       return;
     }
@@ -1383,6 +1396,7 @@ export class PresenceManager extends EventEmitter {
       address,
       lastSeen: now,
       verifiedAt: now,
+      linkClosedAt: null,
     });
     this.recomputeReticulumActiveNeighbors(now);
     this.emit('reticulum-peer-verified', {
@@ -1395,6 +1409,15 @@ export class PresenceManager extends EventEmitter {
 
   private pruneReticulumOverlayState(now: number = Date.now()): void {
     let changed = false;
+    for (const [hash, peer] of [...this.verifiedReticulumPeers.entries()]) {
+      if (
+        peer.linkClosedAt !== null &&
+        now - peer.linkClosedAt > RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS
+      ) {
+        this.verifiedReticulumPeers.delete(hash);
+        changed = true;
+      }
+    }
     for (const [hash, candidate] of [...this.reticulumCandidates.entries()]) {
       if (now > candidate.proofDeadlineAt) {
         this.reticulumCandidates.delete(hash);
