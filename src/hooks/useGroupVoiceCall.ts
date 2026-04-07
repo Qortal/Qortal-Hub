@@ -2089,6 +2089,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const localSpeakersRef = useRef<Map<string, number>>(new Map()); // addr → lastVadTime
   /** Last wall time we saw vad true per source (for forwarder hangover after speech). */
   const lastVadTrueAtRef = useRef<Map<string, number>>(new Map());
+  /** Ensures the local-only speaker glow drops after the normal active-speaker window expires. */
+  const localSpeakerUiRefreshTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   const lastAudioMixUpdateAtRef = useRef(0);
   const lastTuningSnapshotJsonRef = useRef('');
@@ -2223,6 +2227,29 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastMicroWidenDiagAtRef = useRef(0);
   const emptyJitterDrainTicksRef = useRef<Map<string, number>>(new Map());
   /** Workstream 3: starvation SLA + recovery-bar (recovery + multi-source only). */
+
+  const syncSpeakerUiState = useCallback((now = Date.now()) => {
+    const speakers = collectActiveSpeakers(
+      localSpeakersRef.current,
+      now,
+      ACTIVE_SPEAKER_WINDOW_MS,
+      MAX_ACTIVE_SPEAKERS_GLOBAL
+    );
+    setActiveSpeakers((prev) =>
+      sameAddressList(prev, speakers) ? prev : speakers
+    );
+    setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
+  }, []);
+
+  const scheduleLocalSpeakerUiRefresh = useCallback(() => {
+    if (localSpeakerUiRefreshTimerRef.current) {
+      clearTimeout(localSpeakerUiRefreshTimerRef.current);
+    }
+    localSpeakerUiRefreshTimerRef.current = setTimeout(() => {
+      localSpeakerUiRefreshTimerRef.current = null;
+      syncSpeakerUiState();
+    }, ACTIVE_SPEAKER_WINDOW_MS + 50);
+  }, [syncSpeakerUiState]);
   const gcallStarvationTicksSinceProtectedRef = useRef<Map<string, number>>(
     new Map()
   );
@@ -6796,7 +6823,18 @@ export function useGroupVoiceCall(uiActive = false) {
               samples: frame.length,
             });
           }
+          const wasSpeaking = isSpeakingRef.current;
           isSpeakingRef.current = vad;
+          const localAddress = userInfoRef.current?.address?.trim?.() ?? '';
+          if (localAddress && vad) {
+            const now = Date.now();
+            lastVadTrueAtRef.current.set(localAddress, now);
+            localSpeakersRef.current.set(localAddress, now);
+            if (!wasSpeaking) {
+              syncSpeakerUiState(now);
+            }
+            scheduleLocalSpeakerUiRefresh();
+          }
           if (encoder.state === 'closed') return;
           const i16 = float32ToInt16(frame);
           const audioData = new (window as any).AudioData({
@@ -6933,7 +6971,13 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
     },
-    [setCallAudioDevices, teardownCapturePipelineRefs, userInfo?.address]
+    [
+      scheduleLocalSpeakerUiRefresh,
+      setCallAudioDevices,
+      syncSpeakerUiState,
+      teardownCapturePipelineRefs,
+      userInfo?.address,
+    ]
   );
 
   const ensureAudioCaptureStarted = useCallback(() => {
@@ -8426,17 +8470,7 @@ export function useGroupVoiceCall(uiActive = false) {
     if (jitterDrainReactTickCountRef.current >= 10) {
       const reactStartedAt = performance.now();
       jitterDrainReactTickCountRef.current = 0;
-      const tickNow = Date.now();
-      const speakers = collectActiveSpeakers(
-        localSpeakersRef.current,
-        tickNow,
-        ACTIVE_SPEAKER_WINDOW_MS,
-        MAX_ACTIVE_SPEAKERS_GLOBAL
-      );
-      setActiveSpeakers((prev) =>
-        sameAddressList(prev, speakers) ? prev : speakers
-      );
-      setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
+      syncSpeakerUiState();
       reactMs = performance.now() - reactStartedAt;
     }
     const tickTotalMs = performance.now() - tickStartedAt;
@@ -8488,6 +8522,7 @@ export function useGroupVoiceCall(uiActive = false) {
     postWasmFecBatchToPlayout,
     recordPerfDuration,
     recordPerfDurationPerSource,
+    syncSpeakerUiState,
     tickAdaptivePlayoutTargets,
     tickPlaybackMixTargets,
     updatePeerRecoveryStability,
@@ -10536,6 +10571,7 @@ export function useGroupVoiceCall(uiActive = false) {
       );
       audioSessionTokenRef.current = nextAudioToken;
       audioStartInFlightRef.current = false;
+      isSpeakingRef.current = false;
       debugLog(
         '[GCall] cleanup start — invalidated audio token:',
         nextAudioToken,
@@ -10551,6 +10587,10 @@ export function useGroupVoiceCall(uiActive = false) {
       jitterDrainReactTickCountRef.current = 0;
       jitterFirstDrainLoggedRef.current = false;
       lastVadTrueAtRef.current.clear();
+      if (localSpeakerUiRefreshTimerRef.current) {
+        clearTimeout(localSpeakerUiRefreshTimerRef.current);
+        localSpeakerUiRefreshTimerRef.current = null;
+      }
       if (topologyHeartbeatTimerRef.current) {
         clearInterval(topologyHeartbeatTimerRef.current);
         topologyHeartbeatTimerRef.current = null;
