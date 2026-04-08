@@ -4,8 +4,16 @@ type GroupPlayoutProcessorCtor = new (options?: {
   processorOptions?: { sourceAddr?: string };
 }) => {
   process: (inputs: unknown[], outputs: Float32Array[][]) => boolean;
+  _computeRawTargetRate: (
+    bufferedMs: number,
+    deltaMs: number,
+    quantum: number,
+    sampleRateHz: number
+  ) => { targetRate: number; inPanic: boolean; panicZoneEntered: boolean };
   _playoutStarted: boolean;
   _available: number;
+  _smoothedRate: number;
+  _targetPlayoutMs: number;
   _lastTail: Float32Array;
   _lastTailLen: number;
   _lastTailWritePos: number;
@@ -88,5 +96,36 @@ describe('group playout processor concealment', () => {
 
     const concealed = nextBlock(processor);
     expect(concealed[0]).toBeGreaterThan(0.7);
+  });
+});
+
+describe('group playout processor rate control', () => {
+  it('uses gentler over-target rates for healthy overshoot', async () => {
+    const Processor = await loadProcessorCtor();
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
+
+    expect(
+      processor._computeRawTargetRate(150, 50, 128, 48_000).targetRate
+    ).toBe(1.004);
+    expect(
+      processor._computeRawTargetRate(210, 110, 128, 48_000).targetRate
+    ).toBe(1.006);
+    expect(
+      processor._computeRawTargetRate(300, 200, 128, 48_000).targetRate
+    ).toBe(1.01);
+  });
+
+  it('avoids fast-alpha speedup on modest over-target blocks', async () => {
+    const Processor = await loadProcessorCtor();
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
+
+    processor._playoutStarted = true;
+    processor._targetPlayoutMs = 100;
+    processor._smoothedRate = 1;
+    processor._available = Math.round((150 / 1000) * 48_000);
+
+    nextBlock(processor);
+
+    expect(processor._smoothedRate).toBeLessThan(1.001);
   });
 });

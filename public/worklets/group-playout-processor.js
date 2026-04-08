@@ -15,7 +15,7 @@ const ERROR_CLAMP_MS = 80;
 const DEADZONE_MS = 6;
 /** Minimum playback rate (over-target catch-up); under-target/panic may go lower. */
 const RATE_MIN = 0.98;
-const RATE_MAX = 1.015;
+const RATE_MAX = 1.01;
 const EMA_ALPHA_SLOW = 0.06;
 const EMA_ALPHA_FAST = 0.2;
 const OUTSIDE_BAND_MS = 35;
@@ -24,8 +24,11 @@ const METRICS_QUANTA = 47;
 const PCM_LATENCY_HARD_MS = 320;
 const PCM_LATENCY_RELEASE_MS = 240;
 const TARGET_RELEASE_MARGIN_MS = 40;
-const OVER_TARGET_TIER_STRONG_MS = 150;
-const OVER_TARGET_TIER_MID_MS = 80;
+const OVER_TARGET_TIER_STRONG_MS = 170;
+const OVER_TARGET_TIER_MID_MS = 100;
+const OVER_TARGET_RATE_MID = 1.006;
+const OVER_TARGET_RATE_LIGHT = 1.004;
+const OVER_TARGET_FAST_ALPHA_MS = 140;
 const CONCEALMENT_TAIL_SAMPLES = 240;
 const CONCEALMENT_FADE_SAMPLES = 240;
 
@@ -39,6 +42,8 @@ const UNDER_TIER_SHALLOW_MS = -45;
 const UNDER_RATE_DEEP = 0.94;
 const UNDER_RATE_MID = 0.96;
 const UNDER_RATE_SHALLOW = 0.98;
+const RATE_K_UNDER = 0.000125;
+const RATE_K_OVER = 0.00008;
 
 /** Panic: absolute PCM depth (hysteresis + dwell). */
 const PANIC_ENTER_MS = 60;
@@ -230,17 +235,25 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       return { targetRate: RATE_MAX, inPanic: false, panicZoneEntered: false };
     }
     if (deltaMs > OVER_TARGET_TIER_MID_MS) {
-      return { targetRate: 1.01, inPanic: false, panicZoneEntered: false };
+      return {
+        targetRate: OVER_TARGET_RATE_MID,
+        inPanic: false,
+        panicZoneEntered: false,
+      };
     }
     if (deltaMs > emergencyThresh) {
-      return { targetRate: 1.008, inPanic: false, panicZoneEntered: false };
+      return {
+        targetRate: OVER_TARGET_RATE_LIGHT,
+        inPanic: false,
+        panicZoneEntered: false,
+      };
     }
     let errorMs = Math.max(
       -ERROR_CLAMP_MS,
       Math.min(ERROR_CLAMP_MS, deltaMs)
     );
     if (Math.abs(errorMs) < DEADZONE_MS) errorMs = 0;
-    const k = 0.000125;
+    const k = errorMs > 0 ? RATE_K_OVER : RATE_K_UNDER;
     const tr = 1 + Math.max(-0.01, Math.min(0.01, errorMs * k));
     return { targetRate: tr, inPanic: false, panicZoneEntered: false };
   }
@@ -286,7 +299,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
     const underStress =
       raw.inPanic ||
       deltaMs < UNDER_TIER_SHALLOW_MS ||
-      deltaMs > OUTSIDE_BAND_MS + EMERGENCY_BAND_EXTRA_MS;
+      deltaMs > OVER_TARGET_FAST_ALPHA_MS;
     const alpha = underStress ? EMA_ALPHA_FAST : EMA_ALPHA_SLOW;
     this._smoothedRate += alpha * (targetRate - this._smoothedRate);
     this._smoothedRate = Math.max(
