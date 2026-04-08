@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeMultiSourceAccumulationTargetFrames,
   computePhaseDSourceBurstBonus,
   computeGlobalDecodeBudget,
   computeOrderedDrainAddresses,
@@ -8,6 +9,7 @@ import {
   computeProtectedDecodeCapForBreach,
   isCollapsedForStarvation,
   isNearCollapsedForStarvation,
+  shouldHoldMultiSourceAccumulation,
   shouldEnterProtectedMode,
   shouldExitProtectedMode,
   starvationRecoveryBarSatisfied,
@@ -40,6 +42,70 @@ describe('computeProtectedDecodeCap', () => {
   it('adds bounded headroom for multi-breach', () => {
     expect(computeProtectedDecodeCapForBreach(16, 1)).toBe(8);
     expect(computeProtectedDecodeCapForBreach(16, 2)).toBe(10);
+  });
+});
+
+describe('computeMultiSourceAccumulationTargetFrames', () => {
+  it('holds protected multi-source peers until they rebuild a bounded reserve', () => {
+    expect(
+      computeMultiSourceAccumulationTargetFrames({
+        adaptiveTargetMedianMs: 180,
+        protectedMode: true,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(6);
+    expect(
+      computeMultiSourceAccumulationTargetFrames({
+        adaptiveTargetMedianMs: 140,
+        protectedMode: true,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(5);
+  });
+
+  it('returns null for healthy non-protected sources', () => {
+    expect(
+      computeMultiSourceAccumulationTargetFrames({
+        adaptiveTargetMedianMs: 160,
+        protectedMode: false,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(null);
+  });
+});
+
+describe('shouldHoldMultiSourceAccumulation', () => {
+  it('keeps a protected source on hold until it has both frames and reserve', () => {
+    expect(
+      shouldHoldMultiSourceAccumulation({
+        bufferedFrames: 5,
+        opusBufferedMs: 55,
+        adaptiveTargetMedianMs: 145,
+        protectedMode: true,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldHoldMultiSourceAccumulation({
+        bufferedFrames: 5,
+        opusBufferedMs: 85,
+        adaptiveTargetMedianMs: 145,
+        protectedMode: true,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+  });
+
+  it('returns false for healthy non-protected sources', () => {
+    expect(
+      shouldHoldMultiSourceAccumulation({
+        bufferedFrames: 5,
+        opusBufferedMs: 100,
+        adaptiveTargetMedianMs: 145,
+        protectedMode: false,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(false);
   });
 });
 

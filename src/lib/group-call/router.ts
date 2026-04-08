@@ -741,6 +741,62 @@ export function assessGroupCallSourceWindowForRecovery(
   };
 }
 
+export function compareGroupCallSourceIsolationPriority(
+  a: GroupCallSourceWindowMetrics,
+  b: GroupCallSourceWindowMetrics
+): number {
+  const aAssessment = assessGroupCallSourceWindowForRecovery(a);
+  const bAssessment = assessGroupCallSourceWindowForRecovery(b);
+  if (aAssessment.severe !== bAssessment.severe) {
+    return aAssessment.severe ? 1 : -1;
+  }
+  if (aAssessment.score !== bAssessment.score) {
+    return aAssessment.score - bAssessment.score;
+  }
+
+  const aUnderTarget = a.playoutUnderTargetFraction ?? 0;
+  const bUnderTarget = b.playoutUnderTargetFraction ?? 0;
+  if (aUnderTarget !== bUnderTarget) {
+    return aUnderTarget - bUnderTarget;
+  }
+
+  const aDelta = a.avgPlayoutDeltaMs ?? 0;
+  const bDelta = b.avgPlayoutDeltaMs ?? 0;
+  if (aDelta !== bDelta) {
+    return bDelta - aDelta;
+  }
+
+  const aObservedTarget = Math.max(
+    1,
+    a.adaptiveTargetMedianMs || a.adaptiveTargetMaxMs || 1
+  );
+  const bObservedTarget = Math.max(
+    1,
+    b.adaptiveTargetMedianMs || b.adaptiveTargetMaxMs || 1
+  );
+  const aReserveRatio = a.avgOpusBufferedMs / aObservedTarget;
+  const bReserveRatio = b.avgOpusBufferedMs / bObservedTarget;
+  if (aReserveRatio !== bReserveRatio) {
+    return bReserveRatio - aReserveRatio;
+  }
+
+  if (a.adaptiveTargetMaxMs !== b.adaptiveTargetMaxMs) {
+    return a.adaptiveTargetMaxMs - b.adaptiveTargetMaxMs;
+  }
+  return b.sourceAddr.localeCompare(a.sourceAddr);
+}
+
+export function pickWorstSourceForIsolation(
+  sources: readonly GroupCallSourceWindowMetrics[]
+): GroupCallSourceWindowMetrics | null {
+  return sources.reduce<GroupCallSourceWindowMetrics | null>((worst, current) => {
+    if (!worst) return current;
+    return compareGroupCallSourceIsolationPriority(current, worst) > 0
+      ? current
+      : worst;
+  }, null);
+}
+
 export function assessReticulumAudioPressureWindow(
   windowMetrics: Pick<
     GroupCallWindowMetrics,
@@ -2128,8 +2184,6 @@ export class GroupCallPerformanceTracker {
     this.playoutRateSamples = 0;
     this.playoutRateTicksBelow1 = 0;
     this.playoutRateTicksBelow097 = 0;
-    this.recoverySamples = 0;
-    this.recoveryTotalMs = 0;
     this.mixerReductionSamples = 0;
     this.mixerReductionTotalDb = 0;
     this.mixerHeavyReductionSamples = 0;
@@ -2216,13 +2270,7 @@ export class GroupCallPerformanceTracker {
         this.sourceWindowStats.get(source.sourceAddr)?.adaptiveTargetSamples ??
         []
     );
-    const worstSource = sources.reduce<GroupCallSourceWindowMetrics | null>(
-      (worst, current) =>
-        !worst || current.adaptiveTargetMaxMs > worst.adaptiveTargetMaxMs
-          ? current
-          : worst,
-      null
-    );
+    const worstSource = pickWorstSourceForIsolation(sources);
     const result: GroupCallWindowMetrics = {
       receivingPeer,
       startAt: this.windowStartedAtMs,

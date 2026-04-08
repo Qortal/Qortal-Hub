@@ -124,13 +124,206 @@ export function computeRecoveryMultiSourceTargetMaxMs(input: {
           ? 3
           : 4
         : 0;
-  const isolationBonusMs = input.isolatedSource ? (n === 2 ? 3 : 4) : 0;
+  const isolationPenaltyMs = input.isolatedSource ? (n === 2 ? 8 : 10) : 0;
   const maxExtraMs = n === 2 ? 20 : 24;
   return Math.min(
     input.profileAdaptiveSevereMaxMs,
-    input.profileAdaptiveMaxMs +
-      Math.min(maxExtraMs, baseExtraMs + starvationBonusMs + isolationBonusMs)
+    Math.max(
+      input.profileAdaptiveMaxMs,
+      input.profileAdaptiveMaxMs +
+        Math.min(maxExtraMs, baseExtraMs + starvationBonusMs) -
+        isolationPenaltyMs
+    )
   );
+}
+
+const GCALL_SINGLE_REMOTE_FEASIBILITY_MIN_TARGET_MS = 100;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_UNDERTARGET_MIN = 0.6;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_DELTA_MAX_MS = -50;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_RESERVE_RATIO_MAX = 0.42;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_UNDERTARGET_MIN = 0.45;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_DELTA_MAX_MS = -35;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_RESERVE_RATIO_MAX = 0.5;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_UNDERTARGET_MIN = 0.55;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_DELTA_MAX_MS = -45;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_RESERVE_RATIO_MAX = 0.55;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_HEADROOM_MS = 34;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_HEADROOM_MS = 38;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_HEADROOM_MS = 42;
+
+/**
+ * In 1-on-1 recovery, a peer can get stuck chasing a target it never meaningfully rebuilds.
+ * Clamp the ceiling toward a reserve the receiver has shown it can actually hold.
+ */
+export function computeFeasibleSingleRemoteRecoveryTargetMaxMs(input: {
+  currentAdaptiveMaxTargetMs: number;
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  starvationSeverity: 'none' | 'mild' | 'strong';
+  previousStarvationSeverity?: 'none' | 'mild' | 'strong';
+  playoutUnderTargetFraction: number;
+  avgPlayoutDeltaMs: number;
+  avgOpusBufferedMs: number;
+  observedTargetMs: number;
+}): number | null {
+  if (
+    input.adaptiveNetworkMode !== 'recovery' ||
+    Math.max(1, input.activeSourceCount) !== 1
+  ) {
+    return null;
+  }
+  if (
+    !Number.isFinite(input.currentAdaptiveMaxTargetMs) ||
+    input.currentAdaptiveMaxTargetMs <= GCALL_SINGLE_REMOTE_FEASIBILITY_MIN_TARGET_MS
+  ) {
+    return null;
+  }
+  if (
+    !Number.isFinite(input.avgOpusBufferedMs) ||
+    !Number.isFinite(input.playoutUnderTargetFraction) ||
+    !Number.isFinite(input.avgPlayoutDeltaMs)
+  ) {
+    return null;
+  }
+  const observedTarget = Math.max(
+    1,
+    Number.isFinite(input.observedTargetMs) ? input.observedTargetMs : 0
+  );
+  const reserveRatio = input.avgOpusBufferedMs / observedTarget;
+  const acuteMismatch =
+    input.playoutUnderTargetFraction >=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_DELTA_MAX_MS &&
+    reserveRatio < GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_RESERVE_RATIO_MAX;
+  const strongCandidate =
+    input.starvationSeverity === 'strong' &&
+    input.playoutUnderTargetFraction >=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_DELTA_MAX_MS &&
+    reserveRatio < GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_RESERVE_RATIO_MAX;
+  const heldCandidate =
+    input.starvationSeverity !== 'none' &&
+    (input.previousStarvationSeverity ?? 'none') !== 'none' &&
+    input.playoutUnderTargetFraction >=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_DELTA_MAX_MS &&
+    reserveRatio < GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_RESERVE_RATIO_MAX;
+  if (!acuteMismatch && !strongCandidate && !heldCandidate) {
+    return null;
+  }
+  const headroomMs = acuteMismatch
+    ? GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_HEADROOM_MS
+    : strongCandidate
+      ? GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_HEADROOM_MS
+      : GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_HEADROOM_MS;
+  const feasibleMaxMs = Math.max(
+    GCALL_SINGLE_REMOTE_FEASIBILITY_MIN_TARGET_MS,
+    Math.round(input.avgOpusBufferedMs + headroomMs)
+  );
+  return Math.min(input.currentAdaptiveMaxTargetMs, feasibleMaxMs);
+}
+
+const GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS = 100;
+const GCALL_MULTI_SOURCE_FEASIBILITY_RESERVE_RATIO_MAX = 0.6;
+const GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_UNDERTARGET_MIN = 0.7;
+const GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_DELTA_MAX_MS = -45;
+const GCALL_MULTI_SOURCE_FEASIBILITY_MILD_UNDERTARGET_MIN = 0.8;
+const GCALL_MULTI_SOURCE_FEASIBILITY_MILD_DELTA_MAX_MS = -55;
+const GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_HEADROOM_MS = 40;
+const GCALL_MULTI_SOURCE_FEASIBILITY_MILD_HEADROOM_MS = 50;
+const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_UNDERTARGET_MIN = 0.6;
+const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_DELTA_MAX_MS = -35;
+const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_HEADROOM_MS = 32;
+const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX = 0.82;
+
+/**
+ * Clamp multi-source recovery targets back toward an observed reserve the source can
+ * realistically hold. This avoids a steady-state where adaptive target remains high
+ * while the source sits chronically under target and never rebuilds.
+ */
+export function computeFeasibleMultiSourceRecoveryTargetMaxMs(input: {
+  currentAdaptiveMaxTargetMs: number;
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  starvationSeverity: 'none' | 'mild' | 'strong';
+  isolatedSource?: boolean;
+  previousStarvationSeverity?: 'none' | 'mild' | 'strong';
+  playoutUnderTargetFraction: number;
+  avgPlayoutDeltaMs: number;
+  avgOpusBufferedMs: number;
+  observedTargetMs: number;
+}): number | null {
+  if (
+    input.adaptiveNetworkMode !== 'recovery' ||
+    Math.max(1, input.activeSourceCount) < 2
+  ) {
+    return null;
+  }
+  if (
+    !Number.isFinite(input.currentAdaptiveMaxTargetMs) ||
+    input.currentAdaptiveMaxTargetMs <= 0
+  ) {
+    return null;
+  }
+  if (
+    !Number.isFinite(input.avgOpusBufferedMs) ||
+    !Number.isFinite(input.playoutUnderTargetFraction) ||
+    !Number.isFinite(input.avgPlayoutDeltaMs)
+  ) {
+    return null;
+  }
+  const observedTarget = Math.max(
+    1,
+    Number.isFinite(input.observedTargetMs) ? input.observedTargetMs : 0
+  );
+  const reserveRatio = input.avgOpusBufferedMs / observedTarget;
+  const isolatedCandidate =
+    input.isolatedSource === true &&
+    input.starvationSeverity !== 'none' &&
+    input.playoutUnderTargetFraction >=
+      GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <=
+      GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_DELTA_MAX_MS &&
+    reserveRatio < GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX;
+  const strongCandidate =
+    input.starvationSeverity === 'strong' &&
+    input.playoutUnderTargetFraction >=
+      GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <= GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_DELTA_MAX_MS &&
+    reserveRatio < GCALL_MULTI_SOURCE_FEASIBILITY_RESERVE_RATIO_MAX;
+  const mildHeldCandidate =
+    input.starvationSeverity === 'mild' &&
+    (input.previousStarvationSeverity ?? 'none') !== 'none' &&
+    input.playoutUnderTargetFraction >=
+      GCALL_MULTI_SOURCE_FEASIBILITY_MILD_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <= GCALL_MULTI_SOURCE_FEASIBILITY_MILD_DELTA_MAX_MS &&
+    reserveRatio < GCALL_MULTI_SOURCE_FEASIBILITY_RESERVE_RATIO_MAX;
+  if (!strongCandidate && !mildHeldCandidate) {
+    if (!isolatedCandidate) {
+      return null;
+    }
+  }
+  const headroomMs = isolatedCandidate
+    ? GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_HEADROOM_MS
+    : strongCandidate
+      ? GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_HEADROOM_MS
+      : GCALL_MULTI_SOURCE_FEASIBILITY_MILD_HEADROOM_MS;
+  const isolationObservedTargetCap = isolatedCandidate
+    ? Math.round(
+        observedTarget * GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX
+      )
+    : input.currentAdaptiveMaxTargetMs;
+  const feasibleMaxMs = Math.max(
+    GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS,
+    Math.min(
+      isolationObservedTargetCap,
+      Math.round(input.avgOpusBufferedMs + headroomMs)
+    )
+  );
+  return Math.min(input.currentAdaptiveMaxTargetMs, feasibleMaxMs);
 }
 
 /**
@@ -216,13 +409,38 @@ export function pickSecondIsolationCandidate(
   primary: string | null
 ): string | null {
   if (!primary || sources.length < 2) return null;
-  const sorted = [...sources].sort(
-    (a, b) => b.adaptiveTargetMaxMs - a.adaptiveTargetMaxMs
-  );
+  const sorted = [...sources].sort((a, b) => {
+    const aObservedTarget = Math.max(1, a.adaptiveTargetMedianMs || a.adaptiveTargetMaxMs || 1);
+    const bObservedTarget = Math.max(1, b.adaptiveTargetMedianMs || b.adaptiveTargetMaxMs || 1);
+    const aReserveRatio = a.avgOpusBufferedMs / aObservedTarget;
+    const bReserveRatio = b.avgOpusBufferedMs / bObservedTarget;
+    const aBadness =
+      (a.playoutUnderTargetFraction ?? 0) * 4 +
+      (a.playoutOutsideTargetFraction ?? 0) * 2 +
+      Math.max(0, -(a.avgPlayoutDeltaMs ?? 0)) / 80 +
+      (1 - Math.min(1, aReserveRatio));
+    const bBadness =
+      (b.playoutUnderTargetFraction ?? 0) * 4 +
+      (b.playoutOutsideTargetFraction ?? 0) * 2 +
+      Math.max(0, -(b.avgPlayoutDeltaMs ?? 0)) / 80 +
+      (1 - Math.min(1, bReserveRatio));
+    if (aBadness !== bBadness) return bBadness - aBadness;
+    return b.adaptiveTargetMaxMs - a.adaptiveTargetMaxMs;
+  });
   const second = sorted.find((s) => s.sourceAddr !== primary);
   if (!second || second.adaptiveTargetMaxMs <= 0) return null;
   const top = sorted[0];
   if (!top || top.sourceAddr !== primary) return null;
+  const secondObservedTarget = Math.max(
+    1,
+    second.adaptiveTargetMedianMs || second.adaptiveTargetMaxMs || 1
+  );
+  const secondReserveRatio = second.avgOpusBufferedMs / secondObservedTarget;
+  const secondClearlyDegraded =
+    (second.playoutUnderTargetFraction ?? 0) >= 0.6 ||
+    (second.avgPlayoutDeltaMs ?? 0) <= -45 ||
+    secondReserveRatio < 0.55;
+  if (!secondClearlyDegraded) return null;
   if (second.adaptiveTargetMaxMs < top.adaptiveTargetMaxMs - 45) return null;
   return second.sourceAddr;
 }

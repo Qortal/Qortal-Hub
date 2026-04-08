@@ -35,6 +35,7 @@
     "electron:make-win": "node ./scripts/run-electron-package.mjs win",
     "electron:make-arm": "node ./scripts/run-electron-package.mjs arm",
     "electron:make-lin-docker": "bash ./scripts/run-linux-build-in-docker.sh",
+    "electron:make-lin-docker-appimage": "bash ./scripts/run-linux-build-in-docker.sh appimage",
     "electron:make-all": "node ./scripts/run-electron-package.mjs all",
     "bundle:reticulum": "node ./scripts/run-build-rnsd-frozen.mjs",
     "bundle:reticulum-venv": "node ./scripts/bundle-reticulum-runtime.mjs",

@@ -3,6 +3,7 @@ import {
   buildHierarchicalTopologyWithStickyRoot,
   assessGroupCallSourceStall,
   assessReticulumAudioPressureWindow,
+  compareGroupCallSourceIsolationPriority,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   buildTopologyAfterClusterPromotion,
@@ -18,6 +19,7 @@ import {
   hasGroupCallSourceWindowMediaActivity,
   isGroupCallTopologyDuplicateHeartbeat,
   promoteClusterOfficersRow,
+  pickWorstSourceForIsolation,
   reconcileParticipantSpeaking,
   sameAddressList,
 } from './router';
@@ -70,6 +72,80 @@ describe('buildSingleClusterTopologyWithStickyRoot', () => {
     expect(topo!.rootForwarder).toBe('');
     expect(topo!.standbyForwarder).toBe('');
     expect(topo!.clusters[0].members).toEqual([]);
+  });
+});
+
+describe('pickWorstSourceForIsolation', () => {
+  it('prefers real starvation over a merely higher adaptive target', () => {
+    const worst = pickWorstSourceForIsolation([
+      {
+        sourceAddr: 'high-target',
+        jitterUnderruns: 0,
+        missingFrames: 0,
+        concealmentTicks: 0,
+        avgPcmBufferedMs: 95,
+        playoutOutsideTargetFraction: 0.1,
+        playoutUnderTargetFraction: 0.1,
+        avgPlayoutDeltaMs: -10,
+        avgOpusBufferedMs: 92,
+        maxOpusBufferedMs: 110,
+        adaptiveTargetMedianMs: 130,
+        adaptiveTargetP95Ms: 170,
+        adaptiveTargetMaxMs: 185,
+      },
+      {
+        sourceAddr: 'starved',
+        jitterUnderruns: 0,
+        missingFrames: 0,
+        concealmentTicks: 120,
+        avgPcmBufferedMs: 14,
+        playoutOutsideTargetFraction: 1,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -150,
+        avgOpusBufferedMs: 20,
+        maxOpusBufferedMs: 30,
+        adaptiveTargetMedianMs: 120,
+        adaptiveTargetP95Ms: 140,
+        adaptiveTargetMaxMs: 145,
+      },
+    ]);
+    expect(worst?.sourceAddr).toBe('starved');
+  });
+
+  it('uses reserve ratio and delta as tie-breakers when recovery scores match', () => {
+    const preferred = compareGroupCallSourceIsolationPriority(
+      {
+        sourceAddr: 'thin',
+        jitterUnderruns: 0,
+        missingFrames: 0,
+        concealmentTicks: 60,
+        avgPcmBufferedMs: 18,
+        playoutOutsideTargetFraction: 0.8,
+        playoutUnderTargetFraction: 0.75,
+        avgPlayoutDeltaMs: -95,
+        avgOpusBufferedMs: 28,
+        maxOpusBufferedMs: 40,
+        adaptiveTargetMedianMs: 120,
+        adaptiveTargetP95Ms: 140,
+        adaptiveTargetMaxMs: 150,
+      },
+      {
+        sourceAddr: 'less-thin',
+        jitterUnderruns: 0,
+        missingFrames: 0,
+        concealmentTicks: 60,
+        avgPcmBufferedMs: 30,
+        playoutOutsideTargetFraction: 0.8,
+        playoutUnderTargetFraction: 0.75,
+        avgPlayoutDeltaMs: -70,
+        avgOpusBufferedMs: 46,
+        maxOpusBufferedMs: 58,
+        adaptiveTargetMedianMs: 120,
+        adaptiveTargetP95Ms: 150,
+        adaptiveTargetMaxMs: 165,
+      }
+    );
+    expect(preferred).toBeGreaterThan(0);
   });
 });
 
@@ -786,8 +862,8 @@ describe('group-call router helpers', () => {
     expect(window.playoutUnderTargetFraction).toBe(0);
     expect(window.playoutOverTargetFraction).toBe(0.5);
     expect(window.avgPlayoutDeltaMs).toBe(11.5);
-    expect(window.worstSourceAddr).toBe('alice');
-    expect(window.worstAdaptiveTargetMs).toBe(155);
+    expect(window.worstSourceAddr).toBe('bob');
+    expect(window.worstAdaptiveTargetMs).toBe(95);
     expect(window.sources).toEqual([
       expect.objectContaining({
         sourceAddr: 'alice',
@@ -847,14 +923,7 @@ describe('group-call router helpers', () => {
         durationMs: 10_000,
         reticulumAudioQueuePressureDrops: 90,
         reticulumAudioStaleDrops: 3,
-        reticulumAudioLinkUnreadyDrops: 0,
         reticulumAudioPacketSendFailures: 0,
-        reticulumAudioPacketPathRequests: 0,
-        reticulumAudioPacketPathResolutions: 0,
-        reticulumAudioPacketPathTimeouts: 0,
-        reticulumAudioPacketFreshSends: 0,
-        reticulumAudioPacketStaleSends: 0,
-        reticulumAudioPacketUnknownSends: 0,
         reticulumAudioPendingFramesHighWater: 18,
         reticulumAudioBridgeQueuedFramesHighWater: 9,
         reticulumAudioDecodedQueueDepthHighWater: 16,

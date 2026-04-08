@@ -1,13 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computePendingDecryptOverloadMax,
   computePendingDecryptLimits,
   computeRequestedBurstMaxFromSignals,
+  shouldTreatPendingDecryptAsForwarder,
+  shouldBypassDecryptWorkerOnHotQueue,
   GLOBAL_MAX_BURST_MAX,
   PENDING_DECRYPT_BURST_NOMINAL_BASE,
   PENDING_DECRYPT_BURST_TTL_MS,
   PENDING_DECRYPT_MAX,
   PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX,
   PENDING_DECRYPT_OVERLOAD_MAX,
+  PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX,
+  PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
   PENDING_DECRYPT_TTL_MS,
@@ -131,6 +136,141 @@ describe('computeRequestedBurstMaxFromSignals', () => {
       isForwarder: true,
     });
     expect(boosted - base).toBe(24);
+  });
+});
+
+describe('computePendingDecryptOverloadMax', () => {
+  it('keeps the hard clamp for forwarders and long-task pressure', () => {
+    expect(
+      computePendingDecryptOverloadMax({
+        isForwarder: true,
+        longTaskPressure: false,
+        activeSourceCount: 2,
+      })
+    ).toBe(PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX);
+    expect(
+      computePendingDecryptOverloadMax({
+        isForwarder: false,
+        longTaskPressure: true,
+        activeSourceCount: 1,
+      })
+    ).toBe(PENDING_DECRYPT_OVERLOAD_MAX);
+  });
+
+  it('softens the clamp for healthy non-forwarders', () => {
+    expect(
+      computePendingDecryptOverloadMax({
+        isForwarder: false,
+        longTaskPressure: false,
+        activeSourceCount: 1,
+      })
+    ).toBe(PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX);
+    expect(
+      computePendingDecryptOverloadMax({
+        isForwarder: false,
+        longTaskPressure: false,
+        activeSourceCount: 2,
+      })
+    ).toBe(PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX);
+  });
+});
+
+describe('shouldTreatPendingDecryptAsForwarder', () => {
+  it('stays off for one-on-one forwarder roles with a single active source', () => {
+    expect(
+      shouldTreatPendingDecryptAsForwarder({
+        isForwarderRole: true,
+        participantCount: 2,
+        activeSourceCount: 1,
+      })
+    ).toBe(false);
+  });
+
+  it('stays on for actual fanout forwarders', () => {
+    expect(
+      shouldTreatPendingDecryptAsForwarder({
+        isForwarderRole: true,
+        participantCount: 3,
+        activeSourceCount: 1,
+      })
+    ).toBe(true);
+    expect(
+      shouldTreatPendingDecryptAsForwarder({
+        isForwarderRole: true,
+        participantCount: 2,
+        activeSourceCount: 2,
+      })
+    ).toBe(true);
+  });
+});
+
+describe('shouldBypassDecryptWorkerOnHotQueue', () => {
+  it('allows a healthy single-source participant to bypass near the cap', () => {
+    expect(
+      shouldBypassDecryptWorkerOnHotQueue({
+        pendingDepth: 202,
+        pendingMax: 208,
+        overloadActive: true,
+        longTaskPressure: false,
+        isForwarder: false,
+        activeSourceCount: 1,
+        applyQueueDepth: 0,
+      })
+    ).toBe(true);
+  });
+
+  it('stays off for forwarders, multi-source, or when apply is already backlogged', () => {
+    expect(
+      shouldBypassDecryptWorkerOnHotQueue({
+        pendingDepth: 202,
+        pendingMax: 208,
+        overloadActive: true,
+        longTaskPressure: false,
+        isForwarder: true,
+        activeSourceCount: 1,
+        applyQueueDepth: 0,
+      })
+    ).toBe(false);
+    expect(
+      shouldBypassDecryptWorkerOnHotQueue({
+        pendingDepth: 202,
+        pendingMax: 208,
+        overloadActive: true,
+        longTaskPressure: false,
+        isForwarder: false,
+        activeSourceCount: 2,
+        applyQueueDepth: 0,
+      })
+    ).toBe(false);
+    expect(
+      shouldBypassDecryptWorkerOnHotQueue({
+        pendingDepth: 202,
+        pendingMax: 208,
+        overloadActive: true,
+        longTaskPressure: false,
+        isForwarder: false,
+        activeSourceCount: 1,
+        applyQueueDepth: 8,
+      })
+    ).toBe(false);
+  });
+
+  it('allows a one-on-one forwarder-role peer to use the participant bypass path', () => {
+    expect(
+      shouldBypassDecryptWorkerOnHotQueue({
+        pendingDepth: 202,
+        pendingMax: 208,
+        overloadActive: true,
+        longTaskPressure: false,
+        isForwarder: shouldTreatPendingDecryptAsForwarder({
+          isForwarderRole: true,
+          participantCount: 2,
+          activeSourceCount: 1,
+        }),
+        activeSourceCount: 1,
+        applyQueueDepth: 0,
+      })
+    ).toBe(true);
   });
 });
 

@@ -35,6 +35,7 @@ The packaging scripts now bundle a **native Reticulum binary before packaging** 
 
 - `npm run electron:make-lin` → only on **Linux x64**
 - `npm run electron:make-lin-docker` → **any host with Docker**; builds **Linux x64** AppImage + deb inside **Debian 11 (bullseye)** (~glibc **2.31**) for **broader** compatibility than CI (**ubuntu-22.04**, ~2.35). Uses `linux/amd64` (Apple Silicon works via emulation, slower).
+- `npm run electron:make-lin-docker-appimage` → same Dockerized **Linux x64** build path, but emits only the **AppImage** for faster testing.
 - `npm run electron:make-arm` → only on **Linux arm64**
 - `npm run electron:make-win` → only on **Windows**
 - `npm run electron:make-mac` → only on **macOS**

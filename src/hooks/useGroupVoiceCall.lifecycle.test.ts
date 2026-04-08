@@ -15,6 +15,7 @@ import {
   getPredictiveWarmPeers,
   getSessionUpdatedKeyRecoveryAction,
   getPostJoinHydratedParticipants,
+  isFanoutForwarderRole,
   isCurrentGroupCallAudioStartupToken,
   mergeHydratedParticipantsIntoUiList,
   shouldDeferLocalTopologyElection,
@@ -31,6 +32,7 @@ import {
   shouldAccelerateMultiSourceRecoveryDecay,
   shouldAccelerateSingleRemoteRecoveryDecay,
   shouldDropActiveJitterSource,
+  shouldRetainN1RecoveryPrerollSatisfied,
   shouldRelaxSingleRemoteWindowRecovery,
   shouldIgnoreParticipantLeftEvent,
   shouldIgnoreRedundantRoomKeyDelivery,
@@ -43,9 +45,16 @@ import {
   shouldStartGroupCallAudioCapture,
   summarizeRecentRecoveryStability,
 } from './useGroupVoiceCall';
-import type { GroupTopology } from '../lib/group-call/types';
+import type { GroupTopology } from './useGroupVoiceCall';
 
 describe('useGroupVoiceCall lifecycle helpers', () => {
+  it('treats only root and cluster roles as active fanout forwarders', () => {
+    expect(isFanoutForwarderRole('root-forwarder')).toBe(true);
+    expect(isFanoutForwarderRole('cluster-forwarder')).toBe(true);
+    expect(isFanoutForwarderRole('standby-forwarder')).toBe(false);
+    expect(isFanoutForwarderRole('participant')).toBe(false);
+  });
+
   it('suppresses startup when pipeline is active or startup is in flight', () => {
     expect(
       shouldStartGroupCallAudioCapture({ pipelineActive: false, startupInFlight: false })
@@ -344,6 +353,33 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         tier: 'deep',
       })
     ).toBe(1);
+  });
+
+  it('retains released N===1 recovery preroll across brief empty refills', () => {
+    expect(
+      shouldRetainN1RecoveryPrerollSatisfied({
+        bufferedFrames: 0,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        lastPushAgeMs: 90,
+      })
+    ).toBe(true);
+    expect(
+      shouldRetainN1RecoveryPrerollSatisfied({
+        bufferedFrames: 0,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        lastPushAgeMs: 450,
+      })
+    ).toBe(false);
+    expect(
+      shouldRetainN1RecoveryPrerollSatisfied({
+        bufferedFrames: 0,
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'recovery',
+        lastPushAgeMs: 90,
+      })
+    ).toBe(false);
   });
 
   it('relaxes single-remote window recovery when the receiver already has usable reserve', () => {
@@ -1274,7 +1310,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       rootForwarder: 'alpha',
       standbyForwarder: 'standby',
       clusters: [],
-      timestamp: 100,
       lastSeen: 1_000,
     };
     const incoming: GroupTopology = {
@@ -1282,7 +1317,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       rootForwarder: 'beta',
       standbyForwarder: 'standby',
       clusters: [],
-      timestamp: 100,
       lastSeen: 2_000,
     };
     const electionDigests = new Map<string, string>([
@@ -1308,7 +1342,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       topologyEpoch: 8,
       standbyForwarder: 'standby',
       clusters: [],
-      timestamp: 100,
     };
     expect(
       chooseSameEpochTopologyWinner(
@@ -1338,7 +1371,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       rootForwarder: 'root-a',
       standbyForwarder: 'standby',
       clusters: [],
-      timestamp: 100,
       lastSeen: 1_000,
     };
     const incoming: GroupTopology = {
@@ -1346,7 +1378,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       rootForwarder: 'root-a',
       standbyForwarder: 'standby',
       clusters: [],
-      timestamp: 100,
       lastSeen: 2_000,
     };
 

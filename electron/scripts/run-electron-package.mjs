@@ -111,13 +111,19 @@ function run(cmd, args) {
     env: process.env,
     windowsHide: true,
   });
+  if (res.error) {
+    console.error(`Failed to run ${cmd}:`, res.error.message);
+    process.exit(1);
+  }
   if (res.status !== 0) {
     process.exit(res.status ?? 1);
   }
 }
 
-run('npm', ['run', 'build']);
-run('npm', ['run', 'bundle:reticulum']);
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+run(npmCmd, ['run', 'build']);
+run(npmCmd, ['run', 'bundle:reticulum']);
 
 const electronBuilderCmd = process.platform === 'win32' ? 'electron-builder.cmd' : 'electron-builder';
 run(electronBuilderCmd, cfg.builderArgs);

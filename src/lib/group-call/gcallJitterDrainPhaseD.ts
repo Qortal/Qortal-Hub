@@ -24,6 +24,16 @@ export const GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET = 0.35;
 export const GCALL_JITTER_STARVATION_NEAR_COLLAPSE_BETA_TARGET = 0.5;
 /** De-escalation: consecutive ticks at/above depth floor before exiting protected scheduling. */
 export const GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS = 3;
+/** Protected accumulation hold should rebuild to at least this many frames. */
+export const GCALL_MULTI_SOURCE_ACCUMULATION_MIN_FRAMES = 5;
+/** Avoid turning protection into a long mute; accumulation hold remains bounded. */
+export const GCALL_MULTI_SOURCE_ACCUMULATION_MAX_FRAMES = 10;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_TARGET_RATIO_MILD = 0.4;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_TARGET_RATIO_STRONG = 0.6;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_MILD = 0.4;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_STRONG = 0.55;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_MILD = 40;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_STRONG = 60;
 
 /**
  * Protected decode budget per tick: at most half of global decode budget, never more than 8.
@@ -47,6 +57,65 @@ export function computeProtectedDecodeCapForBreach(
   const g = Math.max(1, Math.floor(globalBudget));
   const extra = (slaNearBreachCount - 1) * 2;
   return Math.min(g, base + extra);
+}
+
+/**
+ * When a multi-source recovery peer is already protected/starved, stop draining as soon as
+ * it becomes barely ready. Let it rebuild a small reserve first so it can re-enter playout
+ * with more than a single-frame margin.
+ */
+export function computeMultiSourceAccumulationTargetFrames(input: {
+  adaptiveTargetMedianMs: number;
+  protectedMode: boolean;
+  playoutStarvationSeverity: 'none' | 'mild' | 'strong';
+}): number | null {
+  if (!input.protectedMode && input.playoutStarvationSeverity === 'none') {
+    return null;
+  }
+  const ratio =
+    input.playoutStarvationSeverity === 'strong'
+      ? GCALL_MULTI_SOURCE_ACCUMULATION_TARGET_RATIO_STRONG
+      : GCALL_MULTI_SOURCE_ACCUMULATION_TARGET_RATIO_MILD;
+  const targetMs = Math.max(
+    0,
+    Number.isFinite(input.adaptiveTargetMedianMs)
+      ? input.adaptiveTargetMedianMs
+      : 0
+  );
+  const frames = Math.ceil((targetMs * ratio) / 20);
+  return Math.max(
+    GCALL_MULTI_SOURCE_ACCUMULATION_MIN_FRAMES,
+    Math.min(GCALL_MULTI_SOURCE_ACCUMULATION_MAX_FRAMES, frames)
+  );
+}
+
+export function shouldHoldMultiSourceAccumulation(input: {
+  bufferedFrames: number;
+  opusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+  protectedMode: boolean;
+  playoutStarvationSeverity: 'none' | 'mild' | 'strong';
+}): boolean {
+  const targetFrames = computeMultiSourceAccumulationTargetFrames({
+    adaptiveTargetMedianMs: input.adaptiveTargetMedianMs,
+    protectedMode: input.protectedMode,
+    playoutStarvationSeverity: input.playoutStarvationSeverity,
+  });
+  if (targetFrames === null) return false;
+  if (input.bufferedFrames < targetFrames) return true;
+
+  const releaseRatio =
+    input.playoutStarvationSeverity === 'strong'
+      ? GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_STRONG
+      : GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_MILD;
+  const releaseMinMs =
+    input.playoutStarvationSeverity === 'strong'
+      ? GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_STRONG
+      : GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_MILD;
+  return (
+    input.opusBufferedMs <
+    Math.max(releaseMinMs, input.adaptiveTargetMedianMs * releaseRatio)
+  );
 }
 
 export function starvationRecoveryBarSatisfied(input: {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildOpusSendPressureTiers,
+  computeOpusSendPressureMaxTierIndex,
   createOpusSendPressureControllerState,
   isReticulumSendPressureSignal,
   isReticulumSendPressureSignalForwarder,
@@ -146,5 +147,70 @@ describe('tickOpusSendPressureController', () => {
     );
     expect(afterCooldown.tierChanged).toBe(true);
     expect(state.tierIndex).toBe(0);
+  });
+
+  it('caps participants at mild pressure while receive-path shedding', () => {
+    expect(
+      computeOpusSendPressureMaxTierIndex({
+        receivingShedding: true,
+        isForwarder: false,
+        decryptOverloadActive: true,
+        pressureSnapshot: {
+          bridgeQueuedFrames: 12,
+          decodedQueueDepth: 14,
+          queuePressureDropsLast5s: 9,
+          pendingFrames: 18,
+        },
+      })
+    ).toBe(1);
+  });
+
+  it('lets forwarders step down harder when shedding and bridge pressure is active', () => {
+    expect(
+      computeOpusSendPressureMaxTierIndex({
+        receivingShedding: true,
+        isForwarder: true,
+        decryptOverloadActive: false,
+        pressureSnapshot: {
+          bridgeQueuedFrames: 7,
+          decodedQueueDepth: 10,
+          queuePressureDropsLast5s: 5,
+          pendingFrames: 10,
+        },
+      })
+    ).toBe(2);
+  });
+
+  it('allows the deepest cap only for overloaded forwarders under severe queue pressure', () => {
+    expect(
+      computeOpusSendPressureMaxTierIndex({
+        receivingShedding: true,
+        isForwarder: true,
+        decryptOverloadActive: true,
+        pressureSnapshot: {
+          bridgeWaitingForDrain: true,
+          bridgeQueuedFrames: 12,
+          decodedQueueDepth: 15,
+          queuePressureDropsLast5s: 10,
+          pendingFrames: 20,
+        },
+      })
+    ).toBe(3);
+  });
+
+  it('enforces the computed cap while pressure persists', () => {
+    const state = createOpusSendPressureControllerState();
+    let now = 1000;
+    for (let i = 0; i < 24; i++) {
+      tickOpusSendPressureController(
+        state,
+        tiers,
+        tick,
+        (now += tick),
+        true,
+        { maxTierIndex: 2 }
+      );
+    }
+    expect(state.tierIndex).toBe(2);
   });
 });

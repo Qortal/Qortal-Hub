@@ -81,6 +81,7 @@ import {
   type GroupCallAudioQualityProfile,
 } from '../lib/group-call/groupCallAudioProfile';
 import {
+  computeMultiSourceAccumulationTargetFrames,
   computePhaseDSourceBurstBonus,
   computeGlobalDecodeBudget,
   computeOrderedDrainAddresses,
@@ -91,6 +92,7 @@ import {
   GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS,
   isCollapsedForStarvation,
   isNearCollapsedForStarvation,
+  shouldHoldMultiSourceAccumulation,
   shouldEnterProtectedMode,
   shouldExitProtectedMode,
   starvationRecoveryBarSatisfied,
@@ -127,6 +129,8 @@ import {
   PATH_QUALITY_PEER_COVERAGE_SESSION,
 } from '../lib/group-call/pathQualityScore';
 import {
+  computeFeasibleSingleRemoteRecoveryTargetMaxMs,
+  computeFeasibleMultiSourceRecoveryTargetMaxMs,
   computeRecoveryMultiSourceTargetMaxMs,
   createWorstIsolationHysteresisState,
   computeMicroWidenExtraMsV1,
@@ -212,6 +216,7 @@ import {
 } from '../lib/group-call/gcall-perf';
 import {
   buildOpusSendPressureTiers,
+  computeOpusSendPressureMaxTierIndex,
   createOpusSendPressureControllerState,
   GCALL_SEND_AUDIO_IPC_BATCH_SIZE,
   isReticulumSendPressureSignal,
@@ -225,6 +230,7 @@ import {
   stepDecryptOverloadState,
 } from '../lib/group-call/gcallAudioEscalation';
 import {
+  computePendingDecryptOverloadMax,
   computePendingDecryptLimits,
   computeRequestedBurstMaxFromSignals,
   FAIL_SAFE_JITTER_FLOOR_FRAMES,
@@ -240,8 +246,6 @@ import {
   PENDING_DECRYPT_MAX,
   PENDING_DECRYPT_NEWEST_FIRST_DEPTH,
   PENDING_DECRYPT_OVERLOAD_EXIT,
-  PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX,
-  PENDING_DECRYPT_OVERLOAD_MAX,
   PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
@@ -249,6 +253,8 @@ import {
   PENDING_DECRYPT_SUSTAINED_ARM_DEPTH,
   PENDING_DECRYPT_SUSTAINED_ARM_MS,
   PENDING_DECRYPT_TTL_MS,
+  shouldBypassDecryptWorkerOnHotQueue,
+  shouldTreatPendingDecryptAsForwarder,
   slewBurstMaxTowardRequested,
 } from '../lib/group-call/pendingDecryptLimits';
 import {
@@ -302,6 +308,10 @@ export type JoinGroupCallOptions = {
   /** Shown in Qortal group voice stage header (e.g. `selectedGroup.groupName`). */
   memberGateGroupName?: string;
 };
+
+export function isFanoutForwarderRole(role: MyRole): boolean {
+  return role === 'root-forwarder' || role === 'cluster-forwarder';
+}
 
 export interface ClusterDef {
   members: string[];
@@ -803,6 +813,23 @@ export function computeN1AccumulationDecodeCap(opts: {
     return 0;
   }
   return 1;
+}
+
+export function shouldRetainN1RecoveryPrerollSatisfied(opts: {
+  bufferedFrames: number;
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  lastPushAgeMs: number;
+  recentPushMaxMs?: number;
+}): boolean {
+  const recentPushMaxMs = opts.recentPushMaxMs ?? GCALL_N1_STALL_ESCAPE_MS;
+  return (
+    opts.bufferedFrames === 0 &&
+    opts.activeSourceCount === 1 &&
+    opts.adaptiveNetworkMode === 'recovery' &&
+    Number.isFinite(opts.lastPushAgeMs) &&
+    opts.lastPushAgeMs <= recentPushMaxMs
+  );
 }
 
 export function shouldRelaxSingleRemoteWindowRecovery(opts: {
@@ -3676,7 +3703,7 @@ export function useGroupVoiceCall(uiActive = false) {
       // severe ceiling and blocks the faster decay path that should let it recover.
       const ingressPeerRecovery =
         activeSourceCount >= 2 && ingressPeerRecoveryRaw;
-      const useSevereCeiling = ingressPeerRecovery || isolateThisSource;
+      const useSevereCeiling = ingressPeerRecovery;
       const lastVadAt = lastVadTrueAtRef.current.get(addr) ?? 0;
       const isActiveSpeakerForAddr =
         lastVadAt > 0 && wallNow - lastVadAt < ACTIVE_SPEAKER_WINDOW_MS;
@@ -3807,6 +3834,55 @@ export function useGroupVoiceCall(uiActive = false) {
         adaptiveMaxTargetMs = Math.min(
           adaptiveMaxTargetMs,
           multiSourceRecoveryTargetMaxMs
+        );
+      }
+      const feasibleMultiSourceTargetMaxMs =
+        previousWindowSource !== null
+          ? computeFeasibleMultiSourceRecoveryTargetMaxMs({
+              currentAdaptiveMaxTargetMs: adaptiveMaxTargetMs,
+              activeSourceCount,
+              adaptiveNetworkMode,
+              starvationSeverity: nextStarvationSev,
+              isolatedSource: isolateThisSource,
+              previousStarvationSeverity: prevStarvationSev,
+              playoutUnderTargetFraction:
+                previousWindowSource.playoutUnderTargetFraction,
+              avgPlayoutDeltaMs: previousWindowSource.avgPlayoutDeltaMs,
+              avgOpusBufferedMs: previousWindowSource.avgOpusBufferedMs,
+              observedTargetMs:
+                previousWindowSource.adaptiveTargetMedianMs > 0
+                  ? previousWindowSource.adaptiveTargetMedianMs
+                  : smoothedTargetMsForAdequacy,
+            })
+          : null;
+      if (feasibleMultiSourceTargetMaxMs !== null) {
+        adaptiveMaxTargetMs = Math.min(
+          adaptiveMaxTargetMs,
+          feasibleMultiSourceTargetMaxMs
+        );
+      }
+      const feasibleSingleRemoteTargetMaxMs =
+        previousWindowSource !== null
+          ? computeFeasibleSingleRemoteRecoveryTargetMaxMs({
+              currentAdaptiveMaxTargetMs: adaptiveMaxTargetMs,
+              activeSourceCount,
+              adaptiveNetworkMode,
+              starvationSeverity: nextStarvationSev,
+              previousStarvationSeverity: prevStarvationSev,
+              playoutUnderTargetFraction:
+                previousWindowSource.playoutUnderTargetFraction,
+              avgPlayoutDeltaMs: previousWindowSource.avgPlayoutDeltaMs,
+              avgOpusBufferedMs: previousWindowSource.avgOpusBufferedMs,
+              observedTargetMs:
+                previousWindowSource.adaptiveTargetMedianMs > 0
+                  ? previousWindowSource.adaptiveTargetMedianMs
+                  : smoothedTargetMsForAdequacy,
+            })
+          : null;
+      if (feasibleSingleRemoteTargetMaxMs !== null) {
+        adaptiveMaxTargetMs = Math.min(
+          adaptiveMaxTargetMs,
+          feasibleSingleRemoteTargetMaxMs
         );
       }
       if (failSafeStateRef.current.active) {
@@ -3978,6 +4054,8 @@ export function useGroupVoiceCall(uiActive = false) {
           acceleratedMultiSourceDecay,
           acceleratedSingleRemoteRecoveryDecay,
           multiSourceRecoveryTargetMaxMs,
+          feasibleMultiSourceTargetMaxMs,
+          feasibleSingleRemoteTargetMaxMs,
           bufferAdequacy,
           targetMs: smoothedTargetMsForAdequacy,
           avgPcmBufferedMs: previousWindowSource?.avgPcmBufferedMs ?? null,
@@ -4600,10 +4678,7 @@ export function useGroupVoiceCall(uiActive = false) {
       if (!roomIdRef.current) return;
       const wallNow = Date.now();
       const snap = metricsRef.current.getSnapshot();
-      const forwarderRole =
-        myRoleRef.current === 'root-forwarder' ||
-        myRoleRef.current === 'cluster-forwarder' ||
-        myRoleRef.current === 'standby-forwarder';
+      const forwarderRole = isFanoutForwarderRole(myRoleRef.current);
       const pressureSnap = {
         bridgeWaitingForDrain: snap.reticulumAudioBridgeWaitingForDrain,
         bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
@@ -4668,6 +4743,12 @@ export function useGroupVoiceCall(uiActive = false) {
       const receivingShedding =
         decryptOverloadStateRef.current.active ||
         peakDepthRecentRef.current >= PENDING_DECRYPT_NEWEST_FIRST_DEPTH;
+      const sendPressureCapIx = computeOpusSendPressureMaxTierIndex({
+        receivingShedding,
+        isForwarder: forwarderRole,
+        decryptOverloadActive: decryptOverloadStateRef.current.active,
+        pressureSnapshot: pressureSnap,
+      });
 
       const result = tickOpusSendPressureController(
         opusSendPressureStateRef.current,
@@ -4675,7 +4756,9 @@ export function useGroupVoiceCall(uiActive = false) {
         OPUS_SEND_PRESSURE_TICK_MS,
         wallNow,
         pressured,
-        receivingShedding ? { maxTierIndex: 1 } : undefined
+        sendPressureCapIx !== undefined
+          ? { maxTierIndex: sendPressureCapIx }
+          : undefined
       );
       opusSendPressureStateRef.current = result.state;
       const appliedBitrate = Math.max(
@@ -4890,19 +4973,27 @@ export function useGroupVoiceCall(uiActive = false) {
     ttlMs: number;
   } => {
     const now = Date.now();
-    const forwarderRole =
-      myRoleRef.current === 'root-forwarder' ||
-      myRoleRef.current === 'cluster-forwarder' ||
-      myRoleRef.current === 'standby-forwarder';
+    const forwarderRole = isFanoutForwarderRole(myRoleRef.current);
+    const activeSourceCount = Math.max(
+      activeJitterSourcesRef.current.size,
+      playbackWorkletsRef.current.size
+    );
+    const pendingDecryptForwarderPolicy = shouldTreatPendingDecryptAsForwarder({
+      isForwarderRole: forwarderRole,
+      participantCount: participantsRef.current.size,
+      activeSourceCount,
+    });
     return computePendingDecryptLimits(
       now,
       globalRecoveryUntilMsRef.current,
       decryptBurstUntilMsRef.current,
       effectiveBurstMaxRef.current,
       decryptOverloadStateRef.current.active,
-      forwarderRole
-        ? PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX
-        : PENDING_DECRYPT_OVERLOAD_MAX
+      computePendingDecryptOverloadMax({
+        isForwarder: pendingDecryptForwarderPolicy,
+        longTaskPressure: overloadLongTaskPressureRef.current,
+        activeSourceCount,
+      })
     );
   }, []);
 
@@ -4966,12 +5057,21 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       );
       if (!previousOverloadActive && decryptOverloadStateRef.current.active) {
-        const overloadClampMax =
-          myRoleRef.current === 'root-forwarder' ||
-          myRoleRef.current === 'cluster-forwarder' ||
-          myRoleRef.current === 'standby-forwarder'
-            ? PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX
-            : PENDING_DECRYPT_OVERLOAD_MAX;
+        const activeSourceCount = Math.max(
+          activeJitterSourcesRef.current.size,
+          playbackWorkletsRef.current.size
+        );
+        const pendingDecryptForwarderPolicy =
+          shouldTreatPendingDecryptAsForwarder({
+            isForwarderRole: isFanoutForwarderRole(myRoleRef.current),
+            participantCount: participantsRef.current.size,
+            activeSourceCount,
+          });
+        const overloadClampMax = computePendingDecryptOverloadMax({
+          isForwarder: pendingDecryptForwarderPolicy,
+          longTaskPressure: overloadLongTaskPressureRef.current,
+          activeSourceCount,
+        });
         effectiveBurstMaxRef.current = Math.min(
           effectiveBurstMaxRef.current,
           overloadClampMax
@@ -7530,6 +7630,46 @@ export function useGroupVoiceCall(uiActive = false) {
         decryptWorkerAppliedKeyVersionRef.current ===
         decryptWorkerKeyVersionRef.current;
       if (decryptWorkerRef.current && workerReady) {
+        const forwarderRole = isFanoutForwarderRole(myRoleRef.current);
+        const activeSourceCount = Math.max(
+          activeJitterSourcesRef.current.size,
+          playbackWorkletsRef.current.size
+        );
+        const pendingDecryptForwarderPolicy =
+          shouldTreatPendingDecryptAsForwarder({
+            isForwarderRole: forwarderRole,
+            participantCount: participantsRef.current.size,
+            activeSourceCount,
+          });
+        const pendingDepth = pendingDecryptsRef.current.size;
+        if (
+          shouldBypassDecryptWorkerOnHotQueue({
+            pendingDepth,
+            pendingMax: decryptLimits.max,
+            overloadActive: decryptOverloadStateRef.current.active,
+            longTaskPressure: overloadLongTaskPressureRef.current,
+            isForwarder: pendingDecryptForwarderPolicy,
+            activeSourceCount,
+            applyQueueDepth: pendingDecryptApplyQueueRef.current.length,
+          })
+        ) {
+          const list = decodeAudioPackets(
+            new Uint8Array(data),
+            roomKeyRef.current
+          );
+          applyPostDecryptList(
+            wireForForward,
+            list,
+            startedAt,
+            receivedAt,
+            ingressPeerAddress
+          );
+          recordPerfDuration(
+            'incomingAudioPacketHandlerMs',
+            performance.now() - handlerStartedAt
+          );
+          return;
+        }
         ensurePendingDecryptCap(decryptLimits.max);
         const id = decryptIdRef.current++;
         const workerBuffer = data.slice(0);
@@ -7865,7 +8005,19 @@ export function useGroupVoiceCall(uiActive = false) {
         jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
       );
       if (jb.getBufferedFrames() === 0) {
-        jitterPrerollSatisfiedRef.current.delete(addr);
+        const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
+        const lastPushAgeMs =
+          lastPush > 0 ? performance.now() - lastPush : Number.POSITIVE_INFINITY;
+        if (
+          !shouldRetainN1RecoveryPrerollSatisfied({
+            bufferedFrames: 0,
+            activeSourceCount: sourceCountForDrain,
+            adaptiveNetworkMode: isRecovery ? 'recovery' : 'low-latency',
+            lastPushAgeMs,
+          })
+        ) {
+          jitterPrerollSatisfiedRef.current.delete(addr);
+        }
         jitterAccumulationUntilPerfRef.current.delete(addr);
       }
       if (!jb.hasReadyFrame()) {
@@ -8303,6 +8455,32 @@ export function useGroupVoiceCall(uiActive = false) {
       const protectedAddrs = [
         ...gcallStarvationProtectedModeRef.current,
       ].filter((a) => activeJitterSourcesRef.current.has(a));
+      const accumulationHoldAddrs = new Set<string>();
+      for (const addr of readyAtStart) {
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb) continue;
+        const targetMs =
+          smoothedPlayoutTargetRef.current.get(addr) ??
+          audioTuningRef.current.adaptiveMaxTargetMs;
+        const starvationSeverity =
+          playoutStarvationSeverityRef.current.get(addr) ?? 'none';
+        const protectedMode = gcallStarvationProtectedModeRef.current.has(addr);
+        if (
+          shouldHoldMultiSourceAccumulation({
+            bufferedFrames: jb.getBufferedFrames(),
+            opusBufferedMs:
+              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS,
+            adaptiveTargetMedianMs: targetMs,
+            protectedMode,
+            playoutStarvationSeverity: starvationSeverity,
+          })
+        ) {
+          accumulationHoldAddrs.add(addr);
+        }
+      }
+      const protectedServiceAddrs = protectedAddrs.filter(
+        (addr) => !accumulationHoldAddrs.has(addr)
+      );
       const slaNearBreachCount = protectedAddrs.filter(
         (a) =>
           (gcallStarvationTicksSinceProtectedRef.current.get(a) ?? 0) >=
@@ -8318,10 +8496,10 @@ export function useGroupVoiceCall(uiActive = false) {
       while (
         protectedUsed < protectedCap &&
         globalDecodesLeft > 0 &&
-        protectedAddrs.length > 0
+        protectedServiceAddrs.length > 0
       ) {
         let progressed = false;
-        for (const addr of protectedAddrs) {
+        for (const addr of protectedServiceAddrs) {
           if (protectedUsed >= protectedCap || globalDecodesLeft <= 0) break;
           if (!readyAtStart.has(addr)) continue;
           const jb = jitterMapRef.current.get(addr);
@@ -8350,6 +8528,14 @@ export function useGroupVoiceCall(uiActive = false) {
         if (!jb) continue;
         const info = drainStartInfo.get(addr);
         if (!info) continue;
+        if (accumulationHoldAddrs.has(addr)) {
+          metricsRef.current.recordOpusBufferedMetric(
+            addr,
+            jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+          );
+          emptyJitterDrainTicksRef.current.set(addr, 0);
+          continue;
+        }
         const starvationSeverity =
           playoutStarvationSeverityRef.current.get(addr) ?? 'none';
         const protectedMode = gcallStarvationProtectedModeRef.current.has(addr);

@@ -48,6 +48,10 @@ export const PENDING_DECRYPT_OVERLOAD_EXIT_HOLD_MS = 500;
 export const PENDING_DECRYPT_OVERLOAD_MAX = 176;
 /** Forwarders fan out every source; clamp even harder during overload. */
 export const PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX = 144;
+/** Healthy non-forwarders can hold a bit more in flight before they need to shed. */
+export const PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX = 208;
+/** Multi-source participants still need a clamp, but softer than the default overload cap. */
+export const PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX = 192;
 
 /** Earlier overload entry when depth is rising (paired with {@link PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA}). */
 export const PENDING_DECRYPT_OVERLOAD_WARM_DEPTH = 96;
@@ -66,6 +70,10 @@ export const GCALL_JITTER_DRAIN_TICK_BUDGET_MS = 14;
 
 /** Newest-first / receive-path shedding policy engages at this depth (aligns with overload entry). */
 export const PENDING_DECRYPT_NEWEST_FIRST_DEPTH = PENDING_DECRYPT_OVERLOAD_ENTER;
+/** Near-cap margin where a healthy participant may decrypt inline to avoid dropping at the worker cap. */
+export const PENDING_DECRYPT_SYNC_BYPASS_NEAR_CAP_MARGIN = 8;
+/** Keep sync bypass off if main-thread apply is already backlogged. */
+export const PENDING_DECRYPT_SYNC_BYPASS_APPLY_QUEUE_MAX = 6;
 
 /** Fail-safe playout / jitter clamps (optional stage 6). */
 export const FAIL_SAFE_PLAYOUT_TARGET_MAX_MS = 120;
@@ -93,6 +101,69 @@ export interface PendingDecryptBurstSignals {
   peakDepthRecent: number;
   /** Root/cluster forwarder aggregates more ingress; modest boost to requested burst cap. */
   isForwarder?: boolean;
+}
+
+export function shouldTreatPendingDecryptAsForwarder(input: {
+  isForwarderRole: boolean;
+  participantCount: number;
+  activeSourceCount: number;
+}): boolean {
+  if (!input.isForwarderRole) return false;
+  return (
+    Math.max(0, Math.floor(input.participantCount)) > 2 ||
+    Math.max(0, Math.floor(input.activeSourceCount)) > 1
+  );
+}
+
+export function computePendingDecryptOverloadMax(input: {
+  isForwarder: boolean;
+  longTaskPressure: boolean;
+  activeSourceCount: number;
+}): number {
+  if (input.isForwarder) {
+    return PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX;
+  }
+  if (input.longTaskPressure) {
+    return PENDING_DECRYPT_OVERLOAD_MAX;
+  }
+  const n = Math.max(0, Math.floor(input.activeSourceCount));
+  return n <= 1
+    ? PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX
+    : PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX;
+}
+
+/**
+ * If the worker queue is about to hit the overload cap but the main thread is otherwise healthy,
+ * let a participant decode inline instead of dropping at the queue boundary.
+ */
+export function shouldBypassDecryptWorkerOnHotQueue(input: {
+  pendingDepth: number;
+  pendingMax: number;
+  overloadActive: boolean;
+  longTaskPressure: boolean;
+  isForwarder: boolean;
+  activeSourceCount: number;
+  applyQueueDepth: number;
+}): boolean {
+  if (input.isForwarder || input.longTaskPressure) return false;
+  if (
+    !input.overloadActive &&
+    input.pendingDepth < PENDING_DECRYPT_NEWEST_FIRST_DEPTH
+  ) {
+    return false;
+  }
+  if (Math.max(0, Math.floor(input.activeSourceCount)) > 1) return false;
+  if (
+    Math.max(0, Math.floor(input.applyQueueDepth)) >
+    PENDING_DECRYPT_SYNC_BYPASS_APPLY_QUEUE_MAX
+  ) {
+    return false;
+  }
+  const pendingMax = Math.max(PENDING_DECRYPT_MAX, Math.floor(input.pendingMax));
+  return (
+    Math.max(0, Math.floor(input.pendingDepth)) >=
+    pendingMax - PENDING_DECRYPT_SYNC_BYPASS_NEAR_CAP_MARGIN
+  );
 }
 
 /**

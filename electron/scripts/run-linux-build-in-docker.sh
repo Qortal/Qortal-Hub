@@ -1,12 +1,29 @@
 #!/usr/bin/env bash
-# Build Linux x64 packages (AppImage + deb) inside Debian 11 bullseye (~glibc 2.31) so
-# frozen Reticulum binaries are more broadly compatible than CI (ubuntu-22.04).
+# Build Linux x64 packages inside Debian 11 bullseye (~glibc 2.31) so frozen
+# Reticulum binaries are more broadly compatible than CI (ubuntu-22.04).
 #
 # Usage (from anywhere):
 #   ./electron/scripts/run-linux-build-in-docker.sh
+#   ./electron/scripts/run-linux-build-in-docker.sh appimage
 #
 # Requires Docker or Podman. On Apple Silicon, forces linux/amd64 so output matches desktop Linux x64.
 set -euo pipefail
+
+BUILD_PROFILE="${1:-full}"
+
+case "${BUILD_PROFILE}" in
+  full)
+    PROFILE_LABEL="AppImage + deb"
+    ;;
+  appimage)
+    PROFILE_LABEL="AppImage only"
+    ;;
+  *)
+    echo "Unknown build profile: ${BUILD_PROFILE}" >&2
+    echo "Usage: $0 [full|appimage]" >&2
+    exit 64
+    ;;
+esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ELECTRON_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -28,6 +45,7 @@ Neither 'docker' nor 'podman' was found on PATH.
 
 Install one of them, then re-run:
   npm run electron:make-lin-docker
+  npm run electron:make-lin-docker-appimage
 
 Ubuntu / Debian (simpler, distro packages):
   sudo apt update && sudo apt install -y docker.io
@@ -52,9 +70,10 @@ echo "Using container engine: ${CTR[*]}"
 echo "Building image ${IMAGE_NAME} (Debian 11 bullseye)…"
 "${CTR[@]}" build --platform linux/amd64 -f "${DOCKERFILE}" -t "${IMAGE_NAME}" "${SCRIPT_DIR}"
 
-echo "Running npm ci + electron:make-lin equivalent in container…"
+echo "Running ${PROFILE_LABEL} build in container…"
 "${CTR[@]}" run --rm \
   --platform linux/amd64 \
+  -e "QORTAL_LINUX_DOCKER_PROFILE=${BUILD_PROFILE}" \
   -v "${REPO_ROOT}:/workspace" \
   -w /workspace \
   "${IMAGE_NAME}" \

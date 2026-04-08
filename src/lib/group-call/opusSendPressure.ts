@@ -177,6 +177,47 @@ export interface OpusSendPressureTickOpts {
   maxTierIndex?: number;
 }
 
+export interface OpusSendPressureTierCapInput {
+  receivingShedding: boolean;
+  isForwarder: boolean;
+  decryptOverloadActive: boolean;
+  pressureSnapshot: ReticulumSendPressureSnapshot;
+}
+
+/**
+ * Receive-path shedding should keep participants from ratcheting bitrate all the way down, but
+ * forwarders need more room once their own bridge/queue pressure turns severe. This keeps the
+ * mild cap for participants while allowing overloaded forwarders to step down harder.
+ */
+export function computeOpusSendPressureMaxTierIndex(
+  input: OpusSendPressureTierCapInput
+): number | undefined {
+  if (!input.receivingShedding) return undefined;
+  if (!input.isForwarder) return 1;
+
+  const s = input.pressureSnapshot;
+  const forwarderPressured = isReticulumSendPressureSignalForwarder(s);
+  if (!forwarderPressured && !input.decryptOverloadActive) {
+    return 1;
+  }
+
+  const severeForwarderPressure =
+    s.bridgeWaitingForDrain === true ||
+    s.bridgeQueuedFrames >=
+      RETICULUM_SEND_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER + 4 ||
+    s.decodedQueueDepth >=
+      RETICULUM_SEND_PRESSURE_DECODED_QUEUE_DEPTH_FORWARDER + 4 ||
+    s.queuePressureDropsLast5s >=
+      RETICULUM_SEND_PRESSURE_QUEUE_DROPS_LAST5S_FORWARDER + 3 ||
+    (s.pendingFrames ?? 0) >=
+      RETICULUM_SEND_PRESSURE_PENDING_FRAMES_FORWARDER + 6;
+
+  if (input.decryptOverloadActive && severeForwarderPressure) {
+    return 3;
+  }
+  return 2;
+}
+
 /**
  * Advance pressure controller. Call on a fixed cadence (e.g. 250ms) with live snapshot + nominal tiers.
  */
