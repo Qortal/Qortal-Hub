@@ -74,6 +74,20 @@ export const PENDING_DECRYPT_NEWEST_FIRST_DEPTH = PENDING_DECRYPT_OVERLOAD_ENTER
 export const PENDING_DECRYPT_SYNC_BYPASS_NEAR_CAP_MARGIN = 8;
 /** Keep sync bypass off if main-thread apply is already backlogged. */
 export const PENDING_DECRYPT_SYNC_BYPASS_APPLY_QUEUE_MAX = 6;
+/** Pre-overload throttle: react before overload entry when multi-source depth is rising quickly. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_DEPTH =
+  PENDING_DECRYPT_OVERLOAD_WARM_DEPTH - 16;
+/** Participant multi-source pre-overload entry stays a little later than forwarders. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_DEPTH =
+  PENDING_DECRYPT_OVERLOAD_WARM_DEPTH - 8;
+/** Rising depth delta that counts as bursty queue growth for pre-overload throttling. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_RISE_DELTA = 12;
+/** Mild pre-overload clamp above the hard overload max for multi-source smoothing. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_CLAMP_MAX =
+  PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX + 16;
+/** Participant pre-overload clamp stays softer than the forwarder path. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX =
+  PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX + 16;
 
 /** Fail-safe playout / jitter clamps (optional stage 6). */
 export const FAIL_SAFE_PLAYOUT_TARGET_MAX_MS = 120;
@@ -164,6 +178,45 @@ export function shouldBypassDecryptWorkerOnHotQueue(input: {
     Math.max(0, Math.floor(input.pendingDepth)) >=
     pendingMax - PENDING_DECRYPT_SYNC_BYPASS_NEAR_CAP_MARGIN
   );
+}
+
+export function shouldPreemptivelyThrottlePendingDecrypt(input: {
+  pendingDepth: number;
+  previousDepth: number;
+  isForwarder: boolean;
+  participantCount: number;
+  activeSourceCount: number;
+  longTaskPressure: boolean;
+}): boolean {
+  const participantCount = Math.max(0, Math.floor(input.participantCount));
+  const activeSourceCount = Math.max(0, Math.floor(input.activeSourceCount));
+  const multiSourceSession = participantCount > 2 || activeSourceCount > 1;
+  if (!multiSourceSession) return false;
+  if (input.longTaskPressure) return true;
+
+  const pendingDepth = Math.max(0, Math.floor(input.pendingDepth));
+  const previousDepth = Math.max(0, Math.floor(input.previousDepth));
+  const risingDelta = pendingDepth - previousDepth;
+  const depthFloor = input.isForwarder
+    ? PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_DEPTH
+    : PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_DEPTH;
+  return (
+    pendingDepth >= depthFloor &&
+    risingDelta >= PENDING_DECRYPT_PRE_OVERLOAD_RISE_DELTA
+  );
+}
+
+export function computePendingDecryptPreOverloadClampMax(input: {
+  isForwarder: boolean;
+  activeSourceCount: number;
+}): number {
+  const activeSourceCount = Math.max(0, Math.floor(input.activeSourceCount));
+  if (input.isForwarder) {
+    return PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_CLAMP_MAX;
+  }
+  return activeSourceCount <= 1
+    ? PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX
+    : PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX;
 }
 
 /**

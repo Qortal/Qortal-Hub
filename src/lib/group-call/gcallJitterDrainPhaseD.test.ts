@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeMultiSourceFairBurstCap,
   computeMultiSourceAccumulationTargetFrames,
   computePhaseDSourceBurstBonus,
   computeGlobalDecodeBudget,
@@ -7,11 +8,13 @@ import {
   computePerSourceCap,
   computeProtectedDecodeCap,
   computeProtectedDecodeCapForBreach,
+  computeWeakLegServiceFloor,
   isCollapsedForStarvation,
   isNearCollapsedForStarvation,
   shouldHoldMultiSourceAccumulation,
   shouldEnterProtectedMode,
   shouldExitProtectedMode,
+  shouldPrioritizeWeakMultiSourceLeg,
   starvationRecoveryBarSatisfied,
 } from './gcallJitterDrainPhaseD';
 
@@ -106,6 +109,102 @@ describe('shouldHoldMultiSourceAccumulation', () => {
         playoutStarvationSeverity: 'none',
       })
     ).toBe(false);
+  });
+});
+
+describe('shouldPrioritizeWeakMultiSourceLeg', () => {
+  it('prioritizes protected or strongly starved multi-source legs', () => {
+    expect(
+      shouldPrioritizeWeakMultiSourceLeg({
+        activeSourceCount: 2,
+        bufferedFrames: 4,
+        opusBufferedMs: 80,
+        adaptiveTargetMedianMs: 160,
+        protectedMode: true,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(true);
+    expect(
+      shouldPrioritizeWeakMultiSourceLeg({
+        activeSourceCount: 2,
+        bufferedFrames: 5,
+        opusBufferedMs: 100,
+        adaptiveTargetMedianMs: 160,
+        protectedMode: false,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+  });
+
+  it('prioritizes a mildly starved near-collapsed leg but not a healthy one', () => {
+    expect(
+      shouldPrioritizeWeakMultiSourceLeg({
+        activeSourceCount: 2,
+        bufferedFrames: 4,
+        opusBufferedMs: 75,
+        adaptiveTargetMedianMs: 180,
+        protectedMode: false,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(true);
+    expect(
+      shouldPrioritizeWeakMultiSourceLeg({
+        activeSourceCount: 2,
+        bufferedFrames: 7,
+        opusBufferedMs: 130,
+        adaptiveTargetMedianMs: 180,
+        protectedMode: false,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(false);
+  });
+});
+
+describe('computeWeakLegServiceFloor', () => {
+  it('reserves a small bounded service floor for weak legs', () => {
+    expect(
+      computeWeakLegServiceFloor({ globalDecodeBudget: 16, weakLegCount: 1 })
+    ).toBe(1);
+    expect(
+      computeWeakLegServiceFloor({ globalDecodeBudget: 16, weakLegCount: 3 })
+    ).toBe(2);
+    expect(
+      computeWeakLegServiceFloor({ globalDecodeBudget: 6, weakLegCount: 0 })
+    ).toBe(0);
+  });
+});
+
+describe('computeMultiSourceFairBurstCap', () => {
+  it('shaves strong-leg burst share only when a weak leg is present', () => {
+    expect(
+      computeMultiSourceFairBurstCap({
+        baseCap: 4,
+        weakLegPresent: true,
+        prioritizeWeakLeg: false,
+      })
+    ).toBe(3);
+    expect(
+      computeMultiSourceFairBurstCap({
+        baseCap: 4,
+        weakLegPresent: true,
+        prioritizeWeakLeg: false,
+        strictWeakLegProtection: true,
+      })
+    ).toBe(2);
+    expect(
+      computeMultiSourceFairBurstCap({
+        baseCap: 4,
+        weakLegPresent: true,
+        prioritizeWeakLeg: true,
+      })
+    ).toBe(4);
+    expect(
+      computeMultiSourceFairBurstCap({
+        baseCap: 1,
+        weakLegPresent: true,
+        prioritizeWeakLeg: false,
+      })
+    ).toBe(1);
   });
 });
 

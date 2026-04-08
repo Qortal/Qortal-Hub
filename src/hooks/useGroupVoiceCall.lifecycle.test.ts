@@ -31,6 +31,8 @@ import {
   shouldEscalateRoomWideKeyRecovery,
   shouldAccelerateMultiSourceRecoveryDecay,
   shouldAccelerateSingleRemoteRecoveryDecay,
+  computeWeakSingleRemoteRecoveryHoldState,
+  computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   shouldDropActiveJitterSource,
   shouldRetainN1RecoveryPrerollSatisfied,
   shouldRelaxSingleRemoteWindowRecovery,
@@ -86,6 +88,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     const lastSentPlayoutTarget = new Map([['alice', 90]]);
     const lastPlayoutTargetPostAt = new Map([['alice', 1234]]);
     const lastDrainMissed = new Map([['alice', 2]]);
+    const n1WeakLiveHoldUntilPerf = new Map([['alice', 1400]]);
 
     clearAdaptiveGroupCallPlayoutMaps({
       lastPacketArrivalAt,
@@ -94,6 +97,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       lastSentPlayoutTarget,
       lastPlayoutTargetPostAt,
       lastDrainMissed,
+      n1WeakLiveHoldUntilPerf,
     });
 
     expect(lastPacketArrivalAt.size).toBe(0);
@@ -102,6 +106,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(lastSentPlayoutTarget.size).toBe(0);
     expect(lastPlayoutTargetPostAt.size).toBe(0);
     expect(lastDrainMissed.size).toBe(0);
+    expect(n1WeakLiveHoldUntilPerf.size).toBe(0);
   });
 
   it('summarizes recent recovery stability from existing playout signals', () => {
@@ -380,6 +385,111 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         lastPushAgeMs: 90,
       })
     ).toBe(false);
+  });
+
+  it('keeps a weak single-remote recovery hold active until local stability improves', () => {
+    const armed = computeWeakSingleRemoteRecoveryHoldState({
+      activeSourceCount: 1,
+      adaptiveNetworkMode: 'recovery',
+      recentStability: {
+        sampleCount: 3,
+        avgPcmBufferedMs: 50.95,
+        playoutUnderTargetFraction: 0.782,
+        underrunCount: 6,
+        stable: false,
+        severeInstability: true,
+      },
+      lastPushAgeMs: 80,
+      nowMs: 1_000,
+      holdUntilMs: 0,
+    });
+    expect(armed.holdActive).toBe(true);
+    expect(armed.nextHoldUntilMs).toBe(1_650);
+
+    expect(
+      computeWeakSingleRemoteRecoveryHoldState({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        recentStability: {
+          sampleCount: 3,
+          avgPcmBufferedMs: 138,
+          playoutUnderTargetFraction: 0.18,
+          underrunCount: 1,
+          stable: true,
+          severeInstability: false,
+        },
+        lastPushAgeMs: 80,
+        nowMs: 1_200,
+        holdUntilMs: armed.nextHoldUntilMs,
+      })
+    ).toEqual({
+      holdActive: true,
+      nextHoldUntilMs: 1_650,
+    });
+
+    expect(
+      computeWeakSingleRemoteRecoveryHoldState({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        recentStability: {
+          sampleCount: 3,
+          avgPcmBufferedMs: 50.95,
+          playoutUnderTargetFraction: 0.782,
+          underrunCount: 6,
+          stable: false,
+          severeInstability: true,
+        },
+        lastPushAgeMs: 220,
+        nowMs: 1_200,
+        holdUntilMs: 0,
+      })
+    ).toEqual({
+      holdActive: false,
+      nextHoldUntilMs: 0,
+    });
+
+    expect(
+      computeWeakSingleRemoteRecoveryTargetHoldMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        holdActive: true,
+        recentStability: {
+          sampleCount: 3,
+          avgPcmBufferedMs: 50.95,
+          playoutUnderTargetFraction: 0.782,
+          underrunCount: 6,
+          stable: false,
+          severeInstability: true,
+        },
+      })
+    ).toBe(100);
+    expect(
+      computeWeakSingleRemoteRecoveryTargetHoldMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        holdActive: true,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 116.199,
+          playoutUnderTargetFraction: 0.467,
+          underrunCount: 3,
+          stable: false,
+          severeInstability: false,
+        },
+      })
+    ).toBe(119);
+    expect(
+      computeWeakSingleRemoteRecoveryTargetHoldMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        holdActive: false,
+        recentStability: {
+          sampleCount: 3,
+          avgPcmBufferedMs: 50.95,
+          playoutUnderTargetFraction: 0.782,
+          underrunCount: 6,
+          stable: false,
+          severeInstability: true,
+        },
+      })
+    ).toBe(null);
   });
 
   it('relaxes single-remote window recovery when the receiver already has usable reserve', () => {

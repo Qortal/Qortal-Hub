@@ -81,12 +81,13 @@ import {
   type GroupCallAudioQualityProfile,
 } from '../lib/group-call/groupCallAudioProfile';
 import {
-  computeMultiSourceAccumulationTargetFrames,
+  computeMultiSourceFairBurstCap,
   computePhaseDSourceBurstBonus,
   computeGlobalDecodeBudget,
   computeOrderedDrainAddresses,
   computePerSourceCap,
   computeProtectedDecodeCapForBreach,
+  computeWeakLegServiceFloor,
   GCALL_JITTER_STARVATION_MAX_TICKS_WITHOUT_PROTECTED_SERVICE,
   GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS,
   GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS,
@@ -95,6 +96,7 @@ import {
   shouldHoldMultiSourceAccumulation,
   shouldEnterProtectedMode,
   shouldExitProtectedMode,
+  shouldPrioritizeWeakMultiSourceLeg,
   starvationRecoveryBarSatisfied,
 } from '../lib/group-call/gcallJitterDrainPhaseD';
 import {
@@ -196,6 +198,8 @@ import {
 } from '../lib/group-call/gcall-diagnostics';
 import packageJson from '../../package.json';
 import {
+  computeN1LiveRecoveryBurstCap,
+  computeN1RecoveryEarlyReleaseMinBufferMs,
   computeN1SteadyTierBurstCap,
   computeN1BufferRatio,
   computeN1MinStartMs,
@@ -230,6 +234,7 @@ import {
   stepDecryptOverloadState,
 } from '../lib/group-call/gcallAudioEscalation';
 import {
+  computePendingDecryptPreOverloadClampMax,
   computePendingDecryptOverloadMax,
   computePendingDecryptLimits,
   computeRequestedBurstMaxFromSignals,
@@ -254,6 +259,7 @@ import {
   PENDING_DECRYPT_SUSTAINED_ARM_MS,
   PENDING_DECRYPT_TTL_MS,
   shouldBypassDecryptWorkerOnHotQueue,
+  shouldPreemptivelyThrottlePendingDecrypt,
   shouldTreatPendingDecryptAsForwarder,
   slewBurstMaxTowardRequested,
 } from '../lib/group-call/pendingDecryptLimits';
@@ -614,6 +620,7 @@ export function clearAdaptiveGroupCallPlayoutMaps(maps: {
   lastSentPlayoutTarget: Map<string, number>;
   lastPlayoutTargetPostAt: Map<string, number>;
   lastDrainMissed: Map<string, number>;
+  n1WeakLiveHoldUntilPerf?: Map<string, number>;
 }): void {
   maps.lastPacketArrivalAt.clear();
   maps.interArrivalSamples.clear();
@@ -621,6 +628,7 @@ export function clearAdaptiveGroupCallPlayoutMaps(maps: {
   maps.lastSentPlayoutTarget.clear();
   maps.lastPlayoutTargetPostAt.clear();
   maps.lastDrainMissed.clear();
+  maps.n1WeakLiveHoldUntilPerf?.clear();
 }
 
 export interface RecoveryPlayoutHealthSample {
@@ -832,6 +840,33 @@ export function shouldRetainN1RecoveryPrerollSatisfied(opts: {
   );
 }
 
+function incrementSourceTickCounter(
+  map: Map<string, number>,
+  sourceAddr: string,
+  delta = 1
+): void {
+  map.set(sourceAddr, (map.get(sourceAddr) ?? 0) + delta);
+}
+
+function summarizeSourceTickCounters(map: ReadonlyMap<string, number>): {
+  total: number;
+  dominantShare: number;
+  topSources: Array<{ sourceAddr: string; count: number; share: number }>;
+} {
+  const entries = [...map.entries()].filter(([, count]) => count > 0);
+  const total = entries.reduce((sum, [, count]) => sum + count, 0);
+  const topSources = entries
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([sourceAddr, count]) => ({
+      sourceAddr: truncateGcallDiagAddress(sourceAddr),
+      count,
+      share: total > 0 ? Math.round((count / total) * 1000) / 1000 : 0,
+    }));
+  const dominantShare = total > 0 ? topSources[0]?.share ?? 0 : 0;
+  return { total, dominantShare, topSources };
+}
+
 export function shouldRelaxSingleRemoteWindowRecovery(opts: {
   activeSourceCount: number;
   shouldTightenRecovery: boolean;
@@ -859,6 +894,85 @@ export function shouldRelaxSingleRemoteWindowRecovery(opts: {
     opts.avgPlayoutDeltaMs >= -80 &&
     opts.concealmentTicks <= 100
   );
+}
+
+const GCALL_N1_WEAK_LIVE_HOLD_PCM_MAX_MS = 132;
+const GCALL_N1_WEAK_LIVE_HOLD_UNDERTARGET_MIN = 0.4;
+const GCALL_N1_WEAK_LIVE_HOLD_HEADROOM_MS = 32;
+const GCALL_N1_WEAK_LIVE_HOLD_RECENT_PUSH_MAX_MS = 160;
+const GCALL_N1_WEAK_LIVE_HOLD_RELEASE_MS = 650;
+const GCALL_N1_WEAK_LIVE_HOLD_TARGET_RATIO_MAX = 0.82;
+
+export function computeWeakSingleRemoteRecoveryHoldState(opts: {
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  recentStability: RecentRecoveryStabilitySummary;
+  lastPushAgeMs: number;
+  nowMs: number;
+  holdUntilMs: number;
+  recentPushMaxMs?: number;
+}): { holdActive: boolean; nextHoldUntilMs: number } {
+  const recentPushMaxMs =
+    opts.recentPushMaxMs ?? GCALL_N1_WEAK_LIVE_HOLD_RECENT_PUSH_MAX_MS;
+  if (
+    opts.adaptiveNetworkMode !== 'recovery' ||
+    opts.activeSourceCount !== 1
+  ) {
+    return { holdActive: false, nextHoldUntilMs: 0 };
+  }
+  const recentStability = opts.recentStability;
+  const sourceRecentlyPushed =
+    Number.isFinite(opts.lastPushAgeMs) &&
+    opts.lastPushAgeMs <= recentPushMaxMs;
+  const weakLiveRecovery =
+    recentStability.sampleCount >= 2 &&
+    !recentStability.stable &&
+    Number.isFinite(recentStability.avgPcmBufferedMs) &&
+    recentStability.avgPcmBufferedMs <= GCALL_N1_WEAK_LIVE_HOLD_PCM_MAX_MS &&
+    recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_WEAK_LIVE_HOLD_UNDERTARGET_MIN &&
+    sourceRecentlyPushed;
+  if (weakLiveRecovery) {
+    return {
+      holdActive: true,
+      nextHoldUntilMs: opts.nowMs + GCALL_N1_WEAK_LIVE_HOLD_RELEASE_MS,
+    };
+  }
+  if (
+    sourceRecentlyPushed &&
+    Number.isFinite(opts.holdUntilMs) &&
+    opts.holdUntilMs > opts.nowMs
+  ) {
+    return { holdActive: true, nextHoldUntilMs: opts.holdUntilMs };
+  }
+  return { holdActive: false, nextHoldUntilMs: 0 };
+}
+
+export function computeWeakSingleRemoteRecoveryTargetHoldMaxMs(opts: {
+  currentAdaptiveMaxTargetMs: number;
+  holdActive: boolean;
+  recentStability: RecentRecoveryStabilitySummary;
+}): number | null {
+  if (
+    !opts.holdActive ||
+    !Number.isFinite(opts.currentAdaptiveMaxTargetMs) ||
+    opts.currentAdaptiveMaxTargetMs <= ADAPTIVE_MIN_TARGET_MS
+  ) {
+    return null;
+  }
+  const targetRatioCap = Math.round(
+    opts.currentAdaptiveMaxTargetMs * GCALL_N1_WEAK_LIVE_HOLD_TARGET_RATIO_MAX
+  );
+  const feasibleMaxMs = Math.max(
+    ADAPTIVE_MIN_TARGET_MS,
+    Math.min(
+      targetRatioCap,
+      Math.round(
+        opts.recentStability.avgPcmBufferedMs + GCALL_N1_WEAK_LIVE_HOLD_HEADROOM_MS
+      )
+    )
+  );
+  return Math.min(opts.currentAdaptiveMaxTargetMs, feasibleMaxMs);
 }
 
 /**
@@ -2312,6 +2426,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const recentJitterUnderrunAtRef = useRef<Map<string, number[]>>(new Map());
   /** `performance.now()` of last Opus push into jitter (N===1 stall escape). */
   const lastJitterOpusPushPerfRef = useRef<Map<string, number>>(new Map());
+  /** While `performance.now() < value`, keep weak single-remote recovery locally clamped. */
+  const n1WeakLiveHoldUntilPerfRef = useRef<Map<string, number>>(new Map());
   /** Preroll satisfied once bufferMs >= minStartMs for this source. */
   const jitterPrerollSatisfiedRef = useRef<Map<string, boolean>>(new Map());
   /** While recovery preroll is blocked with a live thin source, track how long we have been stuck. */
@@ -2392,6 +2508,10 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Last cumulative longTask count at escalation interval (delta = stall pressure). */
   const lastLongTaskCountAtIntervalRef = useRef(0);
   const lastPendingDecryptDepthWarnAtRef = useRef(0);
+  const lastPendingDecryptPreOverloadActiveRef = useRef(false);
+  const lastMultiSourceLoadBalanceDiagAtRef = useRef(0);
+  const ingressPacketsBySourceTickRef = useRef<Map<string, number>>(new Map());
+  const decodeFramesBySourceTickRef = useRef<Map<string, number>>(new Map());
   /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
   const decryptWorkerKeyVersionRef = useRef(0);
@@ -3844,6 +3964,7 @@ export function useGroupVoiceCall(uiActive = false) {
               adaptiveNetworkMode,
               starvationSeverity: nextStarvationSev,
               isolatedSource: isolateThisSource,
+              shouldTightenRecovery,
               previousStarvationSeverity: prevStarvationSev,
               playoutUnderTargetFraction:
                 previousWindowSource.playoutUnderTargetFraction,
@@ -3883,6 +4004,37 @@ export function useGroupVoiceCall(uiActive = false) {
         adaptiveMaxTargetMs = Math.min(
           adaptiveMaxTargetMs,
           feasibleSingleRemoteTargetMaxMs
+        );
+      }
+      const lastPushAt = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
+      const lastPushAgeMs =
+        lastPushAt > 0 ? now - lastPushAt : Number.POSITIVE_INFINITY;
+      const weakSingleRemoteHold = computeWeakSingleRemoteRecoveryHoldState({
+        activeSourceCount,
+        adaptiveNetworkMode,
+        recentStability,
+        lastPushAgeMs,
+        nowMs: now,
+        holdUntilMs: n1WeakLiveHoldUntilPerfRef.current.get(addr) ?? 0,
+      });
+      if (weakSingleRemoteHold.nextHoldUntilMs > 0) {
+        n1WeakLiveHoldUntilPerfRef.current.set(
+          addr,
+          weakSingleRemoteHold.nextHoldUntilMs
+        );
+      } else {
+        n1WeakLiveHoldUntilPerfRef.current.delete(addr);
+      }
+      const weakSingleRemoteTargetHoldMaxMs =
+        computeWeakSingleRemoteRecoveryTargetHoldMaxMs({
+          currentAdaptiveMaxTargetMs: adaptiveMaxTargetMs,
+          holdActive: weakSingleRemoteHold.holdActive,
+          recentStability,
+        });
+      if (weakSingleRemoteTargetHoldMaxMs !== null) {
+        adaptiveMaxTargetMs = Math.min(
+          adaptiveMaxTargetMs,
+          weakSingleRemoteTargetHoldMaxMs
         );
       }
       if (failSafeStateRef.current.active) {
@@ -3959,6 +4111,9 @@ export function useGroupVoiceCall(uiActive = false) {
           recentStability,
         });
       if (acceleratedSingleRemoteRecoveryDecay) {
+        alphaDown = Math.max(alphaDown, GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN);
+      }
+      if (weakSingleRemoteHold.holdActive) {
         alphaDown = Math.max(alphaDown, GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN);
       }
 
@@ -4056,6 +4211,12 @@ export function useGroupVoiceCall(uiActive = false) {
           multiSourceRecoveryTargetMaxMs,
           feasibleMultiSourceTargetMaxMs,
           feasibleSingleRemoteTargetMaxMs,
+          weakSingleRemoteHoldActive: weakSingleRemoteHold.holdActive,
+          weakSingleRemoteHoldRemainingMs:
+            weakSingleRemoteHold.nextHoldUntilMs > now
+              ? Math.round(weakSingleRemoteHold.nextHoldUntilMs - now)
+              : 0,
+          weakSingleRemoteTargetHoldMaxMs,
           bufferAdequacy,
           targetMs: smoothedTargetMsForAdequacy,
           avgPcmBufferedMs: previousWindowSource?.avgPcmBufferedMs ?? null,
@@ -4679,6 +4840,10 @@ export function useGroupVoiceCall(uiActive = false) {
       const wallNow = Date.now();
       const snap = metricsRef.current.getSnapshot();
       const forwarderRole = isFanoutForwarderRole(myRoleRef.current);
+      const activeSourceCount = Math.max(
+        activeJitterSourcesRef.current.size,
+        playbackWorkletsRef.current.size
+      );
       const pressureSnap = {
         bridgeWaitingForDrain: snap.reticulumAudioBridgeWaitingForDrain,
         bridgeQueuedFrames: snap.reticulumAudioBridgeQueuedFrames,
@@ -4686,7 +4851,7 @@ export function useGroupVoiceCall(uiActive = false) {
         queuePressureDropsLast5s: snap.reticulumAudioQueuePressureDropsLast5s,
         pendingFrames: snap.reticulumAudioPendingFrames,
       };
-      const pressured = forwarderRole
+      const baselinePressured = forwarderRole
         ? isReticulumSendPressureSignalForwarder(pressureSnap)
         : isReticulumSendPressureSignal(pressureSnap);
       const forwarderFanout = forwarderRole && (snap.packetsForwarded ?? 0) > 0;
@@ -4706,22 +4871,47 @@ export function useGroupVoiceCall(uiActive = false) {
       ingress.received = snap.packetsReceived;
 
       const peerCount = Math.max(0, participantsRef.current.size - 1);
+      const pendingDecryptForwarderPolicy = shouldTreatPendingDecryptAsForwarder({
+        isForwarderRole: forwarderRole,
+        participantCount: participantsRef.current.size,
+        activeSourceCount,
+      });
+      const pendingDepth = pendingDecryptsRef.current.size;
+      const preOverloadActive = shouldPreemptivelyThrottlePendingDecrypt({
+        pendingDepth,
+        previousDepth: previousDepthForOverloadRef.current,
+        isForwarder: pendingDecryptForwarderPolicy,
+        participantCount: participantsRef.current.size,
+        activeSourceCount,
+        longTaskPressure: overloadLongTaskPressureRef.current,
+      });
       const requested = computeRequestedBurstMaxFromSignals({
         peerCount,
         ingressPacketsPerSec: ingressPps,
         peakDepthRecent: peakDepthRecentRef.current,
         isForwarder: forwarderRole,
       });
+      const requestedBurstMax = preOverloadActive
+        ? Math.min(
+            requested,
+            computePendingDecryptPreOverloadClampMax({
+              isForwarder: pendingDecryptForwarderPolicy,
+              activeSourceCount,
+            })
+          )
+        : requested;
 
       const burstWindow = wallNow < decryptBurstUntilMsRef.current;
       const slewDt = Math.max(0, wallNow - lastBurstMaxSlewAtMsRef.current);
       lastBurstMaxSlewAtMsRef.current = wallNow;
       const dynamicBurstActive =
-        burstWindow || decryptOverloadStateRef.current.active;
+        burstWindow ||
+        decryptOverloadStateRef.current.active ||
+        preOverloadActive;
       if (dynamicBurstActive) {
         effectiveBurstMaxRef.current = slewBurstMaxTowardRequested(
           effectiveBurstMaxRef.current,
-          requested,
+          requestedBurstMax,
           slewDt
         );
       } else {
@@ -4742,13 +4932,52 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const receivingShedding =
         decryptOverloadStateRef.current.active ||
-        peakDepthRecentRef.current >= PENDING_DECRYPT_NEWEST_FIRST_DEPTH;
+        peakDepthRecentRef.current >= PENDING_DECRYPT_NEWEST_FIRST_DEPTH ||
+        preOverloadActive;
       const sendPressureCapIx = computeOpusSendPressureMaxTierIndex({
         receivingShedding,
         isForwarder: forwarderRole,
         decryptOverloadActive: decryptOverloadStateRef.current.active,
         pressureSnapshot: pressureSnap,
       });
+      const pressured = baselinePressured || preOverloadActive;
+
+      const ingressBySource = summarizeSourceTickCounters(
+        ingressPacketsBySourceTickRef.current
+      );
+      ingressPacketsBySourceTickRef.current.clear();
+      const decodeBySource = summarizeSourceTickCounters(
+        decodeFramesBySourceTickRef.current
+      );
+      decodeFramesBySourceTickRef.current.clear();
+      if (preOverloadActive !== lastPendingDecryptPreOverloadActiveRef.current) {
+        lastPendingDecryptPreOverloadActiveRef.current = preOverloadActive;
+        gcallDiagnosticsPush('info', '[GCall] pendingDecryptPreOverload', {
+          active: preOverloadActive,
+          pendingDepth,
+          previousDepth: previousDepthForOverloadRef.current,
+          ingressPps: Math.round(ingressPps),
+          activeSources: activeSourceCount,
+          effectiveBurstMax: Math.round(effectiveBurstMaxRef.current),
+          requestedBurstMax,
+          ingressTopSources: ingressBySource.topSources,
+          decodeTopSources: decodeBySource.topSources,
+        });
+      } else if (
+        activeSourceCount >= 2 &&
+        decodeBySource.total >= 4 &&
+        decodeBySource.dominantShare >= 0.75 &&
+        wallNow - lastMultiSourceLoadBalanceDiagAtRef.current >= 1000
+      ) {
+        lastMultiSourceLoadBalanceDiagAtRef.current = wallNow;
+        gcallDiagnosticsPush('info', '[GCall] multiSourceLoadBalance', {
+          pendingDepth,
+          ingressPps: Math.round(ingressPps),
+          dominantDecodeShare: decodeBySource.dominantShare,
+          ingressTopSources: ingressBySource.topSources,
+          decodeTopSources: decodeBySource.topSources,
+        });
+      }
 
       const result = tickOpusSendPressureController(
         opusSendPressureStateRef.current,
@@ -4834,6 +5063,7 @@ export function useGroupVoiceCall(uiActive = false) {
       smoothedPlayoutTargetRef.current.delete(address);
       recentPlayoutHealthSamplesRef.current.delete(address);
       recentJitterUnderrunAtRef.current.delete(address);
+      n1WeakLiveHoldUntilPerfRef.current.delete(address);
       n1RecoveryPrerollBlockedSincePerfRef.current.delete(address);
       lastSentPlayoutTargetRef.current.delete(address);
       lastPlayoutTargetPostAtRef.current.delete(address);
@@ -5350,9 +5580,14 @@ export function useGroupVoiceCall(uiActive = false) {
       const successfulDecodeAt = Date.now();
       lastRemoteDecodeAtRef.current = successfulDecodeAt;
       lastSuccessfulRemoteDecodeAtBySourceRef.current.set(
-        sourceAddr,
-        successfulDecodeAt
-      );
+          sourceAddr,
+          successfulDecodeAt
+        );
+        incrementSourceTickCounter(
+          ingressPacketsBySourceTickRef.current,
+          sourceAddr,
+          decodedList.length
+        );
 
       let jb = jitterMapRef.current.get(sourceAddr);
       if (!jb) {
@@ -8115,8 +8350,19 @@ export function useGroupVoiceCall(uiActive = false) {
         const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
         const lastPushAgeMs =
           lastPush > 0 ? perfWall - lastPush : Number.POSITIVE_INFINITY;
+        const sourceRecentlyPushed =
+          lastPush > 0 && lastPushAgeMs <= GCALL_N1_STALL_ESCAPE_MS;
         const lastEsc = lastStallEscapePerfRef.current.get(addr) ?? 0;
         const playoutActive = isSourcePlayoutActive(addr, tickStartedAt);
+        if (n1RecoverySingleRemote) {
+          n1ScaledCap = computeN1LiveRecoveryBurstCap({
+            tier: n1Tier,
+            scaledBurstCap,
+            opusBufferedMs: opusMsPre,
+            minStartMs,
+            sourceRecentlyPushed,
+          });
+        }
         let prerollBlockedForMs = 0;
         if (
           n1RecoverySingleRemote &&
@@ -8134,6 +8380,7 @@ export function useGroupVoiceCall(uiActive = false) {
               lastPushAgeMs,
               opusBufferedMs: opusMsPre,
               sourceActive: playoutActive,
+              targetMs: smoothedTarget,
             })
           ) {
             jitterPrerollSatisfiedRef.current.set(addr, true);
@@ -8144,6 +8391,9 @@ export function useGroupVoiceCall(uiActive = false) {
               sourceAddr: truncateGcallDiagAddress(addr),
               bufferMs: Math.round(opusMsPre),
               minStartMs: Math.round(minStartMs),
+              earlyReleaseMinBufferMs: Math.round(
+                computeN1RecoveryEarlyReleaseMinBufferMs(smoothedTarget)
+              ),
               targetMs: Math.round(smoothedTarget),
               blockedForMs: Math.round(perfWall - blockedSince),
               lastPushAgeMs: Math.round(lastPushAgeMs),
@@ -8181,15 +8431,14 @@ export function useGroupVoiceCall(uiActive = false) {
           n1Tier !== 'normal' &&
           opusMsPre < steadyMinHoldMs &&
           jb.hasReadyFrame() &&
-          lastPush > 0 &&
-          lastPushAgeMs <= GCALL_N1_STALL_ESCAPE_MS;
+          sourceRecentlyPushed;
         const stallEscapeAllowed =
           n1RecoverySingleRemote &&
           prerollActive &&
           opusMsPre < minStartMs &&
           jb.hasReadyFrame() &&
           lastPush > 0 &&
-          lastPushAgeMs > GCALL_N1_STALL_ESCAPE_MS &&
+          !sourceRecentlyPushed &&
           perfWall - lastEsc >= GCALL_N1_STALL_ESCAPE_MS;
 
         if (singleRemoteShapingMode) {
@@ -8492,6 +8741,70 @@ export function useGroupVoiceCall(uiActive = false) {
       );
       let protectedUsed = 0;
       const burstThisTickByAddr = new Map<string, number>();
+      const prioritizedWeakLegAddrs = new Set<string>();
+      for (const addr of readyAtStart) {
+        if (accumulationHoldAddrs.has(addr)) continue;
+        const jb = jitterMapRef.current.get(addr);
+        if (!jb) continue;
+        const targetMs =
+          smoothedPlayoutTargetRef.current.get(addr) ??
+          audioTuningRef.current.adaptiveMaxTargetMs;
+        const starvationSeverity =
+          playoutStarvationSeverityRef.current.get(addr) ?? 'none';
+        const protectedMode = gcallStarvationProtectedModeRef.current.has(addr);
+        if (
+          shouldPrioritizeWeakMultiSourceLeg({
+            activeSourceCount: readyAtStart.size,
+            bufferedFrames: jb.getBufferedFrames(),
+            opusBufferedMs:
+              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS,
+            adaptiveTargetMedianMs: targetMs,
+            protectedMode,
+            playoutStarvationSeverity: starvationSeverity,
+          })
+        ) {
+          prioritizedWeakLegAddrs.add(addr);
+        }
+      }
+
+      const weakLegServiceBudget = computeWeakLegServiceFloor({
+        globalDecodeBudget: globalDecodesLeft,
+        weakLegCount: prioritizedWeakLegAddrs.size,
+      });
+      const strictWeakLegProtection = [...prioritizedWeakLegAddrs].some(
+        (addr) =>
+          gcallStarvationProtectedModeRef.current.has(addr) ||
+          (playoutStarvationSeverityRef.current.get(addr) ?? 'none') ===
+            'strong'
+      );
+      let weakLegServiceUsed = 0;
+      while (
+        weakLegServiceUsed < weakLegServiceBudget &&
+        globalDecodesLeft > 0 &&
+        prioritizedWeakLegAddrs.size > 0
+      ) {
+        let progressed = false;
+        for (const addr of prioritizedWeakLegAddrs) {
+          if (
+            weakLegServiceUsed >= weakLegServiceBudget ||
+            globalDecodesLeft <= 0
+          ) {
+            break;
+          }
+          if (!readyAtStart.has(addr)) continue;
+          const jb = jitterMapRef.current.get(addr);
+          if (!jb || !jb.hasReadyFrame()) continue;
+          if ((burstThisTickByAddr.get(addr) ?? 0) > 0) continue;
+          const m = decodeOneJitterFrame(addr, jb);
+          if (m === null) continue;
+          burstThisTickByAddr.set(addr, 1);
+          incrementSourceTickCounter(decodeFramesBySourceTickRef.current, addr);
+          weakLegServiceUsed++;
+          globalDecodesLeft--;
+          progressed = true;
+        }
+        if (!progressed) break;
+      }
 
       while (
         protectedUsed < protectedCap &&
@@ -8515,6 +8828,7 @@ export function useGroupVoiceCall(uiActive = false) {
           const m = decodeOneJitterFrame(addr, jb);
           if (m === null) continue;
           burstThisTickByAddr.set(addr, burst + 1);
+          incrementSourceTickCounter(decodeFramesBySourceTickRef.current, addr);
           protectedUsed++;
           globalDecodesLeft--;
           progressed = true;
@@ -8545,8 +8859,15 @@ export function useGroupVoiceCall(uiActive = false) {
           protectedMode,
           starvationSeverity,
         });
+        const prioritizeWeakLeg = prioritizedWeakLegAddrs.has(addr);
+        const fairBurstCap = computeMultiSourceFairBurstCap({
+          baseCap: perSourceCap + burstBonus,
+          weakLegPresent: prioritizedWeakLegAddrs.size > 0,
+          prioritizeWeakLeg,
+          strictWeakLegProtection,
+        });
         const maxBurstPerSourceThisTick = usePhaseDDrain
-          ? perSourceCap + burstBonus
+          ? fairBurstCap
           : scaledBurstCap;
         let missedThisTick = 0;
         let burst = burstThisTickByAddr.get(addr) ?? 0;
@@ -8568,6 +8889,7 @@ export function useGroupVoiceCall(uiActive = false) {
           missedThisTick += m;
           burst++;
           burstThisTickByAddr.set(addr, burst);
+          incrementSourceTickCounter(decodeFramesBySourceTickRef.current, addr);
           if (usePhaseDDrain) {
             globalDecodesLeft -= 1;
           }
@@ -10364,6 +10686,10 @@ export function useGroupVoiceCall(uiActive = false) {
         lastLongTaskCountAtIntervalRef.current = 0;
         overloadLongTaskPressureRef.current = false;
         previousDepthForOverloadRef.current = 0;
+        lastPendingDecryptPreOverloadActiveRef.current = false;
+        lastMultiSourceLoadBalanceDiagAtRef.current = 0;
+        ingressPacketsBySourceTickRef.current.clear();
+        decodeFramesBySourceTickRef.current.clear();
         tickBudgetBreachesRef.current.length = 0;
         tickBudgetBreachesMonotonicRef.current = 0;
         lastTickBudgetBreachesAtWindowEmitRef.current = 0;
@@ -10864,6 +11190,7 @@ export function useGroupVoiceCall(uiActive = false) {
         lastSentPlayoutTarget: lastSentPlayoutTargetRef.current,
         lastPlayoutTargetPostAt: lastPlayoutTargetPostAtRef.current,
         lastDrainMissed: lastDrainMissedRef.current,
+        n1WeakLiveHoldUntilPerf: n1WeakLiveHoldUntilPerfRef.current,
       });
       recentPlayoutHealthSamplesRef.current.clear();
       recentJitterUnderrunAtRef.current.clear();
@@ -10911,6 +11238,10 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       pendingDecryptApplyQueueRef.current.length = 0;
       previousDepthForOverloadRef.current = 0;
+      lastPendingDecryptPreOverloadActiveRef.current = false;
+      lastMultiSourceLoadBalanceDiagAtRef.current = 0;
+      ingressPacketsBySourceTickRef.current.clear();
+      decodeFramesBySourceTickRef.current.clear();
       overloadLongTaskPressureRef.current = false;
       lastLongTaskCountAtIntervalRef.current = 0;
 

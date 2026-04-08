@@ -14,7 +14,10 @@ export const GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS = 180;
 /** Treat pushes newer than this as evidence that the source is still actively trickling in. */
 export const GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS = 120;
 /** Minimum queued Opus needed before early preroll release is allowed. */
-export const GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS = 20;
+export const GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS = 40;
+/** Scale early-release reserve with target, but keep it bounded for weak exact-1-remote paths. */
+export const GCALL_N1_PREROLL_EARLY_RELEASE_TARGET_RATIO = 0.3;
+export const GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS_CEIL = 60;
 
 /** Min start buffer before "preroll satisfied" (ms), lower bound of clamp — below low-latency adaptive max (120). */
 export const GCALL_N1_MIN_START_MS_FLOOR = 100;
@@ -54,6 +57,24 @@ export const GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS = 2000;
 
 export type GcallN1BufferEnforceTier = 'deep' | 'moderate' | 'normal';
 
+export function computeN1RecoveryEarlyReleaseMinBufferMs(
+  smoothedTargetMs: number
+): number {
+  const targetMs = Math.max(
+    GCALL_N1_MIN_TARGET_MS_FLOOR,
+    Number.isFinite(smoothedTargetMs)
+      ? smoothedTargetMs
+      : GCALL_N1_MIN_TARGET_MS_FLOOR
+  );
+  return Math.max(
+    GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS,
+    Math.min(
+      GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS_CEIL,
+      Math.round(targetMs * GCALL_N1_PREROLL_EARLY_RELEASE_TARGET_RATIO)
+    )
+  );
+}
+
 export function computeN1MinStartMs(smoothedTargetMs: number): number {
   const t = Number.isFinite(smoothedTargetMs) ? smoothedTargetMs : GCALL_N1_MIN_TARGET_MS_FLOOR;
   return Math.max(
@@ -80,12 +101,16 @@ export function shouldForceN1RecoveryPrerollSatisfied(input: {
   lastPushAgeMs: number;
   opusBufferedMs: number;
   sourceActive: boolean;
+  targetMs?: number;
 }): boolean {
+  const minBufferMs = computeN1RecoveryEarlyReleaseMinBufferMs(
+    input.targetMs ?? GCALL_N1_MIN_TARGET_MS_FLOOR
+  );
   return (
     input.sourceActive &&
     input.blockedForMs >= GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS &&
     input.lastPushAgeMs <= GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS &&
-    input.opusBufferedMs >= GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS
+    input.opusBufferedMs >= minBufferMs
   );
 }
 
@@ -170,6 +195,27 @@ export function computeN1TierBurstCap(
   }
   if (tier === 'moderate') return Math.min(6, scaledBurstCap);
   return scaledBurstCap;
+}
+
+export function computeN1LiveRecoveryBurstCap(input: {
+  tier: GcallN1BufferEnforceTier;
+  scaledBurstCap: number;
+  opusBufferedMs: number;
+  minStartMs: number;
+  sourceRecentlyPushed: boolean;
+}): number {
+  const baseCap = computeN1TierBurstCap(input.tier, input.scaledBurstCap, {
+    recoverySingleRemote: true,
+  });
+  if (
+    !input.sourceRecentlyPushed ||
+    input.opusBufferedMs >= input.minStartMs
+  ) {
+    return baseCap;
+  }
+  if (input.tier === 'deep') return Math.min(2, baseCap);
+  if (input.tier === 'moderate') return Math.min(3, baseCap);
+  return Math.min(5, baseCap);
 }
 
 export function computeN1SteadyTierBurstCap(

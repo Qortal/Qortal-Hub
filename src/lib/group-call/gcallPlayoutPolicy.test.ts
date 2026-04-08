@@ -194,6 +194,24 @@ describe('gcallPlayoutPolicy', () => {
     ).toBe(100);
   });
 
+  it('clamps a pressure-tightened 2+ recovery target when observed reserve is far below the ceiling', () => {
+    expect(
+      computeFeasibleMultiSourceRecoveryTargetMaxMs({
+        currentAdaptiveMaxTargetMs: 185,
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'mild',
+        isolatedSource: false,
+        shouldTightenRecovery: true,
+        previousStarvationSeverity: 'none',
+        playoutUnderTargetFraction: 0.775,
+        avgPlayoutDeltaMs: -89.944,
+        avgOpusBufferedMs: 77.68,
+        observedTargetMs: 185,
+      })
+    ).toBe(114);
+  });
+
   it('clamps an isolated worst source earlier than the generic feasibility path', () => {
     expect(
       computeFeasibleMultiSourceRecoveryTargetMaxMs({

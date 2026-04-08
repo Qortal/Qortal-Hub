@@ -238,6 +238,11 @@ const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_UNDERTARGET_MIN = 0.6;
 const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_DELTA_MAX_MS = -35;
 const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_HEADROOM_MS = 32;
 const GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX = 0.82;
+const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_UNDERTARGET_MIN = 0.55;
+const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_DELTA_MAX_MS = -35;
+const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_RESERVE_RATIO_MAX = 0.58;
+const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_HEADROOM_MS = 36;
+const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_TARGET_RATIO_MAX = 0.74;
 
 /**
  * Clamp multi-source recovery targets back toward an observed reserve the source can
@@ -250,6 +255,7 @@ export function computeFeasibleMultiSourceRecoveryTargetMaxMs(input: {
   adaptiveNetworkMode: 'low-latency' | 'recovery';
   starvationSeverity: 'none' | 'mild' | 'strong';
   isolatedSource?: boolean;
+  shouldTightenRecovery?: boolean;
   previousStarvationSeverity?: 'none' | 'mild' | 'strong';
   playoutUnderTargetFraction: number;
   avgPlayoutDeltaMs: number;
@@ -301,7 +307,14 @@ export function computeFeasibleMultiSourceRecoveryTargetMaxMs(input: {
       GCALL_MULTI_SOURCE_FEASIBILITY_MILD_UNDERTARGET_MIN &&
     input.avgPlayoutDeltaMs <= GCALL_MULTI_SOURCE_FEASIBILITY_MILD_DELTA_MAX_MS &&
     reserveRatio < GCALL_MULTI_SOURCE_FEASIBILITY_RESERVE_RATIO_MAX;
-  if (!strongCandidate && !mildHeldCandidate) {
+  const pressureMismatchCandidate =
+    input.shouldTightenRecovery === true &&
+    input.playoutUnderTargetFraction >=
+      GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <=
+      GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_DELTA_MAX_MS &&
+    reserveRatio < GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_RESERVE_RATIO_MAX;
+  if (!strongCandidate && !mildHeldCandidate && !pressureMismatchCandidate) {
     if (!isolatedCandidate) {
       return null;
     }
@@ -310,16 +323,24 @@ export function computeFeasibleMultiSourceRecoveryTargetMaxMs(input: {
     ? GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_HEADROOM_MS
     : strongCandidate
       ? GCALL_MULTI_SOURCE_FEASIBILITY_STRONG_HEADROOM_MS
+      : pressureMismatchCandidate
+        ? GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_HEADROOM_MS
       : GCALL_MULTI_SOURCE_FEASIBILITY_MILD_HEADROOM_MS;
-  const isolationObservedTargetCap = isolatedCandidate
-    ? Math.round(
-        observedTarget * GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX
-      )
+  const observedTargetCap =
+    isolatedCandidate
+      ? Math.round(
+          observedTarget * GCALL_MULTI_SOURCE_FEASIBILITY_ISOLATED_TARGET_RATIO_MAX
+        )
+      : pressureMismatchCandidate
+        ? Math.round(
+            observedTarget *
+              GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_TARGET_RATIO_MAX
+          )
     : input.currentAdaptiveMaxTargetMs;
   const feasibleMaxMs = Math.max(
     GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS,
     Math.min(
-      isolationObservedTargetCap,
+      observedTargetCap,
       Math.round(input.avgOpusBufferedMs + headroomMs)
     )
   );

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeN1LiveRecoveryBurstCap,
+  computeN1RecoveryEarlyReleaseMinBufferMs,
   computeN1BufferEnforceTier,
   computeN1BufferRatio,
   computeN1MinStartMs,
@@ -29,28 +31,41 @@ describe('gcallN1PlayoutGate', () => {
   });
 
   it('allows recovery preroll to release early for a live thin source', () => {
+    expect(computeN1RecoveryEarlyReleaseMinBufferMs(145)).toBe(44);
     expect(
       shouldForceN1RecoveryPrerollSatisfied({
         blockedForMs: 200,
         lastPushAgeMs: 40,
-        opusBufferedMs: 20,
+        opusBufferedMs: 44,
         sourceActive: true,
+        targetMs: 145,
       })
     ).toBe(true);
     expect(
       shouldForceN1RecoveryPrerollSatisfied({
         blockedForMs: 120,
         lastPushAgeMs: 40,
-        opusBufferedMs: 20,
+        opusBufferedMs: 44,
         sourceActive: true,
+        targetMs: 145,
       })
     ).toBe(false);
     expect(
       shouldForceN1RecoveryPrerollSatisfied({
         blockedForMs: 200,
         lastPushAgeMs: 180,
-        opusBufferedMs: 20,
+        opusBufferedMs: 44,
         sourceActive: true,
+        targetMs: 145,
+      })
+    ).toBe(false);
+    expect(
+      shouldForceN1RecoveryPrerollSatisfied({
+        blockedForMs: 200,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 30,
+        sourceActive: true,
+        targetMs: 145,
       })
     ).toBe(false);
   });
@@ -107,5 +122,44 @@ describe('gcallN1PlayoutGate', () => {
     expect(computeN1SteadyTierBurstCap('deep', 11)).toBe(2);
     expect(computeN1SteadyTierBurstCap('moderate', 11)).toBe(5);
     expect(computeN1SteadyTierBurstCap('normal', 11)).toBe(7);
+  });
+
+  it('computeN1LiveRecoveryBurstCap protects weak live recovery paths from over-draining', () => {
+    expect(
+      computeN1LiveRecoveryBurstCap({
+        tier: 'deep',
+        scaledBurstCap: 11,
+        opusBufferedMs: 30,
+        minStartMs: 100,
+        sourceRecentlyPushed: true,
+      })
+    ).toBe(2);
+    expect(
+      computeN1LiveRecoveryBurstCap({
+        tier: 'moderate',
+        scaledBurstCap: 11,
+        opusBufferedMs: 60,
+        minStartMs: 100,
+        sourceRecentlyPushed: true,
+      })
+    ).toBe(3);
+    expect(
+      computeN1LiveRecoveryBurstCap({
+        tier: 'moderate',
+        scaledBurstCap: 11,
+        opusBufferedMs: 120,
+        minStartMs: 100,
+        sourceRecentlyPushed: true,
+      })
+    ).toBe(6);
+    expect(
+      computeN1LiveRecoveryBurstCap({
+        tier: 'deep',
+        scaledBurstCap: 11,
+        opusBufferedMs: 30,
+        minStartMs: 100,
+        sourceRecentlyPushed: false,
+      })
+    ).toBe(4);
   });
 });

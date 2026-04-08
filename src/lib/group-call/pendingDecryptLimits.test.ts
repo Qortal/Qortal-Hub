@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computePendingDecryptPreOverloadClampMax,
   computePendingDecryptOverloadMax,
   computePendingDecryptLimits,
   computeRequestedBurstMaxFromSignals,
   shouldTreatPendingDecryptAsForwarder,
   shouldBypassDecryptWorkerOnHotQueue,
+  shouldPreemptivelyThrottlePendingDecrypt,
   GLOBAL_MAX_BURST_MAX,
   PENDING_DECRYPT_BURST_NOMINAL_BASE,
   PENDING_DECRYPT_BURST_TTL_MS,
@@ -172,6 +174,70 @@ describe('computePendingDecryptOverloadMax', () => {
         activeSourceCount: 2,
       })
     ).toBe(PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX);
+  });
+});
+
+describe('shouldPreemptivelyThrottlePendingDecrypt', () => {
+  it('enters pre-overload for bursty multi-source forwarder depth growth', () => {
+    expect(
+      shouldPreemptivelyThrottlePendingDecrypt({
+        pendingDepth: 96,
+        previousDepth: 80,
+        isForwarder: true,
+        participantCount: 3,
+        activeSourceCount: 2,
+        longTaskPressure: false,
+      })
+    ).toBe(true);
+  });
+
+  it('stays off for stable one-on-one depth or flat growth', () => {
+    expect(
+      shouldPreemptivelyThrottlePendingDecrypt({
+        pendingDepth: 96,
+        previousDepth: 90,
+        isForwarder: true,
+        participantCount: 2,
+        activeSourceCount: 1,
+        longTaskPressure: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldPreemptivelyThrottlePendingDecrypt({
+        pendingDepth: 80,
+        previousDepth: 72,
+        isForwarder: true,
+        participantCount: 3,
+        activeSourceCount: 2,
+        longTaskPressure: false,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('computePendingDecryptPreOverloadClampMax', () => {
+  it('keeps forwarders on a milder pre-overload clamp than the burst ceiling', () => {
+    expect(
+      computePendingDecryptPreOverloadClampMax({
+        isForwarder: true,
+        activeSourceCount: 2,
+      })
+    ).toBe(PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX + 16);
+  });
+
+  it('uses the softer participant caps outside the forwarder path', () => {
+    expect(
+      computePendingDecryptPreOverloadClampMax({
+        isForwarder: false,
+        activeSourceCount: 1,
+      })
+    ).toBe(PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX);
+    expect(
+      computePendingDecryptPreOverloadClampMax({
+        isForwarder: false,
+        activeSourceCount: 2,
+      })
+    ).toBe(PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX + 16);
   });
 });
 

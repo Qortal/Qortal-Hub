@@ -34,6 +34,10 @@ export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_MILD = 0.4;
 export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_STRONG = 0.55;
 export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_MILD = 40;
 export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_STRONG = 60;
+/** When a weak leg is present, keep strong legs from consuming the full per-source burst cap. */
+export const GCALL_MULTI_SOURCE_STRONG_SOURCE_BURST_CAP_PENALTY = 1;
+/** If a weak leg is already in protected scheduling, make strong-leg yielding stricter. */
+export const GCALL_MULTI_SOURCE_STRONG_SOURCE_STRICT_BURST_CAP_PENALTY = 2;
 
 /**
  * Protected decode budget per tick: at most half of global decode budget, never more than 8.
@@ -115,6 +119,57 @@ export function shouldHoldMultiSourceAccumulation(input: {
   return (
     input.opusBufferedMs <
     Math.max(releaseMinMs, input.adaptiveTargetMedianMs * releaseRatio)
+  );
+}
+
+export function shouldPrioritizeWeakMultiSourceLeg(input: {
+  activeSourceCount: number;
+  bufferedFrames: number;
+  opusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+  protectedMode: boolean;
+  playoutStarvationSeverity: 'none' | 'mild' | 'strong';
+}): boolean {
+  if (Math.max(1, input.activeSourceCount) < 2) return false;
+  if (input.protectedMode || input.playoutStarvationSeverity === 'strong') {
+    return true;
+  }
+  return (
+    input.playoutStarvationSeverity === 'mild' &&
+    isNearCollapsedForStarvation({
+      bufferedFrames: input.bufferedFrames,
+      opusBufferedMs: input.opusBufferedMs,
+      adaptiveTargetMedianMs: input.adaptiveTargetMedianMs,
+    })
+  );
+}
+
+export function computeWeakLegServiceFloor(input: {
+  globalDecodeBudget: number;
+  weakLegCount: number;
+}): number {
+  const weakLegCount = Math.max(0, Math.floor(input.weakLegCount));
+  if (weakLegCount === 0) return 0;
+  const globalDecodeBudget = Math.max(1, Math.floor(input.globalDecodeBudget));
+  return Math.min(weakLegCount, Math.max(1, Math.ceil(globalDecodeBudget / 8)));
+}
+
+export function computeMultiSourceFairBurstCap(input: {
+  baseCap: number;
+  weakLegPresent: boolean;
+  prioritizeWeakLeg: boolean;
+  strictWeakLegProtection?: boolean;
+}): number {
+  const baseCap = Math.max(1, Math.floor(input.baseCap));
+  if (!input.weakLegPresent || input.prioritizeWeakLeg) {
+    return baseCap;
+  }
+  const penalty = input.strictWeakLegProtection
+    ? GCALL_MULTI_SOURCE_STRONG_SOURCE_STRICT_BURST_CAP_PENALTY
+    : GCALL_MULTI_SOURCE_STRONG_SOURCE_BURST_CAP_PENALTY;
+  return Math.max(
+    1,
+    baseCap - penalty
   );
 }
 
