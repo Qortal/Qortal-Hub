@@ -138,6 +138,18 @@ export type ReticulumSendResult =
       error?: string;
     };
 
+export type ReticulumWarmPathResult =
+  | {
+      ok: true;
+      pathState?: string;
+      ready?: boolean;
+    }
+  | {
+      ok: false;
+      reason: ReticulumSendFailureReason;
+      error?: string;
+    };
+
 export type ReticulumOpenAudioLinkResult =
   | { ok: true; linkId: string; established: boolean }
   | {
@@ -728,8 +740,51 @@ export class ReticulumBridge
 
   async warmGroupAudioPath(
     peerPresenceHash: string
-  ): Promise<ReticulumSendResult> {
-    return this.sendDetailed('warm_group_audio_path', { peerPresenceHash });
+  ): Promise<ReticulumWarmPathResult> {
+    try {
+      await this.start();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        reason: 'bridge-exception',
+        error: message,
+      };
+    }
+    if (this.state !== 'ready') {
+      return { ok: false, reason: 'bridge-not-ready' };
+    }
+    try {
+      const resp = await this.sendCommand('warm_group_audio_path', {
+        peerPresenceHash,
+      });
+      if (resp.ok) {
+        return {
+          ok: true,
+          ...(typeof resp.payload?.pathState === 'string'
+            ? { pathState: resp.payload.pathState }
+            : {}),
+          ...(typeof resp.payload?.ready === 'boolean'
+            ? { ready: resp.payload.ready }
+            : {}),
+        };
+      }
+      const reason = this.mapSendFailureReason(resp);
+      return {
+        ok: false,
+        reason,
+        ...(resp.error ? { error: resp.error } : {}),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        reason: message.includes('timed out')
+          ? 'bridge-timeout'
+          : 'bridge-exception',
+        error: message,
+      };
+    }
   }
 
   /**

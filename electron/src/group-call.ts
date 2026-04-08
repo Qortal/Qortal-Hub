@@ -154,7 +154,8 @@ const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS = 6;
 const GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES_FORWARDER = 6;
 const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH_FORWARDER = 10;
 const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS_FORWARDER = 5;
-const GC_RETICULUM_PACKET_LINK_FALLBACK_TIMEOUTS = 4;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_EVIDENCE_COUNT = 4;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DEGRADED_MS = 6_000;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
@@ -561,6 +562,8 @@ interface ReticulumAudioPeerState {
   peerDestinationHash: string;
   transport: ReticulumMediaTransportKind;
   packetTransportFallback: boolean;
+  packetDegradedSinceMs: number;
+  packetFallbackEvidenceCount: number;
   routeKey: string;
   linkId: string | null;
   established: boolean;
@@ -3444,14 +3447,47 @@ export class GroupCallManager extends EventEmitter {
     this.scheduleReticulumAudioFlush();
   }
 
+  private noteReticulumPacketTransportDegraded(
+    state: ReticulumAudioPeerState,
+    evidence = 1
+  ): void {
+    const now = Date.now();
+    if (state.packetDegradedSinceMs <= 0) {
+      state.packetDegradedSinceMs = now;
+    }
+    if (evidence > 0) {
+      state.packetFallbackEvidenceCount += evidence;
+    }
+  }
+
+  private noteReticulumPacketTransportHealthy(state: ReticulumAudioPeerState): void {
+    state.packetDegradedSinceMs = 0;
+    state.packetFallbackEvidenceCount = 0;
+  }
+
   private shouldFallbackPacketTransport(
-    snapshot: ReticulumAudioQueueSnapshot | null | undefined
+    state: Pick<
+      ReticulumAudioPeerState,
+      'transport' | 'packetTransportFallback' | 'packetDegradedSinceMs' | 'packetFallbackEvidenceCount'
+    >
   ): boolean {
-    if (!snapshot) return false;
     return (
-      snapshot.packetPathResolutions === 0 &&
-      snapshot.packetPathTimeouts >= GC_RETICULUM_PACKET_LINK_FALLBACK_TIMEOUTS
+      state.transport === 'packet' &&
+      !state.packetTransportFallback &&
+      state.packetDegradedSinceMs > 0 &&
+      Date.now() - state.packetDegradedSinceMs >=
+        GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DEGRADED_MS &&
+      state.packetFallbackEvidenceCount >= GC_RETICULUM_PACKET_LINK_FALLBACK_EVIDENCE_COUNT
     );
+  }
+
+  private maybeActivateReticulumPacketFallback(
+    address: string,
+    state: ReticulumAudioPeerState,
+    reason: string
+  ): void {
+    if (!this.shouldFallbackPacketTransport(state)) return;
+    this.activateReticulumAudioLinkFallback(address, state, reason);
   }
 
   private shouldMaintainReticulumAudioLink(
@@ -3534,11 +3570,30 @@ export class GroupCallManager extends EventEmitter {
     void bridge
       .warmGroupAudioPath(state.peerPresenceHash)
       .then((result) => {
-        if (!('reason' in result)) return;
-        const failureReason = result.reason;
-        this.logReticulumFailureThrottled(
-          `packet-path-warm:${address}:${reason}:${failureReason}`,
-          `[GCall] Reticulum packet path warm failed address=${address} reason=${reason} error=${failureReason}${result.error ? ` detail=${result.error}` : ''}`
+        const latest = this.reticulumAudioPeersByAddress.get(address);
+        if (!latest) return;
+        if ('reason' in result) {
+          const failureReason = result.reason;
+          this.logReticulumFailureThrottled(
+            `packet-path-warm:${address}:${reason}:${failureReason}`,
+            `[GCall] Reticulum packet path warm failed address=${address} reason=${reason} error=${failureReason}${result.error ? ` detail=${result.error}` : ''}`
+          );
+          return;
+        }
+        const pathReady = result.ready === true || result.pathState === 'fresh';
+        const pathKnownUnready =
+          result.ready === false ||
+          (typeof result.pathState === 'string' && result.pathState !== 'fresh');
+        if (pathReady) {
+          this.noteReticulumPacketTransportHealthy(latest);
+          return;
+        }
+        if (!pathKnownUnready) return;
+        this.noteReticulumPacketTransportDegraded(latest);
+        this.maybeActivateReticulumPacketFallback(
+          address,
+          latest,
+          `packet-fallback:warm:${result.pathState ?? 'unready'}`
         );
       })
       .catch((error) => {
@@ -3675,6 +3730,8 @@ export class GroupCallManager extends EventEmitter {
         peerDestinationHash: '',
         transport,
         packetTransportFallback: false,
+        packetDegradedSinceMs: 0,
+        packetFallbackEvidenceCount: 0,
         routeKey: this.computeReticulumAudioRouteKey(transport, peerPresenceHash),
         linkId: null,
         established: false,
@@ -4152,6 +4209,11 @@ export class GroupCallManager extends EventEmitter {
         nextDelayMs,
       };
     }
+    if (state.transport === 'packet' && state.pending.length > 0 && state.packetDegradedSinceMs > 0) {
+      this.requestReticulumPacketPathWarmup(address, state, 'packet-drain-recovery', {
+        holdAudio: false,
+      });
+    }
     while (
       state.pending.length > 0 &&
       (state.transport === 'packet' || (state.established && state.linkId)) &&
@@ -4184,11 +4246,8 @@ export class GroupCallManager extends EventEmitter {
           packetSendFailures,
           result.snapshot.packetSendFailures
         );
-        if (
-          state.transport === 'packet' &&
-          this.shouldFallbackPacketTransport(result.snapshot)
-        ) {
-          this.activateReticulumAudioLinkFallback(
+        if (state.transport === 'packet') {
+          this.maybeActivateReticulumPacketFallback(
             address,
             state,
             'packet-fallback:path-unresolved'
@@ -4345,6 +4404,13 @@ export class GroupCallManager extends EventEmitter {
     if ((payload.transport ?? 'link') === 'packet') {
       const state = this.reticulumAudioPeersByAddress.get(address);
       if (state) {
+        if (
+          code === 'path_request_timeout' ||
+          code === 'packet_send_false' ||
+          code === 'exception'
+        ) {
+          this.noteReticulumPacketTransportDegraded(state);
+        }
         this.requestReticulumPacketPathWarmup(address, state, payload.code || payload.reason, {
           force:
             code === 'path_request_timeout' ||
@@ -4352,17 +4418,11 @@ export class GroupCallManager extends EventEmitter {
             code === 'exception',
           holdAudio: true,
         });
-        if (
-          code === 'path_request_timeout' ||
-          code === 'packet_send_false' ||
-          code === 'exception'
-        ) {
-          this.activateReticulumAudioLinkFallback(
-            address,
-            state,
-            `packet-fallback:${code || payload.reason}`
-          );
-        }
+        this.maybeActivateReticulumPacketFallback(
+          address,
+          state,
+          `packet-fallback:${code || payload.reason}`
+        );
       }
     }
     this.logReticulumFailureThrottled(
@@ -4407,6 +4467,7 @@ export class GroupCallManager extends EventEmitter {
       state.peerPresenceHash = desired.peerPresenceHash;
       if (this.getReticulumAudioTransportKind() !== 'packet') {
         state.packetTransportFallback = false;
+        this.noteReticulumPacketTransportHealthy(state);
       }
       state.rooms = desired.rooms;
       this.setReticulumAudioTransport(
@@ -4438,6 +4499,8 @@ export class GroupCallManager extends EventEmitter {
           peerDestinationHash: '',
           transport: this.getEffectiveReticulumAudioTransport(null),
           packetTransportFallback: false,
+          packetDegradedSinceMs: 0,
+          packetFallbackEvidenceCount: 0,
           routeKey: this.computeReticulumAudioRouteKey(
             this.getEffectiveReticulumAudioTransport(null),
             desired.peerPresenceHash
@@ -4459,6 +4522,7 @@ export class GroupCallManager extends EventEmitter {
         state.peerPresenceHash = desired.peerPresenceHash;
         if (this.getReticulumAudioTransportKind() !== 'packet') {
           state.packetTransportFallback = false;
+          this.noteReticulumPacketTransportHealthy(state);
         }
         state.rooms = desired.rooms;
         this.setReticulumAudioTransport(
@@ -5382,6 +5446,7 @@ export class GroupCallManager extends EventEmitter {
         state.recoveryHoldUntilMs = 0;
         state.recoveryReason = '';
         if ((payload.transport ?? 'link') === 'packet') {
+          this.noteReticulumPacketTransportHealthy(state);
           state.packetTransportFallback = false;
           this.setReticulumAudioTransport(fromAddress, state, 'packet');
         }

@@ -91,7 +91,10 @@ type ReticulumBridgeStub = {
   ) => Promise<boolean>;
   warmGroupAudioPath?: (
     peerPresenceHash: string
-  ) => Promise<{ ok: true } | { ok: false; reason: string }>;
+  ) => Promise<
+    | { ok: true; pathState?: string; ready?: boolean }
+    | { ok: false; reason: string }
+  >;
   openGroupAudioLink?: (
     peerPresenceHash: string
   ) => Promise<
@@ -920,6 +923,8 @@ describe('Reticulum group audio transport', () => {
   });
 
   it('falls back to the audio link when packet path never resolves', async () => {
+    vi.useFakeTimers();
+
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
         return 'ready' as const;
@@ -974,7 +979,11 @@ describe('Reticulum group audio transport', () => {
         staleDrops: 0,
         snapshot: this.getAudioQueueSnapshot(),
       }));
-      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      warmGroupAudioPath = vi.fn(async () => ({
+        ok: true as const,
+        pathState: 'stale',
+        ready: false,
+      }));
       closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
     }
 
@@ -995,21 +1004,42 @@ describe('Reticulum group audio transport', () => {
       TEST_D32
     );
 
-    manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    const settle = async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await vi.runOnlyPendingTimersAsync();
+      await Promise.resolve();
+    };
 
-    const second = manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
-    await new Promise<void>((resolve) => setImmediate(resolve));
-    await new Promise<void>((resolve) => setImmediate(resolve));
+    const early = manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await settle();
+
+    for (let i = 0; i < 6; i += 1) {
+      await vi.advanceTimersByTimeAsync(1_100);
+      manager.sendAudio('room-1', 'Q-peer', Buffer.from([i + 4, i + 5, i + 6]));
+      await settle();
+    }
+
+    expect(bridge.enqueueGroupAudio).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1_100);
+    const second = manager.sendAudio('room-1', 'Q-peer', Buffer.from([12, 13, 14]));
+    await settle();
 
     expect(bridge.openGroupAudioLink).toHaveBeenCalledWith('d:Q-peer');
-    expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledTimes(1);
+    expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledTimes(7);
     expect(bridge.enqueueGroupAudio).toHaveBeenCalledWith(
       'link-1',
       'room-1',
-      Buffer.from([4, 5, 6])
+      Buffer.from([12, 13, 14])
     );
+    expect(early).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'packet',
+        targetAddress: 'Q-peer',
+      }),
+    });
     expect(second).toMatchObject({
       success: true,
       diagnostics: expect.objectContaining({

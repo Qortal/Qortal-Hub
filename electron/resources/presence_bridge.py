@@ -48,10 +48,10 @@ _BASE58_MAP = {c: i for i, c in enumerate(_BASE58_ALPHABET)}
 _PEER_STALE_SECONDS = 4 * 3600
 _PEER_TS_SEED_LEASE_SECONDS = 300
 _MAX_KNOWN_PEERS = 256
-_REQUEST_PATH_COOLDOWN_SECONDS = 90.0
-_MAX_PATH_NUDGES_PER_PUBLISH = 5
-_HELLO_BOOTSTRAP_ANNOUNCE_COOLDOWN_SECONDS = 10.0
-_NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 5 * 60
+_REQUEST_PATH_COOLDOWN_SECONDS = 30.0
+_MAX_PATH_NUDGES_PER_PUBLISH = 8
+_HELLO_BOOTSTRAP_ANNOUNCE_COOLDOWN_SECONDS = 5.0
+_NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS = 2 * 60
 # Extra RNS announce while verified overlay peer count is below this (same cooldown as legacy "no peers" path).
 _MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE = 3
 _KR_MISMATCH_LOGGED: set[str] = set()
@@ -60,6 +60,7 @@ _OVERLAY_NEIGHBOR_GRACE_SECONDS = 30.0
 _CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
 _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
+_OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
 # Inbound RNS.Link: classify overlay vs audio by first JSON packet; if none, default to overlay.
 _INBOUND_LINK_CLASSIFY_TIMEOUT_SEC = 5.0
 _pending_inbound_classify_link_ids: Set[int] = set()
@@ -67,7 +68,7 @@ _inbound_classify_timers: Dict[int, threading.Timer] = {}
 
 # RNS Destination.announce: once after authenticated presence (first PRESENCE_ANNOUNCE),
 # then every RNS_ANNOUNCE_INTERVAL_SEC while session active; cancel on PRESENCE_OFFLINE / stop.
-RNS_ANNOUNCE_INTERVAL_SEC = 45 * 60
+RNS_ANNOUNCE_INTERVAL_SEC = 15 * 60
 _rns_auth_announced: bool = False
 _rns_periodic_announce_timer: Optional[threading.Timer] = None
 _last_hello_bootstrap_announce_at: float = 0.0
@@ -166,6 +167,7 @@ _PACKET_PATH_AWAIT_SECONDS = 0.12
 _PACKET_PATH_IDLE_AWAIT_SECONDS = 0.02
 _PACKET_PATH_WARMING_TIMEOUTS_BEFORE_FAILING = 2
 _PACKET_PATH_INBOUND_FRESH_SECONDS = 3.0
+_PACKET_PATH_POLL_INTERVAL_SECONDS = 0.01
 
 _shutdown = threading.Event()
 _json_resp_queue: "queue.Queue[Optional[Dict[str, Any]]]" = queue.Queue(
@@ -1571,6 +1573,11 @@ def _ensure_call_media_path(
         and (now - float(last_rp)) < request_cooldown
     )
     requested = False
+    await_seconds = (
+        _PACKET_PATH_AWAIT_SECONDS
+        if active_call
+        else _PACKET_PATH_IDLE_AWAIT_SECONDS
+    )
     if should_request:
         current = str(state.get("path_state") or "unknown")
         if current == "unknown":
@@ -1591,15 +1598,19 @@ def _ensure_call_media_path(
                 f"peer={peer_hash} err={exc}"
             )
     resolved = False
-    await_seconds = _PACKET_PATH_AWAIT_SECONDS if active_call else _PACKET_PATH_IDLE_AWAIT_SECONDS
     if allow_wait and await_seconds > 0:
-        try:
-            resolved = bool(RNS.Transport.await_path(destination_hash, await_seconds))
-        except Exception:
+        deadline = time.time() + await_seconds
+        while True:
             try:
                 resolved = bool(RNS.Transport.has_path(destination_hash))
             except Exception:
                 resolved = False
+            if resolved:
+                break
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            time.sleep(min(_PACKET_PATH_POLL_INTERVAL_SECONDS, remaining))
     else:
         try:
             resolved = bool(RNS.Transport.has_path(destination_hash))
@@ -1651,6 +1662,64 @@ def _ensure_call_media_path(
         _transition_call_media_path_state(peer_hash, "failing", f"{reason}:recover_timeout")
     _mark_audio_queue_state_dirty()
     return str(state.get("path_state") or initial_state), False
+
+
+def _await_destination_path(destination_hash: bytes, timeout_seconds: float) -> bool:
+    if timeout_seconds <= 0:
+        try:
+            return bool(RNS.Transport.has_path(destination_hash))
+        except Exception:
+            return False
+    deadline = time.time() + timeout_seconds
+    while True:
+        try:
+            resolved = bool(RNS.Transport.has_path(destination_hash))
+        except Exception:
+            resolved = False
+        if resolved:
+            return True
+        remaining = deadline - time.time()
+        if remaining <= 0:
+            return False
+        time.sleep(min(_PACKET_PATH_POLL_INTERVAL_SECONDS, remaining))
+
+
+def _preflight_overlay_link_path(peer_key: str, destination_hash: bytes) -> bool:
+    try:
+        if RNS.Transport.has_path(destination_hash):
+            return True
+    except Exception:
+        pass
+
+    now = time.time()
+    st = _peer_lifecycle.get(peer_key) or {}
+    last_rp = st.get("last_request_path_at")
+    should_request = not (
+        isinstance(last_rp, (int, float))
+        and (now - float(last_rp)) < _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS
+    )
+    if should_request:
+        try:
+            RNS.Transport.request_path(destination_hash)
+            if peer_key not in _peer_lifecycle:
+                _peer_lifecycle[peer_key] = {
+                    "last_seen_inbound": None,
+                    "last_send_ok": None,
+                    "last_request_path_at": None,
+                    "ts_seed_until": None,
+                }
+            _peer_lifecycle[peer_key]["last_request_path_at"] = now
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_link_path_request "
+                f"peer={peer_key}"
+            )
+        except Exception as exc:
+            log(
+                "[presence_bridge] target=presence-reticulum overlay_link_path_request_failed "
+                f"peer={peer_key}: {exc}"
+            )
+
+    return _await_destination_path(destination_hash, _PACKET_PATH_AWAIT_SECONDS)
 
 
 def _note_call_media_inbound(peer_hash: str, sender_call_hash: str = "") -> None:
@@ -2127,6 +2196,7 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
     link_id = ""
     state: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+    outbound = None
     try:
         with _state_lock:
             existing_link_id = _outgoing_overlay_link_id_by_peer_hash.get(peer_key)
@@ -2155,6 +2225,17 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
                 )
                 _known_peers.pop(peer_key, None)
                 _peer_lifecycle.pop(peer_key, None)
+                return None
+        if outbound is not None:
+            _preflight_overlay_link_path(peer_key, outbound.hash)
+        with _state_lock:
+            existing_link_id = _outgoing_overlay_link_id_by_peer_hash.get(peer_key)
+            if existing_link_id:
+                existing = _overlay_links_by_id.get(existing_link_id)
+                if existing is not None:
+                    return existing
+                _outgoing_overlay_link_id_by_peer_hash.pop(peer_key, None)
+            if outbound is None:
                 return None
             link_id = str(uuid.uuid4())
             link = RNS.Link(
@@ -3479,6 +3560,12 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
             return
 
     try:
+        _warm_call_media_path_if_possible(
+            peer_key,
+            active_call=True,
+            allow_wait=True,
+            reason="open_link",
+        )
         outbound = build_outbound_destination(peer_identity)
         link_id = str(uuid.uuid4())
         link = RNS.Link(

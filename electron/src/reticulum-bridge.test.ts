@@ -70,7 +70,7 @@ describe('ReticulumBridge group audio support', () => {
       type: 'resp',
       id: '2',
       ok: true,
-      payload: { action, payload },
+      payload: { action, payload, pathState: 'fresh', ready: true },
     }));
 
     const result = await bridge.warmGroupAudioPath('peer-hash');
@@ -78,7 +78,7 @@ describe('ReticulumBridge group audio support', () => {
     expect(internal.sendCommand).toHaveBeenCalledWith('warm_group_audio_path', {
       peerPresenceHash: 'peer-hash',
     });
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, pathState: 'fresh', ready: true });
   });
 
   it('rejects excess low-priority commands with an overload response', async () => {

@@ -42,7 +42,6 @@ import {
   registerReticulumIpcHandlers,
   setReticulumInstanceIndex,
   restartBundledReticulumDaemonAndWaitReady,
-  startBundledReticulumDaemon,
   stopSharedReticulumDaemon,
 } from './reticulum-daemon';
 import {
@@ -50,6 +49,7 @@ import {
   startReticulumMeshCoordinator,
   stopReticulumMeshCoordinator,
 } from './reticulum-mesh';
+import { startReticulumForAppLaunch } from './reticulum-launch';
 import { runDevReticulumEnsureIfNeeded } from './reticulum-dev-ensure-loader';
 import {
   getReticulumBridge,
@@ -325,7 +325,14 @@ async function setupMultiInstanceUserData(
 
   await myCapacitorApp.init(HUB_P2P_BOOTSTRAP_SEEDS);
 
-  startBundledReticulumDaemon();
+  try {
+    await startReticulumForAppLaunch();
+  } catch (error) {
+    loggerError(
+      '[Reticulum] Launch readiness wait failed; continuing with bridge startup:',
+      error
+    );
+  }
 
   // Presence, direct calls, group calls, and the Reticulum bridge are no longer
   // gated by the legacy P2P mesh setting.
