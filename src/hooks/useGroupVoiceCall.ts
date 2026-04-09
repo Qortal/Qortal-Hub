@@ -487,6 +487,8 @@ const ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS = 2;
 const ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE = 105;
 const ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE = 0.35;
 const ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS_SINGLE_REMOTE = 4;
+const ADAPTIVE_RECOVERY_ACCEL_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE = 92;
+const ADAPTIVE_RECOVERY_ACCEL_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE = 0.45;
 const ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION = 0.45;
 const ADAPTIVE_RECOVERY_SEVERE_UNDERRUNS = 4;
 const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 20;
@@ -805,8 +807,6 @@ export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
   ingressPeerRecovery: boolean;
   recentStability: RecentRecoveryStabilitySummary;
 }): boolean {
-  const maxUnderTargetFraction =
-    ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE + 0.05;
   return (
     opts.activeSourceCount === 1 &&
     opts.adaptiveNetworkMode === 'recovery' &&
@@ -816,8 +816,9 @@ export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
     !opts.recentStability.severeInstability &&
     opts.recentStability.sampleCount >= 2 &&
     opts.recentStability.avgPcmBufferedMs >=
-      ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE &&
-    opts.recentStability.playoutUnderTargetFraction <= maxUnderTargetFraction
+      ADAPTIVE_RECOVERY_ACCEL_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE &&
+    opts.recentStability.playoutUnderTargetFraction <=
+      ADAPTIVE_RECOVERY_ACCEL_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE
   );
 }
 
@@ -8901,6 +8902,8 @@ export function useGroupVoiceCall(uiActive = false) {
               avgPcmBufferedMs: n1RecentStability?.avgPcmBufferedMs ?? 0,
               playoutUnderTargetFraction:
                 n1RecentStability?.playoutUnderTargetFraction ?? 1,
+              recentStable: n1RecentStability?.stable ?? false,
+              severeInstability: n1RecentStability?.severeInstability ?? false,
             })
           ) {
             n1SevereForcedReleaseRebuildActive = true;
@@ -8913,6 +8916,7 @@ export function useGroupVoiceCall(uiActive = false) {
         const shouldRearmLateCollapseRecovery =
           n1RecoverySingleRemote &&
           !prerollActive &&
+          !n1SevereForcedReleaseRebuildActive &&
           n1RecentStability !== null &&
           shouldRearmN1LateCollapseRecovery({
             nowMs: perfWall,

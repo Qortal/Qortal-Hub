@@ -244,9 +244,10 @@ const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_RESERVE_RATIO_MAX = 0.58;
 const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_HEADROOM_MS = 36;
 const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_TARGET_RATIO_MAX = 0.74;
 const GCALL_USABLE_RECOVERY_PCM_MIN_MS = 80;
+const GCALL_USABLE_RECOVERY_SINGLE_PCM_MIN_MS = 48;
 const GCALL_USABLE_RECOVERY_SINGLE_UNDERTARGET_MIN = 0.4;
 const GCALL_USABLE_RECOVERY_MULTI_UNDERTARGET_MIN = 0.45;
-const GCALL_USABLE_RECOVERY_SINGLE_DELTA_MAX_MS = -18;
+const GCALL_USABLE_RECOVERY_SINGLE_DELTA_MAX_MS = -12;
 const GCALL_USABLE_RECOVERY_MULTI_DELTA_MAX_MS = -20;
 const GCALL_USABLE_RECOVERY_SINGLE_HEADROOM_MS = 18;
 const GCALL_USABLE_RECOVERY_SINGLE_HEADROOM_STRONG_MS = 14;
@@ -383,13 +384,15 @@ export function computeUsableRecoveryTargetMaxMs(input: {
     input.recentSampleCount < 2 ||
     !Number.isFinite(input.recentAvgPcmBufferedMs) ||
     !Number.isFinite(input.recentPlayoutUnderTargetFraction) ||
-    !Number.isFinite(input.previousWindowAvgPlayoutDeltaMs) ||
-    input.recentAvgPcmBufferedMs < GCALL_USABLE_RECOVERY_PCM_MIN_MS
+    !Number.isFinite(input.previousWindowAvgPlayoutDeltaMs)
   ) {
     return null;
   }
 
   if (Math.max(1, input.activeSourceCount) === 1) {
+    if (input.recentAvgPcmBufferedMs < GCALL_USABLE_RECOVERY_SINGLE_PCM_MIN_MS) {
+      return null;
+    }
     if (
       input.recentPlayoutUnderTargetFraction <
         GCALL_USABLE_RECOVERY_SINGLE_UNDERTARGET_MIN ||
@@ -424,6 +427,7 @@ export function computeUsableRecoveryTargetMaxMs(input: {
   }
 
   if (
+    input.recentAvgPcmBufferedMs < GCALL_USABLE_RECOVERY_PCM_MIN_MS ||
     input.starvationSeverity === 'none' &&
     input.isolatedSource !== true
   ) {

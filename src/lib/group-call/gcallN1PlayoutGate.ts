@@ -34,8 +34,8 @@ export const GCALL_N1_ACCUMULATION_MS = 75;
 /** After forced early release, hold decode a bit longer so the source can rebuild usable reserve. */
 export const GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS = 140;
 /** Severe 20ms deadlock escape needs a longer rebuild window so the source can climb out of 1 frame. */
-export const GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS = 260;
-export const GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP = 2;
+export const GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS = 420;
+export const GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP = 3;
 export const GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS = 80;
 export const GCALL_N1_SEVERE_RELEASE_EXIT_UNDERTARGET_MAX = 0.45;
 export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_OPUS_MS = 40;
@@ -290,9 +290,12 @@ export function shouldKeepN1SevereForcedReleaseRebuild(input: {
   sampleCount: number;
   avgPcmBufferedMs: number;
   playoutUnderTargetFraction: number;
+  recentStable: boolean;
+  severeInstability: boolean;
 }): boolean {
-  if (input.rebuildUntilMs <= input.nowMs) return false;
+  if (input.rebuildUntilMs > input.nowMs) return true;
   if (input.sampleCount < 2) return true;
+  if (!input.recentStable || input.severeInstability) return true;
   return !(
     input.opusBufferedMs >=
       computeN1RecoveryEarlyReleaseMinBufferMs(input.targetMs) &&

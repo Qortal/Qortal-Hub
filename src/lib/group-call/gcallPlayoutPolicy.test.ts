@@ -163,6 +163,21 @@ describe('gcallPlayoutPolicy', () => {
     ).toBe(113);
   });
 
+  it('can clamp a rough 1-on-1 recovery path earlier once usable pcm exists', () => {
+    expect(
+      computeUsableRecoveryTargetMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'strong',
+        recentSampleCount: 3,
+        recentAvgPcmBufferedMs: 52,
+        recentPlayoutUnderTargetFraction: 0.76,
+        previousWindowAvgPlayoutDeltaMs: -96.11,
+      })
+    ).toBe(100);
+  });
+
   it('clamps a weak multi-source recovery leg toward usable PCM instead of an inflated ceiling', () => {
     expect(
       computeUsableRecoveryTargetMaxMs({

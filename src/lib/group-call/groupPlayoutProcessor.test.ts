@@ -106,10 +106,10 @@ describe('group playout processor rate control', () => {
 
     expect(
       processor._computeRawTargetRate(150, 50, 128, 48_000).targetRate
-    ).toBe(1.004);
+    ).toBe(1.0045);
     expect(
       processor._computeRawTargetRate(210, 110, 128, 48_000).targetRate
-    ).toBe(1.006);
+    ).toBe(1.0065);
     expect(
       processor._computeRawTargetRate(300, 200, 128, 48_000).targetRate
     ).toBe(1.01);

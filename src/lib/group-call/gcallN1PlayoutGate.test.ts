@@ -237,6 +237,8 @@ describe('gcallN1PlayoutGate', () => {
         sampleCount: 0,
         avgPcmBufferedMs: 0,
         playoutUnderTargetFraction: 1,
+        recentStable: false,
+        severeInstability: true,
       })
     ).toBe(true);
     expect(
@@ -248,6 +250,34 @@ describe('gcallN1PlayoutGate', () => {
         sampleCount: 3,
         avgPcmBufferedMs: 95,
         playoutUnderTargetFraction: 0.2,
+        recentStable: true,
+        severeInstability: false,
+      })
+    ).toBe(true);
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_300,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 44,
+        targetMs: 145,
+        sampleCount: 3,
+        avgPcmBufferedMs: 95,
+        playoutUnderTargetFraction: 0.2,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(true);
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_300,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 44,
+        targetMs: 145,
+        sampleCount: 3,
+        avgPcmBufferedMs: 95,
+        playoutUnderTargetFraction: 0.2,
+        recentStable: true,
+        severeInstability: false,
       })
     ).toBe(false);
   });

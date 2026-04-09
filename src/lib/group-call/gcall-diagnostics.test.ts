@@ -34,11 +34,11 @@ describe('gcall-diagnostics', () => {
     expect(isGcallDebugEnabled()).toBe(true);
   });
 
-  it('readGcallDiagnosticsRingEnabled is false in dev when qortal:gcall-diagnostics is 0', () => {
+  it('readGcallDiagnosticsRingEnabled honors the in-memory override', () => {
     localStorage.setItem('qortal:gcall-diagnostics', '0');
-    expect(readGcallDiagnosticsRingEnabled()).toBe(false);
-    gcallDiagnosticsPush('log', '[GCall] dropped', { n: 1 });
-    expect(gcallDiagnosticsGetEvents().length).toBe(0);
+    expect(readGcallDiagnosticsRingEnabled()).toBe(true);
+    gcallDiagnosticsPush('log', '[GCall] kept', { n: 1 });
+    expect(gcallDiagnosticsGetEvents().length).toBe(1);
   });
 
   it('truncates long base58-like addresses', () => {

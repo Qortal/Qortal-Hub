@@ -313,6 +313,23 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeWindowSource: false,
         ingressPeerRecovery: false,
         recentStability: {
+          sampleCount: 3,
+          avgPcmBufferedMs: 94,
+          playoutUnderTargetFraction: 0.44,
+          underrunCount: 2,
+          stable: false,
+          severeInstability: false,
+        },
+      })
+    ).toBe(true);
+    expect(
+      shouldAccelerateSingleRemoteRecoveryDecay({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+        recentStability: {
           sampleCount: 2,
           avgPcmBufferedMs: 90,
           playoutUnderTargetFraction: 0.2,
@@ -350,7 +367,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         opusBufferedMs: 20,
         tier: 'deep',
       })
-    ).toBe(2);
+    ).toBe(3);
     expect(
       computeN1AccumulationDecodeCap({
         accumulationActive: true,

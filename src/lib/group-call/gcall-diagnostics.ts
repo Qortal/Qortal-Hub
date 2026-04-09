@@ -82,6 +82,12 @@ const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
 /** When set to `1`/`on` in production, enables ring-buffer capture without full console debug. */
 const GCALL_DIAGNOSTICS_RING_STORAGE_KEY = 'qortal:gcall-diagnostics';
+/**
+ * In-memory override for diagnostics ring capture.
+ * Set to `true`/`false` to force behavior regardless of localStorage.
+ * Set to `null` to fall back to the storage/debug-driven behavior.
+ */
+const GCALL_DIAGNOSTICS_RING_ENABLED_OVERRIDE: boolean | null = true;
 
 /** Verbose GCall console + ingest from `debugLog` / `debugWarn` in useGroupVoiceCall. */
 export function isGcallDebugEnabled(): boolean {
@@ -108,6 +114,9 @@ export function isGcallMicDebugEnabled(): boolean {
  * Export still works: live metrics + perf snapshot are attached at export time from current state.
  */
 export function readGcallDiagnosticsRingEnabled(): boolean {
+  if (GCALL_DIAGNOSTICS_RING_ENABLED_OVERRIDE !== null) {
+    return GCALL_DIAGNOSTICS_RING_ENABLED_OVERRIDE;
+  }
   const prod =
     typeof import.meta !== 'undefined' &&
     import.meta.env &&
