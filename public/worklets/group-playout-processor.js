@@ -49,7 +49,7 @@ const UNDER_USABLE_BUFFER_MIN_MS = 85;
 const UNDER_USABLE_TARGET_RATIO = 0.62;
 const UNDER_USABLE_DELTA_MIN_MS = -70;
 const RATE_K_UNDER = 0.000125;
-const RATE_K_OVER = 0.00009;
+const RATE_K_OVER = 0.0001;
 
 /** Panic: absolute PCM depth (hysteresis + dwell). */
 const PANIC_ENTER_MS = 60;

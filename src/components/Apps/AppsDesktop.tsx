@@ -457,10 +457,18 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
 
   return (
     <AppsParent
+      aria-hidden={!show}
       sx={{
+        bottom: 0,
         flexDirection: 'row',
-        left: !show && '-200vw',
-        position: !show && 'fixed',
+        left: 0,
+        opacity: show ? 1 : 0,
+        pointerEvents: show ? 'auto' : 'none',
+        position: 'absolute',
+        right: 0,
+        top: 0,
+        visibility: show ? 'visible' : 'hidden',
+        zIndex: show ? 1 : 0,
       }}
     >
       <RatingsCacheInitializer />

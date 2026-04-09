@@ -186,7 +186,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         activeSourceCount: 1,
         adaptiveNetworkMode: 'low-latency',
       })
-    ).toBe(137);
+    ).toBe(131);
     expect(
       computeSteadyTargetDecayThresholdMs({
         adaptiveMaxTargetMs: 145,
@@ -599,6 +599,24 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(
       shouldKeepSingleRemoteWindowRecoveryLocal({
         activeSourceCount: 1,
+        lastRecvAgeMs: 180,
+        avgOpusBufferedMs: 74.298,
+        adaptiveTargetMedianMs: 100,
+        adaptiveTargetMaxMs: 145,
+        avgPcmBufferedMs: 56.424,
+        playoutUnderTargetFraction: 0.734,
+        avgPlayoutDeltaMs: -54.719,
+        missingFrames: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldKeepSingleRemoteWindowRecoveryLocal({
+        activeSourceCount: 1,
         lastRecvAgeMs: 900,
         avgOpusBufferedMs: 106,
         adaptiveTargetMedianMs: 100,
@@ -606,6 +624,24 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         avgPcmBufferedMs: 0.021,
         playoutUnderTargetFraction: 1,
         avgPlayoutDeltaMs: -127.5,
+        missingFrames: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldKeepSingleRemoteWindowRecoveryLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 60,
+        adaptiveTargetMedianMs: 100,
+        adaptiveTargetMaxMs: 120,
+        avgPcmBufferedMs: 52,
+        playoutUnderTargetFraction: 0.92,
+        avgPlayoutDeltaMs: -90,
         missingFrames: 0,
         packetsDroppedPendingDecrypt: 0,
         reticulumAudioStaleDrops: 0,

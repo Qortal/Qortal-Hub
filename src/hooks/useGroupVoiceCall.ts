@@ -416,10 +416,10 @@ const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
 const GCALL_STABLE_RECOVERY_ALPHA_DOWN = 0.34;
-const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.32;
+const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.34;
 const GCALL_MULTI_SOURCE_RECOVERY_ALPHA_DOWN = 0.42;
 const GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN = 0.4;
-const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 8;
+const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 14;
 const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
@@ -942,10 +942,11 @@ const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_DELTA_MIN_MS = -20;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS = 450;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS = 70;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO = 0.55;
-const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_PCM_MAX_MS = 52;
-const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN = 0.78;
-const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS = -55;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_PCM_MAX_MS = 64;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN = 0.7;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS = -45;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX = 40;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_OPUS_PCM_GAP_MIN_MS = 12;
 
 export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
   activeSourceCount: number;
@@ -982,6 +983,8 @@ export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
     (opts.avgOpusBufferedMs >= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS ||
       opts.avgOpusBufferedMs / target >=
         GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO) &&
+    opts.avgOpusBufferedMs >=
+      opts.avgPcmBufferedMs + GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_OPUS_PCM_GAP_MIN_MS &&
     opts.avgPcmBufferedMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_PCM_MAX_MS &&
     opts.playoutUnderTargetFraction >=
       GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN &&
@@ -3617,24 +3620,22 @@ export function useGroupVoiceCall(uiActive = false) {
           }
           continue;
         }
-        markPeerUnstable(peerAddress, severity, {
-          bypassReentryCooldown: shouldBypassRecoveryReentryCooldown({
-            severity,
-            severeInstability:
-              entry.severe ||
-              pressureAssessment.severe ||
-              recentSummary.severeInstability,
-          }),
+        const localOnlySingleRemote =
+          entry.localOnlySingleRemote && !pressureAssessment.shouldTightenRecovery;
+        const effectiveSeverity = localOnlySingleRemote ? 1 : severity;
+        markPeerUnstable(peerAddress, effectiveSeverity, {
+          bypassReentryCooldown: localOnlySingleRemote
+            ? false
+            : shouldBypassRecoveryReentryCooldown({
+                severity: effectiveSeverity,
+                severeInstability:
+                  entry.severe ||
+                  pressureAssessment.severe ||
+                  recentSummary.severeInstability,
+              }),
         });
-        if (entry.localOnlySingleRemote) {
-          const prevBreaches =
-            peerMediaRecoveryBreachRef.current.get(peerAddress) ?? 0;
-          if (prevBreaches > 0) {
-            peerMediaRecoveryBreachRef.current.set(
-              peerAddress,
-              prevBreaches - 1
-            );
-          }
+        if (localOnlySingleRemote) {
+          peerMediaRecoveryBreachRef.current.delete(peerAddress);
           continue;
         }
 

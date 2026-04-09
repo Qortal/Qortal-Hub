@@ -105,6 +105,9 @@ describe('group playout processor rate control', () => {
     const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
 
     expect(
+      processor._computeRawTargetRate(130, 30, 128, 48_000).targetRate
+    ).toBe(1.003);
+    expect(
       processor._computeRawTargetRate(150, 50, 128, 48_000).targetRate
     ).toBe(1.0045);
     expect(
