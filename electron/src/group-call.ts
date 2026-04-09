@@ -2283,47 +2283,7 @@ export class GroupCallManager extends EventEmitter {
     if (bridge.getState() !== 'ready') {
       return { ok: false, reason: 'bridge-not-ready' };
     }
-    const neighbors =
-      this.presence.getReticulumActiveNeighborHashes(excludePeerHashes);
-    if (neighbors.length === 0) {
-      return { ok: false, reason: 'no-route' };
-    }
-    /** True if at least one overlay neighbor received every frame (gossip delivered). */
-    let anyPeerFullDelivery = false;
-    let lastFailure: Extract<ReticulumSendResult, { ok: false }> | null = null;
-    for (const peerHash of neighbors) {
-      let peerDeliveredAllFrames = true;
-      for (const frame of frames) {
-        const result: ReticulumSendResult = await bridge.sendGroupCallDetailed(
-          peerHash,
-          frame
-        );
-        if (result.ok === false) {
-          peerDeliveredAllFrames = false;
-          lastFailure = result;
-          const wireT = frame['t'];
-          const wireHint =
-            typeof wireT === 'string' ? ` wire=${wireT}` : '';
-          loggerWarn(
-            `[GCall] Reticulum overlay fanout send failed peer=${peerHash.slice(0, 16)}… reason=${result.reason}${result.error ? ` error=${result.error}` : ''}${wireHint}`
-          );
-        }
-      }
-      if (peerDeliveredAllFrames) {
-        anyPeerFullDelivery = true;
-      }
-    }
-    if (anyPeerFullDelivery) {
-      return { ok: true };
-    }
-    if (lastFailure) {
-      return lastFailure;
-    }
-    return {
-      ok: false,
-      reason: 'packet-send-false',
-      error: 'Overlay fanout had no successful delivery',
-    };
+    return bridge.fanoutGroupCallDetailed(frames, excludePeerHashes);
   }
 
   private async sendReticulumFramesToHash(

@@ -128,4 +128,15 @@ describe('group playout processor rate control', () => {
 
     expect(processor._smoothedRate).toBeLessThan(1.001);
   });
+
+  it('uses gentler under-target slowdown once the PCM buffer is already usable', async () => {
+    const Processor = await loadProcessorCtor();
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } });
+
+    processor._playoutStarted = true;
+    processor._targetPlayoutMs = 160;
+
+    expect((processor as any)._underTierRate(-50, 110)).toBe(0.992);
+    expect((processor as any)._underTierRate(-50, 70)).toBe(0.98);
+  });
 });

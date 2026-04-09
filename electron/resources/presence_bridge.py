@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire388-overlay-dedupe-v1"
+PRESENCE_BRIDGE_BUILD = "wire390-call-fanout-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -1684,10 +1684,10 @@ def _await_destination_path(destination_hash: bytes, timeout_seconds: float) -> 
         time.sleep(min(_PACKET_PATH_POLL_INTERVAL_SECONDS, remaining))
 
 
-def _preflight_overlay_link_path(peer_key: str, destination_hash: bytes) -> bool:
+def _nudge_overlay_link_path(peer_key: str, destination_hash: bytes) -> None:
     try:
         if RNS.Transport.has_path(destination_hash):
-            return True
+            return
     except Exception:
         pass
 
@@ -1718,8 +1718,6 @@ def _preflight_overlay_link_path(peer_key: str, destination_hash: bytes) -> bool
                 "[presence_bridge] target=presence-reticulum overlay_link_path_request_failed "
                 f"peer={peer_key}: {exc}"
             )
-
-    return _await_destination_path(destination_hash, _PACKET_PATH_AWAIT_SECONDS)
 
 
 def _note_call_media_inbound(peer_hash: str, sender_call_hash: str = "") -> None:
@@ -2227,7 +2225,7 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
                 _peer_lifecycle.pop(peer_key, None)
                 return None
         if outbound is not None:
-            _preflight_overlay_link_path(peer_key, outbound.hash)
+            _nudge_overlay_link_path(peer_key, outbound.hash)
         with _state_lock:
             existing_link_id = _outgoing_overlay_link_id_by_peer_hash.get(peer_key)
             if existing_link_id:
@@ -3393,6 +3391,118 @@ def handle_stop(req_id: str) -> None:
     emit_resp(req_id, True)
 
 
+def _encode_group_signal_wire(msg: Dict[str, Any]) -> Dict[str, Any]:
+    out = _normalize_json_numbers(dict(msg))
+    out["r"] = destination_hash_hex(_destination.hash)
+    wire_bytes = _call_wire_json_bytes(out)
+    if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
+        return {
+            "ok": False,
+            "payload": {
+                "code": "wire_too_large",
+                "wireBytes": len(wire_bytes),
+                "maxWireBytes": _MAX_ENCRYPTED_WIRE_BYTES,
+                "messageType": out.get("t"),
+            },
+            "error": (
+                f"Wire size {len(wire_bytes)} exceeds encrypted MDU "
+                f"{_MAX_ENCRYPTED_WIRE_BYTES}"
+            ),
+        }
+    return {
+        "ok": True,
+        "wire_bytes": wire_bytes,
+        "message_type": out.get("t"),
+    }
+
+
+def _prepare_group_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
+    peer_key = peer_hash.strip().lower()
+    if not peer_key:
+        return {
+            "payload": {"code": "unknown_peer_presence_hash"},
+            "error": "Unknown peer presence hash",
+        }
+    # Overlay fanout: best-effort recall for overlay links; do not reject with
+    # unknown_peer_presence_hash before attempting send (RNS may still lack identity).
+    ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _known_peers:
+        _nudge_overlay_path_for_peer(peer_key)
+        ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _active_overlay_neighbors:
+        _ensure_overlay_link(peer_key)
+    if peer_key not in _known_peers:
+        return {
+            "payload": {"code": "unknown_peer_presence_hash"},
+            "error": "Unknown peer presence hash",
+        }
+    return None
+
+
+def _send_group_signal_wire_to_peer(peer_hash: str, wire_bytes: bytes) -> Optional[Dict[str, Any]]:
+    if not _send_wire_to_overlay_peer(peer_hash, wire_bytes, "group_signal"):
+        return {
+            "payload": {"code": "packet_send_false"},
+            "error": "Packet send returned False",
+        }
+    return None
+
+
+def _encode_call_signal_wire(msg: Dict[str, Any]) -> Dict[str, Any]:
+    out = _normalize_json_numbers(dict(msg))
+    out["r"] = destination_hash_hex(_destination.hash)
+    wire_bytes = _call_wire_json_bytes(out)
+    if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
+        return {
+            "ok": False,
+            "payload": {
+                "code": "wire_too_large",
+                "wireBytes": len(wire_bytes),
+                "maxWireBytes": _MAX_ENCRYPTED_WIRE_BYTES,
+                "messageType": out.get("t"),
+            },
+            "error": (
+                f"Wire size {len(wire_bytes)} exceeds encrypted MDU "
+                f"{_MAX_ENCRYPTED_WIRE_BYTES}"
+            ),
+        }
+    return {
+        "ok": True,
+        "wire_bytes": wire_bytes,
+        "message_type": out.get("t"),
+    }
+
+
+def _prepare_call_signal_peer(peer_hash: str) -> Optional[Dict[str, Any]]:
+    peer_key = peer_hash.strip().lower()
+    if not peer_key:
+        return {
+            "payload": {"code": "unknown_peer_presence_hash"},
+            "error": "Unknown peer presence hash",
+        }
+    ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _known_peers:
+        _nudge_overlay_path_for_peer(peer_key)
+        ensure_known_peer_from_recall(peer_key, "ts_seed")
+    if peer_key not in _active_overlay_neighbors:
+        _ensure_overlay_link(peer_key)
+    if peer_key not in _known_peers:
+        return {
+            "payload": {"code": "unknown_peer_presence_hash"},
+            "error": "Unknown peer presence hash",
+        }
+    return None
+
+
+def _send_call_signal_wire_to_peer(peer_hash: str, wire_bytes: bytes) -> Optional[Dict[str, Any]]:
+    if not _send_wire_to_overlay_peer(peer_hash, wire_bytes, "call_signal"):
+        return {
+            "payload": {"code": "packet_send_false"},
+            "error": "Packet send returned False",
+        }
+    return None
+
+
 def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
     peer_hash = str(payload.get("peerPresenceHash") or "")
     msg = payload.get("message")
@@ -3410,52 +3520,186 @@ def handle_send_call(req_id: str, payload: Dict[str, Any]) -> None:
         return
 
     peer_key = peer_hash.strip().lower()
-    ensure_known_peer_from_recall(peer_key, "ts_seed")
-    if peer_key not in _known_peers:
-        _nudge_overlay_path_for_peer(peer_key)
-        ensure_known_peer_from_recall(peer_key, "ts_seed")
-    if peer_key not in _active_overlay_neighbors:
-        _ensure_overlay_link(peer_key)
-    if peer_key not in _known_peers:
-        emit_resp(
-            req_id,
-            False,
-            payload={"code": "unknown_peer_presence_hash"},
-            error="Unknown peer presence hash",
-        )
-        return
 
     try:
-        out = _normalize_json_numbers(dict(msg))
-        out["r"] = destination_hash_hex(_destination.hash)
-        wire_bytes = _call_wire_json_bytes(out)
-        if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
+        encoded = _encode_call_signal_wire(msg)
+        if not encoded.get("ok"):
             emit_resp(
                 req_id,
                 False,
-                payload={
-                    "code": "wire_too_large",
-                    "wireBytes": len(wire_bytes),
-                    "maxWireBytes": _MAX_ENCRYPTED_WIRE_BYTES,
-                    "messageType": out.get("t"),
-                },
-                error=(
-                    f"Wire size {len(wire_bytes)} exceeds encrypted MDU "
-                    f"{_MAX_ENCRYPTED_WIRE_BYTES}"
-                ),
+                payload=encoded.get("payload"),
+                error=str(encoded.get("error") or "Wire encoding failed"),
             )
             return
+        wire_bytes = encoded["wire_bytes"]
         if len(wire_bytes) > 600:
             log(f"[presence_bridge] warning call packet len={len(wire_bytes)}")
-        if not _send_wire_to_overlay_peer(peer_key, wire_bytes, "call_signal"):
+        failure = _prepare_call_signal_peer(peer_key)
+        if failure is not None:
             emit_resp(
                 req_id,
                 False,
-                payload={"code": "packet_send_false"},
-                error="Packet send returned False",
+                payload=failure.get("payload"),
+                error=str(failure.get("error") or "Unknown peer presence hash"),
+            )
+            return
+        failure = _send_call_signal_wire_to_peer(peer_key, wire_bytes)
+        if failure is not None:
+            emit_resp(
+                req_id,
+                False,
+                payload=failure.get("payload"),
+                error=str(failure.get("error") or "Packet send returned False"),
             )
             return
         emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_fanout_call(req_id: str, payload: Dict[str, Any]) -> None:
+    messages = payload.get("messages")
+    if not isinstance(messages, list) or not messages or any(
+        not isinstance(msg, dict) for msg in messages
+    ):
+        emit_resp(req_id, False, error="Missing messages")
+        return
+
+    if _destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+
+    exclude_raw = payload.get("excludePeerPresenceHashes")
+    exclude_hashes = (
+        [str(h).strip().lower() for h in exclude_raw if isinstance(h, str) and h.strip()]
+        if isinstance(exclude_raw, list)
+        else []
+    )
+
+    try:
+        encoded_frames = []
+        message_types = []
+        for msg in messages:
+            encoded = _encode_call_signal_wire(msg)
+            if not encoded.get("ok"):
+                emit_resp(
+                    req_id,
+                    False,
+                    payload=encoded.get("payload"),
+                    error=str(encoded.get("error") or "Wire encoding failed"),
+                )
+                return
+            wire_bytes = encoded["wire_bytes"]
+            if len(wire_bytes) > 600:
+                log(f"[presence_bridge] warning call packet len={len(wire_bytes)}")
+            encoded_frames.append(wire_bytes)
+            message_type = encoded.get("message_type")
+            message_types.append(message_type if isinstance(message_type, str) else "")
+
+        extra = payload.get("overlayNeighborHashes")
+        if isinstance(extra, list):
+            for h in extra:
+                if isinstance(h, str) and h.strip():
+                    ensure_known_peer_from_recall(h.strip().lower(), "ts_seed")
+
+        _maybe_prune_stale_peers()
+        _sync_overlay_links()
+        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        if not peer_hashes:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "no_route"},
+                error="No overlay route",
+            )
+            return
+
+        log(
+            "[presence_bridge] target=call-signal-reticulum fanout "
+            f"peers={len(peer_hashes)} exclude_hashes={','.join(exclude_hashes)} "
+            f"fanout_hashes={','.join(peer_hashes)} "
+            f"message_types={','.join(t or '?' for t in message_types)}"
+        )
+
+        any_peer_full_delivery = False
+        last_failure_payload = {"code": "packet_send_false"}
+        last_failure_error = "Packet send returned False"
+        saw_failure = False
+
+        for peer_hash in peer_hashes:
+            failure = _prepare_call_signal_peer(peer_hash)
+            if failure is not None:
+                saw_failure = True
+                last_failure_payload = failure.get("payload") or {"code": "packet_send_false"}
+                last_failure_error = str(
+                    failure.get("error") or "Unknown peer presence hash"
+                )
+                log(
+                    "[presence_bridge] target=call-signal-reticulum fanout_peer_failed "
+                    f"peer_hash={peer_hash} "
+                    f"reason={last_failure_payload.get('code', 'packet_send_false')} "
+                    f"error={last_failure_error}"
+                )
+                continue
+
+            peer_delivered_all_frames = True
+            for index, wire_bytes in enumerate(encoded_frames):
+                failure = _send_call_signal_wire_to_peer(peer_hash, wire_bytes)
+                if failure is not None:
+                    saw_failure = True
+                    peer_delivered_all_frames = False
+                    last_failure_payload = failure.get("payload") or {
+                        "code": "packet_send_false"
+                    }
+                    last_failure_error = str(
+                        failure.get("error") or "Packet send returned False"
+                    )
+                    message_type = (
+                        message_types[index]
+                        if index < len(message_types) and message_types[index]
+                        else "?"
+                    )
+                    log(
+                        "[presence_bridge] target=call-signal-reticulum fanout_send_failed "
+                        f"peer_hash={peer_hash} "
+                        f"reason={last_failure_payload.get('code', 'packet_send_false')} "
+                        f"message_type={message_type} "
+                        f"error={last_failure_error}"
+                    )
+            if peer_delivered_all_frames:
+                any_peer_full_delivery = True
+
+        if any_peer_full_delivery:
+            emit_resp(
+                req_id,
+                True,
+                payload={
+                    "fanoutPeers": len(peer_hashes),
+                    "fanoutHashes": peer_hashes,
+                },
+            )
+            return
+
+        if saw_failure:
+            emit_resp(
+                req_id,
+                False,
+                payload=last_failure_payload,
+                error=last_failure_error,
+            )
+            return
+
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "packet_send_false"},
+            error="Overlay fanout had no successful delivery",
+        )
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))
 
@@ -3477,44 +3721,181 @@ def handle_send_group_call(req_id: str, payload: Dict[str, Any]) -> None:
         return
 
     peer_key = peer_hash.strip().lower()
-    # Overlay fanout: best-effort recall for overlay links; do not reject with
-    # unknown_peer_presence_hash before attempting send (RNS may still lack identity).
-    ensure_known_peer_from_recall(peer_key, "ts_seed")
-    if peer_key not in _known_peers:
-        _nudge_overlay_path_for_peer(peer_key)
-        ensure_known_peer_from_recall(peer_key, "ts_seed")
-    if peer_key not in _active_overlay_neighbors:
-        _ensure_overlay_link(peer_key)
-
     try:
-        out = _normalize_json_numbers(dict(msg))
-        out["r"] = destination_hash_hex(_destination.hash)
-        wire_bytes = _call_wire_json_bytes(out)
-        if len(wire_bytes) > _MAX_ENCRYPTED_WIRE_BYTES:
+        encoded = _encode_group_signal_wire(msg)
+        if not encoded.get("ok"):
             emit_resp(
                 req_id,
                 False,
-                payload={
-                    "code": "wire_too_large",
-                    "wireBytes": len(wire_bytes),
-                    "maxWireBytes": _MAX_ENCRYPTED_WIRE_BYTES,
-                    "messageType": out.get("t"),
-                },
-                error=(
-                    f"Wire size {len(wire_bytes)} exceeds encrypted MDU "
-                    f"{_MAX_ENCRYPTED_WIRE_BYTES}"
-                ),
+                payload=encoded.get("payload"),
+                error=str(encoded.get("error") or "Wire encoding failed"),
             )
             return
-        if not _send_wire_to_overlay_peer(peer_key, wire_bytes, "group_signal"):
+        failure = _prepare_group_signal_peer(peer_key)
+        if failure is not None:
             emit_resp(
                 req_id,
                 False,
-                payload={"code": "packet_send_false"},
-                error="Packet send returned False",
+                payload=failure.get("payload"),
+                error=str(failure.get("error") or "Unknown peer presence hash"),
+            )
+            return
+        failure = _send_group_signal_wire_to_peer(
+            peer_key, encoded["wire_bytes"]
+        )
+        if failure is not None:
+            emit_resp(
+                req_id,
+                False,
+                payload=failure.get("payload"),
+                error=str(failure.get("error") or "Packet send returned False"),
             )
             return
         emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
+def handle_fanout_group_call(req_id: str, payload: Dict[str, Any]) -> None:
+    messages = payload.get("messages")
+    if not isinstance(messages, list) or not messages or any(
+        not isinstance(msg, dict) for msg in messages
+    ):
+        emit_resp(req_id, False, error="Missing messages")
+        return
+
+    if _destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+
+    exclude_raw = payload.get("excludePeerPresenceHashes")
+    exclude_hashes = (
+        [str(h).strip().lower() for h in exclude_raw if isinstance(h, str) and h.strip()]
+        if isinstance(exclude_raw, list)
+        else []
+    )
+
+    try:
+        encoded_frames = []
+        message_types = []
+        for msg in messages:
+            encoded = _encode_group_signal_wire(msg)
+            if not encoded.get("ok"):
+                emit_resp(
+                    req_id,
+                    False,
+                    payload=encoded.get("payload"),
+                    error=str(encoded.get("error") or "Wire encoding failed"),
+                )
+                return
+            encoded_frames.append(encoded["wire_bytes"])
+            message_type = encoded.get("message_type")
+            message_types.append(message_type if isinstance(message_type, str) else "")
+
+        extra = payload.get("overlayNeighborHashes")
+        if isinstance(extra, list):
+            for h in extra:
+                if isinstance(h, str) and h.strip():
+                    ensure_known_peer_from_recall(h.strip().lower(), "ts_seed")
+
+        _maybe_prune_stale_peers()
+        _sync_overlay_links()
+        peer_hashes = _resolve_overlay_neighbor_hashes(exclude_hashes)
+        if not peer_hashes:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "no_route"},
+                error="No overlay route",
+            )
+            return
+
+        log(
+            "[presence_bridge] target=group-signal-reticulum fanout "
+            f"peers={len(peer_hashes)} exclude_hashes={','.join(exclude_hashes)} "
+            f"fanout_hashes={','.join(peer_hashes)} "
+            f"message_types={','.join(t or '?' for t in message_types)}"
+        )
+
+        any_peer_full_delivery = False
+        last_failure_payload = {"code": "packet_send_false"}
+        last_failure_error = "Packet send returned False"
+        saw_failure = False
+
+        for peer_hash in peer_hashes:
+            failure = _prepare_group_signal_peer(peer_hash)
+            if failure is not None:
+                saw_failure = True
+                last_failure_payload = failure.get("payload") or {"code": "packet_send_false"}
+                last_failure_error = str(
+                    failure.get("error") or "Unknown peer presence hash"
+                )
+                log(
+                    "[presence_bridge] target=group-signal-reticulum fanout_peer_failed "
+                    f"peer_hash={peer_hash} "
+                    f"reason={last_failure_payload.get('code', 'packet_send_false')} "
+                    f"error={last_failure_error}"
+                )
+                continue
+
+            peer_delivered_all_frames = True
+            for index, wire_bytes in enumerate(encoded_frames):
+                failure = _send_group_signal_wire_to_peer(peer_hash, wire_bytes)
+                if failure is not None:
+                    saw_failure = True
+                    peer_delivered_all_frames = False
+                    last_failure_payload = failure.get("payload") or {
+                        "code": "packet_send_false"
+                    }
+                    last_failure_error = str(
+                        failure.get("error") or "Packet send returned False"
+                    )
+                    message_type = (
+                        message_types[index]
+                        if index < len(message_types) and message_types[index]
+                        else "?"
+                    )
+                    log(
+                        "[presence_bridge] target=group-signal-reticulum fanout_send_failed "
+                        f"peer_hash={peer_hash} "
+                        f"reason={last_failure_payload.get('code', 'packet_send_false')} "
+                        f"message_type={message_type} "
+                        f"error={last_failure_error}"
+                    )
+            if peer_delivered_all_frames:
+                any_peer_full_delivery = True
+
+        if any_peer_full_delivery:
+            emit_resp(
+                req_id,
+                True,
+                payload={
+                    "fanoutPeers": len(peer_hashes),
+                    "fanoutHashes": peer_hashes,
+                },
+            )
+            return
+
+        if saw_failure:
+            emit_resp(
+                req_id,
+                False,
+                payload=last_failure_payload,
+                error=last_failure_error,
+            )
+            return
+
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "packet_send_false"},
+            error="Overlay fanout had no successful delivery",
+        )
     except Exception as exc:
         emit_resp(req_id, False, error=str(exc))
 
@@ -3742,8 +4123,12 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_stop(req_id)
     elif action == "send_call":
         handle_send_call(req_id, payload)
+    elif action == "fanout_call":
+        handle_fanout_call(req_id, payload)
     elif action == "send_group_call":
         handle_send_group_call(req_id, payload)
+    elif action == "fanout_group_call":
+        handle_fanout_group_call(req_id, payload)
     elif action == "open_group_audio_link":
         handle_open_group_audio_link(req_id, payload)
     elif action == "close_group_audio_link":

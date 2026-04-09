@@ -160,6 +160,8 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
   const sessionIdRef = useRef<string | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const idleCheckRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pendingPresenceBootstrapRef = useRef<Promise<boolean> | null>(null);
+  const hasAnnouncedRef = useRef(false);
   // Ref-only idle tracking — no state, no re-renders for the timer itself.
   const lastActivityRef = useRef<number>(Date.now());
   const isIdleRef = useRef<boolean>(false);
@@ -224,12 +226,12 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
     }
   }, []);
 
-  const sendAnnounce = useCallback(async () => {
+  const sendAnnounce = useCallback(async (): Promise<boolean> => {
     const ui = userInfoRef.current;
     const sessionId = sessionIdRef.current;
     const statusVal = getEffectiveStatus();
-    if (statusVal === 'offline') return;
-    if (!ui?.address || !ui?.publicKey || !sessionId || !window.presence) return;
+    if (statusVal === 'offline') return false;
+    if (!ui?.address || !ui?.publicKey || !sessionId || !window.presence) return false;
     const status = statusVal;
     try {
       const timestamp = Date.now();
@@ -253,17 +255,21 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
       await window.presence?.announce(
         buildEnvelope('PRESENCE_ANNOUNCE', payload, timestamp, signature)
       );
+      hasAnnouncedRef.current = true;
+      return true;
     } catch (err) {
       console.error('[Presence] Announce failed:', err);
+      return false;
     }
   }, [getEffectiveStatus]);
 
-  const sendHeartbeat = useCallback(async () => {
+  const sendHeartbeat = useCallback(async (): Promise<boolean> => {
     const ui = userInfoRef.current;
     const sessionId = sessionIdRef.current;
     const statusVal = getEffectiveStatus();
-    if (statusVal === 'offline') return;
-    if (!ui?.address || !ui?.publicKey || !sessionId || !window.presence) return;
+    if (statusVal === 'offline') return false;
+    if (!hasAnnouncedRef.current) return false;
+    if (!ui?.address || !ui?.publicKey || !sessionId || !window.presence) return false;
     const status = statusVal;
     try {
       const timestamp = Date.now();
@@ -285,10 +291,42 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
       await window.presence.heartbeat(
         buildEnvelope('PRESENCE_HEARTBEAT', payload, timestamp, signature)
       );
+      return true;
     } catch (err) {
       console.error('[Presence] Heartbeat failed:', err);
+      return false;
     }
   }, [getEffectiveStatus]);
+
+  const announceWhenRemoteHubsReady = useCallback(
+    (shouldCancel: () => boolean): Promise<boolean> => {
+      if (heartbeatRef.current !== null && getEffectiveStatus() !== 'offline') {
+        return Promise.resolve(true);
+      }
+      const pending = pendingPresenceBootstrapRef.current;
+      if (pending) return pending;
+
+      const task = (async (): Promise<boolean> => {
+        const hubWait = await waitForOnlineRemoteReticulumHub(shouldCancel);
+        if (hubWait === 'cancelled') return false;
+        if (shouldCancel()) return false;
+        const announced = await sendAnnounce();
+        if (!announced) return false;
+        stopHeartbeat();
+        heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+        return true;
+      })();
+
+      pendingPresenceBootstrapRef.current = task;
+      void task.finally(() => {
+        if (pendingPresenceBootstrapRef.current === task) {
+          pendingPresenceBootstrapRef.current = null;
+        }
+      });
+      return task;
+    },
+    [getEffectiveStatus, sendAnnounce, sendHeartbeat, stopHeartbeat]
+  );
 
   // ── Idle detection ────────────────────────────────────────────────────────
   //
@@ -364,11 +402,13 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
         setMyStatus('online');
         myStatusRef.current = 'online';
         isAppearedOfflineRef.current = false;
+        hasAnnouncedRef.current = false;
       }
       return;
     }
 
     sessionIdRef.current = crypto.randomUUID();
+    hasAnnouncedRef.current = false;
     let cancelled = false;
 
     // Read any persisted 'offline' preference for this address before deciding
@@ -385,6 +425,7 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
         // (which watches `myStatus`) sees isAppearedOfflineRef=true and skips
         // sending an unnecessary OFFLINE message.
         isAppearedOfflineRef.current = true;
+        hasAnnouncedRef.current = false;
         setMyStatus('offline');
         myStatusRef.current = 'offline';
         return;
@@ -393,18 +434,14 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
       // Non-offline path — proceed with announce + heartbeat.
       if (myStatusRef.current === 'offline') {
         isAppearedOfflineRef.current = true;
+        hasAnnouncedRef.current = false;
         return;
       }
 
       isAppearedOfflineRef.current = false;
-      const hubWait = await waitForOnlineRemoteReticulumHub(() => cancelled);
-      if (hubWait === 'cancelled') return;
-      if (cancelled) return;
-      if (myStatusRef.current === 'offline') return;
-
-      sendAnnounce();
-      stopHeartbeat();
-      heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
+      void announceWhenRemoteHubsReady(
+        () => cancelled || myStatusRef.current === 'offline'
+      );
     })();
 
     return () => {
@@ -423,21 +460,18 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
     if (myStatus === 'offline') {
       if (!isAppearedOfflineRef.current) {
         isAppearedOfflineRef.current = true;
+        hasAnnouncedRef.current = false;
         stopHeartbeat();
         sendOfflineCallback();
       }
     } else if (isAppearedOfflineRef.current) {
       void (async () => {
-        const hubWait = await waitForOnlineRemoteReticulumHub(
+        const announced = await announceWhenRemoteHubsReady(
           () =>
             !isAuthenticatedRef.current || myStatusRef.current === 'offline'
         );
-        if (hubWait === 'cancelled') return;
-        if (!isAuthenticatedRef.current || myStatusRef.current === 'offline') return;
+        if (!announced) return;
         isAppearedOfflineRef.current = false;
-        sendAnnounce();
-        stopHeartbeat();
-        heartbeatRef.current = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
       })();
     } else {
       const timer = setTimeout(sendHeartbeat, 300);
@@ -512,7 +546,10 @@ export function usePresence(): { sendOfflineBeforeLogout: () => Promise<void> } 
 
     const unsubscribeStarted = window.presence.onStarted?.(() => {
       if (!isAuthenticatedRef.current) return;
-      void sendAnnounce();
+      void announceWhenRemoteHubsReady(
+        () =>
+          !isAuthenticatedRef.current || myStatusRef.current === 'offline'
+      );
     });
 
     return () => {

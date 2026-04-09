@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS,
+  GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS,
+  GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS,
   computeN1LiveRecoveryBurstCap,
+  computeN1PcmRebuildBurstCap,
   computeN1RecoveryEarlyReleaseMinBufferMs,
   computeN1BufferEnforceTier,
   computeN1BufferRatio,
   computeN1MinStartMs,
+  isSevereN1RecoveryPrerollRelease,
   shouldForceN1RecoveryPrerollSatisfied,
+  shouldBoostN1PcmRebuild,
+  shouldKeepN1SevereForcedReleaseRebuild,
+  shouldRearmN1LateCollapseRecovery,
   computeN1SteadyMinHoldMs,
   computeN1SteadyTierBurstCap,
   computeN1TierBurstCap,
@@ -68,6 +76,39 @@ describe('gcallN1PlayoutGate', () => {
         targetMs: 145,
       })
     ).toBe(false);
+    expect(
+      shouldForceN1RecoveryPrerollSatisfied({
+        blockedForMs: 500,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 20,
+        sourceActive: true,
+        targetMs: 145,
+      })
+    ).toBe(true);
+    expect(
+      isSevereN1RecoveryPrerollRelease({
+        blockedForMs: 500,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 20,
+        sourceActive: true,
+        targetMs: 145,
+      })
+    ).toBe(true);
+    expect(
+      isSevereN1RecoveryPrerollRelease({
+        blockedForMs: 500,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 44,
+        sourceActive: true,
+        targetMs: 145,
+      })
+    ).toBe(false);
+    expect(GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS).toBeGreaterThan(
+      computeN1RecoveryEarlyReleaseMinBufferMs(145)
+    );
+    expect(GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS).toBeGreaterThan(
+      GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS
+    );
   });
 
   it('computeN1BufferRatio uses max target floor', () => {
@@ -161,5 +202,92 @@ describe('gcallN1PlayoutGate', () => {
         sourceRecentlyPushed: false,
       })
     ).toBe(4);
+  });
+
+  it('switches to PCM rebuild mode when single-remote playout stays badly starved', () => {
+    expect(
+      shouldBoostN1PcmRebuild({
+        sourceRecentlyPushed: true,
+        sampleCount: 4,
+        avgPcmBufferedMs: 42.67,
+        playoutUnderTargetFraction: 0.807,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(computeN1PcmRebuildBurstCap('deep', 11)).toBe(4);
+    expect(computeN1PcmRebuildBurstCap('moderate', 11)).toBe(5);
+    expect(
+      shouldBoostN1PcmRebuild({
+        sourceRecentlyPushed: true,
+        sampleCount: 4,
+        avgPcmBufferedMs: 90,
+        playoutUnderTargetFraction: 0.4,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(false);
+  });
+
+  it('keeps severe forced release in rebuild mode until playout reserve actually recovers', () => {
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_000,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 20,
+        targetMs: 145,
+        sampleCount: 0,
+        avgPcmBufferedMs: 0,
+        playoutUnderTargetFraction: 1,
+      })
+    ).toBe(true);
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_000,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 44,
+        targetMs: 145,
+        sampleCount: 3,
+        avgPcmBufferedMs: 95,
+        playoutUnderTargetFraction: 0.2,
+      })
+    ).toBe(false);
+  });
+
+  it('re-arms single-remote recovery when a live call collapses back to a one-frame floor', () => {
+    expect(
+      shouldRearmN1LateCollapseRecovery({
+        nowMs: 1_000,
+        cooldownUntilMs: 0,
+        sourceRecentlyPushed: true,
+        opusBufferedMs: 20,
+        sampleCount: 4,
+        avgPcmBufferedMs: 20.049,
+        playoutUnderTargetFraction: 0.91,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldRearmN1LateCollapseRecovery({
+        nowMs: 1_000,
+        cooldownUntilMs: 1_000 + GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS,
+        sourceRecentlyPushed: true,
+        opusBufferedMs: 20,
+        sampleCount: 4,
+        avgPcmBufferedMs: 20.049,
+        playoutUnderTargetFraction: 0.91,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldRearmN1LateCollapseRecovery({
+        nowMs: 1_000,
+        cooldownUntilMs: 0,
+        sourceRecentlyPushed: true,
+        opusBufferedMs: 65,
+        sampleCount: 4,
+        avgPcmBufferedMs: 100,
+        playoutUnderTargetFraction: 0.4,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(false);
   });
 });

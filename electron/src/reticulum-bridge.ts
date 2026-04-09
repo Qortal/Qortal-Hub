@@ -60,7 +60,9 @@ type BridgeCmdFrame = {
     | 'overlay_note_candidate_failure'
     | 'stop'
     | 'send_call'
+    | 'fanout_call'
     | 'send_group_call'
+    | 'fanout_group_call'
     | 'open_group_audio_link'
     | 'close_group_audio_link'
     | 'warm_group_audio_path'
@@ -88,6 +90,7 @@ export type ReticulumSendFailureReason =
   | 'unknown-peer-presence-hash'
   | 'wire-too-large'
   | 'packet-send-false'
+  | 'no-route'
   | 'unknown-link-id'
   | 'audio-link-not-ready'
   | 'audio-payload-too-large'
@@ -664,6 +667,29 @@ export class ReticulumBridge
     });
   }
 
+  async fanoutCallDetailed(
+    messages: Record<string, unknown>[],
+    excludePeerPresenceHashes: string[] = []
+  ): Promise<ReticulumSendResult> {
+    if (messages.length === 0) {
+      return {
+        ok: false,
+        reason: 'wire-too-large',
+        error: 'No Reticulum frames fit encrypted wire limit',
+      };
+    }
+    const pm = getPresenceManager();
+    const overlayNeighborHashes =
+      pm?.getReticulumActiveNeighborHashes(excludePeerPresenceHashes) ??
+      pm?.getReticulumFanoutDestinationHashes() ??
+      [];
+    return this.sendDetailed('fanout_call', {
+      messages,
+      overlayNeighborHashes,
+      excludePeerPresenceHashes,
+    });
+  }
+
   async sendGroupCall(
     peerPresenceHash: string,
     message: Record<string, unknown>
@@ -679,6 +705,29 @@ export class ReticulumBridge
     return this.sendDetailed('send_group_call', {
       peerPresenceHash,
       message,
+    });
+  }
+
+  async fanoutGroupCallDetailed(
+    messages: Record<string, unknown>[],
+    excludePeerPresenceHashes: string[] = []
+  ): Promise<ReticulumSendResult> {
+    if (messages.length === 0) {
+      return {
+        ok: false,
+        reason: 'wire-too-large',
+        error: 'No Reticulum frames fit encrypted wire limit',
+      };
+    }
+    const pm = getPresenceManager();
+    const overlayNeighborHashes =
+      pm?.getReticulumActiveNeighborHashes(excludePeerPresenceHashes) ??
+      pm?.getReticulumFanoutDestinationHashes() ??
+      [];
+    return this.sendDetailed('fanout_group_call', {
+      messages,
+      overlayNeighborHashes,
+      excludePeerPresenceHashes,
     });
   }
 
@@ -2072,7 +2121,9 @@ export class ReticulumBridge
   private async sendDetailed(
     action:
       | 'send_call'
+      | 'fanout_call'
       | 'send_group_call'
+      | 'fanout_group_call'
       | 'close_group_audio_link'
       | 'warm_group_audio_path',
     payload: Record<string, unknown>
@@ -2121,6 +2172,7 @@ export class ReticulumBridge
       return 'unknown-peer-presence-hash';
     if (code === 'wire_too_large') return 'wire-too-large';
     if (code === 'packet_send_false') return 'packet-send-false';
+    if (code === 'no_route') return 'no-route';
     if (code === 'unknown_link_id') return 'unknown-link-id';
     if (code === 'audio_link_not_ready') return 'audio-link-not-ready';
     if (code === 'audio_payload_too_large') return 'audio-payload-too-large';

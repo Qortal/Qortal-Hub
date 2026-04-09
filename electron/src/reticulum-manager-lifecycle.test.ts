@@ -18,6 +18,10 @@ class CallBridgeStub extends EventEmitter {
     return 'ready';
   }
 
+  fanoutCallDetailed = vi.fn(
+    async (_messages: Record<string, unknown>[], _excludePeerHashes?: string[]) =>
+      ({ ok: true as const })
+  );
   sendCall = vi.fn(
     async (_peerHash: string, _message: Record<string, unknown>) => true
   );
@@ -28,6 +32,10 @@ class GroupBridgeStub extends EventEmitter {
     return 'ready';
   }
 
+  fanoutGroupCallDetailed = vi.fn(
+    async (_messages: Record<string, unknown>[], _excludePeerHashes?: string[]) =>
+      ({ ok: true as const })
+  );
   sendGroupCall = vi.fn(
     async (_peerHash: string, _message: Record<string, unknown>) => true
   );
@@ -193,6 +201,7 @@ describe('Reticulum manager late bridge binding', () => {
     await vi.advanceTimersByTimeAsync(4_000);
 
     await expect(pending).resolves.toBeNull();
+    expect(bridge.fanoutCallDetailed).not.toHaveBeenCalled();
     expect(bridge.sendCall).not.toHaveBeenCalled();
     manager.stop();
   });
@@ -219,7 +228,8 @@ describe('Reticulum manager late bridge binding', () => {
         Date.now()
       )
     ).resolves.toBe('call-2');
-    expect(bridge.sendCall).toHaveBeenCalledTimes(1);
+    expect(bridge.fanoutCallDetailed).toHaveBeenCalledTimes(1);
+    expect(bridge.sendCall).not.toHaveBeenCalled();
     manager.stop();
   });
 
@@ -253,10 +263,10 @@ describe('Reticulum manager late bridge binding', () => {
       )
     ).resolves.toBe(callId);
 
-    expect(bridge.sendCall).toHaveBeenCalledTimes(1);
-    const firstSendCall = vi.mocked(bridge.sendCall).mock.calls[0];
-    expect(firstSendCall).toBeDefined();
-    const sentWire = firstSendCall![1] as Record<string, unknown>;
+    expect(bridge.fanoutCallDetailed).toHaveBeenCalledTimes(1);
+    const firstFanout = vi.mocked(bridge.fanoutCallDetailed).mock.calls[0];
+    expect(firstFanout).toBeDefined();
+    const sentWire = (firstFanout![0] as Record<string, unknown>[])[0] as Record<string, unknown>;
     expect(sentWire).toMatchObject({
       t: 'CR',
       c: callId,
@@ -264,6 +274,7 @@ describe('Reticulum manager late bridge binding', () => {
       k: publicKey,
       g: signature,
     });
+    expect(firstFanout![1]).toEqual([]);
     expect(sentWire).not.toHaveProperty('H');
     expect(sentWire).not.toHaveProperty('type');
     expect(byteLengthUtf8JsonWithBridgeSender(sentWire)).toBeLessThanOrEqual(

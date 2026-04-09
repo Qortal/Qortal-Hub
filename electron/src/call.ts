@@ -877,11 +877,7 @@ export class CallManager extends EventEmitter {
   ): void {
     const bridge = this.reticulumBridge;
     if (!bridge || bridge.getState() !== 'ready') return;
-    const neighbors =
-      this.presence.getReticulumActiveNeighborHashes(excludePeerHashes);
-    for (const peerHash of neighbors) {
-      void bridge.sendCall(peerHash, wire).catch(() => {});
-    }
+    void bridge.fanoutCallDetailed([wire], excludePeerHashes).catch(() => {});
   }
 }
 

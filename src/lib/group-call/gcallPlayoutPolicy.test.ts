@@ -4,6 +4,7 @@ import {
   computeFeasibleSingleRemoteRecoveryTargetMaxMs,
   computeFeasibleMultiSourceRecoveryTargetMaxMs,
   computeRecoveryMultiSourceTargetMaxMs,
+  computeUsableRecoveryTargetMaxMs,
   diminishingPlayoutExtraMs,
   effectivePlayoutMaxTargetMs,
   stepWorstIsolationHysteresis,
@@ -145,6 +146,37 @@ describe('gcallPlayoutPolicy', () => {
         observedTargetMs: 145,
       })
     ).toBe(null);
+  });
+
+  it('clamps a weak-but-usable 1-on-1 recovery path closer to the sustained PCM reserve', () => {
+    expect(
+      computeUsableRecoveryTargetMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'mild',
+        recentSampleCount: 4,
+        recentAvgPcmBufferedMs: 102.456,
+        recentPlayoutUnderTargetFraction: 0.5,
+        previousWindowAvgPlayoutDeltaMs: -18.967,
+      })
+    ).toBe(113);
+  });
+
+  it('clamps a weak multi-source recovery leg toward usable PCM instead of an inflated ceiling', () => {
+    expect(
+      computeUsableRecoveryTargetMaxMs({
+        currentAdaptiveMaxTargetMs: 155,
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'mild',
+        isolatedSource: true,
+        recentSampleCount: 4,
+        recentAvgPcmBufferedMs: 96,
+        recentPlayoutUnderTargetFraction: 0.62,
+        previousWindowAvgPlayoutDeltaMs: -32,
+      })
+    ).toBe(114);
   });
 
   it('can clamp acute 1-on-1 mismatch on the first bad window', () => {

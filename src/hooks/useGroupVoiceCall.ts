@@ -134,6 +134,7 @@ import {
   computeFeasibleSingleRemoteRecoveryTargetMaxMs,
   computeFeasibleMultiSourceRecoveryTargetMaxMs,
   computeRecoveryMultiSourceTargetMaxMs,
+  computeUsableRecoveryTargetMaxMs,
   createWorstIsolationHysteresisState,
   computeMicroWidenExtraMsV1,
   effectivePlayoutMaxTargetMs,
@@ -199,7 +200,11 @@ import {
 import packageJson from '../../package.json';
 import {
   computeN1LiveRecoveryBurstCap,
+  computeN1PcmRebuildBurstCap,
   computeN1RecoveryEarlyReleaseMinBufferMs,
+  GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS,
+  GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS,
+  GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP,
   computeN1SteadyTierBurstCap,
   computeN1BufferRatio,
   computeN1MinStartMs,
@@ -207,7 +212,12 @@ import {
   computeN1TierBurstCap,
   GCALL_N1_ACCUMULATION_MS,
   GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS,
+  GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS,
+  isSevereN1RecoveryPrerollRelease,
   shouldForceN1RecoveryPrerollSatisfied,
+  shouldBoostN1PcmRebuild,
+  shouldKeepN1SevereForcedReleaseRebuild,
+  shouldRearmN1LateCollapseRecovery,
   GCALL_N1_STEADY_ACCUMULATION_MS,
   GCALL_N1_STALL_ESCAPE_MS,
   stepN1BufferEnforceTier,
@@ -621,6 +631,10 @@ export function clearAdaptiveGroupCallPlayoutMaps(maps: {
   lastPlayoutTargetPostAt: Map<string, number>;
   lastDrainMissed: Map<string, number>;
   n1WeakLiveHoldUntilPerf?: Map<string, number>;
+  n1ReceivePrioritySendCapState?: Map<
+    string,
+    N1ReceivePrioritySendBitrateCapState
+  >;
 }): void {
   maps.lastPacketArrivalAt.clear();
   maps.interArrivalSamples.clear();
@@ -629,6 +643,7 @@ export function clearAdaptiveGroupCallPlayoutMaps(maps: {
   maps.lastPlayoutTargetPostAt.clear();
   maps.lastDrainMissed.clear();
   maps.n1WeakLiveHoldUntilPerf?.clear();
+  maps.n1ReceivePrioritySendCapState?.clear();
 }
 
 export interface RecoveryPlayoutHealthSample {
@@ -809,10 +824,14 @@ export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
 export function computeN1AccumulationDecodeCap(opts: {
   accumulationActive: boolean;
   recoverySingleRemote: boolean;
+  forcedReleaseRebuildActive?: boolean;
   opusBufferedMs: number;
   tier: GcallN1BufferEnforceTier;
 }): number | null {
   if (!opts.accumulationActive) return null;
+  if (opts.recoverySingleRemote && opts.forcedReleaseRebuildActive) {
+    return GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP;
+  }
   if (
     opts.recoverySingleRemote &&
     opts.tier === 'deep' &&
@@ -902,6 +921,72 @@ const GCALL_N1_WEAK_LIVE_HOLD_HEADROOM_MS = 32;
 const GCALL_N1_WEAK_LIVE_HOLD_RECENT_PUSH_MAX_MS = 160;
 const GCALL_N1_WEAK_LIVE_HOLD_RELEASE_MS = 650;
 const GCALL_N1_WEAK_LIVE_HOLD_TARGET_RATIO_MAX = 0.82;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_STRONG_MAX_MS = 28;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_MAX_MS = 44;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_STRONG_MIN = 0.85;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_MIN = 0.75;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_STRONG_MAX_MS = -70;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_MAX_MS = -50;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_REMOTE_DECODE_AGE_MAX_MS = 350;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_STRONG_BPS = 24_000;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_MILD_BPS = 28_000;
+const GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_OPUS_MS = 60;
+const GCALL_N1_RECEIVE_PRIORITY_MODE_PCM_MAX_MS = 52;
+const GCALL_N1_RECEIVE_PRIORITY_MODE_UNDERTARGET_MIN = 0.78;
+const GCALL_N1_RECEIVE_PRIORITY_MODE_DELTA_MAX_MS = -60;
+const GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_DECODE_CAP = 3;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_MIN_HOLD_MS = 900;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_STABLE_MS = 650;
+const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_DELTA_MIN_MS = -20;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS = 450;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS = 70;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO = 0.55;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_PCM_MAX_MS = 52;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN = 0.78;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS = -55;
+const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX = 40;
+
+export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
+  activeSourceCount: number;
+  lastRecvAgeMs: number;
+  avgOpusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
+  adaptiveTargetMaxMs: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  avgPlayoutDeltaMs: number;
+  missingFrames: number;
+  packetsDroppedPendingDecrypt: number;
+  reticulumAudioStaleDrops: number;
+  reticulumAudioPacketSendFailures: number;
+  reticulumAudioPacketPathTimeouts: number;
+}): boolean {
+  const target = Math.max(
+    1,
+    opts.adaptiveTargetMedianMs || opts.adaptiveTargetMaxMs || 1
+  );
+  const freshLive =
+    Number.isFinite(opts.lastRecvAgeMs) &&
+    opts.lastRecvAgeMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS;
+  const noHardRemoteFailure =
+    opts.missingFrames <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX &&
+    opts.packetsDroppedPendingDecrypt <= 0 &&
+    opts.reticulumAudioStaleDrops <= 0 &&
+    opts.reticulumAudioPacketSendFailures <= 0 &&
+    opts.reticulumAudioPacketPathTimeouts <= 0;
+  return (
+    opts.activeSourceCount === 1 &&
+    freshLive &&
+    noHardRemoteFailure &&
+    (opts.avgOpusBufferedMs >= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS ||
+      opts.avgOpusBufferedMs / target >=
+        GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO) &&
+    opts.avgPcmBufferedMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_PCM_MAX_MS &&
+    opts.playoutUnderTargetFraction >=
+      GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS
+  );
+}
 
 export function computeWeakSingleRemoteRecoveryHoldState(opts: {
   activeSourceCount: number;
@@ -973,6 +1058,190 @@ export function computeWeakSingleRemoteRecoveryTargetHoldMaxMs(opts: {
     )
   );
   return Math.min(opts.currentAdaptiveMaxTargetMs, feasibleMaxMs);
+}
+
+export function computeN1ReceivePrioritySendBitrateCapBps(opts: {
+  activeSourceCount: number;
+  recentStability: RecentRecoveryStabilitySummary;
+  avgPlayoutDeltaMs: number;
+  starvationSeverity: PlayoutStarvationSeverity;
+  lastRemoteDecodeAtMs: number;
+  nowMs: number;
+  localSendPressure: boolean;
+  nominalBitrateBps: number;
+}): number | null {
+  if (
+    opts.activeSourceCount !== 1 ||
+    !opts.localSendPressure ||
+    opts.recentStability.sampleCount < 2 ||
+    !Number.isFinite(opts.avgPlayoutDeltaMs) ||
+    !Number.isFinite(opts.nominalBitrateBps) ||
+    opts.nominalBitrateBps <= 0
+  ) {
+    return null;
+  }
+  const lastRemoteDecodeAgeMs =
+    opts.lastRemoteDecodeAtMs > 0 ? opts.nowMs - opts.lastRemoteDecodeAtMs : Number.POSITIVE_INFINITY;
+  if (lastRemoteDecodeAgeMs > GCALL_N1_RECEIVE_PRIORITY_CAP_REMOTE_DECODE_AGE_MAX_MS) {
+    return null;
+  }
+  const severeCollapse =
+    opts.starvationSeverity === 'strong' &&
+    opts.recentStability.avgPcmBufferedMs <=
+      GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_STRONG_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_STRONG_MIN &&
+    opts.avgPlayoutDeltaMs <=
+      GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_STRONG_MAX_MS;
+  if (severeCollapse) {
+    return Math.min(
+      opts.nominalBitrateBps,
+      GCALL_N1_RECEIVE_PRIORITY_CAP_STRONG_BPS
+    );
+  }
+  const weakCollapse =
+    opts.starvationSeverity !== 'none' &&
+    opts.recentStability.avgPcmBufferedMs <=
+      GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_MAX_MS;
+  if (!weakCollapse) return null;
+  return Math.min(opts.nominalBitrateBps, GCALL_N1_RECEIVE_PRIORITY_CAP_MILD_BPS);
+}
+
+export interface N1ReceivePrioritySendBitrateCapState {
+  holdUntilMs: number;
+  stableSinceMs: number | null;
+}
+
+export function shouldEnterN1ReceivePriorityMode(opts: {
+  recentStability: RecentRecoveryStabilitySummary;
+  avgPlayoutDeltaMs: number;
+  avgOpusBufferedMs: number;
+  starvationSeverity: PlayoutStarvationSeverity;
+  sourceLive: boolean;
+  directCapBps: number | null;
+}): boolean {
+  if (
+    !opts.sourceLive ||
+    opts.recentStability.sampleCount < 2 ||
+    opts.avgOpusBufferedMs < GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_OPUS_MS
+  ) {
+    return false;
+  }
+  if (opts.directCapBps !== null) return true;
+  return (
+    opts.starvationSeverity === 'strong' &&
+    opts.avgOpusBufferedMs >= GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_OPUS_MS &&
+    opts.recentStability.avgPcmBufferedMs <=
+      GCALL_N1_RECEIVE_PRIORITY_MODE_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_RECEIVE_PRIORITY_MODE_UNDERTARGET_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_RECEIVE_PRIORITY_MODE_DELTA_MAX_MS &&
+    !opts.recentStability.stable
+  );
+}
+
+export function tickN1ReceivePrioritySendBitrateCapState(opts: {
+  previousState: N1ReceivePrioritySendBitrateCapState | null;
+  activeSourceCount: number;
+  recentStability: RecentRecoveryStabilitySummary;
+  avgPlayoutDeltaMs: number;
+  avgOpusBufferedMs: number;
+  starvationSeverity: PlayoutStarvationSeverity;
+  lastRemoteDecodeAtMs: number;
+  nowMs: number;
+  localSendPressure: boolean;
+  nominalBitrateBps: number;
+}): {
+  capBps: number | null;
+  nextState: N1ReceivePrioritySendBitrateCapState | null;
+} {
+  if (
+    opts.activeSourceCount !== 1 ||
+    !Number.isFinite(opts.nominalBitrateBps) ||
+    opts.nominalBitrateBps <= 0
+  ) {
+    return { capBps: null, nextState: null };
+  }
+  const lastRemoteDecodeAgeMs =
+    opts.lastRemoteDecodeAtMs > 0
+      ? opts.nowMs - opts.lastRemoteDecodeAtMs
+      : Number.POSITIVE_INFINITY;
+  if (lastRemoteDecodeAgeMs > GCALL_N1_RECEIVE_PRIORITY_CAP_REMOTE_DECODE_AGE_MAX_MS) {
+    return { capBps: null, nextState: null };
+  }
+
+  const directCapBps = computeN1ReceivePrioritySendBitrateCapBps({
+    activeSourceCount: opts.activeSourceCount,
+    recentStability: opts.recentStability,
+    avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
+    starvationSeverity: opts.starvationSeverity,
+    lastRemoteDecodeAtMs: opts.lastRemoteDecodeAtMs,
+    nowMs: opts.nowMs,
+    localSendPressure: opts.localSendPressure,
+    nominalBitrateBps: opts.nominalBitrateBps,
+  });
+  if (
+    shouldEnterN1ReceivePriorityMode({
+      recentStability: opts.recentStability,
+      avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
+      avgOpusBufferedMs: opts.avgOpusBufferedMs,
+      starvationSeverity: opts.starvationSeverity,
+      sourceLive: true,
+      directCapBps,
+    })
+  ) {
+    return {
+      capBps: Math.min(
+        opts.nominalBitrateBps,
+        GCALL_N1_RECEIVE_PRIORITY_CAP_STRONG_BPS
+      ),
+      nextState: {
+        holdUntilMs: Math.max(
+          opts.previousState?.holdUntilMs ?? 0,
+          opts.nowMs + GCALL_N1_RECEIVE_PRIORITY_CAP_MIN_HOLD_MS
+        ),
+        stableSinceMs: null,
+      },
+    };
+  }
+
+  if (opts.previousState === null) {
+    return { capBps: null, nextState: null };
+  }
+
+  const exitStable =
+    opts.recentStability.sampleCount >= 2 &&
+    opts.recentStability.stable &&
+    opts.recentStability.avgPcmBufferedMs >=
+      ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE &&
+    opts.recentStability.playoutUnderTargetFraction <=
+      ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE &&
+    opts.avgPlayoutDeltaMs >= GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_DELTA_MIN_MS &&
+    opts.starvationSeverity === 'none';
+  const stableSinceMs = exitStable
+    ? (opts.previousState.stableSinceMs ?? opts.nowMs)
+    : null;
+  const heldActive = opts.nowMs < opts.previousState.holdUntilMs;
+  const stableLongEnough =
+    stableSinceMs !== null &&
+    opts.nowMs - stableSinceMs >= GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_STABLE_MS;
+  if (!heldActive && stableLongEnough) {
+    return { capBps: null, nextState: null };
+  }
+
+  return {
+    capBps: Math.min(
+      opts.nominalBitrateBps,
+      GCALL_N1_RECEIVE_PRIORITY_CAP_STRONG_BPS
+    ),
+    nextState: {
+      holdUntilMs: opts.previousState.holdUntilMs,
+      stableSinceMs,
+    },
+  };
 }
 
 /**
@@ -2428,6 +2697,18 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastJitterOpusPushPerfRef = useRef<Map<string, number>>(new Map());
   /** While `performance.now() < value`, keep weak single-remote recovery locally clamped. */
   const n1WeakLiveHoldUntilPerfRef = useRef<Map<string, number>>(new Map());
+  /** Severe 20ms forced release gets a short rebuild window so decode does not freeze back to 1 frame. */
+  const n1SevereForcedReleaseRebuildUntilPerfRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  /** One-on-one send cap hysteresis so weak receive recovery does not chatter the uplink cap. */
+  const n1ReceivePrioritySendCapStateRef = useRef<
+    Map<string, N1ReceivePrioritySendBitrateCapState>
+  >(new Map());
+  /** Cooldown for re-arming N===1 recovery after a late live collapse, so it does not flap every tick. */
+  const n1LateCollapseRearmCooldownUntilPerfRef = useRef<Map<string, number>>(
+    new Map()
+  );
   /** Preroll satisfied once bufferMs >= minStartMs for this source. */
   const jitterPrerollSatisfiedRef = useRef<Map<string, boolean>>(new Map());
   /** While recovery preroll is blocked with a live thin source, track how long we have been stuck. */
@@ -3212,10 +3493,12 @@ export function useGroupVoiceCall(uiActive = false) {
           severe: boolean;
           degradedSources: number;
           relaxedSingleRemote: boolean;
+          localOnlySingleRemote: boolean;
         }
       >();
       const activePeers = new Set<string>();
       const singleRemoteWindow = windowMetrics.sources.length === 1;
+      const nowPerf = performance.now();
       for (const source of windowMetrics.sources) {
         const ingressPeer = getSourceIngressDiagnostic(
           source.sourceAddr
@@ -3240,7 +3523,13 @@ export function useGroupVoiceCall(uiActive = false) {
           severe: false,
           degradedSources: 0,
           relaxedSingleRemote: false,
+          localOnlySingleRemote: false,
         };
+        const lastRecvAt = lastRecvAtRef.current.get(source.sourceAddr);
+        const lastRecvAgeMs =
+          lastRecvAt === undefined
+            ? Number.POSITIVE_INFINITY
+            : nowPerf - lastRecvAt;
         const relaxedSingleRemote = shouldRelaxSingleRemoteWindowRecovery({
           activeSourceCount: singleRemoteWindow ? 1 : windowMetrics.sources.length,
           shouldTightenRecovery: pressureAssessment.shouldTightenRecovery,
@@ -3251,14 +3540,34 @@ export function useGroupVoiceCall(uiActive = false) {
           avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
           concealmentTicks: source.concealmentTicks,
         });
+        const localOnlySingleRemote = shouldKeepSingleRemoteWindowRecoveryLocal({
+          activeSourceCount: singleRemoteWindow ? 1 : windowMetrics.sources.length,
+          lastRecvAgeMs,
+          avgOpusBufferedMs: source.avgOpusBufferedMs,
+          adaptiveTargetMedianMs: source.adaptiveTargetMedianMs,
+          adaptiveTargetMaxMs: source.adaptiveTargetMaxMs,
+          avgPcmBufferedMs: source.avgPcmBufferedMs,
+          playoutUnderTargetFraction: source.playoutUnderTargetFraction ?? 0,
+          avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
+          missingFrames: source.missingFrames,
+          packetsDroppedPendingDecrypt:
+            windowMetrics.packetsDroppedPendingDecrypt,
+          reticulumAudioStaleDrops: windowMetrics.reticulumAudioStaleDrops,
+          reticulumAudioPacketSendFailures:
+            windowMetrics.reticulumAudioPacketSendFailures,
+          reticulumAudioPacketPathTimeouts:
+            windowMetrics.reticulumAudioPacketPathTimeouts,
+        });
         prev.score += assessment.score;
         prev.severe =
           prev.severe ||
           assessment.severe ||
           (assessment.shouldEscalate &&
-            pressureAssessment.shouldTightenRecovery);
+              pressureAssessment.shouldTightenRecovery);
         prev.degradedSources++;
         prev.relaxedSingleRemote = prev.relaxedSingleRemote || relaxedSingleRemote;
+        prev.localOnlySingleRemote =
+          prev.localOnlySingleRemote || localOnlySingleRemote;
         peerScores.set(ingressPeer, prev);
       }
 
@@ -3290,7 +3599,7 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         const recentSummary = summarizePeerRecentRecoveryStability(
           peerAddress,
-          performance.now()
+          nowPerf
         );
         if (entry.relaxedSingleRemote && !recentSummary.severeInstability) {
           markPeerStable(peerAddress, {
@@ -3316,6 +3625,17 @@ export function useGroupVoiceCall(uiActive = false) {
               recentSummary.severeInstability,
           }),
         });
+        if (entry.localOnlySingleRemote) {
+          const prevBreaches =
+            peerMediaRecoveryBreachRef.current.get(peerAddress) ?? 0;
+          if (prevBreaches > 0) {
+            peerMediaRecoveryBreachRef.current.set(
+              peerAddress,
+              prevBreaches - 1
+            );
+          }
+          continue;
+        }
 
         const breaches =
           (peerMediaRecoveryBreachRef.current.get(peerAddress) ?? 0) + 1;
@@ -4037,6 +4357,28 @@ export function useGroupVoiceCall(uiActive = false) {
           weakSingleRemoteTargetHoldMaxMs
         );
       }
+      const usableRecoveryTargetMaxMs =
+        previousWindowSource !== null
+          ? computeUsableRecoveryTargetMaxMs({
+              currentAdaptiveMaxTargetMs: adaptiveMaxTargetMs,
+              activeSourceCount,
+              adaptiveNetworkMode,
+              starvationSeverity: nextStarvationSev,
+              isolatedSource: isolateThisSource,
+              recentSampleCount: recentStability.sampleCount,
+              recentAvgPcmBufferedMs: recentStability.avgPcmBufferedMs,
+              recentPlayoutUnderTargetFraction:
+                recentStability.playoutUnderTargetFraction,
+              previousWindowAvgPlayoutDeltaMs:
+                previousWindowSource.avgPlayoutDeltaMs,
+            })
+          : null;
+      if (usableRecoveryTargetMaxMs !== null) {
+        adaptiveMaxTargetMs = Math.min(
+          adaptiveMaxTargetMs,
+          usableRecoveryTargetMaxMs
+        );
+      }
       if (failSafeStateRef.current.active) {
         adaptiveMaxTargetMs = Math.min(
           adaptiveMaxTargetMs,
@@ -4217,6 +4559,7 @@ export function useGroupVoiceCall(uiActive = false) {
               ? Math.round(weakSingleRemoteHold.nextHoldUntilMs - now)
               : 0,
           weakSingleRemoteTargetHoldMaxMs,
+          usableRecoveryTargetMaxMs,
           bufferAdequacy,
           targetMs: smoothedTargetMsForAdequacy,
           avgPcmBufferedMs: previousWindowSource?.avgPcmBufferedMs ?? null,
@@ -4855,10 +5198,92 @@ export function useGroupVoiceCall(uiActive = false) {
         ? isReticulumSendPressureSignalForwarder(pressureSnap)
         : isReticulumSendPressureSignal(pressureSnap);
       const forwarderFanout = forwarderRole && (snap.packetsForwarded ?? 0) > 0;
+      const singleRemoteSourceAddr =
+        activeSourceCount === 1
+          ? [...activeJitterSourcesRef.current][0] ??
+            playbackWorkletsRef.current.keys().next().value ??
+            null
+          : null;
+      const perfNow = performance.now();
+      const singleRemoteRecentStability =
+        singleRemoteSourceAddr !== null
+          ? summarizeRecentRecoveryStability({
+              samples:
+                recentPlayoutHealthSamplesRef.current.get(
+                  singleRemoteSourceAddr
+                ) ?? [],
+              underrunTimesMs:
+                recentJitterUnderrunAtRef.current.get(singleRemoteSourceAddr) ??
+                [],
+              nowMs: perfNow,
+              windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
+            })
+          : null;
+      const singleRemoteStarvationSeverity =
+        singleRemoteSourceAddr !== null
+          ? (playoutStarvationSeverityRef.current.get(singleRemoteSourceAddr) ??
+            'none')
+          : 'none';
+      const singleRemoteWindowSource =
+        singleRemoteSourceAddr !== null
+          ? (lastWindowMetricsRef.current?.sources.find(
+              (source) => source.sourceAddr === singleRemoteSourceAddr
+            ) ?? null)
+          : null;
+      if (singleRemoteSourceAddr === null) {
+        n1ReceivePrioritySendCapStateRef.current.clear();
+      } else {
+        for (const sourceAddr of n1ReceivePrioritySendCapStateRef.current.keys()) {
+          if (sourceAddr !== singleRemoteSourceAddr) {
+            n1ReceivePrioritySendCapStateRef.current.delete(sourceAddr);
+          }
+        }
+      }
       const nominalBitrate = Math.round(
         audioTuningRef.current.opusBitrate * (forwarderFanout ? 0.92 : 1)
       );
-      const tiers = buildOpusSendPressureTiers(nominalBitrate);
+      const receivePriorityBitrateCapDecision =
+        singleRemoteRecentStability !== null
+          ? tickN1ReceivePrioritySendBitrateCapState({
+              previousState:
+                singleRemoteSourceAddr !== null
+                  ? (n1ReceivePrioritySendCapStateRef.current.get(
+                      singleRemoteSourceAddr
+                    ) ?? null)
+                  : null,
+              activeSourceCount,
+              recentStability: singleRemoteRecentStability,
+              avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
+              avgOpusBufferedMs:
+                singleRemoteWindowSource?.avgOpusBufferedMs ??
+                snap.jitterBufferDepthFramesMean * OPUS_FRAME_DURATION_MS,
+              starvationSeverity: singleRemoteStarvationSeverity,
+              lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
+              nowMs: wallNow,
+              localSendPressure:
+                baselinePressured ||
+                decryptOverloadStateRef.current.active ||
+                wallNow < stage5FlushBoostUntilMsRef.current,
+              nominalBitrateBps: nominalBitrate,
+            })
+          : { capBps: null, nextState: null };
+      const receivePriorityBitrateCapBps =
+        receivePriorityBitrateCapDecision.capBps;
+      if (singleRemoteSourceAddr !== null) {
+        if (receivePriorityBitrateCapDecision.nextState !== null) {
+          n1ReceivePrioritySendCapStateRef.current.set(
+            singleRemoteSourceAddr,
+            receivePriorityBitrateCapDecision.nextState
+          );
+        } else {
+          n1ReceivePrioritySendCapStateRef.current.delete(singleRemoteSourceAddr);
+        }
+      }
+      const tiers = buildOpusSendPressureTiers(
+        receivePriorityBitrateCapBps !== null
+          ? Math.min(nominalBitrate, receivePriorityBitrateCapBps)
+          : nominalBitrate
+      );
 
       const ingress = lastIngressPacketsRef.current;
       if (ingress.atMs === 0) {
@@ -5003,6 +5428,7 @@ export function useGroupVoiceCall(uiActive = false) {
           tierIndex: result.state.tierIndex,
           bitrateBps: appliedBitrate,
           pressured,
+          receivePriorityBitrateCapBps,
         });
       }
       if (result.maxPainEntered) {
@@ -5064,6 +5490,9 @@ export function useGroupVoiceCall(uiActive = false) {
       recentPlayoutHealthSamplesRef.current.delete(address);
       recentJitterUnderrunAtRef.current.delete(address);
       n1WeakLiveHoldUntilPerfRef.current.delete(address);
+      n1SevereForcedReleaseRebuildUntilPerfRef.current.delete(address);
+      n1ReceivePrioritySendCapStateRef.current.delete(address);
+      n1LateCollapseRearmCooldownUntilPerfRef.current.delete(address);
       n1RecoveryPrerollBlockedSincePerfRef.current.delete(address);
       lastSentPlayoutTargetRef.current.delete(address);
       lastPlayoutTargetPostAtRef.current.delete(address);
@@ -8354,6 +8783,8 @@ export function useGroupVoiceCall(uiActive = false) {
           lastPush > 0 && lastPushAgeMs <= GCALL_N1_STALL_ESCAPE_MS;
         const lastEsc = lastStallEscapePerfRef.current.get(addr) ?? 0;
         const playoutActive = isSourcePlayoutActive(addr, tickStartedAt);
+        const n1PlayoutStarvationSeverity =
+          playoutStarvationSeverityRef.current.get(addr) ?? 'none';
         if (n1RecoverySingleRemote) {
           n1ScaledCap = computeN1LiveRecoveryBurstCap({
             tier: n1Tier,
@@ -8368,12 +8799,19 @@ export function useGroupVoiceCall(uiActive = false) {
           n1RecoverySingleRemote &&
           prerollActive &&
           opusMsPre < minStartMs &&
-          jb.hasReadyFrame()
+          jb.getBufferedFrames() > 0
         ) {
           const blockedSince =
             n1RecoveryPrerollBlockedSincePerfRef.current.get(addr) ?? perfWall;
           n1RecoveryPrerollBlockedSincePerfRef.current.set(addr, blockedSince);
           prerollBlockedForMs = perfWall - blockedSince;
+          const severeForcedRelease = isSevereN1RecoveryPrerollRelease({
+            blockedForMs: prerollBlockedForMs,
+            lastPushAgeMs,
+            opusBufferedMs: opusMsPre,
+            sourceActive: playoutActive,
+            targetMs: smoothedTarget,
+          });
           if (
             shouldForceN1RecoveryPrerollSatisfied({
               blockedForMs: prerollBlockedForMs,
@@ -8385,6 +8823,26 @@ export function useGroupVoiceCall(uiActive = false) {
           ) {
             jitterPrerollSatisfiedRef.current.set(addr, true);
             n1RecoveryPrerollBlockedSincePerfRef.current.delete(addr);
+            const forcedPrime =
+              jb.getBufferedFrames() > 0 && !jb.hasReadyFrame();
+            if (forcedPrime) {
+              jb.forcePrimeForRecoveryEscape();
+            }
+            const postReleaseAccumulationMs = severeForcedRelease
+              ? GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS
+              : GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS;
+            jitterAccumulationUntilPerfRef.current.set(
+              addr,
+              perfWall + postReleaseAccumulationMs
+            );
+            if (severeForcedRelease) {
+              n1SevereForcedReleaseRebuildUntilPerfRef.current.set(
+                addr,
+                perfWall + GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS
+              );
+            } else {
+              n1SevereForcedReleaseRebuildUntilPerfRef.current.delete(addr);
+            }
             prerollActive = false;
             prerollBlockedForMs = 0;
             gcallDiagnosticsPush('info', '[GCall] recoveryPrerollReleasedEarly', {
@@ -8397,10 +8855,132 @@ export function useGroupVoiceCall(uiActive = false) {
               targetMs: Math.round(smoothedTarget),
               blockedForMs: Math.round(perfWall - blockedSince),
               lastPushAgeMs: Math.round(lastPushAgeMs),
+              severeRelease: severeForcedRelease,
+              forcedPrime,
+              postReleaseAccumulationMs,
             });
+            metricsRef.current.recordOpusBufferedMetric(
+              addr,
+              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+            );
+            emptyJitterDrainTicksRef.current.set(addr, 0);
+            continue;
           }
         } else {
           n1RecoveryPrerollBlockedSincePerfRef.current.delete(addr);
+        }
+
+        const n1RecentStability = n1RecoverySingleRemote
+          ? summarizeRecentRecoveryStability({
+              samples: recentPlayoutHealthSamplesRef.current.get(addr) ?? [],
+              underrunTimesMs: recentJitterUnderrunAtRef.current.get(addr) ?? [],
+              nowMs: perfWall,
+              windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
+            })
+          : null;
+        const n1ReceivePriorityModeActive =
+          n1RecoverySingleRemote &&
+          !prerollActive &&
+          sourceRecentlyPushed &&
+          n1RecentStability !== null &&
+          !n1RecentStability.stable &&
+          n1ReceivePrioritySendCapStateRef.current.has(addr);
+        let n1SevereForcedReleaseRebuildActive = false;
+        if (!n1RecoverySingleRemote || prerollActive) {
+          n1SevereForcedReleaseRebuildUntilPerfRef.current.delete(addr);
+        } else {
+          const severeForcedReleaseRebuildUntil =
+            n1SevereForcedReleaseRebuildUntilPerfRef.current.get(addr) ?? 0;
+          if (
+            shouldKeepN1SevereForcedReleaseRebuild({
+              nowMs: perfWall,
+              rebuildUntilMs: severeForcedReleaseRebuildUntil,
+              opusBufferedMs: opusMsPre,
+              targetMs: smoothedTarget,
+              sampleCount: n1RecentStability?.sampleCount ?? 0,
+              avgPcmBufferedMs: n1RecentStability?.avgPcmBufferedMs ?? 0,
+              playoutUnderTargetFraction:
+                n1RecentStability?.playoutUnderTargetFraction ?? 1,
+            })
+          ) {
+            n1SevereForcedReleaseRebuildActive = true;
+          } else {
+            n1SevereForcedReleaseRebuildUntilPerfRef.current.delete(addr);
+          }
+        }
+        const lateCollapseRearmCooldownUntil =
+          n1LateCollapseRearmCooldownUntilPerfRef.current.get(addr) ?? 0;
+        const shouldRearmLateCollapseRecovery =
+          n1RecoverySingleRemote &&
+          !prerollActive &&
+          n1RecentStability !== null &&
+          shouldRearmN1LateCollapseRecovery({
+            nowMs: perfWall,
+            cooldownUntilMs: lateCollapseRearmCooldownUntil,
+            sourceRecentlyPushed,
+            opusBufferedMs: opusMsPre,
+            sampleCount: n1RecentStability.sampleCount,
+            avgPcmBufferedMs: n1RecentStability.avgPcmBufferedMs,
+            playoutUnderTargetFraction:
+              n1RecentStability.playoutUnderTargetFraction,
+            playoutStarvationSeverity: n1PlayoutStarvationSeverity,
+          });
+        if (shouldRearmLateCollapseRecovery) {
+          jitterPrerollSatisfiedRef.current.delete(addr);
+          n1RecoveryPrerollBlockedSincePerfRef.current.set(addr, perfWall);
+          jitterAccumulationUntilPerfRef.current.set(
+            addr,
+            perfWall + GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS
+          );
+          n1SevereForcedReleaseRebuildUntilPerfRef.current.set(
+            addr,
+            perfWall + GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS
+          );
+          n1LateCollapseRearmCooldownUntilPerfRef.current.set(
+            addr,
+            perfWall + GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS
+          );
+          gcallDiagnosticsPush('info', '[GCall] n1LateCollapseRecoveryRearm', {
+            sourceAddr: truncateGcallDiagAddress(addr),
+            bufferMs: Math.round(opusMsPre),
+            targetMs: Math.round(smoothedTarget),
+            avgPcmBufferedMs: Math.round(n1RecentStability.avgPcmBufferedMs),
+            playoutUnderTargetFraction:
+              Math.round(n1RecentStability.playoutUnderTargetFraction * 1000) /
+              1000,
+            cooldownMs: GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS,
+            rebuildMs: GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS,
+          });
+          emptyJitterDrainTicksRef.current.set(addr, 0);
+          continue;
+        }
+        const n1PcmRebuildActive =
+          n1RecoverySingleRemote &&
+          !prerollActive &&
+          (n1SevereForcedReleaseRebuildActive ||
+            (n1RecentStability !== null &&
+              shouldBoostN1PcmRebuild({
+                sourceRecentlyPushed,
+                sampleCount: n1RecentStability.sampleCount,
+                avgPcmBufferedMs: n1RecentStability.avgPcmBufferedMs,
+                playoutUnderTargetFraction:
+                  n1RecentStability.playoutUnderTargetFraction,
+                playoutStarvationSeverity: n1PlayoutStarvationSeverity,
+              })));
+        if (n1PcmRebuildActive) {
+          n1ScaledCap = Math.max(
+            n1ScaledCap,
+            computeN1PcmRebuildBurstCap(n1Tier, scaledBurstCap)
+          );
+        }
+        if (n1ReceivePriorityModeActive) {
+          n1ScaledCap = Math.max(
+            n1ScaledCap,
+            Math.min(
+              scaledBurstCap,
+              computeN1PcmRebuildBurstCap(n1Tier, scaledBurstCap) + 1
+            )
+          );
         }
 
         const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
@@ -8410,12 +8990,25 @@ export function useGroupVoiceCall(uiActive = false) {
             ? computeN1AccumulationDecodeCap({
                 accumulationActive,
                 recoverySingleRemote: n1RecoverySingleRemote,
+                forcedReleaseRebuildActive:
+                  n1SevereForcedReleaseRebuildActive,
                 opusBufferedMs: opusMsPre,
                 tier: n1Tier,
               })
             : null;
         if (accumulationDecodeCap !== null) {
-          n1ScaledCap = Math.min(n1ScaledCap, accumulationDecodeCap);
+          const effectiveAccumulationDecodeCap = n1PcmRebuildActive
+            ? Math.max(
+                GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP,
+                accumulationDecodeCap
+              )
+            : n1ReceivePriorityModeActive
+              ? Math.max(
+                  GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_DECODE_CAP,
+                  accumulationDecodeCap
+                )
+              : accumulationDecodeCap;
+          n1ScaledCap = Math.min(n1ScaledCap, effectiveAccumulationDecodeCap);
           if (accumulationDecodeCap === 0) {
             gcallDiagnosticsPush('info', '[GCall] n1RecoveryAccumulationHold', {
               sourceAddr: truncateGcallDiagAddress(addr),
@@ -8436,7 +9029,7 @@ export function useGroupVoiceCall(uiActive = false) {
           n1RecoverySingleRemote &&
           prerollActive &&
           opusMsPre < minStartMs &&
-          jb.hasReadyFrame() &&
+          jb.getBufferedFrames() > 0 &&
           lastPush > 0 &&
           !sourceRecentlyPushed &&
           perfWall - lastEsc >= GCALL_N1_STALL_ESCAPE_MS;
@@ -8475,6 +9068,10 @@ export function useGroupVoiceCall(uiActive = false) {
               accumulationRemainingMs: accumulationActive
                 ? Math.max(0, Math.round(accUntil - perfWall))
                 : 0,
+              pcmRebuildActive: n1PcmRebuildActive,
+              receivePriorityModeActive: n1ReceivePriorityModeActive,
+              severeForcedReleaseRebuildActive:
+                n1SevereForcedReleaseRebuildActive,
               steadyHoldActive,
               steadyHoldMs: n1SteadySingleRemote
                 ? Math.round(steadyMinHoldMs)
@@ -8529,6 +9126,9 @@ export function useGroupVoiceCall(uiActive = false) {
         }
 
         if (stallEscapeAllowed) {
+          if (!jb.hasReadyFrame() && jb.getBufferedFrames() > 0) {
+            jb.forcePrimeForRecoveryEscape();
+          }
           lastStallEscapePerfRef.current.set(addr, perfWall);
           const missedEsc = decodeOneJitterFrame(addr, jb) ?? 0;
           runUnderrunAndMetricsTail(addr, jb, missedEsc);
@@ -11170,6 +11770,9 @@ export function useGroupVoiceCall(uiActive = false) {
       emptyJitterDrainTicksRef.current.clear();
       lastJitterOpusPushPerfRef.current.clear();
       jitterPrerollSatisfiedRef.current.clear();
+      n1SevereForcedReleaseRebuildUntilPerfRef.current.clear();
+      n1ReceivePrioritySendCapStateRef.current.clear();
+      n1LateCollapseRearmCooldownUntilPerfRef.current.clear();
       n1RecoveryPrerollBlockedSincePerfRef.current.clear();
       jitterAccumulationUntilPerfRef.current.clear();
       lastStallEscapePerfRef.current.clear();
@@ -11191,6 +11794,8 @@ export function useGroupVoiceCall(uiActive = false) {
         lastPlayoutTargetPostAt: lastPlayoutTargetPostAtRef.current,
         lastDrainMissed: lastDrainMissedRef.current,
         n1WeakLiveHoldUntilPerf: n1WeakLiveHoldUntilPerfRef.current,
+        n1ReceivePrioritySendCapState:
+          n1ReceivePrioritySendCapStateRef.current,
       });
       recentPlayoutHealthSamplesRef.current.clear();
       recentJitterUnderrunAtRef.current.clear();

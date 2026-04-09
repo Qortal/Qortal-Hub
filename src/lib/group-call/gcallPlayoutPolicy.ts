@@ -243,6 +243,19 @@ const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_DELTA_MAX_MS = -35;
 const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_RESERVE_RATIO_MAX = 0.58;
 const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_HEADROOM_MS = 36;
 const GCALL_MULTI_SOURCE_FEASIBILITY_PRESSURE_TARGET_RATIO_MAX = 0.74;
+const GCALL_USABLE_RECOVERY_PCM_MIN_MS = 80;
+const GCALL_USABLE_RECOVERY_SINGLE_UNDERTARGET_MIN = 0.4;
+const GCALL_USABLE_RECOVERY_MULTI_UNDERTARGET_MIN = 0.45;
+const GCALL_USABLE_RECOVERY_SINGLE_DELTA_MAX_MS = -18;
+const GCALL_USABLE_RECOVERY_MULTI_DELTA_MAX_MS = -20;
+const GCALL_USABLE_RECOVERY_SINGLE_HEADROOM_MS = 18;
+const GCALL_USABLE_RECOVERY_SINGLE_HEADROOM_STRONG_MS = 14;
+const GCALL_USABLE_RECOVERY_MULTI_HEADROOM_MS = 22;
+const GCALL_USABLE_RECOVERY_MULTI_HEADROOM_STRONG_MS = 18;
+const GCALL_USABLE_RECOVERY_SINGLE_TARGET_RATIO_MAX = 0.78;
+const GCALL_USABLE_RECOVERY_SINGLE_TARGET_RATIO_STRONG_MAX = 0.72;
+const GCALL_USABLE_RECOVERY_MULTI_TARGET_RATIO_MAX = 0.82;
+const GCALL_USABLE_RECOVERY_MULTI_TARGET_RATIO_STRONG_MAX = 0.78;
 
 /**
  * Clamp multi-source recovery targets back toward an observed reserve the source can
@@ -345,6 +358,109 @@ export function computeFeasibleMultiSourceRecoveryTargetMaxMs(input: {
     )
   );
   return Math.min(input.currentAdaptiveMaxTargetMs, feasibleMaxMs);
+}
+
+/**
+ * Once recovery has already built a usable PCM reserve, continuing to target a much higher
+ * ceiling produces chronic slowed playout and audible roughness. Clamp the target closer to
+ * what the receiver is actually sustaining so the worklet can sound stable instead of forever
+ * chasing an elevated reserve.
+ */
+export function computeUsableRecoveryTargetMaxMs(input: {
+  currentAdaptiveMaxTargetMs: number;
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  starvationSeverity: 'none' | 'mild' | 'strong';
+  isolatedSource?: boolean;
+  recentSampleCount: number;
+  recentAvgPcmBufferedMs: number;
+  recentPlayoutUnderTargetFraction: number;
+  previousWindowAvgPlayoutDeltaMs: number;
+}): number | null {
+  if (
+    input.adaptiveNetworkMode !== 'recovery' ||
+    input.currentAdaptiveMaxTargetMs <= GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS ||
+    input.recentSampleCount < 2 ||
+    !Number.isFinite(input.recentAvgPcmBufferedMs) ||
+    !Number.isFinite(input.recentPlayoutUnderTargetFraction) ||
+    !Number.isFinite(input.previousWindowAvgPlayoutDeltaMs) ||
+    input.recentAvgPcmBufferedMs < GCALL_USABLE_RECOVERY_PCM_MIN_MS
+  ) {
+    return null;
+  }
+
+  if (Math.max(1, input.activeSourceCount) === 1) {
+    if (
+      input.recentPlayoutUnderTargetFraction <
+        GCALL_USABLE_RECOVERY_SINGLE_UNDERTARGET_MIN ||
+      input.previousWindowAvgPlayoutDeltaMs >
+        GCALL_USABLE_RECOVERY_SINGLE_DELTA_MAX_MS
+    ) {
+      return null;
+    }
+    const strongMismatch =
+      input.starvationSeverity === 'strong' ||
+      input.recentPlayoutUnderTargetFraction >= 0.6 ||
+      input.previousWindowAvgPlayoutDeltaMs <= -40;
+    const headroomMs = strongMismatch
+      ? GCALL_USABLE_RECOVERY_SINGLE_HEADROOM_STRONG_MS
+      : GCALL_USABLE_RECOVERY_SINGLE_HEADROOM_MS;
+    const targetRatioCap = Math.round(
+      input.currentAdaptiveMaxTargetMs *
+        (strongMismatch
+          ? GCALL_USABLE_RECOVERY_SINGLE_TARGET_RATIO_STRONG_MAX
+          : GCALL_USABLE_RECOVERY_SINGLE_TARGET_RATIO_MAX)
+    );
+    return Math.min(
+      input.currentAdaptiveMaxTargetMs,
+      Math.max(
+        GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS,
+        Math.min(
+          targetRatioCap,
+          Math.round(input.recentAvgPcmBufferedMs + headroomMs)
+        )
+      )
+    );
+  }
+
+  if (
+    input.starvationSeverity === 'none' &&
+    input.isolatedSource !== true
+  ) {
+    return null;
+  }
+  if (
+    input.recentPlayoutUnderTargetFraction <
+      GCALL_USABLE_RECOVERY_MULTI_UNDERTARGET_MIN ||
+    input.previousWindowAvgPlayoutDeltaMs >
+      GCALL_USABLE_RECOVERY_MULTI_DELTA_MAX_MS
+  ) {
+    return null;
+  }
+  const strongMismatch =
+    input.starvationSeverity === 'strong' ||
+    input.isolatedSource === true ||
+    input.recentPlayoutUnderTargetFraction >= 0.65 ||
+    input.previousWindowAvgPlayoutDeltaMs <= -35;
+  const headroomMs = strongMismatch
+    ? GCALL_USABLE_RECOVERY_MULTI_HEADROOM_STRONG_MS
+    : GCALL_USABLE_RECOVERY_MULTI_HEADROOM_MS;
+  const targetRatioCap = Math.round(
+    input.currentAdaptiveMaxTargetMs *
+      (strongMismatch
+        ? GCALL_USABLE_RECOVERY_MULTI_TARGET_RATIO_STRONG_MAX
+        : GCALL_USABLE_RECOVERY_MULTI_TARGET_RATIO_MAX)
+  );
+  return Math.min(
+    input.currentAdaptiveMaxTargetMs,
+    Math.max(
+      GCALL_MULTI_SOURCE_FEASIBILITY_MIN_TARGET_MS,
+      Math.min(
+        targetRatioCap,
+        Math.round(input.recentAvgPcmBufferedMs + headroomMs)
+      )
+    )
+  );
 }
 
 /**

@@ -1859,6 +1859,9 @@ export function registerLateReticulumBridgeRecovery(): void {
     }
     stopReticulumMeshCoordinator();
     startReticulumMeshCoordinator(currentBridge);
+    // Mirror the normal startup signal so an already-authenticated renderer can
+    // retry its initial presence announce after late Reticulum readiness.
+    notifyPresenceTransportReady();
   };
 
   if (bridge.getState() === 'ready') {

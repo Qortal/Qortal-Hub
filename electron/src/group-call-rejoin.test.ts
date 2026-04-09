@@ -58,6 +58,12 @@ function reticulumBridgeReadyStub(
 ): ReticulumBridgeStub {
   return {
     getState: () => 'ready',
+    fanoutGroupCallDetailed: (messages: Record<string, unknown>[]) => {
+      for (const msg of messages) {
+        sent.push({ hash: 'fanout', msg });
+      }
+      return Promise.resolve({ ok: true as const });
+    },
     sendGroupCallDetailed: (hash: string, msg: Record<string, unknown>) => {
       sent.push({ hash, msg });
       return Promise.resolve({ ok: true as const });
@@ -81,6 +87,10 @@ function reticulumBridgeReadyStub(
 
 type ReticulumBridgeStub = {
   getState: () => 'ready';
+  fanoutGroupCallDetailed: (
+    messages: Record<string, unknown>[],
+    excludePeerPresenceHashes?: string[]
+  ) => Promise<{ ok: true } | { ok: false; reason: string; error?: string }>;
   sendGroupCallDetailed: (
     hash: string,
     msg: Record<string, unknown>
@@ -373,7 +383,13 @@ describe('recent room bootstrap state', () => {
     });
   });
 
-  it('continues Reticulum overlay fanout when an earlier neighbor fails but a later one succeeds', async () => {
+  it('delegates Reticulum overlay fanout to the bridge-owned fanout path', async () => {
+    const fanoutGroupCallDetailed = vi.fn(
+      async (messages: Record<string, unknown>[]) => {
+        sent.push(...messages.map((msg) => ({ hash: 'fanout', msg })));
+        return { ok: true as const };
+      }
+    );
     const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
     const manager = new GroupCallManager(
       {
@@ -388,6 +404,7 @@ describe('recent room bootstrap state', () => {
       } as any,
       {
         getState: () => 'ready',
+        fanoutGroupCallDetailed,
         sendGroupCallDetailed: async (
           hash: string,
           msg: Record<string, unknown>
@@ -429,8 +446,10 @@ describe('recent room bootstrap state', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(sent.some((e) => e.hash === 'd:bad')).toBe(true);
-    expect(sent.some((e) => e.hash === 'd:good')).toBe(true);
+    expect(fanoutGroupCallDetailed).toHaveBeenCalledWith(
+      [expect.objectContaining({ t: 'GJ' })],
+      []
+    );
     expect(sent.some((e) => e.msg.t === 'GJ')).toBe(true);
   });
 
@@ -442,6 +461,20 @@ describe('recent room bootstrap state', () => {
       reticulumAwarePresenceStub() as any,
       {
         getState: () => 'ready',
+        fanoutGroupCallDetailed: async (messages: Record<string, unknown>[]) => {
+          attempts += 1;
+          for (const msg of messages) {
+            sent.push({ hash: 'fanout', msg });
+          }
+          if (attempts === 1) {
+            return {
+              ok: false as const,
+              reason: 'unknown-peer-presence-hash',
+              error: 'Unknown peer presence hash',
+            };
+          }
+          return { ok: true as const };
+        },
         sendGroupCallDetailed: async (
           hash: string,
           msg: Record<string, unknown>
@@ -489,6 +522,7 @@ describe('recent room bootstrap state', () => {
 
   it('reuses the peer presence hash learned from verified inbound Reticulum join traffic', async () => {
     class ReticulumBridgeStub extends EventEmitter {
+      fanoutGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
       sendGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
       warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
       openGroupAudioLink = vi.fn(async () => ({
@@ -568,9 +602,9 @@ describe('recent room bootstrap state', () => {
     );
     await Promise.resolve();
 
-    expect(bridge.sendGroupCallDetailed).toHaveBeenCalledWith(
-      'd:Q-peer',
-      expect.objectContaining({ t: 'GK' })
+    expect(bridge.fanoutGroupCallDetailed).toHaveBeenCalledWith(
+      [expect.objectContaining({ t: 'GK' })],
+      []
     );
     manager.stop();
   });
@@ -719,6 +753,9 @@ describe('Reticulum group audio transport', () => {
       getState() {
         return 'ready' as const;
       }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
       sendGroupCallDetailed() {
         return Promise.resolve({ ok: true as const });
       }
@@ -819,6 +856,9 @@ describe('Reticulum group audio transport', () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
         return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
       }
       sendGroupCallDetailed() {
         return Promise.resolve({ ok: true as const });
@@ -928,6 +968,9 @@ describe('Reticulum group audio transport', () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
         return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
       }
       sendGroupCallDetailed() {
         return Promise.resolve({ ok: true as const });
@@ -1054,6 +1097,9 @@ describe('Reticulum group audio transport', () => {
       getState() {
         return 'ready' as const;
       }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
       sendGroupCallDetailed() {
         return Promise.resolve({ ok: true as const });
       }
@@ -1161,6 +1207,9 @@ describe('Reticulum group audio transport', () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
         return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
       }
       sendGroupCallDetailed() {
         return Promise.resolve({ ok: true as const });
@@ -1271,6 +1320,9 @@ describe('Reticulum group audio transport', () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
         return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
       }
       sendGroupCallDetailed() {
         return Promise.resolve({ ok: true as const });

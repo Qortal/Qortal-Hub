@@ -11,10 +11,14 @@ export const GCALL_N1_STALL_ESCAPE_MS = 300;
  * preroll early rather than remaining silent indefinitely.
  */
 export const GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS = 180;
+/** If the source never reaches the normal early-release buffer, allow a second weaker escape later. */
+export const GCALL_N1_PREROLL_SEVERE_DEADLOCK_ESCAPE_MS = 420;
 /** Treat pushes newer than this as evidence that the source is still actively trickling in. */
 export const GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS = 120;
 /** Minimum queued Opus needed before early preroll release is allowed. */
 export const GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS = 40;
+/** Severe deadlock fallback: one frame is better than remaining muted forever. */
+export const GCALL_N1_PREROLL_SEVERE_RELEASE_MIN_BUFFER_MS = 20;
 /** Scale early-release reserve with target, but keep it bounded for weak exact-1-remote paths. */
 export const GCALL_N1_PREROLL_EARLY_RELEASE_TARGET_RATIO = 0.3;
 export const GCALL_N1_PREROLL_EARLY_RELEASE_MIN_BUFFER_MS_CEIL = 60;
@@ -27,6 +31,17 @@ export const GCALL_N1_MIN_START_MS_CEIL = 185;
 
 /** Micro-accumulation after refill when preroll already satisfied (ms). */
 export const GCALL_N1_ACCUMULATION_MS = 75;
+/** After forced early release, hold decode a bit longer so the source can rebuild usable reserve. */
+export const GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS = 140;
+/** Severe 20ms deadlock escape needs a longer rebuild window so the source can climb out of 1 frame. */
+export const GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS = 260;
+export const GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP = 2;
+export const GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS = 80;
+export const GCALL_N1_SEVERE_RELEASE_EXIT_UNDERTARGET_MAX = 0.45;
+export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_OPUS_MS = 40;
+export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_PCM_MS = 30;
+export const GCALL_N1_LATE_COLLAPSE_REARM_UNDERTARGET_MIN = 0.85;
+export const GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS = 450;
 
 /** Short refill accumulation outside recovery so 2-way steady state does not collapse back to 1 frame. Keep it brief so refill does not push usable audio past playout deadlines. */
 export const GCALL_N1_STEADY_ACCUMULATION_MS = 30;
@@ -37,6 +52,9 @@ export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
 /** Small steady-state reserve for exact-1-remote calls after recovery exits. */
 export const GCALL_N1_STEADY_MIN_HOLD_MS_FLOOR = 20;
 export const GCALL_N1_STEADY_MIN_HOLD_MS_CEIL = 40;
+/** When PCM remains this low on a live N===1 path, prioritize rebuilding PCM over hoarding Opus. */
+export const GCALL_N1_PCM_REBUILD_MAX_MS = 60;
+export const GCALL_N1_PCM_REBUILD_UNDERTARGET_MIN = 0.75;
 
 /** Tier A: deep deficit — very aggressive throttle (typically 1 decode/tick max). */
 export const GCALL_N1_RATIO_DEEP = 0.3;
@@ -107,10 +125,30 @@ export function shouldForceN1RecoveryPrerollSatisfied(input: {
     input.targetMs ?? GCALL_N1_MIN_TARGET_MS_FLOOR
   );
   return (
+    isSevereN1RecoveryPrerollRelease(input) ||
+    (input.sourceActive &&
+      input.blockedForMs >= GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS &&
+      input.lastPushAgeMs <= GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS &&
+      input.opusBufferedMs >= minBufferMs)
+  );
+}
+
+export function isSevereN1RecoveryPrerollRelease(input: {
+  blockedForMs: number;
+  lastPushAgeMs: number;
+  opusBufferedMs: number;
+  sourceActive: boolean;
+  targetMs?: number;
+}): boolean {
+  const minBufferMs = computeN1RecoveryEarlyReleaseMinBufferMs(
+    input.targetMs ?? GCALL_N1_MIN_TARGET_MS_FLOOR
+  );
+  return (
     input.sourceActive &&
-    input.blockedForMs >= GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS &&
+    input.blockedForMs >= GCALL_N1_PREROLL_SEVERE_DEADLOCK_ESCAPE_MS &&
     input.lastPushAgeMs <= GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS &&
-    input.opusBufferedMs >= minBufferMs
+    input.opusBufferedMs >= GCALL_N1_PREROLL_SEVERE_RELEASE_MIN_BUFFER_MS &&
+    input.opusBufferedMs < minBufferMs
   );
 }
 
@@ -216,6 +254,75 @@ export function computeN1LiveRecoveryBurstCap(input: {
   if (input.tier === 'deep') return Math.min(2, baseCap);
   if (input.tier === 'moderate') return Math.min(3, baseCap);
   return Math.min(5, baseCap);
+}
+
+export function shouldBoostN1PcmRebuild(input: {
+  sourceRecentlyPushed: boolean;
+  sampleCount: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  playoutStarvationSeverity: 'none' | 'mild' | 'strong';
+}): boolean {
+  return (
+    input.sourceRecentlyPushed &&
+    input.sampleCount >= 2 &&
+    input.avgPcmBufferedMs <= GCALL_N1_PCM_REBUILD_MAX_MS &&
+    input.playoutUnderTargetFraction >= GCALL_N1_PCM_REBUILD_UNDERTARGET_MIN &&
+    (input.playoutStarvationSeverity === 'strong' ||
+      input.playoutUnderTargetFraction >= 0.9)
+  );
+}
+
+export function computeN1PcmRebuildBurstCap(
+  tier: GcallN1BufferEnforceTier,
+  scaledBurstCap: number
+): number {
+  if (tier === 'deep') return Math.min(4, scaledBurstCap);
+  if (tier === 'moderate') return Math.min(5, scaledBurstCap);
+  return Math.min(6, scaledBurstCap);
+}
+
+export function shouldKeepN1SevereForcedReleaseRebuild(input: {
+  nowMs: number;
+  rebuildUntilMs: number;
+  opusBufferedMs: number;
+  targetMs: number;
+  sampleCount: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+}): boolean {
+  if (input.rebuildUntilMs <= input.nowMs) return false;
+  if (input.sampleCount < 2) return true;
+  return !(
+    input.opusBufferedMs >=
+      computeN1RecoveryEarlyReleaseMinBufferMs(input.targetMs) &&
+    input.avgPcmBufferedMs >= GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS &&
+    input.playoutUnderTargetFraction <=
+      GCALL_N1_SEVERE_RELEASE_EXIT_UNDERTARGET_MAX
+  );
+}
+
+export function shouldRearmN1LateCollapseRecovery(input: {
+  nowMs: number;
+  cooldownUntilMs: number;
+  sourceRecentlyPushed: boolean;
+  opusBufferedMs: number;
+  sampleCount: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  playoutStarvationSeverity: 'none' | 'mild' | 'strong';
+}): boolean {
+  return (
+    input.nowMs >= input.cooldownUntilMs &&
+    input.sourceRecentlyPushed &&
+    input.opusBufferedMs <= GCALL_N1_LATE_COLLAPSE_REARM_MAX_OPUS_MS &&
+    input.sampleCount >= 2 &&
+    input.avgPcmBufferedMs <= GCALL_N1_LATE_COLLAPSE_REARM_MAX_PCM_MS &&
+    input.playoutUnderTargetFraction >=
+      GCALL_N1_LATE_COLLAPSE_REARM_UNDERTARGET_MIN &&
+    (input.playoutStarvationSeverity === 'strong' ||
+      input.playoutUnderTargetFraction >= 0.95)
+  );
 }
 
 export function computeN1SteadyTierBurstCap(

@@ -31,9 +31,12 @@ import {
   shouldEscalateRoomWideKeyRecovery,
   shouldAccelerateMultiSourceRecoveryDecay,
   shouldAccelerateSingleRemoteRecoveryDecay,
+  computeN1ReceivePrioritySendBitrateCapBps,
+  tickN1ReceivePrioritySendBitrateCapState,
   computeWeakSingleRemoteRecoveryHoldState,
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   shouldDropActiveJitterSource,
+  shouldKeepSingleRemoteWindowRecoveryLocal,
   shouldRetainN1RecoveryPrerollSatisfied,
   shouldRelaxSingleRemoteWindowRecovery,
   shouldIgnoreParticipantLeftEvent,
@@ -89,6 +92,9 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     const lastPlayoutTargetPostAt = new Map([['alice', 1234]]);
     const lastDrainMissed = new Map([['alice', 2]]);
     const n1WeakLiveHoldUntilPerf = new Map([['alice', 1400]]);
+    const n1ReceivePrioritySendCapState = new Map([
+      ['alice', { holdUntilMs: 1700, stableSinceMs: null }],
+    ]);
 
     clearAdaptiveGroupCallPlayoutMaps({
       lastPacketArrivalAt,
@@ -98,6 +104,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       lastPlayoutTargetPostAt,
       lastDrainMissed,
       n1WeakLiveHoldUntilPerf,
+      n1ReceivePrioritySendCapState,
     });
 
     expect(lastPacketArrivalAt.size).toBe(0);
@@ -107,6 +114,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(lastPlayoutTargetPostAt.size).toBe(0);
     expect(lastDrainMissed.size).toBe(0);
     expect(n1WeakLiveHoldUntilPerf.size).toBe(0);
+    expect(n1ReceivePrioritySendCapState.size).toBe(0);
   });
 
   it('summarizes recent recovery stability from existing playout signals', () => {
@@ -338,6 +346,15 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       computeN1AccumulationDecodeCap({
         accumulationActive: true,
         recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 20,
+        tier: 'deep',
+      })
+    ).toBe(2);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
         opusBufferedMs: 20,
         tier: 'deep',
       })
@@ -541,6 +558,324 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         concealmentTicks: 87,
       })
     ).toBe(false);
+  });
+
+  it('keeps weak live single-remote collapse local while still allowing real failures to escalate', () => {
+    expect(
+      shouldKeepSingleRemoteWindowRecoveryLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 106,
+        adaptiveTargetMedianMs: 100,
+        adaptiveTargetMaxMs: 120,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -127.5,
+        missingFrames: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldKeepSingleRemoteWindowRecoveryLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 900,
+        avgOpusBufferedMs: 106,
+        adaptiveTargetMedianMs: 100,
+        adaptiveTargetMaxMs: 120,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -127.5,
+        missingFrames: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldKeepSingleRemoteWindowRecoveryLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 106,
+        adaptiveTargetMedianMs: 100,
+        adaptiveTargetMaxMs: 120,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -127.5,
+        missingFrames: 0,
+        packetsDroppedPendingDecrypt: 3,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldKeepSingleRemoteWindowRecoveryLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 106,
+        adaptiveTargetMedianMs: 100,
+        adaptiveTargetMaxMs: 120,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -127.5,
+        missingFrames: 72,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('caps one-on-one send bitrate when local send pressure coincides with receive collapse', () => {
+    expect(
+      computeN1ReceivePrioritySendBitrateCapBps({
+        activeSourceCount: 1,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 27.572,
+          playoutUnderTargetFraction: 0.871,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -87.876,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 900,
+        nowMs: 1_000,
+        localSendPressure: true,
+        nominalBitrateBps: 40_000,
+      })
+    ).toBe(24_000);
+    expect(
+      computeN1ReceivePrioritySendBitrateCapBps({
+        activeSourceCount: 1,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 40,
+          playoutUnderTargetFraction: 0.8,
+          underrunCount: 5,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -55,
+        starvationSeverity: 'mild',
+        lastRemoteDecodeAtMs: 900,
+        nowMs: 1_000,
+        localSendPressure: true,
+        nominalBitrateBps: 40_000,
+      })
+    ).toBe(28_000);
+    expect(
+      computeN1ReceivePrioritySendBitrateCapBps({
+        activeSourceCount: 1,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 27.572,
+          playoutUnderTargetFraction: 0.871,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -87.876,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 100,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+      })
+    ).toBe(null);
+  });
+
+  it('holds the one-on-one receive-priority cap until stability is sustained', () => {
+    const entered = tickN1ReceivePrioritySendBitrateCapState({
+      previousState: null,
+      activeSourceCount: 1,
+      recentStability: {
+        sampleCount: 4,
+        avgPcmBufferedMs: 27.572,
+        playoutUnderTargetFraction: 0.871,
+        underrunCount: 8,
+        stable: false,
+        severeInstability: true,
+      },
+      avgPlayoutDeltaMs: -87.876,
+      avgOpusBufferedMs: 92,
+      starvationSeverity: 'strong',
+      lastRemoteDecodeAtMs: 900,
+      nowMs: 1_000,
+      localSendPressure: true,
+      nominalBitrateBps: 40_000,
+    });
+    expect(entered.capBps).toBe(24_000);
+    expect(entered.nextState).toEqual({
+      holdUntilMs: 1_900,
+      stableSinceMs: null,
+    });
+
+    const stabilizing = tickN1ReceivePrioritySendBitrateCapState({
+      previousState: entered.nextState,
+      activeSourceCount: 1,
+      recentStability: {
+        sampleCount: 4,
+        avgPcmBufferedMs: 118,
+        playoutUnderTargetFraction: 0.22,
+        underrunCount: 0,
+        stable: true,
+        severeInstability: false,
+      },
+      avgPlayoutDeltaMs: -12,
+      avgOpusBufferedMs: 118,
+      starvationSeverity: 'none',
+      lastRemoteDecodeAtMs: 1_250,
+      nowMs: 1_400,
+      localSendPressure: false,
+      nominalBitrateBps: 40_000,
+    });
+    expect(stabilizing.capBps).toBe(24_000);
+    expect(stabilizing.nextState).toEqual({
+      holdUntilMs: 1_900,
+      stableSinceMs: 1_400,
+    });
+
+    const released = tickN1ReceivePrioritySendBitrateCapState({
+      previousState: stabilizing.nextState,
+      activeSourceCount: 1,
+      recentStability: {
+        sampleCount: 4,
+        avgPcmBufferedMs: 118,
+        playoutUnderTargetFraction: 0.22,
+        underrunCount: 0,
+        stable: true,
+        severeInstability: false,
+      },
+      avgPlayoutDeltaMs: -12,
+      avgOpusBufferedMs: 118,
+      starvationSeverity: 'none',
+      lastRemoteDecodeAtMs: 1_850,
+      nowMs: 1_950,
+      localSendPressure: false,
+      nominalBitrateBps: 40_000,
+    });
+    expect(released.capBps).toBe(24_000);
+
+    const releasedAfterStableWindow = tickN1ReceivePrioritySendBitrateCapState({
+      previousState: stabilizing.nextState,
+      activeSourceCount: 1,
+      recentStability: {
+        sampleCount: 4,
+        avgPcmBufferedMs: 118,
+        playoutUnderTargetFraction: 0.22,
+        underrunCount: 0,
+        stable: true,
+        severeInstability: false,
+      },
+      avgPlayoutDeltaMs: -12,
+      avgOpusBufferedMs: 118,
+      starvationSeverity: 'none',
+      lastRemoteDecodeAtMs: 2_000,
+      nowMs: 2_050,
+      localSendPressure: false,
+      nominalBitrateBps: 40_000,
+    });
+    expect(releasedAfterStableWindow).toEqual({
+      capBps: null,
+      nextState: null,
+    });
+  });
+
+  it('enters one-on-one receive-priority mode for a live high-opus low-pcm collapse even when the instant send-pressure sample is calm', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: null,
+        activeSourceCount: 1,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 46.008,
+          playoutUnderTargetFraction: 0.782,
+          underrunCount: 6,
+          stable: false,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -87.48,
+        avgOpusBufferedMs: 106,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 900,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+      })
+    ).toEqual({
+      capBps: 24_000,
+      nextState: {
+        holdUntilMs: 1_900,
+        stableSinceMs: null,
+      },
+    });
+  });
+
+  it('does not enter one-on-one receive-priority mode when opus reserve is not actually present', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: null,
+        activeSourceCount: 1,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 27.572,
+          playoutUnderTargetFraction: 0.871,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -87.876,
+        avgOpusBufferedMs: 40,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 900,
+        nowMs: 1_000,
+        localSendPressure: true,
+        nominalBitrateBps: 40_000,
+      })
+    ).toEqual({
+      capBps: null,
+      nextState: null,
+    });
+  });
+
+  it('drops the one-on-one receive-priority cap when remote decode goes stale', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: {
+          holdUntilMs: 1_900,
+          stableSinceMs: null,
+        },
+        activeSourceCount: 1,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 80,
+          playoutUnderTargetFraction: 0.55,
+          underrunCount: 1,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -35,
+        avgOpusBufferedMs: 80,
+        starvationSeverity: 'mild',
+        lastRemoteDecodeAtMs: 600,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+      })
+    ).toEqual({
+      capBps: null,
+      nextState: null,
+    });
   });
 
   it('only seeds join session state before the root session is adopted', () => {

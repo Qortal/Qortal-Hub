@@ -785,6 +785,108 @@ describe('ReticulumBridge publish_presence payload', () => {
     });
   });
 
+  it('sends bridge-owned call fanout with active overlay neighbor hashes and exclusions', async () => {
+    vi.mocked(getPresenceManager).mockReturnValue({
+      getReticulumActiveNeighborHashes: (excludePeerPresenceHashes?: string[]) =>
+        excludePeerPresenceHashes?.length
+          ? [
+              'aa112233445566778899aabbccddeeff',
+              'cc112233445566778899aabbccddeeff',
+            ]
+          : [
+              'aa112233445566778899aabbccddeeff',
+              'bb00112233445566778899aabbccddee',
+            ],
+    } as any);
+
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: 'fanout-call-1',
+      ok: true,
+      payload: {},
+    }));
+
+    await bridge.fanoutCallDetailed(
+      [{ t: 'CR', c: 'call-1', a: 'Q-local' }],
+      ['bb00112233445566778899aabbccddee']
+    );
+
+    expect(internal.sendCommand).toHaveBeenCalledWith('fanout_call', {
+      messages: [{ t: 'CR', c: 'call-1', a: 'Q-local' }],
+      overlayNeighborHashes: [
+        'aa112233445566778899aabbccddeeff',
+        'cc112233445566778899aabbccddeeff',
+      ],
+      excludePeerPresenceHashes: ['bb00112233445566778899aabbccddee'],
+    });
+  });
+
+  it('sends bridge-owned group-call fanout with active overlay neighbor hashes and exclusions', async () => {
+    vi.mocked(getPresenceManager).mockReturnValue({
+      getReticulumActiveNeighborHashes: (excludePeerPresenceHashes?: string[]) =>
+        excludePeerPresenceHashes?.length
+          ? [
+              'aa112233445566778899aabbccddeeff',
+              'cc112233445566778899aabbccddeeff',
+            ]
+          : [
+              'aa112233445566778899aabbccddeeff',
+              'bb00112233445566778899aabbccddee',
+            ],
+    } as any);
+
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: 'fanout-1',
+      ok: true,
+      payload: {},
+    }));
+
+    await bridge.fanoutGroupCallDetailed(
+      [{ t: 'GJ', R: 'room-1' }],
+      ['bb00112233445566778899aabbccddee']
+    );
+
+    expect(internal.sendCommand).toHaveBeenCalledWith('fanout_group_call', {
+      messages: [{ t: 'GJ', R: 'room-1' }],
+      overlayNeighborHashes: [
+        'aa112233445566778899aabbccddeeff',
+        'cc112233445566778899aabbccddeeff',
+      ],
+      excludePeerPresenceHashes: ['bb00112233445566778899aabbccddee'],
+    });
+  });
+
+  it('maps no-route failures for bridge-owned group-call fanout', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: 'fanout-2',
+      ok: false,
+      payload: { code: 'no_route' },
+      error: 'No overlay route',
+    }));
+
+    const result = await bridge.fanoutGroupCallDetailed([{ t: 'GK', R: 'room-1' }]);
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'no-route',
+      error: 'No overlay route',
+    });
+  });
+
   it('forwards presence with original sender hash and previous-hop exclusion', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;

@@ -42,6 +42,12 @@ const UNDER_TIER_SHALLOW_MS = -45;
 const UNDER_RATE_DEEP = 0.94;
 const UNDER_RATE_MID = 0.96;
 const UNDER_RATE_SHALLOW = 0.98;
+const UNDER_RATE_DEEP_USABLE = 0.97;
+const UNDER_RATE_MID_USABLE = 0.985;
+const UNDER_RATE_SHALLOW_USABLE = 0.992;
+const UNDER_USABLE_BUFFER_MIN_MS = 85;
+const UNDER_USABLE_TARGET_RATIO = 0.62;
+const UNDER_USABLE_DELTA_MIN_MS = -70;
 const RATE_K_UNDER = 0.000125;
 const RATE_K_OVER = 0.00008;
 
@@ -180,10 +186,21 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
   }
 
   /** Tier rate from delta only (under-target path). */
-  _underTierRate(deltaMs) {
-    if (deltaMs < UNDER_TIER_DEEP_MS) return UNDER_RATE_DEEP;
-    if (deltaMs < UNDER_TIER_MID_MS) return UNDER_RATE_MID;
-    if (deltaMs < UNDER_TIER_SHALLOW_MS) return UNDER_RATE_SHALLOW;
+  _underTierRate(deltaMs, bufferedMs) {
+    const usableBufferRelaxed =
+      this._playoutStarted &&
+      deltaMs >= UNDER_USABLE_DELTA_MIN_MS &&
+      bufferedMs >=
+        Math.max(UNDER_USABLE_BUFFER_MIN_MS, this._targetPlayoutMs * UNDER_USABLE_TARGET_RATIO);
+    if (deltaMs < UNDER_TIER_DEEP_MS) {
+      return usableBufferRelaxed ? UNDER_RATE_DEEP_USABLE : UNDER_RATE_DEEP;
+    }
+    if (deltaMs < UNDER_TIER_MID_MS) {
+      return usableBufferRelaxed ? UNDER_RATE_MID_USABLE : UNDER_RATE_MID;
+    }
+    if (deltaMs < UNDER_TIER_SHALLOW_MS) {
+      return usableBufferRelaxed ? UNDER_RATE_SHALLOW_USABLE : UNDER_RATE_SHALLOW;
+    }
     return 1;
   }
 
@@ -208,7 +225,7 @@ class GroupPlayoutProcessor extends AudioWorkletProcessor {
       sampleRateHz > 0
         ? (this._panicSamplesInPanic / sampleRateHz) * 1000
         : 0;
-    const tierUnder = this._underTierRate(deltaMs);
+    const tierUnder = this._underTierRate(deltaMs, bufferedMs);
 
     if (this._inPanic && this._playoutStarted) {
       if (panicMs < PANIC_DWELL_MS) {

@@ -72,6 +72,17 @@ export class JitterBuffer {
     }
   }
 
+  /**
+   * Exact-1-remote recovery can intentionally leave preroll before the normal
+   * unprimed threshold. Mark the buffer primed so a live one-frame trickle can
+   * actually drain on the next tick instead of remaining stuck below threshold.
+   */
+  forcePrimeForRecoveryEscape(): void {
+    if (this.entries.length <= 0) return;
+    this.primed = true;
+    this.emptySinceMs = null;
+  }
+
   private checkSoftUnprime(): void {
     if (this.emptySinceMs === null) return;
     if (this.entries.length > 0) {
