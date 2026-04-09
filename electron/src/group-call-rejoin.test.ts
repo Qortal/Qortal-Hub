@@ -1627,7 +1627,7 @@ describe('pendingKeyEnvelopeWinsOver', () => {
 });
 
 describe('chooseMainTopologyAuthority', () => {
-  it('breaks same-epoch root conflicts by higher lastSeen before digest tie-break', () => {
+  it('breaks same-epoch root conflicts by deterministic digest even when lastSeen is newer', () => {
     expect(
       chooseMainTopologyAuthority(
         {
@@ -1644,7 +1644,7 @@ describe('chooseMainTopologyAuthority', () => {
       )
     ).toEqual({
       acceptIncoming: true,
-      reason: 'lastSeen-root-conflict',
+      reason: 'rootForwarder-lexical',
     });
   });
 

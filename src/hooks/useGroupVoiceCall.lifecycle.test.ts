@@ -1778,11 +1778,11 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       )
     ).toEqual({
       acceptIncoming: true,
-      reason: 'lastSeen-root-conflict',
+      reason: 'rootForwarder-lexical',
     });
   });
 
-  it('keeps incumbent root on same-epoch conflict when lastSeen deltas are within sticky window', () => {
+  it('ignores same-epoch root lastSeen deltas and keeps the digest winner', () => {
     const base = {
       topologyEpoch: 8,
       standbyForwarder: 'standby',
@@ -1795,8 +1795,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         'gcall-qortal-812'
       )
     ).toEqual({
-      acceptIncoming: false,
-      reason: 'lastSeen-root-conflict-sticky',
+      acceptIncoming: true,
+      reason: 'rootForwarder-lexical',
     });
     expect(
       chooseSameEpochTopologyWinner(
@@ -1806,7 +1806,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       )
     ).toEqual({
       acceptIncoming: true,
-      reason: 'lastSeen-root-conflict',
+      reason: 'rootForwarder-lexical',
     });
   });
 

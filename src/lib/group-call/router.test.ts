@@ -220,7 +220,7 @@ describe('chooseRouterTopologyAuthority', () => {
     });
   });
 
-  it('breaks same-epoch root conflicts by higher lastSeen before election digest', () => {
+  it('breaks same-epoch root conflicts by election digest even when lastSeen is newer', () => {
     const current = {
       topologyEpoch: 8,
       rootForwarder: 'alpha',
@@ -245,7 +245,7 @@ describe('chooseRouterTopologyAuthority', () => {
       })
     ).toEqual({
       acceptIncoming: true,
-      reason: 'lastSeen-root-conflict',
+      reason: 'rootForwarder-lexical',
       winningRoot: 'beta',
     });
     expect(
@@ -267,13 +267,13 @@ describe('chooseRouterTopologyAuthority', () => {
         }
       )
     ).toEqual({
-      acceptIncoming: true,
-      reason: 'lastSeen-root-conflict',
-      winningRoot: 'alpha',
+      acceptIncoming: false,
+      reason: 'rootForwarder-lexical',
+      winningRoot: 'beta',
     });
   });
 
-  it('optionally keeps incumbent root when same-epoch lastSeen differs within a sticky window', () => {
+  it('ignores same-epoch root lastSeen deltas and keeps the digest winner', () => {
     const current = {
       topologyEpoch: 8,
       rootForwarder: 'alpha',
@@ -288,9 +288,9 @@ describe('chooseRouterTopologyAuthority', () => {
         { roomId: 'r', sameEpochRootConflictStickyMs: 150 }
       )
     ).toEqual({
-      acceptIncoming: false,
-      reason: 'lastSeen-root-conflict-sticky',
-      winningRoot: 'alpha',
+      acceptIncoming: true,
+      reason: 'rootForwarder-lexical',
+      winningRoot: 'beta',
     });
     expect(
       chooseRouterTopologyAuthority(
@@ -300,7 +300,7 @@ describe('chooseRouterTopologyAuthority', () => {
       )
     ).toEqual({
       acceptIncoming: true,
-      reason: 'lastSeen-root-conflict',
+      reason: 'rootForwarder-lexical',
       winningRoot: 'beta',
     });
   });

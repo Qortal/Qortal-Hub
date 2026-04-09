@@ -121,8 +121,6 @@ export type RouterTopologyAuthorityReason =
   | 'stale-epoch'
   | 'newer-epoch'
   | 'lastSeen'
-  | 'lastSeen-root-conflict'
-  | 'lastSeen-root-conflict-sticky'
   | 'rootForwarder-lexical'
   | 'same-topology';
 
@@ -137,9 +135,8 @@ export interface RouterTopologyAuthorityOptions {
   /** When set, same-epoch root tie-break uses syncRootElectionDigestHex (matches main process). */
   roomId?: string;
   /**
-   * When same-epoch roots differ and both frames carry `lastSeen`, ignore `lastSeen` ordering
-   * if the timestamps are within this window (ms) and keep the incumbent root instead.
-   * Reduces flip-flops from clock skew / bursty GC_TOPOLOGY; 0 disables.
+   * Retained for call-site compatibility. Same-epoch root conflicts now ignore wall-clock
+   * `lastSeen` ordering and always resolve by deterministic root comparison.
    */
   sameEpochRootConflictStickyMs?: number;
 }
@@ -149,8 +146,8 @@ export const DEFAULT_SAME_EPOCH_ROOT_CONFLICT_STICKY_MS = 150;
 
 /**
  * Resolve conflicting topology candidates with a symmetric rule that every peer
- * can compute locally. Same-epoch root conflicts must not preserve local state,
- * or split-brain can persist forever after rejoin.
+ * can compute locally. Same-epoch root conflicts must not use wall-clock freshness,
+ * or a late joiner with a partial roster can override the deterministic winner.
  */
 export function chooseRouterTopologyAuthority(
   current: RouterTopologyAuthorityView,
@@ -186,37 +183,6 @@ export function chooseRouterTopologyAuthority(
         acceptIncoming: false,
         reason: 'rootForwarder-lexical',
         winningRoot: currentRoot,
-      };
-    }
-    const incomingSeen =
-      typeof incoming.lastSeen === 'number' && Number.isFinite(incoming.lastSeen)
-        ? incoming.lastSeen
-        : null;
-    const currentSeen =
-      typeof current.lastSeen === 'number' && Number.isFinite(current.lastSeen)
-        ? current.lastSeen
-        : null;
-    if (
-      incomingSeen !== null &&
-      currentSeen !== null &&
-      incomingSeen !== currentSeen
-    ) {
-      const stickyMs = opts?.sameEpochRootConflictStickyMs ?? 0;
-      if (
-        stickyMs > 0 &&
-        Math.abs(incomingSeen - currentSeen) < stickyMs
-      ) {
-        return {
-          acceptIncoming: false,
-          reason: 'lastSeen-root-conflict-sticky',
-          winningRoot: currentRoot,
-        };
-      }
-      const acceptIncoming = incomingSeen > currentSeen;
-      return {
-        acceptIncoming,
-        reason: 'lastSeen-root-conflict',
-        winningRoot: acceptIncoming ? incomingRoot : currentRoot,
       };
     }
     const compareRoots =
