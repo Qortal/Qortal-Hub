@@ -37,6 +37,7 @@ import {
   computeWeakSingleRemoteRecoveryHoldState,
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   shouldDropActiveJitterSource,
+  shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
   shouldKeepSingleRemoteWindowRecoveryLocal,
   shouldRetainN1RecoveryPrerollSatisfied,
@@ -181,14 +182,14 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     });
   });
 
-  it('keeps more headroom before calm decay accelerates in stable single-remote low-latency calls', () => {
+  it('starts calm target decay sooner in stable single-remote low-latency calls', () => {
     expect(
       computeSteadyTargetDecayThresholdMs({
         adaptiveMaxTargetMs: 145,
         activeSourceCount: 1,
         adaptiveNetworkMode: 'low-latency',
       })
-    ).toBe(131);
+    ).toBe(127);
     expect(
       computeSteadyTargetDecayThresholdMs({
         adaptiveMaxTargetMs: 145,
@@ -203,6 +204,62 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         adaptiveNetworkMode: 'recovery',
       })
     ).toBe(147);
+  });
+
+  it('suppresses micro-widen only for clearly healthy single-remote low-latency calls', () => {
+    expect(
+      shouldSuppressHealthySingleRemoteMicroWiden({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 165,
+          playoutUnderTargetFraction: 0.08,
+          underrunCount: 0,
+          stable: true,
+          severeInstability: false,
+        },
+      })
+    ).toBe(true);
+
+    expect(
+      shouldSuppressHealthySingleRemoteMicroWiden({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 165,
+          playoutUnderTargetFraction: 0.08,
+          underrunCount: 0,
+          stable: true,
+          severeInstability: false,
+        },
+      })
+    ).toBe(false);
+
+    expect(
+      shouldSuppressHealthySingleRemoteMicroWiden({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+        shouldTightenRecovery: false,
+        severeWindowSource: false,
+        ingressPeerRecovery: false,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 108,
+          playoutUnderTargetFraction: 0.32,
+          underrunCount: 1,
+          stable: false,
+          severeInstability: false,
+        },
+      })
+    ).toBe(false);
   });
 
   it('keeps the normal startup threshold when the jitter buffer is not primed', () => {

@@ -416,10 +416,13 @@ const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
 const GCALL_STABLE_RECOVERY_ALPHA_DOWN = 0.34;
-const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.34;
+const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.36;
 const GCALL_MULTI_SOURCE_RECOVERY_ALPHA_DOWN = 0.42;
 const GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN = 0.4;
-const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 14;
+const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 18;
+const GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_PCM_MIN_MS = 120;
+const GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_UNDERTARGET_MAX = 0.18;
+const GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_SAMPLE_COUNT_MIN = 3;
 const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
@@ -766,6 +769,31 @@ export function computeSteadyTargetDecayThresholdMs(opts: {
     );
   }
   return GCALL_DECAY_GUARD_HIGH_TARGET_MS;
+}
+
+export function shouldSuppressHealthySingleRemoteMicroWiden(opts: {
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  shouldTightenRecovery: boolean;
+  severeWindowSource: boolean;
+  ingressPeerRecovery: boolean;
+  recentStability: RecentRecoveryStabilitySummary;
+}): boolean {
+  return (
+    opts.activeSourceCount === 1 &&
+    opts.adaptiveNetworkMode !== 'recovery' &&
+    !opts.shouldTightenRecovery &&
+    !opts.severeWindowSource &&
+    !opts.ingressPeerRecovery &&
+    opts.recentStability.stable &&
+    !opts.recentStability.severeInstability &&
+    opts.recentStability.sampleCount >=
+      GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_SAMPLE_COUNT_MIN &&
+    opts.recentStability.avgPcmBufferedMs >=
+      GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_PCM_MIN_MS &&
+    opts.recentStability.playoutUnderTargetFraction <=
+      GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_UNDERTARGET_MAX
+  );
 }
 
 export function shouldDropActiveJitterSource(opts: {
@@ -4367,6 +4395,15 @@ export function useGroupVoiceCall(uiActive = false) {
       );
       const starvationLiftMs =
         starvationCeilingLiftForSeverity(nextStarvationSev);
+      const suppressHealthySingleRemoteMicroWiden =
+        shouldSuppressHealthySingleRemoteMicroWiden({
+          activeSourceCount,
+          adaptiveNetworkMode,
+          shouldTightenRecovery,
+          severeWindowSource,
+          ingressPeerRecovery,
+          recentStability,
+        });
 
       const microWiden = computeMicroWidenExtraMsV1({
         interArrivalSamplesMs: samples,
@@ -4375,7 +4412,9 @@ export function useGroupVoiceCall(uiActive = false) {
         Wms: MICRO_WIDEN_W_MS,
       });
       let microWidenCeilingLiftMs = 0;
-      if (!topologySettling && !severeWindowSource) {
+      if (suppressHealthySingleRemoteMicroWiden) {
+        microWidenCeilingLiftUntilRef.current.delete(addr);
+      } else if (!topologySettling && !severeWindowSource) {
         if (microWiden.eligible) {
           microWidenCeilingLiftUntilRef.current.set(
             addr,
@@ -4541,7 +4580,11 @@ export function useGroupVoiceCall(uiActive = false) {
         playoutBoostMs,
       });
 
-      if (!topologySettling && !severeWindowSource) {
+      if (
+        !suppressHealthySingleRemoteMicroWiden &&
+        !topologySettling &&
+        !severeWindowSource
+      ) {
         if (microWiden.eligible) {
           ideal = Math.min(ideal + microWiden.extraMs, adaptiveMaxTargetMs);
           if (wallNow - lastMicroWidenDiagAtRef.current >= 5_000) {

@@ -2253,6 +2253,11 @@ export class GroupCallManager extends EventEmitter {
     return true;
   }
 
+  private releaseReticulumWireLogicalKey(key: string | null): void {
+    if (!key) return;
+    this.seenReticulumWireLogicalKeys.delete(key);
+  }
+
   private async broadcastReticulumFramesViaOverlay(
     frames: Record<string, unknown>[],
     excludePeerHashes: string[] = []
@@ -2575,6 +2580,7 @@ export class GroupCallManager extends EventEmitter {
     const now = Date.now();
     this.maybeSweepReticulumWireLogicalKeys(now);
 
+    let overlayLogicalKey: string | null = null;
     const overlayMeta = this.parseReticulumOverlayMeta(wire);
     if (overlayMeta) {
       if (this.hasSeenReticulumOverlayId(overlayMeta.overlayId)) {
@@ -2588,18 +2594,23 @@ export class GroupCallManager extends EventEmitter {
         }
         return;
       }
-      const logicalKey = getReticulumOverlayLogicalDedupeKey(wire);
-      if (logicalKey !== null && this.hasSeenReticulumWireLogicalKey(logicalKey)) {
+      overlayLogicalKey = getReticulumOverlayLogicalDedupeKey(wire);
+      if (
+        overlayLogicalKey !== null &&
+        this.hasSeenReticulumWireLogicalKey(overlayLogicalKey)
+      ) {
         const t =
           typeof wire.t === 'string' ? wire.t : String(wire.t ?? '?');
         this.logGcJoinWireDebugThrottled(
-          `overlay_logical_dup:${logicalKey}`,
-          `[GCall] Dropped Reticulum wire (duplicate logical message across overlay replays): t=${t} key=${logicalKey.slice(0, 48)}…`
+          `overlay_logical_dup:${overlayLogicalKey}`,
+          `[GCall] Dropped Reticulum wire (duplicate logical message across overlay replays): t=${t} key=${overlayLogicalKey.slice(0, 48)}…`
         );
         return;
       }
       this.rememberReticulumOverlayId(overlayMeta.overlayId);
-      if (logicalKey !== null) this.rememberReticulumWireLogicalKey(logicalKey);
+      if (overlayLogicalKey !== null) {
+        this.rememberReticulumWireLogicalKey(overlayLogicalKey);
+      }
       if (overlayMeta.hopsRemaining > 0) {
         const forwarded = {
           ...wire,
@@ -2720,7 +2731,10 @@ export class GroupCallManager extends EventEmitter {
       if (!pr) return;
       const key = `${pr.R}:${pr.z}`;
       const buf = this.reticulumTopoReasm.get(key);
-      if (!buf || pr.n !== buf.meta.n) return;
+      if (!buf || pr.n !== buf.meta.n) {
+        this.releaseReticulumWireLogicalKey(overlayLogicalKey);
+        return;
+      }
       buf.parts.set(pr.x, pr.p);
       if (buf.parts.size < buf.meta.n) return;
       const env = decodeTopologyFromGt1(buf.meta, buf.parts);
@@ -2751,7 +2765,10 @@ export class GroupCallManager extends EventEmitter {
       if (!pr) return;
       const key = `${pr.R}:${pr.z}`;
       const buf = this.reticulumGrReasm.get(key);
-      if (!buf || pr.n !== buf.meta.n) return;
+      if (!buf || pr.n !== buf.meta.n) {
+        this.releaseReticulumWireLogicalKey(overlayLogicalKey);
+        return;
+      }
       buf.parts.set(pr.x, pr.p);
       if (buf.parts.size < buf.meta.n) return;
       const env = decodeKeyRotateFromGr1(buf.meta, buf.parts);
@@ -2782,7 +2799,10 @@ export class GroupCallManager extends EventEmitter {
       if (!pr) return;
       const key = `${pr.R}:${pr.z}`;
       const buf = this.reticulumGkReasm.get(key);
-      if (!buf || pr.n !== buf.meta.n) return;
+      if (!buf || pr.n !== buf.meta.n) {
+        this.releaseReticulumWireLogicalKey(overlayLogicalKey);
+        return;
+      }
       buf.parts.set(pr.x, pr.p);
       if (buf.parts.size < buf.meta.n) return;
       const env = decodeKeyWireFromGk1(buf.meta, buf.parts);
@@ -2807,7 +2827,10 @@ export class GroupCallManager extends EventEmitter {
       if (!pr) return;
       const key = `${pr.R}:${pr.z}`;
       const buf = this.reticulumGqReasm.get(key);
-      if (!buf || pr.n !== buf.meta.n) return;
+      if (!buf || pr.n !== buf.meta.n) {
+        this.releaseReticulumWireLogicalKey(overlayLogicalKey);
+        return;
+      }
       buf.parts.set(pr.x, pr.p);
       if (buf.parts.size < buf.meta.n) return;
       const env = decodeKeyRequestFromGq1(buf.meta, buf.parts);

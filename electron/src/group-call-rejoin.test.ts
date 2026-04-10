@@ -20,7 +20,7 @@ import {
   shouldHoldAudioForReticulumRecoveryReason,
 } from './group-call';
 import { compactDmVoiceJoinWireChatId } from './dm-voice-wire';
-import { encodeJoinWire } from './group-call-wire-reticulum';
+import { encodeJoinWire, encodeKeyWire } from './group-call-wire-reticulum';
 import {
   byteLengthUtf8JsonWithBridgeSender,
   RT_RETICULUM_MAX_WIRE_JSON_BYTES,
@@ -136,6 +136,122 @@ describe('mergeRoomTopologyEpochWithFloor', () => {
 
   it('floors fractional values', () => {
     expect(mergeRoomTopologyEpochWithFloor(0, 9.7)).toBe(9);
+  });
+
+  it('reassembles fragmented GC_KEY after a GK1 fragment arrives before GK0', async () => {
+    class ReticulumBridgeStub extends EventEmitter {
+      fanoutGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+      sendGroupCallDetailed = vi.fn(async () => ({ ok: true as const }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'stub-link',
+        established: true,
+      }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+
+      getState() {
+        return 'ready' as const;
+      }
+
+      sendGroupCall(_hash: string, _msg: Record<string, unknown>) {
+        return Promise.resolve(true);
+      }
+    }
+
+    const bridge = new ReticulumBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    const seen: Array<Record<string, unknown>> = [];
+
+    manager.start();
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
+    manager.on('gcall:key', (payload) => {
+      seen.push(payload as Record<string, unknown>);
+    });
+    manager.setLocalAddresses(['Q-self']);
+
+    const dmChatId = 'direct:Q-peer:Q-self';
+    const dmRoomId = `dmv:${createHash('sha256').update(dmChatId, 'utf8').digest('hex').slice(0, 18)}`;
+    manager.joinRoom(dmRoomId, dmChatId, 'Q-self', 'sig', 'pk-self', 100, TEST_D32);
+
+    const encryptedKey = 'A'.repeat(900);
+    const keyFrames = encodeKeyWire({
+      roomId: dmRoomId,
+      toAddress: 'Q-self',
+      fromAddress: 'Q-peer',
+      fromPublicKey: 'pk-peer',
+      encryptedKey,
+      keyMessageVersion: 3,
+      callSessionId: 'session-root',
+      mediaSessionGeneration: 1,
+      keyCommitment: 'commitment-1',
+      encryptedKeyDigest: createHash('sha256')
+        .update(JSON.stringify({ encryptedKey, toAddress: 'Q-self' }))
+        .digest('hex'),
+      signature: 'sig-peer',
+      timestamp: 101,
+    });
+    const gk0 = keyFrames.find((frame) => frame.t === 'GK0');
+    const gk1 = keyFrames.filter((frame) => frame.t === 'GK1');
+
+    expect(gk0).toBeDefined();
+    expect(gk1.length).toBeGreaterThan(0);
+
+    bridge.emit(
+      'group-call-message',
+      {
+        ...gk1[0]!,
+        X: 'overlay-gk1-early',
+        L: 2,
+      },
+      'call-peer',
+      'd:Q-peer'
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    bridge.emit(
+      'group-call-message',
+      {
+        ...gk0!,
+        X: 'overlay-gk0',
+        L: 2,
+      },
+      'call-peer',
+      'd:Q-peer'
+    );
+    for (const [index, frame] of gk1.entries()) {
+      bridge.emit(
+        'group-call-message',
+        {
+          ...frame,
+          X: `overlay-gk1-replay-${index}`,
+          L: 2,
+        },
+        'call-peer',
+        'd:Q-peer'
+      );
+    }
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(seen).toEqual([
+      expect.objectContaining({
+        roomId: dmRoomId,
+        recipientAddress: 'Q-self',
+        fromAddress: 'Q-peer',
+        encryptedKey,
+        keyMessageVersion: 3,
+        callSessionId: 'session-root',
+        mediaSessionGeneration: 1,
+        keyCommitment: 'commitment-1',
+        verified: true,
+      }),
+    ]);
+    manager.stop();
   });
 });
 
