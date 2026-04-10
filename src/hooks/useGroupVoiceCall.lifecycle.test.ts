@@ -37,6 +37,7 @@ import {
   computeWeakSingleRemoteRecoveryHoldState,
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   shouldKeepSingleRemoteDegradedRebuildLocal,
+  shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldDropActiveJitterSource,
   shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
@@ -774,7 +775,32 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(
       shouldKeepSingleRemoteDegradedRebuildLocal({
         activeSourceCount: 1,
-        pathDegradedUntilMs: 3_500,
+        pathDegradedUntilMs: 5_000,
+        nowMs: 4_000,
+        lastRecvAgeMs: 1_500,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 17.33,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgOpusBufferedMs: 20,
+        avgPlayoutDeltaMs: -107.096,
+        severeForcedReleaseRebuildActive: true,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('keeps severe rebuild local even when the degraded-path flag is no longer present in the current window', () => {
+    expect(
+      shouldKeepSingleRemoteDegradedRebuildLocal({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
         nowMs: 4_000,
         lastRecvAgeMs: 180,
         recentStability: {
@@ -791,6 +817,96 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         packetsDroppedPendingDecrypt: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
+      })
+    ).toBe(true);
+  });
+
+  it('keeps sustained severe rebuild local even when opus reserve is high', () => {
+    expect(
+      shouldKeepSingleRemoteDegradedRebuildLocal({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
+        nowMs: 4_000,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 4.888,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: false,
+        },
+        avgOpusBufferedMs: 254.232,
+        avgPlayoutDeltaMs: -32.424,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_500,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldKeepSingleRemoteDegradedRebuildLocal({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
+        nowMs: 4_000,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 4.888,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: false,
+        },
+        avgOpusBufferedMs: 254.232,
+        avgPlayoutDeltaMs: -32.424,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 400,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('forces local receive relief for sustained severe rebuild on a live one-on-one path', () => {
+    expect(
+      shouldForceN1SustainedSevereRebuildReceiveRelief({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 0,
+          avgPcmBufferedMs: 0,
+          playoutUnderTargetFraction: 0,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -32.424,
+        playoutStarvationSeverity: 'strong',
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_500,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldForceN1SustainedSevereRebuildReceiveRelief({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 1_800,
+        recentStability: {
+          sampleCount: 0,
+          avgPcmBufferedMs: 0,
+          playoutUnderTargetFraction: 0,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -32.424,
+        playoutStarvationSeverity: 'strong',
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_500,
       })
     ).toBe(false);
   });
@@ -1279,6 +1395,107 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         localSendPressure: false,
         nominalBitrateBps: 40_000,
         severeForcedReleaseRebuildActive: true,
+      })
+    ).toEqual({
+      capBps: 24_000,
+      nextState: {
+        holdUntilMs: 1_900,
+        stableSinceMs: null,
+      },
+    });
+  });
+
+  it('enters one-on-one receive-priority mode for a severe rebuild collapse even without an active degraded-path flag', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: null,
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 17.33,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -107.096,
+        avgOpusBufferedMs: 20,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 200,
+        lastRecvAgeMs: 180,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+        severeForcedReleaseRebuildActive: true,
+      })
+    ).toEqual({
+      capBps: 24_000,
+      nextState: {
+        holdUntilMs: 1_900,
+        stableSinceMs: null,
+        },
+      });
+  });
+
+  it('enters one-on-one receive-priority mode for a sustained severe rebuild even when opus reserve is high', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: null,
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 4.888,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -32.424,
+        avgOpusBufferedMs: 254.232,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 200,
+        lastRecvAgeMs: 180,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_500,
+      })
+    ).toEqual({
+      capBps: 24_000,
+      nextState: {
+        holdUntilMs: 1_900,
+        stableSinceMs: null,
+      },
+    });
+  });
+
+  it('enters one-on-one receive-priority mode for sustained severe rebuild even without a populated recent summary', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: null,
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
+        recentStability: {
+          sampleCount: 0,
+          avgPcmBufferedMs: 0,
+          playoutUnderTargetFraction: 0,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -32.424,
+        avgOpusBufferedMs: 254.232,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 0,
+        lastRecvAgeMs: 180,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_500,
       })
     ).toEqual({
       capBps: 24_000,

@@ -2735,18 +2735,19 @@ def make_presence_wire(
     return json.dumps(wire, separators=(",", ":")).encode("utf-8")
 
 
-def announce_local_destination() -> None:
+def announce_local_destination(reason: str = "unspecified") -> None:
     if _destination is None:
         return
     _destination.announce(app_data=b"presence")
     log(
-        "[presence_bridge] announced local destination "
+        "[presence_bridge] rns destination announce "
+        f"reason={reason} "
         + destination_hash_hex(_destination.hash)
     )
 
 
 def _maybe_announce_local_destination_low_verified_overlay_peers() -> None:
-    """Extra RNS announce when verified overlay peers < MIN (same as auth/periodic). 5 min cooldown."""
+    """Extra RNS announce when verified overlay peers < MIN (same cooldown as legacy no-peers path)."""
     global _last_no_verified_peers_announce_at
     if _destination is None or not _rns_auth_announced:
         return
@@ -2756,17 +2757,15 @@ def _maybe_announce_local_destination_low_verified_overlay_peers() -> None:
     if (now - _last_no_verified_peers_announce_at) < _NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS:
         return
     try:
-        announce_local_destination()
+        announce_local_destination(
+            "low_verified_overlay_peers "
+            f"verified={len(_verified_overlay_peers)} "
+            f"min_skip={_MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE}"
+        )
     except Exception as exc:
         log(f"[presence_bridge] rns announce low_verified_overlay_peers failed: {exc}")
         return
     _last_no_verified_peers_announce_at = now
-    log(
-        "[presence_bridge] target=presence-reticulum low_verified_overlay_peers "
-        f"verified={len(_verified_overlay_peers)} "
-        f"min_skip={_MIN_VERIFIED_OVERLAY_PEERS_BEFORE_SKIP_EXTRA_ANNOUNCE} "
-        f"cooldown_sec={_NO_VERIFIED_PEERS_ANNOUNCE_COOLDOWN_SECONDS}"
-    )
 
 
 def _maybe_announce_local_destination_for_overlay_bootstrap(
@@ -2779,10 +2778,9 @@ def _maybe_announce_local_destination_for_overlay_bootstrap(
     if (now - _last_hello_bootstrap_announce_at) < _HELLO_BOOTSTRAP_ANNOUNCE_COOLDOWN_SECONDS:
         return
     _last_hello_bootstrap_announce_at = now
-    announce_local_destination()
-    log(
-        "[presence_bridge] target=presence-reticulum overlay_bootstrap_announce "
-        f"reason={reason} peer={str(peer_hash or '').strip().lower() or 'unknown'}"
+    announce_local_destination(
+        "overlay_bootstrap "
+        f"detail={reason} peer={str(peer_hash or '').strip().lower() or 'unknown'}"
     )
 
 
@@ -2803,11 +2801,8 @@ def _rns_periodic_announce_fire() -> None:
         if _destination is None or not _rns_auth_announced:
             return
         try:
-            _destination.announce(app_data=b"presence")
-            log(
-                "[presence_bridge] rns announce periodic "
-                f"interval={RNS_ANNOUNCE_INTERVAL_SEC}s "
-                + destination_hash_hex(_destination.hash)
+            announce_local_destination(
+                f"periodic interval_sec={RNS_ANNOUNCE_INTERVAL_SEC}"
             )
             _last_no_verified_peers_announce_at = time.time()
         except Exception as exc:
@@ -3258,11 +3253,7 @@ def handle_publish_presence(req_id: str, payload: Dict[str, Any]) -> None:
             _rns_announce_on_auth_session_end()
         elif env_type == "PRESENCE_ANNOUNCE":
             if not _rns_auth_announced:
-                announce_local_destination()
-                log(
-                    "[presence_bridge] rns announce reason=authenticated_initial "
-                    + destination_hash_hex(_destination.hash)
-                )
+                announce_local_destination("authenticated_initial")
                 _rns_auth_announced = True
                 _schedule_rns_periodic_announce_timer()
                 _last_no_verified_peers_announce_at = time.time()
