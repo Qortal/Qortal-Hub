@@ -871,6 +871,35 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
+  it('keeps exact one-frame severe rebuild local even when recent summary is sparse', () => {
+    expect(
+      shouldKeepSingleRemoteDegradedRebuildLocal({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
+        nowMs: 4_000,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 0,
+          avgPcmBufferedMs: 0,
+          playoutUnderTargetFraction: 0,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: false,
+        },
+        avgOpusBufferedMs: 20,
+        avgPlayoutDeltaMs: -99.979,
+        windowAvgPcmBufferedMs: 0.021,
+        windowPlayoutUnderTargetFraction: 1,
+        windowJitterBufferDepthFramesMean: 1,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_500,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+      })
+    ).toBe(true);
+  });
+
   it('forces local receive relief for sustained severe rebuild on a live one-on-one path', () => {
     expect(
       shouldForceN1SustainedSevereRebuildReceiveRelief({
@@ -909,6 +938,29 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActiveForMs: 1_500,
       })
     ).toBe(false);
+  });
+
+  it('forces local receive relief for an exact one-frame dead zone during severe rebuild', () => {
+    expect(
+      shouldForceN1SustainedSevereRebuildReceiveRelief({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 0,
+          avgPcmBufferedMs: 0,
+          playoutUnderTargetFraction: 0,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: 0,
+        playoutStarvationSeverity: 'none',
+        avgOpusBufferedMs: 20,
+        jitterBufferedFrames: 1,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_000,
+      })
+    ).toBe(true);
   });
 
   it('keeps severe local multi-source overload local instead of blaming peers', () => {
@@ -1496,6 +1548,41 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         nominalBitrateBps: 40_000,
         severeForcedReleaseRebuildActive: true,
         severeForcedReleaseRebuildActiveForMs: 1_500,
+      })
+    ).toEqual({
+      capBps: 24_000,
+      nextState: {
+        holdUntilMs: 1_900,
+        stableSinceMs: null,
+      },
+    });
+  });
+
+  it('enters one-on-one receive-priority mode for an exact one-frame dead zone even when recent summary is empty', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: null,
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
+        recentStability: {
+          sampleCount: 0,
+          avgPcmBufferedMs: 0,
+          playoutUnderTargetFraction: 0,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: 0,
+        avgOpusBufferedMs: 20,
+        jitterBufferedFrames: 1,
+        starvationSeverity: 'none',
+        lastRemoteDecodeAtMs: 0,
+        lastRecvAgeMs: 180,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_000,
       })
     ).toEqual({
       capBps: 24_000,

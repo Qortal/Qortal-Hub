@@ -1002,6 +1002,11 @@ const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_PCM_MAX_MS = 60;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS = -20;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS = 1_500;
+const GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS = 600;
+const GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS = OPUS_FRAME_DURATION_MS + 1;
+const GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX = 1;
+const GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS = 12;
+const GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN = 0.9;
 
 export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
   activeSourceCount: number;
@@ -1055,6 +1060,9 @@ export function shouldKeepSingleRemoteDegradedRebuildLocal(opts: {
   recentStability: RecentRecoveryStabilitySummary;
   avgOpusBufferedMs: number;
   avgPlayoutDeltaMs: number;
+  windowAvgPcmBufferedMs?: number;
+  windowPlayoutUnderTargetFraction?: number;
+  windowJitterBufferDepthFramesMean?: number;
   severeForcedReleaseRebuildActive?: boolean;
   severeForcedReleaseRebuildActiveForMs?: number;
   packetsDroppedPendingDecrypt: number;
@@ -1094,9 +1102,32 @@ export function shouldKeepSingleRemoteDegradedRebuildLocal(opts: {
       GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN &&
     opts.avgPlayoutDeltaMs <=
       GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS;
+  const oneFrameDeadzoneSevereRebuild =
+    opts.severeForcedReleaseRebuildActive === true &&
+    (opts.severeForcedReleaseRebuildActiveForMs ?? 0) >=
+      GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS &&
+    opts.avgPlayoutDeltaMs <=
+      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS &&
+    (opts.avgOpusBufferedMs <= GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS ||
+      (opts.windowJitterBufferDepthFramesMean ?? Number.POSITIVE_INFINITY) <=
+        GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX) &&
+    ((opts.recentStability.sampleCount >= 2 &&
+      opts.recentStability.avgPcmBufferedMs <=
+        GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS &&
+      opts.recentStability.playoutUnderTargetFraction >=
+        GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN) ||
+      ((opts.windowAvgPcmBufferedMs ?? Number.POSITIVE_INFINITY) <=
+        GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS &&
+        (opts.windowPlayoutUnderTargetFraction ?? 0) >=
+          GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN));
   return (
     opts.activeSourceCount === 1 &&
-    (explicitDegradedRebuild || stuckSevereRebuild || sustainedSevereRebuild) &&
+    (
+      explicitDegradedRebuild ||
+      stuckSevereRebuild ||
+      sustainedSevereRebuild ||
+      oneFrameDeadzoneSevereRebuild
+    ) &&
     Number.isFinite(opts.lastRecvAgeMs) &&
     opts.lastRecvAgeMs <= GCALL_N1_DEGRADED_REBUILD_LIVE_LAST_RECV_MAX_MS &&
     opts.packetsDroppedPendingDecrypt <= 0 &&
@@ -1111,6 +1142,8 @@ export function shouldForceN1SustainedSevereRebuildReceiveRelief(opts: {
   recentStability: RecentRecoveryStabilitySummary;
   avgPlayoutDeltaMs: number;
   playoutStarvationSeverity: PlayoutStarvationSeverity;
+  avgOpusBufferedMs?: number;
+  jitterBufferedFrames?: number;
   severeForcedReleaseRebuildActive?: boolean;
   severeForcedReleaseRebuildActiveForMs?: number;
 }): boolean {
@@ -1125,6 +1158,14 @@ export function shouldForceN1SustainedSevereRebuildReceiveRelief(opts: {
   ) {
     return false;
   }
+  const exactOneFrameDeadzone =
+    (opts.severeForcedReleaseRebuildActiveForMs ?? 0) >=
+      GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS &&
+    ((opts.jitterBufferedFrames ?? Number.POSITIVE_INFINITY) <=
+      GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX ||
+      (opts.avgOpusBufferedMs ?? Number.POSITIVE_INFINITY) <=
+        GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS);
+  if (exactOneFrameDeadzone) return true;
   if (opts.playoutStarvationSeverity === 'strong') return true;
   return (
     opts.recentStability.sampleCount >= 2 &&
@@ -1411,6 +1452,7 @@ export function tickN1ReceivePrioritySendBitrateCapState(opts: {
   recentStability: RecentRecoveryStabilitySummary;
   avgPlayoutDeltaMs: number;
   avgOpusBufferedMs: number;
+  jitterBufferedFrames?: number;
   starvationSeverity: PlayoutStarvationSeverity;
   lastRemoteDecodeAtMs: number;
   lastRecvAgeMs: number;
@@ -1441,6 +1483,8 @@ export function tickN1ReceivePrioritySendBitrateCapState(opts: {
       recentStability: opts.recentStability,
       avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
       playoutStarvationSeverity: opts.starvationSeverity,
+      avgOpusBufferedMs: opts.avgOpusBufferedMs,
+      jitterBufferedFrames: opts.jitterBufferedFrames,
       severeForcedReleaseRebuildActive: opts.severeForcedReleaseRebuildActive,
       severeForcedReleaseRebuildActiveForMs:
         opts.severeForcedReleaseRebuildActiveForMs,
@@ -3902,6 +3946,11 @@ export function useGroupVoiceCall(uiActive = false) {
             ),
             avgOpusBufferedMs: source.avgOpusBufferedMs,
             avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
+            windowAvgPcmBufferedMs: source.avgPcmBufferedMs,
+            windowPlayoutUnderTargetFraction:
+              source.playoutUnderTargetFraction ?? 0,
+            windowJitterBufferDepthFramesMean:
+              source.jitterBufferDepthFramesMean,
             severeForcedReleaseRebuildActive:
               n1SevereForcedReleaseRebuildUntilPerfRef.current.has(
                 source.sourceAddr
@@ -5698,6 +5747,7 @@ export function useGroupVoiceCall(uiActive = false) {
               avgOpusBufferedMs:
                 singleRemoteWindowSource?.avgOpusBufferedMs ??
                 snap.jitterBufferDepthFramesMean * OPUS_FRAME_DURATION_MS,
+              jitterBufferedFrames: snap.jitterBufferDepthFramesMean,
               starvationSeverity: singleRemoteStarvationSeverity,
               lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
               lastRecvAgeMs:
@@ -9452,7 +9502,11 @@ export function useGroupVoiceCall(uiActive = false) {
                 stable: false,
                 severeInstability: false,
               },
-            avgPlayoutDeltaMs: 0,
+            avgPlayoutDeltaMs: n1RecentStability
+              ? smoothedTarget - n1RecentStability.avgPcmBufferedMs
+              : 0,
+            avgOpusBufferedMs: opusMsPre,
+            jitterBufferedFrames: jb.getBufferedFrames(),
             playoutStarvationSeverity: n1PlayoutStarvationSeverity,
             severeForcedReleaseRebuildActive:
               n1SevereForcedReleaseRebuildActive,
