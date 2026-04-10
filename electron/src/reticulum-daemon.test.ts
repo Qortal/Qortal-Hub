@@ -163,11 +163,7 @@ describe('reticulum-daemon managed config', () => {
       config.indexOf('[logging]')
     );
     expect(reticulumBlock).toContain('discover_interfaces = yes');
-    const wantAutoconnect =
-      process.platform === 'darwin'
-        ? 'autoconnect_discovered_interfaces = 0'
-        : 'autoconnect_discovered_interfaces = 8';
-    expect(reticulumBlock).toContain(wantAutoconnect);
+    expect(reticulumBlock).toContain('autoconnect_discovered_interfaces = 8');
     expect(config).toContain('[[Qortal Hub Mesh Listen]]');
     const meshListenType =
       process.platform === 'linux' ? 'BackboneInterface' : 'TCPServerInterface';

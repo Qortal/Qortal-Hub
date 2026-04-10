@@ -36,6 +36,7 @@ import {
   tickN1ReceivePrioritySendBitrateCapState,
   computeWeakSingleRemoteRecoveryHoldState,
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
+  shouldKeepSingleRemoteDegradedRebuildLocal,
   shouldDropActiveJitterSource,
   shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
@@ -746,6 +747,54 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
+  it('keeps degraded-link severe rebuild local for a live one-on-one path stuck at 20-40ms', () => {
+    expect(
+      shouldKeepSingleRemoteDegradedRebuildLocal({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 10_000,
+        nowMs: 4_000,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 17.33,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgOpusBufferedMs: 20,
+        avgPlayoutDeltaMs: -107.096,
+        severeForcedReleaseRebuildActive: true,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldKeepSingleRemoteDegradedRebuildLocal({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 3_500,
+        nowMs: 4_000,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 17.33,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgOpusBufferedMs: 20,
+        avgPlayoutDeltaMs: -107.096,
+        severeForcedReleaseRebuildActive: true,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+      })
+    ).toBe(false);
+  });
+
   it('keeps severe local multi-source overload local instead of blaming peers', () => {
     expect(
       shouldKeepMultiSourceWindowRecoveryLocal({
@@ -856,6 +905,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         activeSourceCount: 1,
         pathDegradedUntilMs: 10_000,
         nowMs: 4_000,
+        lastRecvAgeMs: 180,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 58.449,
@@ -879,6 +929,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         activeSourceCount: 1,
         pathDegradedUntilMs: 10_000,
         nowMs: 4_000,
+        lastRecvAgeMs: 180,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 98.371,
@@ -902,6 +953,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         activeSourceCount: 1,
         pathDegradedUntilMs: 10_000,
         nowMs: 4_000,
+        lastRecvAgeMs: 180,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 170,
@@ -925,6 +977,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         activeSourceCount: 1,
         pathDegradedUntilMs: 10_000,
         nowMs: 4_000,
+        lastRecvAgeMs: 180,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 113.568,
@@ -945,10 +998,38 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(null);
   });
 
+  it('caps one-on-one send bitrate on a degraded path even when severe rebuild is stuck at low opus', () => {
+    expect(
+      computeN1RoughLinkBitrateCapBps({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 10_000,
+        nowMs: 4_000,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 17.33,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgOpusBufferedMs: 20,
+        avgPlayoutDeltaMs: -107.096,
+        missingFrames: 0,
+        concealmentTicks: 308,
+        avgIncomingPacketMs: 91.829,
+        lastRemoteDecodeAtMs: 3_000,
+        nominalBitrateBps: 24_000,
+        severeForcedReleaseRebuildActive: true,
+      })
+    ).toBe(20_000);
+  });
+
   it('holds the one-on-one receive-priority cap until stability is sustained', () => {
     const entered = tickN1ReceivePrioritySendBitrateCapState({
       previousState: null,
       activeSourceCount: 1,
+      pathDegradedUntilMs: 0,
       recentStability: {
         sampleCount: 4,
         avgPcmBufferedMs: 27.572,
@@ -961,6 +1042,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       avgOpusBufferedMs: 92,
       starvationSeverity: 'strong',
       lastRemoteDecodeAtMs: 900,
+      lastRecvAgeMs: 100,
       nowMs: 1_000,
       localSendPressure: true,
       nominalBitrateBps: 40_000,
@@ -974,6 +1056,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     const stabilizing = tickN1ReceivePrioritySendBitrateCapState({
       previousState: entered.nextState,
       activeSourceCount: 1,
+      pathDegradedUntilMs: 0,
       recentStability: {
         sampleCount: 4,
         avgPcmBufferedMs: 118,
@@ -986,6 +1069,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       avgOpusBufferedMs: 118,
       starvationSeverity: 'none',
       lastRemoteDecodeAtMs: 1_250,
+      lastRecvAgeMs: 100,
       nowMs: 1_400,
       localSendPressure: false,
       nominalBitrateBps: 40_000,
@@ -999,6 +1083,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     const released = tickN1ReceivePrioritySendBitrateCapState({
       previousState: stabilizing.nextState,
       activeSourceCount: 1,
+      pathDegradedUntilMs: 0,
       recentStability: {
         sampleCount: 4,
         avgPcmBufferedMs: 118,
@@ -1011,6 +1096,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       avgOpusBufferedMs: 118,
       starvationSeverity: 'none',
       lastRemoteDecodeAtMs: 1_850,
+      lastRecvAgeMs: 100,
       nowMs: 1_950,
       localSendPressure: false,
       nominalBitrateBps: 40_000,
@@ -1020,6 +1106,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     const releasedAfterStableWindow = tickN1ReceivePrioritySendBitrateCapState({
       previousState: stabilizing.nextState,
       activeSourceCount: 1,
+      pathDegradedUntilMs: 0,
       recentStability: {
         sampleCount: 4,
         avgPcmBufferedMs: 118,
@@ -1032,6 +1119,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       avgOpusBufferedMs: 118,
       starvationSeverity: 'none',
       lastRemoteDecodeAtMs: 2_000,
+      lastRecvAgeMs: 100,
       nowMs: 2_050,
       localSendPressure: false,
       nominalBitrateBps: 40_000,
@@ -1047,6 +1135,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       tickN1ReceivePrioritySendBitrateCapState({
         previousState: null,
         activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 46.008,
@@ -1059,6 +1148,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       avgOpusBufferedMs: 106,
       starvationSeverity: 'strong',
         lastRemoteDecodeAtMs: 900,
+        lastRecvAgeMs: 100,
         nowMs: 1_000,
         localSendPressure: false,
         nominalBitrateBps: 40_000,
@@ -1077,6 +1167,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       tickN1ReceivePrioritySendBitrateCapState({
         previousState: null,
         activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 113.568,
@@ -1089,6 +1180,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         avgOpusBufferedMs: 40,
         starvationSeverity: 'none',
         lastRemoteDecodeAtMs: 900,
+        lastRecvAgeMs: 100,
         nowMs: 1_000,
         localSendPressure: false,
         nominalBitrateBps: 40_000,
@@ -1108,6 +1200,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       tickN1ReceivePrioritySendBitrateCapState({
         previousState: null,
         activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 27.572,
@@ -1120,6 +1213,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         avgOpusBufferedMs: 40,
         starvationSeverity: 'strong',
         lastRemoteDecodeAtMs: 900,
+        lastRecvAgeMs: 100,
         nowMs: 1_000,
         localSendPressure: true,
         nominalBitrateBps: 40_000,
@@ -1138,6 +1232,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
           stableSinceMs: null,
         },
         activeSourceCount: 1,
+        pathDegradedUntilMs: 0,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 80,
@@ -1150,6 +1245,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         avgOpusBufferedMs: 80,
         starvationSeverity: 'mild',
         lastRemoteDecodeAtMs: 600,
+        lastRecvAgeMs: 100,
         nowMs: 1_000,
         localSendPressure: false,
         nominalBitrateBps: 40_000,
@@ -1157,6 +1253,39 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toEqual({
       capBps: null,
       nextState: null,
+    });
+  });
+
+  it('enters one-on-one receive-priority mode on a degraded path even when decode cadence is sparse during severe rebuild', () => {
+    expect(
+      tickN1ReceivePrioritySendBitrateCapState({
+        previousState: null,
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 10_000,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 17.33,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -107.096,
+        avgOpusBufferedMs: 20,
+        starvationSeverity: 'strong',
+        lastRemoteDecodeAtMs: 200,
+        lastRecvAgeMs: 180,
+        nowMs: 1_000,
+        localSendPressure: false,
+        nominalBitrateBps: 40_000,
+        severeForcedReleaseRebuildActive: true,
+      })
+    ).toEqual({
+      capBps: 24_000,
+      nextState: {
+        holdUntilMs: 1_900,
+        stableSinceMs: null,
+      },
     });
   });
 

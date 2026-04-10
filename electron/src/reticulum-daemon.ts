@@ -38,9 +38,6 @@ import {
  * Reticulum hub mesh: listen on the mesh port with optional private-gateway discovery.
  * RNS BackboneInterface is Linux-only; Windows/macOS use TCPServerInterface for the same section.
  * Bootstrap hubs as TCPClient rows; AutoInterface discover/autoconnect (no gossip-driven outbound).
- * On macOS only, `autoconnect_discovered_interfaces` is forced to 0: upstream RNS
- * treats Windows specially for discovered gateways but not Darwin, so autoconnect
- * may synthesize BackboneInterface clients; Backbone is Linux-only (epoll).
  */
 
 /** Mesh listen / private gateway: Backbone on Linux; TCPServer on Windows/macOS (no epoll). */
@@ -706,10 +703,8 @@ shared_instance_port = ${getReticulumSharedInstancePort()}
 instance_control_port = ${getReticulumControlPort()}
 `;
   if (meshSlice?.meshDiscoveryClient) {
-    const autoconnectDiscoveredMax =
-      process.platform === 'darwin' ? 0 : meshSlice.autoconnectDiscoveredMax;
     block += `discover_interfaces = yes
-autoconnect_discovered_interfaces = ${autoconnectDiscoveredMax}
+autoconnect_discovered_interfaces = ${meshSlice.autoconnectDiscoveredMax}
 `;
   }
   if (hasNetworkIdentity) {
