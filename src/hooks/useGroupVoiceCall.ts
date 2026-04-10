@@ -947,6 +947,19 @@ const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS = -45;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX = 40;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_OPUS_PCM_GAP_MIN_MS = 12;
+const GCALL_N1_ROUGH_LINK_WARM_HOLD_MS = 9_000;
+const GCALL_N1_ROUGH_LINK_WARM_REQUEST_COOLDOWN_MS = 6_000;
+const GCALL_N1_ROUGH_LINK_REMOTE_DECODE_AGE_MAX_MS = 500;
+const GCALL_N1_ROUGH_LINK_MIN_OPUS_MS = 60;
+const GCALL_N1_ROUGH_LINK_PCM_MAX_MS = 120;
+const GCALL_N1_ROUGH_LINK_UNDERTARGET_MIN = 0.4;
+const GCALL_N1_ROUGH_LINK_DELTA_MAX_MS = -10;
+const GCALL_N1_ROUGH_LINK_MISSING_FRAMES_MIN = 20;
+const GCALL_N1_ROUGH_LINK_CONCEALMENT_TICKS_MIN = 10;
+const GCALL_N1_ROUGH_LINK_INCOMING_PACKET_MS_MIN = 18;
+const GCALL_N1_ROUGH_LINK_REBUILD_UNDERTARGET_MIN = 0.45;
+const GCALL_N1_ROUGH_LINK_REBUILD_DELTA_MAX_MS = -10;
+const GCALL_N1_ROUGH_LINK_CAP_BPS = 20_000;
 
 export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
   activeSourceCount: number;
@@ -990,6 +1003,85 @@ export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
       GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN &&
     opts.avgPlayoutDeltaMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS
   );
+}
+
+export function shouldKeepMultiSourceWindowRecoveryLocal(opts: {
+  activeSourceCount: number;
+  shouldTightenRecovery: boolean;
+  severePressure: boolean;
+  packetsDroppedPendingDecrypt: number;
+  reticulumAudioQueuePressureDrops: number;
+  reticulumAudioDecodedQueueDepthHighWater: number;
+  reticulumAudioBinaryOutQueueDepthHighWater: number;
+  reticulumAudioBridgeQueuedFramesHighWater: number;
+  degradedSourceCount: number;
+}): boolean {
+  if (
+    opts.activeSourceCount < 2 ||
+    !opts.shouldTightenRecovery ||
+    !opts.severePressure ||
+    opts.degradedSourceCount < 2
+  ) {
+    return false;
+  }
+  return (
+    opts.packetsDroppedPendingDecrypt > 0 ||
+    opts.reticulumAudioQueuePressureDrops > 0 ||
+    opts.reticulumAudioDecodedQueueDepthHighWater >= 16 ||
+    opts.reticulumAudioBinaryOutQueueDepthHighWater >= 24 ||
+    opts.reticulumAudioBridgeQueuedFramesHighWater >= 12
+  );
+}
+
+export function computeN1RoughLinkBitrateCapBps(opts: {
+  activeSourceCount: number;
+  pathDegradedUntilMs: number;
+  nowMs: number;
+  recentStability: RecentRecoveryStabilitySummary;
+  avgOpusBufferedMs: number;
+  avgPlayoutDeltaMs: number;
+  missingFrames: number;
+  concealmentTicks: number;
+  avgIncomingPacketMs: number;
+  lastRemoteDecodeAtMs: number;
+  nominalBitrateBps: number;
+  severeForcedReleaseRebuildActive?: boolean;
+}): number | null {
+  if (
+    opts.activeSourceCount !== 1 ||
+    !Number.isFinite(opts.nominalBitrateBps) ||
+    opts.nominalBitrateBps <= 0 ||
+    opts.pathDegradedUntilMs <= opts.nowMs ||
+    opts.recentStability.sampleCount < 2 ||
+    opts.avgOpusBufferedMs < GCALL_N1_ROUGH_LINK_MIN_OPUS_MS
+  ) {
+    return null;
+  }
+  const lastRemoteDecodeAgeMs =
+    opts.lastRemoteDecodeAtMs > 0
+      ? opts.nowMs - opts.lastRemoteDecodeAtMs
+      : Number.POSITIVE_INFINITY;
+  if (lastRemoteDecodeAgeMs > GCALL_N1_ROUGH_LINK_REMOTE_DECODE_AGE_MAX_MS) {
+    return null;
+  }
+  const pathEvidence =
+    opts.missingFrames >= GCALL_N1_ROUGH_LINK_MISSING_FRAMES_MIN ||
+    opts.concealmentTicks >= GCALL_N1_ROUGH_LINK_CONCEALMENT_TICKS_MIN ||
+    opts.avgIncomingPacketMs >= GCALL_N1_ROUGH_LINK_INCOMING_PACKET_MS_MIN;
+  const struggling =
+    opts.recentStability.avgPcmBufferedMs <= GCALL_N1_ROUGH_LINK_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_ROUGH_LINK_UNDERTARGET_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_ROUGH_LINK_DELTA_MAX_MS;
+  const rebuildStruggling =
+    opts.severeForcedReleaseRebuildActive === true &&
+    opts.recentStability.avgPcmBufferedMs <= GCALL_N1_ROUGH_LINK_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_ROUGH_LINK_REBUILD_UNDERTARGET_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_ROUGH_LINK_REBUILD_DELTA_MAX_MS &&
+    !opts.recentStability.stable;
+  if ((!pathEvidence && !rebuildStruggling) || !struggling) return null;
+  return Math.min(opts.nominalBitrateBps, GCALL_N1_ROUGH_LINK_CAP_BPS);
 }
 
 export function computeWeakSingleRemoteRecoveryHoldState(opts: {
@@ -1126,12 +1218,23 @@ export function shouldEnterN1ReceivePriorityMode(opts: {
   starvationSeverity: PlayoutStarvationSeverity;
   sourceLive: boolean;
   directCapBps: number | null;
+  severeForcedReleaseRebuildActive?: boolean;
 }): boolean {
   if (
     !opts.sourceLive ||
-    opts.recentStability.sampleCount < 2 ||
-    opts.avgOpusBufferedMs < GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_OPUS_MS
+    opts.recentStability.sampleCount < 2
   ) {
+    return false;
+  }
+  if (
+    opts.severeForcedReleaseRebuildActive === true &&
+    opts.recentStability.playoutUnderTargetFraction >= 0.45 &&
+    opts.avgPlayoutDeltaMs <= -5 &&
+    !opts.recentStability.stable
+  ) {
+    return true;
+  }
+  if (opts.avgOpusBufferedMs < GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_OPUS_MS) {
     return false;
   }
   if (opts.directCapBps !== null) return true;
@@ -1158,6 +1261,7 @@ export function tickN1ReceivePrioritySendBitrateCapState(opts: {
   nowMs: number;
   localSendPressure: boolean;
   nominalBitrateBps: number;
+  severeForcedReleaseRebuildActive?: boolean;
 }): {
   capBps: number | null;
   nextState: N1ReceivePrioritySendBitrateCapState | null;
@@ -1195,6 +1299,7 @@ export function tickN1ReceivePrioritySendBitrateCapState(opts: {
       starvationSeverity: opts.starvationSeverity,
       sourceLive: true,
       directCapBps,
+      severeForcedReleaseRebuildActive: opts.severeForcedReleaseRebuildActive,
     })
   ) {
     return {
@@ -2632,6 +2737,10 @@ export function useGroupVoiceCall(uiActive = false) {
     []
   );
   const lastPredictiveWarmAtPeerRef = useRef<Map<string, number>>(new Map());
+  const n1PathDegradedUntilPeerRef = useRef<Map<string, number>>(new Map());
+  const lastN1PathDegradedWarmAtPeerRef = useRef<Map<string, number>>(
+    new Map()
+  );
   const rootInboundStressWarmFiredRef = useRef<Set<string>>(new Set());
   const worstIsolationHysteresisRef = useRef(
     createWorstIsolationHysteresisState()
@@ -3498,10 +3607,30 @@ export function useGroupVoiceCall(uiActive = false) {
           degradedSources: number;
           relaxedSingleRemote: boolean;
           localOnlySingleRemote: boolean;
+          localOnlyMultiSourceOverload: boolean;
         }
       >();
       const activePeers = new Set<string>();
       const singleRemoteWindow = windowMetrics.sources.length === 1;
+      const degradedSourceCount = windowMetrics.sources.filter((source) =>
+        assessGroupCallSourceWindowForRecovery(source).shouldEscalate
+      ).length;
+      const multiSourceLocalOnlyRecovery = shouldKeepMultiSourceWindowRecoveryLocal({
+        activeSourceCount: windowMetrics.sources.length,
+        shouldTightenRecovery: pressureAssessment.shouldTightenRecovery,
+        severePressure: pressureAssessment.severe,
+        packetsDroppedPendingDecrypt:
+          windowMetrics.packetsDroppedPendingDecrypt,
+        reticulumAudioQueuePressureDrops:
+          windowMetrics.reticulumAudioQueuePressureDrops,
+        reticulumAudioDecodedQueueDepthHighWater:
+          windowMetrics.reticulumAudioDecodedQueueDepthHighWater,
+        reticulumAudioBinaryOutQueueDepthHighWater:
+          windowMetrics.reticulumAudioBinaryOutQueueDepthHighWater,
+        reticulumAudioBridgeQueuedFramesHighWater:
+          windowMetrics.reticulumAudioBridgeQueuedFramesHighWater,
+        degradedSourceCount,
+      });
       const nowPerf = performance.now();
       for (const source of windowMetrics.sources) {
         const ingressPeer = getSourceIngressDiagnostic(
@@ -3528,6 +3657,7 @@ export function useGroupVoiceCall(uiActive = false) {
           degradedSources: 0,
           relaxedSingleRemote: false,
           localOnlySingleRemote: false,
+          localOnlyMultiSourceOverload: false,
         };
         const lastRecvAt = lastRecvAtRef.current.get(source.sourceAddr);
         const lastRecvAgeMs =
@@ -3572,6 +3702,8 @@ export function useGroupVoiceCall(uiActive = false) {
         prev.relaxedSingleRemote = prev.relaxedSingleRemote || relaxedSingleRemote;
         prev.localOnlySingleRemote =
           prev.localOnlySingleRemote || localOnlySingleRemote;
+        prev.localOnlyMultiSourceOverload =
+          prev.localOnlyMultiSourceOverload || multiSourceLocalOnlyRecovery;
         peerScores.set(ingressPeer, prev);
       }
 
@@ -3622,6 +3754,17 @@ export function useGroupVoiceCall(uiActive = false) {
         }
         const localOnlySingleRemote =
           entry.localOnlySingleRemote && !pressureAssessment.shouldTightenRecovery;
+        const localOnlyMultiSourceOverload =
+          entry.localOnlyMultiSourceOverload &&
+          !localOnlySingleRemote &&
+          windowMetrics.sources.length >= 2;
+        if (localOnlyMultiSourceOverload) {
+          markPeerUnstable(peerAddress, Math.min(2, severity), {
+            bypassReentryCooldown: false,
+          });
+          peerMediaRecoveryBreachRef.current.delete(peerAddress);
+          continue;
+        }
         const effectiveSeverity = localOnlySingleRemote ? 1 : severity;
         markPeerUnstable(peerAddress, effectiveSeverity, {
           bypassReentryCooldown: localOnlySingleRemote
@@ -5049,6 +5192,33 @@ export function useGroupVoiceCall(uiActive = false) {
                 packetUnknownSends: diagnostics.bridge.packetUnknownSends,
               }
             );
+            if (
+              participantsRef.current.size === 2 &&
+              activeJitterSourcesRef.current.size <= 1 &&
+              peerAddress &&
+              peerAddress !== RELAY_INGRESS_PEER
+            ) {
+              const nowMs = Date.now();
+              n1PathDegradedUntilPeerRef.current.set(
+                peerAddress,
+                nowMs + GCALL_N1_ROUGH_LINK_WARM_HOLD_MS
+              );
+              const lastWarmAt =
+                lastN1PathDegradedWarmAtPeerRef.current.get(peerAddress) ?? 0;
+              if (
+                nowMs - lastWarmAt >=
+                GCALL_N1_ROUGH_LINK_WARM_REQUEST_COOLDOWN_MS
+              ) {
+                lastN1PathDegradedWarmAtPeerRef.current.set(
+                  peerAddress,
+                  nowMs
+                );
+                requestMediaRecoveryForPeerRef.current(
+                  peerAddress,
+                  'path-degraded-warm'
+                );
+              }
+            }
           }
           metricsRef.current.recordReticulumAudioPacketPathActivity({
             requests: packetPathRequestDelta,
@@ -5232,6 +5402,11 @@ export function useGroupVoiceCall(uiActive = false) {
               (source) => source.sourceAddr === singleRemoteSourceAddr
             ) ?? null)
           : null;
+      const singleRemoteIngressPeerAddress =
+        singleRemoteSourceAddr !== null
+          ? sourceIngressPeerRef.current.get(singleRemoteSourceAddr) ??
+            singleRemoteSourceAddr
+          : null;
       if (singleRemoteSourceAddr === null) {
         n1ReceivePrioritySendCapStateRef.current.clear();
       } else {
@@ -5267,10 +5442,43 @@ export function useGroupVoiceCall(uiActive = false) {
                 decryptOverloadStateRef.current.active ||
                 wallNow < stage5FlushBoostUntilMsRef.current,
               nominalBitrateBps: nominalBitrate,
+              severeForcedReleaseRebuildActive:
+                singleRemoteSourceAddr !== null &&
+                n1SevereForcedReleaseRebuildUntilPerfRef.current.has(
+                  singleRemoteSourceAddr
+                ),
             })
           : { capBps: null, nextState: null };
       const receivePriorityBitrateCapBps =
         receivePriorityBitrateCapDecision.capBps;
+      const roughLinkBitrateCapBps =
+        singleRemoteRecentStability !== null &&
+        singleRemoteIngressPeerAddress !== null
+          ? computeN1RoughLinkBitrateCapBps({
+              activeSourceCount,
+              pathDegradedUntilMs:
+                n1PathDegradedUntilPeerRef.current.get(
+                  singleRemoteIngressPeerAddress
+                ) ?? 0,
+              nowMs: wallNow,
+              recentStability: singleRemoteRecentStability,
+              avgOpusBufferedMs:
+                singleRemoteWindowSource?.avgOpusBufferedMs ??
+                snap.jitterBufferDepthFramesMean * OPUS_FRAME_DURATION_MS,
+              avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
+              missingFrames: singleRemoteWindowSource?.missingFrames ?? 0,
+              concealmentTicks:
+                singleRemoteWindowSource?.concealmentTicks ?? 0,
+              avgIncomingPacketMs: snap.avgIncomingPacketMs,
+              lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
+              nominalBitrateBps: nominalBitrate,
+              severeForcedReleaseRebuildActive:
+                singleRemoteSourceAddr !== null &&
+                n1SevereForcedReleaseRebuildUntilPerfRef.current.has(
+                  singleRemoteSourceAddr
+                ),
+            })
+          : null;
       if (singleRemoteSourceAddr !== null) {
         if (receivePriorityBitrateCapDecision.nextState !== null) {
           n1ReceivePrioritySendCapStateRef.current.set(
@@ -5282,9 +5490,11 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
       const tiers = buildOpusSendPressureTiers(
-        receivePriorityBitrateCapBps !== null
-          ? Math.min(nominalBitrate, receivePriorityBitrateCapBps)
-          : nominalBitrate
+        Math.min(
+          nominalBitrate,
+          receivePriorityBitrateCapBps ?? nominalBitrate,
+          roughLinkBitrateCapBps ?? nominalBitrate
+        )
       );
 
       const ingress = lastIngressPacketsRef.current;
@@ -9372,16 +9582,17 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       }
 
-      const weakLegServiceBudget = computeWeakLegServiceFloor({
-        globalDecodeBudget: globalDecodesLeft,
-        weakLegCount: prioritizedWeakLegAddrs.size,
-      });
       const strictWeakLegProtection = [...prioritizedWeakLegAddrs].some(
         (addr) =>
           gcallStarvationProtectedModeRef.current.has(addr) ||
           (playoutStarvationSeverityRef.current.get(addr) ?? 'none') ===
             'strong'
       );
+      const weakLegServiceBudget = computeWeakLegServiceFloor({
+        globalDecodeBudget: globalDecodesLeft,
+        weakLegCount: prioritizedWeakLegAddrs.size,
+        strictWeakLegProtection,
+      });
       let weakLegServiceUsed = 0;
       while (
         weakLegServiceUsed < weakLegServiceBudget &&
@@ -9545,6 +9756,8 @@ export function useGroupVoiceCall(uiActive = false) {
         if (
           shouldExitProtectedMode({
             bufferedFrames: frames,
+            opusBufferedMs: opusMs,
+            adaptiveTargetMedianMs: targetMs,
             recoveryBarSatisfied: recoveryBar,
             playoutStarvationSeverity: starvationSeverity,
           })
@@ -11899,6 +12112,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPeerRouteKeyRef.current.clear();
       predictiveWarmHistoryRef.current = [];
       lastPredictiveWarmAtPeerRef.current.clear();
+      n1PathDegradedUntilPeerRef.current.clear();
+      lastN1PathDegradedWarmAtPeerRef.current.clear();
       worstIsolationHysteresisRef.current =
         createWorstIsolationHysteresisState();
       topologySettleUntilMsRef.current = 0;

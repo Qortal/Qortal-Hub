@@ -15,6 +15,8 @@ import {
   PENDING_DECRYPT_OVERLOAD_MAX,
   PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX,
   PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX,
+  PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX,
+  PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_SUSTAINED_DEPTH,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
   PENDING_DECRYPT_TTL_MS,
@@ -191,6 +193,33 @@ describe('shouldPreemptivelyThrottlePendingDecrypt', () => {
     ).toBe(true);
   });
 
+  it('enters earlier for bursty multi-source participant depth growth', () => {
+    expect(
+      shouldPreemptivelyThrottlePendingDecrypt({
+        pendingDepth: 80,
+        previousDepth: 72,
+        isForwarder: false,
+        participantCount: 3,
+        activeSourceCount: 2,
+        longTaskPressure: false,
+      })
+    ).toBe(true);
+  });
+
+  it('stays in participant pre-overload once multi-source depth is already high', () => {
+    expect(
+      shouldPreemptivelyThrottlePendingDecrypt({
+        pendingDepth: PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_SUSTAINED_DEPTH,
+        previousDepth:
+          PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_SUSTAINED_DEPTH - 2,
+        isForwarder: false,
+        participantCount: 3,
+        activeSourceCount: 2,
+        longTaskPressure: false,
+      })
+    ).toBe(true);
+  });
+
   it('stays off for stable one-on-one depth or flat growth', () => {
     expect(
       shouldPreemptivelyThrottlePendingDecrypt({
@@ -237,7 +266,7 @@ describe('computePendingDecryptPreOverloadClampMax', () => {
         isForwarder: false,
         activeSourceCount: 2,
       })
-    ).toBe(PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX + 16);
+    ).toBe(PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX);
   });
 });
 

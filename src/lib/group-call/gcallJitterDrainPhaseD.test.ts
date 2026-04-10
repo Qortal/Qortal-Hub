@@ -56,14 +56,14 @@ describe('computeMultiSourceAccumulationTargetFrames', () => {
         protectedMode: true,
         playoutStarvationSeverity: 'strong',
       })
-    ).toBe(6);
+    ).toBe(7);
     expect(
       computeMultiSourceAccumulationTargetFrames({
         adaptiveTargetMedianMs: 140,
         protectedMode: true,
         playoutStarvationSeverity: 'mild',
       })
-    ).toBe(5);
+    ).toBe(6);
   });
 
   it('returns null for healthy non-protected sources', () => {
@@ -90,8 +90,8 @@ describe('shouldHoldMultiSourceAccumulation', () => {
     ).toBe(true);
     expect(
       shouldHoldMultiSourceAccumulation({
-        bufferedFrames: 5,
-        opusBufferedMs: 85,
+        bufferedFrames: 6,
+        opusBufferedMs: 100,
         adaptiveTargetMedianMs: 145,
         protectedMode: true,
         playoutStarvationSeverity: 'strong',
@@ -172,6 +172,23 @@ describe('computeWeakLegServiceFloor', () => {
       computeWeakLegServiceFloor({ globalDecodeBudget: 6, weakLegCount: 0 })
     ).toBe(0);
   });
+
+  it('reserves extra service when a weak leg is already under strict protection', () => {
+    expect(
+      computeWeakLegServiceFloor({
+        globalDecodeBudget: 16,
+        weakLegCount: 1,
+        strictWeakLegProtection: true,
+      })
+    ).toBe(2);
+    expect(
+      computeWeakLegServiceFloor({
+        globalDecodeBudget: 16,
+        weakLegCount: 3,
+        strictWeakLegProtection: true,
+      })
+    ).toBe(3);
+  });
 });
 
 describe('computeMultiSourceFairBurstCap', () => {
@@ -182,7 +199,7 @@ describe('computeMultiSourceFairBurstCap', () => {
         weakLegPresent: true,
         prioritizeWeakLeg: false,
       })
-    ).toBe(3);
+    ).toBe(2);
     expect(
       computeMultiSourceFairBurstCap({
         baseCap: 4,
@@ -190,7 +207,7 @@ describe('computeMultiSourceFairBurstCap', () => {
         prioritizeWeakLeg: false,
         strictWeakLegProtection: true,
       })
-    ).toBe(2);
+    ).toBe(1);
     expect(
       computeMultiSourceFairBurstCap({
         baseCap: 4,
@@ -329,7 +346,18 @@ describe('shouldExitProtectedMode', () => {
   it('waits for playout starvation to fully clear before exiting protected mode', () => {
     expect(
       shouldExitProtectedMode({
+        bufferedFrames: 3,
+        opusBufferedMs: 90,
+        adaptiveTargetMedianMs: 155,
+        recoveryBarSatisfied: true,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(false);
+    expect(
+      shouldExitProtectedMode({
         bufferedFrames: 4,
+        opusBufferedMs: 90,
+        adaptiveTargetMedianMs: 155,
         recoveryBarSatisfied: true,
         playoutStarvationSeverity: 'mild',
       })
@@ -337,6 +365,17 @@ describe('shouldExitProtectedMode', () => {
     expect(
       shouldExitProtectedMode({
         bufferedFrames: 4,
+        opusBufferedMs: 80,
+        adaptiveTargetMedianMs: 155,
+        recoveryBarSatisfied: true,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(false);
+    expect(
+      shouldExitProtectedMode({
+        bufferedFrames: 4,
+        opusBufferedMs: 90,
+        adaptiveTargetMedianMs: 155,
         recoveryBarSatisfied: true,
         playoutStarvationSeverity: 'none',
       })

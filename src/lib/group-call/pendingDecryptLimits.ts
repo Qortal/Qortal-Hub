@@ -79,15 +79,20 @@ export const PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_DEPTH =
   PENDING_DECRYPT_OVERLOAD_WARM_DEPTH - 16;
 /** Participant multi-source pre-overload entry stays a little later than forwarders. */
 export const PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_DEPTH =
-  PENDING_DECRYPT_OVERLOAD_WARM_DEPTH - 8;
+  PENDING_DECRYPT_OVERLOAD_WARM_DEPTH - 16;
 /** Rising depth delta that counts as bursty queue growth for pre-overload throttling. */
 export const PENDING_DECRYPT_PRE_OVERLOAD_RISE_DELTA = 12;
+/** Participants in multi-source calls should react sooner than forwarders once depth is already high. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_RISE_DELTA = 8;
+/** Keep participant pre-overload active once multi-source depth is already well into the danger band. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_SUSTAINED_DEPTH =
+  PENDING_DECRYPT_OVERLOAD_WARM_DEPTH + 16;
 /** Mild pre-overload clamp above the hard overload max for multi-source smoothing. */
 export const PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_CLAMP_MAX =
   PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX + 16;
-/** Participant pre-overload clamp stays softer than the forwarder path. */
+/** Participant pre-overload clamp should bite before the multi-source hard cap starts dropping. */
 export const PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX =
-  PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX + 16;
+  PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX - 8;
 
 /** Fail-safe playout / jitter clamps (optional stage 6). */
 export const FAIL_SAFE_PLAYOUT_TARGET_MAX_MS = 120;
@@ -200,9 +205,18 @@ export function shouldPreemptivelyThrottlePendingDecrypt(input: {
   const depthFloor = input.isForwarder
     ? PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_DEPTH
     : PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_DEPTH;
+  const riseDeltaMin = input.isForwarder
+    ? PENDING_DECRYPT_PRE_OVERLOAD_RISE_DELTA
+    : PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_RISE_DELTA;
+  if (
+    !input.isForwarder &&
+    pendingDepth >= PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_SUSTAINED_DEPTH
+  ) {
+    return true;
+  }
   return (
     pendingDepth >= depthFloor &&
-    risingDelta >= PENDING_DECRYPT_PRE_OVERLOAD_RISE_DELTA
+    risingDelta >= riseDeltaMin
   );
 }
 

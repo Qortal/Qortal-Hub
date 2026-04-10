@@ -23,21 +23,26 @@ export const GCALL_JITTER_STARVATION_RECOVERY_BETA_TARGET = 0.35;
 /** Earlier warning band: protect thin sources before full collapse during multi-source recovery. */
 export const GCALL_JITTER_STARVATION_NEAR_COLLAPSE_BETA_TARGET = 0.5;
 /** De-escalation: consecutive ticks at/above depth floor before exiting protected scheduling. */
-export const GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS = 3;
+export const GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS = 4;
+/** Protected-mode exit must rebuild to a real reserve, not just briefly clear the recovery bar. */
+export const GCALL_JITTER_STARVATION_PROTECTED_EXIT_BETA_TARGET = 0.55;
+export const GCALL_JITTER_STARVATION_PROTECTED_EXIT_MIN_MS = 80;
 /** Protected accumulation hold should rebuild to at least this many frames. */
-export const GCALL_MULTI_SOURCE_ACCUMULATION_MIN_FRAMES = 5;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_MIN_FRAMES = 6;
 /** Avoid turning protection into a long mute; accumulation hold remains bounded. */
-export const GCALL_MULTI_SOURCE_ACCUMULATION_MAX_FRAMES = 10;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_MAX_FRAMES = 12;
 export const GCALL_MULTI_SOURCE_ACCUMULATION_TARGET_RATIO_MILD = 0.4;
-export const GCALL_MULTI_SOURCE_ACCUMULATION_TARGET_RATIO_STRONG = 0.6;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_TARGET_RATIO_STRONG = 0.7;
 export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_MILD = 0.4;
-export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_STRONG = 0.55;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_RATIO_STRONG = 0.65;
 export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_MILD = 40;
-export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_STRONG = 60;
+export const GCALL_MULTI_SOURCE_ACCUMULATION_RELEASE_MIN_MS_STRONG = 80;
 /** When a weak leg is present, keep strong legs from consuming the full per-source burst cap. */
-export const GCALL_MULTI_SOURCE_STRONG_SOURCE_BURST_CAP_PENALTY = 1;
+export const GCALL_MULTI_SOURCE_STRONG_SOURCE_BURST_CAP_PENALTY = 2;
 /** If a weak leg is already in protected scheduling, make strong-leg yielding stricter. */
-export const GCALL_MULTI_SOURCE_STRONG_SOURCE_STRICT_BURST_CAP_PENALTY = 2;
+export const GCALL_MULTI_SOURCE_STRONG_SOURCE_STRICT_BURST_CAP_PENALTY = 3;
+/** While a collapsed leg is already protected, reserve at least this many decodes for it. */
+export const GCALL_MULTI_SOURCE_STRICT_WEAK_LEG_SERVICE_FLOOR = 2;
 
 /**
  * Protected decode budget per tick: at most half of global decode budget, never more than 8.
@@ -147,10 +152,23 @@ export function shouldPrioritizeWeakMultiSourceLeg(input: {
 export function computeWeakLegServiceFloor(input: {
   globalDecodeBudget: number;
   weakLegCount: number;
+  strictWeakLegProtection?: boolean;
 }): number {
   const weakLegCount = Math.max(0, Math.floor(input.weakLegCount));
   if (weakLegCount === 0) return 0;
   const globalDecodeBudget = Math.max(1, Math.floor(input.globalDecodeBudget));
+  if (input.strictWeakLegProtection) {
+    return Math.min(
+      globalDecodeBudget,
+      Math.min(
+        weakLegCount * GCALL_MULTI_SOURCE_STRICT_WEAK_LEG_SERVICE_FLOOR,
+        Math.max(
+          GCALL_MULTI_SOURCE_STRICT_WEAK_LEG_SERVICE_FLOOR,
+          Math.ceil(globalDecodeBudget / 6)
+        )
+      )
+    );
+  }
   return Math.min(weakLegCount, Math.max(1, Math.ceil(globalDecodeBudget / 8)));
 }
 
@@ -240,12 +258,20 @@ export function shouldEnterProtectedMode(input: {
 
 export function shouldExitProtectedMode(input: {
   bufferedFrames: number;
+  opusBufferedMs: number;
+  adaptiveTargetMedianMs: number;
   recoveryBarSatisfied: boolean;
   playoutStarvationSeverity: 'none' | 'mild' | 'strong';
 }): boolean {
+  const exitMinMs = Math.max(
+    GCALL_JITTER_STARVATION_PROTECTED_EXIT_MIN_MS,
+    input.adaptiveTargetMedianMs *
+      GCALL_JITTER_STARVATION_PROTECTED_EXIT_BETA_TARGET
+  );
   return (
     input.recoveryBarSatisfied &&
-    input.bufferedFrames >= GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN &&
+    input.bufferedFrames >= GCALL_JITTER_STARVATION_RECOVERY_DEPTH_F_MIN + 1 &&
+    input.opusBufferedMs >= exitMinMs &&
     input.playoutStarvationSeverity === 'none'
   );
 }
