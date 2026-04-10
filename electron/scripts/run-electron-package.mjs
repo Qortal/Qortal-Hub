@@ -106,10 +106,13 @@ if (!supportedHere) {
 }
 
 function run(cmd, args) {
+  // Windows: npm.cmd / electron-builder.cmd are cmd shims; spawn without a shell can
+  // fail with EINVAL. Running through the default shell matches how npm invokes scripts.
   const res = spawnSync(cmd, args, {
     stdio: 'inherit',
     env: process.env,
     windowsHide: true,
+    ...(process.platform === 'win32' ? { shell: true } : {}),
   });
   if (res.error) {
     console.error(`Failed to run ${cmd}:`, res.error.message);
