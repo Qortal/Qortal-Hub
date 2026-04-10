@@ -273,6 +273,13 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const handleIncomingAudioPacketRef = useRef<
     (data: ArrayBuffer, fromAddress: string) => void
   >(() => {});
+  /** Stable IPC subscriptions: avoid unsubscribe/resubscribe gaps when callbacks change. */
+  const groupCallDmIpcHandlerRef = useRef<
+    (event: string, payload: unknown) => Promise<void>
+  >(async () => {});
+  const callIpcHandlerRef = useRef<
+    (event: string, payload: unknown) => Promise<void>
+  >(async () => {});
   const applyDecryptedRoomKeyRef = useRef<
     (
       payload: {
@@ -531,29 +538,48 @@ export function useVoiceCall(): UseVoiceCallReturn {
     (sendHangup = false) => {
       const id = callIdRef.current;
       clearDurationTimer();
-      enqueueTeardownReticulumMedia();
+
+      const applyLocalCallEnd = () => {
+        callIdRef.current = null;
+        isOutboundCallRef.current = false;
+        activeCallChatIdRef.current = null;
+        setActiveCallChatId(null);
+        updateCallState('ended');
+        setCallDuration(0);
+        setIsMuted(false);
+        setHearCallState(true);
+        hearCallRef.current = true;
+        updateIncomingCall(null);
+        inputSwapSeededRef.current = false;
+        prevInputPrefRef.current = undefined;
+        setTimeout(() => updateCallState('idle'), 1_500);
+      };
+
+      /**
+       * Send CALL_HANGUP before GC_LEAVE / DM room teardown. Starting teardown first races the
+       * Reticulum bridge: main `call.ts` drops outbound envelopes when the bridge is not `ready`,
+       * which is easier to hit after leaving a group call (bursty GC) then hanging up DM — the
+       * peer may never receive hangup.
+       */
       if (sendHangup && id) {
         const timestamp = Date.now();
+        applyLocalCallEnd();
         void signPresenceFields(
           { type: 'CALL_HANGUP', callId: id, timestamp },
           publicKeyRef.current
-        ).then(({ signature, publicKey }) => {
-          (window as any).call?.hangup(id, signature, publicKey, timestamp).catch(() => {});
-        });
+        )
+          .then(({ signature, publicKey }) =>
+            (window as any).call?.hangup(id, signature, publicKey, timestamp)
+          )
+          .catch(() => {})
+          .finally(() => {
+            enqueueTeardownReticulumMedia();
+          });
+        return;
       }
-      callIdRef.current = null;
-      isOutboundCallRef.current = false;
-      activeCallChatIdRef.current = null;
-      setActiveCallChatId(null);
-      updateCallState('ended');
-      setCallDuration(0);
-      setIsMuted(false);
-      setHearCallState(true);
-      hearCallRef.current = true;
-      updateIncomingCall(null);
-      inputSwapSeededRef.current = false;
-      prevInputPrefRef.current = undefined;
-      setTimeout(() => updateCallState('idle'), 1_500);
+
+      enqueueTeardownReticulumMedia();
+      applyLocalCallEnd();
     },
     [clearDurationTimer, enqueueTeardownReticulumMedia, updateCallState, updateIncomingCall]
   );
@@ -1397,251 +1423,244 @@ export function useVoiceCall(): UseVoiceCallReturn {
     userInfo?.publicKey,
   ]);
 
+  groupCallDmIpcHandlerRef.current = async (event: string, payload: unknown) => {
+    if (event === 'gcall:participant-joined') {
+      const p = payload as {
+        roomId?: string;
+        address?: string;
+      };
+      const curRoom = dmRoomIdRef.current;
+      const peer = peerAddressRef.current;
+      if (
+        isDmVoiceRoomId(p.roomId) &&
+        curRoom &&
+        p.roomId === curRoom &&
+        typeof p.address === 'string' &&
+        peer &&
+        p.address === peer
+      ) {
+        requestDmPeerMediaWarmup(curRoom, 'dm-peer-joined', {
+          ignoreCooldown: true,
+        });
+      }
+      return;
+    }
+
+    if (event === 'gcall:key') {
+      const p = payload as GcallKeyEventPayload;
+      pushDirectVoiceUiLog('log', 'gcall:key rx', {
+        roomTrunc: String(p.roomId ?? '').slice(0, 24),
+        toTrunc: String(p.recipientAddress ?? '').slice(0, 8),
+        verified: p.verified,
+        ver: p.keyMessageVersion,
+      });
+      if (!isDmVoiceRoomId(p.roomId)) {
+        pushDirectVoiceUiLog('warn', 'gcall:key ignored (not a DM voice room id)', {
+          roomId: p.roomId,
+        });
+        return;
+      }
+      const curRoom = dmRoomIdRef.current;
+      if (!curRoom) {
+        pendingDmVoiceGcallKeyRef.current = p;
+        pushDirectVoiceUiLog(
+          'log',
+          'gcall:key queued (dm room id not set yet — will match after join)'
+        );
+        return;
+      }
+      if (p.roomId !== curRoom) {
+        pushDirectVoiceUiLog('warn', 'gcall:key ignored (roomId mismatch)', {
+          eventTrunc: String(p.roomId).slice(0, 24),
+          expectedTrunc: curRoom.slice(0, 24),
+        });
+        return;
+      }
+      void handleDmVoiceGcallKeyPayload(p);
+      return;
+    }
+
+    if (event === 'gcall:audio') {
+      const p = payload as {
+        roomId?: string;
+        data?: ArrayBuffer | { buffer: ArrayBuffer };
+        fromAddress?: string;
+      };
+      if (!isDmVoiceRoomId(p.roomId) || p.roomId !== dmRoomIdRef.current) return;
+      let buf: ArrayBuffer | null = null;
+      const raw = p.data;
+      if (raw instanceof ArrayBuffer) buf = raw;
+      else if (raw && typeof raw === 'object' && 'buffer' in raw) {
+        const b = raw as { buffer: ArrayBuffer; byteOffset?: number; byteLength?: number };
+        buf = b.buffer.slice(b.byteOffset ?? 0, (b.byteOffset ?? 0) + (b.byteLength ?? 0));
+      }
+      if (!buf) return;
+
+      const fromAddr = p.fromAddress ?? '';
+      if (!fromAddr && !dmVoiceNoFromAddressLoggedRef.current) {
+        dmVoiceNoFromAddressLoggedRef.current = true;
+        pushDirectVoiceUiLog(
+          'warn',
+          'gcall:audio missing fromAddress (inbound handler may drop)'
+        );
+      }
+
+      dmVoiceAudioPacketCountRef.current += 1;
+      const now = Date.now();
+      if (now - dmVoiceLastAudioUiLogAtRef.current >= 2500) {
+        dmVoiceLastAudioUiLogAtRef.current = now;
+        pushDirectVoiceUiLog(
+          'log',
+          'gcall:audio rx (throttled)',
+          {
+            packets: dmVoiceAudioPacketCountRef.current,
+            bytes: buf.byteLength,
+            hasFrom: fromAddr.length > 0,
+          },
+          'debug'
+        );
+      }
+
+      handleIncomingAudioPacketRef.current(buf, fromAddr);
+    }
+  };
+
   useEffect(() => {
     const gc = (window as any).groupCall;
     if (!gc?.onEvent) return;
-
-    const unsub = gc.onEvent(async (event: string, payload: unknown) => {
-      if (event === 'gcall:participant-joined') {
-        const p = payload as {
-          roomId?: string;
-          address?: string;
-        };
-        const curRoom = dmRoomIdRef.current;
-        const peer = peerAddressRef.current;
-        if (
-          isDmVoiceRoomId(p.roomId) &&
-          curRoom &&
-          p.roomId === curRoom &&
-          typeof p.address === 'string' &&
-          peer &&
-          p.address === peer
-        ) {
-          requestDmPeerMediaWarmup(curRoom, 'dm-peer-joined', {
-            ignoreCooldown: true,
-          });
-        }
-        return;
-      }
-
-      if (event === 'gcall:key') {
-        const p = payload as GcallKeyEventPayload;
-        pushDirectVoiceUiLog('log', 'gcall:key rx', {
-          roomTrunc: String(p.roomId ?? '').slice(0, 24),
-          toTrunc: String(p.recipientAddress ?? '').slice(0, 8),
-          verified: p.verified,
-          ver: p.keyMessageVersion,
-        });
-        if (!isDmVoiceRoomId(p.roomId)) {
-          pushDirectVoiceUiLog('warn', 'gcall:key ignored (not a DM voice room id)', {
-            roomId: p.roomId,
-          });
-          return;
-        }
-        const curRoom = dmRoomIdRef.current;
-        if (!curRoom) {
-          pendingDmVoiceGcallKeyRef.current = p;
-          pushDirectVoiceUiLog(
-            'log',
-            'gcall:key queued (dm room id not set yet — will match after join)'
-          );
-          return;
-        }
-        if (p.roomId !== curRoom) {
-          pushDirectVoiceUiLog('warn', 'gcall:key ignored (roomId mismatch)', {
-            eventTrunc: String(p.roomId).slice(0, 24),
-            expectedTrunc: curRoom.slice(0, 24),
-          });
-          return;
-        }
-        void handleDmVoiceGcallKeyPayload(p);
-        return;
-      }
-
-      if (event === 'gcall:audio') {
-        const p = payload as {
-          roomId?: string;
-          data?: ArrayBuffer | { buffer: ArrayBuffer };
-          fromAddress?: string;
-        };
-        if (!isDmVoiceRoomId(p.roomId) || p.roomId !== dmRoomIdRef.current) return;
-        let buf: ArrayBuffer | null = null;
-        const raw = p.data;
-        if (raw instanceof ArrayBuffer) buf = raw;
-        else if (raw && typeof raw === 'object' && 'buffer' in raw) {
-          const b = raw as { buffer: ArrayBuffer; byteOffset?: number; byteLength?: number };
-          buf = b.buffer.slice(b.byteOffset ?? 0, (b.byteOffset ?? 0) + (b.byteLength ?? 0));
-        }
-        if (!buf) return;
-
-        const fromAddr = p.fromAddress ?? '';
-        if (!fromAddr && !dmVoiceNoFromAddressLoggedRef.current) {
-          dmVoiceNoFromAddressLoggedRef.current = true;
-          pushDirectVoiceUiLog(
-            'warn',
-            'gcall:audio missing fromAddress (inbound handler may drop)'
-          );
-        }
-
-        dmVoiceAudioPacketCountRef.current += 1;
-        const now = Date.now();
-        if (now - dmVoiceLastAudioUiLogAtRef.current >= 2500) {
-          dmVoiceLastAudioUiLogAtRef.current = now;
-          pushDirectVoiceUiLog(
-            'log',
-            'gcall:audio rx (throttled)',
-            {
-              packets: dmVoiceAudioPacketCountRef.current,
-              bytes: buf.byteLength,
-              hasFrom: fromAddr.length > 0,
-            },
-            'debug'
-          );
-        }
-
-        handleIncomingAudioPacketRef.current(buf, fromAddr);
-      }
+    return gc.onEvent((event: string, payload: unknown) => {
+      void groupCallDmIpcHandlerRef.current(event, payload);
     });
-    return unsub;
-  }, [handleDmVoiceGcallKeyPayload, requestDmPeerMediaWarmup, userInfo?.address]);
+  }, []);
 
   const startDurationTimer = useCallback(() => {
     setCallDuration(0);
     durationTimerRef.current = setInterval(() => setCallDuration((d) => d + 1), 1_000);
   }, []);
 
+  callIpcHandlerRef.current = async (event: string, payload: unknown) => {
+    const p = payload as Record<string, unknown>;
+
+    switch (event) {
+      case 'call:incoming': {
+        const incCallId = p.callId as string;
+        const incFrom = p.fromAddress as string;
+        const incChatId = p.chatId as string;
+
+        const rejectIncoming = async (reason: string) => {
+          const rejectTs = Date.now();
+          const { signature, publicKey } = await signPresenceFields(
+            { type: 'CALL_REJECT', callId: incCallId, timestamp: rejectTs },
+            publicKeyRef.current
+          );
+          await (window as any).call?.reject(
+            incCallId,
+            reason,
+            signature,
+            publicKey,
+            rejectTs
+          );
+        };
+
+        if (isDirectVoiceCallChatId(incChatId)) {
+          if (blockedAddressesRef.current[incFrom]) {
+            await rejectIncoming('blocked');
+            break;
+          }
+          if (!dmFriendsByAddressRef.current[incFrom]) {
+            await rejectIncoming('not_friend');
+            break;
+          }
+        }
+
+        if (callStateRef.current !== 'idle') break;
+        updateIncomingCall({
+          callId: incCallId,
+          fromAddress: incFrom,
+          chatId: incChatId,
+        });
+        updateCallState('ringing');
+        break;
+      }
+
+      case 'call:accepted': {
+        if (
+          callIdRef.current !== p.callId ||
+          callStateRef.current !== 'calling'
+        ) {
+          pushDirectVoiceUiLog('warn', 'call:accepted ignored (wrong callId or state)', {
+            expectedCallId: callIdRef.current,
+            gotCallId: p.callId,
+            state: callStateRef.current,
+          });
+          break;
+        }
+        await reticulumTeardownChainRef.current.catch(() => {});
+        const chatIdForRoom = activeCallChatIdRef.current;
+        if (chatIdForRoom && isDirectVoiceCallChatId(chatIdForRoom)) {
+          try {
+            const roomId = await buildDmVoiceRoomId(chatIdForRoom);
+            dmRoomIdRef.current = roomId;
+            flushPendingDmVoiceGcallKey(roomId);
+            pushDirectVoiceUiLog('log', 'DM voice room id ready (caller)', {
+              roomTrunc: roomId.slice(0, 32),
+            });
+          } catch (e) {
+            pushDirectVoiceUiLog('warn', 'buildDmVoiceRoomId failed (caller)', {
+              err: String(e),
+            });
+            endCall(false);
+            break;
+          }
+        }
+        pushDirectVoiceUiLog('log', 'call:accepted — starting Reticulum media session');
+        updateCallState('connected');
+        startDurationTimer();
+        void startReticulumMediaSession().catch((e) => {
+          pushDirectVoiceUiLog('warn', 'startReticulumMediaSession rejected', {
+            err: String(e),
+          });
+        });
+        break;
+      }
+
+      case 'call:rejected': {
+        if (callIdRef.current !== p.callId) break;
+        const rejectReason =
+          typeof p.reason === 'string' ? p.reason.trim() : '';
+        const message =
+          rejectReason === 'media unavailable'
+            ? i18n.t('core:voice_call.rejected_media')
+            : i18n.t('core:voice_call.rejected_declined');
+        setInfoSnackGlobal({ type: 'info', message });
+        setOpenSnackGlobal(true);
+        endCall(false);
+        break;
+      }
+
+      case 'call:hangup': {
+        const hid = p.callId as string;
+        const matchesOutboundOrActive = callIdRef.current === hid;
+        const matchesRingingIncoming =
+          callStateRef.current === 'ringing' &&
+          incomingCallRef.current?.callId === hid;
+        if (!matchesOutboundOrActive && !matchesRingingIncoming) break;
+        endCall(false);
+        break;
+      }
+    }
+  };
+
   useEffect(() => {
     const callAPI = (window as any).call;
-    if (!callAPI) {
+    if (!callAPI?.onEvent) {
       console.warn('[DM voice] window.call is undefined — call IPC unavailable');
       return;
     }
-
-    const handleEvent = async (event: string, payload: unknown) => {
-      const p = payload as Record<string, unknown>;
-
-      switch (event) {
-        case 'call:incoming': {
-          const incCallId = p.callId as string;
-          const incFrom = p.fromAddress as string;
-          const incChatId = p.chatId as string;
-
-          const rejectIncoming = async (reason: string) => {
-            const rejectTs = Date.now();
-            const { signature, publicKey } = await signPresenceFields(
-              { type: 'CALL_REJECT', callId: incCallId, timestamp: rejectTs },
-              publicKeyRef.current
-            );
-            await (window as any).call?.reject(
-              incCallId,
-              reason,
-              signature,
-              publicKey,
-              rejectTs
-            );
-          };
-
-          if (isDirectVoiceCallChatId(incChatId)) {
-            if (blockedAddressesRef.current[incFrom]) {
-              await rejectIncoming('blocked');
-              break;
-            }
-            if (!dmFriendsByAddressRef.current[incFrom]) {
-              await rejectIncoming('not_friend');
-              break;
-            }
-          }
-
-          if (callStateRef.current !== 'idle') break;
-          updateIncomingCall({
-            callId: incCallId,
-            fromAddress: incFrom,
-            chatId: incChatId,
-          });
-          updateCallState('ringing');
-          break;
-        }
-
-        case 'call:accepted': {
-          if (
-            callIdRef.current !== p.callId ||
-            callStateRef.current !== 'calling'
-          ) {
-            pushDirectVoiceUiLog('warn', 'call:accepted ignored (wrong callId or state)', {
-              expectedCallId: callIdRef.current,
-              gotCallId: p.callId,
-              state: callStateRef.current,
-            });
-            break;
-          }
-          await reticulumTeardownChainRef.current.catch(() => {});
-          const chatIdForRoom = activeCallChatIdRef.current;
-          if (chatIdForRoom && isDirectVoiceCallChatId(chatIdForRoom)) {
-            try {
-              const roomId = await buildDmVoiceRoomId(chatIdForRoom);
-              dmRoomIdRef.current = roomId;
-              flushPendingDmVoiceGcallKey(roomId);
-              pushDirectVoiceUiLog('log', 'DM voice room id ready (caller)', {
-                roomTrunc: roomId.slice(0, 32),
-              });
-            } catch (e) {
-              pushDirectVoiceUiLog('warn', 'buildDmVoiceRoomId failed (caller)', {
-                err: String(e),
-              });
-              endCall(false);
-              break;
-            }
-          }
-          pushDirectVoiceUiLog('log', 'call:accepted — starting Reticulum media session');
-          updateCallState('connected');
-          startDurationTimer();
-          void startReticulumMediaSession().catch((e) => {
-            pushDirectVoiceUiLog('warn', 'startReticulumMediaSession rejected', {
-              err: String(e),
-            });
-          });
-          break;
-        }
-
-        case 'call:rejected': {
-          if (callIdRef.current !== p.callId) break;
-          const rejectReason =
-            typeof p.reason === 'string' ? p.reason.trim() : '';
-          const message =
-            rejectReason === 'media unavailable'
-              ? i18n.t('core:voice_call.rejected_media')
-              : i18n.t('core:voice_call.rejected_declined');
-          setInfoSnackGlobal({ type: 'info', message });
-          setOpenSnackGlobal(true);
-          endCall(false);
-          break;
-        }
-
-        case 'call:hangup': {
-          const hid = p.callId as string;
-          const matchesOutboundOrActive = callIdRef.current === hid;
-          const matchesRingingIncoming =
-            callStateRef.current === 'ringing' &&
-            incomingCallRef.current?.callId === hid;
-          if (!matchesOutboundOrActive && !matchesRingingIncoming) break;
-          endCall(false);
-          break;
-        }
-      }
-    };
-
-    const unsubscribe = callAPI.onEvent(handleEvent);
-    return unsubscribe;
-  }, [
-    endCall,
-    flushPendingDmVoiceGcallKey,
-    setInfoSnackGlobal,
-    setOpenSnackGlobal,
-    startDurationTimer,
-    startReticulumMediaSession,
-    updateCallState,
-    updateIncomingCall,
-  ]);
+    return callAPI.onEvent((event: string, payload: unknown) => {
+      void callIpcHandlerRef.current(event, payload);
+    });
+  }, []);
 
   useEffect(() => {
     const w = window as Window & {
@@ -1993,6 +2012,26 @@ export function useVoiceCall(): UseVoiceCallReturn {
   useEffect(() => {
     return () => {
       clearDurationTimer();
+      const id = callIdRef.current;
+      const state = callStateRef.current;
+      const needsHangup =
+        Boolean(id) &&
+        (state === 'connected' || state === 'calling' || state === 'ringing');
+      if (needsHangup && id) {
+        const timestamp = Date.now();
+        void signPresenceFields(
+          { type: 'CALL_HANGUP', callId: id, timestamp },
+          publicKeyRef.current
+        )
+          .then(({ signature, publicKey }) =>
+            (window as any).call?.hangup(id, signature, publicKey, timestamp)
+          )
+          .catch(() => {})
+          .finally(() => {
+            enqueueTeardownReticulumMedia();
+          });
+        return;
+      }
       enqueueTeardownReticulumMedia();
     };
   }, [clearDurationTimer, enqueueTeardownReticulumMedia]);

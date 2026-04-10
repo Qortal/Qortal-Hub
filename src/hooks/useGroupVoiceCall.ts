@@ -11620,7 +11620,7 @@ export function useGroupVoiceCall(uiActive = false) {
         flushMetrics();
 
         // Register local address with main process
-        await window.groupCall.setLocalAddresses([userInfo.address]);
+        await window.groupCall.setLocalAddresses([userInfo.address], 'group');
 
         const jbuf = new Uint32Array(1);
         crypto.getRandomValues(jbuf);
@@ -11956,7 +11956,7 @@ export function useGroupVoiceCall(uiActive = false) {
           smoothedTargets: smoothedPlayoutTargetRef.current.size,
         }
       );
-      window.groupCall?.setLocalAddresses([]).catch(() => {});
+      window.groupCall?.setLocalAddresses([], 'group').catch(() => {});
       jitterDrainReactTickCountRef.current = 0;
       jitterFirstDrainLoggedRef.current = false;
       lastVadTrueAtRef.current.clear();

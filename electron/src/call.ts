@@ -26,6 +26,10 @@ const CALL_WIRE_ACCEPT = 'CA';
 const CALL_WIRE_REJECT = 'CX';
 const CALL_WIRE_HANGUP = 'CH';
 
+/** If the bridge is briefly not `ready`, retry before dropping (bursty GC / transport flaps). */
+const CALL_SEND_MAX_ATTEMPTS = 40;
+const CALL_SEND_RETRY_MS = 50;
+
 export type CallNetworkType =
   | 'CALL_REQUEST'
   | 'CALL_ACCEPT'
@@ -252,6 +256,15 @@ export class CallManager extends EventEmitter {
   private started = false;
   private activeCalls = new Map<string, CallRecord>();
   private localAddresses = new Set<string>();
+  /**
+   * Verified CALL_REQUEST payloads received while `localAddresses` was still empty (renderer
+   * has not yet invoked `call:setLocalAddresses`). Flushed when addresses are set.
+   */
+  private pendingVerifiedIncomingWhenNoLocal: Array<{
+    env: CallRequestEnvelope;
+    ctx: { senderDestinationHash: string };
+    receivedAt: number;
+  }> = [];
   private verifyPool = new VerifyWorkerPool(
     'call',
     CALL_VERIFY_WORKER_COUNT,
@@ -339,11 +352,76 @@ export class CallManager extends EventEmitter {
     }
     this.activeCalls.clear();
     this.seenReticulumOverlayIds.clear();
+    this.pendingVerifiedIncomingWhenNoLocal = [];
     loggerLog('[Call] Manager stopped.');
   }
 
   setLocalAddresses(addresses: string[]): void {
     this.localAddresses = new Set(addresses);
+    this.flushPendingVerifiedIncomingRequests();
+  }
+
+  /**
+   * Inbound calls still ringing — replay to the renderer when it sends `call:subscribe`
+   * after missing the initial `call:incoming` broadcast.
+   */
+  getPendingInboundRingingPayloads(): Array<{
+    callId: string;
+    fromAddress: string;
+    chatId: string;
+  }> {
+    const out: Array<{
+      callId: string;
+      fromAddress: string;
+      chatId: string;
+    }> = [];
+    for (const c of this.activeCalls.values()) {
+      if (c.direction === 'inbound' && c.state === 'pending') {
+        out.push({
+          callId: c.callId,
+          fromAddress: c.remoteAddress,
+          chatId: c.chatId,
+        });
+      }
+    }
+    return out;
+  }
+
+  private enqueuePendingVerifiedIncomingRequest(
+    env: CallRequestEnvelope,
+    senderDestinationHash: string
+  ): void {
+    const now = Date.now();
+    const cutoff = now - CALL_REQUEST_TTL_MS;
+    this.pendingVerifiedIncomingWhenNoLocal =
+      this.pendingVerifiedIncomingWhenNoLocal.filter(
+        (p) =>
+          p.receivedAt >= cutoff &&
+          p.env.callId !== env.callId
+      );
+    this.pendingVerifiedIncomingWhenNoLocal.push({
+      env,
+      ctx: { senderDestinationHash },
+      receivedAt: now,
+    });
+    loggerLog(
+      `[Call] Queued CALL_REQUEST until local addresses registered (callId=${env.callId.slice(0, 8)}…)`
+    );
+  }
+
+  private flushPendingVerifiedIncomingRequests(): void {
+    if (this.localAddresses.size === 0) return;
+    const pending = [...this.pendingVerifiedIncomingWhenNoLocal];
+    this.pendingVerifiedIncomingWhenNoLocal = [];
+    const now = Date.now();
+    for (const p of pending) {
+      if (now - p.receivedAt > CALL_REQUEST_TTL_MS) continue;
+      try {
+        this.applyVerifiedIncomingRequest(p.env, p.ctx);
+      } catch (err) {
+        loggerError('[Call] Error applying queued CALL_REQUEST:', err);
+      }
+    }
   }
 
   async initiateCall(
@@ -730,8 +808,6 @@ export class CallManager extends EventEmitter {
     senderDestinationHash: string,
     env: CallRequestEnvelope
   ): void {
-    if (this.localAddresses.size === 0) return;
-
     if (
       typeof env.callId !== 'string' ||
       typeof env.fromAddress !== 'string' ||
@@ -781,6 +857,10 @@ export class CallManager extends EventEmitter {
           loggerLog('[Call] Dropped CALL_REQUEST (RT): invalid signature');
           return;
         }
+        if (this.localAddresses.size === 0) {
+          this.enqueuePendingVerifiedIncomingRequest(env, senderDestinationHash);
+          return;
+        }
         try {
           this.applyVerifiedIncomingRequest(env, {
             senderDestinationHash,
@@ -799,8 +879,25 @@ export class CallManager extends EventEmitter {
     targetAddress: string,
     env: CallWireEnvelope
   ): void {
+    void this.sendEnvelopeWhenReady(targetAddress, env, 0);
+  }
+
+  private sendEnvelopeWhenReady(
+    targetAddress: string,
+    env: CallWireEnvelope,
+    attempt: number
+  ): void {
+    if (!this.started) return;
     if (this.reticulumBridge?.getState() !== 'ready') {
-      loggerWarn('[Call] Dropped send: Reticulum transport unavailable');
+      if (attempt >= CALL_SEND_MAX_ATTEMPTS) {
+        loggerWarn(
+          '[Call] Abandoned send after retries: Reticulum transport unavailable'
+        );
+        return;
+      }
+      setTimeout(() => {
+        this.sendEnvelopeWhenReady(targetAddress, env, attempt + 1);
+      }, CALL_SEND_RETRY_MS);
       return;
     }
     const overlayWire = this.attachReticulumOverlayMeta(

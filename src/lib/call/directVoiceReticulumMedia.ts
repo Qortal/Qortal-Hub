@@ -250,7 +250,7 @@ export async function joinDirectVoiceReticulumRoom(opts: {
   if (!signatures?.joinSig) {
     return { success: false, error: 'join-sign-failed' };
   }
-  await gc.setLocalAddresses?.([opts.address]).catch(() => {});
+  await gc.setLocalAddresses?.([opts.address], 'dm').catch(() => {});
   const res = await gc.join(
     opts.roomId,
     opts.chatId,
@@ -283,6 +283,7 @@ export async function leaveDirectVoiceReticulumRoom(opts: {
     timestamp: ts,
   }).catch(() => '');
   await gc.leave(opts.roomId, opts.address, sig, opts.publicKey, ts);
+  await gc.setLocalAddresses?.([], 'dm').catch(() => {});
 }
 
 export async function sendDirectVoiceRoomKey(opts: {

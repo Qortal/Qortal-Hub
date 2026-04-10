@@ -724,6 +724,66 @@ describe('recent room bootstrap state', () => {
     );
     manager.stop();
   });
+
+  it('keeps the DM local address registration when the group source unregisters', async () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    const seen: Array<Record<string, unknown>> = [];
+
+    manager.start();
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
+    manager.on('gcall:key', (payload) => {
+      seen.push(payload as Record<string, unknown>);
+    });
+
+    const dmChatId = 'direct:Q-peer:Q-self';
+    const dmRoomId = `dmv:${createHash('sha256').update(dmChatId, 'utf8').digest('hex').slice(0, 18)}`;
+    const encryptedKey = 'ciphertext-dm';
+
+    manager.setLocalAddresses(['Q-self'], 'group');
+    manager.setLocalAddresses(['Q-self'], 'dm');
+    manager.joinRoom(dmRoomId, dmChatId, 'Q-self', 'sig', 'pk-self', 100, TEST_D32);
+    manager.setLocalAddresses([], 'group');
+
+    (manager as any).handleKey(
+      {
+        type: 'GC_KEY',
+        roomId: dmRoomId,
+        toAddress: 'Q-self',
+        fromAddress: 'Q-peer',
+        fromPublicKey: 'pk-peer',
+        encryptedKey,
+        signature: 'sig-peer',
+        timestamp: 101,
+        keyMessageVersion: 3,
+        callSessionId: 'dm-session-1',
+        mediaSessionGeneration: 1,
+        keyCommitment: 'dm-commitment-1',
+        encryptedKeyDigest: createHash('sha256')
+          .update(JSON.stringify({ encryptedKey, toAddress: 'Q-self' }))
+          .digest('hex'),
+      },
+      'd:Q-peer'
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(seen).toEqual([
+      expect.objectContaining({
+        roomId: dmRoomId,
+        recipientAddress: 'Q-self',
+        fromAddress: 'Q-peer',
+        encryptedKey,
+        keyMessageVersion: 3,
+        callSessionId: 'dm-session-1',
+        mediaSessionGeneration: 1,
+        verified: true,
+      }),
+    ]);
+    manager.stop();
+  });
 });
 
 describe('retained verified key replay', () => {

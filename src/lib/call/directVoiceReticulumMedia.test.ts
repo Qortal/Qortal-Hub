@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   joinDirectVoiceReticulumRoom,
+  leaveDirectVoiceReticulumRoom,
   signGcJoin,
 } from './directVoiceReticulumMedia';
 
@@ -63,7 +64,7 @@ describe('directVoiceReticulumMedia', () => {
       }),
       10_000
     );
-    expect(setLocalAddresses).toHaveBeenCalledWith(['Qa']);
+    expect(setLocalAddresses).toHaveBeenCalledWith(['Qa'], 'dm');
     expect(join).toHaveBeenCalledWith(
       'dmv:0123456789abcdef01',
       'direct:Qa:Qb',
@@ -94,5 +95,33 @@ describe('directVoiceReticulumMedia', () => {
     });
 
     expect(signatures).toEqual({ joinSig: 'join-sig' });
+  });
+
+  it('clears the DM local-address registration when leaving the Reticulum room', async () => {
+    const leave = vi.fn(async () => {});
+    const setLocalAddresses = vi.fn(async () => {});
+
+    Object.assign(window as any, {
+      sendMessage: vi.fn(async () => ({ signature: 'leave-sig' })),
+      groupCall: {
+        leave,
+        setLocalAddresses,
+      },
+    });
+
+    await leaveDirectVoiceReticulumRoom({
+      roomId: 'dmv:0123456789abcdef01',
+      address: 'Qa',
+      publicKey: 'qortal-pub',
+    });
+
+    expect(leave).toHaveBeenCalledWith(
+      'dmv:0123456789abcdef01',
+      'Qa',
+      'leave-sig',
+      'qortal-pub',
+      expect.any(Number)
+    );
+    expect(setLocalAddresses).toHaveBeenCalledWith([], 'dm');
   });
 });

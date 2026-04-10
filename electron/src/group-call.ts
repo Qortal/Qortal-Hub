@@ -1030,6 +1030,7 @@ export class GroupCallManager extends EventEmitter {
   private reticulumBridge: ReticulumBridge | null;
   private started = false;
   private localAddresses = new Set<string>();
+  private localAddressesBySource = new Map<string, Set<string>>();
   private rooms = new Map<string, GroupRoom>();
   private recentRoomStateByRoomId = new Map<string, RecentRoomState>();
 
@@ -1622,6 +1623,8 @@ export class GroupCallManager extends EventEmitter {
     for (const timer of this.presenceEvictionTimers.values())
       clearTimeout(timer);
     this.presenceEvictionTimers.clear();
+    this.localAddresses.clear();
+    this.localAddressesBySource.clear();
     this.participantNodeIds.clear();
     this.reticulumPeerPresenceHashByAddress.clear();
     for (const state of this.reticulumAudioAwaitingRouteByAddress.values()) {
@@ -1682,9 +1685,28 @@ export class GroupCallManager extends EventEmitter {
     loggerLog('[GCall] GroupCallManager stopped.');
   }
 
-  setLocalAddresses(addresses: string[]): void {
-    this.localAddresses = new Set(addresses);
-    loggerLog(`[GCall] Local addresses set: ${[...addresses].join(', ')}`);
+  setLocalAddresses(addresses: string[], source = 'default'): void {
+    const normalizedSource = source.trim() || 'default';
+    const next = new Set<string>();
+    for (const raw of addresses) {
+      if (typeof raw !== 'string') continue;
+      const address = raw.trim();
+      if (!address) continue;
+      next.add(address);
+    }
+    if (next.size > 0) {
+      this.localAddressesBySource.set(normalizedSource, next);
+    } else {
+      this.localAddressesBySource.delete(normalizedSource);
+    }
+    const merged = new Set<string>();
+    for (const registered of this.localAddressesBySource.values()) {
+      for (const address of registered) merged.add(address);
+    }
+    this.localAddresses = merged;
+    loggerLog(
+      `[GCall] Local addresses set source=${normalizedSource}: ${[...this.localAddresses].join(', ')}`
+    );
     this.syncReticulumAudioLinks();
   }
 
@@ -2450,6 +2472,14 @@ export class GroupCallManager extends EventEmitter {
     // or while watch is briefly []; TTL sweep in flush drops stale entries.
     this.scheduleQortalGroupCallActivityEmit(true);
     this.scheduleNextQortalReticulumExpiry();
+    return this.getQortalGroupCallActivitySnapshot();
+  }
+
+  /**
+   * Full map for the groups list (watched ids only). Used when the renderer subscribes to
+   * `gcall:qortal-group-call-activity` so it does not miss state emitted before subscribe.
+   */
+  getQortalGroupCallActivitySnapshotForSidebar(): Record<string, boolean> {
     return this.getQortalGroupCallActivitySnapshot();
   }
 

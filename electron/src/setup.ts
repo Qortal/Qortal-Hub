@@ -2265,6 +2265,11 @@ ipcMain.handle(
 
 ipcMain.on('call:subscribe', (event) => {
   callSubscribers.add(event.sender);
+  const mgr = getCallManager();
+  if (!mgr || event.sender.isDestroyed()) return;
+  for (const p of mgr.getPendingInboundRingingPayloads()) {
+    event.sender.send('call:incoming', p);
+  }
 });
 ipcMain.on('call:unsubscribe', (event) => {
   callSubscribers.delete(event.sender);
@@ -2294,7 +2299,11 @@ export function attachGroupCallListeners(
   manager.on('gcall:key-request', forward('gcall:key-request'));
   manager.on('gcall:session-updated', forward('gcall:session-updated'));
   manager.on('gcall:qortal-group-call-activity', (payload: unknown) =>
-    broadcastToSet(gcallActivitySubscribers, 'gcall:qortal-group-call-activity', payload)
+    broadcastToSet(
+      gcallActivitySubscribers,
+      'gcall:qortal-group-call-activity',
+      payload
+    )
   );
 }
 
@@ -2615,10 +2624,13 @@ ipcMain.handle('gcall:requestSessionBreak', async (_event, roomId: string) => {
 
 ipcMain.handle(
   'gcall:setLocalAddresses',
-  async (_event, addresses: string[]) => {
+  async (_event, addresses: string[], source?: string) => {
     const mgr = getGroupCallManager();
     if (!mgr) return { success: false, error: 'GroupCall manager not running' };
-    mgr.setLocalAddresses(Array.isArray(addresses) ? addresses : []);
+    mgr.setLocalAddresses(
+      Array.isArray(addresses) ? addresses : [],
+      typeof source === 'string' ? source : undefined
+    );
     return { success: true };
   }
 );
@@ -2682,6 +2694,10 @@ ipcMain.on('gcall:unsubscribe', (event) => {
 });
 ipcMain.on('gcall:subscribe-activity', (event) => {
   gcallActivitySubscribers.add(event.sender);
+  const mgr = getGroupCallManager();
+  if (!mgr || event.sender.isDestroyed()) return;
+  const activeByGroupId = mgr.getQortalGroupCallActivitySnapshotForSidebar();
+  event.sender.send('gcall:qortal-group-call-activity', { activeByGroupId });
 });
 ipcMain.on('gcall:unsubscribe-activity', (event) => {
   gcallActivitySubscribers.delete(event.sender);

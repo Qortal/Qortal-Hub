@@ -29,6 +29,15 @@ const hubP2pBootstrapIceServers = isDisabledLegacy
   ? []
   : buildBootstrapIceServers(parseHubBootstrapSeedsFromArgv());
 
+/**
+ * Refcount `groupCall.onEvent` lifetimes so the last unsubscribe is the only one that sends
+ * `gcall:unsubscribe`. Group voice + DM voice both subscribe; leaving the group must not
+ * remove the window from main's fanout while DM still needs `gcall:key` / `gcall:audio`.
+ */
+let gcallFullStreamOnEventRefCount = 0;
+/** Same idea as gcall: avoid dropping main fanout if `call.onEvent` is registered more than once. */
+let callOnEventRefCount = 0;
+
 type PresenceUpdatePayload = {
   address: string;
   online: boolean;
@@ -960,12 +969,19 @@ try {
         ipcRenderer.on(channel, handler);
       }
 
-      ipcRenderer.send('call:subscribe');
+      callOnEventRefCount++;
+      if (callOnEventRefCount === 1) {
+        ipcRenderer.send('call:subscribe');
+      }
 
       return () => {
-        ipcRenderer.send('call:unsubscribe');
         for (const [channel, handler] of handlers) {
           ipcRenderer.removeListener(channel, handler);
+        }
+        callOnEventRefCount--;
+        if (callOnEventRefCount <= 0) {
+          callOnEventRefCount = 0;
+          ipcRenderer.send('call:unsubscribe');
         }
       };
     },
@@ -1159,8 +1175,8 @@ try {
       }>,
 
     /** Register the local user's address with the group call manager. */
-    setLocalAddresses: async (addresses: string[]) =>
-      ipcRenderer.invoke('gcall:setLocalAddresses', addresses),
+    setLocalAddresses: async (addresses: string[], source?: string) =>
+      ipcRenderer.invoke('gcall:setLocalAddresses', addresses, source),
 
     /** Sync authoritative Qortal group member addresses for Reticulum call-activity fanout. */
     setQortalGroupReticulumTargets: async (roomId: string, addresses: string[]) =>
@@ -1238,11 +1254,16 @@ try {
         ipcRenderer.on(channel, handler);
       }
       ipcRenderer.send('gcall:subscribe');
+      gcallFullStreamOnEventRefCount++;
 
       return () => {
-        ipcRenderer.send('gcall:unsubscribe');
         for (const [channel, handler] of handlers) {
           ipcRenderer.removeListener(channel, handler);
+        }
+        gcallFullStreamOnEventRefCount--;
+        if (gcallFullStreamOnEventRefCount <= 0) {
+          gcallFullStreamOnEventRefCount = 0;
+          ipcRenderer.send('gcall:unsubscribe');
         }
       };
     },

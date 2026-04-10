@@ -303,7 +303,10 @@ declare global {
       accept: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
       reject: (callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
       hangup: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+      setLocalAddresses: (
+        addresses: string[],
+        source?: string
+      ) => Promise<{ success: boolean }>;
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
     };
 
@@ -484,7 +487,10 @@ declare global {
         mediaSessionGeneration: number
       ) => Promise<{ success: boolean }>;
       requestSessionBreak: (roomId: string) => Promise<{ success: boolean; error?: string }>;
-      setLocalAddresses: (addresses: string[]) => Promise<{ success: boolean }>;
+      setLocalAddresses: (
+        addresses: string[],
+        source?: string
+      ) => Promise<{ success: boolean }>;
       setQortalGroupReticulumTargets?: (
         roomId: string,
         addresses: string[]

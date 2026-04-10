@@ -36,7 +36,8 @@ export function useQortalGroupCallSidebarActivitySync(): void {
     });
     return () => {
       unsub();
-      void api.setWatchedQortalGroupIds([]);
+      // Do not clear watched ids here: it races with React Strict remounts and leaves main
+      // with an empty watch set until the next setWatchedQortalGroupIds, hiding sidebar call icons.
       setMeshCallActive({});
     };
   }, [setMeshCallActive]);
