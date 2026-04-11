@@ -532,6 +532,8 @@ const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 1_500;
 const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS = 4_000;
 const GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS = 6_000;
 const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS = 24;
+const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS = 10_000;
+const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS = 12_000;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
@@ -1504,6 +1506,37 @@ export function shouldTriggerN1InboundMediaWatchdog(opts: {
   return (
     missingForMs >= GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS &&
     lastActionAgeMs >= GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS
+  );
+}
+
+export function shouldTriggerN1InboundMediaReannounce(opts: {
+  roomConnected: boolean;
+  hasRoomKey: boolean;
+  remotePeerCount: number;
+  activeSourceCount: number;
+  relayPacketsSent: number;
+  reticulumAudioPacketFreshSends: number;
+  missingForMs: number;
+  lastReannounceAgeMs: number;
+}): boolean {
+  if (!opts.roomConnected || !opts.hasRoomKey) return false;
+  if (opts.remotePeerCount !== 1 || opts.activeSourceCount !== 0) return false;
+  const outboundFreshSends = Math.max(
+    opts.relayPacketsSent,
+    opts.reticulumAudioPacketFreshSends
+  );
+  if (outboundFreshSends < GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS) {
+    return false;
+  }
+  const missingForMs = Number.isFinite(opts.missingForMs)
+    ? opts.missingForMs
+    : 0;
+  const lastReannounceAgeMs = Number.isFinite(opts.lastReannounceAgeMs)
+    ? opts.lastReannounceAgeMs
+    : Number.POSITIVE_INFINITY;
+  return (
+    missingForMs >= GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS &&
+    lastReannounceAgeMs >= GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS
   );
 }
 
@@ -2954,6 +2987,7 @@ export function useGroupVoiceCall(uiActive = false) {
   const requestMediaRecoveryForPeerRef = useRef<
     (peerAddress: string, reason: string) => void
   >(() => {});
+  const reannounceLocalJoinRef = useRef<(reason?: string) => void>(() => {});
   const sessionStartedAtMsRef = useRef<number>(0);
   const peerRecoveryProfileRef = useRef<
     Map<string, 'low-latency' | 'recovery'>
@@ -3134,6 +3168,9 @@ export function useGroupVoiceCall(uiActive = false) {
     new Map()
   );
   const lastInboundMediaWatchdogAtPeerRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const lastInboundMediaReannounceAtPeerRef = useRef<Map<string, number>>(
     new Map()
   );
 
@@ -5838,6 +5875,7 @@ export function useGroupVoiceCall(uiActive = false) {
       for (const peer of inboundMediaMissingSincePeerRef.current.keys()) {
         if (peer !== singleRemotePeerForInboundWatchdog) {
           inboundMediaMissingSincePeerRef.current.delete(peer);
+          lastInboundMediaReannounceAtPeerRef.current.delete(peer);
         }
       }
       if (
@@ -5911,6 +5949,43 @@ export function useGroupVoiceCall(uiActive = false) {
               snap.reticulumAudioPacketPathTimeouts ?? 0,
           });
           requestMediaRecoveryForPeerRef.current(peer, 'inbound-media-missing');
+          const lastReannounceAt =
+            lastInboundMediaReannounceAtPeerRef.current.get(peer) ?? 0;
+          const lastReannounceAgeMs =
+            lastReannounceAt > 0
+              ? wallNow - lastReannounceAt
+              : Number.POSITIVE_INFINITY;
+          if (
+            shouldTriggerN1InboundMediaReannounce({
+              roomConnected: roomStateRef.current === 'connected',
+              hasRoomKey: roomKeyRef.current !== null,
+              remotePeerCount: remotePeersForInboundWatchdog.length,
+              activeSourceCount,
+              relayPacketsSent: snap.relayPacketsSent ?? 0,
+              reticulumAudioPacketFreshSends:
+                snap.reticulumAudioPacketFreshSends ?? 0,
+              missingForMs,
+              lastReannounceAgeMs,
+            })
+          ) {
+            lastInboundMediaReannounceAtPeerRef.current.set(peer, wallNow);
+            gcallWindowDiagnosticTagsRef.current.push({
+              ts: wallNow,
+              type: 'inbound-media-reannounce',
+              detail: {
+                peer: truncateGcallDiagAddress(peer),
+                missingForMs: Math.round(missingForMs),
+              },
+            });
+            gcallDiagnosticsPush('warn', '[GCall] inboundMediaReannounce', {
+              peerAddress: truncateGcallDiagAddress(peer),
+              missingForMs: Math.round(missingForMs),
+              relayPacketsSent: snap.relayPacketsSent ?? 0,
+              reticulumAudioPacketFreshSends:
+                snap.reticulumAudioPacketFreshSends ?? 0,
+            });
+            reannounceLocalJoinRef.current('inbound-media-missing');
+          }
         }
       }
       if (
@@ -12768,6 +12843,8 @@ export function useGroupVoiceCall(uiActive = false) {
       rootInboundStressWarmFiredRef.current.clear();
       inboundMediaMissingSincePeerRef.current.clear();
       lastInboundMediaWatchdogAtPeerRef.current.clear();
+      lastInboundMediaReannounceAtPeerRef.current.clear();
+      reannounceLocalJoinRef.current = () => {};
       gcallWindowDiagnosticTagsRef.current.length = 0;
       pathQualityScoreEmaV1Ref.current = null;
       lastPeerRouteKeyRef.current.clear();
@@ -13286,7 +13363,7 @@ export function useGroupVoiceCall(uiActive = false) {
     };
     scheduleKeyRecoveryCheckRef.current = scheduleKeyRecoveryCheck;
 
-    const reannounceLocalJoin = () => {
+    const reannounceLocalJoin = (reason = 'manual') => {
       if (
         !userInfo?.address ||
         !userInfo.publicKey ||
@@ -13301,6 +13378,10 @@ export function useGroupVoiceCall(uiActive = false) {
       const rk = localReticulumIdentityPublicKeyBase64Ref.current;
       const rts = Date.now();
       const jg = joinGenerationRef.current;
+      gcallDiagnosticsPush('info', '[GCall] localJoinReannounce', {
+        reason,
+        joinGeneration: jg,
+      });
       void (async () => {
         const split = await signReticulumJoinSplit({
           roomId: roomIdRef.current,
@@ -13348,6 +13429,7 @@ export function useGroupVoiceCall(uiActive = false) {
           });
       })().catch(() => {});
     };
+    reannounceLocalJoinRef.current = reannounceLocalJoin;
 
     maybeRequestKeyRecoveryRef.current = (reason: string) => {
       void (async () => {

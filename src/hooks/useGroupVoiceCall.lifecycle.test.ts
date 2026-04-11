@@ -40,6 +40,7 @@ import {
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldEnableN1DrainReceivePriorityMode,
   shouldTriggerN1InboundMediaWatchdog,
+  shouldTriggerN1InboundMediaReannounce,
   shouldTriggerN1SeverePlayoutPathWarm,
   shouldDropActiveJitterSource,
   shouldSuppressHealthySingleRemoteMicroWiden,
@@ -1725,6 +1726,58 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       shouldTriggerN1InboundMediaWatchdog({
         ...base,
         remotePeerCount: 2,
+      })
+    ).toBe(false);
+  });
+
+  it('reannounces local join after sustained one-on-one inbound-media missing', () => {
+    expect(
+      shouldTriggerN1InboundMediaReannounce({
+        roomConnected: true,
+        hasRoomKey: true,
+        remotePeerCount: 1,
+        activeSourceCount: 0,
+        relayPacketsSent: 500,
+        reticulumAudioPacketFreshSends: 500,
+        missingForMs: 12_000,
+        lastReannounceAgeMs: 13_000,
+      })
+    ).toBe(true);
+  });
+
+  it('gates inbound-media local join reannounce on dwell, cooldown, and one-on-one scope', () => {
+    const base = {
+      roomConnected: true,
+      hasRoomKey: true,
+      remotePeerCount: 1,
+      activeSourceCount: 0,
+      relayPacketsSent: 500,
+      reticulumAudioPacketFreshSends: 500,
+      missingForMs: 12_000,
+      lastReannounceAgeMs: 13_000,
+    };
+    expect(
+      shouldTriggerN1InboundMediaReannounce({
+        ...base,
+        missingForMs: 6_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1InboundMediaReannounce({
+        ...base,
+        lastReannounceAgeMs: 6_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1InboundMediaReannounce({
+        ...base,
+        remotePeerCount: 2,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1InboundMediaReannounce({
+        ...base,
+        activeSourceCount: 1,
       })
     ).toBe(false);
   });
