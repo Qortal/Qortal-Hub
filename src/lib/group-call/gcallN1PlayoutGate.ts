@@ -38,6 +38,8 @@ export const GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS = 420;
 export const GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP = 3;
 export const GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS = 80;
 export const GCALL_N1_SEVERE_RELEASE_EXIT_UNDERTARGET_MAX = 0.45;
+export const GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_PCM_MS = 120;
+export const GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_UNDERTARGET_MAX = 0.25;
 export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_OPUS_MS = 40;
 export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_PCM_MS = 30;
 export const GCALL_N1_LATE_COLLAPSE_REARM_UNDERTARGET_MIN = 0.85;
@@ -295,6 +297,26 @@ export function shouldKeepN1SevereForcedReleaseRebuild(input: {
 }): boolean {
   if (input.rebuildUntilMs > input.nowMs) return true;
   if (input.sampleCount < 2) return true;
+
+  const targetMs = Math.max(
+    GCALL_N1_MIN_TARGET_MS_FLOOR,
+    Number.isFinite(input.targetMs)
+      ? input.targetMs
+      : GCALL_N1_MIN_TARGET_MS_FLOOR
+  );
+  const pcmDominantExitMs = Math.max(
+    GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS,
+    Math.min(targetMs, GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_PCM_MS)
+  );
+  if (
+    !input.severeInstability &&
+    input.avgPcmBufferedMs >= pcmDominantExitMs &&
+    input.playoutUnderTargetFraction <=
+      GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_UNDERTARGET_MAX
+  ) {
+    return false;
+  }
+
   if (!input.recentStable || input.severeInstability) return true;
   return !(
     input.opusBufferedMs >=

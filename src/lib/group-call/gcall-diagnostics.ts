@@ -77,6 +77,26 @@ export interface GcallDiagExportPayload {
 
 const MAX_EVENTS = 900;
 const METRICS_THROTTLE_MS = 8000;
+const GCALL_NOISY_DIAGNOSTIC_TAGS = new Set(['[GCall] bufferEnforceActive']);
+const GCALL_PROTECTED_DIAGNOSTIC_TAGS = new Set([
+  '[GCall] inboundMediaMissing',
+  '[GCall] inboundMediaReannounce',
+  '[GCall] localJoinReannounce',
+  '[GCall] peerMediaRecoveryRequested',
+  '[GCall] peerMediaRecoveryRequestFailed',
+  '[GCall] predictivePathWarm',
+  '[GCall] rootInboundPathWarm',
+  '[GCall] postKeyRootPathWarm',
+  '[GCall] reticulumInboundAudioObserved',
+  '[GCall] reticulumAudioSendFailed',
+  '[GCall] reticulumAudioSendException',
+  '[GCall] reticulumPacketPathDegraded',
+  '[GCall] pathRouteKeyChanged',
+  '[GCall] trustedRootKeyApplied',
+  '[GCall] startupKeyDeliveryObserved',
+  '[GCall] workerRoomKeySyncRequested',
+  '[GCall] workerRoomKeySyncApplied',
+]);
 
 const GCALL_DEBUG_STORAGE_KEY = 'qortal:gcall-debug';
 const GCALL_MIC_DEBUG_STORAGE_KEY = 'qortal:gcall-mic-debug';
@@ -255,6 +275,36 @@ export function setGcallDiagnosticsSuppressInfo(suppress: boolean): void {
   gcallDiagnosticsSuppressInfo = suppress;
 }
 
+function isProtectedGcallDiagnosticEvent(event: GcallDiagEvent): boolean {
+  return (
+    event.level === 'warn' || GCALL_PROTECTED_DIAGNOSTIC_TAGS.has(event.tag)
+  );
+}
+
+function pruneGcallDiagnosticsRing(): void {
+  while (events.length > MAX_EVENTS) {
+    const noisyIndex = events.findIndex(
+      (event) =>
+        !isProtectedGcallDiagnosticEvent(event) &&
+        GCALL_NOISY_DIAGNOSTIC_TAGS.has(event.tag)
+    );
+    if (noisyIndex >= 0) {
+      events.splice(noisyIndex, 1);
+      continue;
+    }
+
+    const unprotectedIndex = events.findIndex(
+      (event) => !isProtectedGcallDiagnosticEvent(event)
+    );
+    if (unprotectedIndex >= 0) {
+      events.splice(unprotectedIndex, 1);
+      continue;
+    }
+
+    events.shift();
+  }
+}
+
 export function gcallDiagnosticsPush(
   level: GcallDiagLevel,
   tag: string,
@@ -270,7 +320,7 @@ export function gcallDiagnosticsPush(
     payload,
   });
   if (events.length > MAX_EVENTS) {
-    events.splice(0, events.length - MAX_EVENTS);
+    pruneGcallDiagnosticsRing();
   }
 }
 

@@ -282,6 +282,48 @@ describe('gcallN1PlayoutGate', () => {
     ).toBe(false);
   });
 
+  it('exits severe forced release when PCM has clearly recovered even if Opus reserve is modest', () => {
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_300,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 30,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 150,
+        playoutUnderTargetFraction: 0.12,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_300,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 30,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 150,
+        playoutUnderTargetFraction: 0.12,
+        recentStable: false,
+        severeInstability: true,
+      })
+    ).toBe(true);
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_300,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 30,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 150,
+        playoutUnderTargetFraction: 0.35,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(true);
+  });
+
   it('re-arms single-remote recovery when a live call collapses back to a one-frame floor', () => {
     expect(
       shouldRearmN1LateCollapseRecovery({

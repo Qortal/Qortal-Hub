@@ -54,6 +54,24 @@ describe('gcall-diagnostics', () => {
     expect(gcallDiagnosticsGetEvents()[0]?.payload).toMatchObject({ i: 50 });
   });
 
+  it('keeps critical startup media events when noisy buffer logs overflow the ring', () => {
+    gcallDiagnosticsPush('info', '[GCall] localJoinReannounce', {
+      reason: 'inbound-media-missing',
+    });
+    for (let i = 0; i < 950; i++) {
+      gcallDiagnosticsPush('info', '[GCall] bufferEnforceActive', { i });
+    }
+    const events = gcallDiagnosticsGetEvents();
+    expect(events.length).toBeLessThanOrEqual(900);
+    expect(
+      events.some((event) => event.tag === '[GCall] localJoinReannounce')
+    ).toBe(true);
+    expect(
+      events.filter((event) => event.tag === '[GCall] bufferEnforceActive')
+        .length
+    ).toBe(899);
+  });
+
   it('throttles metrics pushes', () => {
     gcallDiagnosticsPushMetricsThrottled({ a: 1 });
     gcallDiagnosticsPushMetricsThrottled({ a: 2 });

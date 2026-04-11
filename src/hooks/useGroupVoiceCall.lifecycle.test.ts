@@ -1739,8 +1739,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         activeSourceCount: 0,
         relayPacketsSent: 500,
         reticulumAudioPacketFreshSends: 500,
-        missingForMs: 12_000,
-        lastReannounceAgeMs: 13_000,
+        missingForMs: 5_500,
+        lastReannounceAgeMs: 8_000,
       })
     ).toBe(true);
   });
@@ -1753,13 +1753,13 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       activeSourceCount: 0,
       relayPacketsSent: 500,
       reticulumAudioPacketFreshSends: 500,
-      missingForMs: 12_000,
-      lastReannounceAgeMs: 13_000,
+      missingForMs: 5_500,
+      lastReannounceAgeMs: 8_000,
     };
     expect(
       shouldTriggerN1InboundMediaReannounce({
         ...base,
-        missingForMs: 6_000,
+        missingForMs: 4_000,
       })
     ).toBe(false);
     expect(

@@ -532,8 +532,9 @@ const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 1_500;
 const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS = 4_000;
 const GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS = 6_000;
 const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS = 24;
-const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS = 10_000;
-const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS = 12_000;
+const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS = 5_000;
+const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS = 7_000;
+const GCALL_N1_BUFFER_ENFORCE_TIER_CHANGE_LOG_MIN_MS = 1_000;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
@@ -9986,10 +9987,16 @@ export function useGroupVoiceCall(uiActive = false) {
           const lastLog = lastBufferEnforceLogAtRef.current.get(addr) ?? 0;
           const tierChanged = previousN1Tier !== n1Tier;
           const modeChanged = previousN1Mode !== singleRemoteShapingMode;
+          const periodicLogDue =
+            nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS;
+          const tierChangeLogDue =
+            tierChanged &&
+            nowLog - lastLog >=
+              GCALL_N1_BUFFER_ENFORCE_TIER_CHANGE_LOG_MIN_MS;
           const logDue =
             modeChanged ||
-            tierChanged ||
-            nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS;
+            tierChangeLogDue ||
+            periodicLogDue;
           if (
             logDue &&
             (n1Tier !== 'normal' ||
