@@ -40,6 +40,7 @@ import {
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldEnableN1DrainReceivePriorityMode,
   shouldTriggerN1InboundMediaWatchdog,
+  shouldTriggerN1SeverePlayoutPathWarm,
   shouldDropActiveJitterSource,
   shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
@@ -1654,7 +1655,24 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(true);
   });
 
-  it('does not trigger inbound-media watchdog once any inbound media/source exists', () => {
+  it('keeps inbound-media watchdog active for trickle packets until a source exists', () => {
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        roomConnected: true,
+        hasRoomKey: true,
+        remotePeerCount: 1,
+        activeSourceCount: 0,
+        packetsReceived: 11,
+        packetsDecoded: 11,
+        relayPacketsSent: 40,
+        reticulumAudioPacketFreshSends: 80,
+        missingForMs: 10_000,
+        lastActionAgeMs: 10_000,
+      })
+    ).toBe(true);
+  });
+
+  it('does not trigger inbound-media watchdog once an inbound source exists', () => {
     expect(
       shouldTriggerN1InboundMediaWatchdog({
         roomConnected: true,
@@ -1662,20 +1680,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         remotePeerCount: 1,
         activeSourceCount: 1,
         packetsReceived: 0,
-        packetsDecoded: 0,
-        relayPacketsSent: 40,
-        reticulumAudioPacketFreshSends: 80,
-        missingForMs: 10_000,
-        lastActionAgeMs: 10_000,
-      })
-    ).toBe(false);
-    expect(
-      shouldTriggerN1InboundMediaWatchdog({
-        roomConnected: true,
-        hasRoomKey: true,
-        remotePeerCount: 1,
-        activeSourceCount: 0,
-        packetsReceived: 1,
         packetsDecoded: 0,
         relayPacketsSent: 40,
         reticulumAudioPacketFreshSends: 80,
@@ -1719,6 +1723,77 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
     expect(
       shouldTriggerN1InboundMediaWatchdog({
+        ...base,
+        remotePeerCount: 2,
+      })
+    ).toBe(false);
+  });
+
+  it('triggers one-on-one severe playout path warm for live underfed streams', () => {
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        remotePeerCount: 1,
+        activeSourceCount: 1,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 32,
+          playoutUnderTargetFraction: 0.81,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -68,
+        starvationSeverity: 'strong',
+        lastActionAgeMs: 9_000,
+      })
+    ).toBe(true);
+  });
+
+  it('does not warm one-on-one severe playout path for stale, stable, or cooldown-limited streams', () => {
+    const base = {
+      remotePeerCount: 1,
+      activeSourceCount: 1,
+      lastRecvAgeMs: 180,
+      recentStability: {
+        sampleCount: 4,
+        avgPcmBufferedMs: 32,
+        playoutUnderTargetFraction: 0.81,
+        underrunCount: 12,
+        stable: false,
+        severeInstability: true,
+      },
+      avgPlayoutDeltaMs: -68,
+      starvationSeverity: 'strong' as const,
+      lastActionAgeMs: 9_000,
+    };
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        ...base,
+        lastRecvAgeMs: 2_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        ...base,
+        recentStability: {
+          ...base.recentStability,
+          avgPcmBufferedMs: 90,
+          playoutUnderTargetFraction: 0.2,
+          stable: true,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -5,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        ...base,
+        lastActionAgeMs: 2_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
         ...base,
         remotePeerCount: 2,
       })

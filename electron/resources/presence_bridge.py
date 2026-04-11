@@ -2031,6 +2031,22 @@ def _valid_presence_destination_hash_hex(peer_hash: str) -> bool:
     return True
 
 
+def _dedup_age_ts(state: Dict[str, Any], both_established: bool) -> float:
+    """Monotonic-ish sort key: lower = older link (prefer keeping)."""
+    if both_established:
+        t = state.get("established_at")
+        if isinstance(t, (int, float)):
+            return float(t)
+        t = state.get("created_at")
+        if isinstance(t, (int, float)):
+            return float(t)
+        return 0.0
+    t = state.get("created_at")
+    if isinstance(t, (int, float)):
+        return float(t)
+    return 0.0
+
+
 def _dedup_pick_keep_link(
     link_id_a: str,
     state_a: Dict[str, Any],
@@ -2044,12 +2060,11 @@ def _dedup_pick_keep_link(
         return link_id_a, link_id_b
     if est_b and not est_a:
         return link_id_b, link_id_a
-    inc_a = state_a.get("incoming") is True
-    inc_b = state_b.get("incoming") is True
-    if inc_a and not inc_b:
-        return link_id_a, link_id_b
-    if inc_b and not inc_a:
-        return link_id_b, link_id_a
+    both_est = est_a and est_b
+    ta = _dedup_age_ts(state_a, both_est)
+    tb = _dedup_age_ts(state_b, both_est)
+    if ta != tb:
+        return (link_id_a, link_id_b) if ta < tb else (link_id_b, link_id_a)
     return (link_id_a, link_id_b) if link_id_a < link_id_b else (link_id_b, link_id_a)
 
 
@@ -2185,11 +2200,13 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
                 established_callback=on_outgoing_overlay_link_established,
                 closed_callback=on_overlay_link_closed,
             )
+            now = time.time()
             state = {
                 "link": link,
                 "peerPresenceHash": peer_key,
                 "incoming": False,
                 "established": False,
+                "created_at": now,
                 "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
             }
             _overlay_links_by_id[link_id] = state
@@ -2571,8 +2588,10 @@ def on_outgoing_overlay_link_established(link) -> None:
     if state is None:
         return
     configure_overlay_link(link, link_id)
+    now = time.time()
     state["established"] = True
-    state["last_activity_at"] = time.time()
+    state["established_at"] = now
+    state["last_activity_at"] = now
     try:
         if _identity is not None:
             link.identify(_identity)
@@ -2936,13 +2955,16 @@ def _cancel_inbound_classify_timer(link_key: int) -> None:
 
 def _register_incoming_overlay_link(link) -> str:
     link_id = str(uuid.uuid4())
+    now = time.time()
     state = {
         "link": link,
         "peerPresenceHash": "",
         "incoming": True,
         "established": True,
+        "established_at": now,
+        "created_at": now,
         "pending_packets": deque(maxlen=_OVERLAY_PENDING_PACKET_LIMIT),
-        "last_activity_at": time.time(),
+        "last_activity_at": now,
     }
     with _state_lock:
         _overlay_links_by_id[link_id] = state

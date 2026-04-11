@@ -970,6 +970,8 @@ const GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_DECODE_CAP = 3;
 const GCALL_N1_RECEIVE_PRIORITY_CAP_MIN_HOLD_MS = 900;
 const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_STABLE_MS = 650;
 const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_DELTA_MIN_MS = -20;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_COOLDOWN_MS = 8_000;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS = 450;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS = 70;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO = 0.55;
@@ -1486,7 +1488,6 @@ export function shouldTriggerN1InboundMediaWatchdog(opts: {
   if (!opts.roomConnected || !opts.hasRoomKey) return false;
   if (opts.remotePeerCount !== 1) return false;
   if (opts.activeSourceCount !== 0) return false;
-  if (opts.packetsReceived > 0 || opts.packetsDecoded > 0) return false;
   const outboundFreshSends = Math.max(
     opts.relayPacketsSent,
     opts.reticulumAudioPacketFreshSends
@@ -1503,6 +1504,41 @@ export function shouldTriggerN1InboundMediaWatchdog(opts: {
   return (
     missingForMs >= GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS &&
     lastActionAgeMs >= GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS
+  );
+}
+
+export function shouldTriggerN1SeverePlayoutPathWarm(opts: {
+  remotePeerCount: number;
+  activeSourceCount: number;
+  lastRecvAgeMs: number;
+  recentStability: RecentRecoveryStabilitySummary | null;
+  avgPlayoutDeltaMs: number;
+  starvationSeverity: PlayoutStarvationSeverity;
+  lastActionAgeMs: number;
+}): boolean {
+  if (opts.remotePeerCount !== 1 || opts.activeSourceCount !== 1) return false;
+  if (
+    !Number.isFinite(opts.lastRecvAgeMs) ||
+    opts.lastRecvAgeMs > GCALL_N1_SEVERE_PLAYOUT_WARM_LAST_RECV_MAX_MS
+  ) {
+    return false;
+  }
+  const lastActionAgeMs = Number.isFinite(opts.lastActionAgeMs)
+    ? opts.lastActionAgeMs
+    : Number.POSITIVE_INFINITY;
+  if (lastActionAgeMs < GCALL_N1_SEVERE_PLAYOUT_WARM_COOLDOWN_MS) {
+    return false;
+  }
+  const recent = opts.recentStability;
+  if (recent === null || recent.sampleCount < 2 || recent.stable) return false;
+  const severelyUnderfed =
+    recent.avgPcmBufferedMs <= GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_MAX_MS &&
+    recent.playoutUnderTargetFraction >=
+      GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_MAX_MS;
+  return (
+    severelyUnderfed &&
+    (opts.starvationSeverity === 'strong' || recent.severeInstability)
   );
 }
 
@@ -3033,6 +3069,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastPredictiveWarmAtPeerRef = useRef<Map<string, number>>(new Map());
   const n1PathDegradedUntilPeerRef = useRef<Map<string, number>>(new Map());
   const lastN1PathDegradedWarmAtPeerRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const lastN1SeverePlayoutWarmAtPeerRef = useRef<Map<string, number>>(
     new Map()
   );
   const rootInboundStressWarmFiredRef = useRef<Set<string>>(new Set());
@@ -5775,6 +5814,17 @@ export function useGroupVoiceCall(uiActive = false) {
           ? sourceIngressPeerRef.current.get(singleRemoteSourceAddr) ??
             singleRemoteSourceAddr
           : null;
+      const singleRemoteLastRecvAgeMs =
+        singleRemoteSourceAddr !== null
+          ? (() => {
+              const lastRecvAt = lastRecvAtRef.current.get(
+                singleRemoteSourceAddr
+              );
+              return lastRecvAt === undefined
+                ? Number.POSITIVE_INFINITY
+                : perfNow - lastRecvAt;
+            })()
+          : Number.POSITIVE_INFINITY;
       const myAddrForInboundWatchdog = userInfoRef.current?.address ?? '';
       const remotePeersForInboundWatchdog = myAddrForInboundWatchdog
         ? [...participantsRef.current.keys()].filter(
@@ -5863,6 +5913,69 @@ export function useGroupVoiceCall(uiActive = false) {
           requestMediaRecoveryForPeerRef.current(peer, 'inbound-media-missing');
         }
       }
+      if (
+        singleRemoteSourceAddr !== null &&
+        singleRemoteIngressPeerAddress !== null &&
+        singleRemoteIngressPeerAddress !== RELAY_INGRESS_PEER
+      ) {
+        const lastActionAt =
+          lastN1SeverePlayoutWarmAtPeerRef.current.get(
+            singleRemoteIngressPeerAddress
+          ) ?? 0;
+        const lastActionAgeMs =
+          lastActionAt > 0
+            ? wallNow - lastActionAt
+            : Number.POSITIVE_INFINITY;
+        if (
+          shouldTriggerN1SeverePlayoutPathWarm({
+            remotePeerCount: remotePeersForInboundWatchdog.length,
+            activeSourceCount,
+            lastRecvAgeMs: singleRemoteLastRecvAgeMs,
+            recentStability: singleRemoteRecentStability,
+            avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
+            starvationSeverity: singleRemoteStarvationSeverity,
+            lastActionAgeMs,
+          })
+        ) {
+          lastN1SeverePlayoutWarmAtPeerRef.current.set(
+            singleRemoteIngressPeerAddress,
+            wallNow
+          );
+          n1PathDegradedUntilPeerRef.current.set(
+            singleRemoteIngressPeerAddress,
+            wallNow + GCALL_N1_ROUGH_LINK_WARM_HOLD_MS
+          );
+          gcallWindowDiagnosticTagsRef.current.push({
+            ts: wallNow,
+            type: 'n1-severe-playout-warm',
+            detail: {
+              peer: truncateGcallDiagAddress(singleRemoteIngressPeerAddress),
+              source: truncateGcallDiagAddress(singleRemoteSourceAddr),
+              avgPcmBufferedMs:
+                singleRemoteRecentStability?.avgPcmBufferedMs ?? null,
+              underTarget:
+                singleRemoteRecentStability?.playoutUnderTargetFraction ??
+                null,
+              avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
+            },
+          });
+          gcallDiagnosticsPush('warn', '[GCall] n1SeverePlayoutPathWarm', {
+            peerAddress: truncateGcallDiagAddress(singleRemoteIngressPeerAddress),
+            sourceAddr: truncateGcallDiagAddress(singleRemoteSourceAddr),
+            lastRecvAgeMs: Math.round(singleRemoteLastRecvAgeMs),
+            avgPcmBufferedMs:
+              singleRemoteRecentStability?.avgPcmBufferedMs ?? null,
+            playoutUnderTargetFraction:
+              singleRemoteRecentStability?.playoutUnderTargetFraction ?? null,
+            avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
+            starvationSeverity: singleRemoteStarvationSeverity,
+          });
+          requestMediaRecoveryForPeerRef.current(
+            singleRemoteIngressPeerAddress,
+            'n1-severe-playout-warm'
+          );
+        }
+      }
       if (singleRemoteSourceAddr === null) {
         n1ReceivePrioritySendCapStateRef.current.clear();
       } else {
@@ -5905,15 +6018,7 @@ export function useGroupVoiceCall(uiActive = false) {
               jitterBufferedFrames: snap.jitterBufferDepthFramesMean,
               starvationSeverity: singleRemoteStarvationSeverity,
               lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
-              lastRecvAgeMs:
-                (() => {
-                  const lastRecvAt = lastRecvAtRef.current.get(
-                    singleRemoteSourceAddr
-                  );
-                  return lastRecvAt === undefined
-                    ? Number.POSITIVE_INFINITY
-                    : perfNow - lastRecvAt;
-                })(),
+              lastRecvAgeMs: singleRemoteLastRecvAgeMs,
               nowMs: wallNow,
               localSendPressure:
                 baselinePressured ||
@@ -5948,17 +6053,7 @@ export function useGroupVoiceCall(uiActive = false) {
                   singleRemoteIngressPeerAddress
                 ) ?? 0,
               nowMs: wallNow,
-              lastRecvAgeMs:
-                singleRemoteSourceAddr !== null
-                  ? (() => {
-                      const lastRecvAt = lastRecvAtRef.current.get(
-                        singleRemoteSourceAddr
-                      );
-                      return lastRecvAt === undefined
-                        ? Number.POSITIVE_INFINITY
-                        : perfNow - lastRecvAt;
-                    })()
-                  : Number.POSITIVE_INFINITY,
+              lastRecvAgeMs: singleRemoteLastRecvAgeMs,
               recentStability: singleRemoteRecentStability,
               avgOpusBufferedMs:
                 singleRemoteWindowSource?.avgOpusBufferedMs ??
@@ -12680,6 +12775,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPredictiveWarmAtPeerRef.current.clear();
       n1PathDegradedUntilPeerRef.current.clear();
       lastN1PathDegradedWarmAtPeerRef.current.clear();
+      lastN1SeverePlayoutWarmAtPeerRef.current.clear();
       worstIsolationHysteresisRef.current =
         createWorstIsolationHysteresisState();
       topologySettleUntilMsRef.current = 0;
