@@ -13,7 +13,7 @@ import { NavBack } from '../../assets/Icons/NavBack.tsx';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import { useAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
 export const WalletsAppWrapper = () => {
   const { t } = useTranslation([
@@ -73,7 +73,7 @@ export const WalletsAppWrapper = () => {
             borderTopRightRadius: '10px',
             bottom: 0,
             boxShadow: 4,
-            height: `calc(100vh - ${appHeighOffsetPx})`,
+            height: `calc(100vh - ${appChromeOffsetPx})`,
             overflow: 'hidden',
             position: 'fixed',
             right: 0,

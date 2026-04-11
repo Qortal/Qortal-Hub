@@ -1,7 +1,6 @@
 import { Box } from '@mui/material';
 import { Group } from '../Group/Group';
 import { AuthenticatedProfile } from '../Profile';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
 
 /**
  * Authenticated main layout: Group (left) + AuthenticatedProfile (right).
@@ -68,12 +67,29 @@ export function AuthenticatedShell({
 }: AuthenticatedShellProps) {
   return (
     <Box
-      sx={{
+      sx={(theme) => ({
         display: 'flex',
         flexDirection: 'row',
-        height: `calc(100vh - ${appHeighOffsetPx})`,
+        height: '100%',
+        isolation: 'isolate',
+        position: 'relative',
         width: '100vw',
-      }}
+        '&::before': {
+          background:
+            theme.palette.mode === 'dark'
+              ? 'linear-gradient(to bottom, rgba(16, 18, 22, 0.16), rgba(16, 18, 22, 0.09))'
+              : 'linear-gradient(to bottom, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08))',
+          content: '""',
+          inset: 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+          zIndex: 0,
+        },
+        '& > *': {
+          position: 'relative',
+          zIndex: 1,
+        },
+      })}
     >
       <Group
         desktopViewMode={desktopViewMode}

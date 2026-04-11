@@ -6,8 +6,8 @@ import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { QORTAL_PROTOCOL } from '../../constants/constants';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
+import { buildQortalResourceLink } from '../../utils/qortalLink';
 
 type AppViewerProps = {
   app: any;
@@ -27,6 +27,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         isDevMode,
         isDevMode ? 'devapp' : app?.name,
         app?.service,
+        app?.identifier,
         skipAuth
       );
 
@@ -133,8 +134,11 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const copyLinkFunc = (e) => {
       const { tabId } = e.detail;
       if (tabId === app?.tabId) {
-        let link =
-          QORTAL_PROTOCOL + app?.service + '/' + app?.name.replace(/ /g, '%20');
+        let link = buildQortalResourceLink({
+          service: app?.service,
+          name: app?.name,
+          identifier: app?.identifier,
+        });
         if (path && path.startsWith('/')) {
           link = link + removeTrailingSlash(path);
         }
@@ -325,6 +329,25 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       }
     };
 
+    const navigateForwardAppFunc = () => {
+      navigateForwardInIframe();
+    };
+
+    useEffect(() => {
+      if (!app?.tabId) return;
+      subscribeToEvent(
+        `navigateForwardApp-${app?.tabId}`,
+        navigateForwardAppFunc
+      );
+
+      return () => {
+        unsubscribeFromEvent(
+          `navigateForwardApp-${app?.tabId}`,
+          navigateForwardAppFunc
+        );
+      };
+    }, [app?.tabId]);
+
     return (
       <Box
         sx={{
@@ -335,7 +358,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         <iframe
           ref={iframeRef}
           style={{
-            height: `100vh`,
+            height: `calc(100vh - ${appChromeOffsetPx})`,
             border: 'none',
             width: '100%',
           }}

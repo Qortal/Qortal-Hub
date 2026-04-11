@@ -25,6 +25,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import IconClearInput from '../../assets/svgs/ClearInput.svg';
 import { useAtom } from 'jotai';
 import { appSortAtom } from '../../atoms/appsAtoms';
+import { filterAndSortApps } from '../../atoms/appsAtoms';
 import {
   SortDropdown,
   CategoryFilter,
@@ -40,8 +41,8 @@ import {
   MyAppsTab,
   PrivateTab,
 } from './AppsLibrary';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
-import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
+import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
+import { AppCardEnhanced } from './AppCard';
 
 const SearchContainer = styled(Box)(({ theme }) => ({
   display: 'flex',
@@ -62,6 +63,7 @@ export const AppsLibraryDesktop = ({
   isShow,
   categories,
   getQapps,
+  externalSearchRequest,
 }) => {
   const [currentTab, setCurrentTab] = useState<AppsLibraryTabValue>('official');
   const [searchValue, setSearchValue] = useState('');
@@ -85,11 +87,69 @@ export const AppsLibraryDesktop = ({
     return () => clearTimeout(handler);
   }, [searchValue]);
 
+  useEffect(() => {
+    if (!externalSearchRequest?.query) return;
+    setSearchValue(externalSearchRequest.query);
+    setDebouncedSearchValue(externalSearchRequest.query);
+  }, [externalSearchRequest?.nonce]);
+
   const handleTabChange = (tab: AppsLibraryTabValue) => {
     setCurrentTab(tab);
   };
 
   const renderTabContent = () => {
+    if (debouncedSearchValue.trim()) {
+      const combinedResults = filterAndSortApps(availableQapps, {
+        sort: sortOption,
+        category: 'all',
+        status: 'all',
+        search: debouncedSearchValue,
+      });
+
+      return (
+        <AppsWidthLimiter>
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'space-between',
+              width: '100%',
+            }}
+          >
+            <Box
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: '20px',
+                fontWeight: 600,
+              }}
+            >
+              {t('core:action.search_apps', {
+                postProcess: 'capitalizeFirstChar',
+              })}{' '}
+              ({combinedResults.length})
+            </Box>
+          </Box>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gap: '16px',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              width: '100%',
+            }}
+          >
+            {combinedResults.map((app) => (
+              <AppCardEnhanced
+                key={`${app?.service}-${app?.name}`}
+                app={app}
+                myName={myName}
+              />
+            ))}
+          </Box>
+        </AppsWidthLimiter>
+      );
+    }
+
     switch (currentTab) {
       case 'official':
         return (
@@ -146,7 +206,7 @@ export const AppsLibraryDesktop = ({
       sx={{
         display: !isShow && 'none',
         padding: '0px',
-        height: `calc(100vh - ${appHeighOffsetPx} )`,
+        height: `calc(100vh - ${appChromeOffsetPx} )`,
         overflow: 'hidden',
         paddingTop: '30px',
       }}

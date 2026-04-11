@@ -46,7 +46,7 @@ import { MiniDirectThread } from '../Chat/MiniDirectThread';
 import { MiniGroupThread } from '../Chat/MiniGroupThread';
 import { useNameSearch } from '../../hooks/useNameSearch';
 import { validateAddress } from '../../utils/validateAddress';
-import { appHeighOffset, appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { appChromeOffset, appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
 export type ChatWidgetTab = 'messages' | 'groups';
 
@@ -114,7 +114,7 @@ export function GlobalChatWidget({
     if (typeof window === 'undefined')
       return { x: 0, width: 380, height: 560 };
     const w = window.innerWidth;
-    const h = window.innerHeight - appHeighOffset;
+    const h = window.innerHeight - appChromeOffset;
     const maxW = Math.min(WIDGET_MAX_WIDTH, w - 48);
     const maxH = Math.min(
       WIDGET_MAX_HEIGHT,
@@ -140,7 +140,7 @@ export function GlobalChatWidget({
 
   const [windowSize, setWindowSize] = useState(() =>
     typeof window !== 'undefined'
-      ? { w: window.innerWidth, h: window.innerHeight - appHeighOffset }
+      ? { w: window.innerWidth, h: window.innerHeight - appChromeOffset }
       : { w: 800, h: 600 }
   );
   const [bottomX, setBottomX] = useState(initialBounds.x);
@@ -221,7 +221,7 @@ export function GlobalChatWidget({
 
   useEffect(() => {
     const onResize = () =>
-      setWindowSize({ w: window.innerWidth, h: window.innerHeight - appHeighOffset });
+      setWindowSize({ w: window.innerWidth, h: window.innerHeight - appChromeOffset });
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -231,7 +231,7 @@ export function GlobalChatWidget({
     if (!storedBounds || hasAppliedStoredRef.current) return;
     hasAppliedStoredRef.current = true;
     const w = window.innerWidth;
-    const h = window.innerHeight - appHeighOffset;
+    const h = window.innerHeight - appChromeOffset;
     const maxW = Math.min(WIDGET_MAX_WIDTH, w - 48);
     const maxH = Math.min(
       WIDGET_MAX_HEIGHT,
@@ -618,7 +618,7 @@ export function GlobalChatWidget({
                   height: widgetHeight,
                   minHeight: WIDGET_MIN_HEIGHT,
                   maxHeight:
-                    `min(800px, calc(100vh - ${appHeighOffsetPx} - 120px))`,
+                    `min(800px, calc(100vh - ${appChromeOffsetPx} - 120px))`,
                   overflow: 'hidden',
                   visibility: 'visible',
                   opacity: 1,

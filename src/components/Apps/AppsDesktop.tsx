@@ -32,7 +32,6 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  useTheme,
 } from '@mui/material';
 import {
   enabledDevModeAtom,
@@ -43,8 +42,7 @@ import { publishEditTargetAtom } from '../../atoms/appsAtoms';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
-import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
+import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
 const uid = new ShortUniqueId({ length: 8 });
 
@@ -65,9 +63,12 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const { showTutorial } = useHandleTutorials();
   const { refreshRatings } = useAppRatings();
-  const theme = useTheme();
   const [showCloseTabDialog, setShowCloseTabDialog] = useState(false);
   const [pendingTabToRemove, setPendingTabToRemove] = useState(null);
+  const [librarySearchRequest, setLibrarySearchRequest] = useState<{
+    nonce: number;
+    query: string;
+  }>({ nonce: 0, query: '' });
   const { t } = useTranslation([
     'auth',
     'core',
@@ -428,6 +429,28 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
     };
   }, [tabs]);
 
+  const openAppsLibrarySearchFunc = useCallback((e) => {
+    const query = e.detail?.data?.query || '';
+    setSelectedTab(null);
+    setIsNewTabWindow(false);
+    setLibrarySearchRequest({
+      nonce: Date.now(),
+      query,
+    });
+    setMode('library');
+  }, []);
+
+  useEffect(() => {
+    subscribeToEvent('openAppsLibrarySearch', openAppsLibrarySearchFunc);
+
+    return () => {
+      unsubscribeFromEvent(
+        'openAppsLibrarySearch',
+        openAppsLibrarySearchFunc
+      );
+    };
+  }, [openAppsLibrarySearchFunc]);
+
   return (
     <AppsParent
       sx={{
@@ -442,7 +465,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            height: `calc(100vh - ${appHeighOffsetPx} )`,
+            height: `calc(100vh - ${appChromeOffsetPx} )`,
             overflow: 'auto',
             width: '100%',
           }}
@@ -463,6 +486,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
       <AppsLibraryDesktop
         availableQapps={availableQapps}
         categories={categories}
+        externalSearchRequest={librarySearchRequest}
         getQapps={async () => { await getQapps(); refreshRatings(); }}
         hasPublishApp={!!(myApp || myWebsite)}
         isShow={mode === 'library' && !selectedTab}
@@ -527,12 +551,12 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
         <>
           <Box
             sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: `calc(100vh - ${appHeighOffsetPx} )`,
-              overflow: 'auto',
-              width: '100%',
-            }}
+            display: 'flex',
+            flexDirection: 'column',
+            height: `calc(100vh - ${appChromeOffsetPx} )`,
+            overflow: 'auto',
+            width: '100%',
+          }}
           >
             <Spacer height="30px" />
 

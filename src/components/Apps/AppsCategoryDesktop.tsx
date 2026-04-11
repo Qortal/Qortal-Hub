@@ -22,8 +22,7 @@ import { ReturnIcon } from '../../assets/Icons/ReturnIcon';
 import { useAtom } from 'jotai';
 import { appSortAtom } from '../../atoms/appsAtoms';
 import { SortDropdown, SortOption } from './Filters';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
-import { APPS_BOTTOM_NAV_HEIGHT_PX } from './Apps-styles';
+import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
 // Sorting function (same as CommunityAppsTab)
 const sortApps = (apps: any[], sortOption: SortOption): any[] => {
@@ -104,7 +103,7 @@ export const AppsCategoryDesktop = ({
     <AppsLibraryContainer
       sx={{
         display: !isShow && 'none',
-        height: `calc(100vh - ${appHeighOffsetPx} )`,
+        height: `calc(100vh - ${appChromeOffsetPx} )`,
         overflow: 'hidden',
         padding: '0px',
         paddingTop: '30px',
@@ -190,12 +189,12 @@ export const AppsCategoryDesktop = ({
       </AppsDesktopLibraryHeader>
 
       <AppsDesktopLibraryBody
-        sx={{
-          alignItems: 'center',
-          height: `calc(100vh - ${appHeighOffsetPx}  - 36px)`,
-          overflow: 'auto',
-          padding: '0px',
-          width: '90%',
+      sx={{
+        alignItems: 'center',
+        height: `calc(100vh - ${appChromeOffsetPx}  - 36px)`,
+        overflow: 'auto',
+        padding: '0px',
+        width: '90%',
           maxWidth: '1200px',
         }}
       >
