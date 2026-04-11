@@ -958,10 +958,8 @@ export type ReticulumDaemonStatus = {
   hubSummary?: string;
   /** Established overlay (presence/signaling) RNS.Link count from the Python bridge. */
   overlayLinksConnected?: number;
-  /** Established overlay links we initiated (outbound). */
-  p2pOutboundPeers?: number;
-  /** Established overlay links accepted inbound (incoming). */
-  p2pInboundPeers?: number;
+  /** Distinct peers with an established overlay link (deduped). */
+  p2pActiveOverlayPeers?: number;
   /** Identity-verified Reticulum overlay peers (signed presence). */
   verifiedOverlayPeerCount?: number;
 };
@@ -969,6 +967,8 @@ export type ReticulumDaemonStatus = {
 export type ReticulumOverlayPeerStatus = {
   linkId: string;
   peerPresenceHash: string;
+  /** True if the remote peer initiated this overlay link. */
+  incoming?: boolean;
   address?: string;
   connectedAt: number;
 };
@@ -1530,12 +1530,13 @@ export function registerReticulumIpcHandlers(): void {
         if (!bridgeStatus) return base;
         const verifiedOverlayPeerCount =
           getPresenceManager()?.getReticulumVerifiedPeers().length ?? 0;
-        let p2pOutboundPeers = 0;
-        let p2pInboundPeers = 0;
+        let p2pActiveOverlayPeers = 0;
         if (bridge) {
-          for (const snap of bridge.getOverlayLinkSnapshots()) {
-            if (snap.incoming) p2pInboundPeers += 1;
-            else p2pOutboundPeers += 1;
+          const snap = bridge.getConnectivitySnapshot();
+          if (typeof snap.overlayLinksConnected === 'number') {
+            p2pActiveOverlayPeers = snap.overlayLinksConnected;
+          } else {
+            p2pActiveOverlayPeers = bridge.getOverlayLinkSnapshots().length;
           }
         }
         const transportFallback =
@@ -1573,8 +1574,7 @@ export function registerReticulumIpcHandlers(): void {
             bridgeStatus.onlineRemoteHubInterfaces,
           hubSummary: transportFallback?.hubSummary ?? bridgeStatus.hubSummary,
           verifiedOverlayPeerCount,
-          p2pOutboundPeers,
-          p2pInboundPeers,
+          p2pActiveOverlayPeers,
           ...(typeof bridgeStatus.overlayLinksConnected === 'number'
             ? { overlayLinksConnected: bridgeStatus.overlayLinksConnected }
             : {}),
@@ -1614,7 +1614,6 @@ export function registerReticulumIpcHandlers(): void {
         );
         const uniqueByHash = new Map<string, ReticulumOverlayPeerStatus>();
         for (const peer of bridge.getOverlayLinkSnapshots()) {
-          if (peer.incoming === true) continue;
           const peerHash = peer.peerPresenceHash.trim();
           if (!peerHash) continue;
           const peerKey = peerHash.toLowerCase();
@@ -1624,6 +1623,7 @@ export function registerReticulumIpcHandlers(): void {
           uniqueByHash.set(peerKey, {
             linkId: peer.linkId,
             peerPresenceHash: peer.peerPresenceHash,
+            incoming: peer.incoming,
             ...(peersByHash.get(peerKey)
               ? {
                   address: peersByHash.get(peerKey),

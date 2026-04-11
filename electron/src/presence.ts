@@ -30,8 +30,6 @@ const PRESENCE_TOO_OLD_LOG_MIN_MS = 5_000;
 export const RETICULUM_OVERLAY_MAX_NEIGHBORS = 16;
 /** Keep a verified overlay peer sticky across transient local link loss. */
 export const RETICULUM_VERIFIED_PEER_LINK_CLOSE_GRACE_MS = 30_000;
-/** HELLO-derived fanout hints expire if not refreshed (non-verified bootstrap). */
-export const RETICULUM_HELLO_FANOUT_HINT_TTL_MS = 10 * 60_000;
 const RETICULUM_CANDIDATE_PROOF_WINDOW_MS = 45_000;
 const RETICULUM_CANDIDATE_FAILURE_LIMIT = 2;
 
@@ -182,7 +180,6 @@ export interface PresenceTransportHandlers {
     peerHash: string;
     reason?: string;
   }) => void;
-  onOverlayHello?: (payload: { peerHash: string; linkId?: string }) => void;
 }
 
 export interface PresenceTransport {
@@ -640,11 +637,6 @@ export class PresenceManager extends EventEmitter {
    * backfill up to {@link RETICULUM_OVERLAY_MAX_NEIGHBORS} for bootstrap.
    */
   private activeReticulumPublishHashes: string[] = [];
-  /**
-   * Peers that sent OVERLAY_HELLO on an inbound link — lowest fanout priority;
-   * never verified until signed presence arrives.
-   */
-  private helloFanoutHints = new Map<string, { lastSeen: number }>();
 
   /** Local Reticulum destination hash (lowercase hex); set when Reticulum transport is ready. */
   private localReticulumDestinationHash: string | null = null;
@@ -711,8 +703,7 @@ export class PresenceManager extends EventEmitter {
     if (!local) return;
     const had = this.verifiedReticulumPeers.delete(local);
     const hadCand = this.reticulumCandidates.delete(local);
-    const hadHello = this.helloFanoutHints.delete(local);
-    if (had || hadCand || hadHello) {
+    if (had || hadCand) {
       loggerLog(
         `[Presence] Removed local destination hash from overlay peers (self) ${local}`
       );
@@ -1035,11 +1026,10 @@ export class PresenceManager extends EventEmitter {
   ): void {
     const hash = destinationHash.trim().toLowerCase();
     if (!hash) return;
-    const removedHelloHint = this.helloFanoutHints.delete(hash);
     const existingVerified = this.verifiedReticulumPeers.get(hash);
     const wasVerified = Boolean(existingVerified);
     const wasActive = this.activeReticulumNeighborHashes.includes(hash);
-    if (!wasVerified && !wasActive && !removedHelloHint) return;
+    if (!wasVerified && !wasActive) return;
     if (existingVerified) {
       this.verifiedReticulumPeers.set(hash, {
         ...existingVerified,
@@ -1379,7 +1369,6 @@ export class PresenceManager extends EventEmitter {
     if (!hash || !address) return;
     if (this.isSelfReticulumHash(hash)) return;
     this.reticulumCandidates.delete(hash);
-    this.helloFanoutHints.delete(hash);
     const existing = this.verifiedReticulumPeers.get(hash);
     if (existing) {
       this.verifiedReticulumPeers.set(hash, {
@@ -1424,33 +1413,8 @@ export class PresenceManager extends EventEmitter {
         changed = true;
       }
     }
-    for (const [hash, hint] of [...this.helloFanoutHints.entries()]) {
-      if (now - hint.lastSeen > RETICULUM_HELLO_FANOUT_HINT_TTL_MS) {
-        this.helloFanoutHints.delete(hash);
-        changed = true;
-      }
-    }
     const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
     if (changed || neighborsChanged) {
-      this.emitReticulumOverlayChanged();
-    }
-  }
-
-  /**
-   * Inbound OVERLAY_HELLO: seed publish fanout when under the 16-peer cap (never verified).
-   */
-  noteReticulumHelloFanoutHint(destinationHash: string, now: number = Date.now()): void {
-    const hash = destinationHash.trim().toLowerCase();
-    if (!hash) return;
-    if (this.isSelfReticulumHash(hash)) return;
-    const beforePublish = [...this.activeReticulumPublishHashes];
-    this.helloFanoutHints.set(hash, { lastSeen: now });
-    const neighborsChanged = this.recomputeReticulumActiveNeighbors(now);
-    const accepted = this.activeReticulumPublishHashes.includes(hash);
-    loggerLog(
-      `[Presence] target=presence-reticulum overlay_hello_hint sender_hash=${hash} accepted=${accepted ? 'yes' : 'no'} publish_before=${beforePublish.length} publish_after=${this.activeReticulumPublishHashes.length}${accepted ? '' : ' reason=fanout_full_or_duplicate'}`
-    );
-    if (neighborsChanged) {
       this.emitReticulumOverlayChanged();
     }
   }
@@ -1499,22 +1463,6 @@ export class PresenceManager extends EventEmitter {
         seen.add(c.destinationHash.toLowerCase());
       }
     }
-    if (publish.length < RETICULUM_OVERLAY_MAX_NEIGHBORS) {
-      const helloEligible = [...this.helloFanoutHints.entries()]
-        .filter(
-          ([h, hint]) =>
-            !this.isSelfReticulumHash(h) &&
-            now - hint.lastSeen <= RETICULUM_HELLO_FANOUT_HINT_TTL_MS &&
-            !seen.has(h.toLowerCase())
-        )
-        .sort((a, b) => b[1].lastSeen - a[1].lastSeen);
-      for (const [h] of helloEligible) {
-        if (publish.length >= RETICULUM_OVERLAY_MAX_NEIGHBORS) break;
-        publish.push(h);
-        seen.add(h.toLowerCase());
-      }
-    }
-
     const publishChanged =
       publish.length !== this.activeReticulumPublishHashes.length ||
       publish.some((hash, idx) => hash !== this.activeReticulumPublishHashes[idx]);
@@ -1602,9 +1550,6 @@ function subscribePresenceTransport(
     },
     onOverlayLinkClosed: ({ peerHash, reason }) => {
       manager.noteReticulumOverlayLinkClosed(peerHash, reason);
-    },
-    onOverlayHello: ({ peerHash }) => {
-      manager.noteReticulumHelloFanoutHint(peerHash);
     },
     onReady: () => {
       if (transport.kind === 'reticulum' && typeof transport.getLocalDestinationHash === 'function') {

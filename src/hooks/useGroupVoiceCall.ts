@@ -11909,8 +11909,7 @@ export function useGroupVoiceCall(uiActive = false) {
           const rs = await electronApi.reticulumGetStatus();
           const p2pHealth = computeP2pHealth({
             onlineRemoteHubInterfaces: rs.onlineRemoteHubInterfaces ?? 0,
-            p2pOutboundPeers: rs.p2pOutboundPeers ?? 0,
-            p2pInboundPeers: rs.p2pInboundPeers ?? 0,
+            p2pActiveOverlayPeers: rs.p2pActiveOverlayPeers ?? 0,
           });
           //TODO: PUT BACK
           if (p2pHealth !== 'good') {

@@ -565,7 +565,7 @@ describe('ReticulumBridge group audio support', () => {
     ]);
   });
 
-  it('emits overlay-link-closed only for Reticulum-driven outgoing closes', () => {
+  it('emits overlay-link-closed for Reticulum-driven closes when peer hash is known', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
     const seen: unknown[] = [];
@@ -614,32 +614,43 @@ describe('ReticulumBridge group audio support', () => {
       },
     });
 
-    expect(seen).toEqual([{ peerHash: 'peer-hash', reason: 'closed' }]);
+    expect(seen).toEqual([
+      { peerHash: 'peer-hash', reason: 'closed' },
+      { peerHash: 'peer-hash-2', reason: 'closed' },
+    ]);
   });
 
-  it('emits overlay-hello for overlay_hello bridge events', () => {
+  it('dedupes overlay snapshots by peer presence hash', () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;
-    const seen: unknown[] = [];
-    bridge.on('overlay-hello', (payload) => {
-      seen.push(payload);
-    });
-
     internal.handleFrame({
       type: 'event',
-      event: 'overlay_hello',
+      event: 'overlay_link_state',
       payload: {
-        senderPresenceHash: '0123456789abcdef0123456789abcdef',
-        linkId: 'link-uuid',
+        linkId: 'overlay-a',
+        peerPresenceHash: 'samepeerhash0123456789abcdef',
+        incoming: false,
+        established: true,
+        reason: 'established',
+        queuedPackets: 0,
+        closedByReticulum: false,
       },
     });
-
-    expect(seen).toEqual([
-      {
-        peerHash: '0123456789abcdef0123456789abcdef',
-        linkId: 'link-uuid',
+    internal.handleFrame({
+      type: 'event',
+      event: 'overlay_link_state',
+      payload: {
+        linkId: 'overlay-b',
+        peerPresenceHash: 'samepeerhash0123456789abcdef',
+        incoming: true,
+        established: true,
+        reason: 'established',
+        queuedPackets: 0,
+        closedByReticulum: false,
       },
-    ]);
+    });
+    expect(bridge.getConnectivitySnapshot().overlayLinksConnected).toBe(1);
+    expect(bridge.getOverlayLinkSnapshots()).toHaveLength(1);
   });
 
   it('emits presence-envelope with origin and via hashes from forwarded presence', () => {

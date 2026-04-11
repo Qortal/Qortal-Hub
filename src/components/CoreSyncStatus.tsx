@@ -18,8 +18,9 @@ export type { P2pHealthLevel };
 export const CoreSyncStatus = () => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
-  const [p2pOutboundPeers, setP2pOutboundPeers] = useState<number | null>(null);
-  const [p2pInboundPeers, setP2pInboundPeers] = useState<number | null>(null);
+  const [p2pActiveOverlayPeers, setP2pActiveOverlayPeers] = useState<
+    number | null
+  >(null);
   const [connectedRemoteInterfaces, setConnectedRemoteInterfaces] = useState<
     number | null
   >(null);
@@ -56,38 +57,32 @@ export const CoreSyncStatus = () => {
     const fetchP2pReticulumStatus = async () => {
       const api = window.electronAPI;
       if (typeof api?.reticulumGetStatus !== 'function') {
-        setP2pOutboundPeers(null);
-        setP2pInboundPeers(null);
+        setP2pActiveOverlayPeers(null);
         setConnectedRemoteInterfaces(null);
         setP2pHealth(null);
         return;
       }
       try {
         const status = await api.reticulumGetStatus();
-        const out =
-          typeof status.p2pOutboundPeers === 'number' ? status.p2pOutboundPeers : null;
-        const inn =
-          typeof status.p2pInboundPeers === 'number' ? status.p2pInboundPeers : null;
-        setP2pOutboundPeers(out);
-        setP2pInboundPeers(inn);
+        const active =
+          typeof status.p2pActiveOverlayPeers === 'number'
+            ? status.p2pActiveOverlayPeers
+            : null;
+        setP2pActiveOverlayPeers(active);
         setConnectedRemoteInterfaces(
           typeof status.onlineRemoteHubInterfaces === 'number'
             ? status.onlineRemoteHubInterfaces
             : null
         );
         const hubs = status.onlineRemoteHubInterfaces ?? 0;
-        const outbound = status.p2pOutboundPeers ?? 0;
-        const inbound = status.p2pInboundPeers ?? 0;
         setP2pHealth(
           computeP2pHealth({
             onlineRemoteHubInterfaces: hubs,
-            p2pOutboundPeers: outbound,
-            p2pInboundPeers: inbound,
+            p2pActiveOverlayPeers: status.p2pActiveOverlayPeers ?? 0,
           })
         );
       } catch {
-        setP2pOutboundPeers(null);
-        setP2pInboundPeers(null);
+        setP2pActiveOverlayPeers(null);
         setConnectedRemoteInterfaces(null);
         setP2pHealth(null);
       }
@@ -213,23 +208,14 @@ export const CoreSyncStatus = () => {
             </h4>
           )}
 
-          {p2pOutboundPeers !== null && p2pInboundPeers !== null && (
-            <>
-              <h4 className="lineHeight">
-                {t('core:core.p2p_outbound_peers', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                :{' '}
-                <span style={{ color: '#03a9f4' }}>{p2pOutboundPeers}</span>
-              </h4>
-              <h4 className="lineHeight">
-                {t('core:core.p2p_inbound_peers', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
-                :{' '}
-                <span style={{ color: '#03a9f4' }}>{p2pInboundPeers}</span>
-              </h4>
-            </>
+          {p2pActiveOverlayPeers !== null && (
+            <h4 className="lineHeight">
+              {t('core:core.p2p_active_overlay_peers', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              :{' '}
+              <span style={{ color: '#03a9f4' }}>{p2pActiveOverlayPeers}</span>
+            </h4>
           )}
 
           {p2pHealth !== null && (

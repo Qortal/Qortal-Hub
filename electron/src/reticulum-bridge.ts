@@ -39,8 +39,6 @@ const OVERLAY_LINK_PER_PACKET_REASONS = new Set([
   'presence_publish',
   'presence_forward',
   'call_signal',
-  'overlay_hello',
-  'rx_overlay_hello',
 ]);
 
 function shouldLogOverlayLinkStateEvent(reason: string): boolean {
@@ -306,14 +304,6 @@ type BridgeEventFrame =
     }
   | {
       type: 'event';
-      event: 'overlay_hello';
-      payload?: {
-        senderPresenceHash?: string;
-        linkId?: string;
-      };
-    }
-  | {
-      type: 'event';
       event: 'error';
       payload?: { code?: string; message?: string; detail?: string };
     }
@@ -564,17 +554,12 @@ export class ReticulumBridge
       peerHash: string;
       reason?: string;
     }) => handlers.onOverlayLinkClosed?.(payload);
-    const onOverlayHello = (payload: {
-      peerHash: string;
-      linkId?: string;
-    }) => handlers.onOverlayHello?.(payload);
 
     this.on('ready', onReady);
     this.on('degraded', onDegraded);
     this.on('presence-envelope', onEnvelope);
     this.on('candidate-peer-discovered', onCandidatePeerDiscovered);
     this.on('overlay-link-closed', onOverlayLinkClosed);
-    this.on('overlay-hello', onOverlayHello);
 
     return () => {
       this.off('ready', onReady);
@@ -582,7 +567,6 @@ export class ReticulumBridge
       this.off('presence-envelope', onEnvelope);
       this.off('candidate-peer-discovered', onCandidatePeerDiscovered);
       this.off('overlay-link-closed', onOverlayLinkClosed);
-      this.off('overlay-hello', onOverlayHello);
     };
   }
 
@@ -1155,13 +1139,38 @@ export class ReticulumBridge
     return {
       ...this.connectivitySnapshot,
       bridgeState: this.state,
-      overlayLinksConnected: this.overlayEstablishedLinkIds.size,
+      overlayLinksConnected: this.getEstablishedOverlayPeerCount(),
       ...(this.lastDegradedReason ? { reason: this.lastDegradedReason } : {}),
     };
   }
 
+  /** Unique overlay peers (by presence hash); links without hash yet count separately. */
+  private getEstablishedOverlayPeerCount(): number {
+    const byPeer = new Set<string>();
+    let noHash = 0;
+    for (const snap of this.overlayLinkSnapshots.values()) {
+      const k = snap.peerPresenceHash.trim().toLowerCase();
+      if (k) byPeer.add(k);
+      else noHash += 1;
+    }
+    return byPeer.size + noHash;
+  }
+
   getOverlayLinkSnapshots(): ReticulumOverlayLinkSnapshot[] {
-    return [...this.overlayLinkSnapshots.values()].sort(
+    const byPeer = new Map<string, ReticulumOverlayLinkSnapshot>();
+    const noHash: ReticulumOverlayLinkSnapshot[] = [];
+    for (const snap of this.overlayLinkSnapshots.values()) {
+      const k = snap.peerPresenceHash.trim().toLowerCase();
+      if (!k) {
+        noHash.push(snap);
+        continue;
+      }
+      const cur = byPeer.get(k);
+      if (!cur || snap.connectedAt >= cur.connectedAt) {
+        byPeer.set(k, snap);
+      }
+    }
+    return [...byPeer.values(), ...noHash].sort(
       (a, b) => a.connectedAt - b.connectedAt
     );
   }
@@ -1957,11 +1966,7 @@ export class ReticulumBridge
           this.overlayEstablishedLinkIds.delete(linkId);
           this.overlayLinkSnapshots.delete(linkId);
         }
-        if (
-          frame.payload?.closedByReticulum === true &&
-          frame.payload?.incoming !== true &&
-          peerPresenceHash
-        ) {
+        if (frame.payload?.closedByReticulum === true && peerPresenceHash) {
           this.emit('overlay-link-closed', {
             peerHash: peerPresenceHash,
             reason,
@@ -1975,20 +1980,6 @@ export class ReticulumBridge
           reason,
           queuedPackets,
           closedByReticulum: frame.payload?.closedByReticulum === true,
-        });
-        return;
-      }
-      case 'overlay_hello': {
-        const sender = frame.payload?.senderPresenceHash;
-        if (typeof sender !== 'string' || !sender.trim()) return;
-        const linkId =
-          typeof frame.payload?.linkId === 'string' ? frame.payload.linkId : undefined;
-        loggerLog(
-          `[ReticulumBridge] target=presence-reticulum rx=overlay_hello sender_hash=${sender.trim().toLowerCase()} link_id=${linkId ?? 'unknown'}`
-        );
-        this.emit('overlay-hello', {
-          peerHash: sender.trim().toLowerCase(),
-          ...(linkId ? { linkId } : {}),
         });
         return;
       }

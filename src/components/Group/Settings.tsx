@@ -105,6 +105,7 @@ type ReticulumStatus = {
 type ReticulumOverlayPeerStatus = {
   linkId: string;
   peerPresenceHash: string;
+  incoming?: boolean;
   address?: string;
   connectedAt: number;
 };
@@ -637,7 +638,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                         color="text.disabled"
                         sx={{ mt: 0.5 }}
                       >
-                        No outgoing overlay peers connected.
+                        No active overlay peers connected.
                       </Typography>
                     ) : (
                       <TableContainer
@@ -654,6 +655,7 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                             <TableRow>
                               <TableCell>Peer hash</TableCell>
                               <TableCell>Address</TableCell>
+                              <TableCell>Initiated by</TableCell>
                               <TableCell align="right">Connected</TableCell>
                             </TableRow>
                           </TableHead>
@@ -677,6 +679,13 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
                                   }}
                                 >
                                   {peer.address || 'Unknown'}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: '0.75rem' }}>
+                                  {peer.incoming === true
+                                    ? 'Remote'
+                                    : peer.incoming === false
+                                      ? 'Local'
+                                      : '—'}
                                 </TableCell>
                                 <TableCell
                                   align="right"

@@ -302,8 +302,7 @@ try {
         onlineRemoteHubInterfaces?: number;
         hubSummary?: string;
         overlayLinksConnected?: number;
-        p2pOutboundPeers?: number;
-        p2pInboundPeers?: number;
+        p2pActiveOverlayPeers?: number;
         verifiedOverlayPeerCount?: number;
       }>,
     reticulumGetOverlayPeers: () =>
