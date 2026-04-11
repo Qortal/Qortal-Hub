@@ -2103,9 +2103,10 @@ def _register_active_overlay_for_peer(peer_key: str, link_id: str) -> Optional[D
         st_new = _overlay_links_by_id.get(link_id)
         st_old = _overlay_links_by_id.get(existing_link_id)
         if st_new is None:
+            if st_old is not None:
+                return st_old
             _active_overlay_link_id_by_peer_hash.pop(peer_key, None)
-            _active_overlay_link_id_by_peer_hash[peer_key] = link_id
-            return _overlay_links_by_id.get(link_id)
+            return None
         if st_old is None:
             _active_overlay_link_id_by_peer_hash[peer_key] = link_id
             return st_new
@@ -2301,16 +2302,18 @@ def _sync_overlay_links() -> None:
             continue
         if state.get("incoming") is True:
             continue
-        link = state.get("link")
-        if link is not None:
-            try:
-                link.teardown()
-            except Exception:
-                pass
-        remove_overlay_link(link_id)
-        # Emit established=false so UIs can drop this link from "connected" counts.
-        state["established"] = False
-        emit_overlay_link_state(link_id, state, "pruned")
+        _teardown_overlay_link_id(link_id, "pruned")
+    for link_id, state in list(_overlay_links_by_id.items()):
+        if state.get("incoming") is True:
+            continue
+        peer_hash = str(state.get("peerPresenceHash") or "").strip().lower()
+        active_link_id = _active_overlay_link_id_by_peer_hash.get(peer_hash)
+        if active_link_id == link_id:
+            continue
+        if peer_hash not in desired:
+            _teardown_overlay_link_id(link_id, "pruned_orphan")
+        elif active_link_id:
+            _teardown_overlay_link_id(link_id, "dedup_orphan")
 
 
 def _resolve_sender_peer_destination_hash(sender_hex: str) -> str:
@@ -2505,20 +2508,14 @@ def on_overlay_link_remote_identified(link, identity) -> None:
                 "[presence_bridge] target=presence-reticulum overlay_remote_identified_self "
                 f"link={link_id} expected={expected or 'unknown'}"
             )
-            try:
-                link.teardown()
-            except Exception:
-                pass
+            _teardown_overlay_link_id(link_id, "remote_identified_self")
             return
         if expected and derived_peer_hash != expected:
             log(
                 "[presence_bridge] target=presence-reticulum overlay_remote_identified_mismatch "
                 f"link={link_id} expected={expected} derived={derived_peer_hash}"
             )
-            try:
-                link.teardown()
-            except Exception:
-                pass
+            _teardown_overlay_link_id(link_id, "remote_identified_mismatch")
             return
     peer_hash = find_peer_hash_for_identity(identity)
     if peer_hash:

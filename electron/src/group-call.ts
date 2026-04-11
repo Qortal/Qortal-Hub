@@ -162,6 +162,8 @@ const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_INTERVAL_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_TICK_MS = 1_000;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_MISSED_MAX = 2;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_RECOVERY_COOLDOWN_MS = 5_000;
+const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS = 5_000;
+const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS = 30_000;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
@@ -616,6 +618,8 @@ interface ReticulumAudioPeerState {
   linkHeartbeatLastRxAtMs: number;
   linkHeartbeatMissedPongs: number;
   linkHeartbeatLastRecoveryAtMs: number;
+  linkEstablishLastAttemptAtMs: number;
+  linkEstablishRetryDelayMs: number;
 }
 
 interface GcReticulumAudioSendDiagnostics {
@@ -3614,9 +3618,48 @@ export class GroupCallManager extends EventEmitter {
     state.linkHeartbeatAwaitingSeq = 0;
     state.linkHeartbeatMissedPongs = 0;
     state.linkHeartbeatLastPingAtMs = 0;
+    state.linkEstablishLastAttemptAtMs = -1;
+    state.linkEstablishRetryDelayMs =
+      GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS;
     const now = Date.now();
     state.linkHeartbeatLastPongAtMs = now;
     state.linkHeartbeatLastRxAtMs = now;
+  }
+
+  private retryReticulumAudioLinkEstablishIfNeeded(
+    address: string,
+    state: ReticulumAudioPeerState,
+    roomId: string,
+    now: number
+  ): boolean {
+    if (state.established && state.linkId) return false;
+    if (state.opening) return true;
+    const retryDelayMs = Math.max(
+      GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
+      state.linkEstablishRetryDelayMs ||
+        GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS
+    );
+    if (
+      state.linkEstablishLastAttemptAtMs >= 0 &&
+      now - state.linkEstablishLastAttemptAtMs < retryDelayMs
+    ) {
+      return true;
+    }
+    const staleLinkId = state.linkId;
+    state.linkEstablishLastAttemptAtMs = now;
+    state.linkEstablishRetryDelayMs = Math.min(
+      GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS,
+      retryDelayMs * 2
+    );
+    loggerLog(
+      `[GCall] Reticulum audio link establish retry address=${address} room=${roomId} staleLinkId=${staleLinkId || 'n/a'} nextDelayMs=${state.linkEstablishRetryDelayMs}`
+    );
+    if (staleLinkId) {
+      this.markReticulumAudioLinkUnready(address, staleLinkId);
+      void this.reticulumBridge?.closeGroupAudioLink(staleLinkId).catch(() => {});
+    }
+    void this.openReticulumAudioLinkForAddress(address);
+    return true;
   }
 
   private sendReticulumAudioLinkHeartbeat(
@@ -3682,9 +3725,19 @@ export class GroupCallManager extends EventEmitter {
     const now = Date.now();
     for (const [address, state] of this.reticulumAudioPeersByAddress) {
       if (!this.shouldMaintainReticulumAudioLink(state)) continue;
-      if (!state.established || !state.linkId || state.rooms.size === 0) continue;
+      if (state.rooms.size === 0) continue;
       const roomId = this.getReticulumAudioHeartbeatRoomId(state);
       if (!roomId) continue;
+      if (
+        this.retryReticulumAudioLinkEstablishIfNeeded(
+          address,
+          state,
+          roomId,
+          now
+        )
+      ) {
+        continue;
+      }
 
       if (
         state.packetTransportFallback &&
@@ -3871,6 +3924,7 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     state.opening = true;
+    state.linkEstablishLastAttemptAtMs = Date.now();
     const result: ReticulumOpenAudioLinkResult = await bridge.openGroupAudioLink(
       state.peerPresenceHash
     );
@@ -3887,6 +3941,12 @@ export class GroupCallManager extends EventEmitter {
         latest.established = true;
         this.resetReticulumAudioLinkHeartbeat(latest);
         this.scheduleReticulumAudioFlush();
+      } else if (
+        latest.linkEstablishRetryDelayMs <
+        GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS
+      ) {
+        latest.linkEstablishRetryDelayMs =
+          GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS;
       }
       return;
     }
@@ -3967,6 +4027,9 @@ export class GroupCallManager extends EventEmitter {
         linkHeartbeatLastRxAtMs: 0,
         linkHeartbeatMissedPongs: 0,
         linkHeartbeatLastRecoveryAtMs: 0,
+        linkEstablishLastAttemptAtMs: -1,
+        linkEstablishRetryDelayMs:
+          GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
       };
       this.reticulumAudioPeersByAddress.set(address, state);
       this.reticulumAudioAddressByLinkId.set(state.routeKey, address);
@@ -4746,6 +4809,9 @@ export class GroupCallManager extends EventEmitter {
           linkHeartbeatLastRxAtMs: 0,
           linkHeartbeatMissedPongs: 0,
           linkHeartbeatLastRecoveryAtMs: 0,
+          linkEstablishLastAttemptAtMs: -1,
+          linkEstablishRetryDelayMs:
+            GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
         };
         this.reticulumAudioPeersByAddress.set(address, state);
         this.reticulumAudioAddressByLinkId.set(state.routeKey, address);
