@@ -1093,6 +1093,7 @@ const GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS = 64;
 const GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_SEVERE_READY_ESCAPE_FRAMES_MAX = 2;
 const GCALL_N1_SEVERE_READY_ESCAPE_LOG_MIN_MS = 1_000;
+/** Relief/heuristic thresholds for sustained severe rebuild; still valid for window metrics. */
 const GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS = 600;
 const GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS = OPUS_FRAME_DURATION_MS + 1;
 const GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX = 1;
@@ -9563,7 +9564,10 @@ export function useGroupVoiceCall(uiActive = false) {
         n,
         jitterGeomAppliedRef.current === 'recovery'
       );
-      const steadyPrimedHoldFrames = !inRecovery && n === 1 ? 1 : 0;
+      // N=1 recovery: same primed hold as steady (was recovery-only 0). After
+      // forcePrimeForRecoveryEscape, requires 2 frames for hasReadyFrame so a
+      // one-frame trickle cannot decode-drain every tick (deadzone loop).
+      const steadyPrimedHoldFrames = n === 1 ? 1 : 0;
       for (const jb of jitterMapRef.current.values()) {
         jb.setSoftUnprimeMs(softMs);
         jb.setSteadyPrimedHoldFrames(steadyPrimedHoldFrames);
@@ -10322,6 +10326,8 @@ export function useGroupVoiceCall(uiActive = false) {
             playoutStarvationSeverity: n1PlayoutStarvationSeverity,
           });
         if (severeReadyEscapeAllowed) {
+          // N=1 recovery sets steadyPrimedHoldFrames=1: after forcePrime, hasReadyFrame
+          // needs two Opus frames; decodeOneJitterFrame no-ops until then (accumulation).
           jb.forcePrimeForRecoveryEscape();
           const nowLog = Date.now();
           const lastLog =
