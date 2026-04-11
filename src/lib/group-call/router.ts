@@ -448,6 +448,18 @@ export interface GroupCallMetricsSnapshot {
   reticulumAudioPacketStaleSends: number;
   /** Sends issued while path state was unknown/failing. */
   reticulumAudioPacketUnknownSends: number;
+  /**
+   * Outbound group-audio send path observed from main-process diagnostics (`transport` field).
+   * Incremented once per send IPC completion that reported a `link` transport.
+   */
+  reticulumAudioOutboundLinkSamples: number;
+  /**
+   * Outbound group-audio send path observed from main-process diagnostics (`transport` field).
+   * Incremented once per send IPC completion that reported a `packet` transport.
+   */
+  reticulumAudioOutboundPacketSamples: number;
+  /** Most recent outbound `transport` from main-process send diagnostics; null if none yet. */
+  reticulumAudioOutboundTransportLast: 'link' | 'packet' | null;
   mixerActiveSpeakerEstimate: number;
   mixerMasterGain: number;
   mixerCurrentReductionDb: number;
@@ -545,6 +557,10 @@ export interface GroupCallWindowMetrics {
   reticulumAudioPacketFreshSends: number;
   reticulumAudioPacketStaleSends: number;
   reticulumAudioPacketUnknownSends: number;
+  /** Send IPC completions in this window that reported `transport: link`. */
+  reticulumAudioOutboundLinkSamples: number;
+  /** Send IPC completions in this window that reported `transport: packet`. */
+  reticulumAudioOutboundPacketSamples: number;
   reticulumAudioQueuePressureDropRatePerSec: number;
   reticulumAudioStaleDropRatePerSec: number;
   reticulumAudioPacketSendFailureRatePerSec: number;
@@ -1029,6 +1045,8 @@ interface WindowCounterSet {
   reticulumAudioPacketFreshSends: number;
   reticulumAudioPacketStaleSends: number;
   reticulumAudioPacketUnknownSends: number;
+  reticulumAudioOutboundLinkSamples: number;
+  reticulumAudioOutboundPacketSamples: number;
 }
 
 interface SourceWindowAccumulator {
@@ -1091,6 +1109,8 @@ function emptyWindowCounters(): WindowCounterSet {
     reticulumAudioPacketFreshSends: 0,
     reticulumAudioPacketStaleSends: 0,
     reticulumAudioPacketUnknownSends: 0,
+    reticulumAudioOutboundLinkSamples: 0,
+    reticulumAudioOutboundPacketSamples: 0,
   };
 }
 
@@ -1160,6 +1180,9 @@ export class GroupCallPerformanceTracker {
     reticulumAudioPacketFreshSends: 0,
     reticulumAudioPacketStaleSends: 0,
     reticulumAudioPacketUnknownSends: 0,
+    reticulumAudioOutboundLinkSamples: 0,
+    reticulumAudioOutboundPacketSamples: 0,
+    reticulumAudioOutboundTransportLast: null,
     mixerActiveSpeakerEstimate: 0,
     mixerMasterGain: 1,
     mixerCurrentReductionDb: 0,
@@ -1556,6 +1579,22 @@ export class GroupCallPerformanceTracker {
     if (count <= 0) return;
     this.snapshot.reticulumAudioPacketSendFailures += count;
     this.windowCounters.reticulumAudioPacketSendFailures += count;
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /**
+   * From main-process `sendAudio` / `sendAudioBatch` diagnostics' `transport` field
+   * (outbound group audio: `link` vs `packet`).
+   */
+  recordReticulumAudioOutboundTransport(transport: 'link' | 'packet'): void {
+    this.snapshot.reticulumAudioOutboundTransportLast = transport;
+    if (transport === 'link') {
+      this.snapshot.reticulumAudioOutboundLinkSamples++;
+      this.windowCounters.reticulumAudioOutboundLinkSamples++;
+    } else {
+      this.snapshot.reticulumAudioOutboundPacketSamples++;
+      this.windowCounters.reticulumAudioOutboundPacketSamples++;
+    }
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
@@ -2092,6 +2131,9 @@ export class GroupCallPerformanceTracker {
       reticulumAudioPacketFreshSends: 0,
       reticulumAudioPacketStaleSends: 0,
       reticulumAudioPacketUnknownSends: 0,
+      reticulumAudioOutboundLinkSamples: 0,
+      reticulumAudioOutboundPacketSamples: 0,
+      reticulumAudioOutboundTransportLast: null,
       mixerActiveSpeakerEstimate: 0,
       mixerMasterGain: 1,
       mixerCurrentReductionDb: 0,
@@ -2278,6 +2320,10 @@ export class GroupCallPerformanceTracker {
         this.windowCounters.reticulumAudioPacketStaleSends,
       reticulumAudioPacketUnknownSends:
         this.windowCounters.reticulumAudioPacketUnknownSends,
+      reticulumAudioOutboundLinkSamples:
+        this.windowCounters.reticulumAudioOutboundLinkSamples,
+      reticulumAudioOutboundPacketSamples:
+        this.windowCounters.reticulumAudioOutboundPacketSamples,
       reticulumAudioQueuePressureDropRatePerSec: roundMetric(
         this.windowCounters.reticulumAudioQueuePressureDrops / (durationMs / 1000)
       ),

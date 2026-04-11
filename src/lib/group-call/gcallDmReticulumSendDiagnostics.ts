@@ -170,6 +170,10 @@ export function ingestDmReticulumSendResultIntoMetrics(
         diagnostics.linkUnreadyDrops ?? 0
       );
     }
+    const outboundTransport = diagnostics.transport;
+    if (outboundTransport === 'link' || outboundTransport === 'packet') {
+      metrics.recordReticulumAudioOutboundTransport(outboundTransport);
+    }
   }
   if (!res?.success) {
     metrics.recordRelayIpcFailure(1);

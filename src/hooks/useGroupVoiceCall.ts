@@ -5725,6 +5725,12 @@ export function useGroupVoiceCall(uiActive = false) {
     ) => {
       const diagnostics = res?.diagnostics;
       if (diagnostics) {
+        const outboundTransport = diagnostics.transport;
+        if (outboundTransport === 'link' || outboundTransport === 'packet') {
+          metricsRef.current.recordReticulumAudioOutboundTransport(
+            outboundTransport
+          );
+        }
         metricsRef.current.setReticulumAudioQueueDepths({
           pendingFrames: diagnostics.pendingFrames,
           bridgeQueuedFrames: diagnostics.bridge?.bridgeQueuedFrames,
