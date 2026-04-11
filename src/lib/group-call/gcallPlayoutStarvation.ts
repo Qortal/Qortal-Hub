@@ -17,6 +17,7 @@ export const GCALL_STARVATION_STRONG_B_PLAYOUT_DELTA_MS_THRESHOLD = -60;
 export const GCALL_STARVATION_STRONG_C_MIN_UNDER_TARGET_FRAC = 0.5;
 export const GCALL_STARVATION_STRONG_C_MAX_PLAYOUT_DELTA_MS = -30;
 export const GCALL_STARVATION_STRONG_C_SUSTAINED_WINDOWS = 2;
+export const GCALL_STARVATION_STRONG_C_ADEQUACY_MAX = 0.7;
 
 /** Min window duration (ms) before starvation is evaluated (OR min ticks below). */
 export const GCALL_STARVATION_MIN_PLAYOUT_ACTIVE_MS = 500;
@@ -111,7 +112,10 @@ export function classifyStrongStarvationCandidate(
       return { strong: true, reason: 'strong-B' };
     }
   }
-  if (strongCStreak >= GCALL_STARVATION_STRONG_C_SUSTAINED_WINDOWS) {
+  if (
+    bufferAdequacy <= GCALL_STARVATION_STRONG_C_ADEQUACY_MAX &&
+    strongCStreak >= GCALL_STARVATION_STRONG_C_SUSTAINED_WINDOWS
+  ) {
     return { strong: true, reason: 'strong-C' };
   }
   return { strong: false, reason: null };

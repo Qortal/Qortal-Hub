@@ -354,6 +354,18 @@ describe('gcallN1PlayoutGate', () => {
         nowMs: 1_000,
         cooldownUntilMs: 0,
         sourceRecentlyPushed: true,
+        opusBufferedMs: 55,
+        sampleCount: 4,
+        avgPcmBufferedMs: 20.049,
+        playoutUnderTargetFraction: 0.91,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldRearmN1LateCollapseRecovery({
+        nowMs: 1_000,
+        cooldownUntilMs: 0,
+        sourceRecentlyPushed: true,
         opusBufferedMs: 65,
         sampleCount: 4,
         avgPcmBufferedMs: 100,

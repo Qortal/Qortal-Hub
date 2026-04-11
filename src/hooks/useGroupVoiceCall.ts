@@ -535,6 +535,7 @@ const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS = 24;
 const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS = 5_000;
 const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS = 7_000;
 const GCALL_N1_BUFFER_ENFORCE_TIER_CHANGE_LOG_MIN_MS = 1_000;
+const GCALL_N1_ACCUMULATION_HOLD_LOG_MIN_MS = 1_000;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
@@ -3294,6 +3295,9 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Last stall-escape minimal decode time (`performance.now()`). */
   const lastStallEscapePerfRef = useRef<Map<string, number>>(new Map());
   const lastBufferEnforceLogAtRef = useRef<Map<string, number>>(new Map());
+  const lastN1AccumulationHoldLogAtRef = useRef<Map<string, number>>(
+    new Map()
+  );
   const lastBufferEnforceTierRef = useRef<
     Map<string, GcallN1BufferEnforceTier | null>
   >(new Map());
@@ -10060,12 +10064,25 @@ export function useGroupVoiceCall(uiActive = false) {
               : accumulationDecodeCap;
           n1ScaledCap = Math.min(n1ScaledCap, effectiveAccumulationDecodeCap);
           if (accumulationDecodeCap === 0) {
-            gcallDiagnosticsPush('info', '[GCall] n1RecoveryAccumulationHold', {
-              sourceAddr: truncateGcallDiagAddress(addr),
-              bufferMs: Math.round(opusMsPre),
-              targetMs: Math.round(smoothedTarget),
-              tier: n1Tier,
-            });
+            const nowLog = Date.now();
+            const lastHoldLog =
+              lastN1AccumulationHoldLogAtRef.current.get(addr) ?? 0;
+            if (
+              nowLog - lastHoldLog >=
+              GCALL_N1_ACCUMULATION_HOLD_LOG_MIN_MS
+            ) {
+              lastN1AccumulationHoldLogAtRef.current.set(addr, nowLog);
+              gcallDiagnosticsPush(
+                'info',
+                '[GCall] n1RecoveryAccumulationHold',
+                {
+                  sourceAddr: truncateGcallDiagAddress(addr),
+                  bufferMs: Math.round(opusMsPre),
+                  targetMs: Math.round(smoothedTarget),
+                  tier: n1Tier,
+                }
+              );
+            }
           }
         }
 
@@ -12846,6 +12863,7 @@ export function useGroupVoiceCall(uiActive = false) {
       jitterAccumulationUntilPerfRef.current.clear();
       lastStallEscapePerfRef.current.clear();
       lastBufferEnforceLogAtRef.current.clear();
+      lastN1AccumulationHoldLogAtRef.current.clear();
       lastBufferEnforceTierRef.current.clear();
       lastBufferEnforceModeRef.current.clear();
       gcallStarvationTicksSinceProtectedRef.current.clear();

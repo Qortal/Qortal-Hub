@@ -72,6 +72,18 @@ describe('gcallPlayoutStarvation', () => {
     expect(r).toEqual({ strong: true, reason: 'strong-C' });
   });
 
+  it('does not classify strong-C when buffer adequacy has already recovered', () => {
+    const r = classifyStrongStarvationCandidate(
+      baseSource({
+        playoutUnderTargetFraction: 0.6,
+        avgPlayoutDeltaMs: -40,
+      }),
+      0.77,
+      2
+    );
+    expect(r).toEqual({ strong: false, reason: null });
+  });
+
   it('does not classify strong-B without stress signals', () => {
     const r = classifyStrongStarvationCandidate(
       baseSource({
