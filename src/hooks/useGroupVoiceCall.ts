@@ -1045,6 +1045,9 @@ const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_STABLE_MS = 650;
 const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_DELTA_MIN_MS = -20;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_COOLDOWN_MS = 8_000;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_LAST_RECV_MAX_MS = 1_500;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_PCM_MAX_MS = 90;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_UNDERTARGET_MIN = 0.55;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_DELTA_MAX_MS = -45;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS = 450;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS = 70;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO = 0.55;
@@ -1700,10 +1703,10 @@ export function shouldTriggerN1SeverePlayoutPathWarm(opts: {
   const recent = opts.recentStability;
   if (recent === null || recent.sampleCount < 2 || recent.stable) return false;
   const severelyUnderfed =
-    recent.avgPcmBufferedMs <= GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_MAX_MS &&
+    recent.avgPcmBufferedMs <= GCALL_N1_SEVERE_PLAYOUT_WARM_PCM_MAX_MS &&
     recent.playoutUnderTargetFraction >=
-      GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_MAX_MS;
+      GCALL_N1_SEVERE_PLAYOUT_WARM_UNDERTARGET_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_SEVERE_PLAYOUT_WARM_DELTA_MAX_MS;
   return (
     severelyUnderfed &&
     (opts.starvationSeverity === 'strong' || recent.severeInstability)

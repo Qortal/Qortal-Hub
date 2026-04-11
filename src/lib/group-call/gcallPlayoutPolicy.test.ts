@@ -148,6 +148,22 @@ describe('gcallPlayoutPolicy', () => {
     ).toBe(null);
   });
 
+  it('keeps a higher floor during strong 1-on-1 starvation collapse so recovery does not over-tighten', () => {
+    expect(
+      computeFeasibleSingleRemoteRecoveryTargetMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        starvationSeverity: 'strong',
+        previousStarvationSeverity: 'strong',
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -145,
+        avgOpusBufferedMs: 40,
+        observedTargetMs: 145,
+      })
+    ).toBe(120);
+  });
+
   it('clamps a weak-but-usable 1-on-1 recovery path closer to the sustained PCM reserve', () => {
     expect(
       computeUsableRecoveryTargetMaxMs({

@@ -61,6 +61,7 @@ type BridgeCmdFrame = {
     | 'fanout_call'
     | 'send_group_call'
     | 'fanout_group_call'
+    | 'send_group_audio_link_heartbeat'
     | 'open_group_audio_link'
     | 'close_group_audio_link'
     | 'warm_group_audio_path'
@@ -151,6 +152,8 @@ export type ReticulumWarmPathResult =
       error?: string;
     };
 
+export type ReticulumAudioLinkHeartbeatCommand = 'PING' | 'PONG';
+
 export type ReticulumOpenAudioLinkResult =
   | { ok: true; linkId: string; established: boolean }
   | {
@@ -223,6 +226,7 @@ type BridgeEventFrame =
         wire?: Record<string, unknown>;
         senderDestinationHash?: string;
         peerPresenceHash?: string;
+        linkId?: string;
       };
     }
   | {
@@ -232,6 +236,7 @@ type BridgeEventFrame =
         wire?: Record<string, unknown>;
         senderDestinationHash?: string;
         peerPresenceHash?: string;
+        linkId?: string;
       };
     }
   | {
@@ -715,6 +720,34 @@ export class ReticulumBridge
     });
   }
 
+  async sendGroupAudioLinkHeartbeatDetailed(opts: {
+    roomId: string;
+    command: ReticulumAudioLinkHeartbeatCommand;
+    seq?: number;
+    peerPresenceHash?: string;
+    linkId?: string;
+  }): Promise<ReticulumSendResult> {
+    const linkId = typeof opts.linkId === 'string' ? opts.linkId.trim() : '';
+    const peerPresenceHash =
+      typeof opts.peerPresenceHash === 'string'
+        ? opts.peerPresenceHash.trim().toLowerCase()
+        : '';
+    if (!linkId && !peerPresenceHash) {
+      return {
+        ok: false,
+        reason: 'send-command-failed',
+        error: 'Missing linkId or peerPresenceHash',
+      };
+    }
+    return this.sendDetailed('send_group_audio_link_heartbeat', {
+      roomId: opts.roomId,
+      command: opts.command,
+      ...(typeof opts.seq === 'number' ? { seq: opts.seq } : {}),
+      ...(linkId ? { linkId } : {}),
+      ...(peerPresenceHash ? { peerPresenceHash } : {}),
+    });
+  }
+
   async openGroupAudioLink(
     peerPresenceHash: string
   ): Promise<ReticulumOpenAudioLinkResult> {
@@ -871,7 +904,7 @@ export class ReticulumBridge
       return { ok: false, reason: 'bridge-not-ready' };
     }
     let queuePressureDrops = 0;
-    let staleDrops = this.pruneStaleQueuedAudioFrames();
+    const staleDrops = this.pruneStaleQueuedAudioFrames();
     let dropped = staleDrops > 0;
     let queue = this.audioFrameQueues.get(frameInput.routeKey);
     if (!queue) {
@@ -1408,7 +1441,7 @@ export class ReticulumBridge
 
   private flushWriteQueue(): void {
     if (!this.child || this.waitingForDrain) return;
-    while (true) {
+    for (;;) {
       const frame = this.dequeueNextCommand();
       if (!frame) return;
       const ok = this.child.stdin.write(frame.wire);
@@ -1792,7 +1825,8 @@ export class ReticulumBridge
           'group-call-message',
           wire as Record<string, unknown>,
           typeof senderDestinationHash === 'string' ? senderDestinationHash : '',
-          typeof peerPresenceHash === 'string' ? peerPresenceHash : ''
+          typeof peerPresenceHash === 'string' ? peerPresenceHash : '',
+          typeof frame.payload?.linkId === 'string' ? frame.payload.linkId : ''
         );
         return;
       }
@@ -2115,6 +2149,7 @@ export class ReticulumBridge
       | 'fanout_call'
       | 'send_group_call'
       | 'fanout_group_call'
+      | 'send_group_audio_link_heartbeat'
       | 'close_group_audio_link'
       | 'warm_group_audio_path',
     payload: Record<string, unknown>

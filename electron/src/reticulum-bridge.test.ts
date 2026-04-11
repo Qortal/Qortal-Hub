@@ -81,6 +81,39 @@ describe('ReticulumBridge group audio support', () => {
     expect(result).toEqual({ ok: true, pathState: 'fresh', ready: true });
   });
 
+  it('sends audio-link heartbeat frames through the bridge command channel', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async (action: string, payload: Record<string, unknown>) => ({
+      type: 'resp',
+      id: '3',
+      ok: true,
+      payload: { action, payload },
+    }));
+
+    const result = await bridge.sendGroupAudioLinkHeartbeatDetailed({
+      linkId: 'link-1',
+      peerPresenceHash: 'peer-hash',
+      roomId: 'room-1',
+      command: 'PING',
+      seq: 7,
+    });
+
+    expect(internal.sendCommand).toHaveBeenCalledWith(
+      'send_group_audio_link_heartbeat',
+      {
+        roomId: 'room-1',
+        command: 'PING',
+        seq: 7,
+        linkId: 'link-1',
+        peerPresenceHash: 'peer-hash',
+      }
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
   it('rejects excess low-priority commands with an overload response', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;

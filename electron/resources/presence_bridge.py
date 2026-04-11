@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire390-call-fanout-v1"
+PRESENCE_BRIDGE_BUILD = "wire391-audio-link-heartbeat-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -121,6 +121,7 @@ def _call_wire_json_bytes(out: Dict[str, Any]) -> bytes:
 
 
 _GROUP_AUDIO_WIRE_TYPE = "GCA"
+_GROUP_AUDIO_HEARTBEAT_WIRE_TYPE = "GAC"
 _audio_links_by_id: Dict[str, Dict[str, Any]] = {}
 _audio_link_ids_by_object: Dict[int, str] = {}
 _outgoing_audio_link_id_by_peer_hash: Dict[str, str] = {}
@@ -204,6 +205,7 @@ _call_media_path_state: Dict[str, Dict[str, Any]] = {}
 _GROUP_CALL_WIRE_TYPES = frozenset(
     {
         "GA",
+        "GAC",
         "GJ",
         "GL",
         "GH",
@@ -229,6 +231,9 @@ _GROUP_CALL_WIRE_TYPES = frozenset(
         "GI",
         "GX",
     }
+)
+_AUDIO_LINK_WIRE_TYPES = frozenset(
+    {_GROUP_AUDIO_WIRE_TYPE, _GROUP_AUDIO_HEARTBEAT_WIRE_TYPE}
 )
 
 
@@ -2887,6 +2892,16 @@ def on_audio_link_packet(message, packet) -> None:
         return
     if not isinstance(decoded, dict):
         return
+    if decoded.get("t") == _GROUP_AUDIO_HEARTBEAT_WIRE_TYPE:
+        sender_call_hash = decoded.get("r")
+        if isinstance(sender_call_hash, str) and sender_call_hash:
+            state["peerDestinationHash"] = sender_call_hash
+        _emit_call_bridge_message(
+            decoded,
+            str(state.get("peerPresenceHash") or ""),
+            link_id,
+        )
+        return
     if decoded.get("t") != _GROUP_AUDIO_WIRE_TYPE:
         return
     room_id = decoded.get("R")
@@ -3029,7 +3044,7 @@ def on_inbound_link_first_packet(message, packet) -> None:
     if not isinstance(decoded, dict):
         _register_incoming_overlay_link(link)
         return
-    if decoded.get("t") == _GROUP_AUDIO_WIRE_TYPE:
+    if decoded.get("t") in _AUDIO_LINK_WIRE_TYPES:
         link_id = str(uuid.uuid4())
         _audio_links_by_id[link_id] = {
             "link": link,
@@ -4012,6 +4027,111 @@ def handle_warm_group_audio_path(req_id: str, payload: Dict[str, Any]) -> None:
     )
 
 
+def handle_send_group_audio_link_heartbeat(req_id: str, payload: Dict[str, Any]) -> None:
+    room_id = str(payload.get("roomId") or "")
+    command = str(payload.get("command") or "")
+    if not room_id or command not in ("PING", "PONG"):
+        emit_resp(req_id, False, error="Missing roomId or invalid heartbeat command")
+        return
+    if _destination is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "bridge_not_started"},
+            error="Bridge not started",
+        )
+        return
+
+    link_id = str(payload.get("linkId") or "").strip()
+    peer_key = str(payload.get("peerPresenceHash") or "").strip().lower()
+    state: Optional[Dict[str, Any]] = None
+    resolved_link_id = link_id
+    if resolved_link_id:
+        state = get_audio_link_state(resolved_link_id)
+        if state is None:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "unknown_link_id"},
+                error="Unknown audio link id",
+            )
+            return
+    else:
+        if not peer_key:
+            emit_resp(req_id, False, error="Missing linkId or peerPresenceHash")
+            return
+        candidate = _outgoing_audio_link_id_by_peer_hash.get(peer_key)
+        if candidate:
+            state = get_audio_link_state(candidate)
+            resolved_link_id = candidate
+        if state is None:
+            for candidate_link_id, candidate_state in _audio_links_by_id.items():
+                if (
+                    str(candidate_state.get("peerPresenceHash") or "").strip().lower()
+                    == peer_key
+                ):
+                    state = candidate_state
+                    resolved_link_id = candidate_link_id
+                    break
+        if state is None:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "audio_link_not_ready"},
+                error="Audio link not ready",
+            )
+            return
+
+    link = state.get("link")
+    if state.get("established") is not True or link is None:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "audio_link_not_ready"},
+            error="Audio link not ready",
+        )
+        return
+
+    wire: Dict[str, Any] = {
+        "t": _GROUP_AUDIO_HEARTBEAT_WIRE_TYPE,
+        "R": room_id,
+        "c": command,
+        "m": int(time.time() * 1000),
+    }
+    seq = payload.get("seq")
+    if isinstance(seq, int) and seq >= 0:
+        wire["p"] = seq
+    encoded = _encode_group_signal_wire(wire)
+    if not encoded.get("ok"):
+        emit_resp(
+            req_id,
+            False,
+            payload=encoded.get("payload"),
+            error=str(encoded.get("error") or "Wire encoding failed"),
+        )
+        return
+    try:
+        packet = RNS.Packet(link, encoded["wire_bytes"], create_receipt=False)
+        result = packet.send()
+        if result is False:
+            emit_resp(
+                req_id,
+                False,
+                payload={"code": "packet_send_false"},
+                error="Packet send returned False",
+            )
+            return
+        state["last_activity_at"] = time.time()
+        emit_resp(req_id, True, payload={"linkId": resolved_link_id})
+    except Exception as exc:
+        emit_resp(
+            req_id,
+            False,
+            payload={"code": "exception"},
+            error=str(exc),
+        )
+
+
 def handle_command(message: Dict[str, Any]) -> None:
     req_id = str(message.get("id") or "")
     action = message.get("action")
@@ -4053,6 +4173,8 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_close_group_audio_link(req_id, payload)
     elif action == "warm_group_audio_path":
         handle_warm_group_audio_path(req_id, payload)
+    elif action == "send_group_audio_link_heartbeat":
+        handle_send_group_audio_link_heartbeat(req_id, payload)
     elif action == "get_local_identity_public_key":
         handle_get_local_identity_public_key(req_id, payload)
     elif action == "register_peer_identity":

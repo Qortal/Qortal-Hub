@@ -150,6 +150,10 @@ const GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_RESERVE_RATIO_MAX = 0.55;
 const GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_HEADROOM_MS = 34;
 const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_HEADROOM_MS = 38;
 const GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_HEADROOM_MS = 42;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_UNDERTARGET_MIN = 0.75;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_DELTA_MAX_MS = -70;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_RESERVE_RATIO_MAX = 0.36;
+const GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_MIN_TARGET_MS = 120;
 
 /**
  * In 1-on-1 recovery, a peer can get stuck chasing a target it never meaningfully rebuilds.
@@ -211,16 +215,29 @@ export function computeFeasibleSingleRemoteRecoveryTargetMaxMs(input: {
     input.avgPlayoutDeltaMs <=
       GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_DELTA_MAX_MS &&
     reserveRatio < GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_RESERVE_RATIO_MAX;
+  const severeCollapseCandidate =
+    input.starvationSeverity === 'strong' &&
+    input.playoutUnderTargetFraction >=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_UNDERTARGET_MIN &&
+    input.avgPlayoutDeltaMs <=
+      GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_DELTA_MAX_MS &&
+    reserveRatio < GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_RESERVE_RATIO_MAX;
   if (!acuteMismatch && !strongCandidate && !heldCandidate) {
     return null;
   }
+  const minTargetMs = severeCollapseCandidate
+    ? Math.min(
+        input.currentAdaptiveMaxTargetMs,
+        GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_COLLAPSE_MIN_TARGET_MS
+      )
+    : GCALL_SINGLE_REMOTE_FEASIBILITY_MIN_TARGET_MS;
   const headroomMs = acuteMismatch
     ? GCALL_SINGLE_REMOTE_FEASIBILITY_ACUTE_HEADROOM_MS
     : strongCandidate
       ? GCALL_SINGLE_REMOTE_FEASIBILITY_STRONG_HEADROOM_MS
       : GCALL_SINGLE_REMOTE_FEASIBILITY_HELD_HEADROOM_MS;
   const feasibleMaxMs = Math.max(
-    GCALL_SINGLE_REMOTE_FEASIBILITY_MIN_TARGET_MS,
+    minTargetMs,
     Math.round(input.avgOpusBufferedMs + headroomMs)
   );
   return Math.min(input.currentAdaptiveMaxTargetMs, feasibleMaxMs);

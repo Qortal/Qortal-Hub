@@ -2017,6 +2017,24 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         lastActionAgeMs: 9_000,
       })
     ).toBe(true);
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        remotePeerCount: 1,
+        activeSourceCount: 1,
+        lastRecvAgeMs: 220,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 78,
+          playoutUnderTargetFraction: 0.62,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: false,
+        },
+        avgPlayoutDeltaMs: -66,
+        starvationSeverity: 'strong',
+        lastActionAgeMs: 9_000,
+      })
+    ).toBe(true);
   });
 
   it('does not warm one-on-one severe playout path for stale, stable, or cooldown-limited streams', () => {
