@@ -38,6 +38,7 @@ import {
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   shouldKeepSingleRemoteDegradedRebuildLocal,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
+  shouldForceN1SevereRebuildReadyEscape,
   shouldEnableN1DrainReceivePriorityMode,
   shouldExtendN1SevereRebuildAccumulation,
   shouldHoldN1SteadyStarvedAccumulation,
@@ -523,6 +524,55 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActive: true,
         sourceRecentlyPushed: false,
         opusBufferedMs: 40,
+        recentStability: null,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+  });
+
+  it('force-primes a live severe one-frame rebuild that is blocked by jitter readiness', () => {
+    expect(
+      shouldForceN1SevereRebuildReadyEscape({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_200,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: false,
+        bufferedFrames: 2,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldForceN1SevereRebuildReadyEscape({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_200,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        bufferedFrames: 1,
+        recentStability: null,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldForceN1SevereRebuildReadyEscape({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_200,
+        sourceRecentlyPushed: false,
+        hasReadyFrame: false,
+        bufferedFrames: 1,
         recentStability: null,
         playoutStarvationSeverity: 'strong',
       })

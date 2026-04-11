@@ -1091,6 +1091,8 @@ const GCALL_N1_STEADY_STARVED_HOLD_OPUS_FALLBACK_MS =
   OPUS_FRAME_DURATION_MS * 2;
 const GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS = 64;
 const GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN = 0.7;
+const GCALL_N1_SEVERE_READY_ESCAPE_FRAMES_MAX = 2;
+const GCALL_N1_SEVERE_READY_ESCAPE_LOG_MIN_MS = 1_000;
 const GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS = 600;
 const GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS = OPUS_FRAME_DURATION_MS + 1;
 const GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX = 1;
@@ -1266,6 +1268,43 @@ export function shouldForceN1SustainedSevereRebuildReceiveRelief(opts: {
     opts.avgPlayoutDeltaMs <=
       GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS
   );
+}
+
+export function shouldForceN1SevereRebuildReadyEscape(opts: {
+  recoverySingleRemote: boolean;
+  prerollActive: boolean;
+  severeForcedReleaseRebuildActive: boolean;
+  severeForcedReleaseRebuildActiveForMs: number;
+  sourceRecentlyPushed: boolean;
+  hasReadyFrame: boolean;
+  bufferedFrames: number;
+  recentStability: RecentRecoveryStabilitySummary | null;
+  playoutStarvationSeverity: PlayoutStarvationSeverity;
+}): boolean {
+  if (
+    !opts.recoverySingleRemote ||
+    opts.prerollActive ||
+    !opts.severeForcedReleaseRebuildActive ||
+    opts.severeForcedReleaseRebuildActiveForMs <
+      GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS ||
+    !opts.sourceRecentlyPushed ||
+    opts.hasReadyFrame ||
+    opts.bufferedFrames <= 0 ||
+    opts.bufferedFrames > GCALL_N1_SEVERE_READY_ESCAPE_FRAMES_MAX
+  ) {
+    return false;
+  }
+  if (
+    opts.recentStability !== null &&
+    opts.recentStability.sampleCount >= 2 &&
+    opts.recentStability.avgPcmBufferedMs <=
+      GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN
+  ) {
+    return true;
+  }
+  return opts.playoutStarvationSeverity === 'strong';
 }
 
 export function shouldKeepMultiSourceWindowRecoveryLocal(opts: {
@@ -3296,6 +3335,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastStallEscapePerfRef = useRef<Map<string, number>>(new Map());
   const lastBufferEnforceLogAtRef = useRef<Map<string, number>>(new Map());
   const lastN1AccumulationHoldLogAtRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const lastN1SevereReadyEscapeLogAtRef = useRef<Map<string, number>>(
     new Map()
   );
   const lastBufferEnforceTierRef = useRef<
@@ -6464,6 +6506,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPlayoutTargetPostAtRef.current.delete(address);
       lastDrainMissedRef.current.delete(address);
       lastBufferEnforceLogAtRef.current.delete(address);
+      lastN1AccumulationHoldLogAtRef.current.delete(address);
+      lastN1SevereReadyEscapeLogAtRef.current.delete(address);
       lastBufferEnforceTierRef.current.delete(address);
       lastBufferEnforceModeRef.current.delete(address);
       lastSourceGapLogAtRef.current.delete(address);
@@ -10218,6 +10262,56 @@ export function useGroupVoiceCall(uiActive = false) {
           continue;
         }
 
+        const severeReadyEscapeAllowed =
+          shouldForceN1SevereRebuildReadyEscape({
+            recoverySingleRemote: n1RecoverySingleRemote,
+            prerollActive,
+            severeForcedReleaseRebuildActive:
+              n1SevereForcedReleaseRebuildActive,
+            severeForcedReleaseRebuildActiveForMs:
+              n1SevereForcedReleaseRebuildActiveForMs,
+            sourceRecentlyPushed,
+            hasReadyFrame: jb.hasReadyFrame(),
+            bufferedFrames: jb.getBufferedFrames(),
+            recentStability: n1RecentStability,
+            playoutStarvationSeverity: n1PlayoutStarvationSeverity,
+          });
+        if (severeReadyEscapeAllowed) {
+          jb.forcePrimeForRecoveryEscape();
+          const nowLog = Date.now();
+          const lastLog =
+            lastN1SevereReadyEscapeLogAtRef.current.get(addr) ?? 0;
+          if (nowLog - lastLog >= GCALL_N1_SEVERE_READY_ESCAPE_LOG_MIN_MS) {
+            lastN1SevereReadyEscapeLogAtRef.current.set(addr, nowLog);
+            gcallDiagnosticsPush(
+              'info',
+              '[GCall] n1SevereRebuildReadyEscape',
+              {
+                sourceAddr: truncateGcallDiagAddress(addr),
+                bufferedFrames: jb.getBufferedFrames(),
+                bufferMs: Math.round(opusMsPre),
+                targetMs: Math.round(smoothedTarget),
+                severeForcedReleaseRebuildActiveForMs: Math.round(
+                  n1SevereForcedReleaseRebuildActiveForMs
+                ),
+                avgPcmBufferedMs:
+                  n1RecentStability !== null
+                    ? Math.round(n1RecentStability.avgPcmBufferedMs)
+                    : null,
+                playoutUnderTargetFraction:
+                  n1RecentStability !== null
+                    ? Math.round(
+                        n1RecentStability.playoutUnderTargetFraction * 1000
+                      ) / 1000
+                    : null,
+              }
+            );
+          }
+          const missedEsc = decodeOneJitterFrame(addr, jb) ?? 0;
+          runUnderrunAndMetricsTail(addr, jb, missedEsc);
+          continue;
+        }
+
         if (steadyHoldActive) {
           metricsRef.current.recordOpusBufferedMetric(
             addr,
@@ -12864,6 +12958,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastStallEscapePerfRef.current.clear();
       lastBufferEnforceLogAtRef.current.clear();
       lastN1AccumulationHoldLogAtRef.current.clear();
+      lastN1SevereReadyEscapeLogAtRef.current.clear();
       lastBufferEnforceTierRef.current.clear();
       lastBufferEnforceModeRef.current.clear();
       gcallStarvationTicksSinceProtectedRef.current.clear();
