@@ -529,6 +529,9 @@ const RELAY_INGRESS_PEER = '__relay__';
  */
 const ROOT_INBOUND_WARM_MIN_RELAY_SENT = 24;
 const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 1_500;
+const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS = 4_000;
+const GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS = 6_000;
+const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS = 24;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
 const KEY_DIST_GATE_TIMEOUT_MS = 3_000;
 const KEY_DIST_PRE_ENCRYPT_RING_MAX_FRAMES = 10;
@@ -1466,6 +1469,41 @@ export function shouldEnableN1DrainReceivePriorityMode(opts: {
   }
   if (opts.severeForcedReleaseRebuildActive === true) return true;
   return opts.recentStability !== null && !opts.recentStability.stable;
+}
+
+export function shouldTriggerN1InboundMediaWatchdog(opts: {
+  roomConnected: boolean;
+  hasRoomKey: boolean;
+  remotePeerCount: number;
+  activeSourceCount: number;
+  packetsReceived: number;
+  packetsDecoded: number;
+  relayPacketsSent: number;
+  reticulumAudioPacketFreshSends: number;
+  missingForMs: number;
+  lastActionAgeMs: number;
+}): boolean {
+  if (!opts.roomConnected || !opts.hasRoomKey) return false;
+  if (opts.remotePeerCount !== 1) return false;
+  if (opts.activeSourceCount !== 0) return false;
+  if (opts.packetsReceived > 0 || opts.packetsDecoded > 0) return false;
+  const outboundFreshSends = Math.max(
+    opts.relayPacketsSent,
+    opts.reticulumAudioPacketFreshSends
+  );
+  if (outboundFreshSends < GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS) {
+    return false;
+  }
+  const missingForMs = Number.isFinite(opts.missingForMs)
+    ? opts.missingForMs
+    : 0;
+  const lastActionAgeMs = Number.isFinite(opts.lastActionAgeMs)
+    ? opts.lastActionAgeMs
+    : Number.POSITIVE_INFINITY;
+  return (
+    missingForMs >= GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS &&
+    lastActionAgeMs >= GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS
+  );
 }
 
 export function tickN1ReceivePrioritySendBitrateCapState(opts: {
@@ -3053,6 +3091,12 @@ export function useGroupVoiceCall(uiActive = false) {
   const startupReticulumPathWarmKeyRef = useRef<string>('');
   /** Dedupe root→peer inbound path warm (`joinGen:peerAddress`). */
   const rootInboundWarmFiredRef = useRef<Set<string>>(new Set());
+  const inboundMediaMissingSincePeerRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const lastInboundMediaWatchdogAtPeerRef = useRef<Map<string, number>>(
+    new Map()
+  );
 
   /** Inter-arrival times (ms) for adaptive target; last wall packet arrival for delta. */
   const lastPacketArrivalAtRef = useRef<Map<string, number>>(new Map());
@@ -5731,6 +5775,94 @@ export function useGroupVoiceCall(uiActive = false) {
           ? sourceIngressPeerRef.current.get(singleRemoteSourceAddr) ??
             singleRemoteSourceAddr
           : null;
+      const myAddrForInboundWatchdog = userInfoRef.current?.address ?? '';
+      const remotePeersForInboundWatchdog = myAddrForInboundWatchdog
+        ? [...participantsRef.current.keys()].filter(
+            (addr) => addr && addr !== myAddrForInboundWatchdog
+          )
+        : [];
+      const singleRemotePeerForInboundWatchdog =
+        remotePeersForInboundWatchdog.length === 1
+          ? (remotePeersForInboundWatchdog[0] ?? null)
+          : null;
+      for (const peer of inboundMediaMissingSincePeerRef.current.keys()) {
+        if (peer !== singleRemotePeerForInboundWatchdog) {
+          inboundMediaMissingSincePeerRef.current.delete(peer);
+        }
+      }
+      if (
+        singleRemotePeerForInboundWatchdog === null ||
+        roomStateRef.current !== 'connected' ||
+        roomKeyRef.current === null ||
+        activeSourceCount > 0 ||
+        (snap.packetsReceived ?? 0) > 0 ||
+        (snap.packetsDecoded ?? 0) > 0
+      ) {
+        if (singleRemotePeerForInboundWatchdog !== null) {
+          inboundMediaMissingSincePeerRef.current.delete(
+            singleRemotePeerForInboundWatchdog
+          );
+        }
+      } else {
+        const peer = singleRemotePeerForInboundWatchdog;
+        const previousMissingSince =
+          inboundMediaMissingSincePeerRef.current.get(peer);
+        const missingSince = previousMissingSince ?? wallNow;
+        if (previousMissingSince === undefined) {
+          inboundMediaMissingSincePeerRef.current.set(peer, missingSince);
+        }
+        const missingForMs = wallNow - missingSince;
+        const lastActionAt =
+          lastInboundMediaWatchdogAtPeerRef.current.get(peer) ?? 0;
+        const lastActionAgeMs =
+          lastActionAt > 0
+            ? wallNow - lastActionAt
+            : Number.POSITIVE_INFINITY;
+        if (
+          shouldTriggerN1InboundMediaWatchdog({
+            roomConnected: roomStateRef.current === 'connected',
+            hasRoomKey: roomKeyRef.current !== null,
+            remotePeerCount: remotePeersForInboundWatchdog.length,
+            activeSourceCount,
+            packetsReceived: snap.packetsReceived ?? 0,
+            packetsDecoded: snap.packetsDecoded ?? 0,
+            relayPacketsSent: snap.relayPacketsSent ?? 0,
+            reticulumAudioPacketFreshSends:
+              snap.reticulumAudioPacketFreshSends ?? 0,
+            missingForMs,
+            lastActionAgeMs,
+          })
+        ) {
+          lastInboundMediaWatchdogAtPeerRef.current.set(peer, wallNow);
+          gcallWindowDiagnosticTagsRef.current.push({
+            ts: wallNow,
+            type: 'inbound-media-missing',
+            detail: {
+              peer: truncateGcallDiagAddress(peer),
+              role: myRoleRef.current,
+              missingForMs: Math.round(missingForMs),
+            },
+          });
+          gcallDiagnosticsPush('warn', '[GCall] inboundMediaMissing', {
+            peerAddress: truncateGcallDiagAddress(peer),
+            role: myRoleRef.current,
+            missingForMs: Math.round(missingForMs),
+            activeSourceCount,
+            packetsReceived: snap.packetsReceived ?? 0,
+            packetsDecoded: snap.packetsDecoded ?? 0,
+            relayPacketsSent: snap.relayPacketsSent ?? 0,
+            reticulumAudioPacketFreshSends:
+              snap.reticulumAudioPacketFreshSends ?? 0,
+            reticulumAudioPacketPathRequests:
+              snap.reticulumAudioPacketPathRequests ?? 0,
+            reticulumAudioPacketPathResolutions:
+              snap.reticulumAudioPacketPathResolutions ?? 0,
+            reticulumAudioPacketPathTimeouts:
+              snap.reticulumAudioPacketPathTimeouts ?? 0,
+          });
+          requestMediaRecoveryForPeerRef.current(peer, 'inbound-media-missing');
+        }
+      }
       if (singleRemoteSourceAddr === null) {
         n1ReceivePrioritySendCapStateRef.current.clear();
       } else {
@@ -5780,7 +5912,7 @@ export function useGroupVoiceCall(uiActive = false) {
                   );
                   return lastRecvAt === undefined
                     ? Number.POSITIVE_INFINITY
-                    : wallNowPerf - lastRecvAt;
+                    : perfNow - lastRecvAt;
                 })(),
               nowMs: wallNow,
               localSendPressure:
@@ -5800,7 +5932,7 @@ export function useGroupVoiceCall(uiActive = false) {
                     );
                   return startedAt === undefined
                     ? 0
-                    : Math.max(0, wallNowPerf - startedAt);
+                    : Math.max(0, perfNow - startedAt);
                 })(),
             })
           : { capBps: null, nextState: null };
@@ -5824,7 +5956,7 @@ export function useGroupVoiceCall(uiActive = false) {
                       );
                       return lastRecvAt === undefined
                         ? Number.POSITIVE_INFINITY
-                        : wallNowPerf - lastRecvAt;
+                        : perfNow - lastRecvAt;
                     })()
                   : Number.POSITIVE_INFINITY,
               recentStability: singleRemoteRecentStability,
@@ -12539,6 +12671,8 @@ export function useGroupVoiceCall(uiActive = false) {
       startupReticulumPathWarmKeyRef.current = '';
       rootInboundWarmFiredRef.current.clear();
       rootInboundStressWarmFiredRef.current.clear();
+      inboundMediaMissingSincePeerRef.current.clear();
+      lastInboundMediaWatchdogAtPeerRef.current.clear();
       gcallWindowDiagnosticTagsRef.current.length = 0;
       pathQualityScoreEmaV1Ref.current = null;
       lastPeerRouteKeyRef.current.clear();

@@ -39,6 +39,7 @@ import {
   shouldKeepSingleRemoteDegradedRebuildLocal,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldEnableN1DrainReceivePriorityMode,
+  shouldTriggerN1InboundMediaWatchdog,
   shouldDropActiveJitterSource,
   shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
@@ -1632,6 +1633,94 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
           severeInstability: true,
         },
         severeForcedReleaseRebuildActive: true,
+      })
+    ).toBe(false);
+  });
+
+  it('triggers one-on-one inbound-media watchdog for sustained zero-source outbound-only calls', () => {
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        roomConnected: true,
+        hasRoomKey: true,
+        remotePeerCount: 1,
+        activeSourceCount: 0,
+        packetsReceived: 0,
+        packetsDecoded: 0,
+        relayPacketsSent: 40,
+        reticulumAudioPacketFreshSends: 80,
+        missingForMs: 4_500,
+        lastActionAgeMs: 8_000,
+      })
+    ).toBe(true);
+  });
+
+  it('does not trigger inbound-media watchdog once any inbound media/source exists', () => {
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        roomConnected: true,
+        hasRoomKey: true,
+        remotePeerCount: 1,
+        activeSourceCount: 1,
+        packetsReceived: 0,
+        packetsDecoded: 0,
+        relayPacketsSent: 40,
+        reticulumAudioPacketFreshSends: 80,
+        missingForMs: 10_000,
+        lastActionAgeMs: 10_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        roomConnected: true,
+        hasRoomKey: true,
+        remotePeerCount: 1,
+        activeSourceCount: 0,
+        packetsReceived: 1,
+        packetsDecoded: 0,
+        relayPacketsSent: 40,
+        reticulumAudioPacketFreshSends: 80,
+        missingForMs: 10_000,
+        lastActionAgeMs: 10_000,
+      })
+    ).toBe(false);
+  });
+
+  it('gates inbound-media watchdog on outbound activity, dwell, cooldown, and one-on-one scope', () => {
+    const base = {
+      roomConnected: true,
+      hasRoomKey: true,
+      remotePeerCount: 1,
+      activeSourceCount: 0,
+      packetsReceived: 0,
+      packetsDecoded: 0,
+      relayPacketsSent: 40,
+      reticulumAudioPacketFreshSends: 80,
+      missingForMs: 4_500,
+      lastActionAgeMs: 8_000,
+    };
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        ...base,
+        reticulumAudioPacketFreshSends: 0,
+        relayPacketsSent: 8,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        ...base,
+        missingForMs: 2_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        ...base,
+        lastActionAgeMs: 2_000,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1InboundMediaWatchdog({
+        ...base,
+        remotePeerCount: 2,
       })
     ).toBe(false);
   });
