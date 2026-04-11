@@ -864,17 +864,54 @@ export function computeN1AccumulationDecodeCap(opts: {
   tier: GcallN1BufferEnforceTier;
 }): number | null {
   if (!opts.accumulationActive) return null;
-  if (opts.recoverySingleRemote && opts.forcedReleaseRebuildActive) {
-    return GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP;
-  }
   if (
     opts.recoverySingleRemote &&
     opts.tier === 'deep' &&
-    opts.opusBufferedMs <= OPUS_FRAME_DURATION_MS
+    opts.opusBufferedMs <=
+      (opts.forcedReleaseRebuildActive
+        ? GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS
+        : OPUS_FRAME_DURATION_MS)
   ) {
     return 0;
   }
+  if (opts.recoverySingleRemote && opts.forcedReleaseRebuildActive) {
+    return GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP;
+  }
   return 1;
+}
+
+export function shouldExtendN1SevereRebuildAccumulation(opts: {
+  recoverySingleRemote: boolean;
+  prerollActive: boolean;
+  severeForcedReleaseRebuildActive: boolean;
+  sourceRecentlyPushed: boolean;
+  opusBufferedMs: number;
+  recentStability: RecentRecoveryStabilitySummary | null;
+  playoutStarvationSeverity: PlayoutStarvationSeverity;
+}): boolean {
+  if (
+    !opts.recoverySingleRemote ||
+    opts.prerollActive ||
+    !opts.severeForcedReleaseRebuildActive ||
+    !opts.sourceRecentlyPushed ||
+    opts.opusBufferedMs > GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_OPUS_MS
+  ) {
+    return false;
+  }
+  if (
+    opts.recentStability !== null &&
+    opts.recentStability.sampleCount >= 2 &&
+    opts.recentStability.avgPcmBufferedMs <=
+      GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_SEVERE_REBUILD_ACCUMULATION_UNDERTARGET_MIN
+  ) {
+    return true;
+  }
+  return (
+    opts.playoutStarvationSeverity === 'strong' &&
+    opts.opusBufferedMs <= GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS
+  );
 }
 
 export function shouldRetainN1RecoveryPrerollSatisfied(opts: {
@@ -1010,6 +1047,12 @@ const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_PCM_MAX_MS = 60;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS = -20;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS = 1_500;
+const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_MS = 140;
+const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_OPUS_MS = 60;
+const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS =
+  OPUS_FRAME_DURATION_MS * 2;
+const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS = 24;
+const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_UNDERTARGET_MIN = 0.9;
 const GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS = 600;
 const GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS = OPUS_FRAME_DURATION_MS + 1;
 const GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX = 1;
@@ -9931,6 +9974,28 @@ export function useGroupVoiceCall(uiActive = false) {
           );
         }
 
+        const currentAccumulationUntil =
+          jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
+        if (
+          shouldExtendN1SevereRebuildAccumulation({
+            recoverySingleRemote: n1RecoverySingleRemote,
+            prerollActive,
+            severeForcedReleaseRebuildActive:
+              n1SevereForcedReleaseRebuildActive,
+            sourceRecentlyPushed,
+            opusBufferedMs: opusMsPre,
+            recentStability: n1RecentStability,
+            playoutStarvationSeverity: n1PlayoutStarvationSeverity,
+          })
+        ) {
+          jitterAccumulationUntilPerfRef.current.set(
+            addr,
+            Math.max(
+              currentAccumulationUntil,
+              perfWall + GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_MS
+            )
+          );
+        }
         const accUntil = jitterAccumulationUntilPerfRef.current.get(addr) ?? 0;
         const accumulationActive = perfWall < accUntil;
         const accumulationDecodeCap =

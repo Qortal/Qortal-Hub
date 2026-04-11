@@ -39,6 +39,7 @@ import {
   shouldKeepSingleRemoteDegradedRebuildLocal,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldEnableN1DrainReceivePriorityMode,
+  shouldExtendN1SevereRebuildAccumulation,
   shouldTriggerN1InboundMediaWatchdog,
   shouldTriggerN1InboundMediaReannounce,
   shouldTriggerN1SeverePlayoutPathWarm,
@@ -432,6 +433,24 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         opusBufferedMs: 20,
         tier: 'deep',
       })
+    ).toBe(0);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 40,
+        tier: 'deep',
+      })
+    ).toBe(0);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 60,
+        tier: 'deep',
+      })
     ).toBe(3);
     expect(
       computeN1AccumulationDecodeCap({
@@ -457,6 +476,56 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         tier: 'deep',
       })
     ).toBe(1);
+  });
+
+  it('extends severe rebuild accumulation only for live one-on-one PCM dead zones', () => {
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: true,
+        opusBufferedMs: 40,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: true,
+        opusBufferedMs: 80,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: false,
+        opusBufferedMs: 40,
+        recentStability: null,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
   });
 
   it('retains released N===1 recovery preroll across brief empty refills', () => {
