@@ -38,6 +38,7 @@ import {
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   shouldKeepSingleRemoteDegradedRebuildLocal,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
+  shouldEnableN1DrainReceivePriorityMode,
   shouldDropActiveJitterSource,
   shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
@@ -1591,6 +1592,48 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         stableSinceMs: null,
       },
     });
+  });
+
+  it('keeps drain-side receive-priority active while live severe rebuild is still active and hold state exists', () => {
+    expect(
+      shouldEnableN1DrainReceivePriorityMode({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        forceReceivePriorityModeActive: false,
+        hasReceivePrioritySendCapState: true,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 53.957,
+          playoutUnderTargetFraction: 0.709,
+          underrunCount: 10,
+          stable: false,
+          severeInstability: true,
+        },
+        severeForcedReleaseRebuildActive: true,
+      })
+    ).toBe(true);
+  });
+
+  it('drops drain-side receive-priority when the stream is no longer live even if hold state exists', () => {
+    expect(
+      shouldEnableN1DrainReceivePriorityMode({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        forceReceivePriorityModeActive: false,
+        hasReceivePrioritySendCapState: true,
+        lastRecvAgeMs: 2_000,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 53.957,
+          playoutUnderTargetFraction: 0.709,
+          underrunCount: 10,
+          stable: false,
+          severeInstability: true,
+        },
+        severeForcedReleaseRebuildActive: true,
+      })
+    ).toBe(false);
   });
 
   it('only seeds join session state before the root session is adopted', () => {

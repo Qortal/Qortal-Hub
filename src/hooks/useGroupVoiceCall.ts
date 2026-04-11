@@ -1445,6 +1445,29 @@ export function shouldEnterN1ReceivePriorityMode(opts: {
   );
 }
 
+export function shouldEnableN1DrainReceivePriorityMode(opts: {
+  recoverySingleRemote: boolean;
+  prerollActive: boolean;
+  forceReceivePriorityModeActive: boolean;
+  hasReceivePrioritySendCapState: boolean;
+  lastRecvAgeMs: number;
+  recentStability: RecentRecoveryStabilitySummary | null;
+  severeForcedReleaseRebuildActive?: boolean;
+}): boolean {
+  if (!opts.recoverySingleRemote || opts.prerollActive) return false;
+  if (opts.forceReceivePriorityModeActive) return true;
+  if (!opts.hasReceivePrioritySendCapState) return false;
+  if (
+    !Number.isFinite(opts.lastRecvAgeMs) ||
+    opts.lastRecvAgeMs >
+      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS
+  ) {
+    return false;
+  }
+  if (opts.severeForcedReleaseRebuildActive === true) return true;
+  return opts.recentStability !== null && !opts.recentStability.stable;
+}
+
 export function tickN1ReceivePrioritySendBitrateCapState(opts: {
   previousState: N1ReceivePrioritySendBitrateCapState | null;
   activeSourceCount: number;
@@ -9514,13 +9537,17 @@ export function useGroupVoiceCall(uiActive = false) {
               n1SevereForcedReleaseRebuildActiveForMs,
           });
         const n1ReceivePriorityModeActive =
-          n1RecoverySingleRemote &&
-          !prerollActive &&
-          (forceN1ReceivePriorityModeActive ||
-            (sourceRecentlyPushed &&
-              n1RecentStability !== null &&
-              !n1RecentStability.stable &&
-              n1ReceivePrioritySendCapStateRef.current.has(addr)));
+          shouldEnableN1DrainReceivePriorityMode({
+            recoverySingleRemote: n1RecoverySingleRemote,
+            prerollActive,
+            forceReceivePriorityModeActive: forceN1ReceivePriorityModeActive,
+            hasReceivePrioritySendCapState:
+              n1ReceivePrioritySendCapStateRef.current.has(addr),
+            lastRecvAgeMs,
+            recentStability: n1RecentStability,
+            severeForcedReleaseRebuildActive:
+              n1SevereForcedReleaseRebuildActive,
+          });
         const lateCollapseRearmCooldownUntil =
           n1LateCollapseRearmCooldownUntilPerfRef.current.get(addr) ?? 0;
         const shouldRearmLateCollapseRecovery =
