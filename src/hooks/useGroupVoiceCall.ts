@@ -914,6 +914,38 @@ export function shouldExtendN1SevereRebuildAccumulation(opts: {
   );
 }
 
+export function shouldHoldN1SteadyStarvedAccumulation(opts: {
+  steadySingleRemote: boolean;
+  sourceRecentlyPushed: boolean;
+  hasReadyFrame: boolean;
+  opusBufferedMs: number;
+  recentStability: RecentRecoveryStabilitySummary | null;
+  playoutStarvationSeverity: PlayoutStarvationSeverity;
+}): boolean {
+  if (
+    !opts.steadySingleRemote ||
+    !opts.sourceRecentlyPushed ||
+    !opts.hasReadyFrame ||
+    opts.opusBufferedMs > GCALL_N1_STEADY_STARVED_HOLD_OPUS_MAX_MS
+  ) {
+    return false;
+  }
+  if (
+    opts.recentStability !== null &&
+    opts.recentStability.sampleCount >= 2 &&
+    opts.recentStability.avgPcmBufferedMs <=
+      GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN
+  ) {
+    return true;
+  }
+  return (
+    opts.playoutStarvationSeverity === 'strong' &&
+    opts.opusBufferedMs <= GCALL_N1_STEADY_STARVED_HOLD_OPUS_FALLBACK_MS
+  );
+}
+
 export function shouldRetainN1RecoveryPrerollSatisfied(opts: {
   bufferedFrames: number;
   activeSourceCount: number;
@@ -1053,6 +1085,11 @@ const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS =
   OPUS_FRAME_DURATION_MS * 2;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS = 24;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_UNDERTARGET_MIN = 0.9;
+const GCALL_N1_STEADY_STARVED_HOLD_OPUS_MAX_MS = 80;
+const GCALL_N1_STEADY_STARVED_HOLD_OPUS_FALLBACK_MS =
+  OPUS_FRAME_DURATION_MS * 2;
+const GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS = 64;
+const GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS = 600;
 const GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS = OPUS_FRAME_DURATION_MS + 1;
 const GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX = 1;
@@ -9805,7 +9842,7 @@ export function useGroupVoiceCall(uiActive = false) {
           n1RecoveryPrerollBlockedSincePerfRef.current.delete(addr);
         }
 
-        const n1RecentStability = n1RecoverySingleRemote
+        const n1RecentStability = sourceCountForDrain === 1
           ? summarizeRecentRecoveryStability({
               samples: recentPlayoutHealthSamplesRef.current.get(addr) ?? [],
               underrunTimesMs: recentJitterUnderrunAtRef.current.get(addr) ?? [],
@@ -10033,11 +10070,19 @@ export function useGroupVoiceCall(uiActive = false) {
         }
 
         const steadyHoldActive =
-          n1SteadySingleRemote &&
-          n1Tier !== 'normal' &&
-          opusMsPre < steadyMinHoldMs &&
-          jb.hasReadyFrame() &&
-          sourceRecentlyPushed;
+          (n1SteadySingleRemote &&
+            n1Tier !== 'normal' &&
+            opusMsPre < steadyMinHoldMs &&
+            jb.hasReadyFrame() &&
+            sourceRecentlyPushed) ||
+          shouldHoldN1SteadyStarvedAccumulation({
+            steadySingleRemote: n1SteadySingleRemote,
+            sourceRecentlyPushed,
+            hasReadyFrame: jb.hasReadyFrame(),
+            opusBufferedMs: opusMsPre,
+            recentStability: n1RecentStability,
+            playoutStarvationSeverity: n1PlayoutStarvationSeverity,
+          });
         const stallEscapeAllowed =
           n1RecoverySingleRemote &&
           prerollActive &&

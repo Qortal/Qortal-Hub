@@ -40,6 +40,7 @@ import {
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldEnableN1DrainReceivePriorityMode,
   shouldExtendN1SevereRebuildAccumulation,
+  shouldHoldN1SteadyStarvedAccumulation,
   shouldTriggerN1InboundMediaWatchdog,
   shouldTriggerN1InboundMediaReannounce,
   shouldTriggerN1SeverePlayoutPathWarm,
@@ -521,6 +522,63 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         prerollActive: false,
         severeForcedReleaseRebuildActive: true,
         sourceRecentlyPushed: false,
+        opusBufferedMs: 40,
+        recentStability: null,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+  });
+
+  it('holds steady one-on-one drain when live playout is starved at a thin Opus floor', () => {
+    expect(
+      shouldHoldN1SteadyStarvedAccumulation({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        opusBufferedMs: 40,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 49.766,
+          playoutUnderTargetFraction: 0.764,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldHoldN1SteadyStarvedAccumulation({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        opusBufferedMs: 100,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 49.766,
+          playoutUnderTargetFraction: 0.764,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldHoldN1SteadyStarvedAccumulation({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: false,
+        hasReadyFrame: true,
+        opusBufferedMs: 40,
+        recentStability: null,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldHoldN1SteadyStarvedAccumulation({
+        steadySingleRemote: false,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
         opusBufferedMs: 40,
         recentStability: null,
         playoutStarvationSeverity: 'strong',
