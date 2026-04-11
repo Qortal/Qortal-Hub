@@ -1307,6 +1307,19 @@ export function shouldForceN1SevereRebuildReadyEscape(opts: {
   return opts.playoutStarvationSeverity === 'strong';
 }
 
+export function shouldBlockN1RecoveryExitForCurrentJitter(opts: {
+  activeSourceCount: number;
+  bufferedFrames: number;
+  hasReadyFrame: boolean;
+}): boolean {
+  return (
+    opts.activeSourceCount === 1 &&
+    opts.bufferedFrames > 0 &&
+    (!opts.hasReadyFrame ||
+      opts.bufferedFrames <= GCALL_N1_SEVERE_READY_ESCAPE_FRAMES_MAX)
+  );
+}
+
 export function shouldKeepMultiSourceWindowRecoveryLocal(opts: {
   activeSourceCount: number;
   shouldTightenRecovery: boolean;
@@ -3777,6 +3790,24 @@ export function useGroupVoiceCall(uiActive = false) {
     []
   );
 
+  const shouldBlockPeerRecoveryExitForCurrentJitter = useCallback(
+    (peerAddress: string): boolean => {
+      const sourceAddrs = [...activeJitterSourcesRef.current].filter(
+        (sourceAddr) =>
+          sourceIngressPeerRef.current.get(sourceAddr) === peerAddress
+      );
+      if (sourceAddrs.length !== 1) return false;
+      const jb = jitterMapRef.current.get(sourceAddrs[0]!);
+      if (!jb) return false;
+      return shouldBlockN1RecoveryExitForCurrentJitter({
+        activeSourceCount: sourceAddrs.length,
+        bufferedFrames: jb.getBufferedFrames(),
+        hasReadyFrame: jb.hasReadyFrame(),
+      });
+    },
+    []
+  );
+
   const updatePeerRecoveryStability = useCallback(
     (nowMs: number) => {
       const pressureAssessment = lastWindowMetricsRef.current
@@ -3796,10 +3827,13 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         const enteredAt =
           peerRecoveryEnteredAtRef.current.get(peerAddress) ?? nowMs;
+        const currentJitterBlocksExit =
+          shouldBlockPeerRecoveryExitForCurrentJitter(peerAddress);
         const canExit =
           nowMs - enteredAt >= ADAPTIVE_RECOVERY_MIN_DWELL_MS &&
           pressureAssessment?.shouldTightenRecovery !== true &&
-          summary.stable;
+          summary.stable &&
+          !currentJitterBlocksExit;
         if (!canExit) {
           peerRecoveryStableSinceRef.current.delete(peerAddress);
           continue;
@@ -3819,7 +3853,11 @@ export function useGroupVoiceCall(uiActive = false) {
         });
       }
     },
-    [markPeerStable, summarizePeerRecentRecoveryStability]
+    [
+      markPeerStable,
+      shouldBlockPeerRecoveryExitForCurrentJitter,
+      summarizePeerRecentRecoveryStability,
+    ]
   );
 
   const isSourcePlayoutActive = useCallback(
@@ -4291,7 +4329,13 @@ export function useGroupVoiceCall(uiActive = false) {
           peerAddress,
           nowPerf
         );
-        if (entry.relaxedSingleRemote && !recentSummary.severeInstability) {
+        const currentJitterBlocksExit =
+          shouldBlockPeerRecoveryExitForCurrentJitter(peerAddress);
+        if (
+          entry.relaxedSingleRemote &&
+          !recentSummary.severeInstability &&
+          !currentJitterBlocksExit
+        ) {
           markPeerStable(peerAddress, {
             allowRecoveryExit: true,
             nowMs: Date.now(),
@@ -4362,6 +4406,7 @@ export function useGroupVoiceCall(uiActive = false) {
       markPeerStable,
       markPeerUnstable,
       recomputeAdaptiveNetworkMode,
+      shouldBlockPeerRecoveryExitForCurrentJitter,
       summarizePeerRecentRecoveryStability,
     ]
   );

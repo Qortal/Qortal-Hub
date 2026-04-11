@@ -39,6 +39,7 @@ import {
   shouldKeepSingleRemoteDegradedRebuildLocal,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldForceN1SevereRebuildReadyEscape,
+  shouldBlockN1RecoveryExitForCurrentJitter,
   shouldEnableN1DrainReceivePriorityMode,
   shouldExtendN1SevereRebuildAccumulation,
   shouldHoldN1SteadyStarvedAccumulation,
@@ -575,6 +576,44 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         bufferedFrames: 1,
         recentStability: null,
         playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+  });
+
+  it('blocks N===1 recovery exit while current jitter is still thin or unready', () => {
+    expect(
+      shouldBlockN1RecoveryExitForCurrentJitter({
+        activeSourceCount: 1,
+        bufferedFrames: 1,
+        hasReadyFrame: false,
+      })
+    ).toBe(true);
+    expect(
+      shouldBlockN1RecoveryExitForCurrentJitter({
+        activeSourceCount: 1,
+        bufferedFrames: 2,
+        hasReadyFrame: true,
+      })
+    ).toBe(true);
+    expect(
+      shouldBlockN1RecoveryExitForCurrentJitter({
+        activeSourceCount: 1,
+        bufferedFrames: 3,
+        hasReadyFrame: true,
+      })
+    ).toBe(false);
+    expect(
+      shouldBlockN1RecoveryExitForCurrentJitter({
+        activeSourceCount: 2,
+        bufferedFrames: 1,
+        hasReadyFrame: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldBlockN1RecoveryExitForCurrentJitter({
+        activeSourceCount: 1,
+        bufferedFrames: 0,
+        hasReadyFrame: false,
       })
     ).toBe(false);
   });
