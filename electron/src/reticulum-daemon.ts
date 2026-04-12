@@ -63,6 +63,8 @@ const RETICULUM_SHARED_STATE_DIRNAME = 'qortal-shared';
 const RETICULUM_APP_INSTANCE_REGISTRY_FILENAME = 'reticulum-app-instances.json';
 const RETICULUM_SHARED_DAEMON_STATE_FILENAME = 'reticulum-daemon-state.json';
 const RETICULUM_SHARED_TRANSPORT_STATE_FILENAME = 'reticulum-transport-state.json';
+const RETICULUM_SHARED_RPC_KEY_FILENAME = 'reticulum-rpc-key.hex';
+const RETICULUM_RPC_KEY_BYTES = 32;
 const RETICULUM_QORTAL_HUB_NETWORK_NAME = 'qortal-hub';
 const RETICULUM_DISCOVERY_ANNOUNCE_INTERVAL_MINUTES = 5;
 const RETICULUM_DAEMON_STOP_TIMEOUT_MS = 10_000;
@@ -200,6 +202,67 @@ export function getReticulumSharedTransportStatePath(): string {
     getReticulumSharedStateDir(),
     RETICULUM_SHARED_TRANSPORT_STATE_FILENAME
   );
+}
+
+export function getReticulumSharedRpcKeyPath(): string {
+  return path.join(
+    getReticulumSharedStateDir(),
+    RETICULUM_SHARED_RPC_KEY_FILENAME
+  );
+}
+
+function normalizeReticulumRpcKeyHex(value: string): string | null {
+  const trimmed = value.trim().toLowerCase();
+  return /^[0-9a-f]{64}$/.test(trimmed) ? trimmed : null;
+}
+
+function getReticulumSharedRpcKeyHex(): string {
+  const filePath = getReticulumSharedRpcKeyPath();
+  try {
+    const existing = normalizeReticulumRpcKeyHex(
+      fs.readFileSync(filePath, 'utf8')
+    );
+    if (existing) return existing;
+  } catch {
+    /* create below */
+  }
+
+  const generated = crypto.randomBytes(RETICULUM_RPC_KEY_BYTES).toString('hex');
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+
+  try {
+    fs.writeFileSync(filePath, `${generated}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+      flag: 'wx',
+    });
+    return generated;
+  } catch (err) {
+    const code =
+      typeof err === 'object' && err && 'code' in err
+        ? String((err as { code?: unknown }).code ?? '')
+        : '';
+    if (code === 'EEXIST') {
+      try {
+        const raced = normalizeReticulumRpcKeyHex(
+          fs.readFileSync(filePath, 'utf8')
+        );
+        if (raced) return raced;
+      } catch {
+        /* overwrite malformed file below */
+      }
+    }
+  }
+
+  try {
+    fs.writeFileSync(filePath, `${generated}\n`, {
+      encoding: 'utf8',
+      mode: 0o600,
+    });
+  } catch (err) {
+    loggerError(`[Reticulum] Failed to persist shared RPC key ${filePath}:`, err);
+  }
+  return generated;
 }
 
 export function setReticulumInstanceIndex(index: number): void {
@@ -690,6 +753,7 @@ function renderReticulumHeader(
   meshSlice: ReticulumMeshConfigSlice | null | undefined
 ): string {
   const transport = meshSlice?.enableTransport === true ? 'True' : 'False';
+  const rpcKeyHex = getReticulumSharedRpcKeyHex();
   const hasNetworkIdentity =
     typeof meshSlice?.networkIdentityPath === 'string' &&
     meshSlice.networkIdentityPath.length > 0 &&
@@ -701,6 +765,7 @@ share_instance = Yes
 instance_name = ${getReticulumInstanceName()}
 shared_instance_port = ${getReticulumSharedInstancePort()}
 instance_control_port = ${getReticulumControlPort()}
+rpc_key = ${rpcKeyHex}
 `;
   if (meshSlice?.meshDiscoveryClient) {
     block += `discover_interfaces = yes

@@ -162,7 +162,7 @@ const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS_FORWARDER = 5;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_EVIDENCE_COUNT = 4;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DEGRADED_MS = 6_000;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_REQUEST_WINDOW_MS = 15_000;
-const GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DWELL_MS = 10_000;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DWELL_MS = 3_000;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_REMOTE_RX_MISSING_MS = 4_000;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_LOCAL_SEND_RECENT_MS = 12_000;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_PACKET_RX_AGE_CAP_MS = 60_000;
@@ -635,6 +635,10 @@ interface ReticulumAudioPeerState {
   packetDegradedSinceMs: number;
   packetFallbackEvidenceCount: number;
   packetFallbackActivatedAtMs: number;
+  packetFallbackLastProbeAtMs: number;
+  packetFallbackProbeCount: number;
+  packetFallbackExitCount: number;
+  packetFallbackLastDwellMs: number;
   packetLinkFallbackRequestedUntilMs: number;
   packetLinkFallbackReason: string;
   routeKey: string;
@@ -674,6 +678,12 @@ interface GcReticulumAudioSendDiagnostics {
   lastInboundAtMs?: number;
   recoveryReason?: string;
   recoveryHoldUntilMs?: number;
+  linkFallbackActive?: boolean;
+  linkFallbackReason?: string;
+  linkFallbackDwellMs?: number;
+  linkFallbackProbeCount?: number;
+  linkFallbackExitCount?: number;
+  linkFallbackLastDwellMs?: number;
   bridge?: ReticulumAudioQueueSnapshot;
 }
 
@@ -703,6 +713,20 @@ function mergeGcReticulumAudioSendDiagnostics(
     staleDrops: a.staleDrops + b.staleDrops,
     linkUnreadyDrops: a.linkUnreadyDrops + b.linkUnreadyDrops,
     packetSendFailures: a.packetSendFailures + b.packetSendFailures,
+    linkFallbackActive:
+      a.linkFallbackActive || b.linkFallbackActive || undefined,
+    linkFallbackProbeCount: Math.max(
+      a.linkFallbackProbeCount ?? 0,
+      b.linkFallbackProbeCount ?? 0
+    ),
+    linkFallbackExitCount: Math.max(
+      a.linkFallbackExitCount ?? 0,
+      b.linkFallbackExitCount ?? 0
+    ),
+    linkFallbackLastDwellMs: Math.max(
+      a.linkFallbackLastDwellMs ?? 0,
+      b.linkFallbackLastDwellMs ?? 0
+    ),
     bridge: (b.bridge ?? a.bridge) ?? a.bridge,
   };
 }
@@ -3579,6 +3603,7 @@ export class GroupCallManager extends EventEmitter {
     if (state.packetTransportFallback && state.transport === 'link') return;
     state.packetTransportFallback = true;
     state.packetFallbackActivatedAtMs = Date.now();
+    state.packetFallbackLastProbeAtMs = 0;
     state.packetLinkFallbackRequestedUntilMs = 0;
     state.packetLinkFallbackReason = '';
     this.setReticulumAudioTransport(address, state, 'link', reason);
@@ -3588,6 +3613,26 @@ export class GroupCallManager extends EventEmitter {
     if (this.shouldMaintainReticulumAudioLink(state)) {
       void this.openReticulumAudioLinkForAddress(address);
     }
+    this.scheduleReticulumAudioFlush();
+  }
+
+  private deactivateReticulumAudioLinkFallback(
+    address: string,
+    state: ReticulumAudioPeerState,
+    reason: string
+  ): void {
+    const dwellMs =
+      state.packetFallbackActivatedAtMs > 0
+        ? Math.max(0, Date.now() - state.packetFallbackActivatedAtMs)
+        : 0;
+    state.packetTransportFallback = false;
+    state.packetFallbackExitCount += 1;
+    state.packetFallbackLastDwellMs = dwellMs;
+    this.noteReticulumPacketTransportHealthy(state);
+    this.setReticulumAudioTransport(address, state, 'packet', reason);
+    loggerLog(
+      `[GCall] Reticulum audio leaving link fallback address=${address} reason=${reason} dwellMs=${Math.round(dwellMs)} probes=${state.packetFallbackProbeCount}`
+    );
     this.scheduleReticulumAudioFlush();
   }
 
@@ -3633,6 +3678,7 @@ export class GroupCallManager extends EventEmitter {
     state.packetDegradedSinceMs = 0;
     state.packetFallbackEvidenceCount = 0;
     state.packetFallbackActivatedAtMs = 0;
+    state.packetFallbackLastProbeAtMs = 0;
     state.packetLinkFallbackRequestedUntilMs = 0;
     state.packetLinkFallbackReason = '';
   }
@@ -3994,6 +4040,20 @@ export class GroupCallManager extends EventEmitter {
     }
     state.lastPathWarmAtMs = now;
     state.lastRecoveryActionAtMs = now;
+    const fallbackProbe =
+      state.packetTransportFallback && reason === 'packet-fallback-probe';
+    if (fallbackProbe) {
+      state.packetFallbackLastProbeAtMs = now;
+      state.packetFallbackProbeCount += 1;
+      if (
+        state.packetFallbackProbeCount <= 3 ||
+        state.packetFallbackProbeCount % 5 === 0
+      ) {
+        loggerLog(
+          `[GCall] Reticulum packet fallback probe address=${address} count=${state.packetFallbackProbeCount}`
+        );
+      }
+    }
     void bridge
       .warmGroupAudioPath(state.peerPresenceHash)
       .then((result) => {
@@ -4015,12 +4075,11 @@ export class GroupCallManager extends EventEmitter {
           if (!this.canLeaveReticulumPacketFallback(latest)) {
             return;
           }
-          this.noteReticulumPacketTransportHealthy(latest);
           if (latest.packetTransportFallback || latest.transport !== 'packet') {
-            latest.packetTransportFallback = false;
-            this.setReticulumAudioTransport(address, latest, 'packet', reason);
-            this.scheduleReticulumAudioFlush();
+            this.deactivateReticulumAudioLinkFallback(address, latest, reason);
+            return;
           }
+          this.noteReticulumPacketTransportHealthy(latest);
           return;
         }
         if (!pathKnownUnready) return;
@@ -4227,6 +4286,10 @@ export class GroupCallManager extends EventEmitter {
         packetDegradedSinceMs: 0,
         packetFallbackEvidenceCount: 0,
         packetFallbackActivatedAtMs: 0,
+        packetFallbackLastProbeAtMs: 0,
+        packetFallbackProbeCount: 0,
+        packetFallbackExitCount: 0,
+        packetFallbackLastDwellMs: 0,
         packetLinkFallbackRequestedUntilMs: 0,
         packetLinkFallbackReason: '',
         routeKey: this.computeReticulumAudioRouteKey(transport, peerPresenceHash),
@@ -4652,6 +4715,8 @@ export class GroupCallManager extends EventEmitter {
     address?: string,
     deltas?: Partial<Omit<GcReticulumAudioSendDiagnostics, 'pendingFrames' | 'bridge'>>
   ): GcReticulumAudioSendDiagnostics {
+    const now = Date.now();
+    const fallbackActive = state?.packetTransportFallback === true;
     return {
       transport: state?.transport ?? this.getReticulumAudioTransportKind(),
       pendingFrames: state?.pending.length ?? 0,
@@ -4666,6 +4731,26 @@ export class GroupCallManager extends EventEmitter {
       ...(state?.recoveryReason ? { recoveryReason: state.recoveryReason } : {}),
       ...(state && state.recoveryHoldUntilMs > 0
         ? { recoveryHoldUntilMs: state.recoveryHoldUntilMs }
+        : {}),
+      ...(fallbackActive
+        ? {
+            linkFallbackActive: true,
+            linkFallbackReason:
+              state?.recoveryReason || state?.packetLinkFallbackReason || '',
+            linkFallbackDwellMs:
+              state && state.packetFallbackActivatedAtMs > 0
+                ? Math.max(0, now - state.packetFallbackActivatedAtMs)
+                : 0,
+          }
+        : {}),
+      ...(state && state.packetFallbackProbeCount > 0
+        ? { linkFallbackProbeCount: state.packetFallbackProbeCount }
+        : {}),
+      ...(state && state.packetFallbackExitCount > 0
+        ? { linkFallbackExitCount: state.packetFallbackExitCount }
+        : {}),
+      ...(state && state.packetFallbackLastDwellMs > 0
+        ? { linkFallbackLastDwellMs: state.packetFallbackLastDwellMs }
         : {}),
       bridge:
         state && this.reticulumBridge
@@ -4868,6 +4953,22 @@ export class GroupCallManager extends EventEmitter {
           diagnostics.linkUnreadyDrops + flushed.diagnostics.linkUnreadyDrops,
         packetSendFailures:
           diagnostics.packetSendFailures + flushed.diagnostics.packetSendFailures,
+        linkFallbackActive:
+          diagnostics.linkFallbackActive ||
+          flushed.diagnostics.linkFallbackActive ||
+          undefined,
+        linkFallbackProbeCount: Math.max(
+          diagnostics.linkFallbackProbeCount ?? 0,
+          flushed.diagnostics.linkFallbackProbeCount ?? 0
+        ),
+        linkFallbackExitCount: Math.max(
+          diagnostics.linkFallbackExitCount ?? 0,
+          flushed.diagnostics.linkFallbackExitCount ?? 0
+        ),
+        linkFallbackLastDwellMs: Math.max(
+          diagnostics.linkFallbackLastDwellMs ?? 0,
+          flushed.diagnostics.linkFallbackLastDwellMs ?? 0
+        ),
         bridge: flushed.diagnostics.bridge ?? diagnostics.bridge,
       };
       if (bridgePressured) break;
@@ -5012,6 +5113,10 @@ export class GroupCallManager extends EventEmitter {
           packetDegradedSinceMs: 0,
           packetFallbackEvidenceCount: 0,
           packetFallbackActivatedAtMs: 0,
+          packetFallbackLastProbeAtMs: 0,
+          packetFallbackProbeCount: 0,
+          packetFallbackExitCount: 0,
+          packetFallbackLastDwellMs: 0,
           packetLinkFallbackRequestedUntilMs: 0,
           packetLinkFallbackReason: '',
           routeKey: this.computeReticulumAudioRouteKey(

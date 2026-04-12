@@ -365,6 +365,12 @@ declare global {
           lastInboundAtMs?: number;
           recoveryReason?: string;
           recoveryHoldUntilMs?: number;
+          linkFallbackActive?: boolean;
+          linkFallbackReason?: string;
+          linkFallbackDwellMs?: number;
+          linkFallbackProbeCount?: number;
+          linkFallbackExitCount?: number;
+          linkFallbackLastDwellMs?: number;
           bridge?: {
             bridgeQueuedFrames: number;
             bridgeQueuedBytes: number;
@@ -412,6 +418,12 @@ declare global {
           lastInboundAtMs?: number;
           recoveryReason?: string;
           recoveryHoldUntilMs?: number;
+          linkFallbackActive?: boolean;
+          linkFallbackReason?: string;
+          linkFallbackDwellMs?: number;
+          linkFallbackProbeCount?: number;
+          linkFallbackExitCount?: number;
+          linkFallbackLastDwellMs?: number;
           bridge?: {
             bridgeQueuedFrames: number;
             bridgeQueuedBytes: number;

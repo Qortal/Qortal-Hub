@@ -25,6 +25,7 @@ import {
   getReticulumDaemonStatus,
   getReticulumAppInstanceRegistryPath,
   getReticulumSharedDaemonStatePath,
+  getReticulumSharedRpcKeyPath,
   planReticulumAppQuit,
   recoverReticulumStateForAppLaunch,
   registerReticulumAppInstance,
@@ -45,6 +46,7 @@ describe('reticulum-daemon managed config', () => {
     for (const filePath of [
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
+      getReticulumSharedRpcKeyPath(),
     ]) {
       try {
         fs.unlinkSync(filePath);
@@ -64,6 +66,7 @@ describe('reticulum-daemon managed config', () => {
     for (const filePath of [
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
+      getReticulumSharedRpcKeyPath(),
     ]) {
       try {
         fs.unlinkSync(filePath);
@@ -84,6 +87,7 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('[[Default Interface]]');
     expect(config).toContain('type = AutoInterface');
     expect(config).toContain('enabled = yes');
+    expect(config).toMatch(/\nrpc_key = [0-9a-f]{64}\n/);
 
     for (const hub of DEFAULT_RETICULUM_HUBS) {
       expect(config).toContain(`[[${hub.name}]]`);
@@ -119,6 +123,17 @@ describe('reticulum-daemon managed config', () => {
     expect(config).toContain('[[Hub Two]]');
     expect(config).toContain('target_host = two.example');
     expect(config).toContain('target_port = 2222');
+  });
+
+  it('uses one persisted RPC key for every managed config render', () => {
+    const first = buildManagedReticulumConfig();
+    const second = buildManagedReticulumConfig();
+    const keyPath = getReticulumSharedRpcKeyPath();
+    const keyOnDisk = fs.readFileSync(keyPath, 'utf8').trim();
+
+    expect(keyOnDisk).toMatch(/^[0-9a-f]{64}$/);
+    expect(first).toContain(`rpc_key = ${keyOnDisk}`);
+    expect(second).toContain(`rpc_key = ${keyOnDisk}`);
   });
 
   it('uses remote for Backbone hubs on Linux', () => {

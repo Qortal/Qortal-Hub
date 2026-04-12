@@ -82,6 +82,7 @@ const GCALL_PROTECTED_DIAGNOSTIC_TAGS = new Set([
   '[GCall] inboundMediaMissing',
   '[GCall] inboundMediaReannounce',
   '[GCall] localJoinReannounce',
+  '[GCall] n1SevereRebuildDeadzoneReset',
   '[GCall] n1SevereRebuildReadyEscape',
   '[GCall] peerMediaRecoveryRequested',
   '[GCall] peerMediaRecoveryRequestFailed',

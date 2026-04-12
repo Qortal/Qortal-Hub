@@ -36,13 +36,18 @@ import {
   tickN1ReceivePrioritySendBitrateCapState,
   computeWeakSingleRemoteRecoveryHoldState,
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
+  computeSingleRemoteOverbufferTargetMaxMs,
   shouldKeepSingleRemoteDegradedRebuildLocal,
+  shouldKeepSingleRemoteSevereRebuildDeadzoneLocal,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldForceN1SevereRebuildReadyEscape,
+  shouldResetN1SevereRebuildDeadzone,
   shouldBlockN1RecoveryExitForCurrentJitter,
   shouldEnableN1DrainReceivePriorityMode,
   shouldExtendN1SevereRebuildAccumulation,
   shouldHoldN1SteadyStarvedAccumulation,
+  shouldHoldN1SteadyThinDeadzoneAccumulation,
+  shouldPromoteLiveN1PlayoutDeadzoneToStrong,
   shouldTriggerN1InboundMediaWatchdog,
   shouldTriggerN1InboundMediaReannounce,
   shouldTriggerN1SeverePlayoutPathWarm,
@@ -51,6 +56,7 @@ import {
   shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
   shouldKeepSingleRemoteWindowRecoveryLocal,
+  shouldSuppressSingleRemoteBufferedWindowRecovery,
   shouldRetainN1RecoveryPrerollSatisfied,
   shouldRelaxSingleRemoteWindowRecovery,
   shouldIgnoreParticipantLeftEvent,
@@ -106,6 +112,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     const lastPlayoutTargetPostAt = new Map([['alice', 1234]]);
     const lastDrainMissed = new Map([['alice', 2]]);
     const n1WeakLiveHoldUntilPerf = new Map([['alice', 1400]]);
+    const n1SteadyThinLiveSincePerf = new Map([['alice', 1500]]);
     const n1ReceivePrioritySendCapState = new Map([
       ['alice', { holdUntilMs: 1700, stableSinceMs: null }],
     ]);
@@ -118,6 +125,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       lastPlayoutTargetPostAt,
       lastDrainMissed,
       n1WeakLiveHoldUntilPerf,
+      n1SteadyThinLiveSincePerf,
       n1ReceivePrioritySendCapState,
     });
 
@@ -128,6 +136,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(lastPlayoutTargetPostAt.size).toBe(0);
     expect(lastDrainMissed.size).toBe(0);
     expect(n1WeakLiveHoldUntilPerf.size).toBe(0);
+    expect(n1SteadyThinLiveSincePerf.size).toBe(0);
     expect(n1ReceivePrioritySendCapState.size).toBe(0);
   });
 
@@ -565,7 +574,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
-  it('force-primes a live severe one-frame rebuild that is blocked by jitter readiness', () => {
+  it('does not force-prime a live severe rebuild while it is still stuck at two frames', () => {
     expect(
       shouldForceN1SevereRebuildReadyEscape({
         recoverySingleRemote: true,
@@ -575,6 +584,28 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         sourceRecentlyPushed: true,
         hasReadyFrame: false,
         bufferedFrames: 2,
+        targetMs: 100,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldForceN1SevereRebuildReadyEscape({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 1_200,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: false,
+        bufferedFrames: 5,
+        targetMs: 100,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 0.021,
@@ -595,6 +626,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         sourceRecentlyPushed: true,
         hasReadyFrame: true,
         bufferedFrames: 1,
+        targetMs: 100,
         recentStability: null,
         playoutStarvationSeverity: 'strong',
       })
@@ -608,7 +640,74 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         sourceRecentlyPushed: false,
         hasReadyFrame: false,
         bufferedFrames: 1,
+        targetMs: 100,
         recentStability: null,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+  });
+
+  it('re-prerolls a sustained severe rebuild that is live but stuck in a PCM deadzone', () => {
+    expect(
+      shouldResetN1SevereRebuildDeadzone({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 6_500,
+        sourceRecentlyPushed: true,
+        lastRecvAgeMs: 140,
+        bufferedFrames: 2,
+        targetMs: 100,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldResetN1SevereRebuildDeadzone({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 5_500,
+        sourceRecentlyPushed: true,
+        lastRecvAgeMs: 140,
+        bufferedFrames: 2,
+        targetMs: 100,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldResetN1SevereRebuildDeadzone({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 6_500,
+        sourceRecentlyPushed: true,
+        lastRecvAgeMs: 140,
+        bufferedFrames: 5,
+        targetMs: 100,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
         playoutStarvationSeverity: 'strong',
       })
     ).toBe(false);
@@ -633,6 +732,13 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       shouldBlockN1RecoveryExitForCurrentJitter({
         activeSourceCount: 1,
         bufferedFrames: 3,
+        hasReadyFrame: true,
+      })
+    ).toBe(true);
+    expect(
+      shouldBlockN1RecoveryExitForCurrentJitter({
+        activeSourceCount: 1,
+        bufferedFrames: 5,
         hasReadyFrame: true,
       })
     ).toBe(false);
@@ -705,6 +811,106 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         opusBufferedMs: 40,
         recentStability: null,
         playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+  });
+
+  it('holds steady one-on-one drain after a persistent two-frame live deadzone', () => {
+    expect(
+      shouldHoldN1SteadyThinDeadzoneAccumulation({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        tier: 'moderate',
+        opusBufferedMs: 40,
+        targetMs: 100,
+        thinLiveForMs: 2_500,
+        recentStability: null,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(true);
+    expect(
+      shouldHoldN1SteadyThinDeadzoneAccumulation({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        tier: 'moderate',
+        opusBufferedMs: 40,
+        targetMs: 100,
+        thinLiveForMs: 1_500,
+        recentStability: null,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(false);
+    expect(
+      shouldHoldN1SteadyThinDeadzoneAccumulation({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        tier: 'moderate',
+        opusBufferedMs: 60,
+        targetMs: 100,
+        thinLiveForMs: 2_500,
+        recentStability: null,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(false);
+    expect(
+      shouldHoldN1SteadyThinDeadzoneAccumulation({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        tier: 'normal',
+        opusBufferedMs: 40,
+        targetMs: 100,
+        thinLiveForMs: 2_500,
+        recentStability: null,
+        playoutStarvationSeverity: 'none',
+      })
+    ).toBe(false);
+  });
+
+  it('promotes live one-on-one PCM deadzone to strong starvation before the next metrics window', () => {
+    expect(
+      shouldPromoteLiveN1PlayoutDeadzoneToStrong({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 140,
+        recentStability: {
+          sampleCount: 12,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: true,
+        },
+      })
+    ).toBe(true);
+    expect(
+      shouldPromoteLiveN1PlayoutDeadzoneToStrong({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 2_000,
+        recentStability: {
+          sampleCount: 12,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: true,
+        },
+      })
+    ).toBe(false);
+    expect(
+      shouldPromoteLiveN1PlayoutDeadzoneToStrong({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 140,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 0,
+          stable: false,
+          severeInstability: true,
+        },
       })
     ).toBe(false);
   });
@@ -1000,6 +1206,161 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         reticulumAudioPacketPathTimeouts: 0,
       })
     ).toBe(false);
+  });
+
+  it('keeps the 40ms severe rebuild deadzone local when packet delivery is healthy', () => {
+    expect(
+      shouldKeepSingleRemoteSevereRebuildDeadzoneLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 40,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -99.979,
+        missingFrames: 0,
+        jitterBufferDepthFramesMean: 2,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 300_000,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldKeepSingleRemoteSevereRebuildDeadzoneLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 40,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -99.979,
+        missingFrames: 0,
+        jitterBufferDepthFramesMean: 2,
+        severeForcedReleaseRebuildActive: false,
+        severeForcedReleaseRebuildActiveForMs: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldKeepSingleRemoteSevereRebuildDeadzoneLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 40,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -99.979,
+        missingFrames: 0,
+        jitterBufferDepthFramesMean: 2,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 300_000,
+        packetsDroppedPendingDecrypt: 1,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('suppresses remote media recovery for healthy one-on-one over-buffering', () => {
+    expect(
+      shouldSuppressSingleRemoteBufferedWindowRecovery({
+        activeSourceCount: 1,
+        avgPcmBufferedMs: 193,
+        adaptiveTargetMedianMs: 145,
+        avgPlayoutDeltaMs: 53,
+        playoutUnderTargetFraction: 0.05,
+        jitterNotReadyFraction: 0,
+        jitterRawEmptyFraction: 0,
+        packetsDropped: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldSuppressSingleRemoteBufferedWindowRecovery({
+        activeSourceCount: 1,
+        avgPcmBufferedMs: 193,
+        adaptiveTargetMedianMs: 145,
+        avgPlayoutDeltaMs: 53,
+        playoutUnderTargetFraction: 0.05,
+        jitterNotReadyFraction: 0,
+        jitterRawEmptyFraction: 0,
+        packetsDropped: 0,
+        packetsDroppedPendingDecrypt: 1,
+        reticulumAudioQueuePressureDrops: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldSuppressSingleRemoteBufferedWindowRecovery({
+        activeSourceCount: 2,
+        avgPcmBufferedMs: 193,
+        adaptiveTargetMedianMs: 145,
+        avgPlayoutDeltaMs: 53,
+        playoutUnderTargetFraction: 0.05,
+        jitterNotReadyFraction: 0,
+        jitterRawEmptyFraction: 0,
+        packetsDropped: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('caps one-on-one target max downward when the playout buffer is safely above target', () => {
+    expect(
+      computeSingleRemoteOverbufferTargetMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        activeSourceCount: 1,
+        avgPcmBufferedMs: 193,
+        avgPlayoutDeltaMs: 53,
+        playoutUnderTargetFraction: 0.05,
+        jitterNotReadyFraction: 0,
+        jitterRawEmptyFraction: 0,
+        observedTargetMs: 145,
+        packetsDropped: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(130);
+
+    expect(
+      computeSingleRemoteOverbufferTargetMaxMs({
+        currentAdaptiveMaxTargetMs: 145,
+        activeSourceCount: 1,
+        avgPcmBufferedMs: 193,
+        avgPlayoutDeltaMs: 53,
+        playoutUnderTargetFraction: 0.05,
+        jitterNotReadyFraction: 0.2,
+        jitterRawEmptyFraction: 0,
+        observedTargetMs: 145,
+        packetsDropped: 0,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBeNull();
   });
 
   it('keeps degraded-link severe rebuild local for a live one-on-one path stuck at 20-40ms', () => {
