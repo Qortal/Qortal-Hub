@@ -244,6 +244,7 @@ import {
   stepDecryptOverloadState,
 } from '../lib/group-call/gcallAudioEscalation';
 import {
+  choosePendingDecryptDropCandidate,
   computePendingDecryptPreOverloadClampMax,
   computePendingDecryptOverloadMax,
   computePendingDecryptLimits,
@@ -989,6 +990,46 @@ function summarizeSourceTickCounters(map: ReadonlyMap<string, number>): {
     }));
   const dominantShare = total > 0 ? topSources[0]?.share ?? 0 : 0;
   return { total, dominantShare, topSources };
+}
+
+function incrementLatencyTickCounter(
+  map: Map<string, { count: number; sumMs: number; maxMs: number }>,
+  sourceAddr: string,
+  latencyMs: number
+): void {
+  const safeLatencyMs = Math.max(0, Number.isFinite(latencyMs) ? latencyMs : 0);
+  const current = map.get(sourceAddr) ?? { count: 0, sumMs: 0, maxMs: 0 };
+  current.count += 1;
+  current.sumMs += safeLatencyMs;
+  current.maxMs = Math.max(current.maxMs, safeLatencyMs);
+  map.set(sourceAddr, current);
+}
+
+function summarizeLatencyTickCounters(
+  map: ReadonlyMap<string, { count: number; sumMs: number; maxMs: number }>
+): {
+  total: number;
+  maxMs: number;
+  topSources: Array<{
+    sourceAddr: string;
+    count: number;
+    avgMs: number;
+    maxMs: number;
+  }>;
+} {
+  const entries = [...map.entries()].filter(([, stats]) => stats.count > 0);
+  const total = entries.reduce((sum, [, stats]) => sum + stats.count, 0);
+  const maxMs = entries.reduce((max, [, stats]) => Math.max(max, stats.maxMs), 0);
+  const topSources = entries
+    .sort((a, b) => b[1].maxMs - a[1].maxMs)
+    .slice(0, 3)
+    .map(([sourceAddr, stats]) => ({
+      sourceAddr: truncateGcallDiagAddress(sourceAddr),
+      count: stats.count,
+      avgMs: Math.round(stats.sumMs / Math.max(1, stats.count)),
+      maxMs: Math.round(stats.maxMs),
+    }));
+  return { total, maxMs: Math.round(maxMs), topSources };
 }
 
 export function shouldRelaxSingleRemoteWindowRecovery(opts: {
@@ -3378,6 +3419,9 @@ export function useGroupVoiceCall(uiActive = false) {
     new Map()
   );
   const lastPlayoutStarvationDiagAtRef = useRef<Map<string, number>>(new Map());
+  const lastPlayoutStarvationDiagKeyRef = useRef<Map<string, string>>(
+    new Map()
+  );
   const microWidenCeilingLiftUntilRef = useRef<Map<string, number>>(new Map());
   const strongCStreakRef = useRef<Map<string, number>>(new Map());
   const decayGuardCalmStartRef = useRef<Map<string, number>>(new Map());
@@ -3427,9 +3471,26 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastLongTaskCountAtIntervalRef = useRef(0);
   const lastPendingDecryptDepthWarnAtRef = useRef(0);
   const lastPendingDecryptPreOverloadActiveRef = useRef(false);
+  const pendingDecryptPreOverloadActiveRef = useRef(false);
+  const lastPendingDecryptPressureDiagAtRef = useRef(0);
   const lastMultiSourceLoadBalanceDiagAtRef = useRef(0);
   const ingressPacketsBySourceTickRef = useRef<Map<string, number>>(new Map());
   const decodeFramesBySourceTickRef = useRef<Map<string, number>>(new Map());
+  const pendingDecryptQueuedByIngressTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const pendingDecryptCompletedByIngressTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const pendingDecryptDropsByIngressTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const pendingDecryptDropsByReasonTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const pendingDecryptLatencyByIngressTickRef = useRef<
+    Map<string, { count: number; sumMs: number; maxMs: number }>
+  >(new Map());
   /** Bytes last posted to worker — avoid redundant setRoomKey (sync path when no worker). */
   const lastWorkerRoomKeyRef = useRef<Uint8Array | null>(null);
   const decryptWorkerKeyVersionRef = useRef(0);
@@ -5300,12 +5361,20 @@ export function useGroupVoiceCall(uiActive = false) {
       const lastStarvDiag =
         lastPlayoutStarvationDiagAtRef.current.get(addr) ?? 0;
       const starvationDiagThrottleMs = 5_000;
+      const starvationDiagTransitionThrottleMs = 1_000;
+      const starvationDiagKey = `${nextStarvationSev}:${starvationSeverityReason}`;
+      const lastStarvDiagKey =
+        lastPlayoutStarvationDiagKeyRef.current.get(addr) ?? '';
+      const starvationDiagStateChanged =
+        starvationDiagKey !== lastStarvDiagKey;
       const shouldStarvationDiag =
-        prevStarvationSev !== nextStarvationSev ||
+        (starvationDiagStateChanged &&
+          wallNow - lastStarvDiag >= starvationDiagTransitionThrottleMs) ||
         (nextStarvationSev !== 'none' &&
           wallNow - lastStarvDiag >= starvationDiagThrottleMs);
       if (shouldStarvationDiag && starvationHasMinSample) {
         lastPlayoutStarvationDiagAtRef.current.set(addr, wallNow);
+        lastPlayoutStarvationDiagKeyRef.current.set(addr, starvationDiagKey);
         gcallDiagnosticsPush('info', '[GCall] playoutStarvation', {
           sourceAddr: truncateGcallDiagAddress(addr),
           severity: nextStarvationSev,
@@ -6372,6 +6441,7 @@ export function useGroupVoiceCall(uiActive = false) {
         activeSourceCount,
         longTaskPressure: overloadLongTaskPressureRef.current,
       });
+      pendingDecryptPreOverloadActiveRef.current = preOverloadActive;
       const requested = computeRequestedBurstMaxFromSignals({
         peerCount,
         ingressPacketsPerSec: ingressPps,
@@ -6437,6 +6507,59 @@ export function useGroupVoiceCall(uiActive = false) {
         decodeFramesBySourceTickRef.current
       );
       decodeFramesBySourceTickRef.current.clear();
+      const pendingQueuedByIngress = summarizeSourceTickCounters(
+        pendingDecryptQueuedByIngressTickRef.current
+      );
+      const pendingCompletedByIngress = summarizeSourceTickCounters(
+        pendingDecryptCompletedByIngressTickRef.current
+      );
+      const pendingDropsByIngress = summarizeSourceTickCounters(
+        pendingDecryptDropsByIngressTickRef.current
+      );
+      const pendingDropReasons = [...pendingDecryptDropsByReasonTickRef.current]
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1])
+        .map(([reason, count]) => ({ reason, count }));
+      const pendingLatencyByIngress = summarizeLatencyTickCounters(
+        pendingDecryptLatencyByIngressTickRef.current
+      );
+      const shouldLogPendingDecryptPressure =
+        (pendingDropsByIngress.total > 0 ||
+          pendingLatencyByIngress.maxMs >= 250 ||
+          pendingDepth >= 64 ||
+          pendingDecryptApplyQueueRef.current.length >= 8) &&
+        wallNow - lastPendingDecryptPressureDiagAtRef.current >= 1_000;
+      if (shouldLogPendingDecryptPressure) {
+        lastPendingDecryptPressureDiagAtRef.current = wallNow;
+        gcallDiagnosticsPush('info', '[GCall] pendingDecryptPressure', {
+          pendingDepth,
+          applyQueueDepth: pendingDecryptApplyQueueRef.current.length,
+          overloadActive: decryptOverloadStateRef.current.active,
+          preOverloadActive,
+          decryptBurst: burstWindow,
+          effectiveBurstMax: Math.round(effectiveBurstMaxRef.current),
+          queuedByIngress: pendingQueuedByIngress.topSources,
+          completedByIngress: pendingCompletedByIngress.topSources,
+          dropsByIngress: pendingDropsByIngress.topSources,
+          dropReasons: pendingDropReasons,
+          workerLatencyByIngress: pendingLatencyByIngress.topSources,
+          workerLatencyMaxMs: pendingLatencyByIngress.maxMs,
+        });
+        pendingDecryptQueuedByIngressTickRef.current.clear();
+        pendingDecryptCompletedByIngressTickRef.current.clear();
+        pendingDecryptDropsByIngressTickRef.current.clear();
+        pendingDecryptDropsByReasonTickRef.current.clear();
+        pendingDecryptLatencyByIngressTickRef.current.clear();
+      } else if (
+        pendingDropsByIngress.total === 0 &&
+        pendingLatencyByIngress.maxMs < 250 &&
+        pendingDepth < 64 &&
+        pendingDecryptApplyQueueRef.current.length < 8
+      ) {
+        pendingDecryptQueuedByIngressTickRef.current.clear();
+        pendingDecryptCompletedByIngressTickRef.current.clear();
+        pendingDecryptLatencyByIngressTickRef.current.clear();
+      }
       if (preOverloadActive !== lastPendingDecryptPreOverloadActiveRef.current) {
         lastPendingDecryptPreOverloadActiveRef.current = preOverloadActive;
         gcallDiagnosticsPush('info', '[GCall] pendingDecryptPreOverload', {
@@ -6717,7 +6840,8 @@ export function useGroupVoiceCall(uiActive = false) {
         isForwarder: pendingDecryptForwarderPolicy,
         longTaskPressure: overloadLongTaskPressureRef.current,
         activeSourceCount,
-      })
+      }),
+      pendingDecryptPreOverloadActiveRef.current
     );
   }, []);
 
@@ -6846,39 +6970,77 @@ export function useGroupVoiceCall(uiActive = false) {
     ]
   );
 
+  const recordPendingDecryptDrop = useCallback(
+    (
+      pending: { ingressPeerAddress: string },
+      reason: 'cap' | 'ttl'
+    ) => {
+      metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
+      incrementSourceTickCounter(
+        pendingDecryptDropsByIngressTickRef.current,
+        pending.ingressPeerAddress
+      );
+      incrementSourceTickCounter(
+        pendingDecryptDropsByReasonTickRef.current,
+        reason
+      );
+    },
+    []
+  );
+
+  const recordPendingDecryptWorkerCompletion = useCallback(
+    (
+      pending: { startedAt: number; ingressPeerAddress: string },
+      completedAt: number
+    ) => {
+      incrementSourceTickCounter(
+        pendingDecryptCompletedByIngressTickRef.current,
+        pending.ingressPeerAddress
+      );
+      incrementLatencyTickCounter(
+        pendingDecryptLatencyByIngressTickRef.current,
+        pending.ingressPeerAddress,
+        completedAt - pending.startedAt
+      );
+    },
+    []
+  );
+
   const sweepStalePendingDecrypts = useCallback(
     (nowMs: number, ttlMs: number) => {
       const m = pendingDecryptsRef.current;
       for (const [id, p] of m) {
         if (nowMs - p.startedAt > ttlMs) {
           m.delete(id);
-          metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
+          recordPendingDecryptDrop(p, 'ttl');
         }
       }
       recordPendingDecryptDepth(m.size);
     },
-    [recordPendingDecryptDepth]
+    [recordPendingDecryptDepth, recordPendingDecryptDrop]
   );
 
   const ensurePendingDecryptCap = useCallback(
-    (max: number) => {
+    (max: number, incomingIngressPeerAddress: string) => {
       const m = pendingDecryptsRef.current;
       while (m.size >= max) {
-        let oldestId: number | null = null;
-        let oldestT = Infinity;
-        for (const [id, p] of m) {
-          if (p.startedAt < oldestT) {
-            oldestT = p.startedAt;
-            oldestId = id;
-          }
-        }
-        if (oldestId === null) break;
-        m.delete(oldestId);
-        metricsRef.current.recordPacketDroppedWithReason('pending-decrypt');
+        const dropId = choosePendingDecryptDropCandidate(
+          [...m.entries()].map(([id, pending]) => ({
+            id,
+            startedAt: pending.startedAt,
+            ingressPeerAddress: pending.ingressPeerAddress,
+          })),
+          incomingIngressPeerAddress,
+          max
+        );
+        if (dropId === null) break;
+        const pending = m.get(dropId);
+        m.delete(dropId);
+        if (pending) recordPendingDecryptDrop(pending, 'cap');
       }
       recordPendingDecryptDepth(m.size);
     },
-    [recordPendingDecryptDepth]
+    [recordPendingDecryptDepth, recordPendingDecryptDrop]
   );
 
   /** After decrypt (worker or sync): authenticated gating, forward opaque wire, jitter. */
@@ -9399,7 +9561,7 @@ export function useGroupVoiceCall(uiActive = false) {
           );
           return;
         }
-        ensurePendingDecryptCap(decryptLimits.max);
+        ensurePendingDecryptCap(decryptLimits.max, ingressPeerAddress);
         const id = decryptIdRef.current++;
         const workerBuffer = data.slice(0);
         pendingDecryptsRef.current.set(id, {
@@ -9409,6 +9571,10 @@ export function useGroupVoiceCall(uiActive = false) {
           ingressPeerAddress,
           workerKeyVersion: decryptWorkerKeyVersionRef.current,
         });
+        incrementSourceTickCounter(
+          pendingDecryptQueuedByIngressTickRef.current,
+          ingressPeerAddress
+        );
         recordPendingDecryptDepth(pendingDecryptsRef.current.size);
         decryptWorkerRef.current.postMessage(
           { type: 'decrypt', id, buffer: workerBuffer },
@@ -12116,6 +12282,7 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         return;
       }
+      recordPendingDecryptWorkerCompletion(pending, performance.now());
       if (pending.workerKeyVersion !== decryptWorkerKeyVersionRef.current) {
         const pendingKv = pending.workerKeyVersion;
         const currentKv = decryptWorkerKeyVersionRef.current;
@@ -12209,6 +12376,7 @@ export function useGroupVoiceCall(uiActive = false) {
     logSendPathDiagnostic,
     armDecryptBurstRecoveryWindow,
     recordPendingDecryptDepth,
+    recordPendingDecryptWorkerCompletion,
     recordPerfDuration,
     syncDecryptWorkerRoomKey,
   ]);
@@ -13086,9 +13254,16 @@ export function useGroupVoiceCall(uiActive = false) {
       pendingDecryptApplyQueueRef.current.length = 0;
       previousDepthForOverloadRef.current = 0;
       lastPendingDecryptPreOverloadActiveRef.current = false;
+      pendingDecryptPreOverloadActiveRef.current = false;
+      lastPendingDecryptPressureDiagAtRef.current = 0;
       lastMultiSourceLoadBalanceDiagAtRef.current = 0;
       ingressPacketsBySourceTickRef.current.clear();
       decodeFramesBySourceTickRef.current.clear();
+      pendingDecryptQueuedByIngressTickRef.current.clear();
+      pendingDecryptCompletedByIngressTickRef.current.clear();
+      pendingDecryptDropsByIngressTickRef.current.clear();
+      pendingDecryptDropsByReasonTickRef.current.clear();
+      pendingDecryptLatencyByIngressTickRef.current.clear();
       overloadLongTaskPressureRef.current = false;
       lastLongTaskCountAtIntervalRef.current = 0;
 

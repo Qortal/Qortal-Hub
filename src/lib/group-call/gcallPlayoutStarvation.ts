@@ -143,14 +143,14 @@ export function stepPlayoutStarvationSeverity(input: {
   const MILD_EXIT = GCALL_STARVATION_MILD_ADEQUACY_EXIT;
 
   if (held === 'strong') {
+    if (strongMeta.strong && strongMeta.reason) {
+      return { next: 'strong', severityReason: strongMeta.reason };
+    }
     if (bufferAdequacy > MILD_EXIT) {
       return { next: 'none', severityReason: 'none' };
     }
     if (bufferAdequacy > STRONG_EXIT) {
       return { next: 'mild', severityReason: 'mild-adequacy' };
-    }
-    if (strongMeta.strong && strongMeta.reason) {
-      return { next: 'strong', severityReason: strongMeta.reason };
     }
     return {
       next: 'strong',
@@ -164,11 +164,11 @@ export function stepPlayoutStarvationSeverity(input: {
   }
 
   if (held === 'mild') {
-    if (bufferAdequacy > MILD_EXIT) {
-      return { next: 'none', severityReason: 'none' };
-    }
     if (strongMeta.strong && strongMeta.reason) {
       return { next: 'strong', severityReason: strongMeta.reason };
+    }
+    if (bufferAdequacy > MILD_EXIT) {
+      return { next: 'none', severityReason: 'none' };
     }
     return { next: 'mild', severityReason: 'mild-adequacy' };
   }

@@ -1122,6 +1122,8 @@ export class GroupCallManager extends EventEmitter {
   private participantNodeIds = new Map<string, string>();
   /** Fallback address → peer presence hash learned from verified inbound Reticulum traffic. */
   private reticulumPeerPresenceHashByAddress = new Map<string, string>();
+  /** Reverse Reticulum hash lookup for inbound audio/link events with no address context. */
+  private reticulumAddressByPeerPresenceHash = new Map<string, string>();
   private reticulumAudioAwaitingRouteByAddress = new Map<
     string,
     ReticulumAudioAwaitingRouteState
@@ -1356,8 +1358,27 @@ export class GroupCallManager extends EventEmitter {
     peerPresenceHash?: string
   ): void {
     if (!address || !peerPresenceHash) return;
-    this.reticulumPeerPresenceHashByAddress.set(address, peerPresenceHash);
+    const normalized = this.normalizePeerPresenceHashForAudio(peerPresenceHash);
+    if (!normalized) return;
+    const previous = this.reticulumPeerPresenceHashByAddress.get(address);
+    if (previous) {
+      this.reticulumAddressByPeerPresenceHash.delete(
+        this.normalizePeerPresenceHashForAudio(previous)
+      );
+    }
+    this.reticulumPeerPresenceHashByAddress.set(address, normalized);
+    this.reticulumAddressByPeerPresenceHash.set(normalized, address);
     this.promoteAwaitingRouteReticulumAudio(address);
+  }
+
+  private forgetReticulumPeerPresenceHash(address: string): void {
+    const previous = this.reticulumPeerPresenceHashByAddress.get(address);
+    if (previous) {
+      this.reticulumAddressByPeerPresenceHash.delete(
+        this.normalizePeerPresenceHashForAudio(previous)
+      );
+    }
+    this.reticulumPeerPresenceHashByAddress.delete(address);
   }
 
   /**
@@ -1720,6 +1741,7 @@ export class GroupCallManager extends EventEmitter {
     this.localAddressesBySource.clear();
     this.participantNodeIds.clear();
     this.reticulumPeerPresenceHashByAddress.clear();
+    this.reticulumAddressByPeerPresenceHash.clear();
     for (const state of this.reticulumAudioAwaitingRouteByAddress.values()) {
       if (state.retryTimer) clearTimeout(state.retryTimer);
     }
@@ -3213,7 +3235,7 @@ export class GroupCallManager extends EventEmitter {
         `[GCall] Missing GC_LEAVE signature for ${localAddress} in ${roomId} — clearing local room only`
       );
       this.participantNodeIds.delete(localAddress);
-      this.reticulumPeerPresenceHashByAddress.delete(localAddress);
+      this.forgetReticulumPeerPresenceHash(localAddress);
       this.clearAwaitingRouteReticulumAudio(localAddress);
     }
     if (room) this.rememberRecentRoomState(room, timestamp);
@@ -3479,6 +3501,8 @@ export class GroupCallManager extends EventEmitter {
     if (!want) {
       return this.resolveDmVoicePeerFromRoomId(roomId);
     }
+    const cachedAddress = this.reticulumAddressByPeerPresenceHash.get(want);
+    if (cachedAddress) return cachedAddress;
     for (const [address, state] of this.reticulumAudioPeersByAddress) {
       if (
         this.normalizePeerPresenceHashForAudio(state.peerPresenceHash) === want ||
@@ -5733,7 +5757,7 @@ export class GroupCallManager extends EventEmitter {
       }
     }
     this.participantNodeIds.delete(address);
-    this.reticulumPeerPresenceHashByAddress.delete(address);
+    this.forgetReticulumPeerPresenceHash(address);
     this.clearAwaitingRouteReticulumAudio(address);
     if (hadLocalInterest) {
       this.emit('gcall:participant-left', { roomId, address, isAbrupt });
@@ -5979,9 +6003,11 @@ export class GroupCallManager extends EventEmitter {
       loggerWarn('[GCall] Reticulum audio dropped: invalid or oversize payload');
       return;
     }
+    const audioPeerPresenceHash =
+      payload.peerPresenceHash || payload.peerDestinationHash;
     const fromAddress = this.resolveReticulumAudioAddress(
       payload.routeKey ?? payload.linkId,
-      payload.peerPresenceHash,
+      audioPeerPresenceHash,
       payload.roomId
     );
     if (fromAddress && !this.reticulumAudioPeersByAddress.has(fromAddress)) {
@@ -6019,9 +6045,11 @@ export class GroupCallManager extends EventEmitter {
     peerDestinationHash: string;
     incoming: boolean;
   }): void {
+    const peerPresenceHash =
+      payload.peerPresenceHash || payload.peerDestinationHash;
     const address = this.resolveReticulumAudioAddress(
       payload.linkId,
-      payload.peerPresenceHash
+      peerPresenceHash
     );
     if (!address) return;
     if (!this.reticulumAudioPeersByAddress.has(address)) {
@@ -6052,9 +6080,11 @@ export class GroupCallManager extends EventEmitter {
     incoming: boolean;
     reason: string;
   }): void {
+    const peerPresenceHash =
+      payload.peerPresenceHash || payload.peerDestinationHash;
     const address = this.resolveReticulumAudioAddress(
       payload.linkId,
-      payload.peerPresenceHash
+      peerPresenceHash
     );
     if (!address) return;
     this.markReticulumAudioLinkUnready(address, payload.linkId);

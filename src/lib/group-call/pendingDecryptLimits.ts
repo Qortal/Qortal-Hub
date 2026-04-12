@@ -50,8 +50,12 @@ export const PENDING_DECRYPT_OVERLOAD_MAX = 176;
 export const PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX = 144;
 /** Healthy non-forwarders can hold a bit more in flight before they need to shed. */
 export const PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX = 208;
-/** Multi-source participants still need a clamp, but softer than the default overload cap. */
-export const PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX = 192;
+/** Multi-source participants must shed earlier; fresh audio is better than a deep stale queue. */
+export const PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX = 176;
+/** During overload, pending decrypt older than this is no longer useful for real-time audio. */
+export const PENDING_DECRYPT_OVERLOAD_TTL_MS = 500;
+/** Pre-overload uses a short TTL even while a broader burst window is active. */
+export const PENDING_DECRYPT_PRE_OVERLOAD_TTL_MS = 700;
 
 /** Earlier overload entry when depth is rising (paired with {@link PENDING_DECRYPT_OVERLOAD_RISING_TREND_DELTA}). */
 export const PENDING_DECRYPT_OVERLOAD_WARM_DEPTH = 96;
@@ -93,6 +97,73 @@ export const PENDING_DECRYPT_PRE_OVERLOAD_FORWARDER_CLAMP_MAX =
 /** Participant pre-overload clamp should bite before the multi-source hard cap starts dropping. */
 export const PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX =
   PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX - 8;
+
+export interface PendingDecryptDropCandidate {
+  id: number;
+  startedAt: number;
+  ingressPeerAddress: string;
+}
+
+/**
+ * Select a pending decrypt job to shed at the queue cap.
+ *
+ * Policy: keep newest audio, and when several ingress peers are present, avoid letting one
+ * overrepresented ingress consume the whole decrypt queue.
+ */
+export function choosePendingDecryptDropCandidate(
+  candidates: readonly PendingDecryptDropCandidate[],
+  incomingIngressPeerAddress: string,
+  pendingMax: number
+): number | null {
+  if (candidates.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    counts.set(
+      candidate.ingressPeerAddress,
+      (counts.get(candidate.ingressPeerAddress) ?? 0) + 1
+    );
+  }
+  if (incomingIngressPeerAddress && !counts.has(incomingIngressPeerAddress)) {
+    counts.set(incomingIngressPeerAddress, 0);
+  }
+  const distinctIngresses = Math.max(1, counts.size);
+  const fairShare = Math.max(1, Math.ceil(Math.max(1, pendingMax) / distinctIngresses));
+  let targetIngress: string | null = null;
+  let targetCount = 0;
+  for (const [ingress, count] of counts) {
+    if (count > fairShare && count > targetCount) {
+      targetIngress = ingress;
+      targetCount = count;
+    }
+  }
+  if (targetIngress === null && incomingIngressPeerAddress) {
+    const incomingCount = counts.get(incomingIngressPeerAddress) ?? 0;
+    if (incomingCount >= fairShare) {
+      targetIngress = incomingIngressPeerAddress;
+    }
+  }
+
+  let selectedId: number | null = null;
+  let selectedStartedAt = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    if (targetIngress !== null && candidate.ingressPeerAddress !== targetIngress) {
+      continue;
+    }
+    if (candidate.startedAt < selectedStartedAt) {
+      selectedStartedAt = candidate.startedAt;
+      selectedId = candidate.id;
+    }
+  }
+  if (selectedId !== null) return selectedId;
+
+  for (const candidate of candidates) {
+    if (candidate.startedAt < selectedStartedAt) {
+      selectedStartedAt = candidate.startedAt;
+      selectedId = candidate.id;
+    }
+  }
+  return selectedId;
+}
 
 /** Fail-safe playout / jitter clamps (optional stage 6). */
 export const FAIL_SAFE_PLAYOUT_TARGET_MAX_MS = 120;
@@ -276,7 +347,8 @@ export function computePendingDecryptLimits(
   decryptBurstUntilMs: number,
   effectiveBurstMax: number,
   overloadActive = false,
-  overloadMax = PENDING_DECRYPT_OVERLOAD_MAX
+  overloadMax = PENDING_DECRYPT_OVERLOAD_MAX,
+  preOverloadActive = false
 ): { max: number; ttlMs: number } {
   if (overloadActive) {
     return {
@@ -284,7 +356,16 @@ export function computePendingDecryptLimits(
         overloadMax,
         Math.max(PENDING_DECRYPT_MAX, Math.floor(effectiveBurstMax))
       ),
-      ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
+      ttlMs: PENDING_DECRYPT_OVERLOAD_TTL_MS,
+    };
+  }
+  if (preOverloadActive) {
+    return {
+      max: Math.min(
+        GLOBAL_MAX_BURST_MAX,
+        Math.max(PENDING_DECRYPT_MAX, Math.floor(effectiveBurstMax))
+      ),
+      ttlMs: PENDING_DECRYPT_PRE_OVERLOAD_TTL_MS,
     };
   }
   if (nowMs < decryptBurstUntilMs) {

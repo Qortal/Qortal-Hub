@@ -128,6 +128,28 @@ describe('gcallPlayoutStarvation', () => {
     expect(stepped.severityReason).toBe('mild-adequacy');
   });
 
+  it('keeps strong-C held instead of oscillating through none', () => {
+    const stepped = stepPlayoutStarvationSeverity({
+      held: 'strong',
+      bufferAdequacy: 0.65,
+      strongMeta: { strong: true, reason: 'strong-C' },
+      mildCandidate: false,
+    });
+    expect(stepped.next).toBe('strong');
+    expect(stepped.severityReason).toBe('strong-C');
+  });
+
+  it('promotes mild to strong before applying mild exit hysteresis', () => {
+    const stepped = stepPlayoutStarvationSeverity({
+      held: 'mild',
+      bufferAdequacy: 0.65,
+      strongMeta: { strong: true, reason: 'strong-C' },
+      mildCandidate: false,
+    });
+    expect(stepped.next).toBe('strong');
+    expect(stepped.severityReason).toBe('strong-C');
+  });
+
   it('steps mild to none at mild exit', () => {
     const stepped = stepPlayoutStarvationSeverity({
       held: 'mild',

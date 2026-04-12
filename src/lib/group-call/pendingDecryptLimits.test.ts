@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  choosePendingDecryptDropCandidate,
   computePendingDecryptPreOverloadClampMax,
   computePendingDecryptOverloadMax,
   computePendingDecryptLimits,
@@ -15,8 +16,10 @@ import {
   PENDING_DECRYPT_OVERLOAD_MAX,
   PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MAX,
   PENDING_DECRYPT_OVERLOAD_PARTICIPANT_MULTI_MAX,
+  PENDING_DECRYPT_OVERLOAD_TTL_MS,
   PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX,
   PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_SUSTAINED_DEPTH,
+  PENDING_DECRYPT_PRE_OVERLOAD_TTL_MS,
   PENDING_DECRYPT_RECOVERY_MAX,
   PENDING_DECRYPT_RECOVERY_TTL_MS,
   PENDING_DECRYPT_TTL_MS,
@@ -96,7 +99,7 @@ describe('computePendingDecryptLimits', () => {
       computePendingDecryptLimits(now, 0, 0, PENDING_DECRYPT_BURST_NOMINAL_BASE, true)
     ).toEqual({
       max: PENDING_DECRYPT_OVERLOAD_MAX,
-      ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
+      ttlMs: PENDING_DECRYPT_OVERLOAD_TTL_MS,
     });
     expect(
       computePendingDecryptLimits(
@@ -109,8 +112,69 @@ describe('computePendingDecryptLimits', () => {
       )
     ).toEqual({
       max: PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX,
-      ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
+      ttlMs: PENDING_DECRYPT_OVERLOAD_TTL_MS,
     });
+  });
+
+  it('uses a short TTL while pre-overload shedding is active', () => {
+    const now = 10_000;
+    expect(
+      computePendingDecryptLimits(
+        now,
+        0,
+        20_000,
+        PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX,
+        false,
+        PENDING_DECRYPT_OVERLOAD_MAX,
+        true
+      )
+    ).toEqual({
+      max: PENDING_DECRYPT_PRE_OVERLOAD_PARTICIPANT_CLAMP_MAX,
+      ttlMs: PENDING_DECRYPT_PRE_OVERLOAD_TTL_MS,
+    });
+  });
+});
+
+describe('choosePendingDecryptDropCandidate', () => {
+  it('drops the oldest job from an overrepresented ingress', () => {
+    expect(
+      choosePendingDecryptDropCandidate(
+        [
+          { id: 1, startedAt: 100, ingressPeerAddress: 'root' },
+          { id: 2, startedAt: 200, ingressPeerAddress: 'root' },
+          { id: 3, startedAt: 50, ingressPeerAddress: 'peer-b' },
+        ],
+        'peer-c',
+        3
+      )
+    ).toBe(1);
+  });
+
+  it('drops from the incoming ingress when it is already at fair share', () => {
+    expect(
+      choosePendingDecryptDropCandidate(
+        [
+          { id: 1, startedAt: 100, ingressPeerAddress: 'peer-a' },
+          { id: 2, startedAt: 200, ingressPeerAddress: 'peer-b' },
+          { id: 3, startedAt: 50, ingressPeerAddress: 'peer-b' },
+        ],
+        'peer-b',
+        3
+      )
+    ).toBe(3);
+  });
+
+  it('falls back to oldest overall when no ingress is over fair share', () => {
+    expect(
+      choosePendingDecryptDropCandidate(
+        [
+          { id: 1, startedAt: 100, ingressPeerAddress: 'peer-a' },
+          { id: 2, startedAt: 50, ingressPeerAddress: 'peer-b' },
+        ],
+        'peer-c',
+        4
+      )
+    ).toBe(2);
   });
 });
 
