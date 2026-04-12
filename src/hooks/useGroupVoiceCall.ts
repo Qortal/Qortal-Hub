@@ -517,6 +517,8 @@ const SOURCE_STALL_MIN_AGE_MS = 8_000;
 const SOURCE_STALL_LOG_MIN_INTERVAL_MS = 5_000;
 const SOURCE_STALL_BREACH_RECOVERY_THRESHOLD = 2;
 const FORWARDER_GATE_LOG_MIN_INTERVAL_MS = 5_000;
+const UNKNOWN_REMOTE_AUDIO_SOURCE_DROP_LOG_MIN_MS = 5_000;
+const STALE_REMOTE_AUDIO_SOURCE_PRUNE_INTERVAL_MS = 1_000;
 /** Local-only: show group voice connection hint after sustained bad transport/playout. */
 const GCALL_CONNECTION_HINT_BAD_MS = 2800;
 const GCALL_CONNECTION_HINT_SEVERE_MS = 1200;
@@ -811,6 +813,35 @@ export function shouldDropActiveJitterSource(opts: {
 }): boolean {
   const hysteresisTicks = opts.hysteresisTicks ?? JITTER_EMPTY_HYSTERESIS_TICKS;
   return opts.emptyTicks >= hysteresisTicks && !opts.playoutActive;
+}
+
+export function shouldDropNonParticipantRemoteAudioSource(opts: {
+  sourceAddr: string;
+  localAddress: string;
+  participantAddresses: Iterable<string>;
+  nowMs: number;
+  startupMediaGateUntilMs: number;
+  topologySettleUntilMs: number;
+  startupSessionGraceUntilMs: number;
+  authoritySettleUntilMs: number;
+}): boolean {
+  const sourceAddr = opts.sourceAddr.trim();
+  if (!sourceAddr) return true;
+
+  const localAddress = opts.localAddress.trim();
+  if (localAddress && sourceAddr === localAddress) return false;
+
+  for (const participantAddress of opts.participantAddresses) {
+    if (participantAddress.trim() === sourceAddr) return false;
+  }
+
+  const graceUntilMs = Math.max(
+    opts.startupMediaGateUntilMs,
+    opts.topologySettleUntilMs,
+    opts.startupSessionGraceUntilMs,
+    opts.authoritySettleUntilMs
+  );
+  return opts.nowMs >= graceUntilMs;
 }
 
 export function shouldAccelerateMultiSourceRecoveryDecay(opts: {
@@ -3411,6 +3442,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastSourceGapLogAtRef = useRef<Map<string, number>>(new Map());
   const lastSourceStallLogAtRef = useRef<Map<string, number>>(new Map());
   const lastForwarderGateLogAtRef = useRef<Map<string, number>>(new Map());
+  const lastUnknownRemoteAudioDropLogAtRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const lastStaleRemoteAudioPruneAtRef = useRef(0);
   const lastPlayoutStressLogAtRef = useRef<Map<string, number>>(new Map());
   const playoutStarvationSeverityRef = useRef<
     Map<string, PlayoutStarvationSeverity>
@@ -6655,6 +6690,21 @@ export function useGroupVoiceCall(uiActive = false) {
     }
   }, [flushMetrics, uiActive]);
 
+  const shouldDropRemoteAudioSource = useCallback(
+    (sourceAddr: string, nowMs = Date.now()) =>
+      shouldDropNonParticipantRemoteAudioSource({
+        sourceAddr,
+        localAddress: userInfoRef.current?.address ?? '',
+        participantAddresses: participantsRef.current.keys(),
+        nowMs,
+        startupMediaGateUntilMs: startupMediaGateUntilRef.current,
+        topologySettleUntilMs: topologySettleUntilMsRef.current,
+        startupSessionGraceUntilMs: startupSessionGraceUntilRef.current,
+        authoritySettleUntilMs: authoritySettleUntilRef.current,
+      }),
+    []
+  );
+
   const disposeParticipantAudio = useCallback(
     (address: string) => {
       disposeParticipantAudioState(
@@ -6666,6 +6716,8 @@ export function useGroupVoiceCall(uiActive = false) {
         lastRecvAtRef.current,
         localSpeakersRef.current
       );
+      activeJitterSourcesRef.current.delete(address);
+      jitterUnderrunEmaRef.current.delete(address);
       lastVadTrueAtRef.current.delete(address);
       sourceIngressPeerRef.current.delete(address);
       lastSuccessfulRemoteDecodeAtBySourceRef.current.delete(address);
@@ -6674,6 +6726,8 @@ export function useGroupVoiceCall(uiActive = false) {
       smoothedPlayoutTargetRef.current.delete(address);
       recentPlayoutHealthSamplesRef.current.delete(address);
       recentJitterUnderrunAtRef.current.delete(address);
+      lastJitterOpusPushPerfRef.current.delete(address);
+      jitterPrerollSatisfiedRef.current.delete(address);
       n1WeakLiveHoldUntilPerfRef.current.delete(address);
       n1SevereForcedReleaseRebuildUntilPerfRef.current.delete(address);
       n1SevereForcedReleaseRebuildStartedAtPerfRef.current.delete(address);
@@ -6691,9 +6745,11 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSourceGapLogAtRef.current.delete(address);
       lastSourceStallLogAtRef.current.delete(address);
       lastForwarderGateLogAtRef.current.delete(address);
+      lastPlayoutStressLogAtRef.current.delete(address);
       playoutStarvationSeverityRef.current.delete(address);
       playoutStarvationCooldownUntilRef.current.delete(address);
       lastPlayoutStarvationDiagAtRef.current.delete(address);
+      lastPlayoutStarvationDiagKeyRef.current.delete(address);
       microWidenCeilingLiftUntilRef.current.delete(address);
       strongCStreakRef.current.delete(address);
       decayGuardCalmStartRef.current.delete(address);
@@ -6704,6 +6760,7 @@ export function useGroupVoiceCall(uiActive = false) {
       gcallStarvationOpusHistRef.current.delete(address);
       gcallStarvationProtectedExitStreakRef.current.delete(address);
       gcallStarvationProtectedModeRef.current.delete(address);
+      forwardPacketRecvTimestampsRef.current.delete(address);
       playbackWorkletSetupPromisesRef.current.delete(address);
       getWasmFecPipeline().removeSource(address);
       opusFecWorkerRef.current?.postMessage({
@@ -6713,6 +6770,68 @@ export function useGroupVoiceCall(uiActive = false) {
       updateMetricResourceCounts();
     },
     [getWasmFecPipeline, updateMetricResourceCounts]
+  );
+
+  const pruneStaleRemoteAudioSources = useCallback(
+    (reason: string) => {
+      const nowMs = Date.now();
+      if (
+        nowMs - lastStaleRemoteAudioPruneAtRef.current <
+        STALE_REMOTE_AUDIO_SOURCE_PRUNE_INTERVAL_MS
+      ) {
+        return;
+      }
+      lastStaleRemoteAudioPruneAtRef.current = nowMs;
+
+      const candidates = new Set<string>([
+        ...activeJitterSourcesRef.current,
+        ...jitterMapRef.current.keys(),
+        ...decoderMapRef.current.keys(),
+        ...playbackWorkletsRef.current.keys(),
+        ...playbackGainNodesRef.current.keys(),
+        ...sourceIngressPeerRef.current.keys(),
+        ...lastRecvAtRef.current.keys(),
+        ...lastSuccessfulRemoteDecodeAtBySourceRef.current.keys(),
+        ...lastPacketArrivalAtRef.current.keys(),
+        ...interArrivalSamplesRef.current.keys(),
+        ...smoothedPlayoutTargetRef.current.keys(),
+      ]);
+      const pruned: string[] = [];
+
+      for (const sourceAddr of candidates) {
+        if (!shouldDropRemoteAudioSource(sourceAddr, nowMs)) continue;
+        disposeParticipantAudio(sourceAddr);
+        pruned.push(sourceAddr);
+      }
+
+      if (pruned.length === 0) return;
+
+      const truncated = pruned.map((sourceAddr) =>
+        truncateGcallDiagAddress(sourceAddr)
+      );
+      gcallWindowDiagnosticTagsRef.current.push({
+        ts: nowMs,
+        type: 'stale-audio-source-pruned',
+        detail: {
+          reason,
+          count: pruned.length,
+          sources: truncated,
+        },
+      });
+      gcallDiagnosticsPush('warn', '[GCall] staleRemoteAudioSourcesPruned', {
+        reason,
+        count: pruned.length,
+        sources: truncated,
+        participantCount: participantsRef.current.size,
+        topologyEpoch: topologyRef.current?.topologyEpoch ?? null,
+      });
+      recomputeAdaptiveNetworkMode();
+    },
+    [
+      disposeParticipantAudio,
+      recomputeAdaptiveNetworkMode,
+      shouldDropRemoteAudioSource,
+    ]
   );
 
   const sendPacketToPeerReticulum = useCallback(
@@ -7123,7 +7242,35 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const head = decodedList[0]!;
       const { sourceAddr } = head;
-      const myAddress = userInfo?.address ?? '';
+      const myAddress = userInfoRef.current?.address ?? userInfo?.address ?? '';
+      const now = Date.now();
+      if (shouldDropRemoteAudioSource(sourceAddr, now)) {
+        metricsRef.current.recordPacketDroppedWithReason('unknown-source');
+        metricsRef.current.recordIncomingPacketDuration(
+          performance.now() - startedAt
+        );
+        const lastLoggedAt =
+          lastUnknownRemoteAudioDropLogAtRef.current.get(sourceAddr) ?? 0;
+        if (
+          now - lastLoggedAt >=
+          UNKNOWN_REMOTE_AUDIO_SOURCE_DROP_LOG_MIN_MS
+        ) {
+          lastUnknownRemoteAudioDropLogAtRef.current.set(sourceAddr, now);
+          gcallDiagnosticsPush(
+            'warn',
+            '[GCall] unknownRemoteAudioSourceDropped',
+            {
+              sourceAddr: truncateGcallDiagAddress(sourceAddr),
+              ingressPeerAddress: truncateGcallDiagAddress(ingressPeerAddress),
+              participantCount: participantsRef.current.size,
+              topologyEpoch: topologyRef.current?.topologyEpoch ?? null,
+            }
+          );
+        }
+        disposeParticipantAudio(sourceAddr);
+        return;
+      }
+      pruneStaleRemoteAudioSources('post-decrypt');
       lastRecvAtRef.current.set(sourceAddr, receivedAt);
       sourceIngressPeerRef.current.set(sourceAddr, ingressPeerAddress);
 
@@ -7141,7 +7288,6 @@ export function useGroupVoiceCall(uiActive = false) {
         );
       }
 
-      const now = Date.now();
       {
         const m = forwardPacketRecvTimestampsRef.current;
         let arr = m.get(sourceAddr);
@@ -7310,8 +7456,11 @@ export function useGroupVoiceCall(uiActive = false) {
     },
     [
       getForwardRecipientCountForDiagnostics,
+      disposeParticipantAudio,
+      pruneStaleRemoteAudioSources,
       recordInterArrivalForPlayout,
       sendPacketToPeerReticulumBatch,
+      shouldDropRemoteAudioSource,
       updateMetricResourceCounts,
       userInfo?.address,
     ]
@@ -7800,6 +7949,7 @@ export function useGroupVoiceCall(uiActive = false) {
           rootForwarder: topo.rootForwarder,
         });
         processPendingVerifiedKeysRef.current();
+        pruneStaleRemoteAudioSources('topology-duplicate-heartbeat');
         flushMetrics();
         return;
       }
@@ -7834,6 +7984,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const mayWarmTransport =
         wallNowTopology >= topologySettleUntilMsRef.current;
       topologyRef.current = topo;
+      pruneStaleRemoteAudioSources('topology-applied');
       let topologySettleMs = GCALL_TOPOLOGY_SETTLE_MS;
       if (prevTopo && prevTopo.rootForwarder !== topo.rootForwarder) {
         topologySettleMs = GCALL_TOPOLOGY_SETTLE_MS * 2;
@@ -8167,6 +8318,7 @@ export function useGroupVoiceCall(uiActive = false) {
       clearAuthoritativeKeyGrace,
       flushMetrics,
       maybePredictiveWarmPeers,
+      pruneStaleRemoteAudioSources,
       recomputeAdaptiveNetworkMode,
       startClusterHeartbeat,
       startTopologyHeartbeat,
@@ -9262,6 +9414,9 @@ export function useGroupVoiceCall(uiActive = false) {
         ) {
           throw new Error('stale-group-playback-setup');
         }
+        if (shouldDropRemoteAudioSource(sourceAddr)) {
+          throw new Error('stale-group-playback-source');
+        }
         const { mixBus } = ensurePlaybackMixGraph(ctx);
         const wallNow = Date.now();
         const recentSpeakerEstimate = computeRecentSpeakerEstimate(
@@ -9383,6 +9538,7 @@ export function useGroupVoiceCall(uiActive = false) {
     [
       ensurePlaybackMixGraph,
       ensurePlaybackWorkletLoaded,
+      shouldDropRemoteAudioSource,
       tickPlaybackMixTargets,
       updateMetricResourceCounts,
     ]
@@ -9625,6 +9781,7 @@ export function useGroupVoiceCall(uiActive = false) {
    *  ring absorb variance. */
   const runJitterDrainTick = useCallback(() => {
     const tickStartedAt = performance.now();
+    pruneStaleRemoteAudioSources('jitter-drain');
     const jitterTickBudgetDeadline =
       tickStartedAt + GCALL_JITTER_DRAIN_TICK_BUDGET_MS;
     const activeSourceCount = activeJitterSourcesRef.current.size;
@@ -11034,6 +11191,7 @@ export function useGroupVoiceCall(uiActive = false) {
     incrementPerfCounter,
     isSourcePlayoutActive,
     postWasmFecBatchToPlayout,
+    pruneStaleRemoteAudioSources,
     recordPerfDuration,
     recordPerfDurationPerSource,
     syncSpeakerUiState,
@@ -13212,7 +13370,18 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSourceGapLogAtRef.current.clear();
       lastSourceStallLogAtRef.current.clear();
       lastForwarderGateLogAtRef.current.clear();
+      lastUnknownRemoteAudioDropLogAtRef.current.clear();
+      lastStaleRemoteAudioPruneAtRef.current = 0;
       lastPlayoutStressLogAtRef.current.clear();
+      playoutStarvationSeverityRef.current.clear();
+      playoutStarvationCooldownUntilRef.current.clear();
+      lastPlayoutStarvationDiagAtRef.current.clear();
+      lastPlayoutStarvationDiagKeyRef.current.clear();
+      microWidenCeilingLiftUntilRef.current.clear();
+      strongCStreakRef.current.clear();
+      decayGuardCalmStartRef.current.clear();
+      decayGuardDiagLoggedRef.current.clear();
+      lastPanicZoneDiagAtRef.current.clear();
       forwardPacketRecvTimestampsRef.current.clear();
 
       peerRecoveryProfileRef.current.clear();

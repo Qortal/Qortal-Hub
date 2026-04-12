@@ -839,6 +839,7 @@ describe('group-call router helpers', () => {
     expect(window.packetsDroppedStartupGate).toBe(0);
     expect(window.packetsDroppedDecodeFailure).toBe(0);
     expect(window.packetsDroppedDecoderThrow).toBe(0);
+    expect(window.packetsDroppedUnknownSource).toBe(0);
     expect(window.pendingDecryptDepthHighWater).toBe(50);
     expect(window.packetsDroppedPendingDecryptRatePerSec).toBe(0);
     expect(window.relayDwellFraction).toBe(1);
@@ -896,6 +897,16 @@ describe('group-call router helpers', () => {
     expect(tracker.getSnapshot().packetsDropped).toBe(2);
     const w = tracker.captureWindowMetrics('me', 5_000);
     expect(w.packetsDroppedStaleWorkerDecrypt).toBe(2);
+    expect(w.packetsDropped).toBe(2);
+  });
+
+  it('records unknown-source drops in snapshot and window', () => {
+    const tracker = new GroupCallPerformanceTracker();
+    tracker.recordPacketDroppedWithReason('unknown-source', 2);
+    expect(tracker.getSnapshot().packetsDroppedUnknownSource).toBe(2);
+    expect(tracker.getSnapshot().packetsDropped).toBe(2);
+    const w = tracker.captureWindowMetrics('me', 5_000);
+    expect(w.packetsDroppedUnknownSource).toBe(2);
     expect(w.packetsDropped).toBe(2);
   });
 

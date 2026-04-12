@@ -337,7 +337,8 @@ export type GroupCallPacketDropReason =
   | 'pending-decrypt'
   | 'startup-gate'
   | 'decode-failure'
-  | 'decoder-throw';
+  | 'decoder-throw'
+  | 'unknown-source';
 
 export interface GroupCallMetricsSnapshot {
   role: RouterRole;
@@ -352,6 +353,7 @@ export interface GroupCallMetricsSnapshot {
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
+  packetsDroppedUnknownSource: number;
   relayPacketsSent: number;
   relayPacketsReceived: number;
   /** Wall time (ms) of last legacy relay send or receive; 0 = none this session. */
@@ -540,6 +542,7 @@ export interface GroupCallWindowMetrics {
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
+  packetsDroppedUnknownSource: number;
   /** Max in-flight decrypt jobs observed during this metrics window. */
   pendingDecryptDepthHighWater: number;
   /** `packetsDroppedPendingDecrypt` per second over the window. */
@@ -1032,6 +1035,7 @@ interface WindowCounterSet {
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
+  packetsDroppedUnknownSource: number;
   jitterUnderruns: number;
   missingFrames: number;
   concealmentTicks: number;
@@ -1096,6 +1100,7 @@ function emptyWindowCounters(): WindowCounterSet {
     packetsDroppedStartupGate: 0,
     packetsDroppedDecodeFailure: 0,
     packetsDroppedDecoderThrow: 0,
+    packetsDroppedUnknownSource: 0,
     jitterUnderruns: 0,
     missingFrames: 0,
     concealmentTicks: 0,
@@ -1126,6 +1131,7 @@ export class GroupCallPerformanceTracker {
     packetsDroppedStartupGate: 0,
     packetsDroppedDecodeFailure: 0,
     packetsDroppedDecoderThrow: 0,
+    packetsDroppedUnknownSource: 0,
     relayPacketsSent: 0,
     relayPacketsReceived: 0,
     lastRelayActivityAtMs: 0,
@@ -1401,6 +1407,10 @@ export class GroupCallPerformanceTracker {
       case 'decoder-throw':
         this.snapshot.packetsDroppedDecoderThrow += count;
         this.windowCounters.packetsDroppedDecoderThrow += count;
+        break;
+      case 'unknown-source':
+        this.snapshot.packetsDroppedUnknownSource += count;
+        this.windowCounters.packetsDroppedUnknownSource += count;
         break;
     }
     this.snapshot.lastUpdatedAt = Date.now();
@@ -2077,6 +2087,7 @@ export class GroupCallPerformanceTracker {
       packetsDroppedStartupGate: 0,
       packetsDroppedDecodeFailure: 0,
       packetsDroppedDecoderThrow: 0,
+      packetsDroppedUnknownSource: 0,
       relayPacketsSent: 0,
       relayPacketsReceived: 0,
       lastRelayActivityAtMs: 0,
@@ -2294,6 +2305,8 @@ export class GroupCallPerformanceTracker {
         this.windowCounters.packetsDroppedDecodeFailure,
       packetsDroppedDecoderThrow:
         this.windowCounters.packetsDroppedDecoderThrow,
+      packetsDroppedUnknownSource:
+        this.windowCounters.packetsDroppedUnknownSource,
       pendingDecryptDepthHighWater: this.windowPendingDecryptDepthHighWater,
       packetsDroppedPendingDecryptRatePerSec: roundMetric(
         this.windowCounters.packetsDroppedPendingDecrypt / (durationMs / 1000)

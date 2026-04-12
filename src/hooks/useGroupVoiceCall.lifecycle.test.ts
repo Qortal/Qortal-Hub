@@ -47,6 +47,7 @@ import {
   shouldTriggerN1InboundMediaReannounce,
   shouldTriggerN1SeverePlayoutPathWarm,
   shouldDropActiveJitterSource,
+  shouldDropNonParticipantRemoteAudioSource,
   shouldSuppressHealthySingleRemoteMicroWiden,
   shouldKeepMultiSourceWindowRecoveryLocal,
   shouldKeepSingleRemoteWindowRecoveryLocal,
@@ -315,6 +316,39 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         playoutActive: false,
       })
     ).toBe(true);
+  });
+
+  it('drops non-participant remote audio only after startup/topology grace', () => {
+    const base = {
+      sourceAddr: 'Qghost',
+      localAddress: 'Qlocal',
+      participantAddresses: ['Qpeer'],
+      nowMs: 2_000,
+      startupMediaGateUntilMs: 0,
+      topologySettleUntilMs: 0,
+      startupSessionGraceUntilMs: 0,
+      authoritySettleUntilMs: 0,
+    };
+
+    expect(
+      shouldDropNonParticipantRemoteAudioSource({
+        ...base,
+        sourceAddr: 'Qpeer',
+      })
+    ).toBe(false);
+    expect(
+      shouldDropNonParticipantRemoteAudioSource({
+        ...base,
+        sourceAddr: 'Qlocal',
+      })
+    ).toBe(false);
+    expect(
+      shouldDropNonParticipantRemoteAudioSource({
+        ...base,
+        topologySettleUntilMs: 2_500,
+      })
+    ).toBe(false);
+    expect(shouldDropNonParticipantRemoteAudioSource(base)).toBe(true);
   });
 
   it('accelerates decay for chronically under-target multi-source recovery peers', () => {
