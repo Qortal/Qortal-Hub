@@ -56,6 +56,7 @@ type BridgeCmdFrame = {
     | 'forward_presence'
     | 'overlay_sync_state'
     | 'overlay_note_candidate_failure'
+    | 'rns_announce'
     | 'stop'
     | 'send_call'
     | 'fanout_call'
@@ -434,6 +435,7 @@ function commandPriorityForAction(action: BridgeCmdFrame['action']): BridgeCmdPr
     case 'forward_presence':
     case 'overlay_sync_state':
     case 'overlay_note_candidate_failure':
+    case 'rns_announce':
       return 'low';
     default:
       return 'high';
@@ -726,6 +728,8 @@ export class ReticulumBridge
     seq?: number;
     peerPresenceHash?: string;
     linkId?: string;
+    packetRxAgeMs?: number;
+    packetRxRecent?: boolean;
   }): Promise<ReticulumSendResult> {
     const linkId = typeof opts.linkId === 'string' ? opts.linkId.trim() : '';
     const peerPresenceHash =
@@ -745,6 +749,12 @@ export class ReticulumBridge
       ...(typeof opts.seq === 'number' ? { seq: opts.seq } : {}),
       ...(linkId ? { linkId } : {}),
       ...(peerPresenceHash ? { peerPresenceHash } : {}),
+      ...(typeof opts.packetRxAgeMs === 'number'
+        ? { packetRxAgeMs: opts.packetRxAgeMs }
+        : {}),
+      ...(typeof opts.packetRxRecent === 'boolean'
+        ? { packetRxRecent: opts.packetRxRecent }
+        : {}),
     });
   }
 
@@ -1162,6 +1172,27 @@ export class ReticulumBridge
       reason,
     });
     return resp.ok;
+  }
+
+  /**
+   * RNS `Destination.announce()` for mesh discovery (e.g. after joining a group or DM call).
+   * Best-effort: no-op if the bridge is not ready or presence is not authenticated in Python.
+   */
+  async rnsAnnounce(reason = 'gc_join'): Promise<boolean> {
+    try {
+      await this.start();
+    } catch {
+      return false;
+    }
+    if (this.state !== 'ready') return false;
+    const r =
+      typeof reason === 'string' && reason.trim() ? reason.trim() : 'gc_join';
+    try {
+      const resp = await this.sendCommand('rns_announce', { reason: r });
+      return resp.ok;
+    } catch {
+      return false;
+    }
   }
 
   getState(): BridgeState {

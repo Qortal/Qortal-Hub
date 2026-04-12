@@ -138,6 +138,10 @@ const GC_RETICULUM_RECOVERY_HOLD_AUDIO_FALSE_REASONS = new Set<string>([
   'topology-predictive-warm',
   'peer-joined-inbound-warm',
   'peer-joined-startup-warm',
+  'path-degraded-warm',
+]);
+const GC_RETICULUM_RECOVERY_LINK_FALLBACK_REASONS = new Set<string>([
+  'path-degraded-warm',
 ]);
 /** Matches send-side pressure backoff: fair flush reschedules with this delay when bridge is pressured. */
 const GC_RETICULUM_AUDIO_FLUSH_RETRY_DELAY_MS = 5;
@@ -157,6 +161,11 @@ const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH_FORWARDER = 10;
 const GC_RETICULUM_AUDIO_PRESSURE_RECENT_DROPS_FORWARDER = 5;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_EVIDENCE_COUNT = 4;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DEGRADED_MS = 6_000;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_REQUEST_WINDOW_MS = 15_000;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DWELL_MS = 10_000;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_REMOTE_RX_MISSING_MS = 4_000;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_LOCAL_SEND_RECENT_MS = 12_000;
+const GC_RETICULUM_PACKET_LINK_FALLBACK_PACKET_RX_AGE_CAP_MS = 60_000;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_WIRE_TYPE = 'GAC';
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_INTERVAL_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_TICK_MS = 1_000;
@@ -210,6 +219,11 @@ const GC_RETICULUM_RETRYABLE_FAILURES = new Set<GcReticulumSendFailureReason>([
 export function shouldHoldAudioForReticulumRecoveryReason(reason: string): boolean {
   const r = reason.trim().toLowerCase();
   return !GC_RETICULUM_RECOVERY_HOLD_AUDIO_FALSE_REASONS.has(r);
+}
+
+function shouldRequestLinkFallbackForReticulumRecoveryReason(reason: string): boolean {
+  const r = reason.trim().toLowerCase();
+  return GC_RETICULUM_RECOVERY_LINK_FALLBACK_REASONS.has(r);
 }
 
 export type GcJoinTimestampRejectReason = 'expired' | 'future';
@@ -364,6 +378,8 @@ interface GcReticulumAudioLinkHeartbeatWire {
   c: ReticulumAudioLinkHeartbeatCommand;
   m: number;
   p?: number;
+  packetRxAgeMs?: number;
+  packetRxRecent?: boolean;
 }
 
 export function decodeGcReticulumActivityWire(
@@ -399,12 +415,30 @@ function decodeGcReticulumAudioLinkHeartbeatWire(
   if (typeof wire.p === 'number' && Number.isFinite(wire.p)) {
     seq = Math.max(0, Math.trunc(wire.p));
   }
+  let packetRxAgeMs: number | undefined;
+  if (typeof wire.pa === 'number' && Number.isFinite(wire.pa)) {
+    packetRxAgeMs = Math.max(
+      -1,
+      Math.min(
+        GC_RETICULUM_PACKET_LINK_FALLBACK_PACKET_RX_AGE_CAP_MS,
+        Math.trunc(wire.pa)
+      )
+    );
+  }
+  let packetRxRecent: boolean | undefined;
+  if (wire.pr === 0 || wire.pr === 1) {
+    packetRxRecent = wire.pr === 1;
+  } else if (typeof wire.pr === 'boolean') {
+    packetRxRecent = wire.pr;
+  }
   return {
     t: GC_RETICULUM_AUDIO_LINK_HEARTBEAT_WIRE_TYPE,
     R: wire.R,
     c: wire.c,
     m: wire.m,
     ...(seq !== undefined ? { p: seq } : {}),
+    ...(packetRxAgeMs !== undefined ? { packetRxAgeMs } : {}),
+    ...(packetRxRecent !== undefined ? { packetRxRecent } : {}),
   };
 }
 
@@ -600,6 +634,9 @@ interface ReticulumAudioPeerState {
   packetTransportFallback: boolean;
   packetDegradedSinceMs: number;
   packetFallbackEvidenceCount: number;
+  packetFallbackActivatedAtMs: number;
+  packetLinkFallbackRequestedUntilMs: number;
+  packetLinkFallbackReason: string;
   routeKey: string;
   linkId: string | null;
   established: boolean;
@@ -607,6 +644,8 @@ interface ReticulumAudioPeerState {
   rooms: Set<string>;
   pending: ReticulumAudioPendingFrame[];
   lastInboundAtMs: number;
+  lastInboundPacketAtMs: number;
+  lastOutboundPacketAtMs: number;
   lastPathWarmAtMs: number;
   lastRecoveryActionAtMs: number;
   recoveryHoldUntilMs: number;
@@ -1879,6 +1918,8 @@ export class GroupCallManager extends EventEmitter {
       {
         force: true,
         holdAudio,
+        forceLinkFallback:
+          shouldRequestLinkFallbackForReticulumRecoveryReason(normalizedReason),
       }
     );
   }
@@ -3127,6 +3168,9 @@ export class GroupCallManager extends EventEmitter {
     this.scheduleQortalGroupCallActivityEmit(true);
     this.flushReticulumGroupActivityHeartbeats(roomId);
     this.syncReticulumAudioLinks();
+    void Promise.resolve(this.reticulumBridge?.rnsAnnounce?.('gc_join')).catch(
+      () => {}
+    );
     return {
       callSessionId: room.callSessionId,
       mediaSessionGeneration: room.mediaSessionGeneration,
@@ -3510,11 +3554,42 @@ export class GroupCallManager extends EventEmitter {
     if (this.getReticulumAudioTransportKind() !== 'packet') return;
     if (state.packetTransportFallback && state.transport === 'link') return;
     state.packetTransportFallback = true;
+    state.packetFallbackActivatedAtMs = Date.now();
+    state.packetLinkFallbackRequestedUntilMs = 0;
+    state.packetLinkFallbackReason = '';
     this.setReticulumAudioTransport(address, state, 'link', reason);
+    loggerWarn(
+      `[GCall] Reticulum audio switching to link fallback address=${address} reason=${reason}`
+    );
     if (this.shouldMaintainReticulumAudioLink(state)) {
       void this.openReticulumAudioLinkForAddress(address);
     }
     this.scheduleReticulumAudioFlush();
+  }
+
+  private requestReticulumPacketLinkFallback(
+    address: string,
+    state: ReticulumAudioPeerState,
+    reason: string
+  ): void {
+    if (this.getReticulumAudioTransportKind() !== 'packet') return;
+    const now = Date.now();
+    state.packetLinkFallbackRequestedUntilMs = Math.max(
+      state.packetLinkFallbackRequestedUntilMs,
+      now + GC_RETICULUM_PACKET_LINK_FALLBACK_REQUEST_WINDOW_MS
+    );
+    state.packetLinkFallbackReason = reason;
+    this.noteReticulumPacketTransportDegraded(
+      state,
+      GC_RETICULUM_PACKET_LINK_FALLBACK_EVIDENCE_COUNT
+    );
+    if (state.established && state.linkId) {
+      this.activateReticulumAudioLinkFallback(address, state, reason);
+      return;
+    }
+    if (this.shouldMaintainReticulumAudioLink(state)) {
+      void this.openReticulumAudioLinkForAddress(address);
+    }
   }
 
   private noteReticulumPacketTransportDegraded(
@@ -3533,6 +3608,18 @@ export class GroupCallManager extends EventEmitter {
   private noteReticulumPacketTransportHealthy(state: ReticulumAudioPeerState): void {
     state.packetDegradedSinceMs = 0;
     state.packetFallbackEvidenceCount = 0;
+    state.packetFallbackActivatedAtMs = 0;
+    state.packetLinkFallbackRequestedUntilMs = 0;
+    state.packetLinkFallbackReason = '';
+  }
+
+  private canLeaveReticulumPacketFallback(state: ReticulumAudioPeerState): boolean {
+    return (
+      !state.packetTransportFallback ||
+      state.packetFallbackActivatedAtMs <= 0 ||
+      Date.now() - state.packetFallbackActivatedAtMs >=
+        GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DWELL_MS
+    );
   }
 
   private shouldFallbackPacketTransport(
@@ -3557,6 +3644,12 @@ export class GroupCallManager extends EventEmitter {
     reason: string
   ): void {
     if (!this.shouldFallbackPacketTransport(state)) return;
+    if (!state.established || !state.linkId) {
+      if (this.shouldMaintainReticulumAudioLink(state)) {
+        void this.openReticulumAudioLinkForAddress(address);
+      }
+      return;
+    }
     this.activateReticulumAudioLinkFallback(address, state, reason);
   }
 
@@ -3612,6 +3705,53 @@ export class GroupCallManager extends EventEmitter {
       if (this.rooms.has(roomId)) return roomId;
     }
     return null;
+  }
+
+  private getReticulumAudioPacketRxAgeMs(
+    state: ReticulumAudioPeerState,
+    now: number = Date.now()
+  ): number {
+    if (state.lastInboundPacketAtMs <= 0) return -1;
+    return Math.max(
+      0,
+      Math.min(
+        GC_RETICULUM_PACKET_LINK_FALLBACK_PACKET_RX_AGE_CAP_MS,
+        now - state.lastInboundPacketAtMs
+      )
+    );
+  }
+
+  private maybeActivateReticulumFallbackFromPeerRxReport(
+    address: string,
+    state: ReticulumAudioPeerState,
+    wire: GcReticulumAudioLinkHeartbeatWire
+  ): void {
+    if (this.getReticulumAudioTransportKind() !== 'packet') return;
+    if (state.packetTransportFallback || state.transport !== 'packet') return;
+    if (wire.packetRxRecent !== false) return;
+    const now = Date.now();
+    const outboundPacketAgeMs =
+      state.lastOutboundPacketAtMs > 0
+        ? now - state.lastOutboundPacketAtMs
+        : Number.POSITIVE_INFINITY;
+    if (
+      outboundPacketAgeMs >
+      GC_RETICULUM_PACKET_LINK_FALLBACK_LOCAL_SEND_RECENT_MS
+    ) {
+      return;
+    }
+    const peerRxAgeMs = wire.packetRxAgeMs ?? -1;
+    if (
+      peerRxAgeMs >= 0 &&
+      peerRxAgeMs < GC_RETICULUM_PACKET_LINK_FALLBACK_REMOTE_RX_MISSING_MS
+    ) {
+      return;
+    }
+    this.requestReticulumPacketLinkFallback(
+      address,
+      state,
+      `packet-fallback:peer-rx-missing:${wire.c.toLowerCase()}`
+    );
   }
 
   private resetReticulumAudioLinkHeartbeat(state: ReticulumAudioPeerState): void {
@@ -3680,10 +3820,13 @@ export class GroupCallManager extends EventEmitter {
           seq?: number;
           peerPresenceHash?: string;
           linkId?: string;
+          packetRxAgeMs?: number;
+          packetRxRecent?: boolean;
         }) => Promise<ReticulumSendResult>;
       }
     ).sendGroupAudioLinkHeartbeatDetailed;
     if (typeof sendHeartbeat !== 'function') return;
+    const packetRxAgeMs = this.getReticulumAudioPacketRxAgeMs(state);
     void sendHeartbeat
       .call(bridge, {
         roomId,
@@ -3691,6 +3834,10 @@ export class GroupCallManager extends EventEmitter {
         ...(typeof seq === 'number' ? { seq } : {}),
         linkId,
         peerPresenceHash: state.peerPresenceHash,
+        packetRxAgeMs,
+        packetRxRecent:
+          packetRxAgeMs >= 0 &&
+          packetRxAgeMs <= GC_RETICULUM_PACKET_LINK_FALLBACK_REMOTE_RX_MISSING_MS,
       })
       .then((result) => {
         if (result.ok) return;
@@ -3841,6 +3988,9 @@ export class GroupCallManager extends EventEmitter {
           result.ready === false ||
           (typeof result.pathState === 'string' && result.pathState !== 'fresh');
         if (pathReady) {
+          if (!this.canLeaveReticulumPacketFallback(latest)) {
+            return;
+          }
           this.noteReticulumPacketTransportHealthy(latest);
           if (latest.packetTransportFallback || latest.transport !== 'packet') {
             latest.packetTransportFallback = false;
@@ -3882,6 +4032,7 @@ export class GroupCallManager extends EventEmitter {
       force?: boolean;
       holdAudio?: boolean;
       cooldownMs?: number;
+      forceLinkFallback?: boolean;
     }
   ): void {
     const room = this.rooms.get(roomId);
@@ -3894,6 +4045,9 @@ export class GroupCallManager extends EventEmitter {
     }
     const state = this.ensureReticulumAudioPeerState(roomId, address);
     if (!state) return;
+    const forceLinkFallback =
+      opts?.forceLinkFallback === true &&
+      this.getReticulumAudioTransportKind() === 'packet';
     if (state.transport === 'packet') {
       this.requestReticulumPacketPathWarmup(address, state, reason, {
         force: opts?.force,
@@ -3902,6 +4056,34 @@ export class GroupCallManager extends EventEmitter {
       });
       if (this.shouldMaintainReticulumAudioLink(state)) {
         void this.openReticulumAudioLinkForAddress(address);
+      }
+      if (forceLinkFallback) {
+        this.requestReticulumPacketLinkFallback(
+          address,
+          state,
+          `packet-fallback:${reason}`
+        );
+      }
+      return;
+    }
+    if (
+      state.packetTransportFallback &&
+      this.getReticulumAudioTransportKind() === 'packet'
+    ) {
+      this.requestReticulumPacketPathWarmup(address, state, reason, {
+        force: opts?.force,
+        holdAudio: opts?.holdAudio ?? false,
+        cooldownMs: opts?.cooldownMs,
+      });
+      if (this.shouldMaintainReticulumAudioLink(state)) {
+        void this.openReticulumAudioLinkForAddress(address);
+      }
+      if (forceLinkFallback) {
+        this.requestReticulumPacketLinkFallback(
+          address,
+          state,
+          `packet-fallback:${reason}`
+        );
       }
       return;
     }
@@ -3940,6 +4122,17 @@ export class GroupCallManager extends EventEmitter {
       if (result.established) {
         latest.established = true;
         this.resetReticulumAudioLinkHeartbeat(latest);
+        if (
+          latest.packetLinkFallbackRequestedUntilMs > Date.now() &&
+          latest.transport === 'packet' &&
+          !latest.packetTransportFallback
+        ) {
+          this.activateReticulumAudioLinkFallback(
+            address,
+            latest,
+            latest.packetLinkFallbackReason || 'packet-fallback:link-ready'
+          );
+        }
         this.scheduleReticulumAudioFlush();
       } else if (
         latest.linkEstablishRetryDelayMs <
@@ -4009,6 +4202,9 @@ export class GroupCallManager extends EventEmitter {
         packetTransportFallback: false,
         packetDegradedSinceMs: 0,
         packetFallbackEvidenceCount: 0,
+        packetFallbackActivatedAtMs: 0,
+        packetLinkFallbackRequestedUntilMs: 0,
+        packetLinkFallbackReason: '',
         routeKey: this.computeReticulumAudioRouteKey(transport, peerPresenceHash),
         linkId: null,
         established: false,
@@ -4016,6 +4212,8 @@ export class GroupCallManager extends EventEmitter {
         rooms: new Set<string>(),
         pending: [],
         lastInboundAtMs: 0,
+        lastInboundPacketAtMs: 0,
+        lastOutboundPacketAtMs: 0,
         lastPathWarmAtMs: 0,
         lastRecoveryActionAtMs: 0,
         recoveryHoldUntilMs: 0,
@@ -4534,6 +4732,7 @@ export class GroupCallManager extends EventEmitter {
           result.snapshot.packetSendFailures
         );
         if (state.transport === 'packet') {
+          state.lastOutboundPacketAtMs = Date.now();
           this.maybeActivateReticulumPacketFallback(
             address,
             state,
@@ -4788,6 +4987,9 @@ export class GroupCallManager extends EventEmitter {
           packetTransportFallback: false,
           packetDegradedSinceMs: 0,
           packetFallbackEvidenceCount: 0,
+          packetFallbackActivatedAtMs: 0,
+          packetLinkFallbackRequestedUntilMs: 0,
+          packetLinkFallbackReason: '',
           routeKey: this.computeReticulumAudioRouteKey(
             this.getEffectiveReticulumAudioTransport(null),
             desired.peerPresenceHash
@@ -4798,6 +5000,8 @@ export class GroupCallManager extends EventEmitter {
           rooms: desired.rooms,
           pending: [],
           lastInboundAtMs: 0,
+          lastInboundPacketAtMs: 0,
+          lastOutboundPacketAtMs: 0,
           lastPathWarmAtMs: 0,
           lastRecoveryActionAtMs: 0,
           recoveryHoldUntilMs: 0,
@@ -5712,7 +5916,7 @@ export class GroupCallManager extends EventEmitter {
         )
       : null;
     loggerLog(
-      `[GCall] Reticulum audio link heartbeat rx command=${wire.c} room=${wire.R} linkId=${linkId || 'n/a'} peerPresenceHash=${peerPresenceHash || 'n/a'} senderDestinationHash=${senderDestinationHash || 'n/a'} address=${address ?? 'unresolved'} seq=${wire.p ?? 'n/a'} localInterest=${hasLocalInterest ? 'yes' : 'no'}`
+      `[GCall] Reticulum audio link heartbeat rx command=${wire.c} room=${wire.R} linkId=${linkId || 'n/a'} peerPresenceHash=${peerPresenceHash || 'n/a'} senderDestinationHash=${senderDestinationHash || 'n/a'} address=${address ?? 'unresolved'} seq=${wire.p ?? 'n/a'} packetRxRecent=${wire.packetRxRecent === undefined ? 'n/a' : wire.packetRxRecent ? 'yes' : 'no'} packetRxAgeMs=${wire.packetRxAgeMs ?? 'n/a'} localInterest=${hasLocalInterest ? 'yes' : 'no'}`
     );
     if (!hasLocalInterest) return;
     if (!address) return;
@@ -5730,6 +5934,7 @@ export class GroupCallManager extends EventEmitter {
     if (senderDestinationHash) {
       state.peerDestinationHash = senderDestinationHash;
     }
+    this.maybeActivateReticulumFallbackFromPeerRxReport(address, state, wire);
     if (wire.c === 'PONG') {
       state.linkHeartbeatLastPongAtMs = now;
       state.linkHeartbeatAwaitingSeq = 0;
@@ -5787,13 +5992,12 @@ export class GroupCallManager extends EventEmitter {
       if (state) {
         state.peerDestinationHash =
           payload.peerDestinationHash || state.peerDestinationHash;
-        state.lastInboundAtMs = Date.now();
+        const now = Date.now();
+        state.lastInboundAtMs = now;
         state.recoveryHoldUntilMs = 0;
         state.recoveryReason = '';
         if ((payload.transport ?? 'link') === 'packet') {
-          this.noteReticulumPacketTransportHealthy(state);
-          state.packetTransportFallback = false;
-          this.setReticulumAudioTransport(fromAddress, state, 'packet');
+          state.lastInboundPacketAtMs = now;
         }
       }
     }

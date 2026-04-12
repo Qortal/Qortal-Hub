@@ -1268,6 +1268,347 @@ describe('Reticulum group audio transport', () => {
     });
   });
 
+  it('uses the audio link as temporary fallback when renderer reports packet-path degradation', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => ({
+        bridgeQueuedFrames: 0,
+        bridgeQueuedBytes: 0,
+        bridgeBinaryWritesQueued: 0,
+        bridgeWaitingForDrain: false,
+        perLinkQueuedFrames: 0,
+        queuePressureDrops: 0,
+        queuePressureDropsLast5s: 0,
+        staleDrops: 0,
+        staleDropsLast5s: 0,
+        decodedQueueDepth: 0,
+        decodedQueueMax: 48,
+        decodedQueueDrops: 0,
+        binaryOutQueueDepth: 0,
+        binaryOutQueueMax: 128,
+        binaryOutQueueDrops: 0,
+        jsonOutQueueDrops: 0,
+        packetSendFailures: 0,
+        packetPathRequests: 2,
+        packetPathResolutions: 0,
+        packetPathTimeouts: 2,
+        packetFreshSends: 1,
+        packetStaleSends: 0,
+        packetUnknownSends: 0,
+      }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({
+        ok: true as const,
+        pathState: 'stale',
+        ready: false,
+      }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100, TEST_D32);
+
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    manager.requestPeerMediaRecovery('room-1', 'Q-peer', 'path-degraded-warm');
+    await Promise.resolve();
+
+    const fallback = manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
+
+    expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledWith(
+      'd:Q-peer',
+      'room-1',
+      Buffer.from([1, 2, 3]),
+      ''
+    );
+    expect(bridge.enqueueGroupAudio).toHaveBeenCalledWith(
+      'link-1',
+      'room-1',
+      Buffer.from([4, 5, 6])
+    );
+    expect(fallback).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+      }),
+    });
+    manager.stop();
+  });
+
+  it('keeps outbound link fallback after receiving reverse-direction packet audio', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => ({
+        bridgeQueuedFrames: 0,
+        bridgeQueuedBytes: 0,
+        bridgeBinaryWritesQueued: 0,
+        bridgeWaitingForDrain: false,
+        perLinkQueuedFrames: 0,
+        queuePressureDrops: 0,
+        queuePressureDropsLast5s: 0,
+        staleDrops: 0,
+        staleDropsLast5s: 0,
+        decodedQueueDepth: 0,
+        decodedQueueMax: 48,
+        decodedQueueDrops: 0,
+        binaryOutQueueDepth: 0,
+        binaryOutQueueMax: 128,
+        binaryOutQueueDrops: 0,
+        jsonOutQueueDrops: 0,
+        packetSendFailures: 0,
+        packetPathRequests: 2,
+        packetPathResolutions: 0,
+        packetPathTimeouts: 2,
+        packetFreshSends: 1,
+        packetStaleSends: 0,
+        packetUnknownSends: 0,
+      }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({
+        ok: true as const,
+        pathState: 'stale',
+        ready: false,
+      }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100, TEST_D32);
+
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    manager.requestPeerMediaRecovery('room-1', 'Q-peer', 'path-degraded-warm');
+    await Promise.resolve();
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
+
+    bridge.emit('group-audio-packet', {
+      linkId: '',
+      routeKey: 'packet:d:Q-peer',
+      transport: 'packet',
+      roomId: 'room-1',
+      data: Buffer.from([7, 8, 9]),
+      peerPresenceHash: 'd:Q-peer',
+      peerDestinationHash: 'call-peer',
+      incoming: true,
+    });
+
+    const afterInbound = manager.sendAudio(
+      'room-1',
+      'Q-peer',
+      Buffer.from([10, 11, 12])
+    );
+
+    expect(bridge.enqueueGroupAudio).toHaveBeenCalledWith(
+      'link-1',
+      'room-1',
+      Buffer.from([10, 11, 12])
+    );
+    expect(afterInbound).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+      }),
+    });
+    manager.stop();
+  });
+
+  it('falls back to link audio when peer heartbeat reports missing our packet audio', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(20_000);
+
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      sendGroupAudioLinkHeartbeatDetailed = vi.fn(
+        async (_opts: {
+          roomId: string;
+          command: 'PING' | 'PONG';
+          seq?: number;
+          peerPresenceHash?: string;
+          linkId?: string;
+          packetRxAgeMs?: number;
+          packetRxRecent?: boolean;
+        }) => ({ ok: true as const })
+      );
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => ({
+        bridgeQueuedFrames: 0,
+        bridgeQueuedBytes: 0,
+        bridgeBinaryWritesQueued: 0,
+        bridgeWaitingForDrain: false,
+        perLinkQueuedFrames: 0,
+        queuePressureDrops: 0,
+        queuePressureDropsLast5s: 0,
+        staleDrops: 0,
+        staleDropsLast5s: 0,
+        decodedQueueDepth: 0,
+        decodedQueueMax: 48,
+        decodedQueueDrops: 0,
+        binaryOutQueueDepth: 0,
+        binaryOutQueueMax: 128,
+        binaryOutQueueDrops: 0,
+        jsonOutQueueDrops: 0,
+        packetSendFailures: 0,
+        packetPathRequests: 0,
+        packetPathResolutions: 0,
+        packetPathTimeouts: 0,
+        packetFreshSends: 1,
+        packetStaleSends: 0,
+        packetUnknownSends: 0,
+      }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    manager.start();
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100, TEST_D32);
+
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    bridge.emit(
+      'group-call-message',
+      { t: 'GAC', R: 'room-1', c: 'PING', p: 77, m: Date.now(), pr: 0, pa: -1 },
+      'd:Q-peer',
+      'd:Q-peer',
+      'link-1'
+    );
+    await Promise.resolve();
+
+    const fallback = manager.sendAudio('room-1', 'Q-peer', Buffer.from([4, 5, 6]));
+
+    expect(bridge.sendGroupAudioLinkHeartbeatDetailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: 'PONG',
+        packetRxAgeMs: -1,
+        packetRxRecent: false,
+      })
+    );
+    expect(bridge.enqueueGroupAudio).toHaveBeenCalledWith(
+      'link-1',
+      'room-1',
+      Buffer.from([4, 5, 6])
+    );
+    expect(fallback).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+      }),
+    });
+    manager.stop();
+  });
+
   it('emits inbound Reticulum audio as gcall:audio with the mapped sender address', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {

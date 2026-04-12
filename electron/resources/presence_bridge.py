@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire391-audio-link-heartbeat-v1"
+PRESENCE_BRIDGE_BUILD = "wire392-audio-link-heartbeat-rx-health-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -3295,6 +3295,27 @@ def handle_forward_presence(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error=str(exc))
 
 
+def handle_rns_announce(req_id: str, payload: Dict[str, Any]) -> None:
+    """Explicit RNS Destination.announce (e.g. after GC_JOIN / voice call join)."""
+    global _last_no_verified_peers_announce_at
+    reason_raw = payload.get("reason")
+    reason = str(reason_raw).strip() if isinstance(reason_raw, str) else "unspecified"
+    if not reason:
+        reason = "unspecified"
+    if _destination is None:
+        emit_resp(req_id, False, error="Bridge not started")
+        return
+    if not _rns_auth_announced:
+        emit_resp(req_id, False, error="Presence not authenticated")
+        return
+    try:
+        announce_local_destination(reason)
+        _last_no_verified_peers_announce_at = time.time()
+        emit_resp(req_id, True)
+    except Exception as exc:
+        emit_resp(req_id, False, error=str(exc))
+
+
 def handle_overlay_sync_state(req_id: str, payload: Dict[str, Any]) -> None:
     verified_raw = payload.get("verifiedPeers")
     active_raw = payload.get("activeNeighborHashes")
@@ -4098,6 +4119,12 @@ def handle_send_group_audio_link_heartbeat(req_id: str, payload: Dict[str, Any])
     seq = payload.get("seq")
     if isinstance(seq, int) and seq >= 0:
         wire["p"] = seq
+    packet_rx_age_ms = payload.get("packetRxAgeMs")
+    if isinstance(packet_rx_age_ms, (int, float)):
+        wire["pa"] = max(-1, min(60000, int(packet_rx_age_ms)))
+    packet_rx_recent = payload.get("packetRxRecent")
+    if isinstance(packet_rx_recent, bool):
+        wire["pr"] = 1 if packet_rx_recent else 0
     encoded = _encode_group_signal_wire(wire)
     if not encoded.get("ok"):
         emit_resp(
@@ -4152,6 +4179,8 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_forward_presence(req_id, payload)
     elif action == "overlay_sync_state":
         handle_overlay_sync_state(req_id, payload)
+    elif action == "rns_announce":
+        handle_rns_announce(req_id, payload)
     elif action == "overlay_note_candidate_failure":
         handle_overlay_note_candidate_failure(req_id, payload)
     elif action == "stop":
