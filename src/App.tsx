@@ -106,6 +106,7 @@ import {
 } from './components/Desktop/CustomTitleBar';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
+import { QortalPermissionPreview } from './components/App/QortalPermissionPreview.tsx';
 
 // Re-export for consumers that still import from App
 export type { extStates } from './types/app';
@@ -128,6 +129,9 @@ export {
 export { isMainWindow } from './constants/app';
 
 function App() {
+  const permissionPreviewMode =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get('permission-preview') === '1';
   const [extState, setExtstate] = useAtom(extStateAtom);
   const [desktopViewMode, setDesktopViewMode] = useState('home');
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
@@ -1337,6 +1341,10 @@ function App() {
           onBackupWallet,
         }
       : null;
+
+  if (permissionPreviewMode) {
+    return <QortalPermissionPreview />;
+  }
 
   return (
     <AppContainer
