@@ -86,8 +86,10 @@ export function GlobalQortalNavBar({
     const trimmed = inputValue.trim();
     if (!trimmed) return;
 
-    const normalized = normalizeQortalInput(trimmed);
-    const parsedLink = extractComponents(normalized);
+    const isExplicitQortalLink = /^qortal:\/\//i.test(trimmed);
+    const parsedLink = isExplicitQortalLink
+      ? extractComponents(normalizeQortalInput(trimmed))
+      : null;
 
     if (parsedLink) {
       const { service, name, identifier, path } = parsedLink;
@@ -117,8 +119,8 @@ export function GlobalQortalNavBar({
       : 'rgba(255, 255, 255, 0.72)';
   const inputHoverBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(69, 82, 108, 0.94)'
-      : 'rgba(205, 223, 244, 0.92)';
+      ? 'rgba(62, 78, 108, 0.96)'
+      : 'rgba(194, 216, 242, 0.94)';
   const inputFocusBackground =
     theme.palette.mode === 'dark'
       ? 'rgba(68, 71, 77, 0.94)'
@@ -144,8 +146,8 @@ export function GlobalQortalNavBar({
   const inputTextDefaultColor = theme.palette.text.secondary;
   const inputTextHoverColor =
     theme.palette.mode === 'dark'
-      ? 'rgba(224, 224, 224, 0.92)'
-      : 'rgba(0, 0, 0, 0.72)';
+      ? 'rgba(236, 240, 246, 0.96)'
+      : 'rgba(0, 0, 0, 0.78)';
   const inputTextFocusColor = theme.palette.text.primary;
   const inputTextColor = isInputFocused
     ? inputTextFocusColor
@@ -165,12 +167,20 @@ export function GlobalQortalNavBar({
   const remainderText = protocolText ? inputValue.slice(protocolText.length) : '';
   const protocolColor =
     theme.palette.mode === 'dark'
-      ? 'rgba(224, 224, 224, 0.92)'
-      : 'rgba(0, 0, 0, 0.74)';
+      ? isInputHovered
+        ? 'rgba(242, 246, 252, 0.98)'
+        : 'rgba(224, 224, 224, 0.92)'
+      : isInputHovered
+        ? 'rgba(0, 0, 0, 0.82)'
+        : 'rgba(0, 0, 0, 0.74)';
   const remainderColor =
     theme.palette.mode === 'dark'
-      ? 'rgba(176, 176, 176, 0.9)'
-      : 'rgba(0, 0, 0, 0.56)';
+      ? isInputHovered
+        ? 'rgba(218, 226, 238, 0.94)'
+        : 'rgba(176, 176, 176, 0.9)'
+      : isInputHovered
+        ? 'rgba(0, 0, 0, 0.66)'
+        : 'rgba(0, 0, 0, 0.56)';
   const linkTextMetrics = {
     fontSize: '13.5px',
     fontWeight: 400,
@@ -412,9 +422,7 @@ export function GlobalQortalNavBar({
                   handleOpenInput();
                 }
               }}
-              placeholder={t('core:action.search_apps_or_link', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+              placeholder="Search Q-Apps or enter qortal://"
               sx={{
                 color: inputTextColor,
                 flex: 1,
