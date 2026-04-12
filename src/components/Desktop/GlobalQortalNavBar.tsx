@@ -117,8 +117,8 @@ export function GlobalQortalNavBar({
       : 'rgba(255, 255, 255, 0.72)';
   const inputHoverBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(65, 67, 73, 0.94)'
-      : 'rgba(255, 255, 255, 0.82)';
+      ? 'rgba(69, 82, 108, 0.94)'
+      : 'rgba(205, 223, 244, 0.92)';
   const inputFocusBackground =
     theme.palette.mode === 'dark'
       ? 'rgba(68, 71, 77, 0.94)'
@@ -132,9 +132,7 @@ export function GlobalQortalNavBar({
       ? 'rgba(255, 255, 255, 0.24)'
       : 'rgba(0, 0, 0, 0.2)';
   const inputHoverShadow =
-    theme.palette.mode === 'dark'
-      ? `0 0 0 1px rgba(94, 154, 255, 0.3), 0 0 0 3px rgba(94, 154, 255, 0.12)`
-      : `0 0 0 1px rgba(41, 121, 218, 0.28), 0 0 0 3px rgba(41, 121, 218, 0.1)`;
+    'none';
   const inputFocusShadow =
     theme.palette.mode === 'dark'
       ? 'none'
