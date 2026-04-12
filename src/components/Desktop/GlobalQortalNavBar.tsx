@@ -45,7 +45,10 @@ export function GlobalQortalNavBar({
   const { t } = useTranslation(['core']);
   const [selectedTab, setSelectedTab] = useState<SelectedTab>(null);
   const [inputValue, setInputValue] = useState('');
+  const [isInputHovered, setIsInputHovered] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const isInputFocusedRef = useRef(false);
+  const inputElementRef = useRef<HTMLInputElement | null>(null);
 
   const setTabsToNav = useCallback((e: CustomEvent) => {
     const nextSelectedTab = e.detail?.data?.selectedTab;
@@ -118,8 +121,8 @@ export function GlobalQortalNavBar({
       : 'rgba(255, 255, 255, 0.82)';
   const inputFocusBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(70, 73, 79, 0.96)'
-      : 'rgba(255, 255, 255, 0.9)';
+      ? 'rgba(68, 71, 77, 0.94)'
+      : 'rgba(255, 255, 255, 0.88)';
   const hoverBorderColor =
     theme.palette.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.16)'
@@ -130,16 +133,46 @@ export function GlobalQortalNavBar({
       : 'rgba(0, 0, 0, 0.2)';
   const inputHoverShadow =
     theme.palette.mode === 'dark'
-      ? '0 0 0 1px rgba(255, 255, 255, 0.03), 0 8px 18px rgba(0, 0, 0, 0.14)'
-      : '0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(120, 127, 140, 0.12)';
+      ? `0 0 0 1px rgba(94, 154, 255, 0.3), 0 0 0 3px rgba(94, 154, 255, 0.12)`
+      : `0 0 0 1px rgba(41, 121, 218, 0.28), 0 0 0 3px rgba(41, 121, 218, 0.1)`;
   const inputFocusShadow =
     theme.palette.mode === 'dark'
-      ? '0 0 0 1px rgba(255, 255, 255, 0.06), 0 10px 24px rgba(0, 0, 0, 0.2)'
-      : '0 0 0 1px rgba(255, 255, 255, 0.12), 0 10px 24px rgba(120, 127, 140, 0.16)';
+      ? 'none'
+      : 'none';
   const buttonHoverBackground =
     theme.palette.mode === 'dark'
       ? 'rgba(255, 255, 255, 0.06)'
       : 'rgba(0, 0, 0, 0.05)';
+  const inputTextDefaultColor = theme.palette.text.secondary;
+  const inputTextHoverColor =
+    theme.palette.mode === 'dark'
+      ? 'rgba(224, 224, 224, 0.92)'
+      : 'rgba(0, 0, 0, 0.72)';
+  const inputTextFocusColor = theme.palette.text.primary;
+  const inputTextColor = isInputFocused
+    ? inputTextFocusColor
+    : isInputHovered
+      ? inputTextHoverColor
+      : inputTextDefaultColor;
+  const placeholderColor = isInputFocused
+    ? inputTextHoverColor
+    : theme.palette.text.secondary;
+  const selectionBackground = theme.palette.primary.main;
+  const selectionColor =
+    theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.92)' : '#ffffff';
+  const showStyledLinkPreview =
+    !isInputFocused && !!inputValue && /^qortal:\/\//i.test(inputValue);
+  const protocolMatch = inputValue.match(/^(qortal:\/\/)/i);
+  const protocolText = protocolMatch?.[0] || '';
+  const remainderText = protocolText ? inputValue.slice(protocolText.length) : '';
+  const protocolColor =
+    theme.palette.mode === 'dark'
+      ? 'rgba(224, 224, 224, 0.92)'
+      : 'rgba(0, 0, 0, 0.74)';
+  const remainderColor =
+    theme.palette.mode === 'dark'
+      ? 'rgba(176, 176, 176, 0.9)'
+      : 'rgba(0, 0, 0, 0.56)';
 
   return (
     <Box
@@ -200,11 +233,10 @@ export function GlobalQortalNavBar({
               justifyContent: 'center',
               opacity: canGoBack ? 1 : 0.32,
               transition:
-                'background-color 180ms ease, color 180ms ease, opacity 180ms ease, transform 220ms ease',
+                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
               width: 32,
               '&:hover:not(.Mui-disabled)': {
                 backgroundColor: buttonHoverBackground,
-                transform: 'translateY(-1px)',
               },
             }}
           >
@@ -226,11 +258,10 @@ export function GlobalQortalNavBar({
               justifyContent: 'center',
               opacity: canGoForward ? 1 : 0.32,
               transition:
-                'background-color 180ms ease, color 180ms ease, opacity 180ms ease, transform 220ms ease',
+                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
               width: 32,
               '&:hover:not(.Mui-disabled)': {
                 backgroundColor: buttonHoverBackground,
-                transform: 'translateY(-1px)',
               },
             }}
           >
@@ -258,11 +289,10 @@ export function GlobalQortalNavBar({
               justifyContent: 'center',
               opacity: canRefresh ? 1 : 0.32,
               transition:
-                'background-color 180ms ease, color 180ms ease, opacity 180ms ease, transform 220ms ease',
+                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
               width: 32,
               '&:hover:not(.Mui-disabled)': {
                 backgroundColor: buttonHoverBackground,
-                transform: 'translateY(-1px)',
               },
             }}
           >
@@ -271,6 +301,8 @@ export function GlobalQortalNavBar({
         </Box>
 
         <Box
+          onMouseEnter={() => setIsInputHovered(true)}
+          onMouseLeave={() => setIsInputHovered(false)}
           sx={{
             alignItems: 'center',
             backgroundColor: inputBackground,
@@ -284,18 +316,16 @@ export function GlobalQortalNavBar({
             px: 1.5,
             boxShadow: 'none',
             transition:
-              'background-color 240ms ease, border-color 240ms ease, box-shadow 280ms ease, transform 280ms ease',
+              'background-color 240ms ease, border-color 240ms ease, box-shadow 280ms ease',
             '&:hover': {
               backgroundColor: inputHoverBackground,
               borderColor: hoverBorderColor,
               boxShadow: inputHoverShadow,
-              transform: 'translateY(-1px)',
             },
             '&:focus-within': {
               backgroundColor: inputFocusBackground,
               borderColor: focusBorderColor,
               boxShadow: inputFocusShadow,
-              transform: 'translateY(-1px)',
             },
           }}
         >
@@ -305,38 +335,99 @@ export function GlobalQortalNavBar({
               fontSize: 17,
             }}
           />
-          <InputBase
-            value={inputValue}
-            onBlur={() => {
-              isInputFocusedRef.current = false;
-            }}
-            onChange={(e) => setInputValue(e.target.value)}
-            onFocus={() => {
-              isInputFocusedRef.current = true;
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleOpenInput();
-              }
-            }}
-            placeholder={t('core:action.search_apps_or_link', {
-              postProcess: 'capitalizeFirstChar',
-            })}
+          <Box
             sx={{
-              color: theme.palette.text.primary,
+              alignItems: 'center',
+              display: 'flex',
               flex: 1,
-              fontSize: '13.5px',
               minWidth: 0,
-              '& .MuiInputBase-input': {
-                py: '6px',
-              },
-              '& .MuiInputBase-input::placeholder': {
-                color: theme.palette.text.secondary,
-                opacity: 1,
-              },
+              position: 'relative',
             }}
-          />
+          >
+            {showStyledLinkPreview && (
+              <Box
+                aria-hidden
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  inset: 0,
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    color: protocolColor,
+                    fontSize: '13.5px',
+                    transition: 'color 220ms ease',
+                  }}
+                >
+                  {protocolText}
+                </Box>
+                <Box
+                  component="span"
+                  sx={{
+                    color: remainderColor,
+                    fontSize: '13.5px',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    transition: 'color 220ms ease',
+                  }}
+                >
+                  {remainderText}
+                </Box>
+              </Box>
+            )}
+            <InputBase
+              inputRef={inputElementRef}
+              value={inputValue}
+              onBlur={() => {
+                isInputFocusedRef.current = false;
+                setIsInputFocused(false);
+              }}
+              onChange={(e) => setInputValue(e.target.value)}
+              onFocus={() => {
+                isInputFocusedRef.current = true;
+                setIsInputFocused(true);
+                window.setTimeout(() => {
+                  inputElementRef.current?.select();
+                }, 0);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleOpenInput();
+                }
+              }}
+              placeholder={t('core:action.search_apps_or_link', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              sx={{
+                color: inputTextColor,
+                flex: 1,
+                fontSize: '13.5px',
+                minWidth: 0,
+                transition: 'color 220ms ease',
+                '& .MuiInputBase-input': {
+                  color: showStyledLinkPreview ? 'transparent' : 'inherit',
+                  py: '6px',
+                  transition: 'color 220ms ease',
+                  '::selection': {
+                    backgroundColor: selectionBackground,
+                    color: selectionColor,
+                  },
+                },
+                '& .MuiInputBase-input::placeholder': {
+                  color: placeholderColor,
+                  opacity: 1,
+                  transition: 'color 220ms ease',
+                },
+              }}
+            />
+          </Box>
           <ButtonBase
             onClick={handleOpenInput}
             sx={{
@@ -348,12 +439,11 @@ export function GlobalQortalNavBar({
               height: 26,
               justifyContent: 'center',
               transition:
-                'background-color 180ms ease, color 180ms ease, transform 220ms ease',
+                'background-color 180ms ease, color 180ms ease',
               width: 26,
               '&:hover': {
                 backgroundColor: buttonHoverBackground,
                 color: theme.palette.text.primary,
-                transform: 'translateY(-1px)',
               },
             }}
           >
