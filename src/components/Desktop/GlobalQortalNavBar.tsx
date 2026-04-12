@@ -173,6 +173,12 @@ export function GlobalQortalNavBar({
     theme.palette.mode === 'dark'
       ? 'rgba(176, 176, 176, 0.9)'
       : 'rgba(0, 0, 0, 0.56)';
+  const linkTextMetrics = {
+    fontSize: '13.5px',
+    fontWeight: 400,
+    letterSpacing: 'normal',
+    lineHeight: '20px',
+  } as const;
 
   return (
     <Box
@@ -361,8 +367,11 @@ export function GlobalQortalNavBar({
                   component="span"
                   sx={{
                     color: protocolColor,
-                    fontSize: '13.5px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    height: '20px',
                     transition: 'color 220ms ease',
+                    ...linkTextMetrics,
                   }}
                 >
                   {protocolText}
@@ -370,11 +379,14 @@ export function GlobalQortalNavBar({
                 <Box
                   component="span"
                   sx={{
+                    alignItems: 'center',
                     color: remainderColor,
-                    fontSize: '13.5px',
+                    display: 'inline-flex',
+                    height: '20px',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     transition: 'color 220ms ease',
+                    ...linkTextMetrics,
                   }}
                 >
                   {remainderText}
@@ -408,13 +420,20 @@ export function GlobalQortalNavBar({
               sx={{
                 color: inputTextColor,
                 flex: 1,
-                fontSize: '13.5px',
                 minWidth: 0,
                 transition: 'color 220ms ease',
+                ...linkTextMetrics,
                 '& .MuiInputBase-input': {
+                  appearance: 'none',
+                  boxSizing: 'border-box',
                   color: showStyledLinkPreview ? 'transparent' : 'inherit',
-                  py: '6px',
+                  display: 'block',
+                  height: '20px',
+                  lineHeight: '20px',
+                  margin: 0,
+                  padding: 0,
                   transition: 'color 220ms ease',
+                  ...linkTextMetrics,
                   '::selection': {
                     backgroundColor: selectionBackground,
                     color: selectionColor,
