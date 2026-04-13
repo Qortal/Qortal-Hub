@@ -214,8 +214,9 @@ describe('gcallN1PlayoutGate', () => {
         playoutStarvationSeverity: 'strong',
       })
     ).toBe(true);
-    expect(computeN1PcmRebuildBurstCap('deep', 11)).toBe(4);
-    expect(computeN1PcmRebuildBurstCap('moderate', 11)).toBe(5);
+    expect(computeN1PcmRebuildBurstCap('deep', 11)).toBe(5);
+    expect(computeN1PcmRebuildBurstCap('moderate', 11)).toBe(6);
+    expect(computeN1PcmRebuildBurstCap('normal', 11)).toBe(7);
     expect(
       shouldBoostN1PcmRebuild({
         sourceRecentlyPushed: true,
@@ -309,6 +310,19 @@ describe('gcallN1PlayoutGate', () => {
         severeInstability: true,
       })
     ).toBe(true);
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_300,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 30,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 150,
+        playoutUnderTargetFraction: 0.28,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(false);
     expect(
       shouldKeepN1SevereForcedReleaseRebuild({
         nowMs: 1_300,

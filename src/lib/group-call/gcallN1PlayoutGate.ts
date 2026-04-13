@@ -35,11 +35,12 @@ export const GCALL_N1_ACCUMULATION_MS = 75;
 export const GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS = 140;
 /** Severe 20ms deadlock escape needs a longer rebuild window so the source can climb out of 1 frame. */
 export const GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS = 420;
-export const GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP = 3;
+/** During severe PCM rebuild, convert queued Opus to PCM faster than realtime but keep N=1 bounded. */
+export const GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP = 5;
 export const GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS = 80;
 export const GCALL_N1_SEVERE_RELEASE_EXIT_UNDERTARGET_MAX = 0.45;
 export const GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_PCM_MS = 120;
-export const GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_UNDERTARGET_MAX = 0.25;
+export const GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_UNDERTARGET_MAX = 0.3;
 export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_OPUS_MS = 60;
 export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_PCM_MS = 30;
 export const GCALL_N1_LATE_COLLAPSE_REARM_UNDERTARGET_MIN = 0.85;
@@ -279,9 +280,9 @@ export function computeN1PcmRebuildBurstCap(
   tier: GcallN1BufferEnforceTier,
   scaledBurstCap: number
 ): number {
-  if (tier === 'deep') return Math.min(4, scaledBurstCap);
-  if (tier === 'moderate') return Math.min(5, scaledBurstCap);
-  return Math.min(6, scaledBurstCap);
+  if (tier === 'deep') return Math.min(5, scaledBurstCap);
+  if (tier === 'moderate') return Math.min(6, scaledBurstCap);
+  return Math.min(7, scaledBurstCap);
 }
 
 export function shouldKeepN1SevereForcedReleaseRebuild(input: {

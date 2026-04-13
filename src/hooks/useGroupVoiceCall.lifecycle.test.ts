@@ -34,6 +34,7 @@ import {
   computeN1RoughLinkBitrateCapBps,
   computeN1ReceivePrioritySendBitrateCapBps,
   tickN1ReceivePrioritySendBitrateCapState,
+  shouldPreserveN1SevereSingleRemoteTarget,
   computeWeakSingleRemoteRecoveryHoldState,
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   computeSingleRemoteOverbufferTargetMaxMs,
@@ -470,7 +471,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(true);
   });
 
-  it('holds a deep single-frame recovery source so N===1 can re-accumulate', () => {
+  it('holds severe single-remote recovery so N===1 can re-accumulate', () => {
     expect(
       computeN1AccumulationDecodeCap({
         accumulationActive: true,
@@ -497,7 +498,34 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         opusBufferedMs: 60,
         tier: 'deep',
       })
-    ).toBe(3);
+    ).toBe(0);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 60,
+        tier: 'moderate',
+      })
+    ).toBe(0);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 100,
+        tier: 'moderate',
+      })
+    ).toBe(0);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 120,
+        tier: 'moderate',
+      })
+    ).toBe(5);
     expect(
       computeN1AccumulationDecodeCap({
         accumulationActive: true,
@@ -522,6 +550,65 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         tier: 'deep',
       })
     ).toBe(1);
+  });
+
+  it('preserves the high target for the severe isolated one-on-one source', () => {
+    expect(
+      shouldPreserveN1SevereSingleRemoteTarget({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: true,
+        isolatedSource: true,
+        liveN1DeadzoneStrong: false,
+      })
+    ).toBe(true);
+    expect(
+      shouldPreserveN1SevereSingleRemoteTarget({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: false,
+        isolatedSource: false,
+        liveN1DeadzoneStrong: true,
+      })
+    ).toBe(true);
+    expect(
+      shouldPreserveN1SevereSingleRemoteTarget({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: false,
+        isolatedSource: false,
+        liveN1DeadzoneStrong: false,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldPreserveN1SevereSingleRemoteTarget({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: false,
+        isolatedSource: false,
+        liveN1DeadzoneStrong: false,
+        starvationCooldownActive: true,
+      })
+    ).toBe(true);
+    expect(
+      shouldPreserveN1SevereSingleRemoteTarget({
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: true,
+        isolatedSource: true,
+        liveN1DeadzoneStrong: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldPreserveN1SevereSingleRemoteTarget({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'low-latency',
+        severeWindowSource: true,
+        isolatedSource: true,
+        liveN1DeadzoneStrong: false,
+      })
+    ).toBe(false);
   });
 
   it('extends severe rebuild accumulation only for live one-on-one PCM dead zones', () => {
@@ -657,7 +744,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         sourceRecentlyPushed: true,
         lastRecvAgeMs: 140,
         bufferedFrames: 2,
-        targetMs: 100,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 0.021,
@@ -674,11 +760,30 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         recoverySingleRemote: true,
         prerollActive: false,
         severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 6_500,
+        sourceRecentlyPushed: true,
+        lastRecvAgeMs: 140,
+        bufferedFrames: 3,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(false);
+    expect(
+      shouldResetN1SevereRebuildDeadzone({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
         severeForcedReleaseRebuildActiveForMs: 5_500,
         sourceRecentlyPushed: true,
         lastRecvAgeMs: 140,
         bufferedFrames: 2,
-        targetMs: 100,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 0.021,
@@ -699,7 +804,6 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         sourceRecentlyPushed: true,
         lastRecvAgeMs: 140,
         bufferedFrames: 5,
-        targetMs: 100,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 0.021,
@@ -2262,7 +2366,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         relayPacketsSent: 40,
         reticulumAudioPacketFreshSends: 80,
         missingForMs: 4_500,
-        lastActionAgeMs: 8_000,
+        lastActionAgeMs: 4_000,
       })
     ).toBe(true);
   });
@@ -2312,7 +2416,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       relayPacketsSent: 40,
       reticulumAudioPacketFreshSends: 80,
       missingForMs: 4_500,
-      lastActionAgeMs: 8_000,
+      lastActionAgeMs: 4_000,
     };
     expect(
       shouldTriggerN1InboundMediaWatchdog({
@@ -2330,7 +2434,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(
       shouldTriggerN1InboundMediaWatchdog({
         ...base,
-        lastActionAgeMs: 2_000,
+        lastActionAgeMs: 3_000,
       })
     ).toBe(false);
     expect(
@@ -2350,8 +2454,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         activeSourceCount: 0,
         relayPacketsSent: 500,
         reticulumAudioPacketFreshSends: 500,
-        missingForMs: 5_500,
-        lastReannounceAgeMs: 8_000,
+        missingForMs: 4_500,
+        lastReannounceAgeMs: 4_000,
       })
     ).toBe(true);
   });
@@ -2364,19 +2468,19 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       activeSourceCount: 0,
       relayPacketsSent: 500,
       reticulumAudioPacketFreshSends: 500,
-      missingForMs: 5_500,
-      lastReannounceAgeMs: 8_000,
+      missingForMs: 4_500,
+      lastReannounceAgeMs: 4_000,
     };
     expect(
       shouldTriggerN1InboundMediaReannounce({
         ...base,
-        missingForMs: 4_000,
+        missingForMs: 3_000,
       })
     ).toBe(false);
     expect(
       shouldTriggerN1InboundMediaReannounce({
         ...base,
-        lastReannounceAgeMs: 6_000,
+        lastReannounceAgeMs: 3_000,
       })
     ).toBe(false);
     expect(
