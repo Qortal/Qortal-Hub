@@ -279,6 +279,77 @@ export const AppsNavBarRight = styled(Box)(({ theme }) => ({
   justifyContent: 'flex-end',
 }));
 
+export const APPS_HORIZONTAL_TAB_HEIGHT_PX = 52;
+
+export const AppsHorizontalTabBar = styled(Box)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.default,
+  borderBottom: `1px solid ${theme.palette.border.subtle}`,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flexShrink: 0,
+  height: `${APPS_HORIZONTAL_TAB_HEIGHT_PX}px`,
+  minHeight: `${APPS_HORIZONTAL_TAB_HEIGHT_PX}px`,
+  overflow: 'hidden',
+  width: '100%',
+}));
+
+export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({
+  alignItems: 'stretch',
+  backgroundColor: theme.palette.background.default,
+  color: theme.palette.text.primary,
+  display: 'flex',
+  gap: '6px',
+  height: '100%',
+  overflow: 'hidden',
+  padding: '8px 14px 8px 16px',
+  width: '100%',
+  '::-webkit-scrollbar': {
+    display: 'none',
+  },
+}));
+
+export const AppsHorizontalTabButton = styled(ButtonBase)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.action.hover,
+  border: `1px solid ${theme.palette.border.subtle}`,
+  borderRadius: '14px 14px 0 0',
+  color: theme.palette.text.primary,
+  display: 'flex',
+  flex: '1 1 0',
+  gap: '10px',
+  height: '100%',
+  justifyContent: 'flex-start',
+  maxWidth: '240px',
+  minWidth: '96px',
+  padding: '0 12px',
+}));
+
+export const AppsHorizontalTabLabel = styled(Typography)(({ theme }) => ({
+  color: theme.palette.text.primary,
+  flex: 1,
+  fontSize: '13px',
+  fontWeight: 600,
+  overflow: 'hidden',
+  textAlign: 'left',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}));
+
+export const AppsHorizontalTabAddButton = styled(ButtonBase)(({ theme }) => ({
+  alignItems: 'center',
+  backgroundColor: theme.palette.background.paper,
+  border: `1px dashed ${theme.palette.border.subtle}`,
+  borderRadius: '14px 14px 0 0',
+  color: theme.palette.text.secondary,
+  display: 'flex',
+  flexShrink: 0,
+  height: '100%',
+  justifyContent: 'center',
+  minWidth: '44px',
+  padding: '0 10px',
+}));
+
 export const TabParent = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor: theme.palette.background.default,

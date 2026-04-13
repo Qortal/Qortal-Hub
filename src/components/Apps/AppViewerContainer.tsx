@@ -53,6 +53,7 @@ const AppViewerContainer = forwardRef<
     >
       <AppViewer
         app={app}
+        customHeight={customHeight}
         hide={!isSelected || hide}
         isDevMode={isDevMode}
         ref={ref}

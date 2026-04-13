@@ -9,7 +9,6 @@ import {
 import { AppsHomeDesktop } from './AppsHomeDesktop';
 import { Spacer } from '../../common/Spacer';
 import { getBaseApiReact } from '../../App';
-import { useHandleTutorials } from '../../hooks/useHandleTutorials';
 import { AppInfo } from './AppInfo';
 import {
   executeEvent,
@@ -17,13 +16,22 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { clearSessionPermissionsByTabId } from '../../qortal/qortal-requests';
-import { AppsParent } from './Apps-styles';
+import {
+  APPS_HORIZONTAL_TAB_HEIGHT_PX,
+  AppsHorizontalTabAddButton,
+  AppsHorizontalTabBar,
+  AppsHorizontalTabScroller,
+  AppsParent,
+} from './Apps-styles';
 import AppViewerContainer from './AppViewerContainer';
+import TabComponent from './TabComponent';
 import ShortUniqueId from 'short-unique-id';
 import { AppPublish } from './AppPublish';
 import { RatingsCacheInitializer, useAppRatings } from '../../hooks/useAppRatings';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import {
   Box,
   Button,
@@ -34,7 +42,7 @@ import {
   DialogTitle,
 } from '@mui/material';
 import {
-  enabledDevModeAtom,
+  navigationControllerAtom,
   isNewTabWindowAtom,
   userInfoAtom,
 } from '../../atoms/global';
@@ -43,10 +51,21 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
+import { extractComponents } from '../Chat/MessageDisplay';
+import { QORTAL_PROTOCOL } from '../../constants/constants';
 
 const uid = new ShortUniqueId({ length: 8 });
+const MAX_OPEN_APP_TABS = 10;
+
+function normalizeQortalInput(value: string) {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return '';
+  if (/^qortal:\/\//i.test(trimmed)) return trimmed;
+  return `${QORTAL_PROTOCOL}${trimmed}`;
+}
 
 export const AppsDesktop = ({ mode, setMode, show }) => {
+  const navigationController = useAtomValue(navigationControllerAtom);
   const userInfo = useAtomValue(userInfoAtom);
   const publishEditTarget = useAtomValue(publishEditTargetAtom);
   const setPublishEditTarget = useSetAtom(publishEditTargetAtom);
@@ -60,11 +79,14 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
   const [isNewTabWindow, setIsNewTabWindow] = useAtom(isNewTabWindowAtom);
   const [categories, setCategories] = useState([]);
   const iframeRefs = useRef({});
-  const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
-  const { showTutorial } = useHandleTutorials();
   const { refreshRatings } = useAppRatings();
   const [showCloseTabDialog, setShowCloseTabDialog] = useState(false);
   const [pendingTabToRemove, setPendingTabToRemove] = useState(null);
+  const [openSnack, setOpenSnack] = useState(false);
+  const [infoSnack, setInfoSnack] = useState<{
+    message: string;
+    type: 'warning' | 'error' | 'success' | 'info';
+  } | null>(null);
   const [librarySearchRequest, setLibrarySearchRequest] = useState<{
     nonce: number;
     query: string;
@@ -273,6 +295,14 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
 
   const addTabFunc = (e) => {
     const data = e.detail?.data;
+    if (tabs.length >= MAX_OPEN_APP_TABS) {
+      setInfoSnack({
+        message: 'Maximum number of tabs reached. Close one to open another.',
+        type: 'warning',
+      });
+      setOpenSnack(true);
+      return;
+    }
     const newTab = {
       ...data,
       tabId: uid.rnd(),
@@ -451,6 +481,44 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
     };
   }, [openAppsLibrarySearchFunc]);
 
+  const appsContentHeight = `calc(100vh - ${appChromeOffsetPx} - ${APPS_HORIZONTAL_TAB_HEIGHT_PX}px)`;
+
+  const openDashboardFromTabs = useCallback(() => {
+    setSelectedTab(null);
+    setLibrarySearchRequest({
+      nonce: Date.now(),
+      query: '',
+    });
+    setMode('viewer');
+    setIsNewTabWindow(true);
+    executeEvent('open-apps-mode', {});
+  }, [setIsNewTabWindow, setMode]);
+
+  const duplicateTab = useCallback(
+    (tab) => {
+      if (!tab) return;
+
+      const currentLink = tab?.tabId
+        ? navigationController?.[tab.tabId]?.currentLink || ''
+        : '';
+      const parsedLink = currentLink
+        ? extractComponents(normalizeQortalInput(currentLink))
+        : null;
+
+      executeEvent('addTab', {
+        data: {
+          ...tab,
+          identifier: parsedLink?.identifier ?? tab?.identifier,
+          name: parsedLink?.name ?? tab?.name,
+          path: parsedLink?.path ?? tab?.path,
+          service: parsedLink?.service ?? tab?.service,
+        },
+      });
+      executeEvent('open-apps-mode', {});
+    },
+    [navigationController]
+  );
+
   return (
     <AppsParent
       sx={{
@@ -460,117 +528,199 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
       }}
     >
       <RatingsCacheInitializer />
-      {mode === 'home' && (
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          width: '100%',
+        }}
+      >
+        <AppsHorizontalTabBar>
+          <AppsHorizontalTabScroller>
+            {tabs.map((tab) => (
+              <TabComponent
+                key={tab?.tabId}
+                app={tab}
+                isSelected={tab?.tabId === selectedTab?.tabId}
+                onDuplicate={() => duplicateTab(tab)}
+                onClose={() => {
+                  executeEvent('removeTab', {
+                    data: tab,
+                  });
+                }}
+                onSelect={() => {
+                  executeEvent('open-apps-mode', {});
+                  executeEvent('setSelectedTab', {
+                    data: tab,
+                  });
+                }}
+              />
+            ))}
+
+            <AppsHorizontalTabAddButton
+              onClick={openDashboardFromTabs}
+              sx={(theme) => ({
+                '&:hover': {
+                  backgroundColor: theme.palette.action.hover,
+                  color: theme.palette.text.primary,
+                },
+              })}
+            >
+              <AddRoundedIcon sx={{ fontSize: 20 }} />
+            </AppsHorizontalTabAddButton>
+          </AppsHorizontalTabScroller>
+        </AppsHorizontalTabBar>
+
         <Box
           sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            height: `calc(100vh - ${appChromeOffsetPx} )`,
-            overflow: 'auto',
+            height: appsContentHeight,
+            minHeight: 0,
+            overflow: 'hidden',
             width: '100%',
           }}
         >
-          <Spacer height="30px" />
+          {mode === 'home' && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: appsContentHeight,
+                overflow: 'auto',
+                width: '100%',
+              }}
+            >
+              <Spacer height="30px" />
 
-          <AppsHomeDesktop
-            myName={myName}
+              <AppsHomeDesktop
+                myName={myName}
+                availableQapps={availableQapps}
+                setMode={setMode}
+                myApp={myApp}
+                myWebsite={myWebsite}
+                myAddress={myAddress}
+              />
+            </Box>
+          )}
+
+          <AppsLibraryDesktop
             availableQapps={availableQapps}
-            setMode={setMode}
-            myApp={myApp}
-            myWebsite={myWebsite}
-            myAddress={myAddress}
-          />
-        </Box>
-      )}
-
-      <AppsLibraryDesktop
-        availableQapps={availableQapps}
-        categories={categories}
-        externalSearchRequest={librarySearchRequest}
-        getQapps={async () => { await getQapps(); refreshRatings(); }}
-        hasPublishApp={!!(myApp || myWebsite)}
-        isShow={mode === 'library' && !selectedTab}
-        myName={myName}
-        myAddress={myAddress}
-        setMode={setMode}
-      />
-
-      {mode === 'appInfo' && !selectedTab && (
-        <AppInfo app={selectedAppInfo} myName={myName} />
-      )}
-
-      {mode === 'appInfo-from-category' && !selectedTab && (
-        <AppInfo app={selectedAppInfo} myName={myName} />
-      )}
-
-      <AppsCategoryDesktop
-        availableQapps={availableQapps}
-        isShow={mode === 'category' && !selectedTab}
-        category={selectedCategory}
-        myName={myName}
-      />
-
-      {(mode === 'publish' ||
-        mode === 'publish-app' ||
-        mode === 'publish-website') &&
-        !selectedTab && (
-          <AppPublish
             categories={categories}
-            myAddress={myAddress}
+            contentHeight={appsContentHeight}
+            externalSearchRequest={librarySearchRequest}
+            getQapps={async () => {
+              await getQapps();
+              refreshRatings();
+            }}
+            hasPublishApp={!!(myApp || myWebsite)}
+            isShow={mode === 'library' && !selectedTab}
             myName={myName}
-            initialName={publishEditTarget?.name}
-            initialAppType={
-              publishEditTarget?.service ??
-              (mode === 'publish-website' ? 'WEBSITE' : 'APP')
-            }
-            isAppTypeLocked={
-              mode === 'publish-app' ||
-              mode === 'publish-website' ||
-              !!publishEditTarget
-            }
+            myAddress={myAddress}
+            setMode={setMode}
           />
-        )}
 
-      {tabs.map((tab) => {
-        if (!iframeRefs.current[tab.tabId]) {
-          iframeRefs.current[tab.tabId] = createRef();
-        }
-        return (
-          <AppViewerContainer
-            app={tab}
-            hide={isNewTabWindow}
-            isDevMode={tab?.service ? false : true}
-            isSelected={tab?.tabId === selectedTab?.tabId}
-            key={tab?.tabId}
-            ref={iframeRefs.current[tab.tabId]}
+          {mode === 'appInfo' && !selectedTab && (
+            <Box
+              sx={{
+                height: appsContentHeight,
+                overflow: 'auto',
+                width: '100%',
+              }}
+            >
+              <AppInfo app={selectedAppInfo} myName={myName} />
+            </Box>
+          )}
+
+          {mode === 'appInfo-from-category' && !selectedTab && (
+            <Box
+              sx={{
+                height: appsContentHeight,
+                overflow: 'auto',
+                width: '100%',
+              }}
+            >
+              <AppInfo app={selectedAppInfo} myName={myName} />
+            </Box>
+          )}
+
+          <AppsCategoryDesktop
+            availableQapps={availableQapps}
+            contentHeight={appsContentHeight}
+            isShow={mode === 'category' && !selectedTab}
+            category={selectedCategory}
+            myName={myName}
           />
-        );
-      })}
 
-      {isNewTabWindow && mode === 'viewer' && (
-        <>
-          <Box
-            sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            height: `calc(100vh - ${appChromeOffsetPx} )`,
-            overflow: 'auto',
-            width: '100%',
-          }}
-          >
-            <Spacer height="30px" />
+          {(mode === 'publish' ||
+            mode === 'publish-app' ||
+            mode === 'publish-website') &&
+            !selectedTab && (
+              <Box
+                sx={{
+                  height: appsContentHeight,
+                  overflow: 'auto',
+                  width: '100%',
+                }}
+              >
+                <AppPublish
+                  categories={categories}
+                  myAddress={myAddress}
+                  myName={myName}
+                  initialName={publishEditTarget?.name}
+                  initialAppType={
+                    publishEditTarget?.service ??
+                    (mode === 'publish-website' ? 'WEBSITE' : 'APP')
+                  }
+                  isAppTypeLocked={
+                    mode === 'publish-app' ||
+                    mode === 'publish-website' ||
+                    !!publishEditTarget
+                  }
+                />
+              </Box>
+            )}
 
-            <AppsHomeDesktop
-              availableQapps={availableQapps}
-              myApp={myApp}
-              myName={myName}
-              myWebsite={myWebsite}
-              myAddress={myAddress}
-              setMode={setMode}
-            />
-          </Box>
-        </>
-      )}
+          {tabs.map((tab) => {
+            if (!iframeRefs.current[tab.tabId]) {
+              iframeRefs.current[tab.tabId] = createRef();
+            }
+            return (
+              <AppViewerContainer
+                app={tab}
+                customHeight={appsContentHeight}
+                hide={isNewTabWindow}
+                isDevMode={tab?.service ? false : true}
+                isSelected={tab?.tabId === selectedTab?.tabId}
+                key={tab?.tabId}
+                ref={iframeRefs.current[tab.tabId]}
+              />
+            );
+          })}
+
+          {isNewTabWindow && mode === 'viewer' && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: appsContentHeight,
+                overflow: 'auto',
+                width: '100%',
+              }}
+            >
+              <Spacer height="30px" />
+
+              <AppsHomeDesktop
+                availableQapps={availableQapps}
+                myApp={myApp}
+                myName={myName}
+                myWebsite={myWebsite}
+                myAddress={myAddress}
+                setMode={setMode}
+              />
+            </Box>
+          )}
+        </Box>
+      </Box>
 
       <Dialog
         open={showCloseTabDialog}
@@ -619,6 +769,13 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <CustomizedSnackbars
+        open={openSnack}
+        setOpen={setOpenSnack}
+        info={infoSnack}
+        setInfo={setInfoSnack}
+      />
     </AppsParent>
   );
 };

@@ -6,18 +6,18 @@ import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 import { buildQortalResourceLink } from '../../utils/qortalLink';
 
 type AppViewerProps = {
   app: any;
+  customHeight?: string;
   hide: boolean;
   isDevMode: boolean;
   skipAuth?: boolean;
 };
 
 export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
-  ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
+  ({ app, customHeight, hide, isDevMode, skipAuth }, iframeRef) => {
     const { window: frameWindow } = useFrame();
     const { path, history, changeCurrentIndex, resetHistory } =
       useQortalMessageListener(
@@ -358,7 +358,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         <iframe
           ref={iframeRef}
           style={{
-            height: `calc(100vh - ${appChromeOffsetPx})`,
+            height: customHeight || '100%',
             border: 'none',
             width: '100%',
           }}

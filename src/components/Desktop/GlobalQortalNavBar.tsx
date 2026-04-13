@@ -76,9 +76,7 @@ export function GlobalQortalNavBar({
       setInputValue(currentLink);
       return;
     }
-    if (desktopViewMode !== 'apps') {
-      setInputValue('');
-    }
+    setInputValue('');
   }, [currentLink, desktopViewMode]);
 
   const handleOpenInput = useCallback(() => {

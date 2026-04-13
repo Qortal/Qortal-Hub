@@ -41,7 +41,6 @@ import {
   MyAppsTab,
   PrivateTab,
 } from './AppsLibrary';
-import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 import { AppCardEnhanced } from './AppCard';
 
 const SearchContainer = styled(Box)(({ theme }) => ({
@@ -64,6 +63,7 @@ export const AppsLibraryDesktop = ({
   categories,
   getQapps,
   externalSearchRequest,
+  contentHeight,
 }) => {
   const [currentTab, setCurrentTab] = useState<AppsLibraryTabValue>('official');
   const [searchValue, setSearchValue] = useState('');
@@ -88,9 +88,8 @@ export const AppsLibraryDesktop = ({
   }, [searchValue]);
 
   useEffect(() => {
-    if (!externalSearchRequest?.query) return;
-    setSearchValue(externalSearchRequest.query);
-    setDebouncedSearchValue(externalSearchRequest.query);
+    setSearchValue(externalSearchRequest?.query || '');
+    setDebouncedSearchValue(externalSearchRequest?.query || '');
   }, [externalSearchRequest?.nonce]);
 
   const handleTabChange = (tab: AppsLibraryTabValue) => {
@@ -206,7 +205,7 @@ export const AppsLibraryDesktop = ({
       sx={{
         display: !isShow && 'none',
         padding: '0px',
-        height: `calc(100vh - ${appChromeOffsetPx} )`,
+        height: contentHeight || '100%',
         overflow: 'hidden',
         paddingTop: '30px',
       }}
