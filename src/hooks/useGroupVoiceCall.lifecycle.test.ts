@@ -6,6 +6,8 @@ import {
   getRecoveryStabilityThresholds,
   countRecentlyHealthyRemoteSources,
   computeN1AccumulationDecodeCap,
+  computeEffectiveN1AccumulationDecodeCap,
+  computeN1SevereRebuildAccumulationHoldOpusMs,
   computeSteadyTargetDecayThresholdMs,
   clearAdaptiveGroupCallPlayoutMaps,
   getConflictingRootForAuthorityWait,
@@ -35,6 +37,7 @@ import {
   computeN1ReceivePrioritySendBitrateCapBps,
   tickN1ReceivePrioritySendBitrateCapState,
   shouldPreserveN1SevereSingleRemoteTarget,
+  shouldUseN1SevereSingleRemoteCeiling,
   computeWeakSingleRemoteRecoveryHoldState,
   computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
   computeSingleRemoteOverbufferTargetMaxMs,
@@ -530,6 +533,26 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
       computeN1AccumulationDecodeCap({
         accumulationActive: true,
         recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 120,
+        targetMs: 185,
+        tier: 'moderate',
+      })
+    ).toBe(0);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
+        forcedReleaseRebuildActive: true,
+        opusBufferedMs: 140,
+        targetMs: 185,
+        tier: 'moderate',
+      })
+    ).toBe(5);
+    expect(
+      computeN1AccumulationDecodeCap({
+        accumulationActive: true,
+        recoverySingleRemote: true,
         opusBufferedMs: 20,
         tier: 'deep',
       })
@@ -548,6 +571,44 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         recoverySingleRemote: false,
         opusBufferedMs: 20,
         tier: 'deep',
+      })
+    ).toBe(1);
+  });
+
+  it('scales severe rebuild accumulation hold with the active target', () => {
+    expect(computeN1SevereRebuildAccumulationHoldOpusMs(100)).toBe(100);
+    expect(computeN1SevereRebuildAccumulationHoldOpusMs(145)).toBe(108.75);
+    expect(computeN1SevereRebuildAccumulationHoldOpusMs(185)).toBe(138.75);
+    expect(computeN1SevereRebuildAccumulationHoldOpusMs(260)).toBe(160);
+  });
+
+  it('keeps severe accumulation hold absolute while PCM rebuild is active', () => {
+    expect(
+      computeEffectiveN1AccumulationDecodeCap({
+        accumulationDecodeCap: 0,
+        n1PcmRebuildActive: true,
+        n1ReceivePriorityModeActive: false,
+      })
+    ).toBe(0);
+    expect(
+      computeEffectiveN1AccumulationDecodeCap({
+        accumulationDecodeCap: 1,
+        n1PcmRebuildActive: true,
+        n1ReceivePriorityModeActive: false,
+      })
+    ).toBe(5);
+    expect(
+      computeEffectiveN1AccumulationDecodeCap({
+        accumulationDecodeCap: 1,
+        n1PcmRebuildActive: false,
+        n1ReceivePriorityModeActive: true,
+      })
+    ).toBe(3);
+    expect(
+      computeEffectiveN1AccumulationDecodeCap({
+        accumulationDecodeCap: 1,
+        n1PcmRebuildActive: false,
+        n1ReceivePriorityModeActive: false,
       })
     ).toBe(1);
   });
@@ -607,6 +668,49 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeWindowSource: true,
         isolatedSource: true,
         liveN1DeadzoneStrong: false,
+      })
+    ).toBe(false);
+  });
+
+  it('allows the severe ceiling only while one-on-one recovery is strongly starved', () => {
+    expect(
+      shouldUseN1SevereSingleRemoteCeiling({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: false,
+        isolatedSource: false,
+        liveN1DeadzoneStrong: false,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
+    expect(
+      shouldUseN1SevereSingleRemoteCeiling({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: true,
+        isolatedSource: true,
+        liveN1DeadzoneStrong: false,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(true);
+    expect(
+      shouldUseN1SevereSingleRemoteCeiling({
+        activeSourceCount: 1,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: false,
+        isolatedSource: false,
+        liveN1DeadzoneStrong: false,
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(false);
+    expect(
+      shouldUseN1SevereSingleRemoteCeiling({
+        activeSourceCount: 2,
+        adaptiveNetworkMode: 'recovery',
+        severeWindowSource: true,
+        isolatedSource: true,
+        liveN1DeadzoneStrong: false,
+        playoutStarvationSeverity: 'strong',
       })
     ).toBe(false);
   });

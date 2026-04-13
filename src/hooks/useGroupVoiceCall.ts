@@ -906,13 +906,16 @@ export function computeN1AccumulationDecodeCap(opts: {
   forcedReleaseRebuildActive?: boolean;
   opusBufferedMs: number;
   tier: GcallN1BufferEnforceTier;
+  targetMs?: number;
 }): number | null {
   if (!opts.accumulationActive) return null;
+  const severeRebuildHoldOpusMs =
+    computeN1SevereRebuildAccumulationHoldOpusMs(opts.targetMs);
   if (
     opts.recoverySingleRemote &&
     opts.opusBufferedMs <=
       (opts.forcedReleaseRebuildActive
-        ? GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS
+        ? severeRebuildHoldOpusMs
         : OPUS_FRAME_DURATION_MS) &&
     (opts.forcedReleaseRebuildActive || opts.tier === 'deep')
   ) {
@@ -922,6 +925,43 @@ export function computeN1AccumulationDecodeCap(opts: {
     return GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP;
   }
   return 1;
+}
+
+export function computeN1SevereRebuildAccumulationHoldOpusMs(
+  targetMs?: number
+): number {
+  const normalizedTargetMs =
+    Number.isFinite(targetMs) && targetMs !== undefined
+      ? Math.max(GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS, targetMs)
+      : GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS;
+  return Math.max(
+    GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS,
+    Math.min(
+      GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_CEIL_MS,
+      normalizedTargetMs * GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_RATIO
+    )
+  );
+}
+
+export function computeEffectiveN1AccumulationDecodeCap(opts: {
+  accumulationDecodeCap: number;
+  n1PcmRebuildActive: boolean;
+  n1ReceivePriorityModeActive: boolean;
+}): number {
+  if (opts.accumulationDecodeCap === 0) return 0;
+  if (opts.n1PcmRebuildActive) {
+    return Math.max(
+      GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP,
+      opts.accumulationDecodeCap
+    );
+  }
+  if (opts.n1ReceivePriorityModeActive) {
+    return Math.max(
+      GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_DECODE_CAP,
+      opts.accumulationDecodeCap
+    );
+  }
+  return opts.accumulationDecodeCap;
 }
 
 export function shouldPreserveN1SevereSingleRemoteTarget(opts: {
@@ -940,6 +980,23 @@ export function shouldPreserveN1SevereSingleRemoteTarget(opts: {
       (opts.severeWindowSource && opts.isolatedSource) ||
       opts.playoutStarvationSeverity === 'strong' ||
       opts.starvationCooldownActive === true)
+  );
+}
+
+export function shouldUseN1SevereSingleRemoteCeiling(opts: {
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  severeWindowSource: boolean;
+  isolatedSource: boolean;
+  liveN1DeadzoneStrong: boolean;
+  playoutStarvationSeverity: PlayoutStarvationSeverity;
+}): boolean {
+  return (
+    opts.adaptiveNetworkMode === 'recovery' &&
+    opts.activeSourceCount === 1 &&
+    (opts.liveN1DeadzoneStrong ||
+      opts.playoutStarvationSeverity === 'strong' ||
+      (opts.severeWindowSource && opts.isolatedSource))
   );
 }
 
@@ -1271,6 +1328,9 @@ const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_MS = 140;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_OPUS_MS = 60;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS =
   OPUS_FRAME_DURATION_MS * 5;
+const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_RATIO = 0.75;
+const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_CEIL_MS =
+  OPUS_FRAME_DURATION_MS * 8;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS = 24;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_UNDERTARGET_MIN = 0.9;
 const GCALL_N1_STEADY_STARVED_HOLD_OPUS_MAX_MS = 80;
@@ -5418,7 +5478,7 @@ export function useGroupVoiceCall(uiActive = false) {
       // severe ceiling and blocks the faster decay path that should let it recover.
       const ingressPeerRecovery =
         activeSourceCount >= 2 && ingressPeerRecoveryRaw;
-      const useSevereCeiling = ingressPeerRecovery;
+      let useSevereCeiling = ingressPeerRecovery;
       const lastVadAt = lastVadTrueAtRef.current.get(addr) ?? 0;
       const isActiveSpeakerForAddr =
         lastVadAt > 0 && wallNow - lastVadAt < ACTIVE_SPEAKER_WINDOW_MS;
@@ -5520,6 +5580,18 @@ export function useGroupVoiceCall(uiActive = false) {
           playoutStarvationSeverity: nextStarvationSev,
           starvationCooldownActive,
         });
+      const useN1SevereSingleRemoteCeiling =
+        shouldUseN1SevereSingleRemoteCeiling({
+          activeSourceCount,
+          adaptiveNetworkMode,
+          severeWindowSource,
+          isolatedSource: isolateThisSource,
+          liveN1DeadzoneStrong,
+          playoutStarvationSeverity: nextStarvationSev,
+        });
+      if (useN1SevereSingleRemoteCeiling) {
+        useSevereCeiling = true;
+      }
       const starvationLiftMs =
         starvationCeilingLiftForSeverity(nextStarvationSev);
       const suppressHealthySingleRemoteMicroWiden =
@@ -5566,7 +5638,8 @@ export function useGroupVoiceCall(uiActive = false) {
         profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
         profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
         useSevereCeiling,
-        isolationCeilingSoftened,
+        isolationCeilingSoftened:
+          isolationCeilingSoftened && !useN1SevereSingleRemoteCeiling,
         activeSourceCount,
         dynamicCeilingLiftMs,
       });
@@ -5946,6 +6019,7 @@ export function useGroupVoiceCall(uiActive = false) {
           weakSingleRemoteTargetHoldMaxMs,
           usableRecoveryTargetMaxMs,
           preserveN1SevereSingleRemoteTarget,
+          useN1SevereSingleRemoteCeiling,
           liveN1DeadzoneStrong,
           bufferAdequacy,
           targetMs: smoothedTargetMsForAdequacy,
@@ -5974,6 +6048,7 @@ export function useGroupVoiceCall(uiActive = false) {
             severeWindowSource,
             worstPeerIsolation: isolateThisSource,
             preserveN1SevereSingleRemoteTarget,
+            useN1SevereSingleRemoteCeiling,
             playoutBoostMs,
           });
         }
@@ -11212,20 +11287,16 @@ export function useGroupVoiceCall(uiActive = false) {
                   n1SevereForcedReleaseRebuildActive,
                 opusBufferedMs: opusMsPre,
                 tier: n1Tier,
+                targetMs: smoothedTarget,
               })
             : null;
         if (accumulationDecodeCap !== null) {
-          const effectiveAccumulationDecodeCap = n1PcmRebuildActive
-            ? Math.max(
-                GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP,
-                accumulationDecodeCap
-              )
-            : n1ReceivePriorityModeActive
-              ? Math.max(
-                  GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_DECODE_CAP,
-                  accumulationDecodeCap
-                )
-              : accumulationDecodeCap;
+          const effectiveAccumulationDecodeCap =
+            computeEffectiveN1AccumulationDecodeCap({
+              accumulationDecodeCap,
+              n1PcmRebuildActive,
+              n1ReceivePriorityModeActive,
+            });
           n1ScaledCap = Math.min(n1ScaledCap, effectiveAccumulationDecodeCap);
           if (accumulationDecodeCap === 0) {
             const nowLog = Date.now();
@@ -11243,6 +11314,11 @@ export function useGroupVoiceCall(uiActive = false) {
                   sourceAddr: truncateGcallDiagAddress(addr),
                   bufferMs: Math.round(opusMsPre),
                   targetMs: Math.round(smoothedTarget),
+                  holdOpusMs: Math.round(
+                    computeN1SevereRebuildAccumulationHoldOpusMs(
+                      smoothedTarget
+                    )
+                  ),
                   tier: n1Tier,
                 }
               );
