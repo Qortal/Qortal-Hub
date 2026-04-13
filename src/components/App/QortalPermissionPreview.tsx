@@ -46,7 +46,7 @@ const createPreviewMessage = (
       return {
         ...baseMessage,
         summaryBody:
-          'This confirms your Qortal identity for the application. It does not send a payment or publish data.',
+          'This confirms your Qortal identity for the application.\nThis action does not send a payment or publish data.',
         technicalDetails: [
           {
             rows: [

@@ -50,6 +50,10 @@ type PermissionCardProps = {
   onCancel: () => void;
   onCountdownComplete: () => void;
   countdownSeconds?: number;
+  showCountdown?: boolean;
+  acceptLabel?: string;
+  declineLabel?: string;
+  hideDecline?: boolean;
 };
 
 const renderDetailSection = (
@@ -166,6 +170,10 @@ export function QortalPermissionCard({
   onCancel,
   onCountdownComplete,
   countdownSeconds,
+  showCountdown = true,
+  acceptLabel,
+  declineLabel,
+  hideDecline = false,
 }: PermissionCardProps) {
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -220,7 +228,7 @@ export function QortalPermissionCard({
             borderBottom: `1px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.06)}`,
           }}
         >
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: 0 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0 }}>
             <Box
               sx={{
                 alignItems: 'center',
@@ -249,6 +257,7 @@ export function QortalPermissionCard({
                 fontWeight: 700,
                 letterSpacing: '-0.02em',
                 lineHeight: 1.12,
+                marginTop: '4px',
               }}
             >
               {presentation.title}
@@ -259,41 +268,44 @@ export function QortalPermissionCard({
                 fontSize: '14px',
                 lineHeight: 1.5,
                 maxWidth: '440px',
+                whiteSpace: 'pre-line',
               }}
             >
               {presentation.body}
             </Typography>
           </Box>
-          <Box
-            sx={{
-              alignItems: 'center',
-              backgroundColor:
-                theme.palette.mode === 'dark'
-                  ? alpha('#0e141c', 0.95)
-                  : alpha('#f2f5f8', 0.98),
-              border: `1px solid ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.22 : 0.14)}`,
-              borderRadius: '999px',
-              display: 'flex',
-              justifyContent: 'center',
-              minWidth: '74px',
-              padding: '6px 10px',
-            }}
-          >
-            <CountdownCircleTimer
-              isPlaying
-              duration={duration}
-              colors={['#2D7FF9', '#E8A13A', '#C45151', '#C45151']}
-              colorsTime={[Math.max(duration * 0.4, 10), Math.max(duration * 0.2, 5), 3, 0]}
-              onComplete={onCountdownComplete}
-              size={42}
-              strokeWidth={4}
-              trailColor={alpha(theme.palette.common.white, 0.12)}
+          {showCountdown ? (
+            <Box
+              sx={{
+                alignItems: 'center',
+                backgroundColor:
+                  theme.palette.mode === 'dark'
+                    ? alpha('#0e141c', 0.95)
+                    : alpha('#f2f5f8', 0.98),
+                border: `1px solid ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.22 : 0.14)}`,
+                borderRadius: '999px',
+                display: 'flex',
+                justifyContent: 'center',
+                minWidth: '74px',
+                padding: '6px 10px',
+              }}
             >
-              {({ remainingTime }) => (
-                <TextP sx={{ fontSize: '13px', fontWeight: 700 }}>{remainingTime}</TextP>
-              )}
-            </CountdownCircleTimer>
-          </Box>
+              <CountdownCircleTimer
+                isPlaying
+                duration={duration}
+                colors={['#2D7FF9', '#E8A13A', '#C45151', '#C45151']}
+                colorsTime={[Math.max(duration * 0.4, 10), Math.max(duration * 0.2, 5), 3, 0]}
+                onComplete={onCountdownComplete}
+                size={42}
+                strokeWidth={4}
+                trailColor={alpha(theme.palette.common.white, 0.12)}
+              >
+                {({ remainingTime }) => (
+                  <TextP sx={{ fontSize: '13px', fontWeight: 700 }}>{remainingTime}</TextP>
+                )}
+              </CountdownCircleTimer>
+            </Box>
+          ) : null}
         </Box>
 
         <Spacer height="22px" />
@@ -571,43 +583,45 @@ export function QortalPermissionCard({
             alignItems: 'center',
             display: 'flex',
             gap: '12px',
-            justifyContent: 'flex-end',
+            justifyContent: hideDecline ? 'flex-end' : 'space-between',
             width: '100%',
           }}
         >
-          <CustomButtonAccept
-            customColor={theme.palette.text.primary}
-            customBgColor={
-              theme.palette.mode === 'dark'
-                ? alpha('#171d27', 0.96)
-                : alpha('#eef3f8', 0.98)
-            }
-            sx={{
-              minWidth: '122px',
-              border: `1px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.06)}`,
-              boxShadow:
+          {!hideDecline ? (
+            <CustomButtonAccept
+              customColor={theme.palette.text.primary}
+              customBgColor={
                 theme.palette.mode === 'dark'
-                  ? '0px 10px 24px rgba(0,0,0,0.24)'
-                  : '0px 8px 18px rgba(15,23,42,0.08)',
-              transition:
-                'background-color 180ms ease, border-color 180ms ease, box-shadow 200ms ease, transform 180ms ease',
-              '&:hover': {
-                backgroundColor:
-                  theme.palette.mode === 'dark'
-                    ? alpha('#21171c', 0.98)
-                    : alpha('#f8eef0', 0.98),
-                borderColor: alpha(theme.palette.error.main, 0.2),
+                  ? alpha('#171d27', 0.96)
+                  : alpha('#eef3f8', 0.98)
+              }
+              sx={{
+                minWidth: '122px',
+                border: `1px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.08 : 0.06)}`,
                 boxShadow:
                   theme.palette.mode === 'dark'
-                    ? '0px 14px 28px rgba(116, 34, 55, 0.2)'
-                    : '0px 12px 22px rgba(185, 28, 28, 0.08)',
-                transform: 'translateY(-1px)',
-              },
-            }}
-            onClick={onCancel}
-          >
-            {t('core:action.decline', { postProcess: 'capitalizeFirstChar' })}
-          </CustomButtonAccept>
+                    ? '0px 10px 24px rgba(0,0,0,0.24)'
+                    : '0px 8px 18px rgba(15,23,42,0.08)',
+                transition:
+                  'background-color 180ms ease, border-color 180ms ease, box-shadow 200ms ease, transform 180ms ease',
+                '&:hover': {
+                  backgroundColor:
+                    theme.palette.mode === 'dark'
+                      ? alpha('#21171c', 0.98)
+                      : alpha('#f8eef0', 0.98),
+                  borderColor: alpha(theme.palette.error.main, 0.2),
+                  boxShadow:
+                    theme.palette.mode === 'dark'
+                      ? '0px 14px 28px rgba(116, 34, 55, 0.2)'
+                      : '0px 12px 22px rgba(185, 28, 28, 0.08)',
+                  transform: 'translateY(-1px)',
+                },
+              }}
+              onClick={onCancel}
+            >
+              {declineLabel || t('core:action.decline', { postProcess: 'capitalizeFirstChar' })}
+            </CustomButtonAccept>
+          ) : null}
           <CustomButtonAccept
             customColor="#06111c"
             customBgColor={
@@ -642,7 +656,7 @@ export function QortalPermissionCard({
             }}
             onClick={onAccept}
           >
-            {t('core:action.accept', { postProcess: 'capitalizeFirstChar' })}
+            {acceptLabel || t('core:action.accept', { postProcess: 'capitalizeFirstChar' })}
           </CustomButtonAccept>
         </Box>
 

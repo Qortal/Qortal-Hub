@@ -96,7 +96,7 @@ export const MODAL_REQUEST_TYPES = [
   'VOTE_ON_POLL',
 ] as const;
 
-const REQUEST_ACTION_LABELS: Record<string, string> = {
+export const REQUEST_ACTION_LABELS: Record<string, string> = {
   ADD_FOREIGN_SERVER: 'add a server',
   ADD_GROUP_ADMIN: 'add a group admin',
   ADD_LIST_ITEMS: 'add items to a list',
@@ -167,10 +167,18 @@ const QDN_SERVICE_SUMMARIES: Record<string, string> = {
   BLOG: 'This publishes blog content to QDN.',
 };
 
-const humanizeRequestType = (requestType?: string) => {
+export const getReadableRequestAction = (requestType?: string) => {
   if (!requestType) return 'make a change to your account';
   if (REQUEST_ACTION_LABELS[requestType]) return REQUEST_ACTION_LABELS[requestType];
   return 'make a change to your account';
+};
+
+const formatGroupType = (value?: string) => {
+  if (!value) return value;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '1' || normalized === 'public' || normalized === 'open') return 'Public';
+  if (normalized === '0' || normalized === 'private' || normalized === 'closed') return 'Private';
+  return value;
 };
 
 const sanitizeQuestionCopy = (value?: string) => {
@@ -199,6 +207,33 @@ const parseDetailRow = (value?: string): PermissionDetailRow | null => {
   return {
     value: trimmed,
   };
+};
+
+const trimTrailingZeros = (value: string) => {
+  if (!/^-?\d+(\.\d+)?$/u.test(value)) return value;
+  return value.replace(/\.?0+$/u, '');
+};
+
+const formatCurrencyValue = (value?: string, fallbackCurrency = 'QORT') => {
+  if (!value) return '';
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(-?\d+(?:\.\d+)?)(?:\s+([A-Z]+))?$/u);
+
+  if (!match) return trimmed;
+
+  const [, amount, currency] = match;
+  const normalizedAmount = trimTrailingZeros(amount);
+  const resolvedCurrency = currency || fallbackCurrency;
+  return resolvedCurrency ? `${normalizedAmount} ${resolvedCurrency}` : normalizedAmount;
+};
+
+const capitalizeSentence = (value?: string) => {
+  if (!value) return '';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const buildFallbackActionSentence = (requestType?: string) => {
+  return capitalizeSentence(getReadableRequestAction(requestType));
 };
 
 const getDetailRowValue = (
@@ -234,12 +269,34 @@ const getJsonValue = (json: any, candidateKeys: string[]) => {
   return undefined;
 };
 
+const getPermissionsList = (message: MessageQortalRequestExtension) => {
+  const rawPermissions =
+    getJsonValue(message.json, ['permissions']) ??
+    message.technicalDetails
+      ?.flatMap((section) => section.rows || [])
+      .find((row) => row.label?.toLowerCase() === 'permissions')
+      ?.value;
+
+  if (Array.isArray(rawPermissions)) {
+    return rawPermissions.map((permission) => String(permission)).filter(Boolean);
+  }
+
+  if (typeof rawPermissions === 'string') {
+    return rawPermissions
+      .split(',')
+      .map((permission) => permission.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
 const buildTitle = (message: MessageQortalRequestExtension) => {
   if (message.summaryTitle) return message.summaryTitle;
 
   const sourceLabel = message.sourceLabel?.trim();
   const requestType = message.requestType;
-  const actionLabel = humanizeRequestType(requestType);
+  const actionLabel = getReadableRequestAction(requestType);
 
   if (sourceLabel) {
     return `${sourceLabel} wants to ${actionLabel}`;
@@ -261,9 +318,9 @@ const buildBody = (
 
   switch (requestType) {
     case 'GET_USER_ACCOUNT':
-      return 'This app can confirm your Qortal identity. It cannot send payments or publish data.';
+      return 'This confirms your Qortal identity for the application.\nThis action does not send a payment or publish data.';
     case 'SESSION_PERMISSIONS':
-      return 'Approved permissions can run automatically for this session only.';
+      return 'Approved permissions apply only during this session.';
     case 'ADD_FOREIGN_SERVER':
       return 'This adds a foreign server configuration to your Qortal environment.';
     case 'PUBLISH_QDN_RESOURCE':
@@ -272,11 +329,11 @@ const buildBody = (
         `This action will publish data to QDN using the ${serviceValue || 'selected'} service.`
       );
     case 'PUBLISH_MULTIPLE_QDN_RESOURCES':
-      return 'Multiple QDN resources will be published using your account.';
+      return 'Multiple QDN resources will be published using your account.\nResources may include private or encrypted data.';
     case 'SEND_COIN':
       return 'This sends funds from your wallet to the specified recipient.';
     case 'SIGN_TRANSACTION':
-      return 'This app wants your account to sign a transaction.';
+      return 'Review the transaction details before approving.';
     case 'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA':
       return 'This will send a payment and publish private encrypted data in the same action.';
     case 'REMOVE_FOREIGN_SERVER':
@@ -289,7 +346,7 @@ const buildBody = (
     case 'GET_USER_WALLET_TRANSACTIONS':
       return 'This gives the application access to wallet-related information from your Qortal account.';
     default:
-      return 'Review the details of this action before approving.';
+      return '';
   }
 };
 
@@ -309,46 +366,57 @@ const buildSummaryItems = (
   const recipientValue = getDetailRowValue(rows, 'to');
 
   if (requestType === 'GET_USER_ACCOUNT') {
-    return [
-      { value: 'This app can confirm your Qortal identity' },
-      { value: 'It cannot send payments' },
-      { value: 'It will not publish data' },
-    ];
+    return [{ value: 'Grant permissions for this session only' }];
   }
 
   if (requestType === 'SESSION_PERMISSIONS') {
+    const permissions = getPermissionsList(message);
     return [
-      {
-        value: 'Approved permissions can run automatically for this session only',
-      },
-      { value: 'These permissions stop when the session ends' },
+      ...(permissions.length
+        ? permissions.map((permission) => ({ value: capitalizeSentence(permission.replace(/_/g, ' ').toLowerCase()) }))
+        : [{ value: 'Grant permissions for this session only' }]),
     ];
   }
 
   if (requestType === 'ADD_FOREIGN_SERVER') {
+    const hostValue = getDetailRowValue(rows, 'host');
+    const portValue = getDetailRowValue(rows, 'port');
+    const protocolValue = getDetailRowValue(rows, 'protocol');
     return [
-      { value: 'This action will add a foreign server configuration' },
-      { value: 'Make sure you trust the server details below.' },
+      ...(hostValue ? [{ label: 'Host', value: hostValue }] : []),
+      ...(portValue ? [{ label: 'Port', value: portValue }] : []),
+      ...(protocolValue ? [{ label: 'Protocol', value: protocolValue }] : []),
+      ...(!hostValue && !portValue && !protocolValue
+        ? [{ value: 'Add a foreign server' }]
+        : []),
     ];
   }
 
   if (requestType === 'PUBLISH_QDN_RESOURCE') {
     return [
-      { value: 'This will publish data to QDN using your account' },
+      { value: 'Publish data to QDN using your account' },
       ...(serviceValue ? [{ label: 'Content type', value: formatServiceName(serviceValue) }] : []),
-      ...(nameValue ? [{ label: 'Publishing name', value: nameValue }] : []),
+      ...(nameValue ? [{ label: 'Name', value: nameValue }] : []),
+    ];
+  }
+
+  if (requestType === 'CREATE_GROUP') {
+    const typeValue = getDetailRowValue(rows, 'type');
+    return [
+      ...(message.highlightedText
+        ? [{ label: 'Group name', value: message.highlightedText.replace(/^group name:\s*/iu, '') }]
+        : []),
+      ...(typeValue ? [{ label: 'Type', value: formatGroupType(typeValue) }] : []),
+      { value: 'This action will create a group' },
     ];
   }
 
   if (requestType === 'PUBLISH_MULTIPLE_QDN_RESOURCES') {
-    const { resourceCount, includesPrivateData } = parsePublishMultipleSummary(message.html);
+    const { resourceCount } = parsePublishMultipleSummary(message.html);
     return [
-      { value: 'Multiple QDN resources will be published using your account' },
-      ...(includesPrivateData
-        ? [{ value: 'Some resources include private or encrypted data' }]
-        : []),
+      { value: 'Publish multiple QDN resources using your account' },
       ...(resourceCount > 0
-        ? [{ label: 'Resources in this request', value: `${resourceCount}` }]
+        ? [{ label: 'Resource count', value: `${resourceCount}` }]
         : []),
     ];
   }
@@ -356,7 +424,10 @@ const buildSummaryItems = (
   if (requestType === 'SEND_COIN') {
     return [
       ...(message.highlightedText ? [{ label: 'Amount', value: message.highlightedText }] : []),
-      ...(recipientValue ? [{ label: 'Recipient', value: recipientValue }] : []),
+      ...(recipientValue ? [{ label: 'Recipient address', value: recipientValue }] : []),
+      ...(!message.highlightedText && !recipientValue
+        ? [{ value: 'Send a payment' }]
+        : []),
     ];
   }
 
@@ -372,51 +443,53 @@ const buildSummaryItems = (
   }
 
   if (requestType === 'GET_WALLET_BALANCE') {
-    return [
-      { value: 'This app can view your wallet balance' },
-      ...(message.text1?.includes('{{ coin }}') ? [] : []),
-    ];
+    return [{ value: 'This app can view your wallet balance' }];
   }
 
   if (requestType === 'SIGN_TRANSACTION') {
     const txType = getJsonValue(message.json, ['type']);
     const recipient = getJsonValue(message.json, ['recipient', 'recipientAddress']);
     const amount = getJsonValue(message.json, ['amount', 'amountQort']);
-    return [
-      { value: 'This app wants your account to sign a transaction' },
+    const fieldRows = [
       ...(txType != null ? [{ label: 'Transaction type', value: String(txType) }] : []),
-      ...(recipient != null ? [{ label: 'Recipient', value: String(recipient) }] : []),
+      ...(recipient != null ? [{ label: 'Recipient address', value: String(recipient) }] : []),
       ...(amount != null ? [{ label: 'Amount', value: String(amount) }] : []),
     ];
+    return fieldRows.length > 0 ? fieldRows : [{ value: 'Sign a transaction' }];
   }
 
   if (requestType === 'REMOVE_FOREIGN_SERVER') {
-    return [
-      { value: 'This action will remove a saved foreign server configuration' },
-      { value: 'Review the server details below before approving' },
-    ];
+    return [{ value: 'This action will remove a saved foreign server configuration' }];
   }
 
   if (requestType === 'SET_CURRENT_FOREIGN_SERVER') {
-    return [
-      { value: 'This action will change the foreign server currently in use' },
-      { value: 'Review the server details below before approving' },
-    ];
+    return [{ value: 'This action will change the foreign server currently in use' }];
   }
 
   const summaryRows = rows.slice(0, message.highlightedText ? 1 : 2);
+
+  if (requestType === 'ADD_GROUP_ADMIN') {
+    return summaryRows.length > 0 ? summaryRows : [{ value: 'Add a group admin' }];
+  }
+
+  if (requestType === 'CREATE_GROUP') {
+    return summaryRows.length > 0 ? summaryRows : [{ value: 'Create a group' }];
+  }
+
+  if (requestType === 'MULTI_ASSET_PAYMENT_WITH_PRIVATE_DATA') {
+    return [
+      { value: 'Send a payment' },
+      { value: 'Publish private data' },
+    ];
+  }
+
   if (message.highlightedText) {
     return [{ value: message.highlightedText }, ...summaryRows];
   }
 
-  if (summaryRows.length > 0) {
-    return summaryRows;
-  }
-
-  return [
-    { value: 'This action will modify your Qortal account or data' },
-    { value: 'Review the technical details below before approving' },
-  ];
+  return summaryRows.length > 0
+    ? summaryRows
+    : [{ value: buildFallbackActionSentence(requestType) }];
 };
 
 const buildFeeItems = (
@@ -426,7 +499,10 @@ const buildFeeItems = (
   const feeItems: PermissionDetailRow[] = [];
 
   if (message.fee) {
-    feeItems.push({ label: 'Network fee', value: `${message.fee} QORT` });
+    feeItems.push({
+      label: message.requestType === 'CREATE_GROUP' ? 'Fee' : 'Network fee',
+      value: formatCurrencyValue(message.fee),
+    });
   }
 
   if (message.appFee) {
@@ -435,7 +511,7 @@ const buildFeeItems = (
         fee: message.appFee,
         postProcess: 'capitalizeFirstChar',
       }).split(':')[0] || 'App fee',
-      value: `${message.appFee} QORT`,
+      value: formatCurrencyValue(message.appFee),
     });
   }
 
@@ -445,7 +521,7 @@ const buildFeeItems = (
         fee: message.foreignFee,
         postProcess: 'capitalizeFirstChar',
       }).split(':')[0] || 'Foreign fee',
-      value: message.foreignFee,
+      value: formatCurrencyValue(message.foreignFee, ''),
     });
   }
 
@@ -479,6 +555,9 @@ const buildDetailsSections = (message: MessageQortalRequestExtension) => {
   );
 
   for (const section of message.technicalDetails || []) {
+    if (section.title?.trim().toLowerCase() === 'original message') {
+      continue;
+    }
     for (const row of section.rows || []) {
       pushTechnicalRow(row);
     }
@@ -506,16 +585,30 @@ const buildDetailsSections = (message: MessageQortalRequestExtension) => {
   return sections;
 };
 
+const normalizePresentationText = (value?: string) => {
+  return (value || '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .replace(/[.!?]+$/u, '')
+    .toLowerCase();
+};
+
 export const buildPermissionPresentation = (
   message: MessageQortalRequestExtension,
   t: (key: string, options?: Record<string, unknown>) => string
 ): PermissionPresentation => {
+  const summaryItems = buildSummaryItems(message, t);
+  const body = buildBody(message, t);
+  const firstSummaryLine = summaryItems.find((item) => !item.label)?.value;
+  const resolvedBody =
+    normalizePresentationText(body) === normalizePresentationText(firstSummaryLine) ? '' : body;
+
   return {
     sourceLabel: message.sourceLabel,
     sourceKind: message.sourceKind || 'Application',
     title: buildTitle(message),
-    body: buildBody(message, t),
-    summaryItems: buildSummaryItems(message, t),
+    body: resolvedBody,
+    summaryItems,
     feeItems: buildFeeItems(message, t),
     detailsSections: buildDetailsSections(message),
   };
