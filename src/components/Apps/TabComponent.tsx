@@ -12,6 +12,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import LockIcon from '@mui/icons-material/Lock';
 import { useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import {
   AppsHorizontalTabButton,
   AppsHorizontalTabLabel,
@@ -44,6 +45,7 @@ const TabComponent = ({
 
   return (
     <AppsHorizontalTabButton
+      disableRipple
       onClick={onSelect}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -55,23 +57,29 @@ const TabComponent = ({
       }}
       sx={{
         backgroundColor: isSelected
-          ? theme.palette.background.paper
-          : theme.palette.action.hover,
+          ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.78 : 0.88)
+          : theme.palette.mode === 'dark'
+            ? alpha(theme.palette.common.white, 0.03)
+            : alpha(theme.palette.common.black, 0.03),
         borderColor: isSelected
-          ? theme.palette.border.subtle
-          : 'transparent',
-        boxShadow: isSelected ? theme.shadows[1] : 'none',
+          ? 'transparent'
+          : theme.palette.mode === 'dark'
+            ? alpha(theme.palette.common.white, 0.03)
+            : alpha(theme.palette.common.black, 0.04),
+        boxShadow: 'none',
         color: isSelected
-          ? theme.palette.text.primary
+          ? theme.palette.primary.contrastText
           : theme.palette.text.secondary,
-        opacity: isSelected ? 1 : 0.82,
+        opacity: 1,
         transition:
-          'background-color 180ms ease, color 180ms ease, opacity 180ms ease, box-shadow 180ms ease',
+          'background-color 180ms ease, color 180ms ease, border-color 180ms ease',
         '&:hover': {
           backgroundColor: isSelected
-            ? theme.palette.background.paper
-            : theme.palette.action.selected,
-          opacity: 1,
+            ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.86 : 0.94)
+            : theme.palette.mode === 'dark'
+              ? alpha(theme.palette.common.white, 0.06)
+              : alpha(theme.palette.common.black, 0.06),
+          color: theme.palette.text.primary,
         },
       }}
     >
@@ -80,21 +88,21 @@ const TabComponent = ({
           sx={{
             alignItems: 'center',
             color: isSelected
-              ? theme.palette.text.primary
+              ? theme.palette.primary.contrastText
               : theme.palette.text.secondary,
             display: 'flex',
-            height: '26px',
+            height: '22px',
             justifyContent: 'center',
-            width: '26px',
+            width: '22px',
           }}
         >
-          <LockIcon sx={{ fontSize: 18 }} />
+          <LockIcon sx={{ fontSize: 16 }} />
         </Box>
       ) : (
         <Avatar
           sx={{
-            height: '26px',
-            width: '26px',
+            height: '22px',
+            width: '22px',
           }}
           alt={label}
           src={
@@ -107,7 +115,7 @@ const TabComponent = ({
         >
           <img
             style={{
-              width: '26px',
+              width: '22px',
               height: 'auto',
             }}
             src={LogoSelected}
@@ -119,14 +127,16 @@ const TabComponent = ({
       <AppsHorizontalTabLabel
         sx={{
           color: isSelected
-            ? theme.palette.text.primary
+            ? theme.palette.primary.contrastText
             : theme.palette.text.secondary,
+          fontWeight: 500,
         }}
       >
         {label}
       </AppsHorizontalTabLabel>
 
       <IconButton
+        disableRipple
         onClick={(event) => {
           event.stopPropagation();
           onClose();
@@ -134,18 +144,24 @@ const TabComponent = ({
         size="small"
         sx={{
           color: isSelected
-            ? theme.palette.text.primary
+            ? alpha(theme.palette.primary.contrastText, 0.92)
             : theme.palette.text.secondary,
           flexShrink: 0,
-          height: 24,
-          width: 24,
+          height: 22,
+          width: 22,
+          opacity: isSelected ? 0.92 : 0.76,
           '&:hover': {
-            backgroundColor: theme.palette.action.selected,
-            color: theme.palette.text.primary,
+            backgroundColor: isSelected
+              ? alpha(theme.palette.primary.contrastText, 0.14)
+              : theme.palette.action.selected,
+            color: isSelected
+              ? theme.palette.primary.contrastText
+              : theme.palette.text.primary,
+            opacity: 1,
           },
         }}
       >
-        <CloseRoundedIcon sx={{ fontSize: 16 }} />
+        <CloseRoundedIcon sx={{ fontSize: 15 }} />
       </IconButton>
 
       <Menu
@@ -161,7 +177,8 @@ const TabComponent = ({
           paper: {
             sx: {
               backgroundColor: theme.palette.background.default,
-              borderRadius: '8px',
+              border: `1px solid ${theme.palette.border.subtle}`,
+              borderRadius: '6px',
               color: theme.palette.text.primary,
               width: '164px',
             },

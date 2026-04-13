@@ -1,4 +1,5 @@
 import { Typography, Box, ButtonBase, Chip } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { styled } from '@mui/system';
 
 export const AppsParent = styled(Box)(({ theme }) => ({
@@ -279,11 +280,14 @@ export const AppsNavBarRight = styled(Box)(({ theme }) => ({
   justifyContent: 'flex-end',
 }));
 
-export const APPS_HORIZONTAL_TAB_HEIGHT_PX = 52;
+export const APPS_HORIZONTAL_TAB_HEIGHT_PX = 44;
 
 export const AppsHorizontalTabBar = styled(Box)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.default,
+  backgroundColor:
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.common.black, 0.12)
+      : alpha(theme.palette.common.white, 0.58),
   borderBottom: `1px solid ${theme.palette.border.subtle}`,
   color: theme.palette.text.primary,
   display: 'flex',
@@ -291,18 +295,32 @@ export const AppsHorizontalTabBar = styled(Box)(({ theme }) => ({
   height: `${APPS_HORIZONTAL_TAB_HEIGHT_PX}px`,
   minHeight: `${APPS_HORIZONTAL_TAB_HEIGHT_PX}px`,
   overflow: 'hidden',
+  position: 'relative',
   width: '100%',
+  '&::before': {
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? alpha(theme.palette.common.white, 0.035)
+        : alpha(theme.palette.common.black, 0.025),
+    content: '""',
+    inset: 0,
+    pointerEvents: 'none',
+    position: 'absolute',
+  },
 }));
 
 export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({
-  alignItems: 'stretch',
-  backgroundColor: theme.palette.background.default,
+  alignSelf: 'center',
+  alignItems: 'center',
+  backgroundColor: 'transparent',
   color: theme.palette.text.primary,
   display: 'flex',
-  gap: '6px',
-  height: '100%',
+  gap: '2px',
+  height: 'auto',
+  minHeight: 0,
   overflow: 'hidden',
-  padding: '8px 14px 8px 16px',
+  padding: '0 10px 0 6px',
+  position: 'relative',
   width: '100%',
   '::-webkit-scrollbar': {
     display: 'none',
@@ -311,25 +329,31 @@ export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({
 
 export const AppsHorizontalTabButton = styled(ButtonBase)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.action.hover,
-  border: `1px solid ${theme.palette.border.subtle}`,
-  borderRadius: '14px 14px 0 0',
+  backgroundColor:
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.common.white, 0.03)
+      : alpha(theme.palette.common.black, 0.03),
+  border: `1px solid transparent`,
+  borderBottom: 'none',
+  borderRadius: '8px',
   color: theme.palette.text.primary,
   display: 'flex',
   flex: '1 1 0',
-  gap: '10px',
-  height: '100%',
+  gap: '8px',
+  height: '36px',
   justifyContent: 'flex-start',
   maxWidth: '240px',
-  minWidth: '96px',
-  padding: '0 12px',
+  minWidth: '104px',
+  padding: '0 9px',
+  position: 'relative',
 }));
 
 export const AppsHorizontalTabLabel = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.primary,
   flex: 1,
-  fontSize: '13px',
+  fontSize: '12.5px',
   fontWeight: 600,
+  letterSpacing: '0.01em',
   overflow: 'hidden',
   textAlign: 'left',
   textOverflow: 'ellipsis',
@@ -338,16 +362,23 @@ export const AppsHorizontalTabLabel = styled(Typography)(({ theme }) => ({
 
 export const AppsHorizontalTabAddButton = styled(ButtonBase)(({ theme }) => ({
   alignItems: 'center',
-  backgroundColor: theme.palette.background.paper,
-  border: `1px dashed ${theme.palette.border.subtle}`,
-  borderRadius: '14px 14px 0 0',
+  backgroundColor:
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.common.white, 0.035)
+      : alpha(theme.palette.common.black, 0.04),
+  border: '1px solid transparent',
+  borderRadius: '7px',
   color: theme.palette.text.secondary,
   display: 'flex',
   flexShrink: 0,
-  height: '100%',
+  height: '36px',
   justifyContent: 'center',
-  minWidth: '44px',
-  padding: '0 10px',
+  minWidth: '28px',
+  padding: '0 6px',
+  position: 'relative',
+  alignSelf: 'center',
+  marginBottom: 0,
+  transition: 'background-color 180ms ease, color 180ms ease',
 }));
 
 export const TabParent = styled(Box)(({ theme }) => ({

@@ -190,7 +190,14 @@ export function GlobalQortalNavBar({
         alignItems: 'center',
         backdropFilter: 'blur(10px)',
         backgroundColor: chromeBackground,
-        borderBottom: `1px solid ${theme.palette.border.subtle}`,
+        borderBottom:
+          desktopViewMode === 'apps'
+            ? '1px solid transparent'
+            : `1px solid ${theme.palette.border.subtle}`,
+        boxShadow:
+          desktopViewMode === 'apps'
+            ? `inset 0 -1px 0 ${theme.palette.border.subtle}`
+            : 'none',
         display: 'flex',
         height: `${APP_NAV_BAR_HEIGHT}px`,
         width: '100%',
@@ -203,8 +210,8 @@ export function GlobalQortalNavBar({
           gap: 1.25,
           height: '100%',
           maxWidth: '100%',
-          pl: { xs: 1.5, sm: 2, md: 3 },
-          pr: { xs: 1.5, sm: 2, md: 2.5 },
+          pl: { xs: 1.5, sm: 2, md: 2.5 },
+          pr: { xs: 1.5, sm: 2, md: 2.25 },
           width: '100%',
         }}
       >
@@ -213,13 +220,13 @@ export function GlobalQortalNavBar({
             alignItems: 'center',
             display: 'flex',
             flexShrink: 0,
-            gap: 0.75,
-            pr: 1.5,
+            gap: 0.5,
+            pr: 1.25,
             position: 'relative',
             '&::after': {
               backgroundColor: theme.palette.border.subtle,
               content: '""',
-              height: 20,
+              height: 18,
               position: 'absolute',
               right: 0,
               top: '50%',
@@ -229,6 +236,7 @@ export function GlobalQortalNavBar({
           }}
         >
           <ButtonBase
+            disableRipple
             onClick={() => {
               if (!selectedTab?.tabId) return;
               executeEvent(`navigateBackApp-${selectedTab.tabId}`, {});
@@ -254,6 +262,7 @@ export function GlobalQortalNavBar({
           </ButtonBase>
 
           <ButtonBase
+            disableRipple
             onClick={() => {
               if (!selectedTab?.tabId) return;
               if (selectedTab?.refreshFunc) {
@@ -292,13 +301,13 @@ export function GlobalQortalNavBar({
             alignItems: 'center',
             backgroundColor: inputBackground,
             border: `1px solid ${theme.palette.border.subtle}`,
-            borderRadius: '12px',
+            borderRadius: '10px',
             display: 'flex',
             flex: 1,
             gap: 1,
-            height: 34,
+            height: 32,
             minWidth: 0,
-            px: 1.5,
+            px: 1.25,
             boxShadow: 'none',
             transition:
               'background-color 240ms ease, border-color 240ms ease, box-shadow 280ms ease',
@@ -425,6 +434,7 @@ export function GlobalQortalNavBar({
             />
           </Box>
           <ButtonBase
+            disableRipple
             onClick={handleOpenInput}
             sx={{
               alignItems: 'center',

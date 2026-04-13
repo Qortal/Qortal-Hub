@@ -559,10 +559,14 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
             ))}
 
             <AppsHorizontalTabAddButton
+              disableRipple
               onClick={openDashboardFromTabs}
               sx={(theme) => ({
                 '&:hover': {
-                  backgroundColor: theme.palette.action.hover,
+                  backgroundColor:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(255, 255, 255, 0.08)'
+                      : 'rgba(0, 0, 0, 0.06)',
                   color: theme.palette.text.primary,
                 },
               })}
