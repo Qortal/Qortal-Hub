@@ -4,7 +4,6 @@ import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded';
-import ArrowForwardIosRoundedIcon from '@mui/icons-material/ArrowForwardIosRounded';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { extractComponents } from '../Chat/MessageDisplay';
@@ -107,7 +106,6 @@ export function GlobalQortalNavBar({
   }, [inputValue]);
 
   const canGoBack = !!selectedTab?.tabId && !!currentNavigation?.hasBack;
-  const canGoForward = !!selectedTab?.tabId && !!currentNavigation?.hasForward;
   const canRefresh = !!selectedTab?.tabId && desktopViewMode === 'apps';
   const chromeBackground =
     theme.palette.mode === 'dark'
@@ -217,8 +215,8 @@ export function GlobalQortalNavBar({
             alignItems: 'center',
             display: 'flex',
             flexShrink: 0,
-            gap: 0.5,
-            pr: 1.25,
+            gap: 0.75,
+            pr: 1.5,
             position: 'relative',
             '&::after': {
               backgroundColor: theme.palette.border.subtle,
@@ -255,31 +253,6 @@ export function GlobalQortalNavBar({
             }}
           >
             <ArrowBackIosNewRoundedIcon sx={{ fontSize: 15 }} />
-          </ButtonBase>
-
-          <ButtonBase
-            onClick={() => {
-              if (!selectedTab?.tabId) return;
-              executeEvent(`navigateForwardApp-${selectedTab.tabId}`, {});
-            }}
-            disabled={!canGoForward}
-            sx={{
-              alignItems: 'center',
-              borderRadius: '9px',
-              color: theme.palette.text.primary,
-              display: 'flex',
-              height: 32,
-              justifyContent: 'center',
-              opacity: canGoForward ? 1 : 0.32,
-              transition:
-                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
-              width: 32,
-              '&:hover:not(.Mui-disabled)': {
-                backgroundColor: buttonHoverBackground,
-              },
-            }}
-          >
-            <ArrowForwardIosRoundedIcon sx={{ fontSize: 15 }} />
           </ButtonBase>
 
           <ButtonBase

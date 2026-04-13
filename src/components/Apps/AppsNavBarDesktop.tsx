@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  AppsNavBarLeft,
   AppsNavBarParent,
   AppsNavBarRight,
 } from './Apps-styles';
-import { NavBack } from '../../assets/Icons/NavBack.tsx';
 import { NavAdd } from '../../assets/Icons/NavAdd.tsx';
 import { NavMoreMenu } from '../../assets/Icons/NavMoreMenu.tsx';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -14,8 +12,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Tab,
-  Tabs,
   useTheme,
 } from '@mui/material';
 import {
@@ -23,11 +19,8 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import TabComponent from './TabComponent';
 import PushPinIcon from '@mui/icons-material/PushPin';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import {
-  navigationControllerAtom,
   settingsLocalLastUpdatedAtom,
   sortablePinnedAppsAtom,
 } from '../../atoms/global';
@@ -72,11 +65,7 @@ export const AppsNavBarDesktop = ({
   disableBack?: boolean;
   isApps?: boolean;
 }) => {
-  const [tabs, setTabs] = useState([]);
   const [selectedTab, setSelectedTab] = useState(null);
-  const [navigationController, setNavigationController] = useAtom(
-    navigationControllerAtom
-  );
   const [sortablePinnedApps, setSortablePinnedApps] = useAtom(
     sortablePinnedAppsAtom
   );
@@ -89,8 +78,6 @@ export const AppsNavBarDesktop = ({
     'question',
     'tutorial',
   ]);
-  const [isNewTabWindow, setIsNewTabWindow] = useState(false);
-  const tabsRef = useRef(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const open = Boolean(anchorEl);
 
@@ -104,35 +91,9 @@ export const AppsNavBarDesktop = ({
     setAnchorEl(null);
   };
 
-  useEffect(() => {
-    // Scroll to the last tab whenever the tabs array changes (e.g., when a new tab is added)
-    if (tabsRef.current) {
-      const tabElements = tabsRef.current.querySelectorAll('.MuiTab-root');
-      if (tabElements.length > 0) {
-        const lastTab = tabElements[tabElements.length - 1];
-        lastTab.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-          inline: 'end',
-        });
-      }
-    }
-  }, [tabs.length]); // Dependency on the number of tabs
-
-  const isDisableBackButton = useMemo(() => {
-    if (disableBack) return true;
-    if (selectedTab && navigationController[selectedTab?.tabId]?.hasBack)
-      return false;
-    if (selectedTab && !navigationController[selectedTab?.tabId]?.hasBack)
-      return true;
-    return false;
-  }, [navigationController, selectedTab, disableBack]);
-
   const setTabsToNav = (e) => {
-    const { tabs, selectedTab, isNewTabWindow } = e.detail?.data;
-    setTabs([...tabs]);
+    const { selectedTab } = e.detail?.data;
     setSelectedTab(!selectedTab ? null : { ...selectedTab });
-    setIsNewTabWindow(isNewTabWindow);
   };
 
   useEffect(() => {
@@ -163,131 +124,25 @@ export const AppsNavBarDesktop = ({
     }
   }, [selectedTab, sortablePinnedApps]);
 
-  const hasTabs = (tabs || []).length > 0;
-
   return (
     <AppsNavBarParent
       sx={{
         borderRadius: '0px 30px 30px 0px',
         flexDirection: 'column',
-        height: 'unset',
-        maxHeight: '70vh',
+        gap: '14px',
+        height: 'auto',
+        justifyContent: 'flex-start',
         padding: '10px',
         position: 'relative',
         width: '59px',
       }}
     >
-      <AppsNavBarLeft
-        sx={{
-          flexDirection: 'column',
-        }}
-      >
-        {hasTabs && (
-          <>
-            <ButtonBase
-              onClick={() => {
-                executeEvent('navigateBack', selectedTab?.tabId);
-              }}
-              disabled={isDisableBackButton}
-              sx={{
-                alignItems: 'center',
-                borderRadius: '50%',
-                display: 'flex',
-                height: '36px',
-                justifyContent: 'center',
-                opacity: !isDisableBackButton ? 1 : 0.1,
-                cursor: !isDisableBackButton ? 'pointer' : 'default',
-                width: '36px',
-                '&:hover:not(.Mui-disabled)': {
-                  backgroundColor: theme.palette.action.hover,
-                },
-              }}
-            >
-              <NavBack />
-            </ButtonBase>
-
-            <ButtonBase
-              onClick={() => {
-                if (selectedTab?.refreshFunc) {
-                  selectedTab.refreshFunc(selectedTab?.tabId);
-                } else {
-                  executeEvent('refreshApp', {
-                    tabId: selectedTab?.tabId,
-                  });
-                }
-              }}
-              disabled={!selectedTab || !isApps}
-              sx={{
-                alignItems: 'center',
-                borderRadius: '50%',
-                display: 'flex',
-                height: '36px',
-                justifyContent: 'center',
-                marginTop: '20px',
-                opacity: selectedTab && isApps ? 1 : 0.1,
-                cursor: selectedTab && isApps ? 'pointer' : 'default',
-                width: '36px',
-                '&:hover:not(.Mui-disabled)': {
-                  backgroundColor: theme.palette.action.hover,
-                },
-              }}
-            >
-              <RefreshIcon
-                sx={{
-                  color: theme.palette.text.primary,
-                  fontSize: '34px',
-                }}
-              />
-            </ButtonBase>
-
-            <Tabs
-              orientation="vertical"
-              ref={tabsRef}
-              variant="scrollable" // Make tabs scrollable
-              scrollButtons={true}
-              sx={{
-                '&.MuiTabs-indicator': {
-                  backgroundColor: theme.palette.background.default,
-                },
-                maxHeight: `275px`, // Ensure the tabs container fits within the available space
-                overflow: 'hidden', // Prevents overflow on small screens
-              }}
-              value={false}
-            >
-              {tabs?.map((tab) => (
-                <Tab
-                  key={tab?.tabId}
-                  label={
-                    <TabComponent
-                      isSelected={
-                        !!isApps &&
-                        tab?.tabId === selectedTab?.tabId &&
-                        !isNewTabWindow
-                      }
-                      app={tab}
-                    />
-                  } // Pass custom component
-                  sx={{
-                    '&.Mui-selected': {
-                      color: theme.palette.text.primary,
-                    },
-                    padding: '0px',
-                    margin: '0px',
-                    minWidth: '0px',
-                    width: '50px',
-                  }}
-                />
-              ))}
-            </Tabs>
-          </>
-        )}
-      </AppsNavBarLeft>
-
       {isApps && selectedTab && (
         <AppsNavBarRight
           sx={{
             gap: '10px',
             flexDirection: 'column',
+            width: '100%',
           }}
         >
           <ButtonBase
