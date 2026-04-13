@@ -459,6 +459,11 @@ const handleMessage = (event) => {
 
 window.addEventListener('message', handleMessage);
 
+const getPermissionSourceMeta = (appInfo, isFromExtension) => ({
+  sourceLabel: appInfo?.name || undefined,
+  sourceKind: appInfo?.name ? 'Q-App' : isFromExtension ? 'Extension' : 'Application',
+});
+
 async function getUserPermission(payload, isFromExtension) {
   return new Promise((resolve) => {
     const requestId = `qortalRequest_${Date.now()}`;
@@ -530,12 +535,14 @@ export const getUserAccount = async ({
           text1: i18n.t('question:permission.authenticate', {
             postProcess: 'capitalizeFirstChar',
           }),
+          requestType: 'GET_USER_ACCOUNT',
           checkbox1: {
             value: false,
             label: i18n.t('question:always_authenticate', {
               postProcess: 'capitalizeFirstChar',
             }),
           },
+          ...getPermissionSourceMeta(appInfo, isFromExtension),
         },
         isFromExtension
       );
@@ -634,6 +641,7 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
           appName: appInfo.name,
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'SESSION_PERMISSIONS',
         text2: i18n.t('question:permission.session_permissions_description', {
           defaultValue:
             'The following permissions will be automatically granted for this session:',
@@ -656,6 +664,7 @@ export const sessionPermissions = async (data, isFromExtension, appInfo) => {
           postProcess: 'capitalizeFirstChar',
         }),
         isSessionPermission: true,
+        ...getPermissionSourceMeta(appInfo, isFromExtension),
       },
       isFromExtension
     );
@@ -1672,11 +1681,13 @@ export const publishQDNResource = async (
         text1: i18n.t('question:permission.publish_qdn', {
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'PUBLISH_QDN_RESOURCE',
         text2: `service: ${service}`,
         text3: `identifier: ${identifier || null}`,
         text4: `name: ${registeredName}`,
         fee: fee.fee,
         ...handleDynamicValues,
+        ...getPermissionSourceMeta(appInfo, isFromExtension),
       },
       isFromExtension
     );
@@ -1984,6 +1995,7 @@ export const publishMultipleQDNResources = async (
         text1: i18n.t('question:permission.publish_qdn', {
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'PUBLISH_MULTIPLE_QDN_RESOURCES',
         html: `
     <div style="max-height: 30vh; overflow-y: auto;">
     <style>
@@ -2043,6 +2055,7 @@ export const publishMultipleQDNResources = async (
       `,
         fee: +fee.fee * resources.length,
         ...handleDynamicValues,
+        ...getPermissionSourceMeta(appInfo, isFromExtension),
       },
       isFromExtension
     );
@@ -3456,6 +3469,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
         text1: i18n.t('question:permission.get_wallet_info', {
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'GET_USER_WALLET',
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: false,
@@ -3463,6 +3477,7 @@ export const getUserWallet = async (data, isFromExtension, appInfo) => {
             postProcess: 'capitalizeFirstChar',
           }),
         },
+        ...getPermissionSourceMeta(appInfo, isFromExtension),
       },
       isFromExtension
     );
@@ -3608,12 +3623,14 @@ export const getWalletBalance = async (
           coin: data.coin, // TODO highlight coin in the modal
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'GET_WALLET_BALANCE',
         checkbox1: {
           value: false,
           label: i18n.t('question:always_retrieve_balance', {
             postProcess: 'capitalizeFirstChar',
           }),
         },
+        ...getPermissionSourceMeta(appInfo, isFromExtension),
       },
       isFromExtension
     );
@@ -3863,6 +3880,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
         text1: i18n.t('question:permission.get_wallet_info', {
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'GET_USER_WALLET_INFO',
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: false,
@@ -3870,6 +3888,7 @@ export const getUserWalletInfo = async (data, isFromExtension, appInfo) => {
             postProcess: 'capitalizeFirstChar',
           }),
         },
+        ...getPermissionSourceMeta(appInfo, isFromExtension),
       },
       isFromExtension
     );
@@ -3983,6 +4002,7 @@ export const getUserWalletTransactions = async (
         text1: i18n.t('question:permission.get_wallet_transactions', {
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'GET_USER_WALLET_TRANSACTIONS',
         highlightedText: `coin: ${data.coin}`,
         checkbox1: {
           value: false,
@@ -3990,6 +4010,7 @@ export const getUserWalletTransactions = async (
             postProcess: 'capitalizeFirstChar',
           }),
         },
+        ...getPermissionSourceMeta(appInfo, isFromExtension),
       },
       isFromExtension
     );
@@ -5090,6 +5111,7 @@ export const sendCoin = async (data, isFromExtension) => {
         text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'SEND_COIN',
         text2: i18n.t('question:to_recipient', {
           recipient: recipient,
           postProcess: 'capitalizeFirstChar',
@@ -5097,6 +5119,7 @@ export const sendCoin = async (data, isFromExtension) => {
         highlightedText: `${amount} ${checkCoin}`,
         fee: fee,
         confirmCheckbox: true,
+        ...getPermissionSourceMeta(undefined, isFromExtension),
       },
       isFromExtension
     );
@@ -5147,12 +5170,14 @@ export const sendCoin = async (data, isFromExtension) => {
         text1: i18n.t('question:permission.send_coins', {
           postProcess: 'capitalizeFirstChar',
         }),
+        requestType: 'SEND_COIN',
         text2: i18n.t('question:to_recipient', {
           recipient: recipient,
           postProcess: 'capitalizeFirstChar',
         }),
         highlightedText: `${amount} ${checkCoin}`,
         foreignFee: `${fee} BTC`,
+        ...getPermissionSourceMeta(undefined, isFromExtension),
       },
       isFromExtension
     );
@@ -6357,12 +6382,14 @@ export const signTransaction = async (data, isFromExtension) => {
         : i18n.t('question:permission.sign_transaction', {
             postProcess: 'capitalizeFirstChar',
           }),
+      requestType: 'SIGN_TRANSACTION',
       highlightedText: i18n.t(
         'question:message.generic.read_transaction_carefully',
         { postProcess: 'capitalizeFirstChar' }
       ),
       text2: `Tx type: ${decodedData.type}`,
       json: decodedData,
+      ...getPermissionSourceMeta(undefined, isFromExtension),
     },
     isFromExtension
   );
