@@ -1,5 +1,4 @@
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
-import { Box } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useFrame } from 'react-frame-component';
@@ -349,17 +348,26 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     }, [app?.tabId]);
 
     return (
-      <Box
-        sx={{
+      <div
+        data-app-viewer-wrapper={app?.tabId || 'active'}
+        style={{
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
+          flex: '1 1 auto',
+          minHeight: '0',
+          width: '100%',
+          alignSelf: 'stretch',
         }}
       >
         <iframe
+          data-app-viewer-inner-iframe={app?.tabId || 'active'}
           ref={iframeRef}
           style={{
-            height: customHeight || '100%',
             border: 'none',
+            display: 'block',
+            flex: '1 1 auto',
+            minHeight: 0,
             width: '100%',
           }}
           id="browser-iframe"
@@ -367,7 +375,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
           allow="fullscreen; clipboard-read; clipboard-write; screen-wake-lock"
         ></iframe>
-      </Box>
+      </div>
     );
   }
 );

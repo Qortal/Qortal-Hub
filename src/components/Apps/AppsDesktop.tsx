@@ -691,7 +691,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
             return (
               <AppViewerContainer
                 app={tab}
-                customHeight={appsContentHeight}
+                customHeight="100%"
                 hide={isNewTabWindow}
                 isDevMode={tab?.service ? false : true}
                 isSelected={tab?.tabId === selectedTab?.tabId}
