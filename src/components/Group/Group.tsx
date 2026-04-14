@@ -1348,6 +1348,18 @@ export const Group = ({
     };
   }, [openAppsMode]);
 
+  const openHomeMode = useCallback(() => {
+    setDesktopViewMode('home');
+  }, []);
+
+  useEffect(() => {
+    subscribeToEvent('open-home-mode', openHomeMode);
+
+    return () => {
+      unsubscribeFromEvent('open-home-mode', openHomeMode);
+    };
+  }, [openHomeMode]);
+
   const openDevMode = useCallback(() => {
     setDesktopViewMode('dev');
   }, []);

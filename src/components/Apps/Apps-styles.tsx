@@ -346,6 +346,8 @@ export const AppsHorizontalTabButton = styled(ButtonBase)(({ theme }) => ({
   minWidth: '104px',
   padding: '0 9px',
   position: 'relative',
+  transition:
+    'background-color 180ms ease, color 180ms ease, border-color 180ms ease',
 }));
 
 export const AppsHorizontalTabLabel = styled(Typography)(({ theme }) => ({

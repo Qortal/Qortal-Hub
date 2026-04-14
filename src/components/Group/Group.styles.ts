@@ -13,6 +13,7 @@ export const RootBox = styled(Box)({
   display: 'flex',
   flexDirection: 'row',
   height: '100%',
+  position: 'relative',
   width: '100%',
 });
 

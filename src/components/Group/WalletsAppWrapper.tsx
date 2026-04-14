@@ -45,7 +45,7 @@ export const WalletsAppWrapper = () => {
 
   const openWalletsAppFunc = useCallback(
     (e) => {
-      setIsOpen(true);
+      setIsOpen((prev) => !prev);
     },
     [setIsOpen]
   );
