@@ -621,6 +621,19 @@ export function CustomTitleBar(props?: {
     />
   );
 
+  const leftPushCluster = (children: React.ReactNode) => (
+    <Box
+      sx={{
+        alignItems: 'center',
+        display: 'flex',
+        flexShrink: 0,
+        minWidth: 0,
+      }}
+    >
+      {children}
+    </Box>
+  );
+
   return (
     <Box
       onDoubleClick={isElectron ? handleTitleBarDoubleClick : undefined}
@@ -642,13 +655,17 @@ export function CustomTitleBar(props?: {
       {isElectron &&
         (isMac ? (
           <>
-            {macWindowControls}
-            {menuButton}
-            {rightNav && (
+            {leftPushCluster(
               <>
-                {leftOffsetSpacer}
-                {titleBarVerticalDivider}
-                {leftNavSection}
+                {macWindowControls}
+                {menuButton}
+                {rightNav && (
+                  <>
+                    {leftOffsetSpacer}
+                    {titleBarVerticalDivider}
+                    {leftNavSection}
+                  </>
+                )}
               </>
             )}
             <Box sx={{ flex: 1 }} />
@@ -657,12 +674,16 @@ export function CustomTitleBar(props?: {
           </>
         ) : (
           <>
-            {menuButton}
-            {rightNav && (
+            {leftPushCluster(
               <>
-                {leftOffsetSpacer}
-                {titleBarVerticalDivider}
-                {leftNavSection}
+                {menuButton}
+                {rightNav && (
+                  <>
+                    {leftOffsetSpacer}
+                    {titleBarVerticalDivider}
+                    {leftNavSection}
+                  </>
+                )}
               </>
             )}
             <Box sx={{ flex: 1 }} />
@@ -673,7 +694,7 @@ export function CustomTitleBar(props?: {
         ))}
       {!isElectron && (
         <>
-          {rightNav && <>{leftNavSection}</>}
+          {leftPushCluster(<>{rightNav && <>{leftNavSection}</>}</>)}
           <Box sx={{ flex: 1 }} />
           {rightNavSection}
         </>

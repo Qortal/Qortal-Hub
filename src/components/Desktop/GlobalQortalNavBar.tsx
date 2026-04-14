@@ -4,6 +4,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded';
+import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { extractComponents } from '../Chat/MessageDisplay';
@@ -14,7 +15,7 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
-import { APP_NAV_BAR_HEIGHT } from './CustomTitleBar';
+import { APP_NAV_BAR_HEIGHT, CUSTOM_TITLE_BAR_HEIGHT } from './CustomTitleBar';
 
 type GlobalQortalNavBarProps = {
   desktopViewMode: string;
@@ -46,10 +47,27 @@ export function GlobalQortalNavBar({
   const [inputValue, setInputValue] = useState('');
   const [isInputHovered, setIsInputHovered] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [sidebarOffsetPx, setSidebarOffsetPx] = useState(0);
   const isInputFocusedRef = useRef(false);
+  const lastTabsTokenRef = useRef(0);
+  const navClearLockUntilRef = useRef(0);
   const inputElementRef = useRef<HTMLInputElement | null>(null);
+  const SIDEBAR_CHROME_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 
   const setTabsToNav = useCallback((e: CustomEvent) => {
+    const nextToken = Number(e.detail?.data?.tabsToken || 0);
+    if (Date.now() < navClearLockUntilRef.current) {
+      return;
+    }
+    if (lastTabsTokenRef.current > 0 && !nextToken) {
+      return;
+    }
+    if (nextToken && nextToken <= lastTabsTokenRef.current) {
+      return;
+    }
+    if (nextToken) {
+      lastTabsTokenRef.current = nextToken;
+    }
     const nextSelectedTab = e.detail?.data?.selectedTab;
     setSelectedTab(nextSelectedTab ? { ...nextSelectedTab } : null);
   }, []);
@@ -61,6 +79,66 @@ export function GlobalQortalNavBar({
       unsubscribeFromEvent('setTabsToNav', setTabsToNav);
     };
   }, [setTabsToNav]);
+
+  useEffect(() => {
+    const handleClearNavInput = () => {
+      setInputValue('');
+      setIsInputFocused(false);
+      isInputFocusedRef.current = false;
+      if (inputElementRef.current) {
+        inputElementRef.current.blur();
+      }
+    };
+
+    subscribeToEvent('clearNavInput', handleClearNavInput);
+
+    return () => {
+      unsubscribeFromEvent('clearNavInput', handleClearNavInput);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleForceNavClear = (e: CustomEvent) => {
+      const nextToken = Number(e.detail?.data?.tabsToken || 0);
+      if (nextToken) {
+        lastTabsTokenRef.current = nextToken;
+      }
+      navClearLockUntilRef.current = Date.now() + 250;
+      setSelectedTab(null);
+      setInputValue('');
+      setIsInputFocused(false);
+      isInputFocusedRef.current = false;
+      if (inputElementRef.current) {
+        inputElementRef.current.blur();
+      }
+    };
+
+    subscribeToEvent('forceNavClear', handleForceNavClear);
+
+    return () => {
+      unsubscribeFromEvent('forceNavClear', handleForceNavClear);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSidebarOverlayVisibility = (e: CustomEvent) => {
+      const isVisible = !!e.detail?.data?.isVisible;
+      const width = Number(e.detail?.data?.width || 0);
+      setSidebarOffsetPx(isVisible ? width : 0);
+    };
+
+    subscribeToEvent(
+      'sidebarOverlayVisibility',
+      handleSidebarOverlayVisibility
+    );
+
+    return () => {
+      unsubscribeFromEvent(
+        'sidebarOverlayVisibility',
+        handleSidebarOverlayVisibility
+      );
+    };
+  }, []);
 
   const currentNavigation = selectedTab?.tabId
     ? navigationController?.[selectedTab.tabId]
@@ -186,35 +264,39 @@ export function GlobalQortalNavBar({
 
   return (
     <Box
-      sx={{
-        alignItems: 'center',
-        backdropFilter: 'blur(10px)',
-        backgroundColor: chromeBackground,
-        borderBottom:
-          desktopViewMode === 'apps'
-            ? '1px solid transparent'
-            : `1px solid ${theme.palette.border.subtle}`,
-        boxShadow:
-          desktopViewMode === 'apps'
-            ? `inset 0 -1px 0 ${theme.palette.border.subtle}`
-            : 'none',
-        display: 'flex',
-        height: `${APP_NAV_BAR_HEIGHT}px`,
-        width: '100%',
-      }}
-    >
-      <Box
         sx={{
           alignItems: 'center',
+          backdropFilter: 'blur(10px)',
+          backgroundColor: chromeBackground,
+          borderBottom:
+            desktopViewMode === 'apps'
+              ? '1px solid transparent'
+              : `1px solid ${theme.palette.border.subtle}`,
+          boxShadow:
+            desktopViewMode === 'apps'
+              ? `inset 0 -1px 0 ${theme.palette.border.subtle}`
+              : 'none',
           display: 'flex',
-          gap: 1.25,
-          height: '100%',
-          maxWidth: '100%',
-          pl: { xs: 1.5, sm: 2, md: 2.5 },
-          pr: { xs: 1.5, sm: 2, md: 2.25 },
-          width: '100%',
+          height: `${APP_NAV_BAR_HEIGHT}px`,
+          marginLeft: `${sidebarOffsetPx}px`,
+          transition: `margin-left ${SIDEBAR_CHROME_TRANSITION}, width ${SIDEBAR_CHROME_TRANSITION}`,
+          width: sidebarOffsetPx
+            ? `calc(100% - ${sidebarOffsetPx}px)`
+            : '100%',
         }}
       >
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            gap: 1.25,
+            height: '100%',
+            maxWidth: '100%',
+            pl: { xs: 1.5, sm: 2, md: 2.5 },
+            pr: { xs: 1.5, sm: 2, md: 2.25 },
+            width: '100%',
+          }}
+        >
         <Box
           sx={{
             alignItems: 'center',
@@ -259,6 +341,37 @@ export function GlobalQortalNavBar({
             }}
           >
             <ArrowBackIosNewRoundedIcon sx={{ fontSize: 15 }} />
+          </ButtonBase>
+
+          <ButtonBase
+            disableRipple
+            onClick={() => {
+              executeEvent('open-home-mode', {});
+            }}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '9px',
+              color:
+                desktopViewMode === 'home'
+                  ? theme.palette.text.primary
+                  : theme.palette.text.primary,
+              display: 'flex',
+              height: 32,
+              justifyContent: 'center',
+              opacity: desktopViewMode === 'home' ? 1 : 0.92,
+              transition:
+                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
+              width: 32,
+              backgroundColor:
+                desktopViewMode === 'home'
+                  ? buttonHoverBackground
+                  : 'transparent',
+              '&:hover': {
+                backgroundColor: buttonHoverBackground,
+              },
+            }}
+          >
+            <HomeOutlinedIcon sx={{ fontSize: 18.5 }} />
           </ButtonBase>
 
           <ButtonBase
@@ -433,30 +546,50 @@ export function GlobalQortalNavBar({
               }}
             />
           </Box>
-          <ButtonBase
-            disableRipple
-            onClick={handleOpenInput}
+          <Box
             sx={{
               alignItems: 'center',
-              borderRadius: '8px',
-              color: theme.palette.text.secondary,
               display: 'flex',
-              flexShrink: 0,
+              flex: '0 0 26px',
               height: 26,
               justifyContent: 'center',
-              transition:
-                'background-color 180ms ease, color 180ms ease',
+              maxWidth: 26,
+              minWidth: 26,
               width: 26,
-              '&:hover': {
-                backgroundColor: buttonHoverBackground,
-                color: theme.palette.text.primary,
-              },
             }}
           >
-            <ArrowOutwardIcon sx={{ fontSize: 17 }} />
-          </ButtonBase>
+            <ButtonBase
+              disableRipple
+              onClick={handleOpenInput}
+              sx={{
+                alignItems: 'center',
+                borderRadius: '8px',
+                color: theme.palette.text.secondary,
+                display: 'flex',
+                flexShrink: 0,
+                height: 26,
+                justifyContent: 'center',
+                minWidth: 26,
+                transition:
+                  'background-color 180ms ease, color 180ms ease',
+                width: 26,
+                '&:hover': {
+                  backgroundColor: buttonHoverBackground,
+                  color: theme.palette.text.primary,
+                },
+              }}
+            >
+              <ArrowOutwardIcon
+                sx={{
+                  display: 'block',
+                  flexShrink: 0,
+                  fontSize: 17,
+                }}
+              />
+            </ButtonBase>
+          </Box>
+        </Box>
         </Box>
       </Box>
-    </Box>
   );
 }

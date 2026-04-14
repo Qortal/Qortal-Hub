@@ -12,7 +12,13 @@ import { nodeInfosAtom } from '../atoms/global';
 import { nodeDisplay } from '../utils/helpers';
 import { isLocalNodeUrl } from '../constants/constants';
 
-export const CoreSyncStatus = () => {
+export const CoreSyncStatus = ({
+  renderIcon,
+  useExternalTooltip = false,
+}: {
+  renderIcon?: React.ReactNode;
+  useExternalTooltip?: boolean;
+}) => {
   const [nodeInfos] = useAtom(nodeInfosAtom);
   const [coreInfos, setCoreInfos] = useState({});
 
@@ -95,83 +101,97 @@ export const CoreSyncStatus = () => {
       }
     }
 
+    const iconNode = renderIcon || (
+      <img
+        src={imagePath}
+        style={{ height: 'auto', width: '35px' }}
+        alt="sync status"
+      />
+    );
+
+    const panelNode = (
+      <Box
+        className="core-panel"
+        style={{
+          right: 'unset',
+          left: '55px',
+          top: '10px',
+        }}
+      >
+        <h3>
+          {t('core:core.information', { postProcess: 'capitalizeFirstChar' })}
+        </h3>
+
+        <h4 className="lineHeight">
+          {t('core:core.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
+        </h4>
+
+        <h4 className="lineHeight">{message}</h4>
+
+        <h4 className="lineHeight">
+          {t('core:core.block_height', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          : <span style={{ color: '#03a9f4' }}>{height || ''}</span>
+        </h4>
+
+        <h4 className="lineHeight">
+          {t('core:core.peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>
+            {numberOfConnections || ''}
+          </span>
+        </h4>
+
+        <h4 className="lineHeight">
+          {t('core:core.data_peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>
+            {numberOfDataConnections || ''}
+          </span>
+        </h4>
+
+        <h4 className="lineHeight">
+          {t('auth:node.using', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+          :{' '}
+          <span
+            style={{
+              color: '#03a9f4',
+              ...(isLocalNodeUrl(nodeBase) && {
+                fontWeight: 'bold',
+                color: theme.palette.other.positive,
+              }),
+            }}
+          >
+            {nodeDisplay(nodeBase)}
+          </span>
+        </h4>
+
+        <h4 className="lineHeight">
+          {t('core:ui.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
+          <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
+        </h4>
+      </Box>
+    );
+
+    if (useExternalTooltip) {
+      return (
+        <>
+          <span>{iconNode}</span>
+          {panelNode}
+        </>
+      );
+    }
+
     return (
       <Box
         className="tooltip"
         data-theme={theme.palette.mode}
         style={{ display: 'inline' }}
       >
-        <span>
-          <img
-            src={imagePath}
-            style={{ height: 'auto', width: '35px' }}
-            alt="sync status"
-          />
-        </span>
-
-        <Box
-          className="core-panel"
-          style={{
-            right: 'unset',
-            left: '55px',
-            top: '10px',
-          }}
-        >
-          <h3>
-            {t('core:core.information', { postProcess: 'capitalizeFirstChar' })}
-          </h3>
-
-          <h4 className="lineHeight">
-            {t('core:core.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>{buildVersion}</span>
-          </h4>
-
-          <h4 className="lineHeight">{message}</h4>
-
-          <h4 className="lineHeight">
-            {t('core:core.block_height', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            : <span style={{ color: '#03a9f4' }}>{height || ''}</span>
-          </h4>
-
-          <h4 className="lineHeight">
-            {t('core:core.peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>
-              {numberOfConnections || ''}
-            </span>
-          </h4>
-
-          <h4 className="lineHeight">
-            {t('core:core.data_peers', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>
-              {numberOfDataConnections || ''}
-            </span>
-          </h4>
-
-          <h4 className="lineHeight">
-            {t('auth:node.using', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            :{' '}
-            <span
-              style={{
-                color: '#03a9f4',
-                ...(isLocalNodeUrl(nodeBase) && {
-                  fontWeight: 'bold',
-                  color: theme.palette.other.positive,
-                }),
-              }}
-            >
-              {nodeDisplay(nodeBase)}
-            </span>
-          </h4>
-
-          <h4 className="lineHeight">
-            {t('core:ui.version', { postProcess: 'capitalizeFirstChar' })}:{' '}
-            <span style={{ color: '#03a9f4' }}>{manifestData.version}</span>
-          </h4>
-        </Box>
+        <span>{iconNode}</span>
+        {panelNode}
       </Box>
     );
   };

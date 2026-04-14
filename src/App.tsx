@@ -860,7 +860,10 @@ function App() {
     []
   );
   const onOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
-  const onOpenDrawerLookup = useCallback(() => setIsOpenDrawerLookup(true), []);
+  const onOpenDrawerLookup = useCallback(
+    () => setIsOpenDrawerLookup((prev) => !prev),
+    []
+  );
   const onOpenWalletsApp = useCallback(
     () => executeEvent('openWalletsApp', {}),
     []

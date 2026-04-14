@@ -10,9 +10,12 @@ import {
 } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CloseFullscreenRoundedIcon from '@mui/icons-material/CloseFullscreenRounded';
 import LockIcon from '@mui/icons-material/Lock';
 import { useState } from 'react';
 import { alpha } from '@mui/material/styles';
+import { CSS } from '@dnd-kit/utilities';
+import { useSortable } from '@dnd-kit/sortable';
 import {
   AppsHorizontalTabButton,
   AppsHorizontalTabLabel,
@@ -22,30 +25,66 @@ import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 
 type TabComponentProps = {
   app: any;
+  onCloseAll: () => void;
   onDuplicate: () => void;
+  isEntering?: boolean;
   isSelected: boolean;
+  isVisuallySelected?: boolean;
   onClose: () => void;
   onSelect: () => void;
 };
 
 const TabComponent = ({
   app,
+  onCloseAll,
   onDuplicate,
+  isEntering = false,
   isSelected,
+  isVisuallySelected = isSelected,
   onClose,
   onSelect,
 }: TabComponentProps) => {
   const theme = useTheme();
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: app?.tabId,
+  });
   const [menuPosition, setMenuPosition] = useState<{
     left: number;
     top: number;
   } | null>(null);
   const label =
     app?.privateAppProperties?.name || app?.metadata?.title || app?.name || '';
+  const selectedTabTextColor =
+    theme.palette.mode === 'dark'
+      ? theme.palette.common.white
+      : theme.palette.primary.contrastText;
+  const dndStyle = {
+    transform: CSS.Transform.toString(
+      transform
+        ? {
+            ...transform,
+            scaleX: 1,
+            scaleY: 1,
+          }
+        : null
+    ),
+    transition,
+    zIndex: isDragging ? 5 : 'auto',
+  };
 
   return (
     <AppsHorizontalTabButton
+      ref={setNodeRef}
       disableRipple
+      {...attributes}
+      {...listeners}
       onClick={onSelect}
       onContextMenu={(event) => {
         event.preventDefault();
@@ -56,30 +95,53 @@ const TabComponent = ({
         });
       }}
       sx={{
-        backgroundColor: isSelected
+        backgroundColor: isVisuallySelected
           ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.78 : 0.88)
           : theme.palette.mode === 'dark'
             ? alpha(theme.palette.common.white, 0.03)
             : alpha(theme.palette.common.black, 0.03),
-        borderColor: isSelected
+        borderColor: isVisuallySelected
           ? 'transparent'
           : theme.palette.mode === 'dark'
             ? alpha(theme.palette.common.white, 0.03)
             : alpha(theme.palette.common.black, 0.04),
         boxShadow: 'none',
-        color: isSelected
-          ? theme.palette.primary.contrastText
+        color: isVisuallySelected
+          ? selectedTabTextColor
           : theme.palette.text.secondary,
-        opacity: 1,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        opacity: isEntering ? 0 : 1,
+        ...dndStyle,
+        transform: `${dndStyle.transform || ''}${isEntering ? ' scale(0.96)' : ''}`.trim(),
         transition:
-          'background-color 180ms ease, color 180ms ease, border-color 180ms ease',
+          `${transition ? `${transition}, ` : ''}background-color 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, opacity 180ms ease, transform 180ms ease`,
+        animation: isEntering ? 'tabEntryFadeScale 190ms ease-out forwards' : 'none',
+        ...(isDragging && {
+          boxShadow:
+            theme.palette.mode === 'dark'
+              ? '0 10px 22px rgba(0,0,0,0.28)'
+              : '0 10px 22px rgba(0,0,0,0.12)',
+          opacity: 0.96,
+        }),
         '&:hover': {
-          backgroundColor: isSelected
-            ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.86 : 0.94)
+          backgroundColor: isVisuallySelected
+            ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.92 : 0.98)
             : theme.palette.mode === 'dark'
               ? alpha(theme.palette.common.white, 0.06)
               : alpha(theme.palette.common.black, 0.06),
-          color: theme.palette.text.primary,
+          color: isVisuallySelected
+            ? selectedTabTextColor
+            : theme.palette.text.primary,
+        },
+        '@keyframes tabEntryFadeScale': {
+          from: {
+            opacity: 0,
+            transform: `${dndStyle.transform || ''} scale(0.96)`.trim(),
+          },
+          to: {
+            opacity: 1,
+            transform: `${dndStyle.transform || ''} scale(1)`.trim(),
+          },
         },
       }}
     >
@@ -87,7 +149,7 @@ const TabComponent = ({
         <Box
           sx={{
             alignItems: 'center',
-            color: isSelected
+            color: isVisuallySelected
               ? theme.palette.primary.contrastText
               : theme.palette.text.secondary,
             display: 'flex',
@@ -126,8 +188,8 @@ const TabComponent = ({
 
       <AppsHorizontalTabLabel
         sx={{
-          color: isSelected
-            ? theme.palette.primary.contrastText
+          color: isVisuallySelected
+            ? selectedTabTextColor
             : theme.palette.text.secondary,
           fontWeight: 500,
         }}
@@ -141,21 +203,24 @@ const TabComponent = ({
           event.stopPropagation();
           onClose();
         }}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         size="small"
         sx={{
-          color: isSelected
-            ? alpha(theme.palette.primary.contrastText, 0.92)
+          color: isVisuallySelected
+            ? alpha(selectedTabTextColor, 0.92)
             : theme.palette.text.secondary,
           flexShrink: 0,
           height: 22,
           width: 22,
-          opacity: isSelected ? 0.92 : 0.76,
+          opacity: isVisuallySelected ? 1 : 0.76,
           '&:hover': {
-            backgroundColor: isSelected
-              ? alpha(theme.palette.primary.contrastText, 0.14)
+            backgroundColor: isVisuallySelected
+              ? alpha(selectedTabTextColor, 0.18)
               : theme.palette.action.selected,
-            color: isSelected
-              ? theme.palette.primary.contrastText
+            color: isVisuallySelected
+              ? selectedTabTextColor
               : theme.palette.text.primary,
             opacity: 1,
           },
@@ -167,6 +232,9 @@ const TabComponent = ({
       <Menu
         open={!!menuPosition}
         onClose={() => setMenuPosition(null)}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
         anchorReference="anchorPosition"
         anchorPosition={
           menuPosition
@@ -214,6 +282,37 @@ const TabComponent = ({
               },
             }}
             primary="Duplicate Tab"
+          />
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            onCloseAll();
+            setMenuPosition(null);
+          }}
+        >
+          <ListItemIcon
+            sx={{
+              minWidth: '24px !important',
+              marginRight: '6px',
+            }}
+          >
+            <CloseFullscreenRoundedIcon
+              sx={{
+                color: theme.palette.text.primary,
+                fontSize: 18,
+              }}
+            />
+          </ListItemIcon>
+
+          <ListItemText
+            sx={{
+              '& .MuiTypography-root': {
+                fontSize: '12px',
+                fontWeight: 600,
+                color: theme.palette.text.primary,
+              },
+            }}
+            primary="Close All Tabs"
           />
         </MenuItem>
       </Menu>
