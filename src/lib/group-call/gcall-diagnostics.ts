@@ -77,7 +77,10 @@ export interface GcallDiagExportPayload {
 
 const MAX_EVENTS = 900;
 const METRICS_THROTTLE_MS = 8000;
-const GCALL_NOISY_DIAGNOSTIC_TAGS = new Set(['[GCall] bufferEnforceActive']);
+const GCALL_NOISY_DIAGNOSTIC_TAGS = new Set([
+  '[GCall] bufferEnforceActive',
+  '[GCall] jitterPushStats',
+]);
 const GCALL_PROTECTED_DIAGNOSTIC_TAGS = new Set([
   '[GCall] inboundMediaMissing',
   '[GCall] inboundMediaReannounce',

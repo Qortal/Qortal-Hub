@@ -1006,15 +1006,19 @@ export function shouldExtendN1SevereRebuildAccumulation(opts: {
   severeForcedReleaseRebuildActive: boolean;
   sourceRecentlyPushed: boolean;
   opusBufferedMs: number;
+  targetMs?: number;
   recentStability: RecentRecoveryStabilitySummary | null;
   playoutStarvationSeverity: PlayoutStarvationSeverity;
 }): boolean {
+  const severeRebuildHoldOpusMs =
+    computeN1SevereRebuildAccumulationHoldOpusMs(opts.targetMs);
+  const lowPcmHoldMaxMs =
+    computeN1SevereRebuildLowPcmHoldMaxMs(opts.targetMs);
   if (
     !opts.recoverySingleRemote ||
     opts.prerollActive ||
     !opts.severeForcedReleaseRebuildActive ||
-    !opts.sourceRecentlyPushed ||
-    opts.opusBufferedMs > GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_OPUS_MS
+    opts.opusBufferedMs > severeRebuildHoldOpusMs
   ) {
     return false;
   }
@@ -1028,9 +1032,31 @@ export function shouldExtendN1SevereRebuildAccumulation(opts: {
   ) {
     return true;
   }
-  return (
-    opts.playoutStarvationSeverity === 'strong' &&
-    opts.opusBufferedMs <= GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS
+  if (
+    opts.recentStability !== null &&
+    opts.recentStability.sampleCount >= 2 &&
+    opts.recentStability.severeInstability &&
+    opts.recentStability.avgPcmBufferedMs <= lowPcmHoldMaxMs &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_UNDERTARGET_MIN
+  ) {
+    return true;
+  }
+  if (!opts.sourceRecentlyPushed) return false;
+  return opts.playoutStarvationSeverity === 'strong';
+}
+
+function computeN1SevereRebuildLowPcmHoldMaxMs(targetMs?: number): number {
+  const normalizedTargetMs =
+    Number.isFinite(targetMs) && targetMs !== undefined
+      ? Math.max(ADAPTIVE_BASE_TARGET_MS, targetMs)
+      : ADAPTIVE_BASE_TARGET_MS;
+  return Math.max(
+    GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS,
+    Math.min(
+      GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_PCM_CEIL_MS,
+      normalizedTargetMs * GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_TARGET_RATIO
+    )
   );
 }
 
@@ -1165,6 +1191,15 @@ function incrementSourceTickCounter(
   map.set(sourceAddr, (map.get(sourceAddr) ?? 0) + delta);
 }
 
+function setSourceTickMaxCounter(
+  map: Map<string, number>,
+  sourceAddr: string,
+  value: number
+): void {
+  const safeValue = Math.max(0, Number.isFinite(value) ? value : 0);
+  map.set(sourceAddr, Math.max(map.get(sourceAddr) ?? 0, safeValue));
+}
+
 function summarizeSourceTickCounters(map: ReadonlyMap<string, number>): {
   total: number;
   dominantShare: number;
@@ -1182,6 +1217,22 @@ function summarizeSourceTickCounters(map: ReadonlyMap<string, number>): {
     }));
   const dominantShare = total > 0 ? topSources[0]?.share ?? 0 : 0;
   return { total, dominantShare, topSources };
+}
+
+function summarizeSourceTickMaxCounters(map: ReadonlyMap<string, number>): {
+  max: number;
+  topSources: Array<{ sourceAddr: string; max: number }>;
+} {
+  const entries = [...map.entries()].filter(([, max]) => max > 0);
+  const max = entries.reduce((currentMax, [, value]) => Math.max(currentMax, value), 0);
+  const topSources = entries
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([sourceAddr, value]) => ({
+      sourceAddr: truncateGcallDiagAddress(sourceAddr),
+      max: value,
+    }));
+  return { max, topSources };
 }
 
 function incrementLatencyTickCounter(
@@ -1325,7 +1376,6 @@ const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS = -20;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_MS = 140;
-const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_OPUS_MS = 60;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS =
   OPUS_FRAME_DURATION_MS * 5;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_RATIO = 0.75;
@@ -1333,6 +1383,9 @@ const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_CEIL_MS =
   OPUS_FRAME_DURATION_MS * 8;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS = 24;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_UNDERTARGET_MIN = 0.9;
+const GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_PCM_CEIL_MS = 72;
+const GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_TARGET_RATIO = 0.45;
+const GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_STEADY_STARVED_HOLD_OPUS_MAX_MS = 80;
 const GCALL_N1_STEADY_STARVED_HOLD_OPUS_FALLBACK_MS =
   OPUS_FRAME_DURATION_MS * 2;
@@ -1353,6 +1406,7 @@ const GCALL_N1_SEVERE_REBUILD_DEADZONE_RESET_COOLDOWN_MS = 4_000;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_REPREROLL_MS = 280;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX = 2;
+const GCALL_N1_SEVERE_REBUILD_DEADZONE_DRIP_MIN_MS = 3_000;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_PCM_MAX_MS = 4;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_UNDERTARGET_MIN = 0.95;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_DELTA_MAX_MS = -80;
@@ -1654,10 +1708,24 @@ export function shouldForceN1SevereRebuildReadyEscape(opts: {
     opts.severeForcedReleaseRebuildActiveForMs <
       GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS ||
     !opts.sourceRecentlyPushed ||
-    opts.hasReadyFrame ||
-    opts.bufferedFrames <= 0 ||
-    opts.bufferedFrames < minEscapeFrames
+    opts.bufferedFrames <= 0
   ) {
+    return false;
+  }
+  const exactTwoFrameDeadzone =
+    opts.severeForcedReleaseRebuildActiveForMs >=
+      GCALL_N1_SEVERE_REBUILD_DEADZONE_DRIP_MIN_MS &&
+    opts.bufferedFrames === GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX &&
+    opts.recentStability !== null &&
+    opts.recentStability.sampleCount >= 2 &&
+    opts.recentStability.avgPcmBufferedMs <=
+      GCALL_N1_SEVERE_REBUILD_DEADZONE_PCM_MAX_MS &&
+    opts.recentStability.playoutUnderTargetFraction >=
+      GCALL_N1_SEVERE_REBUILD_DEADZONE_UNDERTARGET_MIN;
+  if (exactTwoFrameDeadzone) {
+    return true;
+  }
+  if (opts.hasReadyFrame || opts.bufferedFrames < minEscapeFrames) {
     return false;
   }
   if (
@@ -3921,8 +3989,25 @@ export function useGroupVoiceCall(uiActive = false) {
   const pendingDecryptPreOverloadActiveRef = useRef(false);
   const lastPendingDecryptPressureDiagAtRef = useRef(0);
   const lastMultiSourceLoadBalanceDiagAtRef = useRef(0);
+  const lastJitterPushStatsDiagAtRef = useRef(0);
   const ingressPacketsBySourceTickRef = useRef<Map<string, number>>(new Map());
   const decodeFramesBySourceTickRef = useRef<Map<string, number>>(new Map());
+  const jitterPushAttemptedBySourceTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const jitterPushAcceptedBySourceTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const jitterPushStaleBySourceTickRef = useRef<Map<string, number>>(new Map());
+  const jitterPushDuplicateBySourceTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const jitterPushTrimmedBySourceTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  const jitterPushDepthHighWaterBySourceTickRef = useRef<Map<string, number>>(
+    new Map()
+  );
   const pendingDecryptQueuedByIngressTickRef = useRef<Map<string, number>>(
     new Map()
   );
@@ -7195,6 +7280,78 @@ export function useGroupVoiceCall(uiActive = false) {
         decodeFramesBySourceTickRef.current
       );
       decodeFramesBySourceTickRef.current.clear();
+      const jitterPushAttemptedBySource = summarizeSourceTickCounters(
+        jitterPushAttemptedBySourceTickRef.current
+      );
+      jitterPushAttemptedBySourceTickRef.current.clear();
+      const jitterPushAcceptedBySource = summarizeSourceTickCounters(
+        jitterPushAcceptedBySourceTickRef.current
+      );
+      jitterPushAcceptedBySourceTickRef.current.clear();
+      const jitterPushStaleBySource = summarizeSourceTickCounters(
+        jitterPushStaleBySourceTickRef.current
+      );
+      jitterPushStaleBySourceTickRef.current.clear();
+      const jitterPushDuplicateBySource = summarizeSourceTickCounters(
+        jitterPushDuplicateBySourceTickRef.current
+      );
+      jitterPushDuplicateBySourceTickRef.current.clear();
+      const jitterPushTrimmedBySource = summarizeSourceTickCounters(
+        jitterPushTrimmedBySourceTickRef.current
+      );
+      jitterPushTrimmedBySourceTickRef.current.clear();
+      const jitterPushDepthHighWaterBySource = summarizeSourceTickMaxCounters(
+        jitterPushDepthHighWaterBySourceTickRef.current
+      );
+      jitterPushDepthHighWaterBySourceTickRef.current.clear();
+      const jitterPushRejectedTotal =
+        jitterPushStaleBySource.total + jitterPushDuplicateBySource.total;
+      const shouldLogJitterPushStats =
+        jitterPushAttemptedBySource.total > 0 &&
+        wallNow - lastJitterPushStatsDiagAtRef.current >= 1_000 &&
+        (jitterPushRejectedTotal > 0 ||
+          jitterPushTrimmedBySource.total > 0 ||
+          (activeSourceCount === 1 &&
+            singleRemoteStarvationSeverity === 'strong'));
+      if (shouldLogJitterPushStats) {
+        lastJitterPushStatsDiagAtRef.current = wallNow;
+        const singleRemoteDepthFrames =
+          singleRemoteSourceAddr !== null
+            ? (jitterMapRef.current.get(singleRemoteSourceAddr)?.getBufferedFrames() ??
+              null)
+            : null;
+        gcallDiagnosticsPush('info', '[GCall] jitterPushStats', {
+          attemptedBySource: jitterPushAttemptedBySource.topSources,
+          acceptedBySource: jitterPushAcceptedBySource.topSources,
+          staleBySource: jitterPushStaleBySource.topSources,
+          duplicateBySource: jitterPushDuplicateBySource.topSources,
+          rejectedTotal: jitterPushRejectedTotal,
+          trimmedBySource: jitterPushTrimmedBySource.topSources,
+          depthHighWaterBySource: jitterPushDepthHighWaterBySource.topSources,
+          depthHighWaterMax: jitterPushDepthHighWaterBySource.max,
+          singleRemoteSourceAddr:
+            singleRemoteSourceAddr !== null
+              ? truncateGcallDiagAddress(singleRemoteSourceAddr)
+              : null,
+          singleRemoteDepthFrames,
+          singleRemoteDepthMs:
+            singleRemoteDepthFrames !== null
+              ? singleRemoteDepthFrames * OPUS_FRAME_DURATION_MS
+              : null,
+          adaptiveNetworkMode: snap.adaptiveNetworkMode,
+          starvationSeverity: singleRemoteStarvationSeverity,
+          avgPcmBufferedMs:
+            singleRemoteRecentStability !== null
+              ? Math.round(singleRemoteRecentStability.avgPcmBufferedMs)
+              : null,
+          playoutUnderTargetFraction:
+            singleRemoteRecentStability !== null
+              ? Math.round(
+                  singleRemoteRecentStability.playoutUnderTargetFraction * 1000
+                ) / 1000
+              : null,
+        });
+      }
       const pendingQueuedByIngress = summarizeSourceTickCounters(
         pendingDecryptQueuedByIngressTickRef.current
       );
@@ -8143,9 +8300,61 @@ export function useGroupVoiceCall(uiActive = false) {
         updateMetricResourceCounts();
       }
       const beforeFrames = jb.getBufferedFrames();
+      let pushAccepted = 0;
+      let pushStale = 0;
+      let pushDuplicate = 0;
+      let pushTrimmed = 0;
+      let pushDepthHighWater = beforeFrames;
       for (const decoded of decodedList) {
-        jb.push(decoded.seq, decoded.opusFrame);
+        const pushResult = jb.push(decoded.seq, decoded.opusFrame);
+        pushDepthHighWater = Math.max(pushDepthHighWater, pushResult.depth);
+        pushTrimmed += pushResult.trimmed;
+        if (pushResult.status === 'accepted') {
+          pushAccepted++;
+        } else if (pushResult.status === 'stale') {
+          pushStale++;
+        } else {
+          pushDuplicate++;
+        }
       }
+      incrementSourceTickCounter(
+        jitterPushAttemptedBySourceTickRef.current,
+        sourceAddr,
+        decodedList.length
+      );
+      if (pushAccepted > 0) {
+        incrementSourceTickCounter(
+          jitterPushAcceptedBySourceTickRef.current,
+          sourceAddr,
+          pushAccepted
+        );
+      }
+      if (pushStale > 0) {
+        incrementSourceTickCounter(
+          jitterPushStaleBySourceTickRef.current,
+          sourceAddr,
+          pushStale
+        );
+      }
+      if (pushDuplicate > 0) {
+        incrementSourceTickCounter(
+          jitterPushDuplicateBySourceTickRef.current,
+          sourceAddr,
+          pushDuplicate
+        );
+      }
+      if (pushTrimmed > 0) {
+        incrementSourceTickCounter(
+          jitterPushTrimmedBySourceTickRef.current,
+          sourceAddr,
+          pushTrimmed
+        );
+      }
+      setSourceTickMaxCounter(
+        jitterPushDepthHighWaterBySourceTickRef.current,
+        sourceAddr,
+        pushDepthHighWater
+      );
       const perfNow = performance.now();
       lastJitterOpusPushPerfRef.current.set(sourceAddr, perfNow);
       if (
@@ -11264,6 +11473,7 @@ export function useGroupVoiceCall(uiActive = false) {
               n1SevereForcedReleaseRebuildActive,
             sourceRecentlyPushed,
             opusBufferedMs: opusMsPre,
+            targetMs: smoothedTarget,
             recentStability: n1RecentStability,
             playoutStarvationSeverity: n1PlayoutStarvationSeverity,
           })
@@ -13711,8 +13921,15 @@ export function useGroupVoiceCall(uiActive = false) {
         previousDepthForOverloadRef.current = 0;
         lastPendingDecryptPreOverloadActiveRef.current = false;
         lastMultiSourceLoadBalanceDiagAtRef.current = 0;
+        lastJitterPushStatsDiagAtRef.current = 0;
         ingressPacketsBySourceTickRef.current.clear();
         decodeFramesBySourceTickRef.current.clear();
+        jitterPushAttemptedBySourceTickRef.current.clear();
+        jitterPushAcceptedBySourceTickRef.current.clear();
+        jitterPushStaleBySourceTickRef.current.clear();
+        jitterPushDuplicateBySourceTickRef.current.clear();
+        jitterPushTrimmedBySourceTickRef.current.clear();
+        jitterPushDepthHighWaterBySourceTickRef.current.clear();
         tickBudgetBreachesRef.current.length = 0;
         tickBudgetBreachesMonotonicRef.current = 0;
         lastTickBudgetBreachesAtWindowEmitRef.current = 0;
@@ -14287,8 +14504,15 @@ export function useGroupVoiceCall(uiActive = false) {
       pendingDecryptPreOverloadActiveRef.current = false;
       lastPendingDecryptPressureDiagAtRef.current = 0;
       lastMultiSourceLoadBalanceDiagAtRef.current = 0;
+      lastJitterPushStatsDiagAtRef.current = 0;
       ingressPacketsBySourceTickRef.current.clear();
       decodeFramesBySourceTickRef.current.clear();
+      jitterPushAttemptedBySourceTickRef.current.clear();
+      jitterPushAcceptedBySourceTickRef.current.clear();
+      jitterPushStaleBySourceTickRef.current.clear();
+      jitterPushDuplicateBySourceTickRef.current.clear();
+      jitterPushTrimmedBySourceTickRef.current.clear();
+      jitterPushDepthHighWaterBySourceTickRef.current.clear();
       pendingDecryptQueuedByIngressTickRef.current.clear();
       pendingDecryptCompletedByIngressTickRef.current.clear();
       pendingDecryptDropsByIngressTickRef.current.clear();

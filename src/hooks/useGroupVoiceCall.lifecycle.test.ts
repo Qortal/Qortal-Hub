@@ -715,7 +715,7 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
-  it('extends severe rebuild accumulation only for live one-on-one PCM dead zones', () => {
+  it('extends severe rebuild accumulation for live one-on-one PCM collapses', () => {
     expect(
       shouldExtendN1SevereRebuildAccumulation({
         recoverySingleRemote: true,
@@ -740,7 +740,8 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         prerollActive: false,
         severeForcedReleaseRebuildActive: true,
         sourceRecentlyPushed: true,
-        opusBufferedMs: 80,
+        opusBufferedMs: 160,
+        targetMs: 185,
         recentStability: {
           sampleCount: 4,
           avgPcmBufferedMs: 0.021,
@@ -763,9 +764,97 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         playoutStarvationSeverity: 'strong',
       })
     ).toBe(false);
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: false,
+        opusBufferedMs: 120,
+        targetMs: 185,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(true);
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: false,
+        opusBufferedMs: 120,
+        targetMs: 185,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 60,
+          playoutUnderTargetFraction: 0.8,
+          underrunCount: 2,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(true);
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: false,
+        opusBufferedMs: 120,
+        targetMs: 185,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 90,
+          playoutUnderTargetFraction: 0.8,
+          underrunCount: 2,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(false);
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: false,
+        opusBufferedMs: 120,
+        targetMs: 185,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 60,
+          playoutUnderTargetFraction: 0.55,
+          underrunCount: 2,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'mild',
+      })
+    ).toBe(false);
+    expect(
+      shouldExtendN1SevereRebuildAccumulation({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        sourceRecentlyPushed: true,
+        opusBufferedMs: 120,
+        targetMs: 185,
+        recentStability: null,
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
   });
 
-  it('does not force-prime a live severe rebuild while it is still stuck at two frames', () => {
+  it('waits before forcing a live severe rebuild out of a two-frame deadlock', () => {
     expect(
       shouldForceN1SevereRebuildReadyEscape({
         recoverySingleRemote: true,
@@ -787,6 +876,27 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         playoutStarvationSeverity: 'strong',
       })
     ).toBe(false);
+    expect(
+      shouldForceN1SevereRebuildReadyEscape({
+        recoverySingleRemote: true,
+        prerollActive: false,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 4_000,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        bufferedFrames: 2,
+        targetMs: 185,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 0.021,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 12,
+          stable: false,
+          severeInstability: true,
+        },
+        playoutStarvationSeverity: 'strong',
+      })
+    ).toBe(true);
     expect(
       shouldForceN1SevereRebuildReadyEscape({
         recoverySingleRemote: true,

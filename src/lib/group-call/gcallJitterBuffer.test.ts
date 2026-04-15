@@ -2,6 +2,39 @@ import { describe, expect, it } from 'vitest';
 import { JitterBuffer } from './gcallJitterBuffer';
 
 describe('gcallJitterBuffer', () => {
+  it('reports accepted, duplicate, stale, and trimmed push results', () => {
+    const jb = new JitterBuffer();
+
+    expect(jb.push(1, new Uint8Array([1]))).toEqual({
+      status: 'accepted',
+      depth: 1,
+      trimmed: 0,
+    });
+    expect(jb.push(1, new Uint8Array([1]))).toEqual({
+      status: 'duplicate',
+      depth: 1,
+      trimmed: 0,
+    });
+
+    jb.forcePrimeForRecoveryEscape();
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+    expect(jb.push(1, new Uint8Array([1]))).toEqual({
+      status: 'stale',
+      depth: 0,
+      trimmed: 0,
+    });
+
+    for (let seq = 2; seq <= 14; seq++) {
+      jb.push(seq, new Uint8Array([seq]));
+    }
+    expect(jb.getBufferedFrames()).toBe(12);
+    expect(jb.push(15, new Uint8Array([15]))).toEqual({
+      status: 'accepted',
+      depth: 12,
+      trimmed: 1,
+    });
+  });
+
   it('can force-prime a live one-frame buffer for exact-1-remote recovery escape', () => {
     const jb = new JitterBuffer();
     jb.push(1, new Uint8Array([1, 2, 3]));

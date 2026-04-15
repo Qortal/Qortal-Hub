@@ -13,6 +13,14 @@ interface JitterEntry {
   receivedAt: number;
 }
 
+export type JitterPushStatus = 'accepted' | 'stale' | 'duplicate';
+
+export interface JitterPushResult {
+  status: JitterPushStatus;
+  depth: number;
+  trimmed: number;
+}
+
 export function computeJitterReadyThresholdFrames(opts: {
   primed: boolean;
   jitterStartBufferSize: number;
@@ -105,13 +113,17 @@ export class JitterBuffer {
     return m;
   }
 
-  push(seq: number, opusFrame: Uint8Array): void {
+  push(seq: number, opusFrame: Uint8Array): JitterPushResult {
     this.checkSoftUnprime();
-    if (seq <= this.lastPlayedSeq) return; // already played or older
+    if (seq <= this.lastPlayedSeq) {
+      return { status: 'stale', depth: this.entries.length, trimmed: 0 };
+    }
     let insertAt = this.entries.length;
     while (insertAt > 0) {
       const prev = this.entries[insertAt - 1];
-      if (prev.seq === seq) return; // duplicate
+      if (prev.seq === seq) {
+        return { status: 'duplicate', depth: this.entries.length, trimmed: 0 };
+      }
       if (prev.seq < seq) break;
       insertAt--;
     }
@@ -122,9 +134,12 @@ export class JitterBuffer {
     });
     this.emptySinceMs = null;
     const maxEntries = this.jitterBufferSize * 2;
+    let trimmed = 0;
     if (this.entries.length > maxEntries) {
-      this.entries.splice(0, this.entries.length - maxEntries);
+      trimmed = this.entries.length - maxEntries;
+      this.entries.splice(0, trimmed);
     }
+    return { status: 'accepted', depth: this.entries.length, trimmed };
   }
 
   /** Raw (mod 65536) seq gap before the frame just popped; 0 if first packet or no prior seq. */
