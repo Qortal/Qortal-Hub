@@ -340,11 +340,11 @@ export const DesktopSideBar = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: theme.palette.background.default,
+            backgroundColor: theme.palette.background.paper,
             borderRight: `1px solid ${theme.palette.border.subtle}`,
             boxShadow:
               theme.palette.mode === 'dark'
-                ? '4px 0 10px rgba(0,0,0,0.1)'
+                ? '4px 0 14px rgba(2, 8, 18, 0.16)'
                 : '3px 0 10px rgba(0,0,0,0.05)',
             transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
             transition: `transform ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,

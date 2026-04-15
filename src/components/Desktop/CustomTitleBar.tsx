@@ -158,10 +158,18 @@ export function CustomTitleBar(props?: {
   }, [platform, refreshMaximized]);
 
   const bg =
-    theme.palette.mode === 'dark' ? '#27282c' : theme.palette.background.paper;
-  const borderColor = theme.palette.divider;
+    theme.palette.mode === 'dark'
+      ? 'rgba(31, 36, 44, 0.96)'
+      : theme.palette.background.paper;
+  const borderColor =
+    theme.palette.mode === 'dark'
+      ? theme.palette.border.subtle
+      : theme.palette.divider;
   const controlColor = theme.palette.text.secondary;
-  const controlHover = theme.palette.action.hover;
+  const controlHover =
+    theme.palette.mode === 'dark'
+      ? theme.palette.background.elevated
+      : theme.palette.action.hover;
 
   const macColors = {
     close: '#ff5f57',

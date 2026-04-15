@@ -14,17 +14,25 @@ export const darkThemeOptions: ThemeOptions = {
       main: 'rgb(69, 173, 255)',
     },
     background: {
-      default: 'rgb(49, 51, 56)',
-      surface: 'rgb(58, 60, 65)',
-      paper: 'rgb(77, 80, 85)',
+      default: 'rgb(9, 11, 15)',
+      surface: 'rgb(27, 31, 39)',
+      paper: 'rgb(34, 39, 48)',
+      elevated: 'rgb(44, 50, 61)',
     },
     text: {
-      primary: 'rgb(255, 255, 255)',
-      secondary: 'rgb(179, 179, 179)',
+      primary: 'rgb(244, 247, 251)',
+      secondary: 'rgb(153, 160, 172)',
     },
+    divider: 'rgba(255, 255, 255, 0.11)',
     border: {
-      main: 'rgba(255, 255, 255, 0.12)',
-      subtle: 'rgba(255, 255, 255, 0.08)',
+      main: 'rgba(255, 255, 255, 0.16)',
+      subtle: 'rgba(255, 255, 255, 0.09)',
+    },
+    action: {
+      hover: 'rgba(255, 255, 255, 0.1)',
+      selected: 'rgba(100, 155, 240, 0.18)',
+      focus: 'rgba(100, 155, 240, 0.22)',
+      active: 'rgba(236, 243, 255, 0.86)',
     },
     other: {
       positive: 'rgb(94, 176, 73)',
@@ -39,11 +47,11 @@ export const darkThemeOptions: ThemeOptions = {
         root: {
           boxShadow: 'none',
           borderRadius: '8px',
-          transition: 'all 0.3s ease-in-out',
+          border: '1px solid rgba(255, 255, 255, 0.09)',
+          transition: 'background-color 0.2s ease, border-color 0.2s ease',
           '&:hover': {
             cursor: 'pointer',
-            boxShadow:
-              ' 0px 3px 4px 0px hsla(0,0%,0%,0.14), 0px 3px 3px -2px hsla(0,0%,0%,0.12), 0px 1px 8px 0px hsla(0,0%,0%,0.2);',
+            borderColor: 'rgba(255, 255, 255, 0.18)',
           },
         },
       },
@@ -52,16 +60,17 @@ export const darkThemeOptions: ThemeOptions = {
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
-          '--Mail-Background': 'rgba(6, 10, 30, 1)',
-          '--bg-primary': 'rgba(6, 10, 30, 1)',
-          '--bg-2': 'rgb(39, 40, 44)',
+          '--Mail-Background': 'rgb(9, 11, 15)',
+          '--bg-primary': 'rgb(9, 11, 15)',
+          '--bg-2': 'rgb(27, 31, 39)',
           '--primary-main': theme.palette.primary.main,
           '--text-primary': theme.palette.text.primary,
           '--text-secondary': theme.palette.text.secondary,
           '--background-default': theme.palette.background.default,
           '--background-paper': theme.palette.background.paper,
           '--background-surface': theme.palette.background.surface,
-          '--videoplayer-bg': 'rgba(31, 32, 35, 1)',
+          '--background-elevated': theme.palette.background.elevated,
+          '--videoplayer-bg': 'rgb(18, 21, 27)',
         },
         ...getCommonGlobalStyles(theme),
       }),

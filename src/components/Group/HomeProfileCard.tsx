@@ -175,6 +175,7 @@ export const HomeProfileCard = () => {
       sx={{
         alignItems: 'center',
         bgcolor: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.border.subtle}`,
         borderRadius: '12px',
         display: 'flex',
         gap: '16px',
@@ -272,7 +273,8 @@ export const HomeProfileCard = () => {
             onClick={handleCopyAddress}
             sx={{
               alignItems: 'center',
-              bgcolor: theme.palette.background.default,
+              bgcolor: theme.palette.background.surface,
+              border: `1px solid ${theme.palette.border.subtle}`,
               borderRadius: '8px',
               cursor: 'pointer',
               display: 'flex',
@@ -281,7 +283,10 @@ export const HomeProfileCard = () => {
               maxWidth: '360px',
               padding: '8px 12px',
               width: '100%',
-              '&:hover': { bgcolor: theme.palette.action.hover },
+              '&:hover': {
+                bgcolor: theme.palette.background.elevated,
+                borderColor: theme.palette.border.main,
+              },
             }}
           >
             <Typography

@@ -77,7 +77,7 @@ export function AuthenticatedShell({
         '&::before': {
           background:
             theme.palette.mode === 'dark'
-              ? 'linear-gradient(to bottom, rgba(16, 18, 22, 0.16), rgba(16, 18, 22, 0.09))'
+              ? 'linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(9, 11, 15, 0.02))'
               : 'linear-gradient(to bottom, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.08))',
           content: '""',
           inset: 0,

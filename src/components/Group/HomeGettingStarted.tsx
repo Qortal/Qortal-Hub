@@ -206,6 +206,7 @@ export const HomeGettingStarted = ({
       <Box
         sx={{
           bgcolor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.border.subtle}`,
           borderRadius: '12px',
           display: 'flex',
           flexDirection: 'column',
@@ -248,12 +249,18 @@ export const HomeGettingStarted = ({
             key={step.key}
             sx={{
               alignItems: 'center',
-              bgcolor: theme.palette.background.default,
+              bgcolor: theme.palette.background.surface,
+              border: `1px solid ${theme.palette.border.subtle}`,
               borderRadius: '8px',
               display: 'flex',
               gap: '12px',
               justifyContent: 'space-between',
               padding: '10px 14px',
+              transition: 'background-color 160ms ease, border-color 160ms ease',
+              '&:hover': {
+                backgroundColor: theme.palette.background.elevated,
+                borderColor: theme.palette.border.main,
+              },
             }}
           >
             {/* Step number or check */}
@@ -311,10 +318,20 @@ export const HomeGettingStarted = ({
                 size="small"
                 variant={step.done ? 'text' : 'outlined'}
                 sx={{
+                  borderColor: theme.palette.border.main,
                   flexShrink: 0,
                   fontSize: '0.78rem',
                   minWidth: '60px',
                   opacity: step.done ? 0.5 : 1,
+                  ...(step.done
+                    ? {}
+                    : {
+                        backgroundColor: theme.palette.background.elevated,
+                        '&:hover': {
+                          backgroundColor: theme.palette.background.elevated,
+                          borderColor: theme.palette.primary.light,
+                        },
+                      }),
                 }}
               >
                 {step.done ? t('tutorial:home.done') : t('tutorial:home.open')}

@@ -20,6 +20,7 @@ export const HomeFeaturedApps = () => {
     <Box
       sx={{
         bgcolor: theme.palette.background.paper,
+        border: `1px solid ${theme.palette.border.subtle}`,
         borderRadius: '12px',
         display: 'flex',
         flexDirection: 'column',
@@ -94,7 +95,8 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
       onClick={() => openApp(appName)}
       sx={{
         alignItems: 'center',
-        bgcolor: theme.palette.background.default,
+        bgcolor: theme.palette.background.surface,
+        border: `1px solid ${theme.palette.border.subtle}`,
         borderRadius: '10px',
         display: 'flex',
         flexDirection: 'column',
@@ -102,7 +104,10 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
         gap: '8px',
         padding: '14px 10px',
         width: '120px',
-        '&:hover': { bgcolor: theme.palette.action.hover },
+        '&:hover': {
+          bgcolor: theme.palette.background.elevated,
+          borderColor: theme.palette.border.main,
+        },
       }}
     >
       <Avatar

@@ -15,6 +15,8 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   },
 
   body: {
+    backgroundColor: theme.palette.background.default,
+    color: theme.palette.text.primary,
     padding: 0,
     margin: 0,
     wordBreak: 'break-word',
@@ -34,7 +36,7 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   },
 
   '::-webkit-scrollbar-thumb': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.2)',
     borderRadius: '5px',
     border: '2px solid transparent',
     backgroundClip: 'content-box',
@@ -42,11 +44,11 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   },
 
   '::-webkit-scrollbar-thumb:hover': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.35)' : 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.3)',
   },
 
   '::-webkit-scrollbar-thumb:active': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.38)' : 'rgba(0, 0, 0, 0.4)',
   },
 });
 

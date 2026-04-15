@@ -185,27 +185,27 @@ export function GlobalQortalNavBar({
   const canRefresh = !!selectedTab?.tabId && desktopViewMode === 'apps';
   const chromeBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(39, 40, 44, 0.96)'
+      ? 'rgba(31, 36, 44, 0.94)'
       : 'rgba(206, 209, 216, 0.96)';
   const inputBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(58, 60, 65, 0.88)'
+      ? 'rgba(27, 31, 39, 0.96)'
       : 'rgba(255, 255, 255, 0.72)';
   const inputHoverBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(62, 78, 108, 0.96)'
+      ? 'rgba(44, 50, 61, 0.98)'
       : 'rgba(194, 216, 242, 0.94)';
   const inputFocusBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(68, 71, 77, 0.94)'
+      ? 'rgba(44, 50, 61, 1)'
       : 'rgba(255, 255, 255, 0.88)';
   const hoverBorderColor =
     theme.palette.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.16)'
+      ? theme.palette.border.main
       : 'rgba(0, 0, 0, 0.14)';
   const focusBorderColor =
     theme.palette.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.24)'
+      ? 'rgba(130, 185, 255, 0.28)'
       : 'rgba(0, 0, 0, 0.2)';
   const inputHoverShadow =
     'none';
@@ -215,7 +215,7 @@ export function GlobalQortalNavBar({
       : 'none';
   const buttonHoverBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(255, 255, 255, 0.06)'
+      ? theme.palette.action.hover
       : 'rgba(0, 0, 0, 0.05)';
   const inputTextDefaultColor = theme.palette.text.secondary;
   const inputTextHoverColor =
