@@ -23,19 +23,31 @@ export const extractComponents = (url: string) => {
   // If nothing meaningful left (e.g., "qortal://", "qortal:////"), return null
   if (!/[^/]/.test(url)) return null;
 
-  // Case 1: url contains a slash → already service-based
+  // Case 1: url contains a slash -> already service-based
   if (url.includes('/')) {
-    const parts = url.split('/');
+    // Identifier is part of QDN resource identity when present. Keep older
+    // links without identifier working, and route future reopen flows here.
+    const [basePart, queryString = ''] = url.split('?');
+    const parts = basePart.split('/');
     const service = parts[0].toUpperCase();
     parts.shift();
     const name = parts[0];
     parts.shift();
-    let identifier;
-    const path = parts.join('/');
+
+    const params = new URLSearchParams(queryString);
+    const identifier = params.get('identifier') || undefined;
+    if (identifier) {
+      params.delete('identifier');
+    }
+
+    const remainingQuery = params.toString();
+    const basePath = parts.join('/');
+    const path = `${basePath}${remainingQuery ? `?${remainingQuery}` : ''}`;
+
     return { service, name, identifier, path };
   }
 
-  // Case 2: url is just a username → default to WEBSITE
+  // Case 2: url is just a username -> default to WEBSITE
   return {
     service: 'WEBSITE',
     name: url,
@@ -78,7 +90,7 @@ function processText(input) {
 }
 
 const linkify = (text) => {
-  if (!text) return ''; // Return an empty string if text is null or undefined
+  if (!text) return '';
   let textFormatted = text;
   const urlPattern = /(\bhttps?:\/\/[^\s<]+|\bwww\.[^\s<]+)/g;
   textFormatted = text.replace(urlPattern, (url) => {
@@ -158,7 +170,12 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
   const handleClickCapture = (e) => {
     if (isReply) {
       const target = e.target;
-      const isLink = target.tagName === 'A' || target.getAttribute?.('data-url') || target.closest?.('a') || target.closest?.('.qortal-link') || target.closest?.('[data-url]');
+      const isLink =
+        target.tagName === 'A' ||
+        target.getAttribute?.('data-url') ||
+        target.closest?.('a') ||
+        target.closest?.('.qortal-link') ||
+        target.closest?.('[data-url]');
       if (isLink) {
         e.preventDefault();
         e.stopPropagation();
@@ -170,7 +187,12 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
     if (isReply) {
       e.preventDefault();
       const target = e.target;
-      const isLink = target.tagName === 'A' || target.getAttribute?.('data-url') || target.closest?.('a') || target.closest?.('.qortal-link') || target.closest?.('[data-url]');
+      const isLink =
+        target.tagName === 'A' ||
+        target.getAttribute?.('data-url') ||
+        target.closest?.('a') ||
+        target.closest?.('.qortal-link') ||
+        target.closest?.('[data-url]');
       if (isLink) {
         e.stopPropagation();
         return;
@@ -195,12 +217,11 @@ export const MessageDisplay = ({ htmlContent, isReply = false }) => {
       try {
         copyUrl = copyUrl.replace(/^(qortal:\/\/)/, '');
         if (copyUrl.startsWith('use-')) {
-          // Handle the new 'use' format
           const parts = copyUrl.split('/');
           parts.shift();
-          const action = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., 'invite' from 'action-invite'
+          const action = parts.length > 0 ? parts[0].split('-')[1] : null;
           parts.shift();
-          const id = parts.length > 0 ? parts[0].split('-')[1] : null; // e.g., '321' from 'groupid-321'
+          const id = parts.length > 0 ? parts[0].split('-')[1] : null;
           if (action === 'join') {
             executeEvent('globalActionJoinGroup', { groupId: id });
             return;

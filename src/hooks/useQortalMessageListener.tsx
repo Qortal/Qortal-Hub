@@ -11,10 +11,12 @@ import { mimeToExtensionMap } from '../utils/memeTypes';
 import FileSaver from 'file-saver';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
+  QORTAL_PROTOCOL,
   TIME_HOURS_1_IN_MILLISECONDS,
   TIME_MINUTES_30_IN_MILLISECONDS,
   TIME_SECONDS_30_IN_MILLISECONDS,
 } from '../constants/constants';
+import { buildQortalResourceLink } from '../utils/qortalLink';
 
 export const saveFileInChunks = async (
   blob: Blob,
@@ -535,6 +537,7 @@ export const useQortalMessageListener = (
   isDevMode,
   appName,
   appService,
+  appIdentifier,
   skipAuth
 ) => {
   const [path, setPath] = useState('');
@@ -553,15 +556,38 @@ export const useQortalMessageListener = (
   useEffect(() => {
     if (tabId && !isNaN(history?.currentIndex)) {
       setHasSettingsChangedAtom((prev) => {
+        // Preserve identifier in qortal:// links when present because QDN
+        // targeting depends on it. Links without identifier must still work.
         return {
           ...prev,
           [tabId]: {
             hasBack: history?.currentIndex > 0,
+            hasForward:
+              history?.currentIndex >= 0 &&
+              history?.currentIndex <
+                (history?.customQDNHistoryPaths?.length || 0) - 1,
+            currentLink:
+              appService && appName
+                ? buildQortalResourceLink({
+                    service: appService,
+                    name: appName,
+                    path: path || '',
+                    identifier: appIdentifier,
+                  })
+                : '',
           },
         };
       });
     }
-  }, [history?.currentIndex, tabId]);
+  }, [
+    appIdentifier,
+    appName,
+    appService,
+    history?.currentIndex,
+    history?.customQDNHistoryPaths,
+    path,
+    tabId,
+  ]);
 
   const changeCurrentIndex = useCallback((value) => {
     setHistory((prev) => {

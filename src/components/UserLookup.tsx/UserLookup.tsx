@@ -401,6 +401,7 @@ export const UserLookup = ({ isOpenDrawerLookup, setIsOpenDrawerLookup }) => {
         bottom: 0,
         boxShadow: theme.shadows[12],
         height: `calc(100vh - ${appHeighOffsetPx})`,
+        left: 0,
         overflow: 'hidden',
         position: 'fixed',
         right: 0,

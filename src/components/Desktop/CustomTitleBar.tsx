@@ -27,12 +27,15 @@ import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
 
 const TITLE_BAR_HEIGHT = 32;
+export const APP_NAV_BAR_HEIGHT = 48;
 /** Left offset so title-bar nav aligns with content vertical line (DesktopLeftSideBar width). */
 const TITLE_BAR_LEFT_OFFSET_PX = 70;
 const TITLE_BAR_MENU_WIDTH_PX = 40;
 export const CUSTOM_TITLE_BAR_HEIGHT = TITLE_BAR_HEIGHT;
 export const appHeighOffsetPx = `${TITLE_BAR_HEIGHT}px`;
 export const appHeighOffset = TITLE_BAR_HEIGHT;
+export const appChromeOffsetPx = `${TITLE_BAR_HEIGHT + APP_NAV_BAR_HEIGHT}px`;
+export const appChromeOffset = TITLE_BAR_HEIGHT + APP_NAV_BAR_HEIGHT;
 declare global {
   interface Window {
     electronAPI?: {
@@ -618,6 +621,19 @@ export function CustomTitleBar(props?: {
     />
   );
 
+  const leftPushCluster = (children: React.ReactNode) => (
+    <Box
+      sx={{
+        alignItems: 'center',
+        display: 'flex',
+        flexShrink: 0,
+        minWidth: 0,
+      }}
+    >
+      {children}
+    </Box>
+  );
+
   return (
     <Box
       onDoubleClick={isElectron ? handleTitleBarDoubleClick : undefined}
@@ -639,13 +655,17 @@ export function CustomTitleBar(props?: {
       {isElectron &&
         (isMac ? (
           <>
-            {macWindowControls}
-            {menuButton}
-            {rightNav && (
+            {leftPushCluster(
               <>
-                {leftOffsetSpacer}
-                {titleBarVerticalDivider}
-                {leftNavSection}
+                {macWindowControls}
+                {menuButton}
+                {rightNav && (
+                  <>
+                    {leftOffsetSpacer}
+                    {titleBarVerticalDivider}
+                    {leftNavSection}
+                  </>
+                )}
               </>
             )}
             <Box sx={{ flex: 1 }} />
@@ -654,12 +674,16 @@ export function CustomTitleBar(props?: {
           </>
         ) : (
           <>
-            {menuButton}
-            {rightNav && (
+            {leftPushCluster(
               <>
-                {leftOffsetSpacer}
-                {titleBarVerticalDivider}
-                {leftNavSection}
+                {menuButton}
+                {rightNav && (
+                  <>
+                    {leftOffsetSpacer}
+                    {titleBarVerticalDivider}
+                    {leftNavSection}
+                  </>
+                )}
               </>
             )}
             <Box sx={{ flex: 1 }} />
@@ -670,7 +694,7 @@ export function CustomTitleBar(props?: {
         ))}
       {!isElectron && (
         <>
-          {rightNav && <>{leftNavSection}</>}
+          {leftPushCluster(<>{rightNav && <>{leftNavSection}</>}</>)}
           <Box sx={{ flex: 1 }} />
           {rightNavSection}
         </>

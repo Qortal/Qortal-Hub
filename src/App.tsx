@@ -105,6 +105,7 @@ import {
   CUSTOM_TITLE_BAR_HEIGHT,
 } from './components/Desktop/CustomTitleBar';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
+import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
 
 // Re-export for consumers that still import from App
 export type { extStates } from './types/app';
@@ -859,7 +860,10 @@ function App() {
     []
   );
   const onOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
-  const onOpenDrawerLookup = useCallback(() => setIsOpenDrawerLookup(true), []);
+  const onOpenDrawerLookup = useCallback(
+    () => setIsOpenDrawerLookup((prev) => !prev),
+    []
+  );
   const onOpenWalletsApp = useCallback(
     () => executeEvent('openWalletsApp', {}),
     []
@@ -1348,6 +1352,9 @@ function App() {
       }}
     >
       <CustomTitleBar rightNav={titleBarRightNav} />
+      {extState === 'authenticated' && isMainWindow && (
+        <GlobalQortalNavBar desktopViewMode={desktopViewMode} />
+      )}
 
       <Box
         sx={{

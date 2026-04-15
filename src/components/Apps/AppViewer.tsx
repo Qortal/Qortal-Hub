@@ -1,23 +1,22 @@
 import { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
-import { Box } from '@mui/material';
 import { getBaseApiReact } from '../../App';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { useFrame } from 'react-frame-component';
 import { useQortalMessageListener } from '../../hooks/useQortalMessageListener';
 import { useThemeContext } from '../Theme/ThemeContext';
 import { useTranslation } from 'react-i18next';
-import { QORTAL_PROTOCOL } from '../../constants/constants';
-import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
+import { buildQortalResourceLink } from '../../utils/qortalLink';
 
 type AppViewerProps = {
   app: any;
+  customHeight?: string;
   hide: boolean;
   isDevMode: boolean;
   skipAuth?: boolean;
 };
 
 export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
-  ({ app, hide, isDevMode, skipAuth }, iframeRef) => {
+  ({ app, customHeight, hide, isDevMode, skipAuth }, iframeRef) => {
     const { window: frameWindow } = useFrame();
     const { path, history, changeCurrentIndex, resetHistory } =
       useQortalMessageListener(
@@ -27,6 +26,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
         isDevMode,
         isDevMode ? 'devapp' : app?.name,
         app?.service,
+        app?.identifier,
         skipAuth
       );
 
@@ -133,8 +133,11 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
     const copyLinkFunc = (e) => {
       const { tabId } = e.detail;
       if (tabId === app?.tabId) {
-        let link =
-          QORTAL_PROTOCOL + app?.service + '/' + app?.name.replace(/ /g, '%20');
+        let link = buildQortalResourceLink({
+          service: app?.service,
+          name: app?.name,
+          identifier: app?.identifier,
+        });
         if (path && path.startsWith('/')) {
           link = link + removeTrailingSlash(path);
         }
@@ -325,18 +328,46 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
       }
     };
 
+    const navigateForwardAppFunc = () => {
+      navigateForwardInIframe();
+    };
+
+    useEffect(() => {
+      if (!app?.tabId) return;
+      subscribeToEvent(
+        `navigateForwardApp-${app?.tabId}`,
+        navigateForwardAppFunc
+      );
+
+      return () => {
+        unsubscribeFromEvent(
+          `navigateForwardApp-${app?.tabId}`,
+          navigateForwardAppFunc
+        );
+      };
+    }, [app?.tabId]);
+
     return (
-      <Box
-        sx={{
+      <div
+        data-app-viewer-wrapper={app?.tabId || 'active'}
+        style={{
           display: 'flex',
           flexDirection: 'column',
+          overflow: 'hidden',
+          flex: '1 1 auto',
+          minHeight: '0',
+          width: '100%',
+          alignSelf: 'stretch',
         }}
       >
         <iframe
+          data-app-viewer-inner-iframe={app?.tabId || 'active'}
           ref={iframeRef}
           style={{
-            height: `100vh`,
             border: 'none',
+            display: 'block',
+            flex: '1 1 auto',
+            minHeight: 0,
             width: '100%',
           }}
           id="browser-iframe"
@@ -344,7 +375,7 @@ export const AppViewer = forwardRef<HTMLIFrameElement, AppViewerProps>(
           sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-modals"
           allow="fullscreen; clipboard-read; clipboard-write; screen-wake-lock"
         ></iframe>
-      </Box>
+      </div>
     );
   }
 );
