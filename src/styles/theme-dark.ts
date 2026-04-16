@@ -14,22 +14,22 @@ export const darkThemeOptions: ThemeOptions = {
       main: 'rgb(69, 173, 255)',
     },
     background: {
-      default: 'rgb(9, 11, 15)',
-      surface: 'rgb(27, 31, 39)',
-      paper: 'rgb(34, 39, 48)',
-      elevated: 'rgb(44, 50, 61)',
+      default: 'rgb(10, 12, 15)',
+      surface: 'rgb(29, 32, 38)',
+      paper: 'rgb(39, 43, 50)',
+      elevated: 'rgb(48, 53, 61)',
     },
     text: {
       primary: 'rgb(244, 247, 251)',
-      secondary: 'rgb(153, 160, 172)',
+      secondary: 'rgb(159, 166, 176)',
     },
-    divider: 'rgba(255, 255, 255, 0.11)',
+    divider: 'rgba(255, 255, 255, 0.1)',
     border: {
-      main: 'rgba(255, 255, 255, 0.16)',
-      subtle: 'rgba(255, 255, 255, 0.09)',
+      main: 'rgba(255, 255, 255, 0.18)',
+      subtle: 'rgba(255, 255, 255, 0.1)',
     },
     action: {
-      hover: 'rgba(255, 255, 255, 0.1)',
+      hover: 'rgba(255, 255, 255, 0.08)',
       selected: 'rgba(100, 155, 240, 0.18)',
       focus: 'rgba(100, 155, 240, 0.22)',
       active: 'rgba(236, 243, 255, 0.86)',
@@ -45,13 +45,15 @@ export const darkThemeOptions: ThemeOptions = {
     MuiCard: {
       styleOverrides: {
         root: {
-          boxShadow: 'none',
+          boxShadow: '0 8px 18px rgba(0, 0, 0, 0.12)',
           borderRadius: '8px',
-          border: '1px solid rgba(255, 255, 255, 0.09)',
-          transition: 'background-color 0.2s ease, border-color 0.2s ease',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          transition:
+            'background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease',
           '&:hover': {
             cursor: 'pointer',
-            borderColor: 'rgba(255, 255, 255, 0.18)',
+            borderColor: 'rgba(255, 255, 255, 0.2)',
+            boxShadow: '0 10px 20px rgba(0, 0, 0, 0.14)',
           },
         },
       },

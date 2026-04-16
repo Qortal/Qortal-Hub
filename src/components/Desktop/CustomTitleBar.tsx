@@ -159,7 +159,7 @@ export function CustomTitleBar(props?: {
 
   const bg =
     theme.palette.mode === 'dark'
-      ? 'rgba(31, 36, 44, 0.96)'
+      ? 'rgba(34, 37, 43, 0.97)'
       : theme.palette.background.paper;
   const borderColor =
     theme.palette.mode === 'dark'
@@ -168,8 +168,12 @@ export function CustomTitleBar(props?: {
   const controlColor = theme.palette.text.secondary;
   const controlHover =
     theme.palette.mode === 'dark'
-      ? theme.palette.background.elevated
+      ? 'rgba(255, 255, 255, 0.09)'
       : theme.palette.action.hover;
+  const toolbarShadow =
+    theme.palette.mode === 'dark'
+      ? '0 1px 0 rgba(255,255,255,0.05), 0 10px 20px rgba(0,0,0,0.14)'
+      : '0 1px 0 rgba(15,23,42,0.06), 0 6px 14px rgba(15,23,42,0.05)';
 
   const macColors = {
     close: '#ff5f57',
@@ -651,6 +655,7 @@ export function CustomTitleBar(props?: {
         borderBottom: '1px solid',
         borderColor,
         backgroundColor: bg,
+        boxShadow: toolbarShadow,
         display: 'flex',
         flexDirection: 'row',
         height: TITLE_BAR_HEIGHT,

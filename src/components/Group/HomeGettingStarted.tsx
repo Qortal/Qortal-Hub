@@ -212,6 +212,7 @@ export const HomeGettingStarted = ({
           flexDirection: 'column',
           gap: '8px',
           padding: '16px 20px',
+          transition: 'border-color 180ms ease, background-color 180ms ease',
           width: '100%',
         }}
       >
@@ -256,10 +257,16 @@ export const HomeGettingStarted = ({
               gap: '12px',
               justifyContent: 'space-between',
               padding: '10px 14px',
-              transition: 'background-color 160ms ease, border-color 160ms ease',
+              transition:
+                'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
               '&:hover': {
                 backgroundColor: theme.palette.background.elevated,
                 borderColor: theme.palette.border.main,
+                boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}`,
+              },
+              '& button': {
+                transition:
+                  'background-color 140ms ease, border-color 140ms ease, color 140ms ease',
               },
             }}
           >
@@ -327,9 +334,11 @@ export const HomeGettingStarted = ({
                     ? {}
                     : {
                         backgroundColor: theme.palette.background.elevated,
+                        color: theme.palette.text.primary,
                         '&:hover': {
                           backgroundColor: theme.palette.background.elevated,
                           borderColor: theme.palette.primary.light,
+                          color: theme.palette.text.primary,
                         },
                       }),
                 }}

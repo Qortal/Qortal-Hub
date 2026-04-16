@@ -286,8 +286,8 @@ export const AppsHorizontalTabBar = styled(Box)(({ theme }) => ({
   alignItems: 'center',
   backgroundColor:
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.black, 0.12)
-      : alpha(theme.palette.common.white, 0.58),
+      ? alpha(theme.palette.common.white, 0.03)
+      : alpha(theme.palette.common.black, 0.03),
   borderBottom: `1px solid ${theme.palette.border.subtle}`,
   color: theme.palette.text.primary,
   display: 'flex',
@@ -300,13 +300,17 @@ export const AppsHorizontalTabBar = styled(Box)(({ theme }) => ({
   '&::before': {
     backgroundColor:
       theme.palette.mode === 'dark'
-        ? alpha(theme.palette.common.white, 0.035)
-        : alpha(theme.palette.common.black, 0.025),
+        ? alpha(theme.palette.common.white, 0.02)
+        : alpha(theme.palette.common.black, 0.018),
     content: '""',
     inset: 0,
     pointerEvents: 'none',
     position: 'absolute',
   },
+  boxShadow:
+    theme.palette.mode === 'dark'
+      ? `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.025)}`
+      : `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.35)}`,
 }));
 
 export const AppsHorizontalTabScroller = styled(Box)(({ theme }) => ({

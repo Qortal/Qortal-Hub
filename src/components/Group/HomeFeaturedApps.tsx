@@ -26,6 +26,7 @@ export const HomeFeaturedApps = () => {
         flexDirection: 'column',
         gap: '12px',
         padding: '16px 20px',
+        transition: 'border-color 180ms ease, background-color 180ms ease',
         width: '100%',
       }}
     >
@@ -103,10 +104,12 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
         flexShrink: 0,
         gap: '8px',
         padding: '14px 10px',
+        transition: 'background-color 160ms ease, border-color 160ms ease',
         width: '120px',
         '&:hover': {
           bgcolor: theme.palette.background.elevated,
           borderColor: theme.palette.border.main,
+          boxShadow: '0 6px 14px rgba(0,0,0,0.1)',
         },
       }}
     >

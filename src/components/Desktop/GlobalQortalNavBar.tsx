@@ -185,28 +185,32 @@ export function GlobalQortalNavBar({
   const canRefresh = !!selectedTab?.tabId && desktopViewMode === 'apps';
   const chromeBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(31, 36, 44, 0.94)'
-      : 'rgba(206, 209, 216, 0.96)';
+      ? 'rgba(33, 36, 42, 0.95)'
+      : 'rgba(223, 228, 235, 0.96)';
+  const navShadow =
+    theme.palette.mode === 'dark'
+      ? `inset 0 -1px 0 ${theme.palette.border.subtle}`
+      : `inset 0 -1px 0 ${theme.palette.border.subtle}`;
   const inputBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(27, 31, 39, 0.96)'
-      : 'rgba(255, 255, 255, 0.72)';
+      ? 'rgba(28, 31, 37, 0.98)'
+      : 'rgba(232, 236, 241, 0.96)';
   const inputHoverBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(44, 50, 61, 0.98)'
-      : 'rgba(194, 216, 242, 0.94)';
+      ? 'rgba(41, 45, 52, 0.99)'
+      : 'rgba(214, 220, 228, 0.98)';
   const inputFocusBackground =
     theme.palette.mode === 'dark'
-      ? 'rgba(44, 50, 61, 1)'
-      : 'rgba(255, 255, 255, 0.88)';
+      ? 'rgba(46, 51, 59, 1)'
+      : 'rgba(214, 220, 228, 1)';
   const hoverBorderColor =
     theme.palette.mode === 'dark'
       ? theme.palette.border.main
-      : 'rgba(0, 0, 0, 0.14)';
+      : theme.palette.border.main;
   const focusBorderColor =
     theme.palette.mode === 'dark'
       ? 'rgba(130, 185, 255, 0.28)'
-      : 'rgba(0, 0, 0, 0.2)';
+      : 'rgba(41, 121, 218, 0.2)';
   const inputHoverShadow =
     'none';
   const inputFocusShadow =
@@ -216,7 +220,7 @@ export function GlobalQortalNavBar({
   const buttonHoverBackground =
     theme.palette.mode === 'dark'
       ? theme.palette.action.hover
-      : 'rgba(0, 0, 0, 0.05)';
+      : theme.palette.action.hover;
   const inputTextDefaultColor = theme.palette.text.secondary;
   const inputTextHoverColor =
     theme.palette.mode === 'dark'
@@ -268,14 +272,8 @@ export function GlobalQortalNavBar({
           alignItems: 'center',
           backdropFilter: 'blur(10px)',
           backgroundColor: chromeBackground,
-          borderBottom:
-            desktopViewMode === 'apps'
-              ? '1px solid transparent'
-              : `1px solid ${theme.palette.border.subtle}`,
-          boxShadow:
-            desktopViewMode === 'apps'
-              ? `inset 0 -1px 0 ${theme.palette.border.subtle}`
-              : 'none',
+          borderBottom: `1px solid ${theme.palette.border.subtle}`,
+          boxShadow: navShadow,
           display: 'flex',
           height: `${APP_NAV_BAR_HEIGHT}px`,
           marginLeft: `${sidebarOffsetPx}px`,

@@ -99,6 +99,7 @@ const SidebarItem = ({
     },
     ...(active && {
       backgroundColor: theme.palette.action.selected,
+      boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.primary.light, 0.14)}`,
     }),
   } as const;
 
@@ -340,11 +341,14 @@ export const DesktopSideBar = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: theme.palette.background.paper,
+            backgroundColor:
+              theme.palette.mode === 'dark'
+                ? 'rgb(36, 39, 45)'
+                : theme.palette.background.paper,
             borderRight: `1px solid ${theme.palette.border.subtle}`,
             boxShadow:
               theme.palette.mode === 'dark'
-                ? '4px 0 14px rgba(2, 8, 18, 0.16)'
+                ? '4px 0 16px rgba(0, 0, 0, 0.16)'
                 : '3px 0 10px rgba(0,0,0,0.05)',
             transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
             transition: `transform ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,

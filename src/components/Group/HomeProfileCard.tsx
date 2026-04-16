@@ -181,6 +181,7 @@ export const HomeProfileCard = () => {
         gap: '16px',
         justifyContent: 'space-between',
         padding: '16px 20px',
+        transition: 'border-color 180ms ease, background-color 180ms ease',
         width: '100%',
       }}
     >
@@ -282,10 +283,12 @@ export const HomeProfileCard = () => {
               justifyContent: 'center',
               maxWidth: '360px',
               padding: '8px 12px',
+              transition: 'background-color 160ms ease, border-color 160ms ease',
               width: '100%',
               '&:hover': {
                 bgcolor: theme.palette.background.elevated,
                 borderColor: theme.palette.border.main,
+                boxShadow: `0 4px 10px rgba(0,0,0,0.08)`,
               },
             }}
           >
