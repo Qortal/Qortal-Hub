@@ -151,6 +151,7 @@ export const infoSnackGlobalAtom = atomWithReset<{
   message?: string;
   type?: string;
   duration?: number | null;
+  compact?: boolean;
 } | null>(null);
 
 // Tutorial state (reduces context re-renders for tutorial UI)

@@ -15,11 +15,11 @@ export const dashboardPanelSx = (theme: Theme) => ({
   boxShadow:
     theme.palette.mode === 'dark'
       ? '0 12px 28px rgba(0, 0, 0, 0.16)'
-      : '0 10px 22px rgba(15, 23, 42, 0.05)',
+      : '0 12px 26px rgba(72, 58, 40, 0.08)',
   backgroundImage:
     theme.palette.mode === 'dark'
       ? 'linear-gradient(180deg, #1D1F27 0%, #1B1D24 100%)'
-      : `linear-gradient(180deg, rgba(255,255,255,0.72), rgba(255,255,255,0) 24%)`,
+      : `linear-gradient(180deg, rgba(255,250,244,0.82) 0%, rgba(255,250,244,0.42) 18%, rgba(255,250,244,0.06) 42%, rgba(255,250,244,0) 58%)`,
   transition:
     'border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease',
   '&::before': {
@@ -34,12 +34,12 @@ export const dashboardPanelSx = (theme: Theme) => ({
            radial-gradient(40% 20px at 82% 0%, rgba(60, 76, 90, 0.1), transparent 80%),
            radial-gradient(54% 24px at 50% 100%, rgba(60, 76, 90, 0.08), transparent 82%),
            radial-gradient(22% 16px at 14% 100%, rgba(60, 76, 90, 0.05), transparent 82%)`
-        : `radial-gradient(34% 18px at 18% 0%, rgba(255, 255, 255, 0.24), transparent 78%),
-           radial-gradient(40% 20px at 82% 0%, rgba(86, 155, 255, 0.08), transparent 80%),
-           radial-gradient(54% 24px at 50% 100%, rgba(86, 155, 255, 0.07), transparent 82%),
-           radial-gradient(22% 16px at 14% 100%, rgba(255, 255, 255, 0.12), transparent 82%)`,
+        : `radial-gradient(34% 18px at 18% 0%, rgba(255, 248, 240, 0.11), transparent 78%),
+           radial-gradient(40% 20px at 82% 0%, rgba(109, 159, 238, 0.024), transparent 80%),
+           radial-gradient(54% 24px at 50% 100%, rgba(109, 159, 238, 0.02), transparent 82%),
+           radial-gradient(22% 16px at 14% 100%, rgba(255, 248, 240, 0.058), transparent 82%)`,
     filter: 'blur(10px)',
-    opacity: theme.palette.mode === 'dark' ? 0.92 : 0.82,
+    opacity: theme.palette.mode === 'dark' ? 0.92 : 0.42,
   },
   '&::after': {
     content: '""',
@@ -50,10 +50,10 @@ export const dashboardPanelSx = (theme: Theme) => ({
     padding: '1px',
     background: `radial-gradient(320px circle at var(--panel-mx, 50%) var(--panel-my, 50%), ${alpha(
       '#3C4C5A',
-      theme.palette.mode === 'dark' ? 0.24 : 0.16
+      theme.palette.mode === 'dark' ? 0.24 : 0.06
     )} 0%, ${alpha(
       '#3C4C5A',
-      theme.palette.mode === 'dark' ? 0.12 : 0.08
+      theme.palette.mode === 'dark' ? 0.12 : 0.022
     )} 17%, transparent 46%) border-box`,
     WebkitMask:
       'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
@@ -63,7 +63,7 @@ export const dashboardPanelSx = (theme: Theme) => ({
     transition: 'opacity 160ms ease',
     zIndex: 0,
   },
-  '& > *': {
+  '& > :not(.dashboard-panel-decoration)': {
     position: 'relative',
     zIndex: 1,
   },

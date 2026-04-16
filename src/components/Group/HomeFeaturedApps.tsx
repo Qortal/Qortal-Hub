@@ -56,6 +56,7 @@ export const HomeFeaturedApps = () => {
       onMouseLeave={handleDashboardPanelPointerLeave}
     >
       <Box
+        className="dashboard-panel-decoration"
         aria-hidden="true"
         sx={{
           position: 'absolute',
@@ -111,6 +112,7 @@ export const HomeFeaturedApps = () => {
         }}
       >
         <Box
+          className="dashboard-panel-decoration"
           aria-hidden="true"
           sx={{
             position: 'absolute',
@@ -162,20 +164,26 @@ export const HomeFeaturedApps = () => {
               lineHeight: 1,
               textDecoration: 'none',
               transition: 'color 160ms ease',
-              '&:hover': {
-                backgroundColor: 'transparent',
-                '& .featured-apps-explore': {
-                  color: theme.palette.common.white,
-                  filter: 'brightness(1.04)',
-                  textShadow:
+                '&:hover': {
+                  backgroundColor: 'transparent',
+                  '& .featured-apps-explore': {
+                  color:
                     theme.palette.mode === 'dark'
-                      ? '0 0 8px rgba(87, 170, 219, 0.22), 0 0 16px rgba(87, 170, 219, 0.08)'
-                      : '0 0 8px rgba(87, 170, 219, 0.16)',
+                      ? theme.palette.common.white
+                      : theme.palette.text.primary,
+                    filter: 'brightness(1.04)',
+                    textShadow:
+                      theme.palette.mode === 'dark'
+                        ? '0 0 8px rgba(87, 170, 219, 0.22), 0 0 16px rgba(87, 170, 219, 0.08)'
+                      : '0 0 8px rgba(87, 170, 219, 0.1)',
+                  },
+                  '& .featured-apps-all': {
+                  color:
+                    theme.palette.mode === 'dark'
+                      ? theme.palette.common.white
+                      : theme.palette.text.primary,
+                  },
                 },
-                '& .featured-apps-all': {
-                  color: theme.palette.common.white,
-                },
-              },
             }}
           >
             <Box
@@ -252,7 +260,10 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
       onClick={() => openApp(appName)}
       sx={{
         alignItems: 'center',
-        bgcolor: '#181a20',
+        bgcolor:
+          theme.palette.mode === 'dark'
+            ? '#181a20'
+            : theme.palette.background.surface,
         border: `1px solid ${theme.palette.border.subtle}`,
         borderRadius: '10px',
         display: 'flex',
@@ -268,21 +279,24 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
         boxShadow:
           theme.palette.mode === 'dark'
             ? 'inset 0 1px 0 rgba(255,255,255,0.035), inset 0 -10px 18px rgba(0,0,0,0.22)'
-            : 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -8px 14px rgba(15,23,42,0.08)',
+            : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -8px 14px rgba(15,23,42,0.06)',
         '&:hover': {
-          bgcolor: '#181a20',
+          bgcolor:
+            theme.palette.mode === 'dark'
+              ? '#181a20'
+              : theme.palette.background.paper,
           borderColor: theme.palette.border.main,
           boxShadow:
             theme.palette.mode === 'dark'
               ? 'inset 0 1px 0 rgba(255,255,255,0.04), inset 0 -10px 18px rgba(0,0,0,0.24), 0 8px 18px rgba(0,0,0,0.1)'
-              : 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -8px 14px rgba(15,23,42,0.08), 0 8px 18px rgba(0,0,0,0.1)',
+              : 'inset 0 1px 0 rgba(255,255,255,0.76), inset 0 -8px 14px rgba(15,23,42,0.07), 0 8px 18px rgba(15,23,42,0.08)',
           transform: 'translateY(-1px)',
         },
         '&:active': {
           boxShadow:
             theme.palette.mode === 'dark'
               ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -8px 14px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.1)'
-              : 'inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -8px 14px rgba(15,23,42,0.07), 0 2px 8px rgba(0,0,0,0.1)',
+              : 'inset 0 1px 0 rgba(255,255,255,0.68), inset 0 -8px 14px rgba(15,23,42,0.06), 0 2px 8px rgba(15,23,42,0.07)',
           transform: 'translateY(0)',
         },
         '&:focus-visible': {

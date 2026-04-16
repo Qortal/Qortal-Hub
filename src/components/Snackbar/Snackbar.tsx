@@ -4,25 +4,27 @@ import { useTheme } from '@mui/material/styles';
 
 const snackbarAlertSx = (theme) => ({
   width: '100%',
-  maxWidth: '420px',
+  maxWidth: '292px',
   fontFamily: 'Inter',
-  fontSize: '15px',
+  fontSize: '13px',
   fontWeight: 500,
-  borderRadius: '14px',
-  boxShadow: theme.shadows[8],
-  padding: '14px 18px',
+  borderRadius: '10px',
+  boxShadow: '0 10px 26px rgba(0,0,0,0.34)',
+  padding: '8px 12px',
   alignItems: 'center',
+  backgroundColor: '#1D1F27',
+  color: '#FFFFFF',
+  border: `1px solid ${theme.palette.border.subtle}`,
   '& .MuiAlert-icon': {
     alignItems: 'center',
-    fontSize: '22px',
+    color: '#FFFFFF',
+    fontSize: '18px',
+    marginRight: '8px',
+    padding: 0,
   },
   '& .MuiAlert-message': {
-    padding: '0 4px',
-    lineHeight: 1.4,
-  },
-  '& .MuiAlert-action': {
-    alignItems: 'center',
-    paddingLeft: 1,
+    padding: 0,
+    lineHeight: 1.25,
   },
 });
 
@@ -51,7 +53,9 @@ export const CustomizedSnackbars = ({
     <Snackbar
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       open={open}
-      autoHideDuration={info?.duration === null ? null : duration || 6000}
+      autoHideDuration={
+        info?.duration === null ? null : info?.duration ?? duration ?? 6000
+      }
       onClose={handleClose}
       sx={{
         bottom: { xs: 16, sm: 24 },
@@ -65,7 +69,7 @@ export const CustomizedSnackbars = ({
       }}
     >
       <Alert
-        onClose={handleClose}
+        onClose={undefined}
         severity={info?.type}
         variant="filled"
         sx={snackbarAlertSx(theme)}

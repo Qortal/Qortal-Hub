@@ -283,7 +283,7 @@ export function GlobalQortalNavBar({
           userSelect: 'none',
         }}
       >
-        147
+224
       </Box>
     <Box
         sx={{
