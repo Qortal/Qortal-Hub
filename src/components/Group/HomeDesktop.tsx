@@ -54,6 +54,7 @@ export const HomeDesktop = ({
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
   const name = userInfo?.name;
+  const userAddress = userInfo?.address;
 
   const [activeTab, setActiveTab] = useState<HomeTab>('user');
   const [activityTab, setActivityTab] = useState<ActivityTab>('requests');
@@ -65,6 +66,7 @@ export const HomeDesktop = ({
   const [showMostActiveGroups, setShowMostActiveGroups] = useState(
     () => localStorage.getItem(GETTING_STARTED_LS_KEY) === 'completed'
   );
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
 
@@ -87,6 +89,18 @@ export const HomeDesktop = ({
     if (name) setChecked2(true);
   }, [name]);
 
+  useEffect(() => {
+    if (!userAddress) {
+      setIsOnboardingComplete(false);
+      return;
+    }
+
+    setIsOnboardingComplete(
+      localStorage.getItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`) ===
+        'completed'
+    );
+  }, [userAddress]);
+
   const isLoaded = useMemo(() => userInfo !== null, [userInfo]);
 
   const hasDoneNameAndBalanceAndIsLoaded = useMemo(
@@ -101,7 +115,6 @@ export const HomeDesktop = ({
     setMobileViewMode,
     setSelectedGroup,
   };
-
   return (
     <LazyMotion features={domAnimation}>
       <AnimatePresence mode="wait">
@@ -131,15 +144,34 @@ export const HomeDesktop = ({
                 alignItems: 'flex-start',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '16px',
+                gap: '20px',
                 height: '100%',
-                maxWidth: '1036px',
-                padding: '0 10px',
+                maxWidth: '1320px',
+                padding: '0 20px',
                 width: '100%',
               }}
             >
-              {/* Profile card — always visible */}
-              <HomeProfileCard />
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  width: '100%',
+                }}
+              >
+                <Box
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.03em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  Hub Overview
+                </Box>
+                <HomeProfileCard />
+              </Box>
 
               {/* Tab switcher — temporarily hidden when SHOW_USER_DEVELOPER_TOGGLE is false */}
               {SHOW_USER_DEVELOPER_TOGGLE && (
@@ -193,15 +225,49 @@ export const HomeDesktop = ({
               {/* ── USER TAB ── */}
               {activeTab === 'user' && (
                 <>
-                  <HomeGettingStarted onGettingStartedComplete={() => setShowMostActiveGroups(true)} />
-                  <HomeFeaturedApps />
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gap: '20px',
+                      gridTemplateColumns: {
+                        xs: '1fr',
+                        lg: isOnboardingComplete
+                          ? 'minmax(0, 1fr)'
+                          : 'minmax(390px, 440px) minmax(0, 1fr)',
+                      },
+                      alignItems: 'start',
+                      width: '100%',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: isOnboardingComplete ? 'none' : 'block',
+                        minWidth: 0,
+                      }}
+                    >
+                      <HomeGettingStarted
+                        onGettingStartedComplete={() => {
+                          setShowMostActiveGroups(true);
+                          setIsOnboardingComplete(true);
+                        }}
+                      />
+                    </Box>
+                    <Box
+                      sx={{
+                        minWidth: 0,
+                        width: '100%',
+                      }}
+                    >
+                      <HomeFeaturedApps />
+                    </Box>
+                  </Box>
                   {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
 
                   {/* ── GROUP ACTIVITY SECTION ── */}
-                  {!isLoadingGroups && hasDoneNameAndBalanceAndIsLoaded && (
-                    <Box
+                  <Box
                       sx={{
                         bgcolor: theme.palette.background.paper,
+                        border: `1px solid ${theme.palette.border.subtle}`,
                         borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
@@ -388,7 +454,6 @@ export const HomeDesktop = ({
                         />
                       </Box>
                     </Box>
-                  )}
 
                 </>
               )}
