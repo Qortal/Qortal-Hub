@@ -1,4 +1,4 @@
-import { Box, ButtonBase, CircularProgress, IconButton, Popover, Typography, useTheme } from '@mui/material';
+import { Box, ButtonBase, CircularProgress, IconButton, Popover, Typography, useMediaQuery, useTheme } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import QrCode2Icon from '@mui/icons-material/QrCode2';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
@@ -10,8 +10,10 @@ import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
 import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
 import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
+import ComputerOutlinedIcon from '@mui/icons-material/ComputerOutlined';
 import { alpha } from '@mui/material/styles';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { balanceAtom, groupInvitesCacheAtom, joinRequestsCacheAtom, memberGroupsAtom, nodeInfosAtom, userInfoAtom } from '../../atoms/global';
 import { Spacer } from '../../common/Spacer';
@@ -31,12 +33,30 @@ import { manifestData } from '../NotAuthenticated';
 import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { dashboardPanelSx, handleDashboardPanelPointerLeave, handleDashboardPanelPointerMove } from './dashboardPanelEffects';
 import { useHandleUserInfo } from '../../hooks/useHandleUserInfo';
+import { isLocalNodeUrl } from '../../constants/constants';
+import { nodeDisplay } from '../../utils/helpers';
 
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
 
 const SHOW_USER_DEVELOPER_TOGGLE = false;
 const SHOW_MOST_ACTIVE_GROUPS = false;
+const DASHBOARD_WELCOME_PREVIEW_KEY = 'dashboardWelcomePreviewMode';
+
+// Home dashboard desktop layout invariants:
+// - Info top aligns visually with Account Overview top.
+// - Account Overview -> Featured Q-Apps gap = 20px.
+// - Info -> Wallet Activity gap = 20px.
+// - Info collapsed height stays fixed to preserve spacing and overlay behavior.
+const HOME_DASHBOARD_VERTICAL_GAP_PX = 20;
+// Right rail is offset to visually align Info with Account Overview.
+// The left column includes the "Qortal Hub" eyebrow label above Account Overview,
+// while the right column starts directly with the rail cards, so this offset
+// compensates for that extra left-side content. The alignment is visual, not structural.
+const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 38;
+const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 321;
+const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 120;
+const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 160;
 
 const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx = undefined }) => (
   <Box sx={{ ...dashboardPanelSx(theme), borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', width: '100%', ...sx }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
@@ -48,11 +68,205 @@ const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx
 const sepSx = (theme) => ({ borderBottom: `1px solid ${theme.palette.border.subtle}` });
 
 const WalletActionButton = ({ icon, label, onClick, theme }) => (
-  <ButtonBase onClick={onClick} sx={{ alignItems: 'center', bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '10px', display: 'flex', gap: '9px', height: '44px', justifyContent: 'center', px: 1.4, transition: 'background-color 140ms ease, border-color 140ms ease, transform 120ms ease', width: '100%', '&:hover': { bgcolor: theme.palette.background.elevated, borderColor: theme.palette.border.main, transform: 'translateY(-1px)' }, '&:active': { transform: 'translateY(0)' } }}>
+  <ButtonBase onClick={onClick} sx={{ alignItems: 'center', bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '10px', display: 'flex', gap: '9px', height: '46px', justifyContent: 'center', px: 1.5, transition: 'background-color 140ms ease, border-color 140ms ease, transform 120ms ease', width: '100%', '&:hover': { bgcolor: theme.palette.background.elevated, borderColor: theme.palette.border.main, transform: 'translateY(-1px)' }, '&:active': { transform: 'translateY(0)' } }}>
     <Box sx={{ color: theme.palette.text.secondary, display: 'inline-flex' }}>{icon}</Box>
     <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.8rem', fontWeight: 600 }}>{label}</Typography>
   </ButtonBase>
 );
+
+const InfoPreviewPanel = ({ rows, theme }) => {
+  const enableOverlay = useMediaQuery(theme.breakpoints.up('xl'));
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const openTimerRef = useRef<number | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const [collapsedHeight, setCollapsedHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const clearHoverTimers = () => {
+    if (openTimerRef.current !== null) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => clearHoverTimers();
+  }, []);
+
+  useEffect(() => {
+    if (!enableOverlay) {
+      setIsExpanded(false);
+      return;
+    }
+
+    const wrapperNode = wrapperRef.current;
+    const contentNode = contentRef.current;
+    if (!wrapperNode || !contentNode) return;
+
+    const updateMeasurements = () => {
+      setCollapsedHeight(wrapperNode.getBoundingClientRect().height);
+      setContentHeight(contentNode.scrollHeight);
+    };
+
+    updateMeasurements();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateMeasurements);
+      return () => {
+        window.removeEventListener('resize', updateMeasurements);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(() => updateMeasurements());
+    resizeObserver.observe(wrapperNode);
+    resizeObserver.observe(contentNode);
+    window.addEventListener('resize', updateMeasurements);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateMeasurements);
+    };
+  }, [enableOverlay, rows.length]);
+
+  const hasOverflow = enableOverlay && collapsedHeight > 0 && contentHeight > collapsedHeight + 4;
+  const resolvedCollapsedHeight = collapsedHeight > 0 ? collapsedHeight : undefined;
+  const expandedHeight = resolvedCollapsedHeight
+    ? Math.max(resolvedCollapsedHeight, contentHeight)
+    : contentHeight;
+
+  const handleMouseEnter = () => {
+    if (!hasOverflow) return;
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    if (isExpanded || openTimerRef.current !== null) return;
+    openTimerRef.current = window.setTimeout(() => {
+      openTimerRef.current = null;
+      setIsExpanded(true);
+    }, INFO_PANEL_EXPAND_OPEN_DELAY_MS);
+  };
+
+  const handleMouseLeave = (event) => {
+    handleDashboardPanelPointerLeave(event);
+    if (!hasOverflow) return;
+    if (openTimerRef.current !== null) {
+      window.clearTimeout(openTimerRef.current);
+      openTimerRef.current = null;
+    }
+    if (!isExpanded || closeTimerRef.current !== null) return;
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      setIsExpanded(false);
+    }, INFO_PANEL_EXPAND_CLOSE_DELAY_MS);
+  };
+
+  const isInteractive = enableOverlay && hasOverflow;
+  const showCollapsedFade = isInteractive && !isExpanded;
+
+  return (
+    <Box
+      ref={wrapperRef}
+      sx={{
+        minWidth: 0,
+        position: 'relative',
+        width: '100%',
+        ...(enableOverlay ? { height: '100%', minHeight: 0, zIndex: isExpanded ? 4 : 1 } : {}),
+      }}
+    >
+      <Box
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        sx={{
+          ...dashboardPanelSx(theme),
+          borderRadius: '14px',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          width: '100%',
+          ...(enableOverlay
+            ? {
+                borderColor: isExpanded ? theme.palette.border.main : theme.palette.border.subtle,
+                boxShadow: isExpanded
+                  ? theme.palette.mode === 'dark'
+                    ? '0 24px 60px rgba(0, 0, 0, 0.34)'
+                    : '0 22px 52px rgba(15, 23, 42, 0.16)'
+                  : undefined,
+                height: resolvedCollapsedHeight == null
+                  ? '100%'
+                  : `${isExpanded ? expandedHeight : resolvedCollapsedHeight}px`,
+                left: 0,
+                position: 'absolute',
+                right: 0,
+                top: 0,
+                transition: 'height 260ms cubic-bezier(0.2, 0, 0, 1), box-shadow 220ms ease, border-color 220ms ease',
+              }
+            : {}),
+        }}
+        onMouseMove={handleDashboardPanelPointerMove}
+      >
+        <Box
+          ref={contentRef}
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            px: '16px',
+            py: '12px',
+            width: '100%',
+            ...(showCollapsedFade
+              ? {
+                  WebkitMaskImage:
+                    'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 72px), rgba(0,0,0,0.94) calc(100% - 50px), rgba(0,0,0,0.72) calc(100% - 28px), rgba(0,0,0,0.38) calc(100% - 10px), rgba(0,0,0,0) 100%)',
+                  WebkitMaskRepeat: 'no-repeat',
+                  WebkitMaskSize: '100% 100%',
+                  maskImage:
+                    'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 72px), rgba(0,0,0,0.94) calc(100% - 50px), rgba(0,0,0,0.72) calc(100% - 28px), rgba(0,0,0,0.38) calc(100% - 10px), rgba(0,0,0,0) 100%)',
+                  maskRepeat: 'no-repeat',
+                  maskSize: '100% 100%',
+                }
+              : {}),
+          }}
+        >
+          <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, mb: '8px' }}>
+            Info
+          </Typography>
+
+          {rows.map((row, index) => (
+            <Box
+              key={row.label}
+              sx={{
+                ...(index < rows.length - 1 ? sepSx(theme) : {}),
+                alignItems: 'center',
+                display: 'flex',
+                gap: '12px',
+                justifyContent: 'space-between',
+                py: 0.98,
+              }}
+            >
+              <Box sx={{ alignItems: 'center', color: theme.palette.text.primary, display: 'inline-flex', gap: '8px', minWidth: 0 }}>
+                {row.icon}
+                <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.78rem', fontWeight: 600, minWidth: 0 }}>
+                  {row.label}
+                </Typography>
+              </Box>
+              <Box sx={{ alignItems: 'center', color: theme.palette.text.primary, display: 'inline-flex', flexShrink: 0, fontSize: row.emphasize ? '0.92rem' : '0.82rem', fontWeight: row.emphasize ? 700 : 600, justifyContent: 'flex-end', maxWidth: '62%', minWidth: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {row.value}
+              </Box>
+            </Box>
+          ))}
+        </Box>
+
+      </Box>
+    </Box>
+  );
+};
 
 export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setMobileViewMode, setDesktopViewMode, desktopViewMode }) => {
   const userInfo = useAtomValue(userInfoAtom);
@@ -70,9 +284,14 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
   const [qrAnchorEl, setQrAnchorEl] = useState<HTMLElement | null>(null);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
+  const [coreVersionLabel, setCoreVersionLabel] = useState('—');
   const [minterPreviewMode, setMinterPreviewMode] = useState<'off' | 'on'>(() => {
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
+  });
+  const [welcomePreviewMode, setWelcomePreviewMode] = useState<'off' | 'on'>(() => {
+    const saved = localStorage.getItem(DASHBOARD_WELCOME_PREVIEW_KEY);
+    return saved === 'off' ? 'off' : 'on';
   });
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
@@ -81,6 +300,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const setJoinRequestsCache = useSetAtom(joinRequestsCacheAtom);
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
+  const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
 
   useEffect(() => {
     if (!userAddress) { setIsOnboardingComplete(false); return; }
@@ -104,6 +324,36 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, [minterLevel]);
 
   useEffect(() => {
+    let active = true;
+
+    const loadCoreInfo = async () => {
+      try {
+        const response = await fetch(`${getBaseApiReact()}/admin/info`, {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          method: 'GET',
+        });
+        const data = await response.json();
+        if (!active) return;
+        setCoreVersionLabel(data?.buildVersion ? String(data.buildVersion).substring(0, 20) : '—');
+      } catch {
+        if (active) {
+          setCoreVersionLabel('—');
+        }
+      }
+    };
+
+    loadCoreInfo();
+    const interval = window.setInterval(loadCoreInfo, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleSetDashboardMinterPreview = (e: CustomEvent) => {
       const mode = e.detail?.data?.mode === 'on' ? 'on' : 'off';
       setMinterPreviewMode(mode);
@@ -113,6 +363,19 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     subscribeToEvent('setDashboardMinterPreview', handleSetDashboardMinterPreview);
     return () => {
       unsubscribeFromEvent('setDashboardMinterPreview', handleSetDashboardMinterPreview);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSetDashboardWelcomePreview = (e: CustomEvent) => {
+      const mode = e.detail?.data?.mode === 'off' ? 'off' : 'on';
+      setWelcomePreviewMode(mode);
+      localStorage.setItem(DASHBOARD_WELCOME_PREVIEW_KEY, mode);
+    };
+
+    subscribeToEvent('setDashboardWelcomePreview', handleSetDashboardWelcomePreview);
+    return () => {
+      unsubscribeFromEvent('setDashboardWelcomePreview', handleSetDashboardWelcomePreview);
     };
   }, []);
 
@@ -126,15 +389,118 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const peersLabel = `${nodeInfos?.numberOfConnections || 0}`;
   const blockHeightLabel = `${nodeInfos?.height || '—'}`;
   const hubVersionLabel = manifestData.version || '—';
+  const qdnPeersLabel = `${nodeInfos?.numberOfDataConnections || 0}`;
+  const nodeBase = getBaseApiReact();
+  const nodeHostLabel = (() => {
+    try {
+      return new URL(nodeBase).host;
+    } catch {
+      return nodeDisplay(nodeBase);
+    }
+  })();
+  const nodeTypeLabel = isLocalNodeUrl(nodeBase)
+    ? 'Local node'
+    : nodeBase.includes('ext-node.qortal.link')
+      ? 'Public node'
+      : 'Custom node';
   const minterDotsFilled = minterPreviewMode === 'on' ? 5 : 0;
   const isMinterOn = minterPreviewMode === 'on';
+  const minterValue = (
+    <Box
+      sx={{
+        alignItems: 'center',
+        display: 'inline-flex',
+        height: '24px',
+        justifyContent: 'flex-end',
+        minWidth: '104px',
+      }}
+    >
+      <AnimatePresence initial={false} mode="wait">
+        {isMinterOn ? (
+          <motion.div
+            key="minter-level"
+            initial={{ opacity: 0, y: 3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+            style={{ alignItems: 'center', display: 'flex', height: '24px', justifyContent: 'flex-end', width: '100%' }}
+          >
+            <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '5px', height: '24px' }}>
+              {Array.from({ length: 8 }).map((_, index) => (
+                <Box key={index} sx={{ bgcolor: index < minterDotsFilled ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.28), borderRadius: '50%', boxShadow: index < minterDotsFilled ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.18)}` : 'none', height: '8px', width: '8px' }} />
+              ))}
+            </Box>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="minter-apply"
+            initial={{ opacity: 0, y: 3 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -3 }}
+            transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+            style={{ alignItems: 'center', display: 'flex', height: '24px', justifyContent: 'flex-end', width: '100%' }}
+          >
+            <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '999px', color: theme.palette.text.secondary, display: 'inline-flex', fontSize: '0.72rem', fontWeight: 600, height: '24px', justifyContent: 'center', minWidth: '54px', px: 1.2, py: 0, whiteSpace: 'nowrap' }}>
+              Apply
+            </ButtonBase>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Box>
+  );
   const infoRows = [
-    ['QORT Balance', balanceLabel, <AccountBalanceWalletOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />],
-    ['Node Status', nodeStatusValue, <HubOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />],
-    ['Connected Peers', peersLabel, <GroupOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />],
-    ['Block Height', blockHeightLabel, <LayersOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />],
-    ['Hub Version', hubVersionLabel, <InfoOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />],
-  ] as const;
+    {
+      emphasize: true,
+      icon: <AccountBalanceWalletOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'QORT Balance',
+      value: balanceLabel,
+    },
+    {
+      icon: <HubOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Node Status',
+      value: nodeStatusValue,
+    },
+    {
+      icon: <AutoAwesomeOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Minter Level',
+      value: minterValue,
+    },
+    {
+      icon: <GroupOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Connected Peers',
+      value: peersLabel,
+    },
+    {
+      icon: <LayersOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Block Height',
+      value: blockHeightLabel,
+    },
+    {
+      icon: <DnsOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'QDN Peers',
+      value: qdnPeersLabel,
+    },
+    {
+      icon: <ComputerOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Using Node',
+      value: nodeHostLabel,
+    },
+    {
+      icon: <ComputerOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Node Type',
+      value: nodeTypeLabel,
+    },
+    {
+      icon: <InfoOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Core Version',
+      value: coreVersionLabel,
+    },
+    {
+      icon: <InfoOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
+      label: 'Hub Version',
+      value: hubVersionLabel,
+    },
+  ];
 
   const sharedGroupNavProps = { getTimestampEnterChat, setDesktopViewMode, setGroupSection, setMobileViewMode, setSelectedGroup };
 
@@ -144,73 +510,33 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         {desktopViewMode === 'home' && (
           <motion.div key="home" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} custom={reduce} style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', width: '100%', willChange: 'transform, opacity', backfaceVisibility: 'hidden' }}>
             <Spacer height="20px" />
-            <Box sx={{ alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: { xs: '1320px', xl: '1520px' }, padding: '0 20px', width: '100%' }}>
-              <Box sx={{ display: 'grid', gap: '20px', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(320px, 360px)', xl: 'minmax(0, 1fr) minmax(360px, 400px)' }, alignItems: 'start', width: '100%' }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0, width: '100%' }}>
+            <Box sx={{ alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, maxWidth: { xs: '1320px', xl: '1520px' }, padding: '0 20px', width: '100%' }}>
+              <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: '1fr', alignItems: 'start', width: '100%', [theme.breakpoints.up('xl')]: { alignItems: 'stretch', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 400px)' } }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, width: '100%' }}>
                   <Box sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.055em', textTransform: 'uppercase' }}>Qortal Hub</Box>
                   <HomeProfileCard />
-                  <Box sx={{ display: 'grid', gap: '20px', gridTemplateColumns: { xs: '1fr', md: isOnboardingComplete ? 'minmax(0, 1fr)' : 'minmax(285px, 330px) minmax(0, 1fr)', xl: isOnboardingComplete ? 'minmax(0, 1fr)' : 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
-                    <Box sx={{ display: isOnboardingComplete ? 'none' : 'block', minWidth: 0, '& > *': { height: '100%' } }}>
-                      <HomeGettingStarted onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }} />
+                  <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: { xs: '1fr', md: 'minmax(285px, 330px) minmax(0, 1fr)', xl: 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
+                    <Box sx={{ display: 'block', minWidth: 0, '& > *': { height: '100%' } }}>
+                      <HomeGettingStarted previewMode={isLocalPreview ? welcomePreviewMode : 'live'} onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }} />
                     </Box>
                     <Box sx={{ display: 'flex', minWidth: 0, width: '100%', '& > *': { width: '100%' } }}>
                       <HomeFeaturedApps />
                     </Box>
                   </Box>
                 </Box>
-                <Box sx={{ alignContent: 'start', display: 'grid', gap: '16px', gridTemplateColumns: '1fr', gridTemplateRows: 'auto auto', minWidth: 0, pt: { lg: '22px' } }}>
-                  <DashboardUtilityPanel title="Info" theme={theme} sx={{ gap: '8px', padding: '12px 16px' }}>
-                    <Box sx={{ ...sepSx(theme), pb: 1.05 }}>
-                      <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                        <Box sx={{ alignItems: 'center', color: theme.palette.text.primary, display: 'inline-flex', gap: '8px' }}>
-                          <AccountBalanceWalletOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />
-                          <Typography sx={{ fontSize: '0.78rem', fontWeight: 600 }}>QORT Balance</Typography>
-                        </Box>
-                        <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.92rem', fontWeight: 700, whiteSpace: 'nowrap' }}>{balanceLabel}</Typography>
-                      </Box>
-                    </Box>
-                    <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: '12px', py: 0.8 }}>
-                      <Box sx={{ alignItems: 'center', color: theme.palette.text.primary, display: 'inline-flex', gap: '8px', minWidth: 0 }}>
-                        <AutoAwesomeOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />
-                        <Typography sx={{ fontSize: '0.78rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                          Minter Level
-                        </Typography>
-                      </Box>
-                      {isMinterOn ? (
-                        <Box sx={{ alignItems: 'center', display: 'inline-flex', flexShrink: 0, gap: '6px' }}>
-                          <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '5px' }}>
-                            {Array.from({ length: 8 }).map((_, index) => (
-                              <Box key={index} sx={{ bgcolor: index < minterDotsFilled ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.28), borderRadius: '50%', boxShadow: index < minterDotsFilled ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.18)}` : 'none', height: '8px', width: '8px' }} />
-                            ))}
-                          </Box>
-                        </Box>
-                      ) : (
-                        <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership' } }); executeEvent('open-apps-mode', {}); }} sx={{ bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '999px', color: theme.palette.text.secondary, fontSize: '0.72rem', fontWeight: 600, px: 1.2, py: 0.45 }}>
-                          Apply
-                        </ButtonBase>
-                      )}
-                    </Box>
-                    {infoRows.slice(1).map(([label, value, icon], index, array) => (
-                      <Box key={label} sx={{ ...(index < array.length - 1 ? sepSx(theme) : {}), alignItems: 'center', display: 'flex', justifyContent: 'space-between', gap: '12px', py: 0.8 }}>
-                        <Box sx={{ alignItems: 'center', color: theme.palette.text.primary, display: 'inline-flex', gap: '8px' }}>
-                          {icon}
-                          <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.78rem', fontWeight: 600 }}>{label}</Typography>
-                        </Box>
-                        <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.82rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{value}</Typography>
-                      </Box>
-                    ))}
-                  </DashboardUtilityPanel>
-                  <DashboardUtilityPanel title="Wallet Activity" theme={theme}>
-                    <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', pb: 1.15 }}>
+                <Box sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px auto`, height: `calc(100% - ${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px)`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
+                  <InfoPreviewPanel rows={infoRows} theme={theme} />
+                  <DashboardUtilityPanel title="Wallet Activity" theme={theme} sx={{ gap: '12px', minHeight: '182px', padding: '14px 16px 16px' }}>
+                    <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', pb: 1.35 }}>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>Last activity</Typography>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>2 days ago</Typography>
                     </Box>
-                    <Box sx={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', pt: 0.2 }}>
+                    <Box sx={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', pt: 0.5 }}>
                       <WalletActionButton icon={<SendRoundedIcon sx={{ fontSize: '16px' }} />} label="Send" onClick={() => executeEvent('openPaymentInternal', {})} theme={theme} />
                       <WalletActionButton icon={<SouthWestRoundedIcon sx={{ fontSize: '16px' }} />} label="Receive" onClick={(event) => setQrAnchorEl(event.currentTarget)} theme={theme} />
                       <WalletActionButton icon={<ShoppingBagRoundedIcon sx={{ fontSize: '16px' }} />} label="Buy" onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-trade' } }); executeEvent('open-apps-mode', {}); }} theme={theme} />
                     </Box>
-                    <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.66rem', lineHeight: 1.45 }}>
+                    <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.66rem', lineHeight: 1.45, mt: 'auto', pt: 1.05 }}>
                       Use these shortcuts for your most common wallet actions directly from your Hub Dashboard
                     </Typography>
                   </DashboardUtilityPanel>

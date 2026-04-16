@@ -35,9 +35,7 @@ export const HomeFeaturedApps = () => {
         borderRadius: '12px',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
         gap: '14px',
-        minHeight: { md: '382px' },
         padding: '16px 20px',
         transition: 'border-color 180ms ease, background-color 180ms ease',
         width: '100%',
@@ -60,17 +58,10 @@ export const HomeFeaturedApps = () => {
         sx={{
           display: 'grid',
           gap: '12px',
-          gridTemplateColumns: {
-            xs: 'repeat(2, minmax(132px, 132px))',
-            sm: 'repeat(2, minmax(132px, 132px))',
-            md: 'repeat(4, minmax(132px, 132px))',
-          },
+          gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))',
           alignItems: 'start',
           gridAutoRows: '132px',
-          justifyContent: {
-            xs: 'center',
-            md: 'start',
-          },
+          justifyContent: 'stretch',
           width: '100%',
         }}
       >
@@ -154,7 +145,7 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
         transition:
           'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
         position: 'relative',
-        width: '132px',
+        width: '100%',
         minHeight: '132px',
         '&:hover': {
           bgcolor: theme.palette.background.elevated,

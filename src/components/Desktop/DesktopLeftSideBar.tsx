@@ -26,6 +26,7 @@ const ITEM_PADDING_Y = 1;
 const OVERLAY_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 const SIDEBAR_OPEN_DELAY_MS = 0;
 const SIDEBAR_CLOSE_DELAY_MS = 140;
+const DASHBOARD_WELCOME_PREVIEW_KEY = 'dashboardWelcomePreviewMode';
 
 const SidebarItem = ({
   active = false,
@@ -153,6 +154,10 @@ export const DesktopSideBar = ({
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
   });
+  const [debugWelcomePreview, setDebugWelcomePreview] = useState<'off' | 'on'>(() => {
+    const saved = localStorage.getItem(DASHBOARD_WELCOME_PREVIEW_KEY);
+    return saved === 'off' ? 'off' : 'on';
+  });
   const [isInfoActive, setIsInfoActive] = useState(false);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -175,6 +180,21 @@ export const DesktopSideBar = ({
     if (desktopViewMode === 'chat') return theme.palette.text.primary;
     return theme.palette.text.secondary;
   }, [desktopViewMode, theme.palette.text.primary, theme.palette.text.secondary]);
+
+  const debugToggleSx = {
+    borderRadius: '10px',
+    backgroundColor: alpha(theme.palette.background.paper, 0.94),
+    border: `1px solid ${theme.palette.border.subtle}`,
+    color: theme.palette.text.primary,
+    fontSize: '11px',
+    fontWeight: 700,
+    px: 1,
+    py: 0.6,
+    boxShadow:
+      theme.palette.mode === 'dark'
+        ? '0 6px 16px rgba(0,0,0,0.24)'
+        : '0 6px 16px rgba(0,0,0,0.1)',
+  } as const;
 
   const emitOverlayState = (nextVisible: boolean) => {
     executeEvent('sidebarOverlayVisibility', {
@@ -552,45 +572,31 @@ export const DesktopSideBar = ({
           <ButtonBase
             disableRipple
             onClick={() => {
+              const next = debugWelcomePreview === 'on' ? 'off' : 'on';
+              setDebugWelcomePreview(next);
+              localStorage.setItem(DASHBOARD_WELCOME_PREVIEW_KEY, next);
+              executeEvent('setDashboardWelcomePreview', { data: { mode: next } });
+            }}
+            sx={debugToggleSx}
+          >
+            Welcome: {debugWelcomePreview === 'on' ? 'ON' : 'OFF'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => {
               const next = debugMinterPreview === 'on' ? 'off' : 'on';
               setDebugMinterPreview(next);
               localStorage.setItem('dashboardMinterPreviewMode', next);
               executeEvent('setDashboardMinterPreview', { data: { mode: next } });
             }}
-            sx={{
-              borderRadius: '10px',
-              backgroundColor: alpha(theme.palette.background.paper, 0.94),
-              border: `1px solid ${theme.palette.border.subtle}`,
-              color: theme.palette.text.primary,
-              fontSize: '11px',
-              fontWeight: 700,
-              px: 1,
-              py: 0.6,
-              boxShadow:
-                theme.palette.mode === 'dark'
-                  ? '0 6px 16px rgba(0,0,0,0.24)'
-                  : '0 6px 16px rgba(0,0,0,0.1)',
-            }}
+            sx={debugToggleSx}
           >
             Minter: {debugMinterPreview === 'on' ? 'ON' : 'OFF'}
           </ButtonBase>
           <ButtonBase
             disableRipple
             onClick={() => setDebugUnread((prev) => !prev)}
-            sx={{
-              borderRadius: '10px',
-              backgroundColor: alpha(theme.palette.background.paper, 0.94),
-              border: `1px solid ${theme.palette.border.subtle}`,
-              color: theme.palette.text.primary,
-              fontSize: '11px',
-              fontWeight: 700,
-              px: 1,
-              py: 0.6,
-              boxShadow:
-                theme.palette.mode === 'dark'
-                  ? '0 6px 16px rgba(0,0,0,0.24)'
-                  : '0 6px 16px rgba(0,0,0,0.1)',
-            }}
+            sx={debugToggleSx}
           >
             Chat Pulse: {debugUnread ? 'ON' : 'OFF'}
           </ButtonBase>

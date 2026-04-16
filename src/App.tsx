@@ -895,6 +895,16 @@ function App() {
     setIsOpenDrawerProfile(false);
   }, [setExtstate]);
 
+  useEffect(() => {
+    subscribeToEvent('openMintingPanel', onOpenMinting);
+    subscribeToEvent('openBackupWallet', onBackupWallet);
+
+    return () => {
+      unsubscribeFromEvent('openMintingPanel', onOpenMinting);
+      unsubscribeFromEvent('openBackupWallet', onBackupWallet);
+    };
+  }, [onBackupWallet, onOpenMinting]);
+
   const onOkQortalRequestAccepted = useCallback(
     () => onOkQortalRequest('accepted'),
     [onOkQortalRequest]

@@ -12,11 +12,6 @@ import CropSquareIcon from '@mui/icons-material/CropSquare';
 import FilterNoneIcon from '@mui/icons-material/FilterNone';
 import LogoutIcon from '@mui/icons-material/Logout';
 import SettingsIcon from '@mui/icons-material/Settings';
-import PersonSearchIcon from '@mui/icons-material/PersonSearch';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import EngineeringIcon from '@mui/icons-material/Engineering';
-import HelpIcon from '@mui/icons-material/Help';
-import DownloadIcon from '@mui/icons-material/Download';
 import QortalLogo from '../../assets/svgs/Logo1Dark.svg';
 import { WalletIcon } from '../../assets/Icons/WalletIcon';
 import { QMailStatus } from '../QMailStatus';
@@ -439,46 +434,10 @@ export function CustomTitleBar(props?: {
           onClick={rightNav.onOpenSettings}
           sx={navIconSx}
           aria-label={t('core:settings')}
-        >
-          <SettingsIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-      <Tooltip
-        title={tooltipTitle(
-          t('core:user_lookup', { postProcess: 'capitalizeAll' })
-        )}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
       >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenDrawerLookup}
-          sx={navIconSx}
-          aria-label={t('core:user_lookup')}
-        >
-          <PersonSearchIcon sx={{ fontSize: 20 }} />
-        </IconButton>
+        <SettingsIcon sx={{ fontSize: 20 }} />
+      </IconButton>
       </Tooltip>
-      <Tooltip
-        title={tooltipTitle(t('core:wallet.wallet_other'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenWalletsApp}
-          sx={navIconSx}
-          aria-label={t('core:wallet.wallet_other')}
-        >
-          <AccountBalanceWalletIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-
-      <Box sx={{ width: 2 }} />
       <QMailStatus compact />
       {rightNav.extState === 'authenticated' && (
         <Box sx={navCellSx}>
@@ -505,7 +464,6 @@ export function CustomTitleBar(props?: {
           />
         </Box>
       </Tooltip>
-      <Box sx={{ width: 2 }} />
       {rightNav.desktopViewMode !== 'home' && (
         <Tooltip
           title={tooltipTitle(t('auth:account.your'))}
@@ -548,51 +506,6 @@ export function CustomTitleBar(props?: {
       </>
       {/* )} */}
       <Box sx={{ width: 2 }} />
-      <Tooltip
-        title={tooltipTitle(t('core:minting.status_title'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenMinting}
-          sx={navIconSx}
-          aria-label={t('core:minting.status_title')}
-        >
-          <EngineeringIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-      {/* {(rightNav.desktopViewMode === 'apps' || rightNav.desktopViewMode === 'home') && (
-        <Tooltip title={tooltipTitle(t('core:tutorial'))} placement="bottom" arrow slotProps={tooltipSlotProps(theme)}>
-          <IconButton
-            {...titleBarIconButtonProps}
-            size="small"
-            onClick={() => (rightNav.desktopViewMode === 'apps' ? rightNav.showTutorial('qapps', true) : rightNav.showTutorial('getting-started', true))}
-            sx={navIconSx}
-            aria-label={t('core:tutorial')}
-          >
-            <HelpIcon sx={{ fontSize: 20 }} />
-          </IconButton>
-        </Tooltip>
-      )} */}
-      <Tooltip
-        title={tooltipTitle(t('core:action.backup_wallet'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onBackupWallet}
-          sx={navIconSx}
-          aria-label={t('core:action.backup_wallet')}
-        >
-          <DownloadIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
       <Box
         sx={{
           width: '1px',

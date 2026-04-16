@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
+  ButtonBase,
   CircularProgress,
   Dialog,
   DialogContent,
@@ -16,6 +17,10 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import SchoolIcon from '@mui/icons-material/School';
+import PersonSearchIcon from '@mui/icons-material/PersonSearch';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import EngineeringIcon from '@mui/icons-material/Engineering';
+import DownloadIcon from '@mui/icons-material/Download';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { userInfoAtom, balanceAtom, txListAtom } from '../../atoms/global';
@@ -43,10 +48,12 @@ const MIN_BALANCE_FOR_QORTS = 6;
 
 export type HomeGettingStartedProps = {
   onGettingStartedComplete?: () => void;
+  previewMode?: 'live' | 'off' | 'on';
 };
 
 export const HomeGettingStarted = ({
   onGettingStartedComplete,
+  previewMode = 'live',
 }: HomeGettingStartedProps = {}) => {
   const { t } = useTranslation(['tutorial']);
   const theme = useTheme();
@@ -203,8 +210,44 @@ export const HomeGettingStarted = ({
     [steps]
   );
 
-  // Hidden once the user has completed all steps (persisted across sessions)
-  if (dismissed !== false) return null;
+  const tools = useMemo(
+    () => [
+      {
+        key: 'user-lookup',
+        label: 'User Look-up',
+        icon: <PersonSearchIcon sx={{ fontSize: '1.15rem' }} />,
+        onAction: () => executeEvent('openUserLookupDrawer', {}),
+      },
+      {
+        key: 'wallets',
+        label: 'Wallets',
+        icon: <AccountBalanceWalletIcon sx={{ fontSize: '1.15rem' }} />,
+        onAction: () => executeEvent('openWalletsApp', {}),
+      },
+      {
+        key: 'minting-status',
+        label: 'Minting Status',
+        icon: <EngineeringIcon sx={{ fontSize: '1.15rem' }} />,
+        onAction: () => executeEvent('openMintingPanel', {}),
+      },
+      {
+        key: 'backup-wallet',
+        label: 'Back-up Wallet',
+        icon: <DownloadIcon sx={{ fontSize: '1.15rem' }} />,
+        onAction: () => executeEvent('openBackupWallet', {}),
+      },
+    ],
+    []
+  );
+
+  const previewPanel =
+    previewMode === 'on'
+      ? 'getting-started'
+      : previewMode === 'off'
+        ? 'tools'
+        : null;
+  const showTools =
+    previewPanel != null ? previewPanel === 'tools' : dismissed === true;
 
   return (
     <>
@@ -224,159 +267,245 @@ export const HomeGettingStarted = ({
         onMouseMove={handleDashboardPanelPointerMove}
         onMouseLeave={handleDashboardPanelPointerLeave}
       >
-        {/* Header */}
-        <Box
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            justifyContent: 'space-between',
-            mb: '8px',
-          }}
-        >
-          <Typography
-            sx={{
-              color: theme.palette.text.primary,
-              fontSize: '1rem',
-              fontWeight: 600,
-            }}
-          >
-            {t('tutorial:home.getting_started')}
-          </Typography>
-          <Typography
-            sx={{ color: theme.palette.text.secondary, fontSize: '0.82rem' }}
-          >
-            {t('tutorial:home.progress', {
-              completed: completedCount,
-              total: steps.length,
-            })}
-          </Typography>
-        </Box>
-
-        {/* Steps */}
-        {steps.map((step, index) => (
-          <Box
-            key={step.key}
-            sx={{
-              alignItems: 'center',
-              bgcolor: theme.palette.background.surface,
-              border: `1px solid ${theme.palette.border.subtle}`,
-              borderRadius: '8px',
-              display: 'flex',
-              gap: '12px',
-              justifyContent: 'space-between',
-              padding: '10px 14px',
-              transition:
-                'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
-              '&:hover': {
-                backgroundColor: theme.palette.background.elevated,
-                borderColor: theme.palette.border.main,
-                boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}, 0 2px 10px rgba(0,0,0,0.06)`,
-                transform: 'translateY(-1px)',
-              },
-              '&:active': {
-                transform: 'translateY(0)',
-                boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}`,
-              },
-              '&:focus-within': {
-                borderColor: theme.palette.border.main,
-                boxShadow: `inset 0 0 0 1px ${theme.palette.border.main}`,
-              },
-              '& button': {
-                transition:
-                  'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
-              },
-            }}
-          >
-            {/* Step number or check */}
+        {showTools ? (
+          <>
             <Box
               sx={{
                 alignItems: 'center',
-                color: step.done
-                  ? theme.palette.success.main
-                  : theme.palette.text.secondary,
                 display: 'flex',
-                flexShrink: 0,
+                justifyContent: 'space-between',
+                mb: '8px',
               }}
             >
-              {step.done ? (
-                <CheckCircleIcon sx={{ fontSize: '1.2rem' }} />
-              ) : (
-                <Typography
-                  sx={{
-                    border: `1px solid ${theme.palette.text.secondary}`,
-                    borderRadius: '50%',
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    height: '20px',
-                    lineHeight: '20px',
-                    textAlign: 'center',
-                    width: '20px',
-                  }}
-                >
-                  {index + 1}
-                </Typography>
-              )}
-            </Box>
-
-            {/* Label */}
-            <Typography
-              sx={{
-                color: step.done
-                  ? theme.palette.text.secondary
-                  : theme.palette.text.primary,
-                flex: 1,
-                fontSize: '0.9rem',
-                opacity: step.done ? 0.7 : 1,
-              }}
-            >
-              {step.label}
-            </Typography>
-
-            {/* Action button */}
-            {step.loading ? (
-              <CircularProgress size={20} />
-            ) : (
-              <Button
-                disabled={step.done}
-                onClick={step.onAction}
-                size="small"
-                variant={step.done ? 'text' : 'outlined'}
+              <Typography
                 sx={{
-                  borderColor: theme.palette.border.main,
-                  flexShrink: 0,
-                  fontSize: '0.78rem',
-                  minWidth: '60px',
-                  opacity: step.done ? 0.5 : 1,
-                  borderRadius: '9px',
+                  color: theme.palette.text.primary,
+                  fontSize: '1rem',
                   fontWeight: 600,
-                  '&:focus-visible': {
-                    borderColor: theme.palette.primary.main,
-                    boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
-                  },
-                  ...(step.done
-                    ? {}
-                    : {
-                        backgroundColor: theme.palette.background.elevated,
-                        color: theme.palette.text.primary,
-                        '&:hover': {
-                          backgroundColor: theme.palette.background.elevated,
-                          borderColor: theme.palette.primary.light,
-                          color: theme.palette.text.primary,
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                          transform: 'translateY(-1px)',
-                        },
-                        '&:active': {
-                          boxShadow: 'none',
-                          transform: 'translateY(0)',
-                        },
-                      }),
                 }}
               >
-                {step.done ? t('tutorial:home.done') : t('tutorial:home.open')}
-              </Button>
-            )}
-          </Box>
-        ))}
+                Tools
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'grid',
+                gap: '12px',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              }}
+            >
+              {tools.map((tool) => (
+                <ButtonBase
+                  key={tool.key}
+                  onClick={tool.onAction}
+                  sx={{
+                    alignItems: 'center',
+                    bgcolor: theme.palette.background.surface,
+                    border: `1px solid ${theme.palette.border.subtle}`,
+                    borderRadius: '10px',
+                    color: theme.palette.text.primary,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                    justifyContent: 'center',
+                    minHeight: '108px',
+                    px: 1.5,
+                    py: 1.75,
+                    textAlign: 'center',
+                    transition:
+                      'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
+                    '&:hover': {
+                      backgroundColor: theme.palette.background.elevated,
+                      borderColor: theme.palette.border.main,
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+                      transform: 'translateY(-1px)',
+                    },
+                    '&:active': {
+                      boxShadow: 'none',
+                      transform: 'translateY(0)',
+                    },
+                    '&:focus-visible': {
+                      borderColor: theme.palette.primary.main,
+                      boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      color: theme.palette.text.secondary,
+                      display: 'inline-flex',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {tool.icon}
+                  </Box>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.primary,
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {tool.label}
+                  </Typography>
+                </ButtonBase>
+              ))}
+            </Box>
+          </>
+        ) : (
+          <>
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'flex',
+                justifyContent: 'space-between',
+                mb: '8px',
+              }}
+            >
+              <Typography
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: '1rem',
+                  fontWeight: 600,
+                }}
+              >
+                {t('tutorial:home.getting_started')}
+              </Typography>
+              <Typography
+                sx={{ color: theme.palette.text.secondary, fontSize: '0.82rem' }}
+              >
+                {t('tutorial:home.progress', {
+                  completed: completedCount,
+                  total: steps.length,
+                })}
+              </Typography>
+            </Box>
+
+            {steps.map((step, index) => (
+              <Box
+                key={step.key}
+                sx={{
+                  alignItems: 'center',
+                  bgcolor: theme.palette.background.surface,
+                  border: `1px solid ${theme.palette.border.subtle}`,
+                  borderRadius: '8px',
+                  display: 'flex',
+                  gap: '12px',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  transition:
+                    'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
+                  '&:hover': {
+                    backgroundColor: theme.palette.background.elevated,
+                    borderColor: theme.palette.border.main,
+                    boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}, 0 2px 10px rgba(0,0,0,0.06)`,
+                    transform: 'translateY(-1px)',
+                  },
+                  '&:active': {
+                    transform: 'translateY(0)',
+                    boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}`,
+                  },
+                  '&:focus-within': {
+                    borderColor: theme.palette.border.main,
+                    boxShadow: `inset 0 0 0 1px ${theme.palette.border.main}`,
+                  },
+                  '& button': {
+                    transition:
+                      'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                  },
+                }}
+              >
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    color: step.done
+                      ? theme.palette.success.main
+                      : theme.palette.text.secondary,
+                    display: 'flex',
+                    flexShrink: 0,
+                  }}
+                >
+                  {step.done ? (
+                    <CheckCircleIcon sx={{ fontSize: '1.2rem' }} />
+                  ) : (
+                    <Typography
+                      sx={{
+                        border: `1px solid ${theme.palette.text.secondary}`,
+                        borderRadius: '50%',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        height: '20px',
+                        lineHeight: '20px',
+                        textAlign: 'center',
+                        width: '20px',
+                      }}
+                    >
+                      {index + 1}
+                    </Typography>
+                  )}
+                </Box>
+
+                <Typography
+                  sx={{
+                    color: step.done
+                      ? theme.palette.text.secondary
+                      : theme.palette.text.primary,
+                    flex: 1,
+                    fontSize: '0.9rem',
+                    opacity: step.done ? 0.7 : 1,
+                  }}
+                >
+                  {step.label}
+                </Typography>
+
+                {step.loading ? (
+                  <CircularProgress size={20} />
+                ) : (
+                  <Button
+                    disabled={step.done}
+                    onClick={step.onAction}
+                    size="small"
+                    variant={step.done ? 'text' : 'outlined'}
+                    sx={{
+                      borderColor: theme.palette.border.main,
+                      flexShrink: 0,
+                      fontSize: '0.78rem',
+                      minWidth: '60px',
+                      opacity: step.done ? 0.5 : 1,
+                      borderRadius: '9px',
+                      fontWeight: 600,
+                      '&:focus-visible': {
+                        borderColor: theme.palette.primary.main,
+                        boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
+                      },
+                      ...(step.done
+                        ? {}
+                        : {
+                            backgroundColor: theme.palette.background.elevated,
+                            color: theme.palette.text.primary,
+                            '&:hover': {
+                              backgroundColor: theme.palette.background.elevated,
+                              borderColor: theme.palette.primary.light,
+                              color: theme.palette.text.primary,
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                              transform: 'translateY(-1px)',
+                            },
+                            '&:active': {
+                              boxShadow: 'none',
+                              transform: 'translateY(0)',
+                            },
+                          }),
+                    }}
+                  >
+                    {step.done ? t('tutorial:home.done') : t('tutorial:home.open')}
+                  </Button>
+                )}
+              </Box>
+            ))}
+          </>
+        )}
       </Box>
 
       {/* Get QORT dialog */}
