@@ -34,6 +34,7 @@ import {
   dashboardPanelSx,
   handleDashboardPanelPointerLeave,
   handleDashboardPanelPointerMove,
+  useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
 
 export const GETTING_STARTED_LS_KEY = 'getting_started_status';
@@ -69,6 +70,7 @@ export const HomeGettingStarted = ({
   const [paymentsFallbackTotal, setPaymentsFallbackTotal] = useState<
     number | null
   >(null);
+  const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
 
   const name = userInfo?.name;
   const userAddress = userInfo?.address;
@@ -252,6 +254,7 @@ export const HomeGettingStarted = ({
   return (
     <>
       <Box
+        ref={panelRef}
         sx={{
           ...dashboardPanelSx(theme),
           borderRadius: '12px',
@@ -300,7 +303,10 @@ export const HomeGettingStarted = ({
                   onClick={tool.onAction}
                   sx={{
                     alignItems: 'center',
-                    bgcolor: theme.palette.background.surface,
+                    bgcolor:
+                      theme.palette.mode === 'dark'
+                        ? '#262931'
+                        : theme.palette.background.surface,
                     border: `1px solid ${theme.palette.border.subtle}`,
                     borderRadius: '10px',
                     color: theme.palette.text.primary,
@@ -315,7 +321,10 @@ export const HomeGettingStarted = ({
                     transition:
                       'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
                     '&:hover': {
-                      backgroundColor: theme.palette.background.elevated,
+                      backgroundColor:
+                        theme.palette.mode === 'dark'
+                          ? '#262931'
+                          : theme.palette.background.elevated,
                       borderColor: theme.palette.border.main,
                       boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
                       transform: 'translateY(-1px)',
@@ -388,7 +397,7 @@ export const HomeGettingStarted = ({
                 key={step.key}
                 sx={{
                   alignItems: 'center',
-                  bgcolor: theme.palette.background.surface,
+                  bgcolor: '#181a20',
                   border: `1px solid ${theme.palette.border.subtle}`,
                   borderRadius: '8px',
                   display: 'flex',

@@ -31,7 +31,7 @@ import { AnimatePresence, LazyMotion, domAnimation, motion, useReducedMotion } f
 import { getBaseApiReact } from '../../App';
 import { manifestData } from '../NotAuthenticated';
 import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
-import { dashboardPanelSx, handleDashboardPanelPointerLeave, handleDashboardPanelPointerMove } from './dashboardPanelEffects';
+import { dashboardPanelSx, handleDashboardPanelPointerLeave, handleDashboardPanelPointerMove, useDashboardPanelMouseLight } from './dashboardPanelEffects';
 import { useHandleUserInfo } from '../../hooks/useHandleUserInfo';
 import { isLocalNodeUrl } from '../../constants/constants';
 import { nodeDisplay } from '../../utils/helpers';
@@ -53,22 +53,26 @@ const HOME_DASHBOARD_VERTICAL_GAP_PX = 20;
 // The left column includes the "Qortal Hub" eyebrow label above Account Overview,
 // while the right column starts directly with the rail cards, so this offset
 // compensates for that extra left-side content. The alignment is visual, not structural.
-const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 38;
-const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 321;
+const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 39;
+const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 320;
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 120;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 160;
 
-const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx = undefined }) => (
-  <Box sx={{ ...dashboardPanelSx(theme), borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', width: '100%', ...sx }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
-    <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, ...titleSx }}>{title}</Typography>
-    {children}
-  </Box>
-);
+const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx = undefined }) => {
+  const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
+
+  return (
+    <Box ref={panelRef} sx={{ ...dashboardPanelSx(theme), borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', width: '100%', ...sx }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
+      <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, ...titleSx }}>{title}</Typography>
+      {children}
+    </Box>
+  );
+};
 
 const sepSx = (theme) => ({ borderBottom: `1px solid ${theme.palette.border.subtle}` });
 
 const WalletActionButton = ({ icon, label, onClick, theme }) => (
-  <ButtonBase onClick={onClick} sx={{ alignItems: 'center', bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '10px', display: 'flex', gap: '9px', height: '46px', justifyContent: 'center', px: 1.5, transition: 'background-color 140ms ease, border-color 140ms ease, transform 120ms ease', width: '100%', '&:hover': { bgcolor: theme.palette.background.elevated, borderColor: theme.palette.border.main, transform: 'translateY(-1px)' }, '&:active': { transform: 'translateY(0)' } }}>
+  <ButtonBase onClick={onClick} sx={{ alignItems: 'center', bgcolor: theme.palette.mode === 'dark' ? '#262931' : theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '10px', display: 'flex', gap: '9px', height: '46px', justifyContent: 'center', px: 1.5, transition: 'background-color 140ms ease, border-color 140ms ease, transform 120ms ease', width: '100%', '&:hover': { bgcolor: theme.palette.mode === 'dark' ? '#262931' : theme.palette.background.elevated, borderColor: theme.palette.border.main, transform: 'translateY(-1px)' }, '&:active': { transform: 'translateY(0)' } }}>
     <Box sx={{ color: theme.palette.text.secondary, display: 'inline-flex' }}>{icon}</Box>
     <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.8rem', fontWeight: 600 }}>{label}</Typography>
   </ButtonBase>
@@ -76,6 +80,7 @@ const WalletActionButton = ({ icon, label, onClick, theme }) => (
 
 const InfoPreviewPanel = ({ rows, theme }) => {
   const enableOverlay = useMediaQuery(theme.breakpoints.up('xl'));
+  const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const openTimerRef = useRef<number | null>(null);
@@ -181,6 +186,7 @@ const InfoPreviewPanel = ({ rows, theme }) => {
       }}
     >
       <Box
+        ref={panelRef}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         sx={{
@@ -269,6 +275,7 @@ const InfoPreviewPanel = ({ rows, theme }) => {
 };
 
 export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setMobileViewMode, setDesktopViewMode, desktopViewMode }) => {
+  const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
@@ -427,7 +434,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
           >
             <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '5px', height: '24px' }}>
               {Array.from({ length: 8 }).map((_, index) => (
-                <Box key={index} sx={{ bgcolor: index < minterDotsFilled ? theme.palette.primary.main : alpha(theme.palette.text.secondary, 0.28), borderRadius: '50%', boxShadow: index < minterDotsFilled ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.18)}` : 'none', height: '8px', width: '8px' }} />
+                <Box key={index} sx={{ bgcolor: index < minterDotsFilled ? '#40B4C7' : alpha(theme.palette.text.secondary, 0.28), borderRadius: '50%', boxShadow: index < minterDotsFilled ? `0 0 0 1px ${alpha('#40B4C7', 0.18)}` : 'none', height: '8px', width: '8px' }} />
               ))}
             </Box>
           </motion.div>
@@ -513,13 +520,34 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             <Box sx={{ alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, maxWidth: { xs: '1320px', xl: '1520px' }, padding: '0 20px', width: '100%' }}>
               <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: '1fr', alignItems: 'start', width: '100%', [theme.breakpoints.up('xl')]: { alignItems: 'stretch', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 400px)' } }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, width: '100%' }}>
-                  <Box sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.055em', textTransform: 'uppercase' }}>Qortal Hub</Box>
-                  <HomeProfileCard />
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                    <Box sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.0605em', textTransform: 'uppercase' }}>Qortal Hub</Box>
+                    <HomeProfileCard />
+                  </Box>
                   <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: { xs: '1fr', md: 'minmax(285px, 330px) minmax(0, 1fr)', xl: 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
                     <Box sx={{ display: 'block', minWidth: 0, '& > *': { height: '100%' } }}>
                       <HomeGettingStarted previewMode={isLocalPreview ? welcomePreviewMode : 'live'} onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }} />
                     </Box>
-                    <Box sx={{ display: 'flex', minWidth: 0, width: '100%', '& > *': { width: '100%' } }}>
+                    <Box sx={{ display: 'flex', minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { position: 'relative', width: '100%', zIndex: 1 } }}>
+                      <Box
+                        aria-hidden="true"
+                        sx={{
+                          position: 'absolute',
+                          left: '-6%',
+                          right: '50%',
+                          bottom: '-20px',
+                          height: '20px',
+                          pointerEvents: 'none',
+                          zIndex: 0,
+                          background: theme.palette.mode === 'dark'
+                            ? `radial-gradient(88% 140% at 50% 0%, rgba(87, 170, 219, 0.08) 0%, rgba(87, 170, 219, 0.048) 26%, rgba(14, 15, 20, 0.022) 56%, transparent 82%),
+                               linear-gradient(90deg, transparent 0%, rgba(87, 170, 219, 0.01) 18%, rgba(87, 170, 219, 0.042) 50%, rgba(87, 170, 219, 0.01) 82%, transparent 100%)`
+                            : `radial-gradient(88% 140% at 50% 0%, rgba(60, 76, 90, 0.06) 0%, rgba(60, 76, 90, 0.036) 26%, rgba(14, 15, 20, 0.016) 56%, transparent 82%),
+                               linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0.008) 18%, rgba(60, 76, 90, 0.03) 50%, rgba(60, 76, 90, 0.008) 82%, transparent 100%)`,
+                          filter: 'blur(8px)',
+                          opacity: 1,
+                        }}
+                      />
                       <HomeFeaturedApps />
                     </Box>
                   </Box>
@@ -556,7 +584,26 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
               {activeTab === 'user' && (
                 <>
                   {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
-                  <Box sx={{ ...dashboardPanelSx(theme), borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px 20px', width: '100%' }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
+                  <Box ref={groupActivityPanelRef} sx={{ ...dashboardPanelSx(theme), borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px 20px', width: '100%' }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
+                    <Box
+                      aria-hidden="true"
+                      sx={{
+                        position: 'absolute',
+                        left: '1.03125%',
+                        right: '1.03125%',
+                        top: '-3px',
+                        height: '3.3px',
+                        pointerEvents: 'none',
+                        zIndex: -1,
+                        background: theme.palette.mode === 'dark'
+                          ? `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.14) 26%, rgba(87, 170, 219, 0.216) 40%, rgba(87, 170, 219, 0.486) 46%, rgba(87, 170, 219, 0.594) 50%, rgba(87, 170, 219, 0.486) 54%, rgba(87, 170, 219, 0.216) 60%, rgba(60, 76, 90, 0.14) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
+                             radial-gradient(90% 92% at 50% 100%, rgba(87, 170, 219, 0.198) 0%, rgba(87, 170, 219, 0.108) 30%, rgba(14, 15, 20, 0.035) 52%, transparent 76%)`
+                          : `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.075) 26%, rgba(60, 76, 90, 0.18) 44%, rgba(60, 76, 90, 0.22) 50%, rgba(60, 76, 90, 0.18) 56%, rgba(60, 76, 90, 0.075) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
+                             radial-gradient(90% 92% at 50% 100%, rgba(60, 76, 90, 0.11) 0%, rgba(60, 76, 90, 0.055) 30%, rgba(14, 15, 20, 0.016) 52%, transparent 76%)`,
+                        filter: 'blur(0.72px)',
+                        opacity: 1,
+                      }}
+                    />
                     <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                       <Box>
                         <Box sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600 }}>{t('tutorial:home.group_activity', { postProcess: 'capitalizeFirstChar' })}</Box>

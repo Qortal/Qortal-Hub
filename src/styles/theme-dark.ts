@@ -6,32 +6,32 @@ export const darkThemeOptions: ThemeOptions = {
   palette: {
     mode: 'dark',
     primary: {
-      main: 'rgb(100, 155, 240)',
-      dark: 'rgb(45, 92, 201)',
-      light: 'rgb(130, 185, 255)',
+      main: '#6D9FEE',
+      dark: '#6D9FEE',
+      light: '#71A1EB',
     },
     secondary: {
-      main: 'rgb(69, 173, 255)',
+      main: '#71A1EB',
     },
     background: {
-      default: 'rgb(10, 12, 15)',
-      surface: 'rgb(29, 32, 38)',
-      paper: 'rgb(39, 43, 50)',
-      elevated: 'rgb(48, 53, 61)',
+      default: '#0E0F14',
+      surface: '#1B1D24',
+      paper: '#1D1F27',
+      elevated: '#23262F',
     },
     text: {
       primary: 'rgb(244, 247, 251)',
-      secondary: 'rgb(159, 166, 176)',
+      secondary: '#989BA7',
     },
-    divider: 'rgba(255, 255, 255, 0.1)',
+    divider: '#23262F',
     border: {
-      main: 'rgba(255, 255, 255, 0.18)',
-      subtle: 'rgba(255, 255, 255, 0.1)',
+      main: '#23262F',
+      subtle: '#23262F',
     },
     action: {
-      hover: 'rgba(255, 255, 255, 0.08)',
-      selected: 'rgba(100, 155, 240, 0.18)',
-      focus: 'rgba(100, 155, 240, 0.22)',
+      hover: '#23262F',
+      selected: '#262931',
+      focus: '#262931',
       active: 'rgba(236, 243, 255, 0.86)',
     },
     other: {
@@ -62,9 +62,9 @@ export const darkThemeOptions: ThemeOptions = {
     MuiCssBaseline: {
       styleOverrides: (theme) => ({
         ':root': {
-          '--Mail-Background': 'rgb(9, 11, 15)',
-          '--bg-primary': 'rgb(9, 11, 15)',
-          '--bg-2': 'rgb(27, 31, 39)',
+          '--Mail-Background': '#0E0F14',
+          '--bg-primary': '#0E0F14',
+          '--bg-2': '#0E0F14',
           '--primary-main': theme.palette.primary.main,
           '--text-primary': theme.palette.text.primary,
           '--text-secondary': theme.palette.text.secondary,
@@ -75,6 +75,16 @@ export const darkThemeOptions: ThemeOptions = {
           '--videoplayer-bg': 'rgb(18, 21, 27)',
         },
         ...getCommonGlobalStyles(theme),
+        html: {
+          backgroundColor: '#0E0F14',
+          backgroundImage: 'linear-gradient(180deg, #0E0F14 0%, #0E0F14 100%)',
+          backgroundRepeat: 'no-repeat',
+        },
+        body: {
+          backgroundColor: '#0E0F14',
+          backgroundImage: 'linear-gradient(180deg, #0E0F14 0%, #0E0F14 100%)',
+          backgroundRepeat: 'no-repeat',
+        },
       }),
     },
 

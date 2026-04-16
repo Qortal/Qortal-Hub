@@ -34,6 +34,7 @@ import {
   dashboardPanelSx,
   handleDashboardPanelPointerLeave,
   handleDashboardPanelPointerMove,
+  useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
 
 export const HomeProfileCard = () => {
@@ -53,6 +54,7 @@ export const HomeProfileCard = () => {
     null
   );
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
+  const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
 
   useEffect(() => {
     if (!avatarFile) {
@@ -149,8 +151,14 @@ export const HomeProfileCard = () => {
 
   return (
     <Box
+      ref={panelRef}
       sx={{
         ...dashboardPanelSx(theme),
+        backgroundColor: '#24272f',
+        backgroundImage:
+          theme.palette.mode === 'dark'
+            ? 'linear-gradient(180deg, #24272f 0%, #24272f 50%, #1B1D24 100%)'
+            : undefined,
         alignItems: 'center',
         borderRadius: '14px',
         display: 'grid',
@@ -168,6 +176,27 @@ export const HomeProfileCard = () => {
       onMouseMove={handleDashboardPanelPointerMove}
       onMouseLeave={handleDashboardPanelPointerLeave}
     >
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          left: '0.875%',
+          right: '0.875%',
+          top: 0,
+          transform: 'translateY(-50%)',
+          height: '3.3px',
+          pointerEvents: 'none',
+          zIndex: -1,
+          background:
+            theme.palette.mode === 'dark'
+              ? `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.12) 26%, rgba(87, 170, 219, 0.252) 40%, rgba(87, 170, 219, 0.648) 46%, rgba(87, 170, 219, 0.774) 50%, rgba(87, 170, 219, 0.648) 54%, rgba(87, 170, 219, 0.252) 60%, rgba(60, 76, 90, 0.12) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
+                 radial-gradient(92% 92% at 50% 100%, rgba(87, 170, 219, 0.27) 0%, rgba(87, 170, 219, 0.144) 30%, rgba(14, 15, 20, 0.035) 52%, transparent 76%)`
+              : `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.07) 26%, rgba(60, 76, 90, 0.22) 44%, rgba(60, 76, 90, 0.28) 50%, rgba(60, 76, 90, 0.22) 56%, rgba(60, 76, 90, 0.07) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
+                 radial-gradient(92% 92% at 50% 100%, rgba(60, 76, 90, 0.1) 0%, rgba(60, 76, 90, 0.055) 30%, rgba(14, 15, 20, 0.016) 52%, transparent 76%)`,
+          filter: 'blur(0.72px)',
+          opacity: 1,
+        }}
+      />
       <Box
         sx={{
           alignItems: {
@@ -194,9 +223,9 @@ export const HomeProfileCard = () => {
           <Avatar
             src={avatarUrl ?? undefined}
             onError={() => setAvatarError(true)}
-            sx={{ height: 60, width: 60 }}
+            sx={{ bgcolor: '#636772', height: 60, width: 60 }}
           >
-            <PersonIcon sx={{ fontSize: 34 }} />
+            <PersonIcon sx={{ color: '#1D2126', fontSize: 34 }} />
           </Avatar>
         </ButtonBase>
         <Button
@@ -254,7 +283,7 @@ export const HomeProfileCard = () => {
         <Box
           sx={{
             alignItems: 'center',
-            bgcolor: theme.palette.background.default,
+            bgcolor: '#1B1E25',
             border: `1px solid ${theme.palette.border.subtle}`,
             borderRadius: '10px',
             display: 'flex',
