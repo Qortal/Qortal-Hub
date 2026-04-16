@@ -73,7 +73,7 @@ export function AuthenticatedShell({
         height: '100%',
         isolation: 'isolate',
         position: 'relative',
-        width: '100vw',
+        width: '100%',
         '&::before': {
           background:
             theme.palette.mode === 'dark'

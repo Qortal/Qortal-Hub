@@ -25,6 +25,11 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { getBaseApiReact, getArbitraryEndpointReact } from '../../App';
+import {
+  dashboardPanelSx,
+  handleDashboardPanelPointerLeave,
+  handleDashboardPanelPointerMove,
+} from './dashboardPanelEffects';
 
 export const GETTING_STARTED_LS_KEY = 'getting_started_status';
 const LS_KEY = GETTING_STARTED_LS_KEY;
@@ -205,16 +210,19 @@ export const HomeGettingStarted = ({
     <>
       <Box
         sx={{
-          bgcolor: theme.palette.background.paper,
-          border: `1px solid ${theme.palette.border.subtle}`,
+          ...dashboardPanelSx(theme),
           borderRadius: '12px',
           display: 'flex',
           flexDirection: 'column',
+          height: '100%',
           gap: '8px',
+          justifyContent: 'flex-start',
           padding: '16px 20px',
           transition: 'border-color 180ms ease, background-color 180ms ease',
           width: '100%',
         }}
+        onMouseMove={handleDashboardPanelPointerMove}
+        onMouseLeave={handleDashboardPanelPointerLeave}
       >
         {/* Header */}
         <Box
@@ -258,15 +266,24 @@ export const HomeGettingStarted = ({
               justifyContent: 'space-between',
               padding: '10px 14px',
               transition:
-                'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+                'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
               '&:hover': {
                 backgroundColor: theme.palette.background.elevated,
                 borderColor: theme.palette.border.main,
+                boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}, 0 2px 10px rgba(0,0,0,0.06)`,
+                transform: 'translateY(-1px)',
+              },
+              '&:active': {
+                transform: 'translateY(0)',
                 boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}`,
+              },
+              '&:focus-within': {
+                borderColor: theme.palette.border.main,
+                boxShadow: `inset 0 0 0 1px ${theme.palette.border.main}`,
               },
               '& button': {
                 transition:
-                  'background-color 140ms ease, border-color 140ms ease, color 140ms ease',
+                  'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
               },
             }}
           >
@@ -330,6 +347,12 @@ export const HomeGettingStarted = ({
                   fontSize: '0.78rem',
                   minWidth: '60px',
                   opacity: step.done ? 0.5 : 1,
+                  borderRadius: '9px',
+                  fontWeight: 600,
+                  '&:focus-visible': {
+                    borderColor: theme.palette.primary.main,
+                    boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
+                  },
                   ...(step.done
                     ? {}
                     : {
@@ -339,6 +362,12 @@ export const HomeGettingStarted = ({
                           backgroundColor: theme.palette.background.elevated,
                           borderColor: theme.palette.primary.light,
                           color: theme.palette.text.primary,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                          transform: 'translateY(-1px)',
+                        },
+                        '&:active': {
+                          boxShadow: 'none',
+                          transform: 'translateY(0)',
                         },
                       }),
                 }}
@@ -444,7 +473,22 @@ export const HomeGettingStarted = ({
                       window.open(ONBOARDING_URL, '_blank');
                     }
                   }}
-                  sx={{ mt: 0.75, textTransform: 'none', fontWeight: 600 }}
+                  sx={{
+                    mt: 0.75,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: '9px',
+                    transition:
+                      'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                      boxShadow: 'none',
+                    },
+                  }}
                 >
                   {t('tutorial:home.get_six_qorts_way1_action')}
                 </Button>
@@ -496,7 +540,22 @@ export const HomeGettingStarted = ({
                       window.open(SUPPORT_CHAT_URL, '_blank');
                     }
                   }}
-                  sx={{ mt: 0.75, textTransform: 'none', fontWeight: 600 }}
+                  sx={{
+                    mt: 0.75,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: '9px',
+                    transition:
+                      'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                      boxShadow: 'none',
+                    },
+                  }}
                 >
                   {t('tutorial:home.get_six_qorts_way2_action')}
                 </Button>
@@ -545,7 +604,22 @@ export const HomeGettingStarted = ({
                     executeEvent('open-apps-mode', {});
                     setOpenQortsDialog(false);
                   }}
-                  sx={{ mt: 0.75, textTransform: 'none', fontWeight: 600 }}
+                  sx={{
+                    mt: 0.75,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderRadius: '9px',
+                    transition:
+                      'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                    '&:hover': {
+                      transform: 'translateY(-1px)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                      boxShadow: 'none',
+                    },
+                  }}
                 >
                   {t('tutorial:home.get_six_qorts_way3_action')}
                 </Button>

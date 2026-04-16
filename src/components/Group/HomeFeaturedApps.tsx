@@ -1,11 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { Avatar, Box, ButtonBase, Typography, useTheme } from '@mui/material';
-import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
-import { officialAppsConfig } from '../Apps/config/officialApps';
+import {
+  dashboardPanelSx,
+  handleDashboardPanelPointerLeave,
+  handleDashboardPanelPointerMove,
+} from './dashboardPanelEffects';
 
 const RETRY_DELAY_MS = 5000;
+const FEATURED_APP_NAMES = [
+  'Q-Tube',
+  'Quitter',
+  'Q-Mail',
+  'Q-Trade',
+  'Q-Blog',
+  'Q-Fund',
+  'Pirate Nintendo',
+  'Q-Manager',
+] as const;
 
 const openApp = (appName: string) => {
   executeEvent('addTab', { data: { service: 'APP', name: appName } });
@@ -13,22 +26,24 @@ const openApp = (appName: string) => {
 };
 
 export const HomeFeaturedApps = () => {
-  const { t } = useTranslation(['tutorial']);
   const theme = useTheme();
 
   return (
     <Box
       sx={{
-        bgcolor: theme.palette.background.paper,
-        border: `1px solid ${theme.palette.border.subtle}`,
+        ...dashboardPanelSx(theme),
         borderRadius: '12px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '12px',
+        height: '100%',
+        gap: '14px',
+        minHeight: { md: '382px' },
         padding: '16px 20px',
         transition: 'border-color 180ms ease, background-color 180ms ease',
         width: '100%',
       }}
+      onMouseMove={handleDashboardPanelPointerMove}
+      onMouseLeave={handleDashboardPanelPointerLeave}
     >
       {/* Section title */}
       <Typography
@@ -38,26 +53,57 @@ export const HomeFeaturedApps = () => {
           fontWeight: 600,
         }}
       >
-        {t('tutorial:home.featured_apps')}
+        Featured Q-Apps
       </Typography>
 
-      {/* Horizontally scrollable app row */}
       <Box
         sx={{
-          display: 'flex',
+          display: 'grid',
           gap: '12px',
-          justifyContent: 'center',
-          overflowX: 'auto',
-          pb: '4px', // prevent clipping box-shadows on scroll
-          // Hide scrollbar visually while keeping it functional
-          scrollbarWidth: 'none',
-          '&::-webkit-scrollbar': { display: 'none' },
+          gridTemplateColumns: {
+            xs: 'repeat(2, minmax(132px, 132px))',
+            sm: 'repeat(2, minmax(132px, 132px))',
+            md: 'repeat(4, minmax(132px, 132px))',
+          },
+          alignItems: 'start',
+          gridAutoRows: '132px',
+          justifyContent: {
+            xs: 'center',
+            md: 'start',
+          },
+          width: '100%',
         }}
       >
-        {officialAppsConfig.featured.map((appName) => (
+        {FEATURED_APP_NAMES.map((appName) => (
           <AppTile key={appName} appName={appName} theme={theme} />
         ))}
       </Box>
+
+      <Typography
+        sx={{
+          color: theme.palette.text.secondary,
+          fontSize: '0.74rem',
+          mt: '10px',
+          textAlign: 'center',
+        }}
+      >
+        <ButtonBase
+          onClick={() => executeEvent('open-apps-mode', {})}
+          sx={{
+            color: theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.text.primary,
+            fontSize: 'inherit',
+            fontWeight: 700,
+            mr: '4px',
+            textDecoration: 'none',
+            '&:hover': {
+              backgroundColor: 'transparent',
+            },
+          }}
+        >
+          Explore
+        </ButtonBase>
+        All Q-Apps
+      </Typography>
     </Box>
   );
 };
@@ -93,6 +139,7 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
 
   return (
     <ButtonBase
+      disableRipple
       onClick={() => openApp(appName)}
       sx={{
         alignItems: 'center',
@@ -101,15 +148,28 @@ const AppTile = ({ appName, theme }: Omit<AppTileProps, 'label'>) => {
         borderRadius: '10px',
         display: 'flex',
         flexDirection: 'column',
-        flexShrink: 0,
         gap: '8px',
+        justifyContent: 'center',
         padding: '14px 10px',
-        transition: 'background-color 160ms ease, border-color 160ms ease',
-        width: '120px',
+        transition:
+          'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
+        position: 'relative',
+        width: '132px',
+        minHeight: '132px',
         '&:hover': {
           bgcolor: theme.palette.background.elevated,
           borderColor: theme.palette.border.main,
-          boxShadow: '0 6px 14px rgba(0,0,0,0.1)',
+          boxShadow: '0 8px 18px rgba(0,0,0,0.1)',
+          transform: 'translateY(-1px)',
+        },
+        '&:active': {
+          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+          transform: 'translateY(0)',
+        },
+        '&:focus-visible': {
+          backgroundColor: theme.palette.background.elevated,
+          borderColor: theme.palette.border.main,
+          boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
         },
       }}
     >

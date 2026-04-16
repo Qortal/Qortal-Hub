@@ -88,7 +88,6 @@ import {
   ChatContentBox,
   EncryptionKeyMessageDiv,
   FloatingButtonContainerBox,
-  GroupRightSidebar,
   InnerChatBox,
   MainContentBox,
   NewChatOverlay,
@@ -2106,14 +2105,6 @@ export const Group = ({
             desktopViewMode={desktopViewMode}
           />
         </MainContentBox>
-
-        <GroupRightSidebar
-          hide={
-            desktopViewMode === 'apps' ||
-            desktopViewMode === 'dev' ||
-            desktopViewMode === 'chat'
-          }
-        />
 
         <LoadingSnackbar
           open={isLoadingGroup}

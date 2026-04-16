@@ -85,21 +85,34 @@ const SidebarItem = ({
     justifyContent: 'flex-start',
     minHeight: `${ITEM_MIN_HEIGHT_PX}px`,
     py: ITEM_PADDING_Y,
-    transition: 'background-color 180ms ease, color 180ms ease',
+    transition:
+      'background-color 180ms ease, color 180ms ease, box-shadow 140ms ease, transform 120ms ease',
     width: `${ITEM_WIDTH_PX}px`,
     ...((onClick || isInfo) && {
       '&:hover': {
-        backgroundColor: isInfo ? 'transparent' : theme.palette.action.hover,
+        backgroundColor: theme.palette.action.hover,
         color: theme.palette.text.primary,
+        boxShadow: 'none',
+      },
+      '&:active': {
+        transform: 'translateY(0)',
       },
     }),
     '&:focus-visible': {
-      outline: `1px solid ${alpha(theme.palette.text.primary, 0.18)}`,
-      outlineOffset: '2px',
+      backgroundColor: isInfo
+        ? 'transparent'
+        : alpha(theme.palette.action.hover, theme.palette.mode === 'dark' ? 0.72 : 0.82),
+      boxShadow: isInfo
+        ? 'none'
+        : `inset 0 0 0 1px ${alpha(theme.palette.border.main, 0.22)}, inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.03 : 0.12)}`,
+      color: theme.palette.text.primary,
     },
     ...(active && {
-      backgroundColor: theme.palette.action.selected,
-      boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.primary.light, 0.14)}`,
+      backgroundColor: alpha(
+        theme.palette.action.selected,
+        theme.palette.mode === 'dark' ? 0.78 : 0.88
+      ),
+      boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.primary.light, 0.14)}, inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.02 : 0.1)}`,
     }),
   } as const;
 
@@ -136,6 +149,10 @@ export const DesktopSideBar = ({
   const { t } = useTranslation(['core']);
   const [isVisible, setIsVisible] = useState(false);
   const [debugUnread, setDebugUnread] = useState(false);
+  const [debugMinterPreview, setDebugMinterPreview] = useState<'off' | 'on'>(() => {
+    const saved = localStorage.getItem('dashboardMinterPreviewMode');
+    return saved === 'on' ? 'on' : 'off';
+  });
   const [isInfoActive, setIsInfoActive] = useState(false);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -348,8 +365,8 @@ export const DesktopSideBar = ({
             borderRight: `1px solid ${theme.palette.border.subtle}`,
             boxShadow:
               theme.palette.mode === 'dark'
-                ? '4px 0 16px rgba(0, 0, 0, 0.16)'
-                : '3px 0 10px rgba(0,0,0,0.05)',
+                ? '8px 0 18px rgba(0, 0, 0, 0.12)'
+                : '6px 0 14px rgba(0,0,0,0.04)',
             transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
             transition: `transform ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,
             overflow: 'visible',
@@ -527,11 +544,36 @@ export const DesktopSideBar = ({
             bottom: 16,
             zIndex: 2000,
             display: 'flex',
-            flexDirection: 'column',
+            flexDirection: 'row',
             gap: 0.5,
-            alignItems: 'flex-end',
+            alignItems: 'center',
           }}
         >
+          <ButtonBase
+            disableRipple
+            onClick={() => {
+              const next = debugMinterPreview === 'on' ? 'off' : 'on';
+              setDebugMinterPreview(next);
+              localStorage.setItem('dashboardMinterPreviewMode', next);
+              executeEvent('setDashboardMinterPreview', { data: { mode: next } });
+            }}
+            sx={{
+              borderRadius: '10px',
+              backgroundColor: alpha(theme.palette.background.paper, 0.94),
+              border: `1px solid ${theme.palette.border.subtle}`,
+              color: theme.palette.text.primary,
+              fontSize: '11px',
+              fontWeight: 700,
+              px: 1,
+              py: 0.6,
+              boxShadow:
+                theme.palette.mode === 'dark'
+                  ? '0 6px 16px rgba(0,0,0,0.24)'
+                  : '0 6px 16px rgba(0,0,0,0.1)',
+            }}
+          >
+            Minter: {debugMinterPreview === 'on' ? 'ON' : 'OFF'}
+          </ButtonBase>
           <ButtonBase
             disableRipple
             onClick={() => setDebugUnread((prev) => !prev)}

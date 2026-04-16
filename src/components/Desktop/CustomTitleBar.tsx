@@ -320,7 +320,13 @@ export function CustomTitleBar(props?: {
         height: TITLE_BAR_HEIGHT,
         padding: 0,
         WebkitAppRegion: 'no-drag',
+        transition:
+          'background-color 140ms ease, color 140ms ease, transform 120ms ease',
         '&:hover': { backgroundColor: controlHover },
+        '&:focus-visible': {
+          outline: `1px solid ${theme.palette.primary.main}`,
+          outlineOffset: '-1px',
+        },
       }}
       aria-label="Application menu"
     >
@@ -384,7 +390,14 @@ export function CustomTitleBar(props?: {
     width: 32,
     height: 32,
     borderRadius: 1,
-    '&:hover': { backgroundColor: controlHover },
+    transition:
+      'background-color 140ms ease, color 140ms ease, transform 120ms ease',
+    '&:hover': { backgroundColor: controlHover, transform: 'translateY(-1px)' },
+    '&:active': { transform: 'translateY(0)' },
+    '&:focus-visible': {
+      outline: `1px solid ${theme.palette.primary.main}`,
+      outlineOffset: '2px',
+    },
   };
 
   /** Uniform 32x32 cell for widgets so all title-bar icons align; scales inner icons to 20px */

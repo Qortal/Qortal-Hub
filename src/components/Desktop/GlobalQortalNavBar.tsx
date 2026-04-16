@@ -267,6 +267,24 @@ export function GlobalQortalNavBar({
   } as const;
 
   return (
+    <>
+    <Box
+        sx={{
+          position: 'fixed',
+          top: `${APP_NAV_BAR_HEIGHT + 40}px`,
+          right: 12,
+          zIndex: 1900,
+          color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.52)' : 'rgba(24,29,36,0.48)',
+          fontSize: '11px',
+          fontWeight: 600,
+          letterSpacing: '0.03em',
+          lineHeight: 1,
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}
+      >
+        79
+      </Box>
     <Box
         sx={{
           alignItems: 'center',
@@ -331,10 +349,20 @@ export function GlobalQortalNavBar({
               justifyContent: 'center',
               opacity: canGoBack ? 1 : 0.32,
               transition:
-                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
+                'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
               width: 32,
               '&:hover:not(.Mui-disabled)': {
                 backgroundColor: buttonHoverBackground,
+                transform: 'translateY(-1px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              },
+              '&:active:not(.Mui-disabled)': {
+                transform: 'translateY(0)',
+                boxShadow: 'none',
+              },
+              '&:focus-visible': {
+                outline: `1px solid ${theme.palette.primary.main}`,
+                outlineOffset: '2px',
               },
             }}
           >
@@ -358,7 +386,7 @@ export function GlobalQortalNavBar({
               justifyContent: 'center',
               opacity: desktopViewMode === 'home' ? 1 : 0.92,
               transition:
-                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
+                'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
               width: 32,
               backgroundColor:
                 desktopViewMode === 'home'
@@ -366,6 +394,16 @@ export function GlobalQortalNavBar({
                   : 'transparent',
               '&:hover': {
                 backgroundColor: buttonHoverBackground,
+                transform: 'translateY(-1px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              },
+              '&:active': {
+                transform: 'translateY(0)',
+                boxShadow: 'none',
+              },
+              '&:focus-visible': {
+                outline: `1px solid ${theme.palette.primary.main}`,
+                outlineOffset: '2px',
               },
             }}
           >
@@ -394,10 +432,20 @@ export function GlobalQortalNavBar({
               justifyContent: 'center',
               opacity: canRefresh ? 1 : 0.32,
               transition:
-                'background-color 180ms ease, color 180ms ease, opacity 180ms ease',
+                'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
               width: 32,
               '&:hover:not(.Mui-disabled)': {
                 backgroundColor: buttonHoverBackground,
+                transform: 'translateY(-1px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+              },
+              '&:active:not(.Mui-disabled)': {
+                transform: 'translateY(0)',
+                boxShadow: 'none',
+              },
+              '&:focus-visible': {
+                outline: `1px solid ${theme.palette.primary.main}`,
+                outlineOffset: '2px',
               },
             }}
           >
@@ -419,9 +467,9 @@ export function GlobalQortalNavBar({
             height: 32,
             minWidth: 0,
             px: 1.25,
-            boxShadow: 'none',
-            transition:
-              'background-color 240ms ease, border-color 240ms ease, box-shadow 280ms ease',
+              boxShadow: 'none',
+              transition:
+              'background-color 180ms ease, border-color 180ms ease, box-shadow 200ms ease',
             '&:hover': {
               backgroundColor: inputHoverBackground,
               borderColor: hoverBorderColor,
@@ -430,7 +478,7 @@ export function GlobalQortalNavBar({
             '&:focus-within': {
               backgroundColor: inputFocusBackground,
               borderColor: focusBorderColor,
-              boxShadow: inputFocusShadow,
+              boxShadow: `0 0 0 1px ${focusBorderColor}`,
             },
           }}
         >
@@ -569,11 +617,21 @@ export function GlobalQortalNavBar({
                 justifyContent: 'center',
                 minWidth: 26,
                 transition:
-                  'background-color 180ms ease, color 180ms ease',
+                  'background-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
                 width: 26,
                 '&:hover': {
                   backgroundColor: buttonHoverBackground,
                   color: theme.palette.text.primary,
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                  boxShadow: 'none',
+                },
+                '&:focus-visible': {
+                  outline: `1px solid ${theme.palette.primary.main}`,
+                  outlineOffset: '2px',
                 },
               }}
             >
@@ -589,5 +647,6 @@ export function GlobalQortalNavBar({
         </Box>
         </Box>
       </Box>
+    </>
   );
 }

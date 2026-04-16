@@ -10,6 +10,7 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   },
 
   html: {
+    backgroundColor: theme.palette.background.default,
     padding: 0,
     margin: 0,
   },
@@ -23,32 +24,41 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   },
 
   '::-webkit-scrollbar-track': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 0, 0, 0.04)',
+    backgroundColor: 'transparent',
   },
 
   '::-webkit-scrollbar-track:hover': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: 'transparent',
   },
 
   '::-webkit-scrollbar': {
-    width: '10px',
-    height: '10px',
+    width: '8px',
+    height: '8px',
   },
 
   '::-webkit-scrollbar-thumb': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.18)' : 'rgba(0, 0, 0, 0.2)',
-    borderRadius: '5px',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.12)'
+        : 'rgba(0, 0, 0, 0.14)',
+    borderRadius: '999px',
     border: '2px solid transparent',
     backgroundClip: 'content-box',
     transition: 'background-color 0.2s ease',
   },
 
   '::-webkit-scrollbar-thumb:hover': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.28)' : 'rgba(0, 0, 0, 0.3)',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.18)'
+        : 'rgba(0, 0, 0, 0.2)',
   },
 
   '::-webkit-scrollbar-thumb:active': {
-    backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.38)' : 'rgba(0, 0, 0, 0.4)',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255, 255, 255, 0.24)'
+        : 'rgba(0, 0, 0, 0.26)',
   },
 });
 

@@ -4,9 +4,7 @@ import {
   Box,
   Button,
   ButtonBase,
-  IconButton,
   Popover,
-  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -14,15 +12,10 @@ import { LoadingButton } from '@mui/lab';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import ErrorIcon from '@mui/icons-material/Error';
 import PersonIcon from '@mui/icons-material/Person';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
-import SendIcon from '@mui/icons-material/Send';
-import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import QRCode from 'react-qr-code';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
   userInfoAtom,
-  balanceAtom,
   openSnackGlobalAtom,
   infoSnackGlobalAtom,
 } from '../../atoms/global';
@@ -37,13 +30,17 @@ import {
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
+import {
+  dashboardPanelSx,
+  handleDashboardPanelPointerLeave,
+  handleDashboardPanelPointerMove,
+} from './dashboardPanelEffects';
 
 export const HomeProfileCard = () => {
   const { t } = useTranslation(['tutorial', 'core', 'group']);
   const theme = useTheme();
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const userInfo = useAtomValue(userInfoAtom);
-  const balance = useAtomValue(balanceAtom);
   const setOpenSnack = useSetAtom(openSnackGlobalAtom);
   const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
 
@@ -56,9 +53,7 @@ export const HomeProfileCard = () => {
     null
   );
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
-  const [qrAnchorEl, setQrAnchorEl] = useState<HTMLElement | null>(null);
 
-  // Object URL for selected file preview; revoke on change/cleanup
   useEffect(() => {
     if (!avatarFile) {
       setAvatarPreviewUrl(null);
@@ -69,10 +64,11 @@ export const HomeProfileCard = () => {
     return () => URL.revokeObjectURL(url);
   }, [avatarFile]);
 
-  // When "Load your avatar" step (or any openAvatarUpload event) fires, open the same popover as "Change avatar"
   useEffect(() => {
     const openFromEvent = () => {
-      if (avatarAnchorRef.current) setAvatarAnchorEl(avatarAnchorRef.current);
+      if (avatarAnchorRef.current) {
+        setAvatarAnchorEl(avatarAnchorRef.current);
+      }
     };
     subscribeToEvent('openAvatarUpload', openFromEvent);
     return () => unsubscribeFromEvent('openAvatarUpload', openFromEvent);
@@ -86,8 +82,6 @@ export const HomeProfileCard = () => {
       ? `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${name}/qortal_avatar?async=true`
       : null);
 
-  const formattedBalance = balance != null ? Number(balance).toFixed(2) : '—';
-
   const handleCopyAddress = () => {
     if (!address) return;
     navigator.clipboard.writeText(address);
@@ -100,26 +94,9 @@ export const HomeProfileCard = () => {
     setOpenSnack(true);
   };
 
-  const handleTransferQort = () => {
-    executeEvent('openPaymentInternal', {});
-  };
-
-  const handleOpenQTrade = () => {
-    executeEvent('addTab', { data: { service: 'APP', name: 'q-trade' } });
-    executeEvent('open-apps-mode', {});
-  };
-
   const publishAvatar = async () => {
     try {
       const fee = await getFee('ARBITRARY');
-
-      if (+balance < +fee.fee)
-        throw new Error(
-          t('core:message.generic.avatar_publish_fee', {
-            fee: fee.fee,
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
 
       await show({
         message: t('core:message.question.publish_avatar', {
@@ -173,229 +150,187 @@ export const HomeProfileCard = () => {
   return (
     <Box
       sx={{
+        ...dashboardPanelSx(theme),
         alignItems: 'center',
-        bgcolor: theme.palette.background.paper,
-        border: `1px solid ${theme.palette.border.subtle}`,
-        borderRadius: '12px',
-        display: 'flex',
-        gap: '16px',
-        justifyContent: 'space-between',
-        padding: '16px 20px',
-        transition: 'border-color 180ms ease, background-color 180ms ease',
+        borderRadius: '14px',
+        display: 'grid',
+        gap: {
+          xs: '18px',
+          md: '20px',
+        },
+        gridTemplateColumns: {
+          xs: '1fr',
+          md: 'auto minmax(0, 1fr) 72px',
+        },
+        padding: '20px 22px',
         width: '100%',
       }}
+      onMouseMove={handleDashboardPanelPointerMove}
+      onMouseLeave={handleDashboardPanelPointerLeave}
     >
-      {/* Left: Avatar + Name */}
       <Box
         sx={{
-          alignItems: 'center',
+          alignItems: {
+            xs: 'flex-start',
+            md: 'center',
+          },
           display: 'flex',
-          flexShrink: 0,
-          gap: '12px',
+          flexDirection: {
+            xs: 'row',
+            md: 'column',
+          },
+          gap: '10px',
+          minWidth: {
+            xs: 0,
+            md: '108px',
+          },
         }}
       >
-        <Box
+        <ButtonBase
+          ref={avatarAnchorRef}
+          onClick={(e) => setAvatarAnchorEl(e.currentTarget)}
+          sx={{ borderRadius: '50%' }}
+        >
+          <Avatar
+            src={avatarUrl ?? undefined}
+            onError={() => setAvatarError(true)}
+            sx={{ height: 60, width: 60 }}
+          >
+            <PersonIcon sx={{ fontSize: 34 }} />
+          </Avatar>
+        </ButtonBase>
+        <Button
+          variant="outlined"
+          onClick={(e) => setAvatarAnchorEl(e.currentTarget)}
           sx={{
-            alignItems: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '4px',
+            borderColor: theme.palette.border.main,
+            borderRadius: '999px',
+            color: theme.palette.text.secondary,
+            fontSize: '0.68rem',
+            fontWeight: 700,
+            lineHeight: 1,
+            minWidth: 'auto',
+            px: 1.4,
+            py: 0.72,
+            textTransform: 'uppercase',
+            '&:hover': {
+              borderColor: theme.palette.border.main,
+              backgroundColor: theme.palette.action.hover,
+            },
           }}
         >
-          <ButtonBase
-            ref={avatarAnchorRef}
-            onClick={(e) => setAvatarAnchorEl(e.currentTarget)}
-            sx={{ borderRadius: '50%' }}
-          >
-            <Avatar
-              src={avatarUrl ?? undefined}
-              onError={() => setAvatarError(true)}
-              sx={{ height: 56, width: 56 }}
-            >
-              <PersonIcon sx={{ fontSize: 32 }} />
-            </Avatar>
-          </ButtonBase>
-          <ButtonBase onClick={(e) => setAvatarAnchorEl(e.currentTarget)}>
-            <Typography
-              sx={{
-                color: theme.palette.text.secondary,
-                fontSize: '0.68rem',
-                opacity: 0.7,
-              }}
-            >
-              {t('core:action.change_avatar', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </Typography>
-          </ButtonBase>
-        </Box>
+          Edit profile
+        </Button>
+      </Box>
 
+      <Box
+        sx={{
+          alignItems: {
+            xs: 'flex-start',
+            md: 'center',
+          },
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          minWidth: 0,
+          width: '100%',
+        }}
+      >
         <Typography
           sx={{
             color: theme.palette.text.primary,
             fontSize: '1rem',
             fontWeight: 600,
-            maxWidth: '140px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            textAlign: {
+              xs: 'left',
+              md: 'center',
+            },
+            width: '100%',
           }}
         >
-          {name ?? `${address?.slice(0, 8) ?? ''}…`}
+          Account Overview
         </Typography>
-      </Box>
 
-      {/* Center: Address (copy on click) */}
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          flex: 1,
-          flexDirection: 'column',
-          gap: '4px',
-          minWidth: 0,
-        }}
-      >
-        <Typography
-          sx={{
-            fontSize: '1rem',
-          }}
-        >
-          {t('tutorial:home.account_address', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
-        <Tooltip
-          title={t('tutorial:home.copy_address', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        >
-          <Box
-            onClick={handleCopyAddress}
-            sx={{
-              alignItems: 'center',
-              bgcolor: theme.palette.background.surface,
-              border: `1px solid ${theme.palette.border.subtle}`,
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              gap: '6px',
-              justifyContent: 'center',
-              maxWidth: '360px',
-              padding: '8px 12px',
-              transition: 'background-color 160ms ease, border-color 160ms ease',
-              width: '100%',
-              '&:hover': {
-                bgcolor: theme.palette.background.elevated,
-                borderColor: theme.palette.border.main,
-                boxShadow: `0 4px 10px rgba(0,0,0,0.08)`,
-              },
-            }}
-          >
-            <Typography
-              sx={{
-                color: theme.palette.text.secondary,
-                fontFamily: 'monospace',
-                fontSize: '0.78rem',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {address ?? '—'}
-            </Typography>
-            <ContentCopyIcon
-              sx={{
-                color: theme.palette.text.secondary,
-                flexShrink: 0,
-                fontSize: '0.9rem',
-              }}
-            />
-          </Box>
-        </Tooltip>
-      </Box>
-
-      {/* Right: Balance + actions (vertical) */}
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          flexShrink: 0,
-          gap: '4px',
-        }}
-      >
-        {/* Balance */}
         <Box
           sx={{
-            alignItems: 'flex-end',
+            alignItems: 'center',
+            bgcolor: theme.palette.background.default,
+            border: `1px solid ${theme.palette.border.subtle}`,
+            borderRadius: '10px',
             display: 'flex',
-            flexDirection: 'column',
-            mr: '8px',
+            gap: '10px',
+            maxWidth: '560px',
+            minHeight: '44px',
+            px: 1.5,
+            py: 1,
+            width: '100%',
           }}
         >
-          <Typography
-            sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}
-          >
-            {t('tutorial:home.balance', { postProcess: 'capitalizeFirstChar' })}
-          </Typography>
           <Typography
             sx={{
               color: theme.palette.text.primary,
-              fontSize: '1rem',
-              fontWeight: 700,
+              flex: 1,
+              fontFamily: 'monospace',
+              fontSize: '0.76rem',
+              overflow: 'hidden',
+              textAlign: {
+                xs: 'left',
+                md: 'center',
+              },
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
-            {formattedBalance} QORT
+            {address ?? '—'}
           </Typography>
+          <ButtonBase
+            onClick={handleCopyAddress}
+            disabled={!address}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '8px',
+              color: theme.palette.text.secondary,
+              display: 'inline-flex',
+              flexShrink: 0,
+              height: '26px',
+              justifyContent: 'center',
+              width: '26px',
+              '&:hover': {
+                backgroundColor: theme.palette.action.hover,
+                color: theme.palette.text.primary,
+              },
+            }}
+          >
+            <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
+          </ButtonBase>
         </Box>
 
-        {/* Icons column */}
-        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-          {/* Transfer QORT */}
-          <Tooltip
-            title={t('core:action.transfer_qort', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            placement="left"
-            disableInteractive
-          >
-            <IconButton onClick={handleTransferQort} size="small">
-              <SendIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
-          {/* QR Code */}
-          <Tooltip
-            title={t('core:action.see_qr_code', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            placement="left"
-            disableInteractive
-          >
-            <IconButton
-              onClick={(e) => setQrAnchorEl(e.currentTarget)}
-              size="small"
-            >
-              <QrCode2Icon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-
-          {/* Get QORT in Q-Trade */}
-          <Tooltip
-            title={t('core:action.get_qort_trade', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            placement="left"
-            disableInteractive
-          >
-            <IconButton onClick={handleOpenQTrade} size="small">
-              <ShoppingCartIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-        </Box>
+        <Typography
+          sx={{
+            color: theme.palette.text.secondary,
+            fontSize: '0.64rem',
+            letterSpacing: '0.05em',
+            textAlign: {
+              xs: 'left',
+              md: 'center',
+            },
+            textTransform: 'uppercase',
+            width: '100%',
+          }}
+        >
+          QORT Wallet Address
+        </Typography>
       </Box>
 
-      {/* Avatar upload popover */}
+      <Box
+        sx={{
+          display: {
+            xs: 'none',
+            md: 'block',
+          },
+        }}
+      />
+
       <Popover
         open={Boolean(avatarAnchorEl)}
         anchorEl={avatarAnchorEl}
@@ -437,7 +372,6 @@ export const HomeProfileCard = () => {
             })}
           </Typography>
 
-          {/* Preview area */}
           <Box
             sx={{
               display: 'flex',
@@ -560,25 +494,6 @@ export const HomeProfileCard = () => {
               postProcess: 'capitalizeFirstChar',
             })}
           </LoadingButton>
-        </Box>
-      </Popover>
-
-      {/* QR Code popover */}
-      <Popover
-        open={Boolean(qrAnchorEl)}
-        anchorEl={qrAnchorEl}
-        onClose={() => setQrAnchorEl(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
-      >
-        <Box sx={{ p: 2 }}>
-          <QRCode
-            value={address ?? ''}
-            size={160}
-            level="M"
-            bgColor="#FFFFFF"
-            fgColor="#000000"
-          />
         </Box>
       </Popover>
     </Box>
