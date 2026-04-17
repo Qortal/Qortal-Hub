@@ -38,6 +38,7 @@ import {
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
 import BorderGlow from '../common/BorderGlow';
+import type { GettingStartedDebugOverrides } from './homeGettingStartedDebug';
 
 export const GETTING_STARTED_LS_KEY = 'getting_started_status';
 const LS_KEY = GETTING_STARTED_LS_KEY;
@@ -46,6 +47,8 @@ const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
 const AVATAR_SERVICE = 'THUMBNAIL';
 const AVATAR_IDENTIFIER = 'qortal_avatar';
 const MIN_BALANCE_FOR_QORTS = 6;
+const GETTING_STARTED_PANEL_RADIUS_PX = 12;
+const GETTING_STARTED_PANEL_RADIUS = `${GETTING_STARTED_PANEL_RADIUS_PX}px`;
 
 type GettingStartedStepperProps = {
   currentStep: number;
@@ -205,11 +208,17 @@ const GettingStartedStepper = ({
 /** Fallback: payments to this address (to user) count toward "6 QORT" step when balance < 6 and not in localStorage completed */
 
 export type HomeGettingStartedProps = {
+  debugCompletionOverrides?: Partial<GettingStartedDebugOverrides>;
+  debugReplayToken?: number;
+  debugUseOverridesOnly?: boolean;
   onGettingStartedComplete?: () => void;
   previewMode?: 'live' | 'off' | 'on';
 };
 
 export const HomeGettingStarted = ({
+  debugCompletionOverrides,
+  debugReplayToken = 0,
+  debugUseOverridesOnly = false,
   onGettingStartedComplete,
   previewMode = 'live',
 }: HomeGettingStartedProps = {}) => {
@@ -234,7 +243,6 @@ export const HomeGettingStarted = ({
   const name = userInfo?.name;
   const userAddress = userInfo?.address;
 
-  // When we have an address, sync dismissed from per-account localStorage. null = unknown (behaves like dismissed).
   useEffect(() => {
     if (userAddress == null) {
       setDismissed(null);
@@ -243,20 +251,32 @@ export const HomeGettingStarted = ({
     setDismissed(
       localStorage.getItem(`${LS_KEY}_${userAddress}`) === 'completed'
     );
-  }, [userAddress]);
+  }, [userAddress, debugReplayToken]);
 
   // Step completion flags: balance >= 6 OR (fallback) cumulative payments to user's address >= 6
-  const hasQorts =
+  const realHasQorts =
     (balance != null && Number(balance) >= MIN_BALANCE_FOR_QORTS) ||
     (paymentsFallbackTotal != null &&
       paymentsFallbackTotal >= MIN_BALANCE_FOR_QORTS);
-  const hasName = Boolean(name);
+  const realHasName = Boolean(name);
+  const hasQortsDebugOverride =
+    debugCompletionOverrides?.get_six_qorts === true;
+  const hasNameDebugOverride =
+    debugCompletionOverrides?.register_name === true;
+  const hasAvatarDebugOverride =
+    debugCompletionOverrides?.load_avatar === true;
+  const hasQorts = debugUseOverridesOnly
+    ? hasQortsDebugOverride
+    : hasQortsDebugOverride || realHasQorts;
+  const hasName = debugUseOverridesOnly
+    ? hasNameDebugOverride
+    : hasNameDebugOverride || realHasName;
 
   // Pending register-name tx (same as TaskManager): show "Confirming transaction" on step 2
   const hasPendingRegisterName =
     (txList?.some((tx) => tx?.type === 'register-name' && !tx?.done) ??
       false) &&
-    !hasName;
+    !realHasName;
 
   // Fallback for "6 QORT" step: when balance < 6 and not completed in localStorage, check payments to user's address
   useEffect(() => {
@@ -314,13 +334,18 @@ export const HomeGettingStarted = ({
     return () => unsubscribeFromEvent('avatarUploaded', onUploaded);
   }, [checkAvatar]);
 
+  const resolvedHasAvatar = debugUseOverridesOnly
+    ? hasAvatarDebugOverride
+    : hasAvatarDebugOverride || hasAvatar;
+  const hasCompletionChecksPending = debugUseOverridesOnly ? false : checkingAvatar;
+
   // Once all steps are complete, persist and hide the section (per-account)
   useEffect(() => {
     if (
-      !checkingAvatar &&
+      !hasCompletionChecksPending &&
       hasQorts &&
       hasName &&
-      hasAvatar &&
+      resolvedHasAvatar &&
       dismissed === false &&
       userAddress
     ) {
@@ -329,10 +354,10 @@ export const HomeGettingStarted = ({
       onGettingStartedComplete?.();
     }
   }, [
-    checkingAvatar,
+    hasCompletionChecksPending,
     hasQorts,
     hasName,
-    hasAvatar,
+    resolvedHasAvatar,
     dismissed,
     userAddress,
     onGettingStartedComplete,
@@ -352,18 +377,32 @@ export const HomeGettingStarted = ({
           ? t('tutorial:home.confirming_transaction')
           : t('tutorial:home.register_name'),
         done: hasName,
-        loading: hasPendingRegisterName,
+        loading:
+          !debugUseOverridesOnly &&
+          !hasNameDebugOverride &&
+          hasPendingRegisterName,
         onAction: () => executeEvent('openRegisterName', {}),
       },
       {
         key: 'load_avatar',
         label: t('tutorial:home.load_avatar'),
-        done: hasAvatar,
-        loading: checkingAvatar,
+        done: resolvedHasAvatar,
+        loading:
+          !debugUseOverridesOnly &&
+          !hasAvatarDebugOverride &&
+          checkingAvatar,
         onAction: () => executeEvent('openAvatarUpload', {}),
       },
     ],
-    [t, hasQorts, hasName, hasAvatar, checkingAvatar, hasPendingRegisterName]
+    [
+      t,
+      hasQorts,
+      hasName,
+      resolvedHasAvatar,
+      debugUseOverridesOnly,
+      checkingAvatar,
+      hasPendingRegisterName,
+    ]
   );
 
   const completedCount = useMemo(
@@ -775,7 +814,7 @@ export const HomeGettingStarted = ({
           ref={panelRef}
           sx={{
             ...dashboardPanelSx(theme),
-            borderRadius: '12px',
+            borderRadius: GETTING_STARTED_PANEL_RADIUS,
             display: 'flex',
             flexDirection: 'column',
             height: '100%',
@@ -798,7 +837,7 @@ export const HomeGettingStarted = ({
           edgeSensitivity={20}
           glowColor={isDarkMode ? '192 100 69' : '210 78 56'}
           backgroundColor={isDarkMode ? '#1D1F27' : '#f5f7fb'}
-          borderRadius={22}
+          borderRadius={GETTING_STARTED_PANEL_RADIUS_PX}
           glowRadius={77}
           glowIntensity={isDarkMode ? 0.3 : 0.42}
           coneSpread={25}
@@ -824,7 +863,7 @@ export const HomeGettingStarted = ({
                 theme.palette.mode === 'dark'
                   ? 'linear-gradient(180deg, #1D1F27 0%, #1B1D24 100%)'
                   : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.38) 18%, rgba(255,255,255,0) 42%)',
-              borderRadius: '22px',
+              borderRadius: GETTING_STARTED_PANEL_RADIUS,
               display: 'flex',
               flexDirection: 'column',
               gap: '8px',

@@ -11,6 +11,14 @@ import { executeEvent } from '../../utils/events';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
+import {
+  DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
+  DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
+  GETTING_STARTED_DEBUG_STEPS,
+  parseGettingStartedDebugOverrides,
+  type GettingStartedDebugOverrides,
+  type GettingStartedDebugStepKey,
+} from '../Group/homeGettingStartedDebug';
 
 const SIDEBAR_WIDTH_PX = 72;
 const EDGE_SENSOR_WIDTH_PX = 12;
@@ -26,8 +34,6 @@ const ITEM_PADDING_Y = 1;
 const OVERLAY_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 const SIDEBAR_OPEN_DELAY_MS = 0;
 const SIDEBAR_CLOSE_DELAY_MS = 140;
-const DASHBOARD_WELCOME_PREVIEW_KEY = 'dashboardWelcomePreviewMode';
-
 const SidebarItem = ({
   active = false,
   children,
@@ -154,10 +160,12 @@ export const DesktopSideBar = ({
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
   });
-  const [debugWelcomePreview, setDebugWelcomePreview] = useState<'off' | 'on'>(() => {
-    const saved = localStorage.getItem(DASHBOARD_WELCOME_PREVIEW_KEY);
-    return saved === 'off' ? 'off' : 'on';
-  });
+  const [debugGettingStartedOverrides, setDebugGettingStartedOverrides] =
+    useState<GettingStartedDebugOverrides>(() =>
+      parseGettingStartedDebugOverrides(
+        localStorage.getItem(DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY)
+      )
+    );
   const [isInfoActive, setIsInfoActive] = useState(false);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -195,6 +203,48 @@ export const DesktopSideBar = ({
         ? '0 6px 16px rgba(0,0,0,0.24)'
         : '0 6px 16px rgba(0,0,0,0.1)',
   } as const;
+
+  const getDebugToggleSx = (active = false) => ({
+    ...debugToggleSx,
+    backgroundColor: active
+      ? alpha(
+          theme.palette.primary.main,
+          theme.palette.mode === 'dark' ? 0.24 : 0.16
+        )
+      : debugToggleSx.backgroundColor,
+    border: active
+      ? `1px solid ${alpha(theme.palette.primary.light, 0.54)}`
+      : debugToggleSx.border,
+    boxShadow: active
+      ? theme.palette.mode === 'dark'
+        ? '0 8px 18px rgba(0,0,0,0.28), inset 0 0 0 1px rgba(255,255,255,0.04)'
+        : '0 8px 18px rgba(28,36,52,0.14), inset 0 0 0 1px rgba(255,255,255,0.32)'
+      : debugToggleSx.boxShadow,
+  });
+
+  const emitGettingStartedDebugOverrides = (
+    nextOverrides: GettingStartedDebugOverrides,
+    resetReplay = false
+  ) => {
+    setDebugGettingStartedOverrides(nextOverrides);
+    localStorage.setItem(
+      DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
+      JSON.stringify(nextOverrides)
+    );
+    executeEvent(DASHBOARD_GETTING_STARTED_DEBUG_EVENT, {
+      data: {
+        overrides: nextOverrides,
+        resetReplay,
+      },
+    });
+  };
+
+  const toggleGettingStartedDebugStep = (stepKey: GettingStartedDebugStepKey) => {
+    emitGettingStartedDebugOverrides({
+      ...debugGettingStartedOverrides,
+      [stepKey]: !debugGettingStartedOverrides[stepKey],
+    });
+  };
 
   const emitOverlayState = (nextVisible: boolean) => {
     executeEvent('sidebarOverlayVisibility', {
@@ -565,21 +615,34 @@ export const DesktopSideBar = ({
             zIndex: 2000,
             display: 'flex',
             flexDirection: 'row',
-            gap: 0.5,
+            flexWrap: 'wrap',
+            gap: 0.75,
             alignItems: 'center',
+            justifyContent: 'flex-end',
+            maxWidth: 'min(620px, calc(100vw - 32px))',
           }}
         >
+          {GETTING_STARTED_DEBUG_STEPS.map((step) => (
+            <ButtonBase
+              key={step.key}
+              disableRipple
+              onClick={() => toggleGettingStartedDebugStep(step.key)}
+              sx={getDebugToggleSx(debugGettingStartedOverrides[step.key])}
+            >
+              {step.label}: {debugGettingStartedOverrides[step.key] ? 'ON' : 'OFF'}
+            </ButtonBase>
+          ))}
           <ButtonBase
             disableRipple
-            onClick={() => {
-              const next = debugWelcomePreview === 'on' ? 'off' : 'on';
-              setDebugWelcomePreview(next);
-              localStorage.setItem(DASHBOARD_WELCOME_PREVIEW_KEY, next);
-              executeEvent('setDashboardWelcomePreview', { data: { mode: next } });
-            }}
+            onClick={() =>
+              emitGettingStartedDebugOverrides(
+                parseGettingStartedDebugOverrides(null),
+                true
+              )
+            }
             sx={debugToggleSx}
           >
-            Welcome: {debugWelcomePreview === 'on' ? 'ON' : 'OFF'}
+            Reset Onboarding
           </ButtonBase>
           <ButtonBase
             disableRipple
@@ -589,14 +652,14 @@ export const DesktopSideBar = ({
               localStorage.setItem('dashboardMinterPreviewMode', next);
               executeEvent('setDashboardMinterPreview', { data: { mode: next } });
             }}
-            sx={debugToggleSx}
+            sx={getDebugToggleSx(debugMinterPreview === 'on')}
           >
             Minter: {debugMinterPreview === 'on' ? 'ON' : 'OFF'}
           </ButtonBase>
           <ButtonBase
             disableRipple
             onClick={() => setDebugUnread((prev) => !prev)}
-            sx={debugToggleSx}
+            sx={getDebugToggleSx(debugUnread)}
           >
             Chat Pulse: {debugUnread ? 'ON' : 'OFF'}
           </ButtonBase>

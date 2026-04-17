@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { Avatar, Box, Button, ButtonBase, Typography, useTheme } from '@mui/material';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
@@ -11,12 +11,20 @@ import {
 } from './dashboardPanelEffects';
 
 const RETRY_DELAY_MS = 5000;
-const FEATURED_PREVIEW_EXPAND_DELAY_MS = 200;
-const FEATURED_INITIAL_PREVIEW_DURATION_MS = 10000;
+export const FEATURED_PREVIEW_EXPAND_DELAY_MS = 200;
+export const FEATURED_INITIAL_PREVIEW_DURATION_MS = 6000;
+export const FEATURED_INTRO_TOTAL_DURATION_MS =
+  FEATURED_PREVIEW_EXPAND_DELAY_MS + FEATURED_INITIAL_PREVIEW_DURATION_MS;
+export const FEATURED_DECORATION_FADE_DURATION_MS = 1350;
+export const FEATURED_DECORATION_PULSE_DURATION_MS = 5200;
 const PIRATE_APP_NAME = 'Pirate Nintendo';
 const Q_TUBE_APP_NAME = 'Q-Tube';
 const PIRATE_PREVIEW_VIDEO_SRC = '/pirate-nintendo-preview.mp4';
 const Q_TUBE_PREVIEW_VIDEO_SRC = '/q-tube-preview.mp4';
+export const FEATURED_DECORATION_FADE_TRANSITION =
+  `opacity ${FEATURED_DECORATION_FADE_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
+export const FEATURED_DECORATION_PULSE_ANIMATION =
+  `featuredAmbientPulse ${FEATURED_DECORATION_PULSE_DURATION_MS}ms ease-in-out infinite ${FEATURED_DECORATION_FADE_DURATION_MS}ms`;
 const FEATURED_PREVIEW_CONFIG = {
   [Q_TUBE_APP_NAME]: {
     subtitle: "Decentralized Cat Videos, can't beat that.",
@@ -30,7 +38,7 @@ const FEATURED_PREVIEW_CONFIG = {
   },
 } as const;
 type PreviewAppName = keyof typeof FEATURED_PREVIEW_CONFIG;
-const FEATURED_APP_NAMES = [
+export const FEATURED_APP_NAMES = [
   Q_TUBE_APP_NAME,
   'Quitter',
   'Q-Mail',
@@ -40,6 +48,25 @@ const FEATURED_APP_NAMES = [
   PIRATE_APP_NAME,
   'Q-Manager',
 ] as const;
+
+export const getFeaturedDecorationMotionSx = (
+  decorationsVisible: boolean,
+  peakOpacity: number
+) => ({
+  '--featured-decoration-peak-opacity': `${peakOpacity}`,
+  '--featured-decoration-min-opacity': `${peakOpacity * 0.1}`,
+  opacity: decorationsVisible ? peakOpacity : 0,
+  transition: FEATURED_DECORATION_FADE_TRANSITION,
+  animation: decorationsVisible ? FEATURED_DECORATION_PULSE_ANIMATION : 'none',
+  '@keyframes featuredAmbientPulse': {
+    '0%, 100%': {
+      opacity: 'var(--featured-decoration-peak-opacity)',
+    },
+    '50%': {
+      opacity: 'var(--featured-decoration-min-opacity)',
+    },
+  },
+});
 
 const openApp = (appName: string) => {
   executeEvent('addTab', { data: { service: 'APP', name: appName } });
@@ -55,7 +82,11 @@ const openAppsLibrary = () => {
   executeEvent('open-apps-mode', {});
 };
 
-export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
+export const HomeFeaturedApps = ({
+  panelBoxRef = undefined,
+  decorationsVisible = true,
+  onIntroComplete = undefined,
+}) => {
   const theme = useTheme();
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const assignPanelNode = (node) => {
@@ -72,22 +103,47 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
   };
   const pirateExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pirateCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialPreviewStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const introCompletionReportedRef = useRef(false);
   const [expandedPreviewApp, setExpandedPreviewApp] = useState<PreviewAppName | null>(null);
   const [autoPreviewActive, setAutoPreviewActive] = useState(true);
+  const footerDecorationPeakOpacity = theme.palette.mode === 'dark' ? 0.9 : 0.7;
+
+  const reportIntroComplete = useEffectEvent(() => {
+    if (introCompletionReportedRef.current) return;
+    introCompletionReportedRef.current = true;
+    onIntroComplete?.();
+  });
+
+  const clearInitialPreviewTimers = useEffectEvent(() => {
+    if (initialPreviewStartTimerRef.current) {
+      clearTimeout(initialPreviewStartTimerRef.current);
+      initialPreviewStartTimerRef.current = null;
+    }
+    if (initialPreviewEndTimerRef.current) {
+      clearTimeout(initialPreviewEndTimerRef.current);
+      initialPreviewEndTimerRef.current = null;
+    }
+  });
 
   useEffect(() => {
-    setExpandedPreviewApp(PIRATE_APP_NAME);
-    initialPreviewTimerRef.current = setTimeout(() => {
-      initialPreviewTimerRef.current = null;
+    initialPreviewStartTimerRef.current = setTimeout(() => {
+      initialPreviewStartTimerRef.current = null;
+      setExpandedPreviewApp(PIRATE_APP_NAME);
+    }, FEATURED_PREVIEW_EXPAND_DELAY_MS);
+
+    initialPreviewEndTimerRef.current = setTimeout(() => {
+      initialPreviewEndTimerRef.current = null;
       setAutoPreviewActive(false);
       setExpandedPreviewApp((current) => (current === PIRATE_APP_NAME ? null : current));
-    }, FEATURED_INITIAL_PREVIEW_DURATION_MS);
+      reportIntroComplete();
+    }, FEATURED_INTRO_TOTAL_DURATION_MS);
 
     return () => {
       if (pirateExpandTimerRef.current) clearTimeout(pirateExpandTimerRef.current);
       if (pirateCollapseTimerRef.current) clearTimeout(pirateCollapseTimerRef.current);
-      if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+      clearInitialPreviewTimers();
     };
   }, []);
 
@@ -103,11 +159,9 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
   };
 
   const stopInitialPreview = () => {
-    if (initialPreviewTimerRef.current) {
-      clearTimeout(initialPreviewTimerRef.current);
-      initialPreviewTimerRef.current = null;
-    }
+    clearInitialPreviewTimers();
     setAutoPreviewActive(false);
+    reportIntroComplete();
   };
 
   const schedulePreviewExpand = (appName: PreviewAppName) => {
@@ -175,7 +229,7 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
             : `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.07) 26%, rgba(60, 76, 90, 0.22) 44%, rgba(60, 76, 90, 0.28) 50%, rgba(60, 76, 90, 0.22) 56%, rgba(60, 76, 90, 0.07) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
                radial-gradient(92% 92% at 50% 0%, rgba(60, 76, 90, 0.1) 0%, rgba(60, 76, 90, 0.055) 30%, rgba(14, 15, 20, 0.016) 52%, transparent 76%)`,
           filter: 'blur(0.72px)',
-          opacity: 1,
+          ...getFeaturedDecorationMotionSx(decorationsVisible, 1),
         }}
       />
       {/* Section title */}
@@ -241,7 +295,6 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
             transform: 'translateX(-50%)',
             height: '1px',
             maxWidth: '780px',
-            opacity: theme.palette.mode === 'dark' ? 0.9 : 0.7,
             pointerEvents: 'none',
             width: '126%',
             background:
@@ -249,6 +302,10 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
                 ? 'linear-gradient(90deg, transparent 0%, rgba(60,76,90,0.02) 10%, rgba(60,76,90,0.08) 24%, rgba(87,170,219,0.12) 50%, rgba(60,76,90,0.08) 76%, rgba(60,76,90,0.02) 90%, transparent 100%)'
                 : 'linear-gradient(90deg, transparent 0%, rgba(60,76,90,0.015) 10%, rgba(60,76,90,0.06) 24%, rgba(87,170,219,0.08) 50%, rgba(60,76,90,0.06) 76%, rgba(60,76,90,0.015) 90%, transparent 100%)',
             filter: 'blur(0.45px)',
+            ...getFeaturedDecorationMotionSx(
+              decorationsVisible,
+              footerDecorationPeakOpacity
+            ),
             '&::after': {
               content: '""',
               position: 'absolute',

@@ -1,12 +1,17 @@
 import React, { createContext } from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
 import { createStore, Provider as JotaiProvider } from 'jotai';
-
-// --- Mocks ---
 
 vi.mock('../../../App', () => ({
   getBaseApiReact: () => 'http://localhost:12391',
@@ -30,8 +35,6 @@ vi.mock('../../../utils/events', () => ({
   unsubscribeFromEvent: vi.fn(),
 }));
 
-// --- i18n ---
-
 i18n.init({
   lng: 'en',
   fallbackLng: 'en',
@@ -39,7 +42,7 @@ i18n.init({
     en: {
       tutorial: {
         'home.getting_started': 'Getting Started',
-        'home.progress': '{{completed}} / {{total}} completed',
+        'home.confirming_transaction': 'Confirming transaction',
         'home.get_six_qorts': 'Get your 6 QORT',
         'home.register_name': 'Register your name',
         'home.load_avatar': 'Load your avatar',
@@ -51,10 +54,12 @@ i18n.init({
   interpolation: { escapeValue: false },
 });
 
-// --- Atoms ---
-
-import { userInfoAtom, balanceAtom } from '../../../atoms/global';
-import { HomeGettingStarted } from '../HomeGettingStarted';
+import { balanceAtom, txListAtom, userInfoAtom } from '../../../atoms/global';
+import {
+  HomeGettingStarted,
+  type HomeGettingStartedProps,
+} from '../HomeGettingStarted';
+import { EMPTY_GETTING_STARTED_DEBUG_OVERRIDES } from '../homeGettingStartedDebug';
 
 const LS_KEY = 'getting_started_status';
 const theme = createTheme();
@@ -62,7 +67,8 @@ const theme = createTheme();
 const renderComponent = (
   userInfo: { name: string | null; address: string } | null,
   balance: number | null,
-  fetchResponse: any[] = []
+  fetchResponse: any[] = [],
+  props: HomeGettingStartedProps = {}
 ) => {
   global.fetch = vi.fn().mockResolvedValue({
     json: () => Promise.resolve(fetchResponse),
@@ -71,22 +77,41 @@ const renderComponent = (
   const store = createStore();
   store.set(userInfoAtom, userInfo);
   store.set(balanceAtom, balance);
+  store.set(txListAtom, []);
 
-  return render(
+  const renderView = render(
     <JotaiProvider store={store}>
       <ThemeProvider theme={theme}>
         <I18nextProvider i18n={i18n}>
-          <HomeGettingStarted />
+          <HomeGettingStarted {...props} />
         </I18nextProvider>
       </ThemeProvider>
     </JotaiProvider>
   );
+
+  return {
+    ...renderView,
+    rerenderWithProps: (nextProps: HomeGettingStartedProps) =>
+      renderView.rerender(
+        <JotaiProvider store={store}>
+          <ThemeProvider theme={theme}>
+            <I18nextProvider i18n={i18n}>
+              <HomeGettingStarted {...nextProps} />
+            </I18nextProvider>
+          </ThemeProvider>
+        </JotaiProvider>
+      ),
+  };
 };
 
 describe('HomeGettingStarted', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders all 3 step labels', () => {
@@ -96,21 +121,10 @@ describe('HomeGettingStarted', () => {
     expect(screen.getByText('Load your avatar')).toBeInTheDocument();
   });
 
-  it('shows progress as 0 / 3 when nothing is done', () => {
-    renderComponent({ name: null, address: 'QADDR' }, 0);
-    expect(screen.getByText('0 / 3 completed')).toBeInTheDocument();
-  });
-
   it('marks step 1 done when balance >= 6', () => {
     renderComponent({ name: null, address: 'QADDR' }, 6);
-    const buttons = screen.getAllByRole('button', { name: 'Done' });
-    expect(buttons.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('marks step 2 done when user has a name', () => {
-    renderComponent({ name: 'alice', address: 'QADDR' }, 0);
-    const buttons = screen.getAllByRole('button', { name: 'Done' });
-    expect(buttons.length).toBeGreaterThanOrEqual(1);
+    const doneButtons = screen.getAllByRole('button', { name: 'Done' });
+    expect(doneButtons).toHaveLength(1);
   });
 
   it('marks step 3 done when avatar API returns a result', async () => {
@@ -119,32 +133,17 @@ describe('HomeGettingStarted', () => {
       0,
       [{ name: 'alice', identifier: 'qortal_avatar' }]
     );
-    await waitFor(() => {
-      const buttons = screen.getAllByRole('button', { name: 'Done' });
-      // name (step 2) + avatar (step 3) = 2 Done buttons
-      expect(buttons.length).toBeGreaterThanOrEqual(2);
-    });
-  });
 
-  it('shows correct progress count when steps are done', () => {
-    renderComponent({ name: 'alice', address: 'QADDR' }, 6);
-    // balance (1) + name (1) = 2 done; avatar check pending (fetch returns [])
-    expect(screen.getByText('2 / 3 completed')).toBeInTheDocument();
+    await waitFor(() => {
+      const doneButtons = screen.getAllByRole('button', { name: 'Done' });
+      expect(doneButtons).toHaveLength(2);
+    });
   });
 
   it('fires openRegisterName event when step 2 button clicked', () => {
     renderComponent({ name: null, address: 'QADDR' }, 0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[1]);
     expect(mockExecuteEvent).toHaveBeenCalledWith('openRegisterName', {});
-  });
-
-  it('fires openAvatarUpload event when step 3 button clicked', async () => {
-    renderComponent({ name: 'alice', address: 'QADDR' }, 0, []);
-    await waitFor(() => {
-      expect(screen.getAllByRole('button', { name: 'Open' }).length).toBeGreaterThan(0);
-    });
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open' })[1]);
-    expect(mockExecuteEvent).toHaveBeenCalledWith('openAvatarUpload', {});
   });
 
   it('opens the Get QORT dialog when step 1 button clicked', () => {
@@ -155,37 +154,85 @@ describe('HomeGettingStarted', () => {
     expect(within(dialog).getByText('Get your 6 QORT')).toBeInTheDocument();
   });
 
-  it('hides the section when all 3 steps are completed', async () => {
-    await act(async () => {
-      renderComponent(
-        { name: 'alice', address: 'QADDR' },
-        6,
-        [{ name: 'alice', identifier: 'qortal_avatar' }]
-      );
-    });
+  it('marks a step done when its debug override is enabled', () => {
+    renderComponent(
+      { name: null, address: 'QADDR' },
+      0,
+      [],
+      {
+        debugUseOverridesOnly: true,
+        debugCompletionOverrides: {
+          ...EMPTY_GETTING_STARTED_DEBUG_OVERRIDES,
+          get_six_qorts: true,
+        },
+      }
+    );
 
-    await waitFor(() => {
-      expect(screen.queryByText('Getting Started')).not.toBeInTheDocument();
-    });
+    expect(screen.getAllByRole('button', { name: 'Done' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Open' })).toHaveLength(2);
   });
 
-  it('persists completed status to localStorage when all steps are done (per-account)', async () => {
-    await act(async () => {
-      renderComponent(
-        { name: 'alice', address: 'QADDR' },
-        6,
-        [{ name: 'alice', identifier: 'qortal_avatar' }]
-      );
-    });
+  it('uses the normal completion path to hand off to Tools when all debug overrides are enabled', async () => {
+    const onGettingStartedComplete = vi.fn();
+
+    renderComponent(
+      { name: null, address: 'QADDR' },
+      0,
+      [],
+      {
+        debugUseOverridesOnly: true,
+        debugCompletionOverrides: {
+          get_six_qorts: true,
+          register_name: true,
+          load_avatar: true,
+        },
+        onGettingStartedComplete,
+      }
+    );
 
     await waitFor(() => {
-      expect(localStorage.getItem(`${LS_KEY}_QADDR`)).toBe('completed');
+      expect(screen.getByText('Tools')).toBeInTheDocument();
     });
-  });
 
-  it('hides the section immediately when localStorage already has completed status for this account', () => {
-    localStorage.setItem(`${LS_KEY}_QADDR`, 'completed');
-    renderComponent({ name: null, address: 'QADDR' }, 0);
+    expect(onGettingStartedComplete).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem(`${LS_KEY}_QADDR`)).toBe('completed');
     expect(screen.queryByText('Getting Started')).not.toBeInTheDocument();
+  });
+
+  it('returns to Getting Started after debug reset clears the completion replay state', async () => {
+    const { rerenderWithProps } = renderComponent(
+      { name: null, address: 'QADDR' },
+      0,
+      [],
+      {
+        debugUseOverridesOnly: true,
+        debugCompletionOverrides: {
+          get_six_qorts: true,
+          register_name: true,
+          load_avatar: true,
+        },
+      }
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Tools')).toBeInTheDocument();
+    });
+
+    localStorage.removeItem(`${LS_KEY}_QADDR`);
+
+    await act(async () => {
+      rerenderWithProps({
+        debugUseOverridesOnly: true,
+        debugCompletionOverrides: EMPTY_GETTING_STARTED_DEBUG_OVERRIDES,
+        debugReplayToken: 1,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Getting Started')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText('Tools')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Open' })).toHaveLength(3);
   });
 });

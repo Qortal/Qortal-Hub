@@ -22,12 +22,14 @@ export const GroupInvites = ({
   myAddress,
   setOpenAddGroup,
   compact = false,
+  compactViewportHeight,
   onCountChange,
   onLoadingChange,
 }: {
   myAddress: string;
   setOpenAddGroup?: (v: boolean) => void;
   compact?: boolean;
+  compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
   onLoadingChange?: (loading: boolean) => void;
 }) => {
@@ -39,6 +41,9 @@ export const GroupInvites = ({
     'tutorial',
   ]);
   const theme = useTheme();
+  const compactViewportHeightCss =
+    compactViewportHeight != null ? `${compactViewportHeight}px` : undefined;
+  const hasFixedCompactViewport = compact && compactViewportHeightCss != null;
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const [groupInvitesCache, setGroupInvitesCache] = useAtom(groupInvitesCacheAtom);
@@ -229,27 +234,30 @@ export const GroupInvites = ({
         borderRadius: compact ? '0' : '12px',
         display: 'flex',
         flexDirection: 'column',
-        height: compact ? 'auto' : '250px',
-        maxHeight: compact ? '300px' : undefined,
-        overflow: compact ? 'auto' : undefined,
+        flex: hasFixedCompactViewport ? 1 : undefined,
+        height: hasFixedCompactViewport ? '100%' : compact ? 'auto' : '250px',
+        maxHeight: compact && !hasFixedCompactViewport ? '300px' : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        overflow: hasFixedCompactViewport ? 'hidden' : compact ? 'auto' : undefined,
         padding: compact ? 1.5 : 2,
         width: compact ? '100%' : '322px',
       }}
     >
       {loading && groupsWithJoinRequests.length === 0 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4, width: '100%' }}>
+        <Box sx={{ alignItems: 'center', display: 'flex', flex: hasFixedCompactViewport ? 1 : undefined, justifyContent: 'center', py: 4, width: '100%' }}>
           <CustomLoader />
         </Box>
       )}
 
       {!loading && groupsWithJoinRequests.length === 0 && (
         <Box
-          sx={{
-            alignItems: 'center',
-            display: 'flex',
-            justifyContent: 'center',
-            py: compact ? 4 : 5,
-            width: '100%',
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              flex: hasFixedCompactViewport ? 1 : undefined,
+              justifyContent: 'center',
+              py: compact ? 4 : 5,
+              width: '100%',
           }}
         >
           <Typography
@@ -268,8 +276,10 @@ export const GroupInvites = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
+            flex: hasFixedCompactViewport ? 1 : undefined,
             gap: 1,
-            maxHeight: '300px',
+            maxHeight: hasFixedCompactViewport ? '100%' : '300px',
+            minHeight: 0,
             overflow: 'auto',
             width: '100%',
           }}
@@ -352,6 +362,8 @@ export const GroupInvites = ({
         alignItems: compact ? 'stretch' : 'center',
         display: 'flex',
         flexDirection: 'column',
+        height: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
         width: '100%',
       }}
     >

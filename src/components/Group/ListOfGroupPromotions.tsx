@@ -74,9 +74,11 @@ export function getGroupId(str) {
 
 export const ListOfGroupPromotions = ({
   compact = false,
+  compactViewportHeight,
   onCountChange,
 }: {
   compact?: boolean;
+  compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
 } = {}) => {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
@@ -102,6 +104,9 @@ export const ListOfGroupPromotions = ({
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const theme = useTheme();
+  const compactViewportHeightCss =
+    compactViewportHeight != null ? `${compactViewportHeight}px` : undefined;
+  const hasFixedCompactViewport = compact && compactViewportHeightCss != null;
   const { t } = useTranslation([
     'auth',
     'core',
@@ -415,8 +420,12 @@ export const ListOfGroupPromotions = ({
         borderRadius: compact ? 0 : '16px',
         display: 'flex',
         flexDirection: 'column',
+        flex: hasFixedCompactViewport ? 1 : undefined,
+        height: hasFixedCompactViewport ? '100%' : undefined,
         maxHeight: compact ? undefined : '700px',
         maxWidth: compact ? '100%' : '90%',
+        minHeight: hasFixedCompactViewport ? 0 : undefined,
+        overflow: hasFixedCompactViewport ? 'hidden' : undefined,
         padding: compact ? '16px 0' : '24px 0',
         width: compact ? '100%' : '750px',
         border: compact
@@ -463,7 +472,7 @@ export const ListOfGroupPromotions = ({
 
       <div
         style={{
-          height: '600px',
+          height: hasFixedCompactViewport ? '100%' : '600px',
           position: 'relative',
           display: 'flex',
           flexDirection: 'column',
@@ -902,8 +911,10 @@ export const ListOfGroupPromotions = ({
         alignItems: compact ? 'stretch' : 'center',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
+        height: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        justifyContent: compact ? 'flex-start' : 'center',
         marginTop: compact ? '0' : '20px',
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
         width: '100%',
       }}
     >

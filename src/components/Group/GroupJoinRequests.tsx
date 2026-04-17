@@ -29,6 +29,7 @@ export const GroupJoinRequests = ({
   setMobileViewMode,
   setDesktopViewMode,
   compact = false,
+  compactViewportHeight,
   onCountChange,
   onLoadingChange,
 }: {
@@ -41,6 +42,7 @@ export const GroupJoinRequests = ({
   setMobileViewMode?: (m: string) => void;
   setDesktopViewMode?: (m: string) => void;
   compact?: boolean;
+  compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
   onLoadingChange?: (loading: boolean) => void;
 }) => {
@@ -68,6 +70,9 @@ export const GroupJoinRequests = ({
   const [infoSnack, setInfoSnack] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const theme = useTheme();
+  const compactViewportHeightCss =
+    compactViewportHeight != null ? `${compactViewportHeight}px` : undefined;
+  const hasFixedCompactViewport = compact && compactViewportHeightCss != null;
   const adminGroupIds = useMemo(
     () =>
       [...(myGroupsWhereIAmAdmin ?? [])]
@@ -187,15 +192,17 @@ export const GroupJoinRequests = ({
         borderRadius: compact ? '0' : '12px',
         display: 'flex',
         flexDirection: 'column',
-        height: compact ? 'auto' : '250px',
-        maxHeight: compact ? '300px' : undefined,
-        overflow: compact ? 'auto' : undefined,
+        flex: hasFixedCompactViewport ? 1 : undefined,
+        height: hasFixedCompactViewport ? '100%' : compact ? 'auto' : '250px',
+        maxHeight: compact && !hasFixedCompactViewport ? '300px' : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        overflow: hasFixedCompactViewport ? 'hidden' : compact ? 'auto' : undefined,
         padding: compact ? 1.5 : 2,
         width: compact ? '100%' : '322px',
       }}
     >
       {loading && filteredJoinRequests.length === 0 && (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 4, width: '100%' }}>
+        <Box sx={{ alignItems: 'center', display: 'flex', flex: hasFixedCompactViewport ? 1 : undefined, justifyContent: 'center', py: 4, width: '100%' }}>
           <CustomLoader />
         </Box>
       )}
@@ -206,6 +213,7 @@ export const GroupJoinRequests = ({
             sx={{
               alignItems: 'center',
               display: 'flex',
+              flex: hasFixedCompactViewport ? 1 : undefined,
               justifyContent: 'center',
               py: compact ? 4 : 5,
               width: '100%',
@@ -227,8 +235,10 @@ export const GroupJoinRequests = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
+            flex: hasFixedCompactViewport ? 1 : undefined,
             gap: 1,
-            maxHeight: '300px',
+            maxHeight: hasFixedCompactViewport ? '100%' : '300px',
+            minHeight: 0,
             overflow: 'auto',
             width: '100%',
           }}
@@ -318,6 +328,8 @@ export const GroupJoinRequests = ({
         display: 'flex',
         flexDirection: 'column',
         alignItems: compact ? 'stretch' : 'center',
+        height: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
+        minHeight: hasFixedCompactViewport ? compactViewportHeightCss : undefined,
       }}
     >
       {!compact && (

@@ -21,9 +21,16 @@ import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
 import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted';
-import { HomeFeaturedApps } from './HomeFeaturedApps';
+import { getFeaturedDecorationMotionSx, HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
+import {
+  DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
+  DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
+  EMPTY_GETTING_STARTED_DEBUG_OVERRIDES,
+  parseGettingStartedDebugOverrides,
+  type GettingStartedDebugOverrides,
+} from './homeGettingStartedDebug';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, LazyMotion, domAnimation, motion, useReducedMotion } from 'framer-motion';
 import { getBaseApiReact } from '../../App';
@@ -36,10 +43,10 @@ import { nodeDisplay } from '../../utils/helpers';
 
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
+const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
 
 const SHOW_USER_DEVELOPER_TOGGLE = false;
 const SHOW_MOST_ACTIVE_GROUPS = false;
-const DASHBOARD_WELCOME_PREVIEW_KEY = 'dashboardWelcomePreviewMode';
 
 // Home dashboard desktop layout invariants:
 // - Info top aligns visually with Account Overview top.
@@ -354,6 +361,14 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [promotionsCount, setPromotionsCount] = useState(0);
   const [showMostActiveGroups, setShowMostActiveGroups] = useState(() => localStorage.getItem(GETTING_STARTED_LS_KEY) === 'completed');
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
+  const [featuredAmbientDecorationsVisible, setFeaturedAmbientDecorationsVisible] = useState(false);
+  const [gettingStartedDebugOverrides, setGettingStartedDebugOverrides] = useState<GettingStartedDebugOverrides>(() =>
+    parseGettingStartedDebugOverrides(
+      localStorage.getItem(DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY)
+    )
+  );
+  const [gettingStartedDebugPathActive, setGettingStartedDebugPathActive] = useState(false);
+  const [gettingStartedDebugReplayToken, setGettingStartedDebugReplayToken] = useState(0);
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
@@ -361,10 +376,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [minterPreviewMode, setMinterPreviewMode] = useState<'off' | 'on'>(() => {
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
-  });
-  const [welcomePreviewMode, setWelcomePreviewMode] = useState<'off' | 'on'>(() => {
-    const saved = localStorage.getItem(DASHBOARD_WELCOME_PREVIEW_KEY);
-    return saved === 'off' ? 'off' : 'on';
   });
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
@@ -440,17 +451,39 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, []);
 
   useEffect(() => {
-    const handleSetDashboardWelcomePreview = (e: CustomEvent) => {
-      const mode = e.detail?.data?.mode === 'off' ? 'off' : 'on';
-      setWelcomePreviewMode(mode);
-      localStorage.setItem(DASHBOARD_WELCOME_PREVIEW_KEY, mode);
+    const handleSetDashboardGettingStartedDebugOverrides = (e: CustomEvent) => {
+      const nextOverrides = {
+        ...EMPTY_GETTING_STARTED_DEBUG_OVERRIDES,
+        ...(e.detail?.data?.overrides ?? {}),
+      };
+      setGettingStartedDebugPathActive(true);
+      setGettingStartedDebugOverrides(nextOverrides);
+      localStorage.setItem(
+        DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
+        JSON.stringify(nextOverrides)
+      );
+
+      if (e.detail?.data?.resetReplay) {
+        if (userAddress) {
+          localStorage.removeItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`);
+        }
+        setIsOnboardingComplete(false);
+        setShowMostActiveGroups(false);
+        setGettingStartedDebugReplayToken((prev) => prev + 1);
+      }
     };
 
-    subscribeToEvent('setDashboardWelcomePreview', handleSetDashboardWelcomePreview);
+    subscribeToEvent(
+      DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
+      handleSetDashboardGettingStartedDebugOverrides
+    );
     return () => {
-      unsubscribeFromEvent('setDashboardWelcomePreview', handleSetDashboardWelcomePreview);
+      unsubscribeFromEvent(
+        DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
+        handleSetDashboardGettingStartedDebugOverrides
+      );
     };
-  }, []);
+  }, [userAddress]);
 
   const handleRefreshGroupActivity = () => {
     setGroupInvitesCache(null);
@@ -591,7 +624,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                   </Box>
                   <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: { xs: '1fr', md: 'minmax(285px, 330px) minmax(0, 1fr)', xl: 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
                     <Box sx={{ display: 'block', minWidth: 0, '& > *': { height: '100%' } }}>
-                      <HomeGettingStarted previewMode={isLocalPreview ? welcomePreviewMode : 'live'} onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }} />
+                      <HomeGettingStarted
+                        debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
+                        debugReplayToken={gettingStartedDebugReplayToken}
+                        debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
+                        onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                      />
                     </Box>
                     <Box sx={{ display: 'flex', minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { position: 'relative', width: '100%', zIndex: 1 } }}>
                       <Box
@@ -611,10 +649,18 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             : `radial-gradient(88% 140% at 50% 0%, rgba(60, 76, 90, 0.06) 0%, rgba(60, 76, 90, 0.036) 26%, rgba(14, 15, 20, 0.016) 56%, transparent 82%),
                                linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0.008) 18%, rgba(60, 76, 90, 0.03) 50%, rgba(60, 76, 90, 0.008) 82%, transparent 100%)`,
                           filter: 'blur(8px)',
-                          opacity: 1,
+                          ...getFeaturedDecorationMotionSx(
+                            featuredAmbientDecorationsVisible,
+                            1
+                          ),
                         }}
                       />
-                      <HomeFeaturedApps />
+                      <HomeFeaturedApps
+                        decorationsVisible={featuredAmbientDecorationsVisible}
+                        onIntroComplete={() => {
+                          setFeaturedAmbientDecorationsVisible(true);
+                        }}
+                      />
                     </Box>
                   </Box>
                 </Box>
@@ -723,7 +769,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           : `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.075) 26%, rgba(60, 76, 90, 0.18) 44%, rgba(60, 76, 90, 0.22) 50%, rgba(60, 76, 90, 0.18) 56%, rgba(60, 76, 90, 0.075) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
                              radial-gradient(90% 92% at 50% 100%, rgba(60, 76, 90, 0.11) 0%, rgba(60, 76, 90, 0.055) 30%, rgba(14, 15, 20, 0.016) 52%, transparent 76%)`,
                         filter: 'blur(0.72px)',
-                        opacity: 1,
+                        ...getFeaturedDecorationMotionSx(
+                          featuredAmbientDecorationsVisible,
+                          1
+                        ),
                       }}
                     />
                     <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', width: '100%' }}>
@@ -838,13 +887,13 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       </Typography>
                     </Box>
                     <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
-                      <GroupJoinRequests compact onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
+                      <GroupJoinRequests compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
                     </Box>
                     <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
-                      <GroupInvites compact onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} myAddress={myAddress} />
+                      <GroupInvites compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} myAddress={myAddress} />
                     </Box>
                     <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
-                      <ListOfGroupPromotions compact onCountChange={setPromotionsCount} />
+                      <ListOfGroupPromotions compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setPromotionsCount} />
                     </Box>
                   </Box>
                 </>

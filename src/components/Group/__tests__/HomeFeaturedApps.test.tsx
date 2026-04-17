@@ -1,6 +1,6 @@
 import React, { createContext } from 'react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { I18nextProvider } from 'react-i18next';
 import i18n from 'i18next';
@@ -50,16 +50,19 @@ i18n.init({
 
 // --- Component ---
 
-import { HomeFeaturedApps } from '../HomeFeaturedApps';
-import { officialAppsConfig } from '../../Apps/config/officialApps';
+import {
+  FEATURED_APP_NAMES,
+  FEATURED_INTRO_TOTAL_DURATION_MS,
+  HomeFeaturedApps,
+} from '../HomeFeaturedApps';
 
 const theme = createTheme();
 
-const renderComponent = () =>
+const renderComponent = (props = {}) =>
   render(
     <ThemeProvider theme={theme}>
       <I18nextProvider i18n={i18n}>
-        <HomeFeaturedApps />
+        <HomeFeaturedApps {...props} />
       </I18nextProvider>
     </ThemeProvider>
   );
@@ -69,28 +72,35 @@ describe('HomeFeaturedApps', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders the section title', () => {
     renderComponent();
-    expect(screen.getByText('Featured Apps')).toBeInTheDocument();
+    expect(screen.getByText('Featured Q-Apps')).toBeInTheDocument();
   });
 
   it('renders a tile for every featured app', () => {
     renderComponent();
-    for (const appName of officialAppsConfig.featured) {
+    for (const appName of FEATURED_APP_NAMES) {
       expect(screen.getByText(appName)).toBeInTheDocument();
     }
   });
 
   it('renders a clickable tile for each featured app', () => {
     renderComponent();
-    const buttons = screen.getAllByRole('button');
-    expect(buttons).toHaveLength(officialAppsConfig.featured.length);
+    for (const appName of FEATURED_APP_NAMES) {
+      expect(
+        screen.getByRole('button', { name: appName })
+      ).toBeInTheDocument();
+    }
   });
 
   it('fires addTab and open-apps-mode events when an app is opened', () => {
     renderComponent();
-    const firstAppName = officialAppsConfig.featured[0];
-    fireEvent.click(screen.getAllByRole('button')[0]);
+    const firstAppName = FEATURED_APP_NAMES[0];
+    fireEvent.click(screen.getByRole('button', { name: firstAppName }));
 
     expect(mockExecuteEvent).toHaveBeenCalledWith('addTab', {
       data: { service: 'APP', name: firstAppName },
@@ -98,16 +108,33 @@ describe('HomeFeaturedApps', () => {
     expect(mockExecuteEvent).toHaveBeenCalledWith('open-apps-mode', {});
   });
 
-  it('opens the correct app for each tile', () => {
+  it('opens the app library from the footer CTA', () => {
     renderComponent();
-    const buttons = screen.getAllByRole('button');
+    fireEvent.click(screen.getByRole('button', { name: /Explore All Q-Apps/i }));
 
-    officialAppsConfig.featured.forEach((appName, index) => {
-      vi.clearAllMocks();
-      fireEvent.click(buttons[index]);
-      expect(mockExecuteEvent).toHaveBeenCalledWith('addTab', {
-        data: { service: 'APP', name: appName },
-      });
+    expect(mockExecuteEvent).toHaveBeenCalledWith('openAppsLibrarySearch', {
+      data: { query: '' },
     });
+    expect(mockExecuteEvent).toHaveBeenCalledWith('open-apps-mode', {});
+  });
+
+  it('notifies when the intro preview fully finishes', () => {
+    vi.useFakeTimers();
+    const onIntroComplete = vi.fn();
+
+    renderComponent({
+      decorationsVisible: false,
+      onIntroComplete,
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(FEATURED_INTRO_TOTAL_DURATION_MS - 1);
+    });
+    expect(onIntroComplete).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    expect(onIntroComplete).toHaveBeenCalledTimes(1);
   });
 });
