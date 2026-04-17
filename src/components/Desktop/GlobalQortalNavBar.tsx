@@ -283,7 +283,7 @@ export function GlobalQortalNavBar({
           userSelect: 'none',
         }}
       >
-                          302
+                          304
       </Box>
     <Box
         sx={{

@@ -12,6 +12,7 @@ import {
 
 const RETRY_DELAY_MS = 5000;
 const FEATURED_PREVIEW_EXPAND_DELAY_MS = 200;
+const FEATURED_INITIAL_PREVIEW_DURATION_MS = 10000;
 const PIRATE_APP_NAME = 'Pirate Nintendo';
 const Q_TUBE_APP_NAME = 'Q-Tube';
 const PIRATE_PREVIEW_VIDEO_SRC = '/pirate-nintendo-preview.mp4';
@@ -71,12 +72,22 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
   };
   const pirateExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pirateCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandedPreviewApp, setExpandedPreviewApp] = useState<PreviewAppName | null>(null);
+  const [autoPreviewActive, setAutoPreviewActive] = useState(true);
 
   useEffect(() => {
+    setExpandedPreviewApp(PIRATE_APP_NAME);
+    initialPreviewTimerRef.current = setTimeout(() => {
+      initialPreviewTimerRef.current = null;
+      setAutoPreviewActive(false);
+      setExpandedPreviewApp((current) => (current === PIRATE_APP_NAME ? null : current));
+    }, FEATURED_INITIAL_PREVIEW_DURATION_MS);
+
     return () => {
       if (pirateExpandTimerRef.current) clearTimeout(pirateExpandTimerRef.current);
       if (pirateCollapseTimerRef.current) clearTimeout(pirateCollapseTimerRef.current);
+      if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
     };
   }, []);
 
@@ -91,7 +102,18 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
     }
   };
 
+  const stopInitialPreview = () => {
+    if (initialPreviewTimerRef.current) {
+      clearTimeout(initialPreviewTimerRef.current);
+      initialPreviewTimerRef.current = null;
+    }
+    setAutoPreviewActive(false);
+  };
+
   const schedulePreviewExpand = (appName: PreviewAppName) => {
+    if (autoPreviewActive) {
+      stopInitialPreview();
+    }
     if (expandedPreviewApp === appName && !pirateExpandTimerRef.current) return;
     if (pirateCollapseTimerRef.current) {
       clearTimeout(pirateCollapseTimerRef.current);
@@ -108,6 +130,7 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
   };
 
   const schedulePreviewCollapse = () => {
+    if (autoPreviewActive) return;
     if (pirateExpandTimerRef.current) {
       clearTimeout(pirateExpandTimerRef.current);
       pirateExpandTimerRef.current = null;
@@ -465,7 +488,11 @@ const FeaturedExpandedPreview = ({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) => {
-  const resolvedAppName = appName ?? PIRATE_APP_NAME;
+  const lastResolvedAppRef = useRef<PreviewAppName>(PIRATE_APP_NAME);
+  if (appName) {
+    lastResolvedAppRef.current = appName;
+  }
+  const resolvedAppName = appName ?? lastResolvedAppRef.current;
   const previewConfig = FEATURED_PREVIEW_CONFIG[resolvedAppName];
   const baseAvatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${resolvedAppName}/qortal_avatar?async=true`;
   const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
