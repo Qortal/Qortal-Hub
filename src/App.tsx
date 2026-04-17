@@ -20,7 +20,6 @@ import PhraseWallet from './utils/generateWallet/phrase-wallet';
 import { AppContainer } from './styles/App-styles.ts';
 import { Loader } from './components/Loader';
 import { AuthenticationForm } from './components/AuthenticationForm';
-import { ProfileLeft } from './components/Profile';
 import {
   BuyOrderRequestScreen,
   ConnectionRequestScreen,
@@ -52,7 +51,6 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from './utils/events';
-import { DrawerComponent } from './components/Drawer/Drawer';
 import { Settings } from './components/Group/Settings';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
@@ -227,7 +225,6 @@ function App() {
 
   const [infoSnack, setInfoSnack] = useAtom(infoSnackGlobalAtom);
   const [openSnack, setOpenSnack] = useAtom(openSnackGlobalAtom);
-  const [isOpenDrawerProfile, setIsOpenDrawerProfile] = useState(false);
   const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false);
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
@@ -847,14 +844,6 @@ function App() {
   }, []);
 
   const onOpenSendQort = useCallback(() => setIsOpenSendQort(true), []);
-  const onCloseDrawerProfile = useCallback(
-    () => setIsOpenDrawerProfile(false),
-    []
-  );
-  const onOpenSendQortAndCloseDrawer = useCallback(() => {
-    setIsOpenSendQort(true);
-    setIsOpenDrawerProfile(false);
-  }, []);
   const onOpenRegisterName = useCallback(
     () => executeEvent('openRegisterName', {}),
     []
@@ -866,10 +855,6 @@ function App() {
   );
   const onOpenWalletsApp = useCallback(
     () => executeEvent('openWalletsApp', {}),
-    []
-  );
-  const onOpenDrawerProfile = useCallback(
-    () => setIsOpenDrawerProfile(true),
     []
   );
   const onOpenMinting = useCallback(async () => {
@@ -892,7 +877,6 @@ function App() {
   }, [t]);
   const onBackupWallet = useCallback(() => {
     setExtstate('download-wallet');
-    setIsOpenDrawerProfile(false);
   }, [setExtstate]);
 
   useEffect(() => {
@@ -1024,11 +1008,9 @@ function App() {
               balance={balance}
               desktopViewMode={desktopViewMode}
               isMain={true}
-              isOpenDrawerProfile={isOpenDrawerProfile}
               logoutFunc={logoutFunc}
               myAddress={address}
               setDesktopViewMode={setDesktopViewMode}
-              setIsOpenDrawerProfile={setIsOpenDrawerProfile}
               userInfo={userInfo}
               rawWallet={rawWallet}
               qortBalanceLoading={qortBalanceLoading}
@@ -1042,7 +1024,6 @@ function App() {
               onOpenSettings={onOpenSettings}
               onOpenDrawerLookup={onOpenDrawerLookup}
               onOpenWalletsApp={onOpenWalletsApp}
-              onOpenDrawerProfile={onOpenDrawerProfile}
               getUserInfo={getUserInfo}
               onOpenMinting={onOpenMinting}
               showTutorial={showTutorial}
@@ -1257,28 +1238,6 @@ function App() {
           setInfo={setInfoSnack}
         />
 
-        <DrawerComponent
-          open={isOpenDrawerProfile}
-          setOpen={setIsOpenDrawerProfile}
-        >
-          <ProfileLeft
-            userInfo={userInfo}
-            balance={balance}
-            rawWallet={rawWallet}
-            qortBalanceLoading={qortBalanceLoading}
-            setOpenSnack={setOpenSnack}
-            setInfoSnack={
-              setInfoSnack as (
-                info: { type: string; message: string } | null
-              ) => void
-            }
-            onRefreshBalance={getBalanceAndUserInfoFunc}
-            onOpenSendQort={onOpenSendQortAndCloseDrawer}
-            onOpenRegisterName={onOpenRegisterName}
-            onCloseDrawer={onCloseDrawerProfile}
-          />
-        </DrawerComponent>
-
         <UserLookup
           isOpenDrawerLookup={isOpenDrawerLookup}
           setIsOpenDrawerLookup={setIsOpenDrawerLookup}
@@ -1342,7 +1301,6 @@ function App() {
           onOpenSettings,
           onOpenDrawerLookup,
           onOpenWalletsApp,
-          onOpenDrawerProfile,
           onLogout: logoutFunc,
           getUserInfo,
           onOpenMinting,

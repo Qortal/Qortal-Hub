@@ -57,7 +57,6 @@ export type CustomTitleBarRightNavProps = {
   onOpenSettings: () => void;
   onOpenDrawerLookup: () => void;
   onOpenWalletsApp: () => void;
-  onOpenDrawerProfile: () => void;
   onLogout: () => void;
   getUserInfo: (useTimer?: boolean) => Promise<void>;
   onOpenMinting: () => void;
@@ -464,24 +463,6 @@ export function CustomTitleBar(props?: {
           />
         </Box>
       </Tooltip>
-      {rightNav.desktopViewMode !== 'home' && (
-        <Tooltip
-          title={tooltipTitle(t('auth:account.your'))}
-          placement="bottom"
-          arrow
-          slotProps={tooltipSlotProps(theme)}
-        >
-          <IconButton
-            {...titleBarIconButtonProps}
-            size="small"
-            onClick={rightNav.onOpenDrawerProfile}
-            sx={navIconSx}
-            aria-label={t('auth:account.your')}
-          >
-            <WalletIcon color={controlColor} width="22" />
-          </IconButton>
-        </Tooltip>
-      )}
     </Box>
   );
 

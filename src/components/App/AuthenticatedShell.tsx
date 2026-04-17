@@ -10,11 +10,9 @@ export type AuthenticatedShellProps = {
   // Group
   desktopViewMode: string;
   isMain: boolean;
-  isOpenDrawerProfile: boolean;
   logoutFunc: () => Promise<void>;
   myAddress: string;
   setDesktopViewMode: (mode: string) => void;
-  setIsOpenDrawerProfile: (open: boolean) => void;
   // AuthenticatedProfile
   balance: number;
   userInfo: any;
@@ -30,7 +28,6 @@ export type AuthenticatedShellProps = {
   onOpenSettings: () => void;
   onOpenDrawerLookup: () => void;
   onOpenWalletsApp: () => void;
-  onOpenDrawerProfile: () => void;
   getUserInfo: (useTimer?: boolean) => Promise<void>;
   onOpenMinting: () => void;
   showTutorial: (key: string, force?: boolean) => void;
@@ -41,11 +38,9 @@ export function AuthenticatedShell({
   balance,
   desktopViewMode,
   isMain,
-  isOpenDrawerProfile,
   logoutFunc,
   myAddress,
   setDesktopViewMode,
-  setIsOpenDrawerProfile,
   userInfo,
   rawWallet,
   qortBalanceLoading,
@@ -59,7 +54,6 @@ export function AuthenticatedShell({
   onOpenSettings,
   onOpenDrawerLookup,
   onOpenWalletsApp,
-  onOpenDrawerProfile,
   getUserInfo,
   onOpenMinting,
   showTutorial,
@@ -94,11 +88,9 @@ export function AuthenticatedShell({
       <Group
         desktopViewMode={desktopViewMode}
         isMain={isMain}
-        isOpenDrawerProfile={isOpenDrawerProfile}
         logoutFunc={logoutFunc}
         myAddress={myAddress}
         setDesktopViewMode={setDesktopViewMode}
-        setIsOpenDrawerProfile={setIsOpenDrawerProfile}
       />
       <AuthenticatedProfile
         userInfo={userInfo}
@@ -117,7 +109,6 @@ export function AuthenticatedShell({
         onOpenSettings={onOpenSettings}
         onOpenDrawerLookup={onOpenDrawerLookup}
         onOpenWalletsApp={onOpenWalletsApp}
-        onOpenDrawerProfile={onOpenDrawerProfile}
         getUserInfo={getUserInfo}
         onOpenMinting={onOpenMinting}
         showTutorial={showTutorial}

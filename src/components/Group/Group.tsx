@@ -185,7 +185,6 @@ function MemberGroupsEffects({
 
 export const Group = ({
   myAddress,
-  setIsOpenDrawerProfile,
   setDesktopViewMode,
   desktopViewMode,
 }: GroupProps) => {
@@ -1856,7 +1855,6 @@ export const Group = ({
               chatMode={chatMode}
               openDrawerGroups={openDrawerGroups}
               goToHome={goToHome}
-              setIsOpenDrawerProfile={setIsOpenDrawerProfile}
               mobileViewMode={mobileViewMode}
               setMobileViewMode={setMobileViewMode}
               setMobileViewModeKeepOpen={setMobileViewModeKeepOpen}
