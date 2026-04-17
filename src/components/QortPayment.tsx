@@ -3,19 +3,27 @@ import {
   Box,
   Button,
   CircularProgress,
+  IconButton,
+  InputAdornment,
   TextField,
   Typography,
   useTheme,
 } from '@mui/material';
-import { useState } from 'react';
-import { Spacer } from '../common/Spacer';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import { useEffect, useState } from 'react';
 import { getFee } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
 import BoundedNumericTextField from '../common/BoundedNumericTextField.tsx';
-import { PasswordField } from './PasswordField/PasswordField.tsx';
 import { ErrorText } from './ErrorText/ErrorText.tsx';
 
-export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
+export const QortPayment = ({
+  balance,
+  show,
+  onSuccess,
+  defaultPaymentTo,
+  compact = false,
+}) => {
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -28,13 +36,74 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');
   const [sendPaymentError, setSendPaymentError] = useState<string>('');
-  const [sendPaymentSuccess, setSendPaymentSuccess] = useState<string>('');
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const isDarkMode = theme.palette.mode === 'dark';
+  const secondaryTextColor = alpha(
+    theme.palette.text.secondary,
+    isDarkMode ? 0.9 : 0.82
+  );
+
+  useEffect(() => {
+    setPaymentTo(defaultPaymentTo || '');
+  }, [defaultPaymentTo]);
+
+  const fieldLabelSx = {
+    color: secondaryTextColor,
+    fontSize: compact ? '0.78rem' : '0.79rem',
+    fontWeight: 400,
+    letterSpacing: '0.012em',
+    lineHeight: 1.2,
+  } as const;
+
+  const fieldShellSx = {
+    background: isDarkMode
+      ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
+      : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
+    border: isDarkMode
+      ? '1px solid rgba(255,255,255,0.075)'
+      : '1px solid rgba(28,36,52,0.08)',
+    borderRadius: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: compact ? '8px' : '10px',
+    px: compact ? 1.5 : 1.75,
+    py: compact ? 1.2 : 1.5,
+  } as const;
+
+  const textFieldSurfaceSx = {
+    '& .MuiOutlinedInput-root': {
+      backgroundColor: isDarkMode ? '#1C2027' : '#FFFDFC',
+      borderRadius: '12px',
+      color: theme.palette.text.primary,
+      minHeight: compact ? '44px' : '48px',
+      '& fieldset': {
+        borderColor: isDarkMode
+          ? 'rgba(255,255,255,0.075)'
+          : 'rgba(28,36,52,0.08)',
+      },
+      '&:hover fieldset': {
+        borderColor: theme.palette.border.main,
+      },
+      '&.Mui-focused fieldset': {
+        borderColor: theme.palette.border.main,
+      },
+    },
+    '& .MuiOutlinedInput-input': {
+      fontSize: compact ? '0.94rem' : '0.95rem',
+      fontWeight: 500,
+      padding: compact ? '10px 14px' : '12px 14px',
+    },
+    '& .MuiOutlinedInput-input::placeholder': {
+      color: alpha(theme.palette.text.secondary, isDarkMode ? 0.72 : 0.68),
+      fontWeight: 400,
+      opacity: 1,
+    },
+  } as const;
 
   const sendCoinFunc = async () => {
     try {
       setSendPaymentError('');
-      setSendPaymentSuccess('');
       if (!paymentTo) {
         setSendPaymentError(
           t('auth:action.enter_recipient', {
@@ -100,181 +169,201 @@ export const QortPayment = ({ balance, show, onSuccess, defaultPaymentTo }) => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        flexGrow: 1,
-        overflowY: 'auto',
-        p: 2,
+        gap: compact ? '12px' : '14px',
+        px: compact ? 2 : 2.5,
+        py: compact ? 1.75 : 2.25,
       }}
     >
-      <Box sx={{ maxWidth: 480, mx: 'auto', py: 3, px: 1, width: '100%' }}>
-
-        {/* Page title + balance */}
-        <Box sx={{ mb: 3 }}>
+      <Box
+        sx={{
+          alignItems: 'center',
+          background: isDarkMode
+            ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
+            : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
+          border: isDarkMode
+            ? '1px solid rgba(255,255,255,0.075)'
+            : '1px solid rgba(28,36,52,0.08)',
+          borderRadius: '14px',
+          display: 'flex',
+          px: compact ? 1.5 : 1.75,
+          py: compact ? 1.1 : 1.35,
+        }}
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
           <Typography
-            variant="h6"
-            sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}
-          >
-            {t('core:action.transfer_qort', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-
-          <Spacer height="12px" />
-
-          <Box
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              px: 2,
-              py: 1.25,
-              borderRadius: 2,
-              border: 1,
-              borderColor: alpha(theme.palette.divider, 0.4),
-              bgcolor: alpha(theme.palette.background.default, 0.5),
+              color: secondaryTextColor,
+              fontSize: '0.76rem',
+              fontWeight: 400,
+              letterSpacing: '0.014em',
             }}
           >
-            <Typography variant="body2" color="text.secondary">
-              {t('core:balance', { postProcess: 'capitalizeFirstChar' })}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 700, ml: 'auto' }}
-            >
-              {balance?.toFixed(2)} QORT
-            </Typography>
-          </Box>
-        </Box>
-
-        {/* Recipient */}
-        <Box
-          sx={{
-            borderRadius: 2,
-            border: 1,
-            borderColor: alpha(theme.palette.divider, 0.4),
-            bgcolor: alpha(theme.palette.background.default, 0.5),
-            mb: 2,
-            px: 2,
-            py: 1.5,
-          }}
-        >
-          <Typography
-            component="label"
-            htmlFor="payment-to"
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: 'block', mb: 1 }}
-          >
-            {t('core:to', { postProcess: 'capitalizeFirstChar' })}
+            {t('core:balance', { postProcess: 'capitalizeFirstChar' })}
           </Typography>
-          <TextField
-            id="payment-to"
-            value={paymentTo}
-            onChange={(e) => setPaymentTo(e.target.value)}
-            autoComplete="off"
-            variant="outlined"
-            size="small"
-            fullWidth
+          <Typography
             sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                bgcolor: theme.palette.background.default,
-              },
+              color: theme.palette.text.primary,
+              fontSize: '1.08rem',
+              fontWeight: 650,
+              letterSpacing: '0.012em',
             }}
-          />
-        </Box>
-
-        {/* Amount */}
-        <Box
-          sx={{
-            borderRadius: 2,
-            border: 1,
-            borderColor: alpha(theme.palette.divider, 0.4),
-            bgcolor: alpha(theme.palette.background.default, 0.5),
-            mb: 2,
-            px: 2,
-            py: 1.5,
-          }}
-        >
-          <Typography
-            component="label"
-            htmlFor="payment-amount"
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: 'block', mb: 1 }}
           >
-            {t('core:amount', { postProcess: 'capitalizeFirstChar' })}
+            {balance?.toFixed(2)} QORT
           </Typography>
-          <BoundedNumericTextField
-            value={paymentAmount}
-            minValue={0}
-            maxValue={+balance}
-            allowDecimals={true}
-            initialValue={'0'}
-            allowNegatives={false}
-            afterChange={(e: string) => setPaymentAmount(+e)}
-          />
         </Box>
-
-        {/* Password */}
-        <Box
-          sx={{
-            borderRadius: 2,
-            border: 1,
-            borderColor: alpha(theme.palette.divider, 0.4),
-            bgcolor: alpha(theme.palette.background.default, 0.5),
-            mb: 2,
-            px: 2,
-            py: 1.5,
-          }}
-        >
-          <Typography
-            component="label"
-            htmlFor="payment-password"
-            variant="body2"
-            color="text.secondary"
-            sx={{ display: 'block', mb: 1 }}
-          >
-            {t('auth:wallet.password_confirmation', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
-          <PasswordField
-            id="payment-password"
-            value={paymentPassword}
-            onChange={(e) => setPaymentPassword(e.target.value)}
-            autoComplete="off"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                if (isLoadingSendCoin) return;
-                sendCoinFunc();
-              }
-            }}
-          />
-        </Box>
-
-        <ErrorText>{sendPaymentError}</ErrorText>
-
-        <Spacer height="16px" />
-
-        <Button
-          variant="contained"
-          fullWidth
-          disabled={isLoadingSendCoin}
-          onClick={() => {
-            if (isLoadingSendCoin) return;
-            sendCoinFunc();
-          }}
-          sx={{ borderRadius: 2, py: 1.25 }}
-          startIcon={
-            isLoadingSendCoin ? (
-              <CircularProgress size={16} color="inherit" />
-            ) : null
-          }
-        >
-          {t('core:action.send', { postProcess: 'capitalizeFirstChar' })}
-        </Button>
-
       </Box>
+
+      <Box sx={fieldShellSx}>
+        <Typography
+          component="label"
+          htmlFor="payment-to"
+          sx={fieldLabelSx}
+        >
+          {t('core:to', { postProcess: 'capitalizeFirstChar' })}
+        </Typography>
+        <TextField
+          id="payment-to"
+          value={paymentTo}
+          onChange={(e) => setPaymentTo(e.target.value)}
+          autoComplete="off"
+          placeholder="Qortal address or registered name"
+          fullWidth
+          sx={textFieldSurfaceSx}
+        />
+      </Box>
+
+      <Box sx={fieldShellSx}>
+        <Typography
+          component="label"
+          htmlFor="payment-amount"
+          sx={fieldLabelSx}
+        >
+          {t('core:amount', { postProcess: 'capitalizeFirstChar' })}
+        </Typography>
+        <BoundedNumericTextField
+          value={paymentAmount}
+          minValue={0}
+          maxValue={+balance}
+          allowDecimals={true}
+          initialValue={'0'}
+          allowNegatives={false}
+          addIconButtons={false}
+          afterChange={(e: string) => setPaymentAmount(+e)}
+          sx={{
+            width: '100%',
+            '& .MuiOutlinedInput-root': {
+              backgroundColor: isDarkMode ? '#1C2027' : '#FFFDFC',
+              borderRadius: '12px',
+              minHeight: '48px',
+              '& fieldset': {
+                borderColor: isDarkMode
+                  ? 'rgba(255,255,255,0.075)'
+                  : 'rgba(28,36,52,0.08)',
+              },
+              '&:hover fieldset': {
+                borderColor: theme.palette.border.main,
+              },
+              '&.Mui-focused fieldset': {
+                borderColor: theme.palette.border.main,
+              },
+            },
+            '& input': {
+              fontSize: '0.9rem',
+              padding: compact ? '10px 14px' : '12px 14px',
+            },
+          }}
+        />
+      </Box>
+
+      <Box sx={fieldShellSx}>
+        <Typography
+          component="label"
+          htmlFor="payment-password"
+          sx={fieldLabelSx}
+        >
+          {t('auth:wallet.password_confirmation', {
+            postProcess: 'capitalizeFirstChar',
+          })}
+        </Typography>
+        <TextField
+          id="payment-password"
+          type={showPassword ? 'text' : 'password'}
+          value={paymentPassword}
+          onChange={(e) => setPaymentPassword(e.target.value)}
+          autoComplete="off"
+          fullWidth
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              if (isLoadingSendCoin) return;
+              sendCoinFunc();
+            }
+          }}
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  edge="end"
+                  sx={{ color: theme.palette.text.secondary }}
+                >
+                  {showPassword ? (
+                    <VisibilityOffIcon fontSize="small" />
+                  ) : (
+                    <VisibilityIcon fontSize="small" />
+                  )}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+          sx={textFieldSurfaceSx}
+        />
+      </Box>
+
+      <ErrorText
+        sx={{
+          fontSize: '0.74rem',
+          minHeight: sendPaymentError ? '20px' : compact ? '8px' : '12px',
+          px: 0.5,
+        }}
+      >
+        {sendPaymentError}
+      </ErrorText>
+
+      <Button
+        variant="contained"
+        fullWidth
+        disabled={isLoadingSendCoin}
+        onClick={() => {
+          if (isLoadingSendCoin) return;
+          sendCoinFunc();
+        }}
+        sx={{
+          backgroundColor: theme.palette.primary.main,
+          border: isDarkMode
+            ? '1px solid rgba(255,255,255,0.07)'
+            : '1px solid rgba(255,255,255,0.3)',
+          borderRadius: '14px',
+          boxShadow: isDarkMode
+            ? '0 12px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.08)'
+            : '0 10px 24px rgba(45, 84, 138, 0.18), inset 0 1px 0 rgba(255,255,255,0.28)',
+          color: '#fff',
+          fontSize: '0.86rem',
+          fontWeight: 600,
+          minHeight: compact ? 44 : 46,
+          textTransform: 'none',
+          '&:hover': {
+            backgroundColor: theme.palette.primary.main,
+            filter: 'brightness(1.05)',
+          },
+        }}
+        startIcon={
+          isLoadingSendCoin ? (
+            <CircularProgress size={16} color="inherit" />
+          ) : null
+        }
+      >
+        {t('core:action.send', { postProcess: 'capitalizeFirstChar' })}
+      </Button>
     </Box>
   );
 };

@@ -67,6 +67,25 @@ export const HomeProfileCard = () => {
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
+  const avatarModalSurface = isDarkMode ? '#2C303A' : '#FBF8F2';
+  const avatarModalSurfaceSoft = isDarkMode ? '#272B34' : '#F6F0E6';
+  const avatarFieldSurface = isDarkMode
+    ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
+    : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)';
+  const avatarFieldBorder = isDarkMode
+    ? 'rgba(255,255,255,0.075)'
+    : 'rgba(28,36,52,0.08)';
+  const avatarWarningTone = isDarkMode
+    ? {
+        background: 'rgba(189, 143, 73, 0.1)',
+        border: 'rgba(189, 143, 73, 0.24)',
+        icon: '#C7A56C',
+      }
+    : {
+        background: 'rgba(191, 144, 73, 0.08)',
+        border: 'rgba(191, 144, 73, 0.2)',
+        icon: '#A97E3F',
+      };
 
   const openAvatarPanel = useCallback((target: HTMLElement | null) => {
     if (!target) return;
@@ -692,14 +711,42 @@ export const HomeProfileCard = () => {
                 component={motion.button}
                 type="button"
                 aria-label="Close avatar panel"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.14, ease: [0.2, 0, 0, 1] }}
+                initial={{
+                  opacity: 0,
+                  backdropFilter: 'blur(0px) brightness(1) saturate(1)',
+                  WebkitBackdropFilter: 'blur(0px) brightness(1) saturate(1)',
+                  backgroundColor: isDarkMode
+                    ? 'rgba(6, 8, 12, 0)'
+                    : 'rgba(22, 26, 34, 0)',
+                }}
+                animate={{
+                  opacity: 1,
+                  backdropFilter: isDarkMode
+                    ? 'blur(12px) brightness(0.76) saturate(0.88)'
+                    : 'blur(12px) brightness(0.9) saturate(0.94)',
+                  WebkitBackdropFilter: isDarkMode
+                    ? 'blur(12px) brightness(0.76) saturate(0.88)'
+                    : 'blur(12px) brightness(0.9) saturate(0.94)',
+                  backgroundColor: isDarkMode
+                    ? 'rgba(6, 8, 12, 0.4)'
+                    : 'rgba(22, 26, 34, 0.14)',
+                }}
+                exit={{
+                  opacity: 0,
+                  backdropFilter: 'blur(0px) brightness(1) saturate(1)',
+                  WebkitBackdropFilter: 'blur(0px) brightness(1) saturate(1)',
+                  backgroundColor: isDarkMode
+                    ? 'rgba(6, 8, 12, 0)'
+                    : 'rgba(22, 26, 34, 0)',
+                }}
+                transition={{
+                  duration: prefersReducedMotion ? 0.08 : 0.14,
+                  ease: [0.2, 0, 0, 1],
+                  delay: prefersReducedMotion ? 0 : 0.08,
+                }}
                 onClick={closeAvatarPanel}
                 sx={{
                   appearance: 'none',
-                  background: 'rgba(8, 10, 16, 0.08)',
                   border: 0,
                   inset: 0,
                   padding: 0,
@@ -731,13 +778,15 @@ export const HomeProfileCard = () => {
                 <Box
                   ref={avatarPanelRef}
                   sx={{
-                    bgcolor: isDarkMode ? '#1D1F27' : theme.palette.background.paper,
-                    border: `1px solid ${theme.palette.border.subtle}`,
+                    bgcolor: avatarModalSurface,
+                    border: isDarkMode
+                      ? '1px solid rgba(255,255,255,0.075)'
+                      : '1px solid rgba(28,36,52,0.08)',
                     borderRadius: `${avatarPanelTargetRadius}px`,
                     boxShadow:
                       isDarkMode
-                        ? '0 20px 48px rgba(0,0,0,0.34)'
-                        : '0 18px 38px rgba(28, 36, 52, 0.12)',
+                        ? '0 38px 92px rgba(0,0,0,0.54), 0 14px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.035)'
+                        : '0 32px 72px rgba(28, 36, 52, 0.2), 0 12px 26px rgba(28, 36, 52, 0.1), inset 0 1px 0 rgba(255,255,255,0.45)',
                     overflow: 'hidden',
                   }}
                 >
@@ -751,7 +800,7 @@ export const HomeProfileCard = () => {
                       delay: prefersReducedMotion ? 0 : 0.1,
                     }}
                     sx={{
-                      bgcolor: isDarkMode ? '#1D1F27' : theme.palette.background.paper,
+                      bgcolor: avatarModalSurface,
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 0,
@@ -825,8 +874,8 @@ export const HomeProfileCard = () => {
                           alignItems: 'center',
                           background:
                             isDarkMode
-                              ? 'linear-gradient(180deg, rgba(27,30,37,0.98) 0%, rgba(24,26,32,1) 100%)'
-                              : 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(233,238,245,0.82) 100%)',
+                              ? 'linear-gradient(180deg, rgba(38,42,51,0.98) 0%, rgba(34,37,45,1) 100%)'
+                              : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(241,236,227,0.92) 100%)',
                           border: `1px solid ${theme.palette.border.subtle}`,
                           borderRadius: '16px',
                           display: 'flex',
@@ -839,7 +888,7 @@ export const HomeProfileCard = () => {
                         <Box
                           sx={{
                             alignItems: 'center',
-                            backgroundColor: isDarkMode ? '#23262F' : theme.palette.background.elevated,
+                            backgroundColor: isDarkMode ? avatarModalSurfaceSoft : theme.palette.background.elevated,
                             border: `1px solid ${theme.palette.border.subtle}`,
                             borderRadius: '50%',
                             boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
@@ -873,8 +922,8 @@ export const HomeProfileCard = () => {
                         <ButtonBase
                           sx={{
                             alignItems: 'center',
-                            backgroundColor: isDarkMode ? '#181a20' : '#EEE6DA',
-                            border: `1px solid ${theme.palette.border.subtle}`,
+                            background: avatarFieldSurface,
+                            border: `1px solid ${avatarFieldBorder}`,
                             borderRadius: '12px',
                             color: theme.palette.text.primary,
                             display: 'flex',
@@ -886,7 +935,9 @@ export const HomeProfileCard = () => {
                               'background-color 160ms ease, border-color 160ms ease, transform 120ms ease',
                             width: '100%',
                             '&:hover': {
-                              backgroundColor: isDarkMode ? '#16181d' : theme.palette.background.elevated,
+                              background: isDarkMode
+                                ? 'linear-gradient(180deg, rgba(43,47,58,1) 0%, rgba(36,39,47,1) 100%)'
+                                : 'linear-gradient(180deg, rgba(250,246,238,1) 0%, rgba(244,238,229,1) 100%)',
                               borderColor: theme.palette.border.main,
                               transform: 'translateY(-1px)',
                             },
@@ -923,12 +974,12 @@ export const HomeProfileCard = () => {
                             </Typography>
                           </Box>
                           <Box
-                            sx={{
-                              alignItems: 'center',
-                              backgroundColor: isDarkMode ? '#23262F' : theme.palette.background.elevated,
-                              border: `1px solid ${theme.palette.border.subtle}`,
-                              borderRadius: '999px',
-                              color: theme.palette.text.primary,
+                          sx={{
+                            alignItems: 'center',
+                            backgroundColor: isDarkMode ? avatarModalSurfaceSoft : theme.palette.background.elevated,
+                            border: `1px solid ${theme.palette.border.subtle}`,
+                            borderRadius: '999px',
+                            color: theme.palette.text.primary,
                               display: 'inline-flex',
                               fontSize: '0.72rem',
                               fontWeight: 600,
@@ -945,8 +996,8 @@ export const HomeProfileCard = () => {
                         <Box
                           sx={{
                             alignItems: 'center',
-                            backgroundColor: isDarkMode ? '#181a20' : '#EEE6DA',
-                            border: `1px solid ${theme.palette.border.subtle}`,
+                            background: avatarFieldSurface,
+                            border: `1px solid ${avatarFieldBorder}`,
                             borderRadius: '10px',
                             color: theme.palette.text.secondary,
                             display: 'flex',
@@ -971,11 +1022,8 @@ export const HomeProfileCard = () => {
                         <Box
                           sx={{
                             alignItems: 'flex-start',
-                            backgroundColor:
-                              isDarkMode
-                                ? 'rgba(255,152,0,0.1)'
-                                : 'rgba(255,152,0,0.08)',
-                            border: `1px solid ${theme.palette.warning.main}35`,
+                            backgroundColor: avatarWarningTone.background,
+                            border: `1px solid ${avatarWarningTone.border}`,
                             borderRadius: '12px',
                             display: 'flex',
                             gap: 1,
@@ -985,7 +1033,7 @@ export const HomeProfileCard = () => {
                         >
                           <ErrorIcon
                             sx={{
-                              color: theme.palette.warning.main,
+                              color: avatarWarningTone.icon,
                               fontSize: 18,
                               flexShrink: 0,
                               mt: '1px',
@@ -1013,7 +1061,13 @@ export const HomeProfileCard = () => {
                         fullWidth
                         sx={{
                           backgroundColor: theme.palette.primary.main,
+                          border: isDarkMode
+                            ? '1px solid rgba(255,255,255,0.07)'
+                            : '1px solid rgba(255,255,255,0.3)',
                           borderRadius: '12px',
+                          boxShadow: isDarkMode
+                            ? '0 10px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)'
+                            : '0 10px 22px rgba(45, 84, 138, 0.16), inset 0 1px 0 rgba(255,255,255,0.32)',
                           color: '#fff',
                           fontSize: '0.82rem',
                           fontWeight: 600,
@@ -1024,8 +1078,16 @@ export const HomeProfileCard = () => {
                             filter: 'brightness(1.06)',
                           },
                           '&.Mui-disabled': {
-                            backgroundColor: isDarkMode ? '#2A2D36' : theme.palette.background.elevated,
-                            color: theme.palette.action.disabled,
+                            background: isDarkMode
+                              ? 'rgba(255,255,255,0.035)'
+                              : 'rgba(24,29,36,0.04)',
+                            border: isDarkMode
+                              ? '1px solid rgba(255,255,255,0.055)'
+                              : '1px solid rgba(24,29,36,0.06)',
+                            boxShadow: 'none',
+                            color: isDarkMode
+                              ? 'rgba(255,255,255,0.34)'
+                              : 'rgba(24,29,36,0.34)',
                           },
                         }}
                       >

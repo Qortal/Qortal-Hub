@@ -1,6 +1,5 @@
-import { Box, ButtonBase, CircularProgress, IconButton, Popover, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, ButtonBase, CircularProgress, IconButton, Typography, useMediaQuery, useTheme } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
@@ -26,7 +25,6 @@ import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
 import { useTranslation } from 'react-i18next';
-import QRCode from 'react-qr-code';
 import { AnimatePresence, LazyMotion, domAnimation, motion, useReducedMotion } from 'framer-motion';
 import { getBaseApiReact } from '../../App';
 import { manifestData } from '../NotAuthenticated';
@@ -60,12 +58,23 @@ const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 18;
 const HOME_INFO_PANEL_DARK_BACKGROUND = '#24272f';
 const HOME_INFO_PANEL_DARK_GRADIENT = 'linear-gradient(180deg, #24272f 0%, #24272f 30%, #1B1D24 100%)';
-
-const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx = undefined }) => {
+const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx = undefined, panelBoxRef = undefined }) => {
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
+  const assignPanelNode = (node) => {
+    panelRef.current = node;
+
+    if (typeof panelBoxRef === 'function') {
+      panelBoxRef(node);
+      return;
+    }
+
+    if (panelBoxRef) {
+      panelBoxRef.current = node;
+    }
+  };
 
   return (
-    <Box ref={panelRef} sx={{ ...dashboardPanelSx(theme), borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', width: '100%', ...sx }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
+    <Box ref={assignPanelNode} sx={{ ...dashboardPanelSx(theme), borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', width: '100%', ...sx }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
       <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, ...titleSx }}>{title}</Typography>
       {children}
     </Box>
@@ -333,6 +342,7 @@ const InfoPreviewPanel = ({ rows, theme }) => {
 
 export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setMobileViewMode, setDesktopViewMode, desktopViewMode }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
+  const rightRailRef = useRef<HTMLDivElement | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
@@ -346,7 +356,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
-  const [qrAnchorEl, setQrAnchorEl] = useState<HTMLElement | null>(null);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
   const [coreVersionLabel, setCoreVersionLabel] = useState('—');
   const [minterPreviewMode, setMinterPreviewMode] = useState<'off' | 'on'>(() => {
@@ -567,7 +576,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   ];
 
   const sharedGroupNavProps = { getTimestampEnterChat, setDesktopViewMode, setGroupSection, setMobileViewMode, setSelectedGroup };
-
   return (
     <LazyMotion features={domAnimation}>
       <AnimatePresence mode="wait">
@@ -610,16 +618,71 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                     </Box>
                   </Box>
                 </Box>
-                <Box sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px auto`, height: `calc(100% - ${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px)`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
+                <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px auto`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
                   <InfoPreviewPanel rows={infoRows} theme={theme} />
-            <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', minHeight: '182px', padding: '14px 16px 16px' }}>
+                  <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', minHeight: '182px', padding: '14px 16px 16px' }}>
                     <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', pb: 1.35 }}>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>Last activity</Typography>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>2 days ago</Typography>
                     </Box>
                     <Box sx={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', pt: 0.5 }}>
-                      <WalletActionButton icon={<SendRoundedIcon sx={{ fontSize: '16px' }} />} label="Send" onClick={() => executeEvent('openPaymentInternal', {})} theme={theme} />
-                      <WalletActionButton icon={<SouthWestRoundedIcon sx={{ fontSize: '16px' }} />} label="Receive" onClick={(event) => setQrAnchorEl(event.currentTarget)} theme={theme} />
+                      <WalletActionButton
+                        icon={<SendRoundedIcon sx={{ fontSize: '16px' }} />}
+                        label="Send"
+                        onClick={(event) => {
+                          const rect = (
+                            event.currentTarget as HTMLElement
+                          ).getBoundingClientRect();
+                          const rightRailRect =
+                            rightRailRef.current?.getBoundingClientRect();
+                          executeEvent('openPaymentInternal', {
+                            anchorRect: {
+                              height: rect.height,
+                              left: rect.left,
+                              top: rect.top,
+                              width: rect.width,
+                            },
+                            targetRect: rightRailRect
+                              ? {
+                                  height: rightRailRect.height,
+                                  left: rightRailRect.left,
+                                  top: rightRailRect.top,
+                                  width: rightRailRect.width,
+                                }
+                              : null,
+                          });
+                        }}
+                        theme={theme}
+                      />
+                      <WalletActionButton
+                        icon={<SouthWestRoundedIcon sx={{ fontSize: '16px' }} />}
+                        label="Receive"
+                        onClick={(event) => {
+                          const rect = (
+                            event.currentTarget as HTMLElement
+                          ).getBoundingClientRect();
+                          const rightRailRect =
+                            rightRailRef.current?.getBoundingClientRect();
+                          executeEvent('openReceiveQortInternal', {
+                            address: userAddress ?? myAddress ?? '',
+                            anchorRect: {
+                              height: rect.height,
+                              left: rect.left,
+                              top: rect.top,
+                              width: rect.width,
+                            },
+                            targetRect: rightRailRect
+                              ? {
+                                  height: rightRailRect.height,
+                                  left: rightRailRect.left,
+                                  top: rightRailRect.top,
+                                  width: rightRailRect.width,
+                                }
+                              : null,
+                          });
+                        }}
+                        theme={theme}
+                      />
                       <WalletActionButton icon={<ShoppingBagRoundedIcon sx={{ fontSize: '16px' }} />} label="Buy" onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-trade' } }); executeEvent('open-apps-mode', {}); }} theme={theme} />
                     </Box>
                     <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.66rem', lineHeight: 1.45, mt: 'auto', pt: 1.05 }}>
@@ -789,17 +852,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
 
               {activeTab === 'developer' && <HomeDeveloperTab {...sharedGroupNavProps} />}
             </Box>
-
-            <Popover open={Boolean(qrAnchorEl)} anchorEl={qrAnchorEl} onClose={() => setQrAnchorEl(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-              <Box sx={{ bgcolor: theme.palette.background.paper, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '12px', p: 2, width: '220px' }}>
-                <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.9rem', fontWeight: 600, textAlign: 'center' }}>Wallet QR</Typography>
-                <Box sx={{ alignItems: 'center', bgcolor: '#ffffff', borderRadius: '12px', display: 'flex', justifyContent: 'center', p: 1.5 }}>
-                  <QRCode value={userAddress ?? ''} size={150} level="M" bgColor="#FFFFFF" fgColor="#000000" />
-                </Box>
-                <Typography sx={{ color: theme.palette.text.secondary, fontFamily: 'monospace', fontSize: '0.72rem', textAlign: 'center', wordBreak: 'break-all' }}>{userAddress ?? '—'}</Typography>
-              </Box>
-            </Popover>
-
             <Spacer height="120px" />
           </motion.div>
         )}

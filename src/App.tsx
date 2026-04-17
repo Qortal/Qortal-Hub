@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Box, ButtonBase, useTheme } from '@mui/material';
+import { AnimatePresence } from 'framer-motion';
 import { decryptStoredWallet } from './utils/decryptWallet';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
 import {
@@ -31,6 +32,7 @@ import {
   PaymentRequestScreen,
   QortalRequestExtensionDialog,
   QortalRequestScreen,
+  ReceiveQortOverlay,
   SendQortOverlay,
   SuccessOverlay,
   SuccessScreen,
@@ -126,6 +128,13 @@ export {
 export { isMainWindow } from './constants/app';
 
 function App() {
+  type SendQortOriginRect = {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null;
+
   const [extState, setExtstate] = useAtom(extStateAtom);
   const [desktopViewMode, setDesktopViewMode] = useState('home');
   const [rawWallet, setRawWallet] = useAtom(rawWalletAtom);
@@ -227,7 +236,17 @@ function App() {
   const [openSnack, setOpenSnack] = useAtom(openSnackGlobalAtom);
   const [isOpenDrawerLookup, setIsOpenDrawerLookup] = useState(false);
   const [isOpenSendQort, setIsOpenSendQort] = useState(false);
+  const [isOpenReceiveQort, setIsOpenReceiveQort] = useState(false);
   const [isOpenSendQortSuccess, setIsOpenSendQortSuccess] = useState(false);
+  const [sendQortOriginRect, setSendQortOriginRect] =
+    useState<SendQortOriginRect>(null);
+  const [sendQortTargetRect, setSendQortTargetRect] =
+    useState<SendQortOriginRect>(null);
+  const [receiveQortOriginRect, setReceiveQortOriginRect] =
+    useState<SendQortOriginRect>(null);
+  const [receiveQortTargetRect, setReceiveQortTargetRect] =
+    useState<SendQortOriginRect>(null);
+  const [receiveQortAddress, setReceiveQortAddress] = useState('');
   const [selectedNode, setSelectedNode] = useAtom(selectedNodeInfoAtom);
   const {
     isNodeValid,
@@ -734,8 +753,14 @@ function App() {
     setWalletToBeDownloadedPassword('');
     setShowSeed(false);
     setCreationStep(1);
+    setSendQortOriginRect(null);
+    setSendQortTargetRect(null);
+    setReceiveQortOriginRect(null);
+    setReceiveQortTargetRect(null);
+    setReceiveQortAddress('');
     setExtstate('authenticated');
     setIsOpenSendQort(false);
+    setIsOpenReceiveQort(false);
     setIsOpenSendQortSuccess(false);
   }, []);
 
@@ -831,19 +856,74 @@ function App() {
   const openPaymentInternal = (e) => {
     const directAddress = e.detail?.address;
     const name = e.detail?.name;
+    const anchorRect = e.detail?.anchorRect;
+    const targetRect = e.detail?.targetRect;
+    setSendQortOriginRect(
+      anchorRect
+        ? {
+            left: anchorRect.left,
+            top: anchorRect.top,
+            width: anchorRect.width,
+            height: anchorRect.height,
+          }
+        : null
+    );
+    setSendQortTargetRect(
+      targetRect
+        ? {
+            left: targetRect.left,
+            top: targetRect.top,
+            width: targetRect.width,
+            height: targetRect.height,
+          }
+        : null
+    );
     setIsOpenSendQort(true);
-    setPaymentTo(name || directAddress);
+    setPaymentTo(name || directAddress || '');
+  };
+
+  const openReceiveQortInternal = (e) => {
+    const anchorRect = e.detail?.anchorRect;
+    const targetRect = e.detail?.targetRect;
+    setReceiveQortOriginRect(
+      anchorRect
+        ? {
+            left: anchorRect.left,
+            top: anchorRect.top,
+            width: anchorRect.width,
+            height: anchorRect.height,
+          }
+        : null
+    );
+    setReceiveQortTargetRect(
+      targetRect
+        ? {
+            left: targetRect.left,
+            top: targetRect.top,
+            width: targetRect.width,
+            height: targetRect.height,
+          }
+        : null
+    );
+    setReceiveQortAddress(e.detail?.address || address || '');
+    setIsOpenReceiveQort(true);
   };
 
   useEffect(() => {
     subscribeToEvent('openPaymentInternal', openPaymentInternal);
+    subscribeToEvent('openReceiveQortInternal', openReceiveQortInternal);
 
     return () => {
       unsubscribeFromEvent('openPaymentInternal', openPaymentInternal);
+      unsubscribeFromEvent('openReceiveQortInternal', openReceiveQortInternal);
     };
-  }, []);
+  }, [address]);
 
-  const onOpenSendQort = useCallback(() => setIsOpenSendQort(true), []);
+  const onOpenSendQort = useCallback(() => {
+    setSendQortOriginRect(null);
+    setSendQortTargetRect(null);
+    setIsOpenSendQort(true);
+  }, []);
   const onOpenRegisterName = useCallback(
     () => executeEvent('openRegisterName', {}),
     []
@@ -1032,18 +1112,37 @@ function App() {
           </Suspense>
         )}
 
-        {isOpenSendQort && isMainWindow && (
-          <SendQortOverlay
-            balance={balance}
-            paymentTo={paymentTo}
-            onReturn={returnToMain}
-            onSuccess={() => {
-              setIsOpenSendQort(false);
-              setIsOpenSendQortSuccess(true);
-            }}
-            show={show}
-          />
-        )}
+        <AnimatePresence>
+          {isOpenSendQort && isMainWindow && (
+            <SendQortOverlay
+              balance={balance}
+              originRect={sendQortOriginRect}
+              targetRect={sendQortTargetRect}
+              paymentTo={paymentTo}
+              onReturn={returnToMain}
+              onSuccess={() => {
+                setIsOpenSendQort(false);
+                setSendQortOriginRect(null);
+                setSendQortTargetRect(null);
+                setIsOpenSendQortSuccess(true);
+              }}
+              show={show}
+            />
+          )}
+          {isOpenReceiveQort && isMainWindow && (
+            <ReceiveQortOverlay
+              address={receiveQortAddress || address || ''}
+              originRect={receiveQortOriginRect}
+              targetRect={receiveQortTargetRect}
+              onReturn={() => {
+                setIsOpenReceiveQort(false);
+                setReceiveQortOriginRect(null);
+                setReceiveQortTargetRect(null);
+                setReceiveQortAddress('');
+              }}
+            />
+          )}
+        </AnimatePresence>
 
         {isShowQortalRequest && !isMainWindow && (
           <QortalRequestScreen

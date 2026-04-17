@@ -11,11 +11,26 @@ import {
 } from './dashboardPanelEffects';
 
 const RETRY_DELAY_MS = 5000;
-const PIRATE_EXPAND_DELAY_MS = 200;
+const FEATURED_PREVIEW_EXPAND_DELAY_MS = 200;
 const PIRATE_APP_NAME = 'Pirate Nintendo';
+const Q_TUBE_APP_NAME = 'Q-Tube';
 const PIRATE_PREVIEW_VIDEO_SRC = '/pirate-nintendo-preview.mp4';
+const Q_TUBE_PREVIEW_VIDEO_SRC = '/q-tube-preview.mp4';
+const FEATURED_PREVIEW_CONFIG = {
+  [Q_TUBE_APP_NAME]: {
+    subtitle: "Decentralized Cat Videos, can't beat that.",
+    title: Q_TUBE_APP_NAME,
+    videoSrc: Q_TUBE_PREVIEW_VIDEO_SRC,
+  },
+  [PIRATE_APP_NAME]: {
+    subtitle: 'Play and grow a community-powered retro game library.',
+    title: PIRATE_APP_NAME,
+    videoSrc: PIRATE_PREVIEW_VIDEO_SRC,
+  },
+} as const;
+type PreviewAppName = keyof typeof FEATURED_PREVIEW_CONFIG;
 const FEATURED_APP_NAMES = [
-  'Q-Tube',
+  Q_TUBE_APP_NAME,
   'Quitter',
   'Q-Mail',
   'Q-Trade',
@@ -39,12 +54,24 @@ const openAppsLibrary = () => {
   executeEvent('open-apps-mode', {});
 };
 
-export const HomeFeaturedApps = () => {
+export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
   const theme = useTheme();
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
+  const assignPanelNode = (node) => {
+    panelRef.current = node;
+
+    if (typeof panelBoxRef === 'function') {
+      panelBoxRef(node);
+      return;
+    }
+
+    if (panelBoxRef) {
+      panelBoxRef.current = node;
+    }
+  };
   const pirateExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pirateCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isPirateExpanded, setIsPirateExpanded] = useState(false);
+  const [expandedPreviewApp, setExpandedPreviewApp] = useState<PreviewAppName | null>(null);
 
   useEffect(() => {
     return () => {
@@ -64,33 +91,37 @@ export const HomeFeaturedApps = () => {
     }
   };
 
-  const schedulePirateExpand = () => {
-    if (isPirateExpanded || pirateExpandTimerRef.current) return;
+  const schedulePreviewExpand = (appName: PreviewAppName) => {
+    if (expandedPreviewApp === appName && !pirateExpandTimerRef.current) return;
     if (pirateCollapseTimerRef.current) {
       clearTimeout(pirateCollapseTimerRef.current);
       pirateCollapseTimerRef.current = null;
     }
-    pirateExpandTimerRef.current = setTimeout(() => {
-      pirateExpandTimerRef.current = null;
-      setIsPirateExpanded(true);
-    }, PIRATE_EXPAND_DELAY_MS);
-  };
-
-  const schedulePirateCollapse = () => {
     if (pirateExpandTimerRef.current) {
       clearTimeout(pirateExpandTimerRef.current);
       pirateExpandTimerRef.current = null;
     }
-    if (!isPirateExpanded || pirateCollapseTimerRef.current) return;
+    pirateExpandTimerRef.current = setTimeout(() => {
+      pirateExpandTimerRef.current = null;
+      setExpandedPreviewApp(appName);
+    }, FEATURED_PREVIEW_EXPAND_DELAY_MS);
+  };
+
+  const schedulePreviewCollapse = () => {
+    if (pirateExpandTimerRef.current) {
+      clearTimeout(pirateExpandTimerRef.current);
+      pirateExpandTimerRef.current = null;
+    }
+    if (!expandedPreviewApp || pirateCollapseTimerRef.current) return;
     pirateCollapseTimerRef.current = setTimeout(() => {
       pirateCollapseTimerRef.current = null;
-      setIsPirateExpanded(false);
+      setExpandedPreviewApp(null);
     }, 70);
   };
 
   return (
     <Box
-      ref={panelRef}
+      ref={assignPanelNode}
       sx={{
         ...dashboardPanelSx(theme),
         borderRadius: '12px',
@@ -152,18 +183,19 @@ export const HomeFeaturedApps = () => {
             key={appName}
             appName={appName}
             theme={theme}
-            isPirateExpanded={isPirateExpanded}
-            onPirateExpandStart={schedulePirateExpand}
-            onPirateExpandEnd={schedulePirateCollapse}
+            expandedPreviewApp={expandedPreviewApp}
+            onPreviewExpandStart={schedulePreviewExpand}
+            onPreviewExpandEnd={schedulePreviewCollapse}
           />
         ))}
-        <PirateExpandedPreview
+        <FeaturedExpandedPreview
+          appName={expandedPreviewApp}
           theme={theme}
-          visible={isPirateExpanded}
+          visible={!!expandedPreviewApp}
           onMouseEnter={() => {
             clearPirateTimers();
           }}
-          onMouseLeave={schedulePirateCollapse}
+          onMouseLeave={schedulePreviewCollapse}
         />
       </Box>
 
@@ -295,26 +327,26 @@ export const HomeFeaturedApps = () => {
 interface AppTileProps {
   appName: string;
   theme: any;
-  isPirateExpanded: boolean;
-  onPirateExpandStart: () => void;
-  onPirateExpandEnd: () => void;
+  expandedPreviewApp: PreviewAppName | null;
+  onPreviewExpandStart: (appName: PreviewAppName) => void;
+  onPreviewExpandEnd: () => void;
 }
 
 const AppTile = ({
   appName,
   theme,
-  isPirateExpanded,
-  onPirateExpandStart,
-  onPirateExpandEnd,
+  expandedPreviewApp,
+  onPreviewExpandStart,
+  onPreviewExpandEnd,
 }: AppTileProps) => {
   const baseAvatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
   const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
   const hasRetriedRef = useRef(false);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isPirateTile = appName === PIRATE_APP_NAME;
-  const fadeOutForPiratePreview = isPirateExpanded && !isPirateTile;
-  const hideBasePirateTile = isPirateExpanded && isPirateTile;
-  const allowTileHover = !isPirateExpanded;
+  const isPreviewableTile = appName in FEATURED_PREVIEW_CONFIG;
+  const fadeOutForPreview = !!expandedPreviewApp && expandedPreviewApp !== appName;
+  const hideBasePreviewTile = !!expandedPreviewApp && expandedPreviewApp === appName;
+  const allowTileHover = !expandedPreviewApp;
 
   useEffect(() => {
     return () => {
@@ -336,8 +368,12 @@ const AppTile = ({
     <ButtonBase
       disableRipple
       onClick={() => openApp(appName)}
-      onMouseEnter={isPirateTile ? onPirateExpandStart : undefined}
-      onMouseLeave={isPirateTile ? onPirateExpandEnd : undefined}
+      onMouseEnter={
+        isPreviewableTile
+          ? () => onPreviewExpandStart(appName as PreviewAppName)
+          : undefined
+      }
+      onMouseLeave={isPreviewableTile ? onPreviewExpandEnd : undefined}
       sx={{
         alignItems: 'center',
         bgcolor:
@@ -356,8 +392,8 @@ const AppTile = ({
         position: 'relative',
         width: '100%',
         minHeight: '132px',
-        opacity: fadeOutForPiratePreview ? 0 : hideBasePirateTile ? 0 : 1,
-        pointerEvents: fadeOutForPiratePreview ? 'none' : 'auto',
+        opacity: fadeOutForPreview ? 0 : hideBasePreviewTile ? 0 : 1,
+        pointerEvents: fadeOutForPreview ? 'none' : 'auto',
         transform: 'translateY(0)',
         boxShadow:
           theme.palette.mode === 'dark'
@@ -416,24 +452,29 @@ const AppTile = ({
   );
 };
 
-const PirateExpandedPreview = ({
+const FeaturedExpandedPreview = ({
+  appName,
   theme,
   visible,
   onMouseEnter,
   onMouseLeave,
 }: {
+  appName: PreviewAppName | null;
   theme: any;
   visible: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) => {
-  const baseAvatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${PIRATE_APP_NAME}/qortal_avatar?async=true`;
+  const resolvedAppName = appName ?? PIRATE_APP_NAME;
+  const previewConfig = FEATURED_PREVIEW_CONFIG[resolvedAppName];
+  const baseAvatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${resolvedAppName}/qortal_avatar?async=true`;
   const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
   const [hasVideoError, setHasVideoError] = useState(false);
 
   useEffect(() => {
     setImageSrc(baseAvatarUrl);
-  }, [baseAvatarUrl]);
+    setHasVideoError(false);
+  }, [baseAvatarUrl, resolvedAppName]);
 
   return (
     <Box
@@ -476,6 +517,7 @@ const PirateExpandedPreview = ({
     >
       {!hasVideoError ? (
         <Box
+          key={previewConfig.videoSrc}
           component="video"
           autoPlay
           muted
@@ -484,7 +526,7 @@ const PirateExpandedPreview = ({
           preload="metadata"
           onError={() => setHasVideoError(true)}
         >
-          <source src={PIRATE_PREVIEW_VIDEO_SRC} type="video/mp4" />
+          <source src={previewConfig.videoSrc} type="video/mp4" />
         </Box>
       ) : null}
         <Box
@@ -559,7 +601,7 @@ const PirateExpandedPreview = ({
                   opacity: theme.palette.mode === 'dark' ? 0.94 : 0.9,
                 }}
               >
-                {PIRATE_APP_NAME.charAt(0)}
+                {previewConfig.title.charAt(0)}
               </Avatar>
               <Typography
                 sx={{
@@ -573,7 +615,7 @@ const PirateExpandedPreview = ({
                       : '0 2px 10px rgba(18,22,28,0.22)',
                 }}
               >
-                Pirate Nintendo
+                {previewConfig.title}
               </Typography>
             </Box>
             <Typography
@@ -591,11 +633,11 @@ const PirateExpandedPreview = ({
                     : '0 2px 10px rgba(18,22,28,0.18)',
               }}
             >
-              Play and grow a community-powered retro game library.
+              {previewConfig.subtitle}
             </Typography>
             <Box sx={{ pt: '6px', pointerEvents: 'auto' }}>
               <Button
-                onClick={() => openApp(PIRATE_APP_NAME)}
+                onClick={() => openApp(resolvedAppName)}
                 variant="contained"
                   sx={{
                     borderRadius: '11px',

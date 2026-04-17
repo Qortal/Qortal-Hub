@@ -1,80 +1,51 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import {
+  alpha,
   Box,
+  Button,
   ButtonBase,
   Portal,
   Typography,
   useTheme,
 } from '@mui/material';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import CloseIcon from '@mui/icons-material/Close';
 import { motion, useReducedMotion } from 'framer-motion';
-import { QortPayment } from '../QortPayment';
+import QRCode from 'react-qr-code';
 
-type SendQortOriginRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-} | null;
-
-type SendQortOverlayProps = {
-  balance: number;
-  paymentTo: string;
-  originRect?: SendQortOriginRect;
-  targetRect?: SendQortOriginRect;
+type ReceiveQortOverlayProps = {
+  address: string;
+  originRect?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null;
+  targetRect?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null;
   onReturn: () => void;
-  onSuccess: () => void;
-  show: (data: any) => Promise<unknown>;
 };
 
-export function SendQortOverlay({
-  balance,
-  paymentTo,
+export function ReceiveQortOverlay({
+  address,
   originRect = null,
   targetRect = null,
   onReturn,
-  onSuccess,
-  show,
-}: SendQortOverlayProps) {
+}: ReceiveQortOverlayProps) {
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
-  const panelRef = useRef<HTMLDivElement | null>(null);
   const isDarkMode = theme.palette.mode === 'dark';
-  const [measuredPanelHeight, setMeasuredPanelHeight] = useState(496);
-
-  useEffect(() => {
-    if (!panelRef.current) return;
-
-    const measure = () => {
-      if (panelRef.current) {
-        setMeasuredPanelHeight(panelRef.current.getBoundingClientRect().height);
-      }
-    };
-
-    measure();
-
-    const resizeObserver =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => measure())
-        : null;
-
-    if (resizeObserver) {
-      resizeObserver.observe(panelRef.current);
-    }
-
-    window.addEventListener('resize', measure);
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, []);
+  const qrContainerRef = useRef<HTMLDivElement | null>(null);
 
   const fallbackPanelWidth = useMemo(() => {
     if (typeof window === 'undefined') return 620;
     return Math.min(700, Math.max(560, window.innerWidth - 48));
   }, []);
-
-  const resolvedPanelHeight = targetRect?.height ?? measuredPanelHeight;
 
   const panelLayout = useMemo(() => {
     if (targetRect) {
@@ -89,14 +60,15 @@ export function SendQortOverlay({
     const viewportWidth =
       typeof window !== 'undefined' ? window.innerWidth : fallbackPanelWidth + 48;
     const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 900;
+    const fallbackHeight = 560;
 
     return {
-      height: resolvedPanelHeight,
+      height: fallbackHeight,
       left: Math.max(24, (viewportWidth - fallbackPanelWidth) / 2),
-      top: Math.max(40, (viewportHeight - resolvedPanelHeight) / 2),
+      top: Math.max(40, (viewportHeight - fallbackHeight) / 2),
       width: fallbackPanelWidth,
     };
-  }, [fallbackPanelWidth, resolvedPanelHeight, targetRect]);
+  }, [fallbackPanelWidth, targetRect]);
 
   const panelAnimation = useMemo(() => {
     if (originRect && targetRect && !prefersReducedMotion) {
@@ -145,7 +117,42 @@ export function SendQortOverlay({
         ? { opacity: 0 }
         : { opacity: 0, y: 10, scale: 0.985 },
     };
-  }, [prefersReducedMotion]);
+  }, [originRect, prefersReducedMotion, targetRect]);
+
+  const qrSize = useMemo(() => {
+    const widthBound = Math.max(170, panelLayout.width - 176);
+    const heightBound = Math.max(170, panelLayout.height - 320);
+    return Math.min(240, widthBound, heightBound);
+  }, [panelLayout.height, panelLayout.width]);
+
+  const handleCopyAddress = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+    } catch (error) {
+      console.error('Failed to copy address:', error);
+    }
+  };
+
+  const handleDownloadQr = () => {
+    if (!address || !qrContainerRef.current) return;
+    const svg = qrContainerRef.current.querySelector('svg');
+    if (!svg) return;
+
+    const serializer = new XMLSerializer();
+    const source = serializer.serializeToString(svg);
+    const blob = new Blob([source], {
+      type: 'image/svg+xml;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'qort-wallet-qr.svg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Portal>
@@ -153,7 +160,7 @@ export function SendQortOverlay({
         <Box
           component={motion.button}
           type="button"
-          aria-label="Close send QORT modal"
+          aria-label="Close receive QORT modal"
           initial={{
             opacity: 0,
             backdropFilter: 'blur(0px) brightness(1) saturate(1)',
@@ -215,13 +222,12 @@ export function SendQortOverlay({
             top: `${panelLayout.top}px`,
             transformOrigin: targetRect ? 'bottom left' : 'center center',
             height: `${panelLayout.height}px`,
-            willChange: 'transform, opacity',
             width: `${panelLayout.width}px`,
+            willChange: 'transform, opacity',
             zIndex: 1399,
           }}
         >
           <Box
-            ref={panelRef}
             sx={{
               backgroundColor: isDarkMode ? '#2C303A' : '#FBF8F2',
               border: isDarkMode
@@ -255,7 +261,7 @@ export function SendQortOverlay({
                     letterSpacing: '0.014em',
                   }}
                 >
-                  Send QORT
+                  Receive QORT
                 </Typography>
                 <Typography
                   sx={{
@@ -265,7 +271,7 @@ export function SendQortOverlay({
                     lineHeight: 1.42,
                   }}
                 >
-                  Transfer QORT to any registered name or address.
+                  Scan to receive QORT
                 </Typography>
               </Box>
               <ButtonBase
@@ -289,19 +295,141 @@ export function SendQortOverlay({
               sx={{
                 borderTop: `1px solid ${theme.palette.border.subtle}`,
                 flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.8,
                 minHeight: 0,
                 overflowY: 'auto',
-                px: { xs: 0, sm: 0 },
-                py: 0,
+                px: 2.25,
+                pb: 2.25,
+                pt: 2,
               }}
             >
-              <QortPayment
-                balance={balance}
-                show={show}
-                onSuccess={onSuccess}
-                defaultPaymentTo={paymentTo}
-                compact
-              />
+              <Box
+                ref={qrContainerRef}
+                sx={{
+                  alignItems: 'center',
+                  background:
+                    isDarkMode
+                      ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
+                      : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
+                  border: isDarkMode
+                    ? '1px solid rgba(255,255,255,0.075)'
+                    : '1px solid rgba(28,36,52,0.08)',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  minHeight: Math.max(252, qrSize + 76),
+                  p: 3,
+                }}
+              >
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '18px',
+                    boxShadow:
+                      '0 10px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.7)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    p: 2.2,
+                  }}
+                >
+                  <QRCode
+                    value={address || ''}
+                    size={qrSize}
+                    level="M"
+                    bgColor="#FFFFFF"
+                    fgColor="#000000"
+                  />
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  background:
+                    isDarkMode
+                      ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
+                      : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
+                  border: isDarkMode
+                    ? '1px solid rgba(255,255,255,0.075)'
+                    : '1px solid rgba(28,36,52,0.08)',
+                  borderRadius: '14px',
+                  px: 1.5,
+                  py: 1.2,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: alpha(theme.palette.text.secondary, isDarkMode ? 0.88 : 0.8),
+                    fontFamily: 'monospace',
+                    fontSize: '0.78rem',
+                    lineHeight: 1.55,
+                    textAlign: 'center',
+                    wordBreak: 'break-all',
+                  }}
+                >
+                  {address || '—'}
+                </Typography>
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: '10px',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                }}
+              >
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  onClick={handleCopyAddress}
+                  startIcon={<ContentCopyIcon sx={{ fontSize: '0.95rem' }} />}
+                  sx={{
+                    backgroundColor: isDarkMode ? '#1C2027' : '#FFFDFC',
+                    borderColor: theme.palette.border.subtle,
+                    borderRadius: '12px',
+                    color: theme.palette.text.primary,
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    minHeight: 44,
+                    textTransform: 'none',
+                    '&:hover': {
+                      backgroundColor: theme.palette.action.hover,
+                      borderColor: theme.palette.border.main,
+                    },
+                  }}
+                >
+                  Copy address
+                </Button>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={handleDownloadQr}
+                  startIcon={<DownloadRoundedIcon sx={{ fontSize: '1rem' }} />}
+                  sx={{
+                    backgroundColor: theme.palette.primary.main,
+                    border: isDarkMode
+                      ? '1px solid rgba(255,255,255,0.07)'
+                      : '1px solid rgba(255,255,255,0.3)',
+                    borderRadius: '12px',
+                    boxShadow: isDarkMode
+                      ? '0 12px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.08)'
+                      : '0 10px 24px rgba(45, 84, 138, 0.18), inset 0 1px 0 rgba(255,255,255,0.28)',
+                    color: '#fff',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    minHeight: 44,
+                    textTransform: 'none',
+                    '&:hover': {
+                      backgroundColor: theme.palette.primary.main,
+                      filter: 'brightness(1.05)',
+                    },
+                  }}
+                >
+                  Download QR
+                </Button>
+              </Box>
             </Box>
           </Box>
         </Box>
