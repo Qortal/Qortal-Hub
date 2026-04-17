@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Box, Button, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -7,6 +8,7 @@ import {
 
 type GroupActivityEmptyStateProps = {
   compact?: boolean;
+  isVisible?: boolean;
   title: string;
   secondaryLines: [string, string] | string[];
   tertiaryText?: string;
@@ -17,6 +19,7 @@ type GroupActivityEmptyStateProps = {
 
 export const GroupActivityEmptyState = ({
   compact = false,
+  isVisible = true,
   title,
   secondaryLines,
   tertiaryText,
@@ -25,25 +28,129 @@ export const GroupActivityEmptyState = ({
   graphicVariant = 'requests',
 }: GroupActivityEmptyStateProps) => {
   const theme = useTheme();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const graphicFrameRef = useRef<HTMLDivElement | null>(null);
+  const resizeFrameRef = useRef<number | null>(null);
+  const extraLiftPxRef = useRef(0);
+  const [extraLiftPx, setExtraLiftPx] = useState(0);
+
+  const baseLiftPx = compact ? 44 : 40;
+  const totalLiftPx = baseLiftPx + extraLiftPx;
+
+  useEffect(() => {
+    extraLiftPxRef.current = extraLiftPx;
+  }, [extraLiftPx]);
+
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined' || !isVisible) return undefined;
+
+    const scheduleMeasurement = (callback: () => void) => {
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+      }
+      resizeFrameRef.current = window.requestAnimationFrame(() => {
+        resizeFrameRef.current = null;
+        callback();
+      });
+    };
+
+    const updateLift = () => {
+      const ghostBarNode = document.querySelector(
+        '[data-group-activity-ghost-bar="true"]'
+      ) as HTMLElement | null;
+      const graphicFrameNode = graphicFrameRef.current;
+
+      if (!ghostBarNode || !graphicFrameNode) return;
+      if (
+        ghostBarNode.getClientRects().length === 0 ||
+        graphicFrameNode.getClientRects().length === 0
+      ) {
+        return;
+      }
+
+      const ghostBarBottom = ghostBarNode.getBoundingClientRect().bottom;
+      const graphicTop = graphicFrameNode.getBoundingClientRect().top;
+      const actualGapPx = graphicTop - ghostBarBottom;
+      const baselineGapPx = actualGapPx + extraLiftPxRef.current;
+      const targetGapPx = baselineGapPx * 0.4;
+      const nextExtraLiftPx = Math.max(0, baselineGapPx - targetGapPx);
+
+      if (Math.abs(nextExtraLiftPx - extraLiftPxRef.current) > 0.5) {
+        extraLiftPxRef.current = nextExtraLiftPx;
+        setExtraLiftPx(nextExtraLiftPx);
+      }
+    };
+
+    const handleMeasurement = () => {
+      scheduleMeasurement(updateLift);
+    };
+
+    updateLift();
+    window.addEventListener('resize', handleMeasurement);
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(handleMeasurement);
+
+      const ghostBarNode = document.querySelector(
+        '[data-group-activity-ghost-bar="true"]'
+      );
+      if (ghostBarNode) {
+        resizeObserver.observe(ghostBarNode);
+      }
+      if (rootRef.current) {
+        resizeObserver.observe(rootRef.current);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleMeasurement);
+      if (resizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameRef.current);
+      }
+      resizeObserver?.disconnect();
+    };
+  }, [
+    baseLiftPx,
+    compact,
+    graphicVariant,
+    isVisible,
+    secondaryLines,
+    tertiaryText,
+    title,
+  ]);
 
   return (
     <Box
+      ref={rootRef}
       sx={{
         alignItems: 'center',
         display: 'flex',
         flexDirection: 'column',
         margin: '0 auto',
         maxWidth: '360px',
-        transform: compact ? 'translateY(-44px)' : 'translateY(-40px)',
+        position: 'relative',
         textAlign: 'center',
+        transform: `translateY(-${totalLiftPx}px)`,
         width: '100%',
       }}
       className="group-empty-state"
     >
-      <GroupActivityEmptyStateGraphic
-        size={compact ? 292 : 254}
-        variant={graphicVariant}
-      />
+      <Box
+        ref={graphicFrameRef}
+        sx={{
+          marginBottom: '18px',
+          maxWidth: '100%',
+          position: 'relative',
+          width: compact ? '292px' : '254px',
+        }}
+      >
+        <GroupActivityEmptyStateGraphic
+          size={compact ? 292 : 254}
+          sx={{ margin: 0 }}
+          variant={graphicVariant}
+        />
+      </Box>
       <Box
         sx={{
           alignItems: 'center',
@@ -150,8 +257,7 @@ export const GroupActivityEmptyState = ({
               filter: 'saturate(1.02)',
             },
             '&:active': {
-              background:
-                'linear-gradient(180deg, #7faef0 0%, #6f9fe7 100%)',
+              background: 'linear-gradient(180deg, #7faef0 0%, #6f9fe7 100%)',
               boxShadow:
                 '0 4px 12px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.02) inset, 0 0 12px rgba(132, 175, 240, 0.14)',
               transform: 'translateY(1px)',

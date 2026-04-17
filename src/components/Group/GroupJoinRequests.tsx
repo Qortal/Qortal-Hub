@@ -31,6 +31,7 @@ export const GroupJoinRequests = ({
   setMobileViewMode,
   setDesktopViewMode,
   compact = false,
+  isVisible = true,
   compactViewportHeight,
   onCountChange,
   onLoadingChange,
@@ -45,6 +46,7 @@ export const GroupJoinRequests = ({
   setMobileViewMode?: (m: string) => void;
   setDesktopViewMode?: (m: string) => void;
   compact?: boolean;
+  isVisible?: boolean;
   compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
   onLoadingChange?: (loading: boolean) => void;
@@ -236,6 +238,7 @@ export const GroupJoinRequests = ({
           >
             <GroupActivityEmptyState
               compact={compact}
+              isVisible={isVisible}
               title="No join requests"
               secondaryLines={[
                 "You don't have any pending requests",

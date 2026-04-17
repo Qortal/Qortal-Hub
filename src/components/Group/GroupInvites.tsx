@@ -26,6 +26,7 @@ export const GroupInvites = ({
   setOpenAddGroup,
   setOpenAddGroupTab,
   compact = false,
+  isVisible = true,
   compactViewportHeight,
   onCountChange,
   onLoadingChange,
@@ -34,6 +35,7 @@ export const GroupInvites = ({
   setOpenAddGroup?: (v: boolean) => void;
   setOpenAddGroupTab?: (tab: 0 | 1 | 2) => void;
   compact?: boolean;
+  isVisible?: boolean;
   compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
   onLoadingChange?: (loading: boolean) => void;
@@ -281,6 +283,7 @@ export const GroupInvites = ({
         >
           <GroupActivityEmptyState
             compact={compact}
+            isVisible={isVisible}
             title="No invite requests"
             secondaryLines={[
               "You don't have any pending invites",

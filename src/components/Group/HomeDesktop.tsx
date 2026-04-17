@@ -1069,6 +1069,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       })}
                     </Box>
                     <Box
+                      data-group-activity-ghost-bar="true"
                       sx={{
                         alignItems: 'center',
                         alignSelf: 'center',
@@ -1157,10 +1158,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       </Typography>
                     </Box>
                     <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
-                      <GroupJoinRequests compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
+                      <GroupJoinRequests compact isVisible={activityTab === 'requests'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
                     </Box>
                     <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
-                      <GroupInvites compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
+                      <GroupInvites compact isVisible={activityTab === 'invites'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
                     </Box>
                     <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
                       <ListOfGroupPromotions compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setPromotionsCount} />

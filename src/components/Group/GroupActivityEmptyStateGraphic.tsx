@@ -2,7 +2,7 @@ import { useId, type CSSProperties } from 'react';
 import { keyframes } from '@emotion/react';
 import { Box, type SxProps, type Theme } from '@mui/material';
 
-const GROUP_EMPTY_RATIO = 156 / 320;
+const GROUP_EMPTY_RATIO = 92 / 320;
 const GROUP_EMPTY_EASING = 'cubic-bezier(0.45, 0.05, 0.55, 0.95)';
 
 const requesterNodeFloat = keyframes`
@@ -179,7 +179,7 @@ export const GroupActivityEmptyStateGraphic = ({
       <Box className="group-empty-graphic__glow" />
       <svg
         className="group-empty-graphic__svg"
-        viewBox="0 0 320 156"
+        viewBox="0 34 320 92"
         fill="none"
         role="presentation"
       >
