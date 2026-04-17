@@ -11,8 +11,8 @@ import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
 import ComputerOutlinedIcon from '@mui/icons-material/ComputerOutlined';
-import { alpha } from '@mui/material/styles';
-import { useEffect, useRef, useState } from 'react';
+import { alpha, darken } from '@mui/material/styles';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { balanceAtom, groupInvitesCacheAtom, joinRequestsCacheAtom, memberGroupsAtom, nodeInfosAtom, userInfoAtom } from '../../atoms/global';
 import { Spacer } from '../../common/Spacer';
@@ -24,6 +24,7 @@ import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted
 import { getFeaturedDecorationMotionSx, HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
+import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
 import {
   DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
   DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
@@ -44,6 +45,18 @@ import { nodeDisplay } from '../../utils/helpers';
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
 const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
+const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
+  width: {
+    duration: 0.24,
+    ease: [0.22, 1, 0.36, 1] as const,
+  },
+  x: {
+    type: 'spring' as const,
+    stiffness: 360,
+    damping: 31,
+    mass: 0.74,
+  },
+};
 
 const SHOW_USER_DEVELOPER_TOGGLE = false;
 const SHOW_MOST_ACTIVE_GROUPS = false;
@@ -347,8 +360,14 @@ const InfoPreviewPanel = ({ rows, theme }) => {
   );
 };
 
-export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setMobileViewMode, setDesktopViewMode, desktopViewMode }) => {
+export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setOpenAddGroupTab, setMobileViewMode, setDesktopViewMode, desktopViewMode }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
+  const activityToggleTrackRef = useRef<HTMLDivElement | null>(null);
+  const activityToggleSegmentRefs = useRef<Record<ActivityTab, HTMLButtonElement | null>>({
+    requests: null,
+    promotions: null,
+    invites: null,
+  });
   const rightRailRef = useRef<HTMLDivElement | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
@@ -372,6 +391,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
+  const [activityToggleIndicator, setActivityToggleIndicator] = useState({
+    ready: false,
+    width: 0,
+    x: 0,
+  });
   const [coreVersionLabel, setCoreVersionLabel] = useState('—');
   const [minterPreviewMode, setMinterPreviewMode] = useState<'off' | 'on'>(() => {
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
@@ -380,11 +404,113 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const theme = useTheme();
+  const groupActivityAccentTextColor = theme.palette.getContrastText(
+    GROUP_ACTIVITY_BLUE.primary
+  );
+  const groupActivityAccentBadgeTextColor = theme.palette.getContrastText(
+    GROUP_ACTIVITY_BLUE.pressed
+  );
+  const groupActivityToggleTrackBackground =
+    theme.palette.mode === 'dark'
+      ? darken(theme.palette.background.surface, 0.25)
+      : darken(theme.palette.background.paper, 0.25);
+  const groupActivityToggleTrackShadow =
+    theme.palette.mode === 'dark'
+      ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.32)'
+      : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(31,39,53,0.08)';
+  const groupActivityToggleIndicatorBackground =
+    theme.palette.mode === 'dark'
+      ? `linear-gradient(180deg, ${alpha(GROUP_ACTIVITY_BLUE.hover, 0.96)} 0%, ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.9)} 100%)`
+      : `linear-gradient(180deg, ${alpha(GROUP_ACTIVITY_BLUE.hover, 0.94)} 0%, ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.88)} 100%)`;
   const setGroupInvitesCache = useSetAtom(groupInvitesCacheAtom);
   const setJoinRequestsCache = useSetAtom(joinRequestsCacheAtom);
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+  const setActivityToggleSegmentRef = useCallback(
+    (tab: ActivityTab) => (node: HTMLButtonElement | null) => {
+      activityToggleSegmentRefs.current[tab] = node;
+    },
+    []
+  );
+  const updateActivityToggleIndicator = useCallback(() => {
+    const track = activityToggleTrackRef.current;
+    const activeSegment = activityToggleSegmentRefs.current[activityTab];
+
+    if (!track || !activeSegment) return;
+
+    const trackRect = track.getBoundingClientRect();
+    const segmentRect = activeSegment.getBoundingClientRect();
+    const nextIndicator = {
+      ready: true,
+      width: segmentRect.width,
+      x: segmentRect.left - trackRect.left,
+    };
+
+    setActivityToggleIndicator((prev) => {
+      if (
+        prev.ready === nextIndicator.ready &&
+        Math.abs(prev.width - nextIndicator.width) < 0.5 &&
+        Math.abs(prev.x - nextIndicator.x) < 0.5
+      ) {
+        return prev;
+      }
+
+      return nextIndicator;
+    });
+  }, [activityTab]);
+
+  useLayoutEffect(() => {
+    updateActivityToggleIndicator();
+  }, [
+    updateActivityToggleIndicator,
+    requestsCount,
+    invitesCount,
+    promotionsCount,
+    requestsCountLoading,
+    invitesCountLoading,
+  ]);
+
+  useEffect(() => {
+    const track = activityToggleTrackRef.current;
+    if (!track) return;
+
+    let animationFrame = 0;
+    const scheduleIndicatorUpdate = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(updateActivityToggleIndicator);
+    };
+
+    scheduleIndicatorUpdate();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', scheduleIndicatorUpdate);
+      return () => {
+        cancelAnimationFrame(animationFrame);
+        window.removeEventListener('resize', scheduleIndicatorUpdate);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(scheduleIndicatorUpdate);
+    resizeObserver.observe(track);
+    Object.values(activityToggleSegmentRefs.current).forEach((segment) => {
+      if (segment) resizeObserver.observe(segment);
+    });
+    window.addEventListener('resize', scheduleIndicatorUpdate);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', scheduleIndicatorUpdate);
+    };
+  }, [
+    updateActivityToggleIndicator,
+    requestsCount,
+    invitesCount,
+    promotionsCount,
+    requestsCountLoading,
+    invitesCountLoading,
+  ]);
 
   useEffect(() => {
     if (!userAddress) { setIsOnboardingComplete(false); return; }
@@ -786,17 +912,161 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                         <RefreshIcon fontSize="small" />
                       </IconButton>
                     </Box>
-                    <Box sx={{ alignSelf: 'center', bgcolor: theme.palette.mode === 'dark' ? 'rgba(14,15,20,0.82)' : 'rgba(255,255,255,0.68)', border: `1px solid ${alpha(theme.palette.border.subtle, theme.palette.mode === 'dark' ? 0.7 : 0.9)}`, borderRadius: '50px', display: 'flex', gap: '4px', justifyContent: 'center', minWidth: 'fit-content', padding: '4px', boxShadow: theme.palette.mode === 'dark' ? 'inset 0 1px 0 rgba(255,255,255,0.03)' : 'inset 0 1px 0 rgba(255,255,255,0.45)' }}>
+                    <Box
+                      ref={activityToggleTrackRef}
+                      sx={{
+                        alignSelf: 'center',
+                        bgcolor: groupActivityToggleTrackBackground,
+                        borderRadius: '999px',
+                        boxShadow: groupActivityToggleTrackShadow,
+                        display: 'inline-flex',
+                        gap: '1px',
+                        minWidth: 0,
+                        overflow: 'hidden',
+                        padding: '2px',
+                        position: 'relative',
+                        width: 'fit-content',
+                      }}
+                    >
+                      {activityToggleIndicator.ready && (
+                        <motion.div
+                          aria-hidden="true"
+                          animate={{
+                            width: activityToggleIndicator.width,
+                            x: activityToggleIndicator.x,
+                          }}
+                          initial={false}
+                          transition={
+                            reduce ? { duration: 0 } : GROUP_ACTIVITY_TOGGLE_TRANSITION
+                          }
+                          style={{
+                            background: groupActivityToggleIndicatorBackground,
+                            borderRadius: 999,
+                            bottom: 2,
+                            boxShadow: `0 5px 12px -12px ${GROUP_ACTIVITY_BLUE.glow}, inset 0 1px 0 rgba(255,255,255,0.14)`,
+                            left: 0,
+                            pointerEvents: 'none',
+                            position: 'absolute',
+                            top: 2,
+                            willChange: 'transform, width',
+                            zIndex: 0,
+                          }}
+                        />
+                      )}
                       {([
-                        { key: 'requests' as ActivityTab, label: t('group:join_requests', { postProcess: 'capitalizeFirstChar' }), count: requestsCount, countLoading: requestsCountLoading },
-                        { key: 'promotions' as ActivityTab, label: t('group:group.promotions', { postProcess: 'capitalizeFirstChar' }), count: promotionsCount, countLoading: false },
-                        { key: 'invites' as ActivityTab, label: t('group:group.invites', { postProcess: 'capitalizeFirstChar' }), count: invitesCount, countLoading: invitesCountLoading },
-                      ]).map(({ key, label, count, countLoading }) => (
-                        <ButtonBase key={key} onClick={() => setActivityTab(key)} sx={{ bgcolor: activityTab === key ? (theme.palette.mode === 'dark' ? '#8DB6F2' : '#90B6F0') : 'transparent', borderRadius: '50px', color: activityTab === key ? '#172132' : theme.palette.text.secondary, fontSize: '0.82rem', fontWeight: activityTab === key ? 600 : 400, px: 2, py: 0.8, textTransform: 'none', whiteSpace: 'nowrap', transition: 'background-color 140ms ease, color 140ms ease', '&:hover': { bgcolor: activityTab === key ? (theme.palette.mode === 'dark' ? '#84AFF0' : '#89B0EE') : (theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(24,29,36,0.04)') } }}>
-                          {label}
-                          {countLoading && key !== 'invites' ? <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', ml: '6px' }}><CircularProgress size={14} thickness={4} sx={{ color: activityTab === key ? '#172132' : theme.palette.primary.main }} /></Box> : count > 0 ? <Box component="span" sx={{ bgcolor: activityTab === key ? 'rgba(23,33,50,0.14)' : (theme.palette.mode === 'dark' ? '#8DB6F2' : '#90B6F0'), borderRadius: '50px', color: activityTab === key ? '#172132' : '#172132', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 700, height: '18px', lineHeight: 1, ml: '6px', minWidth: '18px', px: '6px' }}>{count}</Box> : null}
-                        </ButtonBase>
-                      ))}
+                        { key: 'requests' as ActivityTab, label: t('tutorial:home.group_activity_requests_short', { defaultValue: 'Requests' }), count: requestsCount, countLoading: requestsCountLoading },
+                        { key: 'promotions' as ActivityTab, label: t('tutorial:home.group_activity_promoted_short', { defaultValue: 'Promoted' }), count: promotionsCount, countLoading: false },
+                        { key: 'invites' as ActivityTab, label: t('tutorial:home.group_activity_invites_short', { defaultValue: 'Invites' }), count: invitesCount, countLoading: invitesCountLoading },
+                      ]).map(({ key, label, count, countLoading }) => {
+                        const showLoadingIndicator = countLoading && key !== 'invites';
+                        const showCount = count > 0;
+
+                        return (
+                          <ButtonBase
+                            key={key}
+                            ref={setActivityToggleSegmentRef(key)}
+                            onClick={() => setActivityTab(key)}
+                            sx={{
+                              borderRadius: '999px',
+                              color:
+                                activityTab === key
+                                  ? groupActivityAccentTextColor
+                                  : theme.palette.text.secondary,
+                              display: 'inline-flex',
+                              fontSize: '0.77rem',
+                              fontWeight: 600,
+                              height: '30px',
+                              justifyContent: 'center',
+                              minWidth: 0,
+                              px: 1.55,
+                              position: 'relative',
+                              textTransform: 'none',
+                              transition: reduce
+                                ? 'none'
+                                : 'color 220ms ease-out',
+                              whiteSpace: 'nowrap',
+                              zIndex: 1,
+                            }}
+                          >
+                            <Box
+                              component="span"
+                              sx={{
+                                alignItems: 'center',
+                                display: 'inline-flex',
+                                gap:
+                                  showLoadingIndicator || showCount ? '6px' : '0px',
+                                justifyContent: 'center',
+                                minWidth: 0,
+                              }}
+                            >
+                              <Box
+                                component="span"
+                                sx={{
+                                  minWidth: 0,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
+                                {label}
+                              </Box>
+                              <Box
+                                component="span"
+                                sx={{
+                                  alignItems: 'center',
+                                  display: 'inline-flex',
+                                  justifyContent: 'center',
+                                  minWidth:
+                                    showLoadingIndicator || showCount ? '18px' : 0,
+                                }}
+                              >
+                                {showLoadingIndicator ? (
+                                  <CircularProgress
+                                    size={12}
+                                    thickness={4}
+                                    sx={{
+                                      color:
+                                        activityTab === key
+                                          ? groupActivityAccentTextColor
+                                          : GROUP_ACTIVITY_BLUE.primary,
+                                    }}
+                                  />
+                                ) : showCount ? (
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      alignItems: 'center',
+                                      bgcolor:
+                                        activityTab === key
+                                          ? alpha(GROUP_ACTIVITY_BLUE.pressed, 0.72)
+                                          : GROUP_ACTIVITY_BLUE.soft,
+                                      borderRadius: '50px',
+                                      color:
+                                        activityTab === key
+                                          ? alpha(groupActivityAccentBadgeTextColor, 0.92)
+                                          : alpha(groupActivityAccentTextColor, 0.84),
+                                      display: 'inline-flex',
+                                      fontSize: '0.64rem',
+                                      fontWeight: 650,
+                                      height: '15px',
+                                      justifyContent: 'center',
+                                      lineHeight: 1,
+                                      minWidth: '15px',
+                                      px: '4px',
+                                    }}
+                                  >
+                                    <Box
+                                      component="span"
+                                      sx={{ position: 'relative', top: '0.5px' }}
+                                    >
+                                      {count}
+                                    </Box>
+                                  </Box>
+                                ) : null}
+                              </Box>
+                            </Box>
+                          </ButtonBase>
+                        );
+                      })}
                     </Box>
                     <Box
                       sx={{
@@ -887,10 +1157,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       </Typography>
                     </Box>
                     <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
-                      <GroupJoinRequests compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
+                      <GroupJoinRequests compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
                     </Box>
                     <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
-                      <GroupInvites compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} myAddress={myAddress} />
+                      <GroupInvites compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
                     </Box>
                     <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
                       <ListOfGroupPromotions compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setPromotionsCount} />

@@ -17,11 +17,13 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
+import { GroupActivityEmptyState } from './GroupActivityEmptyState';
 export const requestQueueGroupJoinRequests = new RequestQueueWithPromise(2);
 
 export const GroupJoinRequests = ({
   myAddress,
   groups,
+  setOpenAddGroup,
   setOpenManageMembers,
   getTimestampEnterChat,
   setSelectedGroup,
@@ -35,6 +37,7 @@ export const GroupJoinRequests = ({
 }: {
   myAddress: string;
   groups?: any[];
+  setOpenAddGroup?: (v: boolean) => void;
   setOpenManageMembers?: (v: boolean) => void;
   getTimestampEnterChat?: () => void;
   setSelectedGroup?: (g: any) => void;
@@ -161,6 +164,9 @@ export const GroupJoinRequests = ({
     () => filteredJoinRequests?.filter((g) => g?.data?.length > 0)?.length ?? 0,
     [filteredJoinRequests]
   );
+  const hasAdminGroups = adminGroupIds.length > 0;
+  const hasMemberGroups = (groups?.length ?? 0) > 0;
+  const shouldShowEmptyStateHelper = !hasAdminGroups && !hasMemberGroups;
 
   useEffect(() => {
     onCountChange?.(activeRequestCount);
@@ -184,6 +190,14 @@ export const GroupJoinRequests = ({
     setSelectedGroupForDialog(null);
     getJoinRequests(true, true);
   };
+
+  const handleCreateGroup = () => {
+    setOpenAddGroup?.(true);
+  };
+
+  const emptyStateTertiaryText = shouldShowEmptyStateHelper
+    ? "You're not managing any groups yet."
+    : undefined;
 
   const listContent = (
     <Box
@@ -216,17 +230,22 @@ export const GroupJoinRequests = ({
               flex: hasFixedCompactViewport ? 1 : undefined,
               justifyContent: 'center',
               py: compact ? 4 : 5,
+              px: 2,
               width: '100%',
             }}
           >
-            <Typography
-              variant="body2"
-              sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}
-            >
-              {t('group:message.generic.no_display', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </Typography>
+            <GroupActivityEmptyState
+              compact={compact}
+              title="No join requests"
+              secondaryLines={[
+                "You don't have any pending requests",
+                'at the moment.',
+              ]}
+              tertiaryText={emptyStateTertiaryText}
+              ctaLabel="Create group"
+              onCtaClick={handleCreateGroup}
+              graphicVariant="requests"
+            />
           </Box>
         )}
 

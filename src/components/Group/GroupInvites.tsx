@@ -2,10 +2,12 @@ import { useCallback, useContext, useEffect, useState } from 'react';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { Box, Button, ButtonBase, Collapse, Popover, Typography, useTheme } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import {
   GROUP_ACTIVITY_CACHE_TTL_MS,
   groupInvitesCacheAtom,
+  memberGroupsAtom,
+  myGroupsWhereIAmAdminAtom,
   txListAtom,
 } from '../../atoms/global';
 import { QORTAL_APP_CONTEXT } from '../../App';
@@ -17,10 +19,12 @@ import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useTranslation } from 'react-i18next';
+import { GroupActivityEmptyState } from './GroupActivityEmptyState';
 
 export const GroupInvites = ({
   myAddress,
   setOpenAddGroup,
+  setOpenAddGroupTab,
   compact = false,
   compactViewportHeight,
   onCountChange,
@@ -28,6 +32,7 @@ export const GroupInvites = ({
 }: {
   myAddress: string;
   setOpenAddGroup?: (v: boolean) => void;
+  setOpenAddGroupTab?: (tab: 0 | 1 | 2) => void;
   compact?: boolean;
   compactViewportHeight?: number;
   onCountChange?: (count: number) => void;
@@ -47,6 +52,8 @@ export const GroupInvites = ({
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
   const [groupInvitesCache, setGroupInvitesCache] = useAtom(groupInvitesCacheAtom);
+  const memberGroups = useAtomValue(memberGroupsAtom);
+  const myGroupsWhereIAmAdmin = useAtomValue(myGroupsWhereIAmAdminAtom);
 
   const [groupsWithJoinRequests, setGroupsWithJoinRequests] = useState([]);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -216,6 +223,17 @@ export const GroupInvites = ({
     onLoadingChange?.(loading);
   }, [loading, onLoadingChange]);
 
+  const hasAnyGroups =
+    (memberGroups?.length ?? 0) > 0 || (myGroupsWhereIAmAdmin?.length ?? 0) > 0;
+  const emptyStateTertiaryText = hasAnyGroups
+    ? undefined
+    : 'You are not part of any groups yet.';
+
+  const handleFindGroups = useCallback(() => {
+    setOpenAddGroupTab?.(1);
+    setOpenAddGroup?.(true);
+  }, [setOpenAddGroup, setOpenAddGroupTab]);
+
   const handleInviteItemClick = (e: React.MouseEvent<HTMLElement>, group: (typeof groupsWithJoinRequests)[number]) => {
     setPopoverAnchor(e.currentTarget as HTMLElement);
     setSelectedGroupForPopover({
@@ -251,23 +269,28 @@ export const GroupInvites = ({
 
       {!loading && groupsWithJoinRequests.length === 0 && (
         <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              flex: hasFixedCompactViewport ? 1 : undefined,
-              justifyContent: 'center',
-              py: compact ? 4 : 5,
-              width: '100%',
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            flex: hasFixedCompactViewport ? 1 : undefined,
+            justifyContent: 'center',
+            py: compact ? 4 : 5,
+            px: 2,
+            width: '100%',
           }}
         >
-          <Typography
-            variant="body2"
-            sx={{ color: theme.palette.text.secondary, fontWeight: 500 }}
-          >
-            {t('group:message.generic.no_display', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Typography>
+          <GroupActivityEmptyState
+            compact={compact}
+            title="No invite requests"
+            secondaryLines={[
+              "You don't have any pending invites",
+              'at the moment.',
+            ]}
+            tertiaryText={emptyStateTertiaryText}
+            ctaLabel="Find groups"
+            onCtaClick={handleFindGroups}
+            graphicVariant="invites"
+          />
         </Box>
       )}
 

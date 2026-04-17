@@ -210,6 +210,7 @@ export const Group = ({
   const [groupOwner, setGroupOwner] = useState(null);
   const [triedToFetchSecretKey, setTriedToFetchSecretKey] = useState(false);
   const [openAddGroup, setOpenAddGroup] = useState(false);
+  const [openAddGroupTab, setOpenAddGroupTab] = useState<0 | 1 | 2>(0);
   const [openManageMembers, setOpenManageMembers] = useState(false);
   const setMemberGroups = useSetAtom(memberGroupsAtom);
   const [timestampEnterData, setTimestampEnterData] = useAtom(
@@ -253,6 +254,12 @@ export const Group = ({
   );
   const setIsEnabledDevMode = useSetAtom(enabledDevModeAtom);
   const setIsDisabledEditorEnter = useSetAtom(isDisabledEditorEnterAtom);
+
+  useEffect(() => {
+    if (!openAddGroup) {
+      setOpenAddGroupTab(0);
+    }
+  }, [openAddGroup]);
 
   useEffect(() => {
     const isDevModeFromStorage = localStorage.getItem('isEnabledDevMode');
@@ -1808,6 +1815,7 @@ export const Group = ({
               <LazyAddGroup
                 address={myAddress}
                 open={openAddGroup}
+                initialTab={openAddGroupTab}
                 setOpen={setOpenAddGroup}
               />
             </Suspense>
@@ -2098,6 +2106,7 @@ export const Group = ({
             getTimestampEnterChat={getTimestampEnterChat}
             setOpenManageMembers={setOpenManageMembers}
             setOpenAddGroup={setOpenAddGroup}
+            setOpenAddGroupTab={setOpenAddGroupTab}
             setMobileViewMode={setMobileViewMode}
             setDesktopViewMode={setDesktopViewMode}
             desktopViewMode={desktopViewMode}

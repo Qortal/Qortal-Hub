@@ -37,7 +37,7 @@ import { useSetAtom } from 'jotai';
 import { txListAtom } from '../../atoms/global';
 import { TransitionUp } from '../../common/Transitions.tsx';
 
-export const AddGroup = ({ address, open, setOpen }) => {
+export const AddGroup = ({ address, open, setOpen, initialTab = 0 }) => {
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const setTxList = useSetAtom(txListAtom);
 
@@ -48,7 +48,7 @@ export const AddGroup = ({ address, open, setOpen }) => {
   const [approvalThreshold, setApprovalThreshold] = useState('40');
   const [minBlock, setMinBlock] = useState('5');
   const [maxBlock, setMaxBlock] = useState('21600');
-  const [value, setValue] = useState(0);
+  const [value, setValue] = useState(initialTab);
   const [openSnack, setOpenSnack] = useState(false);
   const [infoSnack, setInfoSnack] = useState(null);
 
@@ -187,13 +187,28 @@ export const AddGroup = ({ address, open, setOpen }) => {
     setValue(2);
   };
 
+  const openFindGroupRequestFunc = () => {
+    setValue(1);
+  };
+
+  useEffect(() => {
+    if (open) {
+      setValue(initialTab);
+    }
+  }, [initialTab, open]);
+
   useEffect(() => {
     subscribeToEvent('openGroupInvitesRequest', openGroupInvitesRequestFunc);
+    subscribeToEvent('openFindGroupRequest', openFindGroupRequestFunc);
 
     return () => {
       unsubscribeFromEvent(
         'openGroupInvitesRequest',
         openGroupInvitesRequestFunc
+      );
+      unsubscribeFromEvent(
+        'openFindGroupRequest',
+        openFindGroupRequestFunc
       );
     };
   }, []);
