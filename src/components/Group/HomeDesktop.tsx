@@ -3,14 +3,6 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
-import AccountBalanceWalletOutlinedIcon from '@mui/icons-material/AccountBalanceWalletOutlined';
-import AutoAwesomeOutlinedIcon from '@mui/icons-material/AutoAwesomeOutlined';
-import HubOutlinedIcon from '@mui/icons-material/HubOutlined';
-import GroupOutlinedIcon from '@mui/icons-material/GroupOutlined';
-import LayersOutlinedIcon from '@mui/icons-material/LayersOutlined';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import DnsOutlinedIcon from '@mui/icons-material/DnsOutlined';
-import ComputerOutlinedIcon from '@mui/icons-material/ComputerOutlined';
 import { alpha, darken } from '@mui/material/styles';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -87,6 +79,8 @@ const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 18;
 const HOME_INFO_PANEL_DARK_BACKGROUND = '#24272f';
 const HOME_INFO_PANEL_DARK_GRADIENT = 'linear-gradient(180deg, #24272f 0%, #24272f 30%, #1B1D24 100%)';
+const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
+const INFO_SECONDARY_LAYER_TRANSITION_MS = 145;
 
 type HomeLayoutDebugMetric = {
   bottom: number;
@@ -226,7 +220,7 @@ const InfoPreviewPanel = ({ rows, theme }) => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateMeasurements);
     };
-  }, [enableOverlay, rows.length]);
+  }, [enableOverlay, rows.items.length]);
 
   const hasOverflow = enableOverlay && collapsedHeight > 0 && contentHeight > collapsedHeight + 4;
   const resolvedCollapsedHeight = collapsedHeight > 0 ? collapsedHeight : undefined;
@@ -359,33 +353,155 @@ const InfoPreviewPanel = ({ rows, theme }) => {
               : {}),
           }}
         >
-          <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, letterSpacing: '0.015em', mb: '10px' }}>
+          <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, letterSpacing: '0.015em', mb: '12px' }}>
             INFO
           </Typography>
 
-          {rows.map((row, index) => (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'inline-flex',
+              gap: '8px',
+              mb: '14px',
+            }}
+          >
             <Box
-              key={row.label}
               sx={{
-                ...(index < rows.length - 1 ? infoSepSx(theme, index, rows.length) : {}),
-                alignItems: 'center',
-                display: 'flex',
-                gap: '14px',
-                justifyContent: 'space-between',
-                py: 1.14,
+                bgcolor: rows.status.isOperational
+                  ? alpha(GROUP_ACTIVITY_BLUE.primary, 0.9)
+                  : alpha(theme.palette.error.light, 0.86),
+                borderRadius: '50%',
+                boxShadow: rows.status.isOperational
+                  ? `0 0 8px ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.22)}`
+                  : `0 0 8px ${alpha(theme.palette.error.light, 0.16)}`,
+                flexShrink: 0,
+                height: '7px',
+                width: '7px',
+              }}
+            />
+            <Typography
+              sx={{
+                color: rows.status.isOperational
+                  ? theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.common.white, 0.72)
+                    : alpha(theme.palette.text.primary, 0.76)
+                  : theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.error.light, 0.84)
+                    : alpha(theme.palette.error.main, 0.84),
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                letterSpacing: '0.015em',
+                lineHeight: 1,
               }}
             >
-              <Box sx={{ alignItems: 'center', color: theme.palette.text.primary, display: 'inline-flex', gap: '10px', minWidth: 0 }}>
-                {row.icon}
-                <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.78rem', fontWeight: 500, letterSpacing: '0.02em', minWidth: 0 }}>
+              {rows.status.label}
+            </Typography>
+          </Box>
+
+          {rows.items.map((row, index) => {
+            const nextRow = rows.items[index + 1];
+            const showSeparator =
+              index < rows.items.length - 1 && !nextRow?.sectionStart;
+
+            return (
+              <Box
+                key={row.label}
+                {...(row.secondary
+                  ? {
+                      component: motion.div,
+                      initial: false,
+                      animate: enableOverlay
+                        ? {
+                            opacity: isExpanded ? 1 : 0.84,
+                            y: isExpanded ? 0 : 4,
+                          }
+                        : undefined,
+                      transition: enableOverlay
+                        ? {
+                            duration: INFO_SECONDARY_LAYER_TRANSITION_MS / 1000,
+                            ease: [0.2, 0, 0, 1],
+                          }
+                        : undefined,
+                    }
+                  : {})}
+                sx={{
+                  ...(showSeparator
+                    ? infoSepSx(theme, index, rows.items.length)
+                    : {}),
+                  alignItems: 'center',
+                  columnGap: '18px',
+                  display: 'grid',
+                  gridTemplateColumns: `minmax(0, 1fr) minmax(${INFO_VALUE_COLUMN_MIN_WIDTH_PX}px, 44%)`,
+                  minHeight: '38px',
+                  mt: row.sectionStart ? '18px' : 0,
+                  py: row.secondary ? '6px' : '7px',
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: row.secondary
+                      ? theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.common.white, 0.42)
+                        : alpha(theme.palette.text.primary, 0.48)
+                      : theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.common.white, 0.58)
+                        : alpha(theme.palette.text.primary, 0.62),
+                    fontSize: row.secondary ? '0.7rem' : '0.73rem',
+                    fontWeight: row.secondary ? 400 : 500,
+                    letterSpacing: '0.018em',
+                    minWidth: 0,
+                  }}
+                >
                   {row.label}
                 </Typography>
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    color: theme.palette.text.primary,
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    justifySelf: 'stretch',
+                    maxWidth: '100%',
+                    minHeight: '24px',
+                    minWidth: 0,
+                    textAlign: 'right',
+                  }}
+                >
+                  {typeof row.value === 'string' ? (
+                    <Typography
+                      sx={{
+                        color: row.secondary
+                          ? theme.palette.mode === 'dark'
+                            ? alpha(theme.palette.common.white, 0.66)
+                            : alpha(theme.palette.text.primary, 0.72)
+                          : theme.palette.text.primary,
+                        fontSize: row.secondary
+                          ? '0.785rem'
+                          : row.emphasize
+                            ? '0.94rem'
+                            : '0.845rem',
+                        fontWeight: row.secondary
+                          ? 400
+                          : row.emphasize
+                            ? 700
+                            : 600,
+                        letterSpacing: row.emphasize ? '0.01em' : '0.012em',
+                        lineHeight: 1.2,
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.value}
+                    </Typography>
+                  ) : (
+                    row.value
+                  )}
+                </Box>
               </Box>
-              <Box sx={{ alignItems: 'center', color: theme.palette.text.primary, display: 'inline-flex', flexShrink: 0, fontSize: row.emphasize ? '0.92rem' : '0.82rem', fontWeight: row.emphasize ? 700 : 600, justifyContent: 'flex-end', letterSpacing: '0.018em', maxWidth: '62%', minWidth: 0, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                {row.value}
-              </Box>
-            </Box>
-          ))}
+            );
+          })}
         </Box>
 
       </Box>
@@ -852,6 +968,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     : nodeBase.includes('ext-node.qortal.link')
       ? 'Public node'
       : 'Custom node';
+  const isSystemOperational =
+    !!nodeInfos &&
+    !(nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100);
   const minterDotsFilled = minterPreviewMode === 'on' ? 5 : 0;
   const isMinterOn = minterPreviewMode === 'on';
   const minterValue = (
@@ -859,9 +978,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       sx={{
         alignItems: 'center',
         display: 'inline-flex',
-        height: '28px',
+        height: '24px',
         justifyContent: 'flex-end',
-        minWidth: '126px',
+        minWidth: `${INFO_VALUE_COLUMN_MIN_WIDTH_PX}px`,
+        width: '100%',
       }}
     >
       <AnimatePresence initial={false} mode="wait">
@@ -872,17 +992,17 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
             transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            style={{ alignItems: 'center', display: 'flex', height: '28px', justifyContent: 'flex-end', width: '100%' }}
+            style={{ alignItems: 'center', display: 'flex', height: '24px', justifyContent: 'flex-end', width: '100%' }}
           >
-            <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '6px', height: '28px' }}>
+            <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '4px', height: '20px', justifyContent: 'flex-end' }}>
               {Array.from({ length: 8 }).map((_, index) => (
                 <Box
                   key={index}
                   sx={{
                     ...(index < minterDotsFilled ? filledBlueDotSx : emptyBlueDotSx),
                     borderRadius: '50%',
-                    height: '14px',
-                    width: '14px',
+                    height: '12px',
+                    width: '12px',
                   }}
                 />
               ))}
@@ -895,9 +1015,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
             transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            style={{ alignItems: 'center', display: 'flex', height: '28px', justifyContent: 'flex-end', width: '100%' }}
+            style={{ alignItems: 'center', display: 'flex', height: '24px', justifyContent: 'flex-end', width: '100%' }}
           >
-            <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '999px', color: theme.palette.text.secondary, display: 'inline-flex', fontSize: '0.72rem', fontWeight: 600, height: '26px', justifyContent: 'center', minWidth: '58px', px: 1.3, py: 0, whiteSpace: 'nowrap' }}>
+            <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '999px', color: theme.palette.text.secondary, display: 'inline-flex', fontSize: '0.69rem', fontWeight: 600, height: '24px', justifyContent: 'center', minWidth: '56px', px: 1.15, py: 0, whiteSpace: 'nowrap' }}>
               Apply
             </ButtonBase>
           </motion.div>
@@ -905,59 +1025,60 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       </AnimatePresence>
     </Box>
   );
-  const infoRows = [
-    {
-      emphasize: true,
-      icon: <AccountBalanceWalletOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'QORT Balance',
-      value: balanceLabel,
+  const infoRows = {
+    status: {
+      isOperational: isSystemOperational,
+      label: isSystemOperational ? 'Fully operational' : 'Not operational',
     },
-    {
-      icon: <HubOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Node Status',
-      value: nodeStatusValue,
-    },
-    {
-      icon: <AutoAwesomeOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Minter Level',
-      value: minterValue,
-    },
-    {
-      icon: <GroupOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Connected Peers',
-      value: peersLabel,
-    },
-    {
-      icon: <LayersOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Block Height',
-      value: blockHeightLabel,
-    },
-    {
-      icon: <DnsOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'QDN Peers',
-      value: qdnPeersLabel,
-    },
-    {
-      icon: <ComputerOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Using Node',
-      value: nodeHostLabel,
-    },
-    {
-      icon: <ComputerOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Node Type',
-      value: nodeTypeLabel,
-    },
-    {
-      icon: <InfoOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Core Version',
-      value: coreVersionLabel,
-    },
-    {
-      icon: <InfoOutlinedIcon sx={{ color: theme.palette.text.secondary, fontSize: '0.92rem' }} />,
-      label: 'Hub Version',
-      value: hubVersionLabel,
-    },
-  ];
+    items: [
+      {
+        emphasize: true,
+        label: 'QORT Balance',
+        value: balanceLabel,
+      },
+      {
+        label: 'Node Status',
+        value: nodeStatusValue,
+      },
+      {
+        label: 'Minter Level',
+        value: minterValue,
+      },
+      {
+        label: 'Connected Peers',
+        value: peersLabel,
+      },
+      {
+        label: 'Block Height',
+        value: blockHeightLabel,
+      },
+      {
+        label: 'QDN Peers',
+        value: qdnPeersLabel,
+      },
+      {
+        label: 'Using Node',
+        secondary: true,
+        sectionStart: true,
+        value: nodeHostLabel,
+      },
+      {
+        label: 'Node Type',
+        secondary: true,
+        value: nodeTypeLabel,
+      },
+      {
+        label: 'Core Version',
+        secondary: true,
+        value: coreVersionLabel,
+      },
+      {
+        label: 'Hub Version',
+        secondary: true,
+        value: hubVersionLabel,
+      },
+    ],
+  };
 
   const sharedGroupNavProps = { getTimestampEnterChat, setDesktopViewMode, setGroupSection, setMobileViewMode, setSelectedGroup };
   return (
