@@ -225,29 +225,7 @@ const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx
 
 const sepSx = (theme) => ({ borderBottom: `1px solid ${theme.palette.border.subtle}` });
 
-const infoSepSx = (theme, index, total) => {
-  const progress = total > 1 ? index / (total - 1) : 0;
-  const opacity = theme.palette.mode === 'dark'
-    ? (0.16 - progress * 0.08) * 0.6
-    : (0.14 - progress * 0.06) * 0.6;
-  const edgeOpacity = opacity * 0.32;
-
-  return {
-    position: 'relative',
-    '&::after': {
-      content: '""',
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: '1px',
-      pointerEvents: 'none',
-      background: theme.palette.mode === 'dark'
-        ? `linear-gradient(90deg, rgba(255,255,255,${edgeOpacity}) 0%, rgba(255,255,255,${opacity}) 14%, rgba(255,255,255,${opacity}) 86%, rgba(255,255,255,${edgeOpacity}) 100%)`
-        : `linear-gradient(90deg, rgba(60,76,90,${edgeOpacity}) 0%, rgba(60,76,90,${opacity}) 14%, rgba(60,76,90,${opacity}) 86%, rgba(60,76,90,${edgeOpacity}) 100%)`,
-    },
-  };
-};
+const infoSepSx = (theme, index, total) => sepSx(theme);
 
 const WalletActionButton = ({ icon, label, onClick, theme }) => {
   const blueStrongHover = getBlueTier1ButtonSx()['&:hover'];
