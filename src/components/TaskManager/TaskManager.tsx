@@ -20,7 +20,15 @@ import { useTranslation } from 'react-i18next';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants';
 import { titleBarIconButtonProps } from '../Desktop/CustomTitleBar';
 
-export const TaskManager = ({ getUserInfo }) => {
+export const TaskManager = ({
+  getUserInfo,
+  buttonSx = undefined,
+  iconSx = undefined,
+}: {
+  getUserInfo: (useTimer?: boolean) => Promise<void>;
+  buttonSx?: any;
+  iconSx?: any;
+}) => {
   const [memberGroups] = useAtom(memberGroupsAtom);
   const [txList, setTxList] = useAtom(txListAtom);
   const [open, setOpen] = useState(false);
@@ -206,19 +214,20 @@ export const TaskManager = ({ getUserInfo }) => {
           onClick={handleClick}
           size="small"
           sx={{
-            bgcolor: theme.palette.primary.main,
-            color: theme.palette.text.primary,
-            ':hover': { bgcolor: theme.palette.primary },
+            color: txList.some((item) => !item.done)
+              ? theme.palette.primary.light
+              : theme.palette.text.secondary,
             '&.MuiIconButton-root': {
               width: 26,
               height: 26,
             },
+            ...(buttonSx || {}),
           }}
         >
           {txList.some((item) => !item.done) ? (
-            <PendingIcon />
+            <PendingIcon sx={iconSx || undefined} />
           ) : (
-            <TaskAltIcon />
+            <TaskAltIcon sx={iconSx || undefined} />
           )}
         </IconButton>
       )}

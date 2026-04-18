@@ -21,6 +21,7 @@ import { QORTAL_APP_CONTEXT } from '../../App';
 import { getFee } from '../../background/background.ts';
 import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 import { SaveIcon } from '../../assets/Icons/SaveIcon';
+import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import { IconWrapper } from '../Desktop/DesktopFooter';
 import { Spacer } from '../../common/Spacer';
 import { LoadingButton } from '@mui/lab';
@@ -65,7 +66,14 @@ export const handleImportClick = async () => {
   });
 };
 
-export const Save = ({ isDesktop, disableWidth, myName }) => {
+export const Save = ({
+  isDesktop,
+  disableWidth,
+  myName,
+  toolbarModule = false,
+  buttonSx = undefined,
+  iconSx = undefined,
+}) => {
   const [pinnedApps, setPinnedApps] = useAtom(sortablePinnedAppsAtom);
   const [settingsQdnLastUpdated, setSettingsQdnLastUpdated] = useAtom(
     settingsQDNLastUpdatedAtom
@@ -233,9 +241,23 @@ export const Save = ({ isDesktop, disableWidth, myName }) => {
       <ButtonBase
         onClick={handleDialogOpen}
         disabled={isLoading}
-        sx={{ marginBottom: '2px' }}
+        sx={{
+          marginBottom: '2px',
+          ...(buttonSx || {}),
+        }}
       >
-        {isDesktop ? (
+        {toolbarModule ? (
+          <SaveRoundedIcon
+            sx={{
+              color:
+                hasChanged && !isLoading
+                  ? '#5EB049'
+                  : theme.palette.text.secondary,
+              fontSize: 20,
+              ...(iconSx || {}),
+            }}
+          />
+        ) : isDesktop ? (
           disableWidth ? (
             <IconWrapper
               disableWidth={disableWidth}

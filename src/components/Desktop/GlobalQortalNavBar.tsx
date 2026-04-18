@@ -1,24 +1,33 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, ButtonBase, InputBase, useTheme } from '@mui/material';
+import { Box, ButtonBase, IconButton, InputBase, Tooltip, useTheme } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
+import { motion } from 'framer-motion';
 import { extractComponents } from '../Chat/MessageDisplay';
-import { navigationControllerAtom } from '../../atoms/global';
+import { navigationControllerAtom, txListAtom } from '../../atoms/global';
 import {
   executeEvent,
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
-import { APP_NAV_BAR_HEIGHT } from './CustomTitleBar';
+import { APP_NAV_BAR_HEIGHT, type CustomTitleBarRightNavProps } from './CustomTitleBar';
+import { QMailStatus } from '../QMailStatus';
+import { GeneralNotifications } from '../GeneralNotifications';
+import { Save } from '../Save/Save';
+import { TaskManager } from '../TaskManager/TaskManager';
+import { GlobalActions } from '../GlobalActions/GlobalActions';
+import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
 
 type GlobalQortalNavBarProps = {
   desktopViewMode: string;
+  utilityNav?: CustomTitleBarRightNavProps | null;
 };
 
 type SelectedTab = {
@@ -39,9 +48,11 @@ function normalizeQortalInput(value: string) {
 
 export function GlobalQortalNavBar({
   desktopViewMode,
+  utilityNav = null,
 }: GlobalQortalNavBarProps) {
   const theme = useTheme();
   const navigationController = useAtomValue(navigationControllerAtom);
+  const txList = useAtomValue(txListAtom);
   const { t } = useTranslation(['core']);
   const [selectedTab, setSelectedTab] = useState<SelectedTab>(null);
   const [inputValue, setInputValue] = useState('');
@@ -265,26 +276,73 @@ export function GlobalQortalNavBar({
     letterSpacing: 'normal',
     lineHeight: '20px',
   } as const;
+  const tooltipSlotProps = {
+    tooltip: {
+      sx: {
+        color: theme.palette.text.primary,
+        backgroundColor: theme.palette.background.paper,
+      },
+    },
+    arrow: {
+      sx: {
+        color: theme.palette.text.primary,
+      },
+    },
+  } as const;
+  const tooltipTitle = (text: string) => (
+    <span
+      style={{ fontSize: '14px', fontWeight: 700, textTransform: 'uppercase' }}
+    >
+      {text}
+    </span>
+  );
+  const utilityModuleButtonSx = {
+    alignItems: 'center',
+    border: `1px solid ${theme.palette.border.subtle}`,
+    borderRadius: '10px',
+    color: theme.palette.text.secondary,
+    display: 'inline-flex',
+    height: 32,
+    justifyContent: 'center',
+    minWidth: 32,
+    transition:
+      'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+    width: 32,
+    '&:hover': {
+      backgroundColor: buttonHoverBackground,
+      borderColor: hoverBorderColor,
+      color: theme.palette.text.primary,
+      transform: 'translateY(-1px)',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    },
+    '&:active': {
+      transform: 'translateY(0)',
+      boxShadow: 'none',
+    },
+    '&:focus-visible': {
+      outline: `1px solid ${theme.palette.primary.main}`,
+      outlineOffset: '2px',
+    },
+  } as const;
+  const utilityModuleIconSx = {
+    fontSize: 20,
+  } as const;
+  const utilitySectionSx = {
+    alignItems: 'center',
+    display: 'flex',
+    flexShrink: 0,
+    gap: 0.75,
+    ml: 0.125,
+    pl: 0.25,
+  } as const;
+  const hasActiveTasks = !!txList?.some((item: any) => item && !item.done);
+  const utilityLayoutTransition = {
+    duration: 0.22,
+    ease: [0.22, 1, 0.36, 1],
+  } as const;
 
   return (
     <>
-    <Box
-        sx={{
-          position: 'fixed',
-          top: `${APP_NAV_BAR_HEIGHT + 40}px`,
-          right: 12,
-          zIndex: 1900,
-          color: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.52)' : 'rgba(24,29,36,0.48)',
-          fontSize: '11px',
-          fontWeight: 600,
-          letterSpacing: '0.03em',
-          lineHeight: 1,
-          pointerEvents: 'none',
-          userSelect: 'none',
-        }}
-      >
-                          304
-      </Box>
     <Box
         sx={{
           alignItems: 'center',
@@ -299,6 +357,9 @@ export function GlobalQortalNavBar({
         }}
       >
         <Box
+          component={motion.div}
+          layout
+          transition={utilityLayoutTransition}
           sx={{
             alignItems: 'center',
             display: 'flex',
@@ -456,6 +517,9 @@ export function GlobalQortalNavBar({
         </Box>
 
         <Box
+          component={motion.div}
+          layout
+          transition={utilityLayoutTransition}
           onMouseEnter={() => setIsInputHovered(true)}
           onMouseLeave={() => setIsInputHovered(false)}
           sx={{
@@ -647,6 +711,126 @@ export function GlobalQortalNavBar({
             </ButtonBase>
           </Box>
         </Box>
+        {utilityNav && (
+          <Box
+            component={motion.div}
+            layout
+            transition={utilityLayoutTransition}
+            sx={utilitySectionSx}
+          >
+            <GlobalActions />
+            <Box
+              component={motion.span}
+              layout
+              transition={utilityLayoutTransition}
+              sx={{ display: 'inline-flex', flexShrink: 0 }}
+            >
+              <ChatWidgetReopenIcon
+                inTitleBar
+                buttonSx={utilityModuleButtonSx}
+                iconSx={utilityModuleIconSx}
+              />
+            </Box>
+            <Box
+              component={motion.span}
+              layout
+              transition={utilityLayoutTransition}
+              sx={{ display: 'inline-flex', flexShrink: 0 }}
+            >
+              <QMailStatus
+                compact
+                buttonSx={utilityModuleButtonSx}
+                iconSx={utilityModuleIconSx}
+                tooltipPlacement="bottom"
+              />
+            </Box>
+            {utilityNav.extState === 'authenticated' && (
+              <Box
+                component={motion.span}
+                layout
+                transition={utilityLayoutTransition}
+                sx={{ display: 'inline-flex', flexShrink: 0 }}
+              >
+                <GeneralNotifications
+                  address={utilityNav.userInfo?.address}
+                  tooltipPlacement="bottom"
+                  compact
+                  buttonSx={utilityModuleButtonSx}
+                  iconSx={utilityModuleIconSx}
+                />
+              </Box>
+            )}
+            <Tooltip
+              title={tooltipTitle(
+                t('core:action.save', { postProcess: 'capitalizeFirstChar' })
+              )}
+              placement="bottom"
+              arrow
+              slotProps={tooltipSlotProps}
+            >
+              <Box
+                component={motion.span}
+                layout
+                transition={utilityLayoutTransition}
+                sx={{ display: 'inline-flex', flexShrink: 0 }}
+              >
+                <Save
+                  isDesktop
+                  disableWidth={false}
+                  myName={utilityNav.userInfo?.name}
+                  toolbarModule
+                  buttonSx={utilityModuleButtonSx}
+                  iconSx={utilityModuleIconSx}
+                />
+              </Box>
+            </Tooltip>
+            {hasActiveTasks && (
+              <Tooltip
+                title={tooltipTitle(
+                  t('core:message.generic.ongoing_transactions')
+                )}
+                placement="bottom"
+                arrow
+                slotProps={tooltipSlotProps}
+              >
+                <Box
+                  component={motion.span}
+                  layout
+                  transition={utilityLayoutTransition}
+                  sx={{ display: 'inline-flex', flexShrink: 0 }}
+                >
+                  <TaskManager
+                    getUserInfo={utilityNav.getUserInfo}
+                    buttonSx={utilityModuleButtonSx}
+                    iconSx={utilityModuleIconSx}
+                  />
+                </Box>
+              </Tooltip>
+            )}
+            <Tooltip
+              title={tooltipTitle(t('core:action.logout'))}
+              placement="bottom"
+              arrow
+              slotProps={tooltipSlotProps}
+            >
+              <Box
+                component={motion.span}
+                layout
+                transition={utilityLayoutTransition}
+                sx={{ display: 'inline-flex', flexShrink: 0 }}
+              >
+                <IconButton
+                  size="small"
+                  onClick={utilityNav.onLogout}
+                  sx={utilityModuleButtonSx}
+                  aria-label={t('core:action.logout')}
+                >
+                  <LogoutRoundedIcon sx={utilityModuleIconSx} />
+                </IconButton>
+              </Box>
+            </Tooltip>
+          </Box>
+        )}
         </Box>
       </Box>
     </>

@@ -2,7 +2,7 @@ import { ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAtom, useAtomValue } from 'jotai';
 import { chatWidgetClosedAtom, memberGroupsAtom } from '../../atoms/global';
-import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
+import MoreRoundedIcon from '@mui/icons-material/MoreRounded';
 import { Spacer } from '../../common/Spacer';
 
 const tooltipSlotProps = (theme: any) => ({
@@ -19,8 +19,15 @@ const tooltipSlotProps = (theme: any) => ({
   },
 });
 
-/** Right-sidebar icon to reopen the chat widget. Subscribes to atoms; only visible when widget is closed and user has groups. */
-export function ChatWidgetReopenIcon({ inTitleBar = false }: { inTitleBar?: boolean } = {}) {
+export function ChatWidgetReopenIcon({
+  inTitleBar = false,
+  buttonSx = undefined,
+  iconSx = undefined,
+}: {
+  inTitleBar?: boolean;
+  buttonSx?: any;
+  iconSx?: any;
+} = {}) {
   const theme = useTheme();
   const { t } = useTranslation(['group']);
   const [chatWidgetClosed, setChatWidgetClosed] = useAtom(chatWidgetClosedAtom);
@@ -36,7 +43,19 @@ export function ChatWidgetReopenIcon({ inTitleBar = false }: { inTitleBar?: bool
       aria-label={t('group:group.messaging', {
         postProcess: 'capitalizeFirstChar',
       })}
-      sx={inTitleBar ? { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 1 } : undefined}
+      sx={{
+        ...(inTitleBar
+          ? {
+              width: 32,
+              height: 32,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: 1,
+            }
+          : {}),
+        ...(buttonSx || {}),
+      }}
     >
       <Tooltip
         title={
@@ -56,20 +75,20 @@ export function ChatWidgetReopenIcon({ inTitleBar = false }: { inTitleBar?: bool
         arrow
         sx={{ fontSize: inTitleBar ? '20' : '24' }}
         slotProps={tooltipSlotProps(theme)}
-      >
-        <ChatBubbleOutlineRoundedIcon
-          sx={{ color: theme.palette.text.secondary, fontSize: inTitleBar ? 20 : undefined }}
+        >
+          <MoreRoundedIcon
+          sx={{
+            color: theme.palette.text.secondary,
+            fontSize: inTitleBar ? 20 : undefined,
+            ...(iconSx || {}),
+          }}
         />
       </Tooltip>
     </ButtonBase>
   );
 
   if (inTitleBar) {
-    return (
-      <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        {icon}
-      </div>
-    );
+    return icon;
   }
   return (
     <>

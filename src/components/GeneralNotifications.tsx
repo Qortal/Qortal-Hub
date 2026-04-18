@@ -16,7 +16,13 @@ import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotificat
 import { executeEvent } from '../utils/events';
 import { useTranslation } from 'react-i18next';
 
-export const GeneralNotifications = ({ address, tooltipPlacement = 'left' }) => {
+export const GeneralNotifications = ({
+  address,
+  tooltipPlacement = 'left',
+  compact = false,
+  buttonSx = undefined,
+  iconSx = undefined,
+}) => {
   const [anchorEl, setAnchorEl] = useState(null);
 
   const {
@@ -48,7 +54,7 @@ export const GeneralNotifications = ({ address, tooltipPlacement = 'left' }) => 
         onClick={(e) => {
           handlePopupClick(e);
         }}
-        style={{}}
+        sx={buttonSx || undefined}
       >
         <Tooltip
           title={
@@ -85,6 +91,8 @@ export const GeneralNotifications = ({ address, tooltipPlacement = 'left' }) => 
               color: hasNewPayment
                 ? theme.palette.other.unread
                 : theme.palette.text.secondary,
+              fontSize: compact ? 20 : undefined,
+              ...(iconSx || {}),
             }}
           />
         </Tooltip>

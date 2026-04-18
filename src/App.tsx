@@ -1420,7 +1420,10 @@ function App() {
     >
       <CustomTitleBar rightNav={titleBarRightNav} />
       {extState === 'authenticated' && isMainWindow && (
-        <GlobalQortalNavBar desktopViewMode={desktopViewMode} />
+        <GlobalQortalNavBar
+          desktopViewMode={desktopViewMode}
+          utilityNav={titleBarRightNav}
+        />
       )}
 
       <Box

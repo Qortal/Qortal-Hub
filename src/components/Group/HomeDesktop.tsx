@@ -1,5 +1,9 @@
 import { Box, ButtonBase, CircularProgress, IconButton, Typography, useMediaQuery, useTheme } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
+import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
@@ -16,6 +20,7 @@ import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
+import AppViewerContainer from '../Apps/AppViewerContainer';
 import {
   APP_BLUE_SURFACE_TEXT,
   GROUP_ACTIVITY_BLUE,
@@ -44,6 +49,7 @@ import { nodeDisplay } from '../../utils/helpers';
 
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
+type HomeCustomizableCardId = 'groupActivity' | 'quitter';
 const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
 const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
   width: {
@@ -74,11 +80,102 @@ const HOME_DASHBOARD_VERTICAL_GAP_PX = 20;
 const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 29;
 const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 322;
 const HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX = 426;
+const HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX = 720;
+const HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX = 100;
+const HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX =
+  GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX +
+  HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX;
+const HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY =
+  'home-dashboard-customizable-cards-layout-v1';
+const HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX = 60;
+const HOME_GROUP_ACTIVITY_CARD_SAFE_MIN_HEIGHT_PX =
+  HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX + 600;
+const HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS: Record<HomeCustomizableCardId, number> = {
+  groupActivity: HOME_GROUP_ACTIVITY_CARD_SAFE_MIN_HEIGHT_PX,
+  quitter: 420,
+};
+const HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS: Record<HomeCustomizableCardId, number> = {
+  groupActivity: 1480,
+  quitter: 1280,
+};
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 18;
 const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
 const INFO_SECONDARY_LAYER_TRANSITION_MS = 145;
+const DASHBOARD_EMBEDDED_QUITTER_APP = {
+  identifier: '',
+  name: 'Quitter',
+  path: '',
+  service: 'APP',
+  tabId: 'dashboard-embedded-quitter',
+} as const;
+const HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT: HomeCustomizableCardId[] = [
+  'groupActivity',
+  'quitter',
+];
+
+type HomeCustomizableCardsLayout = {
+  heights: Partial<Record<HomeCustomizableCardId, number>>;
+  order: HomeCustomizableCardId[];
+};
+
+const clampHomeCustomizableCardHeight = (
+  cardId: HomeCustomizableCardId,
+  value: number
+) =>
+  Math.max(
+    HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS[cardId],
+    Math.min(HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS[cardId], Math.round(value))
+  );
+
+const parseHomeCustomizableCardsLayout = (
+  rawValue: string | null
+): HomeCustomizableCardsLayout => {
+  if (!rawValue) {
+    return {
+      heights: {},
+      order: HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(rawValue);
+    const parsedOrder = Array.isArray(parsed?.order)
+      ? parsed.order.filter(
+          (value): value is HomeCustomizableCardId =>
+            value === 'groupActivity' || value === 'quitter'
+        )
+      : [];
+    const order =
+      parsedOrder.length === HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.length &&
+      HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.every((value) =>
+        parsedOrder.includes(value)
+      )
+        ? parsedOrder
+        : HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT;
+
+    const nextHeights: Partial<Record<HomeCustomizableCardId, number>> = {};
+    const parsedHeights = parsed?.heights ?? {};
+
+    HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.forEach((cardId) => {
+      const value = parsedHeights?.[cardId];
+      if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+        nextHeights[cardId] = clampHomeCustomizableCardHeight(cardId, value);
+      }
+    });
+
+    return {
+      heights: nextHeights,
+      order,
+    };
+  } catch {
+    return {
+      heights: {},
+      order: HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
+    };
+  }
+};
 
 type HomeLayoutDebugMetric = {
   bottom: number;
@@ -568,6 +665,10 @@ const InfoPreviewPanel = ({ rows, theme }) => {
 
 export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setOpenAddGroupTab, setMobileViewMode, setDesktopViewMode, desktopViewMode, onOpenSettings }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
+  const groupActivityCardHeightRef = useRef<HTMLDivElement | null>(null);
+  const groupActivityContentFrameRef = useRef<HTMLDivElement | null>(null);
+  const groupActivityTopControlsRef = useRef<HTMLDivElement | null>(null);
+  const quitterCardHeightRef = useRef<HTMLDivElement | null>(null);
   const activityToggleTrackRef = useRef<HTMLDivElement | null>(null);
   const activityToggleSegmentRefs = useRef<Record<ActivityTab, HTMLButtonElement | null>>({
     requests: null,
@@ -605,11 +706,19 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
   const [walletActivityTargetHeightPx, setWalletActivityTargetHeightPx] =
     useState<number | null>(null);
+  const [customizableCardsLayout, setCustomizableCardsLayout] =
+    useState<HomeCustomizableCardsLayout>(() =>
+      parseHomeCustomizableCardsLayout(
+        localStorage.getItem(HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY)
+      )
+    );
   const [activityToggleIndicator, setActivityToggleIndicator] = useState({
     ready: false,
     width: 0,
     x: 0,
   });
+  const [groupActivityMeasuredViewportHeightPx, setGroupActivityMeasuredViewportHeightPx] =
+    useState<number | null>(null);
   const [coreVersionLabel, setCoreVersionLabel] = useState('—');
   const [minterPreviewMode, setMinterPreviewMode] = useState<'off' | 'on'>(() => {
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
@@ -647,6 +756,183 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+  const assignGroupActivityPanelNode = useCallback((node: HTMLDivElement | null) => {
+    groupActivityPanelRef.current = node;
+    groupActivityCardHeightRef.current = node;
+  }, [groupActivityPanelRef]);
+
+  useEffect(() => {
+    localStorage.setItem(
+      HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY,
+      JSON.stringify(customizableCardsLayout)
+    );
+  }, [customizableCardsLayout]);
+
+  useEffect(() => {
+    setCustomizableCardsLayout((currentLayout) => {
+      let changed = false;
+      const nextHeights: Partial<Record<HomeCustomizableCardId, number>> = {
+        ...currentLayout.heights,
+      };
+
+      HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.forEach((cardId) => {
+        const currentHeight = currentLayout.heights[cardId];
+        if (typeof currentHeight !== 'number' || !Number.isFinite(currentHeight)) {
+          return;
+        }
+        const clampedHeight = clampHomeCustomizableCardHeight(
+          cardId,
+          currentHeight
+        );
+        if (clampedHeight !== currentHeight) {
+          nextHeights[cardId] = clampedHeight;
+          changed = true;
+        }
+      });
+
+      if (!changed) return currentLayout;
+      return {
+        ...currentLayout,
+        heights: nextHeights,
+      };
+    });
+  }, []);
+
+  const getCurrentCustomizableCardHeight = useCallback(
+    (cardId: HomeCustomizableCardId) => {
+      const storedHeight = customizableCardsLayout.heights[cardId];
+      if (storedHeight != null) return storedHeight;
+
+      const sourceNode =
+        cardId === 'groupActivity'
+          ? groupActivityCardHeightRef.current
+          : quitterCardHeightRef.current;
+      const measuredHeight = sourceNode?.getBoundingClientRect().height;
+
+      if (measuredHeight && Number.isFinite(measuredHeight)) {
+        return Math.round(measuredHeight);
+      }
+
+      return cardId === 'groupActivity'
+        ? HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX
+        : HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX;
+    },
+    [customizableCardsLayout.heights]
+  );
+
+  const moveCustomizableCard = useCallback(
+    (cardId: HomeCustomizableCardId, direction: 'up' | 'down') => {
+      setCustomizableCardsLayout((currentLayout) => {
+        const currentIndex = currentLayout.order.indexOf(cardId);
+        if (currentIndex === -1) return currentLayout;
+
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        if (targetIndex < 0 || targetIndex >= currentLayout.order.length) {
+          return currentLayout;
+        }
+
+        const nextOrder = [...currentLayout.order];
+        const [movedCard] = nextOrder.splice(currentIndex, 1);
+        nextOrder.splice(targetIndex, 0, movedCard);
+
+        return {
+          ...currentLayout,
+          order: nextOrder,
+        };
+      });
+    },
+    []
+  );
+
+  const resizeCustomizableCard = useCallback(
+    (cardId: HomeCustomizableCardId, direction: 'grow' | 'shrink') => {
+      const currentHeight = getCurrentCustomizableCardHeight(cardId);
+      const delta =
+        direction === 'grow'
+          ? HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX
+          : -HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX;
+      const nextHeight = Math.max(
+        HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS[cardId],
+        Math.min(
+          HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS[cardId],
+          currentHeight + delta
+        )
+      );
+
+      setCustomizableCardsLayout((currentLayout) => ({
+        ...currentLayout,
+        heights: {
+          ...currentLayout.heights,
+          [cardId]: nextHeight,
+        },
+      }));
+    },
+    [getCurrentCustomizableCardHeight]
+  );
+
+  const renderCustomizableCardControls = useCallback(
+    (cardId: HomeCustomizableCardId) => {
+      const currentIndex = customizableCardsLayout.order.indexOf(cardId);
+      const canMoveUp = currentIndex > 0;
+      const canMoveDown = currentIndex !== -1 && currentIndex < customizableCardsLayout.order.length - 1;
+      const iconButtonSx = {
+        borderRadius: '8px',
+        color: theme.palette.text.secondary,
+        height: 28,
+        width: 28,
+        '&:hover': {
+          backgroundColor: theme.palette.action.hover,
+          color: theme.palette.text.primary,
+        },
+      } as const;
+
+      return (
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: '4px',
+          }}
+        >
+          <IconButton
+            aria-label="Move card up"
+            disabled={!canMoveUp}
+            onClick={() => moveCustomizableCard(cardId, 'up')}
+            size="small"
+            sx={iconButtonSx}
+          >
+            <KeyboardArrowUpRoundedIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            aria-label="Move card down"
+            disabled={!canMoveDown}
+            onClick={() => moveCustomizableCard(cardId, 'down')}
+            size="small"
+            sx={iconButtonSx}
+          >
+            <KeyboardArrowDownRoundedIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            aria-label="Decrease card height"
+            onClick={() => resizeCustomizableCard(cardId, 'shrink')}
+            size="small"
+            sx={iconButtonSx}
+          >
+            <RemoveRoundedIcon fontSize="small" />
+          </IconButton>
+          <IconButton
+            aria-label="Increase card height"
+            onClick={() => resizeCustomizableCard(cardId, 'grow')}
+            size="small"
+            sx={iconButtonSx}
+          >
+            <AddRoundedIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      );
+    },
+    [customizableCardsLayout.order, moveCustomizableCard, resizeCustomizableCard, theme.palette.action.hover, theme.palette.text.primary, theme.palette.text.secondary]
+  );
 
   useLayoutEffect(() => {
     const rootNode = homeLayoutDebugRootRef.current;
@@ -861,6 +1147,67 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     invitesCountLoading,
   ]);
 
+  useLayoutEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const contentNode = groupActivityContentFrameRef.current;
+    const topControlsNode = groupActivityTopControlsRef.current;
+    if (!contentNode || !topControlsNode) return undefined;
+
+    let animationFrame = 0;
+
+    const updateViewportHeight = () => {
+      const contentRect = contentNode.getBoundingClientRect();
+      const topControlsRect = topControlsNode.getBoundingClientRect();
+      const computedStyle = window.getComputedStyle(contentNode);
+      const gapPx = parseFloat(computedStyle.rowGap || computedStyle.gap || '0') || 0;
+      const nextViewportHeight = Math.max(
+        280,
+        Math.floor(contentRect.height - topControlsRect.height - gapPx)
+      );
+
+      setGroupActivityMeasuredViewportHeightPx((prev) =>
+        prev != null && Math.abs(prev - nextViewportHeight) < 1
+          ? prev
+          : nextViewportHeight
+      );
+    };
+
+    const scheduleViewportHeightUpdate = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(updateViewportHeight);
+    };
+
+    scheduleViewportHeightUpdate();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', scheduleViewportHeightUpdate);
+      return () => {
+        cancelAnimationFrame(animationFrame);
+        window.removeEventListener('resize', scheduleViewportHeightUpdate);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(scheduleViewportHeightUpdate);
+    resizeObserver.observe(contentNode);
+    resizeObserver.observe(topControlsNode);
+    window.addEventListener('resize', scheduleViewportHeightUpdate);
+
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', scheduleViewportHeightUpdate);
+    };
+  }, [
+    activityTab,
+    customizableCardsLayout.heights.groupActivity,
+    invitesCount,
+    invitesCountLoading,
+    promotionsCount,
+    requestsCount,
+    requestsCountLoading,
+  ]);
+
   useEffect(() => {
     const track = activityToggleTrackRef.current;
     if (!track) return;
@@ -1007,6 +1354,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   };
 
   const balanceLabel = balance != null ? `${Number(balance).toFixed(2)} QORT` : '—';
+  const handleOpenEmbeddedQuitter = () => {
+    executeEvent('addTab', { data: { service: 'APP', name: 'Quitter' } });
+    executeEvent('open-apps-mode', {});
+  };
+
   const nodeStatusValue = nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100 ? `Syncing ${Math.round(nodeInfos?.syncPercent || 0)}%` : 'Fully Synced';
   const peersLabel = `${nodeInfos?.numberOfConnections || 0}`;
   const blockHeightLabel = `${nodeInfos?.height || '—'}`;
@@ -1138,6 +1490,24 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   };
 
   const sharedGroupNavProps = { getTimestampEnterChat, setDesktopViewMode, setGroupSection, setMobileViewMode, setSelectedGroup };
+  const groupActivityCardOrder = Math.max(
+    0,
+    customizableCardsLayout.order.indexOf('groupActivity')
+  );
+  const quitterCardOrder = Math.max(
+    0,
+    customizableCardsLayout.order.indexOf('quitter')
+  );
+  const groupActivityCardHeightPx =
+    customizableCardsLayout.heights.groupActivity ?? null;
+  const quitterCardHeightPx = customizableCardsLayout.heights.quitter ?? null;
+  const groupActivityViewportHeightPx = Math.max(
+    280,
+    groupActivityMeasuredViewportHeightPx ??
+      ((groupActivityCardHeightPx ?? HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX) -
+        HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX)
+  );
+
   return (
     <LazyMotion features={domAnimation}>
       <AnimatePresence mode="wait">
@@ -1261,7 +1631,35 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
               {activeTab === 'user' && (
                 <>
                   {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
-                  <Box ref={groupActivityPanelRef} sx={{ ...dashboardPanelSx(theme, 'base'), borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px 20px 16px', width: '100%' }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                      width: '100%',
+                    }}
+                  >
+                  <Box
+                    ref={assignGroupActivityPanelNode}
+                    sx={{
+                      ...dashboardPanelSx(theme, 'base'),
+                      borderRadius: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      height:
+                        groupActivityCardHeightPx != null
+                          ? `${groupActivityCardHeightPx}px`
+                          : undefined,
+                      minHeight: `${HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS.groupActivity}px`,
+                      order: groupActivityCardOrder,
+                      overflow: 'hidden',
+                      padding: '12px 20px 16px',
+                      width: '100%',
+                    }}
+                    onMouseMove={handleDashboardPanelPointerMove}
+                    onMouseLeave={handleDashboardPanelPointerLeave}
+                  >
                     <Box
                       sx={{
                         display: 'flex',
@@ -1276,275 +1674,381 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             Keep up with promotions, invites, and membership requests.
                           </Typography>
                         </Box>
-                        <IconButton aria-label={t('core:action.refresh', { postProcess: 'capitalizeFirstChar', defaultValue: 'Refresh' })} onClick={handleRefreshGroupActivity} size="small" sx={{ color: theme.palette.text.secondary }}>
-                          <RefreshIcon fontSize="small" />
-                        </IconButton>
+                        <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '6px' }}>
+                          {renderCustomizableCardControls('groupActivity')}
+                          <IconButton aria-label={t('core:action.refresh', { postProcess: 'capitalizeFirstChar', defaultValue: 'Refresh' })} onClick={handleRefreshGroupActivity} size="small" sx={{ color: theme.palette.text.secondary }}>
+                            <RefreshIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
                       </Box>
                     </Box>
                     <Box
+                      ref={groupActivityContentFrameRef}
                       sx={{
                         display: 'flex',
+                        flex: '1 1 auto',
                         flexDirection: 'column',
                         gap: '8px',
-                        mt: {
-                          xs: '-10px',
-                          md: '-12px',
-                          xl: '-14px',
-                        },
+                        minHeight: 0,
+                        overflow: 'hidden',
                       }}
                     >
                       <Box
-                        ref={activityToggleTrackRef}
+                        ref={groupActivityTopControlsRef}
                         sx={{
-                          alignSelf: 'center',
-                          bgcolor: groupActivityToggleTrackBackground,
-                          borderRadius: '999px',
-                          boxShadow: groupActivityToggleTrackShadow,
-                          display: 'inline-flex',
-                          gap: '1px',
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          padding: '2px',
-                          position: 'relative',
-                          width: 'fit-content',
+                          alignItems: 'center',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
                         }}
                       >
-                      {activityToggleIndicator.ready && (
-                        <motion.div
-                          aria-hidden="true"
-                          animate={{
-                            width: activityToggleIndicator.width,
-                            x: activityToggleIndicator.x,
+                        <Box
+                          ref={activityToggleTrackRef}
+                          sx={{
+                            alignSelf: 'center',
+                            bgcolor: groupActivityToggleTrackBackground,
+                            borderRadius: '999px',
+                            boxShadow: groupActivityToggleTrackShadow,
+                            display: 'inline-flex',
+                            gap: '1px',
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            padding: '2px',
+                            position: 'relative',
+                            width: 'fit-content',
                           }}
-                          initial={false}
-                          transition={
-                            reduce ? { duration: 0 } : GROUP_ACTIVITY_TOGGLE_TRANSITION
-                          }
-                          style={{
-                            background: groupActivityToggleIndicatorSurface.background,
-                            borderRadius: 999,
-                            bottom: 2,
-                            boxShadow: groupActivityToggleIndicatorSurface.boxShadow,
-                            left: 0,
-                            pointerEvents: 'none',
-                            position: 'absolute',
-                            top: 2,
-                            willChange: 'transform, width',
-                            zIndex: 0,
-                          }}
-                        />
-                      )}
-                      {([ 
-                        { key: 'requests' as ActivityTab, label: t('tutorial:home.group_activity_requests_short', { defaultValue: 'Requests' }), count: requestsCount, countLoading: requestsCountLoading, showBadge: true },
-                        { key: 'promotions' as ActivityTab, label: t('tutorial:home.group_activity_promoted_short', { defaultValue: 'Promoted' }), count: promotionsCount, countLoading: false, showBadge: false },
-                        { key: 'invites' as ActivityTab, label: t('tutorial:home.group_activity_invites_short', { defaultValue: 'Invites' }), count: invitesCount, countLoading: invitesCountLoading, showBadge: true },
-                      ]).map(({ key, label, count, countLoading, showBadge }) => {
-                        const showLoadingIndicator = countLoading && key !== 'invites';
-                        const showCount = showBadge && count > 0;
-
-                        return (
-                          <ButtonBase
-                            key={key}
-                            ref={setActivityToggleSegmentRef(key)}
-                            onClick={() => setActivityTab(key)}
-                            sx={{
-                              borderRadius: '999px',
-                              color:
-                                activityTab === key
-                                  ? groupActivityAccentTextColor
-                                  : theme.palette.text.secondary,
-                              display: 'inline-flex',
-                              fontSize: '0.79rem',
-                              fontWeight: 650,
-                              height: '32px',
-                              justifyContent: 'center',
-                              minWidth: 0,
-                              px: 1.7,
-                              position: 'relative',
-                              textTransform: 'none',
-                              transition: reduce
-                                ? 'none'
-                                : 'color 220ms ease-out',
-                              whiteSpace: 'nowrap',
-                              zIndex: 1,
+                        >
+                        {activityToggleIndicator.ready && (
+                          <motion.div
+                            aria-hidden="true"
+                            animate={{
+                              width: activityToggleIndicator.width,
+                              x: activityToggleIndicator.x,
                             }}
-                          >
-                            <Box
-                              component="span"
+                            initial={false}
+                            transition={
+                              reduce ? { duration: 0 } : GROUP_ACTIVITY_TOGGLE_TRANSITION
+                            }
+                            style={{
+                              background: groupActivityToggleIndicatorSurface.background,
+                              borderRadius: 999,
+                              bottom: 2,
+                              boxShadow: groupActivityToggleIndicatorSurface.boxShadow,
+                              left: 0,
+                              pointerEvents: 'none',
+                              position: 'absolute',
+                              top: 2,
+                              willChange: 'transform, width',
+                              zIndex: 0,
+                            }}
+                          />
+                        )}
+                        {([ 
+                          { key: 'requests' as ActivityTab, label: t('tutorial:home.group_activity_requests_short', { defaultValue: 'Requests' }), count: requestsCount, countLoading: requestsCountLoading, showBadge: true },
+                          { key: 'promotions' as ActivityTab, label: t('tutorial:home.group_activity_promoted_short', { defaultValue: 'Promoted' }), count: promotionsCount, countLoading: false, showBadge: false },
+                          { key: 'invites' as ActivityTab, label: t('tutorial:home.group_activity_invites_short', { defaultValue: 'Invites' }), count: invitesCount, countLoading: invitesCountLoading, showBadge: true },
+                        ]).map(({ key, label, count, countLoading, showBadge }) => {
+                          const showLoadingIndicator = countLoading && key !== 'invites';
+                          const showCount = showBadge && count > 0;
+
+                          return (
+                            <ButtonBase
+                              key={key}
+                              ref={setActivityToggleSegmentRef(key)}
+                              onClick={() => setActivityTab(key)}
                               sx={{
-                                alignItems: 'center',
+                                borderRadius: '999px',
+                                color:
+                                  activityTab === key
+                                    ? groupActivityAccentTextColor
+                                    : theme.palette.text.secondary,
                                 display: 'inline-flex',
-                                gap:
-                                  showLoadingIndicator || showCount ? '6px' : '0px',
+                                fontSize: '0.79rem',
+                                fontWeight: 650,
+                                height: '32px',
                                 justifyContent: 'center',
                                 minWidth: 0,
+                                px: 1.7,
+                                position: 'relative',
+                                textTransform: 'none',
+                                transition: reduce
+                                  ? 'none'
+                                  : 'color 220ms ease-out',
+                                whiteSpace: 'nowrap',
+                                zIndex: 1,
                               }}
                             >
                               <Box
                                 component="span"
                                 sx={{
-                                  minWidth: 0,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                }}
-                              >
-                                {label}
-                              </Box>
-                              <Box
-                                component="span"
-                                sx={{
                                   alignItems: 'center',
                                   display: 'inline-flex',
+                                  gap:
+                                    showLoadingIndicator || showCount ? '6px' : '0px',
                                   justifyContent: 'center',
-                                  minWidth:
-                                    showLoadingIndicator || showCount ? '18px' : 0,
+                                  minWidth: 0,
                                 }}
                               >
-                                {showLoadingIndicator ? (
-                                  <CircularProgress
-                                    size={12}
-                                    thickness={4}
-                                    sx={{
-                                      color:
-                                        activityTab === key
-                                          ? groupActivityAccentTextColor
-                                          : GROUP_ACTIVITY_BLUE.primary,
-                                    }}
-                                  />
-                                ) : showCount ? (
-                                  <Box
-                                    component="span"
-                                    sx={{
-                                      alignItems: 'center',
-                                      borderRadius: '50px',
-                                      color:
-                                        activityTab === key
-                                          ? alpha(groupActivityAccentBadgeTextColor, 0.92)
-                                          : alpha(APP_BLUE_SURFACE_TEXT, 0.86),
-                                      display: 'inline-flex',
-                                      fontSize: '0.64rem',
-                                      fontWeight: 630,
-                                      height: '15px',
-                                      justifyContent: 'center',
-                                      lineHeight: 1,
-                                      minWidth: '15px',
-                                      px: '4px',
-                                      ...(activityTab === key
-                                        ? groupActivityActiveBadgeSurface
-                                        : groupActivityInactiveBadgeSurface),
-                                    }}
-                                  >
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                >
+                                  {label}
+                                </Box>
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    alignItems: 'center',
+                                    display: 'inline-flex',
+                                    justifyContent: 'center',
+                                    minWidth:
+                                      showLoadingIndicator || showCount ? '18px' : 0,
+                                  }}
+                                >
+                                  {showLoadingIndicator ? (
+                                    <CircularProgress
+                                      size={12}
+                                      thickness={4}
+                                      sx={{
+                                        color:
+                                          activityTab === key
+                                            ? groupActivityAccentTextColor
+                                            : GROUP_ACTIVITY_BLUE.primary,
+                                      }}
+                                    />
+                                  ) : showCount ? (
                                     <Box
                                       component="span"
-                                      sx={{ position: 'relative', top: '0.5px' }}
+                                      sx={{
+                                        alignItems: 'center',
+                                        borderRadius: '50px',
+                                        color:
+                                          activityTab === key
+                                            ? alpha(groupActivityAccentBadgeTextColor, 0.92)
+                                            : alpha(APP_BLUE_SURFACE_TEXT, 0.86),
+                                        display: 'inline-flex',
+                                        fontSize: '0.64rem',
+                                        fontWeight: 630,
+                                        height: '15px',
+                                        justifyContent: 'center',
+                                        lineHeight: 1,
+                                        minWidth: '15px',
+                                        px: '4px',
+                                        ...(activityTab === key
+                                          ? groupActivityActiveBadgeSurface
+                                          : groupActivityInactiveBadgeSurface),
+                                      }}
                                     >
-                                      {count}
+                                      <Box
+                                        component="span"
+                                        sx={{ position: 'relative', top: '0.5px' }}
+                                      >
+                                        {count}
+                                      </Box>
                                     </Box>
-                                  </Box>
-                                ) : null}
+                                  ) : null}
+                                </Box>
                               </Box>
-                            </Box>
-                          </ButtonBase>
-                        );
-                      })}
-                      </Box>
-                      <Box
-                        data-group-activity-ghost-bar="true"
-                        sx={{
-                          alignItems: 'center',
-                          alignSelf: 'center',
-                          display: 'inline-flex',
-                          justifyContent: 'center',
-                          maxWidth: 'min(100%, 404px)',
-                          mt: '12px',
-                          px: '18px',
-                          py: '10px',
-                          position: 'relative',
-                          width: '100%',
-                        }}
-                      >
+                            </ButtonBase>
+                          );
+                        })}
+                        </Box>
                         <Box
-                          aria-hidden="true"
+                          data-group-activity-ghost-bar="true"
                           sx={{
-                            background: theme.palette.mode === 'dark'
-                              ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.01) 16%, rgba(255,255,255,0.022) 50%, rgba(255,255,255,0.01) 84%, transparent 100%)'
-                              : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.008) 16%, rgba(24,29,36,0.018) 50%, rgba(24,29,36,0.008) 84%, transparent 100%)',
-                            borderRadius: '999px',
-                            inset: 0,
-                            pointerEvents: 'none',
-                            position: 'absolute',
-                          }}
-                        />
-                        <Box
-                          aria-hidden="true"
-                          sx={{
-                            background: sharedAmbientPillGlowBackground,
-                            borderRadius: '999px',
-                            bottom: '-1px',
-                            filter: 'blur(7px)',
-                            left: '12%',
-                            opacity: 0.9,
-                            pointerEvents: 'none',
-                            position: 'absolute',
-                            right: '12%',
-                            top: '-1px',
-                          }}
-                        />
-                        <Box
-                          aria-hidden="true"
-                          sx={{
-                            background: theme.palette.mode === 'dark'
-                              ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.008) 10%, rgba(255,255,255,0.026) 26%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.026) 74%, rgba(255,255,255,0.008) 90%, transparent 100%)'
-                              : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.006) 10%, rgba(24,29,36,0.018) 26%, rgba(24,29,36,0.042) 50%, rgba(24,29,36,0.018) 74%, rgba(24,29,36,0.006) 90%, transparent 100%)',
-                            height: '1px',
-                            left: '4%',
-                            pointerEvents: 'none',
-                            position: 'absolute',
-                            right: '4%',
-                            top: 0,
-                          }}
-                        />
-                        <Box
-                          aria-hidden="true"
-                          sx={{
-                            background: theme.palette.mode === 'dark'
-                              ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.006) 10%, rgba(255,255,255,0.018) 26%, rgba(255,255,255,0.042) 50%, rgba(255,255,255,0.018) 74%, rgba(255,255,255,0.006) 90%, transparent 100%)'
-                              : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.005) 10%, rgba(24,29,36,0.014) 26%, rgba(24,29,36,0.032) 50%, rgba(24,29,36,0.014) 74%, rgba(24,29,36,0.005) 90%, transparent 100%)',
-                            bottom: 0,
-                            height: '1px',
-                            left: '4%',
-                            pointerEvents: 'none',
-                            position: 'absolute',
-                            right: '4%',
-                          }}
-                        />
-                        <Typography
-                          sx={{
-                            color: theme.palette.mode === 'dark'
-                              ? 'rgba(223, 228, 238, 0.56)'
-                              : 'rgba(72, 78, 92, 0.54)',
-                            fontSize: '0.75rem',
-                            fontWeight: 500,
-                            letterSpacing: '0.018em',
-                            lineHeight: 1.2,
+                            alignItems: 'center',
+                            alignSelf: 'center',
+                            display: 'inline-flex',
+                            justifyContent: 'center',
+                            maxWidth: 'min(100%, 404px)',
+                            mt: '12px',
+                            px: '18px',
+                            py: '10px',
                             position: 'relative',
-                            textAlign: 'center',
-                            zIndex: 1,
+                            width: '100%',
                           }}
                         >
-                          Join censorship-free decentralized groups
-                        </Typography>
+                          <Box
+                            aria-hidden="true"
+                            sx={{
+                              background: theme.palette.mode === 'dark'
+                                ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.01) 16%, rgba(255,255,255,0.022) 50%, rgba(255,255,255,0.01) 84%, transparent 100%)'
+                                : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.008) 16%, rgba(24,29,36,0.018) 50%, rgba(24,29,36,0.008) 84%, transparent 100%)',
+                              borderRadius: '999px',
+                              inset: 0,
+                              pointerEvents: 'none',
+                              position: 'absolute',
+                            }}
+                          />
+                          <Box
+                            aria-hidden="true"
+                            sx={{
+                              background: sharedAmbientPillGlowBackground,
+                              borderRadius: '999px',
+                              bottom: '-1px',
+                              filter: 'blur(7px)',
+                              left: '12%',
+                              opacity: 0.9,
+                              pointerEvents: 'none',
+                              position: 'absolute',
+                              right: '12%',
+                              top: '-1px',
+                            }}
+                          />
+                          <Box
+                            aria-hidden="true"
+                            sx={{
+                              background: theme.palette.mode === 'dark'
+                                ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.008) 10%, rgba(255,255,255,0.026) 26%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.026) 74%, rgba(255,255,255,0.008) 90%, transparent 100%)'
+                                : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.006) 10%, rgba(24,29,36,0.018) 26%, rgba(24,29,36,0.042) 50%, rgba(24,29,36,0.018) 74%, rgba(24,29,36,0.006) 90%, transparent 100%)',
+                              height: '1px',
+                              left: '4%',
+                              pointerEvents: 'none',
+                              position: 'absolute',
+                              right: '4%',
+                              top: 0,
+                            }}
+                          />
+                          <Box
+                            aria-hidden="true"
+                            sx={{
+                              background: theme.palette.mode === 'dark'
+                                ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.006) 10%, rgba(255,255,255,0.018) 26%, rgba(255,255,255,0.042) 50%, rgba(255,255,255,0.018) 74%, rgba(255,255,255,0.006) 90%, transparent 100%)'
+                                : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.005) 10%, rgba(24,29,36,0.014) 26%, rgba(24,29,36,0.032) 50%, rgba(24,29,36,0.014) 74%, rgba(24,29,36,0.005) 90%, transparent 100%)',
+                              bottom: 0,
+                              height: '1px',
+                              left: '4%',
+                              pointerEvents: 'none',
+                              position: 'absolute',
+                              right: '4%',
+                            }}
+                          />
+                          <Typography
+                            sx={{
+                              color: theme.palette.mode === 'dark'
+                                ? 'rgba(223, 228, 238, 0.56)'
+                                : 'rgba(72, 78, 92, 0.54)',
+                              fontSize: '0.75rem',
+                              fontWeight: 500,
+                              letterSpacing: '0.018em',
+                              lineHeight: 1.2,
+                              position: 'relative',
+                              textAlign: 'center',
+                              zIndex: 1,
+                            }}
+                          >
+                            Join censorship-free decentralized groups
+                          </Typography>
+                        </Box>
                       </Box>
                       <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
-                        <GroupJoinRequests compact isVisible={activityTab === 'requests'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
+                        <GroupJoinRequests compact isVisible={activityTab === 'requests'} compactViewportHeight={groupActivityViewportHeightPx} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
                       </Box>
                       <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
-                        <GroupInvites compact isVisible={activityTab === 'invites'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
+                        <GroupInvites compact isVisible={activityTab === 'invites'} compactViewportHeight={groupActivityViewportHeightPx} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
                       </Box>
                       <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
-                        <ListOfGroupPromotions compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setPromotionsCount} />
+                        <ListOfGroupPromotions compact compactViewportHeight={groupActivityViewportHeightPx} onCountChange={setPromotionsCount} />
                       </Box>
                     </Box>
+                  </Box>
+                  <Box
+                    ref={quitterCardHeightRef}
+                    sx={{
+                      ...dashboardPanelSx(theme, 'base'),
+                      borderRadius: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      height:
+                        quitterCardHeightPx != null
+                          ? `${quitterCardHeightPx}px`
+                          : undefined,
+                      minHeight: `${HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS.quitter}px`,
+                      order: quitterCardOrder,
+                      overflow: 'hidden',
+                      padding: '14px 16px 16px',
+                      width: '100%',
+                    }}
+                    onMouseMove={handleDashboardPanelPointerMove}
+                    onMouseLeave={handleDashboardPanelPointerLeave}
+                  >
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: '14px',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontSize: '1.02rem',
+                            fontWeight: 650,
+                            letterSpacing: '-0.01em',
+                          }}
+                        >
+                          Quitter
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color:
+                              theme.palette.mode === 'dark'
+                                ? 'rgba(223, 228, 238, 0.68)'
+                                : 'rgba(72, 78, 92, 0.66)',
+                            fontSize: '0.78rem',
+                            mt: '2px',
+                          }}
+                        >
+                          Live Q-App preview directly from your Main Page.
+                        </Typography>
+                      </Box>
+                      <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '8px' }}>
+                        {renderCustomizableCardControls('quitter')}
+                        <ButtonBase
+                          disableRipple
+                          onClick={handleOpenEmbeddedQuitter}
+                          sx={{
+                            ...getBlueTier1ButtonSx(),
+                            borderRadius: '999px',
+                            color: APP_BLUE_SURFACE_TEXT,
+                            flexShrink: 0,
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            minHeight: '36px',
+                            px: 1.7,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Open In Apps
+                        </ButtonBase>
+                      </Box>
+                    </Box>
+                    <Box
+                      sx={{
+                        border: `1px solid ${alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.26 : 0.18)}`,
+                        borderRadius: '12px',
+                        flex: '1 1 auto',
+                        minHeight: 0,
+                        overflow: 'hidden',
+                        width: '100%',
+                      }}
+                    >
+                      <AppViewerContainer
+                        app={DASHBOARD_EMBEDDED_QUITTER_APP}
+                        customHeight="100%"
+                        hide={false}
+                        isDevMode={false}
+                        isSelected
+                      />
+                    </Box>
+                  </Box>
                   </Box>
                 </>
               )}

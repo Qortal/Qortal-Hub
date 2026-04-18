@@ -7,7 +7,17 @@ import { Mail } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useAtom } from 'jotai';
 
-export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
+export const QMailStatus = ({
+  compact = false,
+  buttonSx = undefined,
+  iconSx = undefined,
+  tooltipPlacement = undefined,
+}: {
+  compact?: boolean;
+  buttonSx?: any;
+  iconSx?: any;
+  tooltipPlacement?: 'bottom' | 'left' | 'right' | 'top';
+}) => {
   const { t } = useTranslation([
     'auth',
     'core',
@@ -42,9 +52,17 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
         executeEvent('open-apps-mode', {});
         setLastEnteredTimestamp(Date.now());
       }}
-      style={{
+      sx={{
         position: 'relative',
-        ...(compact && { width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }),
+        ...(compact && {
+          width: 32,
+          height: 32,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderRadius: 1,
+        }),
+        ...(buttonSx || {}),
       }}
     >
       {hasNewMail && (
@@ -76,7 +94,7 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
             })}
           </span>
         }
-        placement={compact ? 'bottom' : 'left'}
+        placement={tooltipPlacement || (compact ? 'bottom' : 'left')}
         arrow
         sx={{ fontSize: compact ? '20' : '24' }}
         slotProps={{
@@ -97,6 +115,7 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
           sx={{
             color: theme.palette.text.secondary,
             fontSize: compact ? 20 : undefined,
+            ...(iconSx || {}),
           }}
         />
       </Tooltip>
@@ -104,11 +123,7 @@ export const QMailStatus = ({ compact = false }: { compact?: boolean }) => {
   );
 
   if (compact) {
-    return (
-      <div style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        {button}
-      </div>
-    );
+    return button;
   }
   return button;
 };

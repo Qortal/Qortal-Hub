@@ -896,7 +896,7 @@ const FeaturedExpandedPreview = ({
             </Box>
           </Box>
             <Box sx={{ flex: 1, minHeight: '150px', position: 'relative', zIndex: 1 }} />
-          </GlassSurface>
+        </GlassSurface>
           <Box
             aria-hidden="true"
             sx={{

@@ -10,15 +10,8 @@ import MenuIcon from '@mui/icons-material/Menu';
 import RemoveIcon from '@mui/icons-material/Remove';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import FilterNoneIcon from '@mui/icons-material/FilterNone';
-import LogoutIcon from '@mui/icons-material/Logout';
 import QortalLogo from '../../assets/svgs/Logo1Dark.svg';
 import { WalletIcon } from '../../assets/Icons/WalletIcon';
-import { QMailStatus } from '../QMailStatus';
-import { GeneralNotifications } from '../GeneralNotifications';
-import { Save } from '../Save/Save';
-import { TaskManager } from '../TaskManager/TaskManager';
-import { GlobalActions } from '../GlobalActions/GlobalActions';
-import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
 
 const TITLE_BAR_HEIGHT = 32;
 export const APP_NAV_BAR_HEIGHT = 48;
@@ -378,151 +371,6 @@ export function CustomTitleBar(props?: {
     </span>
   );
 
-  const navIconSx = {
-    color: controlColor,
-    width: 32,
-    height: 32,
-    borderRadius: 1,
-    transition:
-      'background-color 140ms ease, color 140ms ease, transform 120ms ease',
-    '&:hover': { backgroundColor: controlHover, transform: 'translateY(-1px)' },
-    '&:active': { transform: 'translateY(0)' },
-    '&:focus-visible': {
-      outline: `1px solid ${theme.palette.primary.main}`,
-      outlineOffset: '2px',
-    },
-  };
-
-  /** Uniform 32x32 cell for widgets so all title-bar icons align; scales inner icons to 20px */
-  const navCellSx = {
-    width: 32,
-    height: 32,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    overflow: 'hidden',
-    '& .MuiSvgIcon-root': { fontSize: 20 },
-    '& .MuiIconButton-root': { width: 32, height: 32, padding: 0, minWidth: 0 },
-    '& svg': { width: 20, height: 20 },
-  };
-
-  const navSectionSx = {
-    alignItems: 'center' as const,
-    display: 'flex',
-    flexShrink: 0,
-    gap: 0.5,
-    height: '100%',
-    pl: 0.5,
-    pr: 0.5,
-    ...(isElectron && { WebkitAppRegion: 'no-drag' as const }),
-  };
-
-  const leftNavSection = rightNav && (
-    <Box sx={navSectionSx}>
-      <QMailStatus compact />
-      {rightNav.extState === 'authenticated' && (
-        <Box sx={navCellSx}>
-          <GeneralNotifications
-            address={rightNav.userInfo?.address}
-            tooltipPlacement="bottom"
-          />
-        </Box>
-      )}
-      <Box sx={{ width: 2 }} />
-      <Tooltip
-        title={tooltipTitle(
-          t('core:action.save', { postProcess: 'capitalizeFirstChar' })
-        )}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <Box component="span">
-          <Save
-            isDesktop
-            disableWidth={false}
-            myName={rightNav.userInfo?.name}
-          />
-        </Box>
-      </Tooltip>
-    </Box>
-  );
-
-  const rightNavSection = rightNav && (
-    <Box sx={navSectionSx}>
-      <ChatWidgetReopenIcon inTitleBar />
-      {/* {rightNav.extState === 'authenticated' && rightNav.isMainWindow && ( */}
-      <>
-        <Tooltip
-          title={tooltipTitle(t('core:message.generic.ongoing_transactions'))}
-          placement="bottom"
-          arrow
-          slotProps={tooltipSlotProps(theme)}
-        >
-          <Box sx={navCellSx} component="span">
-            <TaskManager getUserInfo={rightNav.getUserInfo} />
-          </Box>
-        </Tooltip>
-        <Box sx={navCellSx}>
-          <GlobalActions />
-        </Box>
-      </>
-      {/* )} */}
-      <Box sx={{ width: 2 }} />
-      <Box
-        sx={{
-          width: '1px',
-          minWidth: '1px',
-          alignSelf: 'stretch',
-          backgroundColor: borderColor,
-          mx: 0.5,
-          my: 0.75,
-        }}
-        aria-hidden
-      />
-      <Tooltip
-        title={tooltipTitle(t('core:action.logout'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onLogout}
-          sx={navIconSx}
-          aria-label={t('core:action.logout')}
-        >
-          <LogoutIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      </Tooltip>
-    </Box>
-  );
-
-  const titleBarVerticalDivider = (
-    <Box
-      sx={{
-        width: '1px',
-        minWidth: '1px',
-        alignSelf: 'stretch',
-        backgroundColor: borderColor,
-        my: 0.75,
-      }}
-      aria-hidden
-    />
-  );
-
-  const leftOffsetSpacer = (
-    <Box
-      sx={{
-        width: TITLE_BAR_LEFT_OFFSET_PX - TITLE_BAR_MENU_WIDTH_PX,
-        minWidth: TITLE_BAR_LEFT_OFFSET_PX - TITLE_BAR_MENU_WIDTH_PX,
-        flexShrink: 0,
-      }}
-    />
-  );
-
   const leftPushCluster = (children: React.ReactNode) => (
     <Box
       sx={{
@@ -558,48 +406,21 @@ export function CustomTitleBar(props?: {
       {isElectron &&
         (isMac ? (
           <>
-            {leftPushCluster(
-              <>
-                {macWindowControls}
-                {menuButton}
-                {rightNav && (
-                  <>
-                    {leftOffsetSpacer}
-                    {titleBarVerticalDivider}
-                    {leftNavSection}
-                  </>
-                )}
-              </>
-            )}
+            {leftPushCluster(<>{macWindowControls}{menuButton}</>)}
             <Box sx={{ flex: 1 }} />
-            {rightNavSection}
             <Box sx={{ width: 52 }} />
           </>
         ) : (
           <>
-            {leftPushCluster(
-              <>
-                {menuButton}
-                {rightNav && (
-                  <>
-                    {leftOffsetSpacer}
-                    {titleBarVerticalDivider}
-                    {leftNavSection}
-                  </>
-                )}
-              </>
-            )}
+            {leftPushCluster(<>{menuButton}</>)}
             <Box sx={{ flex: 1 }} />
-            {rightNavSection}
-            {titleBarVerticalDivider}
             {winWindowControls}
           </>
         ))}
       {!isElectron && (
         <>
-          {leftPushCluster(<>{rightNav && <>{leftNavSection}</>}</>)}
+          {leftPushCluster(<Box sx={{ width: TITLE_BAR_LEFT_OFFSET_PX, minWidth: TITLE_BAR_LEFT_OFFSET_PX }} />)}
           <Box sx={{ flex: 1 }} />
-          {rightNavSection}
         </>
       )}
     </Box>
