@@ -1,8 +1,9 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { CSSProperties, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { alpha } from '@mui/material/styles';
 import { Avatar, Box, Button, ButtonBase, Typography, useTheme } from '@mui/material';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
+import BorderGlow from '../common/BorderGlow';
 import GlassSurface from '../common/GlassSurface';
 import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 import {
@@ -28,6 +29,10 @@ const PIRATE_APP_NAME = 'Pirate Nintendo';
 const Q_TUBE_APP_NAME = 'Q-Tube';
 const PIRATE_PREVIEW_VIDEO_SRC = '/pirate-nintendo-preview.mp4';
 const Q_TUBE_PREVIEW_VIDEO_SRC = '/q-tube-preview.mp4';
+const FEATURED_TILE_VIDEO_SRC = {
+  [Q_TUBE_APP_NAME]: Q_TUBE_PREVIEW_VIDEO_SRC,
+  [PIRATE_APP_NAME]: PIRATE_PREVIEW_VIDEO_SRC,
+} as const;
 const FEATURED_STRIP_HOVER_TRANSITION =
   `${FEATURED_STRIP_HOVER_DURATION_MS}ms ease`;
 const FEATURED_PREVIEW_CONFIG = {
@@ -43,15 +48,13 @@ const FEATURED_PREVIEW_CONFIG = {
   },
 } as const;
 type PreviewAppName = keyof typeof FEATURED_PREVIEW_CONFIG;
-export const FEATURED_APP_NAMES = [
+const FEATURED_APP_GRID = [
   Q_TUBE_APP_NAME,
   'Quitter',
   'Q-Mail',
-  'Q-Trade',
   'Q-Blog',
-  'Q-Fund',
+  'Q-Trade',
   PIRATE_APP_NAME,
-  'Q-Manager',
 ] as const;
 
 const openApp = (appName: string) => {
@@ -312,33 +315,59 @@ export const HomeFeaturedApps = ({
           display: 'flex',
           flex: 1,
           flexDirection: 'column',
+          gap: '0px',
           minHeight: 0,
         }}
       >
         <Box
           sx={{
-            display: 'grid',
+            alignItems: 'center',
+            display: 'flex',
             flex: 1,
-            gap: '12px',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))',
-            alignItems: 'start',
-            gridAutoRows: '132px',
-            justifyContent: 'stretch',
+            justifyContent: 'center',
             minHeight: 0,
+            padding: '18px 0',
             position: 'relative',
             width: '100%',
           }}
         >
-          {FEATURED_APP_NAMES.map((appName) => (
-            <AppTile
-              key={appName}
-              appName={appName}
-              theme={theme}
-              expandedPreviewApp={expandedPreviewApp}
-              onPreviewExpandStart={schedulePreviewExpand}
-              onPreviewExpandEnd={schedulePreviewCollapse}
-            />
-          ))}
+          <Box
+            sx={{
+              alignItems: 'stretch',
+              display: 'grid',
+              gap: '12px',
+              gridAutoRows: '124px',
+              gridTemplateColumns: 'repeat(4, 124px)',
+              justifyContent: 'center',
+              maxWidth: '100%',
+              position: 'relative',
+              width: 'max-content',
+              zIndex: 1,
+            }}
+          >
+            {FEATURED_APP_GRID.map((appName, index) =>
+              appName ? (
+                <AppTile
+                  key={appName}
+                  appName={appName}
+                  theme={theme}
+                  expandedPreviewApp={expandedPreviewApp}
+                  onPreviewExpandStart={schedulePreviewExpand}
+                  onPreviewExpandEnd={schedulePreviewCollapse}
+                />
+              ) : (
+                <Box
+                  key={`featured-empty-slot-${index}`}
+                  aria-hidden="true"
+                  sx={{
+                    height: '100%',
+                    visibility: 'hidden',
+                    width: '100%',
+                  }}
+                />
+              )
+            )}
+          </Box>
           <FeaturedExpandedPreview
             appName={expandedPreviewApp}
             theme={theme}
@@ -358,7 +387,6 @@ export const HomeFeaturedApps = ({
             flexShrink: 0,
             justifyContent: 'center',
             height: '42px',
-            mt: '18px',
             position: 'relative',
           }}
         >
@@ -546,12 +574,28 @@ const AppTile = ({
 }: AppTileProps) => {
   const baseAvatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
   const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
+  const [hasTileVideoError, setHasTileVideoError] = useState(false);
   const hasRetriedRef = useRef(false);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPreviewableTile = appName in FEATURED_PREVIEW_CONFIG;
+  const isWideLeftTile = appName === Q_TUBE_APP_NAME;
+  const isWideRightTile = appName === PIRATE_APP_NAME;
+  const isWideTile = isWideLeftTile || isWideRightTile;
+  const tileVideoSrc = appName in FEATURED_TILE_VIDEO_SRC
+    ? FEATURED_TILE_VIDEO_SRC[appName as keyof typeof FEATURED_TILE_VIDEO_SRC]
+    : null;
   const fadeOutForPreview = !!expandedPreviewApp && expandedPreviewApp !== appName;
   const hideBasePreviewTile = !!expandedPreviewApp && expandedPreviewApp === appName;
   const allowTileHover = !expandedPreviewApp;
+  const hiddenTileStyles = {
+    opacity: fadeOutForPreview ? 0 : hideBasePreviewTile ? 0 : 1,
+    pointerEvents: fadeOutForPreview || hideBasePreviewTile ? 'none' : 'auto',
+    visibility: fadeOutForPreview || hideBasePreviewTile ? 'hidden' : 'visible',
+  } as const;
+
+  useEffect(() => {
+    setHasTileVideoError(false);
+  }, [tileVideoSrc]);
 
   useEffect(() => {
     return () => {
@@ -569,7 +613,7 @@ const AppTile = ({
     }, RETRY_DELAY_MS);
   };
 
-  return (
+  const tileButton = (
     <ButtonBase
       disableRipple
       onClick={() => openApp(appName)}
@@ -580,7 +624,7 @@ const AppTile = ({
       }
       onMouseLeave={isPreviewableTile ? onPreviewExpandEnd : undefined}
       sx={{
-        alignItems: 'center',
+        alignItems: isWideLeftTile ? 'flex-start' : isWideRightTile ? 'flex-end' : 'center',
         bgcolor:
           theme.palette.mode === 'dark'
             ? '#181a20'
@@ -591,14 +635,16 @@ const AppTile = ({
         flexDirection: 'column',
         gap: '8px',
         justifyContent: 'center',
-        padding: '14px 10px',
+        height: '100%',
+        minHeight: 0,
+        padding: '12px 10px',
         transition:
           'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, opacity 160ms ease',
+        overflow: 'hidden',
         position: 'relative',
         width: '100%',
-        minHeight: '128px',
-        opacity: fadeOutForPreview ? 0 : hideBasePreviewTile ? 0 : 1,
-        pointerEvents: fadeOutForPreview ? 'none' : 'auto',
+        gridColumn: isWideTile ? 'span 2' : 'span 1',
+        ...(!isWideTile ? hiddenTileStyles : null),
         transform: 'translateY(0)',
         boxShadow:
           theme.palette.mode === 'dark'
@@ -630,30 +676,252 @@ const AppTile = ({
         },
       }}
     >
-      <Avatar
-        src={imageSrc}
-        variant="rounded"
-        onError={handleImageError}
-        sx={{ height: 52, width: 52 }}
-      >
-        {appName.charAt(0)}
-      </Avatar>
-
-      <Typography
+      {tileVideoSrc && !hasTileVideoError ? (
+        <Box
+          aria-hidden="true"
+          sx={{
+            inset: 0,
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            position: 'absolute',
+            zIndex: 0,
+          }}
+        >
+          <Box
+            component="video"
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            onError={() => setHasTileVideoError(true)}
+            sx={{
+              height: '100%',
+              inset: 0,
+              objectFit: 'cover',
+              objectPosition: 'center center',
+              opacity: theme.palette.mode === 'dark' ? 0.88 : 0.8,
+              pointerEvents: 'none',
+              position: 'absolute',
+              transform: 'scale(1.18)',
+              width: '100%',
+              filter:
+                theme.palette.mode === 'dark'
+                  ? 'blur(10px) saturate(0.9)'
+                  : 'blur(9px) saturate(0.86)',
+            }}
+          >
+            <source src={tileVideoSrc} type="video/mp4" />
+          </Box>
+        </Box>
+      ) : null}
+      <Box
         sx={{
-          color: theme.palette.text.primary,
-          fontSize: '0.8rem',
-          fontWeight: 600,
-          maxWidth: '100px',
-          overflow: 'hidden',
-          textAlign: 'center',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          alignItems: 'center',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          position: 'relative',
+          width: isWideTile ? '104px' : '100%',
+          alignSelf: isWideRightTile ? 'flex-end' : 'auto',
+          zIndex: 1,
         }}
       >
-        {appName}
-      </Typography>
+        <Avatar
+          src={imageSrc}
+          variant="rounded"
+          onError={handleImageError}
+          sx={{ height: 52, width: 52 }}
+        >
+          {appName.charAt(0)}
+        </Avatar>
+
+        <Typography
+          sx={{
+            color: theme.palette.text.primary,
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            maxWidth: '100px',
+            overflow: 'hidden',
+            textAlign: 'center',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {appName}
+        </Typography>
+      </Box>
+      {isWideLeftTile ? (
+        <Box
+          aria-hidden="true"
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            inset: '0 16px 0 124px',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            position: 'absolute',
+            transform: 'translateX(-20px)',
+            zIndex: 1,
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'stretch',
+              display: 'inline-flex',
+              gap: '6px',
+            }}
+          >
+            <Box
+              sx={{
+                bgcolor:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(239,243,250,0.72)'
+                    : 'rgba(20,28,40,0.66)',
+                borderRadius: '999px',
+                flexShrink: 0,
+                width: '3px',
+              }}
+            />
+            <Typography
+              component="div"
+              sx={{
+                color:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(239,243,250,0.9)'
+                    : 'rgba(20,28,40,0.84)',
+                display: 'inline-flex',
+                flexDirection: 'column',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                letterSpacing: '0.004em',
+                lineHeight: 0.98,
+                textAlign: 'left',
+                textShadow:
+                  theme.palette.mode === 'dark'
+                    ? '0 1px 10px rgba(0,0,0,0.28)'
+                    : '0 1px 6px rgba(255,255,255,0.16)',
+              }}
+            >
+              <Box component="span" sx={{ display: 'block' }}>
+                decentralized.
+              </Box>
+              <Box component="span" sx={{ display: 'block' }}>
+                cat. videos.
+              </Box>
+              <Box component="span" sx={{ display: 'block' }}>
+                debauchery.
+              </Box>
+            </Typography>
+          </Box>
+        </Box>
+      ) : null}
+      {isWideRightTile ? (
+        <Box
+          aria-hidden="true"
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            inset: '0 124px 0 16px',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            position: 'absolute',
+            transform: 'translateX(20px)',
+            zIndex: 1,
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'stretch',
+              display: 'inline-flex',
+              gap: '6px',
+            }}
+          >
+            <Box
+              sx={{
+                bgcolor:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(239,243,250,0.72)'
+                    : 'rgba(20,28,40,0.66)',
+                borderRadius: '999px',
+                flexShrink: 0,
+                width: '3px',
+              }}
+            />
+            <Typography
+              component="div"
+              sx={{
+                color:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(239,243,250,0.9)'
+                    : 'rgba(20,28,40,0.84)',
+                display: 'inline-flex',
+                flexDirection: 'column',
+                fontSize: '0.8rem',
+                fontWeight: 800,
+                letterSpacing: '0.004em',
+                lineHeight: 0.98,
+                textAlign: 'left',
+                textShadow:
+                  theme.palette.mode === 'dark'
+                    ? '0 1px 10px rgba(0,0,0,0.28)'
+                    : '0 1px 6px rgba(255,255,255,0.16)',
+              }}
+            >
+              <Box component="span" sx={{ display: 'block' }}>
+                community.
+              </Box>
+              <Box component="span" sx={{ display: 'block' }}>
+                rom.library.
+              </Box>
+              <Box component="span" sx={{ display: 'block' }}>
+                bowser.
+              </Box>
+            </Typography>
+          </Box>
+        </Box>
+      ) : null}
     </ButtonBase>
+  );
+
+  if (!isWideTile) {
+    return tileButton;
+  }
+
+  return (
+    <BorderGlow
+      alwaysOn
+      animated={false}
+      foregroundGlow
+      interactive={false}
+      edgeSensitivity={30}
+      glowColor="40 80 80"
+      backgroundColor="transparent"
+      borderRadius={10}
+      glowRadius={40}
+      glowIntensity={1}
+      coneSpread={25}
+      colors={[
+        '#c084fc',
+        '#f472b6',
+        '#38bdf8',
+      ]}
+      style={
+        {
+          '--card-border': 'transparent',
+          '--card-shadow': 'none',
+          borderRadius: '10px',
+          gridColumn: 'span 2',
+          height: '100%',
+          minHeight: 0,
+          transition: 'opacity 160ms ease',
+          width: '100%',
+          ...hiddenTileStyles,
+        } as CSSProperties
+      }
+    >
+      {tileButton}
+    </BorderGlow>
   );
 };
 
@@ -709,7 +977,6 @@ const FeaturedExpandedPreview = ({
         flexDirection: 'column',
         justifyContent: 'flex-start',
         overflow: 'hidden',
-        p: '22px',
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? 'auto' : 'none',
         transform: visible ? 'scale(1)' : teaserMode ? 'scale(0.992)' : 'scale(0.985)',
@@ -807,98 +1074,111 @@ const FeaturedExpandedPreview = ({
               zIndex: 0,
             }}
           />
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: '12px', mb: '18px', position: 'relative', zIndex: 1, pl: '24px', pr: '14px', pt: '24px' }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Avatar
-                src={imageSrc}
-                variant="rounded"
-                sx={{
-                  height: 52,
-                  width: 52,
-                  bgcolor: theme.palette.mode === 'dark' ? '#181a20' : theme.palette.background.surface,
-                  border: `1px solid ${theme.palette.border.subtle}`,
-                  flexShrink: 0,
-                  opacity: theme.palette.mode === 'dark' ? 0.94 : 0.9,
-                }}
-              >
-                {previewConfig.title.charAt(0)}
-              </Avatar>
+          <Box
+            sx={{
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              p: '22px',
+              position: 'relative',
+              width: '100%',
+              zIndex: 1,
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '12px', mb: '18px', position: 'relative', pl: '24px', pr: '14px', pt: '24px' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Avatar
+                  src={imageSrc}
+                  variant="rounded"
+                  sx={{
+                    height: 52,
+                    width: 52,
+                    bgcolor: theme.palette.mode === 'dark' ? '#181a20' : theme.palette.background.surface,
+                    border: `1px solid ${theme.palette.border.subtle}`,
+                    flexShrink: 0,
+                    opacity: theme.palette.mode === 'dark' ? 0.94 : 0.9,
+                  }}
+                >
+                  {previewConfig.title.charAt(0)}
+                </Avatar>
+                <Typography
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontSize: '1.24rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.026em',
+                    textShadow:
+                      theme.palette.mode === 'dark'
+                        ? '0 2px 12px rgba(0,0,0,0.42)'
+                        : '0 2px 10px rgba(18,22,28,0.22)',
+                  }}
+                >
+                  {previewConfig.title}
+                </Typography>
+              </Box>
               <Typography
                 sx={{
-                  color: theme.palette.text.primary,
-                  fontSize: '1.24rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.026em',
+                  color:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(232,236,244,0.86)'
+                      : 'rgba(28,36,52,0.8)',
+                  fontSize: '0.96rem',
+                  lineHeight: 1.55,
+                  maxWidth: '54ch',
                   textShadow:
                     theme.palette.mode === 'dark'
-                      ? '0 2px 12px rgba(0,0,0,0.42)'
-                      : '0 2px 10px rgba(18,22,28,0.22)',
+                      ? '0 2px 14px rgba(0,0,0,0.36)'
+                      : '0 2px 10px rgba(18,22,28,0.18)',
                 }}
               >
-                {previewConfig.title}
+                {previewConfig.subtitle}
               </Typography>
+              <Box sx={{ pt: '6px', pointerEvents: 'auto' }}>
+                <Button
+                  onClick={() => openApp(resolvedAppName)}
+                  variant="contained"
+                  sx={{
+                    ...getBlueTier1ButtonSx(),
+                    borderRadius: '11px',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    minWidth: '138px',
+                    minHeight: '42px',
+                    px: 2.2,
+                    py: 0.9,
+                    textTransform: 'none',
+                    backdropFilter: 'blur(2px)',
+                    WebkitBackdropFilter: 'blur(2px)',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundImage:
+                        'radial-gradient(circle at 20% 25%, rgba(255,255,255,0.1) 0.5px, transparent 0.8px), radial-gradient(circle at 72% 64%, rgba(0,0,0,0.08) 0.5px, transparent 0.9px), radial-gradient(circle at 48% 38%, rgba(255,255,255,0.06) 0.45px, transparent 0.75px)',
+                      backgroundSize: '18px 18px, 22px 22px, 16px 16px',
+                      opacity: theme.palette.mode === 'dark' ? 0.06 : 0.05,
+                      mixBlendMode: 'soft-light',
+                      pointerEvents: 'none',
+                    },
+                    '&:hover': {
+                      ...getBlueTier1ButtonSx()['&:hover'],
+                      transform: 'none',
+                    },
+                    '&:active': {
+                      ...getBlueTier1ButtonSx()['&:active'],
+                      transform: 'none',
+                    },
+                  }}
+                >
+                  Open Q-App
+                </Button>
+              </Box>
             </Box>
-            <Typography
-              sx={{
-                color:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(232,236,244,0.86)'
-                    : 'rgba(28,36,52,0.8)',
-                fontSize: '0.96rem',
-                lineHeight: 1.55,
-                maxWidth: '54ch',
-                textShadow:
-                  theme.palette.mode === 'dark'
-                    ? '0 2px 14px rgba(0,0,0,0.36)'
-                    : '0 2px 10px rgba(18,22,28,0.18)',
-              }}
-            >
-              {previewConfig.subtitle}
-            </Typography>
-            <Box sx={{ pt: '6px', pointerEvents: 'auto' }}>
-              <Button
-                onClick={() => openApp(resolvedAppName)}
-                variant="contained"
-                sx={{
-                  ...getBlueTier1ButtonSx(),
-                  borderRadius: '11px',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  minWidth: '138px',
-                  minHeight: '42px',
-                  px: 2.2,
-                  py: 0.9,
-                  textTransform: 'none',
-                  backdropFilter: 'blur(2px)',
-                  WebkitBackdropFilter: 'blur(2px)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  '&::before': {
-                    content: '""',
-                    position: 'absolute',
-                    inset: 0,
-                    backgroundImage:
-                      'radial-gradient(circle at 20% 25%, rgba(255,255,255,0.1) 0.5px, transparent 0.8px), radial-gradient(circle at 72% 64%, rgba(0,0,0,0.08) 0.5px, transparent 0.9px), radial-gradient(circle at 48% 38%, rgba(255,255,255,0.06) 0.45px, transparent 0.75px)',
-                    backgroundSize: '18px 18px, 22px 22px, 16px 16px',
-                    opacity: theme.palette.mode === 'dark' ? 0.06 : 0.05,
-                    mixBlendMode: 'soft-light',
-                    pointerEvents: 'none',
-                  },
-                  '&:hover': {
-                    ...getBlueTier1ButtonSx()['&:hover'],
-                    transform: 'none',
-                  },
-                  '&:active': {
-                    ...getBlueTier1ButtonSx()['&:active'],
-                    transform: 'none',
-                  },
-                }}
-              >
-                Open Q-App
-              </Button>
-            </Box>
+            <Box sx={{ flex: 1, minHeight: '150px', position: 'relative' }} />
           </Box>
-            <Box sx={{ flex: 1, minHeight: '150px', position: 'relative', zIndex: 1 }} />
         </GlassSurface>
           <Box
             aria-hidden="true"

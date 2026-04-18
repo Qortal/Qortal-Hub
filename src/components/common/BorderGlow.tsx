@@ -5,6 +5,8 @@ type BorderGlowProps = {
   children: ReactNode;
   className?: string;
   interactive?: boolean;
+  alwaysOn?: boolean;
+  foregroundGlow?: boolean;
   edgeSensitivity?: number;
   glowColor?: string;
   backgroundColor?: string;
@@ -117,6 +119,8 @@ const BorderGlow = ({
   children,
   className = '',
   interactive = true,
+  alwaysOn = false,
+  foregroundGlow = false,
   edgeSensitivity = 30,
   glowColor = '40 80 80',
   backgroundColor = '#120F17',
@@ -185,11 +189,41 @@ const BorderGlow = ({
   );
 
   useEffect(() => {
-    if (!animated || !cardRef.current) return;
+    if (!cardRef.current) return;
 
     const card = cardRef.current;
+    let rafId: number | null = null;
     let cancelled = false;
     let intervalId: number | null = null;
+
+    if (alwaysOn) {
+      card.classList.add('sweep-active');
+      card.style.setProperty('--edge-proximity', '100');
+      card.style.setProperty('--cursor-angle', '110deg');
+
+      const animateContinuousSweep = (timestamp: number) => {
+        if (cancelled) return;
+        const progress =
+          ((timestamp % animationDurationMs) + animationDurationMs) %
+          animationDurationMs;
+        const angle = 110 + (progress / animationDurationMs) * 360;
+        card.style.setProperty('--cursor-angle', `${angle}deg`);
+        rafId = requestAnimationFrame(animateContinuousSweep);
+      };
+
+      rafId = requestAnimationFrame(animateContinuousSweep);
+
+      return () => {
+        cancelled = true;
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+        card.classList.remove('sweep-active');
+        card.style.setProperty('--edge-proximity', '0');
+      };
+    }
+
+    if (!animated) return;
 
     const runSweep = () => {
       if (cancelled) return;
@@ -257,13 +291,16 @@ const BorderGlow = ({
 
     return () => {
       cancelled = true;
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
       if (intervalId !== null) {
         window.clearInterval(intervalId);
       }
       card.classList.remove('sweep-active');
       card.style.setProperty('--edge-proximity', '0');
     };
-  }, [animated, animationDurationMs, loopAnimated]);
+  }, [alwaysOn, animated, animationDurationMs, loopAnimated]);
 
   const glowVars = buildGlowVars(glowColor, glowIntensity);
   const gradientVars = buildGradientVars(colors);
@@ -272,7 +309,11 @@ const BorderGlow = ({
     <div
       ref={cardRef}
       onPointerMove={interactive ? handlePointerMove : undefined}
-      className={`border-glow-card ${interactive ? '' : 'non-interactive'} ${className}`.trim()}
+      className={`border-glow-card ${interactive ? '' : 'non-interactive'} ${
+        alwaysOn ? 'border-glow-card--always-on' : ''
+      } ${foregroundGlow ? 'border-glow-card--foreground' : ''} ${
+        className
+      }`.trim()}
       style={
         {
           '--card-bg': backgroundColor,

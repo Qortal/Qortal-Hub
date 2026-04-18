@@ -32,20 +32,27 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  pointer-events: none;
   transition: opacity 0.25s ease-out;
   z-index: -1;
 }
 
-.border-glow-card:not(:hover):not(.sweep-active)::before,
-.border-glow-card:not(:hover):not(.sweep-active)::after,
-.border-glow-card:not(:hover):not(.sweep-active) > .edge-light {
+.border-glow-card.border-glow-card--foreground::before,
+.border-glow-card.border-glow-card--foreground::after,
+.border-glow-card.border-glow-card--foreground > .edge-light {
+  z-index: 2;
+}
+
+.border-glow-card:not(:hover):not(.sweep-active):not(.border-glow-card--always-on)::before,
+.border-glow-card:not(:hover):not(.sweep-active):not(.border-glow-card--always-on)::after,
+.border-glow-card:not(:hover):not(.sweep-active):not(.border-glow-card--always-on) > .edge-light {
   opacity: 0;
   transition: opacity 0.75s ease-in-out;
 }
 
-.border-glow-card.non-interactive:not(.sweep-active)::before,
-.border-glow-card.non-interactive:not(.sweep-active)::after,
-.border-glow-card.non-interactive:not(.sweep-active) > .edge-light {
+.border-glow-card.non-interactive:not(.sweep-active):not(.border-glow-card--always-on)::before,
+.border-glow-card.non-interactive:not(.sweep-active):not(.border-glow-card--always-on)::after,
+.border-glow-card.non-interactive:not(.sweep-active):not(.border-glow-card--always-on) > .edge-light {
   opacity: 0;
   transition: opacity 0.75s ease-in-out;
 }
