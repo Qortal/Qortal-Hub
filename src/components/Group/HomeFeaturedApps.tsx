@@ -278,9 +278,11 @@ export const HomeFeaturedApps = ({
     >
       <Box
         sx={{
+          alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
           gap: '3px',
+          textAlign: 'center',
         }}
       >
         <Typography
@@ -298,6 +300,7 @@ export const HomeFeaturedApps = ({
             fontSize: '0.76rem',
             letterSpacing: '0.012em',
             lineHeight: 1.45,
+            maxWidth: '420px',
           }}
         >
           Launch trusted community apps directly from your dashboard.

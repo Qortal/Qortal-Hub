@@ -166,6 +166,7 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const accountIdentitySecondaryText = address ?? '—';
   const shouldRevealAddressOnHover = hasRegisteredName && Boolean(address);
   const showAnimatedAddress = shouldRevealAddressOnHover && isAddressFieldHovered;
+  const addressFieldSideSlotPx = 26;
   const avatarUrl =
     tempAvatar ??
     (name && !avatarError
@@ -498,8 +499,9 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
                 ? 'inset 0 1px 0 rgba(255,255,255,0.045)'
                 : 'inset 0 1px 0 rgba(255,255,255,0.28)',
               cursor: address ? 'pointer' : 'default',
-              display: 'flex',
-              gap: '10px',
+              columnGap: '10px',
+              display: 'grid',
+              gridTemplateColumns: `${addressFieldSideSlotPx}px minmax(0, 1fr) ${addressFieldSideSlotPx}px`,
               minHeight: '48px',
               position: 'relative',
               px: 1.5,
@@ -540,33 +542,21 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
             role={address ? 'button' : undefined}
             tabIndex={address ? 0 : undefined}
           >
-            <Typography
+            <Box
+              aria-hidden="true"
               sx={{
-                color: 'transparent',
-                flex: 1,
-                fontFamily: shouldRevealAddressOnHover
-                  ? 'monospace'
-                  : hasRegisteredName
-                    ? 'inherit'
-                    : 'monospace',
-                fontSize: '0.84rem',
-                overflow: 'hidden',
-                position: 'relative',
-                textAlign: 'center',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                height: `${addressFieldSideSlotPx}px`,
+                width: `${addressFieldSideSlotPx}px`,
               }}
-            >
-              {showAnimatedAddress
-                ? accountIdentitySecondaryText
-                : accountIdentityPrimaryText}
-            </Typography>
+            />
             <Box
               className="wallet-address-overlay"
               sx={{
+                alignItems: 'center',
                 color: theme.palette.mode === 'dark'
                   ? 'rgba(236, 241, 248, 0.9)'
                   : theme.palette.text.secondary,
+                display: 'flex',
                 fontFamily: shouldRevealAddressOnHover
                   ? showAnimatedAddress
                     ? 'monospace'
@@ -574,23 +564,25 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
                   : hasRegisteredName
                     ? 'inherit'
                     : 'monospace',
-                fontSize: '0.84rem',
-                left: '12px',
-                overflow: 'hidden',
-                pointerEvents: 'none',
-                position: 'absolute',
-                right: '44px',
+                fontSize: '0.88rem',
+                justifyContent: 'center',
+                minWidth: 0,
                 textAlign: 'center',
-                textOverflow: 'ellipsis',
-                top: '50%',
-                transform: 'translateY(-50%)',
                 transition: 'color 160ms ease',
-                whiteSpace: 'nowrap',
+                width: '100%',
               }}
             >
               {shouldRevealAddressOnHover ? (
                 showAnimatedAddress ? (
-                  <Box sx={{ pointerEvents: 'auto' }}>
+                  <Box
+                    sx={{
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      pointerEvents: 'auto',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     <DecryptedText
                       text={accountIdentitySecondaryText}
                       animateOn="hover"
@@ -605,6 +597,7 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
                 ) : (
                   <Box
                     sx={{
+                      maxWidth: '100%',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -616,6 +609,7 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
               ) : (
                 <Box
                   sx={{
+                    maxWidth: '100%',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
