@@ -13,15 +13,14 @@ import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
 import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted';
-import { getFeaturedDecorationMotionSx, HomeFeaturedApps } from './HomeFeaturedApps';
+import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
 import {
   APP_BLUE_SURFACE_TEXT,
   GROUP_ACTIVITY_BLUE,
-  getBlueAmbientFieldBackground,
   getBlueAmbientPillGlowBackground,
-  getBlueAmbientSeamBackground,
+  getBlueTier1ButtonSx,
   getBlueTier1PillSurface,
   getBlueTier2BadgeSx,
   getBlueTier3DotSx,
@@ -74,11 +73,10 @@ const HOME_DASHBOARD_VERTICAL_GAP_PX = 20;
 // compensates for that extra left-side content. The alignment is visual, not structural.
 const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 29;
 const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 322;
+const HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX = 426;
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 18;
-const HOME_INFO_PANEL_DARK_BACKGROUND = '#24272f';
-const HOME_INFO_PANEL_DARK_GRADIENT = 'linear-gradient(180deg, #24272f 0%, #24272f 30%, #1B1D24 100%)';
 const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
 const INFO_SECONDARY_LAYER_TRANSITION_MS = 145;
 
@@ -121,7 +119,7 @@ const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx
   };
 
   return (
-    <Box ref={assignPanelNode} sx={{ ...dashboardPanelSx(theme), borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', width: '100%', ...sx }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
+    <Box ref={assignPanelNode} sx={{ ...dashboardPanelSx(theme, 'utility'), borderRadius: '14px', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px 16px', width: '100%', ...sx }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
       <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, ...titleSx }}>{title}</Typography>
       {children}
     </Box>
@@ -154,12 +152,59 @@ const infoSepSx = (theme, index, total) => {
   };
 };
 
-const WalletActionButton = ({ icon, label, onClick, theme }) => (
-  <ButtonBase onClick={onClick} sx={{ alignItems: 'center', bgcolor: theme.palette.mode === 'dark' ? '#262931' : theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '10px', display: 'flex', gap: '9px', height: '46px', justifyContent: 'center', px: 1.5, transition: 'background-color 140ms ease, border-color 140ms ease, transform 120ms ease', width: '100%', '&:hover': { bgcolor: theme.palette.mode === 'dark' ? '#262931' : theme.palette.background.elevated, borderColor: theme.palette.border.main, transform: 'translateY(-1px)' }, '&:active': { transform: 'translateY(0)' } }}>
-    <Box sx={{ color: theme.palette.text.secondary, display: 'inline-flex' }}>{icon}</Box>
-    <Typography sx={{ color: theme.palette.text.primary, fontSize: '0.8rem', fontWeight: 600 }}>{label}</Typography>
-  </ButtonBase>
-);
+const WalletActionButton = ({ icon, label, onClick, theme }) => {
+  const blueStrongHover = getBlueTier1ButtonSx()['&:hover'];
+
+  return (
+    <ButtonBase
+      onClick={onClick}
+      sx={{
+        alignItems: 'center',
+        bgcolor:
+          theme.palette.mode === 'dark'
+            ? '#262931'
+            : theme.palette.background.surface,
+        border: `1px solid ${theme.palette.border.subtle}`,
+        borderRadius: '10px',
+        display: 'flex',
+        gap: '9px',
+        height: '46px',
+        justifyContent: 'center',
+        px: 1.5,
+        transition:
+          'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms ease, filter 140ms ease',
+        width: '100%',
+        '&:hover': {
+          ...blueStrongHover,
+          borderColor: 'rgba(143, 184, 243, 0.22)',
+          color: APP_BLUE_SURFACE_TEXT,
+          transform: 'translateY(-1px)',
+        },
+        '&:active': {
+          transform: 'translateY(0)',
+        },
+      }}
+    >
+      <Box
+        sx={{
+          color: 'inherit',
+          display: 'inline-flex',
+        }}
+      >
+        {icon}
+      </Box>
+      <Typography
+        sx={{
+          color: 'inherit',
+          fontSize: '0.8rem',
+          fontWeight: 600,
+        }}
+      >
+        {label}
+      </Typography>
+    </ButtonBase>
+  );
+};
 
 const InfoPreviewPanel = ({ rows, theme }) => {
   const enableOverlay = useMediaQuery(theme.breakpoints.up('xl'));
@@ -276,13 +321,7 @@ const InfoPreviewPanel = ({ rows, theme }) => {
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         sx={{
-          ...dashboardPanelSx(theme),
-          ...(theme.palette.mode === 'dark'
-            ? {
-                backgroundColor: HOME_INFO_PANEL_DARK_BACKGROUND,
-                backgroundImage: HOME_INFO_PANEL_DARK_GRADIENT,
-              }
-            : {}),
+          ...dashboardPanelSx(theme, 'utility'),
           borderRadius: '14px',
           display: 'flex',
           flexDirection: 'column',
@@ -353,49 +392,67 @@ const InfoPreviewPanel = ({ rows, theme }) => {
               : {}),
           }}
         >
-          <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600, letterSpacing: '0.015em', mb: '12px' }}>
-            INFO
-          </Typography>
-
           <Box
             sx={{
               alignItems: 'center',
-              display: 'inline-flex',
-              gap: '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
               mb: '14px',
+              width: '100%',
             }}
           >
-            <Box
-              sx={{
-                bgcolor: rows.status.isOperational
-                  ? alpha(GROUP_ACTIVITY_BLUE.primary, 0.9)
-                  : alpha(theme.palette.error.light, 0.86),
-                borderRadius: '50%',
-                boxShadow: rows.status.isOperational
-                  ? `0 0 8px ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.22)}`
-                  : `0 0 8px ${alpha(theme.palette.error.light, 0.16)}`,
-                flexShrink: 0,
-                height: '7px',
-                width: '7px',
-              }}
-            />
             <Typography
               sx={{
-                color: rows.status.isOperational
-                  ? theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.common.white, 0.72)
-                    : alpha(theme.palette.text.primary, 0.76)
-                  : theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.error.light, 0.84)
-                    : alpha(theme.palette.error.main, 0.84),
-                fontSize: '0.72rem',
+                color: theme.palette.text.primary,
+                fontSize: '1rem',
                 fontWeight: 600,
                 letterSpacing: '0.015em',
-                lineHeight: 1,
               }}
             >
-              {rows.status.label}
+              STATUS
             </Typography>
+            <Box
+              sx={{
+                alignItems: 'center',
+                display: 'inline-flex',
+                gap: '8px',
+                justifyContent: 'flex-end',
+                minWidth: 0,
+              }}
+            >
+              <Box
+                sx={{
+                  bgcolor: rows.status.isOperational
+                    ? alpha(GROUP_ACTIVITY_BLUE.primary, 0.92)
+                    : alpha(theme.palette.error.light, 0.86),
+                  borderRadius: '50%',
+                  boxShadow: rows.status.isOperational
+                    ? `0 0 6px ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.14)}`
+                    : `0 0 6px ${alpha(theme.palette.error.light, 0.12)}`,
+                  flexShrink: 0,
+                  height: '7px',
+                  width: '7px',
+                }}
+              />
+              <Typography
+                sx={{
+                  color: rows.status.isOperational
+                    ? theme.palette.mode === 'dark'
+                      ? alpha(theme.palette.common.white, 0.7)
+                      : alpha(theme.palette.text.primary, 0.72)
+                    : theme.palette.mode === 'dark'
+                      ? alpha(theme.palette.error.light, 0.76)
+                      : alpha(theme.palette.error.main, 0.76),
+                  fontSize: '0.73rem',
+                  fontWeight: 400,
+                  letterSpacing: '0.015em',
+                  lineHeight: 1,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {rows.status.label}
+              </Typography>
+            </Box>
           </Box>
 
           {rows.items.map((row, index) => {
@@ -441,11 +498,11 @@ const InfoPreviewPanel = ({ rows, theme }) => {
                   sx={{
                     color: row.secondary
                       ? theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.42)
-                        : alpha(theme.palette.text.primary, 0.48)
+                        ? alpha(theme.palette.common.white, 0.46)
+                        : alpha(theme.palette.text.primary, 0.52)
                       : theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.58)
-                        : alpha(theme.palette.text.primary, 0.62),
+                        ? alpha(theme.palette.common.white, 0.62)
+                        : alpha(theme.palette.text.primary, 0.66),
                     fontSize: row.secondary ? '0.7rem' : '0.73rem',
                     fontWeight: row.secondary ? 400 : 500,
                     letterSpacing: '0.018em',
@@ -472,14 +529,14 @@ const InfoPreviewPanel = ({ rows, theme }) => {
                       sx={{
                         color: row.secondary
                           ? theme.palette.mode === 'dark'
-                            ? alpha(theme.palette.common.white, 0.66)
-                            : alpha(theme.palette.text.primary, 0.72)
+                            ? alpha(theme.palette.common.white, 0.72)
+                            : alpha(theme.palette.text.primary, 0.76)
                           : theme.palette.text.primary,
                         fontSize: row.secondary
                           ? '0.785rem'
                           : row.emphasize
                             ? '0.94rem'
-                            : '0.845rem',
+                            : '0.86rem',
                         fontWeight: row.secondary
                           ? 400
                           : row.emphasize
@@ -509,10 +566,9 @@ const InfoPreviewPanel = ({ rows, theme }) => {
   );
 };
 
-export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setOpenAddGroupTab, setMobileViewMode, setDesktopViewMode, desktopViewMode }) => {
+export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setOpenAddGroupTab, setMobileViewMode, setDesktopViewMode, desktopViewMode, onOpenSettings }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const activityToggleTrackRef = useRef<HTMLDivElement | null>(null);
-  const featuredDecorationReleaseTimerRef = useRef<number | null>(null);
   const activityToggleSegmentRefs = useRef<Record<ActivityTab, HTMLButtonElement | null>>({
     requests: null,
     promotions: null,
@@ -525,6 +581,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const featuredAppsDebugRef = useRef<HTMLDivElement | null>(null);
   const walletActivityDebugRef = useRef<HTMLDivElement | null>(null);
   const rightRailRef = useRef<HTMLDivElement | null>(null);
+  const layoutStabilizeFrameRef = useRef<number | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
@@ -536,16 +593,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [promotionsCount, setPromotionsCount] = useState(0);
   const [showMostActiveGroups, setShowMostActiveGroups] = useState(() => localStorage.getItem(GETTING_STARTED_LS_KEY) === 'completed');
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
-  const [featuredAmbientDecorationsVisible, setFeaturedAmbientDecorationsVisible] = useState(false);
-  const [featuredStripHovered, setFeaturedStripHovered] = useState(false);
-  const [featuredDecorationReleasingToAmbient, setFeaturedDecorationReleasingToAmbient] =
-    useState(false);
-  const [featuredDecorationPulseRestartKey, setFeaturedDecorationPulseRestartKey] =
-    useState(0);
-  const [
-    featuredDecorationSkipPulseIntroDelay,
-    setFeaturedDecorationSkipPulseIntroDelay,
-  ] = useState(false);
   const [gettingStartedDebugOverrides, setGettingStartedDebugOverrides] = useState<GettingStartedDebugOverrides>(() =>
     parseGettingStartedDebugOverrides(
       localStorage.getItem(DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY)
@@ -572,28 +619,20 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const theme = useTheme();
   const isWideDashboardLayout = useMediaQuery(theme.breakpoints.up('xl'));
+  const resolvedWideLeftLowerRowPanelHeightPx = isWideDashboardLayout
+    ? HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX
+    : null;
   const groupActivityAccentTextColor = theme.palette.getContrastText(
     GROUP_ACTIVITY_BLUE.primary
   );
   const groupActivityAccentBadgeTextColor = theme.palette.getContrastText(
     GROUP_ACTIVITY_BLUE.pressed
   );
-  const featuredSeamLockedPeakOpacity = 0.4;
-  const groupActivitySeamLockedPeakOpacity = 0.32;
   const groupActivityToggleIndicatorSurface = getBlueTier1PillSurface(theme);
   const groupActivityActiveBadgeSurface = getBlueTier2BadgeSx(theme, true);
   const groupActivityInactiveBadgeSurface = getBlueTier2BadgeSx(theme, false);
   const filledBlueDotSx = getBlueTier3DotSx(theme, true);
   const emptyBlueDotSx = getBlueTier3DotSx(theme, false);
-  const sharedAmbientSeamBackground = getBlueAmbientSeamBackground(
-    theme,
-    'strong'
-  );
-  const groupActivitySeamPeakOpacity = 0.6;
-  const sharedAmbientFieldBackground = getBlueAmbientFieldBackground(
-    theme,
-    'strong'
-  );
   const sharedAmbientPillGlowBackground = getBlueAmbientPillGlowBackground(theme);
   const groupActivityToggleTrackBackground =
     theme.palette.mode === 'dark'
@@ -608,46 +647,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
-  const handleFeaturedExploreStripHoverChange = useCallback(
-    (isHovered: boolean) => {
-      setFeaturedStripHovered((current) => {
-        if (current === isHovered) {
-          return current;
-        }
-
-        if (featuredDecorationReleaseTimerRef.current !== null) {
-          window.clearTimeout(featuredDecorationReleaseTimerRef.current);
-          featuredDecorationReleaseTimerRef.current = null;
-        }
-
-        if (isHovered) {
-          setFeaturedDecorationReleasingToAmbient(false);
-          return isHovered;
-        }
-
-        if (current && !isHovered && featuredAmbientDecorationsVisible) {
-          setFeaturedDecorationSkipPulseIntroDelay(true);
-          setFeaturedDecorationReleasingToAmbient(true);
-          featuredDecorationReleaseTimerRef.current = window.setTimeout(() => {
-            setFeaturedDecorationReleasingToAmbient(false);
-            setFeaturedDecorationPulseRestartKey((pulseKey) => pulseKey + 1);
-            featuredDecorationReleaseTimerRef.current = null;
-          }, 190);
-        }
-
-        return isHovered;
-      });
-    },
-    [featuredAmbientDecorationsVisible]
-  );
-
-  useEffect(() => {
-    return () => {
-      if (featuredDecorationReleaseTimerRef.current !== null) {
-        window.clearTimeout(featuredDecorationReleaseTimerRef.current);
-      }
-    };
-  }, []);
 
   useLayoutEffect(() => {
     const rootNode = homeLayoutDebugRootRef.current;
@@ -716,9 +715,67 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       } else {
         setWalletActivityTargetHeightPx(null);
       }
+
+      return {
+        accountOverviewTop: nextMetrics.accountOverview?.top ?? 0,
+        featuredBottom: nextMetrics.featuredApps?.bottom ?? 0,
+        featuredTop: nextMetrics.featuredApps?.top ?? 0,
+        infoBottom: nextMetrics.info?.bottom ?? 0,
+        toolsBottom: nextMetrics.tools?.bottom ?? 0,
+        walletBottom: nextMetrics.walletActivity?.bottom ?? 0,
+        walletTop: nextMetrics.walletActivity?.top ?? 0,
+      };
+    };
+
+    const cancelLayoutStabilizePass = () => {
+      if (layoutStabilizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(layoutStabilizeFrameRef.current);
+        layoutStabilizeFrameRef.current = null;
+      }
+    };
+
+    const startLayoutStabilizePass = () => {
+      cancelLayoutStabilizePass();
+
+      const startTime = performance.now();
+      let lastSnapshot = '';
+      let stableFrameCount = 0;
+
+      const step = () => {
+        const snapshot = measureDebugLayout();
+        const snapshotKey = JSON.stringify(snapshot);
+
+        if (snapshotKey === lastSnapshot) {
+          stableFrameCount += 1;
+        } else {
+          lastSnapshot = snapshotKey;
+          stableFrameCount = 0;
+        }
+
+        const elapsed = performance.now() - startTime;
+        if (stableFrameCount >= 3 || elapsed > 900) {
+          layoutStabilizeFrameRef.current = null;
+          return;
+        }
+
+        layoutStabilizeFrameRef.current = window.requestAnimationFrame(step);
+      };
+
+      layoutStabilizeFrameRef.current = window.requestAnimationFrame(step);
     };
 
     measureDebugLayout();
+    startLayoutStabilizePass();
+
+    const fonts = (document as Document & {
+      fonts?: { ready?: Promise<unknown> };
+    }).fonts;
+
+    if (fonts?.ready) {
+      fonts.ready.then(() => {
+        startLayoutStabilizePass();
+      });
+    }
 
     const observedNodes = [
       rootNode,
@@ -738,22 +795,22 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     }
 
     const resizeObserver = new ResizeObserver(() => {
-      measureDebugLayout();
+      startLayoutStabilizePass();
     });
 
     observedNodes.forEach((node) => {
       resizeObserver.observe(node);
     });
-    window.addEventListener('resize', measureDebugLayout);
+    window.addEventListener('resize', startLayoutStabilizePass);
 
     return () => {
+      cancelLayoutStabilizePass();
       resizeObserver.disconnect();
-      window.removeEventListener('resize', measureDebugLayout);
+      window.removeEventListener('resize', startLayoutStabilizePass);
     };
   }, [
     activeTab,
     desktopViewMode,
-    featuredAmbientDecorationsVisible,
     isLocalPreview,
     isOnboardingComplete,
     isWideDashboardLayout,
@@ -1088,16 +1145,19 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
           <motion.div key="home" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} custom={reduce} style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', scrollbarGutter: 'stable', width: '100%', willChange: 'transform, opacity', backfaceVisibility: 'hidden' }}>
             <Spacer height="20px" />
             <Box ref={homeLayoutDebugRootRef} sx={{ alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, maxWidth: { xs: '1320px', xl: '1520px' }, padding: '0 20px', position: 'relative', width: '100%' }}>
+              {/*
+                    T/F Δb {(lowerRowDebugMetrics.toolsBottom - lowerRowDebugMetrics.featuredBottom).toFixed(1)} | F/W Δb {(lowerRowDebugMetrics.featuredBottom - lowerRowDebugMetrics.walletBottom).toFixed(1)}
+              */}
               <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: '1fr', alignItems: 'start', width: '100%', [theme.breakpoints.up('xl')]: { alignItems: 'stretch', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 400px)' } }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, width: '100%' }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                     <Box sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.0605em', textTransform: 'uppercase' }}>Qortal Hub</Box>
                     <Box ref={accountOverviewDebugRef} sx={{ position: 'relative', width: '100%' }}>
-                      <HomeProfileCard />
+                      <HomeProfileCard onOpenSettings={onOpenSettings} />
                     </Box>
                   </Box>
                   <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: { xs: '1fr', md: 'minmax(285px, 330px) minmax(0, 1fr)', xl: 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
-                    <Box ref={toolsDebugRef} sx={{ display: 'block', minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}>
+                    <Box ref={toolsDebugRef} sx={{ display: 'block', height: resolvedWideLeftLowerRowPanelHeightPx != null ? `${resolvedWideLeftLowerRowPanelHeightPx}px` : undefined, minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}>
                       <HomeGettingStarted
                         debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
                         debugReplayToken={gettingStartedDebugReplayToken}
@@ -1105,68 +1165,17 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                         onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
                       />
                     </Box>
-                    <Box ref={featuredAppsDebugRef} sx={{ display: 'flex', minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { position: 'relative', width: '100%', zIndex: 1 } }}>
-                      <Box
-                        className="dashboard-panel-decoration"
-                        aria-hidden="true"
-                        sx={{
-                          position: 'absolute',
-                          left: '-6%',
-                          right: '50%',
-                          bottom: '-20px',
-                          height: '20px',
-                          pointerEvents: 'none',
-                          zIndex: 0,
-                          background: sharedAmbientFieldBackground,
-                          filter: 'blur(8px)',
-                          ...getFeaturedDecorationMotionSx(
-                            featuredAmbientDecorationsVisible,
-                            1,
-                            {
-                              holdAtPeak:
-                                featuredAmbientDecorationsVisible &&
-                                featuredStripHovered,
-                              pulseRestartKey: featuredDecorationPulseRestartKey,
-                              releaseToMin:
-                                featuredAmbientDecorationsVisible &&
-                                featuredDecorationReleasingToAmbient,
-                              skipPulseIntroDelay:
-                                featuredDecorationSkipPulseIntroDelay,
-                            }
-                          ),
-                        }}
-                      />
-                      <HomeFeaturedApps
-                        decorationsVisible={featuredAmbientDecorationsVisible}
-                        onExploreStripHoverChange={
-                          handleFeaturedExploreStripHoverChange
-                        }
-                        onIntroComplete={() => {
-                          setFeaturedAmbientDecorationsVisible(true);
-                        }}
-                        seamHoldAtPeak={
-                          featuredAmbientDecorationsVisible &&
-                          featuredStripHovered
-                        }
-                        seamLockedPeakOpacity={featuredSeamLockedPeakOpacity}
-                        seamReleaseToMin={
-                          featuredAmbientDecorationsVisible &&
-                          featuredDecorationReleasingToAmbient
-                        }
-                        seamPulseRestartKey={featuredDecorationPulseRestartKey}
-                        seamSkipPulseIntroDelay={
-                          featuredDecorationSkipPulseIntroDelay
-                        }
-                      />
+                    <Box ref={featuredAppsDebugRef} sx={{ display: 'flex', height: resolvedWideLeftLowerRowPanelHeightPx != null ? `${resolvedWideLeftLowerRowPanelHeightPx}px` : undefined, minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { height: '100%', position: 'relative', width: '100%', zIndex: 1 } }}>
+                      <HomeFeaturedApps />
                     </Box>
                   </Box>
                 </Box>
-                <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px auto`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
+                <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px ${walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : 'auto'}`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
                   <Box ref={infoDebugRef} sx={{ minWidth: 0, position: 'relative', width: '100%', '& > *': { height: '100%' } }}>
                     <InfoPreviewPanel rows={infoRows} theme={theme} />
                   </Box>
-                  <Box ref={walletActivityDebugRef} sx={{ position: 'relative', width: '100%' }}>
-                  <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : undefined, minHeight: '182px', padding: '14px 16px 16px' }}>
+                  <Box ref={walletActivityDebugRef} sx={{ position: 'relative', width: '100%', minHeight: '182px', height: walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
+                  <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: '100%', minHeight: '182px', padding: '14px 16px 16px' }}>
                     <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', pb: 1.35 }}>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>Last activity</Typography>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>2 days ago</Typography>
@@ -1252,66 +1261,54 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
               {activeTab === 'user' && (
                 <>
                   {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
-                  <Box ref={groupActivityPanelRef} sx={{ ...dashboardPanelSx(theme), borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px 20px', width: '100%' }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
+                  <Box ref={groupActivityPanelRef} sx={{ ...dashboardPanelSx(theme, 'base'), borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '8px', padding: '12px 20px 16px', width: '100%' }} onMouseMove={handleDashboardPanelPointerMove} onMouseLeave={handleDashboardPanelPointerLeave}>
                     <Box
-                      className="dashboard-panel-decoration"
-                      aria-hidden="true"
                       sx={{
-                        position: 'absolute',
-                        left: '1.03125%',
-                        right: '1.03125%',
-                        top: '-3px',
-                        height: '3.3px',
-                        pointerEvents: 'none',
-                        zIndex: -1,
-                        background: sharedAmbientSeamBackground,
-                        filter: 'blur(0.72px)',
-                        ...getFeaturedDecorationMotionSx(
-                          featuredAmbientDecorationsVisible,
-                          groupActivitySeamPeakOpacity,
-                          {
-                            holdAtPeak:
-                              featuredAmbientDecorationsVisible &&
-                              featuredStripHovered,
-                            lockedPeakOpacity:
-                              groupActivitySeamLockedPeakOpacity,
-                            pulseRestartKey: featuredDecorationPulseRestartKey,
-                            releaseToMin:
-                              featuredAmbientDecorationsVisible &&
-                              featuredDecorationReleasingToAmbient,
-                            skipPulseIntroDelay:
-                              featuredDecorationSkipPulseIntroDelay,
-                          }
-                        ),
-                      }}
-                    />
-                    <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                      <Box>
-                        <Box sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600 }}>{t('tutorial:home.group_activity', { postProcess: 'capitalizeFirstChar' })}</Box>
-                        <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.78rem', mt: '3px' }}>
-                          Keep up with promotions, invites, and membership requests.
-                        </Typography>
-                      </Box>
-                      <IconButton aria-label={t('core:action.refresh', { postProcess: 'capitalizeFirstChar', defaultValue: 'Refresh' })} onClick={handleRefreshGroupActivity} size="small" sx={{ color: theme.palette.text.secondary }}>
-                        <RefreshIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                    <Box
-                      ref={activityToggleTrackRef}
-                      sx={{
-                        alignSelf: 'center',
-                        bgcolor: groupActivityToggleTrackBackground,
-                        borderRadius: '999px',
-                        boxShadow: groupActivityToggleTrackShadow,
-                        display: 'inline-flex',
-                        gap: '1px',
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        padding: '2px',
-                        position: 'relative',
-                        width: 'fit-content',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '4px',
                       }}
                     >
+                      <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                        <Box>
+                          <Box sx={{ color: theme.palette.text.primary, fontSize: '1.02rem', fontWeight: 650, letterSpacing: '-0.01em' }}>{t('tutorial:home.group_activity', { postProcess: 'capitalizeFirstChar' })}</Box>
+                          <Typography sx={{ color: theme.palette.mode === 'dark' ? 'rgba(223, 228, 238, 0.7)' : 'rgba(72, 78, 92, 0.68)', fontSize: '0.78rem', mt: '2px' }}>
+                            Keep up with promotions, invites, and membership requests.
+                          </Typography>
+                        </Box>
+                        <IconButton aria-label={t('core:action.refresh', { postProcess: 'capitalizeFirstChar', defaultValue: 'Refresh' })} onClick={handleRefreshGroupActivity} size="small" sx={{ color: theme.palette.text.secondary }}>
+                          <RefreshIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        mt: {
+                          xs: '-10px',
+                          md: '-12px',
+                          xl: '-14px',
+                        },
+                      }}
+                    >
+                      <Box
+                        ref={activityToggleTrackRef}
+                        sx={{
+                          alignSelf: 'center',
+                          bgcolor: groupActivityToggleTrackBackground,
+                          borderRadius: '999px',
+                          boxShadow: groupActivityToggleTrackShadow,
+                          display: 'inline-flex',
+                          gap: '1px',
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          padding: '2px',
+                          position: 'relative',
+                          width: 'fit-content',
+                        }}
+                      >
                       {activityToggleIndicator.ready && (
                         <motion.div
                           aria-hidden="true"
@@ -1337,13 +1334,13 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           }}
                         />
                       )}
-                      {([
-                        { key: 'requests' as ActivityTab, label: t('tutorial:home.group_activity_requests_short', { defaultValue: 'Requests' }), count: requestsCount, countLoading: requestsCountLoading },
-                        { key: 'promotions' as ActivityTab, label: t('tutorial:home.group_activity_promoted_short', { defaultValue: 'Promoted' }), count: promotionsCount, countLoading: false },
-                        { key: 'invites' as ActivityTab, label: t('tutorial:home.group_activity_invites_short', { defaultValue: 'Invites' }), count: invitesCount, countLoading: invitesCountLoading },
-                      ]).map(({ key, label, count, countLoading }) => {
+                      {([ 
+                        { key: 'requests' as ActivityTab, label: t('tutorial:home.group_activity_requests_short', { defaultValue: 'Requests' }), count: requestsCount, countLoading: requestsCountLoading, showBadge: true },
+                        { key: 'promotions' as ActivityTab, label: t('tutorial:home.group_activity_promoted_short', { defaultValue: 'Promoted' }), count: promotionsCount, countLoading: false, showBadge: false },
+                        { key: 'invites' as ActivityTab, label: t('tutorial:home.group_activity_invites_short', { defaultValue: 'Invites' }), count: invitesCount, countLoading: invitesCountLoading, showBadge: true },
+                      ]).map(({ key, label, count, countLoading, showBadge }) => {
                         const showLoadingIndicator = countLoading && key !== 'invites';
-                        const showCount = count > 0;
+                        const showCount = showBadge && count > 0;
 
                         return (
                           <ButtonBase
@@ -1357,12 +1354,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                                   ? groupActivityAccentTextColor
                                   : theme.palette.text.secondary,
                               display: 'inline-flex',
-                              fontSize: '0.77rem',
-                              fontWeight: 600,
-                              height: '30px',
+                              fontSize: '0.79rem',
+                              fontWeight: 650,
+                              height: '32px',
                               justifyContent: 'center',
                               minWidth: 0,
-                              px: 1.55,
+                              px: 1.7,
                               position: 'relative',
                               textTransform: 'none',
                               transition: reduce
@@ -1450,102 +1447,103 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           </ButtonBase>
                         );
                       })}
-                    </Box>
-                    <Box
-                      data-group-activity-ghost-bar="true"
-                      sx={{
-                        alignItems: 'center',
-                        alignSelf: 'center',
-                        display: 'inline-flex',
-                        justifyContent: 'center',
-                        maxWidth: 'min(100%, 420px)',
-                        mt: '2px',
-                        px: '18px',
-                        py: '13px',
-                        position: 'relative',
-                        width: '100%',
-                      }}
-                    >
+                      </Box>
                       <Box
-                        aria-hidden="true"
+                        data-group-activity-ghost-bar="true"
                         sx={{
-                          background: theme.palette.mode === 'dark'
-                            ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.01) 16%, rgba(255,255,255,0.022) 50%, rgba(255,255,255,0.01) 84%, transparent 100%)'
-                            : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.008) 16%, rgba(24,29,36,0.018) 50%, rgba(24,29,36,0.008) 84%, transparent 100%)',
-                          borderRadius: '999px',
-                          inset: 0,
-                          pointerEvents: 'none',
-                          position: 'absolute',
-                        }}
-                      />
-                      <Box
-                        aria-hidden="true"
-                        sx={{
-                          background: sharedAmbientPillGlowBackground,
-                          borderRadius: '999px',
-                          bottom: '-1px',
-                          filter: 'blur(7px)',
-                          left: '12%',
-                          opacity: 0.9,
-                          pointerEvents: 'none',
-                          position: 'absolute',
-                          right: '12%',
-                          top: '-1px',
-                        }}
-                      />
-                      <Box
-                        aria-hidden="true"
-                        sx={{
-                          background: theme.palette.mode === 'dark'
-                            ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.008) 10%, rgba(255,255,255,0.026) 26%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.026) 74%, rgba(255,255,255,0.008) 90%, transparent 100%)'
-                            : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.006) 10%, rgba(24,29,36,0.018) 26%, rgba(24,29,36,0.042) 50%, rgba(24,29,36,0.018) 74%, rgba(24,29,36,0.006) 90%, transparent 100%)',
-                          height: '1px',
-                          left: '4%',
-                          pointerEvents: 'none',
-                          position: 'absolute',
-                          right: '4%',
-                          top: 0,
-                        }}
-                      />
-                      <Box
-                        aria-hidden="true"
-                        sx={{
-                          background: theme.palette.mode === 'dark'
-                            ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.006) 10%, rgba(255,255,255,0.018) 26%, rgba(255,255,255,0.042) 50%, rgba(255,255,255,0.018) 74%, rgba(255,255,255,0.006) 90%, transparent 100%)'
-                            : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.005) 10%, rgba(24,29,36,0.014) 26%, rgba(24,29,36,0.032) 50%, rgba(24,29,36,0.014) 74%, rgba(24,29,36,0.005) 90%, transparent 100%)',
-                          bottom: 0,
-                          height: '1px',
-                          left: '4%',
-                          pointerEvents: 'none',
-                          position: 'absolute',
-                          right: '4%',
-                        }}
-                      />
-                      <Typography
-                        sx={{
-                          color: theme.palette.mode === 'dark'
-                            ? 'rgba(223, 228, 238, 0.56)'
-                            : 'rgba(72, 78, 92, 0.54)',
-                          fontSize: '0.75rem',
-                          fontWeight: 500,
-                          letterSpacing: '0.018em',
-                          lineHeight: 1.2,
+                          alignItems: 'center',
+                          alignSelf: 'center',
+                          display: 'inline-flex',
+                          justifyContent: 'center',
+                          maxWidth: 'min(100%, 404px)',
+                          mt: '12px',
+                          px: '18px',
+                          py: '10px',
                           position: 'relative',
-                          textAlign: 'center',
-                          zIndex: 1,
+                          width: '100%',
                         }}
                       >
-                        Join censorship-free decentralized groups
-                      </Typography>
-                    </Box>
-                    <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
-                      <GroupJoinRequests compact isVisible={activityTab === 'requests'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
-                    </Box>
-                    <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
-                      <GroupInvites compact isVisible={activityTab === 'invites'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
-                    </Box>
-                    <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
-                      <ListOfGroupPromotions compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setPromotionsCount} />
+                        <Box
+                          aria-hidden="true"
+                          sx={{
+                            background: theme.palette.mode === 'dark'
+                              ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.01) 16%, rgba(255,255,255,0.022) 50%, rgba(255,255,255,0.01) 84%, transparent 100%)'
+                              : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.008) 16%, rgba(24,29,36,0.018) 50%, rgba(24,29,36,0.008) 84%, transparent 100%)',
+                            borderRadius: '999px',
+                            inset: 0,
+                            pointerEvents: 'none',
+                            position: 'absolute',
+                          }}
+                        />
+                        <Box
+                          aria-hidden="true"
+                          sx={{
+                            background: sharedAmbientPillGlowBackground,
+                            borderRadius: '999px',
+                            bottom: '-1px',
+                            filter: 'blur(7px)',
+                            left: '12%',
+                            opacity: 0.9,
+                            pointerEvents: 'none',
+                            position: 'absolute',
+                            right: '12%',
+                            top: '-1px',
+                          }}
+                        />
+                        <Box
+                          aria-hidden="true"
+                          sx={{
+                            background: theme.palette.mode === 'dark'
+                              ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.008) 10%, rgba(255,255,255,0.026) 26%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.026) 74%, rgba(255,255,255,0.008) 90%, transparent 100%)'
+                              : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.006) 10%, rgba(24,29,36,0.018) 26%, rgba(24,29,36,0.042) 50%, rgba(24,29,36,0.018) 74%, rgba(24,29,36,0.006) 90%, transparent 100%)',
+                            height: '1px',
+                            left: '4%',
+                            pointerEvents: 'none',
+                            position: 'absolute',
+                            right: '4%',
+                            top: 0,
+                          }}
+                        />
+                        <Box
+                          aria-hidden="true"
+                          sx={{
+                            background: theme.palette.mode === 'dark'
+                              ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.006) 10%, rgba(255,255,255,0.018) 26%, rgba(255,255,255,0.042) 50%, rgba(255,255,255,0.018) 74%, rgba(255,255,255,0.006) 90%, transparent 100%)'
+                              : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.005) 10%, rgba(24,29,36,0.014) 26%, rgba(24,29,36,0.032) 50%, rgba(24,29,36,0.014) 74%, rgba(24,29,36,0.005) 90%, transparent 100%)',
+                            bottom: 0,
+                            height: '1px',
+                            left: '4%',
+                            pointerEvents: 'none',
+                            position: 'absolute',
+                            right: '4%',
+                          }}
+                        />
+                        <Typography
+                          sx={{
+                            color: theme.palette.mode === 'dark'
+                              ? 'rgba(223, 228, 238, 0.56)'
+                              : 'rgba(72, 78, 92, 0.54)',
+                            fontSize: '0.75rem',
+                            fontWeight: 500,
+                            letterSpacing: '0.018em',
+                            lineHeight: 1.2,
+                            position: 'relative',
+                            textAlign: 'center',
+                            zIndex: 1,
+                          }}
+                        >
+                          Join censorship-free decentralized groups
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
+                        <GroupJoinRequests compact isVisible={activityTab === 'requests'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
+                      </Box>
+                      <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
+                        <GroupInvites compact isVisible={activityTab === 'invites'} compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
+                      </Box>
+                      <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
+                        <ListOfGroupPromotions compact compactViewportHeight={GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX} onCountChange={setPromotionsCount} />
+                      </Box>
                     </Box>
                   </Box>
                 </>

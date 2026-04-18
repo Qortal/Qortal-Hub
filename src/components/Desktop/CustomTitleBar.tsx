@@ -11,7 +11,6 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import FilterNoneIcon from '@mui/icons-material/FilterNone';
 import LogoutIcon from '@mui/icons-material/Logout';
-import SettingsIcon from '@mui/icons-material/Settings';
 import QortalLogo from '../../assets/svgs/Logo1Dark.svg';
 import { WalletIcon } from '../../assets/Icons/WalletIcon';
 import { QMailStatus } from '../QMailStatus';
@@ -421,22 +420,6 @@ export function CustomTitleBar(props?: {
 
   const leftNavSection = rightNav && (
     <Box sx={navSectionSx}>
-      <Tooltip
-        title={tooltipTitle(t('core:settings'))}
-        placement="bottom"
-        arrow
-        slotProps={tooltipSlotProps(theme)}
-      >
-        <IconButton
-          {...titleBarIconButtonProps}
-          size="small"
-          onClick={rightNav.onOpenSettings}
-          sx={navIconSx}
-          aria-label={t('core:settings')}
-      >
-        <SettingsIcon sx={{ fontSize: 20 }} />
-      </IconButton>
-      </Tooltip>
       <QMailStatus compact />
       {rightNav.extState === 'authenticated' && (
         <Box sx={navCellSx}>

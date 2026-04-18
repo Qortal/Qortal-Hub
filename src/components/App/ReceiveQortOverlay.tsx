@@ -13,6 +13,7 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import CloseIcon from '@mui/icons-material/Close';
 import { motion, useReducedMotion } from 'framer-motion';
 import QRCode from 'react-qr-code';
+import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 
 type ReceiveQortOverlayProps = {
   address: string;
@@ -408,23 +409,12 @@ export function ReceiveQortOverlay({
                   onClick={handleDownloadQr}
                   startIcon={<DownloadRoundedIcon sx={{ fontSize: '1rem' }} />}
                   sx={{
-                    backgroundColor: theme.palette.primary.main,
-                    border: isDarkMode
-                      ? '1px solid rgba(255,255,255,0.07)'
-                      : '1px solid rgba(255,255,255,0.3)',
                     borderRadius: '12px',
-                    boxShadow: isDarkMode
-                      ? '0 12px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.08)'
-                      : '0 10px 24px rgba(45, 84, 138, 0.18), inset 0 1px 0 rgba(255,255,255,0.28)',
-                    color: '#fff',
+                    ...getBlueTier1ButtonSx(),
                     fontSize: '0.84rem',
                     fontWeight: 600,
                     minHeight: 44,
                     textTransform: 'none',
-                    '&:hover': {
-                      backgroundColor: theme.palette.primary.main,
-                      filter: 'brightness(1.05)',
-                    },
                   }}
                 >
                   Download QR

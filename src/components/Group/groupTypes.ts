@@ -3,5 +3,6 @@ export interface GroupProps {
   desktopViewMode: string;
   isMain?: boolean;
   logoutFunc?: () => Promise<void>;
+  onOpenSettings?: () => void;
   setDesktopViewMode: (mode: string) => void;
 }

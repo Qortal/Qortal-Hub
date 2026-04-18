@@ -77,7 +77,10 @@ export const DecryptedText = ({
     const tick = () => {
       const step = stepRef.current;
       const progress = sequential
-        ? Math.min(text.length, Math.ceil(((step + 1) / maxIterations) * text.length))
+        ? Math.min(
+            text.length,
+            Math.ceil(((step + 1) / maxIterations) * text.length)
+          )
         : 0;
 
       const chars = text.split('').map((char, index) => {

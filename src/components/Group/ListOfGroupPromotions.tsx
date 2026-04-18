@@ -432,7 +432,7 @@ export const ListOfGroupPromotions = ({
   const promotionsList = (
     <Box
       sx={{
-        bgcolor: 'background.paper',
+        bgcolor: compact ? 'transparent' : 'background.paper',
         borderRadius: compact ? 0 : '16px',
         display: 'flex',
         flexDirection: 'column',

@@ -72,6 +72,33 @@ const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
 const SIDEBAR_CHROME_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 
+const restrictTabsToHorizontalAxis = ({ transform }) => ({
+  ...transform,
+  y: 0,
+});
+
+const restrictTabsToStrip = ({
+  activeNodeRect,
+  containerNodeRect,
+  transform,
+}) => {
+  if (!activeNodeRect || !containerNodeRect) {
+    return {
+      ...transform,
+      y: 0,
+    };
+  }
+
+  const minX = containerNodeRect.left - activeNodeRect.left;
+  const maxX = containerNodeRect.right - activeNodeRect.right;
+
+  return {
+    ...transform,
+    x: Math.min(Math.max(transform.x, minX), maxX),
+    y: 0,
+  };
+};
+
 function normalizeQortalInput(value: string) {
   const trimmed = (value || '').trim();
   if (!trimmed) return '';
@@ -805,11 +832,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
       >
         <AppsHorizontalTabBar
           sx={{
-            marginLeft: `${sidebarOffsetPx}px`,
-            transition: `margin-left ${SIDEBAR_CHROME_TRANSITION}, width ${SIDEBAR_CHROME_TRANSITION}, opacity ${show ? '200ms ease-out' : '140ms ease-in'}, transform ${show ? '200ms ease-out' : '140ms ease-in'}`,
-            width: sidebarOffsetPx
-              ? `calc(100% - ${sidebarOffsetPx}px)`
-              : '100%',
+            transition: `opacity ${show ? '200ms ease-out' : '140ms ease-in'}, transform ${show ? '200ms ease-out' : '140ms ease-in'}`,
             opacity: show ? 1 : 0,
             transform: show ? 'translateY(0px)' : 'translateY(-10px)',
             willChange: 'opacity, transform',
@@ -820,10 +843,13 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
             sx={{
               alignItems: 'stretch',
               gap: '2px',
+              paddingLeft: `calc(6px + ${sidebarOffsetPx}px)`,
+              transition: `padding-left ${SIDEBAR_CHROME_TRANSITION}`,
             }}
           >
             <DndContext
               collisionDetection={closestCenter}
+              modifiers={[restrictTabsToHorizontalAxis, restrictTabsToStrip]}
               onDragEnd={handleTabDragEnd}
               sensors={sensors}
             >
@@ -837,6 +863,9 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
                     flex: '0 1 auto',
                     gap: '2px',
                     minWidth: 0,
+                    maxWidth: 'calc(100% - 34px)',
+                    overflow: 'hidden',
+                    width: 'fit-content',
                   }}
                 >
                   {tabs.map((tab) => (

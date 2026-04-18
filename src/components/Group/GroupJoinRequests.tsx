@@ -204,7 +204,7 @@ export const GroupJoinRequests = ({
   const listContent = (
     <Box
       sx={{
-        bgcolor: theme.palette.background.paper,
+        bgcolor: compact ? 'transparent' : theme.palette.background.paper,
         borderRadius: compact ? '0' : '12px',
         display: 'flex',
         flexDirection: 'column',

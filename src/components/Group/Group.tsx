@@ -187,6 +187,7 @@ export const Group = ({
   myAddress,
   setDesktopViewMode,
   desktopViewMode,
+  onOpenSettings,
 }: GroupProps) => {
   const [desktopSideView, setDesktopSideView] = useState('groups');
   const [chatWidgetClosed, setChatWidgetClosed] = useAtom(chatWidgetClosedAtom);
@@ -2101,6 +2102,7 @@ export const Group = ({
             refreshHomeDataFunc={refreshHomeDataFunc}
             myAddress={myAddress}
             isLoadingGroups={isLoadingGroups}
+            onOpenSettings={onOpenSettings}
             setGroupSection={setGroupSection}
             setSelectedGroup={setSelectedGroup}
             getTimestampEnterChat={getTimestampEnterChat}

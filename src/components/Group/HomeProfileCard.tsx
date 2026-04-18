@@ -2,17 +2,18 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import {
   Avatar,
   Box,
-  Button,
   ButtonBase,
   Portal,
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { LoadingButton } from '@mui/lab';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseIcon from '@mui/icons-material/Close';
 import ErrorIcon from '@mui/icons-material/Error';
 import PersonIcon from '@mui/icons-material/Person';
+import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
@@ -38,10 +39,16 @@ import {
   handleDashboardPanelPointerMove,
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
-import { getBlueAmbientSeamBackground } from './groupActivityColorSystem';
 import { DecryptedText } from '../common/DecryptedText';
+import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
+import BorderGlow from '../common/BorderGlow';
+import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
 
-export const HomeProfileCard = () => {
+type HomeProfileCardProps = {
+  onOpenSettings?: () => void;
+};
+
+export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const { t } = useTranslation(['tutorial', 'core', 'group']);
   const theme = useTheme();
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -50,7 +57,6 @@ export const HomeProfileCard = () => {
   const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
 
   const avatarAnchorRef = useRef<HTMLButtonElement | null>(null);
-  const editProfileButtonRef = useRef<HTMLButtonElement | null>(null);
   const avatarPanelRef = useRef<HTMLDivElement | null>(null);
   const [avatarError, setAvatarError] = useState(false);
   const [tempAvatar, setTempAvatar] = useState<string | null>(null);
@@ -65,6 +71,7 @@ export const HomeProfileCard = () => {
   const [avatarPanelHeight, setAvatarPanelHeight] = useState(430);
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isAddressFieldHovered, setIsAddressFieldHovered] = useState(false);
+  const [isAvatarGlowHovered, setIsAvatarGlowHovered] = useState(false);
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
@@ -111,10 +118,6 @@ export const HomeProfileCard = () => {
 
   useEffect(() => {
     const openFromEvent = () => {
-      if (editProfileButtonRef.current) {
-        openAvatarPanel(editProfileButtonRef.current);
-        return;
-      }
       if (avatarAnchorRef.current) {
         openAvatarPanel(avatarAnchorRef.current);
       }
@@ -156,6 +159,13 @@ export const HomeProfileCard = () => {
 
   const name = userInfo?.name;
   const address = userInfo?.address;
+  const hasRegisteredName = Boolean(name);
+  const accountIdentityPrimaryText = hasRegisteredName
+    ? name ?? '—'
+    : address ?? '—';
+  const accountIdentitySecondaryText = address ?? '—';
+  const shouldRevealAddressOnHover = hasRegisteredName && Boolean(address);
+  const showAnimatedAddress = shouldRevealAddressOnHover && isAddressFieldHovered;
   const avatarUrl =
     tempAvatar ??
     (name && !avatarError
@@ -230,9 +240,8 @@ export const HomeProfileCard = () => {
   };
 
   const isAvatarPanelOpen = Boolean(avatarAnchorEl);
-  const avatarPanelOriginRadius = avatarAnchorEl === avatarAnchorRef.current ? 999 : 10;
-  const avatarPanelTargetRadius =
-    avatarAnchorEl === editProfileButtonRef.current ? 10 : 18;
+  const avatarPanelOriginRadius = 22;
+  const avatarPanelTargetRadius = 20;
   const avatarPanelWidth =
     typeof window === 'undefined'
       ? 332
@@ -317,388 +326,389 @@ export const HomeProfileCard = () => {
     <Box
       ref={panelRef}
       sx={{
-        ...dashboardPanelSx(theme),
-        backgroundColor: isDarkMode ? '#24272f' : theme.palette.background.paper,
-        backgroundImage:
-          isDarkMode
-            ? 'linear-gradient(180deg, #24272f 0%, #24272f 50%, #1B1D24 100%)'
-            : 'linear-gradient(180deg, rgba(248,244,237,0.98) 0%, rgba(244,239,231,1) 52%, rgba(230,222,210,1) 100%)',
+        ...dashboardPanelSx(theme, 'accent'),
         alignItems: 'center',
         borderRadius: '14px',
         display: 'grid',
         gap: {
           xs: '18px',
-          md: '20px',
+          md: '16px',
         },
         gridTemplateColumns: {
           xs: '1fr',
-          md: 'auto minmax(0, 1fr) 72px',
+          md: '104px minmax(0, 1fr) 104px',
         },
-        padding: '20px 22px',
+        minHeight: '164px',
+        padding: '22px 24px',
         width: '100%',
       }}
       onMouseMove={handleDashboardPanelPointerMove}
       onMouseLeave={handleDashboardPanelPointerLeave}
     >
       <Box
-        className="dashboard-panel-decoration"
-        aria-hidden="true"
         sx={{
-          position: 'absolute',
-          inset: 0,
-          pointerEvents: 'none',
-          zIndex: 0,
-          borderRadius: 'inherit',
-          overflow: 'hidden',
-        }}
-      >
-        <Box
-          sx={{
-            position: 'absolute',
-            left: '8px',
-            right: '8px',
-            top: 0,
-            height: '1px',
-            background:
-              isDarkMode
-                ? 'linear-gradient(90deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.18) 10%, rgba(255,255,255,0.24) 22%, rgba(255,255,255,0.22) 30%, rgba(255,255,255,0) 39%, rgba(255,255,255,0) 61%, rgba(255,255,255,0.22) 70%, rgba(255,255,255,0.24) 78%, rgba(255,255,255,0.18) 90%, rgba(255,255,255,0.1) 100%)'
-                : 'linear-gradient(90deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.46) 12%, rgba(255,255,255,0.58) 24%, rgba(255,255,255,0.5) 34%, rgba(255,255,255,0.16) 50%, rgba(255,255,255,0.5) 66%, rgba(255,255,255,0.58) 76%, rgba(255,255,255,0.46) 88%, rgba(255,255,255,0.32) 100%)',
-            filter: 'blur(0.08px)',
-          }}
-        />
-        <Box
-          sx={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            width: '7px',
-            height: '7px',
-            borderTopLeftRadius: '7px',
-            borderLeft:
-              isDarkMode
-                ? '1px solid rgba(255,255,255,0.176)'
-                : '1px solid rgba(255,255,255,0.72)',
-            borderTop:
-              isDarkMode
-                ? '1px solid rgba(255,255,255,0.176)'
-                : '1px solid rgba(255,255,255,0.72)',
-          }}
-        />
-        <Box
-          sx={{
-            position: 'absolute',
-            right: 0,
-            top: 0,
-            width: '7px',
-            height: '7px',
-            borderTopRightRadius: '7px',
-            borderRight:
-              isDarkMode
-                ? '1px solid rgba(255,255,255,0.176)'
-                : '1px solid rgba(255,255,255,0.72)',
-            borderTop:
-              isDarkMode
-                ? '1px solid rgba(255,255,255,0.176)'
-                : '1px solid rgba(255,255,255,0.72)',
-          }}
-        />
-        <Box
-          sx={{
-            position: 'absolute',
-            left: 0,
-            top: '7px',
-            width: '1px',
-            height: 'calc(100% - 7px)',
-            background:
-              isDarkMode
-                ? 'linear-gradient(180deg, rgba(255,255,255,0.192) 0%, rgba(255,255,255,0.096) 18%, rgba(255,255,255,0.04) 38%, rgba(255,255,255,0.0144) 56%, transparent 82%)'
-                : 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.34) 22%, rgba(255,255,255,0.14) 40%, rgba(255,255,255,0.04) 58%, transparent 82%)',
-            filter: 'blur(0.08px)',
-          }}
-        />
-        <Box
-          sx={{
-            position: 'absolute',
-            right: 0,
-            top: '7px',
-            width: '1px',
-            height: 'calc(100% - 7px)',
-            background:
-              isDarkMode
-                ? 'linear-gradient(180deg, rgba(255,255,255,0.192) 0%, rgba(255,255,255,0.096) 18%, rgba(255,255,255,0.04) 38%, rgba(255,255,255,0.0144) 56%, transparent 82%)'
-                : 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.34) 22%, rgba(255,255,255,0.14) 40%, rgba(255,255,255,0.04) 58%, transparent 82%)',
-            filter: 'blur(0.08px)',
-          }}
-        />
-      </Box>
-      <Box
-        className="dashboard-panel-decoration"
-        aria-hidden="true"
-        sx={{
-          position: 'absolute',
-          left: '0.875%',
-          right: '0.875%',
-          top: isDarkMode ? 0 : 0,
-          transform: isDarkMode ? 'translateY(-50%)' : 'translateY(-32%)',
-          height: isDarkMode ? '3.3px' : '2px',
-          pointerEvents: 'none',
-          zIndex: isDarkMode ? -1 : 0,
-          background: getBlueAmbientSeamBackground(theme, 'strong'),
-          filter: isDarkMode ? 'blur(0.72px)' : 'blur(0.28px)',
-          opacity: isDarkMode ? 1 : 0.92,
-        }}
-      />
-      <Box
-        sx={{
-          alignItems: {
-            xs: 'flex-start',
-            md: 'center',
-          },
+          alignItems: 'center',
           display: 'flex',
-          flexDirection: {
-            xs: 'row',
-            md: 'column',
-          },
-          gap: '10px',
-          minWidth: {
-            xs: 0,
-            md: '108px',
-          },
+          flexDirection: 'column',
+          gap: '6px',
+          justifyContent: 'center',
+          width: '104px',
         }}
       >
-        <ButtonBase
-          ref={avatarAnchorRef}
-          onClick={(e) => openAvatarPanel(e.currentTarget)}
-          sx={{ borderRadius: '50%' }}
-        >
-          <Avatar
-            src={avatarUrl ?? undefined}
-            onError={() => setAvatarError(true)}
-            sx={{
-              bgcolor: isDarkMode ? '#636772' : '#E7DED0',
-              height: 60,
-              width: 60,
-            }}
-          >
-            <PersonIcon
-              sx={{
-                color: isDarkMode ? '#1D2126' : theme.palette.text.secondary,
-                fontSize: 34,
-              }}
-            />
-          </Avatar>
-        </ButtonBase>
-        <Button
-          ref={editProfileButtonRef}
-          variant="outlined"
-          onClick={(e) => openAvatarPanel(e.currentTarget)}
-          sx={{
-            backgroundColor: isDarkMode ? '#1B1E25' : theme.palette.background.surface,
-            borderColor: theme.palette.border.subtle,
-            borderRadius: '10px',
-            color: theme.palette.text.primary,
-            fontSize: '0.68rem',
-            fontWeight: 600,
-            lineHeight: 1,
-            minWidth: 'auto',
-            px: 1.4,
-            py: 0.72,
-            transition: 'background-color 160ms ease, border-color 160ms ease, color 160ms ease',
-            textTransform: 'uppercase',
-            '&:hover': {
-              backgroundColor: isDarkMode ? '#181a20' : '#E8DECF',
-              borderColor: theme.palette.border.main,
-              color: theme.palette.text.primary,
-            },
+        <BorderGlow
+          animated={isAvatarGlowHovered}
+          loopAnimated={true}
+          interactive={false}
+          edgeSensitivity={20}
+          glowColor={isDarkMode ? '218 79 73' : '218 72 70'}
+          backgroundColor="transparent"
+          borderRadius={26}
+          glowRadius={50}
+          glowIntensity={isDarkMode ? 0.3 : 0.42}
+          coneSpread={25}
+          colors={[
+            GROUP_ACTIVITY_BLUE.gradientTop,
+            GROUP_ACTIVITY_BLUE.primary,
+            GROUP_ACTIVITY_BLUE.hover,
+          ]}
+          fillOpacity={0.32}
+          style={{
+            '--card-border': 'transparent',
+            '--card-shadow': 'none',
+            width: 'fit-content',
           }}
         >
-          <Box
-            component={motion.span}
-            animate={{
-              opacity: isAvatarPanelOpen ? 0 : 1,
-              y: isAvatarPanelOpen ? -2 : 0,
+          <ButtonBase
+            ref={avatarAnchorRef}
+            onClick={(e) => openAvatarPanel(e.currentTarget)}
+            onMouseEnter={() => setIsAvatarGlowHovered(true)}
+            onMouseLeave={() => setIsAvatarGlowHovered(false)}
+            sx={{
+              background: isDarkMode
+                ? 'linear-gradient(180deg, rgba(255,255,255,0.062) 0%, rgba(255,255,255,0.02) 100%)'
+                : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.36) 100%)',
+              border: `1px solid ${
+                isDarkMode
+                  ? 'rgba(255,255,255,0.08)'
+                  : alpha(theme.palette.common.white, 0.54)
+              }`,
+              borderRadius: '22px',
+              boxShadow: isDarkMode
+                ? '0 1px 4px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18)'
+                : '0 1px 3px rgba(28,36,52,0.08), inset 0 1px 0 rgba(255,255,255,0.42)',
+              display: 'inline-flex',
+              overflow: 'hidden',
+              padding: '3px',
+              transition: 'border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease',
+              '&:hover': {
+                borderColor: isDarkMode
+                  ? 'rgba(255,255,255,0.12)'
+                  : alpha(theme.palette.common.white, 0.74),
+                boxShadow: isDarkMode
+                  ? '0 0 0 3px rgba(132,175,240,0.08), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -1px 0 rgba(0,0,0,0.18)'
+                  : '0 0 0 3px rgba(132,175,240,0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
+              },
             }}
-            transition={{ duration: 0.14, ease: [0.2, 0, 0, 1] }}
-            sx={{ display: 'inline-flex' }}
           >
-            Edit profile
-          </Box>
-        </Button>
+            <Avatar
+              src={avatarUrl ?? undefined}
+              onError={() => setAvatarError(true)}
+              sx={{
+                bgcolor: isDarkMode ? '#636772' : '#E7DED0',
+                borderRadius: '22px',
+                height: 88,
+                width: 88,
+              }}
+            >
+              <PersonIcon
+                sx={{
+                  color: isDarkMode ? '#1D2126' : theme.palette.text.secondary,
+                  fontSize: 44,
+                }}
+              />
+            </Avatar>
+          </ButtonBase>
+        </BorderGlow>
+        <Typography
+          sx={{
+            color: theme.palette.mode === 'dark'
+              ? alpha(theme.palette.common.white, 0.48)
+              : alpha(theme.palette.text.primary, 0.5),
+            fontSize: '0.6rem',
+            letterSpacing: '0.01em',
+            opacity: 1,
+            lineHeight: 1.1,
+            textAlign: 'center',
+            userSelect: 'none',
+            width: '100%',
+          }}
+        >
+          Edit profile
+        </Typography>
       </Box>
 
       <Box
         sx={{
-          alignItems: {
-            xs: 'flex-start',
-            md: 'center',
-          },
+          alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
+          justifyContent: 'center',
           gap: '8px',
           minWidth: 0,
           width: '100%',
         }}
       >
-        <Typography
-          sx={{
-            color: theme.palette.text.primary,
-            fontSize: '1rem',
-            fontWeight: 600,
-            textAlign: {
-              xs: 'left',
-              md: 'center',
-            },
-            width: '100%',
-          }}
-        >
-          Account Overview
-        </Typography>
-
         <Box
           sx={{
             alignItems: 'center',
-            bgcolor: isDarkMode ? '#1B1E25' : '#E7DDCE',
-            border: `1px solid ${theme.palette.border.subtle}`,
-            borderRadius: '10px',
-            cursor: address ? 'pointer' : 'default',
             display: 'flex',
-            gap: '10px',
-            maxWidth: '381px',
-            minHeight: '44px',
-            position: 'relative',
-            px: 1.5,
-            py: 1,
-            transition: 'background-color 160ms ease, border-color 160ms ease',
+            flexDirection: 'column',
+            gap: '8px',
+            maxWidth: '430px',
+            minWidth: 0,
             width: '100%',
-            '&:hover': address
-              ? {
-                  backgroundColor: isDarkMode ? '#181a20' : '#DDD2C2',
-                  borderColor: theme.palette.border.main,
-                  '& .wallet-address-overlay': {
-                    color: theme.palette.text.primary,
-                  },
-                }
-              : undefined,
           }}
-          onClick={address ? handleCopyAddress : undefined}
-          onMouseEnter={address ? () => setIsAddressFieldHovered(true) : undefined}
-          onMouseLeave={address ? () => setIsAddressFieldHovered(false) : undefined}
-          onKeyDown={
-            address
-              ? (event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    handleCopyAddress();
-                  }
-                }
-              : undefined
-          }
-          role={address ? 'button' : undefined}
-          tabIndex={address ? 0 : undefined}
         >
           <Typography
             sx={{
-              color: 'transparent',
-              flex: 1,
-              fontFamily: 'monospace',
-              fontSize: '0.76rem',
-              overflow: 'hidden',
-              position: 'relative',
-              textAlign: {
-                xs: 'left',
-                md: 'center',
-              },
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              color: isDarkMode
+                ? alpha(theme.palette.common.white, 0.9)
+                : alpha(theme.palette.text.primary, 0.9),
+              fontSize: '0.95rem',
+              fontWeight: 560,
+              letterSpacing: '-0.01em',
+              textAlign: 'center',
+              width: '100%',
             }}
           >
-            {address ?? '—'}
+            Account Overview
           </Typography>
+
           <Box
-            className="wallet-address-overlay"
-            sx={{
-              color: theme.palette.text.secondary,
-              fontFamily: 'monospace',
-              fontSize: '0.76rem',
-              left: '12px',
-              overflow: 'hidden',
-              pointerEvents: 'none',
-              position: 'absolute',
-              right: '44px',
-              textAlign: {
-                xs: 'left',
-                md: 'center',
-              },
-              textOverflow: 'ellipsis',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              transition: 'color 160ms ease',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Box sx={{ pointerEvents: 'auto' }}>
-              <DecryptedText
-                text={address ?? '-'}
-                animateOn="hover"
-                active={isAddressFieldHovered}
-                speed={35}
-                maxIterations={12}
-                sequential={true}
-                revealDirection="start"
-                useOriginalCharsOnly={true}
-              />
-            </Box>
-          </Box>
-          <ButtonBase
-            onClick={(event) => {
-              event.stopPropagation();
-              handleCopyAddress();
-            }}
-            disabled={!address}
             sx={{
               alignItems: 'center',
-              borderRadius: '8px',
+              bgcolor: isDarkMode ? '#1A1E26' : '#E7DDCE',
+              border: `1px solid ${
+                isDarkMode
+                  ? 'rgba(255,255,255,0.09)'
+                  : theme.palette.border.main
+              }`,
+              borderRadius: '10px',
+              boxShadow: isDarkMode
+                ? 'inset 0 1px 0 rgba(255,255,255,0.045)'
+                : 'inset 0 1px 0 rgba(255,255,255,0.28)',
+              cursor: address ? 'pointer' : 'default',
+              display: 'flex',
+              gap: '10px',
+              minHeight: '48px',
+              position: 'relative',
+              px: 1.5,
+              py: 1,
+              transition: 'background-color 160ms ease, border-color 160ms ease',
+              width: '100%',
+              '&:hover': address
+                ? {
+                    backgroundColor: isDarkMode ? '#181c23' : '#DDD2C2',
+                    borderColor: theme.palette.border.main,
+                    '& .wallet-address-overlay': {
+                      color: theme.palette.text.primary,
+                    },
+                  }
+                : undefined,
+            }}
+            onClick={address ? handleCopyAddress : undefined}
+            onMouseEnter={
+              shouldRevealAddressOnHover
+                ? () => setIsAddressFieldHovered(true)
+                : undefined
+            }
+            onMouseLeave={
+              shouldRevealAddressOnHover
+                ? () => setIsAddressFieldHovered(false)
+                : undefined
+            }
+            onKeyDown={
+              address
+                ? (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleCopyAddress();
+                    }
+                  }
+                : undefined
+            }
+            role={address ? 'button' : undefined}
+            tabIndex={address ? 0 : undefined}
+          >
+            <Typography
+              sx={{
+                color: 'transparent',
+                flex: 1,
+                fontFamily: shouldRevealAddressOnHover
+                  ? 'monospace'
+                  : hasRegisteredName
+                    ? 'inherit'
+                    : 'monospace',
+                fontSize: '0.84rem',
+                overflow: 'hidden',
+                position: 'relative',
+                textAlign: 'center',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {showAnimatedAddress
+                ? accountIdentitySecondaryText
+                : accountIdentityPrimaryText}
+            </Typography>
+            <Box
+              className="wallet-address-overlay"
+              sx={{
+                color: theme.palette.mode === 'dark'
+                  ? 'rgba(236, 241, 248, 0.9)'
+                  : theme.palette.text.secondary,
+                fontFamily: shouldRevealAddressOnHover
+                  ? showAnimatedAddress
+                    ? 'monospace'
+                    : 'inherit'
+                  : hasRegisteredName
+                    ? 'inherit'
+                    : 'monospace',
+                fontSize: '0.84rem',
+                left: '12px',
+                overflow: 'hidden',
+                pointerEvents: 'none',
+                position: 'absolute',
+                right: '44px',
+                textAlign: 'center',
+                textOverflow: 'ellipsis',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                transition: 'color 160ms ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {shouldRevealAddressOnHover ? (
+                showAnimatedAddress ? (
+                  <Box sx={{ pointerEvents: 'auto' }}>
+                    <DecryptedText
+                      text={accountIdentitySecondaryText}
+                      animateOn="hover"
+                      active={showAnimatedAddress}
+                      speed={35}
+                      maxIterations={12}
+                      sequential={true}
+                      revealDirection="start"
+                      useOriginalCharsOnly={true}
+                    />
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {accountIdentityPrimaryText}
+                  </Box>
+                )
+              ) : (
+                <Box
+                  sx={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {accountIdentityPrimaryText}
+                </Box>
+              )}
+            </Box>
+            <ButtonBase
+              onClick={(event) => {
+                event.stopPropagation();
+                handleCopyAddress();
+              }}
+              disabled={!address}
+              sx={{
+                alignItems: 'center',
+                borderRadius: '8px',
+                color: theme.palette.text.secondary,
+                display: 'inline-flex',
+                flexShrink: 0,
+                height: '26px',
+                justifyContent: 'center',
+                width: '26px',
+                '&:hover': {
+                  backgroundColor: theme.palette.action.hover,
+                  color: theme.palette.text.primary,
+                },
+              }}
+            >
+              <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
+            </ButtonBase>
+          </Box>
+
+          <Typography
+            sx={{
               color: theme.palette.text.secondary,
-              display: 'inline-flex',
-              flexShrink: 0,
-              height: '26px',
-              justifyContent: 'center',
-              width: '26px',
-              '&:hover': {
-                backgroundColor: theme.palette.action.hover,
-                color: theme.palette.text.primary,
-              },
+              fontSize: '0.64rem',
+              letterSpacing: '0.05em',
+              opacity: 0.88,
+              textAlign: 'center',
+              textTransform: 'uppercase',
+              width: '100%',
             }}
           >
-            <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
-          </ButtonBase>
+            QORTAL NAME & ADDRESS
+          </Typography>
         </Box>
-
-        <Typography
-          sx={{
-            color: theme.palette.text.secondary,
-            fontSize: '0.64rem',
-            letterSpacing: '0.05em',
-            textAlign: {
-              xs: 'left',
-              md: 'center',
-            },
-            textTransform: 'uppercase',
-            width: '100%',
-          }}
-        >
-          QORT Wallet Address
-        </Typography>
       </Box>
 
       <Box
         sx={{
-          display: {
-            xs: 'none',
-            md: 'block',
+          alignItems: 'flex-start',
+          display: 'flex',
+          justifyContent: {
+            xs: 'flex-end',
+            md: 'flex-end',
           },
+          justifySelf: 'stretch',
+          minHeight: '100%',
+          width: '104px',
         }}
-      />
+      >
+        {onOpenSettings && (
+          <ButtonBase
+            onClick={onOpenSettings}
+            aria-label={t('core:settings')}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '10px',
+              color: theme.palette.text.secondary,
+              display: 'inline-flex',
+              height: 32,
+              justifyContent: 'center',
+              opacity: 0.52,
+              backgroundColor: 'transparent',
+              transition:
+                'background-color 160ms ease, color 160ms ease, opacity 160ms ease, transform 120ms ease',
+              width: 32,
+              '&:hover': {
+                backgroundColor: alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.06 : 0.18),
+                color: theme.palette.text.primary,
+                opacity: 1,
+              },
+              '&:active': {
+                transform: 'translateY(1px)',
+              },
+            }}
+          >
+            <SettingsRoundedIcon sx={{ fontSize: 19 }} />
+          </ButtonBase>
+        )}
+      </Box>
 
       <Portal>
         <AnimatePresence>
@@ -1057,23 +1067,12 @@ export const HomeProfileCard = () => {
                         variant="contained"
                         fullWidth
                         sx={{
-                          backgroundColor: theme.palette.primary.main,
-                          border: isDarkMode
-                            ? '1px solid rgba(255,255,255,0.07)'
-                            : '1px solid rgba(255,255,255,0.3)',
                           borderRadius: '12px',
-                          boxShadow: isDarkMode
-                            ? '0 10px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08)'
-                            : '0 10px 22px rgba(45, 84, 138, 0.16), inset 0 1px 0 rgba(255,255,255,0.32)',
-                          color: '#fff',
+                          ...getBlueTier1ButtonSx(),
                           fontSize: '0.82rem',
                           fontWeight: 600,
                           minHeight: 44,
                           textTransform: 'none',
-                          '&:hover': {
-                            backgroundColor: theme.palette.primary.main,
-                            filter: 'brightness(1.06)',
-                          },
                           '&.Mui-disabled': {
                             background: isDarkMode
                               ? 'rgba(255,255,255,0.035)'

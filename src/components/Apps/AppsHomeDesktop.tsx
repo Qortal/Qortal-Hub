@@ -17,6 +17,7 @@ import {
   useTheme,
 } from '@mui/material';
 import AppsIcon from '@mui/icons-material/Apps';
+import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import LinkIcon from '@mui/icons-material/Link';
@@ -455,6 +456,24 @@ export const AppsHomeDesktop = ({
           justifyContent: 'flex-start',
         }}
       >
+        <ButtonBase
+          onClick={() => {
+            executeEvent('open-home-mode', {});
+          }}
+        >
+          <AppCircleContainer
+            sx={{
+              gap: '10px',
+            }}
+          >
+            <AppCircle>
+              <HomeRoundedIcon />
+            </AppCircle>
+
+            <AppCircleLabel>Home</AppCircleLabel>
+          </AppCircleContainer>
+        </ButtonBase>
+
         <ButtonBase
           onClick={() => {
             setMode('library');

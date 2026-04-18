@@ -16,6 +16,7 @@ import { getFee } from '../background/background.ts';
 import { useTranslation } from 'react-i18next';
 import BoundedNumericTextField from '../common/BoundedNumericTextField.tsx';
 import { ErrorText } from './ErrorText/ErrorText.tsx';
+import { getBlueTier1ButtonSx } from '../styles/blueMaterial';
 
 export const QortPayment = ({
   balance,
@@ -338,23 +339,12 @@ export const QortPayment = ({
           sendCoinFunc();
         }}
         sx={{
-          backgroundColor: theme.palette.primary.main,
-          border: isDarkMode
-            ? '1px solid rgba(255,255,255,0.07)'
-            : '1px solid rgba(255,255,255,0.3)',
           borderRadius: '14px',
-          boxShadow: isDarkMode
-            ? '0 12px 28px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.08)'
-            : '0 10px 24px rgba(45, 84, 138, 0.18), inset 0 1px 0 rgba(255,255,255,0.28)',
-          color: '#fff',
+          ...getBlueTier1ButtonSx(),
           fontSize: '0.86rem',
           fontWeight: 600,
           minHeight: compact ? 44 : 46,
           textTransform: 'none',
-          '&:hover': {
-            backgroundColor: theme.palette.primary.main,
-            filter: 'brightness(1.05)',
-          },
         }}
         startIcon={
           isLoadingSendCoin ? (

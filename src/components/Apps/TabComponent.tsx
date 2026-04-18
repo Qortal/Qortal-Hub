@@ -17,6 +17,10 @@ import { alpha } from '@mui/material/styles';
 import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
 import {
+  APP_BLUE_SURFACE_TEXT,
+  getBlueTier1PillSurface,
+} from '../../styles/blueMaterial';
+import {
   AppsHorizontalTabButton,
   AppsHorizontalTabLabel,
 } from './Apps-styles';
@@ -61,10 +65,8 @@ const TabComponent = ({
   } | null>(null);
   const label =
     app?.privateAppProperties?.name || app?.metadata?.title || app?.name || '';
-  const selectedTabTextColor =
-    theme.palette.mode === 'dark'
-      ? theme.palette.common.white
-      : theme.palette.primary.contrastText;
+  const selectedTabSurface = getBlueTier1PillSurface(theme);
+  const selectedTabTextColor = APP_BLUE_SURFACE_TEXT;
   const dndStyle = {
     transform: CSS.Transform.toString(
       transform
@@ -95,17 +97,17 @@ const TabComponent = ({
         });
       }}
       sx={{
-        backgroundColor: isVisuallySelected
-          ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.78 : 0.88)
+        background: isVisuallySelected
+          ? selectedTabSurface.background
           : theme.palette.mode === 'dark'
             ? alpha(theme.palette.common.white, 0.03)
             : alpha(theme.palette.common.black, 0.03),
         borderColor: isVisuallySelected
-          ? 'transparent'
+          ? alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.045 : 0.035)
           : theme.palette.mode === 'dark'
             ? alpha(theme.palette.common.white, 0.03)
             : alpha(theme.palette.common.black, 0.04),
-        boxShadow: 'none',
+        boxShadow: isVisuallySelected ? selectedTabSurface.boxShadow : 'none',
         color: isVisuallySelected
           ? selectedTabTextColor
           : theme.palette.text.secondary,
@@ -124,11 +126,12 @@ const TabComponent = ({
           opacity: 0.96,
         }),
         '&:hover': {
-          backgroundColor: isVisuallySelected
-            ? alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.92 : 0.98)
+          background: isVisuallySelected
+            ? selectedTabSurface.background
             : theme.palette.mode === 'dark'
               ? alpha(theme.palette.common.white, 0.06)
               : alpha(theme.palette.common.black, 0.06),
+          boxShadow: isVisuallySelected ? selectedTabSurface.boxShadow : undefined,
           color: isVisuallySelected
             ? selectedTabTextColor
             : theme.palette.text.primary,
@@ -150,7 +153,7 @@ const TabComponent = ({
           sx={{
             alignItems: 'center',
             color: isVisuallySelected
-              ? theme.palette.primary.contrastText
+              ? selectedTabTextColor
               : theme.palette.text.secondary,
             display: 'flex',
             height: '22px',

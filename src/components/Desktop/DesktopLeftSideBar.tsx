@@ -8,6 +8,14 @@ import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qortalLogoOfficial from '../../assets/sidebar/qortal-logo-official.png';
 import { hasUnreadGroupsAtom } from '../../atoms/global';
 import { executeEvent } from '../../utils/events';
+import {
+  DASHBOARD_LOGIN_INTRO_PREVIEW_EVENT,
+  DASHBOARD_LOGIN_INTRO_PREVIEW_STORAGE_KEY,
+  getDashboardLoginIntroModeLabel,
+  getNextDashboardLoginIntroMode,
+  parseDashboardLoginIntroMode,
+  type DashboardLoginIntroMode,
+} from '../App/dashboardIntroPreview';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
@@ -160,6 +168,12 @@ export const DesktopSideBar = ({
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
   });
+  const [debugDashboardIntroMode, setDebugDashboardIntroMode] =
+    useState<DashboardLoginIntroMode>(() =>
+      parseDashboardLoginIntroMode(
+        localStorage.getItem(DASHBOARD_LOGIN_INTRO_PREVIEW_STORAGE_KEY)
+      )
+    );
   const [debugGettingStartedOverrides, setDebugGettingStartedOverrides] =
     useState<GettingStartedDebugOverrides>(() =>
       parseGettingStartedDebugOverrides(
@@ -188,6 +202,14 @@ export const DesktopSideBar = ({
     if (desktopViewMode === 'chat') return theme.palette.text.primary;
     return theme.palette.text.secondary;
   }, [desktopViewMode, theme.palette.text.primary, theme.palette.text.secondary]);
+  const sidebarSurfaceColor =
+    theme.palette.mode === 'dark'
+      ? 'rgb(36, 39, 45)'
+      : theme.palette.background.paper;
+  const sidebarSurfaceShadow =
+    theme.palette.mode === 'dark'
+      ? '8px 0 18px rgba(0, 0, 0, 0.12)'
+      : '6px 0 14px rgba(0,0,0,0.04)';
 
   const debugToggleSx = {
     borderRadius: '10px',
@@ -411,7 +433,13 @@ export const DesktopSideBar = ({
           top: 0,
           bottom: 0,
           width: `${SIDEBAR_WIDTH_PX}px`,
+          backgroundColor: sidebarSurfaceColor,
+          borderRight: `1px solid ${theme.palette.border.subtle}`,
+          boxShadow: sidebarSurfaceShadow,
+          opacity: isVisible ? 1 : 0,
           pointerEvents: 'none',
+          transition: `opacity ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,
+          overflow: 'hidden',
           zIndex: 9998,
         }}
       >
@@ -428,15 +456,6 @@ export const DesktopSideBar = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor:
-              theme.palette.mode === 'dark'
-                ? 'rgb(36, 39, 45)'
-                : theme.palette.background.paper,
-            borderRight: `1px solid ${theme.palette.border.subtle}`,
-            boxShadow:
-              theme.palette.mode === 'dark'
-                ? '8px 0 18px rgba(0, 0, 0, 0.12)'
-                : '6px 0 14px rgba(0,0,0,0.04)',
             transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
             transition: `transform ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,
             overflow: 'visible',
@@ -643,6 +662,36 @@ export const DesktopSideBar = ({
             sx={debugToggleSx}
           >
             Reset Onboarding
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => {
+              const nextMode = getNextDashboardLoginIntroMode(
+                debugDashboardIntroMode
+              );
+              setDebugDashboardIntroMode(nextMode);
+              localStorage.setItem(
+                DASHBOARD_LOGIN_INTRO_PREVIEW_STORAGE_KEY,
+                nextMode
+              );
+              executeEvent(DASHBOARD_LOGIN_INTRO_PREVIEW_EVENT, {
+                data: { mode: nextMode, replay: true },
+              });
+            }}
+            sx={getDebugToggleSx(debugDashboardIntroMode !== 'off')}
+          >
+            Login Intro: {getDashboardLoginIntroModeLabel(debugDashboardIntroMode)}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() =>
+              executeEvent(DASHBOARD_LOGIN_INTRO_PREVIEW_EVENT, {
+                data: { mode: debugDashboardIntroMode, replay: true },
+              })
+            }
+            sx={debugToggleSx}
+          >
+            Replay Intro
           </ButtonBase>
           <ButtonBase
             disableRipple

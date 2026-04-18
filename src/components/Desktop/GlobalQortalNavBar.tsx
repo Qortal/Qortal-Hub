@@ -294,11 +294,8 @@ export function GlobalQortalNavBar({
           boxShadow: navShadow,
           display: 'flex',
           height: `${APP_NAV_BAR_HEIGHT}px`,
-          marginLeft: `${sidebarOffsetPx}px`,
-          transition: `margin-left ${SIDEBAR_CHROME_TRANSITION}, width ${SIDEBAR_CHROME_TRANSITION}`,
-          width: sidebarOffsetPx
-            ? `calc(100% - ${sidebarOffsetPx}px)`
-            : '100%',
+          transition: `background-color 180ms ease, box-shadow 180ms ease`,
+          width: '100%',
         }}
       >
         <Box
@@ -308,8 +305,13 @@ export function GlobalQortalNavBar({
             gap: 1.25,
             height: '100%',
             maxWidth: '100%',
-            pl: { xs: 1.5, sm: 2, md: 2.5 },
+            pl: {
+              xs: `calc(12px + ${sidebarOffsetPx}px)`,
+              sm: `calc(16px + ${sidebarOffsetPx}px)`,
+              md: `calc(20px + ${sidebarOffsetPx}px)`,
+            },
             pr: { xs: 1.5, sm: 2, md: 2.25 },
+            transition: `padding-left ${SIDEBAR_CHROME_TRANSITION}`,
             width: '100%',
           }}
         >

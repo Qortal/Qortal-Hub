@@ -401,11 +401,13 @@ export const HomeGettingStarted = ({
     () => [
       {
         key: 'user-lookup',
+        description: 'Inspect profiles and recent activity.',
         label: 'Lookup User',
         icon: <PersonSearchIcon sx={{ fontSize: '1.5rem' }} />,
         onAction: () => executeEvent('openUserLookupDrawer', {}),
       },
       {
+        description: 'Manage balances, payments, and assets.',
         key: 'wallets',
         label: 'Open Wallets',
         icon: <AccountBalanceWalletIcon sx={{ fontSize: '1.62rem' }} />,
@@ -414,12 +416,14 @@ export const HomeGettingStarted = ({
       },
       {
         key: 'minting-status',
+        description: 'Check node health and minting progress.',
         label: 'Check Minting',
         icon: <SpaOutlinedIcon sx={{ fontSize: '1.5rem' }} />,
         onAction: () => executeEvent('openMintingPanel', {}),
       },
       {
         key: 'backup-wallet',
+        description: 'Export a secure recovery copy.',
         label: 'Backup Wallet',
         icon: <DownloadIcon sx={{ fontSize: '1.5rem' }} />,
         onAction: () => executeEvent('openBackupWallet', {}),
@@ -455,59 +459,50 @@ export const HomeGettingStarted = ({
 
   const cardContent = (
     <>
-      <Box
-        className="dashboard-panel-decoration"
-        aria-hidden="true"
-        sx={{
-          borderRadius: 'inherit',
-          inset: 0,
-          overflow: 'visible',
-          pointerEvents: 'none',
-          position: 'absolute',
-          zIndex: 0,
-        }}
-      >
+      {showTools ? (
         <Box
           sx={{
-            left: 0,
-            top: 0,
-            width: '1px',
-            height: '100%',
-            position: 'absolute',
-            background:
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.12) 10%, rgba(255,255,255,0.16) 18%, rgba(255,255,255,0.12) 28%, rgba(255,255,255,0.08) 44%, rgba(255,255,255,0.08) 56%, rgba(255,255,255,0.12) 72%, rgba(255,255,255,0.16) 82%, rgba(255,255,255,0.12) 90%, transparent 100%)'
-                : 'linear-gradient(180deg, transparent 0%, rgba(255,255,255,0.13) 10%, rgba(255,255,255,0.18) 18%, rgba(255,255,255,0.13) 28%, rgba(255,255,255,0.09) 44%, rgba(255,255,255,0.09) 56%, rgba(255,255,255,0.13) 72%, rgba(255,255,255,0.18) 82%, rgba(255,255,255,0.13) 90%, transparent 100%)',
-            filter: 'blur(0.08px)',
+            display: 'flex',
+            flex: 1,
+            flexDirection: 'column',
+            gap: '12px',
+            minHeight: 0,
           }}
-        />
-      </Box>
-        {showTools ? (
-          <>
+        >
             <Box
               sx={{
                 alignItems: 'center',
                 display: 'flex',
-                justifyContent: 'space-between',
-                gap: '14px',
-                mb: '8px',
+                flexDirection: 'column',
+                gap: '3px',
+                minWidth: 0,
+                textAlign: 'center',
               }}
             >
+              <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600 }}>
+                Tools
+              </Typography>
               <Typography
                 sx={{
-                  color: theme.palette.text.primary,
-                  fontSize: '1rem',
-                  fontWeight: 600,
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.76rem',
+                  letterSpacing: '0.012em',
+                  lineHeight: 1.45,
+                  maxWidth: '28ch',
+                  textAlign: 'center',
                 }}
               >
-                Tools
+                Quick actions for your account, wallet, and node.
               </Typography>
             </Box>
             <Box
               sx={{
                 display: 'grid',
-                gap: '16px',
+                flex: 1,
+                gap: '12px',
+                gridAutoRows: '1fr',
                 gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                minHeight: 0,
               }}
             >
               {tools.map((tool) => (
@@ -528,11 +523,11 @@ export const HomeGettingStarted = ({
                     color: theme.palette.text.primary,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '11px',
+                    gap: '9px',
                     justifyContent: 'center',
-                    minHeight: tool.emphasis === 'primary' ? '102px' : '98px',
+                    minHeight: 0,
                     px: 1.75,
-                    py: 1.7,
+                    py: tool.emphasis === 'primary' ? 1.8 : 1.6,
                     position: 'relative',
                     textAlign: 'center',
                     transition:
@@ -614,24 +609,35 @@ export const HomeGettingStarted = ({
                   >
                     {tool.icon}
                   </Box>
-                  <Typography
-                    className="tool-label"
-                    sx={{
-                      color: theme.palette.text.primary,
-                      fontSize: tool.emphasis === 'primary' ? '0.87rem' : '0.84rem',
-                      fontWeight: tool.emphasis === 'primary' ? 650 : 600,
+                    <Typography
+                      className="tool-label"
+                      sx={{
+                        color: theme.palette.text.primary,
+                        fontSize: tool.emphasis === 'primary' ? '0.9rem' : '0.86rem',
+                      fontWeight: tool.emphasis === 'primary' ? 700 : 650,
                       letterSpacing: '0.01em',
                       lineHeight: 1.3,
-                      opacity: tool.emphasis === 'primary' ? 1 : 0.96,
+                      opacity: 1,
                       transition: 'opacity 140ms ease',
+                      }}
+                    >
+                      {tool.label}
+                    </Typography>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: tool.emphasis === 'primary' ? '0.73rem' : '0.71rem',
+                      lineHeight: 1.45,
+                      maxWidth: '15ch',
+                      opacity: tool.emphasis === 'primary' ? 0.82 : 0.72,
                     }}
                   >
-                    {tool.label}
+                    {tool.description}
                   </Typography>
                 </ButtonBase>
               ))}
             </Box>
-          </>
+        </Box>
         ) : (
           <>
             <Box
@@ -796,7 +802,7 @@ export const HomeGettingStarted = ({
         <Box
           ref={panelRef}
           sx={{
-            ...dashboardPanelSx(theme),
+            ...dashboardPanelSx(theme, 'base'),
             borderRadius: GETTING_STARTED_PANEL_RADIUS,
             display: 'flex',
             flexDirection: 'column',
