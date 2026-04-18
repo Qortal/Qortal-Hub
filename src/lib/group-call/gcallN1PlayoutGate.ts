@@ -3,6 +3,8 @@
  * and helpers shared with tests. See 2-way jitter playout plan.
  */
 
+import { OPUS_FRAME_DURATION_MS } from './gcallVoiceAudioConstants';
+
 /** Initial stall escape: no ingress this long → allow one minimal decode (ms). */
 export const GCALL_N1_STALL_ESCAPE_MS = 300;
 
@@ -55,6 +57,8 @@ export const GCALL_N1_MIN_TARGET_MS_FLOOR = 100;
 /** Small steady-state reserve for exact-1-remote calls after recovery exits. */
 export const GCALL_N1_STEADY_MIN_HOLD_MS_FLOOR = 20;
 export const GCALL_N1_STEADY_MIN_HOLD_MS_CEIL = 40;
+/** Minimum whole-frame reserve that can actually be ready with N=1 primed hold. */
+export const GCALL_N1_STEADY_MIN_RESERVE_FRAMES = 2;
 /** When PCM remains this low on a live N===1 path, prioritize rebuilding PCM over hoarding Opus. */
 export const GCALL_N1_PCM_REBUILD_MAX_MS = 60;
 export const GCALL_N1_PCM_REBUILD_UNDERTARGET_MIN = 0.75;
@@ -114,6 +118,31 @@ export function computeN1SteadyMinHoldMs(smoothedTargetMs: number): number {
   return Math.max(
     GCALL_N1_STEADY_MIN_HOLD_MS_FLOOR,
     Math.min(GCALL_N1_STEADY_MIN_HOLD_MS_CEIL, Math.round(t * 0.3))
+  );
+}
+
+export function computeN1SteadyReserveMs(smoothedTargetMs: number): number {
+  const minHoldMs = computeN1SteadyMinHoldMs(smoothedTargetMs);
+  const frameFloorMs =
+    GCALL_N1_STEADY_MIN_RESERVE_FRAMES * OPUS_FRAME_DURATION_MS;
+  return Math.max(
+    frameFloorMs,
+    Math.ceil(minHoldMs / OPUS_FRAME_DURATION_MS) * OPUS_FRAME_DURATION_MS
+  );
+}
+
+export function shouldHoldN1SteadyReserve(input: {
+  steadySingleRemote: boolean;
+  sourceRecentlyPushed: boolean;
+  hasReadyFrame: boolean;
+  opusBufferedMs: number;
+  reserveMs: number;
+}): boolean {
+  return (
+    input.steadySingleRemote &&
+    input.sourceRecentlyPushed &&
+    input.hasReadyFrame &&
+    input.opusBufferedMs <= input.reserveMs
   );
 }
 

@@ -73,10 +73,13 @@ import {
   GCALL_RECOVERY_JITTER_APPLY_DWELL_MS,
   GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS,
   GCALL_THIN_JITTER_BUFFER_FRAMES,
+  applyGcallJitterBurstHeadroom,
   computeSoftUnprimeMsForTier2,
+  createGcallJitterBurstHeadroomState,
   getEffectiveJitterTuning,
   getGroupCallAudioTuning,
   readGroupCallAudioProfile,
+  stepGcallJitterBurstHeadroom,
   writeGroupCallAudioProfile,
   type GroupCallAudioQualityProfile,
 } from '../lib/group-call/groupCallAudioProfile';
@@ -208,7 +211,7 @@ import {
   computeN1SteadyTierBurstCap,
   computeN1BufferRatio,
   computeN1MinStartMs,
-  computeN1SteadyMinHoldMs,
+  computeN1SteadyReserveMs,
   computeN1TierBurstCap,
   GCALL_N1_ACCUMULATION_MS,
   GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS,
@@ -218,6 +221,7 @@ import {
   shouldBoostN1PcmRebuild,
   shouldKeepN1SevereForcedReleaseRebuild,
   shouldRearmN1LateCollapseRecovery,
+  shouldHoldN1SteadyReserve,
   GCALL_N1_STEADY_ACCUMULATION_MS,
   GCALL_N1_STALL_ESCAPE_MS,
   stepN1BufferEnforceTier,
@@ -948,7 +952,6 @@ export function computeEffectiveN1AccumulationDecodeCap(opts: {
   n1PcmRebuildActive: boolean;
   n1ReceivePriorityModeActive: boolean;
 }): number {
-  if (opts.accumulationDecodeCap === 0) return 0;
   if (opts.n1PcmRebuildActive) {
     return Math.max(
       GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP,
@@ -961,6 +964,7 @@ export function computeEffectiveN1AccumulationDecodeCap(opts: {
       opts.accumulationDecodeCap
     );
   }
+  if (opts.accumulationDecodeCap === 0) return 0;
   return opts.accumulationDecodeCap;
 }
 
@@ -3623,6 +3627,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const jitterUnderrunEmaRef = useRef<Map<string, number>>(new Map());
   /** Dedup `applyJitterTuning` when effective geometry unchanged (tier-2 vs N). */
   const lastEffectiveJitterKeyRef = useRef<string>('');
+  /** Temporary jitter capacity expansion when trims + playout stress prove burst clipping. */
+  const jitterBurstHeadroomStateRef = useRef(
+    createGcallJitterBurstHeadroomState()
+  );
   const [audioQualityProfile, setAudioQualityProfile] =
     useState<GroupCallAudioQualityProfile>(() => readGroupCallAudioProfile());
   const audioTuningRef = useRef(getGroupCallAudioTuning(audioQualityProfile));
@@ -4159,19 +4167,27 @@ export function useGroupVoiceCall(uiActive = false) {
 
   useEffect(() => {
     audioTuningRef.current = getGroupCallAudioTuning(audioQualityProfile);
+    if (audioTuningRef.current.profile !== 'high-stability') {
+      jitterBurstHeadroomStateRef.current =
+        createGcallJitterBurstHeadroomState();
+    }
     opusSendPressureStateRef.current = createOpusSendPressureControllerState();
     opusEncoderLastConfiguredBitrateRef.current = null;
     writeGroupCallAudioProfile(audioQualityProfile);
     const mode =
       jitterGeomAppliedRef.current === 'recovery' ? 'recovery' : 'low-latency';
     const n = activeJitterSourcesRef.current.size;
-    const effective =
+    const baseEffective =
       mode === 'recovery'
         ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
             tier2MultiSource: n >= 2,
             activeSourceCount: n,
           })
         : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
+    const effective = applyGcallJitterBurstHeadroom(
+      baseEffective,
+      jitterBurstHeadroomStateRef.current.level
+    );
     lastEffectiveJitterKeyRef.current = `${effective.jitterBufferSize}|${effective.jitterStartBufferSize}|${mode}`;
     for (const jb of jitterMapRef.current.values()) {
       jb.applyJitterTuning(effective);
@@ -5306,13 +5322,18 @@ export function useGroupVoiceCall(uiActive = false) {
     const n = activeJitterSourcesRef.current.size;
     const mode =
       jitterGeomAppliedRef.current === 'recovery' ? 'recovery' : 'low-latency';
-    const effectiveJitter =
+    const baseEffectiveJitter =
       mode === 'recovery'
         ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
             tier2MultiSource: n >= 2,
             activeSourceCount: n,
           })
         : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
+    const burstHeadroom = jitterBurstHeadroomStateRef.current;
+    const effectiveJitter = applyGcallJitterBurstHeadroom(
+      baseEffectiveJitter,
+      burstHeadroom.level
+    );
     return {
       audioQualityProfile,
       dcProfiles: {
@@ -5322,6 +5343,8 @@ export function useGroupVoiceCall(uiActive = false) {
       jitterGeomApplied: jitterGeomAppliedRef.current,
       effectiveJitterBufferSize: effectiveJitter.jitterBufferSize,
       effectiveJitterStartBufferSize: effectiveJitter.jitterStartBufferSize,
+      adaptiveJitterBurstHeadroomLevel: burstHeadroom.level,
+      adaptiveJitterBurstHeadroomHoldUntilMs: burstHeadroom.holdUntilMs,
       activeJitterSourceCount: n,
       jitterDrainRotationIndex: jitterDrainRotationTickRef.current,
       jitterBufferSize: tuning.jitterBufferSize,
@@ -7306,6 +7329,62 @@ export function useGroupVoiceCall(uiActive = false) {
       jitterPushDepthHighWaterBySourceTickRef.current.clear();
       const jitterPushRejectedTotal =
         jitterPushStaleBySource.total + jitterPushDuplicateBySource.total;
+      const headroomMode =
+        snap.adaptiveNetworkMode === 'recovery' ? 'recovery' : 'low-latency';
+      const baseHeadroomTuning =
+        headroomMode === 'recovery'
+          ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
+              tier2MultiSource: activeSourceCount >= 2,
+              activeSourceCount,
+            })
+          : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
+      const currentHeadroomTuning = applyGcallJitterBurstHeadroom(
+        baseHeadroomTuning,
+        jitterBurstHeadroomStateRef.current.level
+      );
+      const previousBurstHeadroomState =
+        jitterBurstHeadroomStateRef.current;
+      const burstHeadroomUnderTarget =
+        singleRemoteRecentStability?.playoutUnderTargetFraction ??
+        snap.playoutUnderTargetFraction;
+      const burstHeadroomAvgPlayoutRate =
+        Number.isFinite(snap.avgPlayoutRate) && snap.avgPlayoutRate > 0
+          ? snap.avgPlayoutRate
+          : 1;
+      const burstHeadroomDecision = stepGcallJitterBurstHeadroom({
+        state: previousBurstHeadroomState,
+        enabled: audioTuningRef.current.profile === 'high-stability',
+        nowMs: wallNow,
+        trimCount: jitterPushTrimmedBySource.total,
+        depthHighWater: jitterPushDepthHighWaterBySource.max,
+        maxDepthFrames: currentHeadroomTuning.jitterBufferSize * 2,
+        playoutUnderTargetFraction: burstHeadroomUnderTarget,
+        avgPlayoutRate: burstHeadroomAvgPlayoutRate,
+      });
+      jitterBurstHeadroomStateRef.current = burstHeadroomDecision.state;
+      if (
+        burstHeadroomDecision.reason !== null &&
+        burstHeadroomDecision.state.level !== previousBurstHeadroomState.level
+      ) {
+        lastEffectiveJitterKeyRef.current = '';
+        gcallDiagnosticsPush('info', '[GCall] jitterBurstHeadroom', {
+          reason: burstHeadroomDecision.reason,
+          previousLevel: previousBurstHeadroomState.level,
+          level: burstHeadroomDecision.state.level,
+          trimCount: jitterPushTrimmedBySource.total,
+          depthHighWaterMax: jitterPushDepthHighWaterBySource.max,
+          maxDepthFrames: currentHeadroomTuning.jitterBufferSize * 2,
+          playoutUnderTargetFraction: Math.round(
+            burstHeadroomUnderTarget * 1000
+          ) / 1000,
+          avgPlayoutRate:
+            Math.round(burstHeadroomAvgPlayoutRate * 1000) / 1000,
+          holdRemainingMs: Math.max(
+            0,
+            Math.round(burstHeadroomDecision.state.holdUntilMs - wallNow)
+          ),
+        });
+      }
       const shouldLogJitterPushStats =
         jitterPushAttemptedBySource.total > 0 &&
         wallNow - lastJitterPushStatsDiagAtRef.current >= 1_000 &&
@@ -7339,6 +7418,8 @@ export function useGroupVoiceCall(uiActive = false) {
               ? singleRemoteDepthFrames * OPUS_FRAME_DURATION_MS
               : null,
           adaptiveNetworkMode: snap.adaptiveNetworkMode,
+          adaptiveJitterBurstHeadroomLevel:
+            jitterBurstHeadroomStateRef.current.level,
           starvationSeverity: singleRemoteStarvationSeverity,
           avgPcmBufferedMs:
             singleRemoteRecentStability !== null
@@ -10833,13 +10914,17 @@ export function useGroupVoiceCall(uiActive = false) {
         jitterGeomAppliedRef.current === 'recovery'
           ? 'recovery'
           : 'low-latency';
-      const eff =
+      const baseEff =
         mode === 'recovery'
           ? getEffectiveJitterTuning(audioTuningRef.current, 'recovery', {
               tier2MultiSource: n >= 2,
               activeSourceCount: n,
             })
           : getEffectiveJitterTuning(audioTuningRef.current, 'low-latency');
+      const eff = applyGcallJitterBurstHeadroom(
+        baseEff,
+        jitterBurstHeadroomStateRef.current.level
+      );
       const key = `${eff.jitterBufferSize}|${eff.jitterStartBufferSize}|${mode}`;
       if (key !== lastEffectiveJitterKeyRef.current) {
         lastEffectiveJitterKeyRef.current = key;
@@ -11082,7 +11167,7 @@ export function useGroupVoiceCall(uiActive = false) {
           ? computeN1MinStartMs(smoothedTarget)
           : 0;
         const steadyMinHoldMs = n1SteadySingleRemote
-          ? computeN1SteadyMinHoldMs(smoothedTarget)
+          ? computeN1SteadyReserveMs(smoothedTarget)
           : 0;
         if (n1RecoverySingleRemote && opusMsPre >= minStartMs) {
           jitterPrerollSatisfiedRef.current.set(addr, true);
@@ -11508,7 +11593,7 @@ export function useGroupVoiceCall(uiActive = false) {
               n1ReceivePriorityModeActive,
             });
           n1ScaledCap = Math.min(n1ScaledCap, effectiveAccumulationDecodeCap);
-          if (accumulationDecodeCap === 0) {
+          if (effectiveAccumulationDecodeCap === 0) {
             const nowLog = Date.now();
             const lastHoldLog =
               lastN1AccumulationHoldLogAtRef.current.get(addr) ?? 0;
@@ -11564,11 +11649,13 @@ export function useGroupVoiceCall(uiActive = false) {
             playoutStarvationSeverity: n1PlayoutStarvationSeverity,
           });
         const steadyHoldActive =
-          (n1SteadySingleRemote &&
-            n1Tier !== 'normal' &&
-            opusMsPre < steadyMinHoldMs &&
-            jb.hasReadyFrame() &&
-            sourceRecentlyPushed) ||
+          shouldHoldN1SteadyReserve({
+            steadySingleRemote: n1SteadySingleRemote,
+            sourceRecentlyPushed,
+            hasReadyFrame: jb.hasReadyFrame(),
+            opusBufferedMs: opusMsPre,
+            reserveMs: steadyMinHoldMs,
+          }) ||
           steadyThinDeadzoneHoldActive ||
           shouldHoldN1SteadyStarvedAccumulation({
             steadySingleRemote: n1SteadySingleRemote,
@@ -11815,6 +11902,14 @@ export function useGroupVoiceCall(uiActive = false) {
           (!usePhaseDDrain || globalDecodesLeft > 0)
         ) {
           const bufferedFrames = jb.getBufferedFrames();
+          if (
+            n1SteadySingleRemote &&
+            sourceRecentlyPushed &&
+            steadyMinHoldMs > 0 &&
+            bufferedFrames * OPUS_FRAME_DURATION_MS <= steadyMinHoldMs
+          ) {
+            break;
+          }
           const effectiveBurstMax = Math.min(
             n1ScaledCap,
             Math.max(burstBase, burstBase + Math.floor(bufferedFrames / 2))
@@ -13922,6 +14017,8 @@ export function useGroupVoiceCall(uiActive = false) {
         lastPendingDecryptPreOverloadActiveRef.current = false;
         lastMultiSourceLoadBalanceDiagAtRef.current = 0;
         lastJitterPushStatsDiagAtRef.current = 0;
+        jitterBurstHeadroomStateRef.current =
+          createGcallJitterBurstHeadroomState();
         ingressPacketsBySourceTickRef.current.clear();
         decodeFramesBySourceTickRef.current.clear();
         jitterPushAttemptedBySourceTickRef.current.clear();
@@ -14505,6 +14602,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastPendingDecryptPressureDiagAtRef.current = 0;
       lastMultiSourceLoadBalanceDiagAtRef.current = 0;
       lastJitterPushStatsDiagAtRef.current = 0;
+      jitterBurstHeadroomStateRef.current =
+        createGcallJitterBurstHeadroomState();
       ingressPacketsBySourceTickRef.current.clear();
       decodeFramesBySourceTickRef.current.clear();
       jitterPushAttemptedBySourceTickRef.current.clear();

@@ -15,8 +15,10 @@ import {
   shouldKeepN1SevereForcedReleaseRebuild,
   shouldRearmN1LateCollapseRecovery,
   computeN1SteadyMinHoldMs,
+  computeN1SteadyReserveMs,
   computeN1SteadyTierBurstCap,
   computeN1TierBurstCap,
+  shouldHoldN1SteadyReserve,
   stepN1SteadyBufferEnforceTier,
   stepN1BufferEnforceTier,
   GCALL_N1_RATIO_DEEP,
@@ -36,6 +38,42 @@ describe('gcallN1PlayoutGate', () => {
     expect(computeN1SteadyMinHoldMs(120)).toBe(36);
     expect(computeN1SteadyMinHoldMs(145)).toBe(40);
     expect(computeN1SteadyMinHoldMs(400)).toBe(40);
+  });
+
+  it('computeN1SteadyReserveMs rounds the reserve up to a reachable Opus frame boundary', () => {
+    expect(computeN1SteadyReserveMs(0)).toBe(40);
+    expect(computeN1SteadyReserveMs(120)).toBe(40);
+    expect(computeN1SteadyReserveMs(145)).toBe(40);
+  });
+
+  it('holds the exact two-frame steady reserve for live one-on-one paths', () => {
+    expect(
+      shouldHoldN1SteadyReserve({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        opusBufferedMs: 40,
+        reserveMs: computeN1SteadyReserveMs(145),
+      })
+    ).toBe(true);
+    expect(
+      shouldHoldN1SteadyReserve({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: true,
+        hasReadyFrame: true,
+        opusBufferedMs: 60,
+        reserveMs: computeN1SteadyReserveMs(145),
+      })
+    ).toBe(false);
+    expect(
+      shouldHoldN1SteadyReserve({
+        steadySingleRemote: true,
+        sourceRecentlyPushed: false,
+        hasReadyFrame: true,
+        opusBufferedMs: 40,
+        reserveMs: computeN1SteadyReserveMs(145),
+      })
+    ).toBe(false);
   });
 
   it('allows recovery preroll to release early for a live thin source', () => {

@@ -582,14 +582,14 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     expect(computeN1SevereRebuildAccumulationHoldOpusMs(260)).toBe(160);
   });
 
-  it('keeps severe accumulation hold absolute while PCM rebuild is active', () => {
+  it('lets PCM rebuild and receive-priority mode pierce a zero accumulation hold', () => {
     expect(
       computeEffectiveN1AccumulationDecodeCap({
         accumulationDecodeCap: 0,
         n1PcmRebuildActive: true,
         n1ReceivePriorityModeActive: false,
       })
-    ).toBe(0);
+    ).toBe(5);
     expect(
       computeEffectiveN1AccumulationDecodeCap({
         accumulationDecodeCap: 1,
@@ -604,6 +604,20 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         n1ReceivePriorityModeActive: true,
       })
     ).toBe(3);
+    expect(
+      computeEffectiveN1AccumulationDecodeCap({
+        accumulationDecodeCap: 0,
+        n1PcmRebuildActive: false,
+        n1ReceivePriorityModeActive: true,
+      })
+    ).toBe(3);
+    expect(
+      computeEffectiveN1AccumulationDecodeCap({
+        accumulationDecodeCap: 0,
+        n1PcmRebuildActive: false,
+        n1ReceivePriorityModeActive: false,
+      })
+    ).toBe(0);
     expect(
       computeEffectiveN1AccumulationDecodeCap({
         accumulationDecodeCap: 1,

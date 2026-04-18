@@ -39,8 +39,9 @@ const HIGH_STABILITY_BASE = {
   opusBitrate: 32_000,
   /** Slightly higher than low-latency so WebCodecs Opus `packetlossperc` + WASM FEC ladder tolerate measured mesh loss. */
   opusExpectedPacketLossPercent: 14,
-  jitterBufferSize: 6,
-  jitterStartBufferSize: 6,
+  /** Deeper steady geometry so high-stability can absorb one-on-one decrypt/network bursts before recovery engages. */
+  jitterBufferSize: 8,
+  jitterStartBufferSize: 7,
   adaptiveMaxTargetMs: 145,
   adaptiveSevereMaxTargetMs: 185,
   /** Wider seq-gap tolerance before WASM FEC worker reset under high-stability profile. */
@@ -75,6 +76,187 @@ export const GCALL_JITTER_SOFT_UNPRIME_MS = 50;
 
 /** Phase D: boost decode when physical depth is at or below this (frames). */
 export const GCALL_THIN_JITTER_BUFFER_FRAMES = 2;
+
+export type GcallJitterBurstHeadroomLevel = 0 | 1 | 2;
+
+export interface GcallJitterBurstHeadroomState {
+  readonly level: GcallJitterBurstHeadroomLevel;
+  readonly holdUntilMs: number;
+  readonly calmSinceMs: number | null;
+  readonly nearCapPressureCount: number;
+}
+
+export const GCALL_JITTER_BURST_HEADROOM_TRIM_TRIGGER = 6;
+export const GCALL_JITTER_BURST_HEADROOM_STRONG_TRIM_TRIGGER = 12;
+export const GCALL_JITTER_BURST_HEADROOM_HOLD_MS = 12_000;
+export const GCALL_JITTER_BURST_HEADROOM_CALM_MS = 10_000;
+export const GCALL_JITTER_BURST_HEADROOM_UNDERTARGET_MIN = 0.2;
+export const GCALL_JITTER_BURST_HEADROOM_PLAYOUT_RATE_MIN = 0.98;
+export const GCALL_JITTER_BURST_HEADROOM_STABLE_UNDERTARGET_MAX = 0.15;
+export const GCALL_JITTER_BURST_HEADROOM_STABLE_PLAYOUT_RATE_MIN = 0.985;
+export const GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT = 2;
+
+export function createGcallJitterBurstHeadroomState(): GcallJitterBurstHeadroomState {
+  return {
+    level: 0,
+    holdUntilMs: 0,
+    calmSinceMs: null,
+    nearCapPressureCount: 0,
+  };
+}
+
+export function applyGcallJitterBurstHeadroom(
+  tuning: { jitterBufferSize: number; jitterStartBufferSize: number },
+  level: GcallJitterBurstHeadroomLevel
+): { jitterBufferSize: number; jitterStartBufferSize: number } {
+  if (level <= 0) return tuning;
+  const target =
+    level >= 2
+      ? { jitterBufferSize: 12, jitterStartBufferSize: 9 }
+      : { jitterBufferSize: 10, jitterStartBufferSize: 8 };
+  return {
+    jitterBufferSize: Math.max(
+      tuning.jitterBufferSize,
+      target.jitterBufferSize
+    ),
+    jitterStartBufferSize: Math.max(
+      tuning.jitterStartBufferSize,
+      target.jitterStartBufferSize
+    ),
+  };
+}
+
+export function stepGcallJitterBurstHeadroom(input: {
+  state: GcallJitterBurstHeadroomState;
+  enabled: boolean;
+  nowMs: number;
+  trimCount: number;
+  depthHighWater: number;
+  maxDepthFrames: number;
+  playoutUnderTargetFraction: number;
+  avgPlayoutRate: number;
+}): { state: GcallJitterBurstHeadroomState; reason: string | null } {
+  const safeState = input.state ?? createGcallJitterBurstHeadroomState();
+  if (!input.enabled) {
+    return safeState.level === 0 &&
+      safeState.holdUntilMs === 0 &&
+      safeState.calmSinceMs === null &&
+      safeState.nearCapPressureCount === 0
+      ? { state: safeState, reason: null }
+      : { state: createGcallJitterBurstHeadroomState(), reason: 'disabled' };
+  }
+
+  const nowMs = Number.isFinite(input.nowMs) ? input.nowMs : Date.now();
+  const trimCount = Math.max(
+    0,
+    Number.isFinite(input.trimCount) ? input.trimCount : 0
+  );
+  const depthHighWater = Math.max(
+    0,
+    Number.isFinite(input.depthHighWater) ? input.depthHighWater : 0
+  );
+  const maxDepthFrames = Math.max(
+    1,
+    Number.isFinite(input.maxDepthFrames) ? input.maxDepthFrames : 1
+  );
+  const underTarget = Math.max(
+    0,
+    Math.min(
+      1,
+      Number.isFinite(input.playoutUnderTargetFraction)
+        ? input.playoutUnderTargetFraction
+        : 0
+    )
+  );
+  const avgPlayoutRate =
+    Number.isFinite(input.avgPlayoutRate) && input.avgPlayoutRate > 0
+      ? input.avgPlayoutRate
+      : 1;
+  const playoutStressed =
+    underTarget >= GCALL_JITTER_BURST_HEADROOM_UNDERTARGET_MIN ||
+    avgPlayoutRate < GCALL_JITTER_BURST_HEADROOM_PLAYOUT_RATE_MIN;
+  const nearCap =
+    depthHighWater >= Math.max(1, maxDepthFrames - 1);
+  const nearCapPressureCount =
+    nearCap && playoutStressed
+      ? safeState.nearCapPressureCount + 1
+      : 0;
+  const trimPressure =
+    trimCount >= GCALL_JITTER_BURST_HEADROOM_TRIM_TRIGGER ||
+    (trimCount > 0 && nearCap);
+  const nearCapPressure =
+    nearCapPressureCount >= GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT;
+
+  if (playoutStressed && (trimPressure || nearCapPressure)) {
+    const strongPressure =
+      trimCount >= GCALL_JITTER_BURST_HEADROOM_STRONG_TRIM_TRIGGER ||
+      nearCapPressureCount >
+        GCALL_JITTER_BURST_HEADROOM_NEAR_CAP_TRIGGER_COUNT;
+    const requestedLevel: GcallJitterBurstHeadroomLevel = strongPressure
+      ? 2
+      : safeState.level >= 1
+        ? 2
+        : 1;
+    const nextLevel =
+      requestedLevel > safeState.level ? requestedLevel : safeState.level;
+    return {
+      state: {
+        level: nextLevel as GcallJitterBurstHeadroomLevel,
+        holdUntilMs: nowMs + GCALL_JITTER_BURST_HEADROOM_HOLD_MS,
+        calmSinceMs: null,
+        nearCapPressureCount,
+      },
+      reason: trimPressure ? 'trim-pressure' : 'near-cap-pressure',
+    };
+  }
+
+  const stable =
+    trimCount === 0 &&
+    !nearCap &&
+    underTarget <= GCALL_JITTER_BURST_HEADROOM_STABLE_UNDERTARGET_MAX &&
+    avgPlayoutRate >= GCALL_JITTER_BURST_HEADROOM_STABLE_PLAYOUT_RATE_MIN;
+  if (safeState.level <= 0) {
+    return {
+      state: {
+        ...safeState,
+        calmSinceMs: stable ? (safeState.calmSinceMs ?? nowMs) : null,
+        nearCapPressureCount,
+      },
+      reason: null,
+    };
+  }
+  if (!stable || nowMs < safeState.holdUntilMs) {
+    return {
+      state: {
+        ...safeState,
+        calmSinceMs: stable ? (safeState.calmSinceMs ?? nowMs) : null,
+        nearCapPressureCount,
+      },
+      reason: null,
+    };
+  }
+  const calmSinceMs = safeState.calmSinceMs ?? nowMs;
+  if (nowMs - calmSinceMs < GCALL_JITTER_BURST_HEADROOM_CALM_MS) {
+    return {
+      state: {
+        ...safeState,
+        calmSinceMs,
+        nearCapPressureCount,
+      },
+      reason: null,
+    };
+  }
+  const nextLevel = Math.max(0, safeState.level - 1) as GcallJitterBurstHeadroomLevel;
+  return {
+    state: {
+      level: nextLevel,
+      holdUntilMs: nextLevel > 0 ? nowMs + GCALL_JITTER_BURST_HEADROOM_HOLD_MS : 0,
+      calmSinceMs: nextLevel > 0 ? nowMs : null,
+      nearCapPressureCount,
+    },
+    reason: 'calm-decay',
+  };
+}
 
 /**
  * Opt out of Phase D tier-2 geometry (12/10) + scaled soft un-prime for local debugging.

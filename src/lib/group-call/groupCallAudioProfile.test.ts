@@ -6,8 +6,11 @@ import {
   GCALL_RECOVERY_JITTER_START_MIN,
   GCALL_RECOVERY_JITTER_START_MIN_SINGLE_REMOTE,
   GCALL_RECOVERY_JITTER_START_MIN_TIER2,
+  applyGcallJitterBurstHeadroom,
+  createGcallJitterBurstHeadroomState,
   getEffectiveJitterTuning,
   getGroupCallAudioTuning,
+  stepGcallJitterBurstHeadroom,
 } from './groupCallAudioProfile';
 
 describe('getEffectiveJitterTuning', () => {
@@ -16,6 +19,16 @@ describe('getEffectiveJitterTuning', () => {
     expect(getEffectiveJitterTuning(t, 'low-latency')).toEqual({
       jitterBufferSize: t.jitterBufferSize,
       jitterStartBufferSize: t.jitterStartBufferSize,
+    });
+  });
+
+  it('uses deeper steady jitter geometry for high-stability mode', () => {
+    const t = getGroupCallAudioTuning('high-stability');
+    expect(t.jitterBufferSize).toBe(8);
+    expect(t.jitterStartBufferSize).toBe(7);
+    expect(getEffectiveJitterTuning(t, 'low-latency')).toEqual({
+      jitterBufferSize: 8,
+      jitterStartBufferSize: 7,
     });
   });
 
@@ -69,5 +82,100 @@ describe('getEffectiveJitterTuning tier-2 (Phase D)', () => {
     });
     expect(e.jitterBufferSize).toBe(GCALL_RECOVERY_JITTER_BUFFER_SIZE_MIN);
     expect(e.jitterStartBufferSize).toBe(GCALL_RECOVERY_JITTER_START_MIN);
+  });
+});
+
+describe('gcall jitter burst headroom', () => {
+  it('expands effective jitter capacity in bounded levels', () => {
+    expect(
+      applyGcallJitterBurstHeadroom(
+        { jitterBufferSize: 8, jitterStartBufferSize: 7 },
+        0
+      )
+    ).toEqual({ jitterBufferSize: 8, jitterStartBufferSize: 7 });
+    expect(
+      applyGcallJitterBurstHeadroom(
+        { jitterBufferSize: 8, jitterStartBufferSize: 7 },
+        1
+      )
+    ).toEqual({ jitterBufferSize: 10, jitterStartBufferSize: 8 });
+    expect(
+      applyGcallJitterBurstHeadroom(
+        { jitterBufferSize: 8, jitterStartBufferSize: 7 },
+        2
+      )
+    ).toEqual({ jitterBufferSize: 12, jitterStartBufferSize: 9 });
+    expect(
+      applyGcallJitterBurstHeadroom(
+        { jitterBufferSize: 12, jitterStartBufferSize: 11 },
+        2
+      )
+    ).toEqual({ jitterBufferSize: 12, jitterStartBufferSize: 11 });
+  });
+
+  it('arms burst headroom only when trim pressure coincides with playout stress', () => {
+    const state = createGcallJitterBurstHeadroomState();
+    expect(
+      stepGcallJitterBurstHeadroom({
+        state,
+        enabled: true,
+        nowMs: 1_000,
+        trimCount: 8,
+        depthHighWater: 16,
+        maxDepthFrames: 16,
+        playoutUnderTargetFraction: 0.05,
+        avgPlayoutRate: 1,
+      }).state.level
+    ).toBe(0);
+
+    const armed = stepGcallJitterBurstHeadroom({
+      state,
+      enabled: true,
+      nowMs: 2_000,
+      trimCount: 8,
+      depthHighWater: 16,
+      maxDepthFrames: 16,
+      playoutUnderTargetFraction: 0.35,
+      avgPlayoutRate: 0.99,
+    });
+    expect(armed.reason).toBe('trim-pressure');
+    expect(armed.state.level).toBe(1);
+    expect(armed.state.holdUntilMs).toBeGreaterThan(2_000);
+  });
+
+  it('escalates strong trim pressure to level 2', () => {
+    const armed = stepGcallJitterBurstHeadroom({
+      state: createGcallJitterBurstHeadroomState(),
+      enabled: true,
+      nowMs: 1_000,
+      trimCount: 12,
+      depthHighWater: 16,
+      maxDepthFrames: 16,
+      playoutUnderTargetFraction: 0.1,
+      avgPlayoutRate: 0.97,
+    });
+    expect(armed.reason).toBe('trim-pressure');
+    expect(armed.state.level).toBe(2);
+  });
+
+  it('decays one level after the hold window and a calm period', () => {
+    const initial = {
+      level: 2 as const,
+      holdUntilMs: 5_000,
+      calmSinceMs: 5_000,
+      nearCapPressureCount: 0,
+    };
+    const decayed = stepGcallJitterBurstHeadroom({
+      state: initial,
+      enabled: true,
+      nowMs: 16_000,
+      trimCount: 0,
+      depthHighWater: 6,
+      maxDepthFrames: 24,
+      playoutUnderTargetFraction: 0.05,
+      avgPlayoutRate: 0.995,
+    });
+    expect(decayed.reason).toBe('calm-decay');
+    expect(decayed.state.level).toBe(1);
   });
 });
