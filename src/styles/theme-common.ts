@@ -1,4 +1,8 @@
 import { Theme } from '@mui/material/styles';
+import {
+  APP_BLUE_SURFACE_TEXT,
+  getBlueTier1ButtonSx,
+} from './blueMaterial';
 
 /**
  * Returns the common MuiCssBaseline global styles shared by both themes.
@@ -125,10 +129,15 @@ const commonThemeOptions = {
     MuiButton: {
       styleOverrides: {
         root: {
-          transition: 'filter 0.3s ease-in-out',
+          transition:
+            'background 180ms ease, box-shadow 180ms ease, border-color 180ms ease, color 180ms ease, filter 180ms ease, transform 180ms ease',
           '&:hover': {
-            filter: 'brightness(1.1)',
+            filter: 'none',
           },
+        },
+        containedPrimary: {
+          ...getBlueTier1ButtonSx(),
+          color: APP_BLUE_SURFACE_TEXT,
         },
       },
       defaultProps: {

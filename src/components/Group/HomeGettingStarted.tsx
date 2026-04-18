@@ -39,6 +39,11 @@ import {
 } from './dashboardPanelEffects';
 import BorderGlow from '../common/BorderGlow';
 import type { GettingStartedDebugOverrides } from './homeGettingStartedDebug';
+import {
+  GROUP_ACTIVITY_BLUE,
+  getBlueTier3ProgressBackground,
+  getBlueTier3StepperState,
+} from './groupActivityColorSystem';
 
 export const GETTING_STARTED_LS_KEY = 'getting_started_status';
 const LS_KEY = GETTING_STARTED_LS_KEY;
@@ -93,30 +98,9 @@ const GettingStartedStepper = ({
               initial={false}
               animate={status}
               variants={{
-                inactive: {
-                  scale: 1,
-                  backgroundColor: isDarkMode
-                    ? 'rgba(255,255,255,0.06)'
-                    : 'rgba(27,29,36,0.08)',
-                  borderColor: isDarkMode
-                    ? 'rgba(255,255,255,0.16)'
-                    : 'rgba(27,29,36,0.14)',
-                  boxShadow: 'none',
-                },
-                active: {
-                  scale: 1,
-                  backgroundColor: '#6D9FEE',
-                  borderColor: '#71A1EB',
-                  boxShadow: isDarkMode
-                    ? '0 0 0 1px rgba(109,159,238,0.3), 0 0 14px rgba(64,180,199,0.24)'
-                    : '0 0 0 1px rgba(109,159,238,0.2), 0 0 10px rgba(64,180,199,0.14)',
-                },
-                complete: {
-                  scale: 1,
-                  backgroundColor: '#40B4C7',
-                  borderColor: '#40B4C7',
-                  boxShadow: 'none',
-                },
+                inactive: getBlueTier3StepperState(isDarkMode, 'inactive'),
+                active: getBlueTier3StepperState(isDarkMode, 'active'),
+                complete: getBlueTier3StepperState(isDarkMode, 'complete'),
               }}
               transition={{ duration: 0.28, ease: 'easeOut' }}
               style={{
@@ -187,8 +171,7 @@ const GettingStartedStepper = ({
                   }}
                   transition={{ duration: 0.32, ease: 'easeOut' }}
                   style={{
-                    background:
-                      'linear-gradient(90deg, #6D9FEE 0%, #40B4C7 100%)',
+                    background: getBlueTier3ProgressBackground(),
                     borderRadius: 999,
                     height: '100%',
                     left: 0,
@@ -835,16 +818,18 @@ export const HomeGettingStarted = ({
           animated={startBorderGlowIntro}
           interactive={false}
           edgeSensitivity={20}
-          glowColor={isDarkMode ? '192 100 69' : '210 78 56'}
+          glowColor={isDarkMode ? '218 79 73' : '218 72 70'}
           backgroundColor={isDarkMode ? '#1D1F27' : '#f5f7fb'}
           borderRadius={GETTING_STARTED_PANEL_RADIUS_PX}
           glowRadius={77}
           glowIntensity={isDarkMode ? 0.3 : 0.42}
           coneSpread={25}
           colors={
-            isDarkMode
-              ? ['#6D9FEE', '#71A1EB', '#40B4C7']
-              : ['#4D7FE4', '#5B8DE6', '#2F9EB4']
+            [
+              GROUP_ACTIVITY_BLUE.gradientTop,
+              GROUP_ACTIVITY_BLUE.primary,
+              GROUP_ACTIVITY_BLUE.hover,
+            ]
           }
           className="getting-started-border-glow"
           style={{

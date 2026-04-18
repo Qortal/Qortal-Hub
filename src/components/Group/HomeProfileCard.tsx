@@ -38,6 +38,7 @@ import {
   handleDashboardPanelPointerMove,
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
+import { getBlueAmbientSeamBackground } from './groupActivityColorSystem';
 import { DecryptedText } from '../common/DecryptedText';
 
 export const HomeProfileCard = () => {
@@ -442,11 +443,7 @@ export const HomeProfileCard = () => {
           height: isDarkMode ? '3.3px' : '2px',
           pointerEvents: 'none',
           zIndex: isDarkMode ? -1 : 0,
-            background:
-              isDarkMode
-                ? `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.12) 26%, rgba(87, 170, 219, 0.252) 40%, rgba(87, 170, 219, 0.648) 46%, rgba(87, 170, 219, 0.774) 50%, rgba(87, 170, 219, 0.648) 54%, rgba(87, 170, 219, 0.252) 60%, rgba(60, 76, 90, 0.12) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
-                 radial-gradient(92% 92% at 50% 100%, rgba(87, 170, 219, 0.27) 0%, rgba(87, 170, 219, 0.144) 30%, rgba(14, 15, 20, 0.035) 52%, transparent 76%)`
-                : 'linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 16%, rgba(60, 76, 90, 0.02) 30%, rgba(109, 159, 238, 0.08) 44%, rgba(109, 159, 238, 0.12) 50%, rgba(109, 159, 238, 0.08) 56%, rgba(60, 76, 90, 0.02) 70%, rgba(60, 76, 90, 0) 84%, transparent 100%)',
+          background: getBlueAmbientSeamBackground(theme, 'strong'),
           filter: isDarkMode ? 'blur(0.72px)' : 'blur(0.28px)',
           opacity: isDarkMode ? 1 : 0.92,
         }}

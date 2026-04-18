@@ -24,7 +24,16 @@ import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted
 import { getFeaturedDecorationMotionSx, HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
-import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
+import {
+  APP_BLUE_SURFACE_TEXT,
+  GROUP_ACTIVITY_BLUE,
+  getBlueAmbientFieldBackground,
+  getBlueAmbientPillGlowBackground,
+  getBlueAmbientSeamBackground,
+  getBlueTier1PillSurface,
+  getBlueTier2BadgeSx,
+  getBlueTier3DotSx,
+} from './groupActivityColorSystem';
 import {
   DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
   DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
@@ -78,6 +87,30 @@ const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 18;
 const HOME_INFO_PANEL_DARK_BACKGROUND = '#24272f';
 const HOME_INFO_PANEL_DARK_GRADIENT = 'linear-gradient(180deg, #24272f 0%, #24272f 30%, #1B1D24 100%)';
+
+type HomeLayoutDebugMetric = {
+  bottom: number;
+  height: number;
+  left: number;
+  top: number;
+  width: number;
+};
+
+const measureHomeLayoutDebugMetric = (
+  node: HTMLElement,
+  rootRect: DOMRect
+): HomeLayoutDebugMetric => {
+  const rect = node.getBoundingClientRect();
+
+  return {
+    bottom: rect.bottom - rootRect.top,
+    height: rect.height,
+    left: rect.left - rootRect.left,
+    top: rect.top - rootRect.top,
+    width: rect.width,
+  };
+};
+
 const DashboardUtilityPanel = ({ title, children, theme, sx = undefined, titleSx = undefined, panelBoxRef = undefined }) => {
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const assignPanelNode = (node) => {
@@ -363,11 +396,18 @@ const InfoPreviewPanel = ({ rows, theme }) => {
 export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setOpenAddGroupTab, setMobileViewMode, setDesktopViewMode, desktopViewMode }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const activityToggleTrackRef = useRef<HTMLDivElement | null>(null);
+  const featuredDecorationReleaseTimerRef = useRef<number | null>(null);
   const activityToggleSegmentRefs = useRef<Record<ActivityTab, HTMLButtonElement | null>>({
     requests: null,
     promotions: null,
     invites: null,
   });
+  const homeLayoutDebugRootRef = useRef<HTMLDivElement | null>(null);
+  const accountOverviewDebugRef = useRef<HTMLDivElement | null>(null);
+  const infoDebugRef = useRef<HTMLDivElement | null>(null);
+  const toolsDebugRef = useRef<HTMLDivElement | null>(null);
+  const featuredAppsDebugRef = useRef<HTMLDivElement | null>(null);
+  const walletActivityDebugRef = useRef<HTMLDivElement | null>(null);
   const rightRailRef = useRef<HTMLDivElement | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
@@ -381,6 +421,15 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [showMostActiveGroups, setShowMostActiveGroups] = useState(() => localStorage.getItem(GETTING_STARTED_LS_KEY) === 'completed');
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [featuredAmbientDecorationsVisible, setFeaturedAmbientDecorationsVisible] = useState(false);
+  const [featuredStripHovered, setFeaturedStripHovered] = useState(false);
+  const [featuredDecorationReleasingToAmbient, setFeaturedDecorationReleasingToAmbient] =
+    useState(false);
+  const [featuredDecorationPulseRestartKey, setFeaturedDecorationPulseRestartKey] =
+    useState(0);
+  const [
+    featuredDecorationSkipPulseIntroDelay,
+    setFeaturedDecorationSkipPulseIntroDelay,
+  ] = useState(false);
   const [gettingStartedDebugOverrides, setGettingStartedDebugOverrides] = useState<GettingStartedDebugOverrides>(() =>
     parseGettingStartedDebugOverrides(
       localStorage.getItem(DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY)
@@ -391,6 +440,8 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
+  const [walletActivityTargetHeightPx, setWalletActivityTargetHeightPx] =
+    useState<number | null>(null);
   const [activityToggleIndicator, setActivityToggleIndicator] = useState({
     ready: false,
     width: 0,
@@ -404,12 +455,30 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const theme = useTheme();
+  const isWideDashboardLayout = useMediaQuery(theme.breakpoints.up('xl'));
   const groupActivityAccentTextColor = theme.palette.getContrastText(
     GROUP_ACTIVITY_BLUE.primary
   );
   const groupActivityAccentBadgeTextColor = theme.palette.getContrastText(
     GROUP_ACTIVITY_BLUE.pressed
   );
+  const featuredSeamLockedPeakOpacity = 0.4;
+  const groupActivitySeamLockedPeakOpacity = 0.32;
+  const groupActivityToggleIndicatorSurface = getBlueTier1PillSurface(theme);
+  const groupActivityActiveBadgeSurface = getBlueTier2BadgeSx(theme, true);
+  const groupActivityInactiveBadgeSurface = getBlueTier2BadgeSx(theme, false);
+  const filledBlueDotSx = getBlueTier3DotSx(theme, true);
+  const emptyBlueDotSx = getBlueTier3DotSx(theme, false);
+  const sharedAmbientSeamBackground = getBlueAmbientSeamBackground(
+    theme,
+    'strong'
+  );
+  const groupActivitySeamPeakOpacity = 0.6;
+  const sharedAmbientFieldBackground = getBlueAmbientFieldBackground(
+    theme,
+    'strong'
+  );
+  const sharedAmbientPillGlowBackground = getBlueAmbientPillGlowBackground(theme);
   const groupActivityToggleTrackBackground =
     theme.palette.mode === 'dark'
       ? darken(theme.palette.background.surface, 0.25)
@@ -418,15 +487,163 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     theme.palette.mode === 'dark'
       ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.32)'
       : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(31,39,53,0.08)';
-  const groupActivityToggleIndicatorBackground =
-    theme.palette.mode === 'dark'
-      ? `linear-gradient(180deg, ${alpha(GROUP_ACTIVITY_BLUE.hover, 0.96)} 0%, ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.9)} 100%)`
-      : `linear-gradient(180deg, ${alpha(GROUP_ACTIVITY_BLUE.hover, 0.94)} 0%, ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.88)} 100%)`;
   const setGroupInvitesCache = useSetAtom(groupInvitesCacheAtom);
   const setJoinRequestsCache = useSetAtom(joinRequestsCacheAtom);
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+  const handleFeaturedExploreStripHoverChange = useCallback(
+    (isHovered: boolean) => {
+      setFeaturedStripHovered((current) => {
+        if (current === isHovered) {
+          return current;
+        }
+
+        if (featuredDecorationReleaseTimerRef.current !== null) {
+          window.clearTimeout(featuredDecorationReleaseTimerRef.current);
+          featuredDecorationReleaseTimerRef.current = null;
+        }
+
+        if (isHovered) {
+          setFeaturedDecorationReleasingToAmbient(false);
+          return isHovered;
+        }
+
+        if (current && !isHovered && featuredAmbientDecorationsVisible) {
+          setFeaturedDecorationSkipPulseIntroDelay(true);
+          setFeaturedDecorationReleasingToAmbient(true);
+          featuredDecorationReleaseTimerRef.current = window.setTimeout(() => {
+            setFeaturedDecorationReleasingToAmbient(false);
+            setFeaturedDecorationPulseRestartKey((pulseKey) => pulseKey + 1);
+            featuredDecorationReleaseTimerRef.current = null;
+          }, 190);
+        }
+
+        return isHovered;
+      });
+    },
+    [featuredAmbientDecorationsVisible]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (featuredDecorationReleaseTimerRef.current !== null) {
+        window.clearTimeout(featuredDecorationReleaseTimerRef.current);
+      }
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const rootNode = homeLayoutDebugRootRef.current;
+
+    if (!rootNode || desktopViewMode !== 'home') {
+      setWalletActivityTargetHeightPx(null);
+      return;
+    }
+
+    const measureDebugLayout = () => {
+      const rootRect = rootNode.getBoundingClientRect();
+      const nextMetrics: Partial<Record<HomeLayoutDebugKey, HomeLayoutDebugMetric>> = {};
+
+      if (accountOverviewDebugRef.current) {
+        nextMetrics.accountOverview = measureHomeLayoutDebugMetric(
+          accountOverviewDebugRef.current,
+          rootRect
+        );
+      }
+
+      if (infoDebugRef.current) {
+        nextMetrics.info = measureHomeLayoutDebugMetric(infoDebugRef.current, rootRect);
+      }
+
+      if (toolsDebugRef.current) {
+        nextMetrics.tools = measureHomeLayoutDebugMetric(
+          toolsDebugRef.current,
+          rootRect
+        );
+      }
+
+      if (featuredAppsDebugRef.current) {
+        nextMetrics.featuredApps = measureHomeLayoutDebugMetric(
+          featuredAppsDebugRef.current,
+          rootRect
+        );
+      }
+
+      if (walletActivityDebugRef.current) {
+        nextMetrics.walletActivity = measureHomeLayoutDebugMetric(
+          walletActivityDebugRef.current,
+          rootRect
+        );
+      }
+
+      if (isWideDashboardLayout) {
+        const leftRowMetric =
+          nextMetrics.featuredApps ?? nextMetrics.tools ?? undefined;
+        const walletMetric = nextMetrics.walletActivity;
+
+        if (leftRowMetric && walletMetric) {
+          const nextTargetHeight = Math.max(
+            0,
+            leftRowMetric.bottom - walletMetric.top
+          );
+
+          setWalletActivityTargetHeightPx((currentHeight) =>
+            currentHeight !== null &&
+            Math.abs(currentHeight - nextTargetHeight) < 0.25
+              ? currentHeight
+              : nextTargetHeight
+          );
+        } else {
+          setWalletActivityTargetHeightPx(null);
+        }
+      } else {
+        setWalletActivityTargetHeightPx(null);
+      }
+    };
+
+    measureDebugLayout();
+
+    const observedNodes = [
+      rootNode,
+      accountOverviewDebugRef.current,
+      infoDebugRef.current,
+      toolsDebugRef.current,
+      featuredAppsDebugRef.current,
+      walletActivityDebugRef.current,
+    ].filter(Boolean) as HTMLElement[];
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measureDebugLayout);
+
+      return () => {
+        window.removeEventListener('resize', measureDebugLayout);
+      };
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      measureDebugLayout();
+    });
+
+    observedNodes.forEach((node) => {
+      resizeObserver.observe(node);
+    });
+    window.addEventListener('resize', measureDebugLayout);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', measureDebugLayout);
+    };
+  }, [
+    activeTab,
+    desktopViewMode,
+    featuredAmbientDecorationsVisible,
+    isLocalPreview,
+    isOnboardingComplete,
+    isWideDashboardLayout,
+    showMostActiveGroups,
+  ]);
+
   const setActivityToggleSegmentRef = useCallback(
     (tab: ActivityTab) => (node: HTMLButtonElement | null) => {
       activityToggleSegmentRefs.current[tab] = node;
@@ -659,7 +876,15 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
           >
             <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '6px', height: '28px' }}>
               {Array.from({ length: 8 }).map((_, index) => (
-                <Box key={index} sx={{ bgcolor: index < minterDotsFilled ? '#40B4C7' : alpha(theme.palette.text.secondary, 0.28), borderRadius: '50%', boxShadow: index < minterDotsFilled ? `0 0 0 1px ${alpha('#40B4C7', 0.18)}` : 'none', height: '14px', width: '14px' }} />
+                <Box
+                  key={index}
+                  sx={{
+                    ...(index < minterDotsFilled ? filledBlueDotSx : emptyBlueDotSx),
+                    borderRadius: '50%',
+                    height: '14px',
+                    width: '14px',
+                  }}
+                />
               ))}
             </Box>
           </motion.div>
@@ -741,15 +966,17 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         {desktopViewMode === 'home' && (
           <motion.div key="home" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} custom={reduce} style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', scrollbarGutter: 'stable', width: '100%', willChange: 'transform, opacity', backfaceVisibility: 'hidden' }}>
             <Spacer height="20px" />
-            <Box sx={{ alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, maxWidth: { xs: '1320px', xl: '1520px' }, padding: '0 20px', width: '100%' }}>
+            <Box ref={homeLayoutDebugRootRef} sx={{ alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, maxWidth: { xs: '1320px', xl: '1520px' }, padding: '0 20px', position: 'relative', width: '100%' }}>
               <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: '1fr', alignItems: 'start', width: '100%', [theme.breakpoints.up('xl')]: { alignItems: 'stretch', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 400px)' } }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, width: '100%' }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                     <Box sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.0605em', textTransform: 'uppercase' }}>Qortal Hub</Box>
-                    <HomeProfileCard />
+                    <Box ref={accountOverviewDebugRef} sx={{ position: 'relative', width: '100%' }}>
+                      <HomeProfileCard />
+                    </Box>
                   </Box>
                   <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: { xs: '1fr', md: 'minmax(285px, 330px) minmax(0, 1fr)', xl: 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
-                    <Box sx={{ display: 'block', minWidth: 0, '& > *': { height: '100%' } }}>
+                    <Box ref={toolsDebugRef} sx={{ display: 'block', minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}>
                       <HomeGettingStarted
                         debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
                         debugReplayToken={gettingStartedDebugReplayToken}
@@ -757,7 +984,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                         onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
                       />
                     </Box>
-                    <Box sx={{ display: 'flex', minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { position: 'relative', width: '100%', zIndex: 1 } }}>
+                    <Box ref={featuredAppsDebugRef} sx={{ display: 'flex', minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { position: 'relative', width: '100%', zIndex: 1 } }}>
                       <Box
                         className="dashboard-panel-decoration"
                         aria-hidden="true"
@@ -769,30 +996,56 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           height: '20px',
                           pointerEvents: 'none',
                           zIndex: 0,
-                          background: theme.palette.mode === 'dark'
-                            ? `radial-gradient(88% 140% at 50% 0%, rgba(87, 170, 219, 0.08) 0%, rgba(87, 170, 219, 0.048) 26%, rgba(14, 15, 20, 0.022) 56%, transparent 82%),
-                               linear-gradient(90deg, transparent 0%, rgba(87, 170, 219, 0.01) 18%, rgba(87, 170, 219, 0.042) 50%, rgba(87, 170, 219, 0.01) 82%, transparent 100%)`
-                            : `radial-gradient(88% 140% at 50% 0%, rgba(60, 76, 90, 0.06) 0%, rgba(60, 76, 90, 0.036) 26%, rgba(14, 15, 20, 0.016) 56%, transparent 82%),
-                               linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0.008) 18%, rgba(60, 76, 90, 0.03) 50%, rgba(60, 76, 90, 0.008) 82%, transparent 100%)`,
+                          background: sharedAmbientFieldBackground,
                           filter: 'blur(8px)',
                           ...getFeaturedDecorationMotionSx(
                             featuredAmbientDecorationsVisible,
-                            1
+                            1,
+                            {
+                              holdAtPeak:
+                                featuredAmbientDecorationsVisible &&
+                                featuredStripHovered,
+                              pulseRestartKey: featuredDecorationPulseRestartKey,
+                              releaseToMin:
+                                featuredAmbientDecorationsVisible &&
+                                featuredDecorationReleasingToAmbient,
+                              skipPulseIntroDelay:
+                                featuredDecorationSkipPulseIntroDelay,
+                            }
                           ),
                         }}
                       />
                       <HomeFeaturedApps
                         decorationsVisible={featuredAmbientDecorationsVisible}
+                        onExploreStripHoverChange={
+                          handleFeaturedExploreStripHoverChange
+                        }
                         onIntroComplete={() => {
                           setFeaturedAmbientDecorationsVisible(true);
                         }}
+                        seamHoldAtPeak={
+                          featuredAmbientDecorationsVisible &&
+                          featuredStripHovered
+                        }
+                        seamLockedPeakOpacity={featuredSeamLockedPeakOpacity}
+                        seamReleaseToMin={
+                          featuredAmbientDecorationsVisible &&
+                          featuredDecorationReleasingToAmbient
+                        }
+                        seamPulseRestartKey={featuredDecorationPulseRestartKey}
+                        seamSkipPulseIntroDelay={
+                          featuredDecorationSkipPulseIntroDelay
+                        }
                       />
                     </Box>
                   </Box>
                 </Box>
                 <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px auto`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
-                  <InfoPreviewPanel rows={infoRows} theme={theme} />
-                  <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', minHeight: '182px', padding: '14px 16px 16px' }}>
+                  <Box ref={infoDebugRef} sx={{ minWidth: 0, position: 'relative', width: '100%', '& > *': { height: '100%' } }}>
+                    <InfoPreviewPanel rows={infoRows} theme={theme} />
+                  </Box>
+                  <Box ref={walletActivityDebugRef} sx={{ position: 'relative', width: '100%' }}>
+                  <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : undefined, minHeight: '182px', padding: '14px 16px 16px' }}>
                     <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', pb: 1.35 }}>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>Last activity</Typography>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>2 days ago</Typography>
@@ -861,6 +1114,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       Use these shortcuts for your most common wallet actions directly from your Hub Dashboard
                     </Typography>
                   </DashboardUtilityPanel>
+                  </Box>
                 </Box>
               </Box>
 
@@ -889,15 +1143,24 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                         height: '3.3px',
                         pointerEvents: 'none',
                         zIndex: -1,
-                        background: theme.palette.mode === 'dark'
-                          ? `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.14) 26%, rgba(87, 170, 219, 0.216) 40%, rgba(87, 170, 219, 0.486) 46%, rgba(87, 170, 219, 0.594) 50%, rgba(87, 170, 219, 0.486) 54%, rgba(87, 170, 219, 0.216) 60%, rgba(60, 76, 90, 0.14) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
-                             radial-gradient(90% 92% at 50% 100%, rgba(87, 170, 219, 0.198) 0%, rgba(87, 170, 219, 0.108) 30%, rgba(14, 15, 20, 0.035) 52%, transparent 76%)`
-                          : `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.075) 26%, rgba(60, 76, 90, 0.18) 44%, rgba(60, 76, 90, 0.22) 50%, rgba(60, 76, 90, 0.18) 56%, rgba(60, 76, 90, 0.075) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
-                             radial-gradient(90% 92% at 50% 100%, rgba(60, 76, 90, 0.11) 0%, rgba(60, 76, 90, 0.055) 30%, rgba(14, 15, 20, 0.016) 52%, transparent 76%)`,
+                        background: sharedAmbientSeamBackground,
                         filter: 'blur(0.72px)',
                         ...getFeaturedDecorationMotionSx(
                           featuredAmbientDecorationsVisible,
-                          1
+                          groupActivitySeamPeakOpacity,
+                          {
+                            holdAtPeak:
+                              featuredAmbientDecorationsVisible &&
+                              featuredStripHovered,
+                            lockedPeakOpacity:
+                              groupActivitySeamLockedPeakOpacity,
+                            pulseRestartKey: featuredDecorationPulseRestartKey,
+                            releaseToMin:
+                              featuredAmbientDecorationsVisible &&
+                              featuredDecorationReleasingToAmbient,
+                            skipPulseIntroDelay:
+                              featuredDecorationSkipPulseIntroDelay,
+                          }
                         ),
                       }}
                     />
@@ -940,10 +1203,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             reduce ? { duration: 0 } : GROUP_ACTIVITY_TOGGLE_TRANSITION
                           }
                           style={{
-                            background: groupActivityToggleIndicatorBackground,
+                            background: groupActivityToggleIndicatorSurface.background,
                             borderRadius: 999,
                             bottom: 2,
-                            boxShadow: `0 5px 12px -12px ${GROUP_ACTIVITY_BLUE.glow}, inset 0 1px 0 rgba(255,255,255,0.14)`,
+                            boxShadow: groupActivityToggleIndicatorSurface.boxShadow,
                             left: 0,
                             pointerEvents: 'none',
                             position: 'absolute',
@@ -1035,23 +1298,22 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                                     component="span"
                                     sx={{
                                       alignItems: 'center',
-                                      bgcolor:
-                                        activityTab === key
-                                          ? alpha(GROUP_ACTIVITY_BLUE.pressed, 0.72)
-                                          : GROUP_ACTIVITY_BLUE.soft,
                                       borderRadius: '50px',
                                       color:
                                         activityTab === key
                                           ? alpha(groupActivityAccentBadgeTextColor, 0.92)
-                                          : alpha(groupActivityAccentTextColor, 0.84),
+                                          : alpha(APP_BLUE_SURFACE_TEXT, 0.86),
                                       display: 'inline-flex',
                                       fontSize: '0.64rem',
-                                      fontWeight: 650,
+                                      fontWeight: 630,
                                       height: '15px',
                                       justifyContent: 'center',
                                       lineHeight: 1,
                                       minWidth: '15px',
                                       px: '4px',
+                                      ...(activityTab === key
+                                        ? groupActivityActiveBadgeSurface
+                                        : groupActivityInactiveBadgeSurface),
                                     }}
                                   >
                                     <Box
@@ -1098,9 +1360,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       <Box
                         aria-hidden="true"
                         sx={{
-                          background: theme.palette.mode === 'dark'
-                            ? 'radial-gradient(58% 136% at 50% 50%, rgba(87,170,219,0.11) 0%, rgba(87,170,219,0.072) 20%, rgba(87,170,219,0.038) 42%, rgba(14,15,20,0.012) 72%, transparent 100%)'
-                            : 'radial-gradient(58% 136% at 50% 50%, rgba(60,76,90,0.072) 0%, rgba(60,76,90,0.045) 20%, rgba(60,76,90,0.022) 42%, rgba(255,255,255,0.008) 72%, transparent 100%)',
+                          background: sharedAmbientPillGlowBackground,
                           borderRadius: '999px',
                           bottom: '-1px',
                           filter: 'blur(7px)',

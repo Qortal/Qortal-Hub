@@ -1,7 +1,14 @@
-export const GROUP_ACTIVITY_BLUE = {
-  primary: '#84AFF0',
-  hover: '#6FA3F0',
-  pressed: '#5A8FE0',
-  soft: 'rgba(132, 175, 240, 0.12)',
-  glow: 'rgba(132, 175, 240, 0.25)',
-} as const;
+export {
+  APP_BLUE as GROUP_ACTIVITY_BLUE,
+  APP_BLUE_SURFACE_TEXT,
+  getBlueAmbientFieldBackground,
+  getBlueAmbientLineBackground,
+  getBlueAmbientPillGlowBackground,
+  getBlueAmbientSeamBackground,
+  getBlueTier1ButtonSx,
+  getBlueTier1PillSurface,
+  getBlueTier2BadgeSx,
+  getBlueTier3DotSx,
+  getBlueTier3ProgressBackground,
+  getBlueTier3StepperState,
+} from '../../styles/blueMaterial';

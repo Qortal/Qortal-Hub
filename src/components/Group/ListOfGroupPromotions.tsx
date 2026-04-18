@@ -46,7 +46,10 @@ import { getFee } from '../../background/background.ts';
 import { useAtom, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { Label } from '../../styles/App-styles.ts';
-import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
+import {
+  GROUP_ACTIVITY_BLUE,
+  getBlueTier1ButtonSx,
+} from './groupActivityColorSystem';
 import {
   TIME_WEEKS_1_IN_MILLISECONDS,
   TIME_MINUTES_30_IN_MILLISECONDS,
@@ -112,23 +115,13 @@ export const ListOfGroupPromotions = ({
     GROUP_ACTIVITY_BLUE.primary
   );
   const promotionButtonSx = {
-    backgroundColor: GROUP_ACTIVITY_BLUE.primary,
     borderRadius: '50px',
-    boxShadow: `0 6px 16px -12px ${GROUP_ACTIVITY_BLUE.glow}`,
     color: groupActivityAccentTextColor,
     fontWeight: 600,
     px: 2,
     py: 1,
     textTransform: 'none',
-    transition: 'background-color 140ms ease, box-shadow 140ms ease',
-    '&:hover': {
-      backgroundColor: GROUP_ACTIVITY_BLUE.hover,
-      boxShadow: `0 8px 18px -12px ${GROUP_ACTIVITY_BLUE.glow}`,
-    },
-    '&:active': {
-      backgroundColor: GROUP_ACTIVITY_BLUE.pressed,
-      boxShadow: `0 4px 12px -12px ${GROUP_ACTIVITY_BLUE.glow}`,
-    },
+    ...getBlueTier1ButtonSx(),
   } as const;
   const { t } = useTranslation([
     'auth',

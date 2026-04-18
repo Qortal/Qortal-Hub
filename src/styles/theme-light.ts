@@ -1,17 +1,18 @@
 import { createTheme, ThemeOptions } from '@mui/material/styles';
 import { commonThemeOptions, getCommonGlobalStyles } from './theme-common';
+import { APP_BLUE } from './blueMaterial';
 
 export const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: 'light',
     primary: {
-      main: 'rgb(41, 121, 218)',
-      dark: 'rgb(80, 160, 180)',
-      light: 'rgb(150, 180, 220)',
+      main: APP_BLUE.primary,
+      dark: APP_BLUE.pressed,
+      light: APP_BLUE.gradientTop,
     },
     secondary: {
-      main: 'rgb(55, 145, 215)',
+      main: APP_BLUE.hover,
     },
     background: {
       default: '#DDD6CA',

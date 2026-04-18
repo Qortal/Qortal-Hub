@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import { Avatar, Box, Button, ButtonBase, Typography, useTheme } from '@mui/material';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
@@ -9,6 +10,11 @@ import {
   handleDashboardPanelPointerMove,
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
+import {
+  GROUP_ACTIVITY_BLUE,
+  getBlueAmbientLineBackground,
+  getBlueAmbientSeamBackground,
+} from './groupActivityColorSystem';
 
 const RETRY_DELAY_MS = 5000;
 export const FEATURED_PREVIEW_EXPAND_DELAY_MS = 200;
@@ -17,14 +23,25 @@ export const FEATURED_INTRO_TOTAL_DURATION_MS =
   FEATURED_PREVIEW_EXPAND_DELAY_MS + FEATURED_INITIAL_PREVIEW_DURATION_MS;
 export const FEATURED_DECORATION_FADE_DURATION_MS = 1350;
 export const FEATURED_DECORATION_PULSE_DURATION_MS = 5200;
+const FEATURED_DECORATION_HOVER_LOCK_DURATION_MS = 190;
+const FEATURED_STRIP_HOVER_DURATION_MS = 190;
 const PIRATE_APP_NAME = 'Pirate Nintendo';
 const Q_TUBE_APP_NAME = 'Q-Tube';
 const PIRATE_PREVIEW_VIDEO_SRC = '/pirate-nintendo-preview.mp4';
 const Q_TUBE_PREVIEW_VIDEO_SRC = '/q-tube-preview.mp4';
 export const FEATURED_DECORATION_FADE_TRANSITION =
   `opacity ${FEATURED_DECORATION_FADE_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-export const FEATURED_DECORATION_PULSE_ANIMATION =
-  `featuredAmbientPulse ${FEATURED_DECORATION_PULSE_DURATION_MS}ms ease-in-out infinite ${FEATURED_DECORATION_FADE_DURATION_MS}ms`;
+const FEATURED_DECORATION_HOVER_LOCK_TRANSITION =
+  `opacity ${FEATURED_DECORATION_HOVER_LOCK_DURATION_MS}ms ease`;
+const FEATURED_STRIP_HOVER_TRANSITION =
+  `${FEATURED_STRIP_HOVER_DURATION_MS}ms ease`;
+type FeaturedDecorationMotionOptions = {
+  holdAtPeak?: boolean;
+  lockedPeakOpacity?: number;
+  pulseRestartKey?: number;
+  releaseToMin?: boolean;
+  skipPulseIntroDelay?: boolean;
+};
 const FEATURED_PREVIEW_CONFIG = {
   [Q_TUBE_APP_NAME]: {
     subtitle: "Decentralized Cat Videos, can't beat that.",
@@ -51,22 +68,62 @@ export const FEATURED_APP_NAMES = [
 
 export const getFeaturedDecorationMotionSx = (
   decorationsVisible: boolean,
-  peakOpacity: number
-) => ({
-  '--featured-decoration-peak-opacity': `${peakOpacity}`,
-  '--featured-decoration-min-opacity': `${peakOpacity * 0.1}`,
-  opacity: decorationsVisible ? peakOpacity : 0,
-  transition: FEATURED_DECORATION_FADE_TRANSITION,
-  animation: decorationsVisible ? FEATURED_DECORATION_PULSE_ANIMATION : 'none',
-  '@keyframes featuredAmbientPulse': {
-    '0%, 100%': {
-      opacity: 'var(--featured-decoration-peak-opacity)',
+  peakOpacity: number,
+  options: FeaturedDecorationMotionOptions = {}
+) => {
+  const {
+    holdAtPeak = false,
+    lockedPeakOpacity,
+    pulseRestartKey = 0,
+    releaseToMin = false,
+    skipPulseIntroDelay = false,
+  } = options;
+  const animationName = `featuredAmbientPulse${pulseRestartKey}`;
+  const animationDelayMs = skipPulseIntroDelay
+    ? 0
+    : FEATURED_DECORATION_FADE_DURATION_MS;
+  const minOpacity = peakOpacity * 0.1;
+  const heldOpacity = lockedPeakOpacity ?? peakOpacity;
+  const animationStartsFromMin = skipPulseIntroDelay;
+
+  return {
+    '--featured-decoration-peak-opacity': `${peakOpacity}`,
+    '--featured-decoration-min-opacity': `${minOpacity}`,
+    opacity: decorationsVisible
+      ? holdAtPeak
+        ? heldOpacity
+        : releaseToMin
+          ? minOpacity
+          : peakOpacity
+      : 0,
+    transition: holdAtPeak || releaseToMin
+      ? FEATURED_DECORATION_HOVER_LOCK_TRANSITION
+      : FEATURED_DECORATION_FADE_TRANSITION,
+    animation:
+      decorationsVisible && !holdAtPeak && !releaseToMin
+        ? `${animationName} ${FEATURED_DECORATION_PULSE_DURATION_MS}ms ease-in-out infinite ${animationDelayMs}ms`
+        : 'none',
+    [`@keyframes ${animationName}`]: {
+      ...(animationStartsFromMin
+        ? {
+            '0%, 100%': {
+              opacity: 'var(--featured-decoration-min-opacity)',
+            },
+            '50%': {
+              opacity: 'var(--featured-decoration-peak-opacity)',
+            },
+          }
+        : {
+            '0%, 100%': {
+              opacity: 'var(--featured-decoration-peak-opacity)',
+            },
+            '50%': {
+              opacity: 'var(--featured-decoration-min-opacity)',
+            },
+          }),
     },
-    '50%': {
-      opacity: 'var(--featured-decoration-min-opacity)',
-    },
-  },
-});
+  };
+};
 
 const openApp = (appName: string) => {
   executeEvent('addTab', { data: { service: 'APP', name: appName } });
@@ -86,6 +143,12 @@ export const HomeFeaturedApps = ({
   panelBoxRef = undefined,
   decorationsVisible = true,
   onIntroComplete = undefined,
+  onExploreStripHoverChange = undefined,
+  seamHoldAtPeak = false,
+  seamLockedPeakOpacity = undefined,
+  seamReleaseToMin = false,
+  seamPulseRestartKey = 0,
+  seamSkipPulseIntroDelay = false,
 }) => {
   const theme = useTheme();
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
@@ -109,6 +172,68 @@ export const HomeFeaturedApps = ({
   const [expandedPreviewApp, setExpandedPreviewApp] = useState<PreviewAppName | null>(null);
   const [autoPreviewActive, setAutoPreviewActive] = useState(true);
   const footerDecorationPeakOpacity = theme.palette.mode === 'dark' ? 0.9 : 0.7;
+  const featuredFooterStripBackground =
+    theme.palette.mode === 'dark'
+      ? `radial-gradient(136% 248% at 50% 54%, ${alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.2)} 0%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.118
+        )} 18%, ${alpha(GROUP_ACTIVITY_BLUE.hover, 0.068)} 38%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.026
+        )} 62%, transparent 88%), linear-gradient(90deg, transparent 0%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.01
+        )} 18%, ${alpha(GROUP_ACTIVITY_BLUE.gradientMid, 0.06)} 50%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.01
+        )} 82%, transparent 100%), linear-gradient(180deg, ${alpha(
+          theme.palette.common.white,
+          0.02
+        )} 0%, ${alpha(theme.palette.common.white, 0.008)} 12%, transparent 34%, transparent 64%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.024
+        )} 100%), linear-gradient(180deg, transparent 0%, transparent 46%, ${alpha(
+          theme.palette.common.white,
+          0.028
+        )} 49.5%, ${alpha(theme.palette.common.white, 0.04)} 50%, ${alpha(
+          theme.palette.common.white,
+          0.028
+        )} 50.5%, transparent 54%, transparent 100%)`
+      : `radial-gradient(136% 248% at 50% 54%, ${alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.145)} 0%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.084
+        )} 18%, ${alpha(GROUP_ACTIVITY_BLUE.hover, 0.048)} 38%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.018
+        )} 62%, transparent 88%), linear-gradient(90deg, transparent 0%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.006
+        )} 18%, ${alpha(GROUP_ACTIVITY_BLUE.gradientMid, 0.042)} 50%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.006
+        )} 82%, transparent 100%), linear-gradient(180deg, ${alpha(
+          theme.palette.common.white,
+          0.014
+        )} 0%, ${alpha(theme.palette.common.white, 0.006)} 12%, transparent 34%, transparent 64%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.016
+        )} 100%), linear-gradient(180deg, transparent 0%, transparent 46%, ${alpha(
+          theme.palette.common.white,
+          0.018
+        )} 49.5%, ${alpha(theme.palette.common.white, 0.026)} 50%, ${alpha(
+          theme.palette.common.white,
+          0.018
+        )} 50.5%, transparent 54%, transparent 100%)`;
+  const featuredFooterStripCoreGlow =
+    theme.palette.mode === 'dark'
+      ? `radial-gradient(86% 194% at 50% 56%, ${alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.24)} 0%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.138
+        )} 30%, ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.04)} 56%, transparent 80%)`
+      : `radial-gradient(86% 194% at 50% 56%, ${alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.17)} 0%, ${alpha(
+          GROUP_ACTIVITY_BLUE.primary,
+          0.096
+        )} 30%, ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.028)} 56%, transparent 80%)`;
 
   const reportIntroComplete = useEffectEvent(() => {
     if (introCompletionReportedRef.current) return;
@@ -146,6 +271,12 @@ export const HomeFeaturedApps = ({
       clearInitialPreviewTimers();
     };
   }, []);
+
+  useEffect(() => {
+    return () => {
+      onExploreStripHoverChange?.(false);
+    };
+  }, [onExploreStripHoverChange]);
 
   const clearPirateTimers = () => {
     if (pirateExpandTimerRef.current) {
@@ -223,13 +354,15 @@ export const HomeFeaturedApps = ({
           height: '3.3px',
           pointerEvents: 'none',
           zIndex: -1,
-          background: theme.palette.mode === 'dark'
-            ? `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.12) 26%, rgba(87, 170, 219, 0.252) 40%, rgba(87, 170, 219, 0.648) 46%, rgba(87, 170, 219, 0.774) 50%, rgba(87, 170, 219, 0.648) 54%, rgba(87, 170, 219, 0.252) 60%, rgba(60, 76, 90, 0.12) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
-               radial-gradient(92% 92% at 50% 0%, rgba(87, 170, 219, 0.27) 0%, rgba(87, 170, 219, 0.144) 30%, rgba(14, 15, 20, 0.035) 52%, transparent 76%)`
-            : `linear-gradient(90deg, transparent 0%, rgba(60, 76, 90, 0) 12%, rgba(60, 76, 90, 0.07) 26%, rgba(60, 76, 90, 0.22) 44%, rgba(60, 76, 90, 0.28) 50%, rgba(60, 76, 90, 0.22) 56%, rgba(60, 76, 90, 0.07) 74%, rgba(60, 76, 90, 0) 88%, transparent 100%),
-               radial-gradient(92% 92% at 50% 0%, rgba(60, 76, 90, 0.1) 0%, rgba(60, 76, 90, 0.055) 30%, rgba(14, 15, 20, 0.016) 52%, transparent 76%)`,
+          background: getBlueAmbientSeamBackground(theme, 'strong'),
           filter: 'blur(0.72px)',
-          ...getFeaturedDecorationMotionSx(decorationsVisible, 1),
+          ...getFeaturedDecorationMotionSx(decorationsVisible, 1, {
+            holdAtPeak: seamHoldAtPeak,
+            lockedPeakOpacity: seamLockedPeakOpacity,
+            pulseRestartKey: seamPulseRestartKey,
+            releaseToMin: seamReleaseToMin,
+            skipPulseIntroDelay: seamSkipPulseIntroDelay,
+          }),
         }}
       />
       {/* Section title */}
@@ -281,6 +414,7 @@ export const HomeFeaturedApps = ({
           alignItems: 'center',
           display: 'flex',
           justifyContent: 'center',
+          minHeight: '18px',
           mt: '10px',
           position: 'relative',
         }}
@@ -297,10 +431,7 @@ export const HomeFeaturedApps = ({
             maxWidth: '780px',
             pointerEvents: 'none',
             width: '126%',
-            background:
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(90deg, transparent 0%, rgba(60,76,90,0.02) 10%, rgba(60,76,90,0.08) 24%, rgba(87,170,219,0.12) 50%, rgba(60,76,90,0.08) 76%, rgba(60,76,90,0.02) 90%, transparent 100%)'
-                : 'linear-gradient(90deg, transparent 0%, rgba(60,76,90,0.015) 10%, rgba(60,76,90,0.06) 24%, rgba(87,170,219,0.08) 50%, rgba(60,76,90,0.06) 76%, rgba(60,76,90,0.015) 90%, transparent 100%)',
+            background: getBlueAmbientLineBackground(theme, 'medium'),
             filter: 'blur(0.45px)',
             ...getFeaturedDecorationMotionSx(
               decorationsVisible,
@@ -323,80 +454,130 @@ export const HomeFeaturedApps = ({
             },
           }}
         />
-        <Typography
+        <ButtonBase
+          disableRipple
+          onClick={openAppsLibrary}
+          onMouseEnter={() => {
+            onExploreStripHoverChange?.(true);
+          }}
+          onMouseLeave={() => {
+            onExploreStripHoverChange?.(false);
+          }}
           sx={{
+            alignItems: 'center',
             color: theme.palette.text.secondary,
-            fontSize: '0.851rem',
+            cursor: 'pointer',
+            display: 'flex',
+            justifyContent: 'center',
+            inset: '-10px -20px -16px',
+            lineHeight: 1,
+            overflow: 'hidden',
+            padding: 0,
+            position: 'absolute',
             textAlign: 'center',
+            textDecoration: 'none',
+            transition: `color ${FEATURED_STRIP_HOVER_TRANSITION}`,
+            zIndex: 0,
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              inset: '0 0 0 0',
+              pointerEvents: 'none',
+              background: featuredFooterStripBackground,
+              filter: 'blur(7px)',
+              opacity: theme.palette.mode === 'dark' ? 0.1 : 0.07,
+              transition: `opacity ${FEATURED_STRIP_HOVER_TRANSITION}, filter ${FEATURED_STRIP_HOVER_TRANSITION}`,
+            },
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              inset: '0 10% 0 10%',
+              pointerEvents: 'none',
+              background: featuredFooterStripCoreGlow,
+              filter: 'blur(12px)',
+              opacity: theme.palette.mode === 'dark' ? 0.1 : 0.07,
+              transition: `opacity ${FEATURED_STRIP_HOVER_TRANSITION}, filter ${FEATURED_STRIP_HOVER_TRANSITION}, inset ${FEATURED_STRIP_HOVER_TRANSITION}`,
+            },
+            '&:hover, &:focus-visible': {
+              backgroundColor: 'transparent',
+              '&::before': {
+                filter: 'blur(8px)',
+                opacity: theme.palette.mode === 'dark' ? 1 : 0.9,
+              },
+              '&::after': {
+                inset: '0 6% 0 6%',
+                filter: 'blur(14px)',
+                opacity: theme.palette.mode === 'dark' ? 1 : 0.96,
+              },
+              '& .featured-apps-strip-label': {
+                color:
+                  theme.palette.mode === 'dark'
+                    ? theme.palette.common.white
+                    : theme.palette.text.primary,
+                opacity: 1,
+                textShadow:
+                  theme.palette.mode === 'dark'
+                    ? '0 0 12px rgba(132, 175, 240, 0.24), 0 0 22px rgba(132, 175, 240, 0.1)'
+                    : '0 0 12px rgba(132, 175, 240, 0.12)',
+              },
+              '& .featured-apps-strip-subtle': {
+                color:
+                  theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.common.white, 0.92)
+                    : theme.palette.text.primary,
+                opacity: 1,
+              },
+            },
           }}
         >
-          <ButtonBase
-            onClick={openAppsLibrary}
+          <Typography
             sx={{
               alignItems: 'center',
               color: 'inherit',
               columnGap: '4px',
               display: 'inline-flex',
-              fontSize: 'inherit',
-              lineHeight: 1,
-              textDecoration: 'none',
-              transition: 'color 160ms ease',
-                '&:hover': {
-                  backgroundColor: 'transparent',
-                  '& .featured-apps-explore': {
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? theme.palette.common.white
-                      : theme.palette.text.primary,
-                    filter: 'brightness(1.04)',
-                    textShadow:
-                      theme.palette.mode === 'dark'
-                        ? '0 0 8px rgba(87, 170, 219, 0.22), 0 0 16px rgba(87, 170, 219, 0.08)'
-                      : '0 0 8px rgba(87, 170, 219, 0.1)',
-                  },
-                  '& .featured-apps-all': {
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? theme.palette.common.white
-                      : theme.palette.text.primary,
-                  },
-                },
+              fontSize: '0.851rem',
+              position: 'relative',
+              textAlign: 'center',
+              zIndex: 1,
             }}
           >
             <Box
               component="span"
-              className="featured-apps-explore"
+              className="featured-apps-strip-label"
               sx={{
                 color:
                   theme.palette.mode === 'dark'
-                    ? theme.palette.common.white
+                    ? alpha(theme.palette.common.white, 0.9)
                     : theme.palette.text.primary,
                 display: 'inline-flex',
                 fontSize: 'inherit',
                 fontWeight: 700,
                 lineHeight: 1,
+                opacity: theme.palette.mode === 'dark' ? 0.94 : 1,
                 transition:
-                  'color 160ms ease, text-shadow 180ms ease, filter 180ms ease',
+                  `color ${FEATURED_STRIP_HOVER_TRANSITION}, text-shadow ${FEATURED_STRIP_HOVER_TRANSITION}, opacity ${FEATURED_STRIP_HOVER_TRANSITION}`,
               }}
             >
               Explore
             </Box>
             <Box
               component="span"
-              className="featured-apps-all"
+              className="featured-apps-strip-subtle"
               sx={{
                 color: theme.palette.text.secondary,
                 display: 'inline-flex',
                 fontSize: 'inherit',
                 fontWeight: 400,
                 lineHeight: 1,
-                transition: 'color 160ms ease',
+                opacity: theme.palette.mode === 'dark' ? 0.88 : 1,
+                transition: `color ${FEATURED_STRIP_HOVER_TRANSITION}, opacity ${FEATURED_STRIP_HOVER_TRANSITION}`,
               }}
             >
               All Q-Apps
             </Box>
-          </ButtonBase>
-        </Typography>
+          </Typography>
+        </ButtonBase>
       </Box>
     </Box>
   );
@@ -649,8 +830,8 @@ const FeaturedExpandedPreview = ({
               inset: 0,
               background:
                 theme.palette.mode === 'dark'
-                  ? 'linear-gradient(180deg, rgba(7,9,13,0.72) 0%, rgba(7,9,13,0.62) 18%, rgba(8,10,14,0.36) 30%, rgba(8,10,14,0.08) 56%, rgba(8,10,14,0) 100%), linear-gradient(90deg, rgba(8,10,14,0.72) 0%, rgba(8,10,14,0.64) 26%, rgba(8,10,14,0.44) 54%, rgba(8,10,14,0.24) 100%), linear-gradient(180deg, rgba(10,12,16,0.68) 0%, rgba(10,12,16,0.54) 26%, rgba(10,12,16,0.42) 54%, rgba(10,12,16,0.56) 100%), radial-gradient(120% 82% at 50% 8%, rgba(87,170,219,0.038) 0%, rgba(87,170,219,0.014) 24%, rgba(10,12,16,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(255,255,255,0) 24%)'
-                  : 'linear-gradient(180deg, rgba(20,24,30,0.4) 0%, rgba(20,24,30,0.32) 18%, rgba(20,24,30,0.16) 30%, rgba(20,24,30,0.04) 56%, rgba(20,24,30,0) 100%), linear-gradient(90deg, rgba(18,22,28,0.58) 0%, rgba(18,22,28,0.5) 26%, rgba(18,22,28,0.34) 54%, rgba(18,22,28,0.18) 100%), linear-gradient(180deg, rgba(22,26,32,0.54) 0%, rgba(22,26,32,0.38) 26%, rgba(22,26,32,0.32) 54%, rgba(22,26,32,0.44) 100%), radial-gradient(120% 82% at 50% 8%, rgba(87,170,219,0.03) 0%, rgba(87,170,219,0.012) 24%, rgba(22,26,32,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.018) 0%, rgba(255,255,255,0) 24%)',
+                  ? 'linear-gradient(180deg, rgba(7,9,13,0.72) 0%, rgba(7,9,13,0.62) 18%, rgba(8,10,14,0.36) 30%, rgba(8,10,14,0.08) 56%, rgba(8,10,14,0) 100%), linear-gradient(90deg, rgba(8,10,14,0.72) 0%, rgba(8,10,14,0.64) 26%, rgba(8,10,14,0.44) 54%, rgba(8,10,14,0.24) 100%), linear-gradient(180deg, rgba(10,12,16,0.68) 0%, rgba(10,12,16,0.54) 26%, rgba(10,12,16,0.42) 54%, rgba(10,12,16,0.56) 100%), radial-gradient(120% 82% at 50% 8%, rgba(132,175,240,0.032) 0%, rgba(132,175,240,0.012) 24%, rgba(10,12,16,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(255,255,255,0) 24%)'
+                  : 'linear-gradient(180deg, rgba(20,24,30,0.4) 0%, rgba(20,24,30,0.32) 18%, rgba(20,24,30,0.16) 30%, rgba(20,24,30,0.04) 56%, rgba(20,24,30,0) 100%), linear-gradient(90deg, rgba(18,22,28,0.58) 0%, rgba(18,22,28,0.5) 26%, rgba(18,22,28,0.34) 54%, rgba(18,22,28,0.18) 100%), linear-gradient(180deg, rgba(22,26,32,0.54) 0%, rgba(22,26,32,0.38) 26%, rgba(22,26,32,0.32) 54%, rgba(22,26,32,0.44) 100%), radial-gradient(120% 82% at 50% 8%, rgba(132,175,240,0.024) 0%, rgba(132,175,240,0.01) 24%, rgba(22,26,32,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.018) 0%, rgba(255,255,255,0) 24%)',
               pointerEvents: 'none',
               zIndex: 0,
             }}

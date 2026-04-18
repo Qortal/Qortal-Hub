@@ -5,6 +5,7 @@ import {
   GroupActivityEmptyStateGraphic,
   type GroupActivityEmptyStateGraphicVariant,
 } from './GroupActivityEmptyStateGraphic';
+import { getBlueTier1ButtonSx } from './groupActivityColorSystem';
 
 type GroupActivityEmptyStateProps = {
   compact?: boolean;
@@ -231,14 +232,7 @@ export const GroupActivityEmptyState = ({
           disableElevation
           onClick={onCtaClick}
           sx={{
-            appearance: 'none',
-            background:
-              'linear-gradient(180deg, #8fb8f3 0%, #79aaf0 42%, #6fa3f0 100%)',
-            border: '1px solid rgba(143, 184, 243, 0.22)',
             borderRadius: '999px',
-            boxShadow:
-              '0 6px 18px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 0 18px rgba(132, 175, 240, 0.18)',
-            color: 'rgba(10, 18, 30, 0.92)',
             fontSize: '15px',
             fontWeight: 600,
             letterSpacing: '-0.01em',
@@ -247,26 +241,7 @@ export const GroupActivityEmptyState = ({
             minWidth: '168px',
             padding: '12px 22px',
             textTransform: 'none',
-            transition:
-              'transform 180ms ease, box-shadow 180ms ease, filter 180ms ease, background 180ms ease',
-            '&:hover': {
-              background:
-                'linear-gradient(180deg, #98bff6 0%, #83b1f3 42%, #76a7f1 100%)',
-              boxShadow:
-                '0 8px 22px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.04) inset, 0 0 22px rgba(132, 175, 240, 0.22)',
-              filter: 'saturate(1.02)',
-            },
-            '&:active': {
-              background: 'linear-gradient(180deg, #7faef0 0%, #6f9fe7 100%)',
-              boxShadow:
-                '0 4px 12px rgba(0, 0, 0, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.02) inset, 0 0 12px rgba(132, 175, 240, 0.14)',
-              transform: 'translateY(1px)',
-            },
-            '&:focus-visible': {
-              boxShadow:
-                '0 0 0 2px rgba(132, 175, 240, 0.28), 0 6px 18px rgba(0, 0, 0, 0.28), 0 0 18px rgba(132, 175, 240, 0.18)',
-              outline: 'none',
-            },
+            ...getBlueTier1ButtonSx(),
           }}
         >
           {ctaLabel}
