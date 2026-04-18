@@ -42,6 +42,7 @@ import {
 import { DecryptedText } from '../common/DecryptedText';
 import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 import BorderGlow from '../common/BorderGlow';
+import TiltedCard from '../common/TiltedCard';
 import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
 
 type HomeProfileCardProps = {
@@ -356,80 +357,85 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
           width: '104px',
         }}
       >
-        <BorderGlow
-          animated={isAvatarGlowHovered}
-          loopAnimated={true}
-          interactive={false}
-          edgeSensitivity={20}
-          glowColor={isDarkMode ? '218 79 73' : '218 72 70'}
-          backgroundColor="transparent"
-          borderRadius={26}
-          glowRadius={50}
-          glowIntensity={isDarkMode ? 0.3 : 0.42}
-          coneSpread={25}
-          colors={[
-            GROUP_ACTIVITY_BLUE.gradientTop,
-            GROUP_ACTIVITY_BLUE.primary,
-            GROUP_ACTIVITY_BLUE.hover,
-          ]}
-          fillOpacity={0.32}
-          style={{
-            '--card-border': 'transparent',
-            '--card-shadow': 'none',
-            width: 'fit-content',
-          }}
+        <TiltedCard
+          scaleOnHover={1.1}
+          rotateAmplitude={18}
         >
-          <ButtonBase
-            ref={avatarAnchorRef}
-            onClick={(e) => openAvatarPanel(e.currentTarget)}
-            onMouseEnter={() => setIsAvatarGlowHovered(true)}
-            onMouseLeave={() => setIsAvatarGlowHovered(false)}
-            sx={{
-              background: isDarkMode
-                ? 'linear-gradient(180deg, rgba(255,255,255,0.062) 0%, rgba(255,255,255,0.02) 100%)'
-                : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.36) 100%)',
-              border: `1px solid ${
-                isDarkMode
-                  ? 'rgba(255,255,255,0.08)'
-                  : alpha(theme.palette.common.white, 0.54)
-              }`,
-              borderRadius: '22px',
-              boxShadow: isDarkMode
-                ? '0 1px 4px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18)'
-                : '0 1px 3px rgba(28,36,52,0.08), inset 0 1px 0 rgba(255,255,255,0.42)',
-              display: 'inline-flex',
-              overflow: 'hidden',
-              padding: '3px',
-              transition: 'border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease',
-              '&:hover': {
-                borderColor: isDarkMode
-                  ? 'rgba(255,255,255,0.12)'
-                  : alpha(theme.palette.common.white, 0.74),
-                boxShadow: isDarkMode
-                  ? '0 0 0 3px rgba(132,175,240,0.08), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -1px 0 rgba(0,0,0,0.18)'
-                  : '0 0 0 3px rgba(132,175,240,0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
-              },
+          <BorderGlow
+            animated={isAvatarGlowHovered}
+            loopAnimated={true}
+            interactive={false}
+            edgeSensitivity={20}
+            glowColor={isDarkMode ? '218 79 73' : '218 72 70'}
+            backgroundColor="transparent"
+            borderRadius={26}
+            glowRadius={50}
+            glowIntensity={isDarkMode ? 0.3 : 0.42}
+            coneSpread={25}
+            colors={[
+              GROUP_ACTIVITY_BLUE.gradientTop,
+              GROUP_ACTIVITY_BLUE.primary,
+              GROUP_ACTIVITY_BLUE.hover,
+            ]}
+            fillOpacity={0.32}
+            style={{
+              '--card-border': 'transparent',
+              '--card-shadow': 'none',
+              width: 'fit-content',
             }}
           >
-            <Avatar
-              src={avatarUrl ?? undefined}
-              onError={() => setAvatarError(true)}
+            <ButtonBase
+              ref={avatarAnchorRef}
+              onClick={(e) => openAvatarPanel(e.currentTarget)}
+              onMouseEnter={() => setIsAvatarGlowHovered(true)}
+              onMouseLeave={() => setIsAvatarGlowHovered(false)}
               sx={{
-                bgcolor: isDarkMode ? '#636772' : '#E7DED0',
+                background: isDarkMode
+                  ? 'linear-gradient(180deg, rgba(255,255,255,0.062) 0%, rgba(255,255,255,0.02) 100%)'
+                  : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.36) 100%)',
+                border: `1px solid ${
+                  isDarkMode
+                    ? 'rgba(255,255,255,0.08)'
+                    : alpha(theme.palette.common.white, 0.54)
+                }`,
                 borderRadius: '22px',
-                height: 88,
-                width: 88,
+                boxShadow: isDarkMode
+                  ? '0 1px 4px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.18)'
+                  : '0 1px 3px rgba(28,36,52,0.08), inset 0 1px 0 rgba(255,255,255,0.42)',
+                display: 'inline-flex',
+                overflow: 'hidden',
+                padding: '3px',
+                transition: 'border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease',
+                '&:hover': {
+                  borderColor: isDarkMode
+                    ? 'rgba(255,255,255,0.12)'
+                    : alpha(theme.palette.common.white, 0.74),
+                  boxShadow: isDarkMode
+                    ? '0 0 0 3px rgba(132,175,240,0.08), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -1px 0 rgba(0,0,0,0.18)'
+                    : '0 0 0 3px rgba(132,175,240,0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
+                },
               }}
             >
-              <PersonIcon
+              <Avatar
+                src={avatarUrl ?? undefined}
+                onError={() => setAvatarError(true)}
                 sx={{
-                  color: isDarkMode ? '#1D2126' : theme.palette.text.secondary,
-                  fontSize: 44,
+                  bgcolor: isDarkMode ? '#636772' : '#E7DED0',
+                  borderRadius: '22px',
+                  height: 88,
+                  width: 88,
                 }}
-              />
-            </Avatar>
-          </ButtonBase>
-        </BorderGlow>
+              >
+                <PersonIcon
+                  sx={{
+                    color: isDarkMode ? '#1D2126' : theme.palette.text.secondary,
+                    fontSize: 44,
+                  }}
+                />
+              </Avatar>
+            </ButtonBase>
+          </BorderGlow>
+        </TiltedCard>
         <Typography
           sx={{
             color: theme.palette.mode === 'dark'

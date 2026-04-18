@@ -7,6 +7,7 @@ type BorderGlowProps = {
   interactive?: boolean;
   alwaysOn?: boolean;
   foregroundGlow?: boolean;
+  reverseSweep?: boolean;
   edgeSensitivity?: number;
   glowColor?: string;
   backgroundColor?: string;
@@ -121,6 +122,7 @@ const BorderGlow = ({
   interactive = true,
   alwaysOn = false,
   foregroundGlow = false,
+  reverseSweep = false,
   edgeSensitivity = 30,
   glowColor = '40 80 80',
   backgroundColor = '#120F17',
@@ -206,7 +208,7 @@ const BorderGlow = ({
         const progress =
           ((timestamp % animationDurationMs) + animationDurationMs) %
           animationDurationMs;
-        const angle = 110 + (progress / animationDurationMs) * 360;
+        const angle = 110 + (progress / animationDurationMs) * (reverseSweep ? -360 : 360);
         card.style.setProperty('--cursor-angle', `${angle}deg`);
         rafId = requestAnimationFrame(animateContinuousSweep);
       };
@@ -300,7 +302,7 @@ const BorderGlow = ({
       card.classList.remove('sweep-active');
       card.style.setProperty('--edge-proximity', '0');
     };
-  }, [alwaysOn, animated, animationDurationMs, loopAnimated]);
+  }, [alwaysOn, animated, animationDurationMs, loopAnimated, reverseSweep]);
 
   const glowVars = buildGlowVars(glowColor, glowIntensity);
   const gradientVars = buildGradientVars(colors);

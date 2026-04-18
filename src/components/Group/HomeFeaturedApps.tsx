@@ -894,6 +894,7 @@ const AppTile = ({
       animated={false}
       foregroundGlow
       interactive={false}
+      reverseSweep={isWideRightTile}
       edgeSensitivity={30}
       glowColor="40 80 80"
       backgroundColor="transparent"
