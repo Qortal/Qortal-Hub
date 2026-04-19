@@ -49,6 +49,8 @@ type HomeProfileCardProps = {
   onOpenSettings?: () => void;
 };
 
+type AccountStatus = 'busy' | 'invisible' | 'online';
+
 export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const { t } = useTranslation(['tutorial', 'core', 'group']);
   const theme = useTheme();
@@ -168,6 +170,68 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const shouldRevealAddressOnHover = hasRegisteredName && Boolean(address);
   const showAnimatedAddress = shouldRevealAddressOnHover && isAddressFieldHovered;
   const addressFieldSideSlotPx = 26;
+  const accountStatus = useMemo<AccountStatus>(() => {
+    const candidateStatuses = [
+      userInfo?.status,
+      userInfo?.presence,
+      userInfo?.userStatus,
+      userInfo?.availability,
+    ];
+    const rawStatus = candidateStatuses.find(
+      (value) => typeof value === 'string' && value.trim().length > 0
+    );
+
+    if (typeof rawStatus !== 'string') {
+      return 'online';
+    }
+
+    const normalized = rawStatus.trim().toLowerCase();
+
+    if (
+      normalized === 'busy' ||
+      normalized === 'dnd' ||
+      normalized === 'do not disturb'
+    ) {
+      return 'busy';
+    }
+
+    if (
+      normalized === 'invisible' ||
+      normalized === 'hidden' ||
+      normalized === 'offline'
+    ) {
+      return 'invisible';
+    }
+
+    return 'online';
+  }, [userInfo]);
+  const accountStatusMeta = useMemo(() => {
+    if (accountStatus === 'busy') {
+      return {
+        color: isDarkMode ? '#D8A34D' : '#C48A26',
+        label: 'Busy',
+      };
+    }
+
+    if (accountStatus === 'invisible') {
+      return {
+        color: isDarkMode
+          ? alpha(theme.palette.common.white, 0.36)
+          : alpha(theme.palette.text.primary, 0.32),
+        label: 'Invisible',
+      };
+    }
+
+    return {
+      color: isDarkMode ? '#56C47B' : '#2F9E5E',
+      label: 'Online',
+    };
+  }, [
+    accountStatus,
+    isDarkMode,
+    theme.palette.common.white,
+    theme.palette.text.primary,
+  ]);
   const avatarUrl =
     tempAvatar ??
     (name && !avatarError
@@ -648,6 +712,55 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
             >
               <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
             </ButtonBase>
+          </Box>
+
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'inline-flex',
+              gap: '7px',
+              justifyContent: 'center',
+              minHeight: '18px',
+              mt: '2px',
+              width: '100%',
+            }}
+          >
+            <Box
+              aria-hidden="true"
+              sx={{
+                animation:
+                  accountStatus === 'online'
+                    ? 'homeProfileStatusPulse 3.4s ease-in-out infinite'
+                    : undefined,
+                bgcolor: accountStatusMeta.color,
+                borderRadius: '50%',
+                flexShrink: 0,
+                height: 7,
+                width: 7,
+                '@keyframes homeProfileStatusPulse': {
+                  '0%, 100%': {
+                    opacity: 0.9,
+                    transform: 'scale(0.92)',
+                  },
+                  '50%': {
+                    opacity: 1,
+                    transform: 'scale(1.08)',
+                  },
+                },
+              }}
+            />
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.92),
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                letterSpacing: '0.01em',
+                lineHeight: 1.1,
+                textAlign: 'center',
+              }}
+            >
+              {accountStatusMeta.label}
+            </Typography>
           </Box>
 
           <Typography
