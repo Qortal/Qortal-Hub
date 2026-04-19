@@ -363,9 +363,17 @@ export const Group = ({
   // Track view modes to prevent marking messages as read when not viewing chat
   const desktopViewModeRef = useRef(desktopViewMode);
   const mobileViewModeRef = useRef(mobileViewMode);
+  const lastNonQappDesktopViewModeRef = useRef(
+    desktopViewMode !== 'apps' && desktopViewMode !== 'dev'
+      ? desktopViewMode
+      : 'home'
+  );
 
   useEffect(() => {
     desktopViewModeRef.current = desktopViewMode;
+    if (desktopViewMode !== 'apps' && desktopViewMode !== 'dev') {
+      lastNonQappDesktopViewModeRef.current = desktopViewMode;
+    }
   }, [desktopViewMode]);
 
   useEffect(() => {
@@ -1365,6 +1373,37 @@ export const Group = ({
       unsubscribeFromEvent('open-home-mode', openHomeMode);
     };
   }, [openHomeMode]);
+
+  const returnFromAppsMode = useCallback(() => {
+    setDesktopViewMode(lastNonQappDesktopViewModeRef.current || 'home');
+  }, [setDesktopViewMode]);
+
+  useEffect(() => {
+    subscribeToEvent('return-from-apps-mode', returnFromAppsMode);
+
+    return () => {
+      unsubscribeFromEvent('return-from-apps-mode', returnFromAppsMode);
+    };
+  }, [returnFromAppsMode]);
+
+  const openGroupDiscovery = useCallback(() => {
+    setChatMode('groups');
+    setDesktopSideView('groups');
+    setSelectedGroup(null);
+    setSelectedDirect(null);
+    setNewChat(false);
+    setDesktopViewMode('chat');
+    setOpenAddGroupTab(1);
+    setOpenAddGroup(true);
+  }, [setDesktopViewMode]);
+
+  useEffect(() => {
+    subscribeToEvent('open-group-discovery', openGroupDiscovery);
+
+    return () => {
+      unsubscribeFromEvent('open-group-discovery', openGroupDiscovery);
+    };
+  }, [openGroupDiscovery]);
 
   const openDevMode = useCallback(() => {
     setDesktopViewMode('dev');

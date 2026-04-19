@@ -598,7 +598,24 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
     setIsAddTabWaitingForPointerMove(false);
     addTabPointerOriginRef.current = null;
     if (copyTabs?.length === 0) {
-      setMode('home');
+      setTabs(copyTabs);
+      setSelectedTab(null);
+      tabsTokenRef.current += 1;
+      const tabsToken = tabsTokenRef.current;
+      executeEvent('setTabsToNav', {
+        data: {
+          tabs: copyTabs,
+          selectedTab: null,
+          tabsToken,
+        },
+      });
+      executeEvent('forceNavClear', { data: { tabsToken } });
+      executeEvent('clearNavInput', {});
+      returnFromAppsMode();
+      window.setTimeout(() => {
+        setMode('home');
+      }, 0);
+      return;
     } else {
       setSelectedTab(copyTabs[0]);
     }
@@ -727,6 +744,10 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
     setIsNewTabWindow(false);
   }, [setIsNewTabWindow, setMode]);
 
+  const returnFromAppsMode = useCallback(() => {
+    executeEvent('return-from-apps-mode', {});
+  }, []);
+
   const duplicateTab = useCallback(
     (tab) => {
       if (!tab) return;
@@ -765,9 +786,7 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
     setIsAddTabWaitingForPointerMove(false);
     addTabPointerOriginRef.current = null;
     setIsNewTabWindow(false);
-    setMode('home');
     executeEvent('clearNavInput', {});
-    executeEvent('open-apps-mode', {});
     tabsTokenRef.current += 1;
     executeEvent('setTabsToNav', {
       data: {
@@ -778,7 +797,11 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
       },
     });
     executeEvent('forceNavClear', { data: { tabsToken: tabsTokenRef.current } });
-  }, [tabs, setIsNewTabWindow, setMode]);
+    returnFromAppsMode();
+    window.setTimeout(() => {
+      setMode('home');
+    }, 0);
+  }, [tabs, returnFromAppsMode, setIsNewTabWindow, setMode]);
 
   useEffect(() => {
     if (!show) {
@@ -796,9 +819,19 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
     }
 
     if (tabs.length === 0 && !isNewTabWindow && mode === 'viewer') {
-      setMode('home');
+      returnFromAppsMode();
+      window.setTimeout(() => {
+        setMode('home');
+      }, 0);
     }
-  }, [tabs.length, selectedTab, isNewTabWindow, mode, setMode]);
+  }, [
+    tabs.length,
+    selectedTab,
+    isNewTabWindow,
+    mode,
+    returnFromAppsMode,
+    setMode,
+  ]);
 
   const handleTabDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;

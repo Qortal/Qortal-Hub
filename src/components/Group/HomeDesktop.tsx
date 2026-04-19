@@ -1,16 +1,20 @@
-import { Box, ButtonBase, CircularProgress, IconButton, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, ButtonBase, CircularProgress, IconButton, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
+import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
+import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
+import DensitySmallRoundedIcon from '@mui/icons-material/DensitySmallRounded';
+import DensityLargeRoundedIcon from '@mui/icons-material/DensityLargeRounded';
 import { alpha, darken } from '@mui/material/styles';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { balanceAtom, groupInvitesCacheAtom, joinRequestsCacheAtom, memberGroupsAtom, nodeInfosAtom, userInfoAtom } from '../../atoms/global';
+import { useAtomValue } from 'jotai';
+import { balanceAtom, memberGroupsAtom, nodeInfosAtom, userInfoAtom } from '../../atoms/global';
 import { Spacer } from '../../common/Spacer';
 import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
@@ -20,7 +24,6 @@ import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
-import AppViewerContainer from '../Apps/AppViewerContainer';
 import {
   APP_BLUE_SURFACE_TEXT,
   GROUP_ACTIVITY_BLUE,
@@ -46,6 +49,9 @@ import { dashboardPanelSx, handleDashboardPanelPointerLeave, handleDashboardPane
 import { useHandleUserInfo } from '../../hooks/useHandleUserInfo';
 import { isLocalNodeUrl } from '../../constants/constants';
 import { nodeDisplay } from '../../utils/helpers';
+import { DashboardWidgetFrame, type WidgetDisplayMode } from '../Widgets/DashboardWidgetFrame';
+import { GroupsWidget } from '../Widgets/GroupsWidget';
+import { QuitterFeedWidget } from '../Widgets/QuitterFeedWidget';
 
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
@@ -88,15 +94,27 @@ const HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX =
 const HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY =
   'home-dashboard-customizable-cards-layout-v1';
 const HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX = 60;
-const HOME_GROUP_ACTIVITY_CARD_SAFE_MIN_HEIGHT_PX =
-  HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX + 600;
+const HOME_DASHBOARD_WIDGET_HEIGHT_PX = 612;
+const HOME_DASHBOARD_WIDGET_DISPLAY_MODE: WidgetDisplayMode = 'expanded';
 const HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS: Record<HomeCustomizableCardId, number> = {
-  groupActivity: HOME_GROUP_ACTIVITY_CARD_SAFE_MIN_HEIGHT_PX,
-  quitter: 420,
+  groupActivity: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
+  quitter: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
 };
 const HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS: Record<HomeCustomizableCardId, number> = {
-  groupActivity: 1480,
-  quitter: 1280,
+  groupActivity: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
+  quitter: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
+};
+const HOME_QUITTER_WIDGET_INITIAL_BATCH_SIZES: Record<WidgetDisplayMode, number> = {
+  compact: 6,
+  expanded: 8,
+};
+const HOME_QUITTER_WIDGET_LOAD_MORE_BATCH_SIZES: Record<WidgetDisplayMode, number> = {
+  compact: 4,
+  expanded: 4,
+};
+const HOME_QUITTER_WIDGET_SEARCH_LIMITS: Record<WidgetDisplayMode, number> = {
+  compact: 6,
+  expanded: 8,
 };
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
@@ -690,6 +708,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         localStorage.getItem(HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY)
       )
     );
+  const [groupWidgetRefreshToken, setGroupWidgetRefreshToken] = useState(0);
+  const [isGroupWidgetRefreshing, setIsGroupWidgetRefreshing] = useState(false);
+  const [quitterWidgetRefreshToken, setQuitterWidgetRefreshToken] = useState(0);
+  const [isQuitterWidgetRefreshing, setIsQuitterWidgetRefreshing] = useState(false);
   const [activityToggleIndicator, setActivityToggleIndicator] = useState({
     ready: false,
     width: 0,
@@ -729,8 +751,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     theme.palette.mode === 'dark'
       ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.32)'
       : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(31,39,53,0.08)';
-  const setGroupInvitesCache = useSetAtom(groupInvitesCacheAtom);
-  const setJoinRequestsCache = useSetAtom(joinRequestsCacheAtom);
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
@@ -1327,15 +1347,30 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, [userAddress]);
 
   const handleRefreshGroupActivity = () => {
-    setGroupInvitesCache(null);
-    setJoinRequestsCache(null);
+    setGroupWidgetRefreshToken((value) => value + 1);
   };
+
+  const handleRefreshQuitterWidget = useCallback(() => {
+    setQuitterWidgetRefreshToken((value) => value + 1);
+  }, []);
+
+  const handleSwapDashboardWidgets = useCallback(() => {
+    setCustomizableCardsLayout((currentLayout) => ({
+      ...currentLayout,
+      order: [...currentLayout.order].reverse(),
+    }));
+  }, []);
 
   const balanceLabel = balance != null ? `${Number(balance).toFixed(2)} QORT` : '—';
   const handleOpenEmbeddedQuitter = () => {
     executeEvent('addTab', { data: { service: 'APP', name: 'Quitter' } });
     executeEvent('open-apps-mode', {});
   };
+  const handleOpenGroupsWidget = useCallback(() => {
+    setSelectedGroup(null);
+    setGroupSection('chat');
+    setDesktopViewMode('chat');
+  }, [setDesktopViewMode, setGroupSection, setSelectedGroup]);
 
   const nodeStatusValue = nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100 ? `Syncing ${Math.round(nodeInfos?.syncPercent || 0)}%` : 'Fully Synced';
   const peersLabel = `${nodeInfos?.numberOfConnections || 0}`;
@@ -1476,15 +1511,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     0,
     customizableCardsLayout.order.indexOf('quitter')
   );
-  const groupActivityCardHeightPx =
-    customizableCardsLayout.heights.groupActivity ?? null;
-  const quitterCardHeightPx = customizableCardsLayout.heights.quitter ?? null;
-  const groupActivityViewportHeightPx = Math.max(
-    280,
-    groupActivityMeasuredViewportHeightPx ??
-      ((groupActivityCardHeightPx ?? HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX) -
-        HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX)
-  );
+  const quitterWidgetInitialBatchSize =
+    HOME_QUITTER_WIDGET_INITIAL_BATCH_SIZES[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
+  const quitterWidgetLoadMoreBatchSize =
+    HOME_QUITTER_WIDGET_LOAD_MORE_BATCH_SIZES[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
+  const quitterWidgetSearchLimit =
+    HOME_QUITTER_WIDGET_SEARCH_LIMITS[HOME_DASHBOARD_WIDGET_DISPLAY_MODE];
 
   return (
     <LazyMotion features={domAnimation}>
@@ -1611,422 +1643,61 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                   {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
                   <Box
                     sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
+                      alignItems: 'start',
+                      display: 'grid',
                       gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                      gridTemplateColumns: {
+                        xs: '1fr',
+                        xl: 'repeat(2, minmax(0, 1fr))',
+                      },
                       width: '100%',
                     }}
                   >
-                  <Box
-                    ref={assignGroupActivityPanelNode}
-                    sx={{
-                      ...dashboardPanelSx(theme, 'base'),
-                      borderRadius: '12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                      height:
-                        groupActivityCardHeightPx != null
-                          ? `${groupActivityCardHeightPx}px`
-                          : undefined,
-                      minHeight: `${HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS.groupActivity}px`,
-                      order: groupActivityCardOrder,
-                      overflow: 'hidden',
-                      padding: '12px 20px 16px',
-                      width: '100%',
-                    }}
-                    onMouseMove={handleDashboardPanelPointerMove}
-                    onMouseLeave={handleDashboardPanelPointerLeave}
-                  >
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px',
-                      }}
+                    <DashboardWidgetFrame
+                      actionIcon={<ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />}
+                      actionLabel="Open in Q-Chat"
+                      height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                      onAction={handleOpenGroupsWidget}
+                      onRefresh={handleRefreshGroupActivity}
+                      onSwap={handleSwapDashboardWidgets}
+                      order={groupActivityCardOrder}
+                      panelRef={assignGroupActivityPanelNode}
+                      refreshing={isGroupWidgetRefreshing}
+                      title={t('tutorial:home.group_activity', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
+                      widgetId="groups"
                     >
-                      <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                        <Box>
-                          <Box sx={{ color: theme.palette.text.primary, fontSize: '1.02rem', fontWeight: 650, letterSpacing: '-0.01em' }}>{t('tutorial:home.group_activity', { postProcess: 'capitalizeFirstChar' })}</Box>
-                          <Typography sx={{ color: theme.palette.mode === 'dark' ? 'rgba(223, 228, 238, 0.7)' : 'rgba(72, 78, 92, 0.68)', fontSize: '0.78rem', mt: '2px' }}>
-                            Keep up with promotions, invites, and membership requests.
-                          </Typography>
-                        </Box>
-                        <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '6px' }}>
-                          {renderCustomizableCardControls('groupActivity')}
-                          <IconButton aria-label={t('core:action.refresh', { postProcess: 'capitalizeFirstChar', defaultValue: 'Refresh' })} onClick={handleRefreshGroupActivity} size="small" sx={{ color: theme.palette.text.secondary }}>
-                            <RefreshIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
-                      </Box>
-                    </Box>
-                    <Box
-                      ref={groupActivityContentFrameRef}
-                      sx={{
-                        display: 'flex',
-                        flex: '1 1 auto',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        minHeight: 0,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <Box
-                        ref={groupActivityTopControlsRef}
-                        sx={{
-                          alignItems: 'center',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                        }}
-                      >
-                        <Box
-                          ref={activityToggleTrackRef}
-                          sx={{
-                            alignSelf: 'center',
-                            bgcolor: groupActivityToggleTrackBackground,
-                            borderRadius: '999px',
-                            boxShadow: groupActivityToggleTrackShadow,
-                            display: 'inline-flex',
-                            gap: '1px',
-                            minWidth: 0,
-                            overflow: 'hidden',
-                            padding: '2px',
-                            position: 'relative',
-                            width: 'fit-content',
-                          }}
-                        >
-                        {activityToggleIndicator.ready && (
-                          <motion.div
-                            aria-hidden="true"
-                            animate={{
-                              width: activityToggleIndicator.width,
-                              x: activityToggleIndicator.x,
-                            }}
-                            initial={false}
-                            transition={
-                              reduce ? { duration: 0 } : GROUP_ACTIVITY_TOGGLE_TRANSITION
-                            }
-                            style={{
-                              background: groupActivityToggleIndicatorSurface.background,
-                              borderRadius: 999,
-                              bottom: 2,
-                              boxShadow: groupActivityToggleIndicatorSurface.boxShadow,
-                              left: 0,
-                              pointerEvents: 'none',
-                              position: 'absolute',
-                              top: 2,
-                              willChange: 'transform, width',
-                              zIndex: 0,
-                            }}
-                          />
-                        )}
-                        {([ 
-                          { key: 'requests' as ActivityTab, label: t('tutorial:home.group_activity_requests_short', { defaultValue: 'Requests' }), count: requestsCount, countLoading: requestsCountLoading, showBadge: true },
-                          { key: 'promotions' as ActivityTab, label: t('tutorial:home.group_activity_promoted_short', { defaultValue: 'Promoted' }), count: promotionsCount, countLoading: false, showBadge: false },
-                          { key: 'invites' as ActivityTab, label: t('tutorial:home.group_activity_invites_short', { defaultValue: 'Invites' }), count: invitesCount, countLoading: invitesCountLoading, showBadge: true },
-                        ]).map(({ key, label, count, countLoading, showBadge }) => {
-                          const showLoadingIndicator = countLoading && key !== 'invites';
-                          const showCount = showBadge && count > 0;
-
-                          return (
-                            <ButtonBase
-                              key={key}
-                              ref={setActivityToggleSegmentRef(key)}
-                              onClick={() => setActivityTab(key)}
-                              sx={{
-                                borderRadius: '999px',
-                                color:
-                                  activityTab === key
-                                    ? groupActivityAccentTextColor
-                                    : theme.palette.text.secondary,
-                                display: 'inline-flex',
-                                fontSize: '0.79rem',
-                                fontWeight: 650,
-                                height: '32px',
-                                justifyContent: 'center',
-                                minWidth: 0,
-                                px: 1.7,
-                                position: 'relative',
-                                textTransform: 'none',
-                                transition: reduce
-                                  ? 'none'
-                                  : 'color 220ms ease-out',
-                                whiteSpace: 'nowrap',
-                                zIndex: 1,
-                              }}
-                            >
-                              <Box
-                                component="span"
-                                sx={{
-                                  alignItems: 'center',
-                                  display: 'inline-flex',
-                                  gap:
-                                    showLoadingIndicator || showCount ? '6px' : '0px',
-                                  justifyContent: 'center',
-                                  minWidth: 0,
-                                }}
-                              >
-                                <Box
-                                  component="span"
-                                  sx={{
-                                    minWidth: 0,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                  }}
-                                >
-                                  {label}
-                                </Box>
-                                <Box
-                                  component="span"
-                                  sx={{
-                                    alignItems: 'center',
-                                    display: 'inline-flex',
-                                    justifyContent: 'center',
-                                    minWidth:
-                                      showLoadingIndicator || showCount ? '18px' : 0,
-                                  }}
-                                >
-                                  {showLoadingIndicator ? (
-                                    <CircularProgress
-                                      size={12}
-                                      thickness={4}
-                                      sx={{
-                                        color:
-                                          activityTab === key
-                                            ? groupActivityAccentTextColor
-                                            : GROUP_ACTIVITY_BLUE.primary,
-                                      }}
-                                    />
-                                  ) : showCount ? (
-                                    <Box
-                                      component="span"
-                                      sx={{
-                                        alignItems: 'center',
-                                        borderRadius: '50px',
-                                        color:
-                                          activityTab === key
-                                            ? alpha(groupActivityAccentBadgeTextColor, 0.92)
-                                            : alpha(APP_BLUE_SURFACE_TEXT, 0.86),
-                                        display: 'inline-flex',
-                                        fontSize: '0.64rem',
-                                        fontWeight: 630,
-                                        height: '15px',
-                                        justifyContent: 'center',
-                                        lineHeight: 1,
-                                        minWidth: '15px',
-                                        px: '4px',
-                                        ...(activityTab === key
-                                          ? groupActivityActiveBadgeSurface
-                                          : groupActivityInactiveBadgeSurface),
-                                      }}
-                                    >
-                                      <Box
-                                        component="span"
-                                        sx={{ position: 'relative', top: '0.5px' }}
-                                      >
-                                        {count}
-                                      </Box>
-                                    </Box>
-                                  ) : null}
-                                </Box>
-                              </Box>
-                            </ButtonBase>
-                          );
-                        })}
-                        </Box>
-                        <Box
-                          data-group-activity-ghost-bar="true"
-                          sx={{
-                            alignItems: 'center',
-                            alignSelf: 'center',
-                            display: 'inline-flex',
-                            justifyContent: 'center',
-                            maxWidth: 'min(100%, 404px)',
-                            mt: '12px',
-                            px: '18px',
-                            py: '10px',
-                            position: 'relative',
-                            width: '100%',
-                          }}
-                        >
-                          <Box
-                            aria-hidden="true"
-                            sx={{
-                              background: theme.palette.mode === 'dark'
-                                ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.01) 16%, rgba(255,255,255,0.022) 50%, rgba(255,255,255,0.01) 84%, transparent 100%)'
-                                : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.008) 16%, rgba(24,29,36,0.018) 50%, rgba(24,29,36,0.008) 84%, transparent 100%)',
-                              borderRadius: '999px',
-                              inset: 0,
-                              pointerEvents: 'none',
-                              position: 'absolute',
-                            }}
-                          />
-                          <Box
-                            aria-hidden="true"
-                            sx={{
-                              background: sharedAmbientPillGlowBackground,
-                              borderRadius: '999px',
-                              bottom: '-1px',
-                              filter: 'blur(7px)',
-                              left: '12%',
-                              opacity: 0.9,
-                              pointerEvents: 'none',
-                              position: 'absolute',
-                              right: '12%',
-                              top: '-1px',
-                            }}
-                          />
-                          <Box
-                            aria-hidden="true"
-                            sx={{
-                              background: theme.palette.mode === 'dark'
-                                ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.008) 10%, rgba(255,255,255,0.026) 26%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.026) 74%, rgba(255,255,255,0.008) 90%, transparent 100%)'
-                                : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.006) 10%, rgba(24,29,36,0.018) 26%, rgba(24,29,36,0.042) 50%, rgba(24,29,36,0.018) 74%, rgba(24,29,36,0.006) 90%, transparent 100%)',
-                              height: '1px',
-                              left: '4%',
-                              pointerEvents: 'none',
-                              position: 'absolute',
-                              right: '4%',
-                              top: 0,
-                            }}
-                          />
-                          <Box
-                            aria-hidden="true"
-                            sx={{
-                              background: theme.palette.mode === 'dark'
-                                ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.006) 10%, rgba(255,255,255,0.018) 26%, rgba(255,255,255,0.042) 50%, rgba(255,255,255,0.018) 74%, rgba(255,255,255,0.006) 90%, transparent 100%)'
-                                : 'linear-gradient(90deg, transparent 0%, rgba(24,29,36,0.005) 10%, rgba(24,29,36,0.014) 26%, rgba(24,29,36,0.032) 50%, rgba(24,29,36,0.014) 74%, rgba(24,29,36,0.005) 90%, transparent 100%)',
-                              bottom: 0,
-                              height: '1px',
-                              left: '4%',
-                              pointerEvents: 'none',
-                              position: 'absolute',
-                              right: '4%',
-                            }}
-                          />
-                          <Typography
-                            sx={{
-                              color: theme.palette.mode === 'dark'
-                                ? 'rgba(223, 228, 238, 0.56)'
-                                : 'rgba(72, 78, 92, 0.54)',
-                              fontSize: '0.75rem',
-                              fontWeight: 500,
-                              letterSpacing: '0.018em',
-                              lineHeight: 1.2,
-                              position: 'relative',
-                              textAlign: 'center',
-                              zIndex: 1,
-                            }}
-                          >
-                            Join censorship-free decentralized groups
-                          </Typography>
-                        </Box>
-                      </Box>
-                      <Box sx={{ display: activityTab === 'requests' ? 'block' : 'none' }}>
-                        <GroupJoinRequests compact isVisible={activityTab === 'requests'} compactViewportHeight={groupActivityViewportHeightPx} onCountChange={setRequestsCount} onLoadingChange={setRequestsCountLoading} setGroupSection={setGroupSection} setSelectedGroup={setSelectedGroup} getTimestampEnterChat={getTimestampEnterChat} setOpenAddGroup={setOpenAddGroup} setOpenManageMembers={setOpenManageMembers} myAddress={myAddress} groups={groups} setMobileViewMode={setMobileViewMode} setDesktopViewMode={setDesktopViewMode} />
-                      </Box>
-                      <Box sx={{ display: activityTab === 'invites' ? 'block' : 'none' }}>
-                        <GroupInvites compact isVisible={activityTab === 'invites'} compactViewportHeight={groupActivityViewportHeightPx} onCountChange={setInvitesCount} onLoadingChange={setInvitesCountLoading} setOpenAddGroup={setOpenAddGroup} setOpenAddGroupTab={setOpenAddGroupTab} myAddress={myAddress} />
-                      </Box>
-                      <Box sx={{ display: activityTab === 'promotions' ? 'block' : 'none' }}>
-                        <ListOfGroupPromotions compact compactViewportHeight={groupActivityViewportHeightPx} onCountChange={setPromotionsCount} />
-                      </Box>
-                    </Box>
-                  </Box>
-                  <Box
-                    ref={quitterCardHeightRef}
-                    sx={{
-                      ...dashboardPanelSx(theme, 'base'),
-                      borderRadius: '12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px',
-                      height:
-                        quitterCardHeightPx != null
-                          ? `${quitterCardHeightPx}px`
-                          : undefined,
-                      minHeight: `${HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS.quitter}px`,
-                      order: quitterCardOrder,
-                      overflow: 'hidden',
-                      padding: '14px 16px 16px',
-                      width: '100%',
-                    }}
-                    onMouseMove={handleDashboardPanelPointerMove}
-                    onMouseLeave={handleDashboardPanelPointerLeave}
-                  >
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'flex',
-                        gap: '14px',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.primary,
-                            fontSize: '1.02rem',
-                            fontWeight: 650,
-                            letterSpacing: '-0.01em',
-                          }}
-                        >
-                          Quitter
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color:
-                              theme.palette.mode === 'dark'
-                                ? 'rgba(223, 228, 238, 0.68)'
-                                : 'rgba(72, 78, 92, 0.66)',
-                            fontSize: '0.78rem',
-                            mt: '2px',
-                          }}
-                        >
-                          Live Q-App preview directly from your Main Page.
-                        </Typography>
-                      </Box>
-                      <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '8px' }}>
-                        {renderCustomizableCardControls('quitter')}
-                        <ButtonBase
-                          disableRipple
-                          onClick={handleOpenEmbeddedQuitter}
-                          sx={{
-                            ...getBlueTier1ButtonSx(),
-                            borderRadius: '999px',
-                            color: APP_BLUE_SURFACE_TEXT,
-                            flexShrink: 0,
-                            fontSize: '0.76rem',
-                            fontWeight: 700,
-                            minHeight: '36px',
-                            px: 1.7,
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          Open In Apps
-                        </ButtonBase>
-                      </Box>
-                    </Box>
-                    <Box
-                      sx={{
-                        border: `1px solid ${alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.26 : 0.18)}`,
-                        borderRadius: '12px',
-                        flex: '1 1 auto',
-                        minHeight: 0,
-                        overflow: 'hidden',
-                        width: '100%',
-                      }}
-                    >
-                      <AppViewerContainer
-                        app={DASHBOARD_EMBEDDED_QUITTER_APP}
-                        customHeight="100%"
-                        hide={false}
-                        isDevMode={false}
-                        isSelected
+                      <GroupsWidget
+                        displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                        myAddress={myAddress}
+                        onRefreshStateChange={setIsGroupWidgetRefreshing}
+                        refreshToken={groupWidgetRefreshToken}
                       />
-                    </Box>
-                  </Box>
+                    </DashboardWidgetFrame>
+
+                    <DashboardWidgetFrame
+                      actionIcon={<OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />}
+                      actionLabel="Open in Q-Apps"
+                      height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                      onAction={handleOpenEmbeddedQuitter}
+                      onRefresh={handleRefreshQuitterWidget}
+                      onSwap={handleSwapDashboardWidgets}
+                      order={quitterCardOrder}
+                      panelRef={quitterCardHeightRef}
+                      refreshing={isQuitterWidgetRefreshing}
+                      title="Quitter"
+                      widgetId="quitter"
+                    >
+                      <QuitterFeedWidget
+                        batchSize={quitterWidgetLoadMoreBatchSize}
+                        displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                        initialBatchSize={quitterWidgetInitialBatchSize}
+                        onRefreshStateChange={setIsQuitterWidgetRefreshing}
+                        refreshToken={quitterWidgetRefreshToken}
+                        searchLimit={quitterWidgetSearchLimit}
+                      />
+                    </DashboardWidgetFrame>
                   </Box>
                 </>
               )}

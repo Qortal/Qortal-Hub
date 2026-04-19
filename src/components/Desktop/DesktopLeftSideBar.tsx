@@ -168,6 +168,14 @@ export const DesktopSideBar = ({
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
   });
+  const [debugGroupsWidget, setDebugGroupsWidget] = useState(() => {
+    const saved = localStorage.getItem('hub.groupsWidgetDebug');
+    return saved === '1' || saved === 'true';
+  });
+  const [debugQuitterNewPosts, setDebugQuitterNewPosts] = useState(() => {
+    const saved = localStorage.getItem('hub.quitterWidgetNewPostsDebug');
+    return saved === '1' || saved === 'true';
+  });
   const [debugDashboardIntroMode, setDebugDashboardIntroMode] =
     useState<DashboardLoginIntroMode>(() =>
       parseDashboardLoginIntroMode(
@@ -711,6 +719,35 @@ export const DesktopSideBar = ({
             sx={getDebugToggleSx(debugUnread)}
           >
             Chat Pulse: {debugUnread ? 'ON' : 'OFF'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => {
+              const next = !debugGroupsWidget;
+              setDebugGroupsWidget(next);
+              localStorage.setItem('hub.groupsWidgetDebug', next ? 'true' : 'false');
+              executeEvent('setGroupsWidgetDebug', { data: { enabled: next } });
+            }}
+            sx={getDebugToggleSx(debugGroupsWidget)}
+          >
+            Groups Debug: {debugGroupsWidget ? 'ON' : 'OFF'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => {
+              const next = !debugQuitterNewPosts;
+              setDebugQuitterNewPosts(next);
+              localStorage.setItem(
+                'hub.quitterWidgetNewPostsDebug',
+                next ? 'true' : 'false'
+              );
+              executeEvent('setQuitterWidgetNewPostsDebug', {
+                data: { enabled: next },
+              });
+            }}
+            sx={getDebugToggleSx(debugQuitterNewPosts)}
+          >
+            Quitter New Posts: {debugQuitterNewPosts ? 'ON' : 'OFF'}
           </ButtonBase>
         </Box>
       ) : null}
