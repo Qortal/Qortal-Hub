@@ -26,13 +26,23 @@ export function computeJitterReadyThresholdFrames(opts: {
   jitterStartBufferSize: number;
   extraHoldFrames?: number;
   steadyPrimedHoldFrames?: number;
+  /**
+   * Additive hold while a decrypt-burst recovery window is active.
+   * Protects late-decrypted frames from being rejected as `stale` by keeping
+   * `lastPlayedSeq` from advancing past them before they land.
+   */
+  burstRecoveryExtraHoldFrames?: number;
 }): number {
   const extraHoldFrames = Math.max(0, opts.extraHoldFrames ?? 0);
   const steadyPrimedHoldFrames = Math.max(0, opts.steadyPrimedHoldFrames ?? 0);
+  const burstRecoveryExtraHoldFrames = Math.max(
+    0,
+    opts.burstRecoveryExtraHoldFrames ?? 0
+  );
   const base = opts.primed
     ? 1 + steadyPrimedHoldFrames
     : opts.jitterStartBufferSize;
-  return base + extraHoldFrames;
+  return base + extraHoldFrames + burstRecoveryExtraHoldFrames;
 }
 
 export class JitterBuffer {
@@ -46,6 +56,13 @@ export class JitterBuffer {
   private softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
   /** Exact-1-remote steady-state floor after priming; keeps the Opus side off the 1-frame edge. */
   private steadyPrimedHoldFrames = 0;
+  /**
+   * Additive hold active while a decrypt-burst recovery window is armed.
+   * Prevents pops from advancing `lastPlayedSeq` past frames that are still
+   * being decrypted on the worker; protects against the "late-decrypt stale"
+   * loss mode at call start and after key/topology re-syncs.
+   */
+  private burstRecoveryExtraHoldFrames = 0;
   /** Raw seq gap for the last pop (for WASM FEC); cleared by consumeLastRawGapAfterPop. */
   private lastRawGapAfterPop = 0;
   private jitterBufferSize: number;
@@ -78,6 +95,22 @@ export class JitterBuffer {
     if (Number.isFinite(frames)) {
       this.steadyPrimedHoldFrames = Math.max(0, Math.trunc(frames));
     }
+  }
+
+  /**
+   * Set the additive hold used during active decrypt-burst recovery windows.
+   * Pass 0 to clear it when the window ends. Applies to both unprimed startup
+   * and steady-state pops (i.e. re-armed mid-call), so late-decrypted frames
+   * have a chance to land before `lastPlayedSeq` advances past them.
+   */
+  setBurstRecoveryExtraHoldFrames(frames: number): void {
+    if (Number.isFinite(frames)) {
+      this.burstRecoveryExtraHoldFrames = Math.max(0, Math.trunc(frames));
+    }
+  }
+
+  getBurstRecoveryExtraHoldFrames(): number {
+    return this.burstRecoveryExtraHoldFrames;
   }
 
   /**
@@ -157,6 +190,7 @@ export class JitterBuffer {
       jitterStartBufferSize: this.jitterStartBufferSize,
       extraHoldFrames: this.extraHoldFrames,
       steadyPrimedHoldFrames: this.steadyPrimedHoldFrames,
+      burstRecoveryExtraHoldFrames: this.burstRecoveryExtraHoldFrames,
     });
     if (this.entries.length < threshold) return null;
     const entry = this.entries.shift();
@@ -188,6 +222,7 @@ export class JitterBuffer {
         jitterStartBufferSize: this.jitterStartBufferSize,
         extraHoldFrames: this.extraHoldFrames,
         steadyPrimedHoldFrames: this.steadyPrimedHoldFrames,
+        burstRecoveryExtraHoldFrames: this.burstRecoveryExtraHoldFrames,
       })
     );
   }
@@ -205,5 +240,6 @@ export class JitterBuffer {
     this.lastRawGapAfterPop = 0;
     this.softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
     this.steadyPrimedHoldFrames = 0;
+    this.burstRecoveryExtraHoldFrames = 0;
   }
 }

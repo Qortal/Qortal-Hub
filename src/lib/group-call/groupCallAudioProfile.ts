@@ -74,6 +74,18 @@ export const GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS = 260;
 /** Base delay resetting `primed` after last pop empties the jitter buffer (ms). Phase C/D. */
 export const GCALL_JITTER_SOFT_UNPRIME_MS = 50;
 
+/**
+ * Additive jitter-buffer hold frames while a decrypt-burst recovery window is
+ * active (call start, post-key-sync, topology change, participant join). This
+ * prevents pops from advancing `lastPlayedSeq` before late-decrypted frames
+ * from the worker land at the ingest — those frames would otherwise be
+ * rejected as `stale` in `JitterBuffer.push`. 4 frames ≈ 80 ms of extra
+ * preroll, sized to cover typical decrypt-worker latency bursts (100–200 ms)
+ * observed at call start without adding audible latency to the steady state.
+ * The hold is cleared when the burst window expires.
+ */
+export const GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES = 4;
+
 /** Phase D: boost decode when physical depth is at or below this (frames). */
 export const GCALL_THIN_JITTER_BUFFER_FRAMES = 2;
 

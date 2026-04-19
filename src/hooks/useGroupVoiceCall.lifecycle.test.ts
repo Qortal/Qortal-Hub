@@ -2814,6 +2814,49 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
     ).toBe(false);
   });
 
+  it('extends the n1-severe-playout-warm cooldown after repeated fires without improvement', () => {
+    const base = {
+      remotePeerCount: 1,
+      activeSourceCount: 1,
+      lastRecvAgeMs: 180,
+      recentStability: {
+        sampleCount: 4,
+        avgPcmBufferedMs: 32,
+        playoutUnderTargetFraction: 0.81,
+        underrunCount: 12,
+        stable: false,
+        severeInstability: true,
+      },
+      avgPlayoutDeltaMs: -68,
+      starvationSeverity: 'strong' as const,
+    };
+    // After the normal 8 s cooldown and <3 consecutive fires, the warm still fires.
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        ...base,
+        lastActionAgeMs: 9_000,
+        consecutiveFires: 2,
+      })
+    ).toBe(true);
+    // After 3 consecutive fires, the caller must wait for the extended 30 s
+    // cooldown; 9 s is no longer enough.
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        ...base,
+        lastActionAgeMs: 9_000,
+        consecutiveFires: 3,
+      })
+    ).toBe(false);
+    // Past the extended cooldown, backoff clears and the warm fires again.
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        ...base,
+        lastActionAgeMs: 31_000,
+        consecutiveFires: 3,
+      })
+    ).toBe(true);
+  });
+
   it('only seeds join session state before the root session is adopted', () => {
     expect(
       shouldApplyJoinSessionSnapshot({

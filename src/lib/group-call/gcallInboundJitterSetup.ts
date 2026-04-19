@@ -25,6 +25,12 @@ export function createGcallJitterBufferForIngress(opts: {
    * DM applies immediately for single-peer low-latency profile.
    */
   applySteadyPrimedHoldNow: boolean;
+  /**
+   * Initial additive hold while a decrypt-burst recovery window is still
+   * active (e.g. source appeared mid-burst right after key sync / topology).
+   * Pass 0 when no window is armed.
+   */
+  burstRecoveryExtraHoldFrames?: number;
 }): JitterBuffer {
   const mode = opts.adaptiveNetworkMode;
   const effective =
@@ -45,6 +51,10 @@ export function createGcallJitterBufferForIngress(opts: {
     const n = Math.max(0, Math.floor(opts.activeSourceCount));
     const inRecovery = mode === 'recovery';
     jb.setSteadyPrimedHoldFrames(!inRecovery && n === 1 ? 1 : 0);
+  }
+  const burstHold = Math.max(0, opts.burstRecoveryExtraHoldFrames ?? 0);
+  if (burstHold > 0) {
+    jb.setBurstRecoveryExtraHoldFrames(burstHold);
   }
   return jb;
 }

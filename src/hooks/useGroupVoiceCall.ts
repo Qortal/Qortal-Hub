@@ -70,6 +70,7 @@ import {
 } from '../lib/group-call/router';
 import {
   GCALL_AUDIO_QUALITY_PROFILE_KEY,
+  GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES,
   GCALL_RECOVERY_JITTER_APPLY_DWELL_MS,
   GCALL_RECOVERY_JITTER_EXIT_DEBOUNCE_MS,
   GCALL_THIN_JITTER_BUFFER_FRAMES,
@@ -1340,6 +1341,17 @@ const GCALL_N1_RECEIVE_PRIORITY_CAP_MIN_HOLD_MS = 900;
 const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_STABLE_MS = 650;
 const GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_DELTA_MIN_MS = -20;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_COOLDOWN_MS = 8_000;
+/**
+ * After this many consecutive fires without the peer reaching a `stable`
+ * recent-recovery window, extend the cooldown to avoid thrashing the path.
+ * Real-world trace: Kenny's call fired `n1-severe-playout-warm` 33 times on
+ * an 8 s cadence for 4 minutes straight — the peer was unhealthy but the
+ * warms were not helping, they were just adding path-request churn on top of
+ * an already-starved ingress. Backing off gives adaptive jitter + FEC room to
+ * breathe while still escalating if the peer truly needs re-routing later.
+ */
+const GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_AFTER_FIRES = 3;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_COOLDOWN_MS = 30_000;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_PCM_MAX_MS = 90;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_UNDERTARGET_MIN = 0.55;
@@ -2222,6 +2234,12 @@ export function shouldTriggerN1SeverePlayoutPathWarm(opts: {
   avgPlayoutDeltaMs: number;
   starvationSeverity: PlayoutStarvationSeverity;
   lastActionAgeMs: number;
+  /**
+   * Number of consecutive severe-warm fires against this peer without an
+   * intervening `stable` recent-recovery window. Used to extend the cooldown
+   * when repeated warms aren't helping (see backoff constants above).
+   */
+  consecutiveFires?: number;
 }): boolean {
   if (opts.remotePeerCount !== 1 || opts.activeSourceCount !== 1) return false;
   if (
@@ -2233,7 +2251,12 @@ export function shouldTriggerN1SeverePlayoutPathWarm(opts: {
   const lastActionAgeMs = Number.isFinite(opts.lastActionAgeMs)
     ? opts.lastActionAgeMs
     : Number.POSITIVE_INFINITY;
-  if (lastActionAgeMs < GCALL_N1_SEVERE_PLAYOUT_WARM_COOLDOWN_MS) {
+  const consecutiveFires = Math.max(0, opts.consecutiveFires ?? 0);
+  const cooldownMs =
+    consecutiveFires >= GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_AFTER_FIRES
+      ? GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_COOLDOWN_MS
+      : GCALL_N1_SEVERE_PLAYOUT_WARM_COOLDOWN_MS;
+  if (lastActionAgeMs < cooldownMs) {
     return false;
   }
   const recent = opts.recentStability;
@@ -3689,6 +3712,13 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Short decrypt-queue burst window after key sync or participant join (see `computePendingDecryptLimits`). */
   const decryptBurstUntilMsRef = useRef<number>(0);
   /**
+   * Whether jitter buffers are currently carrying the burst-recovery extra
+   * hold (mirrors `decryptBurstUntilMsRef.current > now`). Used to apply /
+   * clear `setBurstRecoveryExtraHoldFrames` on edges and to avoid diagnostic
+   * spam on every tick.
+   */
+  const burstRecoveryJitterHoldActiveRef = useRef<boolean>(false);
+  /**
    * Staged audio escalation (single transition: `runGcallAudioEscalationTransition` + overload in
    * `recordPendingDecryptDepth`). See `gcallAudioEscalation.ts` for the ownership table.
    */
@@ -3794,6 +3824,14 @@ export function useGroupVoiceCall(uiActive = false) {
     new Map()
   );
   const lastN1SeverePlayoutWarmAtPeerRef = useRef<Map<string, number>>(
+    new Map()
+  );
+  /**
+   * Consecutive `n1-severe-playout-warm` fires per peer since the last
+   * recent-recovery window classified the peer as `stable`. Feeds the
+   * extended cooldown in `shouldTriggerN1SeverePlayoutPathWarm`.
+   */
+  const n1SeverePlayoutWarmConsecutiveFiresRef = useRef<Map<string, number>>(
     new Map()
   );
   const rootInboundStressWarmFiredRef = useRef<Set<string>>(new Set());
@@ -7049,6 +7087,18 @@ export function useGroupVoiceCall(uiActive = false) {
             ? wallNow - lastActionAt
             : Number.POSITIVE_INFINITY;
         if (
+          singleRemoteRecentStability !== null &&
+          singleRemoteRecentStability.stable
+        ) {
+          n1SeverePlayoutWarmConsecutiveFiresRef.current.delete(
+            singleRemoteIngressPeerAddress
+          );
+        }
+        const consecutiveFires =
+          n1SeverePlayoutWarmConsecutiveFiresRef.current.get(
+            singleRemoteIngressPeerAddress
+          ) ?? 0;
+        if (
           shouldTriggerN1SeverePlayoutPathWarm({
             remotePeerCount: remotePeersForInboundWatchdog.length,
             activeSourceCount,
@@ -7057,11 +7107,16 @@ export function useGroupVoiceCall(uiActive = false) {
             avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
             starvationSeverity: singleRemoteStarvationSeverity,
             lastActionAgeMs,
+            consecutiveFires,
           })
         ) {
           lastN1SeverePlayoutWarmAtPeerRef.current.set(
             singleRemoteIngressPeerAddress,
             wallNow
+          );
+          n1SeverePlayoutWarmConsecutiveFiresRef.current.set(
+            singleRemoteIngressPeerAddress,
+            consecutiveFires + 1
           );
           n1PathDegradedUntilPeerRef.current.set(
             singleRemoteIngressPeerAddress,
@@ -7091,6 +7146,10 @@ export function useGroupVoiceCall(uiActive = false) {
               singleRemoteRecentStability?.playoutUnderTargetFraction ?? null,
             avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
             starvationSeverity: singleRemoteStarvationSeverity,
+            consecutiveFires: consecutiveFires + 1,
+            backoffActive:
+              consecutiveFires + 1 >=
+              GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_AFTER_FIRES,
           });
           requestMediaRecoveryForPeerRef.current(
             singleRemoteIngressPeerAddress,
@@ -7255,6 +7314,9 @@ export function useGroupVoiceCall(uiActive = false) {
         : requested;
 
       const burstWindow = wallNow < decryptBurstUntilMsRef.current;
+      if (!burstWindow && burstRecoveryJitterHoldActiveRef.current) {
+        applyBurstRecoveryJitterHold(false, 'window-expired');
+      }
       const slewDt = Math.max(0, wallNow - lastBurstMaxSlewAtMsRef.current);
       lastBurstMaxSlewAtMsRef.current = wallNow;
       const dynamicBurstActive =
@@ -7896,17 +7958,46 @@ export function useGroupVoiceCall(uiActive = false) {
     );
   }, []);
 
-  const armDecryptBurstRecoveryWindow = useCallback((reason: string) => {
-    const until = Date.now() + PENDING_DECRYPT_BURST_EXTEND_MS;
-    decryptBurstUntilMsRef.current = Math.max(
-      decryptBurstUntilMsRef.current,
-      until
-    );
-    gcallDiagnosticsPush('info', '[GCall] decryptBurstRecoveryWindow', {
-      reason,
-      untilMs: until,
-    });
-  }, []);
+  /**
+   * Apply (or clear) the additive jitter-buffer hold that protects late-
+   * decrypted frames from being rejected as `stale` during decrypt-burst
+   * recovery windows. See `GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES`.
+   * No-ops on the trailing edge if no state change is needed.
+   */
+  const applyBurstRecoveryJitterHold = useCallback(
+    (active: boolean, reason: string) => {
+      if (burstRecoveryJitterHoldActiveRef.current === active) return;
+      const frames = active ? GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES : 0;
+      for (const jb of jitterMapRef.current.values()) {
+        jb.setBurstRecoveryExtraHoldFrames(frames);
+      }
+      burstRecoveryJitterHoldActiveRef.current = active;
+      gcallDiagnosticsPush('info', '[GCall] burstRecoveryJitterHold', {
+        active,
+        reason,
+        extraHoldFrames: frames,
+        extraHoldMs: frames * OPUS_FRAME_DURATION_MS,
+        jitterBufferCount: jitterMapRef.current.size,
+      });
+    },
+    []
+  );
+
+  const armDecryptBurstRecoveryWindow = useCallback(
+    (reason: string) => {
+      const until = Date.now() + PENDING_DECRYPT_BURST_EXTEND_MS;
+      decryptBurstUntilMsRef.current = Math.max(
+        decryptBurstUntilMsRef.current,
+        until
+      );
+      gcallDiagnosticsPush('info', '[GCall] decryptBurstRecoveryWindow', {
+        reason,
+        untilMs: until,
+      });
+      applyBurstRecoveryJitterHold(true, `arm:${reason}`);
+    },
+    [applyBurstRecoveryJitterHold]
+  );
 
   const getPendingDecryptBurstCause = useCallback((nowMs = Date.now()) => {
     if (decryptOverloadStateRef.current.active) return 'overload';
@@ -8376,6 +8467,9 @@ export function useGroupVoiceCall(uiActive = false) {
           activeSourceCount: nForTuning,
           tier2MultiSource: nForTuning >= 2,
           applySteadyPrimedHoldNow: false,
+          burstRecoveryExtraHoldFrames: burstRecoveryJitterHoldActiveRef.current
+            ? GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES
+            : 0,
         });
         jitterMapRef.current.set(sourceAddr, jb);
         updateMetricResourceCounts();
@@ -14069,6 +14163,7 @@ export function useGroupVoiceCall(uiActive = false) {
         lastSendPathDiagnosticAtRef.current.clear();
         globalRecoveryUntilMsRef.current = 0;
         decryptBurstUntilMsRef.current = 0;
+        burstRecoveryJitterHoldActiveRef.current = false;
         effectiveBurstMaxRef.current = PENDING_DECRYPT_BURST_NOMINAL_BASE;
         lastBurstMaxSlewAtMsRef.current = Date.now();
         peakDepthSamplesRef.current = [];
@@ -14570,6 +14665,7 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSendPathDiagnosticAtRef.current.clear();
       globalRecoveryUntilMsRef.current = 0;
       decryptBurstUntilMsRef.current = 0;
+      burstRecoveryJitterHoldActiveRef.current = false;
       effectiveBurstMaxRef.current = PENDING_DECRYPT_BURST_NOMINAL_BASE;
       lastBurstMaxSlewAtMsRef.current = Date.now();
       peakDepthSamplesRef.current = [];
@@ -14679,6 +14775,7 @@ export function useGroupVoiceCall(uiActive = false) {
       n1PathDegradedUntilPeerRef.current.clear();
       lastN1PathDegradedWarmAtPeerRef.current.clear();
       lastN1SeverePlayoutWarmAtPeerRef.current.clear();
+      n1SeverePlayoutWarmConsecutiveFiresRef.current.clear();
       worstIsolationHysteresisRef.current =
         createWorstIsolationHysteresisState();
       topologySettleUntilMsRef.current = 0;
