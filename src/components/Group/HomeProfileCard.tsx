@@ -14,6 +14,7 @@ import {
   Menu,
   MenuItem,
   Portal,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -24,6 +25,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import ErrorIcon from '@mui/icons-material/Error';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import PersonIcon from '@mui/icons-material/Person';
+import QrCode2RoundedIcon from '@mui/icons-material/QrCode2Rounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -57,6 +59,7 @@ import TiltedCard from '../common/TiltedCard';
 import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
 
 type HomeProfileCardProps = {
+  onOpenReceive?: (anchorEl: HTMLElement) => void;
   onOpenSettings?: () => void;
 };
 
@@ -85,7 +88,10 @@ const ACCOUNT_STATUS_OPTIONS: Array<{
   },
 ];
 
-export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
+export const HomeProfileCard = ({
+  onOpenReceive,
+  onOpenSettings,
+}: HomeProfileCardProps) => {
   const { t } = useTranslation(['tutorial', 'core', 'group']);
   const theme = useTheme();
   const { show } = useContext(QORTAL_APP_CONTEXT);
@@ -211,7 +217,17 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const accountIdentitySecondaryText = address ?? '—';
   const shouldRevealAddressOnHover = hasRegisteredName && Boolean(address);
   const showAnimatedAddress = shouldRevealAddressOnHover && isAddressFieldHovered;
-  const addressFieldSideSlotPx = 26;
+  const addressFieldActionButtonSizePx = 26;
+  const addressFieldActionGapPx = 1;
+  const addressFieldActionBaseColor = isDarkMode
+    ? alpha(theme.palette.common.white, 0.34)
+    : alpha(theme.palette.text.primary, 0.4);
+  const addressFieldActionHoverColor = isDarkMode
+    ? alpha(theme.palette.common.white, 0.68)
+    : alpha(theme.palette.text.primary, 0.7);
+  const addressFieldActionHoverBackground = isDarkMode
+    ? alpha(theme.palette.common.white, 0.055)
+    : alpha(theme.palette.text.primary, 0.06);
   const fallbackAccountStatus = useMemo<AccountStatus>(() => {
     const candidateStatuses = [
       userInfo?.status,
@@ -713,30 +729,31 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
           <Box
             sx={{
               alignItems: 'center',
-              bgcolor: isDarkMode ? '#1A1E26' : '#E7DDCE',
+              bgcolor: isDarkMode ? '#1A1D24' : '#E7DDD0',
               border: `1px solid ${
                 isDarkMode
-                  ? 'rgba(255,255,255,0.09)'
-                  : theme.palette.border.main
+                  ? 'rgba(255,255,255,0.045)'
+                  : alpha(theme.palette.text.primary, 0.065)
               }`,
-              borderRadius: '10px',
+              borderRadius: '11px',
               boxShadow: isDarkMode
-                ? 'inset 0 1px 0 rgba(255,255,255,0.045)'
-                : 'inset 0 1px 0 rgba(255,255,255,0.28)',
+                ? 'inset 0 1px 0 rgba(255,255,255,0.018)'
+                : 'inset 0 1px 0 rgba(255,255,255,0.12)',
               cursor: address ? 'pointer' : 'default',
-              columnGap: '10px',
-              display: 'grid',
-              gridTemplateColumns: `${addressFieldSideSlotPx}px minmax(0, 1fr) ${addressFieldSideSlotPx}px`,
-              minHeight: '48px',
-              position: 'relative',
-              px: 1.5,
-              py: 1,
-              transition: 'background-color 160ms ease, border-color 160ms ease',
+              display: 'flex',
+              gap: '8px',
+              minHeight: '38px',
+              px: '11px',
+              py: '5px',
+              transition:
+                'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
               width: '100%',
               '&:hover': address
                 ? {
-                    backgroundColor: isDarkMode ? '#181c23' : '#DDD2C2',
-                    borderColor: theme.palette.border.main,
+                    backgroundColor: isDarkMode ? '#171A20' : '#E2D7C9',
+                    borderColor: isDarkMode
+                      ? 'rgba(255,255,255,0.06)'
+                      : alpha(theme.palette.text.primary, 0.095),
                     '& .wallet-address-overlay': {
                       color: theme.palette.text.primary,
                     },
@@ -768,20 +785,14 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
             tabIndex={address ? 0 : undefined}
           >
             <Box
-              aria-hidden="true"
-              sx={{
-                height: `${addressFieldSideSlotPx}px`,
-                width: `${addressFieldSideSlotPx}px`,
-              }}
-            />
-            <Box
               className="wallet-address-overlay"
               sx={{
                 alignItems: 'center',
                 color: theme.palette.mode === 'dark'
-                  ? 'rgba(236, 241, 248, 0.9)'
-                  : theme.palette.text.secondary,
+                  ? 'rgba(236, 241, 248, 0.86)'
+                  : alpha(theme.palette.text.primary, 0.72),
                 display: 'flex',
+                flex: '1 1 auto',
                 fontFamily: shouldRevealAddressOnHover
                   ? showAnimatedAddress
                     ? 'monospace'
@@ -789,12 +800,12 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
                   : hasRegisteredName
                     ? 'inherit'
                     : 'monospace',
-                fontSize: '0.88rem',
-                justifyContent: 'center',
+                fontSize: '0.84rem',
+                justifyContent: 'flex-start',
                 minWidth: 0,
-                textAlign: 'center',
+                pr: '4px',
+                textAlign: 'left',
                 transition: 'color 160ms ease',
-                width: '100%',
               }}
             >
               {shouldRevealAddressOnHover ? (
@@ -844,29 +855,81 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
                 </Box>
               )}
             </Box>
-            <ButtonBase
-              onClick={(event) => {
-                event.stopPropagation();
-                handleCopyAddress();
-              }}
-              disabled={!address}
+            <Box
               sx={{
                 alignItems: 'center',
-                borderRadius: '8px',
-                color: theme.palette.text.secondary,
-                display: 'inline-flex',
+                display: 'flex',
                 flexShrink: 0,
-                height: '26px',
-                justifyContent: 'center',
-                width: '26px',
-                '&:hover': {
-                  backgroundColor: theme.palette.action.hover,
-                  color: theme.palette.text.primary,
-                },
+                justifyContent: 'flex-end',
+                ml: 'auto',
               }}
             >
-              <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
-            </ButtonBase>
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  gap: `${addressFieldActionGapPx}px`,
+                  justifyContent: 'flex-end',
+                }}
+              >
+                {onOpenReceive ? (
+                  <Tooltip enterDelay={450} title="Show receive QR">
+                    <Box component="span">
+                      <ButtonBase
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onOpenReceive(event.currentTarget);
+                        }}
+                        disabled={!address}
+                        aria-label="Show receive QR"
+                        sx={{
+                          alignItems: 'center',
+                          borderRadius: '8px',
+                          color: addressFieldActionBaseColor,
+                          display: 'inline-flex',
+                          flexShrink: 0,
+                          height: `${addressFieldActionButtonSizePx}px`,
+                          justifyContent: 'center',
+                          transition:
+                            'background-color 160ms ease, color 160ms ease, opacity 160ms ease',
+                          width: `${addressFieldActionButtonSizePx}px`,
+                          '&:hover': {
+                            backgroundColor: addressFieldActionHoverBackground,
+                            color: addressFieldActionHoverColor,
+                          },
+                        }}
+                      >
+                        <QrCode2RoundedIcon sx={{ fontSize: '0.95rem' }} />
+                      </ButtonBase>
+                    </Box>
+                  </Tooltip>
+                ) : null}
+                <ButtonBase
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleCopyAddress();
+                  }}
+                  disabled={!address}
+                  aria-label="Copy address"
+                  sx={{
+                    alignItems: 'center',
+                    borderRadius: '8px',
+                    color: addressFieldActionBaseColor,
+                    display: 'inline-flex',
+                    flexShrink: 0,
+                    height: `${addressFieldActionButtonSizePx}px`,
+                    justifyContent: 'center',
+                    width: `${addressFieldActionButtonSizePx}px`,
+                    '&:hover': {
+                      backgroundColor: addressFieldActionHoverBackground,
+                      color: addressFieldActionHoverColor,
+                    },
+                  }}
+                >
+                  <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
+                </ButtonBase>
+              </Box>
+            </Box>
           </Box>
 
           <Typography

@@ -516,7 +516,7 @@ export const DesktopSideBar = ({
           transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
           pointerEvents: 'none',
           transition: `transform ${OVERLAY_TRANSITION}, opacity ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,
-          overflow: 'hidden',
+          overflow: isVisible ? 'visible' : 'hidden',
           zIndex: 9998,
         }}
       >

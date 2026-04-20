@@ -80,9 +80,29 @@ type GroupNotificationItem = {
   id: string;
   isEncryptedLike: boolean;
   isUnread: boolean;
+  openedAt: number;
   senderLabel: string;
   snippet: string;
   timestamp: number;
+};
+
+const sortGroupNotificationItems = (
+  left: GroupNotificationItem,
+  right: GroupNotificationItem
+) => {
+  if (left.isUnread !== right.isUnread) {
+    return left.isUnread ? -1 : 1;
+  }
+
+  if (left.isUnread && right.isUnread) {
+    return right.timestamp - left.timestamp;
+  }
+
+  if (left.openedAt !== right.openedAt) {
+    return left.openedAt - right.openedAt;
+  }
+
+  return right.timestamp - left.timestamp;
 };
 
 type GroupInviteItem = {
@@ -686,13 +706,14 @@ export const GroupsWidget = ({
           id: `${groupId}:${timestamp}:${group.sender ?? 'unknown'}`,
           isEncryptedLike: isLikelyEncryptedSnippet(group.data),
           isUnread,
+          openedAt: timestampEnterData[groupId] ?? 0,
           senderLabel,
           snippet,
           timestamp,
         };
       })
       .filter((item) => item.timestamp > 0)
-      .sort((left, right) => right.timestamp - left.timestamp)
+      .sort(sortGroupNotificationItems)
       .slice(0, GROUP_NOTIFICATION_PREVIEW_LIMIT);
   }, [
     currentAddress,
@@ -716,6 +737,7 @@ export const GroupsWidget = ({
         id: 'debug-notification-1',
         isEncryptedLike: false,
         isUnread: true,
+        openedAt: 0,
         senderLabel: 'Q-Bot',
         snippet: 'The new weekly roadmap summary is ready for review.',
         timestamp: Date.now() - 1000 * 60 * 12,
@@ -727,6 +749,7 @@ export const GroupsWidget = ({
         id: 'debug-notification-2',
         isEncryptedLike: false,
         isUnread: false,
+        openedAt: Date.now() - 1000 * 60 * 8,
         senderLabel: 'Luna',
         snippet: 'Updated concepts just landed in the shared folder.',
         timestamp: Date.now() - 1000 * 60 * 54,
@@ -738,6 +761,7 @@ export const GroupsWidget = ({
         id: 'debug-notification-3',
         isEncryptedLike: false,
         isUnread: true,
+        openedAt: 0,
         senderLabel: 'Marek',
         snippet: 'Can someone confirm the onboarding copy before tonight?',
         timestamp: Date.now() - 1000 * 60 * 115,
@@ -1602,20 +1626,24 @@ export const GroupsWidget = ({
       : alpha(theme.palette.text.primary, 0.04);
   const unreadNotificationSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.primary.main, 0.032)
-      : alpha(theme.palette.primary.main, 0.02);
+      ? alpha(theme.palette.primary.main, 0.044)
+      : alpha(theme.palette.primary.main, 0.03);
   const unreadNotificationHoverSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.primary.main, 0.042)
-      : alpha(theme.palette.primary.main, 0.027);
+      ? alpha(theme.palette.primary.main, 0.058)
+      : alpha(theme.palette.primary.main, 0.04);
   const unreadNotificationBorderColor = alpha(
     theme.palette.primary.main,
-    theme.palette.mode === 'dark' ? 0.09 : 0.06
+    theme.palette.mode === 'dark' ? 0.12 : 0.085
   );
 
-  const effectiveNotificationItems = isGroupsDebugMode
-    ? debugNotificationItems
-    : notificationItems;
+  const effectiveNotificationItems = useMemo(
+    () =>
+      [...(isGroupsDebugMode ? debugNotificationItems : notificationItems)].sort(
+        sortGroupNotificationItems
+      ),
+    [debugNotificationItems, isGroupsDebugMode, notificationItems]
+  );
   const effectiveInvites = isGroupsDebugMode ? debugInviteItems : visibleInvites;
   const effectiveRequests = isGroupsDebugMode ? debugRequestItems : visibleRequests;
   const effectivePromotions = isGroupsDebugMode ? debugPromotions : promotions;

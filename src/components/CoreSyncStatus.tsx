@@ -114,8 +114,8 @@ export const CoreSyncStatus = ({
         className="core-panel"
         style={{
           right: 'unset',
-          left: '55px',
-          top: '10px',
+          left: 'calc(100% + 16px)',
+          top: '0px',
         }}
       >
         <h3>

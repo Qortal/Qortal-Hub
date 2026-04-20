@@ -4,6 +4,7 @@ import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownR
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
+import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
@@ -70,6 +71,7 @@ type MinterProgressSnapshot = {
   progressRatio: number;
   requiredBlocks: number;
 };
+type MinterInfoView = 'dots' | 'progress';
 const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
 const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
   width: {
@@ -134,6 +136,7 @@ const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 52;
 const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
+const DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY = 'dashboardMinterDefaultView';
 const DASHBOARD_STATUS_PREVIEW_EVENT = 'setDashboardStatusPreview';
 const DASHBOARD_STATUS_PREVIEW_STORAGE_KEY = 'dashboardStatusPreviewMode';
 const DASHBOARD_EMBEDDED_QUITTER_APP = {
@@ -195,6 +198,9 @@ const getDashboardStatusPreviewModeLabel = (
       return 'Live';
   }
 };
+
+const parseMinterInfoView = (value: string | null): MinterInfoView =>
+  value === 'progress' ? 'progress' : 'dots';
 
 type HomeCustomizableCardsLayout = {
   heights: Partial<Record<HomeCustomizableCardId, number>>;
@@ -914,7 +920,12 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
               display: 'flex',
               flexDirection: 'column',
               gap: '6px',
-              mt: sectionIndex === 0 ? 0 : '2px',
+              mt:
+                section.offsetTopPx != null
+                  ? `${section.offsetTopPx}px`
+                  : sectionIndex === 0
+                    ? 0
+                    : '2px',
             }}
           >
             <Typography
@@ -1058,6 +1069,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
   });
+  const [minterDefaultView, setMinterDefaultView] = useState<MinterInfoView>(() =>
+    parseMinterInfoView(
+      localStorage.getItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY)
+    )
+  );
+  const [isMinterFieldHovered, setIsMinterFieldHovered] = useState(false);
   const [statusPreviewMode, setStatusPreviewMode] =
     useState<DashboardStatusPreviewMode>(() =>
       parseDashboardStatusPreviewMode(
@@ -1101,6 +1118,28 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+  const handleOpenReceiveQort = useCallback((target: HTMLElement | null) => {
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const rightRailRect = rightRailRef.current?.getBoundingClientRect();
+    executeEvent('openReceiveQortInternal', {
+      address: userAddress ?? myAddress ?? '',
+      anchorRect: {
+        height: rect.height,
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+      },
+      targetRect: rightRailRect
+        ? {
+            height: rightRailRect.height,
+            left: rightRailRect.left,
+            top: rightRailRect.top,
+            width: rightRailRect.width,
+          }
+        : null,
+    });
+  }, [myAddress, userAddress]);
   const assignGroupActivityPanelNode = useCallback((node: HTMLDivElement | null) => {
     groupActivityPanelRef.current = node;
     groupActivityCardHeightRef.current = node;
@@ -1727,6 +1766,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     };
   }, []);
 
+  const handleSetMinterDefaultView = useCallback((nextView: MinterInfoView) => {
+    setMinterDefaultView(nextView);
+    localStorage.setItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY, nextView);
+  }, []);
+
   useEffect(() => {
     const handleSetDashboardStatusPreview = (e: CustomEvent) => {
       const nextMode = parseDashboardStatusPreviewMode(
@@ -1930,6 +1974,25 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     minterProgress?.requiredBlocks != null
       ? minterProgress.requiredBlocks.toLocaleString()
       : null;
+  const hasMinterProgressSummary =
+    minterProgress != null &&
+    formattedMinterCurrentBlocks != null &&
+    formattedMinterRequiredBlocks != null;
+  const resolvedMinterDefaultView: MinterInfoView =
+    hasMinterProgressSummary && minterDefaultView === 'progress'
+      ? 'progress'
+      : 'dots';
+  const minterHoverView: MinterInfoView =
+    resolvedMinterDefaultView === 'dots' ? 'progress' : 'dots';
+  const isShowingMinterHoverView =
+    hasMinterProgressSummary && isMinterFieldHovered;
+  const activeMinterInfoView: MinterInfoView = isShowingMinterHoverView
+    ? minterHoverView
+    : resolvedMinterDefaultView;
+  const minterPinActionLabel =
+    activeMinterInfoView === 'progress'
+      ? 'Save level bar as default view'
+      : 'Save minting dots as default view';
   const minterValue = (
     <Box
       sx={{
@@ -1938,7 +2001,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         height: '22px',
         justifyContent: 'flex-end',
         minWidth: `${INFO_VALUE_COLUMN_MIN_WIDTH_PX}px`,
-        position: 'relative',
         width: '100%',
       }}
     >
@@ -1953,139 +2015,178 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             style={{ alignItems: 'center', display: 'flex', height: '22px', justifyContent: 'flex-end', width: '100%' }}
           >
             <Box
+              onMouseEnter={
+                hasMinterProgressSummary
+                  ? () => setIsMinterFieldHovered(true)
+                  : undefined
+              }
+              onMouseLeave={
+                hasMinterProgressSummary
+                  ? () => setIsMinterFieldHovered(false)
+                  : undefined
+              }
+              onFocusCapture={
+                hasMinterProgressSummary
+                  ? () => setIsMinterFieldHovered(true)
+                  : undefined
+              }
+              onBlurCapture={
+                hasMinterProgressSummary
+                  ? (event) => {
+                      const nextFocusedElement = event.relatedTarget;
+
+                      if (
+                        !(nextFocusedElement instanceof Node) ||
+                        !event.currentTarget.contains(nextFocusedElement)
+                      ) {
+                        setIsMinterFieldHovered(false);
+                      }
+                    }
+                  : undefined
+              }
               sx={{
                 alignItems: 'center',
-                cursor: minterProgress ? 'default' : 'inherit',
                 display: 'inline-flex',
-                height: '18px',
+                height: '22px',
                 justifyContent: 'flex-end',
-                overflow: 'hidden',
-                position: 'relative',
-                width: '156px',
                 maxWidth: '100%',
-                '& .minter-dots-layer': {
-                  opacity: minterProgress ? 1 : 1,
-                  transform: 'scaleX(1)',
-                  transition:
-                    'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1)',
-                },
-                '& .minter-progress-layer': {
-                  opacity: 0,
-                  transform: 'scaleX(0.96)',
-                  transition:
-                    'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1)',
-                },
-                ...(minterProgress
-                  ? {
-                      '&:hover .minter-dots-layer': {
-                        opacity: 0,
-                        transform: 'scaleX(0.94)',
-                      },
-                      '&:hover .minter-progress-layer': {
-                        opacity: 1,
-                        transform: 'scaleX(1)',
-                      },
-                    }
-                  : {}),
+                minWidth: '180px',
+                width: '180px',
               }}
             >
-              <Box
-                className="minter-dots-layer"
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  inset: 0,
-                  justifyContent: 'flex-end',
-                  pointerEvents: 'none',
-                  position: 'absolute',
-                  transformOrigin: 'right center',
-                }}
-              >
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    display: 'inline-flex',
-                    gap: '4px',
-                    height: '18px',
-                    justifyContent: 'flex-end',
-                  }}
-                >
-                  {Array.from({ length: 9 }).map((_, index) => (
-                    <Box
-                      key={index}
-                      sx={{
-                        ...(index < minterDotsFilled ? filledBlueDotSx : emptyBlueDotSx),
-                        borderRadius: '50%',
-                        height: '11px',
-                        width: '11px',
-                      }}
-                    />
-                  ))}
-                </Box>
-              </Box>
-
-              {minterProgress && formattedMinterCurrentBlocks && formattedMinterRequiredBlocks ? (
-                <Box
-                  className="minter-progress-layer"
-                  sx={{
+              <AnimatePresence initial={false} mode="wait">
+                <motion.div
+                  key={activeMinterInfoView}
+                  initial={{ opacity: 0, y: 3 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -3 }}
+                  transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
+                  style={{
                     alignItems: 'center',
                     display: 'flex',
-                    inset: 0,
+                    gap: '8px',
+                    height: '22px',
                     justifyContent: 'flex-end',
-                    pointerEvents: 'none',
-                    position: 'absolute',
-                    transformOrigin: 'right center',
+                    width: '100%',
                   }}
                 >
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      display: 'inline-flex',
-                      gap: '8px',
-                      justifyContent: 'flex-end',
-                      width: '100%',
-                    }}
-                  >
+                  {isShowingMinterHoverView ? (
+                    <Tooltip title={minterPinActionLabel}>
+                      <ButtonBase
+                        aria-label={minterPinActionLabel}
+                        disableRipple
+                        onClick={() =>
+                          handleSetMinterDefaultView(activeMinterInfoView)
+                        }
+                        sx={{
+                          alignItems: 'center',
+                          borderRadius: '999px',
+                          color: alpha(
+                            GROUP_ACTIVITY_BLUE.primary,
+                            theme.palette.mode === 'dark' ? 0.92 : 0.82
+                          ),
+                          display: 'inline-flex',
+                          flexShrink: 0,
+                          height: '18px',
+                          justifyContent: 'center',
+                          transition:
+                            'background-color 140ms ease, color 140ms ease, transform 120ms ease',
+                          width: '18px',
+                          '&:hover': {
+                            backgroundColor: alpha(
+                              GROUP_ACTIVITY_BLUE.primary,
+                              theme.palette.mode === 'dark' ? 0.18 : 0.12
+                            ),
+                            color: GROUP_ACTIVITY_BLUE.primary,
+                            transform: 'translateY(-1px)',
+                          },
+                          '&:active': {
+                            transform: 'translateY(0)',
+                          },
+                        }}
+                      >
+                        <LockOpenRoundedIcon sx={{ fontSize: '0.92rem' }} />
+                      </ButtonBase>
+                    </Tooltip>
+                  ) : null}
+
+                  {activeMinterInfoView === 'progress' && hasMinterProgressSummary ? (
                     <Box
                       sx={{
-                        background:
-                          theme.palette.mode === 'dark'
-                            ? 'rgba(255,255,255,0.08)'
-                            : 'rgba(15,23,42,0.08)',
-                        borderRadius: '999px',
-                        height: '6px',
-                        overflow: 'hidden',
-                        width: '64px',
+                        alignItems: 'center',
+                        display: 'inline-flex',
+                        gap: '8px',
+                        justifyContent: 'flex-end',
+                        minWidth: 0,
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       <Box
                         sx={{
-                          background: GROUP_ACTIVITY_BLUE.primary,
+                          background:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(255,255,255,0.08)'
+                              : 'rgba(15,23,42,0.08)',
                           borderRadius: '999px',
-                          height: '100%',
-                          transition: 'width 180ms ease',
-                          width: `${Math.max(
-                            0,
-                            Math.min(100, minterProgress.progressRatio * 100)
-                          )}%`,
+                          flexShrink: 0,
+                          height: '6px',
+                          overflow: 'hidden',
+                          width: '56px',
                         }}
-                      />
+                      >
+                        <Box
+                          sx={{
+                            background: GROUP_ACTIVITY_BLUE.primary,
+                            borderRadius: '999px',
+                            height: '100%',
+                            transition: 'width 180ms ease',
+                            width: `${Math.max(
+                              0,
+                              Math.min(100, minterProgress.progressRatio * 100)
+                            )}%`,
+                          }}
+                        />
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.primary, 0.84),
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.01em',
+                          lineHeight: 1,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {formattedMinterCurrentBlocks} / {formattedMinterRequiredBlocks}
+                      </Typography>
                     </Box>
-                    <Typography
+                  ) : (
+                    <Box
                       sx={{
-                        color: alpha(theme.palette.text.primary, 0.84),
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        letterSpacing: '0.01em',
-                        lineHeight: 1,
-                        whiteSpace: 'nowrap',
+                        alignItems: 'center',
+                        display: 'inline-flex',
+                        gap: '4px',
+                        height: '18px',
+                        justifyContent: 'flex-end',
                       }}
                     >
-                      {formattedMinterCurrentBlocks} / {formattedMinterRequiredBlocks}
-                    </Typography>
-                  </Box>
-                </Box>
-              ) : null}
+                      {Array.from({ length: 9 }).map((_, index) => (
+                        <Box
+                          key={index}
+                          sx={{
+                            ...(index < minterDotsFilled
+                              ? filledBlueDotSx
+                              : emptyBlueDotSx),
+                            borderRadius: '50%',
+                            height: '11px',
+                            width: '11px',
+                          }}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </Box>
           </motion.div>
         ) : (
@@ -2162,6 +2263,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     footerSections: [
       {
         title: 'Node',
+        offsetTopPx: 10,
         items: [
           {
             label: 'Using Node',
@@ -2211,7 +2313,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                     <Box sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.0605em', textTransform: 'uppercase' }}>Qortal Hub</Box>
                     <Box ref={accountOverviewDebugRef} sx={{ position: 'relative', width: '100%' }}>
-                      <HomeProfileCard onOpenSettings={onOpenSettings} />
+                      <HomeProfileCard
+                        onOpenReceive={handleOpenReceiveQort}
+                        onOpenSettings={onOpenSettings}
+                      />
                     </Box>
                   </Box>
                   <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: { xs: '1fr', md: 'minmax(285px, 330px) minmax(0, 1fr)', xl: 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
@@ -2275,28 +2380,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                         icon={<SouthWestRoundedIcon sx={{ fontSize: '16px' }} />}
                         label="Receive"
                         onClick={(event) => {
-                          const rect = (
-                            event.currentTarget as HTMLElement
-                          ).getBoundingClientRect();
-                          const rightRailRect =
-                            rightRailRef.current?.getBoundingClientRect();
-                          executeEvent('openReceiveQortInternal', {
-                            address: userAddress ?? myAddress ?? '',
-                            anchorRect: {
-                              height: rect.height,
-                              left: rect.left,
-                              top: rect.top,
-                              width: rect.width,
-                            },
-                            targetRect: rightRailRect
-                              ? {
-                                  height: rightRailRect.height,
-                                  left: rightRailRect.left,
-                                  top: rightRailRect.top,
-                                  width: rightRailRect.width,
-                                }
-                              : null,
-                          });
+                          handleOpenReceiveQort(event.currentTarget as HTMLElement);
                         }}
                         theme={theme}
                       />
@@ -2368,7 +2452,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       order={quitterCardOrder}
                       panelRef={quitterCardHeightRef}
                       refreshing={isQuitterWidgetRefreshing}
-                      title="Quitter"
+                      title="Quitter Feed"
                       widgetId="quitter"
                     >
                       <QuitterFeedWidget
