@@ -11,6 +11,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
@@ -22,6 +23,10 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import SpaOutlinedIcon from '@mui/icons-material/SpaOutlined';
 import DownloadIcon from '@mui/icons-material/Download';
 import { useAtomValue } from 'jotai';
+import {
+  APP_BLUE_SURFACE_TEXT,
+  getBlueTier1ButtonSx,
+} from './groupActivityColorSystem';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { userInfoAtom, balanceAtom, txListAtom } from '../../atoms/global';
@@ -208,6 +213,7 @@ export const HomeGettingStarted = ({
   const { t } = useTranslation(['tutorial']);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
+  const blueStrongHover = getBlueTier1ButtonSx()['&:hover'];
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
   const txList = useAtomValue(txListAtom);
@@ -400,30 +406,29 @@ export const HomeGettingStarted = ({
   const tools = useMemo(
     () => [
       {
+        accent: '#6D9FEE',
         key: 'user-lookup',
-        description: 'Inspect profiles and recent activity.',
         label: 'Lookup User',
         icon: <PersonSearchIcon sx={{ fontSize: '1.5rem' }} />,
         onAction: () => executeEvent('openUserLookupDrawer', {}),
       },
       {
-        description: 'Manage balances, payments, and assets.',
+        accent: '#79A8FF',
         key: 'wallets',
         label: 'Open Wallets',
         icon: <AccountBalanceWalletIcon sx={{ fontSize: '1.62rem' }} />,
-        emphasis: 'primary',
         onAction: () => executeEvent('openWalletsApp', {}),
       },
       {
+        accent: '#9BCB8B',
         key: 'minting-status',
-        description: 'Check node health and minting progress.',
         label: 'Check Minting',
         icon: <SpaOutlinedIcon sx={{ fontSize: '1.5rem' }} />,
         onAction: () => executeEvent('openMintingPanel', {}),
       },
       {
+        accent: '#A97CFF',
         key: 'backup-wallet',
-        description: 'Export a secure recovery copy.',
         label: 'Backup Wallet',
         icon: <DownloadIcon sx={{ fontSize: '1.5rem' }} />,
         onAction: () => executeEvent('openBackupWallet', {}),
@@ -465,7 +470,7 @@ export const HomeGettingStarted = ({
             display: 'flex',
             flex: 1,
             flexDirection: 'column',
-            gap: '12px',
+            gap: '16px',
             minHeight: 0,
           }}
         >
@@ -474,21 +479,28 @@ export const HomeGettingStarted = ({
                 alignItems: 'center',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '3px',
+                gap: '5px',
                 minWidth: 0,
                 textAlign: 'center',
               }}
             >
-              <Typography sx={{ color: theme.palette.text.primary, fontSize: '1rem', fontWeight: 600 }}>
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.primary, 0.96),
+                  fontSize: '1.08rem',
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                }}
+              >
                 Tools
               </Typography>
               <Typography
                 sx={{
-                  color: theme.palette.text.secondary,
-                  fontSize: '0.76rem',
-                  letterSpacing: '0.012em',
-                  lineHeight: 1.45,
-                  maxWidth: '28ch',
+                  color: alpha(theme.palette.text.secondary, 0.86),
+                  fontSize: '0.82rem',
+                  letterSpacing: '-0.01em',
+                  lineHeight: 1.35,
+                  maxWidth: '24ch',
                   textAlign: 'center',
                 }}
               >
@@ -499,9 +511,9 @@ export const HomeGettingStarted = ({
               sx={{
                 display: 'grid',
                 flex: 1,
-                gap: '12px',
-                gridAutoRows: '1fr',
+                gap: '10px',
                 gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                gridTemplateRows: 'repeat(2, minmax(0, 1fr))',
                 minHeight: 0,
               }}
             >
@@ -512,73 +524,74 @@ export const HomeGettingStarted = ({
                   sx={{
                     alignItems: 'center',
                     background: isDarkMode
-                      ? tool.emphasis === 'primary'
-                        ? 'linear-gradient(180deg, rgba(38,41,49,0.18) 0%, rgba(38,41,49,0.08) 100%)'
-                        : 'linear-gradient(180deg, rgba(38,41,49,0.12) 0%, rgba(38,41,49,0.04) 100%)'
-                      : tool.emphasis === 'primary'
-                        ? 'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%)'
-                        : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.03) 100%)',
-                    border: '1px solid transparent',
-                    borderRadius: '12px',
+                      ? 'linear-gradient(180deg, rgba(39,43,53,0.92) 0%, rgba(29,33,41,0.96) 100%)'
+                      : 'linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(244,238,229,0.82) 100%)',
+                    border: `1px solid ${
+                      isDarkMode
+                        ? 'rgba(255,255,255,0.065)'
+                        : alpha(theme.palette.text.primary, 0.08)
+                    }`,
+                    borderRadius: '13px',
+                    boxShadow: isDarkMode
+                      ? '0 12px 26px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255,255,255,0.032)'
+                      : '0 10px 22px rgba(24,32,44,0.08), inset 0 1px 0 rgba(255,255,255,0.34)',
                     color: theme.palette.text.primary,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '9px',
+                    gap: '12px',
                     justifyContent: 'center',
-                    minHeight: 0,
-                    px: 1.75,
-                    py: tool.emphasis === 'primary' ? 1.8 : 1.6,
+                    minHeight: '80px',
+                    overflow: 'hidden',
+                    px: 1.5,
+                    py: 1.55,
                     position: 'relative',
                     textAlign: 'center',
                     transition:
-                      'background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 120ms ease, opacity 140ms ease',
+                      'background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 140ms ease',
                     '&::before': {
                       content: '""',
                       position: 'absolute',
-                      inset: 0,
+                      inset: '1px',
                       borderRadius: 'inherit',
                       pointerEvents: 'none',
-                      opacity: 0,
-                      transition: 'opacity 160ms ease',
+                      opacity: isDarkMode ? 1 : 0.76,
                       background: isDarkMode
-                        ? 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(109,159,238,0.028) 42%, rgba(64,180,199,0.016) 100%)'
-                        : 'linear-gradient(180deg, rgba(255,255,255,0.46) 0%, rgba(109,159,238,0.06) 42%, rgba(64,180,199,0.03) 100%)',
-                      boxShadow: isDarkMode
-                        ? 'inset 0 1px 0 rgba(255,255,255,0.045), 0 0 0 1px rgba(109,159,238,0.08)'
-                        : 'inset 0 1px 0 rgba(255,255,255,0.52), 0 0 0 1px rgba(109,159,238,0.07)',
+                        ? 'linear-gradient(180deg, rgba(255,255,255,0.022) 0%, rgba(255,255,255,0) 72%)'
+                        : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0) 72%)',
+                    },
+                    '&::after': {
+                      content: '""',
+                      position: 'absolute',
+                      left: '50%',
+                      bottom: '-12px',
+                      width: '48%',
+                      height: '22px',
+                      transform: 'translateX(-50%)',
+                      borderRadius: '999px',
+                      pointerEvents: 'none',
+                      opacity: isDarkMode ? 0.44 : 0.34,
+                      background: `radial-gradient(circle at center, ${alpha(
+                        tool.accent,
+                        isDarkMode ? 0.7 : 0.42
+                      )} 0%, ${alpha(tool.accent, 0.16)} 42%, transparent 76%)`,
+                      transition: 'opacity 180ms ease, transform 180ms ease',
                     },
                     '&:hover': {
                       background: isDarkMode
-                        ? tool.emphasis === 'primary'
-                          ? 'linear-gradient(180deg, rgba(38,41,49,0.4) 0%, rgba(38,41,49,0.22) 100%)'
-                          : 'linear-gradient(180deg, rgba(38,41,49,0.28) 0%, rgba(38,41,49,0.14) 100%)'
-                        : tool.emphasis === 'primary'
-                          ? 'linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.12) 100%)'
-                          : 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 100%)',
-                      borderColor: 'transparent',
+                        ? 'linear-gradient(180deg, rgba(45,50,61,0.96) 0%, rgba(33,36,45,0.98) 100%)'
+                        : 'linear-gradient(180deg, rgba(255,255,255,0.74) 0%, rgba(247,241,233,0.88) 100%)',
+                      borderColor: alpha(tool.accent, isDarkMode ? 0.18 : 0.16),
                       boxShadow: isDarkMode
-                        ? tool.emphasis === 'primary'
-                          ? '0 10px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.06)'
-                          : '0 8px 16px rgba(0,0,0,0.14), inset 0 1px 0 rgba(255,255,255,0.035)'
-                        : tool.emphasis === 'primary'
-                          ? '0 10px 18px rgba(28,36,52,0.085), inset 0 1px 0 rgba(255,255,255,0.52)'
-                          : '0 8px 14px rgba(28,36,52,0.06), inset 0 1px 0 rgba(255,255,255,0.42)',
-                      transform: 'translateY(-2px)',
-                      '&::before': {
-                        opacity: 1,
-                      },
+                        ? '0 14px 28px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.05)'
+                        : '0 12px 24px rgba(24,32,44,0.11), inset 0 1px 0 rgba(255,255,255,0.36)',
+                      transform: 'translateY(-1px)',
                       '& .tool-icon': {
-                        color: isDarkMode
-                          ? (tool.emphasis === 'primary'
-                              ? 'rgba(142, 190, 246, 0.96)'
-                              : 'rgba(132, 178, 236, 0.86)')
-                          : (tool.emphasis === 'primary'
-                              ? 'rgba(75, 120, 215, 0.92)'
-                              : 'rgba(82, 130, 224, 0.78)'),
-                        transform: 'translateY(-1px) scale(1.04)',
+                        color: alpha(tool.accent, isDarkMode ? 0.98 : 0.92),
+                        transform: 'translateY(-1px)',
                       },
-                      '& .tool-label': {
-                        opacity: 1,
+                      '&::after': {
+                        opacity: isDarkMode ? 0.62 : 0.48,
+                        transform: 'translateX(-50%) scale(1.04)',
                       },
                     },
                     '&:active': {
@@ -586,8 +599,8 @@ export const HomeGettingStarted = ({
                       transform: 'translateY(0)',
                     },
                     '&:focus-visible': {
-                      borderColor: theme.palette.primary.main,
-                      boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
+                      borderColor: alpha(tool.accent, 0.58),
+                      boxShadow: `inset 0 0 0 1px ${alpha(tool.accent, 0.45)}`,
                     },
                   }}
                 >
@@ -595,44 +608,27 @@ export const HomeGettingStarted = ({
                     className="tool-icon"
                     sx={{
                       alignItems: 'center',
-                      color: isDarkMode
-                        ? tool.emphasis === 'primary'
-                          ? 'rgba(223,228,238,0.9)'
-                          : 'rgba(223,228,238,0.7)'
-                        : tool.emphasis === 'primary'
-                          ? 'rgba(24,29,36,0.78)'
-                          : 'rgba(24,29,36,0.58)',
+                      color: alpha(tool.accent, isDarkMode ? 0.96 : 0.84),
                       display: 'inline-flex',
                       justifyContent: 'center',
-                      transition: 'color 160ms ease, transform 140ms ease',
+                      lineHeight: 1,
+                      transition: 'color 180ms ease, transform 160ms ease',
                     }}
                   >
                     {tool.icon}
                   </Box>
-                    <Typography
-                      className="tool-label"
-                      sx={{
-                        color: theme.palette.text.primary,
-                        fontSize: tool.emphasis === 'primary' ? '0.9rem' : '0.86rem',
-                      fontWeight: tool.emphasis === 'primary' ? 700 : 650,
-                      letterSpacing: '0.01em',
-                      lineHeight: 1.3,
-                      opacity: 1,
-                      transition: 'opacity 140ms ease',
-                      }}
-                    >
-                      {tool.label}
-                    </Typography>
                   <Typography
+                    className="tool-label"
                     sx={{
-                      color: theme.palette.text.secondary,
-                      fontSize: tool.emphasis === 'primary' ? '0.73rem' : '0.71rem',
-                      lineHeight: 1.45,
-                      maxWidth: '15ch',
-                      opacity: tool.emphasis === 'primary' ? 0.82 : 0.72,
+                      color: alpha(theme.palette.text.primary, 0.96),
+                      fontSize: '0.92rem',
+                      fontWeight: 650,
+                      letterSpacing: '-0.01em',
+                      lineHeight: 1.22,
+                      maxWidth: '11ch',
                     }}
                   >
-                    {tool.description}
+                    {tool.label}
                   </Typography>
                 </ButtonBase>
               ))}
@@ -752,13 +748,26 @@ export const HomeGettingStarted = ({
                     size="small"
                     variant={step.done ? 'text' : 'outlined'}
                     sx={{
-                      borderColor: theme.palette.border.main,
+                      alignItems: 'center',
+                      bgcolor:
+                        !step.done
+                          ? isDarkMode
+                            ? '#262931'
+                            : theme.palette.background.surface
+                          : undefined,
+                      borderColor: step.done
+                        ? theme.palette.border.main
+                        : theme.palette.border.subtle,
                       flexShrink: 0,
                       fontSize: '0.78rem',
-                      minWidth: '60px',
+                      height: '36px',
+                      minWidth: '76px',
                       opacity: step.done ? 0.5 : 1,
-                      borderRadius: '9px',
+                      borderRadius: '10px',
                       fontWeight: 600,
+                      px: 1.5,
+                      transition:
+                        'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms ease, filter 140ms ease',
                       '&:focus-visible': {
                         borderColor: theme.palette.primary.main,
                         boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
@@ -766,21 +775,14 @@ export const HomeGettingStarted = ({
                       ...(step.done
                         ? {}
                         : {
-                            backgroundColor: isDarkMode
-                              ? theme.palette.background.elevated
-                              : theme.palette.background.paper,
                             color: theme.palette.text.primary,
                             '&:hover': {
-                              backgroundColor: isDarkMode
-                                ? theme.palette.background.elevated
-                                : theme.palette.background.elevated,
-                              borderColor: theme.palette.primary.light,
-                              color: theme.palette.text.primary,
-                              boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                              ...blueStrongHover,
+                              borderColor: 'rgba(143, 184, 243, 0.22)',
+                              color: APP_BLUE_SURFACE_TEXT,
                               transform: 'translateY(-1px)',
                             },
                             '&:active': {
-                              boxShadow: 'none',
                               transform: 'translateY(0)',
                             },
                           }),

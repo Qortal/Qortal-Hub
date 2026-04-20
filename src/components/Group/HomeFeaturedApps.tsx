@@ -4,7 +4,6 @@ import { Avatar, Box, Button, ButtonBase, Typography, useTheme } from '@mui/mate
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import BorderGlow from '../common/BorderGlow';
-import GlassSurface from '../common/GlassSurface';
 import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 import {
   dashboardPanelSx,
@@ -37,14 +36,22 @@ const FEATURED_STRIP_HOVER_TRANSITION =
   `${FEATURED_STRIP_HOVER_DURATION_MS}ms ease`;
 const FEATURED_PREVIEW_CONFIG = {
   [Q_TUBE_APP_NAME]: {
-    subtitle: "Decentralized Cat Videos, can't beat that.",
+    accent: '#78AFFF',
+    align: 'left',
+    eyebrow: 'Always on',
+    subtitle: 'Network-hosted video drops, weird clips, and creator rabbit holes.',
     title: Q_TUBE_APP_NAME,
     videoSrc: Q_TUBE_PREVIEW_VIDEO_SRC,
+    videoPosition: 'center center',
   },
   [PIRATE_APP_NAME]: {
-    subtitle: 'Play and grow a community-powered retro game library.',
+    accent: '#B893FF',
+    align: 'right',
+    eyebrow: 'Community vault',
+    subtitle: 'Retro discoveries, preserved libraries, and cartridge-era nostalgia.',
     title: PIRATE_APP_NAME,
     videoSrc: PIRATE_PREVIEW_VIDEO_SRC,
+    videoPosition: 'center center',
   },
 } as const;
 type PreviewAppName = keyof typeof FEATURED_PREVIEW_CONFIG;
@@ -810,7 +817,7 @@ const AppTile = ({
                 cat. videos.
               </Box>
               <Box component="span" sx={{ display: 'block' }}>
-                debauchery.
+                platform.
               </Box>
             </Typography>
           </Box>
@@ -947,14 +954,12 @@ const FeaturedExpandedPreview = ({
   }
   const resolvedAppName = appName ?? lastResolvedAppRef.current;
   const previewConfig = FEATURED_PREVIEW_CONFIG[resolvedAppName];
-  const baseAvatarUrl = `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${resolvedAppName}/qortal_avatar?async=true`;
-  const [imageSrc, setImageSrc] = useState(baseAvatarUrl);
   const [hasVideoError, setHasVideoError] = useState(false);
+  const alignRight = previewConfig.align === 'right';
 
   useEffect(() => {
-    setImageSrc(baseAvatarUrl);
     setHasVideoError(false);
-  }, [baseAvatarUrl, resolvedAppName]);
+  }, [resolvedAppName]);
 
   return (
     <Box
@@ -967,8 +972,8 @@ const FeaturedExpandedPreview = ({
         borderRadius: '12px',
         background:
           theme.palette.mode === 'dark'
-            ? 'linear-gradient(180deg, rgba(16,18,24,0.96) 0%, rgba(22,24,31,0.98) 100%)'
-            : 'linear-gradient(180deg, rgba(243,238,230,0.96) 0%, rgba(233,226,214,0.98) 100%)',
+            ? 'linear-gradient(180deg, rgba(14,16,22,0.96) 0%, rgba(20,23,30,0.98) 100%)'
+            : 'linear-gradient(180deg, rgba(243,238,230,0.96) 0%, rgba(236,228,217,0.98) 100%)',
         border: `1px solid ${theme.palette.border.main}`,
         boxShadow:
           theme.palette.mode === 'dark'
@@ -980,20 +985,12 @@ const FeaturedExpandedPreview = ({
         overflow: 'hidden',
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? 'auto' : 'none',
-        transform: visible ? 'scale(1)' : teaserMode ? 'scale(0.992)' : 'scale(0.985)',
+        transform: visible
+          ? 'translateY(0) scale(1)'
+          : teaserMode
+            ? 'translateY(4px) scale(0.992)'
+            : 'translateY(8px) scale(0.985)',
         transition: `opacity ${teaserMode ? FEATURED_TEASER_FADE_DURATION_MS : 220}ms ease, transform ${teaserMode ? FEATURED_TEASER_FADE_DURATION_MS : 220}ms ease`,
-        '& video': {
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          objectPosition: 'center center',
-          pointerEvents: 'none',
-          transform: 'scale(1.035)',
-          opacity: teaserMode ? 0.8 : 1,
-          transition: `opacity ${FEATURED_TEASER_FADE_DURATION_MS}ms ease`,
-        },
       }}
     >
       {!hasVideoError ? (
@@ -1006,196 +1003,192 @@ const FeaturedExpandedPreview = ({
           playsInline
           preload="metadata"
           onError={() => setHasVideoError(true)}
+          sx={{
+            height: '100%',
+            inset: 0,
+            objectFit: 'cover',
+            objectPosition: previewConfig.videoPosition,
+            opacity: teaserMode ? 0.78 : 0.94,
+            pointerEvents: 'none',
+            position: 'absolute',
+            transform: 'scale(1.03)',
+            transition: `opacity ${FEATURED_TEASER_FADE_DURATION_MS}ms ease`,
+            width: '100%',
+            filter:
+              theme.palette.mode === 'dark'
+                ? 'saturate(0.9) brightness(0.7)'
+                : 'saturate(0.84) brightness(0.94)',
+          }}
         >
           <source src={previewConfig.videoSrc} type="video/mp4" />
         </Box>
       ) : null}
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          background:
+            theme.palette.mode === 'dark'
+              ? `linear-gradient(180deg, rgba(7,9,13,0.12) 0%, rgba(7,9,13,0.38) 40%, rgba(7,9,13,0.84) 100%), linear-gradient(${alignRight ? '270deg' : '90deg'}, rgba(7,9,13,0.82) 0%, rgba(7,9,13,0.32) 42%, rgba(7,9,13,0.06) 100%)`
+              : `linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(24,29,36,0.12) 40%, rgba(24,29,36,0.36) 100%), linear-gradient(${alignRight ? '270deg' : '90deg'}, rgba(24,29,36,0.54) 0%, rgba(24,29,36,0.2) 38%, rgba(24,29,36,0.04) 100%)`,
+        }}
+      />
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          top: '-10%',
+          [alignRight ? 'right' : 'left']: '-6%',
+          width: '38%',
+          height: '138%',
+          background: `radial-gradient(circle at center, ${alpha(
+            previewConfig.accent,
+            theme.palette.mode === 'dark' ? 0.28 : 0.18
+          )} 0%, ${alpha(previewConfig.accent, 0.06)} 46%, transparent 76%)`,
+          filter: 'blur(30px)',
+          pointerEvents: 'none',
+        }}
+      />
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          inset: 'auto 0 78px 0',
+          display: 'flex',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+        }}
+      >
         <Box
           sx={{
-            position: 'absolute',
-            inset: '-1px 0',
-            zIndex: 2,
-            pointerEvents: 'none',
-            borderRadius: 'inherit',
-            overflow: 'hidden',
+            width: '64%',
+            height: '1px',
+            background: `linear-gradient(90deg, transparent 0%, ${alpha(
+              previewConfig.accent,
+              0.12
+            )} 20%, ${alpha(previewConfig.accent, 0.44)} 50%, ${alpha(
+              previewConfig.accent,
+              0.12
+            )} 80%, transparent 100%)`,
+          }}
+        />
+      </Box>
+      <Box
+        sx={{
+          position: 'relative',
+          zIndex: 1,
+          display: 'flex',
+          alignItems: 'stretch',
+          justifyContent: alignRight ? 'flex-end' : 'flex-start',
+          height: '100%',
+          p: '24px',
+        }}
+      >
+        <Box
+          sx={{
+            alignItems: alignRight ? 'flex-end' : 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            justifyContent: 'flex-end',
+            maxWidth: 'min(54%, 420px)',
+            textAlign: alignRight ? 'right' : 'left',
           }}
         >
-          <GlassSurface
-            borderRadius={12}
-            borderWidth={0.036}
-            brightness={theme.palette.mode === 'dark' ? 26 : 66}
-            opacity={theme.palette.mode === 'dark' ? 0.86 : 0.83}
-            blur={theme.palette.mode === 'dark' ? 2.35 : 2.05}
-            displace={theme.palette.mode === 'dark' ? 0.05 : 0.04}
-            backgroundOpacity={theme.palette.mode === 'dark' ? 0.018 : 0.038}
-            saturation={theme.palette.mode === 'dark' ? 1.005 : 0.99}
-            distortionScale={theme.palette.mode === 'dark' ? -30 : -25}
-            redOffset={0}
-            greenOffset={1.5}
-            blueOffset={3}
-            mixBlendMode="difference"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 1,
-              overflow: 'hidden',
-            }}
-        >
           <Box
-            aria-hidden="true"
             sx={{
-              position: 'absolute',
-              inset: 0,
-              background:
+              alignItems: 'center',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              backgroundColor:
                 theme.palette.mode === 'dark'
-                  ? teaserMode
-                    ? 'linear-gradient(180deg, rgba(7,9,13,0.62) 0%, rgba(7,9,13,0.52) 18%, rgba(8,10,14,0.28) 30%, rgba(8,10,14,0.06) 56%, rgba(8,10,14,0) 100%), linear-gradient(90deg, rgba(8,10,14,0.58) 0%, rgba(8,10,14,0.48) 26%, rgba(8,10,14,0.32) 54%, rgba(8,10,14,0.14) 100%), linear-gradient(180deg, rgba(10,12,16,0.56) 0%, rgba(10,12,16,0.44) 26%, rgba(10,12,16,0.3) 54%, rgba(10,12,16,0.46) 100%), radial-gradient(120% 82% at 50% 8%, rgba(132,175,240,0.026) 0%, rgba(132,175,240,0.01) 24%, rgba(10,12,16,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.006) 0%, rgba(255,255,255,0) 24%)'
-                    : 'linear-gradient(180deg, rgba(7,9,13,0.72) 0%, rgba(7,9,13,0.62) 18%, rgba(8,10,14,0.36) 30%, rgba(8,10,14,0.08) 56%, rgba(8,10,14,0) 100%), linear-gradient(90deg, rgba(8,10,14,0.72) 0%, rgba(8,10,14,0.64) 26%, rgba(8,10,14,0.44) 54%, rgba(8,10,14,0.24) 100%), linear-gradient(180deg, rgba(10,12,16,0.68) 0%, rgba(10,12,16,0.54) 26%, rgba(10,12,16,0.42) 54%, rgba(10,12,16,0.56) 100%), radial-gradient(120% 82% at 50% 8%, rgba(132,175,240,0.032) 0%, rgba(132,175,240,0.012) 24%, rgba(10,12,16,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.008) 0%, rgba(255,255,255,0) 24%)'
-                  : teaserMode
-                    ? 'linear-gradient(180deg, rgba(20,24,30,0.32) 0%, rgba(20,24,30,0.26) 18%, rgba(20,24,30,0.13) 30%, rgba(20,24,30,0.03) 56%, rgba(20,24,30,0) 100%), linear-gradient(90deg, rgba(18,22,28,0.46) 0%, rgba(18,22,28,0.38) 26%, rgba(18,22,28,0.24) 54%, rgba(18,22,28,0.12) 100%), linear-gradient(180deg, rgba(22,26,32,0.42) 0%, rgba(22,26,32,0.3) 26%, rgba(22,26,32,0.22) 54%, rgba(22,26,32,0.34) 100%), radial-gradient(120% 82% at 50% 8%, rgba(132,175,240,0.02) 0%, rgba(132,175,240,0.008) 24%, rgba(22,26,32,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.014) 0%, rgba(255,255,255,0) 24%)'
-                    : 'linear-gradient(180deg, rgba(20,24,30,0.4) 0%, rgba(20,24,30,0.32) 18%, rgba(20,24,30,0.16) 30%, rgba(20,24,30,0.04) 56%, rgba(20,24,30,0) 100%), linear-gradient(90deg, rgba(18,22,28,0.58) 0%, rgba(18,22,28,0.5) 26%, rgba(18,22,28,0.34) 54%, rgba(18,22,28,0.18) 100%), linear-gradient(180deg, rgba(22,26,32,0.54) 0%, rgba(22,26,32,0.38) 26%, rgba(22,26,32,0.32) 54%, rgba(22,26,32,0.44) 100%), radial-gradient(120% 82% at 50% 8%, rgba(132,175,240,0.024) 0%, rgba(132,175,240,0.01) 24%, rgba(22,26,32,0) 58%), linear-gradient(180deg, rgba(255,255,255,0.018) 0%, rgba(255,255,255,0) 24%)',
-              pointerEvents: 'none',
-              zIndex: 0,
-              transition: `background ${FEATURED_TEASER_FADE_DURATION_MS}ms ease`,
-            }}
-          />
-          <Box
-            aria-hidden="true"
-            sx={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: '44%',
-              background:
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(90deg, rgba(6,8,12,0.22) 0%, rgba(6,8,12,0.14) 52%, rgba(6,8,12,0) 100%)'
-                  : 'linear-gradient(90deg, rgba(16,20,28,0.12) 0%, rgba(16,20,28,0.08) 52%, rgba(16,20,28,0) 100%)',
-              pointerEvents: 'none',
-              zIndex: 0,
-            }}
-          />
-          <Box
-            sx={{
-              boxSizing: 'border-box',
-              display: 'flex',
-              flexDirection: 'column',
-              height: '100%',
-              p: '22px',
-              position: 'relative',
-              width: '100%',
-              zIndex: 1,
+                  ? 'rgba(16,18,24,0.34)'
+                  : 'rgba(252,248,241,0.34)',
+              border: `1px solid ${alpha(
+                theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.text.primary,
+                0.08
+              )}`,
+              borderRadius: '999px',
+              color: alpha(theme.palette.text.secondary, 0.92),
+              display: 'inline-flex',
+              fontSize: '0.64rem',
+              fontWeight: 700,
+              letterSpacing: '0.09em',
+              lineHeight: 1,
+              px: '9px',
+              py: '5px',
+              textTransform: 'uppercase',
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '12px', mb: '18px', position: 'relative', pl: '24px', pr: '14px', pt: '24px' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <Avatar
-                  src={imageSrc}
-                  variant="rounded"
-                  sx={{
-                    height: 52,
-                    width: 52,
-                    bgcolor: theme.palette.mode === 'dark' ? '#181a20' : theme.palette.background.surface,
-                    border: `1px solid ${theme.palette.border.subtle}`,
-                    flexShrink: 0,
-                    opacity: theme.palette.mode === 'dark' ? 0.94 : 0.9,
-                  }}
-                >
-                  {previewConfig.title.charAt(0)}
-                </Avatar>
-                <Typography
-                  sx={{
-                    color: theme.palette.text.primary,
-                    fontSize: '1.24rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.026em',
-                    textShadow:
-                      theme.palette.mode === 'dark'
-                        ? '0 2px 12px rgba(0,0,0,0.42)'
-                        : '0 2px 10px rgba(18,22,28,0.22)',
-                  }}
-                >
-                  {previewConfig.title}
-                </Typography>
-              </Box>
-              <Typography
-                sx={{
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(232,236,244,0.86)'
-                      : 'rgba(28,36,52,0.8)',
-                  fontSize: '0.96rem',
-                  lineHeight: 1.55,
-                  maxWidth: '54ch',
-                  textShadow:
-                    theme.palette.mode === 'dark'
-                      ? '0 2px 14px rgba(0,0,0,0.36)'
-                      : '0 2px 10px rgba(18,22,28,0.18)',
-                }}
-              >
-                {previewConfig.subtitle}
-              </Typography>
-              <Box sx={{ pt: '6px', pointerEvents: 'auto' }}>
-                <Button
-                  onClick={() => openApp(resolvedAppName)}
-                  variant="contained"
-                  sx={{
-                    ...getBlueTier1ButtonSx(),
-                    borderRadius: '11px',
-                    fontSize: '0.84rem',
-                    fontWeight: 600,
-                    minWidth: '138px',
-                    minHeight: '42px',
-                    px: 2.2,
-                    py: 0.9,
-                    textTransform: 'none',
-                    backdropFilter: 'blur(2px)',
-                    WebkitBackdropFilter: 'blur(2px)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      inset: 0,
-                      backgroundImage:
-                        'radial-gradient(circle at 20% 25%, rgba(255,255,255,0.1) 0.5px, transparent 0.8px), radial-gradient(circle at 72% 64%, rgba(0,0,0,0.08) 0.5px, transparent 0.9px), radial-gradient(circle at 48% 38%, rgba(255,255,255,0.06) 0.45px, transparent 0.75px)',
-                      backgroundSize: '18px 18px, 22px 22px, 16px 16px',
-                      opacity: theme.palette.mode === 'dark' ? 0.06 : 0.05,
-                      mixBlendMode: 'soft-light',
-                      pointerEvents: 'none',
-                    },
-                    '&:hover': {
-                      ...getBlueTier1ButtonSx()['&:hover'],
-                      transform: 'none',
-                    },
-                    '&:active': {
-                      ...getBlueTier1ButtonSx()['&:active'],
-                      transform: 'none',
-                    },
-                  }}
-                >
-                  Open Q-App
-                </Button>
-              </Box>
-            </Box>
-            <Box sx={{ flex: 1, minHeight: '150px', position: 'relative' }} />
+            {previewConfig.eyebrow}
           </Box>
-        </GlassSurface>
-          <Box
-            aria-hidden="true"
+          <Typography
             sx={{
-              position: 'absolute',
-              inset: 0,
-              borderRadius: '12px',
-              pointerEvents: 'none',
-              zIndex: 2,
-              boxShadow:
-                theme.palette.mode === 'dark'
-                  ? 'inset 0 0 0 0.72px rgba(8,10,14,0.26), inset 0 -1px 2px rgba(6,8,12,0.16), inset -1px 0 2px rgba(6,8,12,0.13)'
-                  : 'inset 0 0 0 0.72px rgba(22,26,32,0.11), inset 0 -1px 2px rgba(22,26,32,0.07), inset -1px 0 2px rgba(22,26,32,0.05)',
+              color: alpha(theme.palette.common.white, 0.97),
+              fontSize: '1.52rem',
+              fontWeight: 700,
+              letterSpacing: '-0.03em',
+              lineHeight: 0.98,
+              textShadow: '0 2px 20px rgba(0,0,0,0.28)',
             }}
-          />
+          >
+            {previewConfig.title}
+          </Typography>
+          <Typography
+            sx={{
+              color:
+                theme.palette.mode === 'dark'
+                  ? 'rgba(232,236,244,0.84)'
+                  : 'rgba(245,247,250,0.86)',
+              fontSize: '0.95rem',
+              lineHeight: 1.55,
+              maxWidth: '44ch',
+              textShadow: '0 2px 14px rgba(0,0,0,0.22)',
+            }}
+          >
+            {previewConfig.subtitle}
+          </Typography>
+          <Button
+            onClick={() => openApp(resolvedAppName)}
+            variant="contained"
+            sx={{
+              ...getBlueTier1ButtonSx(),
+              borderRadius: '11px',
+              fontSize: '0.84rem',
+              fontWeight: 600,
+              minHeight: '42px',
+              minWidth: '138px',
+              px: 2.2,
+              py: 0.9,
+              textTransform: 'none',
+              '&:hover': {
+                ...getBlueTier1ButtonSx()['&:hover'],
+                transform: 'none',
+              },
+              '&:active': {
+                ...getBlueTier1ButtonSx()['&:active'],
+                transform: 'none',
+              },
+            }}
+          >
+            Open Q-App
+          </Button>
         </Box>
       </Box>
-    );
-  };
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          inset: 0,
+          borderRadius: 'inherit',
+          boxShadow:
+            theme.palette.mode === 'dark'
+              ? 'inset 0 0 0 1px rgba(255,255,255,0.04), inset 0 -18px 26px rgba(0,0,0,0.2)'
+              : 'inset 0 0 0 1px rgba(24,29,36,0.06), inset 0 -14px 22px rgba(24,29,36,0.08)',
+          pointerEvents: 'none',
+        }}
+      />
+    </Box>
+  );
+};

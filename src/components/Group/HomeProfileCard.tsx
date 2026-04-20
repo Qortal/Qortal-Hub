@@ -1,8 +1,18 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type MouseEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Avatar,
   Box,
   ButtonBase,
+  Menu,
+  MenuItem,
   Portal,
   Typography,
   useTheme,
@@ -12,6 +22,7 @@ import { LoadingButton } from '@mui/lab';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseIcon from '@mui/icons-material/Close';
 import ErrorIcon from '@mui/icons-material/Error';
+import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import PersonIcon from '@mui/icons-material/Person';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -51,6 +62,29 @@ type HomeProfileCardProps = {
 
 type AccountStatus = 'busy' | 'invisible' | 'online';
 
+const ACCOUNT_STATUS_STORAGE_KEY = 'home_profile_account_status';
+const ACCOUNT_STATUS_OPTIONS: Array<{
+  color: string;
+  key: AccountStatus;
+  label: string;
+}> = [
+  {
+    color: 'var(--account-status-online)',
+    key: 'online',
+    label: 'Online',
+  },
+  {
+    color: 'var(--account-status-busy)',
+    key: 'busy',
+    label: 'Busy',
+  },
+  {
+    color: 'var(--account-status-invisible)',
+    key: 'invisible',
+    label: 'Invisible',
+  },
+];
+
 export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const { t } = useTranslation(['tutorial', 'core', 'group']);
   const theme = useTheme();
@@ -75,6 +109,10 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isAddressFieldHovered, setIsAddressFieldHovered] = useState(false);
   const [isAvatarGlowHovered, setIsAvatarGlowHovered] = useState(false);
+  const [accountStatusAnchorEl, setAccountStatusAnchorEl] =
+    useState<HTMLElement | null>(null);
+  const [accountStatusOverride, setAccountStatusOverride] =
+    useState<AccountStatus | null>(null);
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
@@ -163,6 +201,10 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const name = userInfo?.name;
   const address = userInfo?.address;
   const hasRegisteredName = Boolean(name);
+  const accountStatusStorageKey = useMemo(() => {
+    const identityKey = address?.trim() || name?.trim() || 'default';
+    return `${ACCOUNT_STATUS_STORAGE_KEY}:${identityKey}`;
+  }, [address, name]);
   const accountIdentityPrimaryText = hasRegisteredName
     ? name ?? '—'
     : address ?? '—';
@@ -170,7 +212,7 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
   const shouldRevealAddressOnHover = hasRegisteredName && Boolean(address);
   const showAnimatedAddress = shouldRevealAddressOnHover && isAddressFieldHovered;
   const addressFieldSideSlotPx = 26;
-  const accountStatus = useMemo<AccountStatus>(() => {
+  const fallbackAccountStatus = useMemo<AccountStatus>(() => {
     const candidateStatuses = [
       userInfo?.status,
       userInfo?.presence,
@@ -205,6 +247,8 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
 
     return 'online';
   }, [userInfo]);
+  const accountStatus = accountStatusOverride ?? fallbackAccountStatus;
+  const isAccountStatusMenuOpen = Boolean(accountStatusAnchorEl);
   const accountStatusMeta = useMemo(() => {
     if (accountStatus === 'busy') {
       return {
@@ -232,6 +276,56 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
     theme.palette.common.white,
     theme.palette.text.primary,
   ]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedStatus = window.localStorage.getItem(accountStatusStorageKey);
+
+      if (
+        storedStatus === 'online' ||
+        storedStatus === 'busy' ||
+        storedStatus === 'invisible'
+      ) {
+        setAccountStatusOverride(storedStatus);
+        return;
+      }
+    } catch (error) {
+      console.warn('Unable to read local account status override.', error);
+    }
+
+    setAccountStatusOverride(null);
+  }, [accountStatusStorageKey]);
+
+  const handleOpenAccountStatusMenu = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      setAccountStatusAnchorEl(event.currentTarget);
+    },
+    []
+  );
+
+  const handleCloseAccountStatusMenu = useCallback(() => {
+    setAccountStatusAnchorEl(null);
+  }, []);
+
+  const handleSelectAccountStatus = useCallback(
+    (nextStatus: AccountStatus) => {
+      setAccountStatusOverride(nextStatus);
+
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(accountStatusStorageKey, nextStatus);
+        } catch (error) {
+          console.warn('Unable to persist local account status override.', error);
+        }
+      }
+
+      setAccountStatusAnchorEl(null);
+    },
+    [accountStatusStorageKey]
+  );
+
   const avatarUrl =
     tempAvatar ??
     (name && !avatarError
@@ -416,7 +510,7 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
           alignItems: 'center',
           display: 'flex',
           flexDirection: 'column',
-          gap: '6px',
+          gap: '4px',
           justifyContent: 'center',
           width: '104px',
         }}
@@ -500,22 +594,83 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
             </ButtonBase>
           </BorderGlow>
         </TiltedCard>
-        <Typography
+
+        <ButtonBase
+          onClick={handleOpenAccountStatusMenu}
+          aria-haspopup="menu"
+          aria-expanded={isAccountStatusMenuOpen ? 'true' : undefined}
+          aria-controls={isAccountStatusMenuOpen ? 'account-status-menu' : undefined}
           sx={{
-            color: theme.palette.mode === 'dark'
-              ? alpha(theme.palette.common.white, 0.48)
-              : alpha(theme.palette.text.primary, 0.5),
-            fontSize: '0.6rem',
-            letterSpacing: '0.01em',
-            opacity: 1,
-            lineHeight: 1.1,
-            textAlign: 'center',
-            userSelect: 'none',
-            width: '100%',
+            alignItems: 'center',
+            backgroundColor: alpha(
+              isDarkMode ? theme.palette.common.white : theme.palette.text.primary,
+              isDarkMode ? 0.06 : 0.05
+            ),
+            borderRadius: '999px',
+            display: 'inline-flex',
+            gap: '6px',
+            justifyContent: 'center',
+            maxWidth: '100%',
+            minHeight: '22px',
+            mt: '2px',
+            px: '8px',
+            py: '3px',
+            transition:
+              'background-color 160ms ease, color 160ms ease, transform 120ms ease',
+            '&:hover': {
+              backgroundColor: alpha(
+                isDarkMode ? theme.palette.common.white : theme.palette.text.primary,
+                isDarkMode ? 0.1 : 0.08
+              ),
+            },
+            '&:focus-visible': {
+              backgroundColor: alpha(theme.palette.primary.main, isDarkMode ? 0.16 : 0.1),
+            },
           }}
         >
-          Edit profile
-        </Typography>
+          <Box
+            aria-hidden="true"
+            sx={{
+              animation:
+                accountStatus === 'online'
+                  ? 'homeProfileStatusPulse 3.4s ease-in-out infinite'
+                  : undefined,
+              bgcolor: accountStatusMeta.color,
+              borderRadius: '50%',
+              flexShrink: 0,
+              height: 7,
+              width: 7,
+              '@keyframes homeProfileStatusPulse': {
+                '0%, 100%': {
+                  opacity: 0.9,
+                  transform: 'scale(0.92)',
+                },
+                '50%': {
+                  opacity: 1,
+                  transform: 'scale(1.08)',
+                },
+              },
+            }}
+          />
+          <Typography
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.88),
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              letterSpacing: '0.01em',
+              lineHeight: 1.1,
+              textAlign: 'center',
+            }}
+          >
+            {accountStatusMeta.label}
+          </Typography>
+          <KeyboardArrowDownRoundedIcon
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.66),
+              fontSize: '0.9rem',
+            }}
+          />
+        </ButtonBase>
       </Box>
 
       <Box
@@ -714,55 +869,6 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
             </ButtonBase>
           </Box>
 
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'inline-flex',
-              gap: '7px',
-              justifyContent: 'center',
-              minHeight: '18px',
-              mt: '2px',
-              width: '100%',
-            }}
-          >
-            <Box
-              aria-hidden="true"
-              sx={{
-                animation:
-                  accountStatus === 'online'
-                    ? 'homeProfileStatusPulse 3.4s ease-in-out infinite'
-                    : undefined,
-                bgcolor: accountStatusMeta.color,
-                borderRadius: '50%',
-                flexShrink: 0,
-                height: 7,
-                width: 7,
-                '@keyframes homeProfileStatusPulse': {
-                  '0%, 100%': {
-                    opacity: 0.9,
-                    transform: 'scale(0.92)',
-                  },
-                  '50%': {
-                    opacity: 1,
-                    transform: 'scale(1.08)',
-                  },
-                },
-              }}
-            />
-            <Typography
-              sx={{
-                color: alpha(theme.palette.text.secondary, 0.92),
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                letterSpacing: '0.01em',
-                lineHeight: 1.1,
-                textAlign: 'center',
-              }}
-            >
-              {accountStatusMeta.label}
-            </Typography>
-          </Box>
-
           <Typography
             sx={{
               color: theme.palette.text.secondary,
@@ -822,6 +928,88 @@ export const HomeProfileCard = ({ onOpenSettings }: HomeProfileCardProps) => {
           </ButtonBase>
         )}
       </Box>
+
+      <Menu
+        id="account-status-menu"
+        anchorEl={accountStatusAnchorEl}
+        open={isAccountStatusMenuOpen}
+        onClose={handleCloseAccountStatusMenu}
+        anchorOrigin={{
+          horizontal: 'center',
+          vertical: 'bottom',
+        }}
+        transformOrigin={{
+          horizontal: 'center',
+          vertical: 'top',
+        }}
+        slotProps={{
+          list: {
+            sx: {
+              p: '6px',
+            },
+          },
+          paper: {
+            sx: {
+              backdropFilter: 'blur(14px)',
+              bgcolor: isDarkMode ? 'rgba(34, 37, 46, 0.94)' : 'rgba(251, 247, 240, 0.94)',
+              border: `1px solid ${alpha(
+                isDarkMode ? theme.palette.common.white : theme.palette.text.primary,
+                0.07
+              )}`,
+              borderRadius: '16px',
+              boxShadow: isDarkMode
+                ? '0 18px 36px rgba(0, 0, 0, 0.32)'
+                : '0 16px 28px rgba(24, 32, 44, 0.12)',
+              minWidth: 168,
+              mt: 0.5,
+              overflow: 'hidden',
+            },
+          },
+        }}
+      >
+        {ACCOUNT_STATUS_OPTIONS.map((option) => {
+          const isSelected = option.key === accountStatus;
+
+          return (
+            <MenuItem
+              key={option.key}
+              selected={isSelected}
+              onClick={() => handleSelectAccountStatus(option.key)}
+              sx={{
+                alignItems: 'center',
+                columnGap: '10px',
+                borderRadius: '12px',
+                minHeight: '38px',
+                px: '12px',
+                py: '7px',
+              }}
+            >
+              <Box
+                aria-hidden="true"
+                sx={{
+                  bgcolor: option.color,
+                  borderRadius: '50%',
+                  flexShrink: 0,
+                  height: 8,
+                  width: 8,
+                }}
+              />
+              <Typography
+                sx={{
+                  color: isSelected
+                    ? theme.palette.text.primary
+                    : alpha(theme.palette.text.secondary, 0.96),
+                  fontSize: '0.82rem',
+                  fontWeight: isSelected ? 700 : 600,
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {option.label}
+              </Typography>
+            </MenuItem>
+          );
+        })}
+      </Menu>
 
       <Portal>
         <AnimatePresence>

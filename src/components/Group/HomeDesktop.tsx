@@ -24,6 +24,7 @@ import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
+import { accountTargetBlocks } from '../Minting/MintingStats';
 import {
   APP_BLUE_SURFACE_TEXT,
   GROUP_ACTIVITY_BLUE,
@@ -56,6 +57,19 @@ import { QuitterFeedWidget } from '../Widgets/QuitterFeedWidget';
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
 type HomeCustomizableCardId = 'groupActivity' | 'quitter';
+type DashboardStatusPreviewMode =
+  | 'live'
+  | 'syncing'
+  | 'local'
+  | 'custom'
+  | 'issue';
+type DashboardInfoStatusTone = 'operational' | 'syncing' | 'issue';
+type MinterProgressSnapshot = {
+  currentBlocks: number;
+  currentLevel: number;
+  progressRatio: number;
+  requiredBlocks: number;
+};
 const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
 const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
   width: {
@@ -118,9 +132,10 @@ const HOME_QUITTER_WIDGET_SEARCH_LIMITS: Record<WidgetDisplayMode, number> = {
 };
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
-const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 18;
+const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 52;
 const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
-const INFO_SECONDARY_LAYER_TRANSITION_MS = 145;
+const DASHBOARD_STATUS_PREVIEW_EVENT = 'setDashboardStatusPreview';
+const DASHBOARD_STATUS_PREVIEW_STORAGE_KEY = 'dashboardStatusPreviewMode';
 const DASHBOARD_EMBEDDED_QUITTER_APP = {
   identifier: '',
   name: 'Quitter',
@@ -132,6 +147,54 @@ const HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT: HomeCustomizableCardId[] = [
   'groupActivity',
   'quitter',
 ];
+
+const parseDashboardStatusPreviewMode = (
+  value: string | null
+): DashboardStatusPreviewMode => {
+  switch (value) {
+    case 'syncing':
+    case 'local':
+    case 'custom':
+    case 'issue':
+      return value;
+    default:
+      return 'live';
+  }
+};
+
+const getNextDashboardStatusPreviewMode = (
+  currentMode: DashboardStatusPreviewMode
+): DashboardStatusPreviewMode => {
+  switch (currentMode) {
+    case 'live':
+      return 'syncing';
+    case 'syncing':
+      return 'local';
+    case 'local':
+      return 'custom';
+    case 'custom':
+      return 'issue';
+    default:
+      return 'live';
+  }
+};
+
+const getDashboardStatusPreviewModeLabel = (
+  mode: DashboardStatusPreviewMode
+) => {
+  switch (mode) {
+    case 'syncing':
+      return 'Syncing';
+    case 'local':
+      return 'Local';
+    case 'custom':
+      return 'Custom';
+    case 'issue':
+      return 'Issue';
+    default:
+      return 'Live';
+  }
+};
 
 type HomeCustomizableCardsLayout = {
   heights: Partial<Record<HomeCustomizableCardId, number>>;
@@ -299,7 +362,7 @@ const WalletActionButton = ({ icon, label, onClick, theme }) => {
   );
 };
 
-const InfoPreviewPanel = ({ rows, theme }) => {
+const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
   const enableOverlay = useMediaQuery(theme.breakpoints.up('xl'));
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -309,6 +372,11 @@ const InfoPreviewPanel = ({ rows, theme }) => {
   const [collapsedHeight, setCollapsedHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
+  const footerSectionCount = rows.footerSections.length;
+  const footerItemCount = rows.footerSections.reduce(
+    (total, section) => total + section.items.length,
+    0
+  );
 
   const clearHoverTimers = () => {
     if (openTimerRef.current !== null) {
@@ -349,7 +417,7 @@ const InfoPreviewPanel = ({ rows, theme }) => {
       };
     }
 
-    const resizeObserver = new ResizeObserver(() => updateMeasurements());
+    const resizeObserver = new ResizeObserver(updateMeasurements);
     resizeObserver.observe(wrapperNode);
     resizeObserver.observe(contentNode);
     window.addEventListener('resize', updateMeasurements);
@@ -358,16 +426,31 @@ const InfoPreviewPanel = ({ rows, theme }) => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updateMeasurements);
     };
-  }, [enableOverlay, rows.items.length]);
+  }, [
+    enableOverlay,
+    footerItemCount,
+    footerSectionCount,
+    rows.metricItems.length,
+    rows.primaryItems.length,
+  ]);
 
-  const hasOverflow = enableOverlay && collapsedHeight > 0 && contentHeight > collapsedHeight + 4;
-  const resolvedCollapsedHeight = collapsedHeight > 0 ? collapsedHeight : undefined;
-  const expandedHeight = resolvedCollapsedHeight
+  const hasOverflow =
+    enableOverlay && collapsedHeight > 0 && contentHeight > collapsedHeight + 4;
+  const resolvedCollapsedHeight =
+    collapsedHeight > 0 ? collapsedHeight : undefined;
+  const rawExpandedHeight = resolvedCollapsedHeight
     ? Math.max(
         resolvedCollapsedHeight,
         contentHeight + INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX
       )
     : contentHeight + INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX;
+  const expandedHeight =
+    maxExpandedHeightPx != null
+      ? Math.max(
+          resolvedCollapsedHeight ?? 0,
+          Math.min(rawExpandedHeight, maxExpandedHeightPx)
+        )
+      : rawExpandedHeight;
 
   const handleMouseEnter = () => {
     if (!hasOverflow) return;
@@ -396,8 +479,131 @@ const InfoPreviewPanel = ({ rows, theme }) => {
     }, INFO_PANEL_EXPAND_CLOSE_DELAY_MS);
   };
 
-  const isInteractive = enableOverlay && hasOverflow;
-  const showCollapsedFade = isInteractive && !isExpanded;
+  const showCollapsedFade = hasOverflow && !isExpanded;
+  const statusAccentColor =
+    rows.status.tone === 'issue'
+      ? theme.palette.mode === 'dark'
+        ? alpha(theme.palette.error.light, 0.9)
+        : alpha(theme.palette.error.main, 0.88)
+      : rows.status.tone === 'syncing'
+        ? theme.palette.mode === 'dark'
+          ? alpha(theme.palette.warning.light, 0.9)
+          : alpha(theme.palette.warning.main, 0.88)
+        : alpha(
+            GROUP_ACTIVITY_BLUE.primary,
+            theme.palette.mode === 'dark' ? 0.98 : 0.9
+          );
+  const statusTextColor =
+    rows.status.tone === 'issue'
+      ? theme.palette.mode === 'dark'
+        ? alpha(theme.palette.error.light, 0.76)
+        : alpha(theme.palette.error.main, 0.76)
+      : rows.status.tone === 'syncing'
+        ? theme.palette.mode === 'dark'
+          ? alpha(theme.palette.warning.light, 0.76)
+          : alpha(theme.palette.warning.dark, 0.8)
+        : theme.palette.mode === 'dark'
+          ? alpha(theme.palette.common.white, 0.7)
+          : alpha(theme.palette.text.primary, 0.72);
+  const statusGlowColor =
+    rows.status.tone === 'issue'
+      ? alpha(theme.palette.error.light, 0.12)
+      : rows.status.tone === 'syncing'
+        ? alpha(theme.palette.warning.light, 0.16)
+        : alpha(GROUP_ACTIVITY_BLUE.primary, 0.14);
+
+  const renderPrimaryValue = (row) => {
+    if (row.valueNode) return row.valueNode;
+
+    if (row.variant === 'pill') {
+      const pillTone =
+        row.pillTone === 'negative'
+          ? {
+              background:
+                theme.palette.mode === 'dark'
+                  ? 'rgba(104, 70, 74, 0.32)'
+                  : 'rgba(168, 90, 90, 0.12)',
+              border: alpha(
+                theme.palette.error.light,
+                theme.palette.mode === 'dark' ? 0.16 : 0.22
+              ),
+              color:
+                theme.palette.mode === 'dark'
+                  ? alpha(theme.palette.error.light, 0.88)
+                  : alpha(theme.palette.error.dark, 0.88),
+            }
+          : row.pillTone === 'neutral'
+            ? {
+                background:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(62, 72, 89, 0.34)'
+                    : 'rgba(70, 97, 140, 0.11)',
+                border: alpha(
+                  GROUP_ACTIVITY_BLUE.primary,
+                  theme.palette.mode === 'dark' ? 0.16 : 0.18
+                ),
+                color:
+                  theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.common.white, 0.84)
+                    : alpha(theme.palette.text.primary, 0.84),
+              }
+            : {
+                background:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(71, 100, 86, 0.3)'
+                    : 'rgba(84, 124, 103, 0.14)',
+                border: alpha(
+                  theme.palette.success.light,
+                  theme.palette.mode === 'dark' ? 0.16 : 0.22
+                ),
+                color:
+                  theme.palette.mode === 'dark'
+                    ? '#C2D9CA'
+                    : '#406C53',
+              };
+      return (
+        <Box
+          sx={{
+            alignItems: 'center',
+            bgcolor: pillTone.background,
+            border: `1px solid ${pillTone.border}`,
+            borderRadius: '999px',
+            color: pillTone.color,
+            display: 'inline-flex',
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            height: '26px',
+            justifyContent: 'center',
+            letterSpacing: '0.01em',
+            maxWidth: '100%',
+            minWidth: 0,
+            px: '10px',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {row.value}
+        </Box>
+      );
+    }
+
+    return (
+      <Typography
+        sx={{
+          color: row.emphasize ? theme.palette.text.primary : alpha(theme.palette.text.primary, 0.9),
+          fontSize: row.emphasize ? '0.96rem' : '0.88rem',
+          fontWeight: row.emphasize ? 700 : 600,
+          letterSpacing: row.emphasize ? '0.01em' : '0.012em',
+          lineHeight: 1.2,
+          maxWidth: '100%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {row.value}
+      </Typography>
+    );
+  };
 
   return (
     <Box
@@ -406,255 +612,381 @@ const InfoPreviewPanel = ({ rows, theme }) => {
         minWidth: 0,
         position: 'relative',
         width: '100%',
-        ...(enableOverlay ? { height: '100%', minHeight: 0, zIndex: isExpanded ? 4 : 1 } : {}),
+        ...(enableOverlay
+          ? { height: '100%', minHeight: 0, zIndex: isExpanded ? 4 : 1 }
+          : {}),
       }}
     >
       <Box
-        ref={panelRef}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        sx={{
-          ...dashboardPanelSx(theme, 'utility'),
-          borderRadius: '14px',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          width: '100%',
-          ...(enableOverlay
-            ? {
-                borderColor: isExpanded ? theme.palette.border.main : theme.palette.border.subtle,
-                boxShadow: isExpanded
-                  ? theme.palette.mode === 'dark'
-                    ? '0 26px 34px -12px rgba(0, 0, 0, 0.34)'
-                    : '0 24px 28px -12px rgba(15, 23, 42, 0.16)'
-                  : undefined,
-                height: resolvedCollapsedHeight == null
+      ref={panelRef}
+      sx={{
+        ...dashboardPanelSx(theme, 'utility'),
+        borderRadius: '14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0,
+        minWidth: 0,
+        overflow: 'hidden',
+        px: '16px',
+        py: '12px',
+        width: '100%',
+        ...(enableOverlay
+          ? {
+              borderColor: isExpanded
+                ? theme.palette.border.main
+                : theme.palette.border.subtle,
+              boxShadow: isExpanded
+                ? theme.palette.mode === 'dark'
+                  ? '0 26px 34px -12px rgba(0, 0, 0, 0.34)'
+                  : '0 24px 28px -12px rgba(15, 23, 42, 0.16)'
+                : undefined,
+              height:
+                resolvedCollapsedHeight == null
                   ? '100%'
                   : `${isExpanded ? expandedHeight : resolvedCollapsedHeight}px`,
-                left: 0,
-                position: 'absolute',
-                right: 0,
-                top: 0,
-                transition: 'height 160ms cubic-bezier(0.2, 0, 0, 1), box-shadow 140ms ease, border-color 140ms ease',
+              left: 0,
+              position: 'absolute',
+              right: 0,
+              top: 0,
+              transition:
+                'height 160ms cubic-bezier(0.2, 0, 0, 1), box-shadow 140ms ease, border-color 140ms ease',
+            }
+          : {
+              height: '100%',
+            }),
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseMove={handleDashboardPanelPointerMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <Box
+        className="dashboard-panel-decoration"
+        sx={{
+          display: 'none',
+        }}
+      />
+      <Box
+        ref={contentRef}
+        sx={{
+          '& > *': {
+            flexShrink: 0,
+          },
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          position: 'relative',
+          width: '100%',
+          ...(showCollapsedFade
+            ? {
+                WebkitMaskImage:
+                  'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 102px), rgba(0,0,0,0.86) calc(100% - 68px), rgba(0,0,0,0.46) calc(100% - 40px), rgba(0,0,0,0.12) calc(100% - 18px), rgba(0,0,0,0) 100%)',
+                WebkitMaskRepeat: 'no-repeat',
+                WebkitMaskSize: '100% 100%',
+                maskImage:
+                  'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 102px), rgba(0,0,0,0.86) calc(100% - 68px), rgba(0,0,0,0.46) calc(100% - 40px), rgba(0,0,0,0.12) calc(100% - 18px), rgba(0,0,0,0) 100%)',
+                maskRepeat: 'no-repeat',
+                maskSize: '100% 100%',
+                '&::after': {
+                  content: '""',
+                  position: 'absolute',
+                  left: '8px',
+                  right: '8px',
+                  bottom: -12,
+                  height: '72px',
+                  pointerEvents: 'none',
+                  background:
+                    theme.palette.mode === 'dark'
+                      ? 'linear-gradient(180deg, rgba(27,29,36,0) 0%, rgba(27,29,36,0.08) 22%, rgba(27,29,36,0.28) 46%, rgba(27,29,36,0.62) 74%, rgba(27,29,36,0.9) 100%)'
+                      : 'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 22%, rgba(255,255,255,0.22) 46%, rgba(255,255,255,0.52) 74%, rgba(255,255,255,0.84) 100%)',
+                },
               }
             : {}),
         }}
-        onMouseMove={handleDashboardPanelPointerMove}
       >
-        <Box
-          className="dashboard-panel-decoration"
+      <Box
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          mb: '14px',
+          width: '100%',
+        }}
+      >
+        <Typography
+          component="div"
           sx={{
-            display: 'none',
+            alignItems: 'center',
+            color: theme.palette.text.primary,
+            display: 'inline-flex',
+            fontFamily:
+              '"IBM Plex Mono","SFMono-Regular","Cascadia Mono","Fira Code","Consolas",monospace',
+            fontSize: '0.95rem',
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+            lineHeight: 1,
+            textTransform: 'none',
           }}
-        />
+        >
+          <Box component="span">status</Box>
+          <Box
+            component="span"
+            aria-hidden="true"
+            sx={{
+              animation: 'homeStatusCursorBlink 1.08s steps(1, end) infinite',
+              color: statusAccentColor,
+              display: 'inline-block',
+              ml: '1px',
+              '@keyframes homeStatusCursorBlink': {
+                '0%, 42%': {
+                  opacity: 1,
+                },
+                '43%, 100%': {
+                  opacity: 0.26,
+                },
+              },
+            }}
+          >
+            _
+          </Box>
+        </Typography>
         <Box
-          ref={contentRef}
           sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0,
-            pb: isExpanded ? '18px' : '12px',
-            px: '16px',
-            pt: '12px',
-            position: 'relative',
-            width: '100%',
-            ...(showCollapsedFade
-              ? {
-                  WebkitMaskImage:
-                    'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 102px), rgba(0,0,0,0.86) calc(100% - 68px), rgba(0,0,0,0.46) calc(100% - 40px), rgba(0,0,0,0.12) calc(100% - 18px), rgba(0,0,0,0) 100%)',
-                  WebkitMaskRepeat: 'no-repeat',
-                  WebkitMaskSize: '100% 100%',
-                  maskImage:
-                    'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 102px), rgba(0,0,0,0.86) calc(100% - 68px), rgba(0,0,0,0.46) calc(100% - 40px), rgba(0,0,0,0.12) calc(100% - 18px), rgba(0,0,0,0) 100%)',
-                  maskRepeat: 'no-repeat',
-                  maskSize: '100% 100%',
-                  '&::after': {
-                    content: '""',
-                    position: 'absolute',
-                    left: '8px',
-                    right: '8px',
-                    bottom: 0,
-                    height: '72px',
-                    pointerEvents: 'none',
-                    background:
-                      theme.palette.mode === 'dark'
-                        ? 'linear-gradient(180deg, rgba(27,29,36,0) 0%, rgba(27,29,36,0.08) 22%, rgba(27,29,36,0.28) 46%, rgba(27,29,36,0.62) 74%, rgba(27,29,36,0.9) 100%)'
-                        : 'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 22%, rgba(255,255,255,0.22) 46%, rgba(255,255,255,0.52) 74%, rgba(255,255,255,0.84) 100%)',
-                  },
-                }
-              : {}),
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: '8px',
+            justifyContent: 'flex-end',
+            minWidth: 0,
           }}
         >
           <Box
             sx={{
+              bgcolor: statusAccentColor,
+              borderRadius: '50%',
+              boxShadow: `0 0 6px ${statusGlowColor}`,
+              flexShrink: 0,
+              height: '7px',
+              width: '7px',
+            }}
+          />
+          <Typography
+            sx={{
+              color: statusTextColor,
+              fontSize: '0.73rem',
+              fontWeight: 400,
+              letterSpacing: '0.015em',
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {rows.status.label}
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box sx={{ ...sepSx(theme), pb: '12px', mb: '8px' }} />
+
+      {rows.primaryItems.map((row, index) => (
+        <Box
+          key={row.label}
+          sx={{
+            ...(index < rows.primaryItems.length - 1
+              ? infoSepSx(theme, index, rows.primaryItems.length)
+              : {}),
+            alignItems: 'center',
+            columnGap: '18px',
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
+            height: '46px',
+            py: 0,
+          }}
+        >
+          <Typography
+            sx={{
+              color:
+                theme.palette.mode === 'dark'
+                  ? alpha(theme.palette.common.white, 0.56)
+                  : alpha(theme.palette.text.primary, 0.62),
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              letterSpacing: '0.012em',
+              minWidth: 0,
+            }}
+          >
+            {row.label}
+          </Typography>
+          <Box
+            sx={{
               alignItems: 'center',
+              color: theme.palette.text.primary,
               display: 'flex',
+              height: '100%',
+              justifyContent: 'flex-end',
+              maxWidth: '100%',
+              minWidth: 0,
+              textAlign: 'right',
+            }}
+          >
+            {renderPrimaryValue(row)}
+          </Box>
+        </Box>
+      ))}
+
+      <Box
+        sx={{
+          display: 'grid',
+          gap: '10px',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          mb: '12px',
+          mt: '16px',
+        }}
+      >
+        {rows.metricItems.map((metric) => (
+          <Box
+            key={metric.label}
+            sx={{
+              bgcolor:
+                theme.palette.mode === 'dark'
+                  ? 'rgba(38, 42, 52, 0.9)'
+                  : 'rgba(248, 244, 238, 0.96)',
+              border: `1px solid ${alpha(
+                theme.palette.border.subtle,
+                theme.palette.mode === 'dark' ? 0.92 : 0.68
+              )}`,
+              borderRadius: '10px',
+              boxShadow:
+                theme.palette.mode === 'dark'
+                  ? 'inset 0 1px 0 rgba(255,255,255,0.04)'
+                  : 'inset 0 1px 0 rgba(255,255,255,0.72)',
+              display: 'flex',
+              flexDirection: 'column',
               justifyContent: 'space-between',
-              mb: '14px',
-              width: '100%',
+              minHeight: '70px',
+              overflow: 'hidden',
+              position: 'relative',
+              px: '12px',
+              py: '10px',
             }}
           >
             <Typography
               sx={{
-                color: theme.palette.text.primary,
-                fontSize: '1rem',
-                fontWeight: 600,
-                letterSpacing: '0.015em',
+                color:
+                  theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.common.white, 0.46)
+                    : alpha(theme.palette.text.primary, 0.52),
+                fontSize: '0.66rem',
+                fontWeight: 500,
+                letterSpacing: '0.03em',
+                lineHeight: 1.1,
+                textTransform: 'uppercase',
               }}
             >
-              STATUS
+              {metric.label}
             </Typography>
-            <Box
+            <Typography
               sx={{
-                alignItems: 'center',
-                display: 'inline-flex',
-                gap: '8px',
-                justifyContent: 'flex-end',
-                minWidth: 0,
+                color: theme.palette.text.primary,
+                fontSize: '1.08rem',
+                fontWeight: 700,
+                letterSpacing: '0.01em',
+                lineHeight: 1.1,
+                mt: '8px',
               }}
             >
-              <Box
-                sx={{
-                  bgcolor: rows.status.isOperational
-                    ? alpha(GROUP_ACTIVITY_BLUE.primary, 0.92)
-                    : alpha(theme.palette.error.light, 0.86),
-                  borderRadius: '50%',
-                  boxShadow: rows.status.isOperational
-                    ? `0 0 6px ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.14)}`
-                    : `0 0 6px ${alpha(theme.palette.error.light, 0.12)}`,
-                  flexShrink: 0,
-                  height: '7px',
-                  width: '7px',
-                }}
-              />
-              <Typography
-                sx={{
-                  color: rows.status.isOperational
-                    ? theme.palette.mode === 'dark'
-                      ? alpha(theme.palette.common.white, 0.7)
-                      : alpha(theme.palette.text.primary, 0.72)
-                    : theme.palette.mode === 'dark'
-                      ? alpha(theme.palette.error.light, 0.76)
-                      : alpha(theme.palette.error.main, 0.76),
-                  fontSize: '0.73rem',
-                  fontWeight: 400,
-                  letterSpacing: '0.015em',
-                  lineHeight: 1,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {rows.status.label}
-              </Typography>
-            </Box>
+              {metric.value}
+            </Typography>
           </Box>
+        ))}
+      </Box>
 
-          {rows.items.map((row, index) => {
-            const nextRow = rows.items[index + 1];
-            const showSeparator =
-              index < rows.items.length - 1 && !nextRow?.sectionStart;
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          mt: '12px',
+          width: '100%',
+        }}
+      >
+        {rows.footerSections.map((section, sectionIndex) => (
+          <Box
+            key={section.title}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px',
+              mt: sectionIndex === 0 ? 0 : '2px',
+            }}
+          >
+            <Typography
+              sx={{
+                color:
+                  theme.palette.mode === 'dark'
+                    ? alpha(theme.palette.common.white, 0.4)
+                    : alpha(theme.palette.text.primary, 0.48),
+                fontSize: '0.67rem',
+                fontWeight: 600,
+                letterSpacing: '0.08em',
+                lineHeight: 1,
+                mb: '1px',
+                textTransform: 'uppercase',
+              }}
+            >
+              {section.title}
+            </Typography>
 
-            return (
+            {section.items.map((row, index) => (
               <Box
                 key={row.label}
-                {...(row.secondary
-                  ? {
-                      component: motion.div,
-                      initial: false,
-                      animate: enableOverlay
-                        ? {
-                            opacity: isExpanded ? 1 : 0.84,
-                            y: isExpanded ? 0 : 4,
-                          }
-                        : undefined,
-                      transition: enableOverlay
-                        ? {
-                            duration: INFO_SECONDARY_LAYER_TRANSITION_MS / 1000,
-                            ease: [0.2, 0, 0, 1],
-                          }
-                        : undefined,
-                    }
-                  : {})}
                 sx={{
-                  ...(showSeparator
-                    ? infoSepSx(theme, index, rows.items.length)
+                  ...(index < section.items.length - 1
+                    ? infoSepSx(theme, index, section.items.length)
                     : {}),
-                  alignItems: 'center',
-                  columnGap: '18px',
-                  display: 'grid',
-                  gridTemplateColumns: `minmax(0, 1fr) minmax(${INFO_VALUE_COLUMN_MIN_WIDTH_PX}px, 44%)`,
-                  minHeight: '38px',
-                  mt: row.sectionStart ? '18px' : 0,
-                  py: row.secondary ? '6px' : '7px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px',
+                  minHeight: '50px',
+                  py: '6px',
                 }}
               >
                 <Typography
                   sx={{
-                    color: row.secondary
-                      ? theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.46)
-                        : alpha(theme.palette.text.primary, 0.52)
-                      : theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.62)
-                        : alpha(theme.palette.text.primary, 0.66),
-                    fontSize: row.secondary ? '0.7rem' : '0.73rem',
-                    fontWeight: row.secondary ? 400 : 500,
-                    letterSpacing: '0.018em',
+                    color:
+                      theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.common.white, 0.52)
+                        : alpha(theme.palette.text.primary, 0.58),
+                    fontSize: '0.79rem',
+                    fontWeight: 500,
+                    letterSpacing: '0.012em',
+                    lineHeight: 1.1,
                     minWidth: 0,
                   }}
                 >
                   {row.label}
                 </Typography>
-                <Box
+                <Typography
                   sx={{
-                    alignItems: 'center',
-                    color: theme.palette.text.primary,
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    justifySelf: 'stretch',
+                    color: alpha(theme.palette.text.primary, 0.88),
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.01em',
+                    lineHeight: 1.2,
                     maxWidth: '100%',
-                    minHeight: '24px',
-                    minWidth: 0,
-                    textAlign: 'right',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {typeof row.value === 'string' ? (
-                    <Typography
-                      sx={{
-                        color: row.secondary
-                          ? theme.palette.mode === 'dark'
-                            ? alpha(theme.palette.common.white, 0.72)
-                            : alpha(theme.palette.text.primary, 0.76)
-                          : theme.palette.text.primary,
-                        fontSize: row.secondary
-                          ? '0.785rem'
-                          : row.emphasize
-                            ? '0.94rem'
-                            : '0.86rem',
-                        fontWeight: row.secondary
-                          ? 400
-                          : row.emphasize
-                            ? 700
-                            : 600,
-                        letterSpacing: row.emphasize ? '0.01em' : '0.012em',
-                        lineHeight: 1.2,
-                        maxWidth: '100%',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {row.value}
-                    </Typography>
-                  ) : (
-                    row.value
-                  )}
-                </Box>
+                  {row.value}
+                </Typography>
               </Box>
-            );
-          })}
-        </Box>
-
+            ))}
+          </Box>
+        ))}
       </Box>
+
+      <Box sx={{ minHeight: '8px', width: '100%' }} />
+      </Box>
+    </Box>
     </Box>
   );
 };
@@ -700,6 +1032,8 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
+  const [minterProgress, setMinterProgress] =
+    useState<MinterProgressSnapshot | null>(null);
   const [walletActivityTargetHeightPx, setWalletActivityTargetHeightPx] =
     useState<number | null>(null);
   const [customizableCardsLayout, setCustomizableCardsLayout] =
@@ -724,6 +1058,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
   });
+  const [statusPreviewMode, setStatusPreviewMode] =
+    useState<DashboardStatusPreviewMode>(() =>
+      parseDashboardStatusPreviewMode(
+        localStorage.getItem(DASHBOARD_STATUS_PREVIEW_STORAGE_KEY)
+      )
+    );
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const theme = useTheme();
@@ -751,6 +1091,13 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     theme.palette.mode === 'dark'
       ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.32)'
       : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(31,39,53,0.08)';
+  const infoPanelMaxExpandedHeightPx =
+    isWideDashboardLayout && walletActivityTargetHeightPx != null
+      ? HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX +
+        HOME_DASHBOARD_VERTICAL_GAP_PX +
+        walletActivityTargetHeightPx +
+        2
+      : null;
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
@@ -1264,6 +1611,75 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, [getIndividualUserInfo, userAddress]);
 
   useEffect(() => {
+    let active = true;
+
+    const loadMinterProgress = async () => {
+      if (!userAddress) {
+        if (active) setMinterProgress(null);
+        return;
+      }
+
+      try {
+        const response = await fetch(`${getBaseApiReact()}/addresses/${userAddress}`);
+        if (!response.ok) {
+          throw new Error('network error');
+        }
+
+        const data = await response.json();
+        if (!active) return;
+
+        const currentLevel =
+          typeof data?.level === 'number' && Number.isFinite(data.level)
+            ? data.level
+            : null;
+        const mintedBlocks =
+          typeof data?.blocksMinted === 'number' && Number.isFinite(data.blocksMinted)
+            ? data.blocksMinted
+            : 0;
+        const mintedAdjustment =
+          typeof data?.blocksMintedAdjustment === 'number' &&
+          Number.isFinite(data.blocksMintedAdjustment)
+            ? data.blocksMintedAdjustment
+            : 0;
+        const currentBlocks = Math.max(0, mintedBlocks + mintedAdjustment);
+        const requiredBlocks =
+          currentLevel != null
+            ? currentLevel >= 10
+              ? currentBlocks
+              : accountTargetBlocks(currentLevel)
+            : undefined;
+
+        if (currentLevel == null || requiredBlocks == null) {
+          setMinterProgress(null);
+          return;
+        }
+
+        setMinterProgress({
+          currentBlocks,
+          currentLevel,
+          progressRatio:
+            requiredBlocks > 0
+              ? Math.max(0, Math.min(1, currentBlocks / requiredBlocks))
+              : 0,
+          requiredBlocks,
+        });
+      } catch {
+        if (active) {
+          setMinterProgress(null);
+        }
+      }
+    };
+
+    loadMinterProgress();
+    const interval = window.setInterval(loadMinterProgress, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [userAddress]);
+
+  useEffect(() => {
     if (localStorage.getItem('dashboardMinterPreviewMode')) return;
     setMinterPreviewMode(minterLevel && minterLevel > 0 ? 'on' : 'off');
   }, [minterLevel]);
@@ -1308,6 +1724,27 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     subscribeToEvent('setDashboardMinterPreview', handleSetDashboardMinterPreview);
     return () => {
       unsubscribeFromEvent('setDashboardMinterPreview', handleSetDashboardMinterPreview);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSetDashboardStatusPreview = (e: CustomEvent) => {
+      const nextMode = parseDashboardStatusPreviewMode(
+        e.detail?.data?.mode ?? null
+      );
+      setStatusPreviewMode(nextMode);
+      localStorage.setItem(DASHBOARD_STATUS_PREVIEW_STORAGE_KEY, nextMode);
+    };
+
+    subscribeToEvent(
+      DASHBOARD_STATUS_PREVIEW_EVENT,
+      handleSetDashboardStatusPreview
+    );
+    return () => {
+      unsubscribeFromEvent(
+        DASHBOARD_STATUS_PREVIEW_EVENT,
+        handleSetDashboardStatusPreview
+      );
     };
   }, []);
 
@@ -1372,7 +1809,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     setDesktopViewMode('chat');
   }, [setDesktopViewMode, setGroupSection, setSelectedGroup]);
 
-  const nodeStatusValue = nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100 ? `Syncing ${Math.round(nodeInfos?.syncPercent || 0)}%` : 'Fully Synced';
+  const liveSyncPercent =
+    nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100
+      ? Math.round(nodeInfos?.syncPercent || 0)
+      : 100;
+  const nodeStatusValue = `${liveSyncPercent}% Synced`;
   const peersLabel = `${nodeInfos?.numberOfConnections || 0}`;
   const blockHeightLabel = `${nodeInfos?.height || '—'}`;
   const hubVersionLabel = manifestData.version || '—';
@@ -1393,16 +1834,111 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const isSystemOperational =
     !!nodeInfos &&
     !(nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100);
-  const minterDotsFilled = minterPreviewMode === 'on' ? 5 : 0;
+  const statusPreviewOverrides =
+    statusPreviewMode === 'live'
+      ? null
+      : statusPreviewMode === 'syncing'
+        ? {
+            blockHeight: '1,944,216',
+            coreVersion: coreVersionLabel,
+            hubVersion: hubVersionLabel,
+            isOperational: false,
+            nodeHost: 'ext-node.qortal.link',
+            nodeStatus: '62% Synced',
+            nodeType: 'Public node',
+            peers: '184',
+            qdnPeers: '97',
+            statusLabel: 'Synchronizing',
+          }
+        : statusPreviewMode === 'local'
+          ? {
+              blockHeight: '1,944,882',
+              coreVersion: coreVersionLabel,
+              hubVersion: hubVersionLabel,
+              isOperational: true,
+              nodeHost: '127.0.0.1:12391',
+              nodeStatus: '100% Synced',
+              nodeType: 'Local node',
+              peers: '42',
+              qdnPeers: '28',
+              statusLabel: 'Fully operational',
+            }
+          : statusPreviewMode === 'custom'
+            ? {
+                blockHeight: '1,944,801',
+                coreVersion: coreVersionLabel,
+                hubVersion: hubVersionLabel,
+                isOperational: true,
+                nodeHost: 'node.qortal.example',
+                nodeStatus: '100% Synced',
+                nodeType: 'Custom node',
+                peers: '221',
+                qdnPeers: '153',
+                statusLabel: 'Fully operational',
+              }
+            : {
+                blockHeight: '—',
+                coreVersion: coreVersionLabel,
+                hubVersion: hubVersionLabel,
+                isOperational: false,
+                nodeHost: 'node.qortal.example',
+                nodeStatus: 'Node unavailable',
+                nodeType: 'Custom node',
+                peers: '0',
+                qdnPeers: '0',
+                statusLabel: 'Attention needed',
+              };
+  const resolvedInfoStatusLabel =
+    statusPreviewOverrides?.statusLabel ??
+    (isSystemOperational ? 'Fully operational' : 'Not operational');
+  const resolvedIsSystemOperational =
+    statusPreviewOverrides?.isOperational ?? isSystemOperational;
+  const resolvedInfoStatusTone: DashboardInfoStatusTone =
+    statusPreviewMode === 'issue'
+      ? 'issue'
+      : statusPreviewMode === 'syncing' ||
+          (!statusPreviewOverrides && nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100)
+        ? 'syncing'
+        : resolvedIsSystemOperational
+          ? 'operational'
+          : 'issue';
+  const resolvedNodeStatusValue =
+    statusPreviewOverrides?.nodeStatus ?? nodeStatusValue;
+  const resolvedPeersLabel = statusPreviewOverrides?.peers ?? peersLabel;
+  const resolvedBlockHeightLabel =
+    statusPreviewOverrides?.blockHeight ?? blockHeightLabel;
+  const resolvedQdnPeersLabel =
+    statusPreviewOverrides?.qdnPeers ?? qdnPeersLabel;
+  const resolvedNodeHostLabel =
+    statusPreviewOverrides?.nodeHost ?? nodeHostLabel;
+  const resolvedNodeTypeLabel =
+    statusPreviewOverrides?.nodeType ?? nodeTypeLabel;
+  const resolvedCoreVersionLabel =
+    statusPreviewOverrides?.coreVersion ?? coreVersionLabel;
+  const resolvedHubVersionLabel =
+    statusPreviewOverrides?.hubVersion ?? hubVersionLabel;
+  const minterDotsFilled =
+    minterPreviewMode === 'on'
+      ? Math.max(1, Math.min(9, minterLevel ?? 5))
+      : 0;
   const isMinterOn = minterPreviewMode === 'on';
+  const formattedMinterCurrentBlocks =
+    minterProgress?.currentBlocks != null
+      ? minterProgress.currentBlocks.toLocaleString()
+      : null;
+  const formattedMinterRequiredBlocks =
+    minterProgress?.requiredBlocks != null
+      ? minterProgress.requiredBlocks.toLocaleString()
+      : null;
   const minterValue = (
     <Box
       sx={{
         alignItems: 'center',
         display: 'inline-flex',
-        height: '24px',
+        height: '22px',
         justifyContent: 'flex-end',
         minWidth: `${INFO_VALUE_COLUMN_MIN_WIDTH_PX}px`,
+        position: 'relative',
         width: '100%',
       }}
     >
@@ -1414,20 +1950,142 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
             transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            style={{ alignItems: 'center', display: 'flex', height: '24px', justifyContent: 'flex-end', width: '100%' }}
+            style={{ alignItems: 'center', display: 'flex', height: '22px', justifyContent: 'flex-end', width: '100%' }}
           >
-            <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '4px', height: '20px', justifyContent: 'flex-end' }}>
-              {Array.from({ length: 8 }).map((_, index) => (
+            <Box
+              sx={{
+                alignItems: 'center',
+                cursor: minterProgress ? 'default' : 'inherit',
+                display: 'inline-flex',
+                height: '18px',
+                justifyContent: 'flex-end',
+                overflow: 'hidden',
+                position: 'relative',
+                width: '156px',
+                maxWidth: '100%',
+                '& .minter-dots-layer': {
+                  opacity: minterProgress ? 1 : 1,
+                  transform: 'scaleX(1)',
+                  transition:
+                    'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1)',
+                },
+                '& .minter-progress-layer': {
+                  opacity: 0,
+                  transform: 'scaleX(0.96)',
+                  transition:
+                    'opacity 200ms cubic-bezier(0.2, 0, 0, 1), transform 200ms cubic-bezier(0.2, 0, 0, 1)',
+                },
+                ...(minterProgress
+                  ? {
+                      '&:hover .minter-dots-layer': {
+                        opacity: 0,
+                        transform: 'scaleX(0.94)',
+                      },
+                      '&:hover .minter-progress-layer': {
+                        opacity: 1,
+                        transform: 'scaleX(1)',
+                      },
+                    }
+                  : {}),
+              }}
+            >
+              <Box
+                className="minter-dots-layer"
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  inset: 0,
+                  justifyContent: 'flex-end',
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  transformOrigin: 'right center',
+                }}
+              >
                 <Box
-                  key={index}
                   sx={{
-                    ...(index < minterDotsFilled ? filledBlueDotSx : emptyBlueDotSx),
-                    borderRadius: '50%',
-                    height: '12px',
-                    width: '12px',
+                    alignItems: 'center',
+                    display: 'inline-flex',
+                    gap: '4px',
+                    height: '18px',
+                    justifyContent: 'flex-end',
                   }}
-                />
-              ))}
+                >
+                  {Array.from({ length: 9 }).map((_, index) => (
+                    <Box
+                      key={index}
+                      sx={{
+                        ...(index < minterDotsFilled ? filledBlueDotSx : emptyBlueDotSx),
+                        borderRadius: '50%',
+                        height: '11px',
+                        width: '11px',
+                      }}
+                    />
+                  ))}
+                </Box>
+              </Box>
+
+              {minterProgress && formattedMinterCurrentBlocks && formattedMinterRequiredBlocks ? (
+                <Box
+                  className="minter-progress-layer"
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    inset: 0,
+                    justifyContent: 'flex-end',
+                    pointerEvents: 'none',
+                    position: 'absolute',
+                    transformOrigin: 'right center',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'inline-flex',
+                      gap: '8px',
+                      justifyContent: 'flex-end',
+                      width: '100%',
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        background:
+                          theme.palette.mode === 'dark'
+                            ? 'rgba(255,255,255,0.08)'
+                            : 'rgba(15,23,42,0.08)',
+                        borderRadius: '999px',
+                        height: '6px',
+                        overflow: 'hidden',
+                        width: '64px',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          background: GROUP_ACTIVITY_BLUE.primary,
+                          borderRadius: '999px',
+                          height: '100%',
+                          transition: 'width 180ms ease',
+                          width: `${Math.max(
+                            0,
+                            Math.min(100, minterProgress.progressRatio * 100)
+                          )}%`,
+                        }}
+                      />
+                    </Box>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.primary, 0.84),
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.01em',
+                        lineHeight: 1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {formattedMinterCurrentBlocks} / {formattedMinterRequiredBlocks}
+                    </Typography>
+                  </Box>
+                </Box>
+              ) : null}
             </Box>
           </motion.div>
         ) : (
@@ -1437,9 +2095,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
             transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            style={{ alignItems: 'center', display: 'flex', height: '24px', justifyContent: 'flex-end', width: '100%' }}
+            style={{ alignItems: 'center', display: 'flex', height: '22px', justifyContent: 'flex-end', width: '100%' }}
           >
-            <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: theme.palette.background.surface, border: `1px solid ${theme.palette.border.subtle}`, borderRadius: '999px', color: theme.palette.text.secondary, display: 'inline-flex', fontSize: '0.69rem', fontWeight: 600, height: '24px', justifyContent: 'center', minWidth: '56px', px: 1.15, py: 0, whiteSpace: 'nowrap' }}>
+            <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: alpha(theme.palette.background.surface, theme.palette.mode === 'dark' ? 0.92 : 1), border: `1px solid ${alpha(theme.palette.border.subtle, 0.9)}`, borderRadius: '999px', color: alpha(theme.palette.text.secondary, 0.9), display: 'inline-flex', fontSize: '0.66rem', fontWeight: 600, height: '21px', justifyContent: 'center', minWidth: '50px', px: 1, py: 0, whiteSpace: 'nowrap' }}>
               Apply
             </ButtonBase>
           </motion.div>
@@ -1447,12 +2105,17 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       </AnimatePresence>
     </Box>
   );
+  const coreVersionMetricLabel =
+    resolvedCoreVersionLabel && resolvedCoreVersionLabel !== '—'
+      ? resolvedCoreVersionLabel.replace(/^qortal-/i, '').split('-')[0] || resolvedCoreVersionLabel
+      : '—';
   const infoRows = {
     status: {
-      isOperational: isSystemOperational,
-      label: isSystemOperational ? 'Fully operational' : 'Not operational',
+      isOperational: resolvedIsSystemOperational,
+      label: resolvedInfoStatusLabel,
+      tone: resolvedInfoStatusTone,
     },
-    items: [
+    primaryItems: [
       {
         emphasize: true,
         label: 'QORT Balance',
@@ -1460,44 +2123,59 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       },
       {
         label: 'Node Status',
-        value: nodeStatusValue,
+        pillTone:
+          resolvedNodeStatusValue === 'Node unavailable'
+            ? 'negative'
+            : resolvedNodeStatusValue === '100% Synced'
+              ? 'positive'
+              : 'neutral',
+        value: resolvedNodeStatusValue,
+        variant: 'pill',
       },
       {
         label: 'Minter Level',
-        value: minterValue,
+        valueNode: minterValue,
+      },
+    ],
+    metricItems: [
+      {
+        accent: 'blue',
+        label: 'Peers',
+        value: resolvedPeersLabel,
       },
       {
-        label: 'Connected Peers',
-        value: peersLabel,
+        accent: 'blue',
+        label: 'QDN',
+        value: resolvedQdnPeersLabel,
       },
       {
-        label: 'Block Height',
-        value: blockHeightLabel,
+        accent: 'green',
+        label: 'Core',
+        value: coreVersionMetricLabel,
       },
       {
-        label: 'QDN Peers',
-        value: qdnPeersLabel,
-      },
-      {
-        label: 'Using Node',
-        secondary: true,
-        sectionStart: true,
-        value: nodeHostLabel,
-      },
-      {
-        label: 'Node Type',
-        secondary: true,
-        value: nodeTypeLabel,
-      },
-      {
-        label: 'Core Version',
-        secondary: true,
-        value: coreVersionLabel,
-      },
-      {
-        label: 'Hub Version',
-        secondary: true,
+        accent: 'violet',
+        label: 'Hub',
         value: hubVersionLabel,
+      },
+    ],
+    footerSections: [
+      {
+        title: 'Node',
+        items: [
+          {
+            label: 'Using Node',
+            value: resolvedNodeHostLabel,
+          },
+          {
+            label: 'Node Type',
+            value: resolvedNodeTypeLabel,
+          },
+          {
+            label: 'Node Height',
+            value: resolvedBlockHeightLabel,
+          },
+        ],
       },
     ],
   };
@@ -1552,7 +2230,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                 </Box>
                 <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px ${walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : 'auto'}`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
                   <Box ref={infoDebugRef} sx={{ minWidth: 0, position: 'relative', width: '100%', '& > *': { height: '100%' } }}>
-                    <InfoPreviewPanel rows={infoRows} theme={theme} />
+                    <InfoPreviewPanel
+                      rows={infoRows}
+                      theme={theme}
+                      maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
+                    />
                   </Box>
                   <Box ref={walletActivityDebugRef} sx={{ position: 'relative', width: '100%', minHeight: '182px', height: walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
                   <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: '100%', minHeight: '182px', padding: '14px 16px 16px' }}>

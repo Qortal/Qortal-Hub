@@ -42,6 +42,59 @@ const ITEM_PADDING_Y = 1;
 const OVERLAY_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 const SIDEBAR_OPEN_DELAY_MS = 0;
 const SIDEBAR_CLOSE_DELAY_MS = 140;
+type DashboardStatusPreviewMode =
+  | 'live'
+  | 'syncing'
+  | 'local'
+  | 'custom'
+  | 'issue';
+const DASHBOARD_STATUS_PREVIEW_EVENT = 'setDashboardStatusPreview';
+const DASHBOARD_STATUS_PREVIEW_STORAGE_KEY = 'dashboardStatusPreviewMode';
+const parseDashboardStatusPreviewMode = (
+  value: string | null
+): DashboardStatusPreviewMode => {
+  switch (value) {
+    case 'syncing':
+    case 'local':
+    case 'custom':
+    case 'issue':
+      return value;
+    default:
+      return 'live';
+  }
+};
+const getNextDashboardStatusPreviewMode = (
+  currentMode: DashboardStatusPreviewMode
+): DashboardStatusPreviewMode => {
+  switch (currentMode) {
+    case 'live':
+      return 'syncing';
+    case 'syncing':
+      return 'local';
+    case 'local':
+      return 'custom';
+    case 'custom':
+      return 'issue';
+    default:
+      return 'live';
+  }
+};
+const getDashboardStatusPreviewModeLabel = (
+  mode: DashboardStatusPreviewMode
+) => {
+  switch (mode) {
+    case 'syncing':
+      return 'Syncing';
+    case 'local':
+      return 'Local';
+    case 'custom':
+      return 'Custom';
+    case 'issue':
+      return 'Issue';
+    default:
+      return 'Live';
+  }
+};
 const SidebarItem = ({
   active = false,
   children,
@@ -92,6 +145,12 @@ const SidebarItem = ({
 
   const sharedSx = {
     alignItems: 'center',
+    backgroundColor: active
+      ? alpha(
+          theme.palette.action.selected,
+          theme.palette.mode === 'dark' ? 0.78 : 0.88
+        )
+      : 'transparent',
     borderRadius: '14px',
     color: active ? theme.palette.text.primary : theme.palette.text.secondary,
     display: 'flex',
@@ -103,30 +162,37 @@ const SidebarItem = ({
     transition:
       'background-color 180ms ease, color 180ms ease, box-shadow 140ms ease, transform 120ms ease',
     width: `${ITEM_WIDTH_PX}px`,
+    '& .sidebarItemIconWrap': {
+      transition: 'transform 150ms ease, color 180ms ease, opacity 180ms ease',
+    },
+    '& .sidebarItemLabel': {
+      transition: 'color 180ms ease, opacity 180ms ease',
+    },
     ...((onClick || isInfo) && {
       '&:hover': {
         backgroundColor: theme.palette.action.hover,
         color: theme.palette.text.primary,
-        boxShadow: 'none',
+        boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.border.main, 0.18)}, inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.03 : 0.12)}`,
+        '& .sidebarItemIconWrap': {
+          transform: 'translateY(-1px)',
+        },
       },
       '&:active': {
         transform: 'translateY(0)',
       },
     }),
     '&:focus-visible': {
-      backgroundColor: isInfo
-        ? 'transparent'
-        : alpha(theme.palette.action.hover, theme.palette.mode === 'dark' ? 0.72 : 0.82),
-      boxShadow: isInfo
-        ? 'none'
-        : `inset 0 0 0 1px ${alpha(theme.palette.border.main, 0.22)}, inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.03 : 0.12)}`,
+      backgroundColor: alpha(
+        theme.palette.action.hover,
+        theme.palette.mode === 'dark' ? 0.72 : 0.82
+      ),
+      boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.border.main, 0.22)}, inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.03 : 0.12)}`,
       color: theme.palette.text.primary,
+      '& .sidebarItemIconWrap': {
+        transform: 'translateY(-1px)',
+      },
     },
     ...(active && {
-      backgroundColor: alpha(
-        theme.palette.action.selected,
-        theme.palette.mode === 'dark' ? 0.78 : 0.88
-      ),
       boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.primary.light, 0.14)}, inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.02 : 0.1)}`,
     }),
   } as const;
@@ -176,6 +242,12 @@ export const DesktopSideBar = ({
     const saved = localStorage.getItem('hub.quitterWidgetNewPostsDebug');
     return saved === '1' || saved === 'true';
   });
+  const [debugStatusPreviewMode, setDebugStatusPreviewMode] =
+    useState<DashboardStatusPreviewMode>(() =>
+      parseDashboardStatusPreviewMode(
+        localStorage.getItem(DASHBOARD_STATUS_PREVIEW_STORAGE_KEY)
+      )
+    );
   const [debugDashboardIntroMode, setDebugDashboardIntroMode] =
     useState<DashboardLoginIntroMode>(() =>
       parseDashboardLoginIntroMode(
@@ -206,10 +278,6 @@ export const DesktopSideBar = ({
     [theme.palette.mode]
   );
 
-  const qChatColor = useMemo(() => {
-    if (desktopViewMode === 'chat') return theme.palette.text.primary;
-    return theme.palette.text.secondary;
-  }, [desktopViewMode, theme.palette.text.primary, theme.palette.text.secondary]);
   const sidebarSurfaceColor =
     theme.palette.mode === 'dark'
       ? 'rgb(36, 39, 45)'
@@ -445,8 +513,9 @@ export const DesktopSideBar = ({
           borderRight: `1px solid ${theme.palette.border.subtle}`,
           boxShadow: sidebarSurfaceShadow,
           opacity: isVisible ? 1 : 0,
+          transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
           pointerEvents: 'none',
-          transition: `opacity ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,
+          transition: `transform ${OVERLAY_TRANSITION}, opacity ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,
           overflow: 'hidden',
           zIndex: 9998,
         }}
@@ -464,8 +533,6 @@ export const DesktopSideBar = ({
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            transform: isVisible ? 'translateX(0)' : 'translateX(-100%)',
-            transition: `transform ${OVERLAY_TRANSITION}, box-shadow 200ms ease`,
             overflow: 'visible',
             pointerEvents: isVisible ? 'auto' : 'none',
             '& .sidebarItem:hover .sidebarInfoLogo, & .sidebarItem:focus-visible .sidebarInfoLogo, & .sidebarItem.isOpen .sidebarInfoLogo': {
@@ -502,21 +569,17 @@ export const DesktopSideBar = ({
                 <Box
                   sx={{
                     alignItems: 'center',
+                    color:
+                      desktopViewMode === 'home'
+                        ? theme.palette.text.primary
+                        : theme.palette.text.secondary,
                     display: 'flex',
                     height: `${ICON_WRAP_SIZE_PX}px`,
                     justifyContent: 'center',
                     width: `${ICON_WRAP_SIZE_PX}px`,
                   }}
                 >
-                  <HomeIcon
-                    height={26}
-                    width={26}
-                    color={
-                      desktopViewMode === 'home'
-                        ? theme.palette.text.primary
-                        : theme.palette.text.secondary
-                    }
-                  />
+                  <HomeIcon height={26} width={26} color="currentColor" />
                 </Box>
               </SidebarItem>
 
@@ -532,11 +595,7 @@ export const DesktopSideBar = ({
               >
                 <AppsIcon
                   height={24}
-                  color={
-                    isApps
-                      ? theme.palette.text.primary
-                      : theme.palette.text.secondary
-                  }
+                  color="currentColor"
                 />
               </SidebarItem>
 
@@ -548,7 +607,7 @@ export const DesktopSideBar = ({
                     runSidebarAction(() => setDesktopViewMode('chat'))
                   }
                 >
-                  <MessagingIconFilled height={24} color={qChatColor} />
+                  <MessagingIconFilled height={24} color="currentColor" />
                 </SidebarItem>
 
                 {effectiveUnreadChat ? (
@@ -731,6 +790,24 @@ export const DesktopSideBar = ({
             sx={getDebugToggleSx(debugGroupsWidget)}
           >
             Groups Debug: {debugGroupsWidget ? 'ON' : 'OFF'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => {
+              const nextMode =
+                getNextDashboardStatusPreviewMode(debugStatusPreviewMode);
+              setDebugStatusPreviewMode(nextMode);
+              localStorage.setItem(
+                DASHBOARD_STATUS_PREVIEW_STORAGE_KEY,
+                nextMode
+              );
+              executeEvent(DASHBOARD_STATUS_PREVIEW_EVENT, {
+                data: { mode: nextMode },
+              });
+            }}
+            sx={getDebugToggleSx(debugStatusPreviewMode !== 'live')}
+          >
+            Status: {getDashboardStatusPreviewModeLabel(debugStatusPreviewMode)}
           </ButtonBase>
           <ButtonBase
             disableRipple
