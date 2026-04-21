@@ -7,7 +7,7 @@ import {
   Suspense,
 } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Box, ButtonBase, useTheme } from '@mui/material';
+import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { AnimatePresence } from 'framer-motion';
 import { decryptStoredWallet } from './utils/decryptWallet';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
@@ -20,6 +20,7 @@ import { crypto, walletVersion } from './constants/decryptWallet';
 import PhraseWallet from './utils/generateWallet/phrase-wallet';
 import { AppContainer } from './styles/App-styles.ts';
 import { Loader } from './components/Loader';
+import ErrorBoundary from './common/ErrorBoundary';
 import { AuthenticationForm } from './components/AuthenticationForm';
 import {
   BuyOrderRequestScreen,
@@ -106,6 +107,7 @@ import {
 } from './components/Desktop/CustomTitleBar';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
+import { HUB_UI_BUILD_VERSION } from './constants/uiBuildVersion.ts';
 
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
 
@@ -150,6 +152,10 @@ function App() {
   const [paymentTo, setPaymentTo] = useState<string>('');
   const [sendPaymentError, setSendPaymentError] = useState<string>('');
   const [countdown, setCountdown] = useState<null | number>(null);
+  const [globalRuntimeFault, setGlobalRuntimeFault] = useState<{
+    message: string;
+    source: 'boundary' | 'error' | 'promise';
+  } | null>(null);
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
@@ -295,6 +301,45 @@ function App() {
   }, [extState]);
 
   const [storeAccount, setStoredAccount] = useState<boolean>(true);
+
+  useEffect(() => {
+    const handleWindowError = (event: ErrorEvent) => {
+      setGlobalRuntimeFault({
+        message:
+          event.error instanceof Error
+            ? event.error.message
+            : event.message || 'Unknown runtime error',
+        source: 'error',
+      });
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      setGlobalRuntimeFault({
+        message:
+          reason instanceof Error
+            ? reason.message
+            : typeof reason === 'string'
+              ? reason
+              : 'Unhandled promise rejection',
+        source: 'promise',
+      });
+    };
+
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (extState !== 'authenticated' && globalRuntimeFault) {
+      setGlobalRuntimeFault(null);
+    }
+  }, [extState, globalRuntimeFault]);
 
   const contextValue = useMemo(
     () => ({
@@ -924,6 +969,7 @@ function App() {
   const onOpenSendQort = useCallback(() => {
     setSendQortOriginRect(null);
     setSendQortTargetRect(null);
+    executeEvent('openSendQortInternal', {});
     setIsOpenSendQort(true);
   }, []);
   const onOpenRegisterName = useCallback(
@@ -1090,31 +1136,71 @@ function App() {
 
         {extState === 'authenticated' && isMainWindow && (
           <Suspense fallback={<Loader />}>
-            <LazyAuthenticatedShell
-              balance={balance}
-              desktopViewMode={desktopViewMode}
-              isMain={true}
-              logoutFunc={logoutFunc}
-              myAddress={address}
-              setDesktopViewMode={setDesktopViewMode}
-              userInfo={userInfo}
-              rawWallet={rawWallet}
-              qortBalanceLoading={qortBalanceLoading}
-              setOpenSnack={setOpenSnack}
-              setInfoSnack={setInfoSnack}
-              onRefreshBalance={getBalanceAndUserInfoFunc}
-              onOpenSendQort={onOpenSendQort}
-              onOpenRegisterName={onOpenRegisterName}
-              extState={extState}
-              isMainWindow={isMainWindow}
-              onOpenSettings={onOpenSettings}
-              onOpenDrawerLookup={onOpenDrawerLookup}
-              onOpenWalletsApp={onOpenWalletsApp}
-              getUserInfo={getUserInfo}
-              onOpenMinting={onOpenMinting}
-              showTutorial={showTutorial}
-              onBackupWallet={onBackupWallet}
-            />
+            <ErrorBoundary
+              fallback={
+                <Box
+                  sx={{
+                    alignItems: 'flex-start',
+                    backdropFilter: 'blur(18px)',
+                    background:
+                      theme.palette.mode === 'dark'
+                        ? 'linear-gradient(180deg, rgba(18,22,29,0.92) 0%, rgba(11,14,20,0.96) 100%)'
+                        : 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,247,252,0.96) 100%)',
+                    border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,32,0.08)'}`,
+                    borderRadius: '24px',
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? '0 24px 48px rgba(0,0,0,0.3)'
+                        : '0 18px 36px rgba(15,20,30,0.12)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    m: '24px',
+                    maxWidth: '560px',
+                    p: '22px',
+                  }}
+                >
+                  <Typography sx={{ fontSize: '1.05rem', fontWeight: 800 }}>
+                    Hub runtime error
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.85rem',
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    The authenticated shell crashed during render. The latest safe marker is v{HUB_UI_BUILD_VERSION}.
+                  </Typography>
+                </Box>
+              }
+            >
+              <LazyAuthenticatedShell
+                balance={balance}
+                desktopViewMode={desktopViewMode}
+                isMain={true}
+                logoutFunc={logoutFunc}
+                myAddress={address}
+                setDesktopViewMode={setDesktopViewMode}
+                userInfo={userInfo}
+                rawWallet={rawWallet}
+                qortBalanceLoading={qortBalanceLoading}
+                setOpenSnack={setOpenSnack}
+                setInfoSnack={setInfoSnack}
+                onRefreshBalance={getBalanceAndUserInfoFunc}
+                onOpenSendQort={onOpenSendQort}
+                onOpenRegisterName={onOpenRegisterName}
+                extState={extState}
+                isMainWindow={isMainWindow}
+                onOpenSettings={onOpenSettings}
+                onOpenDrawerLookup={onOpenDrawerLookup}
+                onOpenWalletsApp={onOpenWalletsApp}
+                getUserInfo={getUserInfo}
+                onOpenMinting={onOpenMinting}
+                showTutorial={showTutorial}
+                onBackupWallet={onBackupWallet}
+              />
+            </ErrorBoundary>
           </Suspense>
         )}
 
@@ -1393,6 +1479,48 @@ function App() {
           onOpenCoreSetup={onOpenCoreSetup}
         />
       )}
+
+      {isAuthenticated && isMainWindow && (
+        <Box
+          sx={{
+            alignItems: 'center',
+            backdropFilter: 'blur(14px)',
+            background:
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, rgba(26,31,40,0.82) 0%, rgba(17,21,28,0.92) 100%)'
+                : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(244,247,252,0.92) 100%)',
+            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,32,0.08)'}`,
+            borderRadius: '999px',
+            boxShadow:
+              theme.palette.mode === 'dark'
+                ? '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04)'
+                : '0 10px 22px rgba(15,20,30,0.08), inset 0 1px 0 rgba(255,255,255,0.45)',
+            color: theme.palette.mode === 'dark' ? 'rgba(214,231,255,0.92)' : 'rgba(32,44,64,0.82)',
+            display: 'inline-flex',
+            gap: 0.45,
+            pointerEvents: 'none',
+            position: 'fixed',
+            px: 0.85,
+            py: 0.45,
+            right: '10px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 1500,
+          }}
+        >
+          <Typography
+            sx={{
+              fontSize: '0.58rem',
+              fontWeight: 800,
+              letterSpacing: '0.08em',
+              lineHeight: 1,
+              textTransform: 'uppercase',
+            }}
+          >
+            v{HUB_UI_BUILD_VERSION}
+          </Typography>
+        </Box>
+      )}
     </>
   );
 
@@ -1442,7 +1570,91 @@ function App() {
           overflow: 'hidden',
         }}
       >
-        {mainContent}
+        {globalRuntimeFault && extState === 'authenticated' && isMainWindow ? (
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'center',
+              p: 3,
+              width: '100%',
+            }}
+          >
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                backdropFilter: 'blur(18px)',
+                background:
+                  theme.palette.mode === 'dark'
+                    ? 'linear-gradient(180deg, rgba(18,22,29,0.92) 0%, rgba(11,14,20,0.96) 100%)'
+                    : 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(244,247,252,0.96) 100%)',
+                border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,32,0.08)'}`,
+                borderRadius: '24px',
+                boxShadow:
+                  theme.palette.mode === 'dark'
+                    ? '0 24px 48px rgba(0,0,0,0.3)'
+                    : '0 18px 36px rgba(15,20,30,0.12)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                maxWidth: '620px',
+                p: '22px',
+                width: '100%',
+              }}
+            >
+              <Typography sx={{ fontSize: '1.05rem', fontWeight: 800 }}>
+                Hub runtime error
+              </Typography>
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.85rem',
+                  lineHeight: 1.55,
+                }}
+              >
+                The authenticated app hit a runtime fault after login. We are surfacing it here instead of leaving a white screen.
+              </Typography>
+              <Box
+                sx={{
+                  background:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(255,255,255,0.03)'
+                      : 'rgba(24,32,44,0.04)',
+                  border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(24,32,44,0.08)'}`,
+                  borderRadius: '16px',
+                  px: 1.5,
+                  py: 1.2,
+                }}
+              >
+                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, mb: 0.45 }}>
+                  {globalRuntimeFault.source}
+                </Typography>
+                <Typography
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontFamily: 'monospace',
+                    fontSize: '0.8rem',
+                    lineHeight: 1.5,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {globalRuntimeFault.message}
+                </Typography>
+              </Box>
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.74rem',
+                }}
+              >
+                UI build v{HUB_UI_BUILD_VERSION}
+              </Typography>
+            </Box>
+          </Box>
+        ) : (
+          mainContent
+        )}
       </Box>
     </AppContainer>
   );

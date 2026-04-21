@@ -16,12 +16,14 @@ import { alpha, darken } from '@mui/material/styles';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import { balanceAtom, memberGroupsAtom, nodeInfosAtom, userInfoAtom } from '../../atoms/global';
+import ErrorBoundary from '../../common/ErrorBoundary';
 import { Spacer } from '../../common/Spacer';
 import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
-import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted';
+import { GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
+import { HomeQortinoWorkspaceCard } from './HomeQortinoWorkspaceCard';
 import { HomeQuickToolsPad } from './HomeQuickToolsPad';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
@@ -279,6 +281,14 @@ type HomeLayoutDebugMetric = {
   top: number;
   width: number;
 };
+
+type HomeLayoutDebugKey =
+  | 'accountOverview'
+  | 'featuredApps'
+  | 'info'
+  | 'profileCard'
+  | 'tools'
+  | 'walletActivity';
 
 const measureHomeLayoutDebugMetric = (
   node: HTMLElement,
@@ -1047,6 +1057,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const homeLayoutDebugRootRef = useRef<HTMLDivElement | null>(null);
   const accountOverviewDebugRef = useRef<HTMLDivElement | null>(null);
   const infoDebugRef = useRef<HTMLDivElement | null>(null);
+  const profileCardDebugRef = useRef<HTMLDivElement | null>(null);
   const toolsDebugRef = useRef<HTMLDivElement | null>(null);
   const featuredAppsDebugRef = useRef<HTMLDivElement | null>(null);
   const walletActivityDebugRef = useRef<HTMLDivElement | null>(null);
@@ -1061,7 +1072,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [requestsCount, setRequestsCount] = useState(0);
   const [invitesCount, setInvitesCount] = useState(0);
   const [promotionsCount, setPromotionsCount] = useState(0);
-  const [showMostActiveGroups, setShowMostActiveGroups] = useState(() => localStorage.getItem(GETTING_STARTED_LS_KEY) === 'completed');
+  const [showMostActiveGroups, setShowMostActiveGroups] = useState(false);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [gettingStartedDebugOverrides, setGettingStartedDebugOverrides] = useState<GettingStartedDebugOverrides>(() =>
     parseGettingStartedDebugOverrides(
@@ -1076,6 +1087,8 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [minterProgress, setMinterProgress] =
     useState<MinterProgressSnapshot | null>(null);
   const [walletActivityTargetHeightPx, setWalletActivityTargetHeightPx] =
+    useState<number | null>(null);
+  const [qortinoCardTargetHeightPx, setQortinoCardTargetHeightPx] =
     useState<number | null>(null);
   const [customizableCardsLayout, setCustomizableCardsLayout] =
     useState<HomeCustomizableCardsLayout>(() =>
@@ -1117,6 +1130,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const isWideDashboardLayout = useMediaQuery(theme.breakpoints.up('xl'));
   const resolvedWideLeftLowerRowPanelHeightPx = isWideDashboardLayout
     ? HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX
+    : null;
+  const resolvedQortinoCardHeightPx = isWideDashboardLayout
+    ? qortinoCardTargetHeightPx ?? HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX
     : null;
   const groupActivityAccentTextColor = theme.palette.getContrastText(
     GROUP_ACTIVITY_BLUE.primary
@@ -1371,6 +1387,13 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         nextMetrics.info = measureHomeLayoutDebugMetric(infoDebugRef.current, rootRect);
       }
 
+      if (profileCardDebugRef.current) {
+        nextMetrics.profileCard = measureHomeLayoutDebugMetric(
+          profileCardDebugRef.current,
+          rootRect
+        );
+      }
+
       if (toolsDebugRef.current) {
         nextMetrics.tools = measureHomeLayoutDebugMetric(
           toolsDebugRef.current,
@@ -1393,9 +1416,28 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       }
 
       if (isWideDashboardLayout) {
+        const profileMetric = nextMetrics.profileCard;
         const leftRowMetric =
           nextMetrics.featuredApps ?? nextMetrics.tools ?? undefined;
+        const featuredMetric = nextMetrics.featuredApps;
+        const toolsMetric = nextMetrics.tools;
         const walletMetric = nextMetrics.walletActivity;
+
+        if (profileMetric && featuredMetric && toolsMetric) {
+          const nextQortinoTargetHeight = Math.max(
+            HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX,
+            Math.round(profileMetric.height + featuredMetric.height - toolsMetric.height)
+          );
+
+          setQortinoCardTargetHeightPx((currentHeight) =>
+            currentHeight !== null &&
+            Math.abs(currentHeight - nextQortinoTargetHeight) < 0.25
+              ? currentHeight
+              : nextQortinoTargetHeight
+          );
+        } else {
+          setQortinoCardTargetHeightPx(null);
+        }
 
         if (leftRowMetric && walletMetric) {
           const nextTargetHeight = Math.max(
@@ -1413,6 +1455,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
           setWalletActivityTargetHeightPx(null);
         }
       } else {
+        setQortinoCardTargetHeightPx(null);
         setWalletActivityTargetHeightPx(null);
       }
 
@@ -1481,6 +1524,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       rootNode,
       accountOverviewDebugRef.current,
       infoDebugRef.current,
+      profileCardDebugRef.current,
       toolsDebugRef.current,
       featuredAppsDebugRef.current,
       walletActivityDebugRef.current,
@@ -1664,8 +1708,17 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   ]);
 
   useEffect(() => {
-    if (!userAddress) { setIsOnboardingComplete(false); return; }
-    setIsOnboardingComplete(localStorage.getItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`) === 'completed');
+    if (!userAddress) {
+      setIsOnboardingComplete(false);
+      setShowMostActiveGroups(false);
+      return;
+    }
+
+    const isComplete =
+      localStorage.getItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`) ===
+      'completed';
+    setIsOnboardingComplete(isComplete);
+    setShowMostActiveGroups(isComplete);
   }, [userAddress]);
 
   useEffect(() => {
@@ -2366,22 +2419,71 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             sx={{
                               display: 'block',
                               height:
-                                resolvedWideLeftLowerRowPanelHeightPx != null
-                                  ? `${resolvedWideLeftLowerRowPanelHeightPx}px`
+                                resolvedQortinoCardHeightPx != null
+                                  ? `${resolvedQortinoCardHeightPx}px`
                                   : undefined,
                               minWidth: 0,
                               position: 'relative',
                               '& > *': { height: '100%' },
                             }}
                           >
-                            <HomeGettingStarted
-                              debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
-                              debugReplayToken={gettingStartedDebugReplayToken}
-                              debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
-                              hideToolsContent
-                              onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
-                              previewMode="off"
-                            />
+                            <ErrorBoundary
+                              fallback={
+                                <Box
+                                  sx={{
+                                    ...dashboardPanelSx(theme, 'utility'),
+                                    alignItems: 'flex-start',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px',
+                                    height: '100%',
+                                    justifyContent: 'center',
+                                    p: '20px',
+                                  }}
+                                >
+                                  <Typography
+                                    sx={{
+                                      color: theme.palette.text.primary,
+                                      fontSize: '1rem',
+                                      fontWeight: 700,
+                                      letterSpacing: '-0.02em',
+                                    }}
+                                  >
+                                    QORTINO workspace hit a runtime snag.
+                                  </Typography>
+                                  <Typography
+                                    sx={{
+                                      color: alpha(theme.palette.text.secondary, 0.82),
+                                      fontSize: '0.82rem',
+                                      lineHeight: 1.5,
+                                      maxWidth: '34ch',
+                                    }}
+                                  >
+                                    The rest of the dashboard is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.
+                                  </Typography>
+                                  <Box
+                                    sx={{
+                                      ...getBlueTier2BadgeSx(theme, true),
+                                      borderRadius: '999px',
+                                      color: APP_BLUE_SURFACE_TEXT,
+                                      px: 1,
+                                      py: 0.45,
+                                    }}
+                                  >
+                                    <Typography sx={{ fontSize: '0.66rem', fontWeight: 700 }}>
+                                      v{manifestData?.version ?? 'local'}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              }
+                            >
+                              <HomeQortinoWorkspaceCard
+                                debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
+                                debugReplayToken={gettingStartedDebugReplayToken}
+                                debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
+                                onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                              />
+                            </ErrorBoundary>
                           </Box>
                           <Box
                             ref={toolsDebugRef}
@@ -2409,6 +2511,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           }}
                         >
                           <Box
+                            ref={profileCardDebugRef}
                             sx={{
                               display: 'block',
                               minWidth: 0,
@@ -2450,18 +2553,67 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                         <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS, alignItems: 'stretch', width: '100%' }}>
                           <Box
                             ref={accountOverviewDebugRef}
-                            sx={{ display: 'block', height: resolvedWideLeftLowerRowPanelHeightPx != null ? `${resolvedWideLeftLowerRowPanelHeightPx}px` : undefined, minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}
+                            sx={{ display: 'block', height: resolvedQortinoCardHeightPx != null ? `${resolvedQortinoCardHeightPx}px` : undefined, minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}
                           >
-                            <HomeGettingStarted
-                              debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
-                              debugReplayToken={gettingStartedDebugReplayToken}
-                              debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
-                              hideToolsContent
-                              onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
-                              previewMode="off"
-                            />
+                            <ErrorBoundary
+                              fallback={
+                                <Box
+                                  sx={{
+                                    ...dashboardPanelSx(theme, 'utility'),
+                                    alignItems: 'flex-start',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px',
+                                    height: '100%',
+                                    justifyContent: 'center',
+                                    p: '20px',
+                                  }}
+                                >
+                                  <Typography
+                                    sx={{
+                                      color: theme.palette.text.primary,
+                                      fontSize: '1rem',
+                                      fontWeight: 700,
+                                      letterSpacing: '-0.02em',
+                                    }}
+                                  >
+                                    QORTINO workspace hit a runtime snag.
+                                  </Typography>
+                                  <Typography
+                                    sx={{
+                                      color: alpha(theme.palette.text.secondary, 0.82),
+                                      fontSize: '0.82rem',
+                                      lineHeight: 1.5,
+                                      maxWidth: '34ch',
+                                    }}
+                                  >
+                                    The rest of the dashboard is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.
+                                  </Typography>
+                                  <Box
+                                    sx={{
+                                      ...getBlueTier2BadgeSx(theme, true),
+                                      borderRadius: '999px',
+                                      color: APP_BLUE_SURFACE_TEXT,
+                                      px: 1,
+                                      py: 0.45,
+                                    }}
+                                  >
+                                    <Typography sx={{ fontSize: '0.66rem', fontWeight: 700 }}>
+                                      v{manifestData?.version ?? 'local'}
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              }
+                            >
+                              <HomeQortinoWorkspaceCard
+                                debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
+                                debugReplayToken={gettingStartedDebugReplayToken}
+                                debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
+                                onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                              />
+                            </ErrorBoundary>
                           </Box>
-                          <Box sx={{ display: 'block', minWidth: 0, position: 'relative', width: '100%', '& > *': { width: '100%' } }}>
+                          <Box ref={profileCardDebugRef} sx={{ display: 'block', minWidth: 0, position: 'relative', width: '100%', '& > *': { width: '100%' } }}>
                             <HomeProfileCard
                               onOpenReceive={handleOpenReceiveQort}
                             />
