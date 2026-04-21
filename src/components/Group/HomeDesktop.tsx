@@ -22,6 +22,7 @@ import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
 import { GETTING_STARTED_LS_KEY, HomeGettingStarted } from './HomeGettingStarted';
+import { HomeQuickToolsPad } from './HomeQuickToolsPad';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
 import { HomeDeveloperTab } from './HomeDeveloperTab';
@@ -95,6 +96,13 @@ const SHOW_MOST_ACTIVE_GROUPS = false;
 // - Info -> Wallet Activity gap = 20px.
 // - Info collapsed height stays fixed to preserve spacing and overlay behavior.
 const HOME_DASHBOARD_VERTICAL_GAP_PX = 20;
+const HOME_SHARED_SIDE_RAIL_WIDTH_MD = 'minmax(285px, 330px)';
+const HOME_SHARED_SIDE_RAIL_WIDTH_XL = 'minmax(310px, 360px)';
+const HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS = {
+  xs: '1fr',
+  md: `${HOME_SHARED_SIDE_RAIL_WIDTH_MD} minmax(0, 1fr)`,
+  xl: `${HOME_SHARED_SIDE_RAIL_WIDTH_XL} minmax(0, 1fr)`,
+} as const;
 // Right rail is offset to visually align Info with Account Overview.
 // The left column includes the "Qortal Hub" eyebrow label above Account Overview,
 // while the right column starts directly with the rail cards, so this offset
@@ -316,26 +324,46 @@ const infoSepSx = (theme, index, total) => sepSx(theme);
 
 const WalletActionButton = ({ icon, label, onClick, theme }) => {
   const blueStrongHover = getBlueTier1ButtonSx()['&:hover'];
+  const isDarkMode = theme.palette.mode === 'dark';
 
   return (
     <ButtonBase
       onClick={onClick}
       sx={{
         alignItems: 'center',
-        bgcolor:
-          theme.palette.mode === 'dark'
-            ? '#262931'
-            : theme.palette.background.surface,
-        border: `1px solid ${theme.palette.border.subtle}`,
-        borderRadius: '10px',
+        background: isDarkMode
+          ? 'linear-gradient(145deg, rgba(53,58,68,0.99) 0%, rgba(41,45,54,1) 48%, rgba(30,34,41,1) 100%)'
+          : 'linear-gradient(145deg, rgba(251,253,255,0.99) 0%, rgba(232,237,245,0.99) 48%, rgba(216,223,234,1) 100%)',
+        border: `1px solid ${
+          isDarkMode
+            ? alpha(theme.palette.primary.main, 0.06)
+            : alpha(theme.palette.text.primary, 0.072)
+        }`,
+        borderRadius: '12px',
+        boxShadow: isDarkMode
+          ? 'inset 0 1px 0 rgba(255,255,255,0.075), inset 0 0 0 1px rgba(255,255,255,0.012), inset 0 -1px 0 rgba(0,0,0,0.44), inset -1px -1px 0 rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.17)'
+          : 'inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -1px 0 rgba(104,116,140,0.22), inset -1px -1px 0 rgba(146,158,182,0.14), 0 4px 8px rgba(94,108,132,0.11)',
         display: 'flex',
         gap: '9px',
         height: '46px',
         justifyContent: 'center',
+        overflow: 'hidden',
         px: 1.5,
+        position: 'relative',
         transition:
           'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms ease, filter 140ms ease',
         width: '100%',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          inset: '1px',
+          borderRadius: 'inherit',
+          pointerEvents: 'none',
+          background: isDarkMode
+            ? 'linear-gradient(145deg, rgba(255,255,255,0.052) 0%, rgba(255,255,255,0.02) 24%, rgba(255,255,255,0) 58%)'
+            : 'linear-gradient(145deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.22) 28%, rgba(255,255,255,0) 58%)',
+          opacity: 0.92,
+        },
         '&:hover': {
           ...blueStrongHover,
           borderColor: 'rgba(143, 184, 243, 0.22)',
@@ -343,7 +371,9 @@ const WalletActionButton = ({ icon, label, onClick, theme }) => {
           transform: 'translateY(-1px)',
         },
         '&:active': {
-          transform: 'translateY(0)',
+          boxShadow:
+            'inset 2px 2px 6px rgba(0, 0, 0, 0.7), inset -1px -1px 3px rgba(255, 255, 255, 0.04)',
+          transform: 'scale(0.97)',
         },
       }}
     >
@@ -2198,7 +2228,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
             style={{ alignItems: 'center', display: 'flex', height: '22px', justifyContent: 'flex-end', width: '100%' }}
           >
-            <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: alpha(theme.palette.background.surface, theme.palette.mode === 'dark' ? 0.92 : 1), border: `1px solid ${alpha(theme.palette.border.subtle, 0.9)}`, borderRadius: '999px', color: alpha(theme.palette.text.secondary, 0.9), display: 'inline-flex', fontSize: '0.66rem', fontWeight: 600, height: '21px', justifyContent: 'center', minWidth: '50px', px: 1, py: 0, whiteSpace: 'nowrap' }}>
+                                      <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership', path: '' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: alpha(theme.palette.background.surface, theme.palette.mode === 'dark' ? 0.92 : 1), border: `1px solid ${alpha(theme.palette.border.subtle, 0.9)}`, borderRadius: '999px', color: alpha(theme.palette.text.secondary, 0.9), display: 'inline-flex', fontSize: '0.66rem', fontWeight: 600, height: '21px', justifyContent: 'center', minWidth: '50px', px: 1, py: 0, whiteSpace: 'nowrap' }}>
               Apply
             </ButtonBase>
           </motion.div>
@@ -2308,29 +2338,149 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
               {/*
                     T/F Δb {(lowerRowDebugMetrics.toolsBottom - lowerRowDebugMetrics.featuredBottom).toFixed(1)} | F/W Δb {(lowerRowDebugMetrics.featuredBottom - lowerRowDebugMetrics.walletBottom).toFixed(1)}
               */}
-              <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: '1fr', alignItems: 'start', width: '100%', [theme.breakpoints.up('xl')]: { alignItems: 'stretch', gridTemplateColumns: 'minmax(0, 1fr) minmax(360px, 400px)' } }}>
+              <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: '1fr', alignItems: 'start', width: '100%', [theme.breakpoints.up('xl')]: { alignItems: 'stretch', gridTemplateColumns: `minmax(0, 1fr) ${HOME_SHARED_SIDE_RAIL_WIDTH_XL}` } }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, width: '100%' }}>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
                     <Box sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.0605em', textTransform: 'uppercase' }}>Qortal Hub</Box>
-                    <Box ref={accountOverviewDebugRef} sx={{ position: 'relative', width: '100%' }}>
-                      <HomeProfileCard
-                        onOpenReceive={handleOpenReceiveQort}
-                        onOpenSettings={onOpenSettings}
-                      />
-                    </Box>
-                  </Box>
-                  <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: { xs: '1fr', md: 'minmax(285px, 330px) minmax(0, 1fr)', xl: 'minmax(310px, 360px) minmax(0, 1fr)' }, alignItems: 'stretch', width: '100%' }}>
-                    <Box ref={toolsDebugRef} sx={{ display: 'block', height: resolvedWideLeftLowerRowPanelHeightPx != null ? `${resolvedWideLeftLowerRowPanelHeightPx}px` : undefined, minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}>
-                      <HomeGettingStarted
-                        debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
-                        debugReplayToken={gettingStartedDebugReplayToken}
-                        debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
-                        onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
-                      />
-                    </Box>
-                    <Box ref={featuredAppsDebugRef} sx={{ display: 'flex', height: resolvedWideLeftLowerRowPanelHeightPx != null ? `${resolvedWideLeftLowerRowPanelHeightPx}px` : undefined, minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { height: '100%', position: 'relative', width: '100%', zIndex: 1 } }}>
-                      <HomeFeaturedApps />
-                    </Box>
+                    {isWideDashboardLayout ? (
+                      <Box
+                        sx={{
+                          alignItems: 'start',
+                          display: 'grid',
+                          gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                          gridTemplateColumns: HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS.xl,
+                          width: '100%',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                            minWidth: 0,
+                            width: '100%',
+                          }}
+                        >
+                          <Box
+                            ref={accountOverviewDebugRef}
+                            sx={{
+                              display: 'block',
+                              height:
+                                resolvedWideLeftLowerRowPanelHeightPx != null
+                                  ? `${resolvedWideLeftLowerRowPanelHeightPx}px`
+                                  : undefined,
+                              minWidth: 0,
+                              position: 'relative',
+                              '& > *': { height: '100%' },
+                            }}
+                          >
+                            <HomeGettingStarted
+                              debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
+                              debugReplayToken={gettingStartedDebugReplayToken}
+                              debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
+                              hideToolsContent
+                              onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                              previewMode="off"
+                            />
+                          </Box>
+                          <Box
+                            ref={toolsDebugRef}
+                            sx={{
+                              display: 'block',
+                              minWidth: 0,
+                              position: 'relative',
+                              width: '100%',
+                            }}
+                          >
+                            <HomeQuickToolsPad
+                              fillHeight={false}
+                              onOpenReceive={handleOpenReceiveQort}
+                              onOpenSettings={onOpenSettings}
+                            />
+                          </Box>
+                        </Box>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                            minWidth: 0,
+                            width: '100%',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'block',
+                              minWidth: 0,
+                              position: 'relative',
+                              width: '100%',
+                              '& > *': { width: '100%' },
+                            }}
+                          >
+                            <HomeProfileCard
+                              onOpenReceive={handleOpenReceiveQort}
+                            />
+                          </Box>
+                          <Box
+                            ref={featuredAppsDebugRef}
+                            sx={{
+                              display: 'flex',
+                              height:
+                                resolvedWideLeftLowerRowPanelHeightPx != null
+                                  ? `${resolvedWideLeftLowerRowPanelHeightPx}px`
+                                  : undefined,
+                              minWidth: 0,
+                              overflow: 'visible',
+                              position: 'relative',
+                              width: '100%',
+                              '& > *': {
+                                height: '100%',
+                                position: 'relative',
+                                width: '100%',
+                                zIndex: 1,
+                              },
+                            }}
+                          >
+                            <HomeFeaturedApps />
+                          </Box>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <>
+                        <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS, alignItems: 'stretch', width: '100%' }}>
+                          <Box
+                            ref={accountOverviewDebugRef}
+                            sx={{ display: 'block', height: resolvedWideLeftLowerRowPanelHeightPx != null ? `${resolvedWideLeftLowerRowPanelHeightPx}px` : undefined, minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}
+                          >
+                            <HomeGettingStarted
+                              debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
+                              debugReplayToken={gettingStartedDebugReplayToken}
+                              debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
+                              hideToolsContent
+                              onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                              previewMode="off"
+                            />
+                          </Box>
+                          <Box sx={{ display: 'block', minWidth: 0, position: 'relative', width: '100%', '& > *': { width: '100%' } }}>
+                            <HomeProfileCard
+                              onOpenReceive={handleOpenReceiveQort}
+                            />
+                          </Box>
+                        </Box>
+                        <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS, alignItems: 'stretch', width: '100%' }}>
+                          <Box ref={toolsDebugRef} sx={{ display: 'block', minWidth: 0, position: 'relative', width: '100%' }}>
+                            <HomeQuickToolsPad
+                              fillHeight={false}
+                              onOpenReceive={handleOpenReceiveQort}
+                              onOpenSettings={onOpenSettings}
+                            />
+                          </Box>
+                          <Box ref={featuredAppsDebugRef} sx={{ display: 'flex', height: resolvedWideLeftLowerRowPanelHeightPx != null ? `${resolvedWideLeftLowerRowPanelHeightPx}px` : undefined, minWidth: 0, overflow: 'visible', position: 'relative', width: '100%', '& > *': { height: '100%', position: 'relative', width: '100%', zIndex: 1 } }}>
+                            <HomeFeaturedApps />
+                          </Box>
+                        </Box>
+                      </>
+                    )}
                   </Box>
                 </Box>
                 <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px ${walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : 'auto'}`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>

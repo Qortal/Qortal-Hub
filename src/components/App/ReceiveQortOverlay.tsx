@@ -42,6 +42,14 @@ export function ReceiveQortOverlay({
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
   const qrContainerRef = useRef<HTMLDivElement | null>(null);
+  const isAnchoredLayout = !!targetRect;
+  const surfaceBorder = alpha(theme.palette.divider, 0.38);
+  const softSectionSurface = alpha(
+    isDarkMode ? theme.palette.common.white : theme.palette.text.primary,
+    isDarkMode ? 0.022 : 0.03
+  );
+  const shellDivider = alpha(theme.palette.divider, 0.28);
+  const innerDivider = alpha(theme.palette.divider, isDarkMode ? 0.16 : 0.2);
 
   const fallbackPanelWidth = useMemo(() => {
     if (typeof window === 'undefined') return 620;
@@ -58,15 +66,7 @@ export function ReceiveQortOverlay({
       };
     }
 
-    const viewportWidth =
-      typeof window !== 'undefined' ? window.innerWidth : fallbackPanelWidth + 48;
-    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 900;
-    const fallbackHeight = 560;
-
     return {
-      height: fallbackHeight,
-      left: Math.max(24, (viewportWidth - fallbackPanelWidth) / 2),
-      top: Math.max(40, (viewportHeight - fallbackHeight) / 2),
       width: fallbackPanelWidth,
     };
   }, [fallbackPanelWidth, targetRect]);
@@ -217,31 +217,44 @@ export function ReceiveQortOverlay({
           }}
           onClick={(event) => event.stopPropagation()}
           sx={{
-            left: `${panelLayout.left}px`,
-            overflow: 'hidden',
             position: 'fixed',
-            top: `${panelLayout.top}px`,
+            inset: isAnchoredLayout ? undefined : 0,
+            left: isAnchoredLayout ? `${panelLayout.left}px` : undefined,
+            top: isAnchoredLayout ? `${panelLayout.top}px` : undefined,
+            alignItems: isAnchoredLayout ? undefined : 'center',
+            display: isAnchoredLayout ? undefined : 'flex',
+            justifyContent: isAnchoredLayout ? undefined : 'center',
+            overflow: 'visible',
+            p: isAnchoredLayout ? 0 : 3,
+            pointerEvents: 'none',
             transformOrigin: targetRect ? 'bottom left' : 'center center',
-            height: `${panelLayout.height}px`,
-            width: `${panelLayout.width}px`,
+            height: isAnchoredLayout ? `${panelLayout.height}px` : undefined,
+            width: isAnchoredLayout ? `${panelLayout.width}px` : undefined,
             willChange: 'transform, opacity',
             zIndex: 1399,
           }}
         >
           <Box
             sx={{
-              backgroundColor: isDarkMode ? '#2C303A' : '#FBF8F2',
-              border: isDarkMode
-                ? '1px solid rgba(255,255,255,0.075)'
-                : '1px solid rgba(28,36,52,0.08)',
-              borderRadius: '18px',
+              background: isDarkMode
+                ? 'linear-gradient(180deg, rgba(20,23,30,0.985) 0%, rgba(15,17,23,0.99) 100%)'
+                : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)',
+              border: `1px solid ${surfaceBorder}`,
+              borderRadius: '14px',
               boxShadow: isDarkMode
-                ? '0 38px 92px rgba(0,0,0,0.54), 0 14px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.035)'
-                : '0 32px 72px rgba(28, 36, 52, 0.2), 0 12px 26px rgba(28, 36, 52, 0.1), inset 0 1px 0 rgba(255,255,255,0.45)',
+                ? '0 34px 120px rgba(0,0,0,0.46)'
+                : '0 28px 88px rgba(18,28,45,0.16)',
+              clipPath: 'inset(0 round 14px)',
               display: 'flex',
               flexDirection: 'column',
-              height: '100%',
+              height: isAnchoredLayout
+                ? '100%'
+                : 'min(620px, calc(100vh - 48px))',
+              isolation: 'isolate',
+              maxHeight: isAnchoredLayout ? undefined : 'calc(100vh - 48px)',
               overflow: 'hidden',
+              pointerEvents: 'auto',
+              width: isAnchoredLayout ? '100%' : 'min(700px, 100%)',
             }}
           >
             <Box
@@ -249,17 +262,17 @@ export function ReceiveQortOverlay({
                 alignItems: 'center',
                 display: 'flex',
                 justifyContent: 'space-between',
-                px: 2.25,
-                py: 1.7,
+                px: 2.3,
+                py: 1.45,
               }}
             >
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <Typography
                   sx={{
                     color: theme.palette.text.primary,
-                    fontSize: '1.04rem',
-                    fontWeight: 650,
-                    letterSpacing: '0.014em',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    letterSpacing: '-0.02em',
                   }}
                 >
                   Receive QORT
@@ -267,9 +280,9 @@ export function ReceiveQortOverlay({
                 <Typography
                   sx={{
                     color: theme.palette.text.secondary,
-                    fontSize: '0.79rem',
+                    fontSize: '0.8rem',
                     fontWeight: 400,
-                    lineHeight: 1.42,
+                    lineHeight: 1.45,
                   }}
                 >
                   Scan to receive QORT
@@ -278,12 +291,12 @@ export function ReceiveQortOverlay({
               <ButtonBase
                 onClick={onReturn}
                 sx={{
-                  borderRadius: '9px',
+                  borderRadius: '8px',
                   color: theme.palette.text.secondary,
-                  height: 28,
-                  width: 28,
+                  height: 30,
+                  width: 30,
                   '&:hover': {
-                    backgroundColor: theme.palette.action.hover,
+                    backgroundColor: alpha(theme.palette.common.white, isDarkMode ? 0.05 : 0.55),
                     color: theme.palette.text.primary,
                   },
                 }}
@@ -294,11 +307,10 @@ export function ReceiveQortOverlay({
 
             <Box
               sx={{
-                borderTop: `1px solid ${theme.palette.border.subtle}`,
+                borderTop: `1px solid ${shellDivider}`,
                 flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 1.8,
                 minHeight: 0,
                 overflowY: 'auto',
                 px: 2.25,
@@ -310,18 +322,12 @@ export function ReceiveQortOverlay({
                 ref={qrContainerRef}
                 sx={{
                   alignItems: 'center',
-                  background:
-                    isDarkMode
-                      ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
-                      : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
-                  border: isDarkMode
-                    ? '1px solid rgba(255,255,255,0.075)'
-                    : '1px solid rgba(28,36,52,0.08)',
-                  borderRadius: '16px',
                   display: 'flex',
+                  borderBottom: `1px solid ${innerDivider}`,
                   justifyContent: 'center',
                   minHeight: Math.max(252, qrSize + 76),
-                  p: 3,
+                  pb: 2,
+                  px: 0.25,
                 }}
               >
                 <Box
@@ -348,21 +354,14 @@ export function ReceiveQortOverlay({
 
               <Box
                 sx={{
-                  background:
-                    isDarkMode
-                      ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
-                      : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
-                  border: isDarkMode
-                    ? '1px solid rgba(255,255,255,0.075)'
-                    : '1px solid rgba(28,36,52,0.08)',
-                  borderRadius: '14px',
-                  px: 1.5,
-                  py: 1.2,
+                  borderBottom: `1px solid ${innerDivider}`,
+                  px: 0.25,
+                  py: 1.45,
                 }}
               >
                 <Typography
                   sx={{
-                    color: alpha(theme.palette.text.secondary, isDarkMode ? 0.88 : 0.8),
+                    color: alpha(theme.palette.text.secondary, isDarkMode ? 0.9 : 0.82),
                     fontFamily: 'monospace',
                     fontSize: '0.78rem',
                     lineHeight: 1.55,
@@ -379,6 +378,7 @@ export function ReceiveQortOverlay({
                   display: 'grid',
                   gap: '10px',
                   gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  pt: 1.6,
                 }}
               >
                 <Button
@@ -387,17 +387,20 @@ export function ReceiveQortOverlay({
                   onClick={handleCopyAddress}
                   startIcon={<ContentCopyIcon sx={{ fontSize: '0.95rem' }} />}
                   sx={{
-                    backgroundColor: isDarkMode ? '#1C2027' : '#FFFDFC',
-                    borderColor: theme.palette.border.subtle,
-                    borderRadius: '12px',
+                    backgroundColor: alpha(
+                      isDarkMode ? theme.palette.common.white : theme.palette.background.paper,
+                      isDarkMode ? 0.024 : 0.72
+                    ),
+                    borderColor: alpha(theme.palette.divider, 0.18),
+                    borderRadius: '10px',
                     color: theme.palette.text.primary,
                     fontSize: '0.84rem',
                     fontWeight: 600,
-                    minHeight: 44,
+                    minHeight: 42,
                     textTransform: 'none',
                     '&:hover': {
-                      backgroundColor: theme.palette.action.hover,
-                      borderColor: theme.palette.border.main,
+                      backgroundColor: alpha(theme.palette.primary.main, 0.06),
+                      borderColor: alpha(theme.palette.primary.main, 0.34),
                     },
                   }}
                 >
@@ -409,11 +412,11 @@ export function ReceiveQortOverlay({
                   onClick={handleDownloadQr}
                   startIcon={<DownloadRoundedIcon sx={{ fontSize: '1rem' }} />}
                   sx={{
-                    borderRadius: '12px',
+                    borderRadius: '10px',
                     ...getBlueTier1ButtonSx(),
                     fontSize: '0.84rem',
                     fontWeight: 600,
-                    minHeight: 44,
+                    minHeight: 42,
                     textTransform: 'none',
                   }}
                 >

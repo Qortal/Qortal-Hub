@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import {
+  alpha,
   Box,
   ButtonBase,
   Portal,
@@ -38,43 +39,15 @@ export function SendQortOverlay({
 }: SendQortOverlayProps) {
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
-  const panelRef = useRef<HTMLDivElement | null>(null);
   const isDarkMode = theme.palette.mode === 'dark';
-  const [measuredPanelHeight, setMeasuredPanelHeight] = useState(496);
-
-  useEffect(() => {
-    if (!panelRef.current) return;
-
-    const measure = () => {
-      if (panelRef.current) {
-        setMeasuredPanelHeight(panelRef.current.getBoundingClientRect().height);
-      }
-    };
-
-    measure();
-
-    const resizeObserver =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => measure())
-        : null;
-
-    if (resizeObserver) {
-      resizeObserver.observe(panelRef.current);
-    }
-
-    window.addEventListener('resize', measure);
-    return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', measure);
-    };
-  }, []);
+  const isAnchoredLayout = !!targetRect;
+  const surfaceBorder = alpha(theme.palette.divider, 0.38);
+  const headerDivider = alpha(theme.palette.divider, 0.28);
 
   const fallbackPanelWidth = useMemo(() => {
     if (typeof window === 'undefined') return 620;
     return Math.min(700, Math.max(560, window.innerWidth - 48));
   }, []);
-
-  const resolvedPanelHeight = targetRect?.height ?? measuredPanelHeight;
 
   const panelLayout = useMemo(() => {
     if (targetRect) {
@@ -86,17 +59,10 @@ export function SendQortOverlay({
       };
     }
 
-    const viewportWidth =
-      typeof window !== 'undefined' ? window.innerWidth : fallbackPanelWidth + 48;
-    const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 900;
-
     return {
-      height: resolvedPanelHeight,
-      left: Math.max(24, (viewportWidth - fallbackPanelWidth) / 2),
-      top: Math.max(40, (viewportHeight - resolvedPanelHeight) / 2),
       width: fallbackPanelWidth,
     };
-  }, [fallbackPanelWidth, resolvedPanelHeight, targetRect]);
+  }, [fallbackPanelWidth, targetRect]);
 
   const panelAnimation = useMemo(() => {
     if (originRect && targetRect && !prefersReducedMotion) {
@@ -209,32 +175,44 @@ export function SendQortOverlay({
           }}
           onClick={(event) => event.stopPropagation()}
           sx={{
-            left: `${panelLayout.left}px`,
-            overflow: 'hidden',
             position: 'fixed',
-            top: `${panelLayout.top}px`,
+            inset: isAnchoredLayout ? undefined : 0,
+            left: isAnchoredLayout ? `${panelLayout.left}px` : undefined,
+            top: isAnchoredLayout ? `${panelLayout.top}px` : undefined,
+            alignItems: isAnchoredLayout ? undefined : 'center',
+            display: isAnchoredLayout ? undefined : 'flex',
+            justifyContent: isAnchoredLayout ? undefined : 'center',
+            overflow: 'visible',
+            p: isAnchoredLayout ? 0 : 3,
+            pointerEvents: 'none',
             transformOrigin: targetRect ? 'bottom left' : 'center center',
-            height: `${panelLayout.height}px`,
+            height: isAnchoredLayout ? `${panelLayout.height}px` : undefined,
             willChange: 'transform, opacity',
-            width: `${panelLayout.width}px`,
+            width: isAnchoredLayout ? `${panelLayout.width}px` : undefined,
             zIndex: 1399,
           }}
         >
           <Box
-            ref={panelRef}
             sx={{
-              backgroundColor: isDarkMode ? '#2C303A' : '#FBF8F2',
-              border: isDarkMode
-                ? '1px solid rgba(255,255,255,0.075)'
-                : '1px solid rgba(28,36,52,0.08)',
-              borderRadius: '18px',
+              background: isDarkMode
+                ? 'linear-gradient(180deg, rgba(20,23,30,0.985) 0%, rgba(15,17,23,0.99) 100%)'
+                : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)',
+              border: `1px solid ${surfaceBorder}`,
+              borderRadius: '14px',
               boxShadow: isDarkMode
-                ? '0 38px 92px rgba(0,0,0,0.54), 0 14px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.035)'
-                : '0 32px 72px rgba(28, 36, 52, 0.2), 0 12px 26px rgba(28, 36, 52, 0.1), inset 0 1px 0 rgba(255,255,255,0.45)',
+                ? '0 34px 120px rgba(0,0,0,0.46)'
+                : '0 28px 88px rgba(18,28,45,0.16)',
+              clipPath: 'inset(0 round 14px)',
               display: 'flex',
               flexDirection: 'column',
-              height: '100%',
+              height: isAnchoredLayout
+                ? '100%'
+                : 'min(620px, calc(100vh - 48px))',
+              isolation: 'isolate',
+              maxHeight: isAnchoredLayout ? undefined : 'calc(100vh - 48px)',
               overflow: 'hidden',
+              pointerEvents: 'auto',
+              width: isAnchoredLayout ? '100%' : 'min(700px, 100%)',
             }}
           >
             <Box
@@ -242,17 +220,17 @@ export function SendQortOverlay({
                 alignItems: 'center',
                 display: 'flex',
                 justifyContent: 'space-between',
-                px: 2.25,
-                py: 1.7,
+                px: 2.3,
+                py: 1.45,
               }}
             >
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <Typography
                   sx={{
                     color: theme.palette.text.primary,
-                    fontSize: '1.04rem',
-                    fontWeight: 650,
-                    letterSpacing: '0.014em',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    letterSpacing: '-0.02em',
                   }}
                 >
                   Send QORT
@@ -260,9 +238,9 @@ export function SendQortOverlay({
                 <Typography
                   sx={{
                     color: theme.palette.text.secondary,
-                    fontSize: '0.79rem',
+                    fontSize: '0.8rem',
                     fontWeight: 400,
-                    lineHeight: 1.42,
+                    lineHeight: 1.45,
                   }}
                 >
                   Transfer QORT to any registered name or address.
@@ -271,12 +249,12 @@ export function SendQortOverlay({
               <ButtonBase
                 onClick={onReturn}
                 sx={{
-                  borderRadius: '9px',
+                  borderRadius: '8px',
                   color: theme.palette.text.secondary,
-                  height: 28,
-                  width: 28,
+                  height: 30,
+                  width: 30,
                   '&:hover': {
-                    backgroundColor: theme.palette.action.hover,
+                    backgroundColor: alpha(theme.palette.common.white, isDarkMode ? 0.05 : 0.55),
                     color: theme.palette.text.primary,
                   },
                 }}
@@ -287,12 +265,13 @@ export function SendQortOverlay({
 
             <Box
               sx={{
-                borderTop: `1px solid ${theme.palette.border.subtle}`,
+                borderTop: `1px solid ${headerDivider}`,
                 flex: 1,
                 minHeight: 0,
                 overflowY: 'auto',
+                overscrollBehavior: 'contain',
                 px: { xs: 0, sm: 0 },
-                py: 0,
+                py: 0.25,
               }}
             >
               <QortPayment

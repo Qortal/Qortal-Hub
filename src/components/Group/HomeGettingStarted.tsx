@@ -199,6 +199,7 @@ export type HomeGettingStartedProps = {
   debugCompletionOverrides?: Partial<GettingStartedDebugOverrides>;
   debugReplayToken?: number;
   debugUseOverridesOnly?: boolean;
+  hideToolsContent?: boolean;
   onGettingStartedComplete?: () => void;
   previewMode?: 'live' | 'off' | 'on';
 };
@@ -207,6 +208,7 @@ export const HomeGettingStarted = ({
   debugCompletionOverrides,
   debugReplayToken = 0,
   debugUseOverridesOnly = false,
+  hideToolsContent = false,
   onGettingStartedComplete,
   previewMode = 'live',
 }: HomeGettingStartedProps = {}) => {
@@ -228,7 +230,6 @@ export const HomeGettingStarted = ({
     number | null
   >(null);
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
-
   const name = userInfo?.name;
   const userAddress = userInfo?.address;
 
@@ -408,7 +409,7 @@ export const HomeGettingStarted = ({
       {
         accent: '#6D9FEE',
         key: 'user-lookup',
-        label: 'Lookup User',
+      label: 'User Search',
         icon: <PersonSearchIcon sx={{ fontSize: '1.5rem' }} />,
         onAction: () => executeEvent('openUserLookupDrawer', {}),
       },
@@ -462,18 +463,35 @@ export const HomeGettingStarted = ({
     };
   }, [showTools]);
 
-  const cardContent = (
-    <>
-      {showTools ? (
-        <Box
-          sx={{
-            display: 'flex',
-            flex: 1,
-            flexDirection: 'column',
-            gap: '16px',
-            minHeight: 0,
-          }}
-        >
+  if (showTools) {
+    return (
+      <Box
+        ref={panelRef}
+        sx={{
+          ...dashboardPanelSx(theme, 'base'),
+          borderRadius: GETTING_STARTED_PANEL_RADIUS,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          gap: '8px',
+          justifyContent: 'flex-start',
+          position: 'relative',
+          padding: '16px 20px',
+          width: '100%',
+        }}
+        onMouseMove={handleDashboardPanelPointerMove}
+        onMouseLeave={handleDashboardPanelPointerLeave}
+      >
+        {hideToolsContent ? null : (
+          <Box
+            sx={{
+              display: 'flex',
+              flex: 1,
+              flexDirection: 'column',
+              gap: '16px',
+              minHeight: 0,
+            }}
+          >
             <Box
               sx={{
                 alignItems: 'center',
@@ -633,244 +651,224 @@ export const HomeGettingStarted = ({
                 </ButtonBase>
               ))}
             </Box>
-        </Box>
-        ) : (
-          <>
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                justifyContent: 'space-between',
-                mb: '8px',
-              }}
-            >
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  const cardContent = (
+    <>
+      <Box
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          mb: '8px',
+        }}
+      >
+        <Typography
+          sx={{
+            color: theme.palette.text.primary,
+            fontSize: '1rem',
+            fontWeight: 600,
+          }}
+        >
+          {t('tutorial:home.getting_started')}
+        </Typography>
+        <GettingStartedStepper
+          currentStep={currentProgressStep}
+          totalSteps={steps.length}
+          isDarkMode={isDarkMode}
+        />
+      </Box>
+
+      {steps.map((step, index) => (
+        <Box
+          key={step.key}
+          sx={{
+            alignItems: 'center',
+            bgcolor: isDarkMode ? '#181a20' : theme.palette.background.surface,
+            border: `1px solid ${theme.palette.border.subtle}`,
+            borderRadius: '8px',
+            display: 'flex',
+            gap: '12px',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            transition:
+              'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
+            '&:hover': {
+              backgroundColor: isDarkMode
+                ? theme.palette.background.elevated
+                : theme.palette.background.paper,
+              borderColor: theme.palette.border.main,
+              boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}, 0 2px 10px rgba(0,0,0,0.06)`,
+              transform: 'translateY(-1px)',
+            },
+            '&:active': {
+              transform: 'translateY(0)',
+              boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}`,
+            },
+            '&:focus-within': {
+              borderColor: theme.palette.border.main,
+              boxShadow: `inset 0 0 0 1px ${theme.palette.border.main}`,
+            },
+            '& button': {
+              transition:
+                'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+            },
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'center',
+              color: step.done
+                ? theme.palette.success.main
+                : theme.palette.text.secondary,
+              display: 'flex',
+              flexShrink: 0,
+            }}
+          >
+            {step.done ? (
+              <CheckCircleIcon sx={{ fontSize: '1.2rem' }} />
+            ) : (
               <Typography
                 sx={{
-                  color: theme.palette.text.primary,
-                  fontSize: '1rem',
-                  fontWeight: 600,
+                  border: `1px solid ${theme.palette.text.secondary}`,
+                  borderRadius: '50%',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  height: '20px',
+                  lineHeight: '20px',
+                  textAlign: 'center',
+                  width: '20px',
                 }}
               >
-                {t('tutorial:home.getting_started')}
+                {index + 1}
               </Typography>
-              <GettingStartedStepper
-                currentStep={currentProgressStep}
-                totalSteps={steps.length}
-                isDarkMode={isDarkMode}
-              />
-            </Box>
+            )}
+          </Box>
 
-            {steps.map((step, index) => (
-              <Box
-                key={step.key}
-                sx={{
-                  alignItems: 'center',
-                  bgcolor: isDarkMode ? '#181a20' : theme.palette.background.surface,
-                  border: `1px solid ${theme.palette.border.subtle}`,
-                  borderRadius: '8px',
-                  display: 'flex',
-                  gap: '12px',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  transition:
-                    'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
-                  '&:hover': {
-                    backgroundColor: isDarkMode
-                      ? theme.palette.background.elevated
-                      : theme.palette.background.paper,
-                    borderColor: theme.palette.border.main,
-                    boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}, 0 2px 10px rgba(0,0,0,0.06)`,
-                    transform: 'translateY(-1px)',
-                  },
-                  '&:active': {
-                    transform: 'translateY(0)',
-                    boxShadow: `inset 0 1px 0 ${theme.palette.border.subtle}`,
-                  },
-                  '&:focus-within': {
-                    borderColor: theme.palette.border.main,
-                    boxShadow: `inset 0 0 0 1px ${theme.palette.border.main}`,
-                  },
-                  '& button': {
-                    transition:
-                      'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
-                  },
-                }}
-              >
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    color: step.done
-                      ? theme.palette.success.main
-                      : theme.palette.text.secondary,
-                    display: 'flex',
-                    flexShrink: 0,
-                  }}
-                >
-                  {step.done ? (
-                    <CheckCircleIcon sx={{ fontSize: '1.2rem' }} />
-                  ) : (
-                    <Typography
-                      sx={{
-                        border: `1px solid ${theme.palette.text.secondary}`,
-                        borderRadius: '50%',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        height: '20px',
-                        lineHeight: '20px',
-                        textAlign: 'center',
-                        width: '20px',
-                      }}
-                    >
-                      {index + 1}
-                    </Typography>
-                  )}
-                </Box>
+          <Typography
+            sx={{
+              color: step.done
+                ? theme.palette.text.secondary
+                : theme.palette.text.primary,
+              flex: 1,
+              fontSize: '0.9rem',
+              opacity: step.done ? 0.7 : 1,
+            }}
+          >
+            {step.label}
+          </Typography>
 
-                <Typography
-                  sx={{
-                    color: step.done
-                      ? theme.palette.text.secondary
-                      : theme.palette.text.primary,
-                    flex: 1,
-                    fontSize: '0.9rem',
-                    opacity: step.done ? 0.7 : 1,
-                  }}
-                >
-                  {step.label}
-                </Typography>
-
-                {step.loading ? (
-                  <CircularProgress size={20} />
-                ) : (
-                  <Button
-                    disabled={step.done}
-                    onClick={step.onAction}
-                    size="small"
-                    variant={step.done ? 'text' : 'outlined'}
-                    sx={{
-                      alignItems: 'center',
-                      bgcolor:
-                        !step.done
-                          ? isDarkMode
-                            ? '#262931'
-                            : theme.palette.background.surface
-                          : undefined,
-                      borderColor: step.done
-                        ? theme.palette.border.main
-                        : theme.palette.border.subtle,
-                      flexShrink: 0,
-                      fontSize: '0.78rem',
-                      height: '36px',
-                      minWidth: '76px',
-                      opacity: step.done ? 0.5 : 1,
-                      borderRadius: '10px',
-                      fontWeight: 600,
-                      px: 1.5,
-                      transition:
-                        'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms ease, filter 140ms ease',
-                      '&:focus-visible': {
-                        borderColor: theme.palette.primary.main,
-                        boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
+          {step.loading ? (
+            <CircularProgress size={20} />
+          ) : (
+            <Button
+              disabled={step.done}
+              onClick={step.onAction}
+              size="small"
+              variant={step.done ? 'text' : 'outlined'}
+              sx={{
+                alignItems: 'center',
+                bgcolor:
+                  !step.done
+                    ? isDarkMode
+                      ? '#262931'
+                      : theme.palette.background.surface
+                    : undefined,
+                borderColor: step.done
+                  ? theme.palette.border.main
+                  : theme.palette.border.subtle,
+                flexShrink: 0,
+                fontSize: '0.78rem',
+                height: '36px',
+                minWidth: '76px',
+                opacity: step.done ? 0.5 : 1,
+                borderRadius: '10px',
+                fontWeight: 600,
+                px: 1.5,
+                transition:
+                  'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms ease, filter 140ms ease',
+                '&:focus-visible': {
+                  borderColor: theme.palette.primary.main,
+                  boxShadow: `inset 0 0 0 1px ${theme.palette.primary.main}`,
+                },
+                ...(step.done
+                  ? {}
+                  : {
+                      color: theme.palette.text.primary,
+                      '&:hover': {
+                        ...blueStrongHover,
+                        borderColor: 'rgba(143, 184, 243, 0.22)',
+                        color: APP_BLUE_SURFACE_TEXT,
+                        transform: 'translateY(-1px)',
                       },
-                      ...(step.done
-                        ? {}
-                        : {
-                            color: theme.palette.text.primary,
-                            '&:hover': {
-                              ...blueStrongHover,
-                              borderColor: 'rgba(143, 184, 243, 0.22)',
-                              color: APP_BLUE_SURFACE_TEXT,
-                              transform: 'translateY(-1px)',
-                            },
-                            '&:active': {
-                              transform: 'translateY(0)',
-                            },
-                          }),
-                    }}
-                  >
-                    {step.done ? t('tutorial:home.done') : t('tutorial:home.open')}
-                  </Button>
-                )}
-              </Box>
-            ))}
-          </>
-        )}
+                      '&:active': {
+                        transform: 'translateY(0)',
+                      },
+                    }),
+              }}
+            >
+              {step.done ? t('tutorial:home.done') : t('tutorial:home.open')}
+            </Button>
+          )}
+        </Box>
+      ))}
     </>
   );
 
   return (
     <>
-      {showTools ? (
+      <BorderGlow
+        animated={startBorderGlowIntro}
+        interactive={false}
+        edgeSensitivity={20}
+        glowColor={isDarkMode ? '218 79 73' : '218 72 70'}
+        backgroundColor={isDarkMode ? '#1D1F27' : '#f5f7fb'}
+        borderRadius={GETTING_STARTED_PANEL_RADIUS_PX}
+        glowRadius={77}
+        glowIntensity={isDarkMode ? 0.3 : 0.42}
+        coneSpread={25}
+        colors={
+          [
+            GROUP_ACTIVITY_BLUE.gradientTop,
+            GROUP_ACTIVITY_BLUE.primary,
+            GROUP_ACTIVITY_BLUE.hover,
+          ]
+        }
+        className="getting-started-border-glow"
+        style={{
+          '--card-border': theme.palette.border.subtle,
+          '--card-shadow':
+            theme.palette.mode === 'dark'
+              ? '0 12px 28px rgba(0, 0, 0, 0.16)'
+              : '0 10px 24px rgba(28, 36, 52, 0.07)',
+          width: '100%',
+          height: '100%',
+        } as CSSProperties}
+      >
         <Box
-          ref={panelRef}
           sx={{
-            ...dashboardPanelSx(theme, 'base'),
+            backgroundImage:
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, #1D1F27 0%, #1B1D24 100%)'
+                : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.38) 18%, rgba(255,255,255,0) 42%)',
             borderRadius: GETTING_STARTED_PANEL_RADIUS,
             display: 'flex',
             flexDirection: 'column',
-            height: '100%',
             gap: '8px',
+            height: '100%',
             justifyContent: 'flex-start',
-            position: 'relative',
             padding: '16px 20px',
-            transition: 'border-color 180ms ease, background-color 180ms ease',
+            position: 'relative',
             width: '100%',
           }}
-          onMouseMove={handleDashboardPanelPointerMove}
-          onMouseLeave={handleDashboardPanelPointerLeave}
         >
           {cardContent}
         </Box>
-      ) : (
-        <BorderGlow
-          animated={startBorderGlowIntro}
-          interactive={false}
-          edgeSensitivity={20}
-          glowColor={isDarkMode ? '218 79 73' : '218 72 70'}
-          backgroundColor={isDarkMode ? '#1D1F27' : '#f5f7fb'}
-          borderRadius={GETTING_STARTED_PANEL_RADIUS_PX}
-          glowRadius={77}
-          glowIntensity={isDarkMode ? 0.3 : 0.42}
-          coneSpread={25}
-          colors={
-            [
-              GROUP_ACTIVITY_BLUE.gradientTop,
-              GROUP_ACTIVITY_BLUE.primary,
-              GROUP_ACTIVITY_BLUE.hover,
-            ]
-          }
-          className="getting-started-border-glow"
-          style={{
-            '--card-border': theme.palette.border.subtle,
-            '--card-shadow':
-              theme.palette.mode === 'dark'
-                ? '0 12px 28px rgba(0, 0, 0, 0.16)'
-                : '0 10px 24px rgba(28, 36, 52, 0.07)',
-            width: '100%',
-            height: '100%',
-          } as CSSProperties}
-        >
-          <Box
-            sx={{
-              backgroundImage:
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(180deg, #1D1F27 0%, #1B1D24 100%)'
-                  : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.38) 18%, rgba(255,255,255,0) 42%)',
-              borderRadius: GETTING_STARTED_PANEL_RADIUS,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              height: '100%',
-              justifyContent: 'flex-start',
-              padding: '16px 20px',
-              position: 'relative',
-              width: '100%',
-            }}
-          >
-            {cardContent}
-          </Box>
-        </BorderGlow>
-      )}
+      </BorderGlow>
 
       {/* Get QORT dialog */}
       <Dialog

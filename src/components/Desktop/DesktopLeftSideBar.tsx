@@ -50,6 +50,7 @@ type DashboardStatusPreviewMode =
   | 'issue';
 const DASHBOARD_STATUS_PREVIEW_EVENT = 'setDashboardStatusPreview';
 const DASHBOARD_STATUS_PREVIEW_STORAGE_KEY = 'dashboardStatusPreviewMode';
+const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
 const parseDashboardStatusPreviewMode = (
   value: string | null
 ): DashboardStatusPreviewMode => {
@@ -248,6 +249,10 @@ export const DesktopSideBar = ({
         localStorage.getItem(DASHBOARD_STATUS_PREVIEW_STORAGE_KEY)
       )
     );
+  const [debugMintingLocal, setDebugMintingLocal] = useState(() => {
+    const saved = localStorage.getItem(MINTING_LOCAL_DEBUG_STORAGE_KEY);
+    return saved === '1' || saved === 'true';
+  });
   const [debugDashboardIntroMode, setDebugDashboardIntroMode] =
     useState<DashboardLoginIntroMode>(() =>
       parseDashboardLoginIntroMode(
@@ -771,6 +776,20 @@ export const DesktopSideBar = ({
             sx={getDebugToggleSx(debugMinterPreview === 'on')}
           >
             Minter: {debugMinterPreview === 'on' ? 'ON' : 'OFF'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => {
+              const next = !debugMintingLocal;
+              setDebugMintingLocal(next);
+              localStorage.setItem(
+                MINTING_LOCAL_DEBUG_STORAGE_KEY,
+                next ? 'true' : 'false'
+              );
+            }}
+            sx={getDebugToggleSx(debugMintingLocal)}
+          >
+            Minting Local: {debugMintingLocal ? 'ON' : 'OFF'}
           </ButtonBase>
           <ButtonBase
             disableRipple

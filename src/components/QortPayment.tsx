@@ -44,6 +44,12 @@ export const QortPayment = ({
     theme.palette.text.secondary,
     isDarkMode ? 0.9 : 0.82
   );
+  const inputSurface = alpha(
+    isDarkMode ? theme.palette.common.white : theme.palette.text.primary,
+    isDarkMode ? 0.032 : 0.042
+  );
+  const sectionDivider = alpha(theme.palette.divider, isDarkMode ? 0.18 : 0.22);
+  const inputBorder = alpha(theme.palette.divider, isDarkMode ? 0.16 : 0.2);
 
   useEffect(() => {
     setPaymentTo(defaultPaymentTo || '');
@@ -51,52 +57,41 @@ export const QortPayment = ({
 
   const fieldLabelSx = {
     color: secondaryTextColor,
-    fontSize: compact ? '0.78rem' : '0.79rem',
+    fontSize: compact ? '0.75rem' : '0.77rem',
     fontWeight: 400,
-    letterSpacing: '0.012em',
+    letterSpacing: '0.014em',
     lineHeight: 1.2,
   } as const;
 
-  const fieldShellSx = {
-    background: isDarkMode
-      ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
-      : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
-    border: isDarkMode
-      ? '1px solid rgba(255,255,255,0.075)'
-      : '1px solid rgba(28,36,52,0.08)',
-    borderRadius: '14px',
+  const fieldGroupSx = {
     display: 'flex',
     flexDirection: 'column',
-    gap: compact ? '8px' : '10px',
-    px: compact ? 1.5 : 1.75,
-    py: compact ? 1.2 : 1.5,
+    gap: compact ? '6px' : '7px',
   } as const;
 
   const textFieldSurfaceSx = {
     '& .MuiOutlinedInput-root': {
-      backgroundColor: isDarkMode ? '#1C2027' : '#FFFDFC',
-      borderRadius: '12px',
+      backgroundColor: inputSurface,
+      borderRadius: '10px',
       color: theme.palette.text.primary,
-      minHeight: compact ? '44px' : '48px',
+      minHeight: compact ? '42px' : '44px',
       '& fieldset': {
-        borderColor: isDarkMode
-          ? 'rgba(255,255,255,0.075)'
-          : 'rgba(28,36,52,0.08)',
+        borderColor: inputBorder,
       },
       '&:hover fieldset': {
-        borderColor: theme.palette.border.main,
+        borderColor: alpha(theme.palette.primary.main, 0.28),
       },
       '&.Mui-focused fieldset': {
-        borderColor: theme.palette.border.main,
+        borderColor: alpha(theme.palette.primary.main, 0.42),
       },
     },
     '& .MuiOutlinedInput-input': {
-      fontSize: compact ? '0.94rem' : '0.95rem',
+      fontSize: compact ? '0.92rem' : '0.94rem',
       fontWeight: 500,
-      padding: compact ? '10px 14px' : '12px 14px',
+      padding: compact ? '9px 12px' : '10px 13px',
     },
     '& .MuiOutlinedInput-input::placeholder': {
-      color: alpha(theme.palette.text.secondary, isDarkMode ? 0.72 : 0.68),
+      color: alpha(theme.palette.text.secondary, isDarkMode ? 0.78 : 0.72),
       fontWeight: 400,
       opacity: 1,
     },
@@ -170,51 +165,43 @@ export const QortPayment = ({
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        gap: compact ? '12px' : '14px',
+        gap: compact ? '14px' : '16px',
         px: compact ? 2 : 2.5,
-        py: compact ? 1.75 : 2.25,
+        py: compact ? 1.6 : 2.1,
       }}
     >
       <Box
         sx={{
-          alignItems: 'center',
-          background: isDarkMode
-            ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
-            : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)',
-          border: isDarkMode
-            ? '1px solid rgba(255,255,255,0.075)'
-            : '1px solid rgba(28,36,52,0.08)',
-          borderRadius: '14px',
           display: 'flex',
-          px: compact ? 1.5 : 1.75,
-          py: compact ? 1.1 : 1.35,
+          flexDirection: 'column',
+          gap: '5px',
+          pb: compact ? 1.35 : 1.5,
+          borderBottom: `1px solid ${sectionDivider}`,
         }}
       >
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-          <Typography
-            sx={{
-              color: secondaryTextColor,
-              fontSize: '0.76rem',
-              fontWeight: 400,
-              letterSpacing: '0.014em',
-            }}
-          >
-            {t('core:balance', { postProcess: 'capitalizeFirstChar' })}
-          </Typography>
-          <Typography
-            sx={{
-              color: theme.palette.text.primary,
-              fontSize: '1.08rem',
-              fontWeight: 650,
-              letterSpacing: '0.012em',
-            }}
-          >
-            {balance?.toFixed(2)} QORT
-          </Typography>
-        </Box>
+        <Typography
+          sx={{
+            ...fieldLabelSx,
+            alignSelf: 'flex-start',
+          }}
+        >
+          {t('core:balance', { postProcess: 'capitalizeFirstChar' })}
+        </Typography>
+        <Typography
+          sx={{
+            alignSelf: 'flex-start',
+            color: theme.palette.text.primary,
+            fontSize: compact ? '1.06rem' : '1.12rem',
+            fontWeight: 700,
+            letterSpacing: '-0.025em',
+            lineHeight: 1.1,
+          }}
+        >
+          {balance?.toFixed(2)} QORT
+        </Typography>
       </Box>
 
-      <Box sx={fieldShellSx}>
+      <Box sx={fieldGroupSx}>
         <Typography
           component="label"
           htmlFor="payment-to"
@@ -233,7 +220,7 @@ export const QortPayment = ({
         />
       </Box>
 
-      <Box sx={fieldShellSx}>
+      <Box sx={fieldGroupSx}>
         <Typography
           component="label"
           htmlFor="payment-amount"
@@ -253,30 +240,28 @@ export const QortPayment = ({
           sx={{
             width: '100%',
             '& .MuiOutlinedInput-root': {
-              backgroundColor: isDarkMode ? '#1C2027' : '#FFFDFC',
-              borderRadius: '12px',
-              minHeight: '48px',
+              backgroundColor: inputSurface,
+              borderRadius: '10px',
+              minHeight: compact ? '42px' : '44px',
               '& fieldset': {
-                borderColor: isDarkMode
-                  ? 'rgba(255,255,255,0.075)'
-                  : 'rgba(28,36,52,0.08)',
+                borderColor: inputBorder,
               },
               '&:hover fieldset': {
-                borderColor: theme.palette.border.main,
+                borderColor: alpha(theme.palette.primary.main, 0.28),
               },
               '&.Mui-focused fieldset': {
-                borderColor: theme.palette.border.main,
+                borderColor: alpha(theme.palette.primary.main, 0.42),
               },
             },
             '& input': {
-              fontSize: '0.9rem',
-              padding: compact ? '10px 14px' : '12px 14px',
+              fontSize: compact ? '0.92rem' : '0.94rem',
+              padding: compact ? '9px 12px' : '10px 13px',
             },
           }}
         />
       </Box>
 
-      <Box sx={fieldShellSx}>
+      <Box sx={fieldGroupSx}>
         <Typography
           component="label"
           htmlFor="payment-password"
@@ -339,12 +324,26 @@ export const QortPayment = ({
           sendCoinFunc();
         }}
         sx={{
-          borderRadius: '14px',
+          borderRadius: '12px',
           ...getBlueTier1ButtonSx(),
-          fontSize: '0.86rem',
+          background: isDarkMode
+            ? 'linear-gradient(180deg, rgba(143,181,247,0.96) 0%, rgba(124,166,236,0.96) 100%)'
+            : 'linear-gradient(180deg, rgba(133,176,245,0.96) 0%, rgba(113,157,230,0.96) 100%)',
+          boxShadow: isDarkMode
+            ? '0 10px 24px rgba(76, 123, 209, 0.18), inset 0 1px 0 rgba(255,255,255,0.26)'
+            : '0 10px 20px rgba(76, 123, 209, 0.16), inset 0 1px 0 rgba(255,255,255,0.32)',
+          fontSize: '0.84rem',
           fontWeight: 600,
-          minHeight: compact ? 44 : 46,
+          minHeight: compact ? 42 : 44,
           textTransform: 'none',
+          '&:hover': {
+            background: isDarkMode
+              ? 'linear-gradient(180deg, rgba(149,186,249,0.97) 0%, rgba(130,171,239,0.97) 100%)'
+              : 'linear-gradient(180deg, rgba(138,181,248,0.97) 0%, rgba(118,163,234,0.97) 100%)',
+            boxShadow: isDarkMode
+              ? '0 12px 28px rgba(76, 123, 209, 0.2), inset 0 1px 0 rgba(255,255,255,0.28)'
+              : '0 12px 24px rgba(76, 123, 209, 0.18), inset 0 1px 0 rgba(255,255,255,0.34)',
+          },
         }}
         startIcon={
           isLoadingSendCoin ? (

@@ -107,6 +107,8 @@ import {
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
 
+const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
+
 // Re-export for consumers that still import from App
 export type { extStates } from './types/app';
 export { QORTAL_APP_CONTEXT } from './context/AppContext';
@@ -939,8 +941,12 @@ function App() {
   );
   const onOpenMinting = useCallback(async () => {
     try {
+      const forceLocalMintingPreview =
+        typeof window !== 'undefined' &&
+        (localStorage.getItem(MINTING_LOCAL_DEBUG_STORAGE_KEY) === 'true' ||
+          localStorage.getItem(MINTING_LOCAL_DEBUG_STORAGE_KEY) === '1');
       const res = await isRunningGateway();
-      if (res)
+      if (res && !forceLocalMintingPreview)
         throw new Error(
           t('core:message.generic.no_minting_details', {
             postProcess: 'capitalizeFirstChar',

@@ -26,7 +26,6 @@ import ErrorIcon from '@mui/icons-material/Error';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import PersonIcon from '@mui/icons-material/Person';
 import QrCode2RoundedIcon from '@mui/icons-material/QrCode2Rounded';
-import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +59,6 @@ import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
 
 type HomeProfileCardProps = {
   onOpenReceive?: (anchorEl: HTMLElement) => void;
-  onOpenSettings?: () => void;
 };
 
 type AccountStatus = 'busy' | 'invisible' | 'online';
@@ -90,7 +88,6 @@ const ACCOUNT_STATUS_OPTIONS: Array<{
 
 export const HomeProfileCard = ({
   onOpenReceive,
-  onOpenSettings,
 }: HomeProfileCardProps) => {
   const { t } = useTranslation(['tutorial', 'core', 'group']);
   const theme = useTheme();
@@ -122,14 +119,21 @@ export const HomeProfileCard = ({
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
-  const avatarModalSurface = isDarkMode ? '#2C303A' : '#FBF8F2';
-  const avatarModalSurfaceSoft = isDarkMode ? '#272B34' : '#F6F0E6';
+  const avatarModalSurface = isDarkMode
+    ? 'linear-gradient(180deg, rgba(20,23,30,0.985) 0%, rgba(15,17,23,0.99) 100%)'
+    : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)';
+  const avatarModalSurfaceSoft = isDarkMode
+    ? alpha(theme.palette.common.white, 0.03)
+    : alpha(theme.palette.text.primary, 0.035);
   const avatarFieldSurface = isDarkMode
-    ? 'linear-gradient(180deg, rgba(40,44,54,0.98) 0%, rgba(34,37,45,1) 100%)'
-    : 'linear-gradient(180deg, rgba(248,243,234,0.96) 0%, rgba(242,235,225,1) 100%)';
+    ? 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.028) 100%)'
+    : 'linear-gradient(180deg, rgba(17,23,34,0.042) 0%, rgba(17,23,34,0.024) 100%)';
   const avatarFieldBorder = isDarkMode
-    ? 'rgba(255,255,255,0.075)'
-    : 'rgba(28,36,52,0.08)';
+    ? 'rgba(255,255,255,0.11)'
+    : 'rgba(24,29,36,0.12)';
+  const avatarSectionDivider = isDarkMode
+    ? 'rgba(255,255,255,0.08)'
+    : 'rgba(24,29,36,0.1)';
   const avatarWarningTone = isDarkMode
     ? {
         background: 'rgba(189, 143, 73, 0.1)',
@@ -512,7 +516,7 @@ export const HomeProfileCard = ({
         },
         gridTemplateColumns: {
           xs: '1fr',
-          md: '104px minmax(0, 1fr) 104px',
+          md: '104px minmax(0, 1fr)',
         },
         minHeight: '164px',
         padding: '22px 24px',
@@ -697,6 +701,10 @@ export const HomeProfileCard = ({
           justifyContent: 'center',
           gap: '8px',
           minWidth: 0,
+          pl: {
+            xs: 0,
+            md: '12px',
+          },
           width: '100%',
         }}
       >
@@ -948,50 +956,6 @@ export const HomeProfileCard = ({
         </Box>
       </Box>
 
-      <Box
-        sx={{
-          alignItems: 'flex-start',
-          display: 'flex',
-          justifyContent: {
-            xs: 'flex-end',
-            md: 'flex-end',
-          },
-          justifySelf: 'stretch',
-          minHeight: '100%',
-          width: '104px',
-        }}
-      >
-        {onOpenSettings && (
-          <ButtonBase
-            onClick={onOpenSettings}
-            aria-label={t('core:settings')}
-            sx={{
-              alignItems: 'center',
-              borderRadius: '10px',
-              color: theme.palette.text.secondary,
-              display: 'inline-flex',
-              height: 32,
-              justifyContent: 'center',
-              opacity: 0.52,
-              backgroundColor: 'transparent',
-              transition:
-                'background-color 160ms ease, color 160ms ease, opacity 160ms ease, transform 120ms ease',
-              width: 32,
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.06 : 0.18),
-                color: theme.palette.text.primary,
-                opacity: 1,
-              },
-              '&:active': {
-                transform: 'translateY(1px)',
-              },
-            }}
-          >
-            <SettingsRoundedIcon sx={{ fontSize: 19 }} />
-          </ButtonBase>
-        )}
-      </Box>
-
       <Menu
         id="account-status-menu"
         anchorEl={accountStatusAnchorEl}
@@ -1138,7 +1102,7 @@ export const HomeProfileCard = ({
                 onClick={(event) => event.stopPropagation()}
                 sx={{
                   left: `${avatarPanelLayout.left}px`,
-                  overflow: 'hidden',
+                  overflow: 'visible',
                   position: 'fixed',
                   top: `${avatarPanelLayout.top}px`,
                   transformOrigin: 'top left',
@@ -1149,15 +1113,17 @@ export const HomeProfileCard = ({
                 <Box
                   ref={avatarPanelRef}
                   sx={{
-                    bgcolor: avatarModalSurface,
+                    background: avatarModalSurface,
                     border: isDarkMode
-                      ? '1px solid rgba(255,255,255,0.075)'
-                      : '1px solid rgba(28,36,52,0.08)',
-                    borderRadius: `${avatarPanelTargetRadius}px`,
+                      ? '1px solid rgba(255,255,255,0.08)'
+                      : '1px solid rgba(24,29,36,0.09)',
+                    borderRadius: '14px',
                     boxShadow:
                       isDarkMode
-                        ? '0 38px 92px rgba(0,0,0,0.54), 0 14px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.035)'
-                        : '0 32px 72px rgba(28, 36, 52, 0.2), 0 12px 26px rgba(28, 36, 52, 0.1), inset 0 1px 0 rgba(255,255,255,0.45)',
+                        ? '0 34px 120px rgba(0,0,0,0.46)'
+                        : '0 28px 88px rgba(18,28,45,0.16)',
+                    clipPath: 'inset(0 round 14px)',
+                    isolation: 'isolate',
                     overflow: 'hidden',
                   }}
                 >
@@ -1171,7 +1137,7 @@ export const HomeProfileCard = ({
                       delay: prefersReducedMotion ? 0 : 0.1,
                     }}
                     sx={{
-                      bgcolor: avatarModalSurface,
+                      background: avatarModalSurface,
                       display: 'flex',
                       flexDirection: 'column',
                       gap: 0,
@@ -1192,9 +1158,9 @@ export const HomeProfileCard = ({
                         <Typography
                           sx={{
                             color: theme.palette.text.primary,
-                            fontSize: '0.94rem',
-                            fontWeight: 600,
-                            letterSpacing: '0.01em',
+                            fontSize: '0.98rem',
+                            fontWeight: 700,
+                            letterSpacing: '-0.02em',
                           }}
                         >
                           Update avatar
@@ -1202,8 +1168,8 @@ export const HomeProfileCard = ({
                         <Typography
                           sx={{
                             color: theme.palette.text.secondary,
-                            fontSize: '0.72rem',
-                            lineHeight: 1.35,
+                            fontSize: '0.76rem',
+                            lineHeight: 1.45,
                           }}
                         >
                           {t('core:message.generic.avatar_size', {
@@ -1215,12 +1181,15 @@ export const HomeProfileCard = ({
                       <ButtonBase
                         onClick={closeAvatarPanel}
                         sx={{
-                          borderRadius: '9px',
+                          borderRadius: '8px',
                           color: theme.palette.text.secondary,
-                          height: 28,
-                          width: 28,
+                          height: 30,
+                          width: 30,
                           '&:hover': {
-                            backgroundColor: theme.palette.action.hover,
+                            backgroundColor: alpha(
+                              theme.palette.common.white,
+                              isDarkMode ? 0.05 : 0.55
+                            ),
                             color: theme.palette.text.primary,
                           },
                         }}
@@ -1234,7 +1203,7 @@ export const HomeProfileCard = ({
                         borderTop: `1px solid ${theme.palette.border.subtle}`,
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 1.5,
+                        gap: 1.15,
                         px: 2.25,
                         pb: 2.25,
                         pt: 2,
@@ -1243,31 +1212,32 @@ export const HomeProfileCard = ({
                       <Box
                         sx={{
                           alignItems: 'center',
-                          background:
-                            isDarkMode
-                              ? 'linear-gradient(180deg, rgba(38,42,51,0.98) 0%, rgba(34,37,45,1) 100%)'
-                              : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(241,236,227,0.92) 100%)',
-                          border: `1px solid ${theme.palette.border.subtle}`,
-                          borderRadius: '16px',
                           display: 'flex',
+                          borderBottom: `1px solid ${avatarSectionDivider}`,
                           justifyContent: 'center',
-                          minHeight: 164,
-                          overflow: 'hidden',
-                          position: 'relative',
+                          minHeight: 146,
+                          pb: 1.35,
                         }}
                       >
                         <Box
                           sx={{
                             alignItems: 'center',
-                            backgroundColor: isDarkMode ? avatarModalSurfaceSoft : theme.palette.background.elevated,
-                            border: `1px solid ${theme.palette.border.subtle}`,
+                            backgroundColor: alpha(
+                              isDarkMode
+                                ? theme.palette.common.white
+                                : theme.palette.background.paper,
+                              isDarkMode ? 0.045 : 0.86
+                            ),
+                            border: `1px solid ${avatarFieldBorder}`,
                             borderRadius: '50%',
-                            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.02)',
+                            boxShadow: isDarkMode
+                              ? 'inset 0 1px 0 rgba(255,255,255,0.035)'
+                              : 'inset 0 1px 0 rgba(255,255,255,0.42)',
                             display: 'flex',
-                            height: 108,
+                            height: 112,
                             justifyContent: 'center',
                             overflow: 'hidden',
-                            width: 108,
+                            width: 112,
                           }}
                         >
                           {avatarPreviewUrl ? (
@@ -1293,22 +1263,23 @@ export const HomeProfileCard = ({
                         <ButtonBase
                           sx={{
                             alignItems: 'center',
-                            background: avatarFieldSurface,
+                            backgroundColor: 'transparent',
                             border: `1px solid ${avatarFieldBorder}`,
-                            borderRadius: '12px',
+                            borderRadius: '10px',
                             color: theme.palette.text.primary,
                             display: 'flex',
                             justifyContent: 'space-between',
-                            px: 1.5,
-                            py: 1.3,
+                            px: 1.35,
+                            py: 1.1,
                             textAlign: 'left',
                             transition:
                               'background-color 160ms ease, border-color 160ms ease, transform 120ms ease',
                             width: '100%',
                             '&:hover': {
-                              background: isDarkMode
-                                ? 'linear-gradient(180deg, rgba(43,47,58,1) 0%, rgba(36,39,47,1) 100%)'
-                                : 'linear-gradient(180deg, rgba(250,246,238,1) 0%, rgba(244,238,229,1) 100%)',
+                              backgroundColor: alpha(
+                                theme.palette.primary.main,
+                                isDarkMode ? 0.032 : 0.04
+                              ),
                               borderColor: theme.palette.border.main,
                               transform: 'translateY(-1px)',
                             },
@@ -1323,12 +1294,12 @@ export const HomeProfileCard = ({
                           >
                             <Typography
                               sx={{
-                                color: theme.palette.text.primary,
-                                fontSize: '0.84rem',
-                                fontWeight: 600,
-                              }}
-                            >
-                              {avatarFile
+                              color: theme.palette.text.primary,
+                              fontSize: '0.84rem',
+                              fontWeight: 700,
+                            }}
+                          >
+                            {avatarFile
                                 ? 'Replace image'
                                 : t('core:action.choose_image', {
                                     postProcess: 'capitalizeFirstChar',
@@ -1345,12 +1316,17 @@ export const HomeProfileCard = ({
                             </Typography>
                           </Box>
                           <Box
-                          sx={{
-                            alignItems: 'center',
-                            backgroundColor: isDarkMode ? avatarModalSurfaceSoft : theme.palette.background.elevated,
-                            border: `1px solid ${theme.palette.border.subtle}`,
-                            borderRadius: '999px',
-                            color: theme.palette.text.primary,
+                            sx={{
+                              alignItems: 'center',
+                              backgroundColor: alpha(
+                                isDarkMode
+                                  ? theme.palette.common.white
+                                  : theme.palette.background.paper,
+                                isDarkMode ? 0.04 : 0.78
+                              ),
+                              border: `1px solid ${avatarFieldBorder}`,
+                              borderRadius: '999px',
+                              color: theme.palette.text.primary,
                               display: 'inline-flex',
                               fontSize: '0.72rem',
                               fontWeight: 600,
@@ -1364,29 +1340,17 @@ export const HomeProfileCard = ({
                       </ImageUploader>
 
                       {avatarFile?.name && (
-                        <Box
+                        <Typography
+                          noWrap
                           sx={{
-                            alignItems: 'center',
-                            background: avatarFieldSurface,
-                            border: `1px solid ${avatarFieldBorder}`,
-                            borderRadius: '10px',
                             color: theme.palette.text.secondary,
-                            display: 'flex',
-                            minHeight: 36,
-                            px: 1.2,
+                            fontSize: '0.72rem',
+                            lineHeight: 1.35,
+                            px: 0.15,
                           }}
                         >
-                          <Typography
-                            noWrap
-                            sx={{
-                              color: theme.palette.text.secondary,
-                              fontSize: '0.72rem',
-                              width: '100%',
-                            }}
-                          >
-                            {avatarFile.name}
-                          </Typography>
-                        </Box>
+                          {avatarFile.name}
+                        </Typography>
                       )}
 
                       {!name && (
@@ -1431,11 +1395,11 @@ export const HomeProfileCard = ({
                         variant="contained"
                         fullWidth
                         sx={{
-                          borderRadius: '12px',
+                          borderRadius: '10px',
                           ...getBlueTier1ButtonSx(),
                           fontSize: '0.82rem',
                           fontWeight: 600,
-                          minHeight: 44,
+                          minHeight: 42,
                           textTransform: 'none',
                           '&.Mui-disabled': {
                             background: isDarkMode
