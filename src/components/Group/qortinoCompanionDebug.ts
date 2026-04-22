@@ -14,12 +14,12 @@ export type QortinoCompanionDebugSettings = {
 };
 
 export const DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS: QortinoCompanionDebugSettings = {
-  bubbleOffsetX: -10,
-  bubbleOffsetY: 2,
-  nameOffsetX: -1,
-  nameOffsetY: 28,
-  statusOffsetX: -1,
-  statusOffsetY: 24,
+  bubbleOffsetX: -7,
+  bubbleOffsetY: -6,
+  nameOffsetX: -6,
+  nameOffsetY: 36,
+  statusOffsetX: -56,
+  statusOffsetY: 12,
 };
 
 const normalizeOffset = (value: unknown) => {

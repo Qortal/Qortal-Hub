@@ -17,6 +17,8 @@ import { useTranslation } from 'react-i18next';
 import BoundedNumericTextField from '../common/BoundedNumericTextField.tsx';
 import { ErrorText } from './ErrorText/ErrorText.tsx';
 import { getBlueTier1ButtonSx } from '../styles/blueMaterial';
+import { executeEvent } from '../utils/events';
+import { QORTINO_DONATION_COMPLETED_EVENT } from './Group/qortinoDonationEasterEgg';
 
 export const QortPayment = ({
   balance,
@@ -147,6 +149,9 @@ export const QortPayment = ({
           if (response?.error) {
             setSendPaymentError(response.error);
           } else {
+            executeEvent(QORTINO_DONATION_COMPLETED_EVENT, {
+              recipient: paymentTo.trim(),
+            });
             onSuccess();
           }
           setIsLoadingSendCoin(false);

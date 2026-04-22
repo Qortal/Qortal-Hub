@@ -51,6 +51,7 @@
     "axios": "^1.13.5",
     "bcryptjs": "2.4.3",
     "buffer": "6.0.3",
+    "canvas-confetti": "^1.9.4",
     "chokidar": "^3.6.0",
     "compressorjs": "^1.2.1",
     "dompurify": "^3.2.6",

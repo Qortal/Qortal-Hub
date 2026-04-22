@@ -1,7 +1,9 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
+  type DragEvent,
   type MouseEvent,
 } from 'react';
 import {
@@ -28,6 +30,8 @@ import {
   handleDashboardPanelPointerMove,
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
+import { QORTINO_DONATION_DRAG_TYPE } from './qortinoDonationEasterEgg';
+import { QORTINO_SANDBOX_EVENT } from './qortinoSandbox';
 import { useThemeContext } from '../Theme/ThemeContext';
 
 type HomeQuickToolsPadProps = {
@@ -38,10 +42,12 @@ type HomeQuickToolsPadProps = {
 
 type QuickToolItem = {
   accent: string;
+  draggable?: boolean;
   isActive?: boolean;
   key: string;
   label: string;
   onAction: (event: MouseEvent<HTMLElement>) => void;
+  onDragStart?: (event: DragEvent<HTMLElement>) => void;
   renderIcon: () => React.ReactNode;
 };
 
@@ -85,9 +91,21 @@ export const HomeQuickToolsPad = ({
 }: HomeQuickToolsPadProps) => {
   const theme = useTheme();
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
+  const transparentDragImageRef = useRef<HTMLCanvasElement | null>(null);
   const { themeMode, toggleTheme } = useThemeContext();
   const [notificationsMuted, setNotificationsMuted] = useState(false);
   const isDarkMode = theme.palette.mode === 'dark';
+
+  useEffect(() => {
+    const dragCanvas = document.createElement('canvas');
+    dragCanvas.width = 1;
+    dragCanvas.height = 1;
+    transparentDragImageRef.current = dragCanvas;
+
+    return () => {
+      transparentDragImageRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -170,10 +188,20 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        draggable: true,
         key: 'wallets',
         label: 'Wallets',
         onAction: () => {
           executeEvent('openWalletsApp', {});
+        },
+        onDragStart: (event) => {
+          event.dataTransfer.effectAllowed = 'move';
+          event.dataTransfer.setData(QORTINO_DONATION_DRAG_TYPE, 'wallets');
+          event.dataTransfer.setData('text/plain', 'wallets');
+          const dragImage = transparentDragImageRef.current;
+          if (dragImage) {
+            event.dataTransfer.setDragImage(dragImage, 0, 0);
+          }
         },
         renderIcon: () => (
           <AccountBalanceWalletRoundedIcon
@@ -261,9 +289,11 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
-        key: 'coming-soon',
-        label: 'Coming Soon',
-        onAction: () => {},
+        key: 'qortino-sandbox',
+        label: 'QORTINO Lab',
+        onAction: () => {
+          executeEvent(QORTINO_SANDBOX_EVENT, {});
+        },
         renderIcon: () => (
           <AddRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
         ),
@@ -335,7 +365,9 @@ export const HomeQuickToolsPad = ({
         {items.map((item) => (
           <Tooltip key={item.key} enterDelay={350} title={item.label}>
             <ButtonBase
+              draggable={item.draggable}
               onClick={(event) => item.onAction(event)}
+              onDragStart={item.onDragStart}
               sx={{
                 alignItems: 'center',
                 background: isDarkMode

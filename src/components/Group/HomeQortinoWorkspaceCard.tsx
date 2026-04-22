@@ -1,4 +1,5 @@
 import {
+  Avatar,
   Box,
   Button,
   ButtonBase,
@@ -7,13 +8,16 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Portal,
+  TextField,
   Typography,
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import {
+  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
@@ -23,13 +27,13 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import DriveFileRenameOutlineRoundedIcon from '@mui/icons-material/DriveFileRenameOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import GraphicEqRoundedIcon from '@mui/icons-material/GraphicEqRounded';
+import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import MailOutlineRoundedIcon from '@mui/icons-material/MailOutlineRounded';
 import PauseRoundedIcon from '@mui/icons-material/PauseRounded';
 import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
@@ -45,7 +49,6 @@ import UploadRoundedIcon from '@mui/icons-material/UploadRounded';
 import VideoLibraryRoundedIcon from '@mui/icons-material/VideoLibraryRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import AppsRoundedIcon from '@mui/icons-material/AppsRounded';
-import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import LibraryMusicRoundedIcon from '@mui/icons-material/LibraryMusicRounded';
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
@@ -56,6 +59,7 @@ import {
   userInfoAtom,
 } from '../../atoms/global';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../../App';
+import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { useFetchResources } from '../../hooks/useFetchResources';
 import {
@@ -76,7 +80,6 @@ import {
   getBlueTier1ButtonSx,
   getBlueTier2BadgeSx,
   getBlueTier3ProgressBackground,
-  getBlueTier3StepperState,
 } from './groupActivityColorSystem';
 import type { GettingStartedDebugOverrides } from './homeGettingStartedDebug';
 import { GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
@@ -110,14 +113,28 @@ import {
   searchEarbumpTracks,
   type EarbumpTrack,
 } from './earbumpLibraryApi';
+import { Confetti } from '../ui/confetti';
+import { DotPattern } from '../ui/dot-pattern';
+import {
+  QORTINO_DONATION_BUBBLE_MESSAGE,
+  QORTINO_DONATION_COMPLETED_EVENT,
+  QORTINO_DONATION_DRAG_TYPE,
+  QORTINO_DONATION_GRATEFUL_DURATION_MS,
+  QORTINO_DONATION_OVERLAY_DURATION_MS,
+  QORTINO_DONATION_PREFILL_NAME,
+  QORTINO_DONATION_THANK_YOU_MESSAGE,
+} from './qortinoDonationEasterEgg';
+import { QORTINO_SANDBOX_EVENT } from './qortinoSandbox';
 
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
 const AVATAR_IDENTIFIER = 'qortal_avatar';
 const MIN_BALANCE_FOR_QORTS = 6;
-const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
+export const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
 const ONBOARDING_URL = 'https://qortal.dev/onboarding';
 const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
+const ONBOARDING_RECOGNITION_DURATION_MS = 2600;
+const ONBOARDING_COMPLETION_MESSAGE_DURATION_MS = 3200;
 const QORTINO_MASCOT_BASE_SIZE = 168;
 const QORTINO_MASCOT_SCALE = 0.68;
 const QORTINO_MASCOT_SIZE = Math.round(
@@ -127,21 +144,89 @@ const QORTINO_MASCOT_STAGE_PADDING_X = 26;
 const QORTINO_MASCOT_STAGE_PADDING_Y = 28;
 const QORTINO_MASCOT_VERTICAL_LIFT_PX = 12;
 const QORTINO_WORKSPACE_BAY_HEIGHT_PX = 251;
-const HOTKEY_SLOT_COUNT = 8;
+const HOTKEY_SLOT_COUNT = 6;
+const CURATED_HOTKEY_APP_NAMES = [
+  'Q-Tube',
+  'Quitter',
+  'Q-Mail',
+  'Q-Blog',
+  'Q-Trade',
+  'Earbump',
+] as const;
+type QortinoSandboxPresetKey =
+  | 'guide'
+  | 'unlocked'
+  | 'listening'
+  | 'routing'
+  | 'standby';
+type QortinoSandboxSnapshot = {
+  bubbleMessage: string;
+  presetKey: QortinoSandboxPresetKey;
+  statusLabel: string;
+};
+type QortinoDonationOverlayState = {
+  message: string;
+  nonce: number;
+};
+type QortinoGratefulState = {
+  message: string;
+  nonce: number;
+};
+const QORTINO_SANDBOX_PRESETS: readonly {
+  bubbleMessage: string;
+  description: string;
+  key: QortinoSandboxPresetKey;
+  mood: 'celebrate' | 'empty' | 'guide' | 'hotkeys' | 'music';
+  statusLabel: string;
+}[] = [
+  {
+    bubbleMessage: 'Let’s start with 6 QORT. Pick any option above.',
+    description: 'Onboarding guide state.',
+    key: 'guide',
+    mood: 'guide',
+    statusLabel: 'helpful',
+  },
+  {
+    bubbleMessage: 'All set. You can start building your workspace above.',
+    description: 'Freshly unlocked workspace state.',
+    key: 'unlocked',
+    mood: 'celebrate',
+    statusLabel: 'happy',
+  },
+  {
+    bubbleMessage: 'Locked on Midnight Relay.',
+    description: 'Music playback companion state.',
+    key: 'listening',
+    mood: 'music',
+    statusLabel: 'listening',
+  },
+  {
+    bubbleMessage: 'Hotkeys panel ready.',
+    description: 'Hotkey routing state.',
+    key: 'routing',
+    mood: 'hotkeys',
+    statusLabel: 'idle',
+  },
+  {
+    bubbleMessage: 'Choose what lives above me.',
+    description: 'Neutral standby state.',
+    key: 'standby',
+    mood: 'empty',
+    statusLabel: 'idle',
+  },
+] as const;
+const QORTINO_SANDBOX_PRESET_BY_KEY = Object.fromEntries(
+  QORTINO_SANDBOX_PRESETS.map((preset) => [preset.key, preset])
+) as Record<QortinoSandboxPresetKey, (typeof QORTINO_SANDBOX_PRESETS)[number]>;
+const QORTINO_STATUS_REFERENCE_LABEL = 'standby';
+const HOTKEY_SLOT_VALUE_SEPARATOR = '::';
 const EARBUMP_AUDIO_SERVICE = 'AUDIO';
 const MUSIC_STATUS_SLOT_HEIGHT_PX = 20;
 type WorkspaceMode = 'empty' | 'hotkeys' | 'music';
 type StepKey = 'get_six_qorts' | 'register_name' | 'load_avatar';
-type HotkeyActionId =
-  | 'q-tube'
-  | 'quitter'
-  | 'q-mail'
-  | 'q-blog'
-  | 'q-trade'
-  | 'q-mintership'
-  | 'earbump';
-
-type HotkeySlotValue = HotkeyActionId | null;
+type HotkeyActionId = string;
+type HotkeySlotValue = string | null;
+type HotkeyAppService = 'APP' | 'WEBSITE';
 
 type MusicTrack = EarbumpTrack;
 
@@ -188,9 +273,26 @@ type HotkeyActionDefinition = {
   run: () => void;
 };
 
+type HotkeyAppDefinition = {
+  appName: string;
+  description: string;
+  label: string;
+  service: HotkeyAppService;
+};
+
+type QAppResourceRecord = {
+  metadata?: {
+    description?: string;
+    title?: string;
+  };
+  name?: string;
+  service?: string;
+};
+
 type TrackReadyState = 'downloading' | 'error' | 'idle' | 'ready';
 
 let sharedEarbumpAudioInstance: HTMLAudioElement | null = null;
+let sharedEarbumpTrackSnapshot: MusicTrack | null = null;
 
 const DEFAULT_HOTKEYS: HotkeySlotValue[] = Array.from(
   { length: HOTKEY_SLOT_COUNT },
@@ -222,6 +324,140 @@ const WORKSPACE_MODULES: WorkspaceModuleDefinition[] = [
     mode: 'music',
   },
 ];
+
+const LEGACY_HOTKEY_APP_NAME_MAP: Record<string, string> = {
+  earbump: 'Earbump',
+  'q-blog': 'Q-Blog',
+  'q-mail': 'Q-Mail',
+  'q-mintership': 'q-mintership',
+  'q-trade': 'Q-Trade',
+  'q-tube': 'Q-Tube',
+  quitter: 'Quitter',
+};
+
+const normalizeHotkeyAppName = (value: string) =>
+  LEGACY_HOTKEY_APP_NAME_MAP[value] ?? value;
+
+const encodeHotkeySlotValue = (service: HotkeyAppService, appName: string) =>
+  `${service}${HOTKEY_SLOT_VALUE_SEPARATOR}${appName}`;
+
+const parseHotkeySlotValue = (
+  value: string
+): { appName: string; service: HotkeyAppService } => {
+  const [serviceCandidate, ...rest] = value.split(HOTKEY_SLOT_VALUE_SEPARATOR);
+
+  if (
+    (serviceCandidate === 'APP' || serviceCandidate === 'WEBSITE') &&
+    rest.length > 0
+  ) {
+    return {
+      appName: rest.join(HOTKEY_SLOT_VALUE_SEPARATOR),
+      service: serviceCandidate,
+    };
+  }
+
+  return {
+    appName: normalizeHotkeyAppName(value),
+    service: 'APP',
+  };
+};
+
+const formatHotkeyAppLabel = (appName: string) =>
+  appName
+    .replace(/[-_]+/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+
+const getHotkeyAppThumbnailUrl = (appName: string) =>
+  `${getBaseApiReact()}/arbitrary/THUMBNAIL/${appName}/qortal_avatar?async=true`;
+
+const HotkeyAppAvatar = ({
+  appName,
+  radius = 12,
+  size = 36,
+}: {
+  appName: string;
+  radius?: number;
+  size?: number;
+}) => (
+  <Avatar
+    alt={appName}
+    imgProps={{ loading: 'lazy' }}
+    src={getHotkeyAppThumbnailUrl(appName)}
+    sx={{
+      background: alpha('#A9C9FF', 0.06),
+      borderRadius: `${radius}px`,
+      boxShadow: `inset 0 0 0 1px ${alpha('#A9C9FF', 0.08)}`,
+      height: `${size}px`,
+      width: `${size}px`,
+      '& img': {
+        objectFit: 'fill',
+      },
+    }}
+  >
+    <Box
+      alt=""
+      component="img"
+      src={LogoSelected}
+      sx={{
+        height: 'auto',
+        width: `${Math.round(size * 0.68)}px`,
+      }}
+    />
+  </Avatar>
+);
+
+const getPersistentOnboardingMessage = (stepKey: StepKey) => {
+  if (stepKey === 'get_six_qorts') {
+    return 'Let’s start with 6 QORT. Pick any option above.';
+  }
+
+  if (stepKey === 'register_name') {
+    return 'Next, register your name.';
+  }
+
+  return 'Finally, add your avatar.';
+};
+
+const getOnboardingRecognitionMessage = (
+  previousStepKey: StepKey,
+  nextStepKey: StepKey
+) => {
+  if (
+    previousStepKey === 'get_six_qorts' &&
+    nextStepKey === 'register_name'
+  ) {
+    return 'Nice work. The hardest part is done.';
+  }
+
+  if (
+    previousStepKey === 'register_name' &&
+    nextStepKey === 'load_avatar'
+  ) {
+    return 'Great. One more to go.';
+  }
+
+  return null;
+};
+
+const resolveQortinoSandboxPresetKey = (
+  statusLabel: string
+): QortinoSandboxPresetKey => {
+  if (statusLabel === 'helpful') return 'guide';
+  if (statusLabel === 'happy') return 'unlocked';
+  if (statusLabel === 'listening') return 'listening';
+  if (statusLabel === 'idle') return 'standby';
+  return 'standby';
+};
+
+const truncateQortinoBubbleMessage = (
+  message: string | null,
+  maxChars = 96
+) => {
+  const trimmed = message?.trim() ?? '';
+  if (!trimmed) return null;
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, maxChars - 5)).trimEnd()}(...)`;
+};
 
 const QortinoSectionRuntimeFallback = ({
   body,
@@ -339,14 +575,8 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
     ? parsed.hotkeys
         .slice(0, HOTKEY_SLOT_COUNT)
         .map((item): HotkeySlotValue =>
-          item === 'q-tube' ||
-          item === 'quitter' ||
-          item === 'q-mail' ||
-          item === 'q-blog' ||
-          item === 'q-trade' ||
-          item === 'q-mintership' ||
-          item === 'earbump'
-            ? item
+          typeof item === 'string' && item.trim().length > 0
+            ? normalizeHotkeyAppName(item.trim())
             : null
         )
     : [];
@@ -389,6 +619,25 @@ const getFallbackStorageKey = (userAddress: string | undefined) =>
     ? `${QORTINO_WORKSPACE_SETTINGS_KEY}_${userAddress}`
     : QORTINO_WORKSPACE_SETTINGS_KEY;
 
+const loadWorkspaceStateFromFallbackStorage = (
+  userAddress: string | undefined
+): WorkspaceState => {
+  if (typeof window === 'undefined') {
+    return { ...DEFAULT_WORKSPACE_STATE };
+  }
+
+  const fallbackKey = getFallbackStorageKey(userAddress);
+
+  try {
+    const storedValue = localStorage.getItem(fallbackKey);
+    return sanitizeWorkspaceState(
+      storedValue ? JSON.parse(storedValue) : null
+    );
+  } catch {
+    return { ...DEFAULT_WORKSPACE_STATE };
+  }
+};
+
 const persistWorkspaceState = async (
   nextState: WorkspaceState,
   userAddress: string | undefined
@@ -417,8 +666,6 @@ const persistWorkspaceState = async (
 const loadWorkspaceState = async (
   userAddress: string | undefined
 ): Promise<WorkspaceState> => {
-  const fallbackKey = getFallbackStorageKey(userAddress);
-
   try {
     if (typeof window.sendMessage === 'function') {
       const stored = await window.sendMessage('getUserSettings', {
@@ -433,78 +680,19 @@ const loadWorkspaceState = async (
     // Fallback local storage below.
   }
 
-  try {
-    return sanitizeWorkspaceState(localStorage.getItem(fallbackKey) ? JSON.parse(localStorage.getItem(fallbackKey) as string) : null);
-  } catch {
-    return { ...DEFAULT_WORKSPACE_STATE };
-  }
+  return loadWorkspaceStateFromFallbackStorage(userAddress);
 };
 
-const StepProgress = ({
-  currentStep,
-  isDarkMode,
-  totalSteps,
-}: {
-  currentStep: number;
-  isDarkMode: boolean;
-  totalSteps: number;
-}) => {
-  return (
-    <Box
-      sx={{
-        alignItems: 'center',
-        display: 'flex',
-        gap: '8px',
-        minWidth: 0,
-      }}
-    >
-      {Array.from({ length: totalSteps }, (_, index) => {
-        const stepNumber = index + 1;
-        const status =
-          currentStep === stepNumber
-            ? 'active'
-            : currentStep < stepNumber
-              ? 'inactive'
-              : 'complete';
-
-        return (
-          <motion.div
-            key={stepNumber}
-            initial={false}
-            animate={status}
-            variants={{
-              inactive: getBlueTier3StepperState(isDarkMode, 'inactive'),
-              active: getBlueTier3StepperState(isDarkMode, 'active'),
-              complete: getBlueTier3StepperState(isDarkMode, 'complete'),
-            }}
-            transition={{ duration: 0.24, ease: 'easeOut' }}
-            style={{
-              alignItems: 'center',
-              borderRadius: 999,
-              borderStyle: 'solid',
-              borderWidth: 1,
-              display: 'flex',
-              height: '17px',
-              justifyContent: 'center',
-              width: '17px',
-            }}
-          >
-            {status === 'active' ? (
-              <Box
-                sx={{
-                  bgcolor: '#ffffff',
-                  borderRadius: '50%',
-                  height: '5px',
-                  width: '5px',
-                }}
-              />
-            ) : status === 'complete' ? (
-              <CheckCircleRoundedIcon sx={{ color: '#fff', fontSize: '11px' }} />
-            ) : null}
-          </motion.div>
-        );
-      })}
-    </Box>
+export const resetQortinoWorkspaceOnboardingCelebration = async (
+  userAddress: string | undefined
+) => {
+  const currentState = await loadWorkspaceState(userAddress);
+  await persistWorkspaceState(
+    {
+      ...currentState,
+      onboardingCelebrationSeen: false,
+    },
+    userAddress
   );
 };
 
@@ -533,6 +721,22 @@ const getSharedEarbumpAudio = () => {
   }
 
   return sharedEarbumpAudioInstance;
+};
+
+const getSharedEarbumpTrackSnapshot = () => sharedEarbumpTrackSnapshot;
+
+const setSharedEarbumpTrackSnapshot = (track: MusicTrack | null) => {
+  sharedEarbumpTrackSnapshot = track ? { ...track } : null;
+};
+
+const stopSharedEarbumpAudio = (audio: HTMLAudioElement | null) => {
+  if (!audio) {
+    return;
+  }
+
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
 };
 
 const isAbortError = (error: unknown) =>
@@ -680,6 +884,7 @@ const MusicCoverArt = ({
 
 const QortinoMascot = ({
   isDarkMode,
+  isTickled,
   isListening,
   isTalking,
   lookDebug,
@@ -687,14 +892,23 @@ const QortinoMascot = ({
   showAntenna = true,
 }: {
   isDarkMode: boolean;
+  isTickled: boolean;
   isListening: boolean;
   isTalking: boolean;
   lookDebug: QortinoLookDebugSettings;
-  mood: 'celebrate' | 'empty' | 'guide' | 'hotkeys' | 'music' | 'notes';
+  mood:
+    | 'celebrate'
+    | 'empty'
+    | 'grateful'
+    | 'guide'
+    | 'hotkeys'
+    | 'music'
+    | 'notes';
   showAntenna?: boolean;
 }) => {
-  const expression =
-    mood === 'music'
+  const expression = isTickled
+    ? 'ticklish'
+    : mood === 'music'
       ? 'music'
       : mood === 'guide'
         ? 'guide'
@@ -704,6 +918,8 @@ const QortinoMascot = ({
             ? 'attentive'
             : mood === 'celebrate'
               ? 'delighted'
+              : mood === 'grateful'
+                ? 'delighted'
               : 'calm';
   const eyeStyle = {
     attentive: { height: 8, top: 79, width: 9 },
@@ -712,6 +928,7 @@ const QortinoMascot = ({
     focused: { height: 7, top: 81, width: 10 },
     guide: { height: 10, top: 78, width: 9 },
     music: { height: 10, top: 79, width: 10 },
+    ticklish: { height: 2, top: 82, width: 14 },
   }[expression];
   const mouthStyle = {
     attentive: { left: 69, top: 98, width: 28 },
@@ -720,10 +937,13 @@ const QortinoMascot = ({
     focused: { left: 71, top: 98, width: 24 },
     guide: { left: 68, top: 96, width: 30 },
     music: { left: 67, top: 94, width: 32 },
+    ticklish: { left: 66, top: 93, width: 34 },
   }[expression];
-  const mascotAnimation = isListening
-    ? 'qortinoMusicBounce 3s ease-in-out infinite'
-    : 'qortinoBob 5.8s ease-in-out infinite';
+  const mascotAnimation = isTickled
+    ? 'qortinoTicklishBounce 0.58s ease-in-out infinite'
+    : isListening
+      ? 'qortinoMusicBounce 3s ease-in-out infinite'
+      : 'qortinoBob 5.8s ease-in-out infinite';
   const faceRootLeft = 44;
   const faceRootTop = 58;
   const faceRootWidth = 80;
@@ -754,6 +974,13 @@ const QortinoMascot = ({
             '25%': { transform: 'translateY(2px)' },
             '50%': { transform: 'translateY(-1px)' },
             '75%': { transform: 'translateY(3px)' },
+          },
+          '@keyframes qortinoTicklishBounce': {
+            '0%, 100%': { transform: 'translateY(2px)' },
+            '18%': { transform: 'translateY(-7px)' },
+            '38%': { transform: 'translateY(-2px)' },
+            '60%': { transform: 'translateY(-10px)' },
+            '82%': { transform: 'translateY(-3px)' },
           },
         '@keyframes qortinoBlink': {
           '0%, 45%, 100%': { transform: 'scaleY(1)' },
@@ -896,7 +1123,9 @@ const QortinoMascot = ({
             />
             <Box
               sx={{
-                animation: 'qortinoBlink 6.2s ease-in-out infinite',
+                animation: isTickled
+                  ? 'none'
+                  : 'qortinoBlink 6.2s ease-in-out infinite',
                 bgcolor: '#DDEBFF',
                 borderRadius: '999px',
                 boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
@@ -904,13 +1133,16 @@ const QortinoMascot = ({
                 left: faceLeftEyeLeft,
                 position: 'absolute',
                 top: faceEyeTop,
+                rotate: isTickled ? '-10deg' : undefined,
                 transformOrigin: 'center',
                 width: eyeStyle.width,
               }}
             />
             <Box
               sx={{
-                animation: 'qortinoBlink 6.2s ease-in-out infinite 120ms',
+                animation: isTickled
+                  ? 'none'
+                  : 'qortinoBlink 6.2s ease-in-out infinite 120ms',
                 bgcolor: '#DDEBFF',
                 borderRadius: '999px',
                 boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
@@ -918,6 +1150,7 @@ const QortinoMascot = ({
                 left: faceRightEyeLeft,
                 position: 'absolute',
                 top: faceEyeTop,
+                rotate: isTickled ? '10deg' : undefined,
                 transformOrigin: 'center',
                 width: eyeStyle.width,
               }}
@@ -1211,9 +1444,14 @@ export const HomeQortinoWorkspaceCard = ({
   const [openMusicSearchDialog, setOpenMusicSearchDialog] = useState(false);
   const [openModulePickerDialog, setOpenModulePickerDialog] = useState(false);
   const [openHotkeyPickerDialog, setOpenHotkeyPickerDialog] = useState(false);
-  const [workspaceState, setWorkspaceState] = useState<WorkspaceState>({
-    ...DEFAULT_WORKSPACE_STATE,
-  });
+  const [availableHotkeyApps, setAvailableHotkeyApps] = useState<
+    HotkeyAppDefinition[]
+  >([]);
+  const [hotkeyAppsError, setHotkeyAppsError] = useState<string | null>(null);
+  const [isHotkeyAppsLoading, setIsHotkeyAppsLoading] = useState(false);
+  const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(() =>
+    loadWorkspaceStateFromFallbackStorage(userAddress)
+  );
   const [qortinoLookDebug, setQortinoLookDebug] =
     useState<QortinoLookDebugSettings>(() =>
       typeof window === 'undefined'
@@ -1248,7 +1486,7 @@ export const HomeQortinoWorkspaceCard = ({
     []
   );
   const [selectedTrackSnapshot, setSelectedTrackSnapshot] =
-    useState<MusicTrack | null>(null);
+    useState<MusicTrack | null>(() => getSharedEarbumpTrackSnapshot());
   const [musicProgress, setMusicProgress] = useState(0);
   const [musicPlaybackTime, setMusicPlaybackTime] = useState(0);
   const [musicTrackDurations, setMusicTrackDurations] = useState<
@@ -1265,16 +1503,50 @@ export const HomeQortinoWorkspaceCard = ({
   );
   const [musicStreamError, setMusicStreamError] = useState<string | null>(null);
   const [ephemeralReaction, setEphemeralReaction] = useState<string | null>(null);
+  const [onboardingTransitionMessage, setOnboardingTransitionMessage] =
+    useState<string | null>(null);
+  const [postOnboardingMessage, setPostOnboardingMessage] = useState<
+    string | null
+  >(null);
+  const [openQortinoSandboxDialog, setOpenQortinoSandboxDialog] =
+    useState(false);
+  const [qortinoSandboxPresetKey, setQortinoSandboxPresetKey] =
+    useState<QortinoSandboxPresetKey>('standby');
+  const [qortinoSandboxStatusLabel, setQortinoSandboxStatusLabel] =
+    useState(QORTINO_SANDBOX_PRESET_BY_KEY.standby.statusLabel);
+  const [qortinoSandboxBubbleMessage, setQortinoSandboxBubbleMessage] =
+    useState(QORTINO_SANDBOX_PRESET_BY_KEY.standby.bubbleMessage);
+  const [qortinoSandboxPreviewNonce, setQortinoSandboxPreviewNonce] =
+    useState(0);
+  const [isQortinoTickled, setIsQortinoTickled] = useState(false);
+  const [isQortinoSandboxTickled, setIsQortinoSandboxTickled] = useState(false);
+  const [qortinoGratefulState, setQortinoGratefulState] =
+    useState<QortinoGratefulState | null>(null);
+  const [qortinoDonationOverlayState, setQortinoDonationOverlayState] =
+    useState<QortinoDonationOverlayState | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(getSharedEarbumpAudio());
   const discoveryRequestRef = useRef<AbortController | null>(null);
   const searchRequestRef = useRef<AbortController | null>(null);
+  const qortinoGratefulTimeoutRef = useRef<number | null>(null);
+  const qortinoDonationOverlayTimeoutRef = useRef<number | null>(null);
   const selectedTrackRequestRef = useRef<AbortController | null>(null);
   const reactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onboardingMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const lastReactionRef = useRef<string | null>(null);
   const lastReactionAtRef = useRef(0);
-  const onboardingReactionKeyRef = useRef<string | null>(null);
   const onboardingBubbleLockRef = useRef(false);
+  const onboardingBubbleHoldRef = useRef(false);
+  const previousOnboardingStepRef = useRef<StepKey | null>(null);
+  const onboardingJustCompletedRef = useRef(false);
+  const wasOnboardingVisibleRef = useRef(false);
   const musicProgressBarRef = useRef<HTMLDivElement | null>(null);
+  const qortinoSandboxBaseSnapshotRef = useRef<QortinoSandboxSnapshot>({
+    bubbleMessage: QORTINO_SANDBOX_PRESET_BY_KEY.standby.bubbleMessage,
+    presetKey: 'standby',
+    statusLabel: QORTINO_SANDBOX_PRESET_BY_KEY.standby.statusLabel,
+  });
   const downloadResource = useFetchResources();
 
   const pushReaction = useCallback(
@@ -1286,7 +1558,7 @@ export const HomeQortinoWorkspaceCard = ({
       if (!trimmedMessage) return;
 
       if (
-        onboardingBubbleLockRef.current &&
+        (onboardingBubbleLockRef.current || onboardingBubbleHoldRef.current) &&
         options?.allowDuringOnboarding !== true
       ) {
         return;
@@ -1341,6 +1613,14 @@ export const HomeQortinoWorkspaceCard = ({
         window.clearTimeout(reactionTimeoutRef.current);
       }
 
+      if (onboardingMessageTimeoutRef.current) {
+        window.clearTimeout(onboardingMessageTimeoutRef.current);
+      }
+
+      if (qortinoGratefulTimeoutRef.current) {
+        window.clearTimeout(qortinoGratefulTimeoutRef.current);
+      }
+
       discoveryRequestRef.current?.abort();
       searchRequestRef.current?.abort();
       selectedTrackRequestRef.current?.abort();
@@ -1355,6 +1635,179 @@ export const HomeQortinoWorkspaceCard = ({
   );
 
   useEffect(() => {
+    const handleLogout = () => {
+      stopSharedEarbumpAudio(audioRef.current);
+      setSharedEarbumpTrackSnapshot(null);
+      setMusicPlaybackTime(0);
+      setMusicProgress(0);
+      setMusicStreamError(null);
+      applyWorkspaceState((current) =>
+        current.musicPlaying
+          ? {
+              ...current,
+              musicPlaying: false,
+            }
+          : current
+      );
+    };
+
+    subscribeToEvent('logout-event', handleLogout);
+
+    return () => {
+      unsubscribeFromEvent('logout-event', handleLogout);
+    };
+  }, [applyWorkspaceState]);
+
+  useEffect(() => {
+    if (userAddress != null) {
+      return;
+    }
+
+    stopSharedEarbumpAudio(audioRef.current);
+    setIsQortinoTickled(false);
+    setIsQortinoSandboxTickled(false);
+    setQortinoGratefulState(null);
+    setSharedEarbumpTrackSnapshot(null);
+    setMusicPlaybackTime(0);
+    setMusicProgress(0);
+    setMusicStreamError(null);
+    setSelectedTrackSnapshot(null);
+  }, [userAddress, debugReplayToken]);
+
+  const handleQortinoPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      setIsQortinoTickled(true);
+    },
+    []
+  );
+
+  const handleQortinoPointerRelease = useCallback(() => {
+    setIsQortinoTickled(false);
+  }, []);
+
+  const showQortinoDonationOverlay = useCallback(
+    ({
+      durationMs,
+      message,
+      mood,
+      statusLabel,
+    }: {
+      durationMs: number;
+      message: string;
+    }) => {
+    if (qortinoDonationOverlayTimeoutRef.current != null) {
+      window.clearTimeout(qortinoDonationOverlayTimeoutRef.current);
+    }
+    setQortinoDonationOverlayState({
+      message,
+      nonce: Date.now(),
+    });
+    qortinoDonationOverlayTimeoutRef.current = window.setTimeout(() => {
+      setQortinoDonationOverlayState(null);
+      qortinoDonationOverlayTimeoutRef.current = null;
+    }, durationMs);
+  },
+    []
+  );
+
+  const handleQortinoDonationDragOver = useCallback(
+    (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!event.dataTransfer.types.includes(QORTINO_DONATION_DRAG_TYPE)) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    },
+    []
+  );
+
+  const handleQortinoDonationDrop = useCallback(
+    (event: ReactDragEvent<HTMLDivElement>) => {
+      if (!event.dataTransfer.types.includes(QORTINO_DONATION_DRAG_TYPE)) {
+        return;
+      }
+      event.preventDefault();
+      executeEvent('openPaymentInternal', {
+        name: QORTINO_DONATION_PREFILL_NAME,
+      });
+      showQortinoDonationOverlay({
+        durationMs: QORTINO_DONATION_OVERLAY_DURATION_MS,
+        message: QORTINO_DONATION_BUBBLE_MESSAGE,
+      });
+    },
+    [showQortinoDonationOverlay]
+  );
+
+  const handleQortinoSandboxPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      setIsQortinoSandboxTickled(true);
+    },
+    []
+  );
+
+  const handleQortinoSandboxPointerRelease = useCallback(() => {
+    setIsQortinoSandboxTickled(false);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (qortinoGratefulTimeoutRef.current != null) {
+        window.clearTimeout(qortinoGratefulTimeoutRef.current);
+      }
+      if (qortinoDonationOverlayTimeoutRef.current != null) {
+        window.clearTimeout(qortinoDonationOverlayTimeoutRef.current);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const handleQortinoDonationCompleted = (event: Event) => {
+      const recipient =
+        (
+          event as CustomEvent<{
+            recipient?: string;
+          }>
+        )?.detail?.recipient ?? '';
+
+      if (
+        recipient.trim().toLowerCase() !==
+        QORTINO_DONATION_PREFILL_NAME.toLowerCase()
+      ) {
+        return;
+      }
+
+      if (qortinoGratefulTimeoutRef.current != null) {
+        window.clearTimeout(qortinoGratefulTimeoutRef.current);
+      }
+
+      setQortinoGratefulState({
+        message: QORTINO_DONATION_THANK_YOU_MESSAGE,
+        nonce: Date.now(),
+      });
+
+      qortinoGratefulTimeoutRef.current = window.setTimeout(() => {
+        setQortinoGratefulState(null);
+        qortinoGratefulTimeoutRef.current = null;
+      }, QORTINO_DONATION_GRATEFUL_DURATION_MS);
+    };
+
+    subscribeToEvent(
+      QORTINO_DONATION_COMPLETED_EVENT,
+      handleQortinoDonationCompleted
+    );
+
+    return () => {
+      unsubscribeFromEvent(
+        QORTINO_DONATION_COMPLETED_EVENT,
+        handleQortinoDonationCompleted
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (userAddress == null) {
       setDismissed(null);
       return;
@@ -1367,6 +1820,7 @@ export const HomeQortinoWorkspaceCard = ({
 
   useEffect(() => {
     let active = true;
+    setWorkspaceState(loadWorkspaceStateFromFallbackStorage(userAddress));
     setWorkspaceHydrated(false);
 
     void loadWorkspaceState(userAddress).then((nextState) => {
@@ -1378,7 +1832,7 @@ export const HomeQortinoWorkspaceCard = ({
     return () => {
       active = false;
     };
-  }, [userAddress]);
+  }, [userAddress, debugReplayToken]);
 
   useEffect(() => {
     const handleSetQortinoLookDebug = (
@@ -1454,6 +1908,14 @@ export const HomeQortinoWorkspaceCard = ({
     if (!workspaceHydrated) return;
     void persistWorkspaceState(workspaceState, userAddress);
   }, [userAddress, workspaceHydrated, workspaceState]);
+
+  useEffect(() => {
+    if (!selectedTrackSnapshot?.id) {
+      return;
+    }
+
+    setSharedEarbumpTrackSnapshot(selectedTrackSnapshot);
+  }, [selectedTrackSnapshot]);
 
   const checkAvatar = useCallback(async () => {
     if (!name) return;
@@ -1538,6 +2000,7 @@ export const HomeQortinoWorkspaceCard = ({
       userAddress
     ) {
       localStorage.setItem(`${LS_KEY}_${userAddress}`, 'completed');
+      onboardingJustCompletedRef.current = true;
       setDismissed(true);
       onGettingStartedComplete?.();
     }
@@ -1615,10 +2078,159 @@ export const HomeQortinoWorkspaceCard = ({
 
   const hotkeyCatalog = useMemo(
     () =>
-      (Object.keys(hotkeyActions) as HotkeyActionId[]).map(
-        (id) => hotkeyActions[id]
-      ),
-    [hotkeyActions]
+      availableHotkeyApps.length > 0
+        ? availableHotkeyApps
+        : (Object.keys(hotkeyActions) as HotkeyActionId[]).map((id) => ({
+            appName: hotkeyActions[id].label,
+            description: hotkeyActions[id].description,
+            label: hotkeyActions[id].label,
+            service: 'APP' as const,
+          })),
+    [availableHotkeyApps, hotkeyActions]
+  );
+
+  const loadHotkeyApps = useCallback(async () => {
+    if (isHotkeyAppsLoading) {
+      return;
+    }
+
+    setIsHotkeyAppsLoading(true);
+    setHotkeyAppsError(null);
+
+    try {
+      const urls = [
+        `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true`,
+        `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true`,
+      ];
+      const responses = await Promise.all(
+        urls.map((url) =>
+          fetch(url, {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            method: 'GET',
+          })
+        )
+      );
+
+      if (responses.some((response) => !response.ok)) {
+        throw new Error('Unable to load Q-Apps.');
+      }
+
+      const responseData = (
+        await Promise.all(responses.map((response) => response.json()))
+      ).flat() as QAppResourceRecord[];
+      const nextCatalog = Array.from(
+        new Map(
+          (Array.isArray(responseData) ? responseData : [])
+            .map((resource) => {
+              const appName =
+                typeof resource?.name === 'string' ? resource.name.trim() : '';
+              const service =
+                resource?.service === 'WEBSITE' ? 'WEBSITE' : 'APP';
+              if (!appName) {
+                return null;
+              }
+
+              const label =
+                typeof resource.metadata?.title === 'string' &&
+                resource.metadata.title.trim().length > 0
+                  ? resource.metadata.title.trim()
+                  : appName;
+              const description =
+                typeof resource.metadata?.description === 'string'
+                  ? resource.metadata.description.trim()
+                  : '';
+
+              return [
+                `${service.toLowerCase()}::${appName.toLowerCase()}`,
+                {
+                  appName,
+                  description,
+                  label,
+                  service,
+                } satisfies HotkeyAppDefinition,
+              ] as const;
+            })
+            .filter(
+              (
+                item
+              ): item is readonly [string, HotkeyAppDefinition] => item != null
+            )
+        ).values()
+      ).sort((left, right) =>
+        left.label.localeCompare(right.label, undefined, {
+          sensitivity: 'base',
+        })
+      );
+
+      setAvailableHotkeyApps(nextCatalog);
+    } catch (error) {
+      console.error(error);
+      setHotkeyAppsError('Unable to load Q-Apps right now.');
+    } finally {
+      setIsHotkeyAppsLoading(false);
+    }
+  }, [isHotkeyAppsLoading]);
+
+  useEffect(() => {
+    if (
+      workspaceState.mode !== 'hotkeys' &&
+      !openHotkeyPickerDialog &&
+      availableHotkeyApps.length > 0
+    ) {
+      return;
+    }
+
+    if (
+      (workspaceState.mode === 'hotkeys' || openHotkeyPickerDialog) &&
+      availableHotkeyApps.length === 0 &&
+      !isHotkeyAppsLoading
+    ) {
+      void loadHotkeyApps();
+    }
+  }, [
+    availableHotkeyApps.length,
+    isHotkeyAppsLoading,
+    loadHotkeyApps,
+    openHotkeyPickerDialog,
+    workspaceState.mode,
+  ]);
+
+  const hotkeyAppsByName = useMemo(() => {
+    const nextMap = new Map<string, HotkeyAppDefinition>();
+    availableHotkeyApps.forEach((app) => {
+      nextMap.set(
+        `${app.service.toLowerCase()}${HOTKEY_SLOT_VALUE_SEPARATOR}${app.appName.toLowerCase()}`,
+        app
+      );
+      if (!nextMap.has(app.appName.toLowerCase())) {
+        nextMap.set(app.appName.toLowerCase(), app);
+      }
+    });
+    return nextMap;
+  }, [availableHotkeyApps]);
+
+  const resolveHotkeyApp = useCallback(
+    (slotValue: string): HotkeyAppDefinition => {
+      const parsedSlot = parseHotkeySlotValue(slotValue);
+      const knownApp =
+        hotkeyAppsByName.get(
+          `${parsedSlot.service.toLowerCase()}${HOTKEY_SLOT_VALUE_SEPARATOR}${parsedSlot.appName.toLowerCase()}`
+        ) ?? hotkeyAppsByName.get(parsedSlot.appName.toLowerCase());
+
+      if (knownApp) {
+        return knownApp;
+      }
+
+      return {
+        appName: parsedSlot.appName,
+        description: 'Launch Q-App',
+        label: formatHotkeyAppLabel(parsedSlot.appName),
+        service: parsedSlot.service,
+      };
+    },
+    [hotkeyAppsByName]
   );
 
   const steps = useMemo(
@@ -1658,7 +2270,7 @@ export const HomeQortinoWorkspaceCard = ({
         onAction: () => executeEvent('openRegisterName', {}),
       },
       {
-        accent: '#93D1B8',
+        accent: '#8DBEFF',
         actionLabel: t('tutorial:home.open', 'Open'),
         ctaLabel: t('tutorial:home.load_avatar', 'Load your avatar'),
         done: resolvedHasAvatar,
@@ -1707,32 +2319,85 @@ export const HomeQortinoWorkspaceCard = ({
   }, [isOnboardingVisible]);
 
   useEffect(() => {
+    onboardingBubbleHoldRef.current =
+      onboardingTransitionMessage != null || postOnboardingMessage != null;
+  }, [onboardingTransitionMessage, postOnboardingMessage]);
+
+  useEffect(() => {
     if (!isOnboardingVisible) {
-      onboardingReactionKeyRef.current = null;
+      previousOnboardingStepRef.current = null;
       return;
     }
 
-    if (onboardingReactionKeyRef.current === currentStep.key) return;
-    onboardingReactionKeyRef.current = currentStep.key;
+    const previousStepKey = previousOnboardingStepRef.current;
+    previousOnboardingStepRef.current = currentStep.key;
 
-    if (currentStep.key === 'get_six_qorts') {
-      pushReaction('Start with 6 QORT. Pick any route above.', {
-        allowDuringOnboarding: true,
-      });
+    if (previousStepKey == null || previousStepKey === currentStep.key) {
       return;
     }
 
-    if (currentStep.key === 'register_name') {
-      pushReaction('Register your name next.', {
-        allowDuringOnboarding: true,
-      });
+    const nextRecognitionMessage = getOnboardingRecognitionMessage(
+      previousStepKey,
+      currentStep.key
+    );
+
+    if (!nextRecognitionMessage) {
+      setOnboardingTransitionMessage(null);
       return;
     }
 
-    pushReaction('Load your avatar to finish.', {
-      allowDuringOnboarding: true,
-    });
-  }, [currentStep.key, isOnboardingVisible, pushReaction]);
+    if (onboardingMessageTimeoutRef.current) {
+      window.clearTimeout(onboardingMessageTimeoutRef.current);
+    }
+
+    setOnboardingTransitionMessage(nextRecognitionMessage);
+    onboardingMessageTimeoutRef.current = window.setTimeout(() => {
+      onboardingMessageTimeoutRef.current = null;
+      setOnboardingTransitionMessage(null);
+    }, ONBOARDING_RECOGNITION_DURATION_MS);
+  }, [currentStep.key, isOnboardingVisible]);
+
+  useEffect(() => {
+    const wasOnboardingVisible = wasOnboardingVisibleRef.current;
+    wasOnboardingVisibleRef.current = isOnboardingVisible;
+
+    if (!wasOnboardingVisible && isOnboardingVisible) {
+      onboardingJustCompletedRef.current = false;
+      setPostOnboardingMessage(null);
+      setOnboardingTransitionMessage(null);
+      return;
+    }
+
+    if (!wasOnboardingVisible || isOnboardingVisible) {
+      return;
+    }
+
+    if (!onboardingJustCompletedRef.current) {
+      return;
+    }
+
+    onboardingJustCompletedRef.current = false;
+
+    if (reactionTimeoutRef.current) {
+      window.clearTimeout(reactionTimeoutRef.current);
+      reactionTimeoutRef.current = null;
+    }
+
+    if (onboardingMessageTimeoutRef.current) {
+      window.clearTimeout(onboardingMessageTimeoutRef.current);
+    }
+
+    setEphemeralReaction(null);
+    setOnboardingTransitionMessage(null);
+    setPostOnboardingMessage(
+      'All set. You can start building your workspace above.'
+    );
+
+    onboardingMessageTimeoutRef.current = window.setTimeout(() => {
+      onboardingMessageTimeoutRef.current = null;
+      setPostOnboardingMessage(null);
+    }, ONBOARDING_COMPLETION_MESSAGE_DURATION_MS);
+  }, [isOnboardingVisible]);
 
   const musicSearchQuery = workspaceState.musicQuery.trim();
   const knownMusicTracksById = useMemo(() => {
@@ -2108,15 +2773,46 @@ export const HomeQortinoWorkspaceCard = ({
     const normalized = hotkeySearchQuery.trim().toLowerCase();
     if (!normalized) return hotkeyCatalog;
 
-    return hotkeyCatalog.filter(
-      (action) =>
-        action.label.toLowerCase().includes(normalized) ||
-        action.description.toLowerCase().includes(normalized)
+    return hotkeyCatalog.filter((app) =>
+      [
+        app.appName,
+        app.label,
+        app.description,
+      ].some((value) => value.toLowerCase().includes(normalized))
     );
   }, [hotkeyCatalog, hotkeySearchQuery]);
+
+  const featuredHotkeyCatalog = useMemo(() => {
+    const featuredOrder = new Map(
+      CURATED_HOTKEY_APP_NAMES.map((appName, index) => [appName.toLowerCase(), index])
+    );
+
+    return filteredHotkeyCatalog
+      .filter((app) => featuredOrder.has(app.appName.toLowerCase()))
+      .sort(
+        (left, right) =>
+          (featuredOrder.get(left.appName.toLowerCase()) ?? 999) -
+          (featuredOrder.get(right.appName.toLowerCase()) ?? 999)
+      )
+      .slice(0, HOTKEY_SLOT_COUNT);
+  }, [filteredHotkeyCatalog]);
+
+  const featuredHotkeyCatalogKeys = useMemo(
+    () => new Set(featuredHotkeyCatalog.map((app) => app.appName.toLowerCase())),
+    [featuredHotkeyCatalog]
+  );
+
+  const libraryHotkeyCatalog = useMemo(
+    () =>
+      filteredHotkeyCatalog.filter(
+        (app) => !featuredHotkeyCatalogKeys.has(app.appName.toLowerCase())
+      ),
+    [featuredHotkeyCatalogKeys, filteredHotkeyCatalog]
+  );
   const isBayPickerOpen = openModulePickerDialog || openHotkeyPickerDialog;
 
   const qortinoMood = useMemo(() => {
+    if (qortinoGratefulState) return 'grateful' as const;
     if (isBayPickerOpen) return 'guide' as const;
     if (isOnboardingVisible) return 'guide' as const;
     if (isWorkspaceFreshlyUnlocked) return 'celebrate' as const;
@@ -2126,6 +2822,7 @@ export const HomeQortinoWorkspaceCard = ({
     if (workspaceState.mode === 'hotkeys') return 'hotkeys' as const;
     return 'empty' as const;
   }, [
+    qortinoGratefulState,
     isOnboardingVisible,
     isWorkspaceFreshlyUnlocked,
     isBayPickerOpen,
@@ -2133,7 +2830,17 @@ export const HomeQortinoWorkspaceCard = ({
     workspaceState.musicPlaying,
   ]);
 
-  const qortinoDisplayedMessage = ephemeralReaction?.trim() || null;
+  const persistentOnboardingMessage = isOnboardingVisible
+    ? getPersistentOnboardingMessage(currentStep.key)
+    : null;
+  const qortinoDisplayedMessage = truncateQortinoBubbleMessage(
+    qortinoGratefulState?.message?.trim() ||
+      postOnboardingMessage?.trim() ||
+      onboardingTransitionMessage?.trim() ||
+      persistentOnboardingMessage?.trim() ||
+      ephemeralReaction?.trim() ||
+      null
+  );
   /*
     if (isOnboardingVisible) {
       if (currentStep.key === 'get_six_qorts') {
@@ -2492,10 +3199,19 @@ export const HomeQortinoWorkspaceCard = ({
   );
 
   const handleSetHotkey = useCallback(
-    (actionId: HotkeyActionId) => {
+    (appName: string) => {
+      const parsedSlot = parseHotkeySlotValue(appName);
+      const knownApp =
+        hotkeyAppsByName.get(
+          `${parsedSlot.service.toLowerCase()}${HOTKEY_SLOT_VALUE_SEPARATOR}${parsedSlot.appName.toLowerCase()}`
+        ) ?? hotkeyAppsByName.get(parsedSlot.appName.toLowerCase());
+      const nextSlotValue = encodeHotkeySlotValue(
+        knownApp?.service ?? parsedSlot.service,
+        knownApp?.appName ?? parsedSlot.appName
+      );
       applyWorkspaceState((current) => {
         const nextHotkeys = [...current.hotkeys];
-        nextHotkeys[selectedHotkeySlot] = actionId;
+        nextHotkeys[selectedHotkeySlot] = nextSlotValue;
         return {
           ...current,
           hotkeys: nextHotkeys,
@@ -2506,28 +3222,40 @@ export const HomeQortinoWorkspaceCard = ({
       });
       setOpenModulePickerDialog(false);
       setOpenHotkeyPickerDialog(true);
-      setSelectedHotkeySlot((current) => {
-        const nextEmptyIndex = workspaceState.hotkeys.findIndex(
-          (slot, index) => index > current && slot == null
-        );
-        return nextEmptyIndex >= 0 ? nextEmptyIndex : current;
-      });
+      setSelectedHotkeySlot((current) =>
+        Math.min(current + 1, HOTKEY_SLOT_COUNT - 1)
+      );
     },
     [
       applyWorkspaceState,
       dismissed,
-      hotkeyActions,
-      pushReaction,
+      hotkeyAppsByName,
       selectedHotkeySlot,
-      workspaceState.hotkeys,
     ]
   );
 
   const handleRunHotkey = useCallback(
-    (actionId: HotkeyActionId) => {
-      hotkeyActions[actionId].run();
+    (slotValue: string) => {
+      if (!slotValue) {
+        return;
+      }
+
+      const parsedSlot = parseHotkeySlotValue(slotValue);
+      const knownApp =
+        hotkeyAppsByName.get(
+          `${parsedSlot.service.toLowerCase()}${HOTKEY_SLOT_VALUE_SEPARATOR}${parsedSlot.appName.toLowerCase()}`
+        ) ?? hotkeyAppsByName.get(parsedSlot.appName.toLowerCase());
+
+      executeEvent('addTab', {
+        data: {
+          name: knownApp?.appName ?? parsedSlot.appName,
+          path: '',
+          service: knownApp?.service ?? parsedSlot.service,
+        },
+      });
+      executeEvent('open-apps-mode', {});
     },
-    [hotkeyActions]
+    [hotkeyAppsByName]
   );
 
   const handleToggleTrack = useCallback(
@@ -2899,6 +3627,64 @@ export const HomeQortinoWorkspaceCard = ({
     ];
   }, [currentStep.key, pushReaction, t]);
 
+  const currentStepGetQortMethods = useMemo(() => {
+    if (currentStep.key !== 'get_six_qorts') {
+      return [];
+    }
+
+    return [
+      {
+        description: t(
+          'tutorial:home.get_six_qorts_way1',
+          'Finish the onboarding instruction on qortal.dev'
+        ),
+        icon: SchoolRoundedIcon,
+        key: 'onboarding',
+        label: currentStepPrimaryAction.label,
+        onClick: currentStepPrimaryAction.onClick,
+        recommended: true,
+      },
+      {
+        description: t(
+          'tutorial:home.get_six_qorts_way2',
+          'Ask in the Nextcloud support chat for 6 QORT.'
+        ),
+        icon: SupportAgentRoundedIcon,
+        key: 'support',
+        label: t(
+          'tutorial:home.get_six_qorts_way2_action',
+          'Open support chat'
+        ),
+        onClick: () => {
+          pushReaction(
+            "Support chat is open. Ask for the 6 QORT and I'll queue step two."
+          );
+          openExternalUrl(SUPPORT_CHAT_URL);
+        },
+        recommended: false,
+      },
+      {
+        description: t(
+          'tutorial:home.get_six_qorts_way3',
+          'Buy QORT using Q-Trade'
+        ),
+        icon: ShoppingBagRoundedIcon,
+        key: 'q-trade',
+        label: t(
+          'tutorial:home.get_six_qorts_way3_action',
+          'Open Q-Trade'
+        ),
+        onClick: () => {
+          pushReaction(
+            "Q-Trade is up. If you grab QORT there, I'll take you forward."
+          );
+          openApp('Q-Trade');
+        },
+        recommended: false,
+      },
+    ];
+  }, [currentStep.key, currentStepPrimaryAction.label, currentStepPrimaryAction.onClick, pushReaction, t]);
+
   const workspaceBayBackground =
     theme.palette.mode === 'dark'
       ? `linear-gradient(180deg, ${alpha('#20242D', 0.9)} 0%, ${alpha(
@@ -2915,7 +3701,7 @@ export const HomeQortinoWorkspaceCard = ({
   );
   const workspaceBayHeightPx =
     QORTINO_WORKSPACE_BAY_HEIGHT_PX + workspaceBaySeparatorExtension;
-  const onboardingCompanionLift = isOnboardingVisible ? 8 : 0;
+  const onboardingCompanionLift = 8;
   const progressRowOffsetY = qortinoLayoutDebug.progressOffsetY + 12;
   const progressRowReservedTop = Math.max(progressRowOffsetY, 0);
   const progressRowVisualOffsetY = Math.min(progressRowOffsetY, 0);
@@ -2928,8 +3714,8 @@ export const HomeQortinoWorkspaceCard = ({
         flexDirection: 'column',
         justifyContent: 'center',
         minHeight: 0,
-        px: 2,
-        py: isOnboardingVisible ? 1.55 : 1.25,
+        px: isOnboardingVisible ? 2.15 : 2,
+        py: isOnboardingVisible ? 1.72 : 1.25,
         position: 'relative',
         zIndex: 1,
         '&::after': {
@@ -2948,10 +3734,10 @@ export const HomeQortinoWorkspaceCard = ({
           sx={{
             display: 'flex',
             flexDirection: 'column',
-            gap: 0.78,
+            gap: 1.02,
             height: '100%',
             '@container qortino-card (max-width: 390px)': {
-              gap: 0.7,
+              gap: 0.9,
             },
           }}
         >
@@ -2987,125 +3773,247 @@ export const HomeQortinoWorkspaceCard = ({
               Step {currentProgressStep} / {steps.length}
             </Typography>
           </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flex: 1,
-              flexDirection: 'column',
-              gap: 0.78,
-              minHeight: 0,
-            }}
-          >
+          {currentStep.key === 'get_six_qorts' ? (
             <Box
               sx={{
-                alignItems: 'flex-start',
                 display: 'flex',
+                flex: 1,
                 flexDirection: 'column',
-                gap: 0.5,
-                minWidth: 0,
+                gap: 1,
+                minHeight: 0,
+                transform: 'translateY(10px)',
               }}
             >
               <Box
                 sx={{
-                  alignItems: 'center',
-                  background: alpha(currentStep.accent, 0.07),
-                  border: `1px solid ${alpha(currentStep.accent, 0.14)}`,
-                  borderRadius: '8px',
-                  color: currentStep.accent,
-                  display: 'flex',
-                  flexShrink: 0,
-                  height: '28px',
-                  justifyContent: 'center',
-                  width: '28px',
+                  alignItems: 'flex-start',
+                  display: 'grid',
+                  gap: '12px',
+                  gridTemplateColumns: '40px minmax(0, 1fr)',
+                  minWidth: 0,
+                  pb: 1.22,
+                  pt: 0.2,
+                  position: 'relative',
                   '@container qortino-card (max-width: 390px)': {
-                    height: '26px',
-                    width: '26px',
+                    gap: '10px',
+                    gridTemplateColumns: '34px minmax(0, 1fr)',
+                  },
+                  '&::after': {
+                    background: alpha(
+                      theme.palette.common.white,
+                      isDarkMode ? 0.06 : 0.12
+                    ),
+                    bottom: 0,
+                    content: '""',
+                    height: '1px',
+                    left: 0,
+                    position: 'absolute',
+                    right: 0,
                   },
                 }}
               >
                 <CurrentStepIcon
                   sx={{
-                    fontSize: '15px',
+                    color: alpha(currentStep.accent, 0.92),
+                    fontSize: '32px',
+                    mt: '2px',
                     '@container qortino-card (max-width: 390px)': {
-                      fontSize: '14px',
+                      fontSize: '28px',
                     },
                   }}
                 />
-              </Box>
-              <Typography
-                sx={{
-                  color: alpha(theme.palette.text.primary, 0.96),
-                  fontSize: '0.98rem',
-                  fontWeight: 700,
-                  letterSpacing: '-0.02em',
-                  lineHeight: 1.06,
-                  maxWidth: '19ch',
-                  '@container qortino-card (max-width: 390px)': {
-                    fontSize: '0.92rem',
-                  },
-                }}
-              >
-                {currentStep.label}
-              </Typography>
-              <Typography
-                sx={{
-                  color: alpha(theme.palette.text.secondary, 0.76),
-                  fontSize: '0.71rem',
-                  letterSpacing: '-0.01em',
-                  lineHeight: 1.28,
-                  maxWidth: '31ch',
-                  '@container qortino-card (max-width: 390px)': {
-                    fontSize: '0.67rem',
-                    lineHeight: 1.24,
-                  },
-                }}
-              >
-                {currentStep.helper}
-              </Typography>
-            </Box>
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 0.42,
-                mt: 'auto',
-              }}
-            >
-              <GettingStartedPrimaryAction
-                accent={currentStep.accent}
-                label={currentStepPrimaryAction.label}
-                loading={currentStepPrimaryAction.loading}
-                onClick={currentStepPrimaryAction.onClick}
-              />
-              {currentStepSecondaryActions.length > 0 ? (
                 <Box
                   sx={{
-                    alignItems: 'flex-start',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 0.08,
-                    ml: -0.1,
+                    gap: 0.48,
+                    minWidth: 0,
                   }}
                 >
-                  {currentStepSecondaryActions.map((action, index) => (
-                    <GettingStartedSecondaryAction
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.primary, 0.96),
+                      fontSize: '0.98rem',
+                      fontWeight: 700,
+                      letterSpacing: '-0.02em',
+                      lineHeight: 1.08,
+                      '@container qortino-card (max-width: 390px)': {
+                        fontSize: '0.9rem',
+                      },
+                    }}
+                  >
+                    {currentStep.label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.76),
+                      fontSize: '0.71rem',
+                      letterSpacing: '-0.01em',
+                      lineHeight: 1.3,
+                      maxWidth: '30ch',
+                      '@container qortino-card (max-width: 390px)': {
+                        fontSize: '0.67rem',
+                        lineHeight: 1.24,
+                      },
+                    }}
+                  >
+                    {t(
+                      'tutorial:home.get_qorts_workspace_hint',
+                      'Unlock your first 6 QORT to activate the rest of the setup.'
+                    )}
+                  </Typography>
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  minHeight: 0,
+                  mt: 0.42,
+                }}
+              >
+                  {currentStepGetQortMethods.map((method, index) => (
+                    <GettingStartedMethodRow
                       accent={currentStep.accent}
-                      key={`${currentStep.key}-secondary-${index}`}
-                      label={action.label}
-                      onClick={action.onClick}
+                      description={method.description}
+                      emphasized={method.recommended}
+                      icon={method.icon}
+                      key={method.key}
+                      label={method.label}
+                      onClick={method.onClick}
+                      showChevron={method.recommended}
+                      showDivider={index < currentStepGetQortMethods.length - 1}
                     />
                   ))}
                 </Box>
-              ) : null}
             </Box>
-          </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.16 }}>
-            <StepProgress
-              currentStep={currentProgressStep}
-              isDarkMode={isDarkMode}
-              totalSteps={steps.length}
-            />
-          </Box>
+          ) : (
+            <Box
+              sx={{
+                display: 'flex',
+                flex: 1,
+                flexDirection: 'column',
+                gap: 1,
+                minHeight: 0,
+                transform: 'translateY(10px)',
+              }}
+            >
+              <Box
+                sx={{
+                  alignItems: 'flex-start',
+                  display: 'grid',
+                  gap: '12px',
+                  gridTemplateColumns: '40px minmax(0, 1fr)',
+                  minWidth: 0,
+                  pb: 1.16,
+                  pt: 0.2,
+                  position: 'relative',
+                  '@container qortino-card (max-width: 390px)': {
+                    gap: '10px',
+                    gridTemplateColumns: '34px minmax(0, 1fr)',
+                  },
+                  '&::after': {
+                    background: alpha(
+                      theme.palette.common.white,
+                      isDarkMode ? 0.06 : 0.12
+                    ),
+                    bottom: 0,
+                    content: '""',
+                    height: '1px',
+                    left: 0,
+                    position: 'absolute',
+                    right: 0,
+                  },
+                }}
+              >
+                <CurrentStepIcon
+                  sx={{
+                    color: alpha(currentStep.accent, 0.92),
+                    fontSize: '32px',
+                    mt: '2px',
+                    '@container qortino-card (max-width: 390px)': {
+                      fontSize: '28px',
+                    },
+                  }}
+                />
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.48,
+                    minWidth: 0,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.primary, 0.96),
+                      fontSize: '0.98rem',
+                      fontWeight: 700,
+                      letterSpacing: '-0.008em',
+                      lineHeight: 1.08,
+                      maxWidth: '19ch',
+                      '@container qortino-card (max-width: 390px)': {
+                        fontSize: '0.92rem',
+                      },
+                    }}
+                  >
+                    {currentStep.label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.76),
+                      fontSize: '0.71rem',
+                      letterSpacing: '0.01em',
+                      lineHeight: 1.3,
+                      maxWidth: '31ch',
+                      '@container qortino-card (max-width: 390px)': {
+                        fontSize: '0.67rem',
+                        lineHeight: 1.24,
+                      },
+                    }}
+                  >
+                    {currentStep.helper}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 0.48,
+                  mt: 0.42,
+                }}
+              >
+                <GettingStartedPrimaryAction
+                  accent={currentStep.accent}
+                  label={currentStepPrimaryAction.label}
+                  loading={currentStepPrimaryAction.loading}
+                  onClick={currentStepPrimaryAction.onClick}
+                />
+                {currentStepSecondaryActions.length > 0 ? (
+                  <Box
+                    sx={{
+                      alignItems: 'flex-start',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 0.08,
+                      ml: -0.1,
+                    }}
+                  >
+                    {currentStepSecondaryActions.map((action, index) => (
+                      <GettingStartedSecondaryAction
+                        accent={currentStep.accent}
+                        key={`${currentStep.key}-secondary-${index}`}
+                        label={action.label}
+                        onClick={action.onClick}
+                      />
+                    ))}
+                  </Box>
+                ) : null}
+              </Box>
+            </Box>
+          )}
         </Box>
       ) : workspaceState.mode === 'empty' ? (
     <Box
@@ -3163,27 +4071,38 @@ export const HomeQortinoWorkspaceCard = ({
       </Typography>
     </Box>
   ) : workspaceState.mode === 'hotkeys' ? (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.9 }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flex: 1,
+        flexDirection: 'column',
+        minHeight: 0,
+      }}
+    >
       <Box
         sx={{
           alignItems: 'center',
           display: 'flex',
           justifyContent: 'space-between',
-          transform: `translateY(${qortinoLayoutDebug.musicHeaderOffsetY - 1}px)`,
+          pb: '12px',
+          pl: '10px',
+          pr: '10px',
+          pt: '10px',
+          transform: `translateY(${qortinoLayoutDebug.musicHeaderOffsetY - 11}px)`,
         }}
       >
         <Typography
           sx={{
             color: alpha(theme.palette.text.secondary, 0.82),
-            fontSize: '0.65rem',
+            fontSize: '0.66rem',
             fontWeight: 700,
-            letterSpacing: '0.1em',
+            letterSpacing: '0.11em',
             textTransform: 'uppercase',
           }}
         >
           Hotkeys
         </Typography>
-        <Box sx={{ display: 'flex', gap: 0.35 }}>
+        <Box sx={{ display: 'flex', gap: '6px' }}>
           <IconButton
             onClick={() =>
               handleOpenHotkeyPicker(
@@ -3192,9 +4111,13 @@ export const HomeQortinoWorkspaceCard = ({
             }
             size="small"
             sx={{
-              color: alpha('#9FC4FF', 0.9),
+              borderRadius: '9px',
+              color: alpha('#9FC4FF', 0.92),
               height: '30px',
               width: '30px',
+              '&:hover': {
+                background: alpha('#8DB8FF', 0.1),
+              },
             }}
           >
             <TuneRoundedIcon sx={{ fontSize: '18px' }} />
@@ -3203,9 +4126,13 @@ export const HomeQortinoWorkspaceCard = ({
             onClick={() => handleSelectWorkspaceMode('empty')}
             size="small"
             sx={{
-              color: alpha(theme.palette.text.secondary, 0.82),
+              borderRadius: '9px',
+              color: alpha(theme.palette.text.secondary, 0.84),
               height: '30px',
               width: '30px',
+              '&:hover': {
+                background: alpha(theme.palette.common.white, isDarkMode ? 0.05 : 0.08),
+              },
             }}
           >
             <CloseRoundedIcon sx={{ fontSize: '18px' }} />
@@ -3215,75 +4142,94 @@ export const HomeQortinoWorkspaceCard = ({
 
       <Box
         sx={{
+          alignContent: 'start',
           display: 'grid',
-          gap: '8px',
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          flex: 1,
+          gap: '10px',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+          minHeight: 0,
+          px: '10px',
+          pb: '10px',
         }}
       >
-        {workspaceState.hotkeys.map((actionId, index) => {
-          const action = actionId ? hotkeyActions[actionId] : null;
+        {workspaceState.hotkeys.map((appName, index) => {
+          const app = appName ? resolveHotkeyApp(appName) : null;
 
           return (
             <ButtonBase
               key={`slot-${index}`}
               onClick={() =>
-                action ? handleRunHotkey(action.id) : handleOpenHotkeyPicker(index)
+                app ? handleRunHotkey(app.appName) : handleOpenHotkeyPicker(index)
               }
               sx={{
                 alignItems: 'center',
-                background:
-                  theme.palette.mode === 'dark'
-                    ? 'linear-gradient(180deg, rgba(38,43,52,0.7) 0%, rgba(26,30,36,0.86) 100%)'
-                    : 'linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(245,248,252,0.9) 100%)',
-                border: `1px solid ${alpha(
-                  action ? '#8DB8FF' : theme.palette.common.white,
-                  isDarkMode ? (action ? 0.12 : 0.06) : 0.12
-                )}`,
-                borderRadius: '12px',
+                aspectRatio: '1 / 1',
+                background: 'transparent',
+                border: '1px solid transparent',
+                borderRadius: '14px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 0.45,
-                minHeight: '50px',
-                px: 0.6,
-                py: 0.65,
+                gap: 0.8,
+                justifyContent: 'center',
+                minWidth: 0,
+                px: 0.7,
+                py: 0.7,
                 transition:
-                  'transform 120ms ease, border-color 140ms ease, box-shadow 140ms ease',
+                  'background 150ms ease, box-shadow 150ms ease, transform 120ms ease',
                 '&:hover': {
-                  borderColor: alpha('#8DB8FF', 0.24),
-                  boxShadow: `0 6px 14px ${alpha('#000', 0.16)}`,
+                  background: `linear-gradient(180deg, ${alpha('#9FC4FF', 0.18)} 0%, ${alpha(
+                    '#8DB8FF',
+                    0.1
+                  )} 58%, ${alpha('#8DB8FF', 0.04)} 100%)`,
+                  boxShadow: `inset 0 0 0 1px ${alpha('#9FC4FF', 0.14)}`,
                   transform: 'translateY(-1px)',
                 },
               }}
             >
-              {action ? (
+              {app ? (
                 <>
-                  <action.icon
-                    sx={{ color: alpha('#8DB8FF', 0.92), fontSize: '18px' }}
-                  />
+                  <HotkeyAppAvatar appName={app.appName} radius={11} size={34} />
                   <Typography
                     sx={{
-                      color: alpha(theme.palette.text.primary, 0.9),
-                      fontSize: '0.58rem',
+                      color: alpha(theme.palette.text.primary, 0.92),
+                      display: '-webkit-box',
+                      fontSize: '0.61rem',
                       fontWeight: 700,
-                      lineHeight: 1.08,
+                      lineHeight: 1.18,
+                      overflow: 'hidden',
+                      textAlign: 'center',
+                      textOverflow: 'ellipsis',
+                      WebkitBoxOrient: 'vertical',
+                      WebkitLineClamp: 2,
                     }}
                   >
-                    {action.label}
+                    {app.label}
                   </Typography>
                 </>
               ) : (
                 <>
-                  <AddRoundedIcon
-                    sx={{ color: alpha(theme.palette.text.secondary, 0.54), fontSize: '18px' }}
-                  />
-                  <Typography
+                  <Box
                     sx={{
-                      color: alpha(theme.palette.text.secondary, 0.68),
-                      fontSize: '0.56rem',
-                      fontWeight: 600,
+                      alignItems: 'center',
+                      color: alpha(theme.palette.text.secondary, 0.62),
+                      display: 'flex',
+                      height: '34px',
+                      justifyContent: 'center',
+                      width: '34px',
                     }}
                   >
-                    Add
+                    <AddRoundedIcon sx={{ fontSize: '19px' }} />
+                  </Box>
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.7),
+                      fontSize: '0.59rem',
+                      fontWeight: 700,
+                      lineHeight: 1.12,
+                      textAlign: 'center',
+                    }}
+                  >
+                    Add app
                   </Typography>
                 </>
               )}
@@ -3664,259 +4610,840 @@ export const HomeQortinoWorkspaceCard = ({
     </Box>
   );
 
-  const qortinoStatusLabel = isOnboardingVisible
-    ? 'guide mode'
-    : isWorkspaceFreshlyUnlocked
-      ? 'unlocked'
-      : workspaceState.mode === 'music' && workspaceState.musicPlaying
-        ? 'listening'
-        : workspaceState.mode === 'hotkeys'
-          ? 'routing'
-          : 'standby';
+  const qortinoStatusLabel = isQortinoTickled
+    ? 'ticklish'
+    : qortinoGratefulState
+      ? 'grateful'
+    : isOnboardingVisible
+      ? 'helpful'
+      : isWorkspaceFreshlyUnlocked
+        ? 'happy'
+        : workspaceState.mode === 'music' && workspaceState.musicPlaying
+          ? 'listening'
+          : 'idle';
   const qortinoMascotCenteredOffsetY = Math.round(
     (QORTINO_MASCOT_SIZE - qortinoMascotStageHeight) / 2
   );
+  const applyQortinoSandboxSnapshot = useCallback(
+    (snapshot: QortinoSandboxSnapshot) => {
+      setQortinoSandboxPresetKey(snapshot.presetKey);
+      setQortinoSandboxStatusLabel(snapshot.statusLabel);
+      setQortinoSandboxBubbleMessage(snapshot.bubbleMessage);
+      setQortinoSandboxPreviewNonce((current) => current + 1);
+    },
+    []
+  );
+  const applyQortinoSandboxPreset = useCallback(
+    (presetKey: QortinoSandboxPresetKey) => {
+      const preset = QORTINO_SANDBOX_PRESET_BY_KEY[presetKey];
+      setIsQortinoSandboxTickled(false);
+      applyQortinoSandboxSnapshot({
+        bubbleMessage: preset.bubbleMessage,
+        presetKey,
+        statusLabel: preset.statusLabel,
+      });
+    },
+    [applyQortinoSandboxSnapshot]
+  );
+  const handleResetQortinoSandbox = useCallback(() => {
+    setIsQortinoSandboxTickled(false);
+    applyQortinoSandboxSnapshot(qortinoSandboxBaseSnapshotRef.current);
+  }, [applyQortinoSandboxSnapshot]);
+  const handleCycleQortinoSandboxPreset = useCallback(
+    (direction: 'next' | 'previous') => {
+      const currentIndex = QORTINO_SANDBOX_PRESETS.findIndex(
+        (preset) => preset.key === qortinoSandboxPresetKey
+      );
+      const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+      const nextIndex =
+        direction === 'next'
+          ? (safeCurrentIndex + 1) % QORTINO_SANDBOX_PRESETS.length
+          : (safeCurrentIndex - 1 + QORTINO_SANDBOX_PRESETS.length) %
+            QORTINO_SANDBOX_PRESETS.length;
+      applyQortinoSandboxPreset(QORTINO_SANDBOX_PRESETS[nextIndex].key);
+    },
+    [applyQortinoSandboxPreset, qortinoSandboxPresetKey]
+  );
+  useEffect(() => {
+    const handleOpenQortinoSandbox = () => {
+      const presetKey =
+        qortinoStatusLabel === 'idle' && qortinoMood === 'hotkeys'
+          ? 'routing'
+          : resolveQortinoSandboxPresetKey(qortinoStatusLabel);
+      const preset = QORTINO_SANDBOX_PRESET_BY_KEY[presetKey];
+      const snapshot: QortinoSandboxSnapshot = {
+        bubbleMessage: qortinoDisplayedMessage?.trim() || preset.bubbleMessage,
+        presetKey,
+        statusLabel: qortinoStatusLabel,
+      };
+      qortinoSandboxBaseSnapshotRef.current = snapshot;
+      applyQortinoSandboxSnapshot(snapshot);
+      setOpenQortinoSandboxDialog(true);
+    };
 
-  const qortinoCompanionSection = (
+    subscribeToEvent(QORTINO_SANDBOX_EVENT, handleOpenQortinoSandbox);
+
+    return () => {
+      unsubscribeFromEvent(QORTINO_SANDBOX_EVENT, handleOpenQortinoSandbox);
+    };
+  }, [
+    applyQortinoSandboxSnapshot,
+    qortinoDisplayedMessage,
+    qortinoMood,
+    qortinoStatusLabel,
+  ]);
+  const qortinoSandboxMood =
+    QORTINO_SANDBOX_PRESET_BY_KEY[qortinoSandboxPresetKey].mood;
+  const qortinoSandboxEffectiveStatusLabel = isQortinoSandboxTickled
+    ? 'ticklish'
+    : qortinoSandboxStatusLabel.trim() || ' ';
+  const qortinoSandboxDisplayedMessage =
+    qortinoSandboxBubbleMessage.trim() || null;
+  const qortinoSandboxIsListening = qortinoSandboxPresetKey === 'listening';
+  const qortinoCelebrationConfettiOptions = useMemo(
+    () => ({
+      colors: ['#8DB8FF', '#A7CAFF', '#D7E6FF', '#FFFFFF'],
+      drift: 0,
+      gravity: 0.72,
+      origin: { x: 0.48, y: 0.9 },
+      particleCount: 68,
+      scalar: 0.82,
+      spread: 84,
+      startVelocity: 24,
+      ticks: 180,
+    }),
+    []
+  );
+  const qortinoSandboxMotionKey = [
+    qortinoSandboxPreviewNonce,
+    qortinoSandboxPresetKey,
+    qortinoSandboxStatusLabel,
+    qortinoSandboxBubbleMessage,
+  ].join(':');
+  const renderQortinoCompanionPreviewSection = useCallback(
+    ({
+      displayedMessage,
+      isTickled,
+      isListening,
+      isTalking,
+      messageKey,
+      mood,
+      onMascotDragOver,
+      onMascotDrop,
+      onMascotPointerDown,
+      onMascotPointerRelease,
+      statusLabel,
+      }: {
+        displayedMessage: string | null;
+        isTickled: boolean;
+        isListening: boolean;
+        isTalking: boolean;
+        messageKey: string;
+        mood:
+          | 'celebrate'
+          | 'empty'
+          | 'grateful'
+          | 'guide'
+          | 'hotkeys'
+          | 'music';
+        onMascotDragOver?: (event: ReactDragEvent<HTMLDivElement>) => void;
+        onMascotDrop?: (event: ReactDragEvent<HTMLDivElement>) => void;
+        onMascotPointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
+        onMascotPointerRelease?: () => void;
+        statusLabel: string;
+      }) => {
+        const shouldShowQortinoConfetti =
+          mood === 'celebrate' ||
+          mood === 'grateful' ||
+          statusLabel === 'happy' ||
+          statusLabel === 'grateful';
+
+      return (
+      <Box
+        sx={{
+          background:
+            theme.palette.mode === 'dark'
+              ? `linear-gradient(90deg, ${alpha('#23324A', 0.08)} 0%, ${alpha(
+                  '#1D2A3C',
+                  0.06
+                )} 20%, ${alpha('#141B25', 0.03)} 38%, ${alpha('#11161E', 0)} 62%), radial-gradient(88% 78% at 8% 96%, ${alpha(
+                  '#23324A',
+                  0.16
+                )} 0%, ${alpha('#1A2534', 0.08)} 24%, ${alpha('#11161E', 0)} 68%), linear-gradient(180deg, ${alpha(
+                  '#13171D',
+                  0.98
+                )} 0%, ${alpha('#0E1319', 1)} 100%)`
+              : `linear-gradient(90deg, ${alpha('#D8E8FF', 0.08)} 0%, ${alpha(
+                  '#E7F0FB',
+                  0.06
+                )} 22%, ${alpha('#F4F7FB', 0.03)} 40%, ${alpha('#FFFFFF', 0)} 64%), radial-gradient(88% 78% at 8% 96%, ${alpha(
+                  '#D8E8FF',
+                  0.18
+                )} 0%, ${alpha('#E7F0FB', 0.08)} 24%, ${alpha('#FFFFFF', 0)} 68%), linear-gradient(180deg, ${alpha(
+                  '#F4F7FB',
+                  0.98
+                )} 0%, ${alpha('#EEF3F8', 1)} 100%)`,
+          minHeight: 0,
+          mt: 0,
+          overflow: 'hidden',
+          position: 'relative',
+          px: 2,
+          pb: 1.5,
+          pt: 0,
+        }}
+      >
+        <DotPattern
+          color={isDarkMode ? '#8DB8FF' : '#6EA5FF'}
+          cr={1.15}
+          cx={1}
+          cy={1}
+          height={17}
+          width={17}
+          sx={{
+            opacity: isDarkMode ? 0.5 : 0.34,
+            pointerEvents: 'none',
+            transform: 'translate(-4px, 6px)',
+            zIndex: 0,
+            maskImage:
+              'radial-gradient(70% 76% at 18% 76%, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.86) 26%, rgba(255,255,255,0.44) 52%, rgba(255,255,255,0.14) 69%, transparent 84%), linear-gradient(to right, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.38) 34%, transparent 62%)',
+            WebkitMaskImage:
+              'radial-gradient(70% 76% at 18% 76%, rgba(255,255,255,0.98) 0%, rgba(255,255,255,0.86) 26%, rgba(255,255,255,0.44) 52%, rgba(255,255,255,0.14) 69%, transparent 84%), linear-gradient(to right, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.38) 34%, transparent 62%)',
+          }}
+        />
+        {shouldShowQortinoConfetti ? (
+          <Confetti
+            key={`qortino-confetti-${messageKey}`}
+            aria-hidden="true"
+            manualstart={false}
+            options={qortinoCelebrationConfettiOptions}
+            style={{
+              inset: 0,
+              pointerEvents: 'none',
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              zIndex: 0,
+            }}
+          />
+        ) : null}
+        <Box
+          sx={{
+            inset: 0,
+            pointerEvents: 'none',
+            position: 'absolute',
+            '&::before': {
+              background: subtleLine,
+              content: '""',
+              height: '1px',
+              left: '18px',
+              position: 'absolute',
+              right: '18px',
+              top: 0,
+            },
+          }}
+        />
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            transform: `translateY(${-(qortinoLayoutDebug.separatorOffsetY + onboardingCompanionLift)}px)`,
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'flex-start',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              mb: 1.05,
+              mt: '10px',
+              position: 'relative',
+              zIndex: 1,
+            }}
+          >
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3px',
+                minWidth: '78px',
+              }}
+            >
+              <Typography
+                sx={{
+                  color: workspaceLabelColor,
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.14em',
+                  transform: `translate(${qortinoCompanionDebug.nameOffsetX}px, ${qortinoCompanionDebug.nameOffsetY + 1}px)`,
+                  textTransform: 'uppercase',
+                }}
+              >
+                QORTINO
+              </Typography>
+              <Box
+                sx={{
+                  alignSelf: 'flex-start',
+                  overflow: 'visible',
+                  position: 'relative',
+                  transform: `translate(${qortinoCompanionDebug.statusOffsetX}px, ${qortinoCompanionDebug.statusOffsetY + 5}px)`,
+                }}
+              >
+                <Box
+                  sx={{
+                    border: '1px solid transparent',
+                    borderRadius: '4px',
+                    px: '3px',
+                    py: '1px',
+                    visibility: 'hidden',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: 'transparent',
+                      fontSize: '0.58rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {QORTINO_STATUS_REFERENCE_LABEL}
+                  </Typography>
+                </Box>
+                <Box
+                  sx={{
+                    background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
+                    border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
+                    borderRadius: '4px',
+                    boxShadow: `inset 0 1px 0 ${alpha(
+                      theme.palette.common.white,
+                      isDarkMode ? 0.08 : 0.22
+                    )}`,
+                    position: 'absolute',
+                    px: '3px',
+                    py: '1px',
+                    right: 0,
+                    top: 0,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: alpha('#FFFFFF', 0.98),
+                      fontSize: '0.58rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {statusLabel}
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+          <Box
+            sx={{
+              alignItems: 'end',
+              columnGap: 1,
+              display: 'grid',
+              gridTemplateColumns: `${qortinoMascotStageWidth}px minmax(0, 1fr)`,
+              mt: '-11px',
+              minHeight: `${Math.max(qortinoMascotStageHeight, 96)}px`,
+              position: 'relative',
+              zIndex: 1,
+            }}
+          >
+            <Box
+              sx={{
+                alignItems: 'flex-end',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'center',
+                height: `${qortinoMascotStageHeight}px`,
+                overflow: 'visible',
+                touchAction: 'none',
+                transform: `translateY(${qortinoMascotCenteredOffsetY}px)`,
+                width: `${qortinoMascotStageWidth}px`,
+              }}
+              onDragOver={onMascotDragOver}
+              onDrop={onMascotDrop}
+              onPointerCancel={onMascotPointerRelease}
+              onPointerDown={onMascotPointerDown}
+              onPointerUp={onMascotPointerRelease}
+              onLostPointerCapture={onMascotPointerRelease}
+            >
+              <QortinoMascot
+                isDarkMode={isDarkMode}
+                isTickled={isTickled}
+                isListening={isListening}
+                isTalking={isTalking}
+                lookDebug={qortinoLookDebug}
+                mood={mood}
+              />
+            </Box>
+            <Box
+              sx={{
+                alignItems: 'start',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.02,
+                justifyContent: 'center',
+                minHeight: `${qortinoMascotStageHeight}px`,
+                minWidth: 0,
+                width: '100%',
+              }}
+            >
+              {displayedMessage ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  style={{ minWidth: 0 }}
+                >
+                  <Box
+                    sx={{
+                      alignSelf: 'flex-start',
+                      background:
+                        theme.palette.mode === 'dark'
+                          ? 'linear-gradient(180deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
+                          : 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(243,247,252,0.94) 100%)',
+                      border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.065 : 0.14)}`,
+                      borderRadius: '15px',
+                      boxShadow: `0 14px 24px ${alpha('#000', isDarkMode ? 0.18 : 0.08)}`,
+                      display: 'flex',
+                      maxWidth: { xs: 'calc(100% - 4px)', sm: '204px' },
+                      minHeight: '76px',
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      p: 0.9,
+                      position: 'relative',
+                      transform: `translate(${qortinoCompanionDebug.bubbleOffsetX}px, ${
+                        qortinoCompanionDebug.bubbleOffsetY + 5
+                      }px)`,
+                      '&::before': {
+                        background: alpha(
+                          theme.palette.common.white,
+                          isDarkMode ? 0.07 : 0.15
+                        ),
+                        bottom: '14px',
+                        clipPath: 'polygon(0 50%, 100% 0, 100% 100%)',
+                        content: '""',
+                        height: '18px',
+                        left: '-12px',
+                        position: 'absolute',
+                        width: '12px',
+                      },
+                      '&::after': {
+                        background:
+                          theme.palette.mode === 'dark'
+                            ? 'linear-gradient(180deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
+                            : 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(243,247,252,0.94) 100%)',
+                        bottom: '15px',
+                        clipPath: 'polygon(0 50%, 100% 0, 100% 100%)',
+                        content: '""',
+                        filter: `drop-shadow(0 6px 10px ${alpha('#000', isDarkMode ? 0.12 : 0.05)})`,
+                        height: '16px',
+                        left: '-10px',
+                        position: 'absolute',
+                        width: '10px',
+                      },
+                    }}
+                  >
+                    <motion.div
+                      key={messageKey}
+                      initial={{ opacity: 0.35, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      style={{ width: '100%' }}
+                    >
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.primary, 0.94),
+                          display: '-webkit-box',
+                          fontSize: '0.73rem',
+                          fontWeight: 600,
+                          letterSpacing: '-0.015em',
+                          lineHeight: 1.4,
+                          overflow: 'hidden',
+                          overflowWrap: 'anywhere',
+                          textOverflow: 'ellipsis',
+                          WebkitBoxOrient: 'vertical',
+                          WebkitLineClamp: 3,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {displayedMessage}
+                      </Typography>
+                    </motion.div>
+                  </Box>
+                </motion.div>
+              ) : null}
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+      );
+    },
+    [
+      isDarkMode,
+      onboardingCompanionLift,
+      qortinoCompanionDebug.bubbleOffsetX,
+      qortinoCompanionDebug.bubbleOffsetY,
+      qortinoCompanionDebug.nameOffsetX,
+      qortinoCompanionDebug.nameOffsetY,
+      qortinoCompanionDebug.statusOffsetX,
+      qortinoCompanionDebug.statusOffsetY,
+      qortinoLayoutDebug.separatorOffsetY,
+      qortinoLookDebug,
+      qortinoMascotCenteredOffsetY,
+      qortinoMascotStageHeight,
+      qortinoMascotStageWidth,
+      qortinoCelebrationConfettiOptions,
+      subtleLine,
+      theme,
+      workspaceLabelColor,
+    ]
+  );
+
+  const qortinoCompanionSection = renderQortinoCompanionPreviewSection({
+    displayedMessage: qortinoDisplayedMessage,
+    isTickled: isQortinoTickled,
+    isListening: workspaceState.mode === 'music' && workspaceState.musicPlaying,
+    isTalking: qortinoIsTalking,
+    messageKey: qortinoGratefulState
+      ? `grateful-${qortinoGratefulState.nonce}`
+      : qortinoDisplayedMessage ?? 'empty',
+    mood: qortinoMood,
+    onMascotDragOver: handleQortinoDonationDragOver,
+    onMascotDrop: handleQortinoDonationDrop,
+    onMascotPointerDown: handleQortinoPointerDown,
+    onMascotPointerRelease: handleQortinoPointerRelease,
+    statusLabel: qortinoStatusLabel,
+  });
+  const qortinoDonationOverlayMessage = truncateQortinoBubbleMessage(
+    qortinoDonationOverlayState?.message ?? null,
+    84
+  );
+  const qortinoDonationOverlay = (
+    <AnimatePresence initial={false} mode="wait">
+      {qortinoDonationOverlayState ? (
+        <Portal>
+          <Box
+            sx={{
+              bottom: 26,
+              display: 'flex',
+              left: 26,
+              pointerEvents: 'none',
+              position: 'fixed',
+              zIndex: 1505,
+            }}
+          >
+            <motion.div
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.995 }}
+              initial={{ opacity: 0, y: 12, scale: 0.985 }}
+              key={qortinoDonationOverlayState.nonce}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            >
+              <Box
+                sx={{
+                  alignItems: 'flex-end',
+                  display: 'flex',
+                  gap: 1.7,
+                }}
+              >
+                <Box
+                  sx={{
+                    alignItems: 'flex-end',
+                    display: 'flex',
+                    height: `${QORTINO_MASCOT_SIZE + 34}px`,
+                    justifyContent: 'center',
+                    position: 'relative',
+                    width: `${QORTINO_MASCOT_SIZE + 18}px`,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      background: `radial-gradient(ellipse at center, ${alpha(
+                        '#05070C',
+                        isDarkMode ? 0.28 : 0.12
+                      )} 0%, ${alpha('#05070C', 0)} 72%)`,
+                      bottom: 8,
+                      filter: 'blur(12px)',
+                      height: '16px',
+                      left: '50%',
+                      position: 'absolute',
+                      transform: 'translateX(-50%)',
+                      width: `${Math.round(QORTINO_MASCOT_SIZE * 0.62)}px`,
+                      zIndex: 0,
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      transform: 'translateY(-3px) scale(1.02)',
+                      transformOrigin: 'center bottom',
+                      zIndex: 1,
+                    }}
+                  >
+                    <QortinoMascot
+                      isDarkMode={isDarkMode}
+                      isListening={false}
+                      isTalking
+                      isTickled={false}
+                      lookDebug={qortinoLookDebug}
+                      mood="celebrate"
+                    />
+                  </Box>
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.7,
+                    maxWidth: 'min(340px, calc(100vw - 170px))',
+                    minWidth: 0,
+                    pb: 0.35,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 0.8,
+                      minWidth: 0,
+                      pl: 0.15,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: alpha('#EEF5FF', 0.7),
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.18em',
+                        textTransform: 'uppercase',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      QORTINO
+                    </Typography>
+                    <Box
+                      sx={{
+                        background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
+                        border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
+                        borderRadius: '6px',
+                        boxShadow: `inset 0 1px 0 ${alpha(
+                          theme.palette.common.white,
+                          isDarkMode ? 0.08 : 0.22
+                        )}`,
+                        flexShrink: 0,
+                        px: '4px',
+                        py: '2px',
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: alpha('#FFFFFF', 0.98),
+                          fontSize: '0.58rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.02em',
+                        }}
+                      >
+                        happy
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box
+                    sx={{
+                      background: theme.palette.mode === 'dark'
+                        ? `linear-gradient(180deg, ${alpha('#1D232C', 0.98)} 0%, ${alpha(
+                            '#161B23',
+                            0.995
+                          )} 100%)`
+                        : `linear-gradient(180deg, ${alpha('#FFFFFF', 0.95)} 0%, ${alpha(
+                            '#F2F6FB',
+                            0.98
+                          )} 100%)`,
+                      border: `1px solid ${alpha(
+                        theme.palette.common.white,
+                        isDarkMode ? 0.09 : 0.18
+                      )}`,
+                      borderRadius: '16px',
+                      boxShadow: `0 12px 28px ${alpha(
+                        '#000000',
+                        isDarkMode ? 0.26 : 0.1
+                      )}, inset 0 1px 0 ${alpha('#FFFFFF', isDarkMode ? 0.05 : 0.6)}`,
+                      minHeight: '74px',
+                      px: 2,
+                      py: 1.45,
+                      position: 'relative',
+                      '&::before': {
+                        background: theme.palette.mode === 'dark'
+                          ? `linear-gradient(135deg, ${alpha('#FFFFFF', 0.028)} 0%, ${alpha(
+                              '#FFFFFF',
+                              0
+                            )} 60%)`
+                          : `linear-gradient(135deg, ${alpha('#FFFFFF', 0.42)} 0%, ${alpha(
+                              '#FFFFFF',
+                              0
+                            )} 58%)`,
+                        borderRadius: 'inherit',
+                        content: '""',
+                        inset: '1px',
+                        pointerEvents: 'none',
+                        position: 'absolute',
+                      },
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: alpha('#F6F8FF', 0.98),
+                        display: '-webkit-box',
+                        fontSize: '0.95rem',
+                        fontWeight: 700,
+                        letterSpacing: '-0.014em',
+                        lineHeight: 1.34,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        WebkitBoxOrient: 'vertical',
+                        WebkitLineClamp: 3,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {qortinoDonationOverlayMessage}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </motion.div>
+          </Box>
+        </Portal>
+      ) : null}
+    </AnimatePresence>
+  );
+  const qortinoSandboxCurrentPreset =
+    QORTINO_SANDBOX_PRESET_BY_KEY[qortinoSandboxPresetKey];
+  const qortinoSandboxPreviewSection = renderQortinoCompanionPreviewSection({
+    displayedMessage: qortinoSandboxDisplayedMessage,
+    isTickled: isQortinoSandboxTickled,
+    isListening: qortinoSandboxIsListening,
+    isTalking: Boolean(qortinoSandboxDisplayedMessage),
+    messageKey: qortinoSandboxMotionKey,
+    mood: qortinoSandboxMood,
+    onMascotPointerDown: handleQortinoSandboxPointerDown,
+    onMascotPointerRelease: handleQortinoSandboxPointerRelease,
+    statusLabel: qortinoSandboxEffectiveStatusLabel,
+  });
+  const qortinoSandboxWorkspaceSection = (
     <Box
       sx={{
-        background:
-          theme.palette.mode === 'dark'
-            ? `linear-gradient(90deg, ${alpha('#23324A', 0.08)} 0%, ${alpha(
-                '#1D2A3C',
-                0.06
-              )} 20%, ${alpha('#141B25', 0.03)} 38%, ${alpha('#11161E', 0)} 62%), radial-gradient(88% 78% at 8% 96%, ${alpha(
-                '#23324A',
-                0.16
-              )} 0%, ${alpha('#1A2534', 0.08)} 24%, ${alpha('#11161E', 0)} 68%), linear-gradient(180deg, ${alpha(
-                '#13171D',
-                0.98
-              )} 0%, ${alpha('#0E1319', 1)} 100%)`
-            : `linear-gradient(90deg, ${alpha('#D8E8FF', 0.08)} 0%, ${alpha(
-                '#E7F0FB',
-                0.06
-              )} 22%, ${alpha('#F4F7FB', 0.03)} 40%, ${alpha('#FFFFFF', 0)} 64%), radial-gradient(88% 78% at 8% 96%, ${alpha(
-                '#D8E8FF',
-                0.18
-              )} 0%, ${alpha('#E7F0FB', 0.08)} 24%, ${alpha('#FFFFFF', 0)} 68%), linear-gradient(180deg, ${alpha(
-                '#F4F7FB',
-                0.98
-              )} 0%, ${alpha('#EEF3F8', 1)} 100%)`,
+        background: workspaceBayBackground,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.15,
+        justifyContent: 'center',
         minHeight: 0,
-        mt: 0,
-        overflow: 'hidden',
-        position: 'relative',
         px: 2,
-        pb: 1.5,
-        pt: 0,
+        py: 1.35,
+        position: 'relative',
+        zIndex: 1,
+        '&::after': {
+          background: alpha(theme.palette.common.white, 0.05),
+          bottom: 0,
+          content: '""',
+          height: '1px',
+          left: '18px',
+          position: 'absolute',
+          right: '18px',
+        },
       }}
     >
       <Box
         sx={{
-          inset: 0,
-          pointerEvents: 'none',
-          position: 'absolute',
-          '&::before': {
-            background: subtleLine,
-            content: '""',
-            height: '1px',
-            left: '18px',
-            position: 'absolute',
-            right: '18px',
-            top: 0,
-          },
-        }}
-      />
-      <Box
-        sx={{
+          alignItems: 'baseline',
           display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          transform: `translateY(${-(qortinoLayoutDebug.separatorOffsetY + onboardingCompanionLift)}px)`,
+          justifyContent: 'space-between',
+          gap: 1,
         }}
       >
+        <Typography
+          sx={{
+            color: workspaceLabelColor,
+            fontSize: '0.66rem',
+            fontWeight: 700,
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+          }}
+        >
+          QORTINO Sandbox
+        </Typography>
+        <Typography
+          sx={{
+            color: alpha(theme.palette.text.secondary, 0.52),
+            fontSize: '0.62rem',
+            fontWeight: 600,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {qortinoSandboxCurrentPreset.statusLabel}
+        </Typography>
+      </Box>
       <Box
         sx={{
-          alignItems: 'flex-start',
+          alignItems: 'center',
+          background:
+            theme.palette.mode === 'dark'
+              ? `linear-gradient(180deg, ${alpha('#141922', 0.72)} 0%, ${alpha(
+                  '#10151D',
+                  0.82
+                )} 100%)`
+              : `linear-gradient(180deg, ${alpha('#FFFFFF', 0.62)} 0%, ${alpha(
+                  '#F2F5FA',
+                  0.88
+                )} 100%)`,
+          border: `1px solid ${alpha(
+            theme.palette.common.white,
+            isDarkMode ? 0.06 : 0.14
+          )}`,
+          borderRadius: '14px',
           display: 'flex',
-          justifyContent: 'flex-end',
-          mb: 1.05,
-          mt: '10px',
-          position: 'relative',
-          zIndex: 1,
+          flex: 1,
+          justifyContent: 'center',
+          minHeight: 0,
+          px: 1.4,
+          py: 1.6,
+          textAlign: 'center',
         }}
       >
         <Box
           sx={{
-            alignItems: 'flex-start',
+            alignItems: 'center',
             display: 'flex',
             flexDirection: 'column',
-            gap: '3px',
-            minWidth: '78px',
+            gap: 0.7,
+            maxWidth: '27ch',
           }}
         >
           <Typography
             sx={{
-              color: workspaceLabelColor,
-              fontSize: '0.68rem',
+              color: alpha(theme.palette.text.primary, 0.9),
+              fontSize: '0.8rem',
               fontWeight: 700,
-              letterSpacing: '0.14em',
-              transform: `translate(${qortinoCompanionDebug.nameOffsetX}px, ${qortinoCompanionDebug.nameOffsetY + 1}px)`,
-              textTransform: 'uppercase',
+              letterSpacing: '-0.015em',
             }}
           >
-            QORTINO
+            {qortinoSandboxCurrentPreset.description}
           </Typography>
-          <Box
+          <Typography
             sx={{
-              alignSelf: 'flex-start',
-              background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
-              border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
-              borderRadius: '4px',
-              boxShadow: `inset 0 1px 0 ${alpha(
-                theme.palette.common.white,
-                isDarkMode ? 0.08 : 0.22
-              )}`,
-              px: '3px',
-              py: '1px',
-              transform: `translate(${qortinoCompanionDebug.statusOffsetX}px, ${qortinoCompanionDebug.statusOffsetY + 5}px)`,
+              color: alpha(theme.palette.text.secondary, 0.72),
+              fontSize: '0.67rem',
+              lineHeight: 1.45,
             }}
           >
-            <Typography
-              sx={{
-                color: alpha('#FFFFFF', 0.98),
-                fontSize: '0.58rem',
-                fontWeight: 700,
-                letterSpacing: '0.02em',
-              }}
-            >
-              {qortinoStatusLabel}
-            </Typography>
-          </Box>
+            This isolated lab mirrors QORTINO’s live geometry, bubble, and status
+            behavior without touching onboarding, music, or hotkeys.
+          </Typography>
         </Box>
-      </Box>
-      <Box
-        sx={{
-          alignItems: 'end',
-          columnGap: 1,
-          display: 'grid',
-          gridTemplateColumns: `${qortinoMascotStageWidth}px minmax(0, 1fr)`,
-          mt: '-17px',
-          minHeight: `${Math.max(qortinoMascotStageHeight, 96)}px`,
-          position: 'relative',
-          zIndex: 1,
-        }}
-      >
-        <Box
-          sx={{
-            alignItems: 'flex-end',
-            display: 'flex',
-            justifyContent: 'center',
-            height: `${qortinoMascotStageHeight}px`,
-            overflow: 'visible',
-            transform: `translateY(${qortinoMascotCenteredOffsetY}px)`,
-            width: `${qortinoMascotStageWidth}px`,
-          }}
-        >
-          <QortinoMascot
-            isDarkMode={isDarkMode}
-            isListening={workspaceState.mode === 'music' && workspaceState.musicPlaying}
-            isTalking={qortinoIsTalking}
-            lookDebug={qortinoLookDebug}
-            mood={qortinoMood}
-          />
-        </Box>
-        <Box
-          sx={{
-            alignItems: 'start',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.9,
-            justifyContent: 'center',
-            minHeight: `${qortinoMascotStageHeight}px`,
-            minWidth: 0,
-            width: '100%',
-          }}
-        >
-          {qortinoDisplayedMessage ? (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              style={{ minWidth: 0 }}
-            >
-              <Box
-                sx={{
-                  alignSelf: 'flex-start',
-                  background:
-                    theme.palette.mode === 'dark'
-                      ? 'linear-gradient(180deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
-                      : 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(243,247,252,0.94) 100%)',
-                  border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.065 : 0.14)}`,
-                  borderRadius: '15px',
-                  boxShadow: `0 14px 24px ${alpha('#000', isDarkMode ? 0.18 : 0.08)}`,
-                  display: 'flex',
-                  maxWidth: { xs: '100%', sm: '204px' },
-                  minHeight: '76px',
-                  minWidth: 0,
-                  p: 0.9,
-                  position: 'relative',
-                  transform: `translate(${qortinoCompanionDebug.bubbleOffsetX}px, ${
-                    qortinoCompanionDebug.bubbleOffsetY + 5
-                  }px)`,
-                  '&::before': {
-                    background: alpha(
-                      theme.palette.common.white,
-                      isDarkMode ? 0.07 : 0.15
-                    ),
-                    bottom: '14px',
-                    clipPath: 'polygon(0 50%, 100% 0, 100% 100%)',
-                    content: '""',
-                    height: '18px',
-                    left: '-12px',
-                    position: 'absolute',
-                    width: '12px',
-                  },
-                  '&::after': {
-                    background:
-                      theme.palette.mode === 'dark'
-                        ? 'linear-gradient(180deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
-                        : 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(243,247,252,0.94) 100%)',
-                    bottom: '15px',
-                    clipPath: 'polygon(0 50%, 100% 0, 100% 100%)',
-                    content: '""',
-                    filter: `drop-shadow(0 6px 10px ${alpha('#000', isDarkMode ? 0.12 : 0.05)})`,
-                    height: '16px',
-                    left: '-10px',
-                    position: 'absolute',
-                    width: '10px',
-                  },
-                }}
-              >
-                <motion.div
-                  key={qortinoDisplayedMessage}
-                  initial={{ opacity: 0.35, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.22, ease: 'easeOut' }}
-                  style={{ width: '100%' }}
-                >
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.primary, 0.94),
-                      fontSize: '0.73rem',
-                      fontWeight: 600,
-                      letterSpacing: '-0.015em',
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {qortinoDisplayedMessage}
-                  </Typography>
-                </motion.div>
-              </Box>
-            </motion.div>
-          ) : null}
-        </Box>
-      </Box>
       </Box>
     </Box>
   );
@@ -3966,6 +5493,292 @@ export const HomeQortinoWorkspaceCard = ({
           {qortinoCompanionSection}
         </ErrorBoundary>
       </Box>
+      {qortinoDonationOverlay}
+      <Dialog
+        open={openQortinoSandboxDialog}
+        onClose={() => setOpenQortinoSandboxDialog(false)}
+        BackdropProps={{
+          sx: {
+            backdropFilter: 'blur(10px)',
+            background: alpha('#04070C', 0.42),
+          },
+        }}
+        PaperProps={{
+          sx: {
+            background:
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, rgba(27,31,38,0.98) 0%, rgba(20,24,30,0.99) 100%)'
+                : 'linear-gradient(180deg, rgba(250,252,255,0.98) 0%, rgba(239,244,250,0.99) 100%)',
+            border: `1px solid ${alpha(
+              theme.palette.common.white,
+              isDarkMode ? 0.08 : 0.18
+            )}`,
+            borderRadius: '24px',
+            boxShadow: `0 28px 70px ${alpha('#000', 0.32)}`,
+            maxWidth: '1040px',
+            overflow: 'hidden',
+            width: 'min(1040px, calc(100vw - 28px))',
+          },
+        }}
+      >
+        <DialogTitle
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            justifyContent: 'space-between',
+            pb: 1.2,
+            pt: 1.7,
+          }}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.primary, 0.96),
+                fontSize: '1.02rem',
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+              }}
+            >
+              QORTINO Sandbox
+            </Typography>
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.72),
+                fontSize: '0.72rem',
+                lineHeight: 1.45,
+              }}
+            >
+              Cycle the live presets, edit the bubble, and replay the preview without
+              disturbing dashboard systems.
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={() => setOpenQortinoSandboxDialog(false)}
+            size="small"
+            sx={{
+              borderRadius: '10px',
+              color: alpha(theme.palette.text.secondary, 0.82),
+              height: '32px',
+              width: '32px',
+            }}
+          >
+            <CloseRoundedIcon sx={{ fontSize: '18px' }} />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2.1,
+            pb: 2.4,
+          }}
+        >
+          <Box
+            sx={{
+              display: 'grid',
+              gap: 2.1,
+              gridTemplateColumns: {
+                xs: '1fr',
+                lg: 'minmax(0, 396px) minmax(0, 1fr)',
+              },
+              minWidth: 0,
+            }}
+          >
+            <Box
+              sx={{
+                height: '508px',
+                justifySelf: 'center',
+                maxWidth: '396px',
+                minWidth: 0,
+                width: '100%',
+              }}
+            >
+              <Box
+                sx={{
+                  ...dashboardPanelSx(theme, 'base'),
+                  borderRadius: '18px',
+                  containerName: 'qortino-card',
+                  containerType: 'inline-size',
+                  display: 'grid',
+                  gridTemplateRows: `${workspaceBayHeightPx}px minmax(0, 1fr)`,
+                  height: '100%',
+                  overflow: 'hidden',
+                  position: 'relative',
+                  width: '100%',
+                }}
+              >
+                {qortinoSandboxWorkspaceSection}
+                {qortinoSandboxPreviewSection}
+              </Box>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.45,
+                minWidth: 0,
+              }}
+            >
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: '10px',
+                  gridTemplateColumns: {
+                    xs: 'repeat(2, minmax(0, 1fr))',
+                    sm: 'repeat(3, minmax(0, 1fr))',
+                  },
+                }}
+              >
+                {QORTINO_SANDBOX_PRESETS.map((preset) => {
+                  const isActive = preset.key === qortinoSandboxPresetKey;
+                  return (
+                    <ButtonBase
+                      key={preset.key}
+                      onClick={() => applyQortinoSandboxPreset(preset.key)}
+                      sx={{
+                        alignItems: 'flex-start',
+                        background: isActive
+                          ? `linear-gradient(180deg, ${alpha('#9FC4FF', 0.18)} 0%, ${alpha(
+                              '#8DB8FF',
+                              0.1
+                            )} 100%)`
+                          : alpha(theme.palette.common.white, isDarkMode ? 0.02 : 0.32),
+                        border: `1px solid ${alpha(
+                          '#8DB8FF',
+                          isActive ? 0.26 : 0.08
+                        )}`,
+                        borderRadius: '14px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 0.42,
+                        minHeight: '66px',
+                        px: 1.1,
+                        py: 0.95,
+                        textAlign: 'left',
+                        transition: 'background 140ms ease, border-color 140ms ease',
+                        '&:hover': {
+                          background: `linear-gradient(180deg, ${alpha(
+                            '#9FC4FF',
+                            0.14
+                          )} 0%, ${alpha('#8DB8FF', 0.07)} 100%)`,
+                        },
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.primary, 0.94),
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        {preset.statusLabel}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.72),
+                          fontSize: '0.63rem',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {preset.description}
+                      </Typography>
+                    </ButtonBase>
+                  );
+                })}
+              </Box>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gap: '10px',
+                  gridTemplateColumns: {
+                    xs: 'repeat(2, minmax(0, 1fr))',
+                    sm: 'repeat(4, minmax(0, 1fr))',
+                  },
+                }}
+              >
+                <Button
+                  onClick={() => handleCycleQortinoSandboxPreset('previous')}
+                  sx={{
+                    ...getBlueTier1ButtonSx(theme),
+                    minHeight: '42px',
+                  }}
+                >
+                  Previous
+                </Button>
+                <Button
+                  onClick={() => handleCycleQortinoSandboxPreset('next')}
+                  sx={{
+                    ...getBlueTier1ButtonSx(theme),
+                    minHeight: '42px',
+                  }}
+                >
+                  Next
+                </Button>
+                <Button
+                  onClick={() =>
+                    setQortinoSandboxPreviewNonce((current) => current + 1)
+                  }
+                  sx={{
+                    ...getBlueTier1ButtonSx(theme),
+                    minHeight: '42px',
+                  }}
+                >
+                  Replay
+                </Button>
+                <Button
+                  onClick={handleResetQortinoSandbox}
+                  sx={{
+                    ...getBlueTier1ButtonSx(theme),
+                    minHeight: '42px',
+                  }}
+                >
+                  Reset
+                </Button>
+              </Box>
+              <TextField
+                fullWidth
+                label="Status tag"
+                value={qortinoSandboxStatusLabel}
+                onChange={(event) => setQortinoSandboxStatusLabel(event.target.value)}
+                variant="outlined"
+                sx={{
+                  '& .MuiInputBase-root': {
+                    background: alpha(theme.palette.common.white, isDarkMode ? 0.025 : 0.54),
+                    borderRadius: '14px',
+                  },
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Bubble copy"
+                multiline
+                minRows={4}
+                value={qortinoSandboxBubbleMessage}
+                onChange={(event) => setQortinoSandboxBubbleMessage(event.target.value)}
+                variant="outlined"
+                sx={{
+                  '& .MuiInputBase-root': {
+                    alignItems: 'flex-start',
+                    background: alpha(theme.palette.common.white, isDarkMode ? 0.025 : 0.54),
+                    borderRadius: '16px',
+                  },
+                }}
+              />
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.72),
+                  fontSize: '0.69rem',
+                  lineHeight: 1.55,
+                }}
+              >
+                Bubble text and status edits stay local to this modal. The live card keeps
+                using onboarding, hotkey, and music logic untouched.
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={openModulePickerDialog}
         onClose={() => setOpenModulePickerDialog(false)}
@@ -4100,7 +5913,8 @@ export const HomeQortinoWorkspaceCard = ({
             border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.08 : 0.16)}`,
             borderRadius: '18px',
             boxShadow: `0 26px 60px ${alpha('#000', 0.34)}`,
-            maxWidth: '520px',
+            maxHeight: 'min(90vh, 946px)',
+            maxWidth: '568px',
             width: 'calc(100% - 32px)',
           },
         }}
@@ -4131,16 +5945,29 @@ export const HomeQortinoWorkspaceCard = ({
             <CloseRoundedIcon />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.1, pb: 2.1 }}>
+        <DialogContent
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.1,
+            minHeight: 0,
+            overflow: 'hidden',
+            pb: 2.1,
+          }}
+        >
           <Box
             sx={{
+              alignSelf: 'center',
               display: 'grid',
               gap: '8px',
-              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+              maxWidth: '348px',
+              px: '8px',
+              width: '100%',
             }}
           >
-            {workspaceState.hotkeys.map((actionId, index) => {
-              const action = actionId ? hotkeyActions[actionId] : null;
+            {workspaceState.hotkeys.map((appName, index) => {
+              const app = appName ? resolveHotkeyApp(appName) : null;
               const isActive = selectedHotkeySlot === index;
 
               return (
@@ -4157,20 +5984,32 @@ export const HomeQortinoWorkspaceCard = ({
                       isActive ? '#8DB8FF' : theme.palette.common.white,
                       isDarkMode ? (isActive ? 0.26 : 0.06) : 0.14
                     )}`,
-                    borderRadius: '12px',
+                    borderRadius: '14px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 0.3,
-                    minHeight: '50px',
-                    px: 0.6,
-                    py: 0.65,
+                    gap: 0.5,
+                    minHeight: 0,
+                    px: 0.55,
+                    py: 0.55,
+                    aspectRatio: '1 / 1',
                   }}
                 >
-                  {action ? (
+                  {app ? (
                     <>
-                      <action.icon sx={{ color: alpha('#8DB8FF', 0.94), fontSize: '17px' }} />
-                      <Typography sx={{ fontSize: '0.56rem', fontWeight: 700 }}>
-                        {action.label}
+                      <HotkeyAppAvatar appName={app.appName} radius={11} size={28} />
+                      <Typography
+                        sx={{
+                          display: '-webkit-box',
+                          fontSize: '0.56rem',
+                          fontWeight: 700,
+                          lineHeight: 1.12,
+                          overflow: 'hidden',
+                          textAlign: 'center',
+                          WebkitBoxOrient: 'vertical',
+                          WebkitLineClamp: 2,
+                        }}
+                      >
+                        {app.label}
                       </Typography>
                     </>
                   ) : (
@@ -4219,63 +6058,202 @@ export const HomeQortinoWorkspaceCard = ({
             value={hotkeySearchQuery}
           />
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.55 }}>
-            {filteredHotkeyCatalog.map((action) => (
-              <ButtonBase
-                key={action.id}
-                onClick={() => handleSetHotkey(action.id)}
-                sx={{
-                  alignItems: 'center',
-                  background:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(255,255,255,0.03)'
-                      : 'rgba(20,24,32,0.03)',
-                  border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.06 : 0.12)}`,
-                  borderRadius: '14px',
-                  display: 'grid',
-                  gap: '12px',
-                  gridTemplateColumns: '40px minmax(0, 1fr) auto',
-                  px: 0.95,
-                  py: 0.82,
-                  textAlign: 'left',
-                }}
-              >
-                <Box
-                  sx={{
-                    alignItems: 'center',
-                    background: alpha('#8DB8FF', 0.12),
-                    borderRadius: '12px',
-                    color: alpha('#A8CAFF', 0.96),
-                    display: 'flex',
-                    height: '40px',
-                    justifyContent: 'center',
-                    width: '40px',
-                  }}
-                >
-                  <action.icon sx={{ fontSize: '18px' }} />
-                </Box>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
-                    {action.label}
-                  </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              flex: 1,
+              flexDirection: 'column',
+              gap: 0.9,
+              minHeight: 0,
+            }}
+          >
+            <Box
+              sx={{
+                display: 'flex',
+                flex: 1,
+                flexDirection: 'column',
+                gap: 0.7,
+                minHeight: 0,
+                overflowY: 'auto',
+                pr: 0.2,
+              }}
+            >
+              {featuredHotkeyCatalog.length > 0 && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.55 }}>
                   <Typography
                     sx={{
-                      color: alpha(theme.palette.text.secondary, 0.68),
+                      color: alpha(theme.palette.text.secondary, 0.74),
                       fontSize: '0.64rem',
-                      mt: 0.18,
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
                     }}
                   >
-                    {action.description}
+                    Recommended
                   </Typography>
+                  {featuredHotkeyCatalog.map((app) => (
+                    <ButtonBase
+                      key={`featured-${app.service}-${app.appName}`}
+                      onClick={() =>
+                        handleSetHotkey(
+                          encodeHotkeySlotValue(app.service, app.appName)
+                        )
+                      }
+                      sx={{
+                        alignItems: 'center',
+                        background: `linear-gradient(180deg, ${alpha('#8DB8FF', 0.18)} 0%, ${alpha(
+                          '#6EA7FF',
+                          0.08
+                        )} 100%)`,
+                        border: `1px solid ${alpha('#8DB8FF', 0.16)}`,
+                        borderRadius: '14px',
+                        display: 'grid',
+                        gap: '12px',
+                        gridTemplateColumns: '40px minmax(0, 1fr) auto',
+                        px: 0.95,
+                        py: 0.82,
+                        position: 'relative',
+                        textAlign: 'left',
+                        '&:hover': {
+                          background: `linear-gradient(180deg, ${alpha('#8DB8FF', 0.26)} 0%, ${alpha(
+                            '#6EA7FF',
+                            0.12
+                          )} 100%)`,
+                        },
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          background: alpha('#0F1830', 0.76),
+                          border: `1px solid ${alpha('#8DB8FF', 0.22)}`,
+                          borderRadius: '999px',
+                          color: alpha('#D7E8FF', 0.9),
+                          fontSize: '0.44rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.035em',
+                          lineHeight: 1,
+                          position: 'absolute',
+                          px: 0.45,
+                          py: 0.28,
+                          right: '10px',
+                          textTransform: 'uppercase',
+                          top: '8px',
+                        }}
+                      >
+                        Curated Q-App
+                      </Typography>
+                      <Box
+                        sx={{
+                          alignItems: 'center',
+                          background: alpha('#8DB8FF', 0.12),
+                          borderRadius: '12px',
+                          color: alpha('#A8CAFF', 0.96),
+                          display: 'flex',
+                          height: '40px',
+                          justifyContent: 'center',
+                          width: '40px',
+                        }}
+                      >
+                        <HotkeyAppAvatar appName={app.appName} radius={12} size={40} />
+                      </Box>
+                      <Box sx={{ minWidth: 0, pr: 9 }}>
+                        <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                          {app.label}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: alpha(theme.palette.text.secondary, 0.68),
+                            fontSize: '0.64rem',
+                            mt: 0.18,
+                          }}
+                        >
+                          {app.description || app.appName}
+                        </Typography>
+                      </Box>
+                      <ChevronRightRoundedIcon
+                        sx={{
+                          color: alpha('#8DB8FF', 0.84),
+                          fontSize: '18px',
+                        }}
+                      />
+                    </ButtonBase>
+                  ))}
                 </Box>
-                <ChevronRightRoundedIcon
+              )}
+
+              {featuredHotkeyCatalog.length > 0 && libraryHotkeyCatalog.length > 0 ? (
+                <Box
                   sx={{
-                    color: alpha('#8DB8FF', 0.84),
-                    fontSize: '18px',
+                    background: alpha(theme.palette.common.white, isDarkMode ? 0.06 : 0.12),
+                    height: '1px',
+                    my: 0.1,
+                    width: '100%',
                   }}
                 />
-              </ButtonBase>
-            ))}
+              ) : null}
+
+              {libraryHotkeyCatalog.map((app) => (
+                <ButtonBase
+                  key={`${app.service}-${app.appName}`}
+                  onClick={() =>
+                    handleSetHotkey(
+                      encodeHotkeySlotValue(app.service, app.appName)
+                    )
+                  }
+                  sx={{
+                    alignItems: 'center',
+                    background:
+                      theme.palette.mode === 'dark'
+                        ? 'rgba(255,255,255,0.03)'
+                        : 'rgba(20,24,32,0.03)',
+                    border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.06 : 0.12)}`,
+                    borderRadius: '14px',
+                    display: 'grid',
+                    gap: '12px',
+                    gridTemplateColumns: '40px minmax(0, 1fr) auto',
+                    px: 0.95,
+                    py: 0.82,
+                    textAlign: 'left',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      background: alpha('#8DB8FF', 0.12),
+                      borderRadius: '12px',
+                      color: alpha('#A8CAFF', 0.96),
+                      display: 'flex',
+                      height: '40px',
+                      justifyContent: 'center',
+                      width: '40px',
+                    }}
+                  >
+                    <HotkeyAppAvatar appName={app.appName} radius={12} size={40} />
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography sx={{ fontSize: '0.78rem', fontWeight: 700 }}>
+                      {app.label}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.68),
+                        fontSize: '0.64rem',
+                        mt: 0.18,
+                      }}
+                    >
+                      {app.description || app.appName}
+                    </Typography>
+                  </Box>
+                  <ChevronRightRoundedIcon
+                    sx={{
+                      color: alpha('#8DB8FF', 0.84),
+                      fontSize: '18px',
+                    }}
+                  />
+                </ButtonBase>
+              ))}
+            </Box>
+
             {filteredHotkeyCatalog.length === 0 && (
               <Box
                 sx={{
@@ -4292,25 +6270,43 @@ export const HomeQortinoWorkspaceCard = ({
                   textAlign: 'center',
                 }}
               >
-                <Typography
-                  sx={{
-                    color: alpha(theme.palette.text.primary, 0.88),
-                    fontSize: '0.76rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  No Q-Apps match yet
-                </Typography>
-                <Typography
-                  sx={{
-                    color: alpha(theme.palette.text.secondary, 0.68),
-                    fontSize: '0.64rem',
-                    lineHeight: 1.4,
-                    maxWidth: '28ch',
-                  }}
-                >
-                  Try another app name to wire a shortcut into the selected slot.
-                </Typography>
+                {isHotkeyAppsLoading ? (
+                  <>
+                    <CircularProgress size={18} thickness={4} />
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.68),
+                        fontSize: '0.64rem',
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Loading Q-Apps library...
+                    </Typography>
+                  </>
+                ) : (
+                  <>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.primary, 0.88),
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {hotkeyAppsError ? 'Q-Apps unavailable' : 'No Q-Apps match yet'}
+                    </Typography>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.68),
+                        fontSize: '0.64rem',
+                        lineHeight: 1.4,
+                        maxWidth: '28ch',
+                      }}
+                    >
+                      {hotkeyAppsError ||
+                        'Try another app name to wire a shortcut into the selected slot.'}
+                    </Typography>
+                  </>
+                )}
               </Box>
             )}
           </Box>
@@ -4691,6 +6687,168 @@ export const HomeQortinoWorkspaceCard = ({
   );
 };
 
+const GettingStartedMethodRow = ({
+  accent = '#8DB8FF',
+  description,
+  emphasized = false,
+  icon: Icon,
+  label,
+  onClick,
+  showChevron = false,
+  showDivider = false,
+}: {
+  accent?: string;
+  description: string;
+  emphasized?: boolean;
+  icon: typeof SchoolRoundedIcon;
+  label: string;
+  onClick: () => void;
+  showChevron?: boolean;
+  showDivider?: boolean;
+}) => {
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
+
+  return (
+    <ButtonBase
+      onClick={onClick}
+      sx={{
+        alignItems: 'center',
+        borderRadius: 0,
+        display: 'grid',
+        gap: '10px',
+        gridTemplateColumns: '22px minmax(0, 1fr) auto',
+        minHeight: '56px',
+        px: 0,
+        py: 0.9,
+        position: 'relative',
+        textAlign: 'left',
+        transition: 'color 140ms ease',
+        width: '100%',
+        '@container qortino-card (max-width: 390px)': {
+          gap: '9px',
+          gridTemplateColumns: '20px minmax(0, 1fr) auto',
+          minHeight: '52px',
+          py: 0.82,
+        },
+        '&::before': {
+          background: `linear-gradient(90deg, ${alpha(
+            accent,
+            0
+          )} 0%, ${alpha(accent, isDarkMode ? 0.032 : 0.028)} 16%, ${alpha(
+            accent,
+            isDarkMode ? 0.082 : 0.07
+          )} 50%, ${alpha(accent, isDarkMode ? 0.032 : 0.028)} 84%, ${alpha(
+            accent,
+            0
+          )} 100%)`,
+          borderRadius: '6px',
+          content: '""',
+          inset: '6px -8px',
+          opacity: 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+          transition: 'opacity 150ms ease',
+        },
+        '&:hover::before, &:focus-visible::before': {
+          opacity: 1,
+        },
+        '&::after': showDivider
+          ? {
+              background: alpha(
+                theme.palette.common.white,
+                isDarkMode ? 0.07 : 0.14
+              ),
+              bottom: 0,
+              content: '""',
+              height: '1px',
+              left: 0,
+              position: 'absolute',
+              right: 0,
+            }
+          : undefined,
+      }}
+    >
+      <Box
+        sx={{
+          alignItems: 'center',
+          color: alpha(accent, emphasized ? 0.94 : 0.82),
+          display: 'flex',
+          justifyContent: 'center',
+          width: '22px',
+          '@container qortino-card (max-width: 390px)': {
+            width: '20px',
+          },
+        }}
+      >
+        <Icon
+          sx={{
+            fontSize: emphasized ? '18px' : '17px',
+            '@container qortino-card (max-width: 390px)': {
+              fontSize: emphasized ? '17px' : '16px',
+            },
+          }}
+        />
+      </Box>
+      <Box sx={{ minWidth: 0 }}>
+        {emphasized ? (
+          <Typography
+            sx={{
+              color: alpha(accent, 0.8),
+              fontSize: '0.54rem',
+              fontWeight: 700,
+              letterSpacing: '0.06em',
+              lineHeight: 1,
+              mb: 0.22,
+              textTransform: 'uppercase',
+            }}
+          >
+            Recommended
+          </Typography>
+        ) : null}
+        <Typography
+          sx={{
+            color: alpha(theme.palette.text.primary, 0.94),
+            fontSize: emphasized ? '0.84rem' : '0.8rem',
+            fontWeight: emphasized ? 700 : 600,
+            letterSpacing: '-0.015em',
+            lineHeight: 1.08,
+            '@container qortino-card (max-width: 390px)': {
+              fontSize: emphasized ? '0.79rem' : '0.75rem',
+            },
+          }}
+        >
+          {label}
+        </Typography>
+        <Typography
+          sx={{
+            color: alpha(theme.palette.text.secondary, 0.74),
+            fontSize: '0.67rem',
+            lineHeight: 1.3,
+            mt: 0.14,
+            '@container qortino-card (max-width: 390px)': {
+              fontSize: '0.63rem',
+            },
+          }}
+        >
+          {description}
+        </Typography>
+      </Box>
+      {showChevron ? (
+        <ChevronRightRoundedIcon
+          sx={{
+            color: alpha(accent, 0.82),
+            fontSize: '18px',
+            mr: 0.1,
+          }}
+        />
+      ) : (
+        <Box sx={{ width: '18px' }} />
+      )}
+    </ButtonBase>
+  );
+};
+
 const GettingStartedPrimaryAction = ({
   accent = '#8DB8FF',
   disabled = false,
@@ -4728,7 +6886,7 @@ const GettingStartedPrimaryAction = ({
           theme.palette.common.white,
           theme.palette.mode === 'dark' ? 0.08 : 0.22
         )}`,
-        color: APP_BLUE_SURFACE_TEXT,
+        color: alpha('#FFFFFF', 0.98),
         justifyContent: 'flex-start',
         minHeight: '32px',
         px: 1.1,
@@ -4754,9 +6912,10 @@ const GettingStartedPrimaryAction = ({
     >
       <Typography
         sx={{
-          color: APP_BLUE_SURFACE_TEXT,
+          color: alpha('#FFFFFF', 0.98),
           fontSize: '0.7rem',
-          fontWeight: 700,
+          fontWeight: 600,
+          letterSpacing: '0.01em',
           lineHeight: 1.16,
           '@container qortino-card (max-width: 390px)': {
             fontSize: '0.67rem',

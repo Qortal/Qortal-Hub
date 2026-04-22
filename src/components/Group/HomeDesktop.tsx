@@ -23,7 +23,10 @@ import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
 import { GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
-import { HomeQortinoWorkspaceCard } from './HomeQortinoWorkspaceCard';
+import {
+  HomeQortinoWorkspaceCard,
+  resetQortinoWorkspaceOnboardingCelebration,
+} from './HomeQortinoWorkspaceCard';
 import { HomeQuickToolsPad } from './HomeQuickToolsPad';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
@@ -1127,12 +1130,16 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const theme = useTheme();
+  const isSplitDashboardLayout = useMediaQuery(theme.breakpoints.up('md'));
   const isWideDashboardLayout = useMediaQuery(theme.breakpoints.up('xl'));
   const resolvedWideLeftLowerRowPanelHeightPx = isWideDashboardLayout
     ? HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX
     : null;
-  const resolvedQortinoCardHeightPx = isWideDashboardLayout
+  const resolvedQortinoCardHeightPx = isSplitDashboardLayout
     ? qortinoCardTargetHeightPx ?? HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX
+    : null;
+  const resolvedWalletActivityHeightPx = isWideDashboardLayout
+    ? walletActivityTargetHeightPx ?? HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX
     : null;
   const groupActivityAccentTextColor = theme.palette.getContrastText(
     GROUP_ACTIVITY_BLUE.primary
@@ -1155,10 +1162,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.32)'
       : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(31,39,53,0.08)';
   const infoPanelMaxExpandedHeightPx =
-    isWideDashboardLayout && walletActivityTargetHeightPx != null
+    isWideDashboardLayout && resolvedWalletActivityHeightPx != null
       ? HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX +
         HOME_DASHBOARD_VERTICAL_GAP_PX +
-        walletActivityTargetHeightPx +
+        resolvedWalletActivityHeightPx +
         2
       : null;
   const getIndividualUserInfo = useHandleUserInfo();
@@ -1876,7 +1883,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, []);
 
   useEffect(() => {
-    const handleSetDashboardGettingStartedDebugOverrides = (e: CustomEvent) => {
+    const handleSetDashboardGettingStartedDebugOverrides = async (
+      e: CustomEvent
+    ) => {
       const nextOverrides = {
         ...EMPTY_GETTING_STARTED_DEBUG_OVERRIDES,
         ...(e.detail?.data?.overrides ?? {}),
@@ -1891,6 +1900,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       if (e.detail?.data?.resetReplay) {
         if (userAddress) {
           localStorage.removeItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`);
+          await resetQortinoWorkspaceOnboardingCelebration(userAddress);
         }
         setIsOnboardingComplete(false);
         setShowMostActiveGroups(false);
@@ -2420,7 +2430,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     <LazyMotion features={domAnimation}>
       <AnimatePresence mode="wait">
         {desktopViewMode === 'home' && (
-          <motion.div key="home" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} custom={reduce} style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', scrollbarGutter: 'stable', width: '100%', willChange: 'transform, opacity', backfaceVisibility: 'hidden' }}>
+          <motion.div key="home" initial={{ opacity: 0, scale: 1 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1 }} transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }} custom={reduce} style={{ alignItems: 'center', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'auto', scrollbarGutter: 'stable', width: '100%', willChange: 'opacity', backfaceVisibility: 'hidden' }}>
             <Spacer height="20px" />
             <Box ref={homeLayoutDebugRootRef} sx={{ alignItems: 'flex-start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, maxWidth: { xs: '1320px', xl: '1520px' }, padding: '0 20px', position: 'relative', width: '100%' }}>
               {/*
@@ -2572,7 +2582,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                     )}
                   </Box>
                 </Box>
-                <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px ${walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : 'auto'}`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
+                <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px ${resolvedWalletActivityHeightPx != null ? `${resolvedWalletActivityHeightPx}px` : 'auto'}`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
                   <Box ref={infoDebugRef} sx={{ minWidth: 0, position: 'relative', width: '100%', '& > *': { height: '100%' } }}>
                     <InfoPreviewPanel
                       rows={infoRows}
@@ -2580,7 +2590,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
                     />
                   </Box>
-                  <Box ref={walletActivityDebugRef} sx={{ position: 'relative', width: '100%', minHeight: '182px', height: walletActivityTargetHeightPx != null ? `${walletActivityTargetHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
+                  <Box ref={walletActivityDebugRef} sx={{ position: 'relative', width: '100%', minHeight: '182px', height: resolvedWalletActivityHeightPx != null ? `${resolvedWalletActivityHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
                   <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: '100%', minHeight: '182px', padding: '14px 16px 16px' }}>
                     <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', pb: 1.35 }}>
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>Last activity</Typography>
