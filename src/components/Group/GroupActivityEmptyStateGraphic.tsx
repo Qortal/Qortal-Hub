@@ -96,6 +96,147 @@ type GroupActivityEmptyStateGraphicProps = {
 
 export type GroupActivityEmptyStateGraphicVariant = 'requests' | 'invites';
 
+type QortalRequestBubbleSvgProps = {
+  centerX: number;
+  centerY: number;
+  className?: string;
+  logoScale?: number;
+};
+
+const QortalRequestBubbleSvg = ({
+  centerX,
+  centerY,
+  className,
+  logoScale = 1,
+}: QortalRequestBubbleSvgProps) => {
+  const idBase = useId().replace(/:/g, '');
+  const requesterFillId = `${idBase}-requester-fill`;
+  const requesterRingId = `${idBase}-requester-ring`;
+  const haloFilterId = `${idBase}-halo-blur`;
+  const requesterCoreSoftFilterId = `${idBase}-requester-core-soft`;
+
+  return (
+    <g className={className}>
+      <defs>
+        <filter
+          id={haloFilterId}
+          x={centerX - 55}
+          y={centerY - 55}
+          width="110"
+          height="110"
+          filterUnits="userSpaceOnUse"
+        >
+          <feGaussianBlur stdDeviation="3.8" />
+        </filter>
+        <filter
+          id={requesterCoreSoftFilterId}
+          x="-60%"
+          y="-60%"
+          width="220%"
+          height="220%"
+        >
+          <feGaussianBlur stdDeviation="0.5" />
+        </filter>
+        <radialGradient
+          id={requesterFillId}
+          cx="0"
+          cy="0"
+          r="1"
+          gradientUnits="userSpaceOnUse"
+          gradientTransform={`translate(${centerX} ${centerY}) rotate(90) scale(31)`}
+        >
+          <stop stopColor="#567099" />
+          <stop offset="0.48" stopColor="#3C5275" />
+          <stop offset="1" stopColor="#2A3A52" />
+        </radialGradient>
+        <linearGradient
+          id={requesterRingId}
+          x1={centerX - 27}
+          y1={centerY - 28}
+          x2={centerX + 27}
+          y2={centerY + 26}
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="rgba(176, 206, 250, 0.22)" />
+          <stop offset="1" stopColor="rgba(176, 206, 250, 0.08)" />
+        </linearGradient>
+      </defs>
+      <circle
+        cx={centerX}
+        cy={centerY}
+        r="33.2"
+        fill="rgba(132, 175, 240, 0.05)"
+        filter={`url(#${haloFilterId})`}
+      />
+      <circle cx={centerX} cy={centerY} r="30.4" fill={`url(#${requesterFillId})`} />
+      <circle
+        cx={centerX}
+        cy={centerY}
+        r="29.2"
+        stroke={`url(#${requesterRingId})`}
+        strokeWidth="1.35"
+      />
+      <circle cx={centerX} cy={centerY} r="11.4" fill="rgba(196, 218, 251, 0.05)" />
+      <g
+        transform={`translate(${centerX} ${centerY - 0.8}) scale(${(
+          0.87 * logoScale
+        ).toFixed(3)})`}
+      >
+        <path
+          d={REQUESTER_QORTAL_LOGO_PATH}
+          fill="rgba(196, 218, 251, 0.14)"
+          filter={`url(#${requesterCoreSoftFilterId})`}
+          fillRule="evenodd"
+        />
+        <path
+          d={REQUESTER_QORTAL_LOGO_TAIL_PATH}
+          fill="rgba(196, 218, 251, 0.14)"
+          filter={`url(#${requesterCoreSoftFilterId})`}
+        />
+        <path
+          d={REQUESTER_QORTAL_LOGO_PATH}
+          fill="rgba(196, 218, 251, 0.23)"
+          fillRule="evenodd"
+        />
+        <path
+          d={REQUESTER_QORTAL_LOGO_TAIL_PATH}
+          fill="rgba(196, 218, 251, 0.23)"
+        />
+      </g>
+    </g>
+  );
+};
+
+export const QortalRequestBubbleIcon = ({
+  size = 22,
+  logoScale = 1,
+  sx,
+}: {
+  size?: number;
+  logoScale?: number;
+  sx?: SxProps<Theme>;
+}) => (
+  <Box
+    aria-hidden="true"
+    sx={{
+      display: 'inline-flex',
+      filter: 'drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18))',
+      height: `${size}px`,
+      width: `${size}px`,
+      ...sx,
+    }}
+  >
+    <svg
+      viewBox="0 0 76 76"
+      fill="none"
+      preserveAspectRatio="xMidYMid meet"
+      role="presentation"
+    >
+      <QortalRequestBubbleSvg centerX={38} centerY={38} logoScale={logoScale} />
+    </svg>
+  </Box>
+);
+
 export const GroupActivityEmptyStateGraphic = ({
   size = 292,
   sx,
@@ -105,15 +246,12 @@ export const GroupActivityEmptyStateGraphic = ({
   const isInviteVariant = variant === 'invites';
   const idBase = useId().replace(/:/g, '');
   const fieldGradientId = `${idBase}-field-gradient`;
-  const requesterFillId = `${idBase}-requester-fill`;
-  const requesterRingId = `${idBase}-requester-ring`;
   const groupFillId = `${idBase}-group-fill`;
   const groupRingId = `${idBase}-group-ring`;
   const bridgeFadeGradientId = `${idBase}-bridge-fade-gradient`;
   const bridgeFadeMaskId = `${idBase}-bridge-fade-mask`;
   const ambientFilterId = `${idBase}-ambient-blur`;
   const haloFilterId = `${idBase}-halo-blur`;
-  const requesterCoreSoftFilterId = `${idBase}-requester-core-soft`;
   const bridgeStartX = isInviteVariant ? 210 : 110;
   const bridgeEndX = isInviteVariant ? 118 : 202;
   const bridgeMinX = Math.min(bridgeStartX, bridgeEndX);
@@ -190,23 +328,11 @@ export const GroupActivityEmptyStateGraphic = ({
           <filter id={haloFilterId} x="-20" y="-20" width="220" height="220" filterUnits="userSpaceOnUse">
             <feGaussianBlur stdDeviation="3.8" />
           </filter>
-          <filter id={requesterCoreSoftFilterId} x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="0.5" />
-          </filter>
           <radialGradient id={fieldGradientId} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(160 80) rotate(90) scale(28 96)">
             <stop stopColor="rgba(132, 175, 240, 0.06)" />
             <stop offset="0.46" stopColor="rgba(132, 175, 240, 0.022)" />
             <stop offset="1" stopColor="rgba(132, 175, 240, 0)" />
           </radialGradient>
-          <radialGradient id={requesterFillId} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(76 80) rotate(90) scale(31)">
-            <stop stopColor="#567099" />
-            <stop offset="0.48" stopColor="#3C5275" />
-            <stop offset="1" stopColor="#2A3A52" />
-          </radialGradient>
-          <linearGradient id={requesterRingId} x1="49" y1="52" x2="103" y2="106" gradientUnits="userSpaceOnUse">
-            <stop stopColor="rgba(176, 206, 250, 0.22)" />
-            <stop offset="1" stopColor="rgba(176, 206, 250, 0.08)" />
-          </linearGradient>
           <radialGradient id={groupFillId} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(244 80) rotate(90) scale(31)">
             <stop stopColor="#536E95" />
             <stop offset="0.48" stopColor="#3A5072" />
@@ -263,34 +389,11 @@ export const GroupActivityEmptyStateGraphic = ({
           />
         ))}
 
-        <g className="group-empty-node group-empty-node--requester">
-          <circle cx="76" cy="80" r="33.2" fill="rgba(132, 175, 240, 0.05)" filter={`url(#${haloFilterId})`} />
-          <circle cx="76" cy="80" r="30.4" fill={`url(#${requesterFillId})`} />
-          <circle cx="76" cy="80" r="29.2" stroke={`url(#${requesterRingId})`} strokeWidth="1.35" />
-          <circle cx="76" cy="80" r="11.4" fill="rgba(196, 218, 251, 0.05)" />
-          <g transform="translate(76 79.2) scale(0.87)">
-            <path
-              d={REQUESTER_QORTAL_LOGO_PATH}
-              fill="rgba(196, 218, 251, 0.14)"
-              filter={`url(#${requesterCoreSoftFilterId})`}
-              fillRule="evenodd"
-            />
-            <path
-              d={REQUESTER_QORTAL_LOGO_TAIL_PATH}
-              fill="rgba(196, 218, 251, 0.14)"
-              filter={`url(#${requesterCoreSoftFilterId})`}
-            />
-            <path
-              d={REQUESTER_QORTAL_LOGO_PATH}
-              fill="rgba(196, 218, 251, 0.23)"
-              fillRule="evenodd"
-            />
-            <path
-              d={REQUESTER_QORTAL_LOGO_TAIL_PATH}
-              fill="rgba(196, 218, 251, 0.23)"
-            />
-          </g>
-        </g>
+        <QortalRequestBubbleSvg
+          centerX={76}
+          centerY={80}
+          className="group-empty-node group-empty-node--requester"
+        />
 
         <path
           className="group-empty-bridge-stream"

@@ -1,1 +1,1 @@
-export const HUB_UI_BUILD_VERSION = 8;
+export const HUB_UI_BUILD_VERSION = 79;

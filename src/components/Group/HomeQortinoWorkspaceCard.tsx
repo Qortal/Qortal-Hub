@@ -13,10 +13,16 @@ import {
 import { alpha } from '@mui/material/styles';
 import { motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
-import CampaignRoundedIcon from '@mui/icons-material/CampaignRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
@@ -43,8 +49,15 @@ import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import LibraryMusicRoundedIcon from '@mui/icons-material/LibraryMusicRounded';
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
-import { balanceAtom, txListAtom, userInfoAtom } from '../../atoms/global';
+import {
+  balanceAtom,
+  resourceKeySelector,
+  txListAtom,
+  userInfoAtom,
+} from '../../atoms/global';
 import { getArbitraryEndpointReact, getBaseApiReact } from '../../App';
+import ErrorBoundary from '../../common/ErrorBoundary';
+import { useFetchResources } from '../../hooks/useFetchResources';
 import {
   executeEvent,
   subscribeToEvent,
@@ -56,6 +69,7 @@ import {
   handleDashboardPanelPointerMove,
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
+import { QortalRequestBubbleIcon } from './GroupActivityEmptyStateGraphic';
 import {
   APP_BLUE_SURFACE_TEXT,
   getBlueAmbientLineBackground,
@@ -66,6 +80,36 @@ import {
 } from './groupActivityColorSystem';
 import type { GettingStartedDebugOverrides } from './homeGettingStartedDebug';
 import { GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
+import {
+  DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS,
+  parseQortinoCompanionDebugSettings,
+  QORTINO_COMPANION_DEBUG_EVENT,
+  QORTINO_COMPANION_DEBUG_STORAGE_KEY,
+  sanitizeQortinoCompanionDebugSettings,
+  type QortinoCompanionDebugSettings,
+} from './qortinoCompanionDebug';
+import {
+  DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS,
+  parseQortinoLookDebugSettings,
+  QORTINO_LOOK_DEBUG_EVENT,
+  QORTINO_LOOK_DEBUG_STORAGE_KEY,
+  sanitizeQortinoLookDebugSettings,
+  type QortinoLookDebugSettings,
+} from './qortinoLookDebug';
+import {
+  DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS,
+  parseQortinoLayoutDebugSettings,
+  QORTINO_LAYOUT_DEBUG_EVENT,
+  QORTINO_LAYOUT_DEBUG_STORAGE_KEY,
+  sanitizeQortinoLayoutDebugSettings,
+  type QortinoLayoutDebugSettings,
+} from './qortinoLayoutDebug';
+import {
+  fetchEarbumpRecentTracks,
+  fetchEarbumpTrackById,
+  searchEarbumpTracks,
+  type EarbumpTrack,
+} from './earbumpLibraryApi';
 
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
@@ -75,14 +119,18 @@ const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
 const ONBOARDING_URL = 'https://qortal.dev/onboarding';
 const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
 const QORTINO_MASCOT_BASE_SIZE = 168;
-const QORTINO_MASCOT_SCALE = 0.62;
+const QORTINO_MASCOT_SCALE = 0.68;
 const QORTINO_MASCOT_SIZE = Math.round(
   QORTINO_MASCOT_BASE_SIZE * QORTINO_MASCOT_SCALE
 );
-const QORTINO_WORKSPACE_BAY_HEIGHT_PX = 238;
+const QORTINO_MASCOT_STAGE_PADDING_X = 26;
+const QORTINO_MASCOT_STAGE_PADDING_Y = 28;
+const QORTINO_MASCOT_VERTICAL_LIFT_PX = 12;
+const QORTINO_WORKSPACE_BAY_HEIGHT_PX = 251;
 const HOTKEY_SLOT_COUNT = 8;
-
-type WorkspaceMode = 'empty' | 'hotkeys' | 'announcements' | 'music';
+const EARBUMP_AUDIO_SERVICE = 'AUDIO';
+const MUSIC_STATUS_SLOT_HEIGHT_PX = 20;
+type WorkspaceMode = 'empty' | 'hotkeys' | 'music';
 type StepKey = 'get_six_qorts' | 'register_name' | 'load_avatar';
 type HotkeyActionId =
   | 'q-tube'
@@ -95,14 +143,7 @@ type HotkeyActionId =
 
 type HotkeySlotValue = HotkeyActionId | null;
 
-type MusicTrack = {
-  artist: string;
-  coverColors: [string, string, string];
-  id: string;
-  length: string;
-  title: string;
-  uploaded: string;
-};
+type MusicTrack = EarbumpTrack;
 
 type RepeatMode = 'all' | 'one';
 
@@ -124,6 +165,13 @@ type HomeQortinoWorkspaceCardProps = {
   onGettingStartedComplete?: () => void;
 };
 
+type QortinoSectionRuntimeFallbackProps = {
+  body: string;
+  theme: ReturnType<typeof useTheme>;
+  title: string;
+  variant: 'qortino' | 'workspace';
+};
+
 type WorkspaceModuleDefinition = {
   description: string;
   icon: typeof AppsRoundedIcon;
@@ -136,9 +184,13 @@ type HotkeyActionDefinition = {
   icon: typeof VideoLibraryRoundedIcon;
   id: HotkeyActionId;
   label: string;
-  reaction: string;
+  reaction?: string;
   run: () => void;
 };
+
+type TrackReadyState = 'downloading' | 'error' | 'idle' | 'ready';
+
+let sharedEarbumpAudioInstance: HTMLAudioElement | null = null;
 
 const DEFAULT_HOTKEYS: HotkeySlotValue[] = Array.from(
   { length: HOTKEY_SLOT_COUNT },
@@ -152,51 +204,9 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   musicQuery: '',
   onboardingCelebrationSeen: false,
   repeatMode: 'all',
-  selectedTrackId: 'midnight-relay',
+  selectedTrackId: '',
   version: 1,
 };
-
-const MUSIC_TRACKS: MusicTrack[] = [
-  {
-    artist: 'QORTINO FM',
-    coverColors: ['#6EA7FF', '#243B72', '#9CCBFF'],
-    id: 'midnight-relay',
-    length: '3:18',
-    title: 'Midnight Relay',
-    uploaded: '10 min ago',
-  },
-  {
-    artist: 'QORTINO FM',
-    coverColors: ['#8F6CFF', '#2844A8', '#D9A3FF'],
-    id: 'blue-archive',
-    length: '4:02',
-    title: 'Blue Archive',
-    uploaded: '33 min ago',
-  },
-  {
-    artist: 'QORTINO FM',
-    coverColors: ['#56D3C9', '#2C59CF', '#8BC3FF'],
-    id: 'signal-bloom',
-    length: '2:46',
-    title: 'Signal Bloom',
-    uploaded: '1 hour ago',
-  },
-];
-
-const ANNOUNCEMENT_ITEMS = [
-  {
-    label: 'Workspace bay is now configurable after onboarding.',
-    time: 'Today',
-  },
-  {
-    label: 'QORTINO reacts to the module you pin above him.',
-    time: 'Preview',
-  },
-  {
-    label: 'Music player is wired as the first living widget foundation.',
-    time: 'Prototype',
-  },
-] as const;
 
 const WORKSPACE_MODULES: WorkspaceModuleDefinition[] = [
   {
@@ -206,18 +216,112 @@ const WORKSPACE_MODULES: WorkspaceModuleDefinition[] = [
     mode: 'hotkeys',
   },
   {
-    description: 'Quiet notes and updates inside the bay.',
-    icon: CampaignRoundedIcon,
-    label: 'Announcements',
-    mode: 'announcements',
-  },
-  {
     description: 'A compact Earbump player with search and quick playback.',
     icon: LibraryMusicRoundedIcon,
     label: 'Music player',
     mode: 'music',
   },
 ];
+
+const QortinoSectionRuntimeFallback = ({
+  body,
+  theme,
+  title,
+  variant,
+}: QortinoSectionRuntimeFallbackProps) => {
+  const isDarkMode = theme.palette.mode === 'dark';
+
+  return (
+    <Box
+      sx={{
+        alignItems: 'flex-start',
+        background:
+          variant === 'workspace'
+            ? theme.palette.mode === 'dark'
+              ? `linear-gradient(180deg, ${alpha('#20242D', 0.9)} 0%, ${alpha(
+                  '#171B23',
+                  0.96
+                )} 100%)`
+              : `linear-gradient(180deg, ${alpha('#FFFFFF', 0.72)} 0%, ${alpha(
+                  '#F3F6FB',
+                  0.9
+                )} 100%)`
+            : theme.palette.mode === 'dark'
+              ? `radial-gradient(90% 90% at 50% 14%, ${alpha('#23324A', 0.44)} 0%, ${alpha(
+                  '#18202C',
+                  0.18
+                )} 28%, ${alpha('#11161E', 0)} 72%), linear-gradient(180deg, ${alpha(
+                  '#13171D',
+                  0.98
+                )} 0%, ${alpha('#0E1319', 1)} 100%)`
+              : `radial-gradient(90% 90% at 50% 14%, ${alpha('#D8E8FF', 0.52)} 0%, ${alpha(
+                  '#E6EEF8',
+                  0.22
+                )} 28%, ${alpha('#FFFFFF', 0)} 72%), linear-gradient(180deg, ${alpha(
+                  '#F4F7FB',
+                  0.98
+                )} 0%, ${alpha('#EEF3F8', 1)} 100%)`,
+        borderBottom:
+          variant === 'workspace'
+            ? `1px solid ${alpha(theme.palette.common.white, 0.05)}`
+            : undefined,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1,
+        height: '100%',
+        justifyContent: 'center',
+        minHeight: 0,
+        overflow: 'hidden',
+        position: 'relative',
+        px: 2,
+        py: variant === 'workspace' ? 1.55 : 1.5,
+      }}
+    >
+      {variant === 'qortino' ? (
+        <Box
+          sx={{
+            inset: 0,
+            pointerEvents: 'none',
+            position: 'absolute',
+            '&::before': {
+              background: getBlueAmbientLineBackground(theme, 'soft'),
+              content: '""',
+              height: '1px',
+              left: '18px',
+              position: 'absolute',
+              right: '18px',
+              top: 0,
+            },
+          }}
+        />
+      ) : null}
+      <Typography
+        sx={{
+          color: theme.palette.text.primary,
+          fontSize: '1rem',
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        {title}
+      </Typography>
+      <Typography
+        sx={{
+          color: alpha(theme.palette.text.secondary, isDarkMode ? 0.82 : 0.86),
+          fontSize: '0.8rem',
+          lineHeight: 1.5,
+          maxWidth: '34ch',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        {body}
+      </Typography>
+    </Box>
+  );
+};
 
 const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
   if (!value || typeof value !== 'object') {
@@ -227,7 +331,6 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
   const parsed = value as Partial<WorkspaceState>;
   const nextMode: WorkspaceMode =
     parsed.mode === 'hotkeys' ||
-    parsed.mode === 'announcements' ||
     parsed.mode === 'music'
       ? parsed.mode
       : 'empty';
@@ -260,9 +363,8 @@ const sanitizeWorkspaceState = (value: unknown): WorkspaceState => {
     onboardingCelebrationSeen: parsed.onboardingCelebrationSeen === true,
     repeatMode: parsed.repeatMode === 'one' ? 'one' : 'all',
     selectedTrackId:
-      typeof parsed.selectedTrackId === 'string' &&
-      MUSIC_TRACKS.some((track) => track.id === parsed.selectedTrackId)
-        ? parsed.selectedTrackId
+      typeof parsed.selectedTrackId === 'string'
+        ? parsed.selectedTrackId.trim()
         : DEFAULT_WORKSPACE_STATE.selectedTrackId,
     version: 1,
   };
@@ -406,11 +508,6 @@ const StepProgress = ({
   );
 };
 
-const parseTrackDuration = (duration: string) => {
-  const [minutes, seconds] = duration.split(':').map((value) => Number(value));
-  return minutes * 60 + seconds;
-};
-
 const formatPlaybackTime = (seconds: number) => {
   const safeSeconds = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(safeSeconds / 60);
@@ -418,15 +515,101 @@ const formatPlaybackTime = (seconds: number) => {
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
 };
 
+const truncateTrackLabel = (value: string, maxLength = 30) => {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return value;
+  if (trimmedValue.length <= maxLength) return trimmedValue;
+  return `${trimmedValue.slice(0, maxLength).trimEnd()} (...)`;
+};
+
+const getSharedEarbumpAudio = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  if (sharedEarbumpAudioInstance == null) {
+    sharedEarbumpAudioInstance = new Audio();
+    sharedEarbumpAudioInstance.preload = 'metadata';
+  }
+
+  return sharedEarbumpAudioInstance;
+};
+
+const isAbortError = (error: unknown) =>
+  error instanceof DOMException && error.name === 'AbortError';
+
+const buildTrackResourceKey = (track: Pick<MusicTrack, 'id' | 'name'>) =>
+  track.id && track.name ? `${EARBUMP_AUDIO_SERVICE}-${track.name}-${track.id}` : '';
+
+const buildTrackPlaybackUrl = (track: Pick<MusicTrack, 'id' | 'name'>) =>
+  track.id && track.name
+    ? `${getBaseApiReact()}/arbitrary/${EARBUMP_AUDIO_SERVICE}/${encodeURIComponent(
+        track.name
+      )}/${encodeURIComponent(track.id)}`
+    : '';
+
+const getTrackReadyState = (
+  rawStatus: string | null | undefined,
+  hasTrack: boolean
+): TrackReadyState => {
+  if (!hasTrack) return 'idle';
+  if (rawStatus === 'READY') return 'ready';
+  if (
+    rawStatus === 'FAILED_TO_DOWNLOAD' ||
+    rawStatus === 'BUILD_FAILED' ||
+    rawStatus === 'NOT_PUBLISHED' ||
+    rawStatus === 'BLOCKED' ||
+    rawStatus === 'UNSUPPORTED'
+  ) {
+    return 'error';
+  }
+
+  return 'downloading';
+};
+
+const getTrackReadyPercent = (rawStatus: string | null | undefined, percent: number) => {
+  if (rawStatus === 'READY') return 100;
+  if (Number.isFinite(percent) && percent > 0) {
+    return Math.min(Math.max(percent, 0), 100);
+  }
+
+  if (rawStatus === 'DOWNLOADED') return 94;
+  if (rawStatus === 'BUILDING') return 97;
+  if (rawStatus === 'REFETCHING') return 42;
+  if (rawStatus === 'MISSING_DATA') return 34;
+  if (rawStatus === 'DOWNLOADING') return 18;
+  if (rawStatus === 'SEARCHING') return 10;
+  if (rawStatus === 'PUBLISHED' || rawStatus === 'INITIAL') return 6;
+  return 0;
+};
+
+const EMPTY_MUSIC_TRACK: MusicTrack = {
+  artist: 'EarBump',
+  coverColors: ['#6EA7FF', '#243B72', '#9CCBFF'],
+  created: 0,
+  id: '',
+  length: '--:--',
+  name: 'earbump',
+  status: null,
+  streamUrl: '',
+  title: 'EarBump library',
+  updated: null,
+  uploaded: 'Waiting for library',
+};
+
 const MusicCoverArt = ({
+  isSpinning = false,
   size,
   track,
 }: {
+  isSpinning?: boolean;
   size: number;
   track: MusicTrack;
 }) => (
   <Box
     sx={{
+      animation: 'earbumpDiscSpin 6.4s linear infinite',
+      animationPlayState: isSpinning ? 'running' : 'paused',
       alignItems: 'center',
       background: `radial-gradient(circle at 30% 28%, ${alpha(
         track.coverColors[2],
@@ -446,7 +629,18 @@ const MusicCoverArt = ({
       justifyContent: 'center',
       overflow: 'hidden',
       position: 'relative',
+      transformOrigin: '50% 50%',
+      transition: 'filter 180ms ease',
+      willChange: 'transform',
       width: `${size}px`,
+      '@keyframes earbumpDiscSpin': {
+        from: {
+          transform: 'rotate(0deg)',
+        },
+        to: {
+          transform: 'rotate(360deg)',
+        },
+      },
       '&::before': {
         background: `linear-gradient(135deg, ${alpha('#ffffff', 0.32)} 0%, ${alpha(
           '#ffffff',
@@ -484,283 +678,353 @@ const MusicCoverArt = ({
   </Box>
 );
 
-const QortinoHeadphones = ({ isDarkMode }: { isDarkMode: boolean }) => (
-  <Box
-    aria-hidden
-    sx={{
-      inset: 0,
-      pointerEvents: 'none',
-      position: 'absolute',
-    }}
-  >
-    <Box
-      sx={{
-        border: `5px solid ${alpha('#8DB8FF', isDarkMode ? 0.72 : 0.62)}`,
-        borderBottomColor: 'transparent',
-        borderLeftColor: alpha('#A6CBFF', isDarkMode ? 0.82 : 0.72),
-        borderRadius: '50%',
-        borderRightColor: alpha('#A6CBFF', isDarkMode ? 0.82 : 0.72),
-        borderTopColor: alpha('#D5E5FF', isDarkMode ? 0.44 : 0.34),
-        height: '100px',
-        left: '34px',
-        position: 'absolute',
-        top: '36px',
-        width: '100px',
-      }}
-    />
-    <Box
-      sx={{
-        background: `linear-gradient(180deg, ${alpha('#202A3B', 0.92)} 0%, ${alpha(
-          '#101622',
-          0.96
-        )} 100%)`,
-        border: `1px solid ${alpha('#9DC3FF', 0.22)}`,
-        borderRadius: '14px',
-        boxShadow: `0 10px 18px ${alpha('#000', 0.28)}, inset 0 1px 0 ${alpha(
-          '#fff',
-          0.08
-        )}`,
-        height: '29px',
-        left: '31px',
-        position: 'absolute',
-        top: '78px',
-        width: '15px',
-      }}
-    />
-    <Box
-      sx={{
-        background: `linear-gradient(180deg, ${alpha('#202A3B', 0.92)} 0%, ${alpha(
-          '#101622',
-          0.96
-        )} 100%)`,
-        border: `1px solid ${alpha('#9DC3FF', 0.22)}`,
-        borderRadius: '14px',
-        boxShadow: `0 10px 18px ${alpha('#000', 0.28)}, inset 0 1px 0 ${alpha(
-          '#fff',
-          0.08
-        )}`,
-        height: '29px',
-        position: 'absolute',
-        right: '31px',
-        top: '78px',
-        width: '15px',
-      }}
-    />
-  </Box>
-);
-
 const QortinoMascot = ({
   isDarkMode,
   isListening,
+  isTalking,
+  lookDebug,
   mood,
+  showAntenna = true,
 }: {
   isDarkMode: boolean;
   isListening: boolean;
+  isTalking: boolean;
+  lookDebug: QortinoLookDebugSettings;
   mood: 'celebrate' | 'empty' | 'guide' | 'hotkeys' | 'music' | 'notes';
+  showAntenna?: boolean;
 }) => {
-  const orbGlow = isListening
-    ? alpha('#7FB5FF', isDarkMode ? 0.28 : 0.2)
-    : alpha('#7FB5FF', isDarkMode ? 0.18 : 0.12);
+  const expression =
+    mood === 'music'
+      ? 'music'
+      : mood === 'guide'
+        ? 'guide'
+        : mood === 'hotkeys'
+          ? 'focused'
+          : mood === 'notes'
+            ? 'attentive'
+            : mood === 'celebrate'
+              ? 'delighted'
+              : 'calm';
+  const eyeStyle = {
+    attentive: { height: 8, top: 79, width: 9 },
+    calm: { height: 9, top: 80, width: 9 },
+    delighted: { height: 8, top: 79, width: 10 },
+    focused: { height: 7, top: 81, width: 10 },
+    guide: { height: 10, top: 78, width: 9 },
+    music: { height: 10, top: 79, width: 10 },
+  }[expression];
+  const mouthStyle = {
+    attentive: { left: 69, top: 98, width: 28 },
+    calm: { left: 70, top: 97, width: 26 },
+    delighted: { left: 66, top: 94, width: 34 },
+    focused: { left: 71, top: 98, width: 24 },
+    guide: { left: 68, top: 96, width: 30 },
+    music: { left: 67, top: 94, width: 32 },
+  }[expression];
+  const mascotAnimation = isListening
+    ? 'qortinoMusicBounce 3s ease-in-out infinite'
+    : 'qortinoBob 5.8s ease-in-out infinite';
+  const faceRootLeft = 44;
+  const faceRootTop = 58;
+  const faceRootWidth = 80;
+  const faceRootHeight = 58;
+  const faceLeftEyeLeft = 20;
+  const faceRightEyeLeft = 50;
+  const faceEyeTop = eyeStyle.top - faceRootTop;
+  const faceMouthLeft = mouthStyle.left - faceRootLeft;
+  const faceMouthTop = mouthStyle.top - faceRootTop;
+  const antennaBubbleSize = 20;
+  const antennaBubbleOverlap = 9;
+  const antennaStemHeight = Math.max(
+    11,
+    Math.round(20 * lookDebug.antennaLength)
+  );
+  const antennaContainerHeight =
+    antennaBubbleSize - antennaBubbleOverlap + antennaStemHeight;
 
   return (
-    <Box
-      sx={{
-        '@keyframes qortinoBob': {
-          '0%, 100%': { transform: 'translateY(0px)' },
-          '50%': { transform: 'translateY(-8px)' },
-        },
+      <Box
+        sx={{
+          '@keyframes qortinoBob': {
+            '0%, 100%': { transform: 'translateY(4px)' },
+            '50%': { transform: 'translateY(0px)' },
+          },
+          '@keyframes qortinoMusicBounce': {
+            '0%, 100%': { transform: 'translateY(4px)' },
+            '25%': { transform: 'translateY(2px)' },
+            '50%': { transform: 'translateY(-1px)' },
+            '75%': { transform: 'translateY(3px)' },
+          },
         '@keyframes qortinoBlink': {
           '0%, 45%, 100%': { transform: 'scaleY(1)' },
           '48%, 52%': { transform: 'scaleY(0.16)' },
         },
-        '@keyframes qortinoPulse': {
-          '0%, 100%': { opacity: 0.5, transform: 'scale(0.98)' },
-          '50%': { opacity: 1, transform: 'scale(1.04)' },
+        '@keyframes qortinoTalk': {
+          '0%, 100%': { transform: 'scaleY(1) scaleX(1)' },
+            '25%': { transform: 'scaleY(0.72) scaleX(1.06)' },
+            '50%': { transform: 'scaleY(1.18) scaleX(0.96)' },
+            '75%': { transform: 'scaleY(0.82) scaleX(1.04)' },
         },
-        height: `${QORTINO_MASCOT_SIZE}px`,
-        position: 'relative',
-        width: `${QORTINO_MASCOT_SIZE}px`,
-      }}
+          height: `${QORTINO_MASCOT_SIZE}px`,
+          overflow: 'visible',
+          position: 'relative',
+          width: `${QORTINO_MASCOT_SIZE}px`,
+        }}
     >
       <Box
         sx={{
-          animation: 'qortinoBob 5.8s ease-in-out infinite',
+          bottom: 0,
           height: `${QORTINO_MASCOT_BASE_SIZE}px`,
           left: 0,
-          position: 'relative',
-          top: 0,
+          position: 'absolute',
           transform: `scale(${QORTINO_MASCOT_SCALE})`,
-          transformOrigin: 'top left',
+          transformOrigin: 'bottom left',
           width: `${QORTINO_MASCOT_BASE_SIZE}px`,
         }}
       >
         <Box
           sx={{
-            background: `radial-gradient(circle, ${orbGlow} 0%, ${alpha(
-              '#7FB5FF',
-              0
-            )} 70%)`,
-            filter: 'blur(14px)',
-            inset: '8px',
-            opacity: mood === 'celebrate' ? 1 : 0.82,
-            position: 'absolute',
+            animation: mascotAnimation,
+            height: `${QORTINO_MASCOT_BASE_SIZE}px`,
+            position: 'relative',
+            width: `${QORTINO_MASCOT_BASE_SIZE}px`,
           }}
-        />
-        <Box
-          sx={{
-            background: `radial-gradient(circle at 30% 22%, ${alpha(
-              '#CFE3FF',
-              isDarkMode ? 0.34 : 0.24
-            )} 0%, ${alpha('#A9C8FF', isDarkMode ? 0.18 : 0.12)} 18%, ${alpha(
-              '#0D1524',
-              0
-            )} 42%), linear-gradient(180deg, ${alpha('#232C3A', 0.98)} 0%, ${alpha(
-              '#161B24',
-              0.98
-            )} 58%, ${alpha('#10141C', 1)} 100%)`,
-            border: `1px solid ${alpha('#B3D0FF', isDarkMode ? 0.16 : 0.12)}`,
-            borderRadius: '46% 46% 42% 42%',
-            boxShadow: `0 18px 32px ${alpha('#000', 0.3)}, inset 0 1px 0 ${alpha(
-              '#fff',
-              0.08
-            )}, inset 0 -1px 0 ${alpha('#000', 0.22)}`,
-            height: '152px',
-            left: '8px',
-            position: 'absolute',
-            top: '6px',
-            width: '152px',
-          }}
-        />
-        <Box
-          sx={{
-            backdropFilter: 'blur(10px)',
-            background: `linear-gradient(180deg, ${alpha('#121A26', 0.7)} 0%, ${alpha(
-              '#0B1119',
-              0.84
-            )} 100%)`,
-            border: `1px solid ${alpha('#B3D0FF', 0.12)}`,
-            borderRadius: '28px',
-            boxShadow: `inset 0 1px 0 ${alpha('#fff', 0.06)}`,
-            height: '58px',
-            left: '44px',
-            position: 'absolute',
-            top: '58px',
-            width: '80px',
-          }}
-        />
-        <Box
-          sx={{
-            animation: 'qortinoBlink 6.2s ease-in-out infinite',
-            bgcolor: '#DDEBFF',
-            borderRadius: '999px',
-            boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
-            height: '9px',
-            left: '64px',
-            position: 'absolute',
-            top: '80px',
-            width: '9px',
-            transformOrigin: 'center',
-          }}
-        />
-        <Box
-          sx={{
-            animation: 'qortinoBlink 6.2s ease-in-out infinite 120ms',
-            bgcolor: '#DDEBFF',
-            borderRadius: '999px',
-            boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
-            height: '9px',
-            left: '94px',
-            position: 'absolute',
-            top: '80px',
-            width: '9px',
-            transformOrigin: 'center',
-          }}
-        />
-        <Box
-          sx={{
-            borderBottom: `2px solid ${alpha('#DDEBFF', 0.78)}`,
-            borderRadius: '0 0 999px 999px',
-            height: '8px',
-            left: '71px',
-            position: 'absolute',
-            top: '97px',
-            width: '26px',
-          }}
-        />
-        <Box
-          sx={{
-            background: `linear-gradient(180deg, ${alpha('#D2E3FF', 0.38)} 0%, ${alpha(
-              '#D2E3FF',
-              0
-            )} 100%)`,
-            borderRadius: '999px',
-            height: '18px',
-            left: '79px',
-            position: 'absolute',
-            top: '18px',
-            width: '10px',
-          }}
-        />
-        <Box
-          sx={{
-            background: alpha('#8AB8FF', 0.88),
-            borderRadius: '50%',
-            boxShadow: `0 0 10px ${alpha('#7FB5FF', 0.32)}`,
-            height: '12px',
-            left: '78px',
-            position: 'absolute',
-            top: '10px',
-            width: '12px',
-          }}
-        />
-        {isListening ? <QortinoHeadphones isDarkMode={isDarkMode} /> : null}
-        {mood === 'guide' && <GuideBeacon isDarkMode={isDarkMode} />}
-        {mood === 'hotkeys' && (
-          <>
-            <RouteDecoration
-              delay={0}
-              isDarkMode={isDarkMode}
-              left="18px"
-              top="38px"
+        >
+          <Box
+            sx={{
+              height: '152px',
+              left: '8px',
+              position: 'absolute',
+              top: '6px',
+              transform: `scale(${lookDebug.bodyScale}) scaleX(${lookDebug.bodyWidthScale})`,
+              transformOrigin: 'center',
+              width: '152px',
+            }}
+          >
+            <Box
+              sx={{
+                background: `radial-gradient(ellipse at center, ${alpha(
+                  '#02050B',
+                  isDarkMode ? 0.56 : 0.3
+                )} 0%, ${alpha('#02050B', isDarkMode ? 0.3 : 0.16)} 48%, ${alpha(
+                  '#02050B',
+                  0
+                )} 78%)`,
+                bottom: '4px',
+                filter: 'blur(9px)',
+                height: '20px',
+                left: '16px',
+                opacity: isListening ? 0.98 : 0.9,
+                position: 'absolute',
+                width: '120px',
+              }}
             />
-            <RouteDecoration
-              delay={0.25}
-              isDarkMode={isDarkMode}
-              left="132px"
-              top="114px"
+            <Box
+              sx={{
+                background: `radial-gradient(ellipse at center, ${alpha(
+                  '#010307',
+                  isDarkMode ? 0.5 : 0.28
+                )} 0%, ${alpha('#010307', 0)} 72%)`,
+                bottom: '7px',
+                filter: 'blur(4px)',
+                height: '10px',
+                left: '27px',
+                opacity: isListening ? 0.86 : 0.78,
+                position: 'absolute',
+                width: '88px',
+              }}
             />
-          </>
-        )}
-        {mood === 'notes' && (
-          <>
-            <NoteCardDecoration
-              delay={0}
-              isDarkMode={isDarkMode}
-              left="18px"
-              top="42px"
+            <Box
+              sx={{
+                background: `radial-gradient(circle, ${alpha(
+                  '#0A1220',
+                  0.22
+                )} 0%, ${alpha('#0A1220', 0)} 72%)`,
+                filter: 'blur(10px)',
+                inset: 0,
+                opacity: 0.44,
+                position: 'absolute',
+              }}
             />
-            <NoteCardDecoration
-              delay={0.2}
-              isDarkMode={isDarkMode}
-              left="132px"
-              top="112px"
+            <Box
+              sx={{
+                background: `radial-gradient(circle at 34% 22%, ${alpha(
+                  '#A0B8DD',
+                  isDarkMode ? 0.14 : 0.1
+                )} 0%, ${alpha('#6B88B5', isDarkMode ? 0.08 : 0.05)} 18%, ${alpha(
+                  '#0D1524',
+                  0
+                )} 42%), linear-gradient(180deg, ${alpha('#232C3A', 0.98)} 0%, ${alpha(
+                  '#161B24',
+                  0.98
+                )} 58%, ${alpha('#10141C', 1)} 100%)`,
+                border: `1px solid ${alpha('#B3D0FF', isDarkMode ? 0.16 : 0.12)}`,
+                borderRadius: '46% 46% 42% 42%',
+                boxShadow: `0 18px 32px ${alpha('#000', 0.3)}, inset 0 1px 0 ${alpha(
+                  '#fff',
+                  0.03
+                )}, inset 0 -1px 0 ${alpha('#000', 0.22)}`,
+                inset: 0,
+                position: 'absolute',
+              }}
             />
-          </>
-        )}
-        {(isListening || mood === 'celebrate') && (
-          <>
-            <MusicNoteDecoration delay={0} isDarkMode={isDarkMode} left="20px" top="34px" />
-            <MusicNoteDecoration delay={0.2} isDarkMode={isDarkMode} left="132px" top="42px" />
-            <MusicNoteDecoration delay={0.4} isDarkMode={isDarkMode} left="22px" top="124px" />
-          </>
-        )}
-        {mood === 'celebrate' && (
-          <>
-            <SparkDecoration left="26px" top="18px" />
-            <SparkDecoration left="136px" top="26px" />
-            <SparkDecoration left="134px" top="126px" />
-          </>
-        )}
+          </Box>
+          <Box
+            sx={{
+              height: `${faceRootHeight}px`,
+              left: `${faceRootLeft}px`,
+              position: 'absolute',
+              top: `${faceRootTop}px`,
+              transform: `scale(${lookDebug.faceScale})`,
+              transformOrigin: 'center',
+              width: `${faceRootWidth}px`,
+            }}
+          >
+            <Box
+              sx={{
+                backdropFilter: 'blur(10px)',
+                background: `linear-gradient(180deg, ${alpha('#121A26', 0.7)} 0%, ${alpha(
+                  '#0B1119',
+                  0.84
+                )} 100%)`,
+                border: `1px solid ${alpha('#B3D0FF', 0.12)}`,
+                borderRadius: '28px',
+                boxShadow: `inset 0 1px 0 ${alpha('#fff', 0.06)}`,
+                inset: 0,
+                position: 'absolute',
+              }}
+            />
+            <Box
+              sx={{
+                animation: 'qortinoBlink 6.2s ease-in-out infinite',
+                bgcolor: '#DDEBFF',
+                borderRadius: '999px',
+                boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
+                height: eyeStyle.height,
+                left: faceLeftEyeLeft,
+                position: 'absolute',
+                top: faceEyeTop,
+                transformOrigin: 'center',
+                width: eyeStyle.width,
+              }}
+            />
+            <Box
+              sx={{
+                animation: 'qortinoBlink 6.2s ease-in-out infinite 120ms',
+                bgcolor: '#DDEBFF',
+                borderRadius: '999px',
+                boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
+                height: eyeStyle.height,
+                left: faceRightEyeLeft,
+                position: 'absolute',
+                top: faceEyeTop,
+                transformOrigin: 'center',
+                width: eyeStyle.width,
+              }}
+            />
+            <Box
+              sx={{
+                borderBottom: `2px solid ${alpha('#DDEBFF', 0.78)}`,
+                borderRadius: '0 0 999px 999px',
+                height: '8px',
+                left: faceMouthLeft,
+                position: 'absolute',
+                top: faceMouthTop,
+                transformOrigin: 'center',
+                width: mouthStyle.width,
+                ...(isTalking || isListening
+                  ? {
+                      animation: 'qortinoTalk 1.25s ease-in-out infinite',
+                    }
+                  : null),
+              }}
+            />
+          </Box>
+          {showAntenna ? (
+            <Box
+              sx={{
+                bottom: '130px',
+                height: `${antennaContainerHeight}px`,
+                left: '72px',
+                position: 'absolute',
+                transform: `scale(${lookDebug.antennaScale})`,
+                transformOrigin: 'bottom center',
+                width: '24px',
+              }}
+            >
+              <Box
+                sx={{
+                  background: `linear-gradient(180deg, ${alpha('#D2E3FF', 0.38)} 0%, ${alpha(
+                    '#D2E3FF',
+                    0
+                  )} 100%)`,
+                  borderRadius: '999px',
+                  height: `${antennaStemHeight}px`,
+                  left: '8px',
+                  position: 'absolute',
+                  top: `${antennaBubbleSize - antennaBubbleOverlap}px`,
+                  width: '8px',
+                }}
+              />
+              <QortalRequestBubbleIcon
+                size={antennaBubbleSize}
+                logoScale={lookDebug.logoScale}
+                sx={{
+                  left: '2px',
+                  position: 'absolute',
+                  top: 0,
+                }}
+              />
+            </Box>
+          ) : null}
+          {mood === 'guide' && <GuideBeacon isDarkMode={isDarkMode} />}
+          {mood === 'hotkeys' && (
+            <>
+              <RouteDecoration
+                delay={0}
+                isDarkMode={isDarkMode}
+                left="18px"
+                top="38px"
+              />
+              <RouteDecoration
+                delay={0.25}
+                isDarkMode={isDarkMode}
+                left="132px"
+                top="114px"
+              />
+            </>
+          )}
+          {mood === 'notes' && (
+            <>
+              <NoteCardDecoration
+                delay={0}
+                isDarkMode={isDarkMode}
+                left="18px"
+                top="42px"
+              />
+              <NoteCardDecoration
+                delay={0.2}
+                isDarkMode={isDarkMode}
+                left="132px"
+                top="112px"
+              />
+            </>
+          )}
+          {isListening && (
+            <>
+              <MusicNoteDecoration delay={0} isDarkMode={isDarkMode} left="76px" top="8px" />
+              <MusicNoteDecoration delay={0.18} isDarkMode={isDarkMode} left="90px" top="0px" size={18} />
+              <MusicNoteDecoration delay={0.36} isDarkMode={isDarkMode} left="104px" top="10px" size={14} />
+            </>
+          )}
+          {mood === 'celebrate' && (
+            <>
+              <SparkDecoration left="26px" top="18px" />
+              <SparkDecoration left="136px" top="26px" />
+              <SparkDecoration left="134px" top="126px" />
+            </>
+          )}
+        </Box>
       </Box>
     </Box>
   );
@@ -770,18 +1034,20 @@ const MusicNoteDecoration = ({
   delay,
   isDarkMode,
   left,
+  size = 16,
   top,
 }: {
   delay: number;
   isDarkMode: boolean;
   left: string;
+  size?: number;
   top: string;
 }) => (
   <Box
     sx={{
       '@keyframes qortinoNoteFloat': {
-        '0%, 100%': { opacity: 0.2, transform: 'translateY(0px) scale(0.94)' },
-        '50%': { opacity: 0.85, transform: 'translateY(-8px) scale(1)' },
+        '0%, 100%': { opacity: 0.18, transform: 'translateY(0px) scale(0.94)' },
+        '50%': { opacity: 0.82, transform: 'translateY(-12px) scale(1.02)' },
       },
       animation: `qortinoNoteFloat 3.4s ease-in-out ${delay}s infinite`,
       color: alpha('#95BEFF', isDarkMode ? 0.92 : 0.76),
@@ -790,7 +1056,7 @@ const MusicNoteDecoration = ({
       top,
     }}
   >
-    <GraphicEqRoundedIcon sx={{ fontSize: '16px' }} />
+    <GraphicEqRoundedIcon sx={{ fontSize: `${size}px` }} />
   </Box>
 );
 
@@ -948,43 +1214,145 @@ export const HomeQortinoWorkspaceCard = ({
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>({
     ...DEFAULT_WORKSPACE_STATE,
   });
+  const [qortinoLookDebug, setQortinoLookDebug] =
+    useState<QortinoLookDebugSettings>(() =>
+      typeof window === 'undefined'
+        ? { ...DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS }
+        : parseQortinoLookDebugSettings(
+            localStorage.getItem(QORTINO_LOOK_DEBUG_STORAGE_KEY)
+          )
+    );
+  const [qortinoLayoutDebug, setQortinoLayoutDebug] =
+    useState<QortinoLayoutDebugSettings>(() =>
+      typeof window === 'undefined'
+        ? { ...DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS }
+        : parseQortinoLayoutDebugSettings(
+            localStorage.getItem(QORTINO_LAYOUT_DEBUG_STORAGE_KEY)
+          )
+    );
+  const [qortinoCompanionDebug, setQortinoCompanionDebug] =
+    useState<QortinoCompanionDebugSettings>(() =>
+      typeof window === 'undefined'
+        ? { ...DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS }
+        : parseQortinoCompanionDebugSettings(
+            localStorage.getItem(QORTINO_COMPANION_DEBUG_STORAGE_KEY)
+          )
+    );
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const [selectedHotkeySlot, setSelectedHotkeySlot] = useState(0);
   const [hotkeySearchQuery, setHotkeySearchQuery] = useState('');
-  const [musicProgress, setMusicProgress] = useState(0.16);
+  const [earbumpDiscoveryTracks, setEarbumpDiscoveryTracks] = useState<
+    MusicTrack[]
+  >([]);
+  const [earbumpSearchTracks, setEarbumpSearchTracks] = useState<MusicTrack[]>(
+    []
+  );
+  const [selectedTrackSnapshot, setSelectedTrackSnapshot] =
+    useState<MusicTrack | null>(null);
+  const [musicProgress, setMusicProgress] = useState(0);
+  const [musicPlaybackTime, setMusicPlaybackTime] = useState(0);
+  const [musicTrackDurations, setMusicTrackDurations] = useState<
+    Record<string, number>
+  >({});
+  const [isEarbumpDiscoveryLoading, setIsEarbumpDiscoveryLoading] =
+    useState(false);
+  const [isEarbumpSearchLoading, setIsEarbumpSearchLoading] = useState(false);
+  const [earbumpDiscoveryError, setEarbumpDiscoveryError] = useState<
+    string | null
+  >(null);
+  const [earbumpSearchError, setEarbumpSearchError] = useState<string | null>(
+    null
+  );
+  const [musicStreamError, setMusicStreamError] = useState<string | null>(null);
   const [ephemeralReaction, setEphemeralReaction] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(getSharedEarbumpAudio());
+  const discoveryRequestRef = useRef<AbortController | null>(null);
+  const searchRequestRef = useRef<AbortController | null>(null);
+  const selectedTrackRequestRef = useRef<AbortController | null>(null);
   const reactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastReactionRef = useRef<string | null>(null);
   const lastReactionAtRef = useRef(0);
+  const onboardingReactionKeyRef = useRef<string | null>(null);
+  const onboardingBubbleLockRef = useRef(false);
+  const musicProgressBarRef = useRef<HTMLDivElement | null>(null);
+  const downloadResource = useFetchResources();
 
-  const pushReaction = useCallback((nextMessage: string) => {
-    const now = Date.now();
-    if (
-      lastReactionRef.current === nextMessage &&
-      now - lastReactionAtRef.current < 1400
-    ) {
-      return;
-    }
+  const pushReaction = useCallback(
+    (
+      nextMessage: string,
+      options?: { allowDuringOnboarding?: boolean }
+    ) => {
+      const trimmedMessage = nextMessage.trim();
+      if (!trimmedMessage) return;
 
-    lastReactionRef.current = nextMessage;
-    lastReactionAtRef.current = now;
+      if (
+        onboardingBubbleLockRef.current &&
+        options?.allowDuringOnboarding !== true
+      ) {
+        return;
+      }
 
-    if (reactionTimeoutRef.current) {
-      window.clearTimeout(reactionTimeoutRef.current);
-    }
-    setEphemeralReaction(nextMessage);
-    reactionTimeoutRef.current = window.setTimeout(() => {
-      setEphemeralReaction(null);
-    }, 4200);
-  }, []);
+      const isAllowedRuntimeReaction =
+        trimmedMessage ===
+          'This only mutes desktop alerts. In-Hub notifications still continue.' ||
+        trimmedMessage === 'Only available for minters. Apply at Q-Mintership.' ||
+        trimmedMessage === 'Hotkeys panel ready.' ||
+        trimmedMessage === 'Music panel ready.' ||
+        trimmedMessage === 'Music player ready.' ||
+        trimmedMessage === 'Panel cleared.' ||
+        /^Locked on .+\.$/.test(trimmedMessage) ||
+        /^.+ is in rotation\.$/.test(trimmedMessage);
+
+      if (
+        onboardingBubbleLockRef.current !== true &&
+        options?.allowDuringOnboarding !== true &&
+        !isAllowedRuntimeReaction
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      if (
+        lastReactionRef.current === trimmedMessage &&
+        now - lastReactionAtRef.current < 1400
+      ) {
+        return;
+      }
+
+      lastReactionRef.current = trimmedMessage;
+      lastReactionAtRef.current = now;
+
+      if (reactionTimeoutRef.current) {
+        window.clearTimeout(reactionTimeoutRef.current);
+      }
+      setEphemeralReaction(trimmedMessage);
+      reactionTimeoutRef.current = window.setTimeout(() => {
+        setEphemeralReaction(null);
+      }, 6800);
+    },
+    []
+  );
 
   useEffect(() => {
+    audioRef.current = getSharedEarbumpAudio();
+
     return () => {
       if (reactionTimeoutRef.current) {
         window.clearTimeout(reactionTimeoutRef.current);
       }
+
+      discoveryRequestRef.current?.abort();
+      searchRequestRef.current?.abort();
+      selectedTrackRequestRef.current?.abort();
     };
   }, []);
+
+  const applyWorkspaceState = useCallback(
+    (updater: (current: WorkspaceState) => WorkspaceState) => {
+      setWorkspaceState((current) => sanitizeWorkspaceState(updater(current)));
+    },
+    []
+  );
 
   useEffect(() => {
     if (userAddress == null) {
@@ -1011,6 +1379,76 @@ export const HomeQortinoWorkspaceCard = ({
       active = false;
     };
   }, [userAddress]);
+
+  useEffect(() => {
+    const handleSetQortinoLookDebug = (
+      e: CustomEvent<{
+        data?: { settings?: QortinoLookDebugSettings };
+        settings?: QortinoLookDebugSettings;
+      }>
+    ) => {
+      setQortinoLookDebug(
+        sanitizeQortinoLookDebugSettings(e.detail?.settings ?? e.detail?.data?.settings)
+      );
+    };
+
+    subscribeToEvent(QORTINO_LOOK_DEBUG_EVENT, handleSetQortinoLookDebug);
+
+    return () => {
+      unsubscribeFromEvent(QORTINO_LOOK_DEBUG_EVENT, handleSetQortinoLookDebug);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSetQortinoLayoutDebug = (
+      e: CustomEvent<{
+        data?: { settings?: QortinoLayoutDebugSettings };
+        settings?: QortinoLayoutDebugSettings;
+      }>
+    ) => {
+      setQortinoLayoutDebug(
+        sanitizeQortinoLayoutDebugSettings(
+          e.detail?.settings ?? e.detail?.data?.settings
+        )
+      );
+    };
+
+    subscribeToEvent(QORTINO_LAYOUT_DEBUG_EVENT, handleSetQortinoLayoutDebug);
+
+    return () => {
+      unsubscribeFromEvent(
+        QORTINO_LAYOUT_DEBUG_EVENT,
+        handleSetQortinoLayoutDebug
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleSetQortinoCompanionDebug = (
+      e: CustomEvent<{
+        data?: { settings?: QortinoCompanionDebugSettings };
+        settings?: QortinoCompanionDebugSettings;
+      }>
+    ) => {
+      setQortinoCompanionDebug(
+        sanitizeQortinoCompanionDebugSettings(
+          e.detail?.settings ?? e.detail?.data?.settings
+        )
+      );
+    };
+
+    subscribeToEvent(
+      QORTINO_COMPANION_DEBUG_EVENT,
+      handleSetQortinoCompanionDebug
+    );
+
+    return () => {
+      unsubscribeFromEvent(
+        QORTINO_COMPANION_DEBUG_EVENT,
+        handleSetQortinoCompanionDebug
+      );
+    };
+  }, []);
 
   useEffect(() => {
     if (!workspaceHydrated) return;
@@ -1102,7 +1540,6 @@ export const HomeQortinoWorkspaceCard = ({
       localStorage.setItem(`${LS_KEY}_${userAddress}`, 'completed');
       setDismissed(true);
       onGettingStartedComplete?.();
-      pushReaction('We did it. This bay is yours now.');
     }
   }, [
     dismissed,
@@ -1127,7 +1564,6 @@ export const HomeQortinoWorkspaceCard = ({
         icon: LibraryMusicRoundedIcon,
         id: 'earbump',
         label: 'Earbump',
-        reaction: 'Earbump is open. Queue something good and I am in.',
         run: () => openApp('Earbump'),
       },
       'q-blog': {
@@ -1135,7 +1571,6 @@ export const HomeQortinoWorkspaceCard = ({
         icon: EditRoundedIcon,
         id: 'q-blog',
         label: 'Q-Blog',
-        reaction: 'Opening Q-Blog. Write something good.',
         run: () => openApp('Q-Blog'),
       },
       'q-mail': {
@@ -1143,7 +1578,6 @@ export const HomeQortinoWorkspaceCard = ({
         icon: MailOutlineRoundedIcon,
         id: 'q-mail',
         label: 'Q-Mail',
-        reaction: 'Mail route open. Quiet and direct.',
         run: () => openApp('Q-Mail'),
       },
       'q-trade': {
@@ -1151,7 +1585,7 @@ export const HomeQortinoWorkspaceCard = ({
         icon: ShoppingBagRoundedIcon,
         id: 'q-trade',
         label: 'Q-Trade',
-        reaction: 'Q-Trade is up. Let’s make the next move.',
+        reaction: 'Q-Trade is up. Letâ€™s make the next move.',
         run: () => openApp('Q-Trade'),
       },
       'q-mintership': {
@@ -1159,7 +1593,6 @@ export const HomeQortinoWorkspaceCard = ({
         icon: SpaRoundedIcon,
         id: 'q-mintership',
         label: 'Q-Mintership',
-        reaction: 'Q-Mintership is open. This lane points straight at minting.',
         run: () => openApp('q-mintership'),
       },
       'q-tube': {
@@ -1167,7 +1600,6 @@ export const HomeQortinoWorkspaceCard = ({
         icon: VideoLibraryRoundedIcon,
         id: 'q-tube',
         label: 'Q-Tube',
-        reaction: 'Q-Tube queued. Bring the signal.',
         run: () => openApp('Q-Tube'),
       },
       quitter: {
@@ -1175,7 +1607,6 @@ export const HomeQortinoWorkspaceCard = ({
         icon: ForumRoundedIcon,
         id: 'quitter',
         label: 'Quitter',
-        reaction: 'Quitter feed, coming up.',
         run: () => openApp('Quitter'),
       },
     }),
@@ -1270,38 +1701,409 @@ export const HomeQortinoWorkspaceCard = ({
     steps.find((step) => !step.done) ?? steps[steps.length - 1];
   const CurrentStepIcon = currentStep.icon;
   const isOnboardingVisible = dismissed !== true;
-  const filteredMusicTracks = useMemo(() => {
-    const normalized = workspaceState.musicQuery.trim().toLowerCase();
-    if (!normalized) return MUSIC_TRACKS;
-    return MUSIC_TRACKS.filter(
-      (track) =>
-        track.title.toLowerCase().includes(normalized) ||
-        track.artist.toLowerCase().includes(normalized)
-    );
-  }, [workspaceState.musicQuery]);
 
-  const activeTrack =
-    MUSIC_TRACKS.find((track) => track.id === workspaceState.selectedTrackId) ??
-    MUSIC_TRACKS[0];
-  const activeTrackDuration = useMemo(
-    () => parseTrackDuration(activeTrack.length),
-    [activeTrack.length]
+  useEffect(() => {
+    onboardingBubbleLockRef.current = isOnboardingVisible;
+  }, [isOnboardingVisible]);
+
+  useEffect(() => {
+    if (!isOnboardingVisible) {
+      onboardingReactionKeyRef.current = null;
+      return;
+    }
+
+    if (onboardingReactionKeyRef.current === currentStep.key) return;
+    onboardingReactionKeyRef.current = currentStep.key;
+
+    if (currentStep.key === 'get_six_qorts') {
+      pushReaction('Start with 6 QORT. Pick any route above.', {
+        allowDuringOnboarding: true,
+      });
+      return;
+    }
+
+    if (currentStep.key === 'register_name') {
+      pushReaction('Register your name next.', {
+        allowDuringOnboarding: true,
+      });
+      return;
+    }
+
+    pushReaction('Load your avatar to finish.', {
+      allowDuringOnboarding: true,
+    });
+  }, [currentStep.key, isOnboardingVisible, pushReaction]);
+
+  const musicSearchQuery = workspaceState.musicQuery.trim();
+  const knownMusicTracksById = useMemo(() => {
+    const nextMap = new Map<string, MusicTrack>();
+
+    for (const track of earbumpDiscoveryTracks) {
+      nextMap.set(track.id, track);
+    }
+
+    for (const track of earbumpSearchTracks) {
+      nextMap.set(track.id, track);
+    }
+
+    if (selectedTrackSnapshot) {
+      nextMap.set(selectedTrackSnapshot.id, selectedTrackSnapshot);
+    }
+
+    return nextMap;
+  }, [earbumpDiscoveryTracks, earbumpSearchTracks, selectedTrackSnapshot]);
+
+  const resolveMusicTrack = useCallback(
+    (track: MusicTrack) => {
+      const knownDuration = musicTrackDurations[track.id];
+
+      if (!Number.isFinite(knownDuration) || knownDuration <= 0) {
+        return track;
+      }
+
+      const durationLabel = formatPlaybackTime(knownDuration);
+      return track.length === durationLabel
+        ? track
+        : {
+            ...track,
+            length: durationLabel,
+          };
+    },
+    [musicTrackDurations]
   );
+
+  useEffect(() => {
+    if (!workspaceHydrated) {
+      return undefined;
+    }
+
+    discoveryRequestRef.current?.abort();
+    const controller = new AbortController();
+    discoveryRequestRef.current = controller;
+    setIsEarbumpDiscoveryLoading(true);
+
+    void fetchEarbumpRecentTracks({
+      limit: 12,
+      signal: controller.signal,
+    })
+      .then((tracks) => {
+        setEarbumpDiscoveryTracks(tracks);
+        setEarbumpDiscoveryError(null);
+
+        if (tracks.length === 0) {
+          return;
+        }
+
+        setSelectedTrackSnapshot((current) => current ?? tracks[0]);
+
+        applyWorkspaceState((current) =>
+          current.selectedTrackId
+            ? current
+            : {
+                ...current,
+                selectedTrackId: tracks[0].id,
+              }
+        );
+      })
+      .catch((error: unknown) => {
+        if (isAbortError(error)) {
+          return;
+        }
+
+        console.error('Failed to load EarBump discovery tracks', error);
+        setEarbumpDiscoveryTracks([]);
+        setEarbumpDiscoveryError('Unable to load EarBump right now.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsEarbumpDiscoveryLoading(false);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [applyWorkspaceState, workspaceHydrated]);
+
+  useEffect(() => {
+    searchRequestRef.current?.abort();
+
+    if (!musicSearchQuery) {
+      setEarbumpSearchTracks([]);
+      setEarbumpSearchError(null);
+      setIsEarbumpSearchLoading(false);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    searchRequestRef.current = controller;
+    const timeoutId = window.setTimeout(() => {
+      setIsEarbumpSearchLoading(true);
+
+      void searchEarbumpTracks(musicSearchQuery, {
+        limit: 12,
+        signal: controller.signal,
+      })
+        .then((tracks) => {
+          setEarbumpSearchTracks(tracks);
+          setEarbumpSearchError(null);
+        })
+        .catch((error: unknown) => {
+          if (isAbortError(error)) {
+            return;
+          }
+
+          console.error('Failed to search EarBump tracks', error);
+          setEarbumpSearchTracks([]);
+          setEarbumpSearchError('Unable to search EarBump right now.');
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) {
+            setIsEarbumpSearchLoading(false);
+          }
+        });
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
+  }, [musicSearchQuery]);
+
+  useEffect(() => {
+    if (!workspaceHydrated || !workspaceState.selectedTrackId) {
+      return undefined;
+    }
+
+    const matchedTrack = knownMusicTracksById.get(workspaceState.selectedTrackId);
+    if (matchedTrack) {
+      setSelectedTrackSnapshot(matchedTrack);
+      return undefined;
+    }
+
+    selectedTrackRequestRef.current?.abort();
+    const controller = new AbortController();
+    selectedTrackRequestRef.current = controller;
+
+    void fetchEarbumpTrackById(workspaceState.selectedTrackId, {
+      signal: controller.signal,
+    })
+      .then((track) => {
+        if (track) {
+          setSelectedTrackSnapshot(track);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!isAbortError(error)) {
+          console.error('Failed to restore selected EarBump track', error);
+        }
+      });
+
+    return () => {
+      controller.abort();
+    };
+  }, [knownMusicTracksById, workspaceHydrated, workspaceState.selectedTrackId]);
+
+  const activeTrackSource =
+    (workspaceState.selectedTrackId
+      ? knownMusicTracksById.get(workspaceState.selectedTrackId) ??
+        (selectedTrackSnapshot?.id === workspaceState.selectedTrackId
+          ? selectedTrackSnapshot
+          : null)
+      : null) ??
+    earbumpDiscoveryTracks[0] ??
+    selectedTrackSnapshot;
+  const activeTrack = useMemo(
+    () =>
+      activeTrackSource ? resolveMusicTrack(activeTrackSource) : EMPTY_MUSIC_TRACK,
+    [activeTrackSource, resolveMusicTrack]
+  );
+  const activeTrackResourceKey = useMemo(
+    () => buildTrackResourceKey(activeTrack),
+    [activeTrack]
+  );
+  const activeTrackResource = useAtomValue(
+    resourceKeySelector(activeTrackResourceKey)
+  );
+  const activeTrackResourceStatus =
+    typeof activeTrackResource?.status?.status === 'string'
+      ? activeTrackResource.status.status
+      : null;
+  const activeTrackPeerCount =
+    typeof activeTrackResource?.status?.numberOfPeers === 'number'
+      ? activeTrackResource.status.numberOfPeers
+      : null;
+  const activeTrackReadyPercent = getTrackReadyPercent(
+    activeTrackResourceStatus,
+    Number(activeTrackResource?.status?.percentLoaded ?? 0)
+  );
+  const activeTrackReadyState = getTrackReadyState(
+    activeTrackResourceStatus,
+    Boolean(activeTrack.id)
+  );
+  const activeTrackPlaybackUrl =
+    activeTrackReadyState === 'ready' ? buildTrackPlaybackUrl(activeTrack) : '';
+  const isTrackPreparing = activeTrackReadyState === 'downloading';
+  const isTrackReady = activeTrackReadyState === 'ready';
+  const isTrackLoadError = activeTrackReadyState === 'error';
+  const isResolvingSelectedTrack =
+    workspaceHydrated &&
+    Boolean(workspaceState.selectedTrackId) &&
+    activeTrack.id !== workspaceState.selectedTrackId;
   const currentPlaybackTime = useMemo(
-    () => formatPlaybackTime(activeTrackDuration * Math.min(Math.max(musicProgress, 0.08), 1)),
-    [activeTrackDuration, musicProgress]
+    () => formatPlaybackTime(musicPlaybackTime),
+    [musicPlaybackTime]
   );
+  const activeTrackDurationSeconds = useMemo(() => {
+    if (!activeTrack.id) return 0;
+
+    const audio = audioRef.current;
+    if (audio && Number.isFinite(audio.duration) && audio.duration > 0) {
+      return audio.duration;
+    }
+
+    const storedDuration = musicTrackDurations[activeTrack.id];
+    return Number.isFinite(storedDuration) && storedDuration > 0
+      ? storedDuration
+      : 0;
+  }, [activeTrack.id, musicTrackDurations]);
+  const hasTrackPlaybackMetadata = activeTrackDurationSeconds > 0;
+  const isTrackPlayable = isTrackReady || hasTrackPlaybackMetadata;
+  const isTrackPeerStarved =
+    isTrackPreparing &&
+    !hasTrackPlaybackMetadata &&
+    activeTrackReadyPercent > 0 &&
+    (activeTrackPeerCount ?? 0) === 0;
   const discoveryTracks = useMemo(
-    () => MUSIC_TRACKS.filter((track) => track.id !== workspaceState.selectedTrackId).slice(0, 3),
-    [workspaceState.selectedTrackId]
+    () =>
+      earbumpDiscoveryTracks
+        .filter((track) => track.id !== activeTrack.id)
+        .slice(0, 3)
+        .map(resolveMusicTrack),
+    [activeTrack.id, earbumpDiscoveryTracks, resolveMusicTrack]
   );
   const browserTracks = useMemo(() => {
-    if (workspaceState.musicQuery.trim()) {
-      return filteredMusicTracks;
+    if (musicSearchQuery) {
+      return earbumpSearchTracks.map(resolveMusicTrack);
     }
 
     return discoveryTracks;
-  }, [discoveryTracks, filteredMusicTracks, workspaceState.musicQuery]);
+  }, [discoveryTracks, earbumpSearchTracks, musicSearchQuery, resolveMusicTrack]);
+  const playbackQueue = useMemo(() => {
+    const sourceTracks = musicSearchQuery ? earbumpSearchTracks : earbumpDiscoveryTracks;
+    const resolvedTracks = sourceTracks.map(resolveMusicTrack);
+
+    if (!activeTrack.id) {
+      return resolvedTracks;
+    }
+
+    return [
+      activeTrack,
+      ...resolvedTracks.filter((track) => track.id !== activeTrack.id),
+    ];
+  }, [
+    activeTrack,
+    earbumpDiscoveryTracks,
+    earbumpSearchTracks,
+    musicSearchQuery,
+    resolveMusicTrack,
+  ]);
+  const isMusicBrowserLoading = musicSearchQuery
+    ? isEarbumpSearchLoading
+    : isEarbumpDiscoveryLoading;
+  const musicBrowserError = musicSearchQuery
+    ? earbumpSearchError
+    : earbumpDiscoveryError;
+  const musicLoadingHint = useMemo(() => {
+    if (!activeTrack.id) return null;
+    if (musicStreamError) return musicStreamError;
+    if (isTrackLoadError) return 'This track could not finish loading on your node.';
+    if (hasTrackPlaybackMetadata) return null;
+    if (!isTrackPreparing || isTrackPlayable) return null;
+
+    if (isTrackPeerStarved) {
+      return 'No peers for remaining data';
+    }
+
+    if (activeTrackReadyPercent > 0) {
+      return (activeTrackPeerCount ?? 0) > 0
+        ? `Preparing on your node... ${Math.round(activeTrackReadyPercent)}% (${activeTrackPeerCount} peer${
+            activeTrackPeerCount === 1 ? '' : 's'
+          })`
+        : `Preparing on your node... ${Math.round(activeTrackReadyPercent)}%`;
+    }
+
+    if (activeTrackResourceStatus === 'SEARCHING') {
+      return 'Looking for peers...';
+    }
+
+    if (activeTrackResourceStatus === 'BUILDING') {
+      return 'Finalizing the track on your node...';
+    }
+
+    return 'Preparing on your node...';
+  }, [
+    activeTrack.id,
+    activeTrackPeerCount,
+    activeTrackReadyPercent,
+    activeTrackResource,
+    activeTrackResourceStatus,
+    hasTrackPlaybackMetadata,
+    isTrackLoadError,
+    isTrackPeerStarved,
+    isTrackPreparing,
+    isTrackPlayable,
+    isTrackReady,
+    musicStreamError,
+  ]);
+  const musicStatusSlotMessage =
+    musicLoadingHint ??
+    (isEarbumpDiscoveryLoading
+      ? 'Syncing with EarBump library...'
+      : earbumpDiscoveryError);
+  useEffect(() => {
+    if (!activeTrack.id || !activeTrack.name) {
+      setMusicStreamError(null);
+      return;
+    }
+
+    if (activeTrackReadyState === 'ready' || hasTrackPlaybackMetadata) {
+      setMusicStreamError(null);
+      return;
+    }
+
+    if (activeTrackReadyState === 'error') {
+      return;
+    }
+
+    void downloadResource({
+      identifier: activeTrack.id,
+      name: activeTrack.name,
+      service: EARBUMP_AUDIO_SERVICE,
+    });
+  }, [
+    activeTrack.id,
+    activeTrack.name,
+    activeTrackReadyState,
+    downloadResource,
+    hasTrackPlaybackMetadata,
+  ]);
+
+  useEffect(() => {
+    if (!isTrackLoadError || !workspaceState.musicPlaying) {
+      return;
+    }
+
+    applyWorkspaceState((current) =>
+      current.musicPlaying
+        ? {
+            ...current,
+            musicPlaying: false,
+          }
+        : current
+    );
+  }, [applyWorkspaceState, isTrackLoadError, workspaceState.musicPlaying]);
+
   const filteredHotkeyCatalog = useMemo(() => {
     const normalized = hotkeySearchQuery.trim().toLowerCase();
     if (!normalized) return hotkeyCatalog;
@@ -1322,7 +2124,6 @@ export const HomeQortinoWorkspaceCard = ({
       return 'music' as const;
     }
     if (workspaceState.mode === 'hotkeys') return 'hotkeys' as const;
-    if (workspaceState.mode === 'announcements') return 'notes' as const;
     return 'empty' as const;
   }, [
     isOnboardingVisible,
@@ -1332,16 +2133,11 @@ export const HomeQortinoWorkspaceCard = ({
     workspaceState.musicPlaying,
   ]);
 
-  const qortinoMessage = useMemo(() => {
-    if (ephemeralReaction) return ephemeralReaction;
-
-    if (isBayPickerOpen) {
-      return 'Choose what lives in the bay above me. I will adapt to it.';
-    }
-
+  const qortinoDisplayedMessage = ephemeralReaction?.trim() || null;
+  /*
     if (isOnboardingVisible) {
       if (currentStep.key === 'get_six_qorts') {
-        return 'We start with 6 QORT. Pick any route above and I’ll queue the next step.';
+        return 'We start with 6 QORT. Pick any route above and Iâ€™ll queue the next step.';
       }
       if (currentStep.key === 'register_name') {
         return 'Name next. That unlocks your identity across the hub.';
@@ -1354,21 +2150,17 @@ export const HomeQortinoWorkspaceCard = ({
     }
 
     if (workspaceState.mode === 'hotkeys') {
-      return 'Quick routes armed. Tap a tile and I’ll keep pace.';
-    }
-
-    if (workspaceState.mode === 'announcements') {
-      return 'Quiet signal feed. Good place for curated updates.';
+      return 'Quick routes armed. Tap a tile and Iâ€™ll keep pace.';
     }
 
     if (workspaceState.mode === 'music') {
       if (workspaceState.musicPlaying) {
-        return `Headphones on. ${activeTrack.title} is setting the tone.`;
+        return `${activeTrack.title} is setting the tone. Iâ€™ll keep the bay calm while it plays.`;
       }
       return 'Drop into music mode when you want a little company.';
     }
 
-    return 'The bay is free now. Add a widget or a hotkey deck and I’ll build around it.';
+    return 'The bay is free now. Add a widget or a hotkey deck and Iâ€™ll build around it.';
   }, [
     activeTrack.title,
     currentStep.key,
@@ -1379,139 +2171,298 @@ export const HomeQortinoWorkspaceCard = ({
     workspaceState.mode,
     workspaceState.musicPlaying,
   ]);
+  */
 
-  const configuredHotkeysCount = useMemo(
-    () =>
-      workspaceState.hotkeys.filter((hotkeyId) =>
-        hotkeyId != null && Boolean(hotkeyActions[hotkeyId])
-      ).length,
-    [hotkeyActions, workspaceState.hotkeys]
-  );
   const firstEmptyHotkeySlot = useMemo(
     () => workspaceState.hotkeys.findIndex((slot) => slot == null),
     [workspaceState.hotkeys]
   );
+  const musicControlRingColor =
+    isTrackLoadError
+      ? alpha('#FF8F8F', 0.94)
+      : isTrackPeerStarved
+        ? alpha('#F6C76E', 0.96)
+      : isTrackPlayable
+        ? alpha('#A9CAFF', 0.92)
+        : alpha('#84B2FF', 0.94);
+  const musicControlRingTrackColor = isTrackLoadError
+    ? alpha('#FF8F8F', 0.2)
+    : isTrackPeerStarved
+      ? alpha('#F6C76E', 0.2)
+    : alpha('#DCE8FF', 0.14);
+  const musicControlShowsPause =
+    workspaceState.musicPlaying && isTrackPlayable && !isTrackLoadError;
+  const musicControlShowsDownload =
+    Boolean(activeTrack.id) && isTrackPreparing && !isTrackPlayable;
+  const musicControlShowsReadyPulse =
+    Boolean(activeTrack.id) &&
+    !workspaceState.musicPlaying &&
+    isTrackPlayable &&
+    !isTrackLoadError;
 
-  const qortinoCompanionStatus = useMemo(() => {
-    if (isBayPickerOpen) return 'Configuring the bay';
-    if (isOnboardingVisible) return 'Guiding setup';
-    if (isWorkspaceFreshlyUnlocked) return 'Ready to settle in';
-    if (workspaceState.mode === 'music') {
-      return workspaceState.musicPlaying ? 'Listening live' : 'Waiting on a track';
-    }
-    if (workspaceState.mode === 'hotkeys') return 'Routing with you';
-    if (workspaceState.mode === 'announcements') return 'Reading notes';
-    return 'Watching the bay';
-  }, [
-    isOnboardingVisible,
-    isWorkspaceFreshlyUnlocked,
-    isBayPickerOpen,
-    workspaceState.mode,
-    workspaceState.musicPlaying,
-  ]);
-
-  const qortinoMemoryStatus = useMemo(() => {
-    if (isOnboardingVisible) {
-      return `Step ${currentProgressStep} of ${steps.length}`;
-    }
-    if (isWorkspaceFreshlyUnlocked) return 'Bay unlocked';
-    if (workspaceState.mode === 'music') {
-    return workspaceState.musicPlaying ? activeTrack.title : 'Player saved';
-    }
-    if (workspaceState.mode === 'hotkeys') {
-      return `${configuredHotkeysCount} routes saved`;
-    }
-    if (workspaceState.mode === 'announcements') {
-      return `${ANNOUNCEMENT_ITEMS.length} notes docked`;
-    }
-    return 'Saved per account';
-  }, [
-    activeTrack.title,
-    configuredHotkeysCount,
-    currentProgressStep,
-    isOnboardingVisible,
-    isWorkspaceFreshlyUnlocked,
-    steps.length,
-    workspaceState.mode,
-    workspaceState.musicPlaying,
-  ]);
-
-  const applyWorkspaceState = useCallback(
-    (updater: (current: WorkspaceState) => WorkspaceState) => {
-      setWorkspaceState((current) => sanitizeWorkspaceState(updater(current)));
-    },
-    []
+  const qortinoIsTalking = Boolean(qortinoDisplayedMessage);
+  const qortinoBodyStageScale = Math.max(1, qortinoLookDebug.bodyScale);
+  const qortinoBodyStageWidthScale = Math.max(
+    1,
+    qortinoLookDebug.bodyScale * qortinoLookDebug.bodyWidthScale
   );
-
+  const qortinoAntennaStageBump = Math.max(
+    0,
+    (qortinoLookDebug.antennaScale * qortinoLookDebug.antennaLength - 1) * 22
+  );
+  const qortinoMascotStageWidth = Math.round(
+    QORTINO_MASCOT_SIZE * qortinoBodyStageWidthScale +
+      QORTINO_MASCOT_STAGE_PADDING_X
+  );
+  const qortinoMascotStageHeight = Math.round(
+    QORTINO_MASCOT_SIZE * qortinoBodyStageScale +
+      QORTINO_MASCOT_STAGE_PADDING_Y +
+      qortinoAntennaStageBump
+  );
   const handleCycleTrack = useCallback(
     (direction: 'next' | 'previous') => {
-      const activeIndex = MUSIC_TRACKS.findIndex(
+      if (playbackQueue.length === 0) {
+        return;
+      }
+
+      const activeIndex = playbackQueue.findIndex(
         (track) => track.id === workspaceState.selectedTrackId
       );
       const currentIndex = activeIndex >= 0 ? activeIndex : 0;
       const nextIndex =
         direction === 'next'
-          ? (currentIndex + 1) % MUSIC_TRACKS.length
-          : (currentIndex - 1 + MUSIC_TRACKS.length) % MUSIC_TRACKS.length;
-      const nextTrack = MUSIC_TRACKS[nextIndex];
+          ? (currentIndex + 1) % playbackQueue.length
+          : (currentIndex - 1 + playbackQueue.length) % playbackQueue.length;
+      const nextTrack = playbackQueue[nextIndex];
 
-      setMusicProgress(0.18);
+      if (!nextTrack) {
+        return;
+      }
+
+      setMusicPlaybackTime(0);
+      setMusicProgress(0);
+      setMusicStreamError(null);
+      setSelectedTrackSnapshot(nextTrack);
       applyWorkspaceState((current) => ({
         ...current,
         mode: 'music',
         musicPlaying: true,
         selectedTrackId: nextTrack.id,
       }));
-      pushReaction(`${nextTrack.title} is in rotation now.`);
+      pushReaction(`${nextTrack.title} is in rotation.`);
     },
-    [applyWorkspaceState, pushReaction, workspaceState.selectedTrackId]
+    [applyWorkspaceState, playbackQueue, pushReaction, workspaceState.selectedTrackId]
   );
 
   useEffect(() => {
-    if (workspaceState.mode !== 'music' || !workspaceState.musicPlaying) {
-      setMusicProgress((current) => (current > 0.18 ? 0.18 : current));
-      return;
+    const audio = audioRef.current;
+    if (!audio) {
+      return undefined;
     }
 
-    const interval = window.setInterval(() => {
-      setMusicProgress((current) => {
-        const next = current + 0.035;
-        if (next >= 0.96) {
-          return workspaceState.repeatMode === 'one' ? 0.18 : 0.96;
+    const handleLoadedMetadata = () => {
+      if (!activeTrack.id || !Number.isFinite(audio.duration) || audio.duration <= 0) {
+        return;
+      }
+
+      setMusicStreamError(null);
+
+      setMusicTrackDurations((current) => {
+        if (current[activeTrack.id] === audio.duration) {
+          return current;
         }
 
-        return next;
+        return {
+          ...current,
+          [activeTrack.id]: audio.duration,
+        };
       });
-    }, 980);
+    };
+
+    const handleTimeUpdate = () => {
+      const duration =
+        audio.duration > 0 ? audio.duration : musicTrackDurations[activeTrack.id] ?? 0;
+      const nextPlaybackTime = Number.isFinite(audio.currentTime)
+        ? audio.currentTime
+        : 0;
+
+      setMusicPlaybackTime(nextPlaybackTime);
+      setMusicProgress(duration > 0 ? nextPlaybackTime / duration : 0);
+    };
+
+    const handleEnded = () => {
+      if (workspaceState.repeatMode === 'one') {
+        audio.currentTime = 0;
+        setMusicPlaybackTime(0);
+        setMusicProgress(0);
+        void audio.play().catch((error) => {
+          console.error('Failed to replay EarBump track', error);
+          applyWorkspaceState((current) => ({
+            ...current,
+            musicPlaying: false,
+          }));
+        });
+        return;
+      }
+
+      handleCycleTrack('next');
+    };
+
+    const handleCanPlay = () => {
+      setMusicStreamError(null);
+    };
+
+    const handleError = () => {
+      console.error('Failed to stream EarBump audio track', activeTrack);
+      setMusicStreamError('Playback stalled. Press play to retry.');
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      applyWorkspaceState((current) => ({
+        ...current,
+        musicPlaying: false,
+      }));
+    };
+
+    const handleStalled = () => {
+      if (!activeTrack.id) {
+        return;
+      }
+
+      setMusicStreamError('Track stalled. Rebuilding the stream...');
+      void downloadResource({
+        identifier: activeTrack.id,
+        name: activeTrack.name,
+        service: EARBUMP_AUDIO_SERVICE,
+      });
+    };
+
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
+    audio.addEventListener('canplay', handleCanPlay);
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
+    audio.addEventListener('stalled', handleStalled);
+    handleLoadedMetadata();
+    handleTimeUpdate();
 
     return () => {
-      window.clearInterval(interval);
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      audio.removeEventListener('canplay', handleCanPlay);
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+      audio.removeEventListener('stalled', handleStalled);
     };
   }, [
-    workspaceState.mode,
-    workspaceState.musicPlaying,
+    activeTrack,
+    activeTrack.id,
+    activeTrack.name,
+    applyWorkspaceState,
+    downloadResource,
+    handleCycleTrack,
+    musicTrackDurations,
     workspaceState.repeatMode,
-    workspaceState.selectedTrackId,
   ]);
 
   useEffect(() => {
-    if (
-      workspaceState.mode !== 'music' ||
-      !workspaceState.musicPlaying ||
-      workspaceState.repeatMode !== 'all' ||
-      musicProgress < 0.96
-    ) {
+    const audio = audioRef.current;
+    if (!audio) {
       return;
     }
 
-    handleCycleTrack('next');
+    if (!workspaceHydrated || isResolvingSelectedTrack) {
+      return;
+    }
+
+    if (!activeTrack.id || !activeTrackPlaybackUrl) {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      setMusicPlaybackTime(0);
+      setMusicProgress(0);
+      return;
+    }
+
+    if (audio.src !== activeTrackPlaybackUrl) {
+      audio.pause();
+      audio.src = activeTrackPlaybackUrl;
+      audio.load();
+      setMusicPlaybackTime(0);
+      setMusicProgress(0);
+    }
+
+    if (workspaceState.mode !== 'music' || !workspaceState.musicPlaying) {
+      audio.pause();
+      return;
+    }
+
+    void audio.play().catch((error) => {
+      console.error('Failed to play EarBump stream', error);
+      applyWorkspaceState((current) => ({
+        ...current,
+        musicPlaying: false,
+      }));
+    });
   }, [
-    handleCycleTrack,
-    musicProgress,
+    activeTrack.id,
+    activeTrackPlaybackUrl,
+    applyWorkspaceState,
+    isResolvingSelectedTrack,
+    workspaceHydrated,
     workspaceState.mode,
     workspaceState.musicPlaying,
-    workspaceState.repeatMode,
   ]);
+
+  const seekMusicPlayback = useCallback(
+    (clientX: number) => {
+      const audio = audioRef.current;
+      const progressBar = musicProgressBarRef.current;
+      if (!audio || !progressBar || !isTrackPlayable || activeTrackDurationSeconds <= 0) {
+        return;
+      }
+
+      const rect = progressBar.getBoundingClientRect();
+      if (rect.width <= 0) {
+        return;
+      }
+
+      const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      const nextTime = ratio * activeTrackDurationSeconds;
+
+      audio.currentTime = nextTime;
+      setMusicPlaybackTime(nextTime);
+      setMusicProgress(ratio);
+      setMusicStreamError(null);
+    },
+    [activeTrackDurationSeconds, isTrackPlayable]
+  );
+
+  const handleMusicProgressPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isTrackPlayable || activeTrackDurationSeconds <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+      seekMusicPlayback(event.clientX);
+
+      const handleWindowPointerMove = (moveEvent: PointerEvent) => {
+        seekMusicPlayback(moveEvent.clientX);
+      };
+
+      const handleWindowPointerUp = () => {
+        window.removeEventListener('pointermove', handleWindowPointerMove);
+        window.removeEventListener('pointerup', handleWindowPointerUp);
+      };
+
+      window.addEventListener('pointermove', handleWindowPointerMove);
+      window.addEventListener('pointerup', handleWindowPointerUp, {
+        once: true,
+      });
+    },
+    [activeTrackDurationSeconds, isTrackPlayable, seekMusicPlayback]
+  );
 
   const handleSelectWorkspaceMode = useCallback(
     (mode: WorkspaceMode) => {
@@ -1526,19 +2477,15 @@ export const HomeQortinoWorkspaceCard = ({
       if (mode === 'hotkeys') {
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(true);
-        pushReaction('Hotkeys deck online. I will keep the top lane ready.');
-      } else if (mode === 'announcements') {
-        setOpenModulePickerDialog(false);
-        setOpenHotkeyPickerDialog(false);
-        pushReaction('Developer notes docked. Quiet signal, steady view.');
+        pushReaction('Hotkeys panel ready.');
       } else if (mode === 'music') {
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(false);
-        pushReaction('Music player ready. I will vibe when you do.');
+        pushReaction('Music panel ready.');
       } else {
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(false);
-        pushReaction('Back to an open bay. We can rewire this anytime.');
+        pushReaction('Panel cleared.');
       }
     },
     [applyWorkspaceState, dismissed, pushReaction]
@@ -1565,7 +2512,6 @@ export const HomeQortinoWorkspaceCard = ({
         );
         return nextEmptyIndex >= 0 ? nextEmptyIndex : current;
       });
-      pushReaction(`${hotkeyActions[actionId].label} is wired into the deck.`);
     },
     [
       applyWorkspaceState,
@@ -1580,31 +2526,86 @@ export const HomeQortinoWorkspaceCard = ({
   const handleRunHotkey = useCallback(
     (actionId: HotkeyActionId) => {
       hotkeyActions[actionId].run();
-      pushReaction(hotkeyActions[actionId].reaction);
     },
-    [hotkeyActions, pushReaction]
+    [hotkeyActions]
   );
 
   const handleToggleTrack = useCallback(
     (trackId: string) => {
+      if (!trackId) {
+        return;
+      }
+
+      const audio = audioRef.current;
+      const isSameTrack = workspaceState.selectedTrackId === trackId;
+      const wasPlaying = workspaceState.musicPlaying;
+      const track = knownMusicTracksById.get(trackId) ?? null;
+      const hadPlaybackFailure =
+        isTrackLoadError || musicStreamError != null || audio?.error != null;
+
+      if (isSameTrack && !wasPlaying && hadPlaybackFailure) {
+        if (audio) {
+          audio.pause();
+          audio.removeAttribute('src');
+          audio.load();
+        }
+        setMusicPlaybackTime(0);
+        setMusicProgress(0);
+        setMusicStreamError(null);
+        if (track) {
+          void downloadResource({
+            identifier: track.id,
+            name: track.name,
+            service: EARBUMP_AUDIO_SERVICE,
+          });
+        }
+      }
+
       applyWorkspaceState((current) => {
-        const sameTrack = current.selectedTrackId === trackId;
         return {
           ...current,
           mode: 'music',
-          musicPlaying: sameTrack ? !current.musicPlaying : true,
+          musicPlaying: isSameTrack ? !current.musicPlaying : true,
           onboardingCelebrationSeen:
             current.onboardingCelebrationSeen || dismissed === true,
           selectedTrackId: trackId,
         };
       });
-
-      const track = MUSIC_TRACKS.find((item) => item.id === trackId);
       if (track) {
-        pushReaction(`Locked on ${track.title}. I’m listening with you.`);
+        setSelectedTrackSnapshot(track);
       }
+
+      if (!isSameTrack) {
+        setMusicPlaybackTime(0);
+        setMusicProgress(0);
+        setMusicStreamError(null);
+      }
+
+      if (track && !isSameTrack) {
+        pushReaction(`Locked on ${track.title}.`);
+        return;
+      }
+      if (!wasPlaying && isTrackPlayable) {
+        pushReaction('Music player ready.');
+        return;
+      }
+      return;
+      /*
+        pushReaction(`Locked on ${track.title}. Iâ€™m listening with you.`);
+      */
     },
-    [applyWorkspaceState, dismissed, pushReaction]
+    [
+      applyWorkspaceState,
+      dismissed,
+      downloadResource,
+      isTrackLoadError,
+      isTrackPlayable,
+      knownMusicTracksById,
+      musicStreamError,
+      pushReaction,
+      workspaceState.musicPlaying,
+      workspaceState.selectedTrackId,
+    ]
   );
 
   const handleToggleRepeatMode = useCallback(() => {
@@ -1616,7 +2617,8 @@ export const HomeQortinoWorkspaceCard = ({
 
   const handleSelectTrackFromBrowser = useCallback(
     (trackId: string) => {
-      setMusicProgress(0.18);
+      setMusicPlaybackTime(0);
+      setMusicProgress(0);
       setOpenMusicSearchDialog(false);
       handleToggleTrack(trackId);
     },
@@ -1630,8 +2632,7 @@ export const HomeQortinoWorkspaceCard = ({
     }));
     setOpenHotkeyPickerDialog(false);
     setOpenModulePickerDialog(true);
-    pushReaction('Choose what lives in the bay above me. I will adapt to it.');
-  }, [applyWorkspaceState, pushReaction]);
+  }, [applyWorkspaceState]);
 
   const handleOpenHotkeyPicker = useCallback(
     (slotIndex = 0) => {
@@ -1645,32 +2646,16 @@ export const HomeQortinoWorkspaceCard = ({
       setHotkeySearchQuery('');
       setOpenModulePickerDialog(false);
       setOpenHotkeyPickerDialog(true);
-      pushReaction('Pick the Q-Apps you want in this deck. I will remember them.');
     },
-    [applyWorkspaceState, dismissed, pushReaction]
+    [applyWorkspaceState, dismissed]
   );
 
   const workspaceLabelColor = alpha(theme.palette.text.secondary, 0.78);
   const subtleLine = getBlueAmbientLineBackground(theme, 'soft');
+  /*
   useEffect(() => {
-    const handleWallets = () => {
-      pushReaction('Wallets are open. I’ll keep watch while you move funds.');
-    };
-
-    const handleUserSearch = () => {
-      pushReaction('User search is live. I’ll stay with the trace.');
-    };
-
-    const handleMinting = () => {
-      pushReaction('Minting panel open. This is where the long game lives.');
-    };
-
-    const handleBackup = () => {
-      pushReaction('Backup flow ready. Quiet move, strong move.');
-    };
-
     const handleAvatar = () => {
-      pushReaction('Avatar tools open. Let’s give this place a face.');
+      pushReaction('Avatar tools open. Letâ€™s give this place a face.');
     };
 
     const handleRegisterName = () => {
@@ -1705,6 +2690,19 @@ export const HomeQortinoWorkspaceCard = ({
       pushReaction('App library open. We can wire the next lane from here.');
     };
 
+    const handleContextHint = (event: Event) => {
+      const message =
+        (
+          event as CustomEvent<{
+            data?: { message?: string };
+          }>
+        )?.detail?.data?.message ?? '';
+
+      if (typeof message === 'string' && message.trim().length > 0) {
+        pushReaction(message.trim());
+      }
+    };
+
     const handleAddTab = (event: Event) => {
       const data =
         (
@@ -1725,7 +2723,7 @@ export const HomeQortinoWorkspaceCard = ({
       }
 
       if (rawName === 'quitter') {
-        pushReaction('Quitter is live. Let’s read the pulse.');
+        pushReaction('Quitter is live. Letâ€™s read the pulse.');
         return;
       }
 
@@ -1740,7 +2738,7 @@ export const HomeQortinoWorkspaceCard = ({
       }
 
       if (rawName === 'q-trade') {
-        pushReaction('Q-Trade is open. I’ll keep the board steady.');
+        pushReaction('Q-Trade is open. Iâ€™ll keep the board steady.');
         return;
       }
 
@@ -1750,246 +2748,366 @@ export const HomeQortinoWorkspaceCard = ({
       }
 
       if (rawName === 'earbump') {
-        pushReaction('Earbump tab open. If you play something, I’ll vibe with you.');
+        pushReaction('Earbump tab open. If you play something, Iâ€™ll vibe with you.');
       }
     };
 
-    subscribeToEvent('openWalletsApp', handleWallets);
-    subscribeToEvent('openUserLookupDrawer', handleUserSearch);
-    subscribeToEvent('openMintingPanel', handleMinting);
-    subscribeToEvent('openBackupWallet', handleBackup);
     subscribeToEvent('openAvatarUpload', handleAvatar);
     subscribeToEvent('openRegisterName', handleRegisterName);
     subscribeToEvent('openSendQortInternal', handleSend);
     subscribeToEvent('openReceiveQortInternal', handleReceive);
     subscribeToEvent('openAppsLibrarySearch', handleAppsLibrarySearch);
+    subscribeToEvent('qortinoContextHint', handleContextHint);
     subscribeToEvent('addTab', handleAddTab);
 
     return () => {
-      unsubscribeFromEvent('openWalletsApp', handleWallets);
-      unsubscribeFromEvent('openUserLookupDrawer', handleUserSearch);
-      unsubscribeFromEvent('openMintingPanel', handleMinting);
-      unsubscribeFromEvent('openBackupWallet', handleBackup);
       unsubscribeFromEvent('openAvatarUpload', handleAvatar);
       unsubscribeFromEvent('openRegisterName', handleRegisterName);
       unsubscribeFromEvent('openSendQortInternal', handleSend);
       unsubscribeFromEvent('openReceiveQortInternal', handleReceive);
       unsubscribeFromEvent('openAppsLibrarySearch', handleAppsLibrarySearch);
+      unsubscribeFromEvent('qortinoContextHint', handleContextHint);
       unsubscribeFromEvent('addTab', handleAddTab);
     };
   }, [pushReaction]);
+  */
+
+  useEffect(() => {
+    const handleContextHint = (event: Event) => {
+      const message =
+        (
+          event as CustomEvent<{
+            data?: { message?: string };
+          }>
+        )?.detail?.data?.message ?? '';
+
+      if (typeof message === 'string' && message.trim().length > 0) {
+        pushReaction(message.trim());
+      }
+    };
+
+    subscribeToEvent('qortinoContextHint', handleContextHint);
+
+    return () => {
+      unsubscribeFromEvent('qortinoContextHint', handleContextHint);
+    };
+  }, [pushReaction]);
+
+  /*
+  useEffect(() => {
+    if (dismissed !== true) return;
+
+    const interval = window.setInterval(() => {
+      const recentlySpoke = Date.now() - lastReactionAtRef.current < 240000;
+      if (
+        recentlySpoke ||
+        openModulePickerDialog ||
+        openHotkeyPickerDialog ||
+        openMusicSearchDialog ||
+        workspaceState.musicPlaying
+      ) {
+        return;
+      }
+
+      const nextFact = QORTINO_IDLE_FACTS[idleFactIndexRef.current];
+      idleFactIndexRef.current =
+        (idleFactIndexRef.current + 1) % QORTINO_IDLE_FACTS.length;
+      pushReaction(nextFact);
+    }, 300000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    dismissed,
+    openHotkeyPickerDialog,
+    openModulePickerDialog,
+    openMusicSearchDialog,
+    pushReaction,
+    workspaceState.musicPlaying,
+  ]);
+  */
 
   const handleRunCurrentStepAction = useCallback(() => {
     if (currentStep.key === 'register_name') {
       pushReaction('Name flow open. This is where the hub starts recognizing you.');
     } else if (currentStep.key === 'load_avatar') {
-      pushReaction('Avatar flow ready. Let’s give this place a face.');
+      pushReaction('Avatar flow ready. Letâ€™s give this place a face.');
     }
 
     currentStep.onAction();
   }, [currentStep, pushReaction]);
 
-  const workspaceBayContent = isOnboardingVisible ? (
+  const currentStepPrimaryAction = useMemo(() => {
+    if (currentStep.key === 'get_six_qorts') {
+      return {
+        label: t(
+          'tutorial:home.get_six_qorts_way1_action',
+          'Go to onboarding'
+        ),
+        onClick: () => {
+          pushReaction("Onboarding route open. I'll keep the next step warm.");
+          openExternalUrl(ONBOARDING_URL);
+        },
+      };
+    }
+
+    return {
+      label: currentStep.ctaLabel,
+      loading: currentStep.loading === true,
+      onClick: handleRunCurrentStepAction,
+    };
+  }, [
+    currentStep.ctaLabel,
+    currentStep.key,
+    currentStep.loading,
+    handleRunCurrentStepAction,
+    pushReaction,
+    t,
+  ]);
+
+  const currentStepSecondaryActions = useMemo(() => {
+    if (currentStep.key !== 'get_six_qorts') {
+      return [];
+    }
+
+    return [
+      {
+        label: t(
+          'tutorial:home.get_six_qorts_way2_action',
+          'Open support chat'
+        ),
+        onClick: () => {
+          pushReaction(
+            "Support chat is open. Ask for the 6 QORT and I'll queue step two."
+          );
+          openExternalUrl(SUPPORT_CHAT_URL);
+        },
+      },
+      {
+        label: t(
+          'tutorial:home.get_six_qorts_way3_action',
+          'Open Q-Trade'
+        ),
+        onClick: () => {
+          pushReaction(
+            "Q-Trade is up. If you grab QORT there, I'll take you forward."
+          );
+          openApp('Q-Trade');
+        },
+      },
+    ];
+  }, [currentStep.key, pushReaction, t]);
+
+  const workspaceBayBackground =
+    theme.palette.mode === 'dark'
+      ? `linear-gradient(180deg, ${alpha('#20242D', 0.9)} 0%, ${alpha(
+          '#171B23',
+          0.96
+        )} 100%)`
+      : `linear-gradient(180deg, ${alpha('#FFFFFF', 0.72)} 0%, ${alpha(
+          '#F3F6FB',
+          0.9
+        )} 100%)`;
+  const workspaceBaySeparatorExtension = Math.max(
+    qortinoLayoutDebug.separatorOffsetY,
+    0
+  );
+  const workspaceBayHeightPx =
+    QORTINO_WORKSPACE_BAY_HEIGHT_PX + workspaceBaySeparatorExtension;
+  const onboardingCompanionLift = isOnboardingVisible ? 8 : 0;
+  const progressRowOffsetY = qortinoLayoutDebug.progressOffsetY + 12;
+  const progressRowReservedTop = Math.max(progressRowOffsetY, 0);
+  const progressRowVisualOffsetY = Math.min(progressRowOffsetY, 0);
+
+  const workspaceBaySection = (
     <Box
       sx={{
+        background: workspaceBayBackground,
         display: 'flex',
         flexDirection: 'column',
-        gap: 1.2,
-        '@container qortino-card (max-width: 390px)': {
-          gap: 1,
+        justifyContent: 'center',
+        minHeight: 0,
+        px: 2,
+        py: isOnboardingVisible ? 1.55 : 1.25,
+        position: 'relative',
+        zIndex: 1,
+        '&::after': {
+          background: alpha(theme.palette.common.white, 0.05),
+          content: '""',
+          height: '1px',
+          left: '18px',
+          position: 'absolute',
+          right: '18px',
+          bottom: 0,
         },
       }}
     >
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          justifyContent: 'space-between',
-          '@container qortino-card (max-width: 390px)': {
-            gap: 1,
-          },
-        }}
-      >
-        <Typography
-          sx={{
-            color: workspaceLabelColor,
-            fontSize: '0.68rem',
-            fontWeight: 700,
-            letterSpacing: '0.14em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Getting started
-        </Typography>
+      {isOnboardingVisible ? (
         <Box
           sx={{
-            ...getBlueTier2BadgeSx(theme, true),
-            borderRadius: '999px',
-            color: APP_BLUE_SURFACE_TEXT,
-            px: 1,
-            py: 0.45,
-          }}
-        >
-          <Typography sx={{ fontSize: '0.66rem', fontWeight: 700 }}>
-            Step {currentProgressStep} / {steps.length}
-          </Typography>
-        </Box>
-      </Box>
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          gap: 1.1,
-          minWidth: 0,
-          '@container qortino-card (max-width: 390px)': {
-            alignItems: 'flex-start',
-            gap: 0.9,
-          },
-        }}
-      >
-        <Box
-          sx={{
-            alignItems: 'center',
-            background: alpha(currentStep.accent, 0.14),
-            border: `1px solid ${alpha(currentStep.accent, 0.22)}`,
-            borderRadius: '12px',
-            color: currentStep.accent,
             display: 'flex',
-            flexShrink: 0,
-            height: '42px',
-            justifyContent: 'center',
-            width: '42px',
+            flexDirection: 'column',
+            gap: 0.78,
+            height: '100%',
             '@container qortino-card (max-width: 390px)': {
-              borderRadius: '11px',
-              height: '38px',
-              width: '38px',
+              gap: 0.7,
             },
           }}
         >
-          <CurrentStepIcon
+          <Box
             sx={{
-              fontSize: '22px',
+              alignItems: 'baseline',
+              display: 'flex',
+              justifyContent: 'space-between',
               '@container qortino-card (max-width: 390px)': {
-                fontSize: '20px',
-              },
-            }}
-          />
-        </Box>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography
-            sx={{
-              color: alpha(theme.palette.text.primary, 0.96),
-              fontSize: '1rem',
-              fontWeight: 700,
-              letterSpacing: '-0.02em',
-              lineHeight: 1.1,
-              '@container qortino-card (max-width: 390px)': {
-                fontSize: '0.96rem',
-                lineHeight: 1.08,
+                gap: 0.8,
               },
             }}
           >
-            {currentStep.label}
-          </Typography>
-          <Typography
-            sx={{
-              color: alpha(theme.palette.text.secondary, 0.8),
-              fontSize: '0.76rem',
-              letterSpacing: '-0.01em',
-              lineHeight: 1.4,
-              mt: 0.5,
-              '@container qortino-card (max-width: 390px)': {
-                fontSize: '0.72rem',
-                lineHeight: 1.34,
-                mt: 0.42,
-              },
-            }}
-          >
-            {currentStep.helper}
-          </Typography>
-        </Box>
-      </Box>
-      {currentStep.key === 'get_six_qorts' ? (
-        <>
+            <Typography
+              sx={{
+                color: workspaceLabelColor,
+                fontSize: '0.66rem',
+                fontWeight: 700,
+                letterSpacing: '0.16em',
+                textTransform: 'uppercase',
+              }}
+            >
+              Getting started
+            </Typography>
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.52),
+                fontSize: '0.64rem',
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+              }}
+            >
+              Step {currentProgressStep} / {steps.length}
+            </Typography>
+          </Box>
           <Box
             sx={{
               display: 'flex',
-              flexWrap: 'wrap',
-              gap: 0.8,
-              '@container qortino-card (max-width: 390px)': {
-                gap: 0.55,
-              },
+              flex: 1,
+              flexDirection: 'column',
+              gap: 0.78,
+              minHeight: 0,
             }}
           >
-            <MiniActionPill
-              label={t(
-                'tutorial:home.get_six_qorts_way1_action',
-                'Go to onboarding'
-              )}
-              onClick={() => {
-                pushReaction("Onboarding route open. I'll keep the next step warm.");
-                openExternalUrl(ONBOARDING_URL);
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.5,
+                minWidth: 0,
               }}
-            />
-            <MiniActionPill
-              label={t(
-                'tutorial:home.get_six_qorts_way2_action',
-                'Open support chat'
-              )}
-              onClick={() => {
-                pushReaction("Support chat is open. Ask for the 6 QORT and I'll queue step two.");
-                openExternalUrl(SUPPORT_CHAT_URL);
+            >
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  background: alpha(currentStep.accent, 0.07),
+                  border: `1px solid ${alpha(currentStep.accent, 0.14)}`,
+                  borderRadius: '8px',
+                  color: currentStep.accent,
+                  display: 'flex',
+                  flexShrink: 0,
+                  height: '28px',
+                  justifyContent: 'center',
+                  width: '28px',
+                  '@container qortino-card (max-width: 390px)': {
+                    height: '26px',
+                    width: '26px',
+                  },
+                }}
+              >
+                <CurrentStepIcon
+                  sx={{
+                    fontSize: '15px',
+                    '@container qortino-card (max-width: 390px)': {
+                      fontSize: '14px',
+                    },
+                  }}
+                />
+              </Box>
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.primary, 0.96),
+                  fontSize: '0.98rem',
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                  lineHeight: 1.06,
+                  maxWidth: '19ch',
+                  '@container qortino-card (max-width: 390px)': {
+                    fontSize: '0.92rem',
+                  },
+                }}
+              >
+                {currentStep.label}
+              </Typography>
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.76),
+                  fontSize: '0.71rem',
+                  letterSpacing: '-0.01em',
+                  lineHeight: 1.28,
+                  maxWidth: '31ch',
+                  '@container qortino-card (max-width: 390px)': {
+                    fontSize: '0.67rem',
+                    lineHeight: 1.24,
+                  },
+                }}
+              >
+                {currentStep.helper}
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 0.42,
+                mt: 'auto',
               }}
-            />
-            <MiniActionPill
-              label={t(
-                'tutorial:home.get_six_qorts_way3_action',
-                'Open Q-Trade'
-              )}
-              onClick={() => {
-                pushReaction("Q-Trade is up. If you grab QORT there, I'll take you forward.");
-                openApp('Q-Trade');
-              }}
-            />
+            >
+              <GettingStartedPrimaryAction
+                accent={currentStep.accent}
+                label={currentStepPrimaryAction.label}
+                loading={currentStepPrimaryAction.loading}
+                onClick={currentStepPrimaryAction.onClick}
+              />
+              {currentStepSecondaryActions.length > 0 ? (
+                <Box
+                  sx={{
+                    alignItems: 'flex-start',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.08,
+                    ml: -0.1,
+                  }}
+                >
+                  {currentStepSecondaryActions.map((action, index) => (
+                    <GettingStartedSecondaryAction
+                      accent={currentStep.accent}
+                      key={`${currentStep.key}-secondary-${index}`}
+                      label={action.label}
+                      onClick={action.onClick}
+                    />
+                  ))}
+                </Box>
+              ) : null}
+            </Box>
           </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 0.2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', pt: 0.16 }}>
             <StepProgress
               currentStep={currentProgressStep}
               isDarkMode={isDarkMode}
               totalSteps={steps.length}
             />
           </Box>
-        </>
-      ) : (
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.2 }}>
-          <Button
-            onClick={handleRunCurrentStepAction}
-            sx={{
-              ...getBlueTier1ButtonSx(),
-              borderRadius: '11px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              minHeight: '34px',
-              px: 1.4,
-              py: 0.8,
-              textTransform: 'none',
-            }}
-          >
-            {currentStep.loading ? (
-              <CircularProgress size={14} sx={{ color: APP_BLUE_SURFACE_TEXT }} />
-            ) : (
-              currentStep.ctaLabel
-            )}
-          </Button>
-          <StepProgress
-            currentStep={currentProgressStep}
-            isDarkMode={isDarkMode}
-            totalSteps={steps.length}
-          />
         </Box>
-      )}
-    </Box>
-  ) : workspaceState.mode === 'empty' ? (
+      ) : workspaceState.mode === 'empty' ? (
     <Box
       sx={{
         alignItems: 'center',
@@ -2051,6 +3169,7 @@ export const HomeQortinoWorkspaceCard = ({
           alignItems: 'center',
           display: 'flex',
           justifyContent: 'space-between',
+          transform: `translateY(${qortinoLayoutDebug.musicHeaderOffsetY - 1}px)`,
         }}
       >
         <Typography
@@ -2173,88 +3292,14 @@ export const HomeQortinoWorkspaceCard = ({
         })}
       </Box>
     </Box>
-  ) : workspaceState.mode === 'announcements' ? (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.95 }}>
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          justifyContent: 'space-between',
-        }}
-      >
-        <Typography
-          sx={{
-            color: alpha(theme.palette.text.secondary, 0.82),
-            fontSize: '0.65rem',
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-          }}
-        >
-          Announcements
-        </Typography>
-        <IconButton
-          onClick={() => handleSelectWorkspaceMode('empty')}
-          size="small"
-          sx={{
-            color: alpha(theme.palette.text.secondary, 0.82),
-            height: '30px',
-            width: '30px',
-          }}
-        >
-          <CloseRoundedIcon sx={{ fontSize: '18px' }} />
-        </IconButton>
-      </Box>
-
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.82 }}>
-        {ANNOUNCEMENT_ITEMS.map((item) => (
-          <Box
-            key={item.label}
-            sx={{
-              alignItems: 'flex-start',
-              display: 'grid',
-              gap: 0.75,
-              gridTemplateColumns: 'auto 1fr auto',
-            }}
-          >
-            <CampaignRoundedIcon
-              sx={{
-                color: alpha('#8DB8FF', 0.84),
-                fontSize: '14px',
-                mt: '2px',
-              }}
-            />
-            <Typography
-              sx={{
-                color: alpha(theme.palette.text.primary, 0.88),
-                fontSize: '0.71rem',
-                lineHeight: 1.42,
-              }}
-            >
-              {item.label}
-            </Typography>
-            <Typography
-              sx={{
-                color: alpha(theme.palette.text.secondary, 0.62),
-                fontSize: '0.63rem',
-                fontWeight: 600,
-                letterSpacing: '0.02em',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {item.time}
-            </Typography>
-          </Box>
-        ))}
-      </Box>
-    </Box>
   ) : (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.85 }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.02 }}>
       <Box
         sx={{
           alignItems: 'center',
           display: 'flex',
           justifyContent: 'space-between',
+          transform: `translateY(${qortinoLayoutDebug.musicHeaderOffsetY - 1}px)`,
         }}
       >
         <IconButton
@@ -2296,13 +3341,16 @@ export const HomeQortinoWorkspaceCard = ({
         sx={{
           alignItems: 'center',
           display: 'grid',
-          gap: '12px',
+          gap: '14px',
           gridTemplateColumns: '28px minmax(0, 1fr) 28px',
         }}
       >
         <ButtonBase
           onClick={() => handleCycleTrack('previous')}
-          sx={smallTransportButtonSx(theme)}
+          sx={{
+            ...smallTransportButtonSx(theme),
+            transform: `translateY(${qortinoLayoutDebug.prevNextOffsetY - 8}px)`,
+          }}
         >
           <SkipPreviousRoundedIcon sx={{ fontSize: '15px' }} />
         </ButtonBase>
@@ -2311,7 +3359,7 @@ export const HomeQortinoWorkspaceCard = ({
             alignItems: 'center',
             display: 'flex',
             flexDirection: 'column',
-            gap: 0.6,
+            gap: 1.08,
           }}
         >
           <ButtonBase
@@ -2321,12 +3369,80 @@ export const HomeQortinoWorkspaceCard = ({
               borderRadius: '50%',
               display: 'flex',
               height: '110px',
+              isolation: 'isolate',
               justifyContent: 'center',
               position: 'relative',
+              transform: `translateY(${qortinoLayoutDebug.vinylOffsetY + 12}px)`,
               width: '110px',
             }}
           >
-            <MusicCoverArt size={110} track={activeTrack} />
+            <MusicCoverArt
+              isSpinning={workspaceState.musicPlaying && isTrackReady && !isTrackLoadError}
+              size={110}
+              track={activeTrack}
+            />
+            {activeTrack.id && !isTrackReady ? (
+              <Box
+                sx={{
+                  height: '50px',
+                  left: '50%',
+                  pointerEvents: 'none',
+                  position: 'absolute',
+                  top: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '50px',
+                  zIndex: 2,
+                }}
+              >
+                <CircularProgress
+                  size={50}
+                  thickness={4.1}
+                  value={100}
+                  variant="determinate"
+                  sx={{
+                    color: musicControlRingTrackColor,
+                    inset: 0,
+                    position: 'absolute',
+                  }}
+                />
+                {isTrackPreparing && activeTrackReadyPercent <= 0 ? (
+                  <CircularProgress
+                    size={50}
+                    thickness={4.1}
+                    variant="indeterminate"
+                    sx={{
+                      animationDuration: '1.8s',
+                      color: musicControlRingColor,
+                      inset: 0,
+                      position: 'absolute',
+                      '& .MuiCircularProgress-circle': {
+                        strokeLinecap: 'round',
+                      },
+                    }}
+                  />
+                ) : (
+                  <CircularProgress
+                    size={50}
+                    thickness={4.1}
+                    value={Math.max(
+                      musicControlShowsReadyPulse ? 100 : 8,
+                      activeTrackReadyPercent
+                    )}
+                    variant="determinate"
+                    sx={{
+                      color: musicControlRingColor,
+                      inset: 0,
+                      position: 'absolute',
+                      transition: 'color 180ms ease',
+                      '& .MuiCircularProgress-circle': {
+                        strokeLinecap: 'round',
+                        transition: 'stroke-dashoffset 260ms ease',
+                      },
+                    }}
+                  />
+                )}
+              </Box>
+            ) : null}
             <Box
               sx={{
                 alignItems: 'center',
@@ -2343,31 +3459,49 @@ export const HomeQortinoWorkspaceCard = ({
                 top: '50%',
                 transform: 'translate(-50%, -50%)',
                 width: '36px',
+                zIndex: 3,
               }}
             >
-              {workspaceState.musicPlaying ? (
+              {musicControlShowsPause ? (
                 <PauseRoundedIcon sx={{ fontSize: '22px' }} />
+              ) : musicControlShowsDownload ? (
+                <DownloadRoundedIcon sx={{ fontSize: '18px' }} />
               ) : (
                 <PlayArrowRoundedIcon sx={{ fontSize: '22px' }} />
               )}
             </Box>
           </ButtonBase>
-          <Box sx={{ minWidth: 0, textAlign: 'center' }}>
+          <Box
+            sx={{
+              maxWidth: '100%',
+              minWidth: 0,
+              textAlign: 'center',
+              transform: `translateY(${qortinoLayoutDebug.titleAuthorOffsetY + 21}px)`,
+              width: '100%',
+            }}
+          >
             <Typography
               sx={{
                 color: alpha(theme.palette.text.primary, 0.92),
                 fontSize: '0.78rem',
                 fontWeight: 700,
                 lineHeight: 1.15,
+                overflow: 'hidden',
+                textOverflow: 'clip',
+                whiteSpace: 'nowrap',
+                width: '100%',
               }}
             >
-              {activeTrack.title}
+              {truncateTrackLabel(activeTrack.title)}
             </Typography>
             <Typography
               sx={{
                 color: alpha(theme.palette.text.secondary, 0.72),
                 fontSize: '0.61rem',
                 mt: 0.12,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
               {activeTrack.artist}
@@ -2376,19 +3510,33 @@ export const HomeQortinoWorkspaceCard = ({
         </Box>
         <ButtonBase
           onClick={() => handleCycleTrack('next')}
-          sx={smallTransportButtonSx(theme)}
+          sx={{
+            ...smallTransportButtonSx(theme),
+            transform: `translateY(${qortinoLayoutDebug.prevNextOffsetY - 8}px)`,
+          }}
         >
           <SkipNextRoundedIcon sx={{ fontSize: '15px' }} />
         </ButtonBase>
       </Box>
 
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.32 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0.18,
+          mt: 0.36,
+          pt: `${progressRowReservedTop}px`,
+        }}
+      >
         <Box
           sx={{
             alignItems: 'center',
             display: 'grid',
             gap: '8px',
             gridTemplateColumns: 'auto minmax(0, 1fr) auto auto',
+            position: 'relative',
+            transform: `translateY(${progressRowVisualOffsetY}px)`,
+            zIndex: 1,
           }}
         >
           <Typography
@@ -2402,25 +3550,42 @@ export const HomeQortinoWorkspaceCard = ({
             {currentPlaybackTime}
           </Typography>
           <Box
+            ref={musicProgressBarRef}
+            onPointerDown={handleMusicProgressPointerDown}
             sx={{
-              background: getBlueTier3ProgressBackground(theme, isDarkMode),
-              borderRadius: '999px',
-              height: '4px',
-              overflow: 'hidden',
+              cursor:
+                isTrackPlayable && activeTrackDurationSeconds > 0
+                  ? 'pointer'
+                  : 'default',
+              display: 'flex',
+              alignItems: 'center',
+              height: '12px',
               position: 'relative',
+              touchAction: 'none',
             }}
           >
             <Box
               sx={{
-                background:
-                  'linear-gradient(90deg, rgba(144,186,255,0.96) 0%, rgba(111,166,255,0.9) 100%)',
+                background: getBlueTier3ProgressBackground(theme, isDarkMode),
                 borderRadius: '999px',
-                boxShadow: `0 0 14px ${alpha('#8DB8FF', 0.22)}`,
-                height: '100%',
-                transition: 'width 260ms ease',
-                width: `${Math.min(Math.max(musicProgress, 0.08), 1) * 100}%`,
+                height: '4px',
+                overflow: 'hidden',
+                position: 'relative',
+                width: '100%',
               }}
-            />
+            >
+              <Box
+                sx={{
+                  background:
+                    'linear-gradient(90deg, rgba(144,186,255,0.96) 0%, rgba(111,166,255,0.9) 100%)',
+                  borderRadius: '999px',
+                  boxShadow: `0 0 14px ${alpha('#8DB8FF', 0.22)}`,
+                  height: '100%',
+                  transition: 'width 260ms ease',
+                  width: `${Math.min(Math.max(musicProgress, 0), 1) * 100}%`,
+                }}
+              />
+            </Box>
           </Box>
           <Typography
             sx={{
@@ -2445,7 +3610,9 @@ export const HomeQortinoWorkspaceCard = ({
               display: 'inline-flex',
               height: '18px',
               justifyContent: 'center',
+              position: 'relative',
               width: '18px',
+              zIndex: 1,
             }}
           >
             {workspaceState.repeatMode === 'one' ? (
@@ -2455,6 +3622,301 @@ export const HomeQortinoWorkspaceCard = ({
             )}
           </ButtonBase>
         </Box>
+        <Box
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            height: `${MUSIC_STATUS_SLOT_HEIGHT_PX}px`,
+            justifyContent: 'center',
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            position: 'relative',
+          }}
+        >
+          <Typography
+            sx={{
+              color: alpha(
+                isTrackLoadError
+                  ? '#FFB4B4'
+                  : isTrackPeerStarved
+                    ? '#F6D089'
+                    : theme.palette.text.secondary,
+                isTrackLoadError || isTrackPeerStarved ? 0.9 : 0.7
+              ),
+              fontSize: '0.58rem',
+              fontWeight: 600,
+              lineHeight: 1.35,
+              maxWidth: '100%',
+              opacity: musicStatusSlotMessage ? 1 : 0,
+              textAlign: 'center',
+              transform: `translateY(${qortinoLayoutDebug.nodeStatusOffsetY}px)`,
+              transition: 'opacity 140ms ease',
+              visibility: musicStatusSlotMessage ? 'visible' : 'hidden',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {musicStatusSlotMessage ?? ' '}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+      )}
+    </Box>
+  );
+
+  const qortinoStatusLabel = isOnboardingVisible
+    ? 'guide mode'
+    : isWorkspaceFreshlyUnlocked
+      ? 'unlocked'
+      : workspaceState.mode === 'music' && workspaceState.musicPlaying
+        ? 'listening'
+        : workspaceState.mode === 'hotkeys'
+          ? 'routing'
+          : 'standby';
+  const qortinoMascotCenteredOffsetY = Math.round(
+    (QORTINO_MASCOT_SIZE - qortinoMascotStageHeight) / 2
+  );
+
+  const qortinoCompanionSection = (
+    <Box
+      sx={{
+        background:
+          theme.palette.mode === 'dark'
+            ? `linear-gradient(90deg, ${alpha('#23324A', 0.08)} 0%, ${alpha(
+                '#1D2A3C',
+                0.06
+              )} 20%, ${alpha('#141B25', 0.03)} 38%, ${alpha('#11161E', 0)} 62%), radial-gradient(88% 78% at 8% 96%, ${alpha(
+                '#23324A',
+                0.16
+              )} 0%, ${alpha('#1A2534', 0.08)} 24%, ${alpha('#11161E', 0)} 68%), linear-gradient(180deg, ${alpha(
+                '#13171D',
+                0.98
+              )} 0%, ${alpha('#0E1319', 1)} 100%)`
+            : `linear-gradient(90deg, ${alpha('#D8E8FF', 0.08)} 0%, ${alpha(
+                '#E7F0FB',
+                0.06
+              )} 22%, ${alpha('#F4F7FB', 0.03)} 40%, ${alpha('#FFFFFF', 0)} 64%), radial-gradient(88% 78% at 8% 96%, ${alpha(
+                '#D8E8FF',
+                0.18
+              )} 0%, ${alpha('#E7F0FB', 0.08)} 24%, ${alpha('#FFFFFF', 0)} 68%), linear-gradient(180deg, ${alpha(
+                '#F4F7FB',
+                0.98
+              )} 0%, ${alpha('#EEF3F8', 1)} 100%)`,
+        minHeight: 0,
+        mt: 0,
+        overflow: 'hidden',
+        position: 'relative',
+        px: 2,
+        pb: 1.5,
+        pt: 0,
+      }}
+    >
+      <Box
+        sx={{
+          inset: 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+          '&::before': {
+            background: subtleLine,
+            content: '""',
+            height: '1px',
+            left: '18px',
+            position: 'absolute',
+            right: '18px',
+            top: 0,
+          },
+        }}
+      />
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          transform: `translateY(${-(qortinoLayoutDebug.separatorOffsetY + onboardingCompanionLift)}px)`,
+        }}
+      >
+      <Box
+        sx={{
+          alignItems: 'flex-start',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          mb: 1.05,
+          mt: '10px',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <Box
+          sx={{
+            alignItems: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+            minWidth: '78px',
+          }}
+        >
+          <Typography
+            sx={{
+              color: workspaceLabelColor,
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+              transform: `translate(${qortinoCompanionDebug.nameOffsetX}px, ${qortinoCompanionDebug.nameOffsetY + 1}px)`,
+              textTransform: 'uppercase',
+            }}
+          >
+            QORTINO
+          </Typography>
+          <Box
+            sx={{
+              alignSelf: 'flex-start',
+              background: alpha('#8DB8FF', isDarkMode ? 0.1 : 0.18),
+              border: `1px solid ${alpha('#8DB8FF', isDarkMode ? 0.32 : 0.4)}`,
+              borderRadius: '4px',
+              boxShadow: `inset 0 1px 0 ${alpha(
+                theme.palette.common.white,
+                isDarkMode ? 0.08 : 0.22
+              )}`,
+              px: '3px',
+              py: '1px',
+              transform: `translate(${qortinoCompanionDebug.statusOffsetX}px, ${qortinoCompanionDebug.statusOffsetY + 5}px)`,
+            }}
+          >
+            <Typography
+              sx={{
+                color: alpha('#FFFFFF', 0.98),
+                fontSize: '0.58rem',
+                fontWeight: 700,
+                letterSpacing: '0.02em',
+              }}
+            >
+              {qortinoStatusLabel}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+      <Box
+        sx={{
+          alignItems: 'end',
+          columnGap: 1,
+          display: 'grid',
+          gridTemplateColumns: `${qortinoMascotStageWidth}px minmax(0, 1fr)`,
+          mt: '-17px',
+          minHeight: `${Math.max(qortinoMascotStageHeight, 96)}px`,
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <Box
+          sx={{
+            alignItems: 'flex-end',
+            display: 'flex',
+            justifyContent: 'center',
+            height: `${qortinoMascotStageHeight}px`,
+            overflow: 'visible',
+            transform: `translateY(${qortinoMascotCenteredOffsetY}px)`,
+            width: `${qortinoMascotStageWidth}px`,
+          }}
+        >
+          <QortinoMascot
+            isDarkMode={isDarkMode}
+            isListening={workspaceState.mode === 'music' && workspaceState.musicPlaying}
+            isTalking={qortinoIsTalking}
+            lookDebug={qortinoLookDebug}
+            mood={qortinoMood}
+          />
+        </Box>
+        <Box
+          sx={{
+            alignItems: 'start',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.9,
+            justifyContent: 'center',
+            minHeight: `${qortinoMascotStageHeight}px`,
+            minWidth: 0,
+            width: '100%',
+          }}
+        >
+          {qortinoDisplayedMessage ? (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              style={{ minWidth: 0 }}
+            >
+              <Box
+                sx={{
+                  alignSelf: 'flex-start',
+                  background:
+                    theme.palette.mode === 'dark'
+                      ? 'linear-gradient(180deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
+                      : 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(243,247,252,0.94) 100%)',
+                  border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.065 : 0.14)}`,
+                  borderRadius: '15px',
+                  boxShadow: `0 14px 24px ${alpha('#000', isDarkMode ? 0.18 : 0.08)}`,
+                  display: 'flex',
+                  maxWidth: { xs: '100%', sm: '204px' },
+                  minHeight: '76px',
+                  minWidth: 0,
+                  p: 0.9,
+                  position: 'relative',
+                  transform: `translate(${qortinoCompanionDebug.bubbleOffsetX}px, ${
+                    qortinoCompanionDebug.bubbleOffsetY + 5
+                  }px)`,
+                  '&::before': {
+                    background: alpha(
+                      theme.palette.common.white,
+                      isDarkMode ? 0.07 : 0.15
+                    ),
+                    bottom: '14px',
+                    clipPath: 'polygon(0 50%, 100% 0, 100% 100%)',
+                    content: '""',
+                    height: '18px',
+                    left: '-12px',
+                    position: 'absolute',
+                    width: '12px',
+                  },
+                  '&::after': {
+                    background:
+                      theme.palette.mode === 'dark'
+                        ? 'linear-gradient(180deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
+                        : 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(243,247,252,0.94) 100%)',
+                    bottom: '15px',
+                    clipPath: 'polygon(0 50%, 100% 0, 100% 100%)',
+                    content: '""',
+                    filter: `drop-shadow(0 6px 10px ${alpha('#000', isDarkMode ? 0.12 : 0.05)})`,
+                    height: '16px',
+                    left: '-10px',
+                    position: 'absolute',
+                    width: '10px',
+                  },
+                }}
+              >
+                <motion.div
+                  key={qortinoDisplayedMessage}
+                  initial={{ opacity: 0.35, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, ease: 'easeOut' }}
+                  style={{ width: '100%' }}
+                >
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.primary, 0.94),
+                      fontSize: '0.73rem',
+                      fontWeight: 600,
+                      letterSpacing: '-0.015em',
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {qortinoDisplayedMessage}
+                  </Typography>
+                </motion.div>
+              </Box>
+            </motion.div>
+          ) : null}
+        </Box>
+      </Box>
       </Box>
     </Box>
   );
@@ -2469,7 +3931,7 @@ export const HomeQortinoWorkspaceCard = ({
           containerName: 'qortino-card',
           containerType: 'inline-size',
           display: 'grid',
-          gridTemplateRows: `${QORTINO_WORKSPACE_BAY_HEIGHT_PX}px minmax(0, 1fr)`,
+          gridTemplateRows: `${workspaceBayHeightPx}px minmax(0, 1fr)`,
           height: '100%',
           overflow: 'hidden',
           position: 'relative',
@@ -2478,224 +3940,32 @@ export const HomeQortinoWorkspaceCard = ({
         onMouseMove={handleDashboardPanelPointerMove}
         onMouseLeave={handleDashboardPanelPointerLeave}
       >
-        <Box
-          sx={{
-            background:
-              theme.palette.mode === 'dark'
-                ? `linear-gradient(180deg, ${alpha('#20242D', 0.9)} 0%, ${alpha(
-                    '#171B23',
-                    0.96
-                  )} 100%)`
-                : `linear-gradient(180deg, ${alpha('#FFFFFF', 0.72)} 0%, ${alpha(
-                    '#F3F6FB',
-                    0.9
-                  )} 100%)`,
-            borderBottom: `1px solid ${alpha(theme.palette.common.white, 0.05)}`,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            minHeight: 0,
-            px: 2,
-            py: isOnboardingVisible ? 1.55 : 1.25,
-            position: 'relative',
-          }}
+        <ErrorBoundary
+          fallback={
+            <QortinoSectionRuntimeFallback
+              body="QORTINO below is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here."
+              theme={theme}
+              title="Workspace bay hit a runtime snag."
+              variant="workspace"
+            />
+          }
         >
-          {workspaceBayContent}
-        </Box>
+          {workspaceBaySection}
+        </ErrorBoundary>
 
-        <Box
-          sx={{
-            background:
-              theme.palette.mode === 'dark'
-                ? `radial-gradient(90% 90% at 50% 14%, ${alpha('#23324A', 0.44)} 0%, ${alpha(
-                    '#18202C',
-                    0.18
-                  )} 28%, ${alpha('#11161E', 0)} 72%), linear-gradient(180deg, ${alpha(
-                    '#13171D',
-                    0.98
-                  )} 0%, ${alpha('#0E1319', 1)} 100%)`
-                : `radial-gradient(90% 90% at 50% 14%, ${alpha('#D8E8FF', 0.52)} 0%, ${alpha(
-                    '#E6EEF8',
-                    0.22
-                  )} 28%, ${alpha('#FFFFFF', 0)} 72%), linear-gradient(180deg, ${alpha(
-                    '#F4F7FB',
-                    0.98
-                  )} 0%, ${alpha('#EEF3F8', 1)} 100%)`,
-            minHeight: 0,
-            overflow: 'hidden',
-            position: 'relative',
-            px: 2,
-            py: 1.5,
-          }}
+        <ErrorBoundary
+          fallback={
+            <QortinoSectionRuntimeFallback
+              body="The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here."
+              theme={theme}
+              title="QORTINO hit a runtime snag."
+              variant="qortino"
+            />
+          }
         >
-          <Box
-            sx={{
-              inset: 0,
-              pointerEvents: 'none',
-              position: 'absolute',
-              '&::before': {
-                background: subtleLine,
-                content: '""',
-                height: '1px',
-                left: '18px',
-                position: 'absolute',
-                right: '18px',
-                top: 0,
-              },
-            }}
-          />
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              justifyContent: 'space-between',
-              mb: 0.8,
-              position: 'relative',
-              zIndex: 1,
-            }}
-          >
-            <Typography
-              sx={{
-                color: workspaceLabelColor,
-                fontSize: '0.68rem',
-                fontWeight: 700,
-                letterSpacing: '0.14em',
-                textTransform: 'uppercase',
-              }}
-            >
-              QORTINO
-            </Typography>
-            <Box
-              sx={{
-                ...getBlueTier2BadgeSx(theme, workspaceState.mode !== 'empty'),
-                borderRadius: '999px',
-                px: 0.9,
-                py: 0.35,
-              }}
-            >
-              <Typography
-                sx={{
-                  color:
-                    workspaceState.mode !== 'empty'
-                      ? APP_BLUE_SURFACE_TEXT
-                      : alpha(theme.palette.text.secondary, 0.82),
-                  fontSize: '0.62rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.02em',
-                }}
-              >
-                {isOnboardingVisible
-                  ? 'guide mode'
-                  : isWorkspaceFreshlyUnlocked
-                    ? 'unlocked'
-                  : workspaceState.mode === 'music' && workspaceState.musicPlaying
-                    ? 'listening'
-                    : workspaceState.mode === 'hotkeys'
-                      ? 'routing'
-                      : workspaceState.mode === 'announcements'
-                        ? 'notes'
-                        : 'standby'}
-              </Typography>
-            </Box>
-          </Box>
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      display: 'grid',
-                      gap: { xs: 1.4, sm: 1.8 },
-                      gridTemplateColumns: {
-                        xs: '1fr',
-                        sm: `${QORTINO_MASCOT_SIZE + 12}px minmax(0, 1fr)`,
-                      },
-                      minHeight: 0,
-                      position: 'relative',
-                      zIndex: 1,
-                      '@container qortino-card (max-width: 390px)': {
-                        gap: '14px',
-                        gridTemplateColumns: `${QORTINO_MASCOT_SIZE + 4}px minmax(0, 1fr)`,
-                      },
-                    }}
-                  >
-            <Box sx={{ alignItems: 'center', display: 'flex', justifyContent: 'center' }}>
-              <QortinoMascot
-                isDarkMode={isDarkMode}
-                isListening={workspaceState.mode === 'music' && workspaceState.musicPlaying}
-                mood={qortinoMood}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.95 }}>
-              <motion.div
-                key={qortinoMessage}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-              >
-                <Box
-                  sx={{
-                    background:
-                      theme.palette.mode === 'dark'
-                        ? 'linear-gradient(180deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
-                        : 'linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(243,247,252,0.94) 100%)',
-                    border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.065 : 0.14)}`,
-                    borderRadius: '15px',
-                    boxShadow: `0 14px 24px ${alpha('#000', isDarkMode ? 0.18 : 0.08)}`,
-                    p: 1.15,
-                    position: 'relative',
-                    '&::after': {
-                      background:
-                        theme.palette.mode === 'dark'
-                          ? 'linear-gradient(135deg, rgba(31,36,45,0.88) 0%, rgba(19,23,29,0.96) 100%)'
-                          : 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(243,247,252,0.96) 100%)',
-                      borderBottom: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.04 : 0.12)}`,
-                      borderRight: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.04 : 0.12)}`,
-                      borderRadius: '0 0 8px 0',
-                      bottom: '-7px',
-                      content: '""',
-                      height: '14px',
-                      left: '22px',
-                      position: 'absolute',
-                      transform: 'rotate(45deg)',
-                      width: '14px',
-                    },
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.primary, 0.94),
-                      fontSize: '0.79rem',
-                      fontWeight: 600,
-                      letterSpacing: '-0.015em',
-                      lineHeight: 1.46,
-                    }}
-                  >
-                    {qortinoMessage}
-                  </Typography>
-                </Box>
-              </motion.div>
-
-              <Box
-                sx={{
-                  display: 'grid',
-                  gap: 0.75,
-                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                }}
-              >
-                <StatChip
-                  label="Companion"
-                  value={qortinoCompanionStatus}
-                  theme={theme}
-                />
-                <StatChip
-                  label="Memory"
-                  value={qortinoMemoryStatus}
-                  theme={theme}
-                />
-              </Box>
-            </Box>
-          </Box>
-        </Box>
+          {qortinoCompanionSection}
+        </ErrorBoundary>
       </Box>
-
       <Dialog
         open={openModulePickerDialog}
         onClose={() => setOpenModulePickerDialog(false)}
@@ -3140,7 +4410,75 @@ export const HomeQortinoWorkspaceCard = ({
               {workspaceState.musicQuery.trim() ? 'Results' : 'Discovery'}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.55 }}>
-              {browserTracks.map((track) => (
+              {isMusicBrowserLoading ? (
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.06 : 0.12)}`,
+                    borderRadius: '14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.8,
+                    justifyContent: 'center',
+                    minHeight: '96px',
+                    px: 1.2,
+                    py: 1,
+                    textAlign: 'center',
+                  }}
+                >
+                  <CircularProgress size={20} thickness={4.2} />
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.74),
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {musicSearchQuery
+                      ? 'Searching the EarBump library...'
+                      : 'Loading EarBump discovery...'}
+                  </Typography>
+                </Box>
+              ) : null}
+              {!isMusicBrowserLoading && musicBrowserError ? (
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    border: `1px solid ${alpha(theme.palette.common.white, isDarkMode ? 0.06 : 0.12)}`,
+                    borderRadius: '14px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.35,
+                    justifyContent: 'center',
+                    minHeight: '88px',
+                    px: 1.2,
+                    py: 1,
+                    textAlign: 'center',
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.primary, 0.88),
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                    }}
+                  >
+                    EarBump is quiet right now
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.68),
+                      fontSize: '0.64rem',
+                      lineHeight: 1.4,
+                      maxWidth: '30ch',
+                    }}
+                  >
+                    {musicBrowserError}
+                  </Typography>
+                </Box>
+              ) : null}
+              {!isMusicBrowserLoading && !musicBrowserError
+                ? browserTracks.map((track) => (
                 <ButtonBase
                   key={track.id}
                   onClick={() => handleSelectTrackFromBrowser(track.id)}
@@ -3184,7 +4522,7 @@ export const HomeQortinoWorkspaceCard = ({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {track.artist} • {track.uploaded}
+                      {track.artist} â€¢ {track.uploaded}
                     </Typography>
                   </Box>
                   <Typography
@@ -3212,8 +4550,11 @@ export const HomeQortinoWorkspaceCard = ({
                     <PlayArrowRoundedIcon sx={{ fontSize: '18px' }} />
                   </Box>
                 </ButtonBase>
-              ))}
-              {browserTracks.length === 0 && (
+              ))
+                : null}
+              {!isMusicBrowserLoading &&
+              !musicBrowserError &&
+              browserTracks.length === 0 ? (
                 <Box
                   sx={{
                     alignItems: 'center',
@@ -3249,7 +4590,7 @@ export const HomeQortinoWorkspaceCard = ({
                     Try another title or artist to pull something into the player.
                   </Typography>
                 </Box>
-              )}
+              ) : null}
             </Box>
           </Box>
         </DialogContent>
@@ -3350,89 +4691,139 @@ export const HomeQortinoWorkspaceCard = ({
   );
 };
 
-const MiniActionPill = ({
+const GettingStartedPrimaryAction = ({
+  accent = '#8DB8FF',
+  disabled = false,
+  label,
+  loading = false,
+  onClick,
+}: {
+  accent?: string;
+  disabled?: boolean;
+  label: string;
+  loading?: boolean;
+  onClick: () => void;
+}) => {
+  const theme = useTheme();
+
+  return (
+    <ButtonBase
+      disabled={disabled || loading}
+      onClick={onClick}
+      sx={{
+        alignItems: 'center',
+        background:
+          theme.palette.mode === 'dark'
+            ? `linear-gradient(180deg, ${alpha(accent, 0.18)} 0%, ${alpha(
+                accent,
+                0.11
+              )} 100%)`
+            : `linear-gradient(180deg, ${alpha(accent, 0.16)} 0%, ${alpha(
+                accent,
+                0.1
+              )} 100%)`,
+        border: `1px solid ${alpha(accent, theme.palette.mode === 'dark' ? 0.22 : 0.18)}`,
+        borderRadius: '8px',
+        boxShadow: `inset 0 1px 0 ${alpha(
+          theme.palette.common.white,
+          theme.palette.mode === 'dark' ? 0.08 : 0.22
+        )}`,
+        color: APP_BLUE_SURFACE_TEXT,
+        justifyContent: 'flex-start',
+        minHeight: '32px',
+        px: 1.1,
+        py: 0.5,
+        textAlign: 'left',
+        transition:
+          'transform 120ms ease, filter 140ms ease, background 160ms ease, border-color 160ms ease',
+        width: '100%',
+        '@container qortino-card (max-width: 390px)': {
+          minHeight: '30px',
+          px: 0.95,
+          py: 0.48,
+        },
+        '&:hover': {
+          borderColor: alpha(accent, theme.palette.mode === 'dark' ? 0.3 : 0.22),
+          filter: 'brightness(1.02)',
+          transform: 'translateY(-1px)',
+        },
+        '&.Mui-disabled': {
+          opacity: 0.78,
+        },
+      }}
+    >
+      <Typography
+        sx={{
+          color: APP_BLUE_SURFACE_TEXT,
+          fontSize: '0.7rem',
+          fontWeight: 700,
+          lineHeight: 1.16,
+          '@container qortino-card (max-width: 390px)': {
+            fontSize: '0.67rem',
+          },
+        }}
+      >
+        {loading ? 'Loading...' : label}
+      </Typography>
+    </ButtonBase>
+  );
+};
+
+const GettingStartedSecondaryAction = ({
+  accent = '#8DB8FF',
   label,
   onClick,
 }: {
+  accent?: string;
   label: string;
   onClick: () => void;
-}) => (
-  <ButtonBase
-    onClick={onClick}
-    sx={{
-      alignItems: 'center',
-      background: 'rgba(132, 175, 240, 0.12)',
-      border: `1px solid ${alpha('#8DB8FF', 0.22)}`,
-      borderRadius: '999px',
-      color: alpha('#CFE0FF', 0.96),
-      display: 'inline-flex',
-      fontSize: '0.66rem',
-      fontWeight: 700,
-      gap: 0.4,
-      px: 1.1,
-      py: 0.65,
-      textAlign: 'center',
-      transition: 'transform 120ms ease, border-color 140ms ease',
-      '@container qortino-card (max-width: 390px)': {
-        fontSize: '0.63rem',
-        px: 0.92,
-        py: 0.56,
-      },
-      '&:hover': {
-        borderColor: alpha('#8DB8FF', 0.34),
-        transform: 'translateY(-1px)',
-      },
-    }}
-  >
-    {label}
-  </ButtonBase>
-);
-
-const StatChip = ({
-  label,
-  theme,
-  value,
-}: {
-  label: string;
-  theme: ReturnType<typeof useTheme>;
-  value: string;
-}) => (
-  <Box
-    sx={{
-      background:
-        theme.palette.mode === 'dark'
-          ? 'rgba(255,255,255,0.03)'
-          : 'rgba(20,24,32,0.03)',
-      border: `1px solid ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.06 : 0.12)}`,
-      borderRadius: '12px',
-      minHeight: '52px',
-      px: 1,
-      py: 0.8,
-    }}
-  >
-    <Typography
+}) => {
+  return (
+    <ButtonBase
+      onClick={onClick}
       sx={{
-        color: alpha(theme.palette.text.secondary, 0.64),
-        fontSize: '0.63rem',
-        fontWeight: 700,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-      }}
-    >
-      {label}
-    </Typography>
-    <Typography
-      sx={{
-        color: alpha(theme.palette.text.primary, 0.9),
-        fontSize: '0.73rem',
+        alignItems: 'center',
+        color: alpha('#C3D8FF', 0.84),
+        columnGap: 0.42,
+        display: 'inline-flex',
+        fontSize: '0.65rem',
         fontWeight: 600,
-        mt: 0.35,
+        justifyContent: 'flex-start',
+        minHeight: '20px',
+        px: 0.1,
+        py: 0.05,
+        textAlign: 'left',
+        transition: 'color 140ms ease, opacity 120ms ease',
+        '@container qortino-card (max-width: 390px)': {
+          fontSize: '0.62rem',
+        },
+        '&:hover': {
+          color: alpha('#E0EBFF', 0.98),
+        },
       }}
     >
-      {value}
-    </Typography>
-  </Box>
-);
+      <Box
+        sx={{
+          background: alpha(accent, 0.7),
+          borderRadius: '999px',
+          flexShrink: 0,
+          height: '4px',
+          width: '4px',
+        }}
+      />
+      <Typography
+        sx={{
+          color: 'inherit',
+          fontSize: 'inherit',
+          fontWeight: 'inherit',
+          lineHeight: 1.16,
+        }}
+      >
+        {label}
+      </Typography>
+    </ButtonBase>
+  );
+};
 
 const smallTransportButtonSx = (theme: ReturnType<typeof useTheme>) => ({
   alignItems: 'center',

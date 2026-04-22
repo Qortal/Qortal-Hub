@@ -1,4 +1,17 @@
-import { alpha, Box, ButtonBase, Divider, Typography, useTheme } from '@mui/material';
+import {
+  alpha,
+  Box,
+  Button,
+  ButtonBase,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  Slider,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { useAtomValue } from 'jotai';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +40,38 @@ import {
   type GettingStartedDebugOverrides,
   type GettingStartedDebugStepKey,
 } from '../Group/homeGettingStartedDebug';
+import {
+  areQortinoCompanionDebugSettingsEqual,
+  DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS,
+  parseQortinoCompanionDebugSettings,
+  QORTINO_COMPANION_DEBUG_EVENT,
+  QORTINO_COMPANION_DEBUG_STORAGE_KEY,
+  type QortinoCompanionDebugSettings,
+} from '../Group/qortinoCompanionDebug';
+import {
+  areQortinoLookDebugSettingsEqual,
+  DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS,
+  parseQortinoLookDebugSettings,
+  QORTINO_LOOK_DEBUG_EVENT,
+  QORTINO_LOOK_DEBUG_STORAGE_KEY,
+  type QortinoLookDebugSettings,
+} from '../Group/qortinoLookDebug';
+import {
+  areQortinoLayoutDebugSettingsEqual,
+  DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS,
+  parseQortinoLayoutDebugSettings,
+  QORTINO_LAYOUT_DEBUG_EVENT,
+  QORTINO_LAYOUT_DEBUG_STORAGE_KEY,
+  type QortinoLayoutDebugSettings,
+} from '../Group/qortinoLayoutDebug';
+import {
+  areQortinoInletDebugSettingsEqual,
+  DEFAULT_QORTINO_INLET_DEBUG_SETTINGS,
+  parseQortinoInletDebugSettings,
+  QORTINO_INLET_DEBUG_EVENT,
+  QORTINO_INLET_DEBUG_STORAGE_KEY,
+  type QortinoInletDebugSettings,
+} from '../Snackbar/qortinoInletDebug';
 
 const SIDEBAR_WIDTH_PX = 72;
 const EDGE_SENSOR_WIDTH_PX = 12;
@@ -265,6 +310,37 @@ export const DesktopSideBar = ({
         localStorage.getItem(DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY)
       )
     );
+  const [debugQortinoLookSettings, setDebugQortinoLookSettings] =
+    useState<QortinoLookDebugSettings>(() =>
+      parseQortinoLookDebugSettings(
+        localStorage.getItem(QORTINO_LOOK_DEBUG_STORAGE_KEY)
+      )
+    );
+  const [debugQortinoLayoutSettings, setDebugQortinoLayoutSettings] =
+    useState<QortinoLayoutDebugSettings>(() =>
+      parseQortinoLayoutDebugSettings(
+        localStorage.getItem(QORTINO_LAYOUT_DEBUG_STORAGE_KEY)
+      )
+    );
+  const [debugQortinoCompanionSettings, setDebugQortinoCompanionSettings] =
+    useState<QortinoCompanionDebugSettings>(() =>
+      parseQortinoCompanionDebugSettings(
+        localStorage.getItem(QORTINO_COMPANION_DEBUG_STORAGE_KEY)
+      )
+    );
+  const [debugQortinoInletSettings, setDebugQortinoInletSettings] =
+    useState<QortinoInletDebugSettings>(() =>
+      parseQortinoInletDebugSettings(
+        localStorage.getItem(QORTINO_INLET_DEBUG_STORAGE_KEY)
+      )
+    );
+  const [isQortinoLookDialogOpen, setIsQortinoLookDialogOpen] = useState(false);
+  const [isQortinoLayoutDialogOpen, setIsQortinoLayoutDialogOpen] =
+    useState(false);
+  const [isQortinoCompanionDialogOpen, setIsQortinoCompanionDialogOpen] =
+    useState(false);
+  const [isQortinoInletDialogOpen, setIsQortinoInletDialogOpen] =
+    useState(false);
   const [isInfoActive, setIsInfoActive] = useState(false);
   const openTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -348,6 +424,147 @@ export const DesktopSideBar = ({
       [stepKey]: !debugGettingStartedOverrides[stepKey],
     });
   };
+
+  const emitQortinoLookDebugSettings = (
+    nextSettings: QortinoLookDebugSettings
+  ) => {
+    setDebugQortinoLookSettings(nextSettings);
+    localStorage.setItem(
+      QORTINO_LOOK_DEBUG_STORAGE_KEY,
+      JSON.stringify(nextSettings)
+    );
+    executeEvent(QORTINO_LOOK_DEBUG_EVENT, {
+      data: {
+        settings: nextSettings,
+      },
+    });
+  };
+
+  const updateQortinoLookDebugSetting = (
+    key: keyof QortinoLookDebugSettings,
+    value: number
+  ) => {
+    emitQortinoLookDebugSettings({
+      ...debugQortinoLookSettings,
+      [key]: Math.round(value * 100) / 100,
+    });
+  };
+
+  const resetQortinoLookDebugSettings = () => {
+    emitQortinoLookDebugSettings({ ...DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS });
+  };
+
+  const isQortinoLookCustomized = !areQortinoLookDebugSettingsEqual(
+    debugQortinoLookSettings,
+    DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS
+  );
+
+  const emitQortinoLayoutDebugSettings = (
+    nextSettings: QortinoLayoutDebugSettings
+  ) => {
+    setDebugQortinoLayoutSettings(nextSettings);
+    localStorage.setItem(
+      QORTINO_LAYOUT_DEBUG_STORAGE_KEY,
+      JSON.stringify(nextSettings)
+    );
+    executeEvent(QORTINO_LAYOUT_DEBUG_EVENT, {
+      data: {
+        settings: nextSettings,
+      },
+    });
+  };
+
+  const updateQortinoLayoutDebugSetting = (
+    key: keyof QortinoLayoutDebugSettings,
+    value: number
+  ) => {
+    emitQortinoLayoutDebugSettings({
+      ...debugQortinoLayoutSettings,
+      [key]: Math.round(value),
+    });
+  };
+
+  const resetQortinoLayoutDebugSettings = () => {
+    emitQortinoLayoutDebugSettings({ ...DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS });
+  };
+
+  const isQortinoLayoutCustomized = !areQortinoLayoutDebugSettingsEqual(
+    debugQortinoLayoutSettings,
+    DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS
+  );
+
+  const emitQortinoCompanionDebugSettings = (
+    nextSettings: QortinoCompanionDebugSettings
+  ) => {
+    setDebugQortinoCompanionSettings(nextSettings);
+    localStorage.setItem(
+      QORTINO_COMPANION_DEBUG_STORAGE_KEY,
+      JSON.stringify(nextSettings)
+    );
+    executeEvent(QORTINO_COMPANION_DEBUG_EVENT, {
+      data: {
+        settings: nextSettings,
+      },
+    });
+  };
+
+  const updateQortinoCompanionDebugSetting = (
+    key: keyof QortinoCompanionDebugSettings,
+    value: number
+  ) => {
+    emitQortinoCompanionDebugSettings({
+      ...debugQortinoCompanionSettings,
+      [key]: Math.round(value),
+    });
+  };
+
+  const resetQortinoCompanionDebugSettings = () => {
+    emitQortinoCompanionDebugSettings({
+      ...DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS,
+    });
+  };
+
+  const isQortinoCompanionCustomized = !areQortinoCompanionDebugSettingsEqual(
+    debugQortinoCompanionSettings,
+    DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS
+  );
+
+  const emitQortinoInletDebugSettings = (
+    nextSettings: QortinoInletDebugSettings
+  ) => {
+    setDebugQortinoInletSettings(nextSettings);
+    localStorage.setItem(
+      QORTINO_INLET_DEBUG_STORAGE_KEY,
+      JSON.stringify(nextSettings)
+    );
+    executeEvent(QORTINO_INLET_DEBUG_EVENT, {
+      data: {
+        settings: nextSettings,
+      },
+    });
+  };
+
+  const updateQortinoInletDebugSetting = (
+    key: keyof QortinoInletDebugSettings,
+    value: number
+  ) => {
+    emitQortinoInletDebugSettings({
+      ...debugQortinoInletSettings,
+      [key]:
+        key === 'offsetX' || key === 'offsetY'
+          ? Math.round(value)
+          : Math.round(value * 100) / 100,
+    });
+  };
+
+  const resetQortinoInletDebugSettings = () => {
+    emitQortinoInletDebugSettings({ ...DEFAULT_QORTINO_INLET_DEBUG_SETTINGS });
+  };
+
+  const isQortinoInletCustomized = !areQortinoInletDebugSettingsEqual(
+    debugQortinoInletSettings,
+    DEFAULT_QORTINO_INLET_DEBUG_SETTINGS
+  );
 
   const emitOverlayState = (nextVisible: boolean) => {
     executeEvent('sidebarOverlayVisibility', {
@@ -737,6 +954,34 @@ export const DesktopSideBar = ({
           </ButtonBase>
           <ButtonBase
             disableRipple
+            onClick={() => setIsQortinoLookDialogOpen(true)}
+            sx={getDebugToggleSx(isQortinoLookCustomized)}
+          >
+            QORTINO Look: {isQortinoLookCustomized ? 'Custom' : 'Default'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => setIsQortinoLayoutDialogOpen(true)}
+            sx={getDebugToggleSx(isQortinoLayoutCustomized)}
+          >
+            QORTINO Layout: {isQortinoLayoutCustomized ? 'Custom' : 'Default'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => setIsQortinoCompanionDialogOpen(true)}
+            sx={getDebugToggleSx(isQortinoCompanionCustomized)}
+          >
+            QORTINO Bubble: {isQortinoCompanionCustomized ? 'Custom' : 'Default'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
+            onClick={() => setIsQortinoInletDialogOpen(true)}
+            sx={getDebugToggleSx(isQortinoInletCustomized)}
+          >
+            QORTINO Inlet: {isQortinoInletCustomized ? 'Custom' : 'Default'}
+          </ButtonBase>
+          <ButtonBase
+            disableRipple
             onClick={() => {
               const nextMode = getNextDashboardLoginIntroMode(
                 debugDashboardIntroMode
@@ -847,6 +1092,420 @@ export const DesktopSideBar = ({
           </ButtonBase>
         </Box>
       ) : null}
+      <Dialog
+        open={isLocalPreview && isQortinoLookDialogOpen}
+        onClose={() => setIsQortinoLookDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>QORTINO Look Debug</DialogTitle>
+        <DialogContent
+          dividers
+          sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}
+        >
+          <Typography
+            sx={{ color: theme.palette.text.secondary, fontSize: '0.84rem' }}
+          >
+            These sliders only affect the local preview. Tune QORTINO&apos;s
+            body circle, body width, antenna shape, face, and Qortal mark live.
+          </Typography>
+          {([
+            {
+              key: 'bodyScale',
+              label: 'Circle Size',
+              max: 150,
+              min: 70,
+            },
+            {
+              key: 'bodyWidthScale',
+              label: 'Circle Width',
+              max: 170,
+              min: 70,
+            },
+            {
+              key: 'antennaScale',
+              label: 'Antenna Size',
+              max: 170,
+              min: 70,
+            },
+            {
+              key: 'antennaLength',
+              label: 'Antenna Length',
+              max: 190,
+              min: 55,
+            },
+            {
+              key: 'faceScale',
+              label: 'Face Size',
+              max: 150,
+              min: 70,
+            },
+            {
+              key: 'logoScale',
+              label: 'Qortal Logo Size',
+              max: 170,
+              min: 60,
+            },
+          ] as const).map((control) => (
+            <Box key={control.key}>
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  mb: 0.5,
+                }}
+              >
+                <Typography
+                  sx={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.01em' }}
+                >
+                  {control.label}
+                </Typography>
+                <Typography
+                  sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem' }}
+                >
+                  {Math.round(debugQortinoLookSettings[control.key] * 100)}%
+                </Typography>
+              </Box>
+              <Slider
+                min={control.min}
+                max={control.max}
+                step={5}
+                value={Math.round(debugQortinoLookSettings[control.key] * 100)}
+                onChange={(_, value) =>
+                  updateQortinoLookDebugSetting(
+                    control.key,
+                    (value as number) / 100
+                  )
+                }
+              />
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.25, pt: 1.5 }}>
+          <Button
+            onClick={resetQortinoLookDebugSettings}
+            disabled={!isQortinoLookCustomized}
+          >
+            Reset
+          </Button>
+          <Button variant="contained" onClick={() => setIsQortinoLookDialogOpen(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={isLocalPreview && isQortinoLayoutDialogOpen}
+        onClose={() => setIsQortinoLayoutDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>QORTINO Layout Debug</DialogTitle>
+        <DialogContent
+          dividers
+          sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}
+        >
+          <Typography
+            sx={{ color: theme.palette.text.secondary, fontSize: '0.84rem' }}
+          >
+            These sliders only affect the local preview. Tune the separator and
+            upper music player spacing without touching the bubble/name/status
+            controls below.
+          </Typography>
+          {([
+            { key: 'separatorOffsetY', label: 'Separator Bar', max: 80, min: -80 },
+            {
+              key: 'musicHeaderOffsetY',
+              label: 'Search / Title / Close',
+              max: 80,
+              min: -80,
+            },
+            { key: 'prevNextOffsetY', label: 'Prev / Next', max: 80, min: -80 },
+            { key: 'vinylOffsetY', label: 'Vinyl + Play', max: 80, min: -80 },
+            {
+              key: 'titleAuthorOffsetY',
+              label: 'Title + Author',
+              max: 80,
+              min: -80,
+            },
+            {
+              key: 'progressOffsetY',
+              label: 'Progress + Time + Repeat',
+              max: 80,
+              min: -80,
+            },
+            {
+              key: 'nodeStatusOffsetY',
+              label: 'Node Status Text',
+              max: 80,
+              min: -80,
+            },
+          ] as const).map((control) => (
+            <Box key={control.key}>
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  mb: 0.5,
+                }}
+              >
+                <Typography
+                  sx={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.01em' }}
+                >
+                  {control.label}
+                </Typography>
+                <Typography
+                  sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem' }}
+                >
+                  {`${debugQortinoLayoutSettings[control.key] > 0 ? '+' : ''}${
+                    debugQortinoLayoutSettings[control.key]
+                  }px`}
+                </Typography>
+              </Box>
+              <Slider
+                min={control.min}
+                max={control.max}
+                step={1}
+                value={debugQortinoLayoutSettings[control.key]}
+                onChange={(_, value) =>
+                  updateQortinoLayoutDebugSetting(control.key, value as number)
+                }
+              />
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.25, pt: 1.5 }}>
+          <Button
+            onClick={resetQortinoLayoutDebugSettings}
+            disabled={!isQortinoLayoutCustomized}
+          >
+            Reset
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => setIsQortinoLayoutDialogOpen(false)}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={isLocalPreview && isQortinoCompanionDialogOpen}
+        onClose={() => setIsQortinoCompanionDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>QORTINO Bubble Debug</DialogTitle>
+        <DialogContent
+          dividers
+          sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}
+        >
+          <Typography
+            sx={{ color: theme.palette.text.secondary, fontSize: '0.84rem' }}
+          >
+            These sliders only affect the local preview. Tune the QORTINO label,
+            status tag, and speech bubble position live.
+          </Typography>
+          {([
+            { key: 'nameOffsetX', label: 'QORTINO X', max: 80, min: -80 },
+            { key: 'nameOffsetY', label: 'QORTINO Y', max: 80, min: -80 },
+            { key: 'statusOffsetX', label: 'Status X', max: 80, min: -80 },
+            { key: 'statusOffsetY', label: 'Status Y', max: 80, min: -80 },
+            { key: 'bubbleOffsetX', label: 'Bubble X', max: 80, min: -80 },
+            { key: 'bubbleOffsetY', label: 'Bubble Y', max: 80, min: -80 },
+          ] as const).map((control) => (
+            <Box key={control.key}>
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  mb: 0.5,
+                }}
+              >
+                <Typography
+                  sx={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.01em' }}
+                >
+                  {control.label}
+                </Typography>
+                <Typography
+                  sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem' }}
+                >
+                  {`${debugQortinoCompanionSettings[control.key] > 0 ? '+' : ''}${
+                    debugQortinoCompanionSettings[control.key]
+                  }px`}
+                </Typography>
+              </Box>
+              <Slider
+                min={control.min}
+                max={control.max}
+                step={1}
+                value={debugQortinoCompanionSettings[control.key]}
+                onChange={(_, value) =>
+                  updateQortinoCompanionDebugSetting(control.key, value as number)
+                }
+              />
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.25, pt: 1.5 }}>
+          <Button
+            onClick={resetQortinoCompanionDebugSettings}
+            disabled={!isQortinoCompanionCustomized}
+          >
+            Reset
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => setIsQortinoCompanionDialogOpen(false)}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={isLocalPreview && isQortinoInletDialogOpen}
+        onClose={() => setIsQortinoInletDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>QORTINO Inlet Debug</DialogTitle>
+        <DialogContent
+          dividers
+          sx={{ display: 'flex', flexDirection: 'column', gap: 2.2 }}
+        >
+          <Typography
+            sx={{ color: theme.palette.text.secondary, fontSize: '0.84rem' }}
+          >
+            These sliders affect the global QORTINO inlet head live. Tune the
+            saved no-antenna head shape, proportions, and dock position without
+            touching notification behavior.
+          </Typography>
+          {([
+            {
+              key: 'headWidthScale',
+              label: 'Head Width',
+              max: 135,
+              min: 70,
+              step: 5,
+              unit: '%',
+            },
+            {
+              key: 'headHeightScale',
+              label: 'Head Height',
+              max: 135,
+              min: 70,
+              step: 5,
+              unit: '%',
+            },
+            {
+              key: 'shellRoundness',
+              label: 'Head Shape',
+              max: 125,
+              min: 75,
+              step: 5,
+              unit: '%',
+            },
+            {
+              key: 'faceWidthScale',
+              label: 'Face Width',
+              max: 135,
+              min: 70,
+              step: 5,
+              unit: '%',
+            },
+            {
+              key: 'faceHeightScale',
+              label: 'Face Height',
+              max: 135,
+              min: 70,
+              step: 5,
+              unit: '%',
+            },
+            {
+              key: 'offsetX',
+              label: 'Position X',
+              max: 40,
+              min: -40,
+              step: 1,
+              unit: 'px',
+            },
+            {
+              key: 'offsetY',
+              label: 'Position Y',
+              max: 30,
+              min: -30,
+              step: 1,
+              unit: 'px',
+            },
+          ] as const).map((control) => {
+            const rawValue = debugQortinoInletSettings[control.key];
+            const sliderValue =
+              control.unit === 'px'
+                ? (rawValue as number)
+                : Math.round((rawValue as number) * 100);
+
+            return (
+              <Box key={control.key}>
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    mb: 0.5,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.01em',
+                    }}
+                  >
+                    {control.label}
+                  </Typography>
+                  <Typography
+                    sx={{ color: theme.palette.text.secondary, fontSize: '0.74rem' }}
+                  >
+                    {control.unit === 'px'
+                      ? `${sliderValue > 0 ? '+' : ''}${sliderValue}${control.unit}`
+                      : `${sliderValue}${control.unit}`}
+                  </Typography>
+                </Box>
+                <Slider
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  value={sliderValue}
+                  onChange={(_, value) =>
+                    updateQortinoInletDebugSetting(
+                      control.key,
+                      control.unit === 'px'
+                        ? (value as number)
+                        : (value as number) / 100
+                    )
+                  }
+                />
+              </Box>
+            );
+          })}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.25, pt: 1.5 }}>
+          <Button
+            onClick={resetQortinoInletDebugSettings}
+            disabled={!isQortinoInletCustomized}
+          >
+            Reset
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => setIsQortinoInletDialogOpen(false)}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

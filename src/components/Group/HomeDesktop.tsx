@@ -1945,6 +1945,41 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const blockHeightLabel = `${nodeInfos?.height || '—'}`;
   const hubVersionLabel = manifestData.version || '—';
   const qdnPeersLabel = `${nodeInfos?.numberOfDataConnections || 0}`;
+  const qortinoWorkspaceShellFallback = (
+    <Box
+      sx={{
+        ...dashboardPanelSx(theme, 'utility'),
+        alignItems: 'flex-start',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        height: '100%',
+        justifyContent: 'center',
+        p: '20px',
+      }}
+    >
+      <Typography
+        sx={{
+          color: theme.palette.text.primary,
+          fontSize: '1rem',
+          fontWeight: 700,
+          letterSpacing: '-0.02em',
+        }}
+      >
+        QORTINO card shell hit a runtime snag.
+      </Typography>
+      <Typography
+        sx={{
+          color: alpha(theme.palette.text.secondary, 0.82),
+          fontSize: '0.82rem',
+          lineHeight: 1.5,
+          maxWidth: '34ch',
+        }}
+      >
+        The rest of the dashboard is still safe. Refresh the Hub and if this keeps happening report to George on Discord/Qortal.
+      </Typography>
+    </Box>
+  );
   const nodeBase = getBaseApiReact();
   const nodeHostLabel = (() => {
     try {
@@ -2427,56 +2462,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                               '& > *': { height: '100%' },
                             }}
                           >
-                            <ErrorBoundary
-                              fallback={
-                                <Box
-                                  sx={{
-                                    ...dashboardPanelSx(theme, 'utility'),
-                                    alignItems: 'flex-start',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '12px',
-                                    height: '100%',
-                                    justifyContent: 'center',
-                                    p: '20px',
-                                  }}
-                                >
-                                  <Typography
-                                    sx={{
-                                      color: theme.palette.text.primary,
-                                      fontSize: '1rem',
-                                      fontWeight: 700,
-                                      letterSpacing: '-0.02em',
-                                    }}
-                                  >
-                                    QORTINO workspace hit a runtime snag.
-                                  </Typography>
-                                  <Typography
-                                    sx={{
-                                      color: alpha(theme.palette.text.secondary, 0.82),
-                                      fontSize: '0.82rem',
-                                      lineHeight: 1.5,
-                                      maxWidth: '34ch',
-                                    }}
-                                  >
-                                    The rest of the dashboard is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.
-                                  </Typography>
-                                  <Box
-                                    sx={{
-                                      ...getBlueTier2BadgeSx(theme, true),
-                                      borderRadius: '999px',
-                                      color: APP_BLUE_SURFACE_TEXT,
-                                      px: 1,
-                                      py: 0.45,
-                                    }}
-                                  >
-                                    <Typography sx={{ fontSize: '0.66rem', fontWeight: 700 }}>
-                                      v{manifestData?.version ?? 'local'}
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              }
-                            >
+                            <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
                               <HomeQortinoWorkspaceCard
                                 debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
                                 debugReplayToken={gettingStartedDebugReplayToken}
@@ -2555,56 +2541,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             ref={accountOverviewDebugRef}
                             sx={{ display: 'block', height: resolvedQortinoCardHeightPx != null ? `${resolvedQortinoCardHeightPx}px` : undefined, minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}
                           >
-                            <ErrorBoundary
-                              fallback={
-                                <Box
-                                  sx={{
-                                    ...dashboardPanelSx(theme, 'utility'),
-                                    alignItems: 'flex-start',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '12px',
-                                    height: '100%',
-                                    justifyContent: 'center',
-                                    p: '20px',
-                                  }}
-                                >
-                                  <Typography
-                                    sx={{
-                                      color: theme.palette.text.primary,
-                                      fontSize: '1rem',
-                                      fontWeight: 700,
-                                      letterSpacing: '-0.02em',
-                                    }}
-                                  >
-                                    QORTINO workspace hit a runtime snag.
-                                  </Typography>
-                                  <Typography
-                                    sx={{
-                                      color: alpha(theme.palette.text.secondary, 0.82),
-                                      fontSize: '0.82rem',
-                                      lineHeight: 1.5,
-                                      maxWidth: '34ch',
-                                    }}
-                                  >
-                                    The rest of the dashboard is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.
-                                  </Typography>
-                                  <Box
-                                    sx={{
-                                      ...getBlueTier2BadgeSx(theme, true),
-                                      borderRadius: '999px',
-                                      color: APP_BLUE_SURFACE_TEXT,
-                                      px: 1,
-                                      py: 0.45,
-                                    }}
-                                  >
-                                    <Typography sx={{ fontSize: '0.66rem', fontWeight: 700 }}>
-                                      v{manifestData?.version ?? 'local'}
-                                    </Typography>
-                                  </Box>
-                                </Box>
-                              }
-                            >
+                            <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
                               <HomeQortinoWorkspaceCard
                                 debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
                                 debugReplayToken={gettingStartedDebugReplayToken}

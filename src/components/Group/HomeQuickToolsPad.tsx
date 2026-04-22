@@ -121,7 +121,15 @@ export const HomeQuickToolsPad = ({
 
       if (response?.error) {
         setNotificationsMuted(!nextValue);
+        return;
       }
+
+      executeEvent('qortinoContextHint', {
+        data: {
+          message:
+            'This only mutes desktop alerts. In-Hub notifications still continue.',
+        },
+      });
     } catch {
       setNotificationsMuted(!nextValue);
     }
@@ -152,8 +160,10 @@ export const HomeQuickToolsPad = ({
       {
         accent: QUICK_TOOL_LED_COLOR,
         key: 'lookup-user',
-      label: 'User Search',
-        onAction: () => executeEvent('openUserLookupDrawer', {}),
+        label: 'User Search',
+        onAction: () => {
+          executeEvent('openUserLookupDrawer', {});
+        },
         renderIcon: () => (
           <ManageSearchRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
         ),
@@ -162,7 +172,9 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         key: 'wallets',
         label: 'Wallets',
-        onAction: () => executeEvent('openWalletsApp', {}),
+        onAction: () => {
+          executeEvent('openWalletsApp', {});
+        },
         renderIcon: () => (
           <AccountBalanceWalletRoundedIcon
             sx={{ fontSize: QUICK_TOOL_ICON_SIZE }}
@@ -173,7 +185,14 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         key: 'minting',
         label: 'Minting',
-        onAction: () => executeEvent('openMintingPanel', {}),
+        onAction: () => {
+          executeEvent('qortinoContextHint', {
+            data: {
+              message: 'Only available for minters. Apply at Q-Mintership.',
+            },
+          });
+          executeEvent('openMintingPanel', {});
+        },
         renderIcon: () => (
           <SpaRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
         ),
@@ -182,7 +201,15 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         key: 'backup-wallet',
         label: 'Backup Wallet',
-        onAction: () => executeEvent('openBackupWallet', {}),
+        onAction: () => {
+          executeEvent('openGlobalSnackBar', {
+            message:
+              'Backup exports your wallet locally. This stays on your device.',
+            type: 'info',
+            duration: 5600,
+          });
+          executeEvent('openBackupWallet', {});
+        },
         renderIcon: () => (
           <FileDownloadRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
         ),
@@ -234,7 +261,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
-        key: 'placeholder',
+        key: 'coming-soon',
         label: 'Coming Soon',
         onAction: () => {},
         renderIcon: () => (

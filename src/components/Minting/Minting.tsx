@@ -1,5 +1,4 @@
 import {
-  Alert,
   alpha,
   Box,
   Button,
@@ -8,7 +7,6 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
-  Snackbar,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -40,6 +38,7 @@ import {
   countReward,
   countRewardDay,
 } from './MintingStats.tsx';
+import { CustomizedSnackbars } from '../Snackbar/Snackbar';
 
 export type AddressLevelEntry = {
   level: number;
@@ -1501,21 +1500,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         </Dialog>
       )}
 
-      <Snackbar
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      <CustomizedSnackbars
         open={openSnack}
-        autoHideDuration={6000}
-        onClose={handleCloseSnack}
-      >
-        <Alert
-          onClose={handleCloseSnack}
-          severity={info?.type}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {info?.message}
-        </Alert>
-      </Snackbar>
+        setOpen={setOpenSnack}
+        info={info}
+        setInfo={setInfo}
+      />
     </>
   );
 };

@@ -46,7 +46,7 @@ import { LazyAuthenticatedShell } from './components/App/LazyAuthenticatedShell'
 import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
-import { CustomizedSnackbars } from './components/Snackbar/Snackbar';
+import { QortinoNotificationHost } from './components/Snackbar/QortinoNotificationHost';
 import HelpIcon from '@mui/icons-material/Help';
 import { getWallets, storeWallets } from './background/background.ts';
 import {
@@ -882,24 +882,6 @@ function App() {
     };
   }, []);
 
-  const openGlobalSnackBarFunc = (e) => {
-    const message = e.detail?.message;
-    const type = e.detail?.type;
-    setOpenSnack(true);
-    setInfoSnack({
-      type,
-      message,
-    });
-  };
-
-  useEffect(() => {
-    subscribeToEvent('openGlobalSnackBar', openGlobalSnackBarFunc);
-
-    return () => {
-      unsubscribeFromEvent('openGlobalSnackBar', openGlobalSnackBarFunc);
-    };
-  }, []);
-
   const openPaymentInternal = (e) => {
     const directAddress = e.detail?.address;
     const name = e.detail?.name;
@@ -1170,7 +1152,7 @@ function App() {
                       lineHeight: 1.55,
                     }}
                   >
-                    The authenticated shell crashed during render. The latest safe marker is v{HUB_UI_BUILD_VERSION}.
+                    The authenticated shell crashed during render. The latest safe marker is {HUB_UI_BUILD_VERSION}.
                   </Typography>
                 </Box>
               }
@@ -1422,7 +1404,7 @@ function App() {
           />
         )}
 
-        <CustomizedSnackbars
+        <QortinoNotificationHost
           open={openSnack}
           setOpen={setOpenSnack}
           info={infoSnack}
@@ -1517,7 +1499,7 @@ function App() {
               textTransform: 'uppercase',
             }}
           >
-            v{HUB_UI_BUILD_VERSION}
+            {HUB_UI_BUILD_VERSION}
           </Typography>
         </Box>
       )}
@@ -1648,7 +1630,7 @@ function App() {
                   fontSize: '0.74rem',
                 }}
               >
-                UI build v{HUB_UI_BUILD_VERSION}
+                UI build {HUB_UI_BUILD_VERSION}
               </Typography>
             </Box>
           </Box>
