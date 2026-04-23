@@ -30,7 +30,6 @@ import {
   useDashboardPanelMouseLight,
 } from './dashboardPanelEffects';
 import { QORTINO_DONATION_DRAG_TYPE } from './qortinoDonationEasterEgg';
-import { QORTINO_SANDBOX_EVENT } from './qortinoSandbox';
 
 type HomeQuickToolsPadProps = {
   fillHeight?: boolean;
@@ -318,10 +317,8 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         iconScale: 1.1,
         key: 'qortino-sandbox',
-        label: 'QORTINO Lab',
-        onAction: () => {
-          executeEvent(QORTINO_SANDBOX_EVENT, {});
-        },
+        label: '',
+        onAction: () => {},
         renderIcon: () => (
           <AddRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
         ),

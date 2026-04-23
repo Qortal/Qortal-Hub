@@ -1,6 +1,8 @@
 import { CSSProperties, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { alpha } from '@mui/material/styles';
-import { Avatar, Box, Button, ButtonBase, Typography, useTheme } from '@mui/material';
+import { Avatar, Box, Button, ButtonBase, Tooltip, Typography, useTheme } from '@mui/material';
+import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
+import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import BorderGlow from '../common/BorderGlow';
@@ -23,6 +25,7 @@ export const FEATURED_INTRO_TOTAL_DURATION_MS =
   FEATURED_PREVIEW_EXPAND_DELAY_MS + FEATURED_INITIAL_PREVIEW_DURATION_MS;
 const FEATURED_STRIP_HOVER_DURATION_MS = 190;
 const FEATURED_INITIAL_PREVIEW_SESSION_KEY = 'dashboard-featured-pirate-preview-seen';
+const FEATURED_CALM_MODE_STORAGE_KEY = 'dashboard-featured-apps-calm-mode';
 const FEATURED_TEASER_FADE_DURATION_MS = 300;
 const PIRATE_APP_NAME = 'Pirate Nintendo';
 const Q_TUBE_APP_NAME = 'Q-Tube';
@@ -101,6 +104,13 @@ export const HomeFeaturedApps = ({
   const initialPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandedPreviewApp, setExpandedPreviewApp] = useState<PreviewAppName | null>(null);
   const [autoPreviewActive, setAutoPreviewActive] = useState(false);
+  const [isCalmMode, setIsCalmMode] = useState(() => {
+    try {
+      return window.localStorage.getItem(FEATURED_CALM_MODE_STORAGE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const featuredFooterStripBackground =
     theme.palette.mode === 'dark'
       ? `radial-gradient(140% 252% at 50% 54%, ${alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.225)} 0%, ${alpha(
@@ -176,6 +186,16 @@ export const HomeFeaturedApps = ({
   });
 
   useEffect(() => {
+    if (isCalmMode) {
+      setAutoPreviewActive(false);
+      setExpandedPreviewApp(null);
+      return () => {
+        if (pirateExpandTimerRef.current) clearTimeout(pirateExpandTimerRef.current);
+        if (pirateCollapseTimerRef.current) clearTimeout(pirateCollapseTimerRef.current);
+        clearInitialPreviewTimers();
+      };
+    }
+
     let shouldRunInitialPreview = true;
 
     try {
@@ -218,7 +238,7 @@ export const HomeFeaturedApps = ({
       if (pirateCollapseTimerRef.current) clearTimeout(pirateCollapseTimerRef.current);
       clearInitialPreviewTimers();
     };
-  }, []);
+  }, [clearInitialPreviewTimers, isCalmMode]);
 
   const clearPirateTimers = () => {
     if (pirateExpandTimerRef.current) {
@@ -236,7 +256,25 @@ export const HomeFeaturedApps = ({
     setAutoPreviewActive(false);
   };
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        FEATURED_CALM_MODE_STORAGE_KEY,
+        isCalmMode ? '1' : '0'
+      );
+    } catch {
+      // Ignore storage failures and keep the preference local-only.
+    }
+
+    if (isCalmMode) {
+      clearPirateTimers();
+      stopInitialPreview();
+      setExpandedPreviewApp(null);
+    }
+  }, [isCalmMode]);
+
   const schedulePreviewExpand = (appName: PreviewAppName) => {
+    if (isCalmMode) return;
     if (autoPreviewActive) {
       stopInitialPreview();
     }
@@ -256,6 +294,7 @@ export const HomeFeaturedApps = ({
   };
 
   const schedulePreviewCollapse = () => {
+    if (isCalmMode) return;
     if (autoPreviewActive) return;
     if (pirateExpandTimerRef.current) {
       clearTimeout(pirateExpandTimerRef.current);
@@ -291,31 +330,90 @@ export const HomeFeaturedApps = ({
         sx={{
           alignItems: 'center',
           display: 'flex',
-          flexDirection: 'column',
-          gap: '3px',
+          justifyContent: 'center',
+          minHeight: '42px',
+          position: 'relative',
           textAlign: 'center',
+          width: '100%',
         }}
       >
-        <Typography
+        <Tooltip enterDelay={320} title="Reduce motion">
+          <ButtonBase
+            aria-label="Reduce motion"
+            aria-pressed={isCalmMode}
+            onClick={() => setIsCalmMode((current) => !current)}
+            sx={{
+              alignItems: 'center',
+              borderRadius: '9px',
+              color: alpha(theme.palette.text.secondary, isCalmMode ? 0.9 : 0.68),
+              display: 'inline-flex',
+              height: 30,
+              justifyContent: 'center',
+              position: 'absolute',
+              right: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              transition:
+                'background-color 160ms ease, color 160ms ease, box-shadow 180ms ease, opacity 160ms ease',
+              width: 30,
+              '&:hover': {
+                backgroundColor:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(255,255,255,0.042)'
+                    : 'rgba(24,29,36,0.05)',
+                color: theme.palette.text.primary,
+              },
+              ...(isCalmMode
+                ? {
+                    backgroundColor:
+                      theme.palette.mode === 'dark'
+                        ? 'rgba(255,255,255,0.03)'
+                        : 'rgba(24,29,36,0.042)',
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? 'inset 0 0 0 1px rgba(255,255,255,0.05)'
+                        : 'inset 0 0 0 1px rgba(24,29,36,0.06)',
+                  }
+                : null),
+            }}
+          >
+            {isCalmMode ? (
+              <VisibilityOffRoundedIcon sx={{ fontSize: '1rem' }} />
+            ) : (
+              <VisibilityRoundedIcon sx={{ fontSize: '1rem' }} />
+            )}
+          </ButtonBase>
+        </Tooltip>
+        <Box
           sx={{
-            color: theme.palette.text.primary,
-            fontSize: '1rem',
-            fontWeight: 600,
+            alignItems: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '3px',
+            textAlign: 'center',
           }}
         >
-          Featured Q-Apps
-        </Typography>
-        <Typography
-          sx={{
-            color: theme.palette.text.secondary,
-            fontSize: '0.76rem',
-            letterSpacing: '0.012em',
-            lineHeight: 1.45,
-            maxWidth: '420px',
-          }}
-        >
-          Launch trusted community apps directly from your dashboard.
-        </Typography>
+          <Typography
+            sx={{
+              color: theme.palette.text.primary,
+              fontSize: '1rem',
+              fontWeight: 600,
+            }}
+          >
+            Featured Q-Apps
+          </Typography>
+          <Typography
+            sx={{
+              color: theme.palette.text.secondary,
+              fontSize: '0.76rem',
+              letterSpacing: '0.012em',
+              lineHeight: 1.45,
+              maxWidth: '420px',
+            }}
+          >
+            Launch trusted community apps directly from your dashboard.
+          </Typography>
+        </Box>
       </Box>
 
       <Box
@@ -368,6 +466,7 @@ export const HomeFeaturedApps = ({
                 <AppTile
                   key={appName}
                   appName={appName}
+                  calmMode={isCalmMode}
                   theme={theme}
                   expandedPreviewApp={expandedPreviewApp}
                   onPreviewExpandStart={schedulePreviewExpand}
@@ -386,16 +485,18 @@ export const HomeFeaturedApps = ({
               )
             )}
           </Box>
-          <FeaturedExpandedPreview
-            appName={expandedPreviewApp}
-            theme={theme}
-            visible={!!expandedPreviewApp}
-            teaserMode={autoPreviewActive && expandedPreviewApp === PIRATE_APP_NAME}
-            onMouseEnter={() => {
-              clearPirateTimers();
-            }}
-            onMouseLeave={schedulePreviewCollapse}
-          />
+          {!isCalmMode ? (
+            <FeaturedExpandedPreview
+              appName={expandedPreviewApp}
+              theme={theme}
+              visible={!!expandedPreviewApp}
+              teaserMode={autoPreviewActive && expandedPreviewApp === PIRATE_APP_NAME}
+              onMouseEnter={() => {
+                clearPirateTimers();
+              }}
+              onMouseLeave={schedulePreviewCollapse}
+            />
+          ) : null}
         </Box>
 
         <Box
@@ -577,6 +678,7 @@ export const HomeFeaturedApps = ({
 
 interface AppTileProps {
   appName: string;
+  calmMode: boolean;
   theme: any;
   expandedPreviewApp: PreviewAppName | null;
   onPreviewExpandStart: (appName: PreviewAppName) => void;
@@ -585,6 +687,7 @@ interface AppTileProps {
 
 const AppTile = ({
   appName,
+  calmMode,
   theme,
   expandedPreviewApp,
   onPreviewExpandStart,
@@ -602,14 +705,46 @@ const AppTile = ({
   const tileVideoSrc = appName in FEATURED_TILE_VIDEO_SRC
     ? FEATURED_TILE_VIDEO_SRC[appName as keyof typeof FEATURED_TILE_VIDEO_SRC]
     : null;
-  const fadeOutForPreview = !!expandedPreviewApp && expandedPreviewApp !== appName;
-  const hideBasePreviewTile = !!expandedPreviewApp && expandedPreviewApp === appName;
-  const allowTileHover = !expandedPreviewApp;
+  const fadeOutForPreview = !calmMode && !!expandedPreviewApp && expandedPreviewApp !== appName;
+  const hideBasePreviewTile = !calmMode && !!expandedPreviewApp && expandedPreviewApp === appName;
+  const allowTileHover = !expandedPreviewApp && !calmMode;
   const hiddenTileStyles = {
     opacity: fadeOutForPreview ? 0 : hideBasePreviewTile ? 0 : 1,
     pointerEvents: fadeOutForPreview || hideBasePreviewTile ? 'none' : 'auto',
     visibility: fadeOutForPreview || hideBasePreviewTile ? 'hidden' : 'visible',
   } as const;
+  const staticWideTileBackground =
+    theme.palette.mode === 'dark'
+      ? isWideLeftTile
+        ? `radial-gradient(88% 122% at 18% 54%, ${alpha('#BCA2FF', 0.14)} 0%, ${alpha(
+            '#BCA2FF',
+            0.06
+          )} 26%, transparent 58%), radial-gradient(78% 112% at 82% 50%, ${alpha(
+            '#F2E7DA',
+            0.12
+          )} 0%, ${alpha('#F2E7DA', 0.045)} 24%, transparent 50%), linear-gradient(145deg, rgba(54,58,68,0.9) 0%, rgba(40,44,52,0.95) 48%, rgba(28,31,38,0.98) 100%)`
+        : `radial-gradient(92% 128% at 18% 52%, ${alpha('#7DB5FF', 0.2)} 0%, ${alpha(
+            '#7DB5FF',
+            0.08
+          )} 28%, transparent 60%), radial-gradient(78% 108% at 84% 46%, ${alpha(
+            '#F2E7DA',
+            0.11
+          )} 0%, ${alpha('#F2E7DA', 0.04)} 24%, transparent 52%), linear-gradient(145deg, rgba(54,58,68,0.9) 0%, rgba(40,44,52,0.95) 48%, rgba(28,31,38,0.98) 100%)`
+      : isWideLeftTile
+        ? `radial-gradient(88% 122% at 18% 54%, ${alpha('#BCA2FF', 0.12)} 0%, ${alpha(
+            '#BCA2FF',
+            0.05
+          )} 26%, transparent 58%), radial-gradient(78% 112% at 82% 50%, ${alpha(
+            '#F2E7DA',
+            0.09
+          )} 0%, ${alpha('#F2E7DA', 0.036)} 24%, transparent 50%), linear-gradient(145deg, rgba(246,248,252,0.98) 0%, rgba(235,240,247,0.99) 48%, rgba(224,230,239,1) 100%)`
+        : `radial-gradient(92% 128% at 18% 52%, ${alpha('#7DB5FF', 0.16)} 0%, ${alpha(
+            '#7DB5FF',
+            0.06
+          )} 28%, transparent 60%), radial-gradient(78% 108% at 84% 46%, ${alpha(
+            '#F2E7DA',
+            0.085
+          )} 0%, ${alpha('#F2E7DA', 0.034)} 24%, transparent 52%), linear-gradient(145deg, rgba(246,248,252,0.98) 0%, rgba(235,240,247,0.99) 48%, rgba(224,230,239,1) 100%)`;
 
   useEffect(() => {
     setHasTileVideoError(false);
@@ -636,11 +771,11 @@ const AppTile = ({
       disableRipple
       onClick={() => openApp(appName)}
       onMouseEnter={
-        isPreviewableTile
+        isPreviewableTile && !calmMode
           ? () => onPreviewExpandStart(appName as PreviewAppName)
           : undefined
       }
-      onMouseLeave={isPreviewableTile ? onPreviewExpandEnd : undefined}
+      onMouseLeave={isPreviewableTile && !calmMode ? onPreviewExpandEnd : undefined}
       sx={{
         alignItems: isWideLeftTile ? 'flex-start' : isWideRightTile ? 'flex-end' : 'center',
         bgcolor:
@@ -694,7 +829,20 @@ const AppTile = ({
         },
       }}
     >
-      {tileVideoSrc && !hasTileVideoError ? (
+      {isWideTile ? (
+        <Box
+          aria-hidden="true"
+          sx={{
+            inset: 0,
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            position: 'absolute',
+            zIndex: 0,
+            background: staticWideTileBackground,
+          }}
+        />
+      ) : null}
+      {tileVideoSrc && !hasTileVideoError && !calmMode ? (
         <Box
           aria-hidden="true"
           sx={{
@@ -903,6 +1051,10 @@ const AppTile = ({
   );
 
   if (!isWideTile) {
+    return tileButton;
+  }
+
+  if (calmMode) {
     return tileButton;
   }
 

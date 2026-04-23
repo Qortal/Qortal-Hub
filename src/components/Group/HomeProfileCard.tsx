@@ -11,9 +11,11 @@ import {
   Avatar,
   Box,
   ButtonBase,
+  Dialog,
   Menu,
   MenuItem,
   Portal,
+  TextField,
   Tooltip,
   Typography,
   useTheme,
@@ -23,9 +25,11 @@ import { LoadingButton } from '@mui/lab';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseIcon from '@mui/icons-material/Close';
 import ErrorIcon from '@mui/icons-material/Error';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import PersonIcon from '@mui/icons-material/Person';
 import QrCode2RoundedIcon from '@mui/icons-material/QrCode2Rounded';
+import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
@@ -44,7 +48,10 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { getBaseApiReactForAvatar } from '../../utils/globalApi';
+import {
+  getBaseApiReact,
+  getBaseApiReactForAvatar,
+} from '../../utils/globalApi';
 import {
   dashboardPanelSx,
   handleDashboardPanelPointerLeave,
@@ -62,6 +69,7 @@ type HomeProfileCardProps = {
 };
 
 type AccountStatus = 'busy' | 'invisible' | 'online';
+type NameAvailability = 'available' | 'loading' | 'not-available' | 'null';
 
 const ACCOUNT_STATUS_STORAGE_KEY = 'home_profile_account_status';
 const ACCOUNT_STATUS_OPTIONS: Array<{
@@ -93,6 +101,7 @@ export const HomeProfileCard = ({
   const theme = useTheme();
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const userInfo = useAtomValue(userInfoAtom);
+  const setUserInfo = useSetAtom(userInfoAtom);
   const setOpenSnack = useSetAtom(openSnackGlobalAtom);
   const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
 
@@ -112,6 +121,20 @@ export const HomeProfileCard = ({
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isAddressFieldHovered, setIsAddressFieldHovered] = useState(false);
   const [isAvatarGlowHovered, setIsAvatarGlowHovered] = useState(false);
+  const [isChangeNameOpen, setIsChangeNameOpen] = useState(false);
+  const [changeNameValue, setChangeNameValue] = useState('');
+  const [isChangeNameLoading, setIsChangeNameLoading] = useState(false);
+  const [changeNameAvailability, setChangeNameAvailability] =
+    useState<NameAvailability>('null');
+  const [changeNameFee, setChangeNameFee] = useState<string | number | null>(
+    null
+  );
+  const [currentNameDescription, setCurrentNameDescription] = useState('');
+  const [isCurrentNameMetaLoading, setIsCurrentNameMetaLoading] =
+    useState(false);
+  const [currentNameMetaError, setCurrentNameMetaError] = useState<
+    string | null
+  >(null);
   const [accountStatusAnchorEl, setAccountStatusAnchorEl] =
     useState<HTMLElement | null>(null);
   const [accountStatusOverride, setAccountStatusOverride] =
@@ -153,6 +176,17 @@ export const HomeProfileCard = ({
         background: 'rgba(191, 144, 73, 0.08)',
         border: 'rgba(191, 144, 73, 0.2)',
         icon: '#A97E3F',
+      };
+  const changeNameNoteTone = isDarkMode
+    ? {
+        background: 'rgba(132, 176, 240, 0.09)',
+        border: 'rgba(132, 176, 240, 0.2)',
+        icon: '#8EB8F5',
+      }
+    : {
+        background: 'rgba(90, 126, 196, 0.08)',
+        border: 'rgba(90, 126, 196, 0.18)',
+        icon: '#5C7EC6',
       };
 
   const openAvatarPanel = useCallback((target: HTMLElement | null) => {
@@ -327,6 +361,24 @@ export const HomeProfileCard = ({
     setAccountStatusOverride(null);
   }, [accountStatusStorageKey]);
 
+  const closeChangeNameModal = useCallback(() => {
+    if (isChangeNameLoading) return;
+    setIsChangeNameOpen(false);
+    setChangeNameValue('');
+    setChangeNameAvailability('null');
+    setCurrentNameMetaError(null);
+  }, [isChangeNameLoading]);
+
+  const openChangeNameModal = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      event.stopPropagation();
+      setIsChangeNameOpen(true);
+      setChangeNameValue('');
+      setChangeNameAvailability('null');
+    },
+    []
+  );
+
   const handleOpenAccountStatusMenu = useCallback(
     (event: MouseEvent<HTMLElement>) => {
       setAccountStatusAnchorEl(event.currentTarget);
@@ -374,6 +426,214 @@ export const HomeProfileCard = ({
     });
     setOpenSnack(true);
   };
+
+  const checkIfNameExists = useCallback(
+    async (candidateName: string) => {
+      const trimmedName = candidateName.trim();
+
+      if (!trimmedName) {
+        setChangeNameAvailability('null');
+        return;
+      }
+
+      if (trimmedName.toLowerCase() === name?.trim().toLowerCase()) {
+        setChangeNameAvailability('not-available');
+        return;
+      }
+
+      setChangeNameAvailability('loading');
+
+      try {
+        const response = await fetch(`${getBaseApiReact()}/names/${trimmedName}`);
+        const data = await response.json();
+
+        if (data?.message === 'name unknown' || data?.error) {
+          setChangeNameAvailability('available');
+        } else {
+          setChangeNameAvailability('not-available');
+        }
+      } catch (error) {
+        setChangeNameAvailability('available');
+      }
+    },
+    [name]
+  );
+
+  useEffect(() => {
+    if (!isChangeNameOpen) return;
+
+    const handler = window.setTimeout(() => {
+      checkIfNameExists(changeNameValue);
+    }, 400);
+
+    return () => window.clearTimeout(handler);
+  }, [changeNameValue, checkIfNameExists, isChangeNameOpen]);
+
+  useEffect(() => {
+    if (!isChangeNameOpen || !name) return;
+
+    let cancelled = false;
+
+    const loadChangeNameMeta = async () => {
+      setIsCurrentNameMetaLoading(true);
+      setCurrentNameMetaError(null);
+
+      try {
+        const [feeResponse, nameResponse] = await Promise.all([
+          getFee('UPDATE_NAME'),
+          fetch(`${getBaseApiReact()}/names/${name}`),
+        ]);
+
+        if (cancelled) return;
+
+        setChangeNameFee(feeResponse?.fee ?? null);
+
+        const data = await nameResponse.json();
+
+        if (cancelled) return;
+
+        if (!nameResponse.ok || data?.error || data?.message === 'name unknown') {
+          throw new Error('We could not load your current name details.');
+        }
+
+        const preservedDescription =
+          typeof data?.description === 'string'
+            ? data.description
+            : typeof data?.data === 'string'
+              ? data.data
+              : '';
+
+        setCurrentNameDescription(preservedDescription);
+      } catch (error) {
+        if (cancelled) return;
+
+        setCurrentNameMetaError(
+          error instanceof Error
+            ? error.message
+            : 'We could not load your current name details.'
+        );
+      } finally {
+        if (!cancelled) {
+          setIsCurrentNameMetaLoading(false);
+        }
+      }
+    };
+
+    loadChangeNameMeta();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isChangeNameOpen, name]);
+
+  const submitNameChange = useCallback(async () => {
+    try {
+      const oldName = name?.trim();
+      const newName = changeNameValue.trim();
+
+      if (!oldName) {
+        throw new Error('Register a name first before changing it.');
+      }
+
+      if (!newName) {
+        throw new Error('Enter the new name you want to use.');
+      }
+
+      if (newName.toLowerCase() === oldName.toLowerCase()) {
+        throw new Error('Choose a different name from your current one.');
+      }
+
+      if (isCurrentNameMetaLoading) {
+        throw new Error(
+          'Still loading your current name details. Try again in a moment.'
+        );
+      }
+
+      if (currentNameMetaError) {
+        throw new Error(currentNameMetaError);
+      }
+
+      if (changeNameAvailability !== 'available') {
+        throw new Error('Choose an available name before continuing.');
+      }
+
+      const fee = await getFee('UPDATE_NAME');
+
+      await show({
+        message: `Change your registered name from ${oldName} to ${newName}?`,
+        publishFee: `${fee.fee} QORT`,
+      });
+
+      setIsChangeNameLoading(true);
+
+      const response = await new Promise<any>((resolve, reject) => {
+        window
+          .sendMessage('updateName', {
+            oldName,
+            newName,
+            description: currentNameDescription,
+          })
+          .then((messageResponse) => {
+            if (!messageResponse?.error) {
+              resolve(messageResponse);
+              return;
+            }
+
+            reject(new Error(messageResponse.error));
+          })
+          .catch((error) => {
+            reject(
+              error instanceof Error
+                ? error
+                : new Error('Something went wrong while changing your name.')
+            );
+          });
+      });
+
+      setUserInfo(
+        userInfo
+          ? {
+              ...userInfo,
+              name: newName,
+            }
+          : userInfo
+      );
+      setInfoSnack({
+        type: 'success',
+        message: 'Name change submitted successfully.',
+      });
+      setOpenSnack(true);
+      closeChangeNameModal();
+      executeEvent('nameUpdated', {
+        currentName: newName,
+        previousName: oldName,
+        signature: response?.signature,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message) {
+        setInfoSnack({
+          type: 'error',
+          message: error.message,
+        });
+        setOpenSnack(true);
+      }
+    } finally {
+      setIsChangeNameLoading(false);
+    }
+  }, [
+    changeNameAvailability,
+    changeNameValue,
+    closeChangeNameModal,
+    currentNameDescription,
+    currentNameMetaError,
+    isCurrentNameMetaLoading,
+    name,
+    setInfoSnack,
+    setOpenSnack,
+    setUserInfo,
+    show,
+    userInfo,
+  ]);
 
   const publishAvatar = async () => {
     try {
@@ -510,6 +770,48 @@ export const HomeProfileCard = ({
       },
     };
   }, [avatarPanelLayout.height, avatarPanelLayout.left, avatarPanelLayout.top, avatarPanelLayout.width, avatarPanelOriginRadius, avatarPanelOriginRect, avatarPanelTargetRadius, prefersReducedMotion]);
+
+  const changeNameStatusTone = useMemo(() => {
+    if (changeNameAvailability === 'available') {
+      return {
+        color: isDarkMode ? '#78D29A' : '#2E8B57',
+        label: 'Name is available.',
+      };
+    }
+
+    if (changeNameAvailability === 'loading') {
+      return {
+        color: theme.palette.text.secondary,
+        label: 'Checking name availability...',
+      };
+    }
+
+    if (changeNameAvailability === 'not-available') {
+      return {
+        color: avatarWarningTone.icon,
+        label:
+          changeNameValue.trim().toLowerCase() === name?.trim().toLowerCase()
+            ? 'Choose a different name from the one you already use.'
+            : 'That name is already taken.',
+      };
+    }
+
+    return null;
+  }, [
+    avatarWarningTone.icon,
+    changeNameAvailability,
+    changeNameValue,
+    isDarkMode,
+    name,
+    theme.palette.text.secondary,
+  ]);
+
+  const isChangeNameSubmitDisabled =
+    !changeNameValue.trim() ||
+    isChangeNameLoading ||
+    isCurrentNameMetaLoading ||
+    Boolean(currentNameMetaError) ||
+    changeNameAvailability !== 'available';
 
   return (
     <Box
@@ -727,7 +1029,7 @@ export const HomeProfileCard = ({
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
-            maxWidth: '430px',
+            maxWidth: '478px',
             minWidth: 0,
             width: '100%',
           }}
@@ -750,107 +1052,128 @@ export const HomeProfileCard = ({
           <Box
             sx={{
               alignItems: 'center',
-              bgcolor: isDarkMode ? '#1A1D24' : '#E7DDD0',
-              border: `1px solid ${
-                isDarkMode
-                  ? 'rgba(255,255,255,0.045)'
-                  : alpha(theme.palette.text.primary, 0.065)
-              }`,
-              borderRadius: '11px',
-              boxShadow: isDarkMode
-                ? 'inset 0 1px 0 rgba(255,255,255,0.018)'
-                : 'inset 0 1px 0 rgba(255,255,255,0.12)',
-              cursor: address ? 'pointer' : 'default',
               display: 'flex',
               gap: '8px',
-              minHeight: '38px',
-              px: '11px',
-              py: '5px',
-              transition:
-                'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
               width: '100%',
-              '&:hover': address
-                ? {
-                    backgroundColor: isDarkMode ? '#171A20' : '#E2D7C9',
-                    borderColor: isDarkMode
-                      ? 'rgba(255,255,255,0.06)'
-                      : alpha(theme.palette.text.primary, 0.095),
-                    '& .wallet-address-overlay': {
-                      color: theme.palette.text.primary,
-                    },
-                  }
-                : undefined,
             }}
-            onClick={address ? handleCopyAddress : undefined}
-            onMouseEnter={
-              shouldRevealAddressOnHover
-                ? () => setIsAddressFieldHovered(true)
-                : undefined
-            }
-            onMouseLeave={
-              shouldRevealAddressOnHover
-                ? () => setIsAddressFieldHovered(false)
-                : undefined
-            }
-            onKeyDown={
-              address
-                ? (event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      handleCopyAddress();
-                    }
-                  }
-                : undefined
-            }
-            role={address ? 'button' : undefined}
-            tabIndex={address ? 0 : undefined}
           >
             <Box
-              className="wallet-address-overlay"
               sx={{
                 alignItems: 'center',
-                color: theme.palette.mode === 'dark'
-                  ? 'rgba(236, 241, 248, 0.86)'
-                  : alpha(theme.palette.text.primary, 0.72),
+                bgcolor: isDarkMode ? '#1A1D24' : '#E7DDD0',
+                border: `1px solid ${
+                  isDarkMode
+                    ? 'rgba(255,255,255,0.045)'
+                    : alpha(theme.palette.text.primary, 0.065)
+                }`,
+                borderRadius: '11px',
+                boxShadow: isDarkMode
+                  ? 'inset 0 1px 0 rgba(255,255,255,0.018)'
+                  : 'inset 0 1px 0 rgba(255,255,255,0.12)',
+                cursor: address ? 'pointer' : 'default',
                 display: 'flex',
                 flex: '1 1 auto',
-                fontFamily: shouldRevealAddressOnHover
-                  ? showAnimatedAddress
-                    ? 'monospace'
-                    : 'inherit'
-                  : hasRegisteredName
-                    ? 'inherit'
-                    : 'monospace',
-                fontSize: '0.84rem',
-                justifyContent: 'flex-start',
+                gap: '8px',
+                minHeight: '38px',
                 minWidth: 0,
-                pr: '4px',
-                textAlign: 'left',
-                transition: 'color 160ms ease',
+                px: '11px',
+                py: '5px',
+                transition:
+                  'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+                '&:hover': address
+                  ? {
+                      backgroundColor: isDarkMode ? '#171A20' : '#E2D7C9',
+                      borderColor: isDarkMode
+                        ? 'rgba(255,255,255,0.06)'
+                        : alpha(theme.palette.text.primary, 0.095),
+                      '& .wallet-address-overlay': {
+                        color: theme.palette.text.primary,
+                      },
+                    }
+                  : undefined,
               }}
+              onClick={address ? handleCopyAddress : undefined}
+              onMouseEnter={
+                shouldRevealAddressOnHover
+                  ? () => setIsAddressFieldHovered(true)
+                  : undefined
+              }
+              onMouseLeave={
+                shouldRevealAddressOnHover
+                  ? () => setIsAddressFieldHovered(false)
+                  : undefined
+              }
+              onKeyDown={
+                address
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        handleCopyAddress();
+                      }
+                    }
+                  : undefined
+              }
+              role={address ? 'button' : undefined}
+              tabIndex={address ? 0 : undefined}
             >
-              {shouldRevealAddressOnHover ? (
-                showAnimatedAddress ? (
-                  <Box
-                    sx={{
-                      maxWidth: '100%',
-                      overflow: 'hidden',
-                      pointerEvents: 'auto',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    <DecryptedText
-                      text={accountIdentitySecondaryText}
-                      animateOn="hover"
-                      active={showAnimatedAddress}
-                      speed={35}
-                      maxIterations={12}
-                      sequential={true}
-                      revealDirection="start"
-                      useOriginalCharsOnly={true}
-                    />
-                  </Box>
+              <Box
+                className="wallet-address-overlay"
+                sx={{
+                  alignItems: 'center',
+                  color: theme.palette.mode === 'dark'
+                    ? 'rgba(236, 241, 248, 0.86)'
+                    : alpha(theme.palette.text.primary, 0.72),
+                  display: 'flex',
+                  flex: '1 1 auto',
+                  fontFamily: shouldRevealAddressOnHover
+                    ? showAnimatedAddress
+                      ? 'monospace'
+                      : 'inherit'
+                    : hasRegisteredName
+                      ? 'inherit'
+                      : 'monospace',
+                  fontSize: '0.84rem',
+                  justifyContent: 'flex-start',
+                  minWidth: 0,
+                  pr: '4px',
+                  textAlign: 'left',
+                  transition: 'color 160ms ease',
+                }}
+              >
+                {shouldRevealAddressOnHover ? (
+                  showAnimatedAddress ? (
+                    <Box
+                      sx={{
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        pointerEvents: 'auto',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <DecryptedText
+                        text={accountIdentitySecondaryText}
+                        animateOn="hover"
+                        active={showAnimatedAddress}
+                        speed={35}
+                        maxIterations={12}
+                        sequential={true}
+                        revealDirection="start"
+                        useOriginalCharsOnly={true}
+                      />
+                    </Box>
+                  ) : (
+                    <Box
+                      sx={{
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {accountIdentityPrimaryText}
+                    </Box>
+                  )
                 ) : (
                   <Box
                     sx={{
@@ -862,95 +1185,142 @@ export const HomeProfileCard = ({
                   >
                     {accountIdentityPrimaryText}
                   </Box>
-                )
-              ) : (
-                <Box
-                  sx={{
-                    maxWidth: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {accountIdentityPrimaryText}
-                </Box>
-              )}
-            </Box>
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                flexShrink: 0,
-                justifyContent: 'flex-end',
-                ml: 'auto',
-              }}
-            >
+                )}
+              </Box>
               <Box
                 sx={{
                   alignItems: 'center',
                   display: 'flex',
-                  gap: `${addressFieldActionGapPx}px`,
+                  flexShrink: 0,
                   justifyContent: 'flex-end',
+                  ml: 'auto',
                 }}
               >
-                {onOpenReceive ? (
-                  <Tooltip enterDelay={450} title="Show receive QR">
-                    <Box component="span">
-                      <ButtonBase
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpenReceive(event.currentTarget);
-                        }}
-                        disabled={!address}
-                        aria-label="Show receive QR"
-                        sx={{
-                          alignItems: 'center',
-                          borderRadius: '8px',
-                          color: addressFieldActionBaseColor,
-                          display: 'inline-flex',
-                          flexShrink: 0,
-                          height: `${addressFieldActionButtonSizePx}px`,
-                          justifyContent: 'center',
-                          transition:
-                            'background-color 160ms ease, color 160ms ease, opacity 160ms ease',
-                          width: `${addressFieldActionButtonSizePx}px`,
-                          '&:hover': {
-                            backgroundColor: addressFieldActionHoverBackground,
-                            color: addressFieldActionHoverColor,
-                          },
-                        }}
-                      >
-                        <QrCode2RoundedIcon sx={{ fontSize: '0.95rem' }} />
-                      </ButtonBase>
-                    </Box>
-                  </Tooltip>
-                ) : null}
-                <ButtonBase
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleCopyAddress();
-                  }}
-                  disabled={!address}
-                  aria-label="Copy address"
+                <Box
                   sx={{
                     alignItems: 'center',
-                    borderRadius: '8px',
-                    color: addressFieldActionBaseColor,
+                    display: 'flex',
+                    gap: `${addressFieldActionGapPx}px`,
+                    justifyContent: 'flex-end',
+                  }}
+                >
+                  {onOpenReceive ? (
+                    <Tooltip enterDelay={450} title="Show receive QR">
+                      <Box component="span">
+                        <ButtonBase
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenReceive(event.currentTarget);
+                          }}
+                          disabled={!address}
+                          aria-label="Show receive QR"
+                          sx={{
+                            alignItems: 'center',
+                            borderRadius: '8px',
+                            color: addressFieldActionBaseColor,
+                            display: 'inline-flex',
+                            flexShrink: 0,
+                            height: `${addressFieldActionButtonSizePx}px`,
+                            justifyContent: 'center',
+                            transition:
+                              'background-color 160ms ease, color 160ms ease, opacity 160ms ease',
+                            width: `${addressFieldActionButtonSizePx}px`,
+                            '&:hover': {
+                              backgroundColor: addressFieldActionHoverBackground,
+                              color: addressFieldActionHoverColor,
+                            },
+                          }}
+                        >
+                          <QrCode2RoundedIcon sx={{ fontSize: '0.95rem' }} />
+                        </ButtonBase>
+                      </Box>
+                    </Tooltip>
+                  ) : null}
+                  <ButtonBase
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleCopyAddress();
+                    }}
+                    disabled={!address}
+                    aria-label="Copy address"
+                    sx={{
+                      alignItems: 'center',
+                      borderRadius: '8px',
+                      color: addressFieldActionBaseColor,
+                      display: 'inline-flex',
+                      flexShrink: 0,
+                      height: `${addressFieldActionButtonSizePx}px`,
+                      justifyContent: 'center',
+                      width: `${addressFieldActionButtonSizePx}px`,
+                      '&:hover': {
+                        backgroundColor: addressFieldActionHoverBackground,
+                        color: addressFieldActionHoverColor,
+                      },
+                    }}
+                  >
+                    <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
+                  </ButtonBase>
+                </Box>
+              </Box>
+            </Box>
+
+            {hasRegisteredName ? (
+              <Tooltip enterDelay={320} title="Change registered name">
+                <ButtonBase
+                  onClick={openChangeNameModal}
+                  aria-label="Change registered name"
+                  sx={{
+                    alignItems: 'center',
+                    background: isDarkMode
+                      ? 'rgba(44,49,58,0.98)'
+                      : 'rgba(232,237,245,0.99)',
+                    border: `1px solid ${
+                      isDarkMode
+                        ? alpha('#8FD8FF', 0.06)
+                        : alpha(theme.palette.text.primary, 0.072)
+                    }`,
+                    borderRadius: '12px',
+                    boxShadow: isDarkMode
+                      ? `inset 0 1px 0 rgba(255,255,255,0.075), inset 0 0 0 1px rgba(255,255,255,0.012), inset 0 -1px 0 rgba(0,0,0,0.44), inset -1px -1px 0 rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.17), 0 0 0 1px ${alpha('#8FD8FF', 0.012)}`
+                      : 'inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -1px 0 rgba(104,116,140,0.22), inset -1px -1px 0 rgba(146,158,182,0.14), 0 4px 8px rgba(94,108,132,0.11)',
+                    color: isDarkMode
+                      ? alpha('#F6F8FB', 0.88)
+                      : alpha(theme.palette.text.primary, 0.84),
                     display: 'inline-flex',
                     flexShrink: 0,
-                    height: `${addressFieldActionButtonSizePx}px`,
+                    height: 38,
                     justifyContent: 'center',
-                    width: `${addressFieldActionButtonSizePx}px`,
+                    minWidth: 38,
+                    p: 0,
+                    position: 'relative',
+                    transition:
+                      'transform 90ms ease, filter 120ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease',
+                    width: 38,
+                    '&::before': {
+                      content: '""',
+                      position: 'absolute',
+                      inset: '1px',
+                      borderRadius: 'inherit',
+                      pointerEvents: 'none',
+                      background: isDarkMode
+                        ? 'linear-gradient(145deg, rgba(255,255,255,0.052) 0%, rgba(255,255,255,0.02) 24%, rgba(255,255,255,0) 58%)'
+                        : 'linear-gradient(145deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.22) 28%, rgba(255,255,255,0) 58%)',
+                      opacity: 0.92,
+                    },
                     '&:hover': {
-                      backgroundColor: addressFieldActionHoverBackground,
-                      color: addressFieldActionHoverColor,
+                      filter: 'brightness(1.05)',
+                    },
+                    '&:active': {
+                      boxShadow:
+                        'inset 2px 2px 6px rgba(0, 0, 0, 0.7), inset -1px -1px 3px rgba(255, 255, 255, 0.04)',
+                      transform: 'scale(0.97)',
                     },
                   }}
                 >
-                  <ContentCopyIcon sx={{ fontSize: '0.92rem' }} />
+                  <SettingsRoundedIcon sx={{ fontSize: '1rem' }} />
                 </ButtonBase>
-              </Box>
-            </Box>
+              </Tooltip>
+            ) : null}
           </Box>
 
           <Typography
@@ -1050,6 +1420,340 @@ export const HomeProfileCard = ({
           );
         })}
       </Menu>
+
+      <Dialog
+        open={isChangeNameOpen}
+        onClose={closeChangeNameModal}
+        aria-labelledby="change-name-dialog-title"
+        aria-describedby="change-name-dialog-description"
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          backdrop: {
+            sx: {
+              backdropFilter: isDarkMode
+                ? 'blur(12px) brightness(0.76) saturate(0.88)'
+                : 'blur(12px) brightness(0.9) saturate(0.94)',
+              WebkitBackdropFilter: isDarkMode
+                ? 'blur(12px) brightness(0.76) saturate(0.88)'
+                : 'blur(12px) brightness(0.9) saturate(0.94)',
+              backgroundColor: isDarkMode
+                ? 'rgba(6, 8, 12, 0.4)'
+                : 'rgba(22, 26, 34, 0.14)',
+            },
+          },
+          paper: {
+            sx: {
+              background: avatarModalSurface,
+              border: isDarkMode
+                ? '1px solid rgba(255,255,255,0.08)'
+                : '1px solid rgba(24,29,36,0.09)',
+              borderRadius: '14px',
+              boxShadow: isDarkMode
+                ? '0 34px 120px rgba(0,0,0,0.46)'
+                : '0 28px 88px rgba(18,28,45,0.16)',
+              clipPath: 'inset(0 round 14px)',
+              isolation: 'isolate',
+              overflow: 'hidden',
+              width: 'min(460px, calc(100vw - 32px))',
+            },
+          },
+        }}
+      >
+        <Box
+          sx={{
+            background: avatarModalSurface,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Box
+            sx={{
+              alignItems: 'center',
+              display: 'flex',
+              justifyContent: 'space-between',
+              px: 2.25,
+              py: 1.7,
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <Typography
+                id="change-name-dialog-title"
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: '0.98rem',
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                Change name
+              </Typography>
+              <Typography
+                id="change-name-dialog-description"
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.76rem',
+                  lineHeight: 1.45,
+                }}
+              >
+                Update your current registered name directly from the dashboard.
+              </Typography>
+            </Box>
+            <ButtonBase
+              onClick={closeChangeNameModal}
+              disabled={isChangeNameLoading}
+              sx={{
+                borderRadius: '8px',
+                color: theme.palette.text.secondary,
+                height: 30,
+                width: 30,
+                '&:hover': {
+                  backgroundColor: alpha(
+                    theme.palette.common.white,
+                    isDarkMode ? 0.05 : 0.55
+                  ),
+                  color: theme.palette.text.primary,
+                },
+              }}
+            >
+              <CloseIcon sx={{ fontSize: 17 }} />
+            </ButtonBase>
+          </Box>
+
+          <Box
+            sx={{
+              borderTop: `1px solid ${avatarSectionDivider}`,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.2,
+              px: 2.25,
+              pb: 2.15,
+              pt: 1.85,
+            }}
+          >
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                background: avatarModalSurfaceSoft,
+                border: `1px solid ${avatarFieldBorder}`,
+                borderRadius: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '3px',
+                px: 1.35,
+                py: 1.15,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.03em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Current name
+              </Typography>
+              <Typography
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {name ?? 'No name registered'}
+              </Typography>
+            </Box>
+
+            <Box
+              sx={{
+                alignItems: 'flex-start',
+                backgroundColor: changeNameNoteTone.background,
+                border: `1px solid ${changeNameNoteTone.border}`,
+                borderRadius: '12px',
+                display: 'flex',
+                gap: 1,
+                px: 1.25,
+                py: 1.05,
+              }}
+            >
+              <InfoOutlinedIcon
+                sx={{
+                  color: changeNameNoteTone.icon,
+                  flexShrink: 0,
+                  fontSize: 18,
+                  mt: '1px',
+                }}
+              />
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.76rem',
+                  lineHeight: 1.48,
+                }}
+              >
+                Changing your name updates the current one on-chain and keeps
+                its existing name data attached.
+                {changeNameFee ? ` Fee: ${changeNameFee} QORT.` : ''}
+              </Typography>
+            </Box>
+
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}>
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  display: 'block',
+                  fontSize: '0.74rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.01em',
+                }}
+              >
+                New name
+              </Typography>
+              <TextField
+                autoComplete="off"
+                autoFocus
+                fullWidth
+                variant="outlined"
+                size="medium"
+                onChange={(event) => setChangeNameValue(event.target.value)}
+                value={changeNameValue}
+                placeholder="Enter a new name"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    background: avatarFieldSurface,
+                    borderRadius: '10px',
+                    boxShadow: avatarFieldInsetShadow,
+                    color: theme.palette.text.primary,
+                    '& fieldset': {
+                      borderColor: avatarFieldBorder,
+                    },
+                    '&:hover fieldset': {
+                      borderColor: avatarFieldHoverBorder,
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: alpha(theme.palette.primary.main, 0.9),
+                      borderWidth: 1.5,
+                    },
+                    '&:hover': {
+                      background: avatarFieldSurfaceHover,
+                    },
+                  },
+                }}
+              />
+            </Box>
+
+            {changeNameStatusTone ? (
+              <Typography
+                sx={{
+                  color: changeNameStatusTone.color,
+                  fontSize: '0.73rem',
+                  fontWeight: changeNameAvailability === 'loading' ? 500 : 600,
+                  lineHeight: 1.4,
+                  minHeight: '20px',
+                }}
+              >
+                {changeNameStatusTone.label}
+              </Typography>
+            ) : (
+              <Box sx={{ minHeight: '20px' }} />
+            )}
+
+            {currentNameMetaError ? (
+              <Box
+                sx={{
+                  alignItems: 'flex-start',
+                  backgroundColor: avatarWarningTone.background,
+                  border: `1px solid ${avatarWarningTone.border}`,
+                  borderRadius: '12px',
+                  display: 'flex',
+                  gap: 1,
+                  px: 1.25,
+                  py: 1.1,
+                }}
+              >
+                <ErrorIcon
+                  sx={{
+                    color: avatarWarningTone.icon,
+                    flexShrink: 0,
+                    fontSize: 18,
+                    mt: '1px',
+                  }}
+                />
+                <Typography
+                  sx={{
+                    color: theme.palette.text.secondary,
+                    fontSize: '0.76rem',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {currentNameMetaError}
+                </Typography>
+              </Box>
+            ) : null}
+
+            <Box
+              sx={{
+                borderTop: `1px solid ${avatarSectionDivider}`,
+                mt: 0.35,
+                pt: 1.15,
+              }}
+            >
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  fontSize: '0.73rem',
+                  lineHeight: 1.5,
+                }}
+              >
+                For selling or buying names, check the Q-App called:{' '}
+                <Box
+                  component="span"
+                  sx={{
+                    color: theme.palette.text.primary,
+                    fontWeight: 700,
+                  }}
+                >
+                  Names
+                </Box>
+                .
+              </Typography>
+            </Box>
+
+            <LoadingButton
+              loading={isChangeNameLoading}
+              disabled={isChangeNameSubmitDisabled}
+              onClick={submitNameChange}
+              variant="contained"
+              fullWidth
+              sx={{
+                borderRadius: '10px',
+                ...getBlueTier1ButtonSx(),
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                minHeight: 42,
+                textTransform: 'none',
+                '&.Mui-disabled': {
+                  background: isDarkMode
+                    ? 'rgba(255,255,255,0.035)'
+                    : 'rgba(24,29,36,0.04)',
+                  border: isDarkMode
+                    ? '1px solid rgba(255,255,255,0.055)'
+                    : '1px solid rgba(24,29,36,0.06)',
+                  boxShadow: 'none',
+                  color: isDarkMode
+                    ? 'rgba(255,255,255,0.34)'
+                    : 'rgba(24,29,36,0.34)',
+                },
+              }}
+            >
+              Save new name
+            </LoadingButton>
+          </Box>
+        </Box>
+      </Dialog>
 
       <Portal>
         <AnimatePresence>

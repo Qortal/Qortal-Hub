@@ -125,7 +125,6 @@ import {
   QORTINO_DONATION_PREFILL_NAME,
   QORTINO_DONATION_THANK_YOU_MESSAGE,
 } from './qortinoDonationEasterEgg';
-import { QORTINO_SANDBOX_EVENT } from './qortinoSandbox';
 
 const LS_KEY = GETTING_STARTED_LS_KEY;
 const AVATAR_SERVICE = 'THUMBNAIL';
@@ -4734,34 +4733,6 @@ export const HomeQortinoWorkspaceCard = ({
     },
     [applyQortinoSandboxPreset, qortinoSandboxPresetKey]
   );
-  useEffect(() => {
-    const handleOpenQortinoSandbox = () => {
-      const presetKey =
-        qortinoStatusLabel === 'idle' && qortinoMood === 'hotkeys'
-          ? 'routing'
-          : resolveQortinoSandboxPresetKey(qortinoStatusLabel);
-      const preset = QORTINO_SANDBOX_PRESET_BY_KEY[presetKey];
-      const snapshot: QortinoSandboxSnapshot = {
-        bubbleMessage: qortinoDisplayedMessage?.trim() || preset.bubbleMessage,
-        presetKey,
-        statusLabel: qortinoStatusLabel,
-      };
-      qortinoSandboxBaseSnapshotRef.current = snapshot;
-      applyQortinoSandboxSnapshot(snapshot);
-      setOpenQortinoSandboxDialog(true);
-    };
-
-    subscribeToEvent(QORTINO_SANDBOX_EVENT, handleOpenQortinoSandbox);
-
-    return () => {
-      unsubscribeFromEvent(QORTINO_SANDBOX_EVENT, handleOpenQortinoSandbox);
-    };
-  }, [
-    applyQortinoSandboxSnapshot,
-    qortinoDisplayedMessage,
-    qortinoMood,
-    qortinoStatusLabel,
-  ]);
   const qortinoSandboxMood =
     QORTINO_SANDBOX_PRESET_BY_KEY[qortinoSandboxPresetKey].mood;
   const qortinoSandboxEffectiveStatusLabel = isQortinoSandboxTickled

@@ -44,6 +44,7 @@ import {
   pauseAllQueues,
   processTransactionVersion2,
   registerName,
+  updateName,
   removeAdmin,
   resumeAllQueues,
   saveTempPublish,
@@ -801,6 +802,32 @@ export async function registerNameCase(request, event) {
       {
         requestId: request.requestId,
         action: 'registerName',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+export async function updateNameCase(request, event) {
+  try {
+    const { newName, oldName, description } = request.payload;
+    const response = await updateName({ newName, oldName, description });
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateName',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'updateName',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

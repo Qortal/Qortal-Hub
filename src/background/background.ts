@@ -97,6 +97,7 @@ import {
   setGroupDataCase,
   setupGroupWebsocketCase,
   updateThreadActivityCase,
+  updateNameCase,
   userInfoCase,
   validApiCase,
   versionCase,
@@ -3227,6 +3228,9 @@ function setupMessageListener() {
         break;
       case 'registerName':
         registerNameCase(request, event);
+        break;
+      case 'updateName':
+        updateNameCase(request, event);
         break;
       case 'createPoll':
         createPollCase(request, event);

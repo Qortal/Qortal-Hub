@@ -17,11 +17,11 @@ import { useState } from 'react';
 import { decryptStoredWallet } from '../../utils/decryptWallet';
 import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
 import { crypto, walletVersion } from '../../constants/decryptWallet';
+import { executeEvent } from '../../utils/events';
 
 export const DownloadWallet = ({
   returnToMain,
   setIsLoading,
-  showInfo,
   rawWallet,
   setWalletToBeDownloaded,
   walletToBeDownloaded,
@@ -254,10 +254,12 @@ export const DownloadWallet = ({
           <CustomButton
             onClick={async () => {
               await saveFileToDiskFunc();
-              await showInfo({
+              executeEvent('openGlobalSnackBar', {
                 message: t('auth:message.generic.keep_secure', {
                   postProcess: 'capitalizeFirstChar',
                 }),
+                type: 'info',
+                duration: 5600,
               });
             }}
           >

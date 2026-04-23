@@ -88,6 +88,7 @@ import { BuyQortInformation } from './components/BuyQortInformation';
 import { PdfViewer } from './common/PdfViewer';
 import { useTranslation } from 'react-i18next';
 import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
+import { BackupWalletModal } from './components/Auth/BackupWalletModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import {
   getDefaultLocalNodeUrl,
@@ -212,6 +213,7 @@ function App() {
     source: 'boundary' | 'error' | 'promise';
   } | null>(null);
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
+  const [isBackupWalletModalOpen, setIsBackupWalletModalOpen] = useState(false);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
@@ -1045,8 +1047,17 @@ function App() {
     }
   }, [t]);
   const onBackupWallet = useCallback(() => {
+    if (extState === 'authenticated' && rawWallet) {
+      setIsBackupWalletModalOpen(true);
+      return;
+    }
+
     setExtstate('download-wallet');
-  }, [setExtstate]);
+  }, [extState, rawWallet, setExtstate]);
+
+  const closeBackupWalletModal = useCallback(() => {
+    setIsBackupWalletModalOpen(false);
+  }, []);
 
   useEffect(() => {
     subscribeToEvent('openMintingPanel', onOpenMinting);
@@ -1117,12 +1128,14 @@ function App() {
   const onBackupAccountConfirm = useCallback(async () => {
     await saveFileToDiskFunc();
     returnToMain();
-    await showInfo({
+    executeEvent('openGlobalSnackBar', {
       message: t('auth:tips.wallet_secure', {
         postProcess: 'capitalizeFirstChar',
       }),
+      type: 'info',
+      duration: 5600,
     });
-  }, [t, showInfo, saveFileToDiskFunc, returnToMain]);
+  }, [t, saveFileToDiskFunc, returnToMain]);
   const onCountdownComplete = useCallback(() => {
     window.close();
   }, []);
@@ -1241,6 +1254,14 @@ function App() {
           </Suspense>
         )}
 
+        {isMainWindow && (
+          <BackupWalletModal
+            open={isBackupWalletModalOpen}
+            onClose={closeBackupWalletModal}
+            rawWallet={rawWallet}
+          />
+        )}
+
         <AnimatePresence>
           {isOpenSendQort && isMainWindow && (
             <SendQortOverlay
@@ -1350,7 +1371,6 @@ function App() {
           <DownloadWallet
             returnToMain={returnToMain}
             setIsLoading={setIsLoading}
-            showInfo={showInfo}
             rawWallet={rawWallet}
             setWalletToBeDownloaded={setWalletToBeDownloaded}
             walletToBeDownloaded={walletToBeDownloaded}
