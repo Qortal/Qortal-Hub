@@ -4146,6 +4146,12 @@ export const HomeQortinoWorkspaceCard = ({
           pr: '10px',
           pt: '10px',
           transform: `translateY(${qortinoLayoutDebug.musicHeaderOffsetY - 11}px)`,
+          '@container qortino-card (max-width: 390px)': {
+            pb: '10px',
+            pl: '8px',
+            pr: '8px',
+            pt: '8px',
+          },
         }}
       >
         <Typography
@@ -4203,10 +4209,17 @@ export const HomeQortinoWorkspaceCard = ({
           display: 'grid',
           flex: 1,
           gap: '10px',
+          gridAutoRows: 'minmax(0, 1fr)',
           gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
           minHeight: 0,
+          width: '100%',
           px: '10px',
           pb: '10px',
+          '@container qortino-card (max-width: 390px)': {
+            gap: '8px',
+            px: '8px',
+            pb: '8px',
+          },
         }}
       >
         {workspaceState.hotkeys.map((appName, index) => {
@@ -4220,13 +4233,13 @@ export const HomeQortinoWorkspaceCard = ({
               }
               sx={{
                 alignItems: 'center',
-                aspectRatio: '1 / 1',
                 background: 'transparent',
                 border: '1px solid transparent',
                 borderRadius: '14px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 0.8,
+                height: '100%',
                 justifyContent: 'center',
                 minWidth: 0,
                 px: 0.7,

@@ -123,6 +123,10 @@ const HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS = {
   md: `${HOME_SHARED_SIDE_RAIL_WIDTH_MD} minmax(0, 1fr)`,
   xl: `${HOME_SHARED_SIDE_RAIL_WIDTH_XL} minmax(0, 1fr)`,
 } as const;
+const HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS = {
+  xs: '1fr',
+  lg: `${HOME_SHARED_SIDE_RAIL_WIDTH_MD} minmax(0, 1fr)`,
+} as const;
 // Right rail is offset to visually align Info with Account Overview.
 // The left column includes the "Qortal Hub" eyebrow label above Account Overview,
 // while the right column starts directly with the rail cards, so this offset
@@ -2822,7 +2826,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       </Box>
                     ) : (
                       <>
-                        <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS, alignItems: 'stretch', width: '100%' }}>
+                        <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS, alignItems: 'stretch', width: '100%' }}>
                           <Box
                             ref={accountOverviewDebugRef}
                             sx={{ display: 'block', height: resolvedQortinoCardHeightPx != null ? `${resolvedQortinoCardHeightPx}px` : undefined, minWidth: 0, position: 'relative', '& > *': { height: '100%' } }}
@@ -2843,7 +2847,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             />
                           </Box>
                         </Box>
-                        <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS, alignItems: 'stretch', width: '100%' }}>
+                        <Box sx={{ display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateColumns: HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS, alignItems: 'stretch', width: '100%' }}>
                           <Box ref={toolsDebugRef} sx={{ display: 'block', minWidth: 0, position: 'relative', width: '100%' }}>
                             <HomeQuickToolsPad
                               fillHeight={false}

@@ -521,11 +521,11 @@ export const HomeProfileCard = ({
         display: 'grid',
         gap: {
           xs: '18px',
-          md: '16px',
+          lg: '16px',
         },
         gridTemplateColumns: {
           xs: '1fr',
-          md: '104px minmax(0, 1fr)',
+          lg: '104px minmax(0, 1fr)',
         },
         minHeight: '164px',
         padding: '22px 24px',
@@ -541,6 +541,10 @@ export const HomeProfileCard = ({
           flexDirection: 'column',
           gap: '4px',
           justifyContent: 'center',
+          justifySelf: {
+            xs: 'center',
+            lg: 'stretch',
+          },
           width: '104px',
         }}
       >
@@ -712,7 +716,7 @@ export const HomeProfileCard = ({
           minWidth: 0,
           pl: {
             xs: 0,
-            md: '12px',
+            lg: '12px',
           },
           width: '100%',
         }}

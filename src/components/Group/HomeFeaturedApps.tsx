@@ -274,6 +274,7 @@ export const HomeFeaturedApps = ({
       sx={{
         ...dashboardPanelSx(theme, 'base'),
         borderRadius: '12px',
+        containerType: 'inline-size',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
@@ -350,6 +351,16 @@ export const HomeFeaturedApps = ({
               position: 'relative',
               width: 'max-content',
               zIndex: 1,
+              '@container (max-width: 640px)': {
+                gridAutoRows: '116px',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                justifyContent: 'stretch',
+                width: '100%',
+              },
+              '@container (max-width: 500px)': {
+                gridAutoRows: '108px',
+                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              },
             }}
           >
             {FEATURED_APP_GRID.map((appName, index) =>
