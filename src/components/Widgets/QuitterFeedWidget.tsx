@@ -869,6 +869,7 @@ export const QuitterFeedWidget = ({
               flexShrink: 0,
               gap: '8px',
               justifyContent: 'space-between',
+              mt: '-3px',
               pb: '8px',
             }}
           >

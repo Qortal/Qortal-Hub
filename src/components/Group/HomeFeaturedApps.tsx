@@ -907,7 +907,7 @@ const AppTile = ({
       backgroundColor="transparent"
       borderRadius={10}
       glowRadius={40}
-      glowIntensity={1}
+      glowIntensity={0.5}
       coneSpread={25}
       colors={[
         '#c084fc',

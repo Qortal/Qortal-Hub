@@ -55,21 +55,32 @@ export const RegisterName = ({
     'tutorial',
   ]);
   const modalSurface = isDarkMode
-    ? 'linear-gradient(180deg, rgba(20,23,30,0.985) 0%, rgba(15,17,23,0.99) 100%)'
+    ? 'linear-gradient(145deg, rgba(49,54,64,0.985) 0%, rgba(35,39,47,0.992) 48%, rgba(24,27,33,0.996) 100%)'
     : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)';
-  const surfaceBorder = alpha(theme.palette.divider, 0.38);
-  const shellDivider = alpha(theme.palette.divider, 0.28);
-  const sectionDivider = alpha(theme.palette.divider, isDarkMode ? 0.16 : 0.2);
-  const softSectionSurface = alpha(
-    isDarkMode ? theme.palette.common.white : theme.palette.text.primary,
-    isDarkMode ? 0.026 : 0.032
-  );
+  const surfaceBorder = isDarkMode
+    ? 'rgba(255,255,255,0.08)'
+    : alpha(theme.palette.divider, 0.32);
+  const shellDivider = isDarkMode
+    ? 'rgba(255,255,255,0.052)'
+    : alpha(theme.palette.divider, 0.24);
+  const sectionDivider = isDarkMode
+    ? 'rgba(255,255,255,0.052)'
+    : alpha(theme.palette.divider, 0.18);
+  const softSectionSurface = isDarkMode
+    ? 'linear-gradient(145deg, rgba(94,101,114,0.34) 0%, rgba(72,78,89,0.3) 100%)'
+    : alpha(theme.palette.text.primary, 0.035);
   const fieldBorder =
     theme.palette.border?.subtle ??
-    (isDarkMode ? 'rgba(255,255,255,0.11)' : 'rgba(24,29,36,0.12)');
+    (isDarkMode ? 'rgba(255,255,255,0.085)' : 'rgba(24,29,36,0.12)');
   const fieldSurface = isDarkMode
-    ? 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.028) 100%)'
+    ? 'linear-gradient(145deg, rgba(88,95,108,0.2) 0%, rgba(56,62,73,0.28) 44%, rgba(37,41,49,0.42) 100%)'
     : 'linear-gradient(180deg, rgba(17,23,34,0.042) 0%, rgba(17,23,34,0.024) 100%)';
+  const fieldSurfaceHover = isDarkMode
+    ? 'linear-gradient(145deg, rgba(98,106,120,0.24) 0%, rgba(63,70,82,0.34) 46%, rgba(43,48,57,0.48) 100%)'
+    : 'linear-gradient(180deg, rgba(17,23,34,0.06) 0%, rgba(17,23,34,0.034) 100%)';
+  const fieldInsetShadow = isDarkMode
+    ? '0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.035)'
+    : '0 4px 10px rgba(24,32,44,0.06), inset 0 1px 0 rgba(255,255,255,0.5)';
   const contentColumnMaxWidth = 428;
 
   const checkIfNameExisits = async (name) => {
@@ -389,23 +400,22 @@ export const RegisterName = ({
                   '& .MuiOutlinedInput-root': {
                     background: fieldSurface,
                     borderRadius: '10px',
-                    boxShadow: isDarkMode
-                      ? '0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.04)'
-                      : '0 8px 20px rgba(18,28,45,0.08), inset 0 1px 0 rgba(255,255,255,0.5)',
+                    boxShadow: fieldInsetShadow,
                     color: theme.palette.text.primary,
                     '& fieldset': {
-                      borderColor:
-                        theme.palette.border?.main ??
-                        alpha(theme.palette.primary.main, isDarkMode ? 0.34 : 0.24),
+                      borderColor: fieldBorder,
                     },
                     '&:hover fieldset': {
-                      borderColor:
-                        theme.palette.border?.main ??
-                        alpha(theme.palette.primary.main, 0.58),
+                      borderColor: isDarkMode
+                        ? 'rgba(255,255,255,0.12)'
+                        : alpha(theme.palette.primary.main, 0.42),
                     },
                     '&.Mui-focused fieldset': {
                       borderColor: alpha(theme.palette.primary.main, 0.9),
                       borderWidth: 1.5,
+                    },
+                    '&:hover': {
+                      background: fieldSurfaceHover,
                     },
                   },
                   '& .MuiOutlinedInput-input': {
@@ -421,7 +431,7 @@ export const RegisterName = ({
               <Box
                 sx={{
                   alignItems: 'flex-start',
-                  backgroundColor: alpha(
+                  background: alpha(
                     theme.palette.warning?.main ?? '#d19932',
                     isDarkMode ? 0.13 : 0.08
                   ),
@@ -464,7 +474,7 @@ export const RegisterName = ({
               <Box
                 sx={{
                   alignItems: 'center',
-                  backgroundColor: alpha(
+                  background: alpha(
                     theme.palette.success?.main ?? '#2e7d32',
                     isDarkMode ? 0.13 : 0.08
                   ),
@@ -506,7 +516,7 @@ export const RegisterName = ({
               <Box
                 sx={{
                   alignItems: 'center',
-                  backgroundColor: alpha(
+                  background: alpha(
                     theme.palette.error?.main ?? '#d32f2f',
                     isDarkMode ? 0.13 : 0.08
                   ),
@@ -548,7 +558,7 @@ export const RegisterName = ({
               <Box
                 sx={{
                   alignItems: 'center',
-                  backgroundColor: softSectionSurface,
+                  background: softSectionSurface,
                   border: `1px solid ${fieldBorder}`,
                   borderRadius: '12px',
                   display: 'flex',

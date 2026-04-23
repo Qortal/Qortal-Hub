@@ -688,9 +688,7 @@ export const UserLookup = ({
     navigator.clipboard.writeText(addressInfo.address);
     pushSnack(
       'success',
-      t('tutorial:home.address_copied', {
-        postProcess: 'capitalizeFirstChar',
-      })
+      'Address copied to clipboard'
     );
   }, [addressInfo?.address, pushSnack, t]);
 

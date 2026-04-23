@@ -116,7 +116,7 @@ export const WalletsAppWrapper = () => {
                 ? 'linear-gradient(180deg, rgba(21,24,31,0.985) 0%, rgba(16,18,24,0.99) 100%)'
                 : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)',
             border: `1px solid ${alpha(theme.palette.common.white, 0.08)}`,
-            borderRadius: '26px',
+            borderRadius: '14px',
             boxShadow:
               theme.palette.mode === 'dark'
                 ? '0 34px 120px rgba(0,0,0,0.46)'

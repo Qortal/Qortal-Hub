@@ -120,20 +120,29 @@ export const HomeProfileCard = ({
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
   const avatarModalSurface = isDarkMode
-    ? 'linear-gradient(180deg, rgba(20,23,30,0.985) 0%, rgba(15,17,23,0.99) 100%)'
+    ? 'linear-gradient(145deg, rgba(49,54,64,0.985) 0%, rgba(35,39,47,0.992) 48%, rgba(24,27,33,0.996) 100%)'
     : 'linear-gradient(180deg, rgba(251,253,255,0.985) 0%, rgba(244,247,251,0.99) 100%)';
   const avatarModalSurfaceSoft = isDarkMode
-    ? alpha(theme.palette.common.white, 0.03)
+    ? 'linear-gradient(145deg, rgba(94,101,114,0.34) 0%, rgba(72,78,89,0.3) 100%)'
     : alpha(theme.palette.text.primary, 0.035);
   const avatarFieldSurface = isDarkMode
-    ? 'linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.028) 100%)'
+    ? 'linear-gradient(145deg, rgba(88,95,108,0.2) 0%, rgba(56,62,73,0.28) 44%, rgba(37,41,49,0.42) 100%)'
     : 'linear-gradient(180deg, rgba(17,23,34,0.042) 0%, rgba(17,23,34,0.024) 100%)';
+  const avatarFieldSurfaceHover = isDarkMode
+    ? 'linear-gradient(145deg, rgba(98,106,120,0.24) 0%, rgba(63,70,82,0.34) 46%, rgba(43,48,57,0.48) 100%)'
+    : 'linear-gradient(180deg, rgba(17,23,34,0.06) 0%, rgba(17,23,34,0.034) 100%)';
   const avatarFieldBorder = isDarkMode
-    ? 'rgba(255,255,255,0.11)'
+    ? 'rgba(255,255,255,0.085)'
     : 'rgba(24,29,36,0.12)';
+  const avatarFieldHoverBorder = isDarkMode
+    ? 'rgba(255,255,255,0.12)'
+    : 'rgba(24,29,36,0.16)';
   const avatarSectionDivider = isDarkMode
-    ? 'rgba(255,255,255,0.08)'
+    ? 'rgba(255,255,255,0.052)'
     : 'rgba(24,29,36,0.1)';
+  const avatarFieldInsetShadow = isDarkMode
+    ? '0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.035)'
+    : '0 4px 10px rgba(24,32,44,0.06), inset 0 1px 0 rgba(255,255,255,0.5)';
   const avatarWarningTone = isDarkMode
     ? {
         background: 'rgba(189, 143, 73, 0.1)',
@@ -1200,7 +1209,7 @@ export const HomeProfileCard = ({
 
                     <Box
                       sx={{
-                        borderTop: `1px solid ${theme.palette.border.subtle}`,
+                        borderTop: `1px solid ${avatarSectionDivider}`,
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 1.15,
@@ -1222,17 +1231,10 @@ export const HomeProfileCard = ({
                         <Box
                           sx={{
                             alignItems: 'center',
-                            backgroundColor: alpha(
-                              isDarkMode
-                                ? theme.palette.common.white
-                                : theme.palette.background.paper,
-                              isDarkMode ? 0.045 : 0.86
-                            ),
+                            background: avatarFieldSurface,
                             border: `1px solid ${avatarFieldBorder}`,
                             borderRadius: '50%',
-                            boxShadow: isDarkMode
-                              ? 'inset 0 1px 0 rgba(255,255,255,0.035)'
-                              : 'inset 0 1px 0 rgba(255,255,255,0.42)',
+                            boxShadow: avatarFieldInsetShadow,
                             display: 'flex',
                             height: 112,
                             justifyContent: 'center',
@@ -1263,9 +1265,10 @@ export const HomeProfileCard = ({
                         <ButtonBase
                           sx={{
                             alignItems: 'center',
-                            backgroundColor: 'transparent',
+                            background: avatarFieldSurface,
                             border: `1px solid ${avatarFieldBorder}`,
                             borderRadius: '10px',
+                            boxShadow: avatarFieldInsetShadow,
                             color: theme.palette.text.primary,
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -1273,14 +1276,14 @@ export const HomeProfileCard = ({
                             py: 1.1,
                             textAlign: 'left',
                             transition:
-                              'background-color 160ms ease, border-color 160ms ease, transform 120ms ease',
+                              'background 160ms ease, border-color 160ms ease, transform 120ms ease, box-shadow 160ms ease',
                             width: '100%',
                             '&:hover': {
-                              backgroundColor: alpha(
-                                theme.palette.primary.main,
-                                isDarkMode ? 0.032 : 0.04
-                              ),
-                              borderColor: theme.palette.border.main,
+                              background: avatarFieldSurfaceHover,
+                              borderColor: avatarFieldHoverBorder,
+                              boxShadow: isDarkMode
+                                ? '0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.042)'
+                                : '0 6px 14px rgba(24,32,44,0.08), inset 0 1px 0 rgba(255,255,255,0.54)',
                               transform: 'translateY(-1px)',
                             },
                           }}
@@ -1318,18 +1321,14 @@ export const HomeProfileCard = ({
                           <Box
                             sx={{
                               alignItems: 'center',
-                              backgroundColor: alpha(
-                                isDarkMode
-                                  ? theme.palette.common.white
-                                  : theme.palette.background.paper,
-                                isDarkMode ? 0.04 : 0.78
-                              ),
+                              background: avatarModalSurfaceSoft,
                               border: `1px solid ${avatarFieldBorder}`,
                               borderRadius: '999px',
                               color: theme.palette.text.primary,
                               display: 'inline-flex',
                               fontSize: '0.72rem',
                               fontWeight: 600,
+                              letterSpacing: '0.01em',
                               minHeight: 30,
                               px: 1.2,
                             }}

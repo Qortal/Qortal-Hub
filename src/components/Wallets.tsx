@@ -119,7 +119,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
     },
     onDrop: async (acceptedFiles) => {
       const files: any = acceptedFiles;
-      let importedWallets: any = [];
+      const importedWallets: any = [];
 
       for (const file of files) {
         try {
@@ -210,7 +210,7 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
 
   const updateWalletItem = (idx, wallet) => {
     setWallets((prev) => {
-      let copyPrev = [...prev];
+      const copyPrev = [...prev];
       if (wallet === null) {
         copyPrev.splice(idx, 1); // Use splice to remove the item
         return copyPrev;
@@ -470,6 +470,13 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
         open={isOpenSeedModal}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '14px',
+            },
+          },
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && seedValue && seedName && password) {
             onOk({ seedValue, seedName, password });

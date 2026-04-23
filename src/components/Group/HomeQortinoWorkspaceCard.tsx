@@ -249,6 +249,7 @@ type HomeQortinoWorkspaceCardProps = {
   debugReplayToken?: number;
   debugUseOverridesOnly?: boolean;
   onGettingStartedComplete?: () => void;
+  onOpenAppsPanel?: () => void;
 };
 
 type QortinoSectionRuntimeFallbackProps = {
@@ -259,10 +260,13 @@ type QortinoSectionRuntimeFallbackProps = {
 };
 
 type WorkspaceModuleDefinition = {
+  appName?: string;
+  appPath?: string;
   description: string;
   icon: typeof AppsRoundedIcon;
+  key: string;
   label: string;
-  mode: Exclude<WorkspaceMode, 'empty'>;
+  mode?: Exclude<WorkspaceMode, 'empty'>;
 };
 
 type HotkeyActionDefinition = {
@@ -315,14 +319,24 @@ const WORKSPACE_MODULES: WorkspaceModuleDefinition[] = [
   {
     description: 'Curated shortcuts for your most-used routes.',
     icon: AppsRoundedIcon,
+    key: 'hotkeys',
     label: 'Hotkeys',
     mode: 'hotkeys',
   },
   {
     description: 'A compact Earbump player with search and quick playback.',
     icon: LibraryMusicRoundedIcon,
+    key: 'music',
     label: 'Music player',
     mode: 'music',
+  },
+  {
+    appName: 'q-mail',
+    appPath: 'to/Qortino',
+    description: 'Compose > Add Subject + Message & Send it our way!',
+    icon: MailOutlineRoundedIcon,
+    key: 'suggest-module',
+    label: 'Suggest a module',
   },
 ];
 
@@ -610,9 +624,8 @@ const openExternalUrl = (url: string) => {
   window.open(url, '_blank');
 };
 
-const openApp = (name: string, path = '') => {
+const dispatchAppTab = (name: string, path = '') => {
   executeEvent('addTab', { data: { service: 'APP', name, path } });
-  executeEvent('open-apps-mode', {});
 };
 
 const getFallbackStorageKey = (userAddress: string | undefined) =>
@@ -1426,6 +1439,7 @@ export const HomeQortinoWorkspaceCard = ({
   debugReplayToken = 0,
   debugUseOverridesOnly = false,
   onGettingStartedComplete,
+  onOpenAppsPanel,
 }: HomeQortinoWorkspaceCardProps) => {
   const { t } = useTranslation(['tutorial']);
   const theme = useTheme();
@@ -1436,6 +1450,21 @@ export const HomeQortinoWorkspaceCard = ({
   const txList = useAtomValue(txListAtom);
   const userAddress = userInfo?.address;
   const name = userInfo?.name;
+  const openApp = useCallback(
+    (appName: string, path = '') => {
+      if (onOpenAppsPanel) {
+        onOpenAppsPanel();
+      } else {
+        executeEvent('newTabWindow', {});
+        executeEvent('open-apps-mode', {});
+      }
+
+      window.setTimeout(() => {
+        dispatchAppTab(appName, path);
+      }, 90);
+    },
+    [onOpenAppsPanel]
+  );
 
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   const [paymentsFallbackTotal, setPaymentsFallbackTotal] = useState<number | null>(null);
@@ -1569,6 +1598,9 @@ export const HomeQortinoWorkspaceCard = ({
         trimmedMessage ===
           'This only mutes desktop alerts. In-Hub notifications still continue.' ||
         trimmedMessage === 'Only available for minters. Apply at Q-Mintership.' ||
+        /^This panel unlocks once you.+ minter\. Swing by Q-Mintership to get started!$/.test(
+          trimmedMessage
+        ) ||
         trimmedMessage === 'Hotkeys panel ready.' ||
         trimmedMessage === 'Music panel ready.' ||
         trimmedMessage === 'Music player ready.' ||
@@ -2042,7 +2074,7 @@ export const HomeQortinoWorkspaceCard = ({
         icon: MailOutlineRoundedIcon,
         id: 'q-mail',
         label: 'Q-Mail',
-        run: () => openApp('Q-Mail'),
+        run: () => openApp('q-mail'),
       },
       'q-trade': {
         description: 'Launch Q-Trade',
@@ -5856,13 +5888,22 @@ export const HomeQortinoWorkspaceCard = ({
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, pb: 2.1 }}>
           {WORKSPACE_MODULES.map((module) => (
             <ButtonBase
-              key={module.mode}
+              key={module.key}
               onClick={() => {
+                if (module.appName) {
+                  setOpenModulePickerDialog(false);
+                  window.setTimeout(() => {
+                    openApp(module.appName as string, module.appPath ?? '');
+                  }, 0);
+                  return;
+                }
                 if (module.mode === 'hotkeys') {
                   handleOpenHotkeyPicker(firstEmptyHotkeySlot >= 0 ? firstEmptyHotkeySlot : 0);
                   return;
                 }
-                handleSelectWorkspaceMode(module.mode);
+                if (module.mode) {
+                  handleSelectWorkspaceMode(module.mode);
+                }
               }}
               sx={{
                 alignItems: 'center',

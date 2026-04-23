@@ -2752,6 +2752,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                                 debugReplayToken={gettingStartedDebugReplayToken}
                                 debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
                                 onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                                onOpenAppsPanel={handleOpenAppsPanel}
                               />
                             </ErrorBoundary>
                           </Box>
@@ -2832,6 +2833,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                                 debugReplayToken={gettingStartedDebugReplayToken}
                                 debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
                                 onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                                onOpenAppsPanel={handleOpenAppsPanel}
                               />
                             </ErrorBoundary>
                           </Box>

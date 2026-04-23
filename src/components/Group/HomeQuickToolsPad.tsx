@@ -62,6 +62,19 @@ const QUICK_TOOLS_PANEL_GRADIENT_DEFAULT = {
   angle: 197,
   spread: 76,
 };
+const QUICK_TOOL_GRID_PLACEMENT: Record<
+  string,
+  { gridColumn: string; gridRow: string }
+> = {
+  'lookup-user': { gridColumn: '1', gridRow: '1' },
+  wallets: { gridColumn: '2', gridRow: '1' },
+  apps: { gridColumn: '3', gridRow: '1' },
+  'q-chat': { gridColumn: '4', gridRow: '1' },
+  'backup-wallet': { gridColumn: '1', gridRow: '2' },
+  minting: { gridColumn: '2', gridRow: '2' },
+  notifications: { gridColumn: '3', gridRow: '2' },
+  'qortino-sandbox': { gridColumn: '4', gridRow: '2' },
+};
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
@@ -240,7 +253,7 @@ export const HomeQuickToolsPad = ({
         onAction: () => {
           executeEvent('openGlobalSnackBar', {
             message:
-              'Backup exports your wallet locally. This stays on your device.',
+              'Download your wallet file. This is required to access your account',
             type: 'info',
             duration: 5600,
           });
@@ -383,6 +396,7 @@ export const HomeQuickToolsPad = ({
               onClick={(event) => item.onAction(event)}
               onDragStart={item.onDragStart}
               sx={{
+                ...(QUICK_TOOL_GRID_PLACEMENT[item.key] ?? {}),
                 alignItems: 'center',
                 background: isDarkMode
                   ? 'linear-gradient(145deg, rgba(53,58,68,0.99) 0%, rgba(41,45,54,1) 48%, rgba(30,34,41,1) 100%)'
