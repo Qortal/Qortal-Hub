@@ -148,7 +148,7 @@ type PromotionActionState = 'connecting' | 'processing' | 'request_sent';
 const GROUP_PROMOTION_IDENTIFIER_PREFIX = 'group-promotions-ui24-';
 const GROUP_PROMOTION_MAX_ITEMS = 8;
 const GROUP_NOTIFICATION_PREVIEW_LIMIT = 20;
-const GROUP_WIDGET_CARD_RADIUS = '8px';
+const GROUP_WIDGET_CARD_RADIUS = '10px';
 
 const stripHtml = (value: string) =>
   value
@@ -1592,50 +1592,80 @@ export const GroupsWidget = ({
     },
   } as const;
 
+  const discoverGroupsActionSx = {
+    ...headerUtilityActionSx,
+    background:
+      theme.palette.mode === 'dark'
+        ? 'rgba(88, 122, 178, 0.34)'
+        : 'rgba(117, 161, 227, 0.18)',
+    border: `1px solid ${alpha(
+      '#8FB8F3',
+      theme.palette.mode === 'dark' ? 0.18 : 0.24
+    )}`,
+    boxShadow:
+      theme.palette.mode === 'dark'
+        ? '0 0 0 1px rgba(255,255,255,0.028) inset, 0 0 12px rgba(132,175,240,0.1)'
+        : '0 0 0 1px rgba(255,255,255,0.05) inset, 0 0 10px rgba(132,175,240,0.08)',
+    color:
+      theme.palette.mode === 'dark'
+        ? alpha('#8FB8F3', 0.92)
+        : alpha('#5A8FE0', 0.9),
+    '&:hover': {
+      ...getBlueTier1ButtonSx()['&:hover'],
+      borderColor: 'rgba(143, 184, 243, 0.22)',
+      color: APP_BLUE_SURFACE_TEXT,
+      transform: 'translateY(-1px)',
+    },
+    '&:active': {
+      ...getBlueTier1ButtonSx()['&:active'],
+      transform: 'scale(0.97)',
+    },
+  } as const;
+
   const widgetItemSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.044)
+      ? 'linear-gradient(180deg, rgba(45, 49, 60, 0.9) 0%, rgba(36, 40, 50, 0.96) 100%)'
       : alpha(theme.palette.text.primary, 0.036);
 
   const widgetItemHoverSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.062)
+      ? 'linear-gradient(180deg, rgba(49, 54, 66, 0.94) 0%, rgba(39, 43, 53, 0.98) 100%)'
       : alpha(theme.palette.text.primary, 0.048);
 
-  const widgetItemBorderColor = alpha(
-    theme.palette.border.main,
-    theme.palette.mode === 'dark' ? 0.2 : 0.12
-  );
+  const widgetItemBorderColor =
+    theme.palette.mode === 'dark'
+      ? 'rgba(255,255,255,0.06)'
+      : alpha(theme.palette.border.main, 0.12);
 
-  const widgetItemHoverBorderColor = alpha(
-    theme.palette.border.main,
-    theme.palette.mode === 'dark' ? 0.28 : 0.18
-  );
+  const widgetItemHoverBorderColor =
+    theme.palette.mode === 'dark'
+      ? 'rgba(255,255,255,0.085)'
+      : alpha(theme.palette.border.main, 0.18);
 
   const widgetItemInsetShadow =
     theme.palette.mode === 'dark'
-      ? `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.05)}`
+      ? `0 10px 24px rgba(0,0,0,0.18), inset 0 1px 0 ${alpha(theme.palette.common.white, 0.045)}`
       : `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.72)}`;
   const readNotificationSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.038)
+      ? 'linear-gradient(180deg, rgba(43, 47, 58, 0.88) 0%, rgba(34, 38, 48, 0.95) 100%)'
       : alpha(theme.palette.text.primary, 0.03);
   const readNotificationHoverSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.common.white, 0.052)
+      ? 'linear-gradient(180deg, rgba(47, 52, 63, 0.92) 0%, rgba(37, 41, 51, 0.98) 100%)'
       : alpha(theme.palette.text.primary, 0.04);
   const unreadNotificationSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.primary.main, 0.044)
+      ? `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.14)} 0%, rgba(40, 49, 63, 0.94) 20%, rgba(34, 40, 50, 0.98) 100%)`
       : alpha(theme.palette.primary.main, 0.03);
   const unreadNotificationHoverSurfaceColor =
     theme.palette.mode === 'dark'
-      ? alpha(theme.palette.primary.main, 0.058)
+      ? `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.18)} 0%, rgba(44, 53, 68, 0.97) 22%, rgba(37, 43, 54, 1) 100%)`
       : alpha(theme.palette.primary.main, 0.04);
-  const unreadNotificationBorderColor = alpha(
-    theme.palette.primary.main,
-    theme.palette.mode === 'dark' ? 0.12 : 0.085
-  );
+  const unreadNotificationBorderColor =
+    theme.palette.mode === 'dark'
+      ? alpha(theme.palette.primary.main, 0.16)
+      : alpha(theme.palette.primary.main, 0.085);
 
   const effectiveNotificationItems = useMemo(
     () =>
@@ -1727,7 +1757,7 @@ export const GroupsWidget = ({
               }}
               sx={{
                 alignItems: 'flex-start',
-                backgroundColor: item.isUnread
+                background: item.isUnread
                   ? unreadNotificationSurfaceColor
                   : readNotificationSurfaceColor,
                 border: `1px solid ${
@@ -1744,17 +1774,14 @@ export const GroupsWidget = ({
                 position: 'relative',
                 textAlign: 'left',
                 transition:
-                  'background-color 140ms ease, border-color 140ms ease, transform 120ms ease',
+                  'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
                 width: '100%',
                 '&::before': item.isUnread
                   ? {
-                      background: `linear-gradient(180deg, transparent 0%, ${alpha(
+                      backgroundColor: alpha(
                         theme.palette.primary.main,
                         theme.palette.mode === 'dark' ? 0.34 : 0.28
-                      )} 12%, ${alpha(
-                        theme.palette.primary.main,
-                        theme.palette.mode === 'dark' ? 0.34 : 0.28
-                      )} 88%, transparent 100%)`,
+                      ),
                       borderBottomLeftRadius: GROUP_WIDGET_CARD_RADIUS,
                       borderTopLeftRadius: GROUP_WIDGET_CARD_RADIUS,
                       content: '""',
@@ -1766,7 +1793,7 @@ export const GroupsWidget = ({
                     }
                   : undefined,
                 '&:hover': {
-                  backgroundColor: item.isUnread
+                  background: item.isUnread
                     ? unreadNotificationHoverSurfaceColor
                     : readNotificationHoverSurfaceColor,
                   borderColor: item.isUnread
@@ -1775,6 +1802,10 @@ export const GroupsWidget = ({
                         theme.palette.mode === 'dark' ? 0.18 : 0.13
                       )
                     : widgetItemHoverBorderColor,
+                  boxShadow:
+                    theme.palette.mode === 'dark'
+                      ? `0 14px 28px rgba(0,0,0,0.22), inset 0 1px 0 ${alpha(theme.palette.common.white, 0.05)}`
+                      : widgetItemInsetShadow,
                   transform: 'translateY(-1px)',
                 },
               }}
@@ -1989,7 +2020,7 @@ export const GroupsWidget = ({
               <Box
                 key={invite.id}
                 sx={{
-                  backgroundColor: widgetItemSurfaceColor,
+                  background: widgetItemSurfaceColor,
                   border: `1px solid ${widgetItemBorderColor}`,
                   borderRadius: GROUP_WIDGET_CARD_RADIUS,
                   boxShadow: widgetItemInsetShadow,
@@ -1998,10 +2029,14 @@ export const GroupsWidget = ({
                   gap: isCompact ? '7px' : '8px',
                   p: rowPadding,
                   transition:
-                    'background-color 140ms ease, border-color 140ms ease, transform 120ms ease',
+                    'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
                   '&:hover': {
-                    backgroundColor: widgetItemHoverSurfaceColor,
+                    background: widgetItemHoverSurfaceColor,
                     borderColor: widgetItemHoverBorderColor,
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? `0 14px 28px rgba(0,0,0,0.22), inset 0 1px 0 ${alpha(theme.palette.common.white, 0.05)}`
+                        : widgetItemInsetShadow,
                     transform: 'translateY(-1px)',
                   },
                 }}
@@ -2153,7 +2188,7 @@ export const GroupsWidget = ({
               <Box
                 key={request.id}
                 sx={{
-                  backgroundColor: widgetItemSurfaceColor,
+                  background: widgetItemSurfaceColor,
                   border: `1px solid ${widgetItemBorderColor}`,
                   borderRadius: GROUP_WIDGET_CARD_RADIUS,
                   boxShadow: widgetItemInsetShadow,
@@ -2162,10 +2197,14 @@ export const GroupsWidget = ({
                   gap: isCompact ? '7px' : '8px',
                   p: rowPadding,
                   transition:
-                    'background-color 140ms ease, border-color 140ms ease, transform 120ms ease',
+                    'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
                   '&:hover': {
-                    backgroundColor: widgetItemHoverSurfaceColor,
+                    background: widgetItemHoverSurfaceColor,
                     borderColor: widgetItemHoverBorderColor,
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? `0 14px 28px rgba(0,0,0,0.22), inset 0 1px 0 ${alpha(theme.palette.common.white, 0.05)}`
+                        : widgetItemInsetShadow,
                     transform: 'translateY(-1px)',
                   },
                 }}
@@ -2316,7 +2355,7 @@ export const GroupsWidget = ({
               <Box
                 key={promotion.id}
                 sx={{
-                  backgroundColor: widgetItemSurfaceColor,
+                  background: widgetItemSurfaceColor,
                   border: `1px solid ${widgetItemBorderColor}`,
                   borderRadius: GROUP_WIDGET_CARD_RADIUS,
                   boxShadow: widgetItemInsetShadow,
@@ -2326,10 +2365,14 @@ export const GroupsWidget = ({
                   px: isCompact ? '11px' : '12px',
                   py: isCompact ? '9px' : '10px',
                   transition:
-                    'background-color 140ms ease, border-color 140ms ease, transform 120ms ease',
+                    'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
                   '&:hover': {
-                    backgroundColor: widgetItemHoverSurfaceColor,
+                    background: widgetItemHoverSurfaceColor,
                     borderColor: widgetItemHoverBorderColor,
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? `0 14px 28px rgba(0,0,0,0.22), inset 0 1px 0 ${alpha(theme.palette.common.white, 0.05)}`
+                        : widgetItemInsetShadow,
                     transform: 'translateY(-1px)',
                   },
                 }}
@@ -2585,7 +2628,7 @@ export const GroupsWidget = ({
         >
           <ButtonBase
             onClick={handleOpenGroupDiscovery}
-            sx={headerUtilityActionSx}
+            sx={discoverGroupsActionSx}
           >
             <SearchRoundedIcon sx={{ fontSize: '0.9rem' }} />
             Discover Groups

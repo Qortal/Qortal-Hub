@@ -15,14 +15,13 @@ import {
 import { alpha } from '@mui/material/styles';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
-import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded';
 import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded';
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
 import NotificationsOffRoundedIcon from '@mui/icons-material/NotificationsOffRounded';
-import QrCode2RoundedIcon from '@mui/icons-material/QrCode2Rounded';
 import SpaRoundedIcon from '@mui/icons-material/SpaRounded';
+import { AppsIcon } from '../../assets/Icons/AppsIcon';
+import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import { executeEvent } from '../../utils/events';
 import {
   dashboardPanelSx,
@@ -32,17 +31,20 @@ import {
 } from './dashboardPanelEffects';
 import { QORTINO_DONATION_DRAG_TYPE } from './qortinoDonationEasterEgg';
 import { QORTINO_SANDBOX_EVENT } from './qortinoSandbox';
-import { useThemeContext } from '../Theme/ThemeContext';
 
 type HomeQuickToolsPadProps = {
   fillHeight?: boolean;
-  onOpenReceive?: (anchorEl: HTMLElement) => void;
+  onOpenApps?: () => void;
+  onOpenChat?: () => void;
   onOpenSettings?: () => void;
 };
 
 type QuickToolItem = {
   accent: string;
   draggable?: boolean;
+  iconOffsetX?: number;
+  iconOffsetY?: number;
+  iconScale?: number;
   isActive?: boolean;
   key: string;
   label: string;
@@ -52,6 +54,7 @@ type QuickToolItem = {
 };
 
 const QUICK_TOOL_ICON_SIZE = '1.14rem';
+const QUICK_TOOL_ICON_BOX_SIZE_PX = 20;
 const QUICK_TOOL_DOT_OFFSET = '7px';
 const QUICK_TOOL_DOT_SIZE = '5px';
 const QUICK_TOOL_LED_COLOR = '#8FD8FF';
@@ -87,12 +90,12 @@ const buildQuickToolsPanelHighlightGradient = (
 
 export const HomeQuickToolsPad = ({
   fillHeight = false,
-  onOpenReceive,
+  onOpenApps,
+  onOpenChat,
 }: HomeQuickToolsPadProps) => {
   const theme = useTheme();
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const transparentDragImageRef = useRef<HTMLCanvasElement | null>(null);
-  const { themeMode, toggleTheme } = useThemeContext();
   const [notificationsMuted, setNotificationsMuted] = useState(false);
   const isDarkMode = theme.palette.mode === 'dark';
 
@@ -177,6 +180,7 @@ export const HomeQuickToolsPad = ({
     () => [
       {
         accent: QUICK_TOOL_LED_COLOR,
+        iconScale: 1.08,
         key: 'lookup-user',
         label: 'User Search',
         onAction: () => {
@@ -189,6 +193,7 @@ export const HomeQuickToolsPad = ({
       {
         accent: QUICK_TOOL_LED_COLOR,
         draggable: true,
+        iconScale: 1.08,
         key: 'wallets',
         label: 'Wallets',
         onAction: () => {
@@ -211,12 +216,14 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        iconScale: 1.04,
         key: 'minting',
         label: 'Minting',
         onAction: () => {
           executeEvent('qortinoContextHint', {
             data: {
-              message: 'Only available for minters. Apply at Q-Mintership.',
+              message:
+                'This panel unlocks once you’re a minter. Swing by Q-Mintership to get started!',
             },
           });
           executeEvent('openMintingPanel', {});
@@ -227,6 +234,7 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        iconScale: 1.08,
         key: 'backup-wallet',
         label: 'Backup Wallet',
         onAction: () => {
@@ -244,19 +252,24 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
-        isActive: themeMode === 'light',
-        key: 'theme-toggle',
-        label: themeMode === 'dark' ? 'Light Theme' : 'Dark Theme',
-        onAction: () => toggleTheme(),
-        renderIcon: () =>
-          themeMode === 'dark' ? (
-            <LightModeRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
-          ) : (
-            <DarkModeRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
-          ),
+        iconOffsetY: -0.15,
+        iconScale: 0.9,
+        key: 'q-chat',
+        label: 'Q-Chat',
+        onAction: () => {
+          onOpenChat?.();
+        },
+        renderIcon: () => (
+          <MessagingIconFilled
+            height={20}
+            width={20}
+            color="currentColor"
+          />
+        ),
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        iconScale: 1.07,
         isActive: !notificationsMuted,
         key: 'notifications',
         label: notificationsMuted
@@ -278,17 +291,19 @@ export const HomeQuickToolsPad = ({
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
-        key: 'receive',
-        label: 'Receive',
-        onAction: (event) => {
-          onOpenReceive?.(event.currentTarget);
+        iconScale: 0.9,
+        key: 'apps',
+        label: 'Apps',
+        onAction: () => {
+          onOpenApps?.();
         },
         renderIcon: () => (
-          <QrCode2RoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
+          <AppsIcon height={20} width={20} color="currentColor" />
         ),
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
+        iconScale: 1.1,
         key: 'qortino-sandbox',
         label: 'QORTINO Lab',
         onAction: () => {
@@ -301,9 +316,8 @@ export const HomeQuickToolsPad = ({
     ],
     [
       notificationsMuted,
-      onOpenReceive,
-      themeMode,
-      toggleTheme,
+      onOpenApps,
+      onOpenChat,
     ]
   );
 
@@ -443,13 +457,26 @@ export const HomeQuickToolsPad = ({
                   alignItems: 'center',
                   color: 'inherit',
                   display: 'inline-flex',
-                  height: '20px',
+                  height: `${QUICK_TOOL_ICON_BOX_SIZE_PX}px`,
                   justifyContent: 'center',
                   lineHeight: 1,
-                  width: '20px',
+                  overflow: 'visible',
+                  width: `${QUICK_TOOL_ICON_BOX_SIZE_PX}px`,
                 }}
               >
-                {item.renderIcon()}
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'inline-flex',
+                    justifyContent: 'center',
+                    transform: `translate(${item.iconOffsetX ?? 0}px, ${
+                      item.iconOffsetY ?? 0
+                    }px) scale(${item.iconScale ?? 1})`,
+                    transformOrigin: 'center',
+                  }}
+                >
+                  {item.renderIcon()}
+                </Box>
               </Box>
             </ButtonBase>
           </Tooltip>

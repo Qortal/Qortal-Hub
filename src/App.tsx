@@ -131,6 +131,61 @@ export {
 } from './utils/globalApi';
 export { isMainWindow } from './constants/app';
 
+const formatRuntimeFaultMessage = (
+  value: unknown,
+  fallbackMessage: string
+): string => {
+  if (value instanceof Error) {
+    return value.stack || value.message || fallbackMessage;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    return value;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'message' in value &&
+    typeof (value as { message?: unknown }).message === 'string' &&
+    (value as { message: string }).message.trim()
+  ) {
+    return (value as { message: string }).message;
+  }
+
+  if (
+    value &&
+    typeof value === 'object' &&
+    'reason' in value &&
+    typeof (value as { reason?: unknown }).reason === 'string' &&
+    (value as { reason: string }).reason.trim()
+  ) {
+    return (value as { reason: string }).reason;
+  }
+
+  if (value != null) {
+    try {
+      const serialized = JSON.stringify(value, null, 2);
+      if (serialized && serialized !== '{}') {
+        return `${fallbackMessage}\n${serialized}`;
+      }
+    } catch {
+      // Fall through to String(value) below.
+    }
+
+    const stringified = String(value);
+    if (
+      stringified &&
+      stringified !== '[object Object]' &&
+      stringified !== 'undefined'
+    ) {
+      return `${fallbackMessage}\n${stringified}`;
+    }
+  }
+
+  return fallbackMessage;
+};
+
 function App() {
   type SendQortOriginRect = {
     left: number;
@@ -304,24 +359,24 @@ function App() {
 
   useEffect(() => {
     const handleWindowError = (event: ErrorEvent) => {
+      console.error('Global runtime error', event.error || event.message, event);
       setGlobalRuntimeFault({
-        message:
-          event.error instanceof Error
-            ? event.error.message
-            : event.message || 'Unknown runtime error',
+        message: formatRuntimeFaultMessage(
+          event.error ?? event.message,
+          'Unknown runtime error'
+        ),
         source: 'error',
       });
     };
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
+      console.error('Unhandled promise rejection', reason, event);
       setGlobalRuntimeFault({
-        message:
-          reason instanceof Error
-            ? reason.message
-            : typeof reason === 'string'
-              ? reason
-              : 'Unhandled promise rejection',
+        message: formatRuntimeFaultMessage(
+          reason,
+          'Unhandled promise rejection'
+        ),
         source: 'promise',
       });
     };

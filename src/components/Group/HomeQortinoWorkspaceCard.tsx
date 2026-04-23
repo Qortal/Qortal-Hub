@@ -75,6 +75,7 @@ import {
 } from './dashboardPanelEffects';
 import { QortalRequestBubbleIcon } from './GroupActivityEmptyStateGraphic';
 import {
+  GROUP_ACTIVITY_BLUE,
   APP_BLUE_SURFACE_TEXT,
   getBlueAmbientLineBackground,
   getBlueTier1ButtonSx,
@@ -3234,6 +3235,27 @@ export const HomeQortinoWorkspaceCard = ({
     ]
   );
 
+  const handleClearHotkey = useCallback(
+    (slotIndex: number) => {
+      applyWorkspaceState((current) => {
+        const nextHotkeys = [...current.hotkeys];
+        nextHotkeys[slotIndex] = null;
+
+        return {
+          ...current,
+          hotkeys: nextHotkeys,
+          mode: 'hotkeys',
+          onboardingCelebrationSeen:
+            current.onboardingCelebrationSeen || dismissed === true,
+        };
+      });
+      setSelectedHotkeySlot(slotIndex);
+      setOpenModulePickerDialog(false);
+      setOpenHotkeyPickerDialog(true);
+    },
+    [applyWorkspaceState, dismissed]
+  );
+
   const handleRunHotkey = useCallback(
     (slotValue: string) => {
       if (!slotValue) {
@@ -3380,6 +3402,9 @@ export const HomeQortinoWorkspaceCard = ({
 
   const workspaceLabelColor = alpha(theme.palette.text.secondary, 0.78);
   const subtleLine = getBlueAmbientLineBackground(theme, 'soft');
+  const curatedAccentBlue = isDarkMode
+    ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.96)
+    : alpha(GROUP_ACTIVITY_BLUE.gradientBottom, 0.92);
   /*
   useEffect(() => {
     const handleAvatar = () => {
@@ -5992,8 +6017,40 @@ export const HomeQortinoWorkspaceCard = ({
                     px: 0.55,
                     py: 0.55,
                     aspectRatio: '1 / 1',
+                    position: 'relative',
                   }}
                 >
+                  {app ? (
+                    <ButtonBase
+                      aria-label={`Clear Slot ${index + 1}`}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        handleClearHotkey(index);
+                      }}
+                      sx={{
+                        alignItems: 'center',
+                        color: alpha(theme.palette.text.secondary, 0.68),
+                        display: 'inline-flex',
+                        height: '16px',
+                        justifyContent: 'center',
+                        position: 'absolute',
+                        right: '6px',
+                        top: '6px',
+                        transition: 'color 140ms ease, text-shadow 140ms ease',
+                        width: '16px',
+                        '&:hover': {
+                          color: curatedAccentBlue,
+                          textShadow: `0 0 8px ${alpha(
+                            GROUP_ACTIVITY_BLUE.primary,
+                            isDarkMode ? 0.18 : 0.1
+                          )}`,
+                        },
+                      }}
+                    >
+                      <CloseRoundedIcon sx={{ fontSize: '12px' }} />
+                    </ButtonBase>
+                  ) : null}
                   {app ? (
                     <>
                       <HotkeyAppAvatar appName={app.appName} radius={11} size={28} />
@@ -6014,7 +6071,12 @@ export const HomeQortinoWorkspaceCard = ({
                     </>
                   ) : (
                     <>
-                      <AddRoundedIcon sx={{ color: alpha(theme.palette.text.secondary, 0.58), fontSize: '17px' }} />
+                      <AddRoundedIcon
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.58),
+                          fontSize: '17px',
+                        }}
+                      />
                       <Typography
                         sx={{
                           color: alpha(theme.palette.text.secondary, 0.72),
@@ -6124,23 +6186,24 @@ export const HomeQortinoWorkspaceCard = ({
                     >
                       <Typography
                         sx={{
-                          background: alpha('#0F1830', 0.76),
-                          border: `1px solid ${alpha('#8DB8FF', 0.22)}`,
-                          borderRadius: '999px',
-                          color: alpha('#D7E8FF', 0.9),
+                          color: curatedAccentBlue,
                           fontSize: '0.44rem',
                           fontWeight: 700,
                           letterSpacing: '0.035em',
                           lineHeight: 1,
                           position: 'absolute',
-                          px: 0.45,
-                          py: 0.28,
                           right: '10px',
                           textTransform: 'uppercase',
-                          top: '8px',
+                          top: '9px',
                         }}
                       >
-                        Curated Q-App
+                        <Box component="span" sx={{ color: alpha(theme.palette.text.secondary, 0.62) }}>
+                          [
+                        </Box>{' '}
+                        CURATED{' '}
+                        <Box component="span" sx={{ color: alpha(theme.palette.text.secondary, 0.62) }}>
+                          ]
+                        </Box>
                       </Typography>
                       <Box
                         sx={{

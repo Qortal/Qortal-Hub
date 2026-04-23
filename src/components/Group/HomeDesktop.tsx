@@ -60,6 +60,7 @@ import { nodeDisplay } from '../../utils/helpers';
 import { DashboardWidgetFrame, type WidgetDisplayMode } from '../Widgets/DashboardWidgetFrame';
 import { GroupsWidget } from '../Widgets/GroupsWidget';
 import { QuitterFeedWidget } from '../Widgets/QuitterFeedWidget';
+import { ProgressiveBlur } from '../ui/progressive-blur';
 
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
@@ -78,6 +79,20 @@ type MinterProgressSnapshot = {
   requiredBlocks: number;
 };
 type MinterInfoView = 'dots' | 'progress';
+type WalletActivityTransaction = {
+  amount?: number | string;
+  creatorAddress?: string;
+  recipient?: string;
+  timestamp?: number | string;
+};
+type WalletActivityDirection = 'incoming' | 'outgoing';
+type WalletActivityEntry = {
+  amount: number;
+  counterpartyAddress: string;
+  counterpartyLabel: string;
+  direction: WalletActivityDirection;
+  timestamp: number;
+};
 const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
 const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
   width: {
@@ -145,6 +160,19 @@ const HOME_QUITTER_WIDGET_SEARCH_LIMITS: Record<WidgetDisplayMode, number> = {
   compact: 6,
   expanded: 8,
 };
+const SYSTEM_BADGE_SX = {
+  borderRadius: '4px',
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  height: '26px',
+  letterSpacing: '0.05em',
+  lineHeight: 1,
+  px: '10px',
+  textTransform: 'uppercase',
+  whiteSpace: 'nowrap',
+} as const;
+const WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
+const WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT = 50;
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 52;
@@ -163,6 +191,32 @@ const HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT: HomeCustomizableCardId[] = [
   'groupActivity',
   'quitter',
 ];
+
+const isWalletActivityTimestampRecent = (timestamp: number) =>
+  Date.now() - timestamp <= WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS;
+
+const formatWalletActivityRelativeTime = (timestamp: number, now: number) => {
+  const elapsedMs = Math.max(0, now - timestamp);
+  const elapsedMinutes = Math.floor(elapsedMs / 60000);
+
+  if (elapsedMinutes < 1) return 'Just now';
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) {
+    return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `${elapsedDays} day${elapsedDays === 1 ? '' : 's'} ago`;
+};
+
+const formatWalletActivityAmount = (
+  amount: number,
+  direction: WalletActivityDirection
+) => `${direction === 'outgoing' ? '-' : '+'}${Math.abs(amount).toFixed(2)} QORT`;
 
 const parseDashboardStatusPreviewMode = (
   value: string | null
@@ -538,28 +592,15 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
         ? theme.palette.mode === 'dark'
           ? alpha(theme.palette.warning.light, 0.9)
           : alpha(theme.palette.warning.main, 0.88)
-        : alpha(
-            GROUP_ACTIVITY_BLUE.primary,
-            theme.palette.mode === 'dark' ? 0.98 : 0.9
-          );
-  const statusTextColor =
-    rows.status.tone === 'issue'
-      ? theme.palette.mode === 'dark'
-        ? alpha(theme.palette.error.light, 0.76)
-        : alpha(theme.palette.error.main, 0.76)
-      : rows.status.tone === 'syncing'
-        ? theme.palette.mode === 'dark'
-          ? alpha(theme.palette.warning.light, 0.76)
-          : alpha(theme.palette.warning.dark, 0.8)
         : theme.palette.mode === 'dark'
-          ? alpha(theme.palette.common.white, 0.7)
-          : alpha(theme.palette.text.primary, 0.72);
+          ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.96)
+          : alpha(GROUP_ACTIVITY_BLUE.gradientBottom, 0.92);
   const statusGlowColor =
     rows.status.tone === 'issue'
-      ? alpha(theme.palette.error.light, 0.12)
+      ? alpha(theme.palette.error.light, 0.16)
       : rows.status.tone === 'syncing'
-        ? alpha(theme.palette.warning.light, 0.16)
-        : alpha(GROUP_ACTIVITY_BLUE.primary, 0.14);
+        ? alpha(theme.palette.warning.light, 0.18)
+        : alpha(GROUP_ACTIVITY_BLUE.primary, 0.18);
 
   const renderPrimaryValue = (row) => {
     if (row.valueNode) return row.valueNode;
@@ -581,53 +622,49 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
                   ? alpha(theme.palette.error.light, 0.88)
                   : alpha(theme.palette.error.dark, 0.88),
             }
-          : row.pillTone === 'neutral'
+          : row.pillTone === 'warning'
             ? {
                 background:
                   theme.palette.mode === 'dark'
-                    ? 'rgba(62, 72, 89, 0.34)'
-                    : 'rgba(70, 97, 140, 0.11)',
+                    ? 'rgba(123, 102, 62, 0.3)'
+                    : 'rgba(173, 140, 74, 0.14)',
                 border: alpha(
-                  GROUP_ACTIVITY_BLUE.primary,
-                  theme.palette.mode === 'dark' ? 0.16 : 0.18
+                  theme.palette.warning.light,
+                  theme.palette.mode === 'dark' ? 0.18 : 0.24
                 ),
                 color:
                   theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.common.white, 0.84)
-                    : alpha(theme.palette.text.primary, 0.84),
+                    ? alpha(theme.palette.warning.light, 0.9)
+                    : alpha(theme.palette.warning.dark, 0.88),
               }
             : {
                 background:
                   theme.palette.mode === 'dark'
-                    ? 'rgba(71, 100, 86, 0.3)'
-                    : 'rgba(84, 124, 103, 0.14)',
+                    ? 'rgba(88, 122, 178, 0.3)'
+                    : 'rgba(117, 161, 227, 0.15)',
                 border: alpha(
-                  theme.palette.success.light,
-                  theme.palette.mode === 'dark' ? 0.16 : 0.22
+                  GROUP_ACTIVITY_BLUE.gradientTop,
+                  theme.palette.mode === 'dark' ? 0.18 : 0.24
                 ),
                 color:
                   theme.palette.mode === 'dark'
-                    ? '#C2D9CA'
-                    : '#406C53',
+                    ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.92)
+                    : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.9),
               };
       return (
         <Box
           sx={{
             alignItems: 'center',
-            bgcolor: pillTone.background,
+            background: pillTone.background,
             border: `1px solid ${pillTone.border}`,
-            borderRadius: '999px',
+            boxShadow: pillTone.boxShadow ?? 'none',
             color: pillTone.color,
             display: 'inline-flex',
-            fontSize: '0.7rem',
-            fontWeight: 700,
-            height: '26px',
             justifyContent: 'center',
-            letterSpacing: '0.01em',
+            justifySelf: 'end',
             maxWidth: '100%',
             minWidth: 0,
-            px: '10px',
-            whiteSpace: 'nowrap',
+            ...SYSTEM_BADGE_SX,
           }}
         >
           {row.value}
@@ -725,38 +762,13 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
           minHeight: 0,
           position: 'relative',
           width: '100%',
-          ...(showCollapsedFade
-            ? {
-                WebkitMaskImage:
-                  'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 102px), rgba(0,0,0,0.86) calc(100% - 68px), rgba(0,0,0,0.46) calc(100% - 40px), rgba(0,0,0,0.12) calc(100% - 18px), rgba(0,0,0,0) 100%)',
-                WebkitMaskRepeat: 'no-repeat',
-                WebkitMaskSize: '100% 100%',
-                maskImage:
-                  'linear-gradient(180deg, rgba(0,0,0,1) 0%, rgba(0,0,0,1) calc(100% - 102px), rgba(0,0,0,0.86) calc(100% - 68px), rgba(0,0,0,0.46) calc(100% - 40px), rgba(0,0,0,0.12) calc(100% - 18px), rgba(0,0,0,0) 100%)',
-                maskRepeat: 'no-repeat',
-                maskSize: '100% 100%',
-                '&::after': {
-                  content: '""',
-                  position: 'absolute',
-                  left: '8px',
-                  right: '8px',
-                  bottom: -12,
-                  height: '72px',
-                  pointerEvents: 'none',
-                  background:
-                    theme.palette.mode === 'dark'
-                      ? 'linear-gradient(180deg, rgba(27,29,36,0) 0%, rgba(27,29,36,0.08) 22%, rgba(27,29,36,0.28) 46%, rgba(27,29,36,0.62) 74%, rgba(27,29,36,0.9) 100%)'
-                      : 'linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.08) 22%, rgba(255,255,255,0.22) 46%, rgba(255,255,255,0.52) 74%, rgba(255,255,255,0.84) 100%)',
-                },
-              }
-            : {}),
         }}
       >
       <Box
         sx={{
           alignItems: 'center',
           display: 'flex',
-          justifyContent: 'space-between',
+          justifyContent: 'flex-start',
           mb: '14px',
           width: '100%',
         }}
@@ -785,6 +797,7 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
               color: statusAccentColor,
               display: 'inline-block',
               ml: '1px',
+              textShadow: `0 0 8px ${statusGlowColor}`,
               '@keyframes homeStatusCursorBlink': {
                 '0%, 42%': {
                   opacity: 1,
@@ -798,38 +811,6 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
             _
           </Box>
         </Typography>
-        <Box
-          sx={{
-            alignItems: 'center',
-            display: 'inline-flex',
-            gap: '8px',
-            justifyContent: 'flex-end',
-            minWidth: 0,
-          }}
-        >
-          <Box
-            sx={{
-              bgcolor: statusAccentColor,
-              borderRadius: '50%',
-              boxShadow: `0 0 6px ${statusGlowColor}`,
-              flexShrink: 0,
-              height: '7px',
-              width: '7px',
-            }}
-          />
-          <Typography
-            sx={{
-              color: statusTextColor,
-              fontSize: '0.73rem',
-              fontWeight: 400,
-              letterSpacing: '0.015em',
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {rows.status.label}
-          </Typography>
-        </Box>
       </Box>
 
       <Box sx={{ ...sepSx(theme), pb: '12px', mb: '8px' }} />
@@ -956,89 +937,139 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
           width: '100%',
         }}
       >
-        {rows.footerSections.map((section, sectionIndex) => (
-          <Box
-            key={section.title}
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '6px',
-              mt:
-                section.offsetTopPx != null
-                  ? `${section.offsetTopPx}px`
-                  : sectionIndex === 0
-                    ? 0
-                    : '2px',
-            }}
-          >
-            <Typography
+        {rows.footerSections.map((section, sectionIndex) => {
+          const isNodeSection = section.title === 'Node';
+          const sectionHeaderLabel = isNodeSection
+            ? '// node_info'
+            : section.title;
+
+          return (
+            <Box
+              key={section.title}
               sx={{
-                color:
-                  theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.common.white, 0.4)
-                    : alpha(theme.palette.text.primary, 0.48),
-                fontSize: '0.67rem',
-                fontWeight: 600,
-                letterSpacing: '0.08em',
-                lineHeight: 1,
-                mb: '1px',
-                textTransform: 'uppercase',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                mt:
+                  section.offsetTopPx != null
+                    ? `${section.offsetTopPx}px`
+                    : sectionIndex === 0
+                      ? 0
+                      : '2px',
               }}
             >
-              {section.title}
-            </Typography>
-
-            {section.items.map((row, index) => (
-              <Box
-                key={row.label}
+              <Typography
+                component="div"
                 sx={{
-                  ...(index < section.items.length - 1
-                    ? infoSepSx(theme, index, section.items.length)
-                    : {}),
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  minHeight: '50px',
-                  py: '6px',
+                  alignItems: 'center',
+                  color:
+                    isNodeSection
+                      ? theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.common.white, 0.38)
+                        : alpha(theme.palette.text.secondary, 0.92)
+                      : theme.palette.text.primary,
+                  display: 'inline-flex',
+                  fontFamily:
+                    '"IBM Plex Mono","SFMono-Regular","Cascadia Mono","Fira Code","Consolas",monospace',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.02em',
+                  lineHeight: 1,
+                  mb: '8px',
+                  textTransform: 'none',
                 }}
               >
-                <Typography
+                {sectionHeaderLabel}
+              </Typography>
+
+              {section.items.map((row, index) => (
+                <Box
+                  key={row.label}
                   sx={{
-                    color:
-                      theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.52)
-                        : alpha(theme.palette.text.primary, 0.58),
-                    fontSize: '0.79rem',
-                    fontWeight: 500,
-                    letterSpacing: '0.012em',
-                    lineHeight: 1.1,
-                    minWidth: 0,
+                    ...(index < section.items.length - 1
+                      ? infoSepSx(theme, index, section.items.length)
+                      : {}),
+                    ...(isNodeSection
+                      ? {
+                          alignItems: 'center',
+                          columnGap: '18px',
+                          display: 'grid',
+                          gridTemplateColumns: 'minmax(0, 1fr) auto',
+                          height: '46px',
+                          mt: index === 0 ? '14px' : 0,
+                          py: 0,
+                          width: '100%',
+                        }
+                      : {
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          minHeight: '50px',
+                          py: '6px',
+                        }),
                   }}
                 >
-                  {row.label}
-                </Typography>
-                <Typography
-                  sx={{
-                    color: alpha(theme.palette.text.primary, 0.88),
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    letterSpacing: '0.01em',
-                    lineHeight: 1.2,
-                    maxWidth: '100%',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {row.value}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        ))}
+                  <Typography
+                    sx={{
+                      color:
+                        theme.palette.mode === 'dark'
+                          ? alpha(theme.palette.common.white, 0.52)
+                          : alpha(theme.palette.text.primary, 0.58),
+                      fontSize: '0.79rem',
+                      fontWeight: 500,
+                      letterSpacing: '0.012em',
+                      lineHeight: 1.1,
+                      minWidth: 0,
+                    }}
+                  >
+                    {row.label}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.primary, 0.88),
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      letterSpacing: '0.01em',
+                      lineHeight: 1.2,
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      ...(isNodeSection
+                        ? {
+                            justifySelf: 'end',
+                            textAlign: 'right',
+                          }
+                        : {}),
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {row.value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          );
+        })}
       </Box>
 
       <Box sx={{ minHeight: '8px', width: '100%' }} />
+      {showCollapsedFade && (
+        <ProgressiveBlur
+          blurStrength={18}
+          height="78px"
+          position="bottom"
+          sx={{
+            bottom: -12,
+            left: '-16px',
+            right: '-16px',
+          }}
+          tintColor={
+            theme.palette.mode === 'dark'
+              ? theme.palette.background.paper
+              : theme.palette.common.white
+          }
+        />
+      )}
       </Box>
     </Box>
     </Box>
@@ -1066,6 +1097,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const walletActivityDebugRef = useRef<HTMLDivElement | null>(null);
   const rightRailRef = useRef<HTMLDivElement | null>(null);
   const layoutStabilizeFrameRef = useRef<number | null>(null);
+  const walletActivityNameCacheRef = useRef<Record<string, string>>({});
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
@@ -1103,6 +1135,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [isGroupWidgetRefreshing, setIsGroupWidgetRefreshing] = useState(false);
   const [quitterWidgetRefreshToken, setQuitterWidgetRefreshToken] = useState(0);
   const [isQuitterWidgetRefreshing, setIsQuitterWidgetRefreshing] = useState(false);
+  const [recentWalletActivity, setRecentWalletActivity] =
+    useState<WalletActivityEntry | null>(null);
+  const [isWalletActivityLoading, setIsWalletActivityLoading] = useState(false);
+  const [walletActivityRelativeTimeNow, setWalletActivityRelativeTimeNow] =
+    useState(() => Date.now());
   const [activityToggleIndicator, setActivityToggleIndicator] = useState({
     ready: false,
     width: 0,
@@ -1161,6 +1198,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     theme.palette.mode === 'dark'
       ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.32)'
       : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(31,39,53,0.08)';
+  const walletActivitySecondaryTextColor = alpha(
+    theme.palette.text.primary,
+    0.6
+  );
   const infoPanelMaxExpandedHeightPx =
     isWideDashboardLayout && resolvedWalletActivityHeightPx != null
       ? HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX +
@@ -1193,6 +1234,105 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         : null,
     });
   }, [myAddress, userAddress]);
+  const resolveWalletActivityAddressLabel = useCallback(
+    async (address: string) => {
+      if (!address) return 'Unknown address';
+
+      const cachedSenderName = walletActivityNameCacheRef.current[address];
+      if (cachedSenderName !== undefined) {
+        return cachedSenderName || address;
+      }
+
+      try {
+        const response = await fetch(
+          `${getBaseApiReact()}/names/primary/${address}`
+        );
+        const responseData = await response.json();
+        const senderName =
+          response.ok && responseData?.name ? responseData.name : '';
+        walletActivityNameCacheRef.current[address] = senderName || '';
+        return senderName || address;
+      } catch (error) {
+        console.error('Failed to resolve wallet activity participant name:', error);
+        walletActivityNameCacheRef.current[address] = '';
+        return address;
+      }
+    },
+    []
+  );
+  const buildWalletActivityEntry = useCallback(
+    async (transaction: WalletActivityTransaction | null | undefined) => {
+      if (!transaction || !userAddress) return null;
+
+      const timestamp = Number(transaction.timestamp);
+      const amount = Number(transaction.amount);
+      const isOutgoing = transaction.creatorAddress === userAddress;
+      const isIncoming = transaction.recipient === userAddress;
+
+      if (
+        !Number.isFinite(timestamp) ||
+        !Number.isFinite(amount) ||
+        (!isIncoming && !isOutgoing) ||
+        !isWalletActivityTimestampRecent(timestamp)
+      ) {
+        return null;
+      }
+
+      const counterpartyAddress = isOutgoing
+        ? transaction.recipient || ''
+        : transaction.creatorAddress || '';
+      const counterpartyLabel = await resolveWalletActivityAddressLabel(
+        counterpartyAddress
+      );
+
+      return {
+        amount,
+        counterpartyAddress,
+        counterpartyLabel,
+        direction: isOutgoing ? 'outgoing' : 'incoming',
+        timestamp,
+      };
+    },
+    [resolveWalletActivityAddressLabel, userAddress]
+  );
+  const loadRecentWalletActivity = useCallback(async () => {
+    if (!userAddress) {
+      setRecentWalletActivity(null);
+      setIsWalletActivityLoading(false);
+      return;
+    }
+
+    setIsWalletActivityLoading(true);
+
+    try {
+      const response = await fetch(
+        `${getBaseApiReact()}/transactions/search?txType=PAYMENT&address=${userAddress}&confirmationStatus=CONFIRMED&limit=${WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT}&reverse=true`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch wallet activity payments');
+      }
+
+      const responseData = await response.json();
+      const latestRelevantPayment = Array.isArray(responseData)
+        ? responseData.find(
+            (transaction: WalletActivityTransaction) =>
+              (transaction?.creatorAddress === userAddress ||
+                transaction?.recipient === userAddress) &&
+              Number.isFinite(Number(transaction?.timestamp)) &&
+              isWalletActivityTimestampRecent(Number(transaction.timestamp))
+          )
+        : null;
+
+      const recentEntry = await buildWalletActivityEntry(latestRelevantPayment);
+      setRecentWalletActivity(recentEntry);
+    } catch (error) {
+      console.error('Failed to load recent wallet activity:', error);
+      setRecentWalletActivity(null);
+    } finally {
+      setIsWalletActivityLoading(false);
+    }
+  }, [buildWalletActivityEntry, userAddress]);
   const assignGroupActivityPanelNode = useCallback((node: HTMLDivElement | null) => {
     groupActivityPanelRef.current = node;
     groupActivityCardHeightRef.current = node;
@@ -1204,6 +1344,52 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       JSON.stringify(customizableCardsLayout)
     );
   }, [customizableCardsLayout]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setWalletActivityRelativeTimeNow(Date.now());
+    }, 60000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    loadRecentWalletActivity();
+
+    const handleRecentWalletPaymentMessage = async (event: MessageEvent) => {
+      if (!userAddress) return;
+      if (event.origin !== window.location.origin) return;
+
+      const message = event.data;
+      if (message?.action !== 'SET_PAYMENT_ANNOUNCEMENT' || !message?.payload) {
+        return;
+      }
+
+      if (message.payload?.recipient !== userAddress) {
+        return;
+      }
+
+      const incomingEntry = await buildWalletActivityEntry(message.payload);
+      if (!incomingEntry) {
+        return;
+      }
+
+      if (!isCancelled) {
+        setRecentWalletActivity(incomingEntry);
+      }
+    };
+
+    window.addEventListener('message', handleRecentWalletPaymentMessage);
+
+    return () => {
+      isCancelled = true;
+      window.removeEventListener('message', handleRecentWalletPaymentMessage);
+    };
+  }, [buildWalletActivityEntry, loadRecentWalletActivity, userAddress]);
 
   useEffect(() => {
     setCustomizableCardsLayout((currentLayout) => {
@@ -1936,21 +2122,33 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, []);
 
   const balanceLabel = balance != null ? `${Number(balance).toFixed(2)} QORT` : '—';
+  const handleOpenAppsPanel = useCallback(() => {
+    executeEvent('newTabWindow', {});
+    setDesktopViewMode('apps');
+  }, [setDesktopViewMode]);
   const handleOpenEmbeddedQuitter = () => {
     executeEvent('addTab', { data: { service: 'APP', name: 'Quitter' } });
     executeEvent('open-apps-mode', {});
   };
-  const handleOpenGroupsWidget = useCallback(() => {
+  const handleOpenQChatPanel = useCallback(() => {
     setSelectedGroup(null);
     setGroupSection('chat');
     setDesktopViewMode('chat');
   }, [setDesktopViewMode, setGroupSection, setSelectedGroup]);
+  const handleOpenGroupsWidget = useCallback(() => {
+    handleOpenQChatPanel();
+  }, [handleOpenQChatPanel]);
 
+  const hasLiveNodeConnection = nodeInfos?.height != null;
   const liveSyncPercent =
-    nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100
+    hasLiveNodeConnection &&
+    nodeInfos?.isSynchronizing &&
+    nodeInfos?.syncPercent !== 100
       ? Math.round(nodeInfos?.syncPercent || 0)
       : 100;
-  const nodeStatusValue = `${liveSyncPercent}% Synced`;
+  const nodeStatusValue = hasLiveNodeConnection
+    ? `${liveSyncPercent}% Synced`
+    : 'Node unavailable';
   const peersLabel = `${nodeInfos?.numberOfConnections || 0}`;
   const blockHeightLabel = `${nodeInfos?.height || '—'}`;
   const hubVersionLabel = manifestData.version || '—';
@@ -2004,7 +2202,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       ? 'Public node'
       : 'Custom node';
   const isSystemOperational =
-    !!nodeInfos &&
+    hasLiveNodeConnection &&
     !(nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100);
   const statusPreviewOverrides =
     statusPreviewMode === 'live'
@@ -2326,8 +2524,84 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
             style={{ alignItems: 'center', display: 'flex', height: '22px', justifyContent: 'flex-end', width: '100%' }}
           >
-                                      <ButtonBase onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-mintership', path: '' } }); executeEvent('open-apps-mode', {}); }} sx={{ alignItems: 'center', bgcolor: alpha(theme.palette.background.surface, theme.palette.mode === 'dark' ? 0.92 : 1), border: `1px solid ${alpha(theme.palette.border.subtle, 0.9)}`, borderRadius: '999px', color: alpha(theme.palette.text.secondary, 0.9), display: 'inline-flex', fontSize: '0.66rem', fontWeight: 600, height: '21px', justifyContent: 'center', minWidth: '50px', px: 1, py: 0, whiteSpace: 'nowrap' }}>
-              Apply
+            <ButtonBase
+              onClick={() => {
+                executeEvent('addTab', {
+                  data: { service: 'APP', name: 'q-mintership', path: '' },
+                });
+                executeEvent('open-apps-mode', {});
+              }}
+              sx={{
+                alignItems: 'center',
+                backgroundColor: 'transparent',
+                display: 'inline-flex',
+                justifyContent: 'center',
+                minWidth: 0,
+                ml: 'auto',
+                px: 0,
+                py: 0,
+                transition:
+                  'color 140ms ease, text-shadow 140ms ease, transform 120ms ease',
+                whiteSpace: 'nowrap',
+                '&:hover': {
+                  '& .minter-apply-text': {
+                    color: theme.palette.mode === 'dark'
+                      ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 1)
+                      : alpha(GROUP_ACTIVITY_BLUE.hover, 0.98),
+                    textShadow: `0 0 10px ${alpha(
+                      GROUP_ACTIVITY_BLUE.primary,
+                      theme.palette.mode === 'dark' ? 0.18 : 0.12
+                    )}`,
+                  },
+                  transform: 'translateY(-1px)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                },
+              }}
+            >
+              <Box
+                component="span"
+                sx={{
+                  alignItems: 'center',
+                  display: 'inline-flex',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  lineHeight: 1,
+                  textTransform: 'uppercase',
+                }}
+              >
+                <Box
+                  component="span"
+                  sx={{
+                    color: alpha(theme.palette.text.secondary, 0.52),
+                  }}
+                >
+                  [
+                </Box>
+                <Box
+                  component="span"
+                  className="minter-apply-text"
+                  sx={{
+                    color: theme.palette.mode === 'dark'
+                      ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.94)
+                      : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.9),
+                    px: '4px',
+                    transition: 'color 140ms ease, text-shadow 140ms ease',
+                  }}
+                >
+                  Apply
+                </Box>
+                <Box
+                  component="span"
+                  sx={{
+                    color: alpha(theme.palette.text.secondary, 0.52),
+                  }}
+                >
+                  ]
+                </Box>
+              </Box>
             </ButtonBase>
           </motion.div>
         )}
@@ -2357,7 +2631,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             ? 'negative'
             : resolvedNodeStatusValue === '100% Synced'
               ? 'positive'
-              : 'neutral',
+              : 'warning',
         value: resolvedNodeStatusValue,
         variant: 'pill',
       },
@@ -2492,7 +2766,8 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           >
                             <HomeQuickToolsPad
                               fillHeight={false}
-                              onOpenReceive={handleOpenReceiveQort}
+                              onOpenApps={handleOpenAppsPanel}
+                              onOpenChat={handleOpenQChatPanel}
                               onOpenSettings={onOpenSettings}
                             />
                           </Box>
@@ -2570,7 +2845,8 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           <Box ref={toolsDebugRef} sx={{ display: 'block', minWidth: 0, position: 'relative', width: '100%' }}>
                             <HomeQuickToolsPad
                               fillHeight={false}
-                              onOpenReceive={handleOpenReceiveQort}
+                              onOpenApps={handleOpenAppsPanel}
+                              onOpenChat={handleOpenQChatPanel}
                               onOpenSettings={onOpenSettings}
                             />
                           </Box>
@@ -2590,12 +2866,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
                     />
                   </Box>
-                  <Box ref={walletActivityDebugRef} sx={{ position: 'relative', width: '100%', minHeight: '182px', height: resolvedWalletActivityHeightPx != null ? `${resolvedWalletActivityHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
+                  <Box ref={walletActivityDebugRef} sx={{ maxWidth: { xs: '100%', md: '360px' }, position: 'relative', width: '100%', minHeight: '182px', height: resolvedWalletActivityHeightPx != null ? `${resolvedWalletActivityHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
                   <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: '100%', minHeight: '182px', padding: '14px 16px 16px' }}>
-                    <Box sx={{ ...sepSx(theme), alignItems: 'center', display: 'flex', justifyContent: 'space-between', pb: 1.35 }}>
-                      <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>Last activity</Typography>
-                      <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.72rem' }}>2 days ago</Typography>
-                    </Box>
+                    <Box sx={{ ...sepSx(theme), pb: 1.35 }} />
                     <Box sx={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', pt: 0.5 }}>
                       <WalletActionButton
                         icon={<SendRoundedIcon sx={{ fontSize: '16px' }} />}
@@ -2635,9 +2908,154 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       />
                       <WalletActionButton icon={<ShoppingBagRoundedIcon sx={{ fontSize: '16px' }} />} label="Buy" onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-trade' } }); executeEvent('open-apps-mode', {}); }} theme={theme} />
                     </Box>
-                    <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.66rem', lineHeight: 1.45, mt: 'auto', pt: 1.05 }}>
-                      Use these shortcuts for your most common wallet actions directly from your Hub Dashboard
-                    </Typography>
+                    <Box
+                      sx={{
+                        borderTop: `1px solid ${theme.palette.border.subtle}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        flex: 1,
+                        gap: '5px',
+                        mt: 0.35,
+                        minHeight: 0,
+                        pt: 2.2,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.64rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.08em',
+                          textAlign: 'left',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Recent Transaction
+                      </Typography>
+                      {isWalletActivityLoading ? (
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            fontSize: '0.82rem',
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          Loading recent wallet activity...
+                        </Typography>
+                      ) : recentWalletActivity ? (
+                        [recentWalletActivity].map((activityEntry, index) => (
+                          <Box
+                            key={`${activityEntry.timestamp}-${index}`}
+                            sx={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              minWidth: 0,
+                              '& + &': {
+                                borderTop: `1px solid ${alpha(
+                                  theme.palette.text.primary,
+                                  0.08
+                                )}`,
+                                mt: 0.25,
+                                pt: 1.2,
+                              },
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                alignItems: 'baseline',
+                                color: theme.palette.text.primary,
+                                display: 'flex',
+                                gap: '5px',
+                                minWidth: 0,
+                                textAlign: 'left',
+                                width: '100%',
+                              }}
+                            >
+                              <Typography
+                                sx={{
+                                  color: theme.palette.text.primary,
+                                  fontSize: '0.95rem',
+                                  fontWeight: 600,
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {formatWalletActivityAmount(
+                                  activityEntry.amount,
+                                  activityEntry.direction
+                                )}
+                              </Typography>
+                              <Typography
+                                sx={{
+                                  color: theme.palette.text.primary,
+                                  fontSize: '0.83rem',
+                                  lineHeight: 1.45,
+                                  minWidth: 0,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <Box
+                                  component="span"
+                                  sx={{ color: walletActivitySecondaryTextColor }}
+                                >
+                                  {activityEntry.direction === 'outgoing'
+                                    ? 'sent to '
+                                    : 'received from '}
+                                </Box>
+                                <Box
+                                  component="span"
+                                  sx={{ color: theme.palette.text.primary, fontWeight: 600 }}
+                                >
+                                  {activityEntry.counterpartyLabel}
+                                </Box>
+                              </Typography>
+                            </Box>
+                            <Typography
+                              sx={{
+                                color: walletActivitySecondaryTextColor,
+                                fontSize: '0.74rem',
+                                lineHeight: 1.4,
+                                textAlign: 'left',
+                              }}
+                            >
+                              {formatWalletActivityRelativeTime(
+                                activityEntry.timestamp,
+                                walletActivityRelativeTimeNow
+                              )}
+                            </Typography>
+                          </Box>
+                        ))
+                      ) : (
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            fontSize: '0.82rem',
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          No new wallet activity.
+                        </Typography>
+                      )}
+                      <Box
+                        sx={{
+                          mt: 'auto',
+                          pt: 1.05,
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            color: walletActivitySecondaryTextColor,
+                            fontSize: '0.68rem',
+                            lineHeight: 1.45,
+                            textAlign: 'left',
+                          }}
+                        >
+                          Latest transaction within the past 7 days
+                        </Typography>
+                      </Box>
+                    </Box>
                   </DashboardUtilityPanel>
                   </Box>
                 </Box>

@@ -945,9 +945,9 @@ export const QuitterFeedWidget = ({
               color: theme.palette.text.secondary,
               fontSize: '0.67rem',
               fontWeight: 600,
-                letterSpacing: '0.01em',
-                whiteSpace: 'nowrap',
-              }}
+              letterSpacing: '0.01em',
+              whiteSpace: 'nowrap',
+            }}
           >
             {feedMode === 'following' ? 'Personalized feed' : 'Public feed'}
           </Typography>
@@ -1156,7 +1156,7 @@ export const QuitterFeedWidget = ({
                       </Box>
                     ))}
                   </Box>
-                </Box>
+              </Box>
               {items.length > 0 && (
                 <Box
                   data-quitters-footer="true"
