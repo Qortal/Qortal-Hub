@@ -9,8 +9,10 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { alpha } from '@mui/material/styles';
 import { formatDate } from '../utils/time';
 import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotification';
 import { executeEvent } from '../utils/events';
@@ -47,6 +49,10 @@ export const GeneralNotifications = ({
   ]);
 
   const theme = useTheme();
+  const isOpen = !!anchorEl;
+  const NotificationIcon = hasNewPayment
+    ? NotificationsActiveRoundedIcon
+    : NotificationsNoneRoundedIcon;
 
   return (
     <>
@@ -55,6 +61,7 @@ export const GeneralNotifications = ({
           handlePopupClick(e);
         }}
         sx={buttonSx || undefined}
+        aria-label="Payment notifications"
       >
         <Tooltip
           title={
@@ -86,7 +93,7 @@ export const GeneralNotifications = ({
             },
           }}
         >
-          <NotificationsIcon
+          <NotificationIcon
             sx={{
               color: hasNewPayment
                 ? theme.palette.other.unread
@@ -99,7 +106,7 @@ export const GeneralNotifications = ({
       </ButtonBase>
 
       <Popover
-        open={!!anchorEl}
+        open={isOpen}
         anchorEl={anchorEl}
         onClose={() => {
           if (hasNewPayment) {
@@ -107,37 +114,93 @@ export const GeneralNotifications = ({
           }
           setAnchorEl(null);
         }} // Close popover on click outside
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'center',
+        }}
+        slotProps={{
+          paper: {
+            sx: {
+              background: `linear-gradient(180deg, ${alpha('#252A33', 0.98)} 0%, ${alpha(
+                '#1C2129',
+                0.98
+              )} 100%)`,
+              backgroundImage: 'none',
+              border: `1px solid ${alpha('#FFFFFF', 0.06)}`,
+              borderRadius: '16px',
+              boxShadow: `0 18px 40px ${alpha('#000000', 0.34)}`,
+              mt: 1,
+              overflow: 'hidden',
+            },
+          },
+        }}
       >
         <Box
           sx={{
-            alignItems: hasNewPayment ? 'flex-start' : 'center',
+            alignItems: hasNewPayment ? 'stretch' : 'center',
             display: 'flex',
             flexDirection: 'column',
+            gap: hasNewPayment ? 0 : 1.25,
+            justifyContent: hasNewPayment ? 'flex-start' : 'center',
+            minHeight: hasNewPayment ? 'unset' : 152,
             maxHeight: '60vh',
             maxWidth: '100%',
             overflow: 'auto',
-            padding: '5px',
-            width: '300px',
+            padding: hasNewPayment ? '8px' : '18px 20px',
+            width: '320px',
           }}
         >
           {!hasNewPayment && (
-            <Typography
-              sx={{
-                userSelect: 'none',
-              }}
-            >
-              {t('core:message.generic.no_notifications')}
-            </Typography>
+            <>
+              <NotificationIcon
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.82),
+                  fontSize: 22,
+                }}
+              />
+              <Typography
+                sx={{
+                  color: theme.palette.text.primary,
+                  fontSize: '0.96rem',
+                  fontWeight: 600,
+                  textAlign: 'center',
+                  userSelect: 'none',
+                }}
+              >
+                No new payment notifications
+              </Typography>
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.76),
+                  fontSize: '0.78rem',
+                  lineHeight: 1.5,
+                  maxWidth: '240px',
+                  textAlign: 'center',
+                  userSelect: 'none',
+                }}
+              >
+                Latest incoming payment notification from the past 24 hours will
+                appear here.
+              </Typography>
+            </>
           )}
           {hasNewPayment && (
             <MenuItem
               sx={{
                 alignItems: 'flex-start',
+                borderRadius: '12px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '5px',
                 textWrap: 'auto',
                 width: '100%',
+                '&:hover': {
+                  backgroundColor: alpha('#FFFFFF', 0.035),
+                },
               }}
               onClick={() => {
                 setAnchorEl(null);
@@ -146,11 +209,17 @@ export const GeneralNotifications = ({
             >
               <Card
                 sx={{
-                  backgroundColor: '#1F2023',
+                  background: `linear-gradient(180deg, ${alpha('#242A34', 0.98)} 0%, ${alpha(
+                    '#1A1F27',
+                    0.98
+                  )} 100%)`,
+                  border: `1px solid ${alpha('#FFFFFF', 0.055)}`,
+                  borderRadius: '14px',
+                  boxShadow: `0 10px 24px ${alpha('#000000', 0.22)}`,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '5px',
-                  padding: '10px',
+                  padding: '12px',
                   width: '100%',
                 }}
               >
@@ -165,9 +234,18 @@ export const GeneralNotifications = ({
                   <AccountBalanceWalletIcon
                     sx={{
                       color: theme.palette.text.primary,
+                      fontSize: 19,
                     }}
                   />
-                  {formatDate(latestTx?.timestamp)}
+                  <Typography
+                    sx={{
+                      color: alpha(theme.palette.text.secondary, 0.82),
+                      fontSize: '0.72rem',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {formatDate(latestTx?.timestamp)}
+                  </Typography>
                 </Box>
 
                 <Box
@@ -178,11 +256,21 @@ export const GeneralNotifications = ({
                     justifyContent: 'space-between',
                   }}
                 >
-                  <Typography>{latestTx?.amount}</Typography>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.primary,
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      letterSpacing: '-0.01em',
+                    }}
+                  >
+                    {latestTx?.amount}
+                  </Typography>
                 </Box>
 
                 <Typography
                   sx={{
+                    color: alpha(theme.palette.text.secondary, 0.86),
                     fontSize: '0.8rem',
                   }}
                 >

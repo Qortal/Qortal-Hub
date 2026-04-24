@@ -38,6 +38,8 @@ export const QortPayment = ({
   const [paymentTo, setPaymentTo] = useState<string>(defaultPaymentTo);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');
+  const [isPaymentPasswordEditable, setIsPaymentPasswordEditable] =
+    useState(false);
   const [sendPaymentError, setSendPaymentError] = useState<string>('');
   const [isLoadingSendCoin, setIsLoadingSendCoin] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -97,6 +99,15 @@ export const QortPayment = ({
       fontWeight: 400,
       opacity: 1,
     },
+    '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+      {
+        WebkitBoxShadow: isDarkMode
+          ? '0 0 0 100px rgb(28, 31, 38) inset'
+          : '0 0 0 100px rgb(248, 250, 253) inset',
+        WebkitTextFillColor: theme.palette.text.primary,
+        caretColor: theme.palette.text.primary,
+        transition: 'background-color 9999s ease-out 0s',
+      },
   } as const;
 
   const sendCoinFunc = async () => {
@@ -281,8 +292,16 @@ export const QortPayment = ({
           type={showPassword ? 'text' : 'password'}
           value={paymentPassword}
           onChange={(e) => setPaymentPassword(e.target.value)}
-          autoComplete="off"
+          autoComplete="new-password"
+          name="payment-password-confirmation"
           fullWidth
+          onFocus={() => setIsPaymentPasswordEditable(true)}
+          onMouseDown={() => setIsPaymentPasswordEditable(true)}
+          onBlur={() => {
+            if (!paymentPassword) {
+              setIsPaymentPasswordEditable(false);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               if (isLoadingSendCoin) return;
@@ -290,6 +309,7 @@ export const QortPayment = ({
             }
           }}
           InputProps={{
+            readOnly: !isPaymentPasswordEditable,
             endAdornment: (
               <InputAdornment position="end">
                 <IconButton
@@ -305,6 +325,12 @@ export const QortPayment = ({
                 </IconButton>
               </InputAdornment>
             ),
+          }}
+          inputProps={{
+            autoComplete: 'new-password',
+            'data-1p-ignore': 'true',
+            'data-lpignore': 'true',
+            spellCheck: 'false',
           }}
           sx={textFieldSurfaceSx}
         />

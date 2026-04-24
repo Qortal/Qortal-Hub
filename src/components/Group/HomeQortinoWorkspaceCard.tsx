@@ -957,6 +957,16 @@ const QortinoMascot = ({
     : isListening
       ? 'qortinoMusicBounce 3s ease-in-out infinite'
       : 'qortinoBob 5.8s ease-in-out infinite';
+  const tickleRotateDeg = isTickled ? 1.35 : 0;
+  const tickleTransform = isTickled
+    ? 'translateY(-4px) scale(1.055)'
+    : 'translateY(0px) scale(1)';
+  const leftEyeTransform = isTickled
+    ? `rotate(${(-tickleRotateDeg * 0.85).toFixed(2)}deg) scaleX(1.06)`
+    : 'rotate(0deg) scaleX(1)';
+  const rightEyeTransform = isTickled
+    ? `rotate(${(tickleRotateDeg * 0.85).toFixed(2)}deg) scaleX(1.06)`
+    : 'rotate(0deg) scaleX(1)';
   const faceRootLeft = 44;
   const faceRootTop = 58;
   const faceRootWidth = 80;
@@ -989,28 +999,28 @@ const QortinoMascot = ({
             '75%': { transform: 'translateY(3px)' },
           },
           '@keyframes qortinoTicklishBounce': {
-            '0%, 100%': { transform: 'translateY(2px)' },
-            '18%': { transform: 'translateY(-7px)' },
-            '38%': { transform: 'translateY(-2px)' },
-            '60%': { transform: 'translateY(-10px)' },
-            '82%': { transform: 'translateY(-3px)' },
+            '0%, 100%': { transform: 'translateY(2px) rotate(0deg)' },
+            '18%': { transform: 'translateY(-7px) rotate(-0.85deg)' },
+            '38%': { transform: 'translateY(-2px) rotate(0.55deg)' },
+            '60%': { transform: 'translateY(-10px) rotate(0.95deg)' },
+            '82%': { transform: 'translateY(-3px) rotate(-0.45deg)' },
           },
-        '@keyframes qortinoBlink': {
-          '0%, 45%, 100%': { transform: 'scaleY(1)' },
-          '48%, 52%': { transform: 'scaleY(0.16)' },
-        },
-        '@keyframes qortinoTalk': {
-          '0%, 100%': { transform: 'scaleY(1) scaleX(1)' },
+          '@keyframes qortinoBlink': {
+            '0%, 45%, 100%': { transform: 'scaleY(1)' },
+            '48%, 52%': { transform: 'scaleY(0.16)' },
+          },
+          '@keyframes qortinoTalk': {
+            '0%, 100%': { transform: 'scaleY(1) scaleX(1)' },
             '25%': { transform: 'scaleY(0.72) scaleX(1.06)' },
             '50%': { transform: 'scaleY(1.18) scaleX(0.96)' },
             '75%': { transform: 'scaleY(0.82) scaleX(1.04)' },
-        },
+          },
           height: `${QORTINO_MASCOT_SIZE}px`,
           overflow: 'visible',
           position: 'relative',
           width: `${QORTINO_MASCOT_SIZE}px`,
         }}
-    >
+      >
       <Box
         sx={{
           bottom: 0,
@@ -1024,252 +1034,281 @@ const QortinoMascot = ({
       >
         <Box
           sx={{
-            animation: mascotAnimation,
             height: `${QORTINO_MASCOT_BASE_SIZE}px`,
             position: 'relative',
+            transform: tickleTransform,
+            transformOrigin: 'center bottom',
+            transition:
+              'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
             width: `${QORTINO_MASCOT_BASE_SIZE}px`,
           }}
         >
           <Box
             sx={{
-              height: '152px',
-              left: '8px',
-              position: 'absolute',
-              top: '6px',
-              transform: `scale(${lookDebug.bodyScale}) scaleX(${lookDebug.bodyWidthScale})`,
-              transformOrigin: 'center',
-              width: '152px',
+              animation: mascotAnimation,
+              height: `${QORTINO_MASCOT_BASE_SIZE}px`,
+              position: 'relative',
+              transformOrigin: 'center bottom',
+              width: `${QORTINO_MASCOT_BASE_SIZE}px`,
             }}
           >
             <Box
               sx={{
-                background: `radial-gradient(ellipse at center, ${alpha(
-                  '#02050B',
-                  isDarkMode ? 0.56 : 0.3
-                )} 0%, ${alpha('#02050B', isDarkMode ? 0.3 : 0.16)} 48%, ${alpha(
-                  '#02050B',
-                  0
-                )} 78%)`,
-                bottom: '4px',
-                filter: 'blur(9px)',
-                height: '20px',
-                left: '16px',
-                opacity: isListening ? 0.98 : 0.9,
+                height: '152px',
+                left: '8px',
                 position: 'absolute',
-                width: '120px',
-              }}
-            />
-            <Box
-              sx={{
-                background: `radial-gradient(ellipse at center, ${alpha(
-                  '#010307',
-                  isDarkMode ? 0.5 : 0.28
-                )} 0%, ${alpha('#010307', 0)} 72%)`,
-                bottom: '7px',
-                filter: 'blur(4px)',
-                height: '10px',
-                left: '27px',
-                opacity: isListening ? 0.86 : 0.78,
-                position: 'absolute',
-                width: '88px',
-              }}
-            />
-            <Box
-              sx={{
-                background: `radial-gradient(circle, ${alpha(
-                  '#0A1220',
-                  0.22
-                )} 0%, ${alpha('#0A1220', 0)} 72%)`,
-                filter: 'blur(10px)',
-                inset: 0,
-                opacity: 0.44,
-                position: 'absolute',
-              }}
-            />
-            <Box
-              sx={{
-                background: `radial-gradient(circle at 34% 22%, ${alpha(
-                  '#A0B8DD',
-                  isDarkMode ? 0.14 : 0.1
-                )} 0%, ${alpha('#6B88B5', isDarkMode ? 0.08 : 0.05)} 18%, ${alpha(
-                  '#0D1524',
-                  0
-                )} 42%), linear-gradient(180deg, ${alpha('#232C3A', 0.98)} 0%, ${alpha(
-                  '#161B24',
-                  0.98
-                )} 58%, ${alpha('#10141C', 1)} 100%)`,
-                border: `1px solid ${alpha('#B3D0FF', isDarkMode ? 0.16 : 0.12)}`,
-                borderRadius: '46% 46% 42% 42%',
-                boxShadow: `0 18px 32px ${alpha('#000', 0.3)}, inset 0 1px 0 ${alpha(
-                  '#fff',
-                  0.03
-                )}, inset 0 -1px 0 ${alpha('#000', 0.22)}`,
-                inset: 0,
-                position: 'absolute',
-              }}
-            />
-          </Box>
-          <Box
-            sx={{
-              height: `${faceRootHeight}px`,
-              left: `${faceRootLeft}px`,
-              position: 'absolute',
-              top: `${faceRootTop}px`,
-              transform: `scale(${lookDebug.faceScale})`,
-              transformOrigin: 'center',
-              width: `${faceRootWidth}px`,
-            }}
-          >
-            <Box
-              sx={{
-                backdropFilter: 'blur(10px)',
-                background: `linear-gradient(180deg, ${alpha('#121A26', 0.7)} 0%, ${alpha(
-                  '#0B1119',
-                  0.84
-                )} 100%)`,
-                border: `1px solid ${alpha('#B3D0FF', 0.12)}`,
-                borderRadius: '28px',
-                boxShadow: `inset 0 1px 0 ${alpha('#fff', 0.06)}`,
-                inset: 0,
-                position: 'absolute',
-              }}
-            />
-            <Box
-              sx={{
-                animation: isTickled
-                  ? 'none'
-                  : 'qortinoBlink 6.2s ease-in-out infinite',
-                bgcolor: '#DDEBFF',
-                borderRadius: '999px',
-                boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
-                height: eyeStyle.height,
-                left: faceLeftEyeLeft,
-                position: 'absolute',
-                top: faceEyeTop,
-                rotate: isTickled ? '-10deg' : undefined,
+                top: '6px',
+                transform: `scale(${lookDebug.bodyScale}) scaleX(${lookDebug.bodyWidthScale})`,
                 transformOrigin: 'center',
-                width: eyeStyle.width,
-              }}
-            />
-            <Box
-              sx={{
-                animation: isTickled
-                  ? 'none'
-                  : 'qortinoBlink 6.2s ease-in-out infinite 120ms',
-                bgcolor: '#DDEBFF',
-                borderRadius: '999px',
-                boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
-                height: eyeStyle.height,
-                left: faceRightEyeLeft,
-                position: 'absolute',
-                top: faceEyeTop,
-                rotate: isTickled ? '10deg' : undefined,
-                transformOrigin: 'center',
-                width: eyeStyle.width,
-              }}
-            />
-            <Box
-              sx={{
-                borderBottom: `2px solid ${alpha('#DDEBFF', 0.78)}`,
-                borderRadius: '0 0 999px 999px',
-                height: '8px',
-                left: faceMouthLeft,
-                position: 'absolute',
-                top: faceMouthTop,
-                transformOrigin: 'center',
-                width: mouthStyle.width,
-                ...(isTalking || isListening
-                  ? {
-                      animation: 'qortinoTalk 1.25s ease-in-out infinite',
-                    }
-                  : null),
-              }}
-            />
-          </Box>
-          {showAntenna ? (
-            <Box
-              sx={{
-                bottom: '130px',
-                height: `${antennaContainerHeight}px`,
-                left: '72px',
-                position: 'absolute',
-                transform: `scale(${lookDebug.antennaScale})`,
-                transformOrigin: 'bottom center',
-                width: '24px',
+                width: '152px',
               }}
             >
               <Box
                 sx={{
-                  background: `linear-gradient(180deg, ${alpha('#D2E3FF', 0.38)} 0%, ${alpha(
-                    '#D2E3FF',
+                  background: `radial-gradient(ellipse at center, ${alpha(
+                    '#02050B',
+                    isDarkMode ? 0.56 : 0.3
+                  )} 0%, ${alpha('#02050B', isDarkMode ? 0.3 : 0.16)} 48%, ${alpha(
+                    '#02050B',
                     0
-                  )} 100%)`,
-                  borderRadius: '999px',
-                  height: `${antennaStemHeight}px`,
-                  left: '8px',
+                  )} 78%)`,
+                  bottom: '4px',
+                  filter: 'blur(9px)',
+                  height: '20px',
+                  left: '16px',
+                  opacity: isListening ? 0.98 : 0.9,
                   position: 'absolute',
-                  top: `${antennaBubbleSize - antennaBubbleOverlap}px`,
-                  width: '8px',
+                  width: '120px',
                 }}
               />
-              <QortalRequestBubbleIcon
-                size={antennaBubbleSize}
-                logoScale={lookDebug.logoScale}
+              <Box
                 sx={{
-                  left: '2px',
+                  background: `radial-gradient(ellipse at center, ${alpha(
+                    '#010307',
+                    isDarkMode ? 0.5 : 0.28
+                  )} 0%, ${alpha('#010307', 0)} 72%)`,
+                  bottom: '7px',
+                  filter: 'blur(4px)',
+                  height: '10px',
+                  left: '27px',
+                  opacity: isListening ? 0.86 : 0.78,
                   position: 'absolute',
-                  top: 0,
+                  width: '88px',
+                }}
+              />
+              <Box
+                sx={{
+                  background: `radial-gradient(circle, ${alpha(
+                    '#0A1220',
+                    0.22
+                  )} 0%, ${alpha('#0A1220', 0)} 72%)`,
+                  filter: 'blur(10px)',
+                  inset: 0,
+                  opacity: 0.44,
+                  position: 'absolute',
+                }}
+              />
+              <Box
+                sx={{
+                  background: `radial-gradient(circle at 34% 22%, ${alpha(
+                    '#A0B8DD',
+                    isDarkMode ? 0.14 : 0.1
+                  )} 0%, ${alpha('#6B88B5', isDarkMode ? 0.08 : 0.05)} 18%, ${alpha(
+                    '#0D1524',
+                    0
+                  )} 42%), linear-gradient(180deg, ${alpha('#232C3A', 0.98)} 0%, ${alpha(
+                    '#161B24',
+                    0.98
+                  )} 58%, ${alpha('#10141C', 1)} 100%)`,
+                  border: `1px solid ${alpha('#B3D0FF', isDarkMode ? 0.16 : 0.12)}`,
+                  borderRadius: '46% 46% 42% 42%',
+                  boxShadow: `0 18px 32px ${alpha('#000', 0.3)}, inset 0 1px 0 ${alpha(
+                    '#fff',
+                    0.03
+                  )}, inset 0 -1px 0 ${alpha('#000', 0.22)}`,
+                  inset: 0,
+                  position: 'absolute',
                 }}
               />
             </Box>
-          ) : null}
-          {mood === 'guide' && <GuideBeacon isDarkMode={isDarkMode} />}
-          {mood === 'hotkeys' && (
-            <>
-              <RouteDecoration
-                delay={0}
-                isDarkMode={isDarkMode}
-                left="18px"
-                top="38px"
+            <Box
+              sx={{
+                height: `${faceRootHeight}px`,
+                left: `${faceRootLeft}px`,
+                position: 'absolute',
+                top: `${faceRootTop}px`,
+                transform: `scale(${lookDebug.faceScale})`,
+                transformOrigin: 'center',
+                width: `${faceRootWidth}px`,
+              }}
+            >
+              <Box
+                sx={{
+                  backdropFilter: 'blur(10px)',
+                  background: `linear-gradient(180deg, ${alpha('#121A26', 0.7)} 0%, ${alpha(
+                    '#0B1119',
+                    0.84
+                  )} 100%)`,
+                  border: `1px solid ${alpha('#B3D0FF', 0.12)}`,
+                  borderRadius: '28px',
+                  boxShadow: `inset 0 1px 0 ${alpha('#fff', 0.06)}`,
+                  inset: 0,
+                  position: 'absolute',
+                }}
               />
-              <RouteDecoration
-                delay={0.25}
-                isDarkMode={isDarkMode}
-                left="132px"
-                top="114px"
+              <Box
+                sx={{
+                  animation: isTickled
+                    ? 'none'
+                    : 'qortinoBlink 6.2s ease-in-out infinite',
+                  bgcolor: '#DDEBFF',
+                  borderRadius: '999px',
+                  boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
+                  height: eyeStyle.height,
+                  left: faceLeftEyeLeft,
+                  position: 'absolute',
+                  top: faceEyeTop,
+                  transform: leftEyeTransform,
+                  transformOrigin: 'center',
+                  transition:
+                    'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
+                  width: eyeStyle.width,
+                }}
               />
-            </>
-          )}
-          {mood === 'notes' && (
-            <>
-              <NoteCardDecoration
-                delay={0}
-                isDarkMode={isDarkMode}
-                left="18px"
-                top="42px"
+              <Box
+                sx={{
+                  animation: isTickled
+                    ? 'none'
+                    : 'qortinoBlink 6.2s ease-in-out infinite 120ms',
+                  bgcolor: '#DDEBFF',
+                  borderRadius: '999px',
+                  boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
+                  height: eyeStyle.height,
+                  left: faceRightEyeLeft,
+                  position: 'absolute',
+                  top: faceEyeTop,
+                  transform: rightEyeTransform,
+                  transformOrigin: 'center',
+                  transition:
+                    'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease',
+                  width: eyeStyle.width,
+                }}
               />
-              <NoteCardDecoration
-                delay={0.2}
-                isDarkMode={isDarkMode}
-                left="132px"
-                top="112px"
+              <Box
+                sx={{
+                  borderBottom: `2px solid ${alpha('#DDEBFF', 0.78)}`,
+                  borderRadius: '0 0 999px 999px',
+                  height: '8px',
+                  left: faceMouthLeft,
+                  position: 'absolute',
+                  top: faceMouthTop,
+                  transformOrigin: 'center',
+                  width: mouthStyle.width,
+                  ...(isTalking || isListening
+                    ? {
+                        animation: 'qortinoTalk 1.25s ease-in-out infinite',
+                      }
+                    : null),
+                }}
               />
-            </>
-          )}
-          {isListening && (
-            <>
-              <MusicNoteDecoration delay={0} isDarkMode={isDarkMode} left="76px" top="8px" />
-              <MusicNoteDecoration delay={0.18} isDarkMode={isDarkMode} left="90px" top="0px" size={18} />
-              <MusicNoteDecoration delay={0.36} isDarkMode={isDarkMode} left="104px" top="10px" size={14} />
-            </>
-          )}
-          {mood === 'celebrate' && (
-            <>
-              <SparkDecoration left="26px" top="18px" />
-              <SparkDecoration left="136px" top="26px" />
-              <SparkDecoration left="134px" top="126px" />
-            </>
-          )}
+            </Box>
+            {showAntenna ? (
+              <Box
+                sx={{
+                  bottom: '130px',
+                  height: `${antennaContainerHeight}px`,
+                  left: '72px',
+                  position: 'absolute',
+                  transform: `scale(${lookDebug.antennaScale})`,
+                  transformOrigin: 'bottom center',
+                  width: '24px',
+                }}
+              >
+                <Box
+                  sx={{
+                    background: `linear-gradient(180deg, ${alpha('#D2E3FF', 0.38)} 0%, ${alpha(
+                      '#D2E3FF',
+                      0
+                    )} 100%)`,
+                    borderRadius: '999px',
+                    height: `${antennaStemHeight}px`,
+                    left: '8px',
+                    position: 'absolute',
+                    top: `${antennaBubbleSize - antennaBubbleOverlap}px`,
+                    width: '8px',
+                  }}
+                />
+                <QortalRequestBubbleIcon
+                  size={antennaBubbleSize}
+                  logoScale={lookDebug.logoScale}
+                  sx={{
+                    left: '2px',
+                    position: 'absolute',
+                    top: 0,
+                  }}
+                />
+              </Box>
+            ) : null}
+            {mood === 'guide' && <GuideBeacon isDarkMode={isDarkMode} />}
+            {mood === 'hotkeys' && (
+              <>
+                <RouteDecoration
+                  delay={0}
+                  isDarkMode={isDarkMode}
+                  left="18px"
+                  top="38px"
+                />
+                <RouteDecoration
+                  delay={0.25}
+                  isDarkMode={isDarkMode}
+                  left="132px"
+                  top="114px"
+                />
+              </>
+            )}
+            {mood === 'notes' && (
+              <>
+                <NoteCardDecoration
+                  delay={0}
+                  isDarkMode={isDarkMode}
+                  left="18px"
+                  top="42px"
+                />
+                <NoteCardDecoration
+                  delay={0.2}
+                  isDarkMode={isDarkMode}
+                  left="132px"
+                  top="112px"
+                />
+              </>
+            )}
+            {isListening && (
+              <>
+                <MusicNoteDecoration delay={0} isDarkMode={isDarkMode} left="76px" top="8px" />
+                <MusicNoteDecoration
+                  delay={0.18}
+                  isDarkMode={isDarkMode}
+                  left="90px"
+                  top="0px"
+                  size={18}
+                />
+                <MusicNoteDecoration
+                  delay={0.36}
+                  isDarkMode={isDarkMode}
+                  left="104px"
+                  top="10px"
+                  size={14}
+                />
+              </>
+            )}
+            {mood === 'celebrate' && (
+              <>
+                <SparkDecoration left="26px" top="18px" />
+                <SparkDecoration left="136px" top="26px" />
+                <SparkDecoration left="134px" top="126px" />
+              </>
+            )}
+          </Box>
         </Box>
       </Box>
     </Box>

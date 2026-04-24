@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
 const uid = new ShortUniqueId({ length: 8 });
+const DEV_MODE_SIDEBAR_SAFE_INSET_PX = 88;
 
 export const AppsDevMode = ({
   mode,
@@ -225,11 +226,14 @@ export const AppsDevMode = ({
       {mode === 'home' && (
         <Box
           sx={{
+            boxSizing: 'border-box',
             display: 'flex',
             flexDirection: 'column',
             height: `calc(100vh - ${appChromeOffsetPx} )`,
             overflow: 'auto',
-            width: 'auto',
+            pl: `${DEV_MODE_SIDEBAR_SAFE_INSET_PX}px`,
+            pr: '24px',
+            width: '100%',
           }}
         >
           <Spacer height="30px" />

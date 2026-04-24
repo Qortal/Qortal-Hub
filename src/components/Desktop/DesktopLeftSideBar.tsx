@@ -19,7 +19,7 @@ import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qortalLogoOfficial from '../../assets/sidebar/qortal-logo-official.png';
-import { hasUnreadGroupsAtom } from '../../atoms/global';
+import { enabledDevModeAtom, hasUnreadGroupsAtom } from '../../atoms/global';
 import { executeEvent } from '../../utils/events';
 import {
   DASHBOARD_LOGIN_INTRO_PREVIEW_EVENT,
@@ -96,6 +96,8 @@ type DashboardStatusPreviewMode =
 const DASHBOARD_STATUS_PREVIEW_EVENT = 'setDashboardStatusPreview';
 const DASHBOARD_STATUS_PREVIEW_STORAGE_KEY = 'dashboardStatusPreviewMode';
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
+const DASHBOARD_DEBUG_GOGGLES_VISIBILITY_STORAGE_KEY =
+  'hub.dashboardDebugGogglesVisible';
 const parseDashboardStatusPreviewMode = (
   value: string | null
 ): DashboardStatusPreviewMode => {
@@ -141,6 +143,36 @@ const getDashboardStatusPreviewModeLabel = (
       return 'Live';
   }
 };
+
+const DevModeIcon = ({
+  color = 'currentColor',
+  height = 24,
+  width = 24,
+}: {
+  color?: string;
+  height?: number;
+  width?: number;
+}) => {
+  const dotRadius = 2.3;
+
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="3.5" r={dotRadius} fill={color} />
+      <circle cx="3.5" cy="12" r={dotRadius} fill={color} />
+      <circle cx="12" cy="12" r={dotRadius} fill={color} />
+      <circle cx="20.5" cy="12" r={dotRadius} fill={color} />
+      <circle cx="12" cy="20.5" r={dotRadius} fill={color} />
+    </svg>
+  );
+};
+
 const SidebarItem = ({
   active = false,
   children,
@@ -271,11 +303,18 @@ export const DesktopSideBar = ({
   setDesktopViewMode,
   desktopViewMode,
 }) => {
+  const isEnabledDevMode = useAtomValue(enabledDevModeAtom);
   const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
   const [isVisible, setIsVisible] = useState(false);
   const [debugUnread, setDebugUnread] = useState(false);
+  const [showDebugGoggles, setShowDebugGoggles] = useState(() => {
+    const saved = localStorage.getItem(
+      DASHBOARD_DEBUG_GOGGLES_VISIBILITY_STORAGE_KEY
+    );
+    return saved == null ? true : saved === '1' || saved === 'true';
+  });
   const [debugMinterPreview, setDebugMinterPreview] = useState<'off' | 'on'>(() => {
     const saved = localStorage.getItem('dashboardMinterPreviewMode');
     return saved === 'on' ? 'on' : 'off';
@@ -848,6 +887,18 @@ export const DesktopSideBar = ({
                   />
                 ) : null}
               </Box>
+
+              {isEnabledDevMode ? (
+                <SidebarItem
+                  active={desktopViewMode === 'dev'}
+                  label={t('core:dev_mode', { postProcess: 'capitalizeFirstChar' })}
+                  onClick={() =>
+                    runSidebarAction(() => setDesktopViewMode('dev'))
+                  }
+                >
+                  <DevModeIcon height={24} width={24} color="currentColor" />
+                </SidebarItem>
+              ) : null}
             </Box>
 
             <Divider
@@ -930,166 +981,110 @@ export const DesktopSideBar = ({
             maxWidth: 'min(620px, calc(100vw - 32px))',
           }}
         >
-          {GETTING_STARTED_DEBUG_STEPS.map((step) => (
-            <ButtonBase
-              key={step.key}
-              disableRipple
-              onClick={() => toggleGettingStartedDebugStep(step.key)}
-              sx={getDebugToggleSx(debugGettingStartedOverrides[step.key])}
-            >
-              {step.label}: {debugGettingStartedOverrides[step.key] ? 'ON' : 'OFF'}
-            </ButtonBase>
-          ))}
-          <ButtonBase
-            disableRipple
-            onClick={() =>
-              emitGettingStartedDebugOverrides(
-                parseGettingStartedDebugOverrides(null),
-                true
-              )
-            }
-            sx={debugToggleSx}
-          >
-            Reset Onboarding
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => setIsQortinoLookDialogOpen(true)}
-            sx={getDebugToggleSx(isQortinoLookCustomized)}
-          >
-            QORTINO Look: {isQortinoLookCustomized ? 'Custom' : 'Default'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => setIsQortinoLayoutDialogOpen(true)}
-            sx={getDebugToggleSx(isQortinoLayoutCustomized)}
-          >
-            QORTINO Layout: {isQortinoLayoutCustomized ? 'Custom' : 'Default'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => setIsQortinoCompanionDialogOpen(true)}
-            sx={getDebugToggleSx(isQortinoCompanionCustomized)}
-          >
-            QORTINO Bubble: {isQortinoCompanionCustomized ? 'Custom' : 'Default'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => setIsQortinoInletDialogOpen(true)}
-            sx={getDebugToggleSx(isQortinoInletCustomized)}
-          >
-            QORTINO Inlet: {isQortinoInletCustomized ? 'Custom' : 'Default'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => {
-              const nextMode = getNextDashboardLoginIntroMode(
-                debugDashboardIntroMode
-              );
-              setDebugDashboardIntroMode(nextMode);
-              localStorage.setItem(
-                DASHBOARD_LOGIN_INTRO_PREVIEW_STORAGE_KEY,
-                nextMode
-              );
-              executeEvent(DASHBOARD_LOGIN_INTRO_PREVIEW_EVENT, {
-                data: { mode: nextMode, replay: true },
-              });
-            }}
-            sx={getDebugToggleSx(debugDashboardIntroMode !== 'off')}
-          >
-            Login Intro: {getDashboardLoginIntroModeLabel(debugDashboardIntroMode)}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() =>
-              executeEvent(DASHBOARD_LOGIN_INTRO_PREVIEW_EVENT, {
-                data: { mode: debugDashboardIntroMode, replay: true },
-              })
-            }
-            sx={debugToggleSx}
-          >
-            Replay Intro
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => {
-              const next = debugMinterPreview === 'on' ? 'off' : 'on';
-              setDebugMinterPreview(next);
-              localStorage.setItem('dashboardMinterPreviewMode', next);
-              executeEvent('setDashboardMinterPreview', { data: { mode: next } });
-            }}
-            sx={getDebugToggleSx(debugMinterPreview === 'on')}
-          >
-            Minter: {debugMinterPreview === 'on' ? 'ON' : 'OFF'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => {
-              const next = !debugMintingLocal;
-              setDebugMintingLocal(next);
-              localStorage.setItem(
-                MINTING_LOCAL_DEBUG_STORAGE_KEY,
-                next ? 'true' : 'false'
-              );
-            }}
-            sx={getDebugToggleSx(debugMintingLocal)}
-          >
-            Minting Local: {debugMintingLocal ? 'ON' : 'OFF'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => setDebugUnread((prev) => !prev)}
-            sx={getDebugToggleSx(debugUnread)}
-          >
-            Chat Pulse: {debugUnread ? 'ON' : 'OFF'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => {
-              const next = !debugGroupsWidget;
-              setDebugGroupsWidget(next);
-              localStorage.setItem('hub.groupsWidgetDebug', next ? 'true' : 'false');
-              executeEvent('setGroupsWidgetDebug', { data: { enabled: next } });
-            }}
-            sx={getDebugToggleSx(debugGroupsWidget)}
-          >
-            Groups Debug: {debugGroupsWidget ? 'ON' : 'OFF'}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => {
-              const nextMode =
-                getNextDashboardStatusPreviewMode(debugStatusPreviewMode);
-              setDebugStatusPreviewMode(nextMode);
-              localStorage.setItem(
-                DASHBOARD_STATUS_PREVIEW_STORAGE_KEY,
-                nextMode
-              );
-              executeEvent(DASHBOARD_STATUS_PREVIEW_EVENT, {
-                data: { mode: nextMode },
-              });
-            }}
-            sx={getDebugToggleSx(debugStatusPreviewMode !== 'live')}
-          >
-            Status: {getDashboardStatusPreviewModeLabel(debugStatusPreviewMode)}
-          </ButtonBase>
-          <ButtonBase
-            disableRipple
-            onClick={() => {
-              const next = !debugQuitterNewPosts;
-              setDebugQuitterNewPosts(next);
-              localStorage.setItem(
-                'hub.quitterWidgetNewPostsDebug',
-                next ? 'true' : 'false'
-              );
-              executeEvent('setQuitterWidgetNewPostsDebug', {
-                data: { enabled: next },
-              });
-            }}
-            sx={getDebugToggleSx(debugQuitterNewPosts)}
-          >
-            Quitter New Posts: {debugQuitterNewPosts ? 'ON' : 'OFF'}
-          </ButtonBase>
+          <>
+              {GETTING_STARTED_DEBUG_STEPS.map((step) => (
+                <ButtonBase
+                  key={step.key}
+                  disableRipple
+                  onClick={() => toggleGettingStartedDebugStep(step.key)}
+                  sx={getDebugToggleSx(debugGettingStartedOverrides[step.key])}
+                >
+                  {step.label}: {debugGettingStartedOverrides[step.key] ? 'ON' : 'OFF'}
+                </ButtonBase>
+              ))}
+              <ButtonBase
+                disableRipple
+                onClick={() =>
+                  emitGettingStartedDebugOverrides(
+                    parseGettingStartedDebugOverrides(null),
+                    true
+                  )
+                }
+                sx={debugToggleSx}
+                >
+                  Reset Onboarding
+                </ButtonBase>
+              <ButtonBase
+                disableRipple
+                onClick={() => {
+                  const next = debugMinterPreview === 'on' ? 'off' : 'on';
+                  setDebugMinterPreview(next);
+                  localStorage.setItem('dashboardMinterPreviewMode', next);
+                  executeEvent('setDashboardMinterPreview', { data: { mode: next } });
+                }}
+                sx={getDebugToggleSx(debugMinterPreview === 'on')}
+              >
+                Minter: {debugMinterPreview === 'on' ? 'ON' : 'OFF'}
+              </ButtonBase>
+              <ButtonBase
+                disableRipple
+                onClick={() => {
+                  const next = !debugMintingLocal;
+                  setDebugMintingLocal(next);
+                  localStorage.setItem(
+                    MINTING_LOCAL_DEBUG_STORAGE_KEY,
+                    next ? 'true' : 'false'
+                  );
+                }}
+                sx={getDebugToggleSx(debugMintingLocal)}
+              >
+                Minting Local: {debugMintingLocal ? 'ON' : 'OFF'}
+              </ButtonBase>
+              <ButtonBase
+                disableRipple
+                onClick={() => setDebugUnread((prev) => !prev)}
+                sx={getDebugToggleSx(debugUnread)}
+              >
+                Chat Pulse: {debugUnread ? 'ON' : 'OFF'}
+              </ButtonBase>
+              <ButtonBase
+                disableRipple
+                onClick={() => {
+                  const next = !debugGroupsWidget;
+                  setDebugGroupsWidget(next);
+                  localStorage.setItem('hub.groupsWidgetDebug', next ? 'true' : 'false');
+                  executeEvent('setGroupsWidgetDebug', { data: { enabled: next } });
+                }}
+                sx={getDebugToggleSx(debugGroupsWidget)}
+              >
+                Groups Debug: {debugGroupsWidget ? 'ON' : 'OFF'}
+              </ButtonBase>
+              <ButtonBase
+                disableRipple
+                onClick={() => {
+                  const nextMode =
+                    getNextDashboardStatusPreviewMode(debugStatusPreviewMode);
+                  setDebugStatusPreviewMode(nextMode);
+                  localStorage.setItem(
+                    DASHBOARD_STATUS_PREVIEW_STORAGE_KEY,
+                    nextMode
+                  );
+                  executeEvent(DASHBOARD_STATUS_PREVIEW_EVENT, {
+                    data: { mode: nextMode },
+                  });
+                }}
+                sx={getDebugToggleSx(debugStatusPreviewMode !== 'live')}
+              >
+                Status: {getDashboardStatusPreviewModeLabel(debugStatusPreviewMode)}
+              </ButtonBase>
+              <ButtonBase
+                disableRipple
+                onClick={() => {
+                  const next = !debugQuitterNewPosts;
+                  setDebugQuitterNewPosts(next);
+                  localStorage.setItem(
+                    'hub.quitterWidgetNewPostsDebug',
+                    next ? 'true' : 'false'
+                  );
+                  executeEvent('setQuitterWidgetNewPostsDebug', {
+                    data: { enabled: next },
+                  });
+                }}
+                sx={getDebugToggleSx(debugQuitterNewPosts)}
+              >
+                Quitter New Posts: {debugQuitterNewPosts ? 'ON' : 'OFF'}
+              </ButtonBase>
+          </>
         </Box>
       ) : null}
       <Dialog

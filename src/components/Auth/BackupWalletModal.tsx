@@ -38,6 +38,9 @@ export const BackupWalletModal = ({
   const isDarkMode = theme.palette.mode === 'dark';
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [isCurrentPasswordEditable, setIsCurrentPasswordEditable] =
+    useState(false);
+  const [isNewPasswordEditable, setIsNewPasswordEditable] = useState(false);
   const [keepCurrentPassword, setKeepCurrentPassword] = useState(true);
   const [error, setError] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
@@ -69,6 +72,8 @@ export const BackupWalletModal = ({
   const resetState = useCallback(() => {
     setCurrentPassword('');
     setNewPassword('');
+    setIsCurrentPasswordEditable(false);
+    setIsNewPasswordEditable(false);
     setKeepCurrentPassword(true);
     setError('');
     setIsDownloading(false);
@@ -350,7 +355,24 @@ export const BackupWalletModal = ({
               id="backup-wallet-current-password"
               value={currentPassword}
               onChange={(event) => setCurrentPassword(event.target.value)}
-              autoComplete="off"
+              autoComplete="new-password"
+              name="backup-wallet-current-confirmation"
+              onFocus={() => setIsCurrentPasswordEditable(true)}
+              onMouseDown={() => setIsCurrentPasswordEditable(true)}
+              onBlur={() => {
+                if (!currentPassword) {
+                  setIsCurrentPasswordEditable(false);
+                }
+              }}
+              InputProps={{
+                readOnly: !isCurrentPasswordEditable,
+              }}
+              inputProps={{
+                autoComplete: 'new-password',
+                'data-1p-ignore': 'true',
+                'data-lpignore': 'true',
+                spellCheck: 'false',
+              }}
               sx={{
                 width: '100%',
                 '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
@@ -364,13 +386,22 @@ export const BackupWalletModal = ({
                     borderColor: fieldHoverBorder,
                   },
                   '&.Mui-focused fieldset': {
-                    borderColor: alpha(theme.palette.primary.main, 0.9),
-                    borderWidth: 1.5,
+                    borderColor: fieldHoverBorder,
+                    borderWidth: 1,
                   },
                   '&:hover': {
                     background: fieldSurfaceHover,
                   },
                 },
+                '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+                  {
+                    WebkitBoxShadow: isDarkMode
+                      ? '0 0 0 100px rgb(47, 52, 62) inset'
+                      : '0 0 0 100px rgb(248, 250, 253) inset',
+                    WebkitTextFillColor: theme.palette.text.primary,
+                    caretColor: theme.palette.text.primary,
+                    transition: 'background-color 9999s ease-out 0s',
+                  },
               }}
             />
           </Box>
@@ -422,7 +453,24 @@ export const BackupWalletModal = ({
                 id="backup-wallet-new-password"
                 value={newPassword}
                 onChange={(event) => setNewPassword(event.target.value)}
-                autoComplete="off"
+                autoComplete="new-password"
+                name="backup-wallet-new-passphrase"
+                onFocus={() => setIsNewPasswordEditable(true)}
+                onMouseDown={() => setIsNewPasswordEditable(true)}
+                onBlur={() => {
+                  if (!newPassword) {
+                    setIsNewPasswordEditable(false);
+                  }
+                }}
+                InputProps={{
+                  readOnly: !isNewPasswordEditable,
+                }}
+                inputProps={{
+                  autoComplete: 'new-password',
+                  'data-1p-ignore': 'true',
+                  'data-lpignore': 'true',
+                  spellCheck: 'false',
+                }}
                 sx={{
                   width: '100%',
                   '& .MuiOutlinedInput-root, & .MuiInputBase-root': {
@@ -436,13 +484,22 @@ export const BackupWalletModal = ({
                       borderColor: fieldHoverBorder,
                     },
                     '&.Mui-focused fieldset': {
-                      borderColor: alpha(theme.palette.primary.main, 0.9),
-                      borderWidth: 1.5,
+                      borderColor: fieldHoverBorder,
+                      borderWidth: 1,
                     },
                     '&:hover': {
                       background: fieldSurfaceHover,
                     },
                   },
+                  '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+                    {
+                      WebkitBoxShadow: isDarkMode
+                        ? '0 0 0 100px rgb(47, 52, 62) inset'
+                        : '0 0 0 100px rgb(248, 250, 253) inset',
+                      WebkitTextFillColor: theme.palette.text.primary,
+                      caretColor: theme.palette.text.primary,
+                      transition: 'background-color 9999s ease-out 0s',
+                    },
                 }}
               />
             </Box>

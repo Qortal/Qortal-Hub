@@ -240,6 +240,8 @@ export function CreateWalletView({
               id="standard-adornment-password"
               value={walletToBeDownloadedPassword}
               onChange={(e) => setWalletToBeDownloadedPassword(e.target.value)}
+              name="create-wallet-password"
+              suppressAutofill
               onKeyDown={(e) => {
                 if (e.key === 'Enter') confirmRef.current?.focus();
               }}
@@ -255,6 +257,8 @@ export function CreateWalletView({
               inputRef={confirmRef}
               id="standard-adornment-password-confirm"
               value={walletToBeDownloadedPasswordConfirm}
+              name="create-wallet-password-confirmation"
+              suppressAutofill
               onChange={(e) =>
                 setWalletToBeDownloadedPasswordConfirm(e.target.value)
               }

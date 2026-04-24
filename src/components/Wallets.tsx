@@ -531,7 +531,8 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               id="standard-adornment-password"
               value={seedValue}
               onChange={(e) => setSeedValue(e.target.value)}
-              autoComplete="off"
+              name="wallet-seed-phrase"
+              suppressAutofill
               sx={{
                 width: '100%',
               }}
@@ -548,7 +549,8 @@ export const Wallets = ({ setExtState, setRawWallet, rawWallet }) => {
               id="standard-adornment-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              autoComplete="off"
+              name="wallet-import-password"
+              suppressAutofill
               sx={{
                 width: '100%',
               }}

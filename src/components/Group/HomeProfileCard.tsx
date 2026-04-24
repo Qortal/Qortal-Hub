@@ -1,4 +1,5 @@
 import {
+  type ChangeEvent,
   type MouseEvent,
   useCallback,
   useContext,
@@ -12,9 +13,11 @@ import {
   Box,
   ButtonBase,
   Dialog,
+  GlobalStyles,
   Menu,
   MenuItem,
   Portal,
+  Switch,
   TextField,
   Tooltip,
   Typography,
@@ -23,26 +26,36 @@ import {
 import { alpha } from '@mui/material/styles';
 import { LoadingButton } from '@mui/lab';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import CloseIcon from '@mui/icons-material/Close';
 import ErrorIcon from '@mui/icons-material/Error';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import PersonIcon from '@mui/icons-material/Person';
 import QrCode2RoundedIcon from '@mui/icons-material/QrCode2Rounded';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
+  enabledDevModeAtom,
+  rawWalletAtom,
   userInfoAtom,
   openSnackGlobalAtom,
   infoSnackGlobalAtom,
 } from '../../atoms/global';
 import { QORTAL_APP_CONTEXT } from '../../App';
-import { getFee } from '../../background/background.ts';
+import { getFee, walletVersion } from '../../background/background.ts';
+import Base58 from '../../encryption/Base58';
 import ImageUploader from '../../common/ImageUploader';
 import { MAX_SIZE_AVATAR } from '../../constants/constants.ts';
+import { decryptStoredWallet } from '../../utils/decryptWallet';
 import { fileToBase64 } from '../../utils/fileReading';
+import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
 import {
   executeEvent,
   subscribeToEvent,
@@ -70,8 +83,11 @@ type HomeProfileCardProps = {
 
 type AccountStatus = 'busy' | 'invisible' | 'online';
 type NameAvailability = 'available' | 'loading' | 'not-available' | 'null';
+type AccountSettingsTab = 'developer' | 'profile' | 'security' | 'system';
 
 const ACCOUNT_STATUS_STORAGE_KEY = 'home_profile_account_status';
+const ACCOUNT_SETTINGS_PRIVACY_STORAGE_KEY = 'home_account_settings_privacy_mode';
+const ACCOUNT_SETTINGS_UI_ANIMATIONS_STORAGE_KEY = 'hub_ui_animations_enabled';
 const ACCOUNT_STATUS_OPTIONS: Array<{
   color: string;
   key: AccountStatus;
@@ -94,6 +110,21 @@ const ACCOUNT_STATUS_OPTIONS: Array<{
   },
 ];
 
+const readStoredBoolean = (key: string, fallback: boolean) => {
+  if (typeof window === 'undefined') return fallback;
+
+  try {
+    const storedValue = window.localStorage.getItem(key);
+
+    if (storedValue === null) return fallback;
+
+    return JSON.parse(storedValue);
+  } catch (error) {
+    console.warn(`Unable to read stored boolean for ${key}.`, error);
+    return fallback;
+  }
+};
+
 export const HomeProfileCard = ({
   onOpenReceive,
 }: HomeProfileCardProps) => {
@@ -101,9 +132,11 @@ export const HomeProfileCard = ({
   const theme = useTheme();
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const userInfo = useAtomValue(userInfoAtom);
+  const rawWallet = useAtomValue(rawWalletAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
   const setOpenSnack = useSetAtom(openSnackGlobalAtom);
   const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
+  const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
 
   const avatarAnchorRef = useRef<HTMLButtonElement | null>(null);
   const avatarPanelRef = useRef<HTMLDivElement | null>(null);
@@ -121,7 +154,9 @@ export const HomeProfileCard = ({
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
   const [isAddressFieldHovered, setIsAddressFieldHovered] = useState(false);
   const [isAvatarGlowHovered, setIsAvatarGlowHovered] = useState(false);
-  const [isChangeNameOpen, setIsChangeNameOpen] = useState(false);
+  const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] =
+    useState<AccountSettingsTab>('profile');
   const [changeNameValue, setChangeNameValue] = useState('');
   const [isChangeNameLoading, setIsChangeNameLoading] = useState(false);
   const [changeNameAvailability, setChangeNameAvailability] =
@@ -135,6 +170,23 @@ export const HomeProfileCard = ({
   const [currentNameMetaError, setCurrentNameMetaError] = useState<
     string | null
   >(null);
+  const [changeNamePassword, setChangeNamePassword] = useState('');
+  const [isChangeNamePasswordEditable, setIsChangeNamePasswordEditable] =
+    useState(false);
+  const [isPrivacyModeActive, setIsPrivacyModeActive] = useState(() =>
+    readStoredBoolean(ACCOUNT_SETTINGS_PRIVACY_STORAGE_KEY, false)
+  );
+  const [areAppNotificationsEnabled, setAreAppNotificationsEnabled] =
+    useState(true);
+  const [areUiAnimationsEnabled, setAreUiAnimationsEnabled] = useState(() =>
+    readStoredBoolean(ACCOUNT_SETTINGS_UI_ANIMATIONS_STORAGE_KEY, true)
+  );
+  const [securityPassword, setSecurityPassword] = useState('');
+  const [isSecurityPasswordEditable, setIsSecurityPasswordEditable] =
+    useState(false);
+  const [revealedPrivateKey, setRevealedPrivateKey] = useState('');
+  const [privateKeyError, setPrivateKeyError] = useState<string | null>(null);
+  const [isRevealingPrivateKey, setIsRevealingPrivateKey] = useState(false);
   const [accountStatusAnchorEl, setAccountStatusAnchorEl] =
     useState<HTMLElement | null>(null);
   const [accountStatusOverride, setAccountStatusOverride] =
@@ -188,6 +240,61 @@ export const HomeProfileCard = ({
         border: 'rgba(90, 126, 196, 0.18)',
         icon: '#5C7EC6',
       };
+  const developerNoticeTone = isDarkMode
+    ? {
+        background: 'rgba(205, 156, 69, 0.1)',
+        border: 'rgba(205, 156, 69, 0.2)',
+        icon: '#D8AC61',
+      }
+    : {
+        background: 'rgba(191, 132, 46, 0.08)',
+        border: 'rgba(191, 132, 46, 0.18)',
+        icon: '#A66D1F',
+      };
+  const settingsSidebarSurface = isDarkMode
+    ? 'linear-gradient(180deg, rgba(31,35,43,0.92) 0%, rgba(24,27,33,0.88) 100%)'
+    : 'linear-gradient(180deg, rgba(238,242,248,0.76) 0%, rgba(231,236,244,0.88) 100%)';
+  const settingsSidebarActiveSurface = isDarkMode
+    ? 'linear-gradient(145deg, rgba(73,79,91,0.54) 0%, rgba(50,55,65,0.46) 100%)'
+    : 'linear-gradient(145deg, rgba(255,255,255,0.9) 0%, rgba(240,244,250,0.74) 100%)';
+  const settingsSidebarAccent = isDarkMode
+    ? alpha(theme.palette.primary.light, 0.88)
+    : alpha(theme.palette.primary.main, 0.84);
+  const privacyBlurClassName = isPrivacyModeActive ? 'privacy-blur' : undefined;
+  const accountSettingsTabs = useMemo(
+    () => [
+      {
+        description: 'Update your registered name directly from the dashboard.',
+        icon: PersonIcon,
+        key: 'profile' as const,
+        label: 'Profile',
+        title: 'Profile Settings',
+      },
+      {
+        description:
+          'Reveal and copy your private key (not recommended for most users).',
+        icon: LockOutlinedIcon,
+        key: 'security' as const,
+        label: 'Security',
+        title: 'Security Settings',
+      },
+      {
+        description: 'Enable developer tools and diagnostics for advanced testing.',
+        icon: CodeRoundedIcon,
+        key: 'developer' as const,
+        label: 'Developer',
+        title: 'Developer Settings',
+      },
+      {
+        description: 'Control notifications and motion preferences across the Hub.',
+        icon: TuneRoundedIcon,
+        key: 'system' as const,
+        label: 'System',
+        title: 'System Settings',
+      },
+    ],
+    []
+  );
 
   const openAvatarPanel = useCallback((target: HTMLElement | null) => {
     if (!target) return;
@@ -253,6 +360,7 @@ export const HomeProfileCard = ({
 
   const name = userInfo?.name;
   const address = userInfo?.address;
+  const normalizedCurrentName = name?.trim().toLowerCase() ?? '';
   const hasRegisteredName = Boolean(name);
   const accountStatusStorageKey = useMemo(() => {
     const identityKey = address?.trim() || name?.trim() || 'default';
@@ -361,22 +469,125 @@ export const HomeProfileCard = ({
     setAccountStatusOverride(null);
   }, [accountStatusStorageKey]);
 
-  const closeChangeNameModal = useCallback(() => {
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const storedDevMode = window.localStorage.getItem('isEnabledDevMode');
+
+      if (storedDevMode !== null) {
+        setIsEnabledDevMode(JSON.parse(storedDevMode));
+      }
+    } catch (error) {
+      console.warn('Unable to read developer mode preference.', error);
+    }
+  }, [setIsEnabledDevMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      window.localStorage.setItem(
+        ACCOUNT_SETTINGS_PRIVACY_STORAGE_KEY,
+        JSON.stringify(isPrivacyModeActive)
+      );
+    } catch (error) {
+      console.warn('Unable to persist privacy mode preference.', error);
+    }
+  }, [isPrivacyModeActive]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      window.localStorage.setItem(
+        ACCOUNT_SETTINGS_UI_ANIMATIONS_STORAGE_KEY,
+        JSON.stringify(areUiAnimationsEnabled)
+      );
+    } catch (error) {
+      console.warn('Unable to persist UI animations preference.', error);
+    }
+  }, [areUiAnimationsEnabled]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    document.documentElement.dataset.hubUiAnimations = areUiAnimationsEnabled
+      ? 'on'
+      : 'off';
+  }, [areUiAnimationsEnabled]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    const styleElementId = 'hub-ui-animations-style';
+    let styleElement = document.getElementById(
+      styleElementId
+    ) as HTMLStyleElement | null;
+
+    if (!styleElement) {
+      styleElement = document.createElement('style');
+      styleElement.id = styleElementId;
+      document.head.appendChild(styleElement);
+    }
+
+    styleElement.textContent = areUiAnimationsEnabled
+      ? ''
+      : `
+        html[data-hub-ui-animations="off"] *,
+        html[data-hub-ui-animations="off"] *::before,
+        html[data-hub-ui-animations="off"] *::after {
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+          transition-delay: 0ms !important;
+          transition-duration: 0.01ms !important;
+        }
+      `;
+  }, [areUiAnimationsEnabled]);
+
+  const loadAppNotificationsPreference = useCallback(async () => {
+    try {
+      const response = await window.sendMessage('getUserSettings', {
+        key: 'disable-push-notifications',
+      });
+      setAreAppNotificationsEnabled(!(response || false));
+    } catch (error) {
+      console.error('Unable to load app notification preference.', error);
+    }
+  }, []);
+
+  const closeAccountSettingsModal = useCallback(() => {
     if (isChangeNameLoading) return;
-    setIsChangeNameOpen(false);
+    setIsAccountSettingsOpen(false);
+    setActiveSettingsTab('profile');
     setChangeNameValue('');
     setChangeNameAvailability('null');
     setCurrentNameMetaError(null);
+    setChangeNamePassword('');
+    setIsChangeNamePasswordEditable(false);
+    setSecurityPassword('');
+    setIsSecurityPasswordEditable(false);
+    setPrivateKeyError(null);
+    setRevealedPrivateKey('');
   }, [isChangeNameLoading]);
 
-  const openChangeNameModal = useCallback(
+  const openAccountSettingsModal = useCallback(
     (event: MouseEvent<HTMLElement>) => {
       event.stopPropagation();
-      setIsChangeNameOpen(true);
+      setIsAccountSettingsOpen(true);
+      setActiveSettingsTab('profile');
       setChangeNameValue('');
       setChangeNameAvailability('null');
+      setChangeNamePassword('');
+      setIsChangeNamePasswordEditable(false);
+      setSecurityPassword('');
+      setIsSecurityPasswordEditable(false);
+      setPrivateKeyError(null);
+      setRevealedPrivateKey('');
+      loadAppNotificationsPreference();
     },
-    []
+    [loadAppNotificationsPreference]
   );
 
   const handleOpenAccountStatusMenu = useCallback(
@@ -407,6 +618,107 @@ export const HomeProfileCard = ({
     [accountStatusStorageKey]
   );
 
+  const handleTogglePrivacyMode = useCallback(() => {
+    setIsPrivacyModeActive((previousState) => !previousState);
+  }, []);
+
+  const handleToggleAppNotifications = useCallback(
+    async (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
+      setAreAppNotificationsEnabled(checked);
+
+      try {
+        await window.sendMessage('addUserSettings', {
+          keyValue: {
+            key: 'disable-push-notifications',
+            value: !checked,
+          },
+        });
+      } catch (error) {
+        setAreAppNotificationsEnabled(!checked);
+        setInfoSnack({
+          type: 'error',
+          message: 'We could not update app notifications right now.',
+        });
+        setOpenSnack(true);
+      }
+    },
+    [setInfoSnack, setOpenSnack]
+  );
+
+  const handleToggleDevMode = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
+      setIsEnabledDevMode(checked);
+
+      if (typeof window === 'undefined') return;
+
+      try {
+        window.localStorage.setItem('isEnabledDevMode', JSON.stringify(checked));
+      } catch (error) {
+        console.warn('Unable to persist developer mode preference.', error);
+      }
+    },
+    [setIsEnabledDevMode]
+  );
+
+  const handleToggleUiAnimations = useCallback(
+    (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
+      setAreUiAnimationsEnabled(checked);
+    },
+    []
+  );
+
+  const revealPrivateKey = useCallback(async () => {
+    if (!rawWallet) {
+      setPrivateKeyError('Wallet data is unavailable right now.');
+      return;
+    }
+
+    if (!securityPassword.trim()) {
+      setPrivateKeyError('Enter your wallet password to decrypt the private key.');
+      return;
+    }
+
+    try {
+      setIsRevealingPrivateKey(true);
+      setPrivateKeyError(null);
+
+      const walletCopy = structuredClone(rawWallet);
+      const decryptedSeed = await decryptStoredWallet(
+        securityPassword,
+        walletCopy
+      );
+      const phraseWallet = new PhraseWallet(
+        decryptedSeed,
+        walletCopy?.version || walletVersion
+      );
+      const derivedPrivateKey = Base58.encode(
+        phraseWallet._addresses[0].keyPair.privateKey
+      );
+
+      setRevealedPrivateKey(derivedPrivateKey);
+    } catch (error) {
+      setRevealedPrivateKey('');
+      setPrivateKeyError(
+        error instanceof Error && error.message
+          ? `We could not decrypt your wallet: ${error.message}`
+          : 'We could not decrypt your wallet with that password.'
+      );
+    } finally {
+      setIsRevealingPrivateKey(false);
+    }
+  }, [rawWallet, securityPassword]);
+
+  const copyPrivateKey = useCallback(() => {
+    if (!revealedPrivateKey) return;
+
+    navigator.clipboard.writeText(revealedPrivateKey);
+    setInfoSnack({
+      type: 'success',
+      message: 'Private key copied to clipboard.',
+    });
+    setOpenSnack(true);
+  }, [revealedPrivateKey, setInfoSnack, setOpenSnack]);
+
   const avatarUrl =
     tempAvatar ??
     (name && !avatarError
@@ -436,7 +748,7 @@ export const HomeProfileCard = ({
         return;
       }
 
-      if (trimmedName.toLowerCase() === name?.trim().toLowerCase()) {
+      if (trimmedName.toLowerCase() === normalizedCurrentName) {
         setChangeNameAvailability('not-available');
         return;
       }
@@ -456,21 +768,21 @@ export const HomeProfileCard = ({
         setChangeNameAvailability('available');
       }
     },
-    [name]
+    [normalizedCurrentName]
   );
 
   useEffect(() => {
-    if (!isChangeNameOpen) return;
+    if (!isAccountSettingsOpen || activeSettingsTab !== 'profile') return;
 
     const handler = window.setTimeout(() => {
       checkIfNameExists(changeNameValue);
     }, 400);
 
     return () => window.clearTimeout(handler);
-  }, [changeNameValue, checkIfNameExists, isChangeNameOpen]);
+  }, [activeSettingsTab, changeNameValue, checkIfNameExists, isAccountSettingsOpen]);
 
   useEffect(() => {
-    if (!isChangeNameOpen || !name) return;
+    if (!isAccountSettingsOpen || activeSettingsTab !== 'profile' || !name) return;
 
     let cancelled = false;
 
@@ -524,7 +836,17 @@ export const HomeProfileCard = ({
     return () => {
       cancelled = true;
     };
-  }, [isChangeNameOpen, name]);
+  }, [activeSettingsTab, isAccountSettingsOpen, name]);
+
+  const formattedChangeNameFee = useMemo(() => {
+    const numericFee = Number(changeNameFee);
+
+    if (!Number.isFinite(numericFee)) {
+      return null;
+    }
+
+    return numericFee.toFixed(2);
+  }, [changeNameFee]);
 
   const submitNameChange = useCallback(async () => {
     try {
@@ -555,6 +877,21 @@ export const HomeProfileCard = ({
 
       if (changeNameAvailability !== 'available') {
         throw new Error('Choose an available name before continuing.');
+      }
+
+      if (!rawWallet) {
+        throw new Error('Wallet data is unavailable right now.');
+      }
+
+      if (!changeNamePassword.trim()) {
+        throw new Error('Enter your wallet password before changing your name.');
+      }
+
+      try {
+        const walletCopy = structuredClone(rawWallet);
+        await decryptStoredWallet(changeNamePassword, walletCopy);
+      } catch (error) {
+        throw new Error('We could not verify your wallet password.');
       }
 
       const fee = await getFee('UPDATE_NAME');
@@ -603,7 +940,7 @@ export const HomeProfileCard = ({
         message: 'Name change submitted successfully.',
       });
       setOpenSnack(true);
-      closeChangeNameModal();
+      closeAccountSettingsModal();
       executeEvent('nameUpdated', {
         currentName: newName,
         previousName: oldName,
@@ -622,12 +959,14 @@ export const HomeProfileCard = ({
     }
   }, [
     changeNameAvailability,
+    changeNamePassword,
     changeNameValue,
-    closeChangeNameModal,
+    closeAccountSettingsModal,
     currentNameDescription,
     currentNameMetaError,
     isCurrentNameMetaLoading,
     name,
+    rawWallet,
     setInfoSnack,
     setOpenSnack,
     setUserInfo,
@@ -790,7 +1129,7 @@ export const HomeProfileCard = ({
       return {
         color: avatarWarningTone.icon,
         label:
-          changeNameValue.trim().toLowerCase() === name?.trim().toLowerCase()
+          changeNameValue.trim().toLowerCase() === normalizedCurrentName
             ? 'Choose a different name from the one you already use.'
             : 'That name is already taken.',
       };
@@ -802,16 +1141,116 @@ export const HomeProfileCard = ({
     changeNameAvailability,
     changeNameValue,
     isDarkMode,
-    name,
+    normalizedCurrentName,
     theme.palette.text.secondary,
   ]);
 
   const isChangeNameSubmitDisabled =
     !changeNameValue.trim() ||
+    !changeNamePassword.trim() ||
     isChangeNameLoading ||
     isCurrentNameMetaLoading ||
     Boolean(currentNameMetaError) ||
     changeNameAvailability !== 'available';
+  const activeSettingsMeta =
+    accountSettingsTabs.find((tab) => tab.key === activeSettingsTab) ??
+    accountSettingsTabs[0];
+  const ActiveSettingsIcon = activeSettingsMeta.icon;
+  const settingsSwitchSx = {
+    '& .MuiSwitch-switchBase': {
+      '&.Mui-checked': {
+        color: theme.palette.common.white,
+        '& + .MuiSwitch-track': {
+          backgroundColor: alpha(theme.palette.primary.main, isDarkMode ? 0.72 : 0.82),
+          opacity: 1,
+        },
+      },
+    },
+    '& .MuiSwitch-thumb': {
+      boxShadow: 'none',
+      height: 16,
+      width: 16,
+    },
+    '& .MuiSwitch-track': {
+      backgroundColor: isDarkMode
+        ? 'rgba(255,255,255,0.16)'
+        : 'rgba(24,29,36,0.18)',
+      borderRadius: 999,
+      opacity: 1,
+    },
+  } as const;
+  const compactProfileFieldSx = {
+    '& .MuiOutlinedInput-root': {
+      background: avatarFieldSurface,
+      borderRadius: '10px',
+      boxShadow: avatarFieldInsetShadow,
+      color: theme.palette.text.primary,
+      minHeight: 40,
+      '& fieldset': {
+        borderColor: avatarFieldBorder,
+      },
+      '&:hover fieldset': {
+        borderColor: avatarFieldHoverBorder,
+      },
+      '&.Mui-focused fieldset': {
+        borderColor: alpha(theme.palette.primary.main, 0.9),
+        borderWidth: 1.25,
+      },
+      '&:hover': {
+        background: avatarFieldSurfaceHover,
+      },
+    },
+    '& .MuiOutlinedInput-input': {
+      fontSize: '0.88rem',
+      lineHeight: 1.25,
+      padding: '10px 12px',
+    },
+    '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+      {
+        WebkitBoxShadow: isDarkMode
+          ? '0 0 0 100px rgb(47, 52, 62) inset'
+          : '0 0 0 100px rgb(248, 250, 253) inset',
+        WebkitTextFillColor: theme.palette.text.primary,
+        caretColor: theme.palette.text.primary,
+        transition: 'background-color 9999s ease-out 0s',
+      },
+  } as const;
+  const compactNeutralFieldSx = {
+    '& .MuiOutlinedInput-root': {
+      background: avatarFieldSurface,
+      borderRadius: '10px',
+      boxShadow: avatarFieldInsetShadow,
+      color: theme.palette.text.primary,
+      minHeight: 40,
+      '& fieldset': {
+        borderColor: avatarFieldBorder,
+      },
+      '&:hover fieldset': {
+        borderColor: avatarFieldHoverBorder,
+      },
+      '&.Mui-focused fieldset': {
+        borderColor: avatarFieldHoverBorder,
+        borderWidth: 1,
+      },
+      '&:hover': {
+        background: avatarFieldSurfaceHover,
+      },
+    },
+    '& .MuiOutlinedInput-input': {
+      fontSize: '0.88rem',
+      lineHeight: 1.25,
+      padding: '10px 12px',
+    },
+    '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+      {
+        WebkitBoxShadow: isDarkMode
+          ? '0 0 0 100px rgb(47, 52, 62) inset'
+          : '0 0 0 100px rgb(248, 250, 253) inset',
+        WebkitTextFillColor: theme.palette.text.primary,
+        caretColor: theme.palette.text.primary,
+        transition: 'background-color 9999s ease-out 0s',
+      },
+  } as const;
 
   return (
     <Box
@@ -836,6 +1275,16 @@ export const HomeProfileCard = ({
       onMouseMove={handleDashboardPanelPointerMove}
       onMouseLeave={handleDashboardPanelPointerLeave}
     >
+      <GlobalStyles
+        styles={{
+          '.privacy-blur': {
+            filter: 'blur(8px)',
+            pointerEvents: 'none',
+            transition: 'filter 0.3s ease',
+            userSelect: 'none',
+          },
+        }}
+      />
       <Box
         sx={{
           alignItems: 'center',
@@ -1264,63 +1713,61 @@ export const HomeProfileCard = ({
               </Box>
             </Box>
 
-            {hasRegisteredName ? (
-              <Tooltip enterDelay={320} title="Change registered name">
-                <ButtonBase
-                  onClick={openChangeNameModal}
-                  aria-label="Change registered name"
-                  sx={{
-                    alignItems: 'center',
+            <Tooltip enterDelay={320} title="Account settings">
+              <ButtonBase
+                onClick={openAccountSettingsModal}
+                aria-label="Open account settings"
+                sx={{
+                  alignItems: 'center',
+                  background: isDarkMode
+                    ? 'rgba(44,49,58,0.98)'
+                    : 'rgba(232,237,245,0.99)',
+                  border: `1px solid ${
+                    isDarkMode
+                      ? alpha('#8FD8FF', 0.06)
+                      : alpha(theme.palette.text.primary, 0.072)
+                  }`,
+                  borderRadius: '12px',
+                  boxShadow: isDarkMode
+                    ? `inset 0 1px 0 rgba(255,255,255,0.075), inset 0 0 0 1px rgba(255,255,255,0.012), inset 0 -1px 0 rgba(0,0,0,0.44), inset -1px -1px 0 rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.17), 0 0 0 1px ${alpha('#8FD8FF', 0.012)}`
+                    : 'inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -1px 0 rgba(104,116,140,0.22), inset -1px -1px 0 rgba(146,158,182,0.14), 0 4px 8px rgba(94,108,132,0.11)',
+                  color: isDarkMode
+                    ? alpha('#F6F8FB', 0.88)
+                    : alpha(theme.palette.text.primary, 0.84),
+                  display: 'inline-flex',
+                  flexShrink: 0,
+                  height: 38,
+                  justifyContent: 'center',
+                  minWidth: 38,
+                  p: 0,
+                  position: 'relative',
+                  transition:
+                    'transform 90ms ease, filter 120ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease',
+                  width: 38,
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    inset: '1px',
+                    borderRadius: 'inherit',
+                    pointerEvents: 'none',
                     background: isDarkMode
-                      ? 'rgba(44,49,58,0.98)'
-                      : 'rgba(232,237,245,0.99)',
-                    border: `1px solid ${
-                      isDarkMode
-                        ? alpha('#8FD8FF', 0.06)
-                        : alpha(theme.palette.text.primary, 0.072)
-                    }`,
-                    borderRadius: '12px',
-                    boxShadow: isDarkMode
-                      ? `inset 0 1px 0 rgba(255,255,255,0.075), inset 0 0 0 1px rgba(255,255,255,0.012), inset 0 -1px 0 rgba(0,0,0,0.44), inset -1px -1px 0 rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.17), 0 0 0 1px ${alpha('#8FD8FF', 0.012)}`
-                      : 'inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -1px 0 rgba(104,116,140,0.22), inset -1px -1px 0 rgba(146,158,182,0.14), 0 4px 8px rgba(94,108,132,0.11)',
-                    color: isDarkMode
-                      ? alpha('#F6F8FB', 0.88)
-                      : alpha(theme.palette.text.primary, 0.84),
-                    display: 'inline-flex',
-                    flexShrink: 0,
-                    height: 38,
-                    justifyContent: 'center',
-                    minWidth: 38,
-                    p: 0,
-                    position: 'relative',
-                    transition:
-                      'transform 90ms ease, filter 120ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease',
-                    width: 38,
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      inset: '1px',
-                      borderRadius: 'inherit',
-                      pointerEvents: 'none',
-                      background: isDarkMode
-                        ? 'linear-gradient(145deg, rgba(255,255,255,0.052) 0%, rgba(255,255,255,0.02) 24%, rgba(255,255,255,0) 58%)'
-                        : 'linear-gradient(145deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.22) 28%, rgba(255,255,255,0) 58%)',
-                      opacity: 0.92,
-                    },
-                    '&:hover': {
-                      filter: 'brightness(1.05)',
-                    },
-                    '&:active': {
-                      boxShadow:
-                        'inset 2px 2px 6px rgba(0, 0, 0, 0.7), inset -1px -1px 3px rgba(255, 255, 255, 0.04)',
-                      transform: 'scale(0.97)',
-                    },
-                  }}
-                >
-                  <SettingsRoundedIcon sx={{ fontSize: '1rem' }} />
-                </ButtonBase>
-              </Tooltip>
-            ) : null}
+                      ? 'linear-gradient(145deg, rgba(255,255,255,0.052) 0%, rgba(255,255,255,0.02) 24%, rgba(255,255,255,0) 58%)'
+                      : 'linear-gradient(145deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.22) 28%, rgba(255,255,255,0) 58%)',
+                    opacity: 0.92,
+                  },
+                  '&:hover': {
+                    filter: 'brightness(1.05)',
+                  },
+                  '&:active': {
+                    boxShadow:
+                      'inset 2px 2px 6px rgba(0, 0, 0, 0.7), inset -1px -1px 3px rgba(255, 255, 255, 0.04)',
+                    transform: 'scale(0.97)',
+                  },
+                }}
+              >
+                <SettingsRoundedIcon sx={{ fontSize: '1rem' }} />
+              </ButtonBase>
+            </Tooltip>
           </Box>
 
           <Typography
@@ -1422,11 +1869,11 @@ export const HomeProfileCard = ({
       </Menu>
 
       <Dialog
-        open={isChangeNameOpen}
-        onClose={closeChangeNameModal}
-        aria-labelledby="change-name-dialog-title"
-        aria-describedby="change-name-dialog-description"
-        maxWidth="sm"
+        open={isAccountSettingsOpen}
+        onClose={closeAccountSettingsModal}
+        aria-labelledby="account-settings-dialog-title"
+        aria-describedby="account-settings-dialog-description"
+        maxWidth={false}
         fullWidth
         slotProps={{
           backdrop: {
@@ -1448,14 +1895,14 @@ export const HomeProfileCard = ({
               border: isDarkMode
                 ? '1px solid rgba(255,255,255,0.08)'
                 : '1px solid rgba(24,29,36,0.09)',
-              borderRadius: '14px',
+              borderRadius: '16px',
               boxShadow: isDarkMode
                 ? '0 34px 120px rgba(0,0,0,0.46)'
                 : '0 28px 88px rgba(18,28,45,0.16)',
-              clipPath: 'inset(0 round 14px)',
+              clipPath: 'inset(0 round 16px)',
               isolation: 'isolate',
               overflow: 'hidden',
-              width: 'min(460px, calc(100vw - 32px))',
+              width: 'min(840px, calc(100vw - 32px))',
             },
           },
         }}
@@ -1464,293 +1911,886 @@ export const HomeProfileCard = ({
           sx={{
             background: avatarModalSurface,
             display: 'flex',
-            flexDirection: 'column',
+            minHeight: 530,
+            width: '100%',
           }}
         >
           <Box
             sx={{
-              alignItems: 'center',
+              background: settingsSidebarSurface,
+              borderRight: `1px solid ${avatarSectionDivider}`,
               display: 'flex',
-              justifyContent: 'space-between',
-              px: 2.25,
-              py: 1.7,
+              flexDirection: 'column',
+              flexShrink: 0,
+              gap: 1,
+              minWidth: 200,
+              px: 1.1,
+              py: 1.15,
+              width: 200,
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <Typography
-                id="change-name-dialog-title"
-                sx={{
-                  color: theme.palette.text.primary,
-                  fontSize: '0.98rem',
-                  fontWeight: 700,
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                Change name
-              </Typography>
-              <Typography
-                id="change-name-dialog-description"
-                sx={{
-                  color: theme.palette.text.secondary,
-                  fontSize: '0.76rem',
-                  lineHeight: 1.45,
-                }}
-              >
-                Update your current registered name directly from the dashboard.
-              </Typography>
+            {accountSettingsTabs.map((tab) => {
+              const TabIcon = tab.icon;
+              const isActive = activeSettingsTab === tab.key;
+
+              return (
+                <ButtonBase
+                  key={tab.key}
+                  onClick={() => setActiveSettingsTab(tab.key)}
+                  sx={{
+                    alignItems: 'center',
+                    background: isActive ? settingsSidebarActiveSurface : 'transparent',
+                    border: `1px solid ${
+                      isActive
+                        ? alpha(theme.palette.common.white, isDarkMode ? 0.075 : 0.18)
+                        : 'transparent'
+                    }`,
+                    borderLeft: `2px solid ${
+                      isActive ? settingsSidebarAccent : 'transparent'
+                    }`,
+                    borderRadius: '12px',
+                    color: isActive
+                      ? theme.palette.text.primary
+                      : alpha(theme.palette.text.secondary, 0.9),
+                    justifyContent: 'flex-start',
+                    minHeight: 52,
+                    px: 1.35,
+                    py: 1.15,
+                    transition:
+                      'background-color 160ms ease, border-color 160ms ease, color 160ms ease',
+                    width: '100%',
+                    '&:hover': {
+                      background: isActive
+                        ? settingsSidebarActiveSurface
+                        : alpha(theme.palette.common.white, isDarkMode ? 0.032 : 0.48),
+                    },
+                  }}
+                >
+                  <TabIcon sx={{ fontSize: 20, mr: 1.1 }} />
+                  <Typography
+                    sx={{
+                      fontSize: '0.86rem',
+                      fontWeight: isActive ? 700 : 600,
+                      letterSpacing: '0.01em',
+                    }}
+                  >
+                    {tab.label.toUpperCase()}
+                  </Typography>
+                </ButtonBase>
+              );
+            })}
+
+            <Box sx={{ mt: 'auto', pt: 1.6, display: 'flex', justifyContent: 'center' }}>
+              <Tooltip title="Privacy Mode: Blurs sensitive info for screen sharing">
+                <ButtonBase
+                  onClick={handleTogglePrivacyMode}
+                  aria-label="Toggle privacy mode"
+                  sx={{
+                    borderRadius: '999px',
+                    color: isPrivacyModeActive
+                      ? theme.palette.text.primary
+                      : alpha(theme.palette.text.secondary, 0.78),
+                    height: 32,
+                    width: 32,
+                    '&:hover': {
+                      backgroundColor: alpha(
+                        theme.palette.common.white,
+                        isDarkMode ? 0.05 : 0.6
+                      ),
+                      color: theme.palette.text.primary,
+                    },
+                  }}
+                >
+                  {isPrivacyModeActive ? (
+                    <VisibilityOffOutlinedIcon sx={{ fontSize: 19 }} />
+                  ) : (
+                    <VisibilityOutlinedIcon sx={{ fontSize: 19 }} />
+                  )}
+                </ButtonBase>
+              </Tooltip>
             </Box>
-            <ButtonBase
-              onClick={closeChangeNameModal}
-              disabled={isChangeNameLoading}
-              sx={{
-                borderRadius: '8px',
-                color: theme.palette.text.secondary,
-                height: 30,
-                width: 30,
-                '&:hover': {
-                  backgroundColor: alpha(
-                    theme.palette.common.white,
-                    isDarkMode ? 0.05 : 0.55
-                  ),
-                  color: theme.palette.text.primary,
-                },
-              }}
-            >
-              <CloseIcon sx={{ fontSize: 17 }} />
-            </ButtonBase>
           </Box>
 
           <Box
             sx={{
-              borderTop: `1px solid ${avatarSectionDivider}`,
               display: 'flex',
+              flex: 1,
               flexDirection: 'column',
-              gap: 1.2,
-              px: 2.25,
-              pb: 2.15,
-              pt: 1.85,
+              minWidth: 0,
             }}
           >
             <Box
               sx={{
                 alignItems: 'flex-start',
-                background: avatarModalSurfaceSoft,
-                border: `1px solid ${avatarFieldBorder}`,
-                borderRadius: '12px',
                 display: 'flex',
-                flexDirection: 'column',
-                gap: '3px',
-                px: 1.35,
-                py: 1.15,
+                justifyContent: 'space-between',
+                px: 2.3,
+                py: 1.8,
               }}
             >
-              <Typography
-                sx={{
-                  color: theme.palette.text.secondary,
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  letterSpacing: '0.03em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Current name
-              </Typography>
-              <Typography
-                sx={{
-                  color: theme.palette.text.primary,
-                  fontSize: '0.9rem',
-                  fontWeight: 700,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {name ?? 'No name registered'}
-              </Typography>
-            </Box>
-
-            <Box
-              sx={{
-                alignItems: 'flex-start',
-                backgroundColor: changeNameNoteTone.background,
-                border: `1px solid ${changeNameNoteTone.border}`,
-                borderRadius: '12px',
-                display: 'flex',
-                gap: 1,
-                px: 1.25,
-                py: 1.05,
-              }}
-            >
-              <InfoOutlinedIcon
-                sx={{
-                  color: changeNameNoteTone.icon,
-                  flexShrink: 0,
-                  fontSize: 18,
-                  mt: '1px',
-                }}
-              />
-              <Typography
-                sx={{
-                  color: theme.palette.text.secondary,
-                  fontSize: '0.76rem',
-                  lineHeight: 1.48,
-                }}
-              >
-                Changing your name updates the current one on-chain and keeps
-                its existing name data attached.
-                {changeNameFee ? ` Fee: ${changeNameFee} QORT.` : ''}
-              </Typography>
-            </Box>
-
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}>
-              <Typography
-                sx={{
-                  color: theme.palette.text.secondary,
-                  display: 'block',
-                  fontSize: '0.74rem',
-                  fontWeight: 600,
-                  letterSpacing: '0.01em',
-                }}
-              >
-                New name
-              </Typography>
-              <TextField
-                autoComplete="off"
-                autoFocus
-                fullWidth
-                variant="outlined"
-                size="medium"
-                onChange={(event) => setChangeNameValue(event.target.value)}
-                value={changeNameValue}
-                placeholder="Enter a new name"
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    background: avatarFieldSurface,
-                    borderRadius: '10px',
-                    boxShadow: avatarFieldInsetShadow,
-                    color: theme.palette.text.primary,
-                    '& fieldset': {
-                      borderColor: avatarFieldBorder,
-                    },
-                    '&:hover fieldset': {
-                      borderColor: avatarFieldHoverBorder,
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: alpha(theme.palette.primary.main, 0.9),
-                      borderWidth: 1.5,
-                    },
-                    '&:hover': {
-                      background: avatarFieldSurfaceHover,
-                    },
-                  },
-                }}
-              />
-            </Box>
-
-            {changeNameStatusTone ? (
-              <Typography
-                sx={{
-                  color: changeNameStatusTone.color,
-                  fontSize: '0.73rem',
-                  fontWeight: changeNameAvailability === 'loading' ? 500 : 600,
-                  lineHeight: 1.4,
-                  minHeight: '20px',
-                }}
-              >
-                {changeNameStatusTone.label}
-              </Typography>
-            ) : (
-              <Box sx={{ minHeight: '20px' }} />
-            )}
-
-            {currentNameMetaError ? (
-              <Box
-                sx={{
-                  alignItems: 'flex-start',
-                  backgroundColor: avatarWarningTone.background,
-                  border: `1px solid ${avatarWarningTone.border}`,
-                  borderRadius: '12px',
-                  display: 'flex',
-                  gap: 1,
-                  px: 1.25,
-                  py: 1.1,
-                }}
-              >
-                <ErrorIcon
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.1 }}>
+                <ActiveSettingsIcon
                   sx={{
-                    color: avatarWarningTone.icon,
-                    flexShrink: 0,
-                    fontSize: 18,
-                    mt: '1px',
+                    color: alpha(theme.palette.text.primary, 0.9),
+                    fontSize: 22,
+                    mt: '2px',
                   }}
                 />
-                <Typography
-                  sx={{
-                    color: theme.palette.text.secondary,
-                    fontSize: '0.76rem',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {currentNameMetaError}
-                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <Typography
+                    id="account-settings-dialog-title"
+                    sx={{
+                      color: theme.palette.text.primary,
+                      fontSize: '0.98rem',
+                      fontWeight: 700,
+                      letterSpacing: '-0.02em',
+                    }}
+                  >
+                    {activeSettingsMeta.title}
+                  </Typography>
+                  <Typography
+                    id="account-settings-dialog-description"
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.76rem',
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {activeSettingsMeta.description}
+                  </Typography>
+                </Box>
               </Box>
-            ) : null}
+              <ButtonBase
+                onClick={closeAccountSettingsModal}
+                disabled={isChangeNameLoading}
+                sx={{
+                  borderRadius: '8px',
+                  color: theme.palette.text.secondary,
+                  height: 30,
+                  width: 30,
+                  '&:hover': {
+                    backgroundColor: alpha(
+                      theme.palette.common.white,
+                      isDarkMode ? 0.05 : 0.55
+                    ),
+                    color: theme.palette.text.primary,
+                  },
+                }}
+              >
+                <CloseIcon sx={{ fontSize: 17 }} />
+              </ButtonBase>
+            </Box>
 
             <Box
               sx={{
                 borderTop: `1px solid ${avatarSectionDivider}`,
-                mt: 0.35,
-                pt: 1.15,
+                display: 'flex',
+                flex: 1,
+                flexDirection: 'column',
+                gap: 1.25,
+                px: 2.3,
+                pb: 2.2,
+                pt: 1.9,
               }}
             >
-              <Typography
-                sx={{
-                  color: theme.palette.text.secondary,
-                  fontSize: '0.73rem',
-                  lineHeight: 1.5,
-                }}
-              >
-                For selling or buying names, check the Q-App called:{' '}
+              {activeSettingsTab === 'profile' ? (
+                <>
+                  <Box sx={{ display: 'grid', gap: 1.05 }}>
+                    <Box
+                      sx={{
+                        alignItems: 'flex-start',
+                        background: avatarModalSurfaceSoft,
+                        border: `1px solid ${avatarFieldBorder}`,
+                        borderRadius: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px',
+                        px: 1.35,
+                        py: 1.15,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.03em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Current name
+                      </Typography>
+                      <Typography
+                        className={privacyBlurClassName}
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
+                        {name ?? 'No name registered'}
+                      </Typography>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        alignItems: 'flex-start',
+                        background: avatarModalSurfaceSoft,
+                        border: `1px solid ${avatarFieldBorder}`,
+                        borderRadius: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px',
+                        px: 1.35,
+                        py: 1.15,
+                      }}
+                    >
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.7rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.03em',
+                          textTransform: 'uppercase',
+                        }}
+                      >
+                        Wallet address
+                      </Typography>
+                      <Typography
+                        className={privacyBlurClassName}
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontFamily: 'monospace',
+                          fontSize: '0.81rem',
+                          fontWeight: 600,
+                          letterSpacing: '-0.01em',
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {address ?? 'Unavailable'}
+                      </Typography>
+                    </Box>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      alignItems: 'flex-start',
+                      backgroundColor: changeNameNoteTone.background,
+                      border: `1px solid ${changeNameNoteTone.border}`,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      gap: 1,
+                      px: 1.25,
+                      py: 1.05,
+                    }}
+                  >
+                    <InfoOutlinedIcon
+                      sx={{
+                        color: changeNameNoteTone.icon,
+                        flexShrink: 0,
+                        fontSize: 18,
+                        mt: '1px',
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.76rem',
+                        lineHeight: 1.48,
+                      }}
+                    >
+                      {name
+                        ? `Changing your name updates the current one on-chain and keeps its existing name data attached.${formattedChangeNameFee ? ` Fee: ${formattedChangeNameFee} QORT.` : ''}`
+                        : 'Register a name first, then you can rename it here any time from the dashboard.'}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ display: 'grid', gap: 1.05 }}>
+                    <Box
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}
+                    >
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          display: 'block',
+                          fontSize: '0.74rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        New name
+                      </Typography>
+                      <TextField
+                        autoComplete="off"
+                        autoFocus={activeSettingsTab === 'profile'}
+                        fullWidth
+                        variant="outlined"
+                        size="small"
+                        onChange={(event) => setChangeNameValue(event.target.value)}
+                        value={changeNameValue}
+                        placeholder="Enter a new name"
+                        sx={compactProfileFieldSx}
+                      />
+                    </Box>
+
+                    <Box
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}
+                    >
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          display: 'block',
+                          fontSize: '0.74rem',
+                          fontWeight: 600,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        Wallet password
+                      </Typography>
+                      <TextField
+                        autoComplete="off"
+                        fullWidth
+                        type="password"
+                        variant="outlined"
+                        size="small"
+                        name="hub-change-name-confirmation"
+                        onFocus={() => setIsChangeNamePasswordEditable(true)}
+                        onMouseDown={() =>
+                          setIsChangeNamePasswordEditable(true)
+                        }
+                        onBlur={() => {
+                          if (!changeNamePassword) {
+                            setIsChangeNamePasswordEditable(false);
+                          }
+                        }}
+                        onChange={(event) =>
+                          setChangeNamePassword(event.target.value)
+                        }
+                        value={changeNamePassword}
+                        placeholder="Enter your wallet password"
+                        sx={compactProfileFieldSx}
+                        InputProps={{
+                          readOnly: !isChangeNamePasswordEditable,
+                        }}
+                        inputProps={{
+                          autoComplete: 'new-password',
+                          'data-1p-ignore': 'true',
+                          'data-lpignore': 'true',
+                          spellCheck: 'false',
+                        }}
+                      />
+                    </Box>
+                  </Box>
+
+                  <Box sx={{ minHeight: '20px' }}>
+                    {changeNameStatusTone ? (
+                      <Typography
+                        sx={{
+                          color: changeNameStatusTone.color,
+                          fontSize: '0.73rem',
+                          fontWeight:
+                            changeNameAvailability === 'loading' ? 500 : 600,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {changeNameStatusTone.label}
+                      </Typography>
+                    ) : null}
+                  </Box>
+
+                  {currentNameMetaError ? (
+                    <Box
+                      sx={{
+                        alignItems: 'flex-start',
+                        backgroundColor: avatarWarningTone.background,
+                        border: `1px solid ${avatarWarningTone.border}`,
+                        borderRadius: '12px',
+                        display: 'flex',
+                        gap: 1,
+                        px: 1.25,
+                        py: 1.1,
+                      }}
+                    >
+                      <ErrorIcon
+                        sx={{
+                          color: avatarWarningTone.icon,
+                          flexShrink: 0,
+                          fontSize: 18,
+                          mt: '1px',
+                        }}
+                      />
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.76rem',
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {currentNameMetaError}
+                      </Typography>
+                    </Box>
+                  ) : null}
+
+                  <Box
+                    sx={{
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      mt: 0.35,
+                      pt: 1.15,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.73rem',
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      For selling or buying names, check the Q-App called:{' '}
+                      <Box
+                        component="span"
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontWeight: 700,
+                        }}
+                      >
+                        Names
+                      </Box>
+                      .
+                    </Typography>
+                  </Box>
+
+                  <LoadingButton
+                    loading={isChangeNameLoading}
+                    disabled={isChangeNameSubmitDisabled || !hasRegisteredName}
+                    onClick={submitNameChange}
+                    variant="contained"
+                    fullWidth
+                    sx={{
+                      borderRadius: '10px',
+                      ...getBlueTier1ButtonSx(),
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      minHeight: 42,
+                      textTransform: 'none',
+                      '&.Mui-disabled': {
+                        background: isDarkMode
+                          ? 'rgba(255,255,255,0.035)'
+                          : 'rgba(24,29,36,0.04)',
+                        border: isDarkMode
+                          ? '1px solid rgba(255,255,255,0.055)'
+                          : '1px solid rgba(24,29,36,0.06)',
+                        boxShadow: 'none',
+                        color: isDarkMode
+                          ? 'rgba(255,255,255,0.34)'
+                          : 'rgba(24,29,36,0.34)',
+                      },
+                    }}
+                  >
+                    Save new name
+                  </LoadingButton>
+                </>
+              ) : null}
+
+              {activeSettingsTab === 'security' ? (
+                <>
+                  <Box
+                    sx={{
+                      alignItems: 'flex-start',
+                      backgroundColor: avatarWarningTone.background,
+                      border: `1px solid ${avatarWarningTone.border}`,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      gap: 1,
+                      px: 1.25,
+                      py: 1.1,
+                    }}
+                  >
+                    <ErrorIcon
+                      sx={{
+                        color: avatarWarningTone.icon,
+                        flexShrink: 0,
+                        fontSize: 18,
+                        mt: '1px',
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.76rem',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Never share your private key. Anyone who has it could
+                      potentially control this wallet and its funds.
+                    </Typography>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      alignItems: 'flex-start',
+                      background: avatarModalSurfaceSoft,
+                      border: `1px solid ${avatarFieldBorder}`,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '3px',
+                      px: 1.35,
+                      py: 1.15,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.03em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Wallet address
+                    </Typography>
+                    <Typography
+                      className={privacyBlurClassName}
+                      sx={{
+                        color: theme.palette.text.primary,
+                        fontFamily: 'monospace',
+                        fontSize: '0.81rem',
+                        fontWeight: 600,
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {address ?? 'Unavailable'}
+                    </Typography>
+                  </Box>
+
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}>
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        display: 'block',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.01em',
+                      }}
+                    >
+                      Wallet password
+                    </Typography>
+                    <TextField
+                      autoComplete="off"
+                      fullWidth
+                      type="password"
+                      variant="outlined"
+                      size="small"
+                      name="hub-private-key-decrypt"
+                      onFocus={() => setIsSecurityPasswordEditable(true)}
+                      onMouseDown={() => setIsSecurityPasswordEditable(true)}
+                      onBlur={() => {
+                        if (!securityPassword) {
+                          setIsSecurityPasswordEditable(false);
+                        }
+                      }}
+                      onChange={(event) => setSecurityPassword(event.target.value)}
+                      value={securityPassword}
+                      placeholder="Enter your wallet password"
+                      sx={compactNeutralFieldSx}
+                      InputProps={{
+                        readOnly: !isSecurityPasswordEditable,
+                      }}
+                      inputProps={{
+                        autoComplete: 'new-password',
+                        'data-1p-ignore': 'true',
+                        'data-lpignore': 'true',
+                        spellCheck: 'false',
+                      }}
+                    />
+                  </Box>
+
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <LoadingButton
+                      loading={isRevealingPrivateKey}
+                      disabled={!securityPassword.trim() || !rawWallet}
+                      onClick={revealPrivateKey}
+                      variant="contained"
+                      sx={{
+                        borderRadius: '10px',
+                        ...getBlueTier1ButtonSx(),
+                        minHeight: 40,
+                        px: 2,
+                        textTransform: 'none',
+                        '&.Mui-disabled': {
+                          background: isDarkMode
+                            ? 'rgba(255,255,255,0.035)'
+                            : 'rgba(24,29,36,0.04)',
+                          border: isDarkMode
+                            ? '1px solid rgba(255,255,255,0.055)'
+                            : '1px solid rgba(24,29,36,0.06)',
+                          boxShadow: 'none',
+                          color: isDarkMode
+                            ? 'rgba(255,255,255,0.34)'
+                            : 'rgba(24,29,36,0.34)',
+                        },
+                      }}
+                    >
+                      Decrypt
+                    </LoadingButton>
+                    <LoadingButton
+                      disabled={!revealedPrivateKey}
+                      onClick={copyPrivateKey}
+                      variant="outlined"
+                      sx={{
+                        borderColor: avatarFieldBorder,
+                        borderRadius: '10px',
+                        color: theme.palette.text.primary,
+                        minHeight: 40,
+                        px: 2,
+                        textTransform: 'none',
+                      }}
+                    >
+                      Copy key
+                    </LoadingButton>
+                  </Box>
+
+                  {privateKeyError ? (
+                    <Typography
+                      sx={{
+                        color: avatarWarningTone.icon,
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {privateKeyError}
+                    </Typography>
+                  ) : null}
+
+                  <Box
+                    sx={{
+                      alignItems: 'flex-start',
+                      background: avatarModalSurfaceSoft,
+                      border: `1px solid ${avatarFieldBorder}`,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      minHeight: 98,
+                      px: 1.35,
+                      py: 1.15,
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.03em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      Private key
+                    </Typography>
+                    <Typography
+                      className={revealedPrivateKey ? privacyBlurClassName : undefined}
+                      sx={{
+                        color: revealedPrivateKey
+                          ? theme.palette.text.primary
+                          : theme.palette.text.secondary,
+                        fontFamily: 'monospace',
+                        fontSize: revealedPrivateKey ? '0.78rem' : '0.76rem',
+                        fontWeight: revealedPrivateKey ? 600 : 500,
+                        lineHeight: 1.45,
+                        userSelect: revealedPrivateKey ? 'text' : 'none',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      {revealedPrivateKey ||
+                        'Decrypt your private key only when you need to recover or migrate this wallet.'}
+                    </Typography>
+                  </Box>
+                </>
+              ) : null}
+
+              {activeSettingsTab === 'developer' ? (
                 <Box
-                  component="span"
                   sx={{
-                    color: theme.palette.text.primary,
-                    fontWeight: 700,
+                    background: avatarModalSurfaceSoft,
+                    border: `1px solid ${avatarFieldBorder}`,
+                    borderRadius: '12px',
+                    overflow: 'hidden',
                   }}
                 >
-                  Names
-                </Box>
-                .
-              </Typography>
-            </Box>
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1.2,
+                      justifyContent: 'space-between',
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        Enable Dev Mode
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                          mt: 0.4,
+                        }}
+                      >
+                        Unlock local developer surfaces, diagnostics, and testing tools
+                        across the Hub.
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={isEnabledDevMode}
+                      onChange={handleToggleDevMode}
+                      sx={settingsSwitchSx}
+                    />
+                  </Box>
 
-            <LoadingButton
-              loading={isChangeNameLoading}
-              disabled={isChangeNameSubmitDisabled}
-              onClick={submitNameChange}
-              variant="contained"
-              fullWidth
-              sx={{
-                borderRadius: '10px',
-                ...getBlueTier1ButtonSx(),
-                fontSize: '0.82rem',
-                fontWeight: 600,
-                minHeight: 42,
-                textTransform: 'none',
-                '&.Mui-disabled': {
-                  background: isDarkMode
-                    ? 'rgba(255,255,255,0.035)'
-                    : 'rgba(24,29,36,0.04)',
-                  border: isDarkMode
-                    ? '1px solid rgba(255,255,255,0.055)'
-                    : '1px solid rgba(24,29,36,0.06)',
-                  boxShadow: 'none',
-                  color: isDarkMode
-                    ? 'rgba(255,255,255,0.34)'
-                    : 'rgba(24,29,36,0.34)',
-                },
-              }}
-            >
-              Save new name
-            </LoadingButton>
+                  <Box
+                    sx={{
+                      alignItems: 'flex-start',
+                      backgroundColor: developerNoticeTone.background,
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      display: 'flex',
+                      gap: 1,
+                      px: 1.35,
+                      py: 1.1,
+                    }}
+                  >
+                    <InfoOutlinedIcon
+                      sx={{
+                        color: developerNoticeTone.icon,
+                        flexShrink: 0,
+                        fontSize: 18,
+                        mt: '1px',
+                      }}
+                    />
+                    <Typography
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        fontSize: '0.74rem',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Tip: "Once enabled, a new Developer Tools icon will appear
+                      in your sidebar. You might need to hover over the left edge
+                      to reveal it."
+                    </Typography>
+                  </Box>
+                </Box>
+              ) : null}
+
+              {activeSettingsTab === 'system' ? (
+                <Box
+                  sx={{
+                    background: avatarModalSurfaceSoft,
+                    border: `1px solid ${avatarFieldBorder}`,
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1.2,
+                      justifyContent: 'space-between',
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        App Notifications
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                          mt: 0.4,
+                        }}
+                      >
+                        Allow desktop push notifications for payments and other app
+                        alerts.
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={areAppNotificationsEnabled}
+                      onChange={handleToggleAppNotifications}
+                      sx={settingsSwitchSx}
+                    />
+                  </Box>
+
+                  <Box
+                    sx={{
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      mx: 1.35,
+                    }}
+                  />
+
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1.2,
+                      justifyContent: 'space-between',
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        UI Animations
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                          mt: 0.4,
+                        }}
+                      >
+                        Reduce decorative motion and interface transitions throughout
+                        the Hub.
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={areUiAnimationsEnabled}
+                      onChange={handleToggleUiAnimations}
+                      sx={settingsSwitchSx}
+                    />
+                  </Box>
+                </Box>
+              ) : null}
+            </Box>
           </Box>
         </Box>
       </Dialog>

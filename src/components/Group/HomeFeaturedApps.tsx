@@ -617,6 +617,12 @@ export const HomeFeaturedApps = ({
                       : theme.palette.text.primary,
                   opacity: 1,
                 },
+                '& .explore-arrow': {
+                  transform: 'translateX(0)',
+                },
+                '&:hover .explore-arrow': {
+                  transform: 'translateX(7px)',
+                },
               },
             }}
           >
@@ -665,6 +671,25 @@ export const HomeFeaturedApps = ({
                 }}
               >
                 All Q-Apps
+              </Box>
+              <Box
+                component="span"
+                className="explore-arrow"
+                sx={{
+                  color:
+                    theme.palette.mode === 'dark'
+                      ? alpha(theme.palette.common.white, 0.9)
+                      : theme.palette.text.primary,
+                  display: 'inline-block',
+                  fontSize: 'inherit',
+                  fontWeight: 500,
+                  lineHeight: 1,
+                  transition:
+                    'transform 450ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+                }}
+              >
+                {' '}
+                →
               </Box>
             </Typography>
           </ButtonBase>

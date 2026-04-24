@@ -83,6 +83,8 @@ export const Settings = ({ open, setOpen, rawWallet }) => {
   const [isEnabledDevMode, setIsEnabledDevMode] = useAtom(enabledDevModeAtom);
   const [closeAction, setCloseAction] = useState<CloseAction>('ask');
   const [platform, setPlatform] = useState<string>('');
+  const [isPrivateKeyPasswordEditable, setIsPrivateKeyPasswordEditable] =
+    useState(false);
   const theme = useTheme();
   const { t } = useTranslation([
     'auth',
@@ -485,11 +487,38 @@ const ExportPrivateKey = ({ rawWallet }) => {
             autoFocus
             type="password"
             value={password}
-            autoComplete="off"
+            autoComplete="new-password"
+            name="settings-private-key-decrypt"
             size="small"
+            onFocus={() => setIsPrivateKeyPasswordEditable(true)}
+            onMouseDown={() => setIsPrivateKeyPasswordEditable(true)}
+            onBlur={() => {
+              if (!password) {
+                setIsPrivateKeyPasswordEditable(false);
+              }
+            }}
             onChange={(e) => setPassword(e.target.value)}
+            InputProps={{
+              readOnly: !isPrivateKeyPasswordEditable,
+            }}
+            inputProps={{
+              autoComplete: 'new-password',
+              'data-1p-ignore': 'true',
+              'data-lpignore': 'true',
+              spellCheck: 'false',
+            }}
             sx={{
               '& .MuiOutlinedInput-root': { borderRadius: 2 },
+              '& input:-webkit-autofill, & input:-webkit-autofill:hover, & input:-webkit-autofill:focus':
+                {
+                  WebkitBoxShadow:
+                    theme.palette.mode === 'dark'
+                      ? '0 0 0 100px rgb(38, 42, 50) inset'
+                      : '0 0 0 100px rgb(248, 250, 253) inset',
+                  WebkitTextFillColor: theme.palette.text.primary,
+                  caretColor: theme.palette.text.primary,
+                  transition: 'background-color 9999s ease-out 0s',
+                },
             }}
           />
 
