@@ -1100,7 +1100,7 @@ function App() {
   }, [setExtstate, logoutFunc]);
   const onAuthenticationFormBack = useCallback(() => {
     setRawWallet(null);
-    setExtstate('wallets');
+    setExtstate('not-authenticated');
     setAuthenticatePassword('');
     logoutFunc();
   }, [setExtstate, logoutFunc]);
@@ -1136,6 +1136,9 @@ function App() {
       duration: 5600,
     });
   }, [t, saveFileToDiskFunc, returnToMain]);
+  const onEnterHubAfterCreate = useCallback(() => {
+    returnToMain();
+  }, [returnToMain]);
   const onCountdownComplete = useCallback(() => {
     window.close();
   }, []);
@@ -1178,9 +1181,9 @@ function App() {
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
-            handleSetGlobalApikey={handleSetGlobalApikey}
             setExtstate={setExtstate}
-            useLocalNode={useLocalNode}
+            setRawWallet={setRawWallet}
+            rawWallet={rawWallet}
           />
         )}
 
@@ -1401,6 +1404,7 @@ function App() {
             setStoredAccount={setStoredAccount}
             onCreateAccount={createAccountFunc}
             onBackupAccountConfirm={onBackupAccountConfirm}
+            onEnterHub={onEnterHubAfterCreate}
             exportSeedphrase={exportSeedphrase}
           />
         )}

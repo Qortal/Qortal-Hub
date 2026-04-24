@@ -15,26 +15,28 @@ export function NotAuthenticatedFooter({
   return (
     <Box
       sx={{
-        alignItems: 'flex-start',
-        bottom: '1%',
+        alignItems: 'center',
         display: 'flex',
-        flexDirection: 'column',
-        left: '3px',
+        gap: 0.35,
+        justifyContent: 'flex-end',
+        opacity: 0.62,
         position: 'absolute',
+        right: '12px',
+        bottom: '10px',
         width: 'auto',
       }}
     >
       {showCoreSetup && (
-        <Box sx={{ alignSelf: 'center' }}>
+        <Box>
           <IconButton onClick={onOpenCoreSetup}>
-            <HubIcon />
+            <HubIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Box>
       )}
-      <Box sx={{ alignSelf: 'left' }}>
+      <Box>
         <LanguageSelector />
       </Box>
-      <Box sx={{ alignSelf: 'center' }}>
+      <Box>
         <ThemeSelector />
       </Box>
     </Box>

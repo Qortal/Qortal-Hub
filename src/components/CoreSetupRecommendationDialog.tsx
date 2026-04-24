@@ -1,23 +1,19 @@
+import { useState } from 'react';
 import {
-  Button,
+  Box,
+  ButtonBase,
   Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  IconButton,
   Typography,
+  useTheme,
 } from '@mui/material';
+import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import RocketLaunchRoundedIcon from '@mui/icons-material/RocketLaunchRounded';
+import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
+import CloudRoundedIcon from '@mui/icons-material/CloudRounded';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
+import ExpandLessRoundedIcon from '@mui/icons-material/ExpandLessRounded';
 import { useAuth } from '../hooks/useAuth';
-import { useTranslation } from 'react-i18next';
-
-export type StepStatus = 'idle' | 'active' | 'done' | 'error';
-const isElectron = !!window?.coreSetup;
-export interface StepState {
-  status: StepStatus;
-  /** 0..100; if omitted, inferred from status (done=>100, idle=>0) */
-  progress?: number;
-  /** Optional small helper text under the progress bar */
-  message?: string;
-}
 
 interface CoreSetupRecommendationDialogProps {
   open: boolean;
@@ -26,12 +22,16 @@ interface CoreSetupRecommendationDialogProps {
   setOpenCoreHandler: (val: boolean) => void;
 }
 
-export function CoreSetupRecommendationDialog(
-  props: CoreSetupRecommendationDialogProps
-) {
-  const { open, onClose, setOpenCoreHandler } = props;
+const isElectron = !!window?.coreSetup;
+
+export function CoreSetupRecommendationDialog({
+  open,
+  onClose,
+  setOpenCoreHandler,
+}: CoreSetupRecommendationDialogProps) {
+  const theme = useTheme();
   const { handleSaveNodeInfo, authenticate } = useAuth();
-  const { t } = useTranslation(['node']);
+  const [showWhyLocal, setShowWhyLocal] = useState(false);
 
   const proceedWithPublic = async () => {
     try {
@@ -43,91 +43,179 @@ export function CoreSetupRecommendationDialog(
       onClose();
     }
   };
+
+  const startCore = () => {
+    if (isElectron) {
+      setOpenCoreHandler(true);
+    } else {
+      window.open('https://qortal.dev/downloads', '_system');
+    }
+    onClose();
+  };
+
+  const downloadCore = () => {
+    window.open('https://qortal.dev/downloads', '_system');
+    onClose();
+  };
+
   return (
     <Dialog
       open={open}
+      onClose={onClose}
       fullWidth
       maxWidth="sm"
-      aria-labelledby="core-setup-title"
+      slotProps={{
+        paper: {
+          sx: {
+            background: '#0d1117',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '10px',
+            boxShadow: '0 24px 50px rgba(0,0,0,0.32)',
+            maxWidth: '430px',
+          },
+        },
+      }}
     >
-      <DialogTitle id="core-setup-title">
-        {t('node:recommendation.title', {
-          postProcess: 'capitalizeFirstChar',
-        })}
-      </DialogTitle>
-      <DialogContent dividers>
-        <Typography variant="body1" gutterBottom>
-          {t('node:recommendation.description', {
-            postProcess: 'capitalizeFirstChar',
-          })}
+      <Box
+        sx={{
+          alignItems: 'center',
+          display: 'flex',
+          justifyContent: 'space-between',
+          px: 2.4,
+          py: 1.8,
+        }}
+      >
+        <Box sx={{ width: 32 }} />
+        <Typography
+          sx={{
+            color: '#F5A45A',
+            flex: 1,
+            fontSize: '1.16rem',
+            fontWeight: 700,
+            textAlign: 'center',
+          }}
+        >
+          Local node not detected
+        </Typography>
+        <IconButton onClick={onClose} sx={{ color: theme.palette.text.secondary }}>
+          <CloseRoundedIcon />
+        </IconButton>
+      </Box>
+
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.1, px: 2.4, pb: 2.4 }}>
+        <Typography
+          sx={{
+            color: 'rgba(214,221,233,0.62)',
+            fontSize: '0.92rem',
+            lineHeight: 1.65,
+            textAlign: 'center',
+          }}
+        >
+          Qortal Core is not running. Start it, install it, or continue using a
+          public node.
         </Typography>
 
-        <Typography variant="subtitle1" gutterBottom>
-          {t('node:recommendation.subTitle', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
-        <ul>
-          <li>
-            {' '}
-            {t('node:recommendation.point1', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </li>
-          <li>
-            {' '}
-            {t('node:recommendation.point2', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </li>
-          <li>
-            {t('node:recommendation.point3', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </li>
-        </ul>
+        <ActionRow
+          body="Use this if Core is already installed"
+          icon={<RocketLaunchRoundedIcon sx={{ fontSize: 22 }} />}
+          onClick={startCore}
+          theme={theme}
+          title="Start Core"
+        />
+        <ActionRow
+          body="Install Qortal Core from qortal.dev"
+          icon={<DownloadRoundedIcon sx={{ fontSize: 22 }} />}
+          onClick={downloadCore}
+          theme={theme}
+          title="Download Core"
+        />
+        <ActionRow
+          body="Continue with limited decentralization"
+          icon={<CloudRoundedIcon sx={{ fontSize: 22 }} />}
+          onClick={proceedWithPublic}
+          theme={theme}
+          title="Use Public Node"
+        />
 
-        <Typography variant="body2" color="text.secondary">
-          {t('node:recommendation.publicExplanation', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Typography>
-      </DialogContent>
-
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={proceedWithPublic} variant="text">
-          {t('node:actions.continuePublic', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </Button>
-        {isElectron ? (
-          <Button
-            onClick={() => {
-              setOpenCoreHandler(true);
-              onClose();
+        <Box
+          sx={{
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            mt: 0.8,
+            pt: 1.2,
+          }}
+        >
+          <ButtonBase
+            onClick={() => setShowWhyLocal((prev) => !prev)}
+            sx={{
+              alignItems: 'center',
+              color: 'rgba(214,221,233,0.62)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              width: '100%',
             }}
-            color="success"
-            variant="contained"
           >
-            {t('node:actions.openSetup', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Button>
-        ) : (
-          <Button
-            onClick={() => {
-              window.open('https://qortal.dev/downloads', '_system');
-              onClose();
-            }}
-            color="success"
-            variant="contained"
-          >
-            {t('node:actions.goToDownloads', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-          </Button>
-        )}
-      </DialogActions>
+            <Typography sx={{ fontSize: '0.86rem', fontWeight: 700 }}>
+              Why use a local node?
+            </Typography>
+            {showWhyLocal ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+          </ButtonBase>
+
+          {showWhyLocal && (
+            <Box sx={{ display: 'grid', gap: 0.8, mt: 1.1 }}>
+              <Typography sx={reasonPointSx}>
+                Full decentralized access
+              </Typography>
+              <Typography sx={reasonPointSx}>Faster downloads</Typography>
+              <Typography sx={reasonPointSx}>User-controlled data</Typography>
+            </Box>
+          )}
+        </Box>
+      </Box>
     </Dialog>
   );
 }
+
+const ActionRow = ({ icon, title, body, onClick, theme }) => (
+  <ButtonBase
+    onClick={onClick}
+    sx={{
+      alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.02)',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: '8px',
+      display: 'grid',
+      gap: 1.1,
+      gridTemplateColumns: '26px minmax(0,1fr)',
+      minHeight: 72,
+      px: 1.3,
+      py: 1.1,
+      textAlign: 'left',
+      transition: 'background-color 160ms ease, border-color 160ms ease',
+      '&:hover': {
+        backgroundColor: 'rgba(255,255,255,0.035)',
+        borderColor: 'rgba(255,255,255,0.12)',
+      },
+    }}
+  >
+    <Box sx={{ color: theme.palette.text.secondary }}>{icon}</Box>
+    <Box>
+      <Typography sx={{ fontSize: '0.96rem', fontWeight: 700 }}>{title}</Typography>
+      <Typography
+        sx={{
+          color: 'rgba(214,221,233,0.56)',
+          fontSize: '0.82rem',
+          lineHeight: 1.5,
+          mt: 0.2,
+        }}
+      >
+        {body}
+      </Typography>
+    </Box>
+  </ButtonBase>
+);
+
+const reasonPointSx = {
+  color: 'rgba(214,221,233,0.62)',
+  fontSize: '0.84rem',
+  lineHeight: 1.55,
+};

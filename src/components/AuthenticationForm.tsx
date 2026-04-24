@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Typography, useTheme } from '@mui/material';
-import Avatar from '@mui/material/Avatar';
+import { Avatar, Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
-import { useTranslation } from 'react-i18next';
+import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import SettingsEthernetRoundedIcon from '@mui/icons-material/SettingsEthernetRounded';
 import { useAtom } from 'jotai';
 import { authenticatePasswordAtom } from '../atoms/global';
-import { Return } from '../assets/Icons/Return.tsx';
-import Logo1Dark from '../assets/svgs/Logo1Dark.svg';
-import { isLocalNodeUrl } from '../constants/constants';
-import { nodeDisplay } from '../utils/helpers.ts';
-import { CustomButton, CustomLabel, TextP } from '../styles/App-styles.ts';
-import { Spacer } from '../common/Spacer';
 import { PasswordField, ErrorText } from './index';
 import type { ApiKey } from '../types/auth';
 import { getBaseApiReactForAvatar } from '../App';
 import { getPrimaryNameForAvatar } from './Group/groupApi';
+import { AuthButton, AuthFrame, AuthSectionLabel } from './Auth/AuthShell';
+import { isLocalNodeUrl } from '../constants/constants';
+import { ConnectionModeModal } from './Auth/ConnectionModeModal';
 
 type RawWallet = {
   name?: string;
@@ -30,6 +28,12 @@ type AuthenticationFormProps = {
   onAuthenticate: () => Promise<void>;
 };
 
+const shortenAddress = (address?: string) => {
+  if (!address) return '';
+  if (address.length <= 20) return address;
+  return `${address.slice(0, 8)}...${address.slice(-8)}`;
+};
+
 export const AuthenticationForm = ({
   rawWallet,
   selectedNode,
@@ -38,15 +42,13 @@ export const AuthenticationForm = ({
   onAuthenticate,
 }: AuthenticationFormProps) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core']);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
     authenticatePasswordAtom
   );
   const passwordRef = useRef<HTMLInputElement>(null);
   const [primaryName, setPrimaryName] = useState<string | null>(null);
+  const [isConnectionModeOpen, setIsConnectionModeOpen] = useState(false);
 
-  // Fetch primary name for this address first; only then can we construct the avatar URL.
-  // Use getPrimaryNameForAvatar so the request uses the avatar-friendly base URL (e.g. HTTP when local HTTPS).
   useEffect(() => {
     if (!rawWallet?.address0) {
       setPrimaryName(null);
@@ -57,8 +59,10 @@ export const AuthenticationForm = ({
       .catch(() => setPrimaryName(null));
   }, [rawWallet?.address0]);
 
-  // Avatar URL is built only from the fetched primary name (each address has its own primary name).
-  // Use getBaseApiReactForAvatar so local HTTPS uses HTTP for avatars (avoids cert issues).
+  useEffect(() => {
+    passwordRef.current?.focus();
+  }, []);
+
   const avatarSrc = primaryName
     ? `${getBaseApiReactForAvatar()}/arbitrary/THUMBNAIL/${primaryName}/qortal_avatar?async=true`
     : undefined;
@@ -67,141 +71,163 @@ export const AuthenticationForm = ({
     rawWallet?.name ||
     rawWallet?.filename ||
     rawWallet?.address0 ||
-    '';
-
-  useEffect(() => {
-    passwordRef.current?.focus();
-  }, []);
+    'Unnamed account';
+  const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
 
   return (
     <>
-      <Spacer height="22px" />
-      <Box
-        sx={{
-          boxSizing: 'border-box',
-          display: 'flex',
-          justifyContent: 'flex-start',
-          maxWidth: '700px',
-          paddingLeft: '22px',
-          width: '100%',
-        }}
-      >
-        <Return
-          style={{
-            cursor: 'pointer',
-            height: '24px',
-            width: 'auto',
-          }}
-          onClick={onBack}
-        />
-      </Box>
+      <AuthFrame maxWidth={390}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <ButtonBase
+            onClick={onBack}
+            sx={{
+              alignItems: 'center',
+              color: 'rgba(214,221,233,0.62)',
+              display: 'inline-flex',
+              gap: 0.4,
+              minWidth: 0,
+              p: 0,
+              '&:hover': {
+                color: theme.palette.text.primary,
+              },
+            }}
+          >
+            <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
+          </ButtonBase>
+        </Box>
 
-      <Spacer height="10px" />
-
-      <div
-        className="image-container"
-        style={{
-          width: '136px',
-          height: '154px',
-        }}
-      >
-        <img src={Logo1Dark} className="base-image" alt="" />
-      </div>
-
-      <Spacer height="35px" />
-
-      <Box
-        sx={{
-          alignItems: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
         <Box
           sx={{
             alignItems: 'center',
             display: 'flex',
-            gap: '10px',
+            flexDirection: 'column',
+            gap: 1.05,
+            textAlign: 'center',
           }}
         >
-          <Avatar
-            alt={displayLabel}
-            src={avatarSrc}
-            sx={{ width: 40, height: 40 }}
-          >
-            <PersonIcon sx={{ fontSize: 24 }} />
+          <Avatar alt={displayLabel} src={avatarSrc} sx={{ height: 58, width: 58 }}>
+            <PersonIcon sx={{ fontSize: 32 }} />
           </Avatar>
-          <Typography>{displayLabel}</Typography>
-        </Box>
-
-        <Spacer height="10px" />
-
-        <TextP
-          sx={{
-            textAlign: 'start',
-            lineHeight: '24px',
-            fontSize: '20px',
-            fontWeight: 600,
-          }}
-        >
-          {t('auth:authentication', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </TextP>
-      </Box>
-
-      <Spacer height="35px" />
-
-      <>
-        <CustomLabel htmlFor="standard-adornment-password">
-          {t('auth:wallet.password', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </CustomLabel>
-
-        <Spacer height="10px" />
-
-        <PasswordField
-          id="standard-adornment-password"
-          value={authenticatePassword}
-          onChange={(e) => setAuthenticatePassword(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              onAuthenticate();
-            }
-          }}
-          ref={passwordRef}
-        />
-
-        <>
-          <Spacer height="20px" />
-
           <Typography
             sx={{
-              fontSize: '12px',
-              ...(isLocalNodeUrl(selectedNode?.url) && {
-                fontWeight: 'bold',
-                color: theme.palette.other.positive,
-              }),
+              fontSize: '1.44rem',
+              fontWeight: 700,
+              letterSpacing: '-0.03em',
             }}
           >
-            {t('auth:node.using', {
-              postProcess: 'capitalizeFirstChar',
-            })}
-            : {nodeDisplay(selectedNode?.url)}
+            Unlock account
           </Typography>
-        </>
+          <Typography sx={{ fontSize: '0.98rem', fontWeight: 700 }}>
+            {displayLabel}
+          </Typography>
+          <Typography
+            sx={{
+              color: 'rgba(214,221,233,0.58)',
+              fontSize: '0.88rem',
+            }}
+          >
+            {shortenAddress(rawWallet?.address0)}
+          </Typography>
+        </Box>
 
-        <Spacer height="20px" />
-
-        <CustomButton onClick={onAuthenticate}>
-          {t('auth:action.authenticate', {
-            postProcess: 'capitalizeFirstChar',
-          })}
-        </CustomButton>
+        <Box>
+          <AuthSectionLabel>Wallet password</AuthSectionLabel>
+          <PasswordField
+            id="wallet-unlock-password"
+            value={authenticatePassword}
+            onChange={(e) => setAuthenticatePassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onAuthenticate();
+              }
+            }}
+            ref={passwordRef}
+            sx={{ width: '100%' }}
+          />
+        </Box>
 
         <ErrorText>{walletToBeDecryptedError}</ErrorText>
-      </>
+
+        <AuthButton
+          onClick={onAuthenticate}
+          disabled={!authenticatePassword}
+        >
+          Unlock
+        </AuthButton>
+
+        <ButtonBase
+          onClick={onBack}
+          sx={{
+            color: theme.palette.primary.main,
+            fontSize: '0.88rem',
+            fontWeight: 700,
+            justifyContent: 'center',
+            minHeight: 26,
+          }}
+        >
+          Choose another account
+        </ButtonBase>
+
+        <Box
+          sx={{
+            alignItems: 'center',
+            color: 'rgba(214,221,233,0.5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.4,
+            justifyContent: 'center',
+            mt: 0.3,
+          }}
+        >
+          <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: 0.65 }}>
+            <CheckCircleRoundedIcon
+              sx={{
+                color: usingLocalNode
+                  ? theme.palette.other.positive
+                  : theme.palette.primary.main,
+                fontSize: 15,
+              }}
+            />
+            <Typography
+              sx={{
+                color: usingLocalNode
+                  ? theme.palette.other.positive
+                  : 'rgba(214,221,233,0.56)',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+              }}
+            >
+              {usingLocalNode ? 'Using local node' : 'Using public node'}
+            </Typography>
+          </Box>
+            <ButtonBase
+              onClick={() => setIsConnectionModeOpen(true)}
+              sx={{
+                alignItems: 'center',
+                color: 'rgba(214,221,233,0.42)',
+                display: 'inline-flex',
+                gap: 0.4,
+                minWidth: 0,
+                p: 0,
+                '&:hover': {
+                  color: 'rgba(214,221,233,0.66)',
+                },
+              }}
+            >
+              <SettingsEthernetRoundedIcon sx={{ fontSize: 15 }} />
+              <Typography sx={{ fontSize: '0.74rem', fontWeight: 600 }}>
+                Connection Mode
+              </Typography>
+            </ButtonBase>
+          </Box>
+        </Box>
+      </AuthFrame>
+
+      <ConnectionModeModal
+        open={isConnectionModeOpen}
+        onClose={() => setIsConnectionModeOpen(false)}
+      />
     </>
   );
 };

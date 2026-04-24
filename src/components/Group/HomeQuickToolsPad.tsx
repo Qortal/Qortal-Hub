@@ -16,9 +16,9 @@ import { alpha } from '@mui/material/styles';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
-import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded';
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
 import NotificationsOffRoundedIcon from '@mui/icons-material/NotificationsOffRounded';
+import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import SpaRoundedIcon from '@mui/icons-material/SpaRounded';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
@@ -198,9 +198,7 @@ export const HomeQuickToolsPad = ({
         onAction: () => {
           executeEvent('openUserLookupDrawer', {});
         },
-        renderIcon: () => (
-          <ManageSearchRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
-        ),
+        renderIcon: () => <SearchRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />,
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
