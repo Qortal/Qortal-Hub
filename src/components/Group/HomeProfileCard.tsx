@@ -2095,18 +2095,13 @@ export const HomeProfileCard = ({
             >
               {activeSettingsTab === 'profile' ? (
                 <>
-                  <Box sx={{ display: 'grid', gap: 1.05 }}>
+                  <Box sx={{ display: 'grid', gap: 1.35 }}>
                     <Box
                       sx={{
-                        alignItems: 'flex-start',
-                        background: avatarModalSurfaceSoft,
-                        border: `1px solid ${avatarFieldBorder}`,
-                        borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '3px',
-                        px: 1.35,
-                        py: 1.15,
+                        py: 0.45,
                       }}
                     >
                       <Typography
@@ -2135,15 +2130,10 @@ export const HomeProfileCard = ({
 
                     <Box
                       sx={{
-                        alignItems: 'flex-start',
-                        background: avatarModalSurfaceSoft,
-                        border: `1px solid ${avatarFieldBorder}`,
-                        borderRadius: '12px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '3px',
-                        px: 1.35,
-                        py: 1.15,
+                        py: 0.45,
                       }}
                     >
                       <Typography
@@ -2428,15 +2418,10 @@ export const HomeProfileCard = ({
 
                   <Box
                     sx={{
-                      alignItems: 'flex-start',
-                      background: avatarModalSurfaceSoft,
-                      border: `1px solid ${avatarFieldBorder}`,
-                      borderRadius: '12px',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '3px',
-                      px: 1.35,
-                      py: 1.15,
+                      py: 0.45,
                     }}
                   >
                     <Typography
@@ -2464,7 +2449,14 @@ export const HomeProfileCard = ({
                     </Typography>
                   </Box>
 
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 0.72,
+                      pt: 0.45,
+                    }}
+                  >
                     <Typography
                       sx={{
                         color: theme.palette.text.secondary,
