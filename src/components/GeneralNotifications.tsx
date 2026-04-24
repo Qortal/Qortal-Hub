@@ -9,7 +9,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
+import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { alpha } from '@mui/material/styles';
@@ -52,7 +52,7 @@ export const GeneralNotifications = ({
   const isOpen = !!anchorEl;
   const NotificationIcon = hasNewPayment
     ? NotificationsActiveRoundedIcon
-    : NotificationsNoneRoundedIcon;
+    : NotificationsRoundedIcon;
 
   return (
     <>

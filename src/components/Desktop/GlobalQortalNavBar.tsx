@@ -4,7 +4,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ArrowOutwardIcon from '@mui/icons-material/ArrowOutward';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ArrowBackIosNewRoundedIcon from '@mui/icons-material/ArrowBackIosNewRounded';
-import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
+import HomeRoundedIcon from '@mui/icons-material/HomeRounded';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import { useAtomValue } from 'jotai';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +38,31 @@ type SelectedTab = {
   path?: string;
   refreshFunc?: (tabId?: string) => void;
 } | null;
+
+const QAppsNavIcon = ({ color = 'currentColor' }: { color?: string }) => (
+  <Box
+    aria-hidden="true"
+    sx={{
+      display: 'grid',
+      gap: '3px',
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      height: 14,
+      width: 14,
+    }}
+  >
+    {Array.from({ length: 4 }).map((_, index) => (
+      <Box
+        key={index}
+        sx={{
+          backgroundColor: color,
+          borderRadius: '50%',
+          height: 4,
+          width: 4,
+        }}
+      />
+    ))}
+  </Box>
+);
 
 function normalizeQortalInput(value: string) {
   const trimmed = (value || '').trim();
@@ -194,6 +219,8 @@ export function GlobalQortalNavBar({
 
   const canGoBack = !!selectedTab?.tabId && !!currentNavigation?.hasBack;
   const canRefresh = !!selectedTab?.tabId && desktopViewMode === 'apps';
+  const isAppsMode = desktopViewMode === 'apps';
+  const isHomeMode = desktopViewMode === 'home';
   const chromeBackground =
     theme.palette.mode === 'dark'
       ? 'rgba(33, 36, 42, 0.95)'
@@ -435,24 +462,25 @@ export function GlobalQortalNavBar({
           <ButtonBase
             disableRipple
             onClick={() => {
+              if (isHomeMode) {
+                executeEvent('open-apps-mode', {});
+                return;
+              }
               executeEvent('open-home-mode', {});
             }}
             sx={{
               alignItems: 'center',
               borderRadius: '9px',
-              color:
-                desktopViewMode === 'home'
-                  ? theme.palette.text.primary
-                  : theme.palette.text.primary,
+              color: theme.palette.text.primary,
               display: 'flex',
               height: 32,
               justifyContent: 'center',
-              opacity: desktopViewMode === 'home' ? 1 : 0.92,
+              opacity: isHomeMode || isAppsMode ? 1 : 0.92,
               transition:
                 'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
               width: 32,
               backgroundColor:
-                desktopViewMode === 'home'
+                isHomeMode || isAppsMode
                   ? buttonHoverBackground
                   : 'transparent',
               '&:hover': {
@@ -470,7 +498,11 @@ export function GlobalQortalNavBar({
               },
             }}
           >
-            <HomeOutlinedIcon sx={{ fontSize: 18.5 }} />
+            {isAppsMode ? (
+              <HomeRoundedIcon sx={{ fontSize: 19 }} />
+            ) : (
+              <QAppsNavIcon color={theme.palette.text.primary} />
+            )}
           </ButtonBase>
 
           <ButtonBase
