@@ -13,6 +13,7 @@ type AuthFrameProps = {
   footer?: ReactNode;
   maxWidth?: number | string;
   align?: 'center' | 'start';
+  disableInitialAnimation?: boolean;
 };
 
 type AuthButtonProps = {
@@ -39,6 +40,7 @@ export function AuthFrame({
   footer,
   maxWidth = 560,
   align = 'center',
+  disableInitialAnimation = false,
 }: AuthFrameProps) {
   const theme = useTheme();
 
@@ -70,7 +72,9 @@ export function AuthFrame({
       >
         <Box
           sx={{
-            animation: 'authScreenIn 240ms ease both',
+            animation: disableInitialAnimation
+              ? 'none'
+              : 'authScreenIn 240ms ease both',
             display: 'flex',
             flexDirection: 'column',
             maxWidth,

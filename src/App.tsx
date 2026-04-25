@@ -13,6 +13,7 @@ import { decryptStoredWallet } from './utils/decryptWallet';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
 import {
   createAccount,
+  generateRandomSentence,
   saveFileToDisk,
   saveSeedPhraseToDisk,
 } from './utils/generateWallet/generateWallet';
@@ -109,6 +110,7 @@ import {
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
 import { HUB_UI_BUILD_VERSION } from './constants/uiBuildVersion.ts';
+import type { AuthUnlockTransitionSnapshot } from './types/authTransition';
 
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
 
@@ -212,6 +214,8 @@ function App() {
     message: string;
     source: 'boundary' | 'error' | 'promise';
   } | null>(null);
+  const [authUnlockTransition, setAuthUnlockTransition] =
+    useState<AuthUnlockTransitionSnapshot | null>(null);
   const [walletToBeDownloaded, setWalletToBeDownloaded] = useState<any>(null);
   const [isBackupWalletModalOpen, setIsBackupWalletModalOpen] = useState(false);
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
@@ -333,8 +337,27 @@ function App() {
   const [isOpenMinting, setIsOpenMinting] = useState(false);
   const generatorRef = useRef(null);
 
+  const ensureGeneratedSeedphrase = useCallback(() => {
+    const currentPhrase = generatorRef.current?.parsedString;
+    if (currentPhrase) return currentPhrase;
+
+    const generatedPhrase = generateRandomSentence();
+    generatorRef.current = {
+      parsedString: generatedPhrase,
+    };
+    return generatedPhrase;
+  }, []);
+
+  const prepareNewSeedphrase = useCallback(() => {
+    const generatedPhrase = generateRandomSentence();
+    generatorRef.current = {
+      parsedString: generatedPhrase,
+    };
+    return generatedPhrase;
+  }, []);
+
   const exportSeedphrase = () => {
-    const seedPhrase = generatorRef.current.parsedString;
+    const seedPhrase = ensureGeneratedSeedphrase();
     saveSeedPhraseToDisk(seedPhrase);
   };
 
@@ -735,6 +758,7 @@ function App() {
 
   const createAccountFunc = async () => {
     try {
+      setWalletToBeDownloadedError('');
       if (!walletToBeDownloadedPassword) {
         setWalletToBeDownloadedError(
           t('core:message.generic.password_enter', {
@@ -761,6 +785,13 @@ function App() {
         );
         return;
       }
+      const generatedSeedphrase = ensureGeneratedSeedphrase();
+      if (!generatedSeedphrase) {
+        setWalletToBeDownloadedError(
+          'We could not prepare the seedphrase. Please go back and try again.'
+        );
+        return;
+      }
       setIsLoading(true);
 
       await new Promise<void>((res) => {
@@ -769,7 +800,7 @@ function App() {
         }, 250);
       });
 
-      const res = await createAccount(generatorRef.current.parsedString);
+      const res = await createAccount(generatedSeedphrase);
       const wallet = await res.generateSaveWalletData(
         walletToBeDownloadedPassword,
         crypto.kdfThreads,
@@ -816,7 +847,10 @@ function App() {
           console.error('Failed to decrypt wallet:', error);
         });
     } catch (error: any) {
-      setWalletToBeDownloadedError(error?.message);
+      console.error('Failed to create account:', error);
+      setWalletToBeDownloadedError(
+        'We could not create this account. Please try again.'
+      );
       setIsLoading(false);
     }
   };
@@ -855,6 +889,7 @@ function App() {
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
+    generatorRef.current = null;
     setShowSeed(false);
     setCreationStep(1);
     setSendQortOriginRect(null);
@@ -880,6 +915,7 @@ function App() {
     setCountdown(null);
     setWalletToBeDownloaded(null);
     setWalletToBeDownloadedPassword('');
+    generatorRef.current = null;
     setShowSeed(false);
     setCreationStep(1);
     setWalletToBeDownloadedPasswordConfirm('');
@@ -1090,8 +1126,20 @@ function App() {
     [confirmPayment]
   );
   const onGoToCreateWallet = useCallback(
-    () => setExtstate('create-wallet'),
-    [setExtstate]
+    () => {
+      prepareNewSeedphrase();
+      setWalletToBeDownloadedError('');
+      setWalletToBeDownloadedPassword('');
+      setWalletToBeDownloadedPasswordConfirm('');
+      setCreationStep(1);
+      setExtstate('create-wallet');
+    },
+    [
+      prepareNewSeedphrase,
+      setExtstate,
+      setWalletToBeDownloadedPassword,
+      setWalletToBeDownloadedPasswordConfirm,
+    ]
   );
   const onWalletsBack = useCallback(() => {
     setRawWallet(null);
@@ -1116,6 +1164,8 @@ function App() {
     setCreationStep(1);
     setWalletToBeDownloadedPasswordConfirm('');
     setWalletToBeDownloadedPassword('');
+    setWalletToBeDownloadedError('');
+    generatorRef.current = null;
   }, [
     creationStep,
     setExtstate,
@@ -1124,7 +1174,11 @@ function App() {
   ]);
   const onShowSeed = useCallback(() => setShowSeed(true), []);
   const onHideSeed = useCallback(() => setShowSeed(false), []);
-  const onCreationStepNext = useCallback(() => setCreationStep(2), []);
+  const onCreationStepNext = useCallback(() => {
+    ensureGeneratedSeedphrase();
+    setWalletToBeDownloadedError('');
+    setCreationStep(2);
+  }, [ensureGeneratedSeedphrase]);
   const onBackupAccountConfirm = useCallback(async () => {
     await saveFileToDiskFunc();
     returnToMain();
@@ -1171,6 +1225,10 @@ function App() {
     typeof (
       window as Window & { electronAPI?: { windowMinimize?: () => unknown } }
     ).electronAPI?.windowMinimize === 'function';
+  const shouldReduceAuthTransition =
+    typeof window !== 'undefined' &&
+    (window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
+      window.localStorage.getItem('hub_ui_animations_enabled') === 'false');
 
   const mainContent = (
     <>
@@ -1181,6 +1239,7 @@ function App() {
         <Tutorials />
         {extState === 'not-authenticated' && (
           <NotAuthenticated
+            onWalletUnlockStart={setAuthUnlockTransition}
             setExtstate={setExtstate}
             setRawWallet={setRawWallet}
             rawWallet={rawWallet}
@@ -1228,31 +1287,51 @@ function App() {
                 </Box>
               }
             >
-              <LazyAuthenticatedShell
-                balance={balance}
-                desktopViewMode={desktopViewMode}
-                isMain={true}
-                logoutFunc={logoutFunc}
-                myAddress={address}
-                setDesktopViewMode={setDesktopViewMode}
-                userInfo={userInfo}
-                rawWallet={rawWallet}
-                qortBalanceLoading={qortBalanceLoading}
-                setOpenSnack={setOpenSnack}
-                setInfoSnack={setInfoSnack}
-                onRefreshBalance={getBalanceAndUserInfoFunc}
-                onOpenSendQort={onOpenSendQort}
-                onOpenRegisterName={onOpenRegisterName}
-                extState={extState}
-                isMainWindow={isMainWindow}
-                onOpenSettings={onOpenSettings}
-                onOpenDrawerLookup={onOpenDrawerLookup}
-                onOpenWalletsApp={onOpenWalletsApp}
-                getUserInfo={getUserInfo}
-                onOpenMinting={onOpenMinting}
-                showTutorial={showTutorial}
-                onBackupWallet={onBackupWallet}
-              />
+              <Box
+                sx={{
+                  animation: shouldReduceAuthTransition
+                    ? 'none'
+                    : 'dashboardAfterAuthIn 720ms cubic-bezier(0.4, 0, 0.2, 1) both',
+                  height: '100%',
+                  width: '100%',
+                  '@keyframes dashboardAfterAuthIn': {
+                    from: {
+                      opacity: 0,
+                      transform: 'translateY(8px)',
+                    },
+                    to: {
+                      opacity: 1,
+                      transform: 'translateY(0)',
+                    },
+                  },
+                }}
+              >
+                <LazyAuthenticatedShell
+                  balance={balance}
+                  desktopViewMode={desktopViewMode}
+                  isMain={true}
+                  logoutFunc={logoutFunc}
+                  myAddress={address}
+                  setDesktopViewMode={setDesktopViewMode}
+                  userInfo={userInfo}
+                  rawWallet={rawWallet}
+                  qortBalanceLoading={qortBalanceLoading}
+                  setOpenSnack={setOpenSnack}
+                  setInfoSnack={setInfoSnack}
+                  onRefreshBalance={getBalanceAndUserInfoFunc}
+                  onOpenSendQort={onOpenSendQort}
+                  onOpenRegisterName={onOpenRegisterName}
+                  extState={extState}
+                  isMainWindow={isMainWindow}
+                  onOpenSettings={onOpenSettings}
+                  onOpenDrawerLookup={onOpenDrawerLookup}
+                  onOpenWalletsApp={onOpenWalletsApp}
+                  getUserInfo={getUserInfo}
+                  onOpenMinting={onOpenMinting}
+                  showTutorial={showTutorial}
+                  onBackupWallet={onBackupWallet}
+                />
+              </Box>
             </ErrorBoundary>
           </Suspense>
         )}
@@ -1365,9 +1444,11 @@ function App() {
           <AuthenticationForm
             rawWallet={rawWallet}
             selectedNode={selectedNode}
+            unlockTransition={authUnlockTransition}
             walletToBeDecryptedError={walletToBeDecryptedError}
             onBack={onAuthenticationFormBack}
             onAuthenticate={authenticateWallet}
+            onUnlockTransitionComplete={() => setAuthUnlockTransition(null)}
           />
         )}
         {extState === 'download-wallet' && (
@@ -1536,52 +1617,11 @@ function App() {
 
       {!isAuthenticated && (
         <NotAuthenticatedFooter
-          showCoreSetup={!!window?.coreSetup}
+          showCoreSetup
           onOpenCoreSetup={onOpenCoreSetup}
         />
       )}
 
-      {isAuthenticated && isMainWindow && (
-        <Box
-          sx={{
-            alignItems: 'center',
-            backdropFilter: 'blur(14px)',
-            background:
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(180deg, rgba(26,31,40,0.82) 0%, rgba(17,21,28,0.92) 100%)'
-                : 'linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(244,247,252,0.92) 100%)',
-            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,32,0.08)'}`,
-            borderRadius: '999px',
-            boxShadow:
-              theme.palette.mode === 'dark'
-                ? '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04)'
-                : '0 10px 22px rgba(15,20,30,0.08), inset 0 1px 0 rgba(255,255,255,0.45)',
-            color: theme.palette.mode === 'dark' ? 'rgba(214,231,255,0.92)' : 'rgba(32,44,64,0.82)',
-            display: 'inline-flex',
-            gap: 0.45,
-            pointerEvents: 'none',
-            position: 'fixed',
-            px: 0.85,
-            py: 0.45,
-            right: '10px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            zIndex: 1500,
-          }}
-        >
-          <Typography
-            sx={{
-              fontSize: '0.58rem',
-              fontWeight: 800,
-              letterSpacing: '0.08em',
-              lineHeight: 1,
-              textTransform: 'uppercase',
-            }}
-          >
-            {HUB_UI_BUILD_VERSION}
-          </Typography>
-        </Box>
-      )}
     </>
   );
 
@@ -1703,14 +1743,6 @@ function App() {
                   {globalRuntimeFault.message}
                 </Typography>
               </Box>
-              <Typography
-                sx={{
-                  color: theme.palette.text.secondary,
-                  fontSize: '0.74rem',
-                }}
-              >
-                UI build {HUB_UI_BUILD_VERSION}
-              </Typography>
             </Box>
           </Box>
         ) : (

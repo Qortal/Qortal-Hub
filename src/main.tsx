@@ -7,6 +7,9 @@ import { ThemeProvider } from './components/Theme/ThemeContext.tsx';
 import { CssBaseline } from '@mui/material';
 import './i18n/i18n.js';
 import { OnLaunchWrapper } from './OnLaunchWrapper.tsx';
+import { clearLocalPreviewServiceWorker } from './utils/clearLocalPreviewServiceWorker.ts';
+
+clearLocalPreviewServiceWorker();
 
 createRoot(document.getElementById('root')!).render(
   <>

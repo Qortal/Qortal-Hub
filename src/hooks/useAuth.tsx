@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   getDefaultLocalNodeUrl,
+  HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
@@ -251,6 +252,11 @@ export const useAuth = () => {
       await window.sendMessage('setApiKey', nodeInfo);
       if (nodeInfo) {
         setSelectedNode(nodeInfo);
+      } else {
+        setSelectedNode({
+          url: HTTPS_EXT_NODE_QORTAL_LINK,
+          apikey: '',
+        });
       }
       handleSetGlobalApikey(nodeInfo);
     },

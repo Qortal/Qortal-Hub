@@ -624,17 +624,18 @@ export const HomeProfileCard = ({
 
   const handleToggleAppNotifications = useCallback(
     async (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
-      setAreAppNotificationsEnabled(checked);
+      const shouldReduceNotifications = checked;
+      setAreAppNotificationsEnabled(!shouldReduceNotifications);
 
       try {
         await window.sendMessage('addUserSettings', {
           keyValue: {
             key: 'disable-push-notifications',
-            value: !checked,
+            value: shouldReduceNotifications,
           },
         });
       } catch (error) {
-        setAreAppNotificationsEnabled(!checked);
+        setAreAppNotificationsEnabled(shouldReduceNotifications);
         setInfoSnack({
           type: 'error',
           message: 'We could not update app notifications right now.',
@@ -662,7 +663,7 @@ export const HomeProfileCard = ({
 
   const handleToggleUiAnimations = useCallback(
     (_event: ChangeEvent<HTMLInputElement>, checked: boolean) => {
-      setAreUiAnimationsEnabled(checked);
+      setAreUiAnimationsEnabled(!checked);
     },
     []
   );
@@ -2713,7 +2714,7 @@ export const HomeProfileCard = ({
                           letterSpacing: '0.01em',
                         }}
                       >
-                        App Notifications
+                        Reduce App Notifications
                       </Typography>
                       <Typography
                         sx={{
@@ -2723,12 +2724,12 @@ export const HomeProfileCard = ({
                           mt: 0.4,
                         }}
                       >
-                        Allow desktop push notifications for payments and other app
-                        alerts.
+                        Turn on to mute desktop push notifications. Leave off for
+                        normal Hub alerts.
                       </Typography>
                     </Box>
                     <Switch
-                      checked={areAppNotificationsEnabled}
+                      checked={!areAppNotificationsEnabled}
                       onChange={handleToggleAppNotifications}
                       sx={settingsSwitchSx}
                     />
@@ -2760,7 +2761,7 @@ export const HomeProfileCard = ({
                           letterSpacing: '0.01em',
                         }}
                       >
-                        UI Animations
+                        Reduce UI Animations
                       </Typography>
                       <Typography
                         sx={{
@@ -2770,12 +2771,12 @@ export const HomeProfileCard = ({
                           mt: 0.4,
                         }}
                       >
-                        Reduce decorative motion and interface transitions throughout
-                        the Hub.
+                        Turn on to minimize motion throughout the Hub. Leave off
+                        for the normal animated interface.
                       </Typography>
                     </Box>
                     <Switch
-                      checked={areUiAnimationsEnabled}
+                      checked={!areUiAnimationsEnabled}
                       onChange={handleToggleUiAnimations}
                       sx={settingsSwitchSx}
                     />

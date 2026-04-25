@@ -1,5 +1,6 @@
 import {
   Box,
+  ButtonBase,
   Checkbox,
   FormControlLabel,
   Typography,
@@ -14,7 +15,6 @@ import {
   AuthButton,
   AuthScreen,
   AuthSectionLabel,
-  AuthStepDots,
 } from '../Auth/AuthShell';
 
 type CreateWalletViewProps = {
@@ -62,6 +62,7 @@ export function CreateWalletView({
   const theme = useTheme();
   const [seedphraseSaved, setSeedphraseSaved] = useState(false);
   const [seedphraseCopied, setSeedphraseCopied] = useState(false);
+  const [seedphraseRevealed, setSeedphraseRevealed] = useState(false);
   const [passwordStepError, setPasswordStepError] = useState('');
   const generatedSeedphrase = generatorRef.current?.parsedString || '';
 
@@ -91,6 +92,11 @@ export function CreateWalletView({
   };
 
   const handleCopyPhrase = async () => {
+    if (!seedphraseRevealed) {
+      setSeedphraseRevealed(true);
+      return;
+    }
+
     if (!generatedSeedphrase) return;
     try {
       await navigator.clipboard.writeText(generatedSeedphrase);
@@ -113,7 +119,6 @@ export function CreateWalletView({
             textAlign: 'center',
           }}
         >
-          <AuthStepDots count={3} current={3} />
           <Box
             sx={{
               alignItems: 'center',
@@ -171,9 +176,9 @@ export function CreateWalletView({
       <AuthScreen
         maxWidth={460}
         title="Your Seedphrase"
-        subtitle="Also known as your recovery phrase. It restores your account if you lose access."
+        subtitle="Alongside your backup file, this is the only way to retrieve your account."
       >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
           <ButtonBase
             onClick={onReturnBack}
             sx={{
@@ -183,10 +188,8 @@ export function CreateWalletView({
               '&:hover': { color: theme.palette.text.primary },
             }}
           >
-            <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
+              <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
           </ButtonBase>
-          <AuthStepDots count={3} current={2} />
-          <Box sx={{ width: 18 }} />
         </Box>
 
         <Box
@@ -203,17 +206,18 @@ export function CreateWalletView({
             sx={{
               fontSize: '0.98rem',
               fontWeight: 600,
+              minHeight: '3.7em',
               lineHeight: 1.85,
               wordBreak: 'break-word',
             }}
           >
-            {generatedSeedphrase}
+            {seedphraseRevealed ? generatedSeedphrase : ''}
           </Typography>
         </Box>
 
         <Box sx={{ display: 'grid', gap: 0.9, gridTemplateColumns: '1fr 1fr' }}>
           <AuthButton onClick={handleCopyPhrase} primary={false}>
-            {seedphraseCopied ? 'Copied' : 'Copy'}
+            {!seedphraseRevealed ? 'Reveal' : seedphraseCopied ? 'Copied' : 'Copy'}
           </AuthButton>
           <AuthButton onClick={exportSeedphrase} primary={false}>
             Export
@@ -240,7 +244,7 @@ export function CreateWalletView({
         </Box>
 
         <FormControlLabel
-          sx={{ alignItems: 'flex-start', m: 0 }}
+          sx={{ alignItems: 'center', m: 0 }}
           control={
             <Checkbox
               checked={seedphraseSaved}
@@ -268,7 +272,7 @@ export function CreateWalletView({
       title="Create password"
       subtitle="This password protects your account on this device."
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
         <ButtonBase
           onClick={onReturnBack}
           sx={{
@@ -280,8 +284,6 @@ export function CreateWalletView({
         >
           <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
         </ButtonBase>
-        <AuthStepDots count={3} current={1} />
-        <Box sx={{ width: 18 }} />
       </Box>
 
       <Box>
@@ -314,7 +316,7 @@ export function CreateWalletView({
       </Box>
 
       <FormControlLabel
-        sx={{ alignItems: 'flex-start', m: 0 }}
+        sx={{ alignItems: 'center', m: 0 }}
         control={
           <Checkbox
             checked={storeAccount}
@@ -330,7 +332,7 @@ export function CreateWalletView({
               lineHeight: 1.55,
             }}
           >
-            Save this account on this device
+            Save account in Hub
           </Typography>
         }
       />

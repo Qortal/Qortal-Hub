@@ -26,6 +26,7 @@ import { decryptStoredWalletFromSeedPhrase } from '../utils/decryptWallet.ts';
 import { crypto } from '../constants/decryptWallet.ts';
 import { PasswordField } from './index.ts';
 import { AuthButton, AuthSectionLabel } from './Auth/AuthShell';
+import type { AuthUnlockTransitionSnapshot } from '../types/authTransition';
 
 const parsefilenameQortal = (filename) => {
   return filename.startsWith('qortal_backup_') ? filename.slice(14) : filename;
@@ -42,12 +43,18 @@ type WalletsProps = {
   setRawWallet: (wallet: any) => void;
   rawWallet?: any;
   mode?: 'entry' | 'import';
+  onImportViewChange?: (view: 'choice' | 'backup' | 'seedphrase') => void;
+  onReady?: () => void;
+  onWalletUnlockStart?: (snapshot: AuthUnlockTransitionSnapshot) => void;
 };
 
 export const Wallets = ({
   setExtState,
   setRawWallet,
   mode = 'import',
+  onImportViewChange,
+  onReady,
+  onWalletUnlockStart,
 }: WalletsProps) => {
   const [wallets, setWallets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,12 +67,26 @@ export const Wallets = ({
     'choice'
   );
   const [backupImportHint, setBackupImportHint] = useState('');
+  const [dragOverWalletIndex, setDragOverWalletIndex] = useState<number | null>(
+    null
+  );
+  const [editingWalletIndex, setEditingWalletIndex] = useState<number | null>(
+    null
+  );
   const [primaryNamesByAddress, setPrimaryNamesByAddress] = useState<
     Record<string, string>
   >({});
   const fetchingAddressesRef = useRef<Set<string>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
   const theme = useTheme();
+
+  const changeImportView = useCallback(
+    (view: 'choice' | 'backup' | 'seedphrase') => {
+      setImportView(view);
+      onImportViewChange?.(view);
+    },
+    [onImportViewChange]
+  );
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
@@ -130,12 +151,34 @@ export const Wallets = ({
     }
   }, [wallets, isLoading]);
 
-  const selectedWalletFunc = (wallet) => {
+  useEffect(() => {
+    if (!isLoading) {
+      onReady?.();
+    }
+  }, [isLoading, onReady]);
+
+  const selectedWalletFunc = (
+    wallet,
+    transitionSnapshot?: AuthUnlockTransitionSnapshot
+  ) => {
+    if (transitionSnapshot && mode === 'entry') {
+      onWalletUnlockStart?.(transitionSnapshot);
+      window.setTimeout(() => {
+        setRawWallet(wallet);
+        setExtState('wallet-dropped');
+      }, 130);
+      return;
+    }
+
     setRawWallet(wallet);
     setExtState('wallet-dropped');
   };
 
   const updateWalletItem = (idx, wallet) => {
+    if (wallet === null) {
+      setEditingWalletIndex(null);
+    }
+
     setWallets((prev) => {
       const copyPrev = [...prev];
       if (wallet === null) {
@@ -146,6 +189,19 @@ export const Wallets = ({
       return copyPrev;
     });
   };
+
+  const moveWalletItem = useCallback((fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+
+    setWallets((prev) => {
+      if (fromIndex >= prev.length || toIndex >= prev.length) return prev;
+
+      const nextWallets = [...prev];
+      const [movedWallet] = nextWallets.splice(fromIndex, 1);
+      nextWallets.splice(toIndex, 0, movedWallet);
+      return nextWallets;
+    });
+  }, []);
 
   const importSeedphrase = async () => {
     try {
@@ -163,23 +219,31 @@ export const Wallets = ({
         const existsAlready = wallets.some(
           (existingWallet) => existingWallet?.address0 === wallet.address0
         );
+        const nextWallets = existsAlready
+          ? wallets
+          : [
+              ...wallets,
+              {
+                ...wallet,
+                name: '',
+              },
+            ];
+
         if (!existsAlready) {
-          setWallets([
-            ...wallets,
-            {
-              ...wallet,
-              name: '',
-            },
-          ]);
+          setWallets(nextWallets);
+          await storeWallets(nextWallets);
         }
         setSeedValue('');
         setPassword('');
-        setImportView('choice');
+        changeImportView('choice');
         setBackupImportHint(
           existsAlready
             ? 'This account is already stored on this device.'
             : 'Account imported successfully.'
         );
+        if (!existsAlready) {
+          setExtState('not-authenticated');
+        }
       } else {
         setSeedError('Unable to import this seedphrase.');
       }
@@ -233,7 +297,9 @@ export const Wallets = ({
       );
 
       if (uniqueNewWallets.length > 0) {
-        setWallets([...wallets, ...uniqueNewWallets]);
+        const nextWallets = [...wallets, ...uniqueNewWallets];
+        setWallets(nextWallets);
+        await storeWallets(nextWallets);
       }
 
       setBackupImportHint(
@@ -243,30 +309,48 @@ export const Wallets = ({
             } imported successfully.`
           : 'These accounts are already stored on this device.'
       );
-      setImportView('choice');
+      changeImportView('choice');
+      if (uniqueNewWallets.length > 0) {
+        setExtState('not-authenticated');
+      }
     },
   });
 
   if (isLoading) return null;
+
+  const displayedWallets =
+    editingWalletIndex === null
+      ? wallets.map((wallet, idx) => ({ wallet, idx }))
+      : wallets
+          .map((wallet, idx) => ({ wallet, idx }))
+          .filter(({ idx }) => idx === editingWalletIndex);
 
   const accountsList = (
     <Box
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: mode === 'entry' ? 280 : 'none',
-        overflowY: mode === 'entry' ? 'auto' : 'visible',
+        maxHeight:
+          mode === 'entry' && editingWalletIndex === null ? 280 : 'none',
+        overflowY:
+          mode === 'entry' && editingWalletIndex === null ? 'auto' : 'visible',
         width: '100%',
       }}
     >
-      {wallets.map((wallet, idx) => (
+      {displayedWallets.map(({ wallet, idx }) => (
         <WalletRow
           key={wallet?.address0}
           idx={idx}
+          editingWalletIndex={editingWalletIndex}
           primaryName={
             wallet?.address0 ? primaryNamesByAddress[wallet.address0] : undefined
           }
           registerCardRef={registerCardRef}
+          dragOverWalletIndex={dragOverWalletIndex}
+          moveWalletItem={moveWalletItem}
+          mode={mode}
+          setDragOverWalletIndex={setDragOverWalletIndex}
+          setEditingWalletIndex={setEditingWalletIndex}
           setSelectedWallet={selectedWalletFunc}
           updateWalletItem={updateWalletItem}
           wallet={wallet}
@@ -306,21 +390,31 @@ export const Wallets = ({
           <ChoiceRow
             description="Import a saved Hub backup."
             icon={<DescriptionRoundedIcon sx={{ fontSize: 22 }} />}
-            onClick={() => setImportView('backup')}
+            onClick={() => changeImportView('backup')}
             title="Backup file"
           />
           <ChoiceRow
             description="Restore using your seedphrase."
             icon={<VpnKeyRoundedIcon sx={{ fontSize: 22 }} />}
-            onClick={() => setImportView('seedphrase')}
+            onClick={() => changeImportView('seedphrase')}
             title="Seedphrase"
           />
+          {backupImportHint && (
+            <Typography
+              sx={{
+                color: 'rgba(214,221,233,0.56)',
+                fontSize: '0.84rem',
+              }}
+            >
+              {backupImportHint}
+            </Typography>
+          )}
         </Box>
       )}
 
       {importView === 'backup' && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
-          <InlineReturn label="Return" onClick={() => setImportView('choice')} />
+          <InlineReturn onClick={() => changeImportView('choice')} />
           <Box
             {...getRootProps()}
             sx={{
@@ -374,7 +468,7 @@ export const Wallets = ({
 
       {importView === 'seedphrase' && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
-          <InlineReturn label="Return" onClick={() => setImportView('choice')} />
+          <InlineReturn onClick={() => changeImportView('choice')} />
 
           <Box>
             <AuthSectionLabel>Seedphrase</AuthSectionLabel>
@@ -498,13 +592,7 @@ const ChoiceRow = ({ icon, title, description, onClick }) => {
   );
 };
 
-const InlineReturn = ({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) => {
+const InlineReturn = ({ onClick }: { onClick: () => void }) => {
   const theme = useTheme();
 
   return (
@@ -515,7 +603,6 @@ const InlineReturn = ({
         alignSelf: 'flex-start',
         color: 'rgba(214,221,233,0.62)',
         display: 'inline-flex',
-        gap: 0.5,
         minWidth: 0,
         p: 0,
         '&:hover': {
@@ -524,9 +611,6 @@ const InlineReturn = ({
       }}
     >
       <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
-      <Typography sx={{ fontSize: '0.84rem', fontWeight: 700 }}>
-        {label}
-      </Typography>
     </ButtonBase>
   );
 };
@@ -538,16 +622,57 @@ const WalletRow = ({
   setSelectedWallet,
   primaryName,
   registerCardRef,
+  dragOverWalletIndex,
+  editingWalletIndex,
+  moveWalletItem,
+  mode,
+  setDragOverWalletIndex,
+  setEditingWalletIndex,
 }) => {
-  const [name, setName] = useState('');
+  const [accountName, setAccountName] = useState('');
   const [note, setNote] = useState('');
-  const [isEdit, setIsEdit] = useState(false);
+  const isEdit = editingWalletIndex === idx;
+  const addressRef = useRef<HTMLParagraphElement | null>(null);
+  const avatarRef = useRef<HTMLDivElement | null>(null);
+  const editButtonRef = useRef<HTMLButtonElement | null>(null);
+  const editPanelRef = useRef<HTMLDivElement | null>(null);
+  const nameRef = useRef<HTMLParagraphElement | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const isDraggingRef = useRef(false);
   const theme = useTheme();
 
   useEffect(() => {
-    setName(wallet?.name || '');
+    setAccountName(wallet?.name || '');
     setNote(wallet?.note || '');
   }, [wallet]);
+
+  useEffect(() => {
+    if (!isEdit) return;
+
+    const closeOnOutsidePointer = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+
+      if (
+        target &&
+        (editButtonRef.current?.contains(target) ||
+          editPanelRef.current?.contains(target))
+      ) {
+        return;
+      }
+
+      setNote(wallet?.note || '');
+      setAccountName(wallet?.name || '');
+      setEditingWalletIndex(null);
+    };
+
+    document.addEventListener('mousedown', closeOnOutsidePointer);
+    document.addEventListener('touchstart', closeOnOutsidePointer);
+
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsidePointer);
+      document.removeEventListener('touchstart', closeOnOutsidePointer);
+    };
+  }, [isEdit, setEditingWalletIndex, wallet]);
 
   const qortalAvatarSrc =
     primaryName &&
@@ -557,14 +682,102 @@ const WalletRow = ({
     wallet?.name ||
     (wallet?.filename ? parsefilenameQortal(wallet.filename) : null) ||
     'Unnamed account';
+  const addressLabel = shortenAddress(wallet?.address0);
+  const canEditAccountName =
+    !primaryName && !wallet?.filename;
+
+  const handleSaveEdit = () => {
+    updateWalletItem(idx, {
+      ...wallet,
+      ...(canEditAccountName ? { name: accountName.trim() } : {}),
+      note,
+    });
+    setEditingWalletIndex(null);
+  };
+
+  const getTransitionSnapshot = (): AuthUnlockTransitionSnapshot | undefined => {
+    if (
+      mode !== 'entry' ||
+      !avatarRef.current ||
+      !nameRef.current ||
+      !addressRef.current
+    ) {
+      return undefined;
+    }
+
+    const rectToObject = (rect: DOMRect) => ({
+      height: rect.height,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+    });
+
+    return {
+      addressLabel,
+      addressRect: rectToObject(addressRef.current.getBoundingClientRect()),
+      avatarRect: rectToObject(avatarRef.current.getBoundingClientRect()),
+      avatarSrc: qortalAvatarSrc || undefined,
+      displayName,
+      nameRect: rectToObject(nameRef.current.getBoundingClientRect()),
+    };
+  };
+
+  const handleSelectWallet = () => {
+    if (isEdit || isDraggingRef.current) return;
+    setSelectedWallet(wallet, getTransitionSnapshot());
+  };
 
   return (
     <Box
-      ref={wallet?.address0 ? registerCardRef(wallet.address0) : undefined}
+      ref={(element: HTMLDivElement | null) => {
+        rowRef.current = element;
+        if (wallet?.address0) {
+          registerCardRef(wallet.address0)(element);
+        }
+      }}
+      draggable={!isEdit}
+      onDragStart={(event) => {
+        if (isEdit) {
+          event.preventDefault();
+          return;
+        }
+
+        isDraggingRef.current = true;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(idx));
+      }}
+      onDragOver={(event) => {
+        if (isEdit) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setDragOverWalletIndex(idx);
+      }}
+      onDragLeave={() => {
+        setDragOverWalletIndex((currentIndex) =>
+          currentIndex === idx ? null : currentIndex
+        );
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        const fromIndex = Number(event.dataTransfer.getData('text/plain'));
+        setDragOverWalletIndex(null);
+
+        if (Number.isInteger(fromIndex)) {
+          moveWalletItem(fromIndex, idx);
+        }
+      }}
+      onDragEnd={() => {
+        window.setTimeout(() => {
+          isDraggingRef.current = false;
+        }, 0);
+        setDragOverWalletIndex(null);
+      }}
       sx={{
         borderBottom: '1px solid rgba(255,255,255,0.06)',
+        opacity: dragOverWalletIndex === idx ? 0.74 : 1,
         pb: isEdit ? 1.2 : 0,
         pt: 0.2,
+        transition: 'opacity 140ms ease',
       }}
     >
       <Box
@@ -572,6 +785,7 @@ const WalletRow = ({
           alignItems: 'center',
           backgroundColor: isEdit ? 'rgba(255,255,255,0.03)' : 'transparent',
           borderRadius: '7px',
+          cursor: isEdit ? 'default' : 'grab',
           display: 'grid',
           gap: 1,
           gridTemplateColumns: '36px minmax(0,1fr) auto',
@@ -582,18 +796,27 @@ const WalletRow = ({
           '&:hover': {
             backgroundColor: isEdit ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.035)',
           },
+          '&:active': {
+            cursor: isEdit ? 'default' : 'grabbing',
+          },
         }}
         onClick={() => {
-          if (!isEdit) setSelectedWallet(wallet);
+          handleSelectWallet();
         }}
       >
-        <Avatar alt={displayName} src={qortalAvatarSrc || undefined} sx={{ width: 34, height: 34 }}>
+        <Avatar
+          ref={avatarRef}
+          alt={displayName}
+          src={qortalAvatarSrc || undefined}
+          sx={{ width: 34, height: 34 }}
+        >
           <PersonIcon sx={{ fontSize: 22 }} />
         </Avatar>
 
         <Box sx={{ minWidth: 0 }}>
-          <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: 0.35, maxWidth: '100%' }}>
+          <Box sx={{ alignItems: 'baseline', display: 'inline-flex', gap: 0.35, maxWidth: '100%' }}>
             <Typography
+              ref={nameRef}
               sx={{
                 fontSize: '0.95rem',
                 fontWeight: 700,
@@ -605,6 +828,7 @@ const WalletRow = ({
               {displayName}
             </Typography>
             <IconButton
+              ref={editButtonRef}
               sx={{
                 color: 'rgba(214,221,233,0.48)',
                 ml: 0.1,
@@ -612,13 +836,31 @@ const WalletRow = ({
               }}
               onClick={(event) => {
                 event.stopPropagation();
-                setIsEdit((prev) => !prev);
+                setEditingWalletIndex(isEdit ? null : idx);
               }}
             >
               <EditIcon sx={{ fontSize: 15 }} />
             </IconButton>
+            {wallet?.note && (
+              <Typography
+                sx={{
+                  color: 'rgba(214,221,233,0.42)',
+                  fontSize: '0.72rem',
+                  fontStyle: 'italic',
+                  fontWeight: 400,
+                  lineHeight: 1,
+                  maxWidth: { xs: 120, sm: 180 },
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {wallet.note}
+              </Typography>
+            )}
           </Box>
           <Typography
+            ref={addressRef}
             sx={{
               color: 'rgba(214,221,233,0.56)',
               fontSize: '0.79rem',
@@ -626,21 +868,24 @@ const WalletRow = ({
               mt: 0.05,
             }}
           >
-            {shortenAddress(wallet?.address0)}
+            {addressLabel}
           </Typography>
         </Box>
 
-        <AuthButton
-          fullWidth={false}
-          prominence="subtle"
-          onClick={() => setSelectedWallet(wallet)}
-        >
-          Unlock
-        </AuthButton>
+        <Box onClick={(event) => event.stopPropagation()}>
+          <AuthButton
+            fullWidth={false}
+            prominence="subtle"
+            onClick={handleSelectWallet}
+          >
+            Unlock
+          </AuthButton>
+        </Box>
       </Box>
 
       {isEdit && (
         <Box
+          ref={editPanelRef}
           sx={{
             display: 'flex',
             flexDirection: 'column',
@@ -651,19 +896,36 @@ const WalletRow = ({
           }}
           onClick={(event) => event.stopPropagation()}
         >
-          <Typography sx={inlineFieldLabelSx}>Account name</Typography>
-          <Input
-            placeholder="Account name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            sx={inlineInputSx}
-          />
-
+          {canEditAccountName && (
+            <>
+              <Typography sx={inlineFieldLabelSx}>Name</Typography>
+              <Input
+                autoFocus
+                placeholder="Account name"
+                value={accountName}
+                onChange={(event) => setAccountName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    handleSaveEdit();
+                  }
+                }}
+                inputProps={{ maxLength: 48 }}
+                sx={inlineInputSx}
+              />
+            </>
+          )}
           <Typography sx={inlineFieldLabelSx}>Note</Typography>
           <Input
             placeholder="Optional note"
             value={note}
             onChange={(event) => setNote(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                handleSaveEdit();
+              }
+            }}
             inputProps={{ maxLength: 100 }}
             sx={inlineInputSx}
           />
@@ -683,14 +945,7 @@ const WalletRow = ({
               Remove
             </ButtonBase>
             <ButtonBase
-              onClick={() => {
-                updateWalletItem(idx, {
-                  ...wallet,
-                  name,
-                  note,
-                });
-                setIsEdit(false);
-              }}
+              onClick={handleSaveEdit}
               sx={inlineActionSx(false)}
             >
               Save

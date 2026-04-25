@@ -81,6 +81,7 @@ export interface CoreSetupDialogProps {
   customQortalPath: string;
   verifyCoreNotRunningFunc: () => void;
   isWindows: boolean;
+  onUsePublicNode?: () => void;
 }
 
 const statusIcon = (status: StepStatus) => {
@@ -116,6 +117,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     customQortalPath,
     verifyCoreNotRunningFunc,
     isWindows,
+    onUsePublicNode,
   } = props;
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
@@ -124,7 +126,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const [errorDeleteDB, setErrorDeleteDB] = useState('');
   const [errorBootstrap, setErrorBootstrap] = useState('');
   const { t } = useTranslation(['node', 'core']);
-  const [mode, setMode] = useState(1);
+  const [mode, setMode] = useState(2);
   const [stopCoreLoading, setStopCoreLoading] = useState(false);
   const [bootstrapLoading, setBootstrapLoading] = useState(false);
   const [dbExists, setDbExists] = useState(false);
@@ -194,7 +196,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   );
 
   const stepStates = stepDefs
-    .filter((step) => (isWindows ? step.key !== 'hasJava' : step))
+    .filter((step) => step.key !== 'hasJava')
     .map((def) => ({
       ...def,
       state: steps[def.key],
@@ -273,6 +275,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
   useEffect(() => {
     if (open) {
+      setMode(2);
       verifyCoreNotRunningFunc();
       setErrorStop('');
       setErrorDeleteDB('');
@@ -444,6 +447,16 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       fullWidth
       maxWidth="sm"
       aria-labelledby="core-setup-title"
+      slotProps={{
+        paper: {
+          sx: {
+            background: '#10151D',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '10px',
+            boxShadow: '0 24px 54px rgba(0,0,0,0.42)',
+          },
+        },
+      }}
     >
       {mode === 1 && (
         <>
@@ -545,12 +558,20 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       {mode === 2 && (
         <>
           <DialogTitle id="core-setup-title">
-            {t('node:setup.title', {
-              postProcess: 'capitalizeFirstChar',
-            })}
+            Qortal Core
           </DialogTitle>
           <DialogContent dividers>
-            <Typography></Typography>
+            <Typography
+              sx={{
+                color: 'rgba(214,221,233,0.68)',
+                fontSize: '0.92rem',
+                lineHeight: 1.6,
+                mb: 2,
+              }}
+            >
+              Core runs your local node. You can keep using Hub through a public
+              node while Core starts and syncs in the background.
+            </Typography>
             {!isWindows && (
               <Accordion>
                 <AccordionSummary
@@ -663,12 +684,8 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
             <Spacer height="20px" />
             <Button onClick={() => setIsExtended((prev) => !prev)}>
               {!isExtended
-                ? t(`node:more`, {
-                    postProcess: 'capitalizeFirstChar',
-                  })
-                : t(`node:less`, {
-                    postProcess: 'capitalizeFirstChar',
-                  })}
+                ? 'Advanced core tools'
+                : 'Hide advanced tools'}
             </Button>
             <Collapse in={isExtended} timeout="auto" unmountOnExit>
               <Box
@@ -762,6 +779,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
           </DialogContent>
 
           <DialogActions sx={{ p: 2 }}>
+            {onUsePublicNode && (
+              <Button onClick={onUsePublicNode} variant="text">
+                Use public node
+              </Button>
+            )}
             {onClose && !running && (
               <Button
                 onClick={onClose}
