@@ -425,6 +425,8 @@ export class ReplayHarness {
           pcmBufferedMs: engine.getPcmBufferedMs(),
           lastPushAgeMs: engine.getLastPushAgeMs(),
           lastGapFrames: 0,
+          totalConcealmentFrames: engine.getConcealmentFrames(),
+          recentArrivalGapMs: engine.getRecentArrivalGapMs(),
           peerHealth,
         });
 

@@ -177,6 +177,8 @@ export class GcallV2Session {
         pcmBufferedMs: engine.getPcmBufferedMs(),
         lastPushAgeMs: engine.getLastPushAgeMs(),
         lastGapFrames: engine.getLastGapFrames(),
+        totalConcealmentFrames: engine.getConcealmentFrames(),
+        recentArrivalGapMs: engine.getRecentArrivalGapMs(),
         peerHealth,
       });
 

@@ -38,6 +38,8 @@ function makeInput(overrides: Partial<PolicyTickInput> = {}): PolicyTickInput {
     pcmBufferedMs: 80,
     lastPushAgeMs: 10,
     lastGapFrames: 0,
+    totalConcealmentFrames: 0,
+    recentArrivalGapMs: 0,
     peerHealth: makePeerHealth('healthy'),
     ...overrides,
   };
@@ -263,6 +265,136 @@ test('steady: does not arm steady-state recovery from stale packet inactivity al
   );
 
   expect(out.targetBufferMs).toBe(120);
+});
+
+test('steady: arms steady-state recovery immediately on a fresh large arrival-gap spike', () => {
+  const policy = new ReceivePolicyEngine(STREAM_ID, {
+    targetBufferMs: 120,
+    startupExtraBufferMs: 0,
+    startupWarmupMs: 0,
+    steadyStateRecoveryExtraBufferMs: 80,
+    steadyStateRecoveryHoldMs: 3_000,
+    steadyStateRecoveryPostSpikeHoldMs: 5_000,
+    steadyStateRecoverySpikeGapMs: 220,
+  });
+  const nowBase = performance.now();
+
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
+  expect(policy.state).toBe('steady');
+
+  const out = policy.tick(
+    makeInput({
+      nowMs: nowBase + 20,
+      jitterDepth: 2,
+      opusBufferedMs: 14,
+      pcmBufferedMs: 16,
+      lastPushAgeMs: 20,
+      recentArrivalGapMs: 860,
+    })
+  );
+
+  expect(policy.state).toBe('steady');
+  expect(out.targetBufferMs).toBe(200);
+  expect(out.maxDecodePerTick).toBe(8);
+
+  const held = policy.tick(
+    makeInput({
+      nowMs: nowBase + 4_000,
+      jitterDepth: 3,
+      opusBufferedMs: 20,
+      pcmBufferedMs: 30,
+      lastPushAgeMs: 30,
+    })
+  );
+  expect(held.targetBufferMs).toBe(200);
+});
+
+test('steady: arms steady-state recovery immediately on fresh concealment under active media', () => {
+  const policy = new ReceivePolicyEngine(STREAM_ID, {
+    targetBufferMs: 120,
+    startupExtraBufferMs: 0,
+    startupWarmupMs: 0,
+    steadyStateRecoveryExtraBufferMs: 80,
+    steadyStateRecoveryConcealmentFrames: 1,
+    startupMaxDecodePerTick: 8,
+  });
+  const nowBase = performance.now();
+
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
+  expect(policy.state).toBe('steady');
+
+  const out = policy.tick(
+    makeInput({
+      nowMs: nowBase + 20,
+      jitterDepth: 2,
+      opusBufferedMs: 10,
+      pcmBufferedMs: 14,
+      lastPushAgeMs: 20,
+      totalConcealmentFrames: 1,
+    })
+  );
+
+  expect(out.targetBufferMs).toBe(200);
+  expect(out.maxDecodePerTick).toBe(8);
+});
+
+test('backlogDrain: keeps a higher exit floor while steady-state recovery is active', () => {
+  const policy = new ReceivePolicyEngine(STREAM_ID, {
+    targetBufferMs: 120,
+    startupExtraBufferMs: 0,
+    startupWarmupMs: 0,
+    steadyStateRecoveryExtraBufferMs: 80,
+    steadyStateRecoveryExitMinPcmMs: 96,
+    steadyStateRecoveryConcealmentFrames: 1,
+  });
+  const nowBase = performance.now();
+
+  policy.tick(makeInput({ nowMs: nowBase, jitterDepth: 4, opusBufferedMs: 80 }));
+  policy.tick(
+    makeInput({
+      nowMs: nowBase + 20,
+      jitterDepth: 2,
+      opusBufferedMs: 18,
+      pcmBufferedMs: 14,
+      lastPushAgeMs: 20,
+      totalConcealmentFrames: 1,
+    })
+  );
+  policy.tick(
+    makeInput({
+      nowMs: nowBase + 40,
+      jitterDepth: 6,
+      opusBufferedMs: 170,
+      pcmBufferedMs: 20,
+      lastPushAgeMs: 20,
+      totalConcealmentFrames: 1,
+    })
+  );
+  expect(policy.state).toBe('backlogDrain');
+
+  policy.tick(
+    makeInput({
+      nowMs: nowBase + 60,
+      jitterDepth: 2,
+      opusBufferedMs: 40,
+      pcmBufferedMs: 80,
+      lastPushAgeMs: 20,
+      totalConcealmentFrames: 1,
+    })
+  );
+  expect(policy.state).toBe('backlogDrain');
+
+  policy.tick(
+    makeInput({
+      nowMs: nowBase + 80,
+      jitterDepth: 2,
+      opusBufferedMs: 40,
+      pcmBufferedMs: 100,
+      lastPushAgeMs: 20,
+      totalConcealmentFrames: 1,
+    })
+  );
+  expect(policy.state).toBe('steady');
 });
 
 // ---------------------------------------------------------------------------

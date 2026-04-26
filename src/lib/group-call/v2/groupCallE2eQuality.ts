@@ -844,6 +844,8 @@ async function drainTick(path: SimulatedPeerPath, nowMs: number): Promise<void> 
     pcmBufferedMs: path.engine.getPcmBufferedMs(),
     lastPushAgeMs: path.engine.getLastPushAgeMs(),
     lastGapFrames: path.engine.getLastGapFrames(),
+    totalConcealmentFrames: path.engine.getConcealmentFrames(),
+    recentArrivalGapMs: path.engine.getRecentArrivalGapMs(),
     peerHealth,
   });
   const prevConcealmentFrames = path.engine.getConcealmentFrames();
@@ -1555,6 +1557,33 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         'audio-surface-sim': 9,
       },
       worseAddr: 'peer-A',
+    },
+  },
+  {
+    id: 'new-person-asymmetric-spike-regression',
+    description:
+      'Models the new-person live call shape: standby-side authoritative-key delay with the root listener taking the worse steady-state spike pressure.',
+    durationMs: 28_000,
+    seed: 1616,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+      receiverModel: {
+        startupLatencyAddMs: 140,
+        startupLatencyUntilMs: 3_500,
+      },
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.philKennyTransportSender,
+      receiverModel: {
+        authoritativeKeyReadyAtMs: 1_600,
+      },
+    },
+    expectations: {
+      qualityScoreAtLeast: 6.5,
     },
   },
 ];

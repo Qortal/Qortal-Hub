@@ -70,6 +70,9 @@ class StreamJitterBuffer {
   private _primed = false;
   private _emptySinceMs: number | null = null;
   private _lastPushMs = -1;
+  private _lastPacketReceivedAtMs = -1;
+  private _recentArrivalGapMs = 0;
+  private _recentArrivalGapObservedAtMs = -1;
 
   constructor(
     private _capacity: number,
@@ -104,6 +107,12 @@ class StreamJitterBuffer {
       opusFrame,
       receivedAtMs,
     });
+    if (this._lastPacketReceivedAtMs >= 0) {
+      const arrivalGapMs = Math.max(0, receivedAtMs - this._lastPacketReceivedAtMs);
+      this._recentArrivalGapMs = arrivalGapMs;
+      this._recentArrivalGapObservedAtMs = receivedAtMs;
+    }
+    this._lastPacketReceivedAtMs = receivedAtMs;
     this._lastPushMs = this._clockMs();
     this._emptySinceMs = null;
 
@@ -150,6 +159,12 @@ class StreamJitterBuffer {
     return this._clockMs() - this._lastPushMs;
   }
 
+  recentArrivalGapMs(windowMs = 4_000): number {
+    if (this._recentArrivalGapObservedAtMs < 0) return 0;
+    if (this._clockMs() - this._recentArrivalGapObservedAtMs > windowMs) return 0;
+    return this._recentArrivalGapMs;
+  }
+
   lastPoppedSeq(): number {
     return this._lastPoppedSeq;
   }
@@ -173,6 +188,9 @@ class StreamJitterBuffer {
     this._primed = false;
     this._emptySinceMs = null;
     this._lastPushMs = -1;
+    this._lastPacketReceivedAtMs = -1;
+    this._recentArrivalGapMs = 0;
+    this._recentArrivalGapObservedAtMs = -1;
   }
 }
 
@@ -455,6 +473,10 @@ export class ReceiveEngine {
 
   getLastPushAgeMs(): number {
     return this._jitter.lastPushAgeMs();
+  }
+
+  getRecentArrivalGapMs(windowMs?: number): number {
+    return this._jitter.recentArrivalGapMs(windowMs);
   }
 
   getConcealmentFrames(): number {
