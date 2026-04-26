@@ -5,13 +5,14 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from '../../utils/events';
-import { useSetAtom } from 'jotai';
-import { nodeInfosAtom } from '../../atoms/global';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { nodeInfosAtom, selectedNodeInfoAtom } from '../../atoms/global';
 
 export const useWebsocketStatus = () => {
   const lastPopup = useRef<null | number>(null);
 
   const setNodeInfos = useSetAtom(nodeInfosAtom);
+  const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const socketRef = useRef(null);
   const timeoutIdRef = useRef(null); // No-pong timeout (close if no pong in 5s)
   const groupSocketTimeoutRef = useRef(null); // Next ping in 45s
@@ -118,7 +119,7 @@ export const useWebsocketStatus = () => {
     return () => {
       forceCloseWebSocket(); // Clean up WebSocket on component unmount
     };
-  }, []);
+  }, [selectedNode?.apikey, selectedNode?.url]);
 
   return null;
 };

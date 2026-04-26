@@ -16,6 +16,7 @@ import { signChat } from '../transactions/signChat';
 import { createTransaction } from '../transactions/transactions';
 import { decryptChatMessage } from '../utils/decryptChatMessage';
 import { decryptStoredWallet } from '../utils/decryptWallet';
+import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 import PhraseWallet from '../utils/generateWallet/phrase-wallet';
 import { RequestQueueWithPromise } from '../utils/queue/queue';
 import { validateAddress } from '../utils/validateAddress';
@@ -1377,7 +1378,7 @@ export async function decryptWallet({ password, wallet, walletVersion }) {
 
     return true;
   } catch (error) {
-    throw new Error(error.message);
+    throw new Error(getWalletErrorMessage(error));
   }
 }
 

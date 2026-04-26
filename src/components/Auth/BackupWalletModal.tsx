@@ -21,6 +21,7 @@ import { saveFileToDisk } from '../../utils/generateWallet/generateWallet';
 import { executeEvent } from '../../utils/events';
 import { PasswordField } from '../index';
 import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
+import { getWalletErrorMessage } from '../../utils/walletErrorMessages';
 
 type BackupWalletModalProps = {
   onClose: () => void;
@@ -135,7 +136,12 @@ export const BackupWalletModal = ({
         duration: 5600,
       });
     } catch (downloadError: any) {
-      setError(downloadError?.message || 'Unable to create the wallet backup.');
+      setError(
+        getWalletErrorMessage(
+          downloadError,
+          'Unable to create the wallet backup.'
+        )
+      );
       setIsDownloading(false);
     }
   }, [

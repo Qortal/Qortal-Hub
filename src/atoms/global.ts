@@ -5,7 +5,7 @@ import {
   atomWithStorage,
   useAtomCallback,
 } from 'jotai/utils';
-import { HTTP_LOCALHOST_12391 } from '../constants/constants';
+import { HTTPS_EXT_NODE_QORTAL_LINK } from '../constants/constants';
 import { ApiKey } from '../types/auth';
 import { extStates } from '../App';
 import { Steps } from '../components/CoreSetupDialog';
@@ -101,6 +101,7 @@ export const globalChatWidgetBoundsAtom = atomWithStorage<{
 
 export const txListAtom = atomWithReset([]);
 export const isOpenDialogCoreRecommendationAtom = atomWithReset(false);
+export const isPublicNodeUnavailableAtom = atomWithReset(false);
 export const isLoadingAuthenticateAtom = atomWithReset(false);
 export const authenticatePasswordAtom = atomWithReset('');
 export const extStateAtom = atomWithReset<extStates>('not-authenticated');
@@ -122,7 +123,7 @@ export const devServerDomainAtom = atomWithReset(LOCALHOST);
 export const devServerPortAtom = atomWithReset('');
 export const nodeInfosAtom = atomWithReset({});
 export const selectedNodeInfoAtom = atomWithReset<ApiKey | null>({
-  url: HTTP_LOCALHOST_12391,
+  url: HTTPS_EXT_NODE_QORTAL_LINK,
   apikey: '',
 });
 export const statusesAtom = atomWithReset<Steps>({

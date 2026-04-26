@@ -48,14 +48,38 @@ export function AuthFrame({
     <Box
       sx={{
         background:
-          'radial-gradient(circle at top center, rgba(48,68,104,0.1), transparent 36%), #06080d',
+          'radial-gradient(ellipse 820px 520px at 50% 29%, rgba(39,112,224,0.26), rgba(19,54,106,0.14) 32%, transparent 63%), linear-gradient(180deg, #07101b 0%, #05070c 55%, #030509 100%)',
         color: theme.palette.text.primary,
         display: 'flex',
         flex: 1,
         flexDirection: 'column',
         minHeight: '100vh',
+        overflowX: 'hidden',
         position: 'relative',
         width: '100%',
+        '&::before': {
+          backgroundImage:
+            'radial-gradient(circle, rgba(158,190,245,0.2) 0 1px, transparent 1.4px), radial-gradient(circle, rgba(158,190,245,0.16) 0 1px, transparent 1.3px)',
+          backgroundPosition: '50% 18%, 50% 43%',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: '760px 420px, 880px 540px',
+          content: '""',
+          inset: 0,
+          opacity: 0.42,
+          pointerEvents: 'none',
+          position: 'absolute',
+        },
+        '&::after': {
+          background:
+            'radial-gradient(ellipse 640px 420px at 50% 31%, rgba(54,123,246,0.13), transparent 60%)',
+          content: '""',
+          height: '100%',
+          left: 0,
+          pointerEvents: 'none',
+          position: 'absolute',
+          right: 0,
+          top: 0,
+        },
       }}
     >
       <Box
@@ -207,12 +231,13 @@ export function AuthButton({
           : 'rgba(230,236,247,0.88)',
         display: 'inline-flex',
         fontSize: isSubtlePrimary ? '0.88rem' : '0.92rem',
-        fontWeight: 700,
+        fontWeight: 600,
         height: isSubtlePrimary ? 38 : 42,
         justifyContent: 'center',
         opacity: disabled ? 0.45 : 1,
         px: isSubtlePrimary ? 1.6 : 2,
-        transition: 'background-color 160ms ease, border-color 160ms ease, opacity 160ms ease, transform 160ms ease',
+        transition:
+          'background-color 160ms ease, border-color 160ms ease, opacity 160ms ease',
         width: fullWidth ? '100%' : 'auto',
         '&:hover': disabled
           ? undefined
@@ -227,7 +252,6 @@ export function AuthButton({
                   ? 'rgba(104,151,241,0.22)'
                   : 'rgba(118,165,255,0.28)'
                 : 'rgba(255,255,255,0.12)',
-              transform: isSubtlePrimary ? 'none' : 'translateY(-1px)',
             },
       }}
     >

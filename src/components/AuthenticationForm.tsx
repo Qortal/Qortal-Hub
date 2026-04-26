@@ -11,7 +11,10 @@ import type { ApiKey } from '../types/auth';
 import { getBaseApiReactForAvatar } from '../App';
 import { getPrimaryNameForAvatar } from './Group/groupApi';
 import { AuthButton, AuthFrame, AuthSectionLabel } from './Auth/AuthShell';
-import { isLocalNodeUrl } from '../constants/constants';
+import {
+  HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
+} from '../constants/constants';
 import { ConnectionModeModal } from './Auth/ConnectionModeModal';
 import type {
   AuthUnlockTransitionSnapshot,
@@ -91,11 +94,21 @@ export const AuthenticationForm = ({
     rawWallet?.address0 ||
     'Unnamed account';
   const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
+  const connectionLabel = usingLocalNode
+    ? 'Using local node'
+    : selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
+      ? 'Using public node'
+      : 'Using custom node';
   const isSharedTransitionActive = Boolean(sharedTransition);
+  const storedAnimationPreference =
+    typeof window !== 'undefined'
+      ? window.localStorage.getItem('hub_ui_animations_enabled')
+      : null;
   const shouldReduceMotion =
     typeof window !== 'undefined' &&
-    (window.matchMedia('(prefers-reduced-motion: reduce)').matches ||
-      window.localStorage.getItem('hub_ui_animations_enabled') === 'false');
+    (storedAnimationPreference === 'false' ||
+      (storedAnimationPreference === null &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches));
 
   useLayoutEffect(() => {
     if (
@@ -312,12 +325,14 @@ export const AuthenticationForm = ({
               sx={{
                 color: usingLocalNode
                   ? theme.palette.other.positive
-                  : 'rgba(214,221,233,0.56)',
+                  : selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
+                    ? 'rgba(214,221,233,0.56)'
+                    : theme.palette.primary.main,
                 fontSize: '0.78rem',
                 fontWeight: 600,
               }}
             >
-              {usingLocalNode ? 'Using local node' : 'Using public node'}
+              {connectionLabel}
             </Typography>
           </Box>
             <ButtonBase

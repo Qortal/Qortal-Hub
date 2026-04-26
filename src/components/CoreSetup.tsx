@@ -1,10 +1,11 @@
 import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CoreSetupDialog } from './CoreSetupDialog';
 import {
   getDefaultLocalNodeUrl,
   HTTPS_EXT_NODE_QORTAL_LINK,
+  HTTP_LOCALHOST_12391,
   LOCALHOST_12391,
 } from '../constants/constants';
 import { cleanUrl } from '../background/background';
@@ -32,7 +33,6 @@ export const CoreSetup = () => {
   const [statuses, setStatuses] = useAtom(statusesAtom);
   const [selectedNode] = useAtom(selectedNodeInfoAtom);
   const [extState] = useAtom(extStateAtom);
-  const [osType, setOsType] = useState(null);
   const [isOpenRecommendation, setIsOpenRecommendation] = useAtom(
     isOpenDialogCoreRecommendationAtom
   );
@@ -40,10 +40,23 @@ export const CoreSetup = () => {
   const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
   const [customQortalPath, setCustomQortalPath] = useState('');
   const [showLocalReadyNotice, setShowLocalReadyNotice] = useState(false);
+  const [localNodeRuntimeStatus, setLocalNodeRuntimeStatus] = useState<{
+    running: boolean;
+    syncPercent?: number;
+  } | null>(null);
+  const [startCoreSetupAtIntro, setStartCoreSetupAtIntro] = useState(false);
   const [localReadySwitchError, setLocalReadySwitchError] = useState('');
   const inFlight = useRef(false);
+  const autoStartAttemptedRef = useRef(false);
   const localReadyDismissedRef = useRef(false);
   const switchingToLocalRef = useRef(false);
+  const usingDefaultPublicNode =
+    cleanUrl(selectedNode?.url || '') === cleanUrl(HTTPS_EXT_NODE_QORTAL_LINK);
+  const dismissLocalReadyNotice = useCallback(() => {
+    localReadyDismissedRef.current = true;
+    setShowLocalReadyNotice(false);
+    setLocalNodeRuntimeStatus(null);
+  }, []);
   useEffect(() => {
     if (!window?.coreSetup) return;
     const off = window.coreSetup.onProgress((p) => {
@@ -57,7 +70,6 @@ export const CoreSetup = () => {
       }
 
       if (p?.type === 'osType') {
-        setOsType(p.osType);
         return;
       }
       setStatuses((prev) => {
@@ -71,14 +83,8 @@ export const CoreSetup = () => {
     return () => off();
   }, [setStatuses]);
 
-  async function handleCoreSetup({
-    isReady,
-    isLocal,
-  }: {
-    isReady: boolean;
-    isLocal: boolean;
-  }) {
-    if (!window?.coreSetup || inFlight.current || !isReady || !isLocal) return;
+  async function handleCoreSetup({ isReady }: { isReady: boolean }) {
+    if (!window?.coreSetup || inFlight.current || !isReady) return;
 
     inFlight.current = true;
 
@@ -99,31 +105,59 @@ export const CoreSetup = () => {
 
   useEffect(() => {
     if (!window?.coreSetup) return;
+    if (!isReady) return;
+    if (extState !== 'authenticated' && !open) return;
 
-    handleCoreSetup({ isReady, isLocal });
-  }, [isReady, isLocal]);
+    handleCoreSetup({ isReady });
+  }, [extState, isReady, open]);
+
+  useEffect(() => {
+    if (extState !== 'authenticated' || !usingDefaultPublicNode) {
+      autoStartAttemptedRef.current = false;
+    }
+  }, [extState, usingDefaultPublicNode]);
+
+  useEffect(() => {
+    if (!window?.coreSetup || !isReady) return;
+    if (extState !== 'authenticated' || !usingDefaultPublicNode) return;
+    if (autoStartAttemptedRef.current) return;
+
+    let canceled = false;
+
+    const startInstalledCore = async () => {
+      autoStartAttemptedRef.current = true;
+
+      try {
+        const running = await window.coreSetup.isCoreRunning();
+        if (canceled || running) return;
+
+        const installed = await window.coreSetup.isCoreInstalled();
+        if (canceled) return;
+
+        if (installed) {
+          window.coreSetup.startCore();
+        } else {
+          setStartCoreSetupAtIntro(true);
+          setIsOpenRecommendation(true);
+        }
+      } catch (error) {
+        console.error('Failed to auto-start local Core:', error);
+      }
+    };
+
+    startInstalledCore();
+
+    return () => {
+      canceled = true;
+    };
+  }, [extState, isReady, setIsOpenRecommendation, usingDefaultPublicNode]);
 
   const isCoreInstalledState = statuses['downloadedCore']?.status === 'done';
   const isCoreRunningState = statuses['coreRunning']?.status === 'done';
   const actionLoading = Object.keys(statuses).find(
     (key) => statuses[key]?.status === 'active'
   );
-  const initializedRef = useRef(false);
-  const isNotRunning = statuses['coreRunning']?.status === 'off';
-
-  useEffect(() => {
-    if (!window?.coreSetup) return;
-    if (!isReady || !isLocal) return;
-    if (initializedRef.current) return;
-
-    if (isNotRunning) {
-      initializedRef.current = true;
-      setOpen(true);
-    }
-  }, [isNotRunning, isReady, isLocal, setOpen]);
-
   const verifyCoreNotRunningFunc = useCallback(() => {
-    if (!isLocal) return;
     setStatuses({
       coreRunning: {
         status: 'idle',
@@ -141,8 +175,8 @@ export const CoreSetup = () => {
         message: '',
       },
     });
-    handleCoreSetup({ isReady, isLocal });
-  }, [isLocal, isReady, setStatuses]);
+    handleCoreSetup({ isReady });
+  }, [isReady, setStatuses]);
 
   useEffect(() => {
     if (!window?.coreSetup) return;
@@ -156,50 +190,73 @@ export const CoreSetup = () => {
   useEffect(() => {
     if (!window?.coreSetup || isLocal || extState !== 'authenticated') {
       setShowLocalReadyNotice(false);
+      setLocalNodeRuntimeStatus(null);
       return;
     }
+
+    localReadyDismissedRef.current = false;
+    setShowLocalReadyNotice(false);
+    setLocalNodeRuntimeStatus(null);
 
     let canceled = false;
 
     const checkLocalNodeReady = async () => {
       if (localReadyDismissedRef.current) return;
 
+      let running = false;
       try {
-        const running = await window.coreSetup.isCoreRunning();
-        if (!running) return;
+        running = Boolean(await window.coreSetup.isCoreRunning());
+        if (!running) {
+          if (!canceled) {
+            setLocalNodeRuntimeStatus({ running: false });
+          }
+          return;
+        }
 
         const statusResponse = await fetch(
-          `${getDefaultLocalNodeUrl()}/admin/status`
+          `${HTTP_LOCALHOST_12391}/admin/status`
         );
-        if (!statusResponse.ok) return;
+        if (!statusResponse.ok) {
+          if (!canceled) {
+            setLocalNodeRuntimeStatus({ running: true });
+          }
+          return;
+        }
 
         const status = await statusResponse.json();
-        if (!canceled && status?.syncPercent === 100) {
+        const syncPercent = Number(status?.syncPercent);
+        if (!canceled) {
+          setLocalNodeRuntimeStatus({
+            running: true,
+            syncPercent: Number.isFinite(syncPercent) ? syncPercent : undefined,
+          });
+        }
+        if (
+          !canceled &&
+          isLocalCoreStatusSynced(
+            Number.isFinite(syncPercent) ? syncPercent : undefined
+          )
+        ) {
           setShowLocalReadyNotice(true);
         }
       } catch (error) {
         // Local Core can be starting, blocked, or still syncing; silence noisy polling.
+        if (!canceled && running) {
+          setLocalNodeRuntimeStatus((prev) =>
+            prev?.running ? prev : { running: true }
+          );
+        }
       }
     };
 
-    const firstCheck = window.setTimeout(checkLocalNodeReady, 4000);
-    const interval = window.setInterval(checkLocalNodeReady, 30000);
+    checkLocalNodeReady();
+    const interval = window.setInterval(checkLocalNodeReady, 5000);
 
     return () => {
       canceled = true;
-      window.clearTimeout(firstCheck);
       window.clearInterval(interval);
     };
-  }, [extState, isLocal]);
-
-  const usePublicNode = useCallback(async () => {
-    await handleSaveNodeInfo({
-      url: HTTPS_EXT_NODE_QORTAL_LINK,
-      apikey: '',
-    });
-    setOpen(false);
-    setIsOpenRecommendation(false);
-  }, [handleSaveNodeInfo, setIsOpenRecommendation, setOpen]);
+  }, [extState, isLocal, selectedNode?.url]);
 
   const switchToLocalNode = useCallback(async () => {
     if (switchingToLocalRef.current) return;
@@ -210,14 +267,27 @@ export const CoreSetup = () => {
       const apiKey = window?.coreSetup?.getApiKey
         ? await window.coreSetup.getApiKey()
         : '';
+      const localNodeUrl = getDefaultLocalNodeUrl();
+
+      if (localNodeUrl.startsWith('https://')) {
+        const certResult = await window.electronAPI?.ensureCertForBase?.(
+          localNodeUrl,
+          apiKey || ''
+        );
+
+        if (!certResult?.success) {
+          throw new Error(
+            certResult?.error || 'Unable to prepare local HTTPS certificate'
+          );
+        }
+      }
 
       await handleSaveNodeInfo({
-        url: getDefaultLocalNodeUrl(),
+        url: localNodeUrl,
         apikey: apiKey || '',
       });
       await getBalanceFunc();
-      localReadyDismissedRef.current = true;
-      setShowLocalReadyNotice(false);
+      dismissLocalReadyNotice();
     } catch (error) {
       console.error('Failed to switch to local node:', error);
       setLocalReadySwitchError(
@@ -226,18 +296,144 @@ export const CoreSetup = () => {
     } finally {
       switchingToLocalRef.current = false;
     }
-  }, [getBalanceFunc, handleSaveNodeInfo]);
+  }, [dismissLocalReadyNotice, getBalanceFunc, handleSaveNodeInfo]);
+
+  const coreStatusNotice = useMemo(() => {
+    const downloadedState = statuses.downloadedCore;
+    const runningState = statuses.coreRunning;
+    const hasCoreSetupActivity =
+      downloadedState?.status === 'active' ||
+      runningState?.status === 'active' ||
+      downloadedState?.status === 'error' ||
+      runningState?.status === 'error';
+    if (
+      !window?.coreSetup ||
+      extState !== 'authenticated' ||
+      isLocal ||
+      (!usingDefaultPublicNode && !hasCoreSetupActivity)
+    ) {
+      return null;
+    }
+
+    const translatedMessage =
+      runningState?.message || downloadedState?.message || '';
+
+    if (localReadyDismissedRef.current) {
+      return null;
+    }
+
+    if (showLocalReadyNotice) {
+      return {
+        description:
+          'Qortal Core is synced. You can switch from the public node to your local node now.',
+        progress: 100,
+        ready: true,
+        title: 'Local node ready',
+      };
+    }
+
+    const syncPercent = localNodeRuntimeStatus?.syncPercent;
+    if (
+      localNodeRuntimeStatus?.running &&
+      isLocalCoreStatusSynced(syncPercent)
+    ) {
+      return {
+        description:
+          'Qortal Core is synced. You can switch from the public node to your local node now.',
+        progress: 100,
+        ready: true,
+        title: 'Local node ready',
+      };
+    }
+
+    if (downloadedState?.status === 'active') {
+      return {
+        description: 'Downloading and installing Qortal Core.',
+        progress: downloadedState.progress,
+        ready: false,
+        title: 'Installing Qortal Core',
+      };
+    }
+
+    if (runningState?.status === 'active') {
+      return {
+        description:
+          translatedMessage === '001'
+            ? 'Core is starting and preparing blockchain data.'
+            : 'Starting Qortal Core.',
+        progress: runningState.progress,
+        ready: false,
+        title: 'Starting local Core',
+      };
+    }
+
+    if (
+      localNodeRuntimeStatus?.running &&
+      typeof syncPercent === 'number' &&
+      !isLocalCoreStatusSynced(syncPercent)
+    ) {
+      return {
+        description: 'Your local node is catching up in the background.',
+        progress: Math.max(0, Math.min(100, syncPercent)),
+        ready: false,
+        title: 'Syncing blockchain',
+      };
+    }
+
+    if (runningState?.status === 'done' || localNodeRuntimeStatus?.running) {
+      return {
+        description:
+          typeof syncPercent === 'number'
+            ? 'Your local node is catching up in the background.'
+            : 'Core is running. Checking blockchain sync progress.',
+        progress:
+          typeof syncPercent === 'number'
+            ? Math.max(0, Math.min(100, syncPercent))
+            : undefined,
+        ready: false,
+        title: 'Syncing blockchain',
+      };
+    }
+
+    if (
+      runningState?.status === 'error' ||
+      downloadedState?.status === 'error'
+    ) {
+      return {
+        description: 'Core needs attention. Open setup to review the issue.',
+        progress: undefined,
+        ready: false,
+        title: 'Core setup needs attention',
+      };
+    }
+
+    return null;
+  }, [
+    extState,
+    isLocal,
+    localNodeRuntimeStatus?.running,
+    localNodeRuntimeStatus?.syncPercent,
+    showLocalReadyNotice,
+    statuses.coreRunning,
+    statuses.downloadedCore,
+    usingDefaultPublicNode,
+  ]);
 
   return (
     <>
       <CoreSetupDialog
         open={open}
+        startAtIntro={startCoreSetupAtIntro}
         actionLoading={!!actionLoading}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          setStartCoreSetupAtIntro(false);
+        }}
         onAction={() => {
           if (!window?.coreSetup) return;
           if (isCoreRunningState) {
             setOpen(false);
+            setStartCoreSetupAtIntro(false);
           } else if (isCoreInstalledState) {
             window.coreSetup.startCore();
           } else {
@@ -245,18 +441,24 @@ export const CoreSetup = () => {
           }
         }}
         steps={statuses}
+        isCoreSyncing={
+          isCoreRunningState &&
+          !showLocalReadyNotice &&
+          !isLocal &&
+          !isLocalCoreStatusSynced(localNodeRuntimeStatus?.syncPercent)
+        }
         customQortalPath={customQortalPath}
         verifyCoreNotRunningFunc={verifyCoreNotRunningFunc}
-        isWindows={osType === 'win32'}
-        onUsePublicNode={usePublicNode}
       />
       <CoreSetupRecommendationDialog
         open={isOpenRecommendation}
-        openLocalSetup={() => setOpen(true)}
+        openLocalSetup={() => {
+          setStartCoreSetupAtIntro(true);
+          setOpen(true);
+        }}
         onClose={() => setIsOpenRecommendation(false)}
-        setOpenCoreHandler={setOpen}
       />
-      {showLocalReadyNotice && (
+      {coreStatusNotice && (
         <Box
           sx={{
             background:
@@ -270,13 +472,13 @@ export const CoreSetup = () => {
             position: 'fixed',
             right: 20,
             width: 'calc(100vw - 40px)',
-            zIndex: 2400,
+            zIndex: 12000,
           }}
         >
           <Box sx={{ alignItems: 'flex-start', display: 'flex', gap: 1.2 }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontSize: '0.92rem', fontWeight: 800 }}>
-                Local node ready
+              <Typography sx={{ fontSize: '0.92rem', fontWeight: 700 }}>
+                {coreStatusNotice.title}
               </Typography>
               <Typography
                 sx={{
@@ -286,9 +488,30 @@ export const CoreSetup = () => {
                   mt: 0.45,
                 }}
               >
-                Qortal Core is synced. You can switch from the public node to
-                your local node now.
+                {coreStatusNotice.description}
               </Typography>
+              {typeof coreStatusNotice.progress === 'number' && (
+                <Box
+                  sx={{
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    borderRadius: '999px',
+                    height: 6,
+                    mt: 1,
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      backgroundColor: coreStatusNotice.ready
+                        ? theme.palette.other.positive
+                        : 'rgba(118,165,255,0.82)',
+                      height: '100%',
+                      transition: 'width 220ms ease',
+                      width: `${coreStatusNotice.progress}%`,
+                    }}
+                  />
+                </Box>
+              )}
               {localReadySwitchError && (
                 <Typography
                   sx={{
@@ -302,33 +525,57 @@ export const CoreSetup = () => {
                 </Typography>
               )}
             </Box>
-            <ButtonBase
-              onClick={() => {
-                localReadyDismissedRef.current = true;
-                setShowLocalReadyNotice(false);
-              }}
-              sx={{
-                color: theme.palette.text.secondary,
-                p: 0.25,
-                '&:hover': { color: theme.palette.text.primary },
-              }}
-            >
-              <CloseRoundedIcon sx={{ fontSize: 18 }} />
-            </ButtonBase>
+            {coreStatusNotice.ready && (
+              <ButtonBase
+                onClick={() => {
+                  dismissLocalReadyNotice();
+                }}
+                sx={{
+                  color: theme.palette.text.secondary,
+                  p: 0.25,
+                  '&:hover': { color: theme.palette.text.primary },
+                }}
+              >
+                <CloseRoundedIcon sx={{ fontSize: 18 }} />
+              </ButtonBase>
+            )}
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end', mt: 1.25 }}>
-            <ButtonBase
-              onClick={() => {
-                localReadyDismissedRef.current = true;
-                setShowLocalReadyNotice(false);
-              }}
-              sx={noticeActionSx(false)}
-            >
-              Later
-            </ButtonBase>
-            <ButtonBase onClick={switchToLocalNode} sx={noticeActionSx(true)}>
-              Switch to local
-            </ButtonBase>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 1,
+              justifyContent: 'flex-end',
+              mt: 1.25,
+            }}
+          >
+            {coreStatusNotice.ready ? (
+              <>
+                <ButtonBase
+                  onClick={() => {
+                    dismissLocalReadyNotice();
+                  }}
+                  sx={noticeActionSx(false)}
+                >
+                  Later
+                </ButtonBase>
+                <ButtonBase
+                  onClick={switchToLocalNode}
+                  sx={noticeActionSx(true)}
+                >
+                  Switch to local
+                </ButtonBase>
+              </>
+            ) : (
+              <ButtonBase
+                onClick={() => {
+                  setStartCoreSetupAtIntro(false);
+                  setOpen(true);
+                }}
+                sx={noticeActionSx(true)}
+              >
+                Open setup
+              </ButtonBase>
+            )}
           </Box>
         </Box>
       )}
@@ -341,18 +588,38 @@ export const CoreSetup = () => {
   );
 };
 
+const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
+
+function isLocalCoreStatusSynced(
+  syncPercent?: number
+) {
+  return (
+    typeof syncPercent === 'number' &&
+    syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT
+  );
+}
+
 const noticeActionSx = (primary: boolean) => ({
-  backgroundColor: primary ? 'rgba(91, 132, 201, 0.62)' : 'rgba(255,255,255,0.035)',
+  backgroundColor: primary
+    ? 'rgba(91, 132, 201, 0.62)'
+    : 'rgba(255,255,255,0.035)',
   border: `1px solid ${primary ? 'rgba(174, 204, 255, 0.28)' : 'rgba(255,255,255,0.07)'}`,
   borderRadius: '7px',
   color: primary ? '#F4F8FF' : 'rgba(214,221,233,0.72)',
+  fontFamily: 'inherit',
   fontSize: '0.78rem',
-  fontWeight: 800,
+  fontWeight: 600,
+  letterSpacing: 0,
   minHeight: 32,
   px: 1.25,
+  textTransform: 'none',
   transition: 'background-color 160ms ease, border-color 160ms ease',
   '&:hover': {
-    backgroundColor: primary ? 'rgba(105, 150, 224, 0.72)' : 'rgba(255,255,255,0.055)',
-    borderColor: primary ? 'rgba(190, 216, 255, 0.38)' : 'rgba(255,255,255,0.11)',
+    backgroundColor: primary
+      ? 'rgba(105, 150, 224, 0.72)'
+      : 'rgba(255,255,255,0.055)',
+    borderColor: primary
+      ? 'rgba(190, 216, 255, 0.38)'
+      : 'rgba(255,255,255,0.11)',
   },
 });

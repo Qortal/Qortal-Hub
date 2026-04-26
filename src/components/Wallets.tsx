@@ -18,6 +18,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import VpnKeyRoundedIcon from '@mui/icons-material/VpnKeyRounded';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import { getWallets, storeWallets, walletVersion } from '../background/background.ts';
 import { getPrimaryNameForAvatar } from './Group/groupApi';
 import { getBaseApiReactForAvatar } from '../App';
@@ -330,10 +331,12 @@ export const Wallets = ({
       sx={{
         display: 'flex',
         flexDirection: 'column',
+        gap: mode === 'entry' ? 1.4 : 0,
         maxHeight:
-          mode === 'entry' && editingWalletIndex === null ? 280 : 'none',
+          mode === 'entry' && editingWalletIndex === null ? 292 : 'none',
         overflowY:
           mode === 'entry' && editingWalletIndex === null ? 'auto' : 'visible',
+        pr: mode === 'entry' && editingWalletIndex === null ? 0.35 : 0,
         width: '100%',
       }}
     >
@@ -649,6 +652,12 @@ const WalletRow = ({
   useEffect(() => {
     if (!isEdit) return;
 
+    const closeEditPanel = () => {
+      setNote(wallet?.note || '');
+      setAccountName(wallet?.name || '');
+      setEditingWalletIndex(null);
+    };
+
     const closeOnOutsidePointer = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node | null;
 
@@ -660,17 +669,23 @@ const WalletRow = ({
         return;
       }
 
-      setNote(wallet?.note || '');
-      setAccountName(wallet?.name || '');
-      setEditingWalletIndex(null);
+      closeEditPanel();
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      closeEditPanel();
     };
 
     document.addEventListener('mousedown', closeOnOutsidePointer);
     document.addEventListener('touchstart', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
 
     return () => {
       document.removeEventListener('mousedown', closeOnOutsidePointer);
       document.removeEventListener('touchstart', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
     };
   }, [isEdit, setEditingWalletIndex, wallet]);
 
@@ -726,6 +741,14 @@ const WalletRow = ({
     if (isEdit || isDraggingRef.current) return;
     setSelectedWallet(wallet, getTransitionSnapshot());
   };
+  const isEntryRow = mode === 'entry';
+  const isLeadingEntryRow = isEntryRow && idx === 0;
+  const entryRowBackground = isLeadingEntryRow
+    ? 'linear-gradient(180deg, rgba(12,19,32,0.92), rgba(6,10,17,0.96))'
+    : 'linear-gradient(180deg, rgba(8,13,22,0.86), rgba(5,8,14,0.92))';
+  const entryRowHoverBackground = isLeadingEntryRow
+    ? 'linear-gradient(180deg, rgba(14,23,39,0.95), rgba(7,12,20,0.98))'
+    : 'linear-gradient(180deg, rgba(10,16,27,0.9), rgba(5,9,15,0.94))';
 
   return (
     <Box
@@ -773,28 +796,54 @@ const WalletRow = ({
         setDragOverWalletIndex(null);
       }}
       sx={{
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        borderBottom:
+          mode === 'entry' ? 'none' : '1px solid rgba(255,255,255,0.06)',
         opacity: dragOverWalletIndex === idx ? 0.74 : 1,
-        pb: isEdit ? 1.2 : 0,
-        pt: 0.2,
+        pb: mode === 'entry' ? 0 : isEdit ? 1.2 : 0,
+        pt: mode === 'entry' ? 0 : 0.2,
         transition: 'opacity 140ms ease',
       }}
     >
       <Box
         sx={{
           alignItems: 'center',
-          backgroundColor: isEdit ? 'rgba(255,255,255,0.03)' : 'transparent',
-          borderRadius: '7px',
+          background:
+            mode === 'entry'
+              ? isEdit
+                ? 'linear-gradient(180deg, rgba(13,19,31,0.92), rgba(7,11,18,0.94))'
+                : entryRowBackground
+              : isEdit
+                ? 'rgba(255,255,255,0.03)'
+                : 'transparent',
+          border:
+            mode === 'entry' ? '1px solid rgba(160,184,224,0.16)' : 'none',
+          borderRadius: mode === 'entry' ? '8px' : '7px',
           cursor: isEdit ? 'default' : 'grab',
           display: 'grid',
-          gap: 1,
-          gridTemplateColumns: '36px minmax(0,1fr) auto',
-          minHeight: 60,
-          px: 0.55,
-          py: 0.5,
-          transition: 'background-color 160ms ease',
+          gap: mode === 'entry' ? 1.3 : 1,
+          gridTemplateColumns:
+            mode === 'entry'
+              ? '54px minmax(0,1fr) auto auto'
+              : '36px minmax(0,1fr) auto',
+          minHeight: mode === 'entry' ? 86 : 60,
+          px: mode === 'entry' ? 1.6 : 0.55,
+          py: mode === 'entry' ? 1.15 : 0.5,
+          transition:
+            'background 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
           '&:hover': {
-            backgroundColor: isEdit ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.035)',
+            background: isEdit
+              ? mode === 'entry'
+                ? 'linear-gradient(180deg, rgba(13,19,31,0.92), rgba(7,11,18,0.94))'
+                : 'rgba(255,255,255,0.03)'
+              : mode === 'entry'
+                ? entryRowHoverBackground
+                : 'rgba(255,255,255,0.03)',
+            borderColor:
+              mode === 'entry' ? 'rgba(125,169,245,0.32)' : undefined,
+            boxShadow:
+              mode === 'entry' && !isEdit
+                ? 'inset 2px 0 0 rgba(83,144,255,0.74), 0 0 0 1px rgba(70,120,210,0.04)'
+                : 'none',
           },
           '&:active': {
             cursor: isEdit ? 'default' : 'grabbing',
@@ -804,21 +853,40 @@ const WalletRow = ({
           handleSelectWallet();
         }}
       >
-        <Avatar
-          ref={avatarRef}
-          alt={displayName}
-          src={qortalAvatarSrc || undefined}
-          sx={{ width: 34, height: 34 }}
-        >
-          <PersonIcon sx={{ fontSize: 22 }} />
-        </Avatar>
+        <Box sx={{ position: 'relative', width: mode === 'entry' ? 46 : 34 }}>
+          <Avatar
+            ref={avatarRef}
+            alt={displayName}
+            src={qortalAvatarSrc || undefined}
+            sx={{
+              height: mode === 'entry' ? 46 : 34,
+              width: mode === 'entry' ? 46 : 34,
+            }}
+          >
+            <PersonIcon sx={{ fontSize: mode === 'entry' ? 27 : 22 }} />
+          </Avatar>
+          {mode === 'entry' && (
+            <Box
+              sx={{
+                backgroundColor: '#62D26F',
+                border: '2px solid #111722',
+                borderRadius: '999px',
+                bottom: -1,
+                height: 12,
+                position: 'absolute',
+                right: -1,
+                width: 12,
+              }}
+            />
+          )}
+        </Box>
 
         <Box sx={{ minWidth: 0 }}>
           <Box sx={{ alignItems: 'baseline', display: 'inline-flex', gap: 0.35, maxWidth: '100%' }}>
             <Typography
               ref={nameRef}
               sx={{
-                fontSize: '0.95rem',
+                fontSize: mode === 'entry' ? '1rem' : '0.95rem',
                 fontWeight: 700,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -863,7 +931,7 @@ const WalletRow = ({
             ref={addressRef}
             sx={{
               color: 'rgba(214,221,233,0.56)',
-              fontSize: '0.79rem',
+              fontSize: mode === 'entry' ? '0.84rem' : '0.79rem',
               lineHeight: 1.35,
               mt: 0.05,
             }}
@@ -881,6 +949,15 @@ const WalletRow = ({
             Unlock
           </AuthButton>
         </Box>
+        {mode === 'entry' && (
+          <ChevronRightRoundedIcon
+            sx={{
+              color: 'rgba(214,221,233,0.42)',
+              fontSize: 24,
+              opacity: 0.82,
+            }}
+          />
+        )}
       </Box>
 
       {isEdit && (

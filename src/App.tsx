@@ -10,6 +10,10 @@ import { useDropzone } from 'react-dropzone';
 import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { AnimatePresence } from 'framer-motion';
 import { decryptStoredWallet } from './utils/decryptWallet';
+import {
+  getWalletErrorMessage,
+  getWalletFieldLabel,
+} from './utils/walletErrorMessages';
 import './utils/seedPhrase/randomSentenceGenerator.ts';
 import {
   createAccount,
@@ -67,6 +71,8 @@ import {
   infoSnackGlobalAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
+  isOpenDialogCoreRecommendationAtom,
+  isPublicNodeUnavailableAtom,
   isRunningPublicNodeAtom,
   openSnackGlobalAtom,
   qortBalanceLoadingAtom,
@@ -92,7 +98,7 @@ import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 import { BackupWalletModal } from './components/Auth/BackupWalletModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import {
-  getDefaultLocalNodeUrl,
+  HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
   TIME_SECONDS_10_IN_MILLISECONDS,
 } from './constants/constants.ts';
@@ -221,6 +227,10 @@ function App() {
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
+  const setOpenCoreRecommendation = useSetAtom(
+    isOpenDialogCoreRecommendationAtom
+  );
+  const setPublicNodeUnavailable = useSetAtom(isPublicNodeUnavailableAtom);
   const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
   const [sendqortState, setSendqortState] = useState<any>(null);
   const [isLoading, setIsLoading] = useAtom(isLoadingAuthenticateAtom);
@@ -384,7 +394,11 @@ function App() {
 
   useEffect(() => {
     const handleWindowError = (event: ErrorEvent) => {
-      console.error('Global runtime error', event.error || event.message, event);
+      console.error(
+        'Global runtime error',
+        event.error || event.message,
+        event
+      );
       setGlobalRuntimeFault({
         message: formatRuntimeFaultMessage(
           event.error ?? event.message,
@@ -411,7 +425,10 @@ function App() {
 
     return () => {
       window.removeEventListener('error', handleWindowError);
-      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener(
+        'unhandledrejection',
+        handleUnhandledRejection
+      );
     };
   }, []);
 
@@ -444,10 +461,10 @@ function App() {
             setSelectedNode(response);
           } else {
             const payload = {
-              url: getDefaultLocalNodeUrl(),
+              url: HTTPS_EXT_NODE_QORTAL_LINK,
               apikey: '',
             };
-            handleSetGlobalApikey(response);
+            handleSetGlobalApikey(payload);
             setSelectedNode(payload);
           }
         })
@@ -543,7 +560,7 @@ function App() {
           if (!(field in pf))
             throw new Error(
               t('auth:message.error.field_not_found_json', {
-                field: field,
+                field: getWalletFieldLabel(field),
                 postProcess: 'capitalizeFirstChar',
               })
             );
@@ -731,7 +748,9 @@ function App() {
         walletToBeDownloaded.qortAddress
       );
     } catch (error: any) {
-      setWalletToBeDownloadedError(error?.message);
+      setWalletToBeDownloadedError(
+        getWalletErrorMessage(error, 'Unable to save this wallet backup.')
+      );
     }
   }, [walletToBeDownloaded]);
 
@@ -839,11 +858,12 @@ function App() {
             getBalanceFunc();
           } else if (response?.error) {
             setIsLoading(false);
-            setWalletToBeDecryptedError(response.error);
+            setWalletToBeDecryptedError(getWalletErrorMessage(response.error));
           }
         })
         .catch((error) => {
           setIsLoading(false);
+          setWalletToBeDecryptedError(getWalletErrorMessage(error));
           console.error('Failed to decrypt wallet:', error);
         });
     } catch (error: any) {
@@ -1125,22 +1145,19 @@ function App() {
     () => confirmPayment(true),
     [confirmPayment]
   );
-  const onGoToCreateWallet = useCallback(
-    () => {
-      prepareNewSeedphrase();
-      setWalletToBeDownloadedError('');
-      setWalletToBeDownloadedPassword('');
-      setWalletToBeDownloadedPasswordConfirm('');
-      setCreationStep(1);
-      setExtstate('create-wallet');
-    },
-    [
-      prepareNewSeedphrase,
-      setExtstate,
-      setWalletToBeDownloadedPassword,
-      setWalletToBeDownloadedPasswordConfirm,
-    ]
-  );
+  const onGoToCreateWallet = useCallback(() => {
+    prepareNewSeedphrase();
+    setWalletToBeDownloadedError('');
+    setWalletToBeDownloadedPassword('');
+    setWalletToBeDownloadedPasswordConfirm('');
+    setCreationStep(1);
+    setExtstate('create-wallet');
+  }, [
+    prepareNewSeedphrase,
+    setExtstate,
+    setWalletToBeDownloadedPassword,
+    setWalletToBeDownloadedPasswordConfirm,
+  ]);
   const onWalletsBack = useCallback(() => {
     setRawWallet(null);
     setExtstate('not-authenticated');
@@ -1179,8 +1196,31 @@ function App() {
     setWalletToBeDownloadedError('');
     setCreationStep(2);
   }, [ensureGeneratedSeedphrase]);
+
+  const isPublicNodeReachable = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${HTTPS_EXT_NODE_QORTAL_LINK}/admin/status`
+      );
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
   const onBackupAccountConfirm = useCallback(async () => {
     await saveFileToDiskFunc();
+
+    const selectedUrl = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
+    const usingDefaultPublic = selectedUrl === HTTPS_EXT_NODE_QORTAL_LINK;
+
+    if (usingDefaultPublic && !(await isPublicNodeReachable())) {
+      setPublicNodeUnavailable(true);
+      setOpenCoreRecommendation(true);
+      return;
+    }
+
+    setPublicNodeUnavailable(false);
     returnToMain();
     executeEvent('openGlobalSnackBar', {
       message: t('auth:tips.wallet_secure', {
@@ -1189,10 +1229,47 @@ function App() {
       type: 'info',
       duration: 5600,
     });
-  }, [t, saveFileToDiskFunc, returnToMain]);
-  const onEnterHubAfterCreate = useCallback(() => {
+
+    if (window?.coreSetup && usingDefaultPublic) {
+      window.setTimeout(() => {
+        setOpenCoreRecommendation(true);
+      }, 650);
+    }
+  }, [
+    isPublicNodeReachable,
+    returnToMain,
+    saveFileToDiskFunc,
+    selectedNode?.url,
+    setOpenCoreRecommendation,
+    setPublicNodeUnavailable,
+    t,
+  ]);
+
+  const onEnterHubAfterCreate = useCallback(async () => {
+    const selectedUrl = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
+    const usingDefaultPublic = selectedUrl === HTTPS_EXT_NODE_QORTAL_LINK;
+
+    if (usingDefaultPublic && !(await isPublicNodeReachable())) {
+      setPublicNodeUnavailable(true);
+      setOpenCoreRecommendation(true);
+      return;
+    }
+
+    setPublicNodeUnavailable(false);
     returnToMain();
-  }, [returnToMain]);
+
+    if (window?.coreSetup && usingDefaultPublic) {
+      window.setTimeout(() => {
+        setOpenCoreRecommendation(true);
+      }, 650);
+    }
+  }, [
+    isPublicNodeReachable,
+    returnToMain,
+    selectedNode?.url,
+    setOpenCoreRecommendation,
+    setPublicNodeUnavailable,
+  ]);
   const onCountdownComplete = useCallback(() => {
     window.close();
   }, []);
@@ -1282,7 +1359,8 @@ function App() {
                       lineHeight: 1.55,
                     }}
                   >
-                    The authenticated shell crashed during render. The latest safe marker is {HUB_UI_BUILD_VERSION}.
+                    The authenticated shell crashed during render. The latest
+                    safe marker is {HUB_UI_BUILD_VERSION}.
                   </Typography>
                 </Box>
               }
@@ -1621,7 +1699,6 @@ function App() {
           onOpenCoreSetup={onOpenCoreSetup}
         />
       )}
-
     </>
   );
 
@@ -1713,7 +1790,8 @@ function App() {
                   lineHeight: 1.55,
                 }}
               >
-                The authenticated app hit a runtime fault after login. We are surfacing it here instead of leaving a white screen.
+                The authenticated app hit a runtime fault after login. We are
+                surfacing it here instead of leaving a white screen.
               </Typography>
               <Box
                 sx={{
@@ -1727,7 +1805,9 @@ function App() {
                   py: 1.2,
                 }}
               >
-                <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, mb: 0.45 }}>
+                <Typography
+                  sx={{ fontSize: '0.78rem', fontWeight: 700, mb: 0.45 }}
+                >
                   {globalRuntimeFault.source}
                 </Typography>
                 <Typography

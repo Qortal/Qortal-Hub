@@ -2,7 +2,7 @@ import { Box, ButtonBase } from '@mui/material';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import { Wallets } from '../Wallets';
 import { AuthScreen } from '../Auth/AuthShell';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type WalletsViewProps = {
   onBack: () => void;
@@ -20,6 +20,21 @@ export function WalletsView({
   const [importView, setImportView] = useState<'choice' | 'backup' | 'seedphrase'>(
     'choice'
   );
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onBack();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onBack]);
 
   return (
     <AuthScreen

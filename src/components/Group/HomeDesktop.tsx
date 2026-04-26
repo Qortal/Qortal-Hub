@@ -1,4 +1,5 @@
-import { Box, ButtonBase, CircularProgress, IconButton, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, ButtonBase, CircularProgress, IconButton, Menu, MenuItem, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
 import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
@@ -13,9 +14,9 @@ import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
 import DensitySmallRoundedIcon from '@mui/icons-material/DensitySmallRounded';
 import DensityLargeRoundedIcon from '@mui/icons-material/DensityLargeRounded';
 import { alpha, darken } from '@mui/material/styles';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useAtomValue } from 'jotai';
-import { balanceAtom, memberGroupsAtom, nodeInfosAtom, userInfoAtom } from '../../atoms/global';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { balanceAtom, memberGroupsAtom, nodeInfosAtom, selectedNodeInfoAtom, userInfoAtom } from '../../atoms/global';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { Spacer } from '../../common/Spacer';
 import { GroupJoinRequests } from './GroupJoinRequests';
@@ -55,12 +56,18 @@ import { manifestData } from '../NotAuthenticated';
 import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
 import { dashboardPanelSx, handleDashboardPanelPointerLeave, handleDashboardPanelPointerMove, useDashboardPanelMouseLight } from './dashboardPanelEffects';
 import { useHandleUserInfo } from '../../hooks/useHandleUserInfo';
-import { isLocalNodeUrl } from '../../constants/constants';
+import {
+  getDefaultLocalNodeUrl,
+  HTTPS_EXT_NODE_QORTAL_LINK,
+  isLocalNodeUrl,
+} from '../../constants/constants';
 import { nodeDisplay } from '../../utils/helpers';
 import { DashboardWidgetFrame, type WidgetDisplayMode } from '../Widgets/DashboardWidgetFrame';
 import { GroupsWidget } from '../Widgets/GroupsWidget';
 import { QuitterFeedWidget } from '../Widgets/QuitterFeedWidget';
 import { ProgressiveBlur } from '../ui/progressive-blur';
+import { useAuth } from '../../hooks/useAuth';
+import type { ApiKey } from '../../types/auth';
 
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
@@ -93,6 +100,14 @@ type WalletActivityEntry = {
   direction: WalletActivityDirection;
   timestamp: number;
 };
+type DashboardNodeOption = {
+  key: string;
+  label: string;
+  node: ApiKey;
+  secondary: string;
+  type: 'custom' | 'local' | 'public';
+};
+const BLOCK_HEIGHT_TAIL_DIGITS = 4;
 const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
 const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
   width: {
@@ -181,6 +196,133 @@ const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 52;
 const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
+
+function normalizeDashboardNodeUrl(url?: string | null) {
+  return (url || '').trim().replace(/\/+$/, '');
+}
+
+function getDashboardNodeHost(url: string) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return nodeDisplay(url);
+  }
+}
+
+function normalizeDashboardCustomNodes(nodes: unknown): ApiKey[] {
+  if (!Array.isArray(nodes)) return [];
+
+  return nodes
+    .map((node) => ({
+      url:
+        typeof node?.url === 'string'
+          ? normalizeDashboardNodeUrl(node.url)
+          : '',
+      apikey: typeof node?.apikey === 'string' ? node.apikey : '',
+      name: typeof node?.name === 'string' ? node.name.trim() : '',
+    }))
+    .filter((node) => Boolean(node.url));
+}
+
+function getBlockHeightParts(value?: string | null) {
+  const rawValue = `${value || ''}`.trim();
+  const digits = rawValue.replace(/\D/g, '');
+
+  if (digits.length <= BLOCK_HEIGHT_TAIL_DIGITS) {
+    return {
+      canHighlightTail: false,
+      fullValue: rawValue,
+      prefix: '',
+      tail: rawValue,
+    };
+  }
+
+  return {
+    canHighlightTail: true,
+    fullValue: digits,
+    prefix: digits.slice(0, -BLOCK_HEIGHT_TAIL_DIGITS),
+    tail: digits.slice(-BLOCK_HEIGHT_TAIL_DIGITS),
+  };
+}
+
+function BlockHeightValue({ theme, value }) {
+  const parts = getBlockHeightParts(value);
+
+  return (
+    <Box
+      aria-label={`Node height ${parts.fullValue || value}`}
+      component="span"
+      title={parts.fullValue ? `Full height: ${parts.fullValue}` : undefined}
+      sx={{
+        alignItems: 'center',
+        color: alpha(theme.palette.text.primary, 0.88),
+        display: 'inline-flex',
+        fontFamily:
+          '"IBM Plex Mono","SFMono-Regular","Cascadia Mono","Fira Code","Consolas",monospace',
+        fontSize: '0.9rem',
+        fontVariantNumeric: 'tabular-nums',
+        fontWeight: 700,
+        gap: '6px',
+        justifySelf: 'end',
+        letterSpacing: '0.028em',
+        lineHeight: 1,
+        maxWidth: '100%',
+        minWidth: 0,
+        overflow: 'hidden',
+        textAlign: 'right',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {parts.canHighlightTail ? (
+        <>
+          <Box
+            component="span"
+            sx={{
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {parts.prefix}
+          </Box>
+          <Box
+            component="span"
+            sx={{
+              backgroundColor: alpha(
+                GROUP_ACTIVITY_BLUE.primary,
+                theme.palette.mode === 'dark' ? 0.18 : 0.12
+              ),
+              border: `1px solid ${alpha(
+                GROUP_ACTIVITY_BLUE.gradientTop,
+                theme.palette.mode === 'dark' ? 0.42 : 0.34
+              )}`,
+              borderRadius: '6px',
+              boxShadow:
+                theme.palette.mode === 'dark'
+                  ? `0 0 0 1px ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.08)}`
+                  : 'none',
+              color:
+                theme.palette.mode === 'dark'
+                  ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.96)
+                  : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.94),
+              display: 'inline-flex',
+              justifyContent: 'center',
+              letterSpacing: '0.05em',
+              minWidth: '5ch',
+              px: '7px',
+              py: '4px',
+            }}
+          >
+            {parts.tail}
+          </Box>
+        </>
+      ) : (
+        parts.tail
+      )}
+    </Box>
+  );
+}
+
 const DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY = 'dashboardMinterDefaultView';
 const DASHBOARD_STATUS_PREVIEW_EVENT = 'setDashboardStatusPreview';
 const DASHBOARD_STATUS_PREVIEW_STORAGE_KEY = 'dashboardStatusPreviewMode';
@@ -469,7 +611,12 @@ const WalletActionButton = ({ icon, label, onClick, theme }) => {
   );
 };
 
-const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
+const InfoPreviewPanel = ({
+  rows,
+  theme,
+  maxExpandedHeightPx = null,
+  forceExpanded = false,
+}) => {
   const enableOverlay = useMediaQuery(theme.breakpoints.up('xl'));
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -543,6 +690,7 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
 
   const hasOverflow =
     enableOverlay && collapsedHeight > 0 && contentHeight > collapsedHeight + 4;
+  const isEffectivelyExpanded = isExpanded || (forceExpanded && hasOverflow);
   const resolvedCollapsedHeight =
     collapsedHeight > 0 ? collapsedHeight : undefined;
   const rawExpandedHeight = resolvedCollapsedHeight
@@ -574,6 +722,7 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
 
   const handleMouseLeave = (event) => {
     handleDashboardPanelPointerLeave(event);
+    if (forceExpanded) return;
     if (!hasOverflow) return;
     if (openTimerRef.current !== null) {
       window.clearTimeout(openTimerRef.current);
@@ -586,7 +735,7 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
     }, INFO_PANEL_EXPAND_CLOSE_DELAY_MS);
   };
 
-  const showCollapsedFade = hasOverflow && !isExpanded;
+  const showCollapsedFade = hasOverflow && !isEffectivelyExpanded;
   const statusAccentColor =
     rows.status.tone === 'issue'
       ? theme.palette.mode === 'dark'
@@ -703,7 +852,11 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
         position: 'relative',
         width: '100%',
         ...(enableOverlay
-          ? { height: '100%', minHeight: 0, zIndex: isExpanded ? 4 : 1 }
+          ? {
+              height: '100%',
+              minHeight: 0,
+              zIndex: isEffectivelyExpanded ? 4 : 1,
+            }
           : {}),
       }}
     >
@@ -722,10 +875,10 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
         width: '100%',
         ...(enableOverlay
           ? {
-              borderColor: isExpanded
+              borderColor: isEffectivelyExpanded
                 ? theme.palette.border.main
                 : theme.palette.border.subtle,
-              boxShadow: isExpanded
+              boxShadow: isEffectivelyExpanded
                 ? theme.palette.mode === 'dark'
                   ? '0 26px 34px -12px rgba(0, 0, 0, 0.34)'
                   : '0 24px 28px -12px rgba(15, 23, 42, 0.16)'
@@ -733,7 +886,11 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
               height:
                 resolvedCollapsedHeight == null
                   ? '100%'
-                  : `${isExpanded ? expandedHeight : resolvedCollapsedHeight}px`,
+                  : `${
+                      isEffectivelyExpanded
+                        ? expandedHeight
+                        : resolvedCollapsedHeight
+                    }px`,
               left: 0,
               position: 'absolute',
               right: 0,
@@ -1013,42 +1170,103 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
                         }),
                   }}
                 >
-                  <Typography
-                    sx={{
-                      color:
-                        theme.palette.mode === 'dark'
-                          ? alpha(theme.palette.common.white, 0.52)
-                          : alpha(theme.palette.text.primary, 0.58),
-                      fontSize: '0.79rem',
-                      fontWeight: 500,
-                      letterSpacing: '0.012em',
-                      lineHeight: 1.1,
-                      minWidth: 0,
-                    }}
-                  >
-                    {row.label}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.primary, 0.88),
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.01em',
-                      lineHeight: 1.2,
-                      maxWidth: '100%',
-                      overflow: 'hidden',
-                      ...(isNodeSection
-                        ? {
-                            justifySelf: 'end',
-                            textAlign: 'right',
-                          }
-                        : {}),
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {row.value}
-                  </Typography>
+                  {row.labelAction ? (
+                    <Tooltip title={row.labelAction.tooltip}>
+                      <ButtonBase
+                        aria-label={row.labelAction.ariaLabel}
+                        onClick={row.labelAction.onClick}
+                        sx={{
+                          alignItems: 'center',
+                          borderRadius: '6px',
+                          color:
+                            theme.palette.mode === 'dark'
+                              ? alpha(theme.palette.common.white, 0.58)
+                              : alpha(theme.palette.text.primary, 0.64),
+                          display: 'inline-flex',
+                          gap: '3px',
+                          justifySelf: 'start',
+                          minWidth: 0,
+                          px: '4px',
+                          py: '3px',
+                          transform: 'translateX(-4px)',
+                          transition:
+                            'background-color 140ms ease, color 140ms ease',
+                          '&:hover': {
+                            backgroundColor: alpha(
+                              GROUP_ACTIVITY_BLUE.primary,
+                              theme.palette.mode === 'dark' ? 0.13 : 0.09
+                            ),
+                            color:
+                              theme.palette.mode === 'dark'
+                                ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.95)
+                                : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.94),
+                          },
+                        }}
+                      >
+                        <Typography
+                          component="span"
+                          sx={{
+                            color: 'inherit',
+                            fontSize: '0.79rem',
+                            fontWeight: 600,
+                            letterSpacing: '0.012em',
+                            lineHeight: 1.1,
+                            minWidth: 0,
+                          }}
+                        >
+                          {row.label}
+                        </Typography>
+                        <KeyboardArrowDownRoundedIcon
+                          sx={{
+                            fontSize: '0.95rem',
+                            transform: row.labelAction.isOpen
+                              ? 'rotate(180deg)'
+                              : 'none',
+                            transition: 'transform 140ms ease',
+                          }}
+                        />
+                      </ButtonBase>
+                    </Tooltip>
+                  ) : (
+                    <Typography
+                      sx={{
+                        color:
+                          theme.palette.mode === 'dark'
+                            ? alpha(theme.palette.common.white, 0.52)
+                            : alpha(theme.palette.text.primary, 0.58),
+                        fontSize: '0.79rem',
+                        fontWeight: 500,
+                        letterSpacing: '0.012em',
+                        lineHeight: 1.1,
+                        minWidth: 0,
+                      }}
+                    >
+                      {row.label}
+                    </Typography>
+                  )}
+                  {row.valueNode || (
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.primary, 0.88),
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.01em',
+                        lineHeight: 1.2,
+                        maxWidth: '100%',
+                        overflow: 'hidden',
+                        ...(isNodeSection
+                          ? {
+                              justifySelf: 'end',
+                              textAlign: 'right',
+                            }
+                          : {}),
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {row.value}
+                    </Typography>
+                  )}
                 </Box>
               ))}
             </Box>
@@ -1080,6 +1298,33 @@ const InfoPreviewPanel = ({ rows, theme, maxExpandedHeightPx = null }) => {
   );
 };
 
+function nodeMenuItemSx(theme, selected: boolean) {
+  return {
+    alignItems: 'center',
+    borderRadius: '8px',
+    color: selected
+      ? theme.palette.mode === 'dark'
+        ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.96)
+        : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.94)
+      : alpha(theme.palette.text.primary, 0.9),
+    display: 'flex',
+    gap: '12px',
+    minHeight: 52,
+    px: 1.15,
+    py: 0.9,
+    '&.Mui-disabled': {
+      color: alpha(theme.palette.text.secondary, 0.52),
+      opacity: 1,
+    },
+    '&:hover': {
+      backgroundColor: alpha(
+        GROUP_ACTIVITY_BLUE.primary,
+        theme.palette.mode === 'dark' ? 0.12 : 0.08
+      ),
+    },
+  };
+}
+
 export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getTimestampEnterChat, setOpenManageMembers, setOpenAddGroup, setOpenAddGroupTab, setMobileViewMode, setDesktopViewMode, desktopViewMode, onOpenSettings }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const groupActivityCardHeightRef = useRef<HTMLDivElement | null>(null);
@@ -1106,6 +1351,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
   const nodeInfos = useAtomValue(nodeInfosAtom);
+  const selectedNode = useAtomValue(selectedNodeInfoAtom);
+  const setNodeInfos = useSetAtom(nodeInfosAtom);
+  const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
   const [activeTab, setActiveTab] = useState<HomeTab>('user');
   const [activityTab, setActivityTab] = useState<ActivityTab>('promotions');
   const [requestsCount, setRequestsCount] = useState(0);
@@ -1144,6 +1392,13 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [isWalletActivityLoading, setIsWalletActivityLoading] = useState(false);
   const [walletActivityRelativeTimeNow, setWalletActivityRelativeTimeNow] =
     useState(() => Date.now());
+  const [dashboardCustomNodes, setDashboardCustomNodes] = useState<ApiKey[]>(
+    []
+  );
+  const [nodeMenuAnchorEl, setNodeMenuAnchorEl] =
+    useState<HTMLElement | null>(null);
+  const [isSwitchingNodeUrl, setIsSwitchingNodeUrl] = useState('');
+  const [nodeSwitchError, setNodeSwitchError] = useState('');
   const [activityToggleIndicator, setActivityToggleIndicator] = useState({
     ready: false,
     width: 0,
@@ -1216,6 +1471,152 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
+  const selectedNodeUrl = normalizeDashboardNodeUrl(
+    selectedNode?.url || getBaseApiReact()
+  );
+  const publicNodeUrl = normalizeDashboardNodeUrl(HTTPS_EXT_NODE_QORTAL_LINK);
+  const loadDashboardCustomNodes = useCallback(async () => {
+    try {
+      const nodes = normalizeDashboardCustomNodes(
+        await window.sendMessage('getCustomNodesFromStorage')
+      );
+      setDashboardCustomNodes(nodes);
+      window.electronAPI?.setAllowedDomains?.(nodes.map((node) => node.url));
+    } catch (error) {
+      console.error(error);
+      setDashboardCustomNodes([]);
+    }
+  }, []);
+  const handleOpenNodeMenu = useCallback(
+    (event) => {
+      event.stopPropagation();
+      setNodeSwitchError('');
+      setNodeMenuAnchorEl(event.currentTarget);
+      loadDashboardCustomNodes();
+    },
+    [loadDashboardCustomNodes]
+  );
+  const handleCloseNodeMenu = useCallback(() => {
+    if (isSwitchingNodeUrl) return;
+    setNodeMenuAnchorEl(null);
+  }, [isSwitchingNodeUrl]);
+  const dashboardNodeOptions = useMemo<DashboardNodeOption[]>(() => {
+    const nodes = dashboardCustomNodes.filter((node) => {
+      const nodeUrl = normalizeDashboardNodeUrl(node.url);
+      return nodeUrl && nodeUrl !== publicNodeUrl && !isLocalNodeUrl(nodeUrl);
+    });
+    const localNodeUrl = normalizeDashboardNodeUrl(getDefaultLocalNodeUrl());
+    const localNodeOption: DashboardNodeOption | null = isLocalNodeUrl(
+      selectedNodeUrl
+    )
+      ? null
+      : {
+          key: 'local',
+          label: 'Local Node',
+          node: { url: localNodeUrl, apikey: '' },
+          secondary: getDashboardNodeHost(localNodeUrl),
+          type: 'local',
+        };
+
+    if (
+      selectedNodeUrl &&
+      selectedNodeUrl !== publicNodeUrl &&
+      !isLocalNodeUrl(selectedNodeUrl) &&
+      !nodes.some((node) => normalizeDashboardNodeUrl(node.url) === selectedNodeUrl)
+    ) {
+      nodes.unshift({
+        url: selectedNodeUrl,
+        apikey: selectedNode?.apikey || '',
+        name: selectedNode?.name || '',
+      });
+    }
+
+    return [
+      ...nodes.map((node) => {
+        const nodeUrl = normalizeDashboardNodeUrl(node.url);
+        const host = getDashboardNodeHost(nodeUrl);
+        return {
+          key: `custom:${nodeUrl}`,
+          label: node.name || host,
+          node: { ...node, url: nodeUrl },
+          secondary: host,
+          type: 'custom' as const,
+        };
+      }),
+      ...(localNodeOption ? [localNodeOption] : []),
+      {
+        key: 'public',
+        label: 'Public Node',
+        node: { url: HTTPS_EXT_NODE_QORTAL_LINK, apikey: '' },
+        secondary: getDashboardNodeHost(HTTPS_EXT_NODE_QORTAL_LINK),
+        type: 'public' as const,
+      },
+    ];
+  }, [
+    dashboardCustomNodes,
+    publicNodeUrl,
+    selectedNode?.apikey,
+    selectedNode?.name,
+    selectedNodeUrl,
+  ]);
+  const handleSelectDashboardNode = useCallback(
+    async (option: DashboardNodeOption) => {
+      const nextUrl = normalizeDashboardNodeUrl(option.node.url);
+      if (!nextUrl || isSwitchingNodeUrl) return;
+
+      if (nextUrl === selectedNodeUrl) {
+        setNodeMenuAnchorEl(null);
+        return;
+      }
+
+      try {
+        setNodeSwitchError('');
+        setIsSwitchingNodeUrl(nextUrl);
+        let nodeToSave = option.node;
+
+        if (option.type === 'local') {
+          const apiKey = window?.coreSetup?.getApiKey
+            ? await window.coreSetup.getApiKey()
+            : '';
+          nodeToSave = { ...option.node, apikey: apiKey || '' };
+
+          if (nextUrl.startsWith('https://')) {
+            const certResult = await window.electronAPI?.ensureCertForBase?.(
+              nextUrl,
+              apiKey || ''
+            );
+
+            if (!certResult?.success) {
+              throw new Error(
+                certResult?.error ||
+                  'Unable to prepare local HTTPS certificate'
+              );
+            }
+          }
+        }
+
+        await handleSaveNodeInfo(nodeToSave);
+        setNodeInfos({});
+        await getBalanceFunc();
+        setNodeMenuAnchorEl(null);
+      } catch (error) {
+        console.error(error);
+        setNodeSwitchError('Could not switch nodes right now.');
+      } finally {
+        setIsSwitchingNodeUrl('');
+      }
+    },
+    [
+      getBalanceFunc,
+      handleSaveNodeInfo,
+      isSwitchingNodeUrl,
+      selectedNodeUrl,
+      setNodeInfos,
+    ]
+  );
+  useEffect(() => {
+    loadDashboardCustomNodes();
+  }, [loadDashboardCustomNodes]);
   const handleOpenReceiveQort = useCallback((target: HTMLElement | null) => {
     if (!target) return;
     const rect = target.getBoundingClientRect();
@@ -2673,6 +3074,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         items: [
           {
             label: 'Using Node',
+            labelAction: {
+              ariaLabel: 'Change node',
+              isOpen: Boolean(nodeMenuAnchorEl),
+              onClick: handleOpenNodeMenu,
+              tooltip: 'Change node',
+            },
             value: resolvedNodeHostLabel,
           },
           {
@@ -2682,6 +3089,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
           {
             label: 'Node Height',
             value: resolvedBlockHeightLabel,
+            valueNode: (
+              <BlockHeightValue
+                theme={theme}
+                value={resolvedBlockHeightLabel}
+              />
+            ),
           },
         ],
       },
@@ -2870,7 +3283,120 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       rows={infoRows}
                       theme={theme}
                       maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
+                      forceExpanded={Boolean(nodeMenuAnchorEl)}
                     />
+                    <Menu
+                      anchorEl={nodeMenuAnchorEl}
+                      open={Boolean(nodeMenuAnchorEl)}
+                      onClose={handleCloseNodeMenu}
+                      anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+                      transformOrigin={{ horizontal: 'left', vertical: 'top' }}
+                      PaperProps={{
+                        sx: {
+                          background:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(18, 23, 32, 0.98)'
+                              : 'rgba(250, 252, 255, 0.98)',
+                          border: `1px solid ${alpha(
+                            theme.palette.border.subtle,
+                            0.88
+                          )}`,
+                          borderRadius: '10px',
+                          boxShadow:
+                            theme.palette.mode === 'dark'
+                              ? '0 18px 42px rgba(0,0,0,0.42)'
+                              : '0 16px 36px rgba(24,32,44,0.16)',
+                          minWidth: 260,
+                          mt: 0.7,
+                          p: 0.6,
+                        },
+                      }}
+                    >
+                      {dashboardNodeOptions.filter(
+                        (option) => option.type === 'custom'
+                      ).length === 0 && (
+                        <MenuItem disabled sx={nodeMenuItemSx(theme, false)}>
+                          No custom nodes saved
+                        </MenuItem>
+                      )}
+                      {dashboardNodeOptions.map((option) => {
+                        const isCurrent =
+                          normalizeDashboardNodeUrl(option.node.url) ===
+                          selectedNodeUrl;
+                        const isSwitching =
+                          isSwitchingNodeUrl ===
+                          normalizeDashboardNodeUrl(option.node.url);
+                        return (
+                          <MenuItem
+                            key={option.key}
+                            disabled={Boolean(isSwitchingNodeUrl)}
+                            onClick={() => handleSelectDashboardNode(option)}
+                            sx={{
+                              ...nodeMenuItemSx(theme, isCurrent),
+                              ...(option.type === 'public'
+                                ? {
+                                    borderTop: `1px solid ${alpha(
+                                      theme.palette.text.primary,
+                                      0.08
+                                    )}`,
+                                    mt: 0.55,
+                                  }
+                                : {}),
+                            }}
+                          >
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography
+                                sx={{
+                                  color: 'inherit',
+                                  fontSize: '0.84rem',
+                                  fontWeight: 700,
+                                  lineHeight: 1.25,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {option.label}
+                              </Typography>
+                              <Typography
+                                sx={{
+                                  color: alpha(
+                                    theme.palette.text.secondary,
+                                    0.78
+                                  ),
+                                  fontSize: '0.72rem',
+                                  lineHeight: 1.3,
+                                  mt: 0.3,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {option.secondary}
+                              </Typography>
+                            </Box>
+                            {isSwitching ? (
+                              <CircularProgress size={16} thickness={5} />
+                            ) : isCurrent ? (
+                              <CheckRoundedIcon sx={{ fontSize: 18 }} />
+                            ) : null}
+                          </MenuItem>
+                        );
+                      })}
+                      {nodeSwitchError && (
+                        <Typography
+                          sx={{
+                            color: theme.palette.warning.light,
+                            fontSize: '0.74rem',
+                            lineHeight: 1.35,
+                            px: 1.15,
+                            py: 0.8,
+                          }}
+                        >
+                          {nodeSwitchError}
+                        </Typography>
+                      )}
+                    </Menu>
                   </Box>
                   <Box ref={walletActivityDebugRef} sx={{ maxWidth: { xs: '100%', md: '360px' }, position: 'relative', width: '100%', minHeight: '182px', height: resolvedWalletActivityHeightPx != null ? `${resolvedWalletActivityHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
                   <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: '100%', minHeight: '182px', padding: '14px 16px 16px' }}>

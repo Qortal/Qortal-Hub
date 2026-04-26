@@ -69,6 +69,7 @@ import { encryptSingle } from '../qdn/encryption/group-encryption';
 import { _createPoll, _voteOnPoll } from '../qortal/get.ts';
 import { createTransaction } from '../transactions/transactions';
 import { getData, storeData } from '../utils/chromeStorage';
+import { getWalletErrorMessage } from '../utils/walletErrorMessages.ts';
 
 export function versionCase(request, event) {
   event.source.postMessage(
@@ -260,7 +261,7 @@ export async function decryptWalletCase(request, event) {
       {
         requestId: request.requestId,
         action: 'decryptWallet',
-        error: error?.message,
+        error: getWalletErrorMessage(error),
         type: 'backgroundMessageResponse',
       },
       event.origin

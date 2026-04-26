@@ -356,7 +356,7 @@ export class ElectronCapacitorApp {
         this.MainWindow.show();
       }
       setTimeout(() => {
-        if (electronIsDev) {
+        if (electronIsDev && process.env.QORTAL_HUB_OPEN_DEVTOOLS === '1') {
           this.MainWindow.webContents.openDevTools();
         }
         CapElectronEventEmitter.emit(
@@ -652,7 +652,8 @@ export async function readAppSettings(): Promise<AppSettings> {
       ...DEFAULT_APP_SETTINGS,
       ...parsed,
       closeAction:
-        parsed.closeAction && ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
+        parsed.closeAction &&
+        ['ask', 'minimizeToTray', 'quit'].includes(parsed.closeAction)
           ? (parsed.closeAction as CloseAction)
           : DEFAULT_APP_SETTINGS.closeAction,
     };
@@ -663,7 +664,11 @@ export async function readAppSettings(): Promise<AppSettings> {
 
 async function writeAppSettings(settings: AppSettings): Promise<void> {
   const filePath = await getSharedSettingsFilePath(APP_SETTINGS_FILENAME);
-  await fs.promises.writeFile(filePath, JSON.stringify(settings, null, 2), 'utf-8');
+  await fs.promises.writeFile(
+    filePath,
+    JSON.stringify(settings, null, 2),
+    'utf-8'
+  );
 }
 
 // READ handler
@@ -1095,11 +1100,9 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
     if (isInstalled) {
       const filePath = await getSharedSettingsFilePath('wallet-storage.json');
 
-      const stats = await fs.promises.stat(filePath).catch(() => null);
-      if (!stats || !stats.isFile()) return null;
-
-      const raw = await fs.promises.readFile(filePath, 'utf-8');
-
+      const raw = await fs.promises
+        .readFile(filePath, 'utf-8')
+        .catch(() => null);
       const data = raw ? JSON.parse(raw) : {};
       data['qortalDirectory'] = dir;
       await fs.promises.writeFile(
@@ -1110,7 +1113,7 @@ ipcMain.handle('coreSetup:pickQortalDirectory', async () => {
       broadcastProgress({
         type: 'hasCustomPath',
         hasCustomPath: true,
-        customPath: filePath,
+        customPath: dir,
       });
     } else return false;
   } catch (error) {

@@ -18,6 +18,7 @@ import { decryptStoredWallet } from '../../utils/decryptWallet';
 import PhraseWallet from '../../utils/generateWallet/phrase-wallet';
 import { crypto, walletVersion } from '../../constants/decryptWallet';
 import { executeEvent } from '../../utils/events';
+import { getWalletErrorMessage } from '../../utils/walletErrorMessages';
 
 export const DownloadWallet = ({
   returnToMain,
@@ -46,7 +47,9 @@ export const DownloadWallet = ({
         walletToBeDownloaded.qortAddress
       );
     } catch (error: any) {
-      setWalletToBeDownloadedError(error?.message);
+      setWalletToBeDownloadedError(
+        getWalletErrorMessage(error, 'Unable to save this wallet backup.')
+      );
     }
   };
 
@@ -104,7 +107,9 @@ export const DownloadWallet = ({
         newPasswordForWallet
       );
     } catch (error: any) {
-      setWalletToBeDownloadedError(error?.message);
+      setWalletToBeDownloadedError(
+        getWalletErrorMessage(error, 'Unable to prepare this wallet backup.')
+      );
     } finally {
       setIsLoading(false);
     }
