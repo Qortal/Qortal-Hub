@@ -118,10 +118,18 @@ type AudioSurfaceDiagEvent = {
   payload?: Record<string, unknown>;
 };
 
+type HeldIncomingAudioPayload = {
+  payload: GroupCallAudioReceivePayload;
+  heldAtMs: number;
+};
+
 const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 const AUTHORITATIVE_KEY_RECOVERY_RETRY_MS = 1_500;
+const AUTHORITATIVE_KEY_RECOVERY_FAILURE_LOG_COOLDOWN_MS = 1_000;
+const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS = 48;
+const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_AGE_MS = 4_000;
 const MAX_AUDIO_SURFACE_DIAG_EVENTS = 120;
 const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
@@ -260,6 +268,8 @@ export class GroupCallAudioEngineRuntime {
   private warnedNonArrayBufferAudioData = false;
   /** After a successful join, run one more retained-key replay when topology first arrives. */
   private shouldReplayRetainedKeysAfterNextTopology = false;
+  private heldIncomingAudio: HeldIncomingAudioPayload[] = [];
+  private lastAwaitingAuthoritativeKeyFailureLogAt = 0;
 
   constructor() {
     this.receiveEngine = new GroupCallAudioReceiveEngine(
@@ -403,6 +413,81 @@ export class GroupCallAudioEngineRuntime {
     for (const listener of this.listeners) {
       listener(event);
     }
+  }
+
+  private clearHeldIncomingAudio(): void {
+    this.heldIncomingAudio = [];
+  }
+
+  private cloneIncomingAudioPayload(
+    payload: GroupCallAudioReceivePayload
+  ): GroupCallAudioReceivePayload | null {
+    if (!(payload.data instanceof ArrayBuffer)) {
+      return null;
+    }
+    return {
+      ...payload,
+      data: payload.data.slice(0),
+    };
+  }
+
+  private pruneHeldIncomingAudio(nowMs: number): void {
+    this.heldIncomingAudio = this.heldIncomingAudio.filter(
+      (entry) => nowMs - entry.heldAtMs <= AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_AGE_MS
+    );
+    if (this.heldIncomingAudio.length > AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS) {
+      this.heldIncomingAudio.splice(
+        0,
+        this.heldIncomingAudio.length - AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS
+      );
+    }
+  }
+
+  private enqueueIncomingAudioWhileAwaitingKey(
+    payload: GroupCallAudioReceivePayload
+  ): void {
+    const cloned = this.cloneIncomingAudioPayload(payload);
+    if (!cloned) {
+      return;
+    }
+    const nowMs = Date.now();
+    this.pruneHeldIncomingAudio(nowMs);
+    this.heldIncomingAudio.push({
+      payload: cloned,
+      heldAtMs: nowMs,
+    });
+    this.pruneHeldIncomingAudio(nowMs);
+  }
+
+  private async flushHeldIncomingAudioAfterKeyApplied(): Promise<void> {
+    if (this.heldIncomingAudio.length === 0) {
+      return;
+    }
+    const nowMs = Date.now();
+    this.pruneHeldIncomingAudio(nowMs);
+    if (this.heldIncomingAudio.length === 0) {
+      return;
+    }
+    const pending = this.heldIncomingAudio;
+    this.heldIncomingAudio = [];
+    this.recordDiagEvent('held-audio-flush-after-room-key', {
+      roomId: this.snapshot.roomId,
+      count: pending.length,
+    });
+    for (const entry of pending) {
+      await this.processIncomingAudioPayload(entry.payload);
+    }
+  }
+
+  private shouldLogAwaitingAuthoritativeKeyFailure(nowMs = Date.now()): boolean {
+    if (
+      nowMs - this.lastAwaitingAuthoritativeKeyFailureLogAt <
+      AUTHORITATIVE_KEY_RECOVERY_FAILURE_LOG_COOLDOWN_MS
+    ) {
+      return false;
+    }
+    this.lastAwaitingAuthoritativeKeyFailureLogAt = nowMs;
+    return true;
   }
 
   private emitSnapshot(): void {
@@ -674,6 +759,8 @@ export class GroupCallAudioEngineRuntime {
     this.clearKeyRecoveryRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
+    this.clearHeldIncomingAudio();
+    this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.activeSpeakerLastSeenAt.clear();
     this.connectionHintBadSince = null;
     this.connectionHintGoodSince = null;
@@ -870,6 +957,8 @@ export class GroupCallAudioEngineRuntime {
     this.clearKeyRecoveryRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
+    this.clearHeldIncomingAudio();
+    this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     await this.senderEngine.stop();
     await this.syncDecryptPoolRoomKey(null);
     await this.receiveEngine.reset();
@@ -954,41 +1043,17 @@ export class GroupCallAudioEngineRuntime {
         transport: audioPayload.transport ?? 'unknown',
         dataIsArrayBuffer: audioPayload.data instanceof ArrayBuffer,
       });
+      if (this.awaitingAuthoritativeKey && this.roomKey === null) {
+        this.enqueueIncomingAudioWhileAwaitingKey(audioPayload);
+        this.scheduleAuthoritativeKeyRecovery('decode-failure');
+        return;
+      }
+      const decodedCount = await this.processIncomingAudioPayload(audioPayload);
       if (
-        !this.warnedNonArrayBufferAudioData &&
-        poolReady &&
-        !(audioPayload.data instanceof ArrayBuffer) &&
-        byteLen > 0
+        decodedCount === 0 &&
+        this.awaitingAuthoritativeKey &&
+        this.shouldLogAwaitingAuthoritativeKeyFailure()
       ) {
-        this.warnedNonArrayBufferAudioData = true;
-        traceGcallAudioSurface(
-          'pipeline: gcall:audio data is not ArrayBuffer — worker pool path skipped (check IPC clone type)',
-          { ctor: (audioPayload.data as object)?.constructor?.name }
-        );
-      }
-      if (poolReady && audioPayload.data instanceof ArrayBuffer) {
-        this.receiveEngine.noteIncomingAudio(audioPayload.bridgeReceivedAtWallMs);
-        const ingressPeerAddress =
-          audioPayload.fromAddress ??
-          audioPayload.resolvedFromAddress ??
-          'unknown';
-        const posted = this.decryptPool!.postDecrypt(
-          ingressPeerAddress,
-          this.decryptId++,
-          audioPayload.data.slice(0)
-        );
-        if (posted) {
-          return;
-        }
-        traceGcallAudioSurface('pipeline: decrypt pool postDecrypt returned false, falling back', {
-          from: ingressPeerAddress,
-        });
-      }
-      const decodedCount = await this.receiveEngine.handleIncomingAudio(
-        audioPayload,
-        this.roomKey
-      );
-      if (decodedCount === 0 && this.awaitingAuthoritativeKey) {
         traceGcallAudioSurface(
           'pipeline: gcall:audio decode failed while awaiting authoritative room key',
           {
@@ -1035,6 +1100,8 @@ export class GroupCallAudioEngineRuntime {
       this.awaitingAuthoritativeKey = false;
       this.seq = 0;
       this.callEpochMs = Date.now();
+      this.clearHeldIncomingAudio();
+      this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
       this.activeSpeakerLastSeenAt.clear();
       this.clearActiveSpeakerRefreshTimer();
       await this.senderEngine.stop();
@@ -1056,6 +1123,53 @@ export class GroupCallAudioEngineRuntime {
         }
       );
     }
+  }
+
+  private async processIncomingAudioPayload(
+    audioPayload: GroupCallAudioReceivePayload
+  ): Promise<number> {
+    const byteLen =
+      audioPayload.data instanceof ArrayBuffer
+        ? audioPayload.data.byteLength
+        : ArrayBuffer.isView(audioPayload.data)
+          ? audioPayload.data.byteLength
+          : 0;
+    const poolReady =
+      this.decryptPool !== null &&
+      this.decryptPoolAppliedKeyVersion === this.decryptPoolKeyVersion;
+    const fromAddr =
+      audioPayload.fromAddress ?? audioPayload.resolvedFromAddress ?? '';
+    if (
+      !this.warnedNonArrayBufferAudioData &&
+      poolReady &&
+      !(audioPayload.data instanceof ArrayBuffer) &&
+      byteLen > 0
+    ) {
+      this.warnedNonArrayBufferAudioData = true;
+      traceGcallAudioSurface(
+        'pipeline: gcall:audio data is not ArrayBuffer — worker pool path skipped (check IPC clone type)',
+        { ctor: (audioPayload.data as object)?.constructor?.name }
+      );
+    }
+    if (poolReady && audioPayload.data instanceof ArrayBuffer) {
+      this.receiveEngine.noteIncomingAudio(audioPayload.bridgeReceivedAtWallMs);
+      const ingressPeerAddress =
+        audioPayload.fromAddress ??
+        audioPayload.resolvedFromAddress ??
+        'unknown';
+      const posted = this.decryptPool!.postDecrypt(
+        ingressPeerAddress,
+        this.decryptId++,
+        audioPayload.data.slice(0)
+      );
+      if (posted) {
+        return 1;
+      }
+      traceGcallAudioSurface('pipeline: decrypt pool postDecrypt returned false, falling back', {
+        from: ingressPeerAddress,
+      });
+    }
+    return this.receiveEngine.handleIncomingAudio(audioPayload, this.roomKey);
   }
 
   private async handleIncomingRoomKey(
@@ -1162,6 +1276,7 @@ export class GroupCallAudioEngineRuntime {
       keyBytes: roomKey.length,
       mediaSessionGeneration: payload.mediaSessionGeneration >>> 0,
     });
+    await this.flushHeldIncomingAudioAfterKeyApplied();
     await this.syncSenderState();
   }
 
@@ -1526,7 +1641,9 @@ export class GroupCallAudioEngineRuntime {
     ) {
       return;
     }
-    this.clearKeyRecoveryRetryTimer();
+    if (this.keyRecoveryRetryTimer) {
+      return;
+    }
     this.keyRecoveryRetryTimer = setTimeout(() => {
       this.keyRecoveryRetryTimer = null;
       void this.requestRoomKeyFrom(root, 'topology');

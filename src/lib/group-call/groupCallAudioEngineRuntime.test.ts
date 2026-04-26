@@ -455,6 +455,164 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(lastSnapshot?.snapshot?.metrics?.packetsDecoded).toBe(1);
   });
 
+  it('holds early media while awaiting the authoritative key and flushes it after key apply', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const events: Array<{
+      type: string;
+      snapshot?: { metrics?: { packetsReceived: number; packetsDecoded: number } };
+      json?: string;
+    }> = [];
+    runtime.onEvent((event) => {
+      events.push(event as never);
+    });
+    const roomKey = new Uint8Array(32).fill(7);
+    const decryptedKey = btoa(String.fromCharCode(...roomKey));
+    const keyCommitment = await buildMediaKeyCommitmentHex(roomKey, 'csid-1', 1);
+    (window as unknown as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage = vi
+      .fn()
+      .mockImplementation(async (action: string) => {
+        if (action === 'decryptBoxWithMyKey') {
+          return { decryptedKey };
+        }
+        return { signature: 'sig' };
+      });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' }],
+    });
+    groupCallEventHandler?.('gcall:session-updated', {
+      roomId: 'room-1',
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:audio', {
+      roomId: 'room-1',
+      data: encodeAudioPacketV2('Qpeer', true, 1, 10, new Uint8Array([9, 8, 7]), roomKey)
+        .buffer,
+      fromAddress: 'Qpeer',
+      transport: 'link',
+      bridgeReceivedAtWallMs: Date.now(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.metrics?.packetsReceived ?? 0).toBe(0);
+    expect(lastSnapshot?.snapshot?.metrics?.packetsDecoded ?? 0).toBe(0);
+
+    groupCallEventHandler?.('gcall:key', {
+      roomId: 'room-1',
+      encryptedKey: btoa(String.fromCharCode(...new Uint8Array(64).fill(1))),
+      fromAddress: 'Qpeer',
+      fromPublicKey: 'pub-peer',
+      keyMessageVersion: 3,
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+      keyCommitment,
+      verified: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.metrics?.packetsReceived).toBe(1);
+    expect(lastSnapshot?.snapshot?.metrics?.packetsDecoded).toBe(1);
+
+    const exported = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const parsed = JSON.parse(String(exported.ok ? exported.payload : 'null')) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        recentEvents?: Array<{ tag: string; payload?: { count?: number } }>;
+      };
+    };
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.recentEvents?.some(
+        (event) =>
+          event.tag === 'held-audio-flush-after-room-key' &&
+          event.payload?.count === 1
+      )
+    ).toBe(true);
+  });
+
+  it('does not keep rescheduling authoritative-key recovery on repeated early media', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' }],
+    });
+    (
+      runtime as unknown as {
+        awaitingAuthoritativeKey: boolean;
+        roomKey: Uint8Array | null;
+        keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null;
+        heldIncomingAudio: Array<unknown>;
+      }
+    ).awaitingAuthoritativeKey = true;
+    (runtime as unknown as { roomKey: Uint8Array | null }).roomKey = null;
+
+    const payload = {
+      roomId: 'room-1',
+      data: new Uint8Array([1, 2, 3]).buffer,
+      fromAddress: 'Qpeer',
+      transport: 'link' as const,
+      bridgeReceivedAtWallMs: Date.now(),
+    };
+    groupCallEventHandler?.('gcall:audio', payload);
+    const firstTimer = (
+      runtime as unknown as {
+        keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null;
+      }
+    ).keyRecoveryRetryTimer;
+    expect(firstTimer).not.toBeNull();
+
+    groupCallEventHandler?.('gcall:audio', payload);
+    groupCallEventHandler?.('gcall:audio', payload);
+
+    const runtimeState = runtime as unknown as {
+      keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null;
+      heldIncomingAudio: Array<unknown>;
+    };
+    expect(runtimeState.keyRecoveryRetryTimer).toBe(firstTimer);
+    expect(runtimeState.heldIncomingAudio).toHaveLength(3);
+  });
+
   it('requests a room key on session-updated when another participant is root', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
