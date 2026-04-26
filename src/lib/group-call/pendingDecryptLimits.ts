@@ -223,6 +223,47 @@ export function computePendingDecryptOverloadMax(input: {
 }
 
 /**
+ * Returns true when the async decrypt worker pool provides no meaningful benefit over
+ * main-thread sync decode for the current session shape, and we should therefore skip
+ * the worker entirely.
+ *
+ * Motivation (observed in Kenny+Phil 1:1 production logs, call 58):
+ *   - Stable-hash routing pins every packet from a given ingress peer to one slot, so a
+ *     1:1 call uses exactly one worker regardless of pool size.
+ *   - The round-trip adds structured-clone + two task-queue hops vs. a <1 ms inline
+ *     `decodeAudioPackets` on the main thread. Under even moderate main-thread pressure,
+ *     inbound `resultBatch` messages pile up (Kenny observed 88 batches in-flight on
+ *     slot 0) and end-to-end decrypt latency balloons to 200-400 ms, starving the jitter
+ *     buffer (avgPcmBufferedMs ≈ 20 ms vs 145 ms target, 6000+ underruns in ~2 minutes).
+ *   - Forwarders still need the worker offload (mixer/fanout work contends with decrypt),
+ *     and long-task-pressured main threads benefit from the async hop — both gate out.
+ *
+ * Return true only when sync decode is strictly better:
+ *   • `participantCount <= 2` AND `activeSourceCount <= 1` (no parallelism to reclaim)
+ *   • `isForwarder` is the EFFECTIVE forwarder bit (i.e. the result of
+ *     {@link shouldTreatPendingDecryptAsForwarder}), not the raw `isFanoutForwarderRole`
+ *     flag. In 1:1 calls one peer is always elected `root-forwarder` and the other
+ *     `standby-forwarder` as a topology label, but neither actually forwards — only the
+ *     effective bit flips to `false` in that shape. Passing the raw role flag here
+ *     regresses the root-forwarder peer back onto the async path (observed in call 59:
+ *     Phil sync-decoded at 0.072 ms avg while Kenny was pinned to 213 ms avg because
+ *     his role was root-forwarder).
+ *   • no long-task pressure signal on the main thread
+ */
+export function shouldSyncDecodeForSmallSession(input: {
+  participantCount: number;
+  activeSourceCount: number;
+  isForwarder: boolean;
+  longTaskPressure: boolean;
+}): boolean {
+  if (input.isForwarder) return false;
+  if (input.longTaskPressure) return false;
+  const participants = Math.max(0, Math.floor(input.participantCount));
+  const sources = Math.max(0, Math.floor(input.activeSourceCount));
+  return participants <= 2 && sources <= 1;
+}
+
+/**
  * If the worker queue is about to hit the overload cap but the main thread is otherwise healthy,
  * let a participant decode inline instead of dropping at the queue boundary.
  */
@@ -341,6 +382,24 @@ export function slewBurstMaxTowardRequested(
   return Math.min(cap, currentEffective + maxUp);
 }
 
+/**
+ * Pool-size multiplier for the cap returned by {@link computePendingDecryptLimits}.
+ *
+ * The `max` values in this file historically assumed a single decrypt worker. With the
+ * decrypt worker pool (2-4 shards), the aggregate depth we can tolerate scales roughly
+ * linearly with pool size: each shard is an independent serial queue, so per-worker
+ * effective depth should stay roughly constant as the pool grows.
+ *
+ * Clamped so a degenerate `poolSize` of 0/NaN never shrinks the cap.
+ */
+function clampPoolSizeMultiplier(poolSize: number | undefined): number {
+  if (poolSize === undefined) return 1;
+  const n = Math.floor(poolSize);
+  if (!Number.isFinite(n) || n <= 1) return 1;
+  // Cap at 4× — matches `DECRYPT_POOL_HARD_CEILING` without having to import it here.
+  return Math.min(4, n);
+}
+
 export function computePendingDecryptLimits(
   nowMs: number,
   globalRecoveryUntilMs: number,
@@ -348,13 +407,15 @@ export function computePendingDecryptLimits(
   effectiveBurstMax: number,
   overloadActive = false,
   overloadMax = PENDING_DECRYPT_OVERLOAD_MAX,
-  preOverloadActive = false
+  preOverloadActive = false,
+  poolSize?: number
 ): { max: number; ttlMs: number } {
+  const mult = clampPoolSizeMultiplier(poolSize);
   if (overloadActive) {
     return {
       max: Math.min(
-        overloadMax,
-        Math.max(PENDING_DECRYPT_MAX, Math.floor(effectiveBurstMax))
+        overloadMax * mult,
+        Math.max(PENDING_DECRYPT_MAX * mult, Math.floor(effectiveBurstMax))
       ),
       ttlMs: PENDING_DECRYPT_OVERLOAD_TTL_MS,
     };
@@ -362,16 +423,19 @@ export function computePendingDecryptLimits(
   if (preOverloadActive) {
     return {
       max: Math.min(
-        GLOBAL_MAX_BURST_MAX,
-        Math.max(PENDING_DECRYPT_MAX, Math.floor(effectiveBurstMax))
+        GLOBAL_MAX_BURST_MAX * mult,
+        Math.max(PENDING_DECRYPT_MAX * mult, Math.floor(effectiveBurstMax))
       ),
       ttlMs: PENDING_DECRYPT_PRE_OVERLOAD_TTL_MS,
     };
   }
   if (nowMs < decryptBurstUntilMs) {
     const max = Math.min(
-      GLOBAL_MAX_BURST_MAX,
-      Math.max(PENDING_DECRYPT_RECOVERY_MAX + 1, Math.floor(effectiveBurstMax))
+      GLOBAL_MAX_BURST_MAX * mult,
+      Math.max(
+        PENDING_DECRYPT_RECOVERY_MAX * mult + 1,
+        Math.floor(effectiveBurstMax)
+      )
     );
     return {
       max,
@@ -380,9 +444,9 @@ export function computePendingDecryptLimits(
   }
   if (nowMs < globalRecoveryUntilMs) {
     return {
-      max: PENDING_DECRYPT_RECOVERY_MAX,
+      max: PENDING_DECRYPT_RECOVERY_MAX * mult,
       ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
     };
   }
-  return { max: PENDING_DECRYPT_MAX, ttlMs: PENDING_DECRYPT_TTL_MS };
+  return { max: PENDING_DECRYPT_MAX * mult, ttlMs: PENDING_DECRYPT_TTL_MS };
 }

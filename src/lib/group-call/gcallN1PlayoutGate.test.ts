@@ -376,6 +376,110 @@ describe('gcallN1PlayoutGate', () => {
     ).toBe(true);
   });
 
+  it('exits severe forced release when the opus reserve is already a full target deep, regardless of PCM starvation (regression: call 60)', () => {
+    // Call-60 shape: Kenny's inbound path flapped 4× in the first 75 s, packets
+    // arrived in bursts, the jitter buffer peaked at 400 ms (≈ 20 Opus frames)
+    // yet `avgPcmBufferedMs` was stuck at 0–8 ms because the severe-rebuild
+    // 5-frames/tick clamp couldn't match the worklet's drain + 0.947× playout
+    // stretch. Without this escape, the PCM-dominant exit (≥ 120 ms PCM,
+    // under-target ≤ 0.3) is mathematically unreachable from that trap —
+    // rebuild keeps the clamp on, the clamp keeps PCM empty, forever.
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 5_000,
+        rebuildUntilMs: 4_500,
+        opusBufferedMs: 400,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 8,
+        playoutUnderTargetFraction: 0.95,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(false);
+
+    // Just-at-target is enough: if we have exactly one target's worth of Opus
+    // sitting in the jitter buffer, the rebuild's "protect PCM" rationale is
+    // moot — staying in rebuild is actively causing the starvation we were
+    // trying to protect against.
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 5_000,
+        rebuildUntilMs: 4_500,
+        opusBufferedMs: 145,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 10,
+        playoutUnderTargetFraction: 0.9,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(false);
+
+    // Just below target keeps the clamp on — we don't yet have enough reserve
+    // to safely drain freely.
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 5_000,
+        rebuildUntilMs: 4_500,
+        opusBufferedMs: 140,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 10,
+        playoutUnderTargetFraction: 0.9,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(true);
+
+    // Severe instability (true chaos on the path, not just starvation) still
+    // holds the clamp on: the opus depth could be transient and releasing now
+    // might dump the next trough onto an empty PCM ring.
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 5_000,
+        rebuildUntilMs: 4_500,
+        opusBufferedMs: 400,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 8,
+        playoutUnderTargetFraction: 0.95,
+        recentStable: false,
+        severeInstability: true,
+      })
+    ).toBe(true);
+
+    // Grace timer still wins over opus-overflow (prior tick extended rebuild).
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 1_000,
+        rebuildUntilMs: 1_260,
+        opusBufferedMs: 400,
+        targetMs: 145,
+        sampleCount: 4,
+        avgPcmBufferedMs: 8,
+        playoutUnderTargetFraction: 0.95,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(true);
+
+    // Not enough samples: stay conservative (same as existing sample-count gate).
+    expect(
+      shouldKeepN1SevereForcedReleaseRebuild({
+        nowMs: 5_000,
+        rebuildUntilMs: 4_500,
+        opusBufferedMs: 400,
+        targetMs: 145,
+        sampleCount: 0,
+        avgPcmBufferedMs: 8,
+        playoutUnderTargetFraction: 0.95,
+        recentStable: false,
+        severeInstability: false,
+      })
+    ).toBe(true);
+  });
+
   it('re-arms single-remote recovery when a live call collapses back to a one-frame floor', () => {
     expect(
       shouldRearmN1LateCollapseRecovery({

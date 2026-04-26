@@ -17,6 +17,7 @@ export interface WasmFecPcmSlab {
   pcm: Float32Array;
   frameCount: number;
   consumedFrames: number;
+  ingressAtMs: number | null;
 }
 
 export const GCALL_WASM_FEC_EMPTY_STATS = Object.freeze({
@@ -28,13 +29,19 @@ export const GCALL_WASM_FEC_EMPTY_STATS = Object.freeze({
 export const GCALL_EMPTY_PCM = new Float32Array(0);
 
 export type GetPlayoutNode = (sourceAddr: string) => AudioWorkletNode | undefined;
+export type PostPcmBatch = (
+  sourceAddr: string,
+  pcm: Float32Array,
+  frameCount: number,
+  ingressAtMs: number | null
+) => boolean;
 
 export class GcallOpusFecPlayoutPipeline {
   private readonly jobQueues = new Map<
     string,
-    Array<{ packet: Uint8Array; gap: number }>
+    Array<{ packet: Uint8Array; gap: number; ingressAtMs: number | null }>
   >();
-  private readonly inflight = new Map<string, boolean>();
+  private readonly inflight = new Map<string, number | null>();
   private readonly deferredPcm = new Map<string, WasmFecPcmSlab[]>();
   private readonly postedThisTick = new Map<string, number>();
   private requestId = 0;
@@ -44,7 +51,8 @@ export class GcallOpusFecPlayoutPipeline {
     private readonly onWasmFecDecodeStats?: (
       sourceAddr: string,
       stats: WasmFecDecodeStats & { deferredPcmTick: boolean }
-    ) => void
+    ) => void,
+    private readonly postPcmBatch?: PostPcmBatch
   ) {}
 
   clearPostedThisTick(): void {
@@ -74,9 +82,12 @@ export class GcallOpusFecPlayoutPipeline {
     pcm: Float32Array,
     frameCount: number,
     stats: WasmFecDecodeStats,
-    recordStats: boolean
+    recordStats: boolean,
+    ingressAtMs: number | null = null
   ): void {
-    const playNode = this.getPlayoutNode(sourceAddr);
+    const playNode = this.postPcmBatch
+      ? null
+      : this.getPlayoutNode(sourceAddr);
     const queue = this.deferredPcm.get(sourceAddr) ?? [];
     this.deferredPcm.delete(sourceAddr);
 
@@ -92,10 +103,10 @@ export class GcallOpusFecPlayoutPipeline {
         if (queue.length > 0) this.deferredPcm.set(sourceAddr, queue);
         return;
       }
-      queue.push({ pcm, frameCount, consumedFrames: 0 });
+      queue.push({ pcm, frameCount, consumedFrames: 0, ingressAtMs });
     }
 
-    if (!playNode) {
+    if (!this.postPcmBatch && !playNode) {
       if (queue.length > 0) this.deferredPcm.set(sourceAddr, queue);
       return;
     }
@@ -105,6 +116,41 @@ export class GcallOpusFecPlayoutPipeline {
 
     outer: while (queue.length > 0) {
       const slab = queue[0];
+      if (this.postPcmBatch) {
+        const remainingFrames = slab.frameCount - slab.consumedFrames;
+        const remainingBudget = GCALL_WASM_FEC_MAX_PCM_PER_TICK - posted;
+        if (remainingBudget <= 0) {
+          this.deferredPcm.set(sourceAddr, queue);
+          deferredTick = true;
+          break;
+        }
+        const frameBatch = Math.min(remainingFrames, remainingBudget);
+        const start = slab.consumedFrames * OPUS_FRAME_SAMPLES;
+        const end = start + frameBatch * OPUS_FRAME_SAMPLES;
+        const pcmBatch =
+          start === 0 && end === slab.pcm.length
+            ? slab.pcm
+            : slab.pcm.subarray(start, end);
+        const accepted = this.postPcmBatch(
+          sourceAddr,
+          pcmBatch,
+          frameBatch,
+          slab.ingressAtMs
+        );
+        if (!accepted) {
+          if (queue.length > 0) this.deferredPcm.set(sourceAddr, queue);
+          return;
+        }
+        slab.consumedFrames += frameBatch;
+        posted += frameBatch;
+        if (slab.consumedFrames >= slab.frameCount) {
+          queue.shift();
+          continue;
+        }
+        this.deferredPcm.set(sourceAddr, queue);
+        deferredTick = true;
+        break;
+      }
       while (slab.consumedFrames < slab.frameCount) {
         if (posted >= GCALL_WASM_FEC_MAX_PCM_PER_TICK) {
           this.deferredPcm.set(sourceAddr, queue);
@@ -141,10 +187,11 @@ export class GcallOpusFecPlayoutPipeline {
     worker: Worker,
     sourceAddr: string,
     packet: Uint8Array,
-    gap: number
+    gap: number,
+    ingressAtMs: number | null
   ): void {
     const q = this.jobQueues.get(sourceAddr) ?? [];
-    q.push({ packet, gap });
+    q.push({ packet, gap, ingressAtMs });
     this.jobQueues.set(sourceAddr, q);
     this.pump(worker, sourceAddr);
   }
@@ -156,7 +203,7 @@ export class GcallOpusFecPlayoutPipeline {
     const job = q.shift()!;
     if (q.length === 0) this.jobQueues.delete(sourceAddr);
     else this.jobQueues.set(sourceAddr, q);
-    this.inflight.set(sourceAddr, true);
+    this.inflight.set(sourceAddr, job.ingressAtMs);
     const requestId = ++this.requestId;
     const buf = job.packet.buffer.slice(
       job.packet.byteOffset,
@@ -176,6 +223,10 @@ export class GcallOpusFecPlayoutPipeline {
 
   completeInflight(sourceAddr: string): void {
     this.inflight.delete(sourceAddr);
+  }
+
+  consumeInflightIngressAtMs(sourceAddr: string): number | null {
+    return this.inflight.get(sourceAddr) ?? null;
   }
 
   removeSource(sourceAddr: string): void {

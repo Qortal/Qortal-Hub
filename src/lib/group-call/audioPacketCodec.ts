@@ -9,6 +9,40 @@
 
 import nacl from '../../encryption/nacl-fast';
 
+/**
+ * Pluggable secret-box provider.
+ *
+ * Lets the hot crypto primitives be swapped out per execution context: the
+ * audio-decrypt worker uses a libsodium-backed implementation (see
+ * {@link ./audioPacketCodecSodium.ts}), while the main-thread sync fallback
+ * keeps the existing tweetnacl-js implementation to avoid paying the WASM
+ * init cost on first paint.
+ *
+ * Invariants (must hold across implementations):
+ * - `seal` must be byte-compatible with NaCl secretbox (XSalsa20-Poly1305).
+ * - `open` returns `null` when authentication fails (never throws).
+ * - `randomNonce` returns a fresh 24-byte nonce per call.
+ */
+export interface SecretBoxProvider {
+  open(
+    ciphertext: Uint8Array,
+    nonce: Uint8Array,
+    key: Uint8Array
+  ): Uint8Array | null;
+  seal(plaintext: Uint8Array, nonce: Uint8Array, key: Uint8Array): Uint8Array;
+  randomNonce(): Uint8Array;
+}
+
+/**
+ * Default provider backed by the bundled tweetnacl-js port.
+ * Used when no explicit provider is threaded in (main-thread sync path, tests).
+ */
+export const defaultSecretBoxProvider: SecretBoxProvider = {
+  open: (ciphertext, nonce, key) => nacl.secretbox.open(ciphertext, nonce, key),
+  seal: (plaintext, nonce, key) => nacl.secretbox(plaintext, nonce, key),
+  randomNonce: () => nacl.randomBytes(24),
+};
+
 export const GCALL_AUDIO_PACKET_V2_VERSION = 2;
 /** Multi-Opus container inside one secretbox (backward-compatible: peers without v3 only parse v2/v1). */
 export const GCALL_AUDIO_PACKET_V3_VERSION = 3;
@@ -42,7 +76,8 @@ export function encodeAudioPacketV2(
   seq: number,
   timestampMs: number,
   opusFrame: Uint8Array,
-  roomKey: Uint8Array
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider = defaultSecretBoxProvider
 ): Uint8Array {
   const addrBytes = new TextEncoder().encode(sourceAddr);
   if (addrBytes.length === 0 || addrBytes.length > GCALL_AUDIO_MAX_ADDR_LEN) {
@@ -73,19 +108,23 @@ export function encodeAudioPacketV2(
   inner[o++] = ts32 & 0xff;
   inner.set(opusFrame, o);
 
-  const nonce = nacl.randomBytes(24);
-  const ciphertext = nacl.secretbox(inner, nonce, roomKey);
+  const nonce = provider.randomNonce();
+  const ciphertext = provider.seal(inner, nonce, roomKey);
   const out = new Uint8Array(24 + ciphertext.length);
   out.set(nonce, 0);
   out.set(ciphertext, 24);
   return out;
 }
 
-function tryDecodeV2(buf: Uint8Array, roomKey: Uint8Array): DecodedAudioPacket | null {
+function tryDecodeV2(
+  buf: Uint8Array,
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider
+): DecodedAudioPacket | null {
   if (buf.length < V2_MIN_WIRE) return null;
   const nonce = buf.subarray(0, 24);
   const box = buf.subarray(24);
-  const inner = nacl.secretbox.open(box, nonce, roomKey);
+  const inner = provider.open(box, nonce, roomKey);
   if (!inner) return null;
   if (inner.length < 1 + 1 + 1 + 1 + 2 + 4 + GCALL_AUDIO_MIN_OPUS_LEN) return null;
   let o = 0;
@@ -123,7 +162,8 @@ export function encodeAudioPacketV3(
   startSeq: number,
   timestampMs: number,
   opusFrames: Uint8Array[],
-  roomKey: Uint8Array
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider = defaultSecretBoxProvider
 ): Uint8Array {
   if (opusFrames.length === 0 || opusFrames.length > GCALL_AUDIO_V3_MAX_FRAMES) {
     throw new Error('GCALL v3 encode: frame count 1..MAX');
@@ -163,19 +203,23 @@ export function encodeAudioPacketV3(
     inner.set(f, o);
     o += f.length;
   }
-  const nonce = nacl.randomBytes(24);
-  const ciphertext = nacl.secretbox(inner, nonce, roomKey);
+  const nonce = provider.randomNonce();
+  const ciphertext = provider.seal(inner, nonce, roomKey);
   const out = new Uint8Array(24 + ciphertext.length);
   out.set(nonce, 0);
   out.set(ciphertext, 24);
   return out;
 }
 
-function tryDecodeV3(buf: Uint8Array, roomKey: Uint8Array): DecodedAudioPacket[] {
+function tryDecodeV3(
+  buf: Uint8Array,
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider
+): DecodedAudioPacket[] {
   if (buf.length < V2_MIN_WIRE) return [];
   const nonce = buf.subarray(0, 24);
   const box = buf.subarray(24);
-  const inner = nacl.secretbox.open(box, nonce, roomKey);
+  const inner = provider.open(box, nonce, roomKey);
   if (!inner || inner.length < 1 + 1 + 1 + 1 + 2 + 4 + 1) return [];
   let o = 0;
   const version = inner[o++];
@@ -211,7 +255,11 @@ function tryDecodeV3(buf: Uint8Array, roomKey: Uint8Array): DecodedAudioPacket[]
   return out;
 }
 
-function tryDecodeV1(buf: Uint8Array, roomKey: Uint8Array): DecodedAudioPacket | null {
+function tryDecodeV1(
+  buf: Uint8Array,
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider
+): DecodedAudioPacket | null {
   try {
     let off = 0;
     const addrLen = buf[off++];
@@ -226,7 +274,7 @@ function tryDecodeV1(buf: Uint8Array, roomKey: Uint8Array): DecodedAudioPacket |
     const nonce = buf.subarray(off, off + 24);
     off += 24;
     const ciphertext = buf.subarray(off);
-    const plaintext = nacl.secretbox.open(ciphertext, nonce, roomKey);
+    const plaintext = provider.open(ciphertext, nonce, roomKey);
     if (!plaintext) return null;
     if (plaintext.length < GCALL_AUDIO_MIN_OPUS_LEN || plaintext.length > GCALL_AUDIO_MAX_OPUS_LEN) {
       return null;
@@ -248,22 +296,27 @@ function tryDecodeV1(buf: Uint8Array, roomKey: Uint8Array): DecodedAudioPacket |
  */
 export function decodeAudioPackets(
   buf: Uint8Array,
-  roomKey: Uint8Array
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider = defaultSecretBoxProvider
 ): DecodedAudioPacket[] {
   if (roomKey.length !== 32) return [];
-  const v3 = tryDecodeV3(buf, roomKey);
+  const v3 = tryDecodeV3(buf, roomKey, provider);
   if (v3.length > 0) return v3;
-  const v2 = tryDecodeV2(buf, roomKey);
+  const v2 = tryDecodeV2(buf, roomKey, provider);
   if (v2) return [v2];
-  const v1 = tryDecodeV1(buf, roomKey);
+  const v1 = tryDecodeV1(buf, roomKey, provider);
   return v1 ? [v1] : [];
 }
 
 /**
  * First logical frame only (compat with single-frame call sites).
  */
-export function decodeAudioPacket(buf: Uint8Array, roomKey: Uint8Array): DecodedAudioPacket | null {
-  const all = decodeAudioPackets(buf, roomKey);
+export function decodeAudioPacket(
+  buf: Uint8Array,
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider = defaultSecretBoxProvider
+): DecodedAudioPacket | null {
+  const all = decodeAudioPackets(buf, roomKey, provider);
   return all[0] ?? null;
 }
 
@@ -274,14 +327,15 @@ export function encodeAudioPacketV1(
   seq: number,
   timestampMs: number,
   opusFrame: Uint8Array,
-  roomKey: Uint8Array
+  roomKey: Uint8Array,
+  provider: SecretBoxProvider = defaultSecretBoxProvider
 ): Uint8Array {
   const addrBytes = new TextEncoder().encode(sourceAddr);
   if (addrBytes.length === 0 || addrBytes.length > GCALL_AUDIO_MAX_ADDR_LEN) {
     throw new Error('GCALL v1 encode: invalid address length');
   }
-  const nonce = nacl.randomBytes(24);
-  const ciphertext = nacl.secretbox(opusFrame, nonce, roomKey);
+  const nonce = provider.randomNonce();
+  const ciphertext = provider.seal(opusFrame, nonce, roomKey);
   const total = 1 + addrBytes.length + 1 + 2 + 4 + 24 + ciphertext.length;
   const out = new Uint8Array(total);
   let off = 0;

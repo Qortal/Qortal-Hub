@@ -13,6 +13,8 @@
  *   `window.__qortalGCallPerfStats` when perf is enabled — not on the live call interval.
  */
 
+import type { AnyGcallV2Event } from './v2/diagnosticsContract';
+
 export type GcallDiagLevel = 'log' | 'warn' | 'info';
 
 export interface GcallDiagEvent {
@@ -68,9 +70,34 @@ export interface GcallDiagExportPayload {
   phase5PairedVerificationHint: string;
   /**
    * Renderer GcallPerfCollector snapshot (tick durations, counters, long tasks, tick-budget breach stats).
-   * Present when group-call perf is enabled (off in production by default; opt in via `qortal:gcall-perf`).
+   * Includes `enabled` so exports can distinguish a disabled production collector from an empty sample set.
+   * Group-call perf is off in production by default; opt in via `qortal:gcall-perf`.
    */
   gcallPerfSnapshot?: unknown;
+  audioSurfaceRuntimeDiagnostics?: unknown;
+  v2Diagnostics?: {
+    eventCount: number;
+    v2ManagedSourceAddrs: string[];
+    legacyWindowOpusMetricsMeaningful: boolean;
+    avgJitterBufferedMs: number;
+    avgPcmRingBufferedMs: number;
+    avgPcmRingOldestFrameAgeMs: number;
+    maxPcmRingOldestFrameAgeMs: number;
+    stalePcmDrops: number;
+    avgTargetBufferMs: number;
+    stateTransitionCounts: Partial<Record<string, number>>;
+    perStream: Array<{
+      streamKey: string;
+      lastState: string | null;
+      avgJitterBufferedMs: number;
+      avgPcmRingBufferedMs: number;
+      avgPcmRingOldestFrameAgeMs: number;
+      maxPcmRingOldestFrameAgeMs: number;
+      stalePcmDrops: number;
+      targetBufferMs: number;
+    }>;
+    events: unknown[];
+  };
   events: GcallDiagEvent[];
   webrtcStats?: Record<string, unknown>;
 }
@@ -376,8 +403,15 @@ export function buildGcallDiagnosticsExportJson(params: {
   liveMetricsSnapshot: unknown;
   exportWindowMetrics: unknown;
   gcallPerfSnapshot?: unknown;
+  audioSurfaceRuntimeDiagnostics?: unknown;
+  v2DiagnosticEvents?: readonly AnyGcallV2Event[];
+  v2ManagedSourceAddrs?: readonly string[];
 }): string {
   const triad = extractTransportTriadFromLiveMetrics(params.liveMetricsSnapshot);
+  const v2Diagnostics = buildV2DiagnosticsExportSection(
+    params.v2DiagnosticEvents,
+    params.v2ManagedSourceAddrs
+  );
   const payload: GcallDiagExportPayload = {
     schemaVersion: 1,
     exportedAtMs: Date.now(),
@@ -397,12 +431,184 @@ export function buildGcallDiagnosticsExportJson(params: {
       params.gcallPerfSnapshot !== undefined
         ? redactDeep(params.gcallPerfSnapshot)
         : undefined,
+    audioSurfaceRuntimeDiagnostics:
+      params.audioSurfaceRuntimeDiagnostics !== undefined
+        ? redactDeep(params.audioSurfaceRuntimeDiagnostics)
+        : undefined,
+    v2Diagnostics:
+      v2Diagnostics !== null
+        ? (redactDeep(v2Diagnostics) as GcallDiagExportPayload['v2Diagnostics'])
+        : undefined,
     events: events.map((e) => ({
       ...e,
       payload: redactDeep(e.payload),
     })),
   };
   return JSON.stringify(payload, null, 2);
+}
+
+function buildV2DiagnosticsExportSection(
+  eventsInput?: readonly AnyGcallV2Event[],
+  managedSourceAddrsInput?: readonly string[]
+): GcallDiagExportPayload['v2Diagnostics'] | null {
+  const events = eventsInput ? [...eventsInput] : [];
+  const managedSourceAddrs = [...new Set(managedSourceAddrsInput ?? [])];
+  if (events.length === 0 && managedSourceAddrs.length === 0) return null;
+
+  const stateTransitionCounts: Partial<Record<string, number>> = {};
+  const perStream = new Map<
+    string,
+    {
+      lastState: string | null;
+      jitterTotal: number;
+      jitterCount: number;
+      pcmTotal: number;
+      pcmCount: number;
+      targetBufferMs: number;
+    }
+  >();
+
+  for (const event of events) {
+    switch (event.kind) {
+      case 'state-transition': {
+        const payload = event.payload;
+        stateTransitionCounts[payload.toState] =
+          (stateTransitionCounts[payload.toState] ?? 0) + 1;
+        const stream = ensureV2StreamSummary(perStream, payload.streamKey);
+        stream.lastState = payload.toState;
+        if (payload.policyOutput.targetBufferMs > 0) {
+          stream.targetBufferMs = payload.policyOutput.targetBufferMs;
+        }
+        break;
+      }
+      case 'jitter-stats': {
+        const payload = event.payload;
+        const stream = ensureV2StreamSummary(perStream, payload.streamKey);
+        stream.lastState = payload.state;
+        stream.jitterTotal += payload.bufferedMs;
+        stream.jitterCount += 1;
+        break;
+      }
+      case 'pcm-ring-stats': {
+        const payload = event.payload;
+        const stream = ensureV2StreamSummary(perStream, payload.streamKey);
+        stream.lastState = payload.state;
+        stream.pcmTotal += payload.bufferedMs;
+        stream.pcmCount += 1;
+        stream.pcmOldestAgeTotal += payload.oldestFrameAgeMs;
+        stream.pcmOldestAgeCount += 1;
+        stream.pcmOldestAgeMax = Math.max(
+          stream.pcmOldestAgeMax,
+          payload.oldestFrameAgeMs
+        );
+        stream.stalePcmDrops = Math.max(stream.stalePcmDrops, payload.staleDrops);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  const perStreamSummary = [...perStream.entries()]
+    .map(([streamKey, stream]) => ({
+      streamKey,
+      lastState: stream.lastState,
+      avgJitterBufferedMs:
+        stream.jitterCount > 0 ? stream.jitterTotal / stream.jitterCount : 0,
+      avgPcmRingBufferedMs:
+        stream.pcmCount > 0 ? stream.pcmTotal / stream.pcmCount : 0,
+      avgPcmRingOldestFrameAgeMs:
+        stream.pcmOldestAgeCount > 0
+          ? stream.pcmOldestAgeTotal / stream.pcmOldestAgeCount
+          : 0,
+      maxPcmRingOldestFrameAgeMs: stream.pcmOldestAgeMax,
+      stalePcmDrops: stream.stalePcmDrops,
+      targetBufferMs: stream.targetBufferMs,
+    }))
+    .sort((a, b) => a.streamKey.localeCompare(b.streamKey));
+
+  const avgJitterBufferedMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.avgJitterBufferedMs, 0) /
+        perStreamSummary.length
+      : 0;
+  const avgPcmRingBufferedMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.avgPcmRingBufferedMs, 0) /
+        perStreamSummary.length
+      : 0;
+  const avgPcmRingOldestFrameAgeMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce(
+          (sum, stream) => sum + stream.avgPcmRingOldestFrameAgeMs,
+          0
+        ) / perStreamSummary.length
+      : 0;
+  const maxPcmRingOldestFrameAgeMs =
+    perStreamSummary.length > 0
+      ? Math.max(...perStreamSummary.map((stream) => stream.maxPcmRingOldestFrameAgeMs))
+      : 0;
+  const stalePcmDrops =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.stalePcmDrops, 0)
+      : 0;
+  const avgTargetBufferMs =
+    perStreamSummary.length > 0
+      ? perStreamSummary.reduce((sum, stream) => sum + stream.targetBufferMs, 0) /
+        perStreamSummary.length
+      : 0;
+
+  return {
+    eventCount: events.length,
+    v2ManagedSourceAddrs: managedSourceAddrs,
+    legacyWindowOpusMetricsMeaningful: managedSourceAddrs.length === 0,
+    avgJitterBufferedMs,
+    avgPcmRingBufferedMs,
+    avgPcmRingOldestFrameAgeMs,
+    maxPcmRingOldestFrameAgeMs,
+    stalePcmDrops,
+    avgTargetBufferMs,
+    stateTransitionCounts,
+    perStream: perStreamSummary,
+    events,
+  };
+}
+
+function ensureV2StreamSummary(
+  perStream: Map<
+    string,
+    {
+      lastState: string | null;
+      jitterTotal: number;
+      jitterCount: number;
+      pcmTotal: number;
+      pcmCount: number;
+      pcmOldestAgeTotal: number;
+      pcmOldestAgeCount: number;
+      pcmOldestAgeMax: number;
+      stalePcmDrops: number;
+      targetBufferMs: number;
+    }
+  >,
+  streamKey: string
+) {
+  let summary = perStream.get(streamKey);
+  if (!summary) {
+    summary = {
+      lastState: null,
+      jitterTotal: 0,
+      jitterCount: 0,
+      pcmTotal: 0,
+      pcmCount: 0,
+      pcmOldestAgeTotal: 0,
+      pcmOldestAgeCount: 0,
+      pcmOldestAgeMax: 0,
+      stalePcmDrops: 0,
+      targetBufferMs: 0,
+    };
+    perStream.set(streamKey, summary);
+  }
+  return summary;
 }
 
 type GcallElectronFile = {

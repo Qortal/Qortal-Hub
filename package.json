@@ -11,6 +11,12 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest",
+    "test:gcall:e2e": "GCALL_E2E_ARTIFACT_DIR=${GCALL_E2E_ARTIFACT_DIR:-.artifacts/gcall-e2e} vitest run src/lib/group-call/v2/groupCallE2eQuality.test.ts",
+    "test:gcall:e2e:offline": "GCALL_E2E_ARTIFACT_DIR=${GCALL_E2E_ARTIFACT_DIR:-.artifacts/gcall-e2e} vitest run src/lib/group-call/v2/groupCallE2eQuality.test.ts src/lib/group-call/v2/groupCallE2eLiveExport.test.ts src/lib/group-call/v2/replayHarness.test.ts electron/src/group-call-e2e-electron.test.ts",
+    "test:gcall:e2e:watch": "GCALL_E2E_ARTIFACT_DIR=${GCALL_E2E_ARTIFACT_DIR:-.artifacts/gcall-e2e} vitest src/lib/group-call/v2/groupCallE2eQuality.test.ts",
+    "test:gcall:e2e:scenario": "GCALL_E2E_SCENARIO=${npm_config_scenario:-} GCALL_E2E_ARTIFACT_DIR=${GCALL_E2E_ARTIFACT_DIR:-.artifacts/gcall-e2e} vitest run src/lib/group-call/v2/groupCallE2eQuality.test.ts",
+    "test:gcall:e2e:electron": "GCALL_E2E_ARTIFACT_DIR=${GCALL_E2E_ARTIFACT_DIR:-.artifacts/gcall-e2e} vitest run electron/src/group-call-e2e-electron.test.ts",
+    "test:gcall:e2e:live-export": "GCALL_E2E_EXPORT_A=${npm_config_exporta:-} GCALL_E2E_EXPORT_B=${npm_config_exportb:-} GCALL_E2E_ARTIFACT_DIR=${GCALL_E2E_ARTIFACT_DIR:-.artifacts/gcall-e2e} vitest run src/lib/group-call/v2/groupCallE2eLiveExport.test.ts",
     "build:libopus-fec": "./native/libopus-fec-wasm/build.sh"
   },
   "dependencies": {
@@ -65,6 +71,7 @@
     "i18next-localstorage-backend": "^4.2.0",
     "jotai": "^2.12.3",
     "jssha": "3.3.1",
+    "libsodium-wrappers-sumo": "^0.8.4",
     "lit": "^3.2.1",
     "lodash": "^4.17.21",
     "mime": "^4.0.4",
@@ -97,6 +104,7 @@
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.3.0",
     "@types/dompurify": "^3.0.5",
+    "@types/libsodium-wrappers-sumo": "^0.7.8",
     "@types/lodash": "^4.17.7",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

@@ -14,6 +14,7 @@ export interface GcallPerfLongTaskEntry {
 
 export interface GcallPerfSnapshot {
   exportedAtMs: number;
+  enabled: boolean;
   series: Record<string, GcallPerfSeriesSummary>;
   counters: Record<string, number>;
   longTasks: {
@@ -164,6 +165,10 @@ export class GcallPerfCollector {
     }
     return {
       exportedAtMs: Date.now(),
+      enabled:
+        typeof meta?.['perfCollectionEnabled'] === 'boolean'
+          ? (meta['perfCollectionEnabled'] as boolean)
+          : true,
       series,
       counters,
       longTasks: {

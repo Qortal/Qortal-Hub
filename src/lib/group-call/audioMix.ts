@@ -25,6 +25,20 @@ export function computeRecentSpeakerEstimate(
   return count;
 }
 
+export function computeRecentSpeakerEstimateExcluding(
+  speakers: ReadonlyMap<string, number>,
+  nowMs: number,
+  excludedSpeakerIds: ReadonlySet<string>,
+  recentSpeakerWindowMs: number = RECENT_SPEAKER_WINDOW_MS
+): number {
+  let count = 0;
+  for (const [speakerId, lastVadAt] of speakers) {
+    if (excludedSpeakerIds.has(speakerId)) continue;
+    if (nowMs - lastVadAt <= recentSpeakerWindowMs) count++;
+  }
+  return count;
+}
+
 export function computePerSpeakerGainTarget(opts: {
   recentSpeakerEstimate: number;
   lastVadAtMs?: number;

@@ -3,6 +3,7 @@ import {
   computeMasterGainTarget,
   computePerSpeakerGainTarget,
   computeRecentSpeakerEstimate,
+  computeRecentSpeakerEstimateExcluding,
   shouldUpdateAudioMix,
 } from './audioMix';
 
@@ -15,6 +16,30 @@ describe('audioMix', () => {
       ['d', 10_200],
     ]);
     expect(computeRecentSpeakerEstimate(speakers, 11_400, 1_500)).toBe(4);
+  });
+
+  it('can exclude local speaker activity from playback mix counts', () => {
+    const speakers = new Map<string, number>([
+      ['local', 10_000],
+      ['remote-a', 10_050],
+      ['remote-b', 10_100],
+    ]);
+    expect(
+      computeRecentSpeakerEstimateExcluding(
+        speakers,
+        11_200,
+        new Set(['local']),
+        1_500
+      )
+    ).toBe(2);
+    expect(
+      computeRecentSpeakerEstimateExcluding(
+        speakers,
+        11_200,
+        new Set(['local', 'remote-b']),
+        1_500
+      )
+    ).toBe(1);
   });
 
   it('preserves single-speaker loudness for active speakers', () => {

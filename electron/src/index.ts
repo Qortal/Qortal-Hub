@@ -4,7 +4,7 @@ import {
   setupElectronDeepLinking,
 } from '@capacitor-community/electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { app, MenuItem, dialog, powerMonitor, session } from 'electron';
+import { app, MenuItem, dialog, powerMonitor, protocol, session } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
@@ -57,6 +57,8 @@ import {
 } from './reticulum-bridge';
 import { getPresenceManager } from './presence';
 import { isDisabledLegacy } from './feature-flags';
+import { buildAudioSurfaceScheme } from './audio-window-policy';
+import { setAudioSurfaceHttpsInstanceIndex } from './audio-surface-https';
 
 import * as net from 'net';
 
@@ -220,6 +222,35 @@ const appMenuBarMenuTemplate: (MenuItemConstructorOptions | MenuItem)[] = [
 // Get Config options from capacitor.config
 const capacitorFileConfig: CapacitorElectronConfig =
   getCapacitorElectronConfig();
+const capacitorRendererScheme =
+  capacitorFileConfig.electron?.customUrlScheme ?? 'capacitor-electron';
+const audioSurfaceRendererScheme =
+  buildAudioSurfaceScheme(capacitorRendererScheme);
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: capacitorRendererScheme,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+      codeCache: true,
+    },
+  },
+  {
+    scheme: audioSurfaceRendererScheme,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+      codeCache: true,
+    },
+  },
+]);
 
 // Initialize our app. You can pass menu templates into the app here.
 // const myCapacitorApp = new ElectronCapacitorApp(capacitorFileConfig);
@@ -297,6 +328,7 @@ async function setupMultiInstanceUserData(
 // Run Application
 (async () => {
   const instanceIndex = await setupMultiInstanceUserData();
+  setAudioSurfaceHttpsInstanceIndex(instanceIndex);
   setReticulumInstanceIndex(instanceIndex);
   const recovery = recoverReticulumStateForAppLaunch(instanceIndex);
   if (recovery.orphanedDaemonFound) {
@@ -315,6 +347,23 @@ async function setupMultiInstanceUserData(
 
   // Set Content Security Policy
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());
+
+  for (const desktopAppOrigin of [
+    `${capacitorRendererScheme}://-`,
+    `${audioSurfaceRendererScheme}://-`,
+  ]) {
+    await session.defaultSession
+      .clearStorageData({
+        origin: desktopAppOrigin,
+        storages: ['serviceworkers', 'cachestorage'],
+      })
+      .catch((error) => {
+        loggerError(
+          `[App] Failed to clear desktop service worker state for ${desktopAppOrigin}:`,
+          error
+        );
+      });
+  }
 
   // Install cert verify proc and block HTTPS to local node until ensureCertForBase has run (default session).
   installCertificateVerification(session.defaultSession);

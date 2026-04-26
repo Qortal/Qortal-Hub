@@ -135,7 +135,7 @@ _OVERLAY_PENDING_PACKET_LIMIT = 24
 # Diagnostics: grep logs for "target=reticulum-audio-ipc" (fd open, parse, drops, first bytes).
 _AUDIO_IPC_LOG = "target=reticulum-audio-ipc"
 AUDIO_MAGIC = b"QAUD"
-AUDIO_VERSION = 1
+AUDIO_VERSION = 2
 AUDIO_HEADER_BYTES = 9
 AUDIO_MAX_BODY = 65536
 AUDIO_MAX_FRAMES = 32
@@ -284,6 +284,30 @@ def _mark_audio_queue_state_dirty() -> None:
     _audio_queue_state_dirty = True
 
 
+def _decoded_queue_oldest_age_ms(now: float) -> float:
+    with _audio_decoded_queue.mutex:
+        queued = _audio_decoded_queue.queue[0] if _audio_decoded_queue.queue else None
+    if not queued:
+        return 0.0
+    queued_at, _batch = queued
+    if not isinstance(queued_at, (int, float)):
+        return 0.0
+    return max(0.0, (now - queued_at) * 1000.0)
+
+
+def _binary_out_queue_oldest_age_ms(now: float) -> float:
+    with _audio_binary_out_queue.mutex:
+        queued = _audio_binary_out_queue.queue[0] if _audio_binary_out_queue.queue else None
+    if not queued:
+        return 0.0
+    if not isinstance(queued, tuple) or len(queued) < 2:
+        return 0.0
+    queued_at = queued[0]
+    if not isinstance(queued_at, (int, float)):
+        return 0.0
+    return max(0.0, (now - queued_at) * 1000.0)
+
+
 def _emit_audio_queue_state(force: bool = False) -> None:
     global _audio_queue_state_dirty, _audio_queue_state_last_emit
     now = time.monotonic()
@@ -297,9 +321,11 @@ def _emit_audio_queue_state(force: bool = False) -> None:
         "group_audio_queue_state",
         {
             "decodedQueueDepth": _audio_decoded_queue.qsize(),
+            "decodedQueueOldestAgeMs": _decoded_queue_oldest_age_ms(now),
             "decodedQueueMax": _AUDIO_DECODED_QUEUE_MAX,
             "decodedQueueDrops": _audio_drops_ingress,
             "binaryOutQueueDepth": _audio_binary_out_queue.qsize(),
+            "binaryOutQueueOldestAgeMs": _binary_out_queue_oldest_age_ms(now),
             "binaryOutQueueMax": _AUDIO_BINARY_OUT_QUEUE_MAX,
             "binaryOutQueueDrops": _audio_drops_binary_out,
             "jsonOutQueueDrops": _audio_drops_json_out,
@@ -318,7 +344,7 @@ def _emit_audio_queue_state(force: bool = False) -> None:
 def _emit_binary_audio(chunk: bytes) -> None:
     global _audio_drops_binary_out, _audio_ipc_fd4_first_chunk_logged
     try:
-        _audio_binary_out_queue.put_nowait(chunk)
+        _audio_binary_out_queue.put_nowait((time.monotonic(), chunk))
         _mark_audio_queue_state_dirty()
         if not _audio_ipc_fd4_first_chunk_logged:
             _audio_ipc_fd4_first_chunk_logged = True
@@ -405,11 +431,24 @@ def _parse_audio_batch_body(body: bytes) -> list:
             raise ValueError("truncated plen")
         plen = int.from_bytes(body[o : o + 2], "big")
         o += 2
+        if o + 8 > len(body):
+            raise ValueError("truncated received_at")
+        received_at_wall_ms = int.from_bytes(body[o : o + 8], "big")
+        o += 8
         if plen > AUDIO_MAX_PAYLOAD or o + plen > len(body):
             raise ValueError("bad payload")
         raw = bytes(body[o : o + plen])
         o += plen
-        out.append((link_id, room_id, peer_presence_hash, peer_call_hash, raw))
+        out.append(
+            (
+                link_id,
+                room_id,
+                peer_presence_hash,
+                peer_call_hash,
+                received_at_wall_ms,
+                raw,
+            )
+        )
     if o != len(body):
         raise ValueError("leftover")
     return out
@@ -418,13 +457,13 @@ def _parse_audio_batch_body(body: bytes) -> list:
 def _encode_audio_batch_binary(
     frames: list,
 ) -> bytes:
-    """frames: list of (link_id, room_id, peer_presence_hash, peer_call_hash, raw: bytes)"""
+    """frames: list of (link_id, room_id, peer_presence_hash, peer_call_hash, received_at_wall_ms, raw: bytes)"""
     n = len(frames)
     if n == 0 or n > AUDIO_MAX_FRAMES:
         raise ValueError("bad frame count")
     body = bytearray()
     body.extend(n.to_bytes(2, "big"))
-    for link_id, room_id, pph, pch, raw in frames:
+    for link_id, room_id, pph, pch, received_at_wall_ms, raw in frames:
         lid = link_id.encode("utf-8")
         rid = room_id.encode("utf-8")
         pb = pph.encode("utf-8")
@@ -446,6 +485,7 @@ def _encode_audio_batch_binary(
         body.append(len(cb))
         body.extend(cb)
         body.extend(len(raw).to_bytes(2, "big"))
+        body.extend(int(max(0, int(received_at_wall_ms))).to_bytes(8, "big"))
         body.extend(raw)
     body_bytes = bytes(body)
     if len(body_bytes) > AUDIO_MAX_BODY:
@@ -458,10 +498,10 @@ def _encode_audio_batch_binary(
 
 
 def _process_audio_batch(frames: list) -> None:
-    """frames: list of (link_id, room_id, peer_presence_hash, peer_call_hash, raw_opus_bytes)"""
+    """frames: list of (link_id, room_id, peer_presence_hash, peer_call_hash, received_at_wall_ms, raw_opus_bytes)"""
     global _audio_ipc_rns_first_send_ok_logged, _audio_packet_send_failures
     global _audio_packet_fresh_sends, _audio_packet_stale_sends, _audio_packet_unknown_sends
-    for link_id, room_id, peer_presence_hash, peer_call_hash, raw in frames:
+    for link_id, room_id, peer_presence_hash, peer_call_hash, _received_at_wall_ms, raw in frames:
         if link_id:
             state = get_audio_link_state(link_id)
             if state is None:
@@ -722,10 +762,11 @@ def _audio_binary_out_writer_loop() -> None:
         f"[presence_bridge] {_AUDIO_IPC_LOG} fd4=egress-ready child→parent-binary (inbound audio to Electron)"
     )
     while True:
-        chunk = _audio_binary_out_queue.get()
-        if chunk is None:
+        queued = _audio_binary_out_queue.get()
+        if queued is None:
             break
         try:
+            _queued_at, chunk = queued
             _write_all_binary(outf, chunk)
         except BrokenPipeError:
             break
@@ -2923,6 +2964,7 @@ def on_audio_link_packet(message, packet) -> None:
                     room_id,
                     str(state.get("peerPresenceHash") or ""),
                     str(state.get("peerDestinationHash") or ""),
+                    int(time.time() * 1000),
                     raw_audio,
                 )
             ]
@@ -3100,6 +3142,7 @@ def on_hub_packet_received(data, packet) -> None:
                         room_id,
                         peer_presence_hash,
                         sender_dest,
+                        int(time.time() * 1000),
                         raw_audio,
                     )
                 ]

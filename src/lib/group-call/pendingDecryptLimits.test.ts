@@ -7,6 +7,7 @@ import {
   computeRequestedBurstMaxFromSignals,
   shouldTreatPendingDecryptAsForwarder,
   shouldBypassDecryptWorkerOnHotQueue,
+  shouldSyncDecodeForSmallSession,
   shouldPreemptivelyThrottlePendingDecrypt,
   GLOBAL_MAX_BURST_MAX,
   PENDING_DECRYPT_BURST_NOMINAL_BASE,
@@ -114,6 +115,100 @@ describe('computePendingDecryptLimits', () => {
       max: PENDING_DECRYPT_OVERLOAD_FORWARDER_MAX,
       ttlMs: PENDING_DECRYPT_OVERLOAD_TTL_MS,
     });
+  });
+
+  it('scales steady/recovery/burst/overload caps linearly with pool size', () => {
+    const now = 10_000;
+
+    expect(
+      computePendingDecryptLimits(
+        now,
+        0,
+        0,
+        PENDING_DECRYPT_BURST_NOMINAL_BASE,
+        false,
+        PENDING_DECRYPT_OVERLOAD_MAX,
+        false,
+        4
+      )
+    ).toEqual({ max: PENDING_DECRYPT_MAX * 4, ttlMs: PENDING_DECRYPT_TTL_MS });
+
+    expect(
+      computePendingDecryptLimits(
+        now,
+        20_000,
+        0,
+        PENDING_DECRYPT_BURST_NOMINAL_BASE,
+        false,
+        PENDING_DECRYPT_OVERLOAD_MAX,
+        false,
+        3
+      )
+    ).toEqual({
+      max: PENDING_DECRYPT_RECOVERY_MAX * 3,
+      ttlMs: PENDING_DECRYPT_RECOVERY_TTL_MS,
+    });
+
+    // Overload max is clamped by `min(overloadMax * mult, max(PENDING_MAX * mult, burst))`.
+    // With a small effectiveBurstMax the cap follows overloadMax * mult.
+    const overload2Small = computePendingDecryptLimits(
+      now,
+      0,
+      0,
+      /* effectiveBurstMax */ 0,
+      true,
+      PENDING_DECRYPT_OVERLOAD_MAX,
+      false,
+      2
+    );
+    expect(overload2Small.ttlMs).toBe(PENDING_DECRYPT_OVERLOAD_TTL_MS);
+    expect(overload2Small.max).toBe(PENDING_DECRYPT_MAX * 2);
+  });
+
+  it('clamps the pool-size multiplier at 4×', () => {
+    const now = 10_000;
+    const capAt4 = computePendingDecryptLimits(
+      now,
+      0,
+      0,
+      PENDING_DECRYPT_BURST_NOMINAL_BASE,
+      false,
+      PENDING_DECRYPT_OVERLOAD_MAX,
+      false,
+      4
+    );
+    const capAt16 = computePendingDecryptLimits(
+      now,
+      0,
+      0,
+      PENDING_DECRYPT_BURST_NOMINAL_BASE,
+      false,
+      PENDING_DECRYPT_OVERLOAD_MAX,
+      false,
+      16
+    );
+    expect(capAt16.max).toBe(capAt4.max);
+  });
+
+  it('treats undefined/NaN poolSize as 1× and never shrinks caps below the defaults', () => {
+    const now = 10_000;
+    const baseline = computePendingDecryptLimits(
+      now,
+      0,
+      0,
+      PENDING_DECRYPT_BURST_NOMINAL_BASE
+    );
+    const degenerate = computePendingDecryptLimits(
+      now,
+      0,
+      0,
+      PENDING_DECRYPT_BURST_NOMINAL_BASE,
+      false,
+      PENDING_DECRYPT_OVERLOAD_MAX,
+      false,
+      Number.NaN
+    );
+    expect(degenerate.max).toBeGreaterThanOrEqual(baseline.max);
   });
 
   it('uses a short TTL while pre-overload shedding is active', () => {
@@ -428,6 +523,123 @@ describe('shouldBypassDecryptWorkerOnHotQueue', () => {
         }),
         activeSourceCount: 1,
         applyQueueDepth: 0,
+      })
+    ).toBe(true);
+  });
+});
+
+describe('shouldSyncDecodeForSmallSession', () => {
+  it('sync-decodes the 1:1 single-source non-forwarder happy path', () => {
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 2,
+        activeSourceCount: 1,
+        isForwarder: false,
+        longTaskPressure: false,
+      })
+    ).toBe(true);
+  });
+
+  it('sync-decodes when the call is effectively silent (activeSourceCount === 0)', () => {
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 2,
+        activeSourceCount: 0,
+        isForwarder: false,
+        longTaskPressure: false,
+      })
+    ).toBe(true);
+  });
+
+  it('keeps the worker pool online for fanout forwarders', () => {
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 2,
+        activeSourceCount: 1,
+        isForwarder: true,
+        longTaskPressure: false,
+      })
+    ).toBe(false);
+  });
+
+  it('composes with shouldTreatPendingDecryptAsForwarder so a root-forwarder in a 1:1 call takes the sync path (regression: call 59)', () => {
+    // Kenny was role=root-forwarder in a 1:1 call; the raw `isFanoutForwarderRole` bit
+    // is true for that role, but in a 1:1 there is no actual fanout work so the
+    // effective forwarder bit (what the overload clamp / bypass paths use) is false.
+    // This chain must yield `sync-decode = true` for both endpoints; otherwise only the
+    // standby-forwarder peer benefits and the root-forwarder peer keeps drowning in the
+    // async-worker pipeline.
+    const effectiveForwarderForRoot = shouldTreatPendingDecryptAsForwarder({
+      isForwarderRole: true,
+      participantCount: 2,
+      activeSourceCount: 1,
+    });
+    expect(effectiveForwarderForRoot).toBe(false);
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 2,
+        activeSourceCount: 1,
+        isForwarder: effectiveForwarderForRoot,
+        longTaskPressure: false,
+      })
+    ).toBe(true);
+
+    const effectiveForwarderForStandby = shouldTreatPendingDecryptAsForwarder({
+      isForwarderRole: false,
+      participantCount: 2,
+      activeSourceCount: 1,
+    });
+    expect(effectiveForwarderForStandby).toBe(false);
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 2,
+        activeSourceCount: 1,
+        isForwarder: effectiveForwarderForStandby,
+        longTaskPressure: false,
+      })
+    ).toBe(true);
+  });
+
+  it('defers to the async worker when the main thread is long-task pressured', () => {
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 2,
+        activeSourceCount: 1,
+        isForwarder: false,
+        longTaskPressure: true,
+      })
+    ).toBe(false);
+  });
+
+  it('keeps the worker pool online as soon as a 3rd participant joins', () => {
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 3,
+        activeSourceCount: 1,
+        isForwarder: false,
+        longTaskPressure: false,
+      })
+    ).toBe(false);
+  });
+
+  it('keeps the worker pool online once a second source becomes active', () => {
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: 2,
+        activeSourceCount: 2,
+        isForwarder: false,
+        longTaskPressure: false,
+      })
+    ).toBe(false);
+  });
+
+  it('treats fractional / negative inputs defensively (floors both counts at 0)', () => {
+    expect(
+      shouldSyncDecodeForSmallSession({
+        participantCount: -1,
+        activeSourceCount: 0.5,
+        isForwarder: false,
+        longTaskPressure: false,
       })
     ).toBe(true);
   });

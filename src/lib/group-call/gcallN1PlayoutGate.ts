@@ -43,10 +43,53 @@ export const GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS = 80;
 export const GCALL_N1_SEVERE_RELEASE_EXIT_UNDERTARGET_MAX = 0.45;
 export const GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_PCM_MS = 120;
 export const GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_UNDERTARGET_MAX = 0.3;
+/**
+ * Opus-dominant escape for the severe forced-release rebuild loop.
+ *
+ * The severe rebuild caps jitter → PCM decoding to
+ * {@link GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP} frames/tick so PCM can
+ * rebuild without dumping a burst onto the worklet ring. The PCM-dominant and
+ * standard exits both demand that {@link GCALL_N1_SEVERE_RELEASE_EXIT_PCM_MS} /
+ * {@link GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_PCM_MS} of PCM be present
+ * before we let go of the clamp — fine when the source is cooperating, but a
+ * one-way trap when the remote path is bursty.
+ *
+ * Observed in the Phil ↔ Kenny call 60 logs: Kenny's inbound path flapped
+ * between Reticulum packet/link transports 4× in the first 75 s, packets
+ * arrived in bursts, the jitter buffer peaked at 400 ms (≥ 24 frames — the
+ * `singleRemoteDepthMs` trim ceiling) yet `avgPcmBufferedMs` never climbed out
+ * of the 8–85 ms band because the 5-frames/tick clamp couldn't match the
+ * worklet drain + 0.947× playout stretch. `n1SevereRebuildReadyEscape` fired
+ * 19× and `n1SevereRebuildDeadzoneReset` 7× — all one-shot primes that did
+ * nothing to release the clamp — while Kenny logged `strong` playout starvation
+ * across the whole call.
+ *
+ * Escape threshold: Opus-buffered ≥ 1× the smoothed playout target. At that
+ * depth we already hold a full playout-target reserve of audio waiting to be
+ * decoded; the rebuild's "protect PCM" rationale is moot because staying in
+ * rebuild is actively *causing* the PCM starvation. Exiting lets the normal
+ * drain cap (3–7 frames/tick depending on tier) flush the backlog into PCM,
+ * which in turn satisfies the PCM-dominant exit on subsequent ticks.
+ *
+ * The escape still respects `severeInstability` — if the recent-stability
+ * window shows real chaos (not just under-target), rebuild stays on.
+ */
+export const GCALL_N1_SEVERE_RELEASE_OPUS_OVERFLOW_EXIT_RATIO = 1.0;
 export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_OPUS_MS = 60;
 export const GCALL_N1_LATE_COLLAPSE_REARM_MAX_PCM_MS = 30;
 export const GCALL_N1_LATE_COLLAPSE_REARM_UNDERTARGET_MIN = 0.85;
-export const GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS = 450;
+/**
+ * Debounce between severe forced-release rebuild exits and the next allowed
+ * late-collapse rearm. Previously 450 ms, which let the rebuild clamp re-arm
+ * almost immediately after the opus-dominant escape released it — trapping the
+ * call in a clamp/escape/clamp oscillation while PCM stayed starved. Bumping
+ * to 2000 ms gives the normal drain cap at least a couple of playout periods
+ * to actually flush the Opus backlog into PCM before we're allowed to
+ * reintroduce the 5-frame clamp. Rearm logic still requires PCM ≤ 30 ms and
+ * strong starvation, so this only delays rearm in the pathological case we
+ * observed in call 62.
+ */
+export const GCALL_N1_LATE_COLLAPSE_REARM_COOLDOWN_MS = 2000;
 
 /** Short refill accumulation outside recovery so 2-way steady state does not collapse back to 1 frame. Keep it brief so refill does not push usable audio past playout deadlines. */
 export const GCALL_N1_STEADY_ACCUMULATION_MS = 30;
@@ -343,6 +386,22 @@ export function shouldKeepN1SevereForcedReleaseRebuild(input: {
     input.avgPcmBufferedMs >= pcmDominantExitMs &&
     input.playoutUnderTargetFraction <=
       GCALL_N1_SEVERE_RELEASE_PCM_DOMINANT_EXIT_UNDERTARGET_MAX
+  ) {
+    return false;
+  }
+
+  // Opus-dominant escape: a full target's worth of opus sitting in the jitter
+  // buffer means the rebuild clamp is now the cause of PCM starvation, not the
+  // cure for it. Break the feedback loop and let the normal drain flush the
+  // backlog to PCM. See GCALL_N1_SEVERE_RELEASE_OPUS_OVERFLOW_EXIT_RATIO for
+  // the full reasoning + the call-60 regression that motivated this branch.
+  // `severeInstability` still keeps the clamp on when the recent-stability
+  // window flags chaotic variance (not just steady under-target starvation).
+  const opusOverflowExitMs =
+    targetMs * GCALL_N1_SEVERE_RELEASE_OPUS_OVERFLOW_EXIT_RATIO;
+  if (
+    !input.severeInstability &&
+    input.opusBufferedMs >= opusOverflowExitMs
   ) {
     return false;
   }

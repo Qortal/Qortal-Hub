@@ -33,9 +33,9 @@ import { groupChatOpenAtom, userInfoAtom } from '../../atoms/global';
 import { useSupportChat, GROUP_SUPPORT_ADDRESSES } from '../../hooks/useSupportChat';
 import { useGroupCallContext } from '../../contexts/GroupCallContext';
 import { getGroupCallTransportSummary } from '../../lib/group-call/router';
+import type { GroupCallRole } from '../../lib/group-call/groupCallTopology';
 import { CallAudioSettingsButton } from './CallAudioDeviceSelectors';
 import { GroupCallConnectionBanner } from './GroupCallConnectionBanner';
-import type { MyRole } from '../../hooks/useGroupVoiceCall';
 
 export { GROUP_SUPPORT_ADDRESSES };
 
@@ -63,7 +63,7 @@ function fmtTime(ts: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-const ROLE_COLORS: Record<MyRole, string> = {
+const ROLE_COLORS: Record<GroupCallRole, string> = {
   'root-forwarder':    '#6366f1',
   'cluster-forwarder': '#8b5cf6',
   'standby-forwarder': '#f59e0b',
@@ -84,7 +84,7 @@ function ParticipantRow({
 }: {
   address: string;
   speaking: boolean;
-  role: MyRole;
+  role: GroupCallRole;
 }) {
   return (
     <Box

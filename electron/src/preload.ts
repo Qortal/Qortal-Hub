@@ -1,11 +1,22 @@
-// ------------------- User Preload starts here -------------------
-require('./rt/electron-rt');
-
 import { log as loggerLog, error as loggerError } from './logger';
 loggerLog('User Preload!');
 import { contextBridge, shell, ipcRenderer } from 'electron';
 import { buildBootstrapIceServers } from './stun-bootstrap';
 import { isDisabledLegacy } from './feature-flags';
+import { AUDIO_SURFACE_WINDOW_ROLE } from './audio-window-policy';
+import type {
+  AudioSurfaceCommand,
+  AudioSurfaceCommandEnvelope,
+  AudioSurfaceCommandResultEnvelope,
+  AudioSurfaceEvent,
+} from './audio-surface-ipc';
+
+// Sandbox-safe minimal Capacitor bridge. The repo's electron-plugins module is
+// currently empty, so we only need to preserve the platform marker here.
+contextBridge.exposeInMainWorld('CapacitorCustomPlatform', {
+  name: 'electron',
+  plugins: {},
+});
 
 function parseHubBootstrapSeedsFromArgv(): string[] {
   const prefix = '--hub-p2p-seeds=';
@@ -25,9 +36,21 @@ function parseHubBootstrapSeedsFromArgv(): string[] {
   return [];
 }
 
+function parseWindowRoleFromArgv(): string {
+  const prefix = '--window-role=';
+  for (const arg of process.argv) {
+    if (arg.startsWith(prefix)) {
+      return arg.slice(prefix.length) || 'main-shell';
+    }
+  }
+  return 'main-shell';
+}
+
 const hubP2pBootstrapIceServers = isDisabledLegacy
   ? []
   : buildBootstrapIceServers(parseHubBootstrapSeedsFromArgv());
+const windowRole = parseWindowRoleFromArgv();
+const isAudioSurfaceWindow = windowRole === AUDIO_SURFACE_WINDOW_ROLE;
 
 /**
  * Refcount `groupCall.onEvent` lifetimes so the last unsubscribe is the only one that sends
@@ -121,7 +144,10 @@ const maybeUnsubscribePresence = () => {
   queuedPresenceUpdates.clear();
   if (!presenceSubscribed) return;
   presenceSubscribed = false;
-  ipcRenderer.removeListener('presence:update-batch', handlePresenceUpdateBatch);
+  ipcRenderer.removeListener(
+    'presence:update-batch',
+    handlePresenceUpdateBatch
+  );
   ipcRenderer.send('presence:unsubscribe');
 };
 
@@ -137,7 +163,8 @@ const handleChatEvent = (_e: unknown, payload: unknown) => {
   for (const cb of chatEventSubscribers) cb(eventPayload);
   const chatId = eventPayload?.event?.chatId;
   if (typeof chatId !== 'string') return;
-  for (const cb of chatEventSubscribersByChatId.get(chatId) ?? []) cb(eventPayload);
+  for (const cb of chatEventSubscribersByChatId.get(chatId) ?? [])
+    cb(eventPayload);
 };
 
 const ensureChatEventSubscribed = () => {
@@ -148,10 +175,7 @@ const ensureChatEventSubscribed = () => {
 };
 
 const maybeUnsubscribeChatEvent = () => {
-  if (
-    chatEventSubscribers.size > 0 ||
-    chatEventSubscribersByChatId.size > 0
-  ) {
+  if (chatEventSubscribers.size > 0 || chatEventSubscribersByChatId.size > 0) {
     return;
   }
   if (!chatEventSubscribed) return;
@@ -169,15 +193,22 @@ let chatTypingSubscribed = false;
 
 const dispatchChatTyping = (payload: ChatTypingPayload) => {
   for (const cb of chatTypingSubscribers) cb(payload);
-  for (const cb of chatTypingSubscribersByChatId.get(payload.chatId) ?? []) cb(payload);
+  for (const cb of chatTypingSubscribersByChatId.get(payload.chatId) ?? [])
+    cb(payload);
 };
 
 const handleChatTypingStart = (_e: unknown, payload: unknown) => {
-  dispatchChatTyping({ ...(payload as Record<string, unknown>), active: true } as ChatTypingPayload);
+  dispatchChatTyping({
+    ...(payload as Record<string, unknown>),
+    active: true,
+  } as ChatTypingPayload);
 };
 
 const handleChatTypingStop = (_e: unknown, payload: unknown) => {
-  dispatchChatTyping({ ...(payload as Record<string, unknown>), active: false } as ChatTypingPayload);
+  dispatchChatTyping({
+    ...(payload as Record<string, unknown>),
+    active: false,
+  } as ChatTypingPayload);
 };
 
 const ensureChatTypingSubscribed = () => {
@@ -214,7 +245,8 @@ const handleChatRead = (_e: unknown, payload: unknown) => {
   for (const cb of chatReadSubscribers) cb(readPayload);
   const chatId = readPayload?.chatId;
   if (typeof chatId !== 'string') return;
-  for (const cb of chatReadSubscribersByChatId.get(chatId) ?? []) cb(readPayload);
+  for (const cb of chatReadSubscribersByChatId.get(chatId) ?? [])
+    cb(readPayload);
 };
 
 const ensureChatReadSubscribed = () => {
@@ -225,10 +257,7 @@ const ensureChatReadSubscribed = () => {
 };
 
 const maybeUnsubscribeChatRead = () => {
-  if (
-    chatReadSubscribers.size > 0 ||
-    chatReadSubscribersByChatId.size > 0
-  ) {
+  if (chatReadSubscribers.size > 0 || chatReadSubscribersByChatId.size > 0) {
     return;
   }
   if (!chatReadSubscribed) return;
@@ -339,10 +368,126 @@ try {
         destinationHash: string | null;
       }>,
     reticulumGetLocalIdentityPublicKeyBase64: () =>
-      ipcRenderer.invoke('reticulum:getLocalIdentityPublicKeyBase64') as Promise<{
+      ipcRenderer.invoke(
+        'reticulum:getLocalIdentityPublicKeyBase64'
+      ) as Promise<{
         publicKeyBase64: string | null;
       }>,
+    ...(isAudioSurfaceWindow
+      ? {
+          /**
+           * The audio window cannot use in-memory `keyPair` decryption with
+           * `window.sendMessage` → `signPresenceMessage` (see groupCallJoinSigning).
+           * IPC runs signing in the main shell renderer.
+           */
+          gcallProxySignPresenceMessage: (
+            payload: Record<string, unknown>
+          ) =>
+            ipcRenderer.invoke('gcall:proxySignPresenceMessage', payload) as Promise<{
+              signature?: string;
+              error?: string;
+              message?: string;
+            }>,
+          gcallProxyDecryptBoxWithMyKey: (payload: {
+            ephemeralPublicKey: string;
+            nonce: string;
+            ciphertext: string;
+          }) =>
+            ipcRenderer.invoke(
+              'gcall:proxyDecryptBoxWithMyKey',
+              payload
+            ) as Promise<{
+              decryptedKey?: string;
+              error?: string;
+              message?: string;
+            }>,
+        }
+      : {}),
   });
+
+  contextBridge.exposeInMainWorld('audioSurface', {
+    ensureReady: () =>
+      ipcRenderer.invoke('audio-surface:ensure-ready') as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+    sendCommand: (command: AudioSurfaceCommand) =>
+      ipcRenderer.invoke('audio-surface:send-command', command) as Promise<{
+        ok: boolean;
+        payload?: unknown;
+        error?: string;
+      }>,
+    onEvent: (cb: (event: AudioSurfaceEvent) => void) => {
+      const channel = 'audio-surface:event';
+      const handler = (_event: unknown, payload: unknown) => {
+        cb(payload as AudioSurfaceEvent);
+      };
+      ipcRenderer.on(channel, handler);
+      ipcRenderer.send('audio-surface:subscribe');
+      return () => {
+        ipcRenderer.send('audio-surface:unsubscribe');
+        ipcRenderer.removeListener(channel, handler);
+      };
+    },
+    getWindowRole: async () => windowRole,
+  });
+
+  if (isAudioSurfaceWindow) {
+    /**
+     * Main sends `audio-surface:host-command` as soon as the user joins; the page
+     * module may still be loading (heavy imports) before it calls `onCommand`.
+     * Register the IPC listener in preload so commands are never dropped; queue
+     * until the page provides a handler.
+     */
+    const HOST_COMMAND = 'audio-surface:host-command' as const;
+    let onHostCommand: ((e: AudioSurfaceCommandEnvelope) => void) | null = null;
+    const hostCommandBacklog: AudioSurfaceCommandEnvelope[] = [];
+    ipcRenderer.on(HOST_COMMAND, (_e, payload: unknown) => {
+      const envelope = payload as AudioSurfaceCommandEnvelope;
+      if (onHostCommand) {
+        try {
+          onHostCommand(envelope);
+        } catch (err) {
+          loggerError('[audio-surface] onHostCommand', err);
+        }
+      } else {
+        hostCommandBacklog.push(envelope);
+      }
+    });
+    contextBridge.exposeInMainWorld('audioSurfaceHost', {
+      notifyReady: () => {
+        ipcRenderer.send('audio-surface:host-ready');
+      },
+      emitEvent: (event: AudioSurfaceEvent) => {
+        ipcRenderer.send('audio-surface:host-event', event);
+      },
+      resolveCommand: (envelope: AudioSurfaceCommandResultEnvelope) => {
+        void ipcRenderer
+          .invoke('audio-surface:command-result', envelope)
+          .then((ack: { ack?: boolean; reason?: string }) => {
+            if (ack && ack.ack === false) {
+              loggerError('[audio-surface] command-result not applied', ack);
+            }
+          })
+          .catch((err) => {
+            loggerError('[audio-surface] command-result invoke failed', err);
+          });
+      },
+      onCommand: (cb: (envelope: AudioSurfaceCommandEnvelope) => void) => {
+        onHostCommand = (envelope) => {
+          void Promise.resolve(cb(envelope)).catch((err) => {
+            loggerError('[audio-surface] onCommand async', err);
+          });
+        };
+        for (const e of hostCommandBacklog.splice(0)) {
+          onHostCommand(e);
+        }
+        return () => {
+          onHostCommand = null;
+        };
+      },
+    });
+  }
 
   // Expose other utility functions
   contextBridge.exposeInMainWorld('electron', {
@@ -526,7 +671,15 @@ try {
       addPeer: async (addr: string) => ipcRenderer.invoke('p2p:addPeer', addr),
 
       /** Subscribe to incoming messages. Returns an unsubscribe function. */
-      onMessage: (cb: (payload: { id: string; from: string; via?: string; to?: string; data: unknown }) => void) => {
+      onMessage: (
+        cb: (payload: {
+          id: string;
+          from: string;
+          via?: string;
+          to?: string;
+          data: unknown;
+        }) => void
+      ) => {
         const handler = (_e: unknown, payload: unknown) => cb(payload as any);
         ipcRenderer.on('p2p:message', handler);
         ipcRenderer.send('p2p:message:subscribe');
@@ -537,7 +690,12 @@ try {
       },
 
       /** Subscribe to peer connect/disconnect events. Returns an unsubscribe function. */
-      onPeerChange: (cb: (payload: { type: 'connected' | 'disconnected'; id: string }) => void) => {
+      onPeerChange: (
+        cb: (payload: {
+          type: 'connected' | 'disconnected';
+          id: string;
+        }) => void
+      ) => {
         const handler = (_e: unknown, payload: unknown) => cb(payload as any);
         ipcRenderer.on('p2p:peerChange', handler);
         ipcRenderer.send('p2p:peerChange:subscribe');
@@ -587,19 +745,28 @@ try {
       ipcRenderer.invoke('presence:getOnlineAddresses'),
 
     /** Get full session info for all online users. */
-    getAllOnline: async () =>
-      ipcRenderer.invoke('presence:getAllOnline'),
+    getAllOnline: async () => ipcRenderer.invoke('presence:getAllOnline'),
 
     /**
      * Subscribe to presence updates (connect / timeout / logout).
      * `cb` receives `{ address: string; online: boolean }`.
      * Returns an unsubscribe function.
      */
-    onUpdate: (cb: (payload: { address: string; online: boolean; status: 'online' | 'away' | 'busy' | 'idle' | null }) => void) => {
+    onUpdate: (
+      cb: (payload: {
+        address: string;
+        online: boolean;
+        status: 'online' | 'away' | 'busy' | 'idle' | null;
+      }) => void
+    ) => {
       ensurePresenceSubscribed();
-      presenceUpdateSubscribers.add(cb as (payload: PresenceUpdatePayload) => void);
+      presenceUpdateSubscribers.add(
+        cb as (payload: PresenceUpdatePayload) => void
+      );
       return () => {
-        presenceUpdateSubscribers.delete(cb as (payload: PresenceUpdatePayload) => void);
+        presenceUpdateSubscribers.delete(
+          cb as (payload: PresenceUpdatePayload) => void
+        );
         maybeUnsubscribePresence();
       };
     },
@@ -696,7 +863,11 @@ try {
        * Pass `beforeTimestamp` for reverse-scroll pagination.
        * Returns ChatEvent[].
        */
-      getHistory: async (chatId: string, limit: number, beforeTimestamp?: number) =>
+      getHistory: async (
+        chatId: string,
+        limit: number,
+        beforeTimestamp?: number
+      ) =>
         ipcRenderer.invoke('chat:getHistory', chatId, limit, beforeTimestamp),
 
       /**
@@ -740,7 +911,9 @@ try {
         ensureChatEventSubscribed();
         chatEventSubscribers.add(cb as (payload: ChatEventPayload) => void);
         return () => {
-          chatEventSubscribers.delete(cb as (payload: ChatEventPayload) => void);
+          chatEventSubscribers.delete(
+            cb as (payload: ChatEventPayload) => void
+          );
           maybeUnsubscribeChatEvent();
         };
       },
@@ -779,7 +952,9 @@ try {
         ensureChatTypingSubscribed();
         chatTypingSubscribers.add(cb as (payload: ChatTypingPayload) => void);
         return () => {
-          chatTypingSubscribers.delete(cb as (payload: ChatTypingPayload) => void);
+          chatTypingSubscribers.delete(
+            cb as (payload: ChatTypingPayload) => void
+          );
           maybeUnsubscribeChatTyping();
         };
       },
@@ -930,16 +1105,51 @@ try {
       ),
 
     /** Accept an incoming call identified by callId. */
-    accept: async (callId: string, signature: string, publicKey: string, timestamp: number) =>
-      ipcRenderer.invoke('call:accept', callId, signature, publicKey, timestamp),
+    accept: async (
+      callId: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) =>
+      ipcRenderer.invoke(
+        'call:accept',
+        callId,
+        signature,
+        publicKey,
+        timestamp
+      ),
 
     /** Reject an incoming call. */
-    reject: async (callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) =>
-      ipcRenderer.invoke('call:reject', callId, reason, signature, publicKey, timestamp),
+    reject: async (
+      callId: string,
+      reason?: string,
+      signature?: string,
+      publicKey?: string,
+      timestamp?: number
+    ) =>
+      ipcRenderer.invoke(
+        'call:reject',
+        callId,
+        reason,
+        signature,
+        publicKey,
+        timestamp
+      ),
 
     /** Hang up an active or pending call. */
-    hangup: async (callId: string, signature: string, publicKey: string, timestamp: number) =>
-      ipcRenderer.invoke('call:hangup', callId, signature, publicKey, timestamp),
+    hangup: async (
+      callId: string,
+      signature: string,
+      publicKey: string,
+      timestamp: number
+    ) =>
+      ipcRenderer.invoke(
+        'call:hangup',
+        callId,
+        signature,
+        publicKey,
+        timestamp
+      ),
 
     /** Register the local user's address with the call manager. */
     setLocalAddresses: async (addresses: string[]) =>
@@ -950,9 +1160,7 @@ try {
      * `cb` receives typed payloads keyed by event name.
      * Returns an unsubscribe function.
      */
-    onEvent: (
-      cb: (event: string, payload: unknown) => void
-    ) => {
+    onEvent: (cb: (event: string, payload: unknown) => void) => {
       const channels = [
         'call:incoming',
         'call:accepted',
@@ -1031,7 +1239,15 @@ try {
       signature: string,
       publicKey: string,
       timestamp: number
-    ) => ipcRenderer.invoke('gcall:leave', roomId, localAddress, signature, publicKey, timestamp),
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:leave',
+        roomId,
+        localAddress,
+        signature,
+        publicKey,
+        timestamp
+      ),
 
     leaveSync: (
       roomId: string,
@@ -1066,7 +1282,15 @@ try {
       signature: string,
       publicKey: string,
       timestamp: number
-    ) => ipcRenderer.invoke('gcall:broadcastTopology', roomId, topology, signature, publicKey, timestamp),
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:broadcastTopology',
+        roomId,
+        topology,
+        signature,
+        publicKey,
+        timestamp
+      ),
 
     sendClusterHeartbeat: async (
       roomId: string,
@@ -1080,7 +1304,13 @@ try {
         timestamp: number;
       },
       signature: string
-    ) => ipcRenderer.invoke('gcall:sendClusterHeartbeat', roomId, payload, signature),
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:sendClusterHeartbeat',
+        roomId,
+        payload,
+        signature
+      ),
 
     /** Send a group audio packet to a specific participant via the main transport. */
     sendAudio: async (roomId: string, toAddress: string, data: Uint8Array) =>
@@ -1106,10 +1336,10 @@ try {
       ) as Promise<{ success: boolean; error?: string }>,
 
     reportGcallAudioEscalation: async (opts: { failSafeActive?: boolean }) =>
-      ipcRenderer.invoke(
-        'gcall:reportGcallAudioEscalation',
-        opts
-      ) as Promise<{ success: boolean; error?: string }>,
+      ipcRenderer.invoke('gcall:reportGcallAudioEscalation', opts) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
 
     /** Send room media key (nacl.box encrypted) to a participant. */
     sendKey: async (
@@ -1127,7 +1357,18 @@ try {
         keyCommitment: string;
         encryptedKeyDigest: string;
       }
-    ) => ipcRenderer.invoke('gcall:sendKey', roomId, toAddress, encryptedKey, fromAddress, signature, publicKey, timestamp, meta),
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:sendKey',
+        roomId,
+        toAddress,
+        encryptedKey,
+        fromAddress,
+        signature,
+        publicKey,
+        timestamp,
+        meta
+      ),
 
     /** Send rotated room media keys to all participants. */
     sendKeyRotate: async (
@@ -1144,7 +1385,17 @@ try {
         keyCommitment: string;
         encryptedKeysDigest: string;
       }
-    ) => ipcRenderer.invoke('gcall:sendKeyRotate', roomId, encryptedKeys, fromAddress, signature, publicKey, timestamp, meta),
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:sendKeyRotate',
+        roomId,
+        encryptedKeys,
+        fromAddress,
+        signature,
+        publicKey,
+        timestamp,
+        meta
+      ),
 
     sendKeyRequest: async (
       roomId: string,
@@ -1155,17 +1406,18 @@ try {
       timestamp: number,
       callSessionId: string,
       mediaSessionGeneration: number
-    ) => ipcRenderer.invoke(
-      'gcall:sendKeyRequest',
-      roomId,
-      toAddress,
-      fromAddress,
-      signature,
-      publicKey,
-      timestamp,
-      callSessionId,
-      mediaSessionGeneration
-    ),
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:sendKeyRequest',
+        roomId,
+        toAddress,
+        fromAddress,
+        signature,
+        publicKey,
+        timestamp,
+        callSessionId,
+        mediaSessionGeneration
+      ),
 
     requestSessionBreak: async (roomId: string) =>
       ipcRenderer.invoke('gcall:requestSessionBreak', roomId) as Promise<{
@@ -1178,8 +1430,15 @@ try {
       ipcRenderer.invoke('gcall:setLocalAddresses', addresses, source),
 
     /** Sync authoritative Qortal group member addresses for Reticulum call-activity fanout. */
-    setQortalGroupReticulumTargets: async (roomId: string, addresses: string[]) =>
-      ipcRenderer.invoke('gcall:setQortalGroupReticulumTargets', roomId, addresses) as Promise<{
+    setQortalGroupReticulumTargets: async (
+      roomId: string,
+      addresses: string[]
+    ) =>
+      ipcRenderer.invoke(
+        'gcall:setQortalGroupReticulumTargets',
+        roomId,
+        addresses
+      ) as Promise<{
         success: boolean;
         error?: string;
       }>,
@@ -1206,7 +1465,9 @@ try {
     /**
      * Subscribe only to coalesced group-call activity for the groups list (not full GC_* IPC).
      */
-    onQortalGroupCallActivity: (cb: (payload: { activeByGroupId: Record<string, boolean> }) => void) => {
+    onQortalGroupCallActivity: (
+      cb: (payload: { activeByGroupId: Record<string, boolean> }) => void
+    ) => {
       const channel = 'gcall:qortal-group-call-activity';
       const handler = (_e: unknown, payload: unknown) => {
         const p = payload as { activeByGroupId?: Record<string, boolean> };
@@ -1228,6 +1489,11 @@ try {
         pending_key_expired: number;
         pendingRooms: number;
       }>,
+
+    /** Ask main to re-send retained verified `gcall:key` frames (e.g. after joinRoom). */
+    requestRetainedKeyReplay: () => {
+      ipcRenderer.send('gcall:request-key-replay');
+    },
 
     /**
      * Subscribe to all group call events.
@@ -1267,7 +1533,6 @@ try {
       };
     },
   });
-
 } catch (error) {
   loggerError('error', error);
 }

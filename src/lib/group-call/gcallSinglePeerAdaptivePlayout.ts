@@ -18,11 +18,11 @@ import {
   MICRO_WIDEN_W_MS,
 } from './gcallPlayoutPolicy';
 import type { GroupCallAudioTuning } from './groupCallAudioProfile';
+import { computeSteadyTargetDecayThresholdMs } from './groupCallSteadyTargetDecay';
 import {
-  computeSteadyTargetDecayThresholdMs,
   summarizeRecentRecoveryStability,
   type RecoveryPlayoutHealthSample,
-} from '../../hooks/useGroupVoiceCall';
+} from './groupCallRecoveryDecisions';
 
 const ADAPTIVE_BASE_TARGET_MS = 100;
 const ADAPTIVE_MIN_TARGET_MS = 100;

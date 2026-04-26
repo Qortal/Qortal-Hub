@@ -99,6 +99,7 @@ export type ReticulumSendFailureReason =
 
 export type ReticulumAudioQueueSnapshot = {
   bridgeQueuedFrames: number;
+  bridgeQueuedOldestAgeMs: number;
   bridgeQueuedBytes: number;
   bridgeBinaryWritesQueued: number;
   bridgeWaitingForDrain: boolean;
@@ -108,9 +109,11 @@ export type ReticulumAudioQueueSnapshot = {
   staleDrops: number;
   staleDropsLast5s: number;
   decodedQueueDepth: number;
+  decodedQueueOldestAgeMs: number;
   decodedQueueMax: number;
   decodedQueueDrops: number;
   binaryOutQueueDepth: number;
+  binaryOutQueueOldestAgeMs: number;
   binaryOutQueueMax: number;
   binaryOutQueueDrops: number;
   jsonOutQueueDrops: number;
@@ -279,9 +282,11 @@ type BridgeEventFrame =
       event: 'group_audio_queue_state';
       payload?: {
         decodedQueueDepth?: number;
+        decodedQueueOldestAgeMs?: number;
         decodedQueueMax?: number;
         decodedQueueDrops?: number;
         binaryOutQueueDepth?: number;
+        binaryOutQueueOldestAgeMs?: number;
         binaryOutQueueMax?: number;
         binaryOutQueueDrops?: number;
         jsonOutQueueDrops?: number;
@@ -450,6 +455,7 @@ export type ReticulumGroupAudioPacketPayload = {
   data: Buffer;
   peerPresenceHash: string;
   peerDestinationHash: string;
+  receivedAtWallMs?: number;
   incoming: boolean;
 };
 
@@ -485,10 +491,31 @@ export class ReticulumBridge
   private audioRoundRobinCursor = 0;
   private audioQueuedFrames = 0;
   private audioQueuedBytes = 0;
-  private readonly audioFrameQueueMax = 48;
-  private readonly audioFrameQueuePerLinkMax = 16;
-  private readonly audioFrameStaleMs = 750;
-  private readonly audioBinaryWriteQueueMax = 4;
+  /** Global cap on queued outbound frames before pressure-drops (oldest evicted). */
+  private readonly audioFrameQueueMax = 96;
+  /** Per-route outbound queue cap (packet path uses one route per peer). */
+  private readonly audioFrameQueuePerLinkMax = 24;
+  /**
+   * Max age an outbound frame may sit in `audioFrameQueues` before we drop it.
+   * Needs to be tight enough that when fd3 drain stalls we evict audio that is
+   * already past the receiver's playout deadline rather than stockpile a burst
+   * of 700ms-old frames that will all hit the wire at once (call 62 saw up to
+   * 32 frames queued per link with `audioFrameStaleMs = 750`, exactly the
+   * burst-delivery pattern that kept Kenny's jitter buffer oscillating between
+   * 0 and 400 ms of queued Opus).
+   *
+   * Receiver playout target ranges 145–185 ms across adaptive profiles, so
+   * anything older than ~400 ms is past the deepest smoothed target plus a
+   * generous margin.
+   */
+  private readonly audioFrameStaleMs = 400;
+  /**
+   * Batched IPC buffers waiting for fd3 write. When this is full, `packAudioFramesIntoBinaryWrites`
+   * stops pulling from `audioFrameQueues` even if frames remain — combined with a slow fd3 drain
+   * that starves the main process and causes `queuePressureDrops` (field: Kenny root-forwarder
+   * in phil-kenny-one-on-one-60: 49 drops vs 0 on standby; bridge high-water sat at per-link max).
+   */
+  private readonly audioBinaryWriteQueueMax = 12;
   private audioBinaryWriteQueue: Buffer[] = [];
   private waitingForAudioBinaryDrain = false;
   private audioFlushScheduled = false;
@@ -499,6 +526,7 @@ export class ReticulumBridge
   private audioStaleDropEvents: Array<{ atMs: number; count: number }> = [];
   private lastAudioQueueSnapshot: ReticulumAudioQueueSnapshot = {
     bridgeQueuedFrames: 0,
+    bridgeQueuedOldestAgeMs: 0,
     bridgeQueuedBytes: 0,
     bridgeBinaryWritesQueued: 0,
     bridgeWaitingForDrain: false,
@@ -508,9 +536,11 @@ export class ReticulumBridge
     staleDrops: 0,
     staleDropsLast5s: 0,
     decodedQueueDepth: 0,
+    decodedQueueOldestAgeMs: 0,
     decodedQueueMax: 48,
     decodedQueueDrops: 0,
     binaryOutQueueDepth: 0,
+    binaryOutQueueOldestAgeMs: 0,
     binaryOutQueueMax: 128,
     binaryOutQueueDrops: 0,
     jsonOutQueueDrops: 0,
@@ -956,12 +986,14 @@ export class ReticulumBridge
   }
 
   getAudioQueueSnapshot(routeKey?: string): ReticulumAudioQueueSnapshot {
+    const nowMs = Date.now();
     const perLinkQueuedFrames = routeKey
       ? this.audioFrameQueues.get(routeKey)?.length ?? 0
       : 0;
     this.lastAudioQueueSnapshot = {
       ...this.lastAudioQueueSnapshot,
       bridgeQueuedFrames: this.audioQueuedFrames,
+      bridgeQueuedOldestAgeMs: this.getQueuedAudioFrameOldestAgeMs(nowMs),
       bridgeQueuedBytes: this.audioQueuedBytes,
       bridgeBinaryWritesQueued: this.audioBinaryWriteQueue.length,
       bridgeWaitingForDrain: this.waitingForAudioBinaryDrain,
@@ -974,6 +1006,18 @@ export class ReticulumBridge
       staleDropsLast5s: this.sumRecentAudioDropEvents(this.audioStaleDropEvents),
     };
     return { ...this.lastAudioQueueSnapshot };
+  }
+
+  private getQueuedAudioFrameOldestAgeMs(nowMs = Date.now()): number {
+    if (this.audioQueuedFrames <= 0) return 0;
+    let oldestQueuedAtMs = Number.POSITIVE_INFINITY;
+    for (const queue of this.audioFrameQueues.values()) {
+      const head = queue[0];
+      if (!head) continue;
+      oldestQueuedAtMs = Math.min(oldestQueuedAtMs, head.queuedAtMs);
+    }
+    if (!Number.isFinite(oldestQueuedAtMs)) return 0;
+    return Math.max(0, nowMs - oldestQueuedAtMs);
   }
 
   private recordAudioDropEvents(
@@ -1547,8 +1591,15 @@ export class ReticulumBridge
     this.audioFlushScheduled = true;
     setImmediate(() => {
       this.audioFlushScheduled = false;
-      this.packAudioFramesIntoBinaryWrites();
-      this.flushAudioBinaryQueue();
+      // Run several pack→flush rounds in one turn so a slow fd3 does not leave frames stuck
+      // in `audioFrameQueues` until the next enqueue (reduces queue-pressure drops under burst).
+      const maxRounds = 8;
+      for (let round = 0; round < maxRounds; round++) {
+        if (this.audioQueuedFrames <= 0) break;
+        this.packAudioFramesIntoBinaryWrites();
+        this.flushAudioBinaryQueue();
+        if (this.waitingForAudioBinaryDrain) break;
+      }
     });
   }
 
@@ -1664,6 +1715,12 @@ export class ReticulumBridge
             );
           }
           this.flushAudioBinaryQueue();
+          // fd3 was back-pressured; after draining the binary queue, pull any frames that were
+          // blocked from packing while `audioBinaryWriteQueue` was at capacity.
+          if (this.audioQueuedFrames > 0) {
+            this.packAudioFramesIntoBinaryWrites();
+            this.flushAudioBinaryQueue();
+          }
         });
         return;
       }
@@ -1731,6 +1788,9 @@ export class ReticulumBridge
             data: Buffer.from(f.payload),
             peerPresenceHash: f.peerPresenceHash ?? '',
             peerDestinationHash: f.peerDestinationHash ?? '',
+            ...(f.receivedAtWallMs && f.receivedAtWallMs > 0
+              ? { receivedAtWallMs: f.receivedAtWallMs }
+              : {}),
             incoming: true,
           };
           this.emit('group-audio-packet', pkt);
@@ -1940,6 +2000,10 @@ export class ReticulumBridge
             typeof frame.payload?.decodedQueueDepth === 'number'
               ? frame.payload.decodedQueueDepth
               : this.lastAudioQueueSnapshot.decodedQueueDepth,
+          decodedQueueOldestAgeMs:
+            typeof frame.payload?.decodedQueueOldestAgeMs === 'number'
+              ? frame.payload.decodedQueueOldestAgeMs
+              : this.lastAudioQueueSnapshot.decodedQueueOldestAgeMs,
           decodedQueueMax:
             typeof frame.payload?.decodedQueueMax === 'number'
               ? frame.payload.decodedQueueMax
@@ -1952,6 +2016,10 @@ export class ReticulumBridge
             typeof frame.payload?.binaryOutQueueDepth === 'number'
               ? frame.payload.binaryOutQueueDepth
               : this.lastAudioQueueSnapshot.binaryOutQueueDepth,
+          binaryOutQueueOldestAgeMs:
+            typeof frame.payload?.binaryOutQueueOldestAgeMs === 'number'
+              ? frame.payload.binaryOutQueueOldestAgeMs
+              : this.lastAudioQueueSnapshot.binaryOutQueueOldestAgeMs,
           binaryOutQueueMax:
             typeof frame.payload?.binaryOutQueueMax === 'number'
               ? frame.payload.binaryOutQueueMax

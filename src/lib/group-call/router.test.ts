@@ -803,9 +803,13 @@ describe('group-call router helpers', () => {
     });
     tracker.setReticulumAudioQueueDepths({
       pendingFrames: 14,
+      pendingOldestAgeMs: 280,
       bridgeQueuedFrames: 6,
+      bridgeQueuedOldestAgeMs: 190,
       decodedQueueDepth: 11,
+      decodedQueueOldestAgeMs: 340,
       binaryOutQueueDepth: 3,
+      binaryOutQueueOldestAgeMs: 120,
       queuePressureDropsLast5s: 2,
       staleDropsLast5s: 1,
       packetPathRequests: 3,
@@ -820,6 +824,10 @@ describe('group-call router helpers', () => {
       outsideOver: true,
       deltaMs: 28,
     });
+    tracker.recordReceiverIngressToPlayoutPostLatency('alice', 240);
+    tracker.recordReceiverIngressToPlayoutPostLatency('alice', 480);
+    tracker.recordReticulumAudioBridgeToRendererIngressLatency(55);
+    tracker.recordReticulumAudioBridgeToRendererIngressLatency(95);
     tracker.recordAdaptiveTargetSample('alice', 110);
     tracker.recordAdaptiveTargetSample('alice', 155);
     tracker.recordOpusBufferedMetric('alice', 80);
@@ -857,12 +865,20 @@ describe('group-call router helpers', () => {
     expect(window.reticulumAudioPacketUnknownSends).toBe(1);
     expect(window.reticulumAudioQueuePressureDropRatePerSec).toBe(0.033);
     expect(window.reticulumAudioPendingFramesHighWater).toBe(14);
+    expect(window.reticulumAudioPendingOldestAgeMaxMs).toBe(280);
+    expect(window.reticulumAudioBridgeQueuedOldestAgeMaxMs).toBe(190);
     expect(window.reticulumAudioDecodedQueueDepthHighWater).toBe(11);
+    expect(window.reticulumAudioDecodedQueueOldestAgeMaxMs).toBe(340);
+    expect(window.reticulumAudioBinaryOutQueueOldestAgeMaxMs).toBe(120);
     expect(window.avgPcmBufferedMs).toBe(100);
     expect(window.playoutOutsideTargetFraction).toBe(0.5);
     expect(window.playoutUnderTargetFraction).toBe(0);
     expect(window.playoutOverTargetFraction).toBe(0.5);
     expect(window.avgPlayoutDeltaMs).toBe(11.5);
+    expect(window.avgReceiverIngressToPlayoutPostMs).toBe(360);
+    expect(window.maxReceiverIngressToPlayoutPostMs).toBe(480);
+    expect(window.avgReticulumAudioBridgeToRendererIngressMs).toBe(75);
+    expect(window.maxReticulumAudioBridgeToRendererIngressMs).toBe(95);
     expect(window.worstSourceAddr).toBe('bob');
     expect(window.worstAdaptiveTargetMs).toBe(95);
     expect(window.sources).toEqual([
@@ -876,6 +892,8 @@ describe('group-call router helpers', () => {
         playoutUnderTargetFraction: 0,
         playoutOverTargetFraction: 0.5,
         avgPlayoutDeltaMs: 11.5,
+        avgReceiverIngressToPlayoutPostMs: 360,
+        maxReceiverIngressToPlayoutPostMs: 480,
         avgOpusBufferedMs: 100,
         maxOpusBufferedMs: 120,
         adaptiveTargetMedianMs: 110,
@@ -908,6 +926,46 @@ describe('group-call router helpers', () => {
     const w = tracker.captureWindowMetrics('me', 5_000);
     expect(w.packetsDroppedUnknownSource).toBe(2);
     expect(w.packetsDropped).toBe(2);
+  });
+
+  it('records stale-timestamp drops in snapshot and window', () => {
+    const tracker = new GroupCallPerformanceTracker();
+    tracker.recordPacketDroppedWithReason('stale-timestamp', 3);
+    expect(tracker.getSnapshot().packetsDroppedStaleTimestamp).toBe(3);
+    expect(tracker.getSnapshot().packetsDropped).toBe(3);
+    const w = tracker.captureWindowMetrics('me', 5_000);
+    expect(w.packetsDroppedStaleTimestamp).toBe(3);
+    expect(w.packetsDropped).toBe(3);
+  });
+
+  it('records outbound pre-timestamp sender pipeline in snapshot and window', () => {
+    const tracker = new GroupCallPerformanceTracker();
+    tracker.recordGcallSenderPreEncodePipeline({
+      workletToMainThreadMs: 2,
+      mainThreadToEncoderOutputMs: 4,
+      workletToEncoderOutputMs: 6,
+    });
+    tracker.recordGcallSenderPreEncodePipeline({
+      workletToMainThreadMs: 4,
+      mainThreadToEncoderOutputMs: 6,
+      workletToEncoderOutputMs: 10,
+    });
+    tracker.recordGcallSenderEncoderToPacketTimestampGap(0.5);
+    tracker.recordGcallSenderEncoderToPacketTimestampGap(1.5);
+    const s = tracker.getSnapshot();
+    expect(s.avgGcallSenderWorkletToMainThreadMs).toBe(3);
+    expect(s.maxGcallSenderWorkletToMainThreadMs).toBe(4);
+    expect(s.avgGcallSenderMainThreadToEncoderOutputMs).toBe(5);
+    expect(s.maxGcallSenderMainThreadToEncoderOutputMs).toBe(6);
+    expect(s.avgGcallSenderWorkletToEncoderOutputMs).toBe(8);
+    expect(s.maxGcallSenderWorkletToEncoderOutputMs).toBe(10);
+    expect(s.avgGcallSenderEncoderOutputToPacketTimestampMs).toBe(1);
+    expect(s.maxGcallSenderEncoderOutputToPacketTimestampMs).toBe(1.5);
+    const w = tracker.captureWindowMetrics('me', 10_000);
+    expect(w.avgGcallSenderWorkletToMainThreadMs).toBe(3);
+    expect(w.maxGcallSenderWorkletToMainThreadMs).toBe(4);
+    expect(w.avgGcallSenderEncoderOutputToPacketTimestampMs).toBe(1);
+    expect(w.maxGcallSenderEncoderOutputToPacketTimestampMs).toBe(1.5);
   });
 
   it('resets window-only ratios after capture', () => {

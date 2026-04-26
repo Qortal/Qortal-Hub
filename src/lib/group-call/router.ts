@@ -338,6 +338,7 @@ export type GroupCallPacketDropReason =
   | 'startup-gate'
   | 'decode-failure'
   | 'decoder-throw'
+  | 'stale-timestamp'
   | 'unknown-source';
 
 export interface GroupCallMetricsSnapshot {
@@ -353,6 +354,7 @@ export interface GroupCallMetricsSnapshot {
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
+  packetsDroppedStaleTimestamp: number;
   packetsDroppedUnknownSource: number;
   relayPacketsSent: number;
   relayPacketsReceived: number;
@@ -384,6 +386,38 @@ export interface GroupCallMetricsSnapshot {
   playoutRateFractionBelow1: number;
   /** Fraction of playout metric ticks with rate &lt; 0.97. */
   playoutRateFractionBelow097: number;
+  /** Local receiver ingress -> renderer worklet post latency for V2 playout. */
+  avgReceiverIngressToPlayoutPostMs: number;
+  /** Session max local receiver ingress -> renderer worklet post latency for V2 playout. */
+  maxReceiverIngressToPlayoutPostMs: number;
+  /** Mean Python-bridge receive -> renderer ingress latency for Reticulum inbound audio. */
+  avgReticulumAudioBridgeToRendererIngressMs: number;
+  /** Session max Python-bridge receive -> renderer ingress latency for Reticulum inbound audio. */
+  maxReticulumAudioBridgeToRendererIngressMs: number;
+  /**
+   * Outbound: mean delay from capture worklet `postMessage` to main-thread handler
+   * (worklet → JS thread handoff).
+   */
+  avgGcallSenderWorkletToMainThreadMs: number;
+  maxGcallSenderWorkletToMainThreadMs: number;
+  /**
+   * Outbound: main-thread PCM handler start → `AudioEncoder` output callback
+   * (i16, AudioData, Opus encode).
+   */
+  avgGcallSenderMainThreadToEncoderOutputMs: number;
+  maxGcallSenderMainThreadToEncoderOutputMs: number;
+  /**
+   * Outbound: worklet `postMessage` time → `AudioEncoder` output
+   * (end-to-end before `sendEncodedFrame`).
+   */
+  avgGcallSenderWorkletToEncoderOutputMs: number;
+  maxGcallSenderWorkletToEncoderOutputMs: number;
+  /**
+   * Outbound: `AudioEncoder` output → `timestampMs` assignment
+   * (framing, encrypt/sync path, key checks).
+   */
+  avgGcallSenderEncoderOutputToPacketTimestampMs: number;
+  maxGcallSenderEncoderOutputToPacketTimestampMs: number;
   /** Rolling mean of per-drain-tick mean jitter depth (Opus frames) across active sources. */
   jitterBufferDepthFramesMean: number;
   /** Session high-water: max per-tick worst depth across active sources (Opus frames). */
@@ -410,20 +444,36 @@ export interface GroupCallMetricsSnapshot {
   relayIpcFailures: number;
   /** Latest per-peer pending frames before main enqueues into bridge. */
   reticulumAudioPendingFrames: number;
+  /** Latest age of the oldest per-peer pending Reticulum frame before bridge enqueue. */
+  reticulumAudioPendingOldestAgeMs: number;
   /** Session high-water mark for per-peer pending frames. */
   reticulumAudioPendingFramesHighWater: number;
+  /** Session max age of the oldest per-peer pending Reticulum frame. */
+  reticulumAudioPendingOldestAgeMaxMs: number;
   /** Latest queued frames waiting in the main-process bridge. */
   reticulumAudioBridgeQueuedFrames: number;
+  /** Latest age of the oldest queued frame in the main-process bridge. */
+  reticulumAudioBridgeQueuedOldestAgeMs: number;
   /** Session high-water mark for main-process bridge queued frames. */
   reticulumAudioBridgeQueuedFramesHighWater: number;
+  /** Session max age of the oldest queued frame in the main-process bridge. */
+  reticulumAudioBridgeQueuedOldestAgeMaxMs: number;
   /** Latest decoded fd3 queue depth inside the Python bridge. */
   reticulumAudioDecodedQueueDepth: number;
+  /** Latest age of the oldest decoded fd3 batch inside the Python bridge. */
+  reticulumAudioDecodedQueueOldestAgeMs: number;
   /** Session high-water mark for Python decoded queue depth. */
   reticulumAudioDecodedQueueDepthHighWater: number;
+  /** Session max age of the oldest decoded fd3 batch inside the Python bridge. */
+  reticulumAudioDecodedQueueOldestAgeMaxMs: number;
   /** Latest child→parent binary queue depth inside the Python bridge. */
   reticulumAudioBinaryOutQueueDepth: number;
+  /** Latest age of the oldest child→parent binary queue item inside the Python bridge. */
+  reticulumAudioBinaryOutQueueOldestAgeMs: number;
   /** Session high-water mark for Python child→parent binary queue depth. */
   reticulumAudioBinaryOutQueueDepthHighWater: number;
+  /** Session max age of the oldest child→parent binary queue item inside the Python bridge. */
+  reticulumAudioBinaryOutQueueOldestAgeMaxMs: number;
   /** Latest fd3 backpressure flag from bridge (align with main-process pressure). */
   reticulumAudioBridgeWaitingForDrain: boolean;
   /** Counted send-path drops caused by queue pressure. */
@@ -525,6 +575,8 @@ export interface GroupCallSourceWindowMetrics {
   adaptiveTargetMaxMs: number;
   /** Playout metric samples for this source in the metrics window (starvation min-sample gate). */
   playoutMetricTicks?: number;
+  avgReceiverIngressToPlayoutPostMs?: number;
+  maxReceiverIngressToPlayoutPostMs?: number;
   wasmFecPlcFrames?: number;
   wasmFecAttempts?: number;
   wasmFecSuccessCoarse?: number;
@@ -542,6 +594,7 @@ export interface GroupCallWindowMetrics {
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
+  packetsDroppedStaleTimestamp: number;
   packetsDroppedUnknownSource: number;
   /** Max in-flight decrypt jobs observed during this metrics window. */
   pendingDecryptDepthHighWater: number;
@@ -568,9 +621,13 @@ export interface GroupCallWindowMetrics {
   reticulumAudioStaleDropRatePerSec: number;
   reticulumAudioPacketSendFailureRatePerSec: number;
   reticulumAudioPendingFramesHighWater: number;
+  reticulumAudioPendingOldestAgeMaxMs: number;
   reticulumAudioBridgeQueuedFramesHighWater: number;
+  reticulumAudioBridgeQueuedOldestAgeMaxMs: number;
   reticulumAudioDecodedQueueDepthHighWater: number;
+  reticulumAudioDecodedQueueOldestAgeMaxMs: number;
   reticulumAudioBinaryOutQueueDepthHighWater: number;
+  reticulumAudioBinaryOutQueueOldestAgeMaxMs: number;
   relayDwellMs: number;
   relayDwellFraction: number;
   avgPcmBufferedMs: number;
@@ -589,6 +646,26 @@ export interface GroupCallWindowMetrics {
   playoutRateFractionBelow1: number;
   /** Fraction of playout ticks with rate &lt; 0.97. */
   playoutRateFractionBelow097: number;
+  /** Window mean local receiver ingress -> renderer worklet post latency for V2 playout. */
+  avgReceiverIngressToPlayoutPostMs: number;
+  /** Window max local receiver ingress -> renderer worklet post latency for V2 playout. */
+  maxReceiverIngressToPlayoutPostMs: number;
+  /** Window mean Python-bridge receive -> renderer ingress latency for Reticulum inbound audio. */
+  avgReticulumAudioBridgeToRendererIngressMs: number;
+  /** Window max Python-bridge receive -> renderer ingress latency for Reticulum inbound audio. */
+  maxReticulumAudioBridgeToRendererIngressMs: number;
+  /** Window mean capture worklet → main thread handoff. */
+  avgGcallSenderWorkletToMainThreadMs: number;
+  maxGcallSenderWorkletToMainThreadMs: number;
+  /** Window mean main-thread PCM/encode stage through WebCodecs. */
+  avgGcallSenderMainThreadToEncoderOutputMs: number;
+  maxGcallSenderMainThreadToEncoderOutputMs: number;
+  /** Window mean worklet handoff through encoder output. */
+  avgGcallSenderWorkletToEncoderOutputMs: number;
+  maxGcallSenderWorkletToEncoderOutputMs: number;
+  /** Window mean encoder output → `timestampMs` line. */
+  avgGcallSenderEncoderOutputToPacketTimestampMs: number;
+  maxGcallSenderEncoderOutputToPacketTimestampMs: number;
   /** Mean of per-drain-tick mean jitter depth (Opus frames) in this window. */
   jitterBufferDepthFramesMean: number;
   /** Max per-tick worst jitter depth (Opus frames) in this window. */
@@ -1035,6 +1112,7 @@ interface WindowCounterSet {
   packetsDroppedStartupGate: number;
   packetsDroppedDecodeFailure: number;
   packetsDroppedDecoderThrow: number;
+  packetsDroppedStaleTimestamp: number;
   packetsDroppedUnknownSource: number;
   jitterUnderruns: number;
   missingFrames: number;
@@ -1065,6 +1143,9 @@ interface SourceWindowAccumulator {
   playoutDeltaMsSamples: number;
   playoutBufferedMsSum: number;
   playoutBufferedMsSamples: number;
+  playoutPostLatencyMsSum: number;
+  playoutPostLatencyMsSamples: number;
+  playoutPostLatencyMsMax: number;
   opusBufferedMsSum: number;
   opusBufferedMsSamples: number;
   opusBufferedMsMax: number;
@@ -1100,6 +1181,7 @@ function emptyWindowCounters(): WindowCounterSet {
     packetsDroppedStartupGate: 0,
     packetsDroppedDecodeFailure: 0,
     packetsDroppedDecoderThrow: 0,
+    packetsDroppedStaleTimestamp: 0,
     packetsDroppedUnknownSource: 0,
     jitterUnderruns: 0,
     missingFrames: 0,
@@ -1131,6 +1213,7 @@ export class GroupCallPerformanceTracker {
     packetsDroppedStartupGate: 0,
     packetsDroppedDecodeFailure: 0,
     packetsDroppedDecoderThrow: 0,
+    packetsDroppedStaleTimestamp: 0,
     packetsDroppedUnknownSource: 0,
     relayPacketsSent: 0,
     relayPacketsReceived: 0,
@@ -1153,6 +1236,18 @@ export class GroupCallPerformanceTracker {
     avgPlayoutRate: 1,
     playoutRateFractionBelow1: 0,
     playoutRateFractionBelow097: 0,
+    avgReceiverIngressToPlayoutPostMs: 0,
+    maxReceiverIngressToPlayoutPostMs: 0,
+    avgReticulumAudioBridgeToRendererIngressMs: 0,
+    maxReticulumAudioBridgeToRendererIngressMs: 0,
+    avgGcallSenderWorkletToMainThreadMs: 0,
+    maxGcallSenderWorkletToMainThreadMs: 0,
+    avgGcallSenderMainThreadToEncoderOutputMs: 0,
+    maxGcallSenderMainThreadToEncoderOutputMs: 0,
+    avgGcallSenderWorkletToEncoderOutputMs: 0,
+    maxGcallSenderWorkletToEncoderOutputMs: 0,
+    avgGcallSenderEncoderOutputToPacketTimestampMs: 0,
+    maxGcallSenderEncoderOutputToPacketTimestampMs: 0,
     jitterBufferDepthFramesMean: 0,
     jitterBufferDepthFramesWorst: 0,
     jitterNotReadyFraction: 0,
@@ -1166,13 +1261,21 @@ export class GroupCallPerformanceTracker {
     relayCoalesceSuperseded: 0,
     relayIpcFailures: 0,
     reticulumAudioPendingFrames: 0,
+    reticulumAudioPendingOldestAgeMs: 0,
     reticulumAudioPendingFramesHighWater: 0,
+    reticulumAudioPendingOldestAgeMaxMs: 0,
     reticulumAudioBridgeQueuedFrames: 0,
+    reticulumAudioBridgeQueuedOldestAgeMs: 0,
     reticulumAudioBridgeQueuedFramesHighWater: 0,
+    reticulumAudioBridgeQueuedOldestAgeMaxMs: 0,
     reticulumAudioDecodedQueueDepth: 0,
+    reticulumAudioDecodedQueueOldestAgeMs: 0,
     reticulumAudioDecodedQueueDepthHighWater: 0,
+    reticulumAudioDecodedQueueOldestAgeMaxMs: 0,
     reticulumAudioBinaryOutQueueDepth: 0,
+    reticulumAudioBinaryOutQueueOldestAgeMs: 0,
     reticulumAudioBinaryOutQueueDepthHighWater: 0,
+    reticulumAudioBinaryOutQueueOldestAgeMaxMs: 0,
     reticulumAudioBridgeWaitingForDrain: false,
     reticulumAudioQueuePressureDrops: 0,
     reticulumAudioQueuePressureDropsLast5s: 0,
@@ -1279,17 +1382,60 @@ export class GroupCallPerformanceTracker {
   private playoutRateSamples = 0;
   private playoutRateTicksBelow1 = 0;
   private playoutRateTicksBelow097 = 0;
+  private playoutPostLatencyMsSum = 0;
+  private playoutPostLatencyMsSamples = 0;
+  private playoutPostLatencyMsMax = 0;
+  private bridgeToRendererIngressLatencyMsSum = 0;
+  private bridgeToRendererIngressLatencyMsSamples = 0;
+  private bridgeToRendererIngressLatencyMsMax = 0;
+
+  private senderWorkletToMainThreadMsSum = 0;
+  private senderWorkletToMainThreadMsSamples = 0;
+  private senderWorkletToMainThreadMsMax = 0;
+  private senderMainToEncoderOutputMsSum = 0;
+  private senderMainToEncoderOutputMsSamples = 0;
+  private senderMainToEncoderOutputMsMax = 0;
+  private senderWorkletToEncoderOutputMsSum = 0;
+  private senderWorkletToEncoderOutputMsSamples = 0;
+  private senderWorkletToEncoderOutputMsMax = 0;
+  private senderEncoderToPacketTimestampMsSum = 0;
+  private senderEncoderToPacketTimestampMsSamples = 0;
+  private senderEncoderToPacketTimestampMsMax = 0;
+
+  private windowSenderWorkletToMainThreadMsSum = 0;
+  private windowSenderWorkletToMainThreadMsSamples = 0;
+  private windowSenderWorkletToMainThreadMsMax = 0;
+  private windowSenderMainToEncoderOutputMsSum = 0;
+  private windowSenderMainToEncoderOutputMsSamples = 0;
+  private windowSenderMainToEncoderOutputMsMax = 0;
+  private windowSenderWorkletToEncoderOutputMsSum = 0;
+  private windowSenderWorkletToEncoderOutputMsSamples = 0;
+  private windowSenderWorkletToEncoderOutputMsMax = 0;
+  private windowSenderEncoderToPacketTimestampMsSum = 0;
+  private windowSenderEncoderToPacketTimestampMsSamples = 0;
+  private windowSenderEncoderToPacketTimestampMsMax = 0;
+
   private windowPlayoutRateSum = 0;
   private windowPlayoutRateSamples = 0;
   private windowPlayoutRateTicksBelow1 = 0;
   private windowPlayoutRateTicksBelow097 = 0;
+  private windowPlayoutPostLatencyMsSum = 0;
+  private windowPlayoutPostLatencyMsSamples = 0;
+  private windowPlayoutPostLatencyMsMax = 0;
+  private windowBridgeToRendererIngressLatencyMsSum = 0;
+  private windowBridgeToRendererIngressLatencyMsSamples = 0;
+  private windowBridgeToRendererIngressLatencyMsMax = 0;
   private windowOpusBufferedMsSum = 0;
   private windowOpusBufferedMsSamples = 0;
   private windowOpusBufferedMsMax = 0;
   private windowReticulumAudioPendingFramesHighWater = 0;
+  private windowReticulumAudioPendingOldestAgeMaxMs = 0;
   private windowReticulumAudioBridgeQueuedFramesHighWater = 0;
+  private windowReticulumAudioBridgeQueuedOldestAgeMaxMs = 0;
   private windowReticulumAudioDecodedQueueDepthHighWater = 0;
+  private windowReticulumAudioDecodedQueueOldestAgeMaxMs = 0;
   private windowReticulumAudioBinaryOutQueueDepthHighWater = 0;
+  private windowReticulumAudioBinaryOutQueueOldestAgeMaxMs = 0;
   private windowPendingDecryptDepthHighWater = 0;
   private sourceWindowStats = new Map<string, SourceWindowAccumulator>();
 
@@ -1310,6 +1456,9 @@ export class GroupCallPerformanceTracker {
         playoutDeltaMsSamples: 0,
         playoutBufferedMsSum: 0,
         playoutBufferedMsSamples: 0,
+        playoutPostLatencyMsSum: 0,
+        playoutPostLatencyMsSamples: 0,
+        playoutPostLatencyMsMax: 0,
         opusBufferedMsSum: 0,
         opusBufferedMsSamples: 0,
         opusBufferedMsMax: 0,
@@ -1342,13 +1491,35 @@ export class GroupCallPerformanceTracker {
     this.windowPlayoutRateSamples = 0;
     this.windowPlayoutRateTicksBelow1 = 0;
     this.windowPlayoutRateTicksBelow097 = 0;
+    this.windowPlayoutPostLatencyMsSum = 0;
+    this.windowPlayoutPostLatencyMsSamples = 0;
+    this.windowPlayoutPostLatencyMsMax = 0;
+    this.windowBridgeToRendererIngressLatencyMsSum = 0;
+    this.windowBridgeToRendererIngressLatencyMsSamples = 0;
+    this.windowBridgeToRendererIngressLatencyMsMax = 0;
+    this.windowSenderWorkletToMainThreadMsSum = 0;
+    this.windowSenderWorkletToMainThreadMsSamples = 0;
+    this.windowSenderWorkletToMainThreadMsMax = 0;
+    this.windowSenderMainToEncoderOutputMsSum = 0;
+    this.windowSenderMainToEncoderOutputMsSamples = 0;
+    this.windowSenderMainToEncoderOutputMsMax = 0;
+    this.windowSenderWorkletToEncoderOutputMsSum = 0;
+    this.windowSenderWorkletToEncoderOutputMsSamples = 0;
+    this.windowSenderWorkletToEncoderOutputMsMax = 0;
+    this.windowSenderEncoderToPacketTimestampMsSum = 0;
+    this.windowSenderEncoderToPacketTimestampMsSamples = 0;
+    this.windowSenderEncoderToPacketTimestampMsMax = 0;
     this.windowOpusBufferedMsSum = 0;
     this.windowOpusBufferedMsSamples = 0;
     this.windowOpusBufferedMsMax = 0;
     this.windowReticulumAudioPendingFramesHighWater = 0;
+    this.windowReticulumAudioPendingOldestAgeMaxMs = 0;
     this.windowReticulumAudioBridgeQueuedFramesHighWater = 0;
+    this.windowReticulumAudioBridgeQueuedOldestAgeMaxMs = 0;
     this.windowReticulumAudioDecodedQueueDepthHighWater = 0;
+    this.windowReticulumAudioDecodedQueueOldestAgeMaxMs = 0;
     this.windowReticulumAudioBinaryOutQueueDepthHighWater = 0;
+    this.windowReticulumAudioBinaryOutQueueOldestAgeMaxMs = 0;
     this.windowPendingDecryptDepthHighWater = 0;
     this.windowJitterDrainTicks = 0;
     this.windowJitterDepthMeanTickSum = 0;
@@ -1407,6 +1578,10 @@ export class GroupCallPerformanceTracker {
       case 'decoder-throw':
         this.snapshot.packetsDroppedDecoderThrow += count;
         this.windowCounters.packetsDroppedDecoderThrow += count;
+        break;
+      case 'stale-timestamp':
+        this.snapshot.packetsDroppedStaleTimestamp += count;
+        this.windowCounters.packetsDroppedStaleTimestamp += count;
         break;
       case 'unknown-source':
         this.snapshot.packetsDroppedUnknownSource += count;
@@ -1649,10 +1824,14 @@ export class GroupCallPerformanceTracker {
 
   setReticulumAudioQueueDepths(depths: {
     pendingFrames?: number;
+    pendingOldestAgeMs?: number;
     bridgeQueuedFrames?: number;
+    bridgeQueuedOldestAgeMs?: number;
     bridgeWaitingForDrain?: boolean;
     decodedQueueDepth?: number;
+    decodedQueueOldestAgeMs?: number;
     binaryOutQueueDepth?: number;
+    binaryOutQueueOldestAgeMs?: number;
     queuePressureDropsLast5s?: number;
     staleDropsLast5s?: number;
     packetPathRequests?: number;
@@ -1674,6 +1853,18 @@ export class GroupCallPerformanceTracker {
         pendingFrames
       );
     }
+    if (typeof depths.pendingOldestAgeMs === 'number') {
+      const pendingOldestAgeMs = Math.max(0, roundMetric(depths.pendingOldestAgeMs));
+      this.snapshot.reticulumAudioPendingOldestAgeMs = pendingOldestAgeMs;
+      this.snapshot.reticulumAudioPendingOldestAgeMaxMs = Math.max(
+        this.snapshot.reticulumAudioPendingOldestAgeMaxMs,
+        pendingOldestAgeMs
+      );
+      this.windowReticulumAudioPendingOldestAgeMaxMs = Math.max(
+        this.windowReticulumAudioPendingOldestAgeMaxMs,
+        pendingOldestAgeMs
+      );
+    }
     if (typeof depths.bridgeQueuedFrames === 'number') {
       const bridgeQueuedFrames = Math.max(0, Math.trunc(depths.bridgeQueuedFrames));
       this.snapshot.reticulumAudioBridgeQueuedFrames = bridgeQueuedFrames;
@@ -1684,6 +1875,21 @@ export class GroupCallPerformanceTracker {
       this.windowReticulumAudioBridgeQueuedFramesHighWater = Math.max(
         this.windowReticulumAudioBridgeQueuedFramesHighWater,
         bridgeQueuedFrames
+      );
+    }
+    if (typeof depths.bridgeQueuedOldestAgeMs === 'number') {
+      const bridgeQueuedOldestAgeMs = Math.max(
+        0,
+        roundMetric(depths.bridgeQueuedOldestAgeMs)
+      );
+      this.snapshot.reticulumAudioBridgeQueuedOldestAgeMs = bridgeQueuedOldestAgeMs;
+      this.snapshot.reticulumAudioBridgeQueuedOldestAgeMaxMs = Math.max(
+        this.snapshot.reticulumAudioBridgeQueuedOldestAgeMaxMs,
+        bridgeQueuedOldestAgeMs
+      );
+      this.windowReticulumAudioBridgeQueuedOldestAgeMaxMs = Math.max(
+        this.windowReticulumAudioBridgeQueuedOldestAgeMaxMs,
+        bridgeQueuedOldestAgeMs
       );
     }
     if (typeof depths.bridgeWaitingForDrain === 'boolean') {
@@ -1701,6 +1907,21 @@ export class GroupCallPerformanceTracker {
         decodedQueueDepth
       );
     }
+    if (typeof depths.decodedQueueOldestAgeMs === 'number') {
+      const decodedQueueOldestAgeMs = Math.max(
+        0,
+        roundMetric(depths.decodedQueueOldestAgeMs)
+      );
+      this.snapshot.reticulumAudioDecodedQueueOldestAgeMs = decodedQueueOldestAgeMs;
+      this.snapshot.reticulumAudioDecodedQueueOldestAgeMaxMs = Math.max(
+        this.snapshot.reticulumAudioDecodedQueueOldestAgeMaxMs,
+        decodedQueueOldestAgeMs
+      );
+      this.windowReticulumAudioDecodedQueueOldestAgeMaxMs = Math.max(
+        this.windowReticulumAudioDecodedQueueOldestAgeMaxMs,
+        decodedQueueOldestAgeMs
+      );
+    }
     if (typeof depths.binaryOutQueueDepth === 'number') {
       const binaryOutQueueDepth = Math.max(0, Math.trunc(depths.binaryOutQueueDepth));
       this.snapshot.reticulumAudioBinaryOutQueueDepth = binaryOutQueueDepth;
@@ -1711,6 +1932,22 @@ export class GroupCallPerformanceTracker {
       this.windowReticulumAudioBinaryOutQueueDepthHighWater = Math.max(
         this.windowReticulumAudioBinaryOutQueueDepthHighWater,
         binaryOutQueueDepth
+      );
+    }
+    if (typeof depths.binaryOutQueueOldestAgeMs === 'number') {
+      const binaryOutQueueOldestAgeMs = Math.max(
+        0,
+        roundMetric(depths.binaryOutQueueOldestAgeMs)
+      );
+      this.snapshot.reticulumAudioBinaryOutQueueOldestAgeMs =
+        binaryOutQueueOldestAgeMs;
+      this.snapshot.reticulumAudioBinaryOutQueueOldestAgeMaxMs = Math.max(
+        this.snapshot.reticulumAudioBinaryOutQueueOldestAgeMaxMs,
+        binaryOutQueueOldestAgeMs
+      );
+      this.windowReticulumAudioBinaryOutQueueOldestAgeMaxMs = Math.max(
+        this.windowReticulumAudioBinaryOutQueueOldestAgeMaxMs,
+        binaryOutQueueOldestAgeMs
       );
     }
     if (typeof depths.queuePressureDropsLast5s === 'number') {
@@ -1932,6 +2169,165 @@ export class GroupCallPerformanceTracker {
     this.snapshot.lastUpdatedAt = Date.now();
   }
 
+  recordReceiverIngressToPlayoutPostLatency(
+    sourceAddr: string,
+    latencyMs: number
+  ): void {
+    if (!Number.isFinite(latencyMs) || latencyMs < 0) return;
+    this.playoutPostLatencyMsSum += latencyMs;
+    this.playoutPostLatencyMsSamples++;
+    this.playoutPostLatencyMsMax = Math.max(this.playoutPostLatencyMsMax, latencyMs);
+    this.snapshot.avgReceiverIngressToPlayoutPostMs = roundMetric(
+      this.playoutPostLatencyMsSum / Math.max(1, this.playoutPostLatencyMsSamples)
+    );
+    this.snapshot.maxReceiverIngressToPlayoutPostMs = roundMetric(
+      this.playoutPostLatencyMsMax
+    );
+
+    this.windowPlayoutPostLatencyMsSum += latencyMs;
+    this.windowPlayoutPostLatencyMsSamples++;
+    this.windowPlayoutPostLatencyMsMax = Math.max(
+      this.windowPlayoutPostLatencyMsMax,
+      latencyMs
+    );
+
+    const source = this.getSourceWindowAccumulator(sourceAddr);
+    source.playoutPostLatencyMsSum += latencyMs;
+    source.playoutPostLatencyMsSamples++;
+    source.playoutPostLatencyMsMax = Math.max(
+      source.playoutPostLatencyMsMax,
+      latencyMs
+    );
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  recordReticulumAudioBridgeToRendererIngressLatency(latencyMs: number): void {
+    if (!Number.isFinite(latencyMs) || latencyMs < 0) return;
+    this.bridgeToRendererIngressLatencyMsSum += latencyMs;
+    this.bridgeToRendererIngressLatencyMsSamples++;
+    this.bridgeToRendererIngressLatencyMsMax = Math.max(
+      this.bridgeToRendererIngressLatencyMsMax,
+      latencyMs
+    );
+    this.snapshot.avgReticulumAudioBridgeToRendererIngressMs = roundMetric(
+      this.bridgeToRendererIngressLatencyMsSum /
+        Math.max(1, this.bridgeToRendererIngressLatencyMsSamples)
+    );
+    this.snapshot.maxReticulumAudioBridgeToRendererIngressMs = roundMetric(
+      this.bridgeToRendererIngressLatencyMsMax
+    );
+    this.windowBridgeToRendererIngressLatencyMsSum += latencyMs;
+    this.windowBridgeToRendererIngressLatencyMsSamples++;
+    this.windowBridgeToRendererIngressLatencyMsMax = Math.max(
+      this.windowBridgeToRendererIngressLatencyMsMax,
+      latencyMs
+    );
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /**
+   * Outbound sender path: one sample per Opus frame after WebCodecs encode,
+   * before `sendEncodedFrame` (see `recordGcallSenderEncoderToPacketTimestampGap`).
+   */
+  recordGcallSenderPreEncodePipeline(sample: {
+    workletToMainThreadMs: number;
+    mainThreadToEncoderOutputMs: number;
+    workletToEncoderOutputMs: number;
+  }): void {
+    const a = sample.workletToMainThreadMs;
+    const b = sample.mainThreadToEncoderOutputMs;
+    const c = sample.workletToEncoderOutputMs;
+    if (!Number.isFinite(a) || a < 0) return;
+    if (!Number.isFinite(b) || b < 0) return;
+    if (!Number.isFinite(c) || c < 0) return;
+    this.senderWorkletToMainThreadMsSum += a;
+    this.senderWorkletToMainThreadMsSamples++;
+    this.senderWorkletToMainThreadMsMax = Math.max(
+      this.senderWorkletToMainThreadMsMax,
+      a
+    );
+    this.senderMainToEncoderOutputMsSum += b;
+    this.senderMainToEncoderOutputMsSamples++;
+    this.senderMainToEncoderOutputMsMax = Math.max(
+      this.senderMainToEncoderOutputMsMax,
+      b
+    );
+    this.senderWorkletToEncoderOutputMsSum += c;
+    this.senderWorkletToEncoderOutputMsSamples++;
+    this.senderWorkletToEncoderOutputMsMax = Math.max(
+      this.senderWorkletToEncoderOutputMsMax,
+      c
+    );
+    this.snapshot.avgGcallSenderWorkletToMainThreadMs = roundMetric(
+      this.senderWorkletToMainThreadMsSum /
+        Math.max(1, this.senderWorkletToMainThreadMsSamples)
+    );
+    this.snapshot.maxGcallSenderWorkletToMainThreadMs = roundMetric(
+      this.senderWorkletToMainThreadMsMax
+    );
+    this.snapshot.avgGcallSenderMainThreadToEncoderOutputMs = roundMetric(
+      this.senderMainToEncoderOutputMsSum /
+        Math.max(1, this.senderMainToEncoderOutputMsSamples)
+    );
+    this.snapshot.maxGcallSenderMainThreadToEncoderOutputMs = roundMetric(
+      this.senderMainToEncoderOutputMsMax
+    );
+    this.snapshot.avgGcallSenderWorkletToEncoderOutputMs = roundMetric(
+      this.senderWorkletToEncoderOutputMsSum /
+        Math.max(1, this.senderWorkletToEncoderOutputMsSamples)
+    );
+    this.snapshot.maxGcallSenderWorkletToEncoderOutputMs = roundMetric(
+      this.senderWorkletToEncoderOutputMsMax
+    );
+    this.windowSenderWorkletToMainThreadMsSum += a;
+    this.windowSenderWorkletToMainThreadMsSamples++;
+    this.windowSenderWorkletToMainThreadMsMax = Math.max(
+      this.windowSenderWorkletToMainThreadMsMax,
+      a
+    );
+    this.windowSenderMainToEncoderOutputMsSum += b;
+    this.windowSenderMainToEncoderOutputMsSamples++;
+    this.windowSenderMainToEncoderOutputMsMax = Math.max(
+      this.windowSenderMainToEncoderOutputMsMax,
+      b
+    );
+    this.windowSenderWorkletToEncoderOutputMsSum += c;
+    this.windowSenderWorkletToEncoderOutputMsSamples++;
+    this.windowSenderWorkletToEncoderOutputMsMax = Math.max(
+      this.windowSenderWorkletToEncoderOutputMsMax,
+      c
+    );
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /**
+   * Outbound: delay from `AudioEncoder` output callback to assignment of `timestampMs` in
+   * `sendEncodedFrame` (sync frame/encrypt, early-return gates).
+   */
+  recordGcallSenderEncoderToPacketTimestampGap(gapMs: number): void {
+    if (!Number.isFinite(gapMs) || gapMs < 0) return;
+    this.senderEncoderToPacketTimestampMsSum += gapMs;
+    this.senderEncoderToPacketTimestampMsSamples++;
+    this.senderEncoderToPacketTimestampMsMax = Math.max(
+      this.senderEncoderToPacketTimestampMsMax,
+      gapMs
+    );
+    this.snapshot.avgGcallSenderEncoderOutputToPacketTimestampMs = roundMetric(
+      this.senderEncoderToPacketTimestampMsSum /
+        Math.max(1, this.senderEncoderToPacketTimestampMsSamples)
+    );
+    this.snapshot.maxGcallSenderEncoderOutputToPacketTimestampMs = roundMetric(
+      this.senderEncoderToPacketTimestampMsMax
+    );
+    this.windowSenderEncoderToPacketTimestampMsSum += gapMs;
+    this.windowSenderEncoderToPacketTimestampMsSamples++;
+    this.windowSenderEncoderToPacketTimestampMsMax = Math.max(
+      this.windowSenderEncoderToPacketTimestampMsMax,
+      gapMs
+    );
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
   recordAdaptiveTargetSample(sourceAddr: string, targetMs: number): void {
     if (!Number.isFinite(targetMs) || targetMs <= 0) return;
     this.getSourceWindowAccumulator(sourceAddr).adaptiveTargetSamples.push(
@@ -2087,6 +2483,7 @@ export class GroupCallPerformanceTracker {
       packetsDroppedStartupGate: 0,
       packetsDroppedDecodeFailure: 0,
       packetsDroppedDecoderThrow: 0,
+      packetsDroppedStaleTimestamp: 0,
       packetsDroppedUnknownSource: 0,
       relayPacketsSent: 0,
       relayPacketsReceived: 0,
@@ -2109,6 +2506,18 @@ export class GroupCallPerformanceTracker {
       avgPlayoutRate: 1,
       playoutRateFractionBelow1: 0,
       playoutRateFractionBelow097: 0,
+      avgReceiverIngressToPlayoutPostMs: 0,
+      maxReceiverIngressToPlayoutPostMs: 0,
+      avgReticulumAudioBridgeToRendererIngressMs: 0,
+      maxReticulumAudioBridgeToRendererIngressMs: 0,
+      avgGcallSenderWorkletToMainThreadMs: 0,
+      maxGcallSenderWorkletToMainThreadMs: 0,
+      avgGcallSenderMainThreadToEncoderOutputMs: 0,
+      maxGcallSenderMainThreadToEncoderOutputMs: 0,
+      avgGcallSenderWorkletToEncoderOutputMs: 0,
+      maxGcallSenderWorkletToEncoderOutputMs: 0,
+      avgGcallSenderEncoderOutputToPacketTimestampMs: 0,
+      maxGcallSenderEncoderOutputToPacketTimestampMs: 0,
       jitterBufferDepthFramesMean: 0,
       jitterBufferDepthFramesWorst: 0,
       jitterNotReadyFraction: 0,
@@ -2122,13 +2531,21 @@ export class GroupCallPerformanceTracker {
       relayCoalesceSuperseded: 0,
       relayIpcFailures: 0,
       reticulumAudioPendingFrames: 0,
+      reticulumAudioPendingOldestAgeMs: 0,
       reticulumAudioPendingFramesHighWater: 0,
+      reticulumAudioPendingOldestAgeMaxMs: 0,
       reticulumAudioBridgeQueuedFrames: 0,
+      reticulumAudioBridgeQueuedOldestAgeMs: 0,
       reticulumAudioBridgeQueuedFramesHighWater: 0,
+      reticulumAudioBridgeQueuedOldestAgeMaxMs: 0,
       reticulumAudioDecodedQueueDepth: 0,
+      reticulumAudioDecodedQueueOldestAgeMs: 0,
       reticulumAudioDecodedQueueDepthHighWater: 0,
+      reticulumAudioDecodedQueueOldestAgeMaxMs: 0,
       reticulumAudioBinaryOutQueueDepth: 0,
+      reticulumAudioBinaryOutQueueOldestAgeMs: 0,
       reticulumAudioBinaryOutQueueDepthHighWater: 0,
+      reticulumAudioBinaryOutQueueOldestAgeMaxMs: 0,
       reticulumAudioBridgeWaitingForDrain: false,
       reticulumAudioQueuePressureDrops: 0,
       reticulumAudioQueuePressureDropsLast5s: 0,
@@ -2203,6 +2620,24 @@ export class GroupCallPerformanceTracker {
     this.playoutRateSamples = 0;
     this.playoutRateTicksBelow1 = 0;
     this.playoutRateTicksBelow097 = 0;
+    this.playoutPostLatencyMsSum = 0;
+    this.playoutPostLatencyMsSamples = 0;
+    this.playoutPostLatencyMsMax = 0;
+    this.bridgeToRendererIngressLatencyMsSum = 0;
+    this.bridgeToRendererIngressLatencyMsSamples = 0;
+    this.bridgeToRendererIngressLatencyMsMax = 0;
+    this.senderWorkletToMainThreadMsSum = 0;
+    this.senderWorkletToMainThreadMsSamples = 0;
+    this.senderWorkletToMainThreadMsMax = 0;
+    this.senderMainToEncoderOutputMsSum = 0;
+    this.senderMainToEncoderOutputMsSamples = 0;
+    this.senderMainToEncoderOutputMsMax = 0;
+    this.senderWorkletToEncoderOutputMsSum = 0;
+    this.senderWorkletToEncoderOutputMsSamples = 0;
+    this.senderWorkletToEncoderOutputMsMax = 0;
+    this.senderEncoderToPacketTimestampMsSum = 0;
+    this.senderEncoderToPacketTimestampMsSamples = 0;
+    this.senderEncoderToPacketTimestampMsMax = 0;
     this.mixerReductionSamples = 0;
     this.mixerReductionTotalDb = 0;
     this.mixerHeavyReductionSamples = 0;
@@ -2265,6 +2700,13 @@ export class GroupCallPerformanceTracker {
             stats.playoutDeltaMsSum /
               Math.max(1, stats.playoutDeltaMsSamples)
           ),
+          avgReceiverIngressToPlayoutPostMs: roundMetric(
+            stats.playoutPostLatencyMsSum /
+              Math.max(1, stats.playoutPostLatencyMsSamples)
+          ),
+          maxReceiverIngressToPlayoutPostMs: roundMetric(
+            stats.playoutPostLatencyMsMax
+          ),
           avgOpusBufferedMs: roundMetric(
             stats.opusBufferedMsSum / Math.max(1, stats.opusBufferedMsSamples)
           ),
@@ -2305,6 +2747,8 @@ export class GroupCallPerformanceTracker {
         this.windowCounters.packetsDroppedDecodeFailure,
       packetsDroppedDecoderThrow:
         this.windowCounters.packetsDroppedDecoderThrow,
+      packetsDroppedStaleTimestamp:
+        this.windowCounters.packetsDroppedStaleTimestamp,
       packetsDroppedUnknownSource:
         this.windowCounters.packetsDroppedUnknownSource,
       pendingDecryptDepthHighWater: this.windowPendingDecryptDepthHighWater,
@@ -2348,12 +2792,20 @@ export class GroupCallPerformanceTracker {
       ),
       reticulumAudioPendingFramesHighWater:
         this.windowReticulumAudioPendingFramesHighWater,
+      reticulumAudioPendingOldestAgeMaxMs:
+        this.windowReticulumAudioPendingOldestAgeMaxMs,
       reticulumAudioBridgeQueuedFramesHighWater:
         this.windowReticulumAudioBridgeQueuedFramesHighWater,
+      reticulumAudioBridgeQueuedOldestAgeMaxMs:
+        this.windowReticulumAudioBridgeQueuedOldestAgeMaxMs,
       reticulumAudioDecodedQueueDepthHighWater:
         this.windowReticulumAudioDecodedQueueDepthHighWater,
+      reticulumAudioDecodedQueueOldestAgeMaxMs:
+        this.windowReticulumAudioDecodedQueueOldestAgeMaxMs,
       reticulumAudioBinaryOutQueueDepthHighWater:
         this.windowReticulumAudioBinaryOutQueueDepthHighWater,
+      reticulumAudioBinaryOutQueueOldestAgeMaxMs:
+        this.windowReticulumAudioBinaryOutQueueOldestAgeMaxMs,
       relayDwellMs: roundMetric(relayDwellMs),
       relayDwellFraction: roundMetric(relayDwellMs / durationMs),
       avgPcmBufferedMs: roundMetric(
@@ -2390,6 +2842,48 @@ export class GroupCallPerformanceTracker {
         this.windowPlayoutRateSamples > 0
           ? this.windowPlayoutRateTicksBelow097 / this.windowPlayoutRateSamples
           : 0
+      ),
+      avgReceiverIngressToPlayoutPostMs: roundMetric(
+        this.windowPlayoutPostLatencyMsSum /
+          Math.max(1, this.windowPlayoutPostLatencyMsSamples)
+      ),
+      maxReceiverIngressToPlayoutPostMs: roundMetric(
+        this.windowPlayoutPostLatencyMsMax
+      ),
+      avgReticulumAudioBridgeToRendererIngressMs: roundMetric(
+        this.windowBridgeToRendererIngressLatencyMsSum /
+          Math.max(1, this.windowBridgeToRendererIngressLatencyMsSamples)
+      ),
+      maxReticulumAudioBridgeToRendererIngressMs: roundMetric(
+        this.windowBridgeToRendererIngressLatencyMsMax
+      ),
+      avgGcallSenderWorkletToMainThreadMs: roundMetric(
+        this.windowSenderWorkletToMainThreadMsSum /
+          Math.max(1, this.windowSenderWorkletToMainThreadMsSamples)
+      ),
+      maxGcallSenderWorkletToMainThreadMs: roundMetric(
+        this.windowSenderWorkletToMainThreadMsMax
+      ),
+      avgGcallSenderMainThreadToEncoderOutputMs: roundMetric(
+        this.windowSenderMainToEncoderOutputMsSum /
+          Math.max(1, this.windowSenderMainToEncoderOutputMsSamples)
+      ),
+      maxGcallSenderMainThreadToEncoderOutputMs: roundMetric(
+        this.windowSenderMainToEncoderOutputMsMax
+      ),
+      avgGcallSenderWorkletToEncoderOutputMs: roundMetric(
+        this.windowSenderWorkletToEncoderOutputMsSum /
+          Math.max(1, this.windowSenderWorkletToEncoderOutputMsSamples)
+      ),
+      maxGcallSenderWorkletToEncoderOutputMs: roundMetric(
+        this.windowSenderWorkletToEncoderOutputMsMax
+      ),
+      avgGcallSenderEncoderOutputToPacketTimestampMs: roundMetric(
+        this.windowSenderEncoderToPacketTimestampMsSum /
+          Math.max(1, this.windowSenderEncoderToPacketTimestampMsSamples)
+      ),
+      maxGcallSenderEncoderOutputToPacketTimestampMs: roundMetric(
+        this.windowSenderEncoderToPacketTimestampMsMax
       ),
       jitterBufferDepthFramesMean: roundMetric(
         this.windowJitterDrainTicks > 0

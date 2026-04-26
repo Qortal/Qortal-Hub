@@ -47,14 +47,24 @@ import ed2curve from '../encryption/ed2curve';
 import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 import OpusFecWorker from '../workers/gcall-opus-fec.worker?worker';
 import {
+  DecryptWorkerPool,
+  type DecryptPoolDecryptBatchHandlerInput,
+} from '../lib/group-call/decryptWorkerPool';
+import {
+  DECRYPT_POOL_HARD_CEILING,
+  DECRYPT_POOL_LOW_DEPTH_MAX,
+  DECRYPT_POOL_MIN_SIZE,
+  DECRYPT_POOL_GROW_TO_3_DEPTH_THRESHOLD,
+  DECRYPT_POOL_GROW_TO_4_DEPTH_THRESHOLD,
+  computeDesiredPoolSize,
+} from '../lib/group-call/decryptWorkerPoolScaling';
+import {
   buildHierarchicalTopologyWithStickyRoot,
   assessGroupCallSourceStall,
   assessReticulumAudioPressureWindow,
   assessGroupCallSourceWindowForRecovery,
   buildSingleClusterTopologyWithStickyRoot,
   buildTopologyAfterClusterPromotion,
-  chooseRouterTopologyAuthority,
-  DEFAULT_SAME_EPOCH_ROOT_CONFLICT_STICKY_MS,
   GroupCallPerformanceTracker,
   hasGroupCallSourceWindowMediaActivity,
   type GroupCallWindowMetrics,
@@ -104,9 +114,146 @@ import {
   starvationRecoveryBarSatisfied,
 } from '../lib/group-call/gcallJitterDrainPhaseD';
 import {
-  compareGroupCallElectionAddresses,
-  compareRootForwardersSameEpoch,
-} from '../lib/group-call/election-order';
+  getStartupKeyAuthorityDecision,
+  getConflictingRootForAuthorityWait,
+  getSessionUpdatedKeyRecoveryAction,
+  getTrustedRootForRejoinElection,
+  resolveDesignatedRootForSessionKey,
+  shouldAcceptIncomingRoomKeySender,
+  shouldAcceptIncomingRoomKeySenderRelaxed,
+  shouldAdoptTrustedRootSessionDuringRecovery,
+  shouldAllowSimultaneousJoinKeyFallback,
+  shouldIgnoreRedundantRoomKeyDelivery,
+  shouldMintRootSessionKeyImmediately,
+} from '../lib/group-call/groupCallSessionKeyPolicy';
+import { chooseSameEpochTopologyWinner } from '../lib/group-call/groupCallTopologyAuthority';
+import { computeSteadyTargetDecayThresholdMs } from '../lib/group-call/groupCallSteadyTargetDecay';
+import {
+  countRecentlyHealthyRemoteSources,
+  getPostJoinHydratedParticipants,
+  hasOccupiedRoomEvidenceForJoin,
+  mergeHydratedParticipantsIntoUiList,
+  shouldAcceptKeyRecoveryRequestGeneration,
+  shouldApplyJoinSessionSnapshot,
+  shouldContinueAfterParticipantJoinRefresh,
+  shouldDeferLocalTopologyElection,
+  shouldDelayPostJoinRosterElection,
+  shouldEscalateRoomWideKeyRecovery,
+  shouldIgnoreParticipantLeftEvent,
+  shouldPromoteStandbyRootAfterHeartbeatTimeout,
+  shouldSendCachedQuitLeave,
+  shouldSubscribeToJoinedGroupCallEvents,
+} from '../lib/group-call/groupCallJoinLifecycleDecisions';
+import {
+  bumpGroupCallAudioSessionToken,
+  clearAdaptiveGroupCallPlayoutMaps,
+  isCurrentGroupCallAudioStartupToken,
+  shouldStartGroupCallAudioCapture,
+} from '../lib/group-call/groupCallRendererLifecycleHelpers';
+import {
+  buildStandbyRootFailoverTopology,
+  computeTopologySettleMs,
+  shouldRestartClusterHeartbeat,
+  shouldRestartTopologyHeartbeat,
+} from '../lib/group-call/groupCallTopologyLifecycle';
+import {
+  buildGroupCallTopology as buildTopology,
+  computeGroupCallRole as computeMyRole,
+  findAssignedForwarder,
+  findClusterIndexForForwarder,
+  findNonRootClusterStandbyDuty,
+  getPredictiveWarmPeers,
+  getRootInboundWarmPeers,
+  getReticulumTransportTargets,
+  isFanoutForwarderRole,
+  normalizeGroupCallTopology as normalizeGroupTopologyClustersImpl,
+  type GroupCallRole,
+  type GroupCallTopology as ImportedGroupTopology,
+  type GroupCallTopologyCluster as ImportedClusterDef,
+} from '../lib/group-call/groupCallTopology';
+import {
+  computeN1SteadyThinDeadzoneHoldMs,
+  GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS,
+  GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS,
+  GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS,
+  GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS,
+  GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS,
+  GCALL_N1_STEADY_STARVED_HOLD_OPUS_FALLBACK_MS,
+  GCALL_N1_STEADY_STARVED_HOLD_OPUS_MAX_MS,
+  GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS,
+  GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN,
+  GCALL_N1_STEADY_THIN_DEADZONE_HOLD_MAX_MS,
+  GCALL_N1_STEADY_THIN_DEADZONE_HOLD_MIN_MS,
+  GCALL_N1_STEADY_THIN_DEADZONE_HOLD_TARGET_RATIO,
+  GCALL_N1_STEADY_THIN_DEADZONE_OPUS_MAX_MS,
+  GCALL_N1_STEADY_THIN_DEADZONE_TRIGGER_MS,
+  GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS,
+  JITTER_EMPTY_HYSTERESIS_TICKS,
+  shouldDropActiveJitterSource,
+  shouldDropNonParticipantRemoteAudioSource,
+  shouldEnableN1DrainReceivePriorityMode,
+  shouldHoldN1SteadyStarvedAccumulation,
+  shouldHoldN1SteadyThinDeadzoneAccumulation,
+  shouldSuppressStartupDecodeFailure,
+  shouldTriggerN1InboundMediaReannounce,
+  shouldTriggerN1InboundMediaWatchdog,
+  type RecentRecoveryStabilitySummary,
+} from '../lib/group-call/groupCallReceiveDecisions';
+import {
+  ADAPTIVE_RECOVERY_ACCEL_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE,
+  ADAPTIVE_RECOVERY_ACCEL_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE,
+  ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS,
+  ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS_SINGLE_REMOTE,
+  ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS,
+  ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE,
+  ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX,
+  ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE,
+  ADAPTIVE_RECOVERY_SEVERE_UNDERRUNS,
+  ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION,
+  GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_PCM_MIN_MS,
+  GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_SAMPLE_COUNT_MIN,
+  GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_UNDERTARGET_MAX,
+  getRecoveryStabilityThresholds,
+  shouldAccelerateMultiSourceRecoveryDecay,
+  shouldAccelerateSingleRemoteRecoveryDecay,
+  shouldBypassRecoveryReentryCooldown,
+  shouldSuppressHealthySingleRemoteMicroWiden,
+  summarizeRecentRecoveryStability,
+  type RecoveryPlayoutHealthSample,
+  type RecoveryStabilityThresholds,
+} from '../lib/group-call/groupCallRecoveryDecisions';
+import {
+  computeEffectiveN1AccumulationDecodeCap,
+  computeN1AccumulationDecodeCap,
+  computeN1SevereRebuildAccumulationHoldOpusMs,
+  computeN1SevereReadyEscapeMinFrames,
+  shouldBlockN1RecoveryExitForCurrentJitter,
+  shouldExtendN1SevereRebuildAccumulation,
+  shouldForceN1SevereRebuildReadyEscape,
+  shouldForceN1SustainedSevereRebuildReceiveRelief,
+  shouldKeepSingleRemoteDegradedRebuildLocal,
+  shouldKeepSingleRemoteSevereRebuildDeadzoneLocal,
+  shouldKeepSingleRemoteWindowRecoveryLocal,
+  shouldPreserveN1SevereSingleRemoteTarget,
+  shouldPromoteLiveN1PlayoutDeadzoneToStrong,
+  shouldRelaxSingleRemoteWindowRecovery,
+  shouldResetN1SevereRebuildDeadzone,
+  shouldRetainN1RecoveryPrerollSatisfied,
+  shouldSuppressSingleRemoteBufferedWindowRecovery,
+  shouldUseN1SevereSingleRemoteCeiling,
+} from '../lib/group-call/groupCallSingleRemoteRecoveryDecisions';
+import {
+  computeN1ReceivePrioritySendBitrateCapBps,
+  computeN1RoughLinkBitrateCapBps,
+  computeSingleRemoteOverbufferTargetMaxMs,
+  computeWeakSingleRemoteRecoveryHoldState,
+  computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
+  shouldEnterN1ReceivePriorityMode,
+  shouldKeepMultiSourceWindowRecoveryLocal,
+  shouldTriggerN1SeverePlayoutPathWarm,
+  tickN1ReceivePrioritySendBitrateCapState,
+  type N1ReceivePrioritySendBitrateCapState,
+} from '../lib/group-call/groupCallReceivePriorityDecisions';
 import {
   ACTIVE_SPEAKER_GAIN,
   GAIN_SMOOTHING_TIME_CONSTANT_S,
@@ -120,7 +267,7 @@ import {
   SPEAKER_HANGOVER_MS,
   computeMasterGainTarget,
   computePerSpeakerGainTarget,
-  computeRecentSpeakerEstimate,
+  computeRecentSpeakerEstimateExcluding,
   shouldUpdateAudioMix,
 } from '../lib/group-call/audioMix';
 import {
@@ -275,6 +422,7 @@ import {
   PENDING_DECRYPT_SUSTAINED_ARM_MS,
   PENDING_DECRYPT_TTL_MS,
   shouldBypassDecryptWorkerOnHotQueue,
+  shouldSyncDecodeForSmallSession,
   shouldPreemptivelyThrottlePendingDecrypt,
   shouldTreatPendingDecryptAsForwarder,
   slewBurstMaxTowardRequested,
@@ -294,6 +442,16 @@ import {
   clearRootInboundWarmDedupeForPeer,
 } from '../lib/group-call/rootInboundWarmDedupe';
 import { computeP2pHealth } from '../lib/p2pHealth';
+import {
+  assessSourceTimestampLateness,
+  type SourceTimestampLatenessState,
+} from '../lib/group-call/sourceTimestampLateness';
+import { GcallV2Session } from '../lib/group-call/v2/gcallV2Session';
+import type { TopologyEvent } from '../lib/group-call/v2/reticulumSessionController';
+import {
+  decideFramesToPost,
+  estimateWorkletBufferedMs,
+} from '../lib/group-call/v2/playoutDrainControl';
 
 const naclApi = nacl as any;
 
@@ -317,11 +475,7 @@ export type { GroupCallLocalConnectionHint } from '../lib/group-call/groupCallLo
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type RoomState = 'idle' | 'joining' | 'connected' | 'ended';
-export type MyRole =
-  | 'participant'
-  | 'cluster-forwarder'
-  | 'root-forwarder'
-  | 'standby-forwarder';
+export type MyRole = GroupCallRole;
 export type TopologyLabel = 'Reticulum';
 
 /** Optional member-list gate for Qortal group calls (API: `/groups/members/:id?limit=0`). */
@@ -331,24 +485,95 @@ export type JoinGroupCallOptions = {
   memberGateGroupName?: string;
 };
 
-export function isFanoutForwarderRole(role: MyRole): boolean {
-  return role === 'root-forwarder' || role === 'cluster-forwarder';
-}
-
-export interface ClusterDef {
-  members: string[];
-  forwarder: string;
-  standby: string;
+export interface ClusterDef extends ImportedClusterDef {
   standby2: string;
 }
 
-export interface GroupTopology {
-  topologyEpoch: number;
-  rootForwarder: string;
-  standbyForwarder: string;
+export interface GroupTopology extends ImportedGroupTopology {
   clusters: ClusterDef[];
-  /** Present on IPC `gcall:topology`; used to resolve same-epoch root disagreements vs local election. */
-  lastSeen?: number;
+}
+
+export {
+  bumpGroupCallAudioSessionToken,
+  chooseSameEpochTopologyWinner,
+  computeN1ReceivePrioritySendBitrateCapBps,
+  computeN1RoughLinkBitrateCapBps,
+  computeSingleRemoteOverbufferTargetMaxMs,
+  countRecentlyHealthyRemoteSources,
+  clearAdaptiveGroupCallPlayoutMaps,
+  getConflictingRootForAuthorityWait,
+  getPredictiveWarmPeers,
+  getPostJoinHydratedParticipants,
+  getReticulumTransportTargets,
+  getSessionUpdatedKeyRecoveryAction,
+  getStartupKeyAuthorityDecision,
+  getTrustedRootForRejoinElection,
+  isFanoutForwarderRole,
+  computeWeakSingleRemoteRecoveryHoldState,
+  computeWeakSingleRemoteRecoveryTargetHoldMaxMs,
+  hasOccupiedRoomEvidenceForJoin,
+  isCurrentGroupCallAudioStartupToken,
+  mergeHydratedParticipantsIntoUiList,
+  computeEffectiveN1AccumulationDecodeCap,
+  computeN1AccumulationDecodeCap,
+  computeN1SevereRebuildAccumulationHoldOpusMs,
+  getRecoveryStabilityThresholds,
+  shouldAcceptIncomingRoomKeySender,
+  shouldAcceptIncomingRoomKeySenderRelaxed,
+  shouldAcceptKeyRecoveryRequestGeneration,
+  shouldAdoptTrustedRootSessionDuringRecovery,
+  shouldDropActiveJitterSource,
+  shouldDropNonParticipantRemoteAudioSource,
+  shouldAccelerateMultiSourceRecoveryDecay,
+  shouldAccelerateSingleRemoteRecoveryDecay,
+  shouldAllowSimultaneousJoinKeyFallback,
+  shouldApplyJoinSessionSnapshot,
+  shouldBypassRecoveryReentryCooldown,
+  shouldBlockN1RecoveryExitForCurrentJitter,
+  shouldContinueAfterParticipantJoinRefresh,
+  shouldDeferLocalTopologyElection,
+  shouldEnableN1DrainReceivePriorityMode,
+  shouldExtendN1SevereRebuildAccumulation,
+  shouldForceN1SevereRebuildReadyEscape,
+  shouldForceN1SustainedSevereRebuildReceiveRelief,
+  shouldHoldN1SteadyStarvedAccumulation,
+  shouldHoldN1SteadyThinDeadzoneAccumulation,
+  shouldIgnoreParticipantLeftEvent,
+  shouldIgnoreRedundantRoomKeyDelivery,
+  shouldKeepSingleRemoteDegradedRebuildLocal,
+  shouldKeepSingleRemoteSevereRebuildDeadzoneLocal,
+  shouldKeepSingleRemoteWindowRecoveryLocal,
+  shouldMintRootSessionKeyImmediately,
+  shouldPreserveN1SevereSingleRemoteTarget,
+  shouldPromoteStandbyRootAfterHeartbeatTimeout,
+  shouldPromoteLiveN1PlayoutDeadzoneToStrong,
+  shouldRelaxSingleRemoteWindowRecovery,
+  resolveDesignatedRootForSessionKey,
+  shouldResetN1SevereRebuildDeadzone,
+  shouldRetainN1RecoveryPrerollSatisfied,
+  shouldSendCachedQuitLeave,
+  shouldStartGroupCallAudioCapture,
+  shouldSubscribeToJoinedGroupCallEvents,
+  shouldEnterN1ReceivePriorityMode,
+  shouldKeepMultiSourceWindowRecoveryLocal,
+  shouldDelayPostJoinRosterElection,
+  shouldEscalateRoomWideKeyRecovery,
+  shouldSuppressHealthySingleRemoteMicroWiden,
+  shouldSuppressSingleRemoteBufferedWindowRecovery,
+  shouldSuppressStartupDecodeFailure,
+  shouldTriggerN1InboundMediaReannounce,
+  shouldTriggerN1SeverePlayoutPathWarm,
+  shouldTriggerN1InboundMediaWatchdog,
+  summarizeRecentRecoveryStability,
+  tickN1ReceivePrioritySendBitrateCapState,
+  shouldUseN1SevereSingleRemoteCeiling,
+  computeSteadyTargetDecayThresholdMs,
+};
+
+function normalizeGroupTopologyClusters(
+  topo: ImportedGroupTopology | RouterTopology
+): GroupTopology {
+  return normalizeGroupTopologyClustersImpl(topo) as GroupTopology;
 }
 
 export interface Participant {
@@ -389,9 +614,6 @@ interface IncomingKeyRequestPayload {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-/** Minimum Opus frames queued before decode drain starts (20ms per frame). Playout also gates on PCM depth in worklet. */
-const JITTER_EMPTY_HYSTERESIS_TICKS = 3;
-
 /** Max Opus frames decoded per remote source per jitter scheduler tick (burst catch-up). */
 const JITTER_DECODE_BURST_MAX_DEFAULT = 8;
 /** Extra decode frames per drain tick when session is in recovery (Phase C upstream assist). */
@@ -417,7 +639,6 @@ const ADAPTIVE_ALPHA_DOWN = 0.28;
 const ADAPTIVE_ALPHA_DOWN_RECOVERY = 0.18;
 /** When smoothed target is high and jitter stays calm, allow faster decay toward ideal. */
 /** Scaled with low-latency adaptive max (~120 vs original 180): 220 * 120/180 ≈ 147. */
-const GCALL_DECAY_GUARD_HIGH_TARGET_MS = 147;
 const GCALL_DECAY_GUARD_JITTER_CALM_MAX_MS = 22;
 const GCALL_DECAY_GUARD_CALM_DURATION_MS = 2500;
 const GCALL_DECAY_GUARD_ALPHA_DOWN = 0.38;
@@ -425,10 +646,6 @@ const GCALL_STABLE_RECOVERY_ALPHA_DOWN = 0.34;
 const GCALL_STABLE_SINGLE_REMOTE_ALPHA_DOWN = 0.36;
 const GCALL_MULTI_SOURCE_RECOVERY_ALPHA_DOWN = 0.42;
 const GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN = 0.4;
-const GCALL_STEADY_TARGET_DECAY_HEADROOM_MS = 18;
-const GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_PCM_MIN_MS = 120;
-const GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_UNDERTARGET_MAX = 0.18;
-const GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_SAMPLE_COUNT_MIN = 3;
 const GCALL_SINGLE_REMOTE_OVERBUFFER_DELTA_MIN_MS = 20;
 const GCALL_SINGLE_REMOTE_OVERBUFFER_PCM_HEADROOM_MS = 24;
 const GCALL_SINGLE_REMOTE_OVERBUFFER_UNDERTARGET_MAX = 0.25;
@@ -440,6 +657,8 @@ const ADAPTIVE_TARGET_POST_MIN_MS = 40;
 const ADAPTIVE_TARGET_MIN_DELTA_MS = 3;
 const INTER_ARRIVAL_MAX_SAMPLES = 40;
 const ADAPTIVE_LOSS_MS_CAP = 12;
+const ADAPTIVE_FULL_TICK_MIN_MS = 30;
+const ADAPTIVE_FULL_TICK_MULTI_SOURCE_MIN_MS = 40;
 
 /**
  * After capture VAD goes false, keep treating the source as "speaking" for relay for this long.
@@ -497,16 +716,6 @@ const ADAPTIVE_RECOVERY_COOLDOWN_MS = 12_000;
 const ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS = 400;
 const ADAPTIVE_RECOVERY_MIN_DWELL_MS = 250;
 const ADAPTIVE_RECOVERY_REENTRY_COOLDOWN_MS = 300;
-const ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS = 120;
-const ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX = 0.2;
-const ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS = 2;
-const ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE = 105;
-const ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE = 0.35;
-const ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS_SINGLE_REMOTE = 4;
-const ADAPTIVE_RECOVERY_ACCEL_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE = 92;
-const ADAPTIVE_RECOVERY_ACCEL_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE = 0.45;
-const ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION = 0.45;
-const ADAPTIVE_RECOVERY_SEVERE_UNDERRUNS = 4;
 const ADAPTIVE_RECOVERY_PLAYOUT_BOOST_MS = 20;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const SPEAKER_GATE_WINDOW_MS = 3_000;
@@ -545,12 +754,6 @@ type GcallAudioIngressTransport = 'packet' | 'link' | 'unknown';
  */
 const ROOT_INBOUND_WARM_MIN_RELAY_SENT = 24;
 const ROOT_INBOUND_WARM_MIN_KEY_AGE_MS = 1_500;
-const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS = 4_000;
-const GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS = 4_000;
-const GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS = 24;
-const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS =
-  GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS;
-const GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS = 4_000;
 const GCALL_N1_BUFFER_ENFORCE_TIER_CHANGE_LOG_MIN_MS = 1_000;
 const GCALL_N1_ACCUMULATION_HOLD_LOG_MIN_MS = 1_000;
 /** Safety-net timeout: if GC_KEY_ROTATE IPC hangs, release the send gate after this. */
@@ -633,561 +836,6 @@ function debugWarn(...args: unknown[]): void {
   gcallDiagnosticsIngestConsoleArgs('warn', args);
 }
 
-/** Start capture only once the Reticulum audio pipeline is idle. */
-export function shouldStartGroupCallAudioCapture(opts: {
-  pipelineActive: boolean;
-  startupInFlight: boolean;
-}): boolean {
-  return !opts.pipelineActive && !opts.startupInFlight;
-}
-
-export function bumpGroupCallAudioSessionToken(token: number): number {
-  return token + 1;
-}
-
-export function isCurrentGroupCallAudioStartupToken(
-  expected: number,
-  current: number
-): boolean {
-  return expected === current;
-}
-
-export function clearAdaptiveGroupCallPlayoutMaps(maps: {
-  lastPacketArrivalAt: Map<string, number>;
-  interArrivalSamples: Map<string, number[]>;
-  smoothedPlayoutTarget: Map<string, number>;
-  lastSentPlayoutTarget: Map<string, number>;
-  lastPlayoutTargetPostAt: Map<string, number>;
-  lastDrainMissed: Map<string, number>;
-  n1WeakLiveHoldUntilPerf?: Map<string, number>;
-  n1SteadyThinLiveSincePerf?: Map<string, number>;
-  n1ReceivePrioritySendCapState?: Map<
-    string,
-    N1ReceivePrioritySendBitrateCapState
-  >;
-}): void {
-  maps.lastPacketArrivalAt.clear();
-  maps.interArrivalSamples.clear();
-  maps.smoothedPlayoutTarget.clear();
-  maps.lastSentPlayoutTarget.clear();
-  maps.lastPlayoutTargetPostAt.clear();
-  maps.lastDrainMissed.clear();
-  maps.n1WeakLiveHoldUntilPerf?.clear();
-  maps.n1SteadyThinLiveSincePerf?.clear();
-  maps.n1ReceivePrioritySendCapState?.clear();
-}
-
-export interface RecoveryPlayoutHealthSample {
-  atMs: number;
-  bufferedMs: number;
-  underTarget: boolean;
-}
-
-export interface RecentRecoveryStabilitySummary {
-  sampleCount: number;
-  avgPcmBufferedMs: number;
-  playoutUnderTargetFraction: number;
-  underrunCount: number;
-  stable: boolean;
-  severeInstability: boolean;
-}
-
-export interface RecoveryStabilityThresholds {
-  minBufferedMs: number;
-  maxUnderTargetFraction: number;
-  maxUnderruns: number;
-}
-
-export function getRecoveryStabilityThresholds(
-  activeSourceCount: number
-): RecoveryStabilityThresholds {
-  if (activeSourceCount === 1) {
-    return {
-      minBufferedMs: ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE,
-      maxUnderTargetFraction:
-        ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE,
-      maxUnderruns: ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS_SINGLE_REMOTE,
-    };
-  }
-  return {
-    minBufferedMs: ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS,
-    maxUnderTargetFraction: ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX,
-    maxUnderruns: ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS,
-  };
-}
-
-export function summarizeRecentRecoveryStability(opts: {
-  samples: readonly RecoveryPlayoutHealthSample[];
-  underrunTimesMs: readonly number[];
-  nowMs: number;
-  windowMs: number;
-  minBufferedMs?: number;
-  maxUnderTargetFraction?: number;
-  maxUnderruns?: number;
-  severeUnderTargetFraction?: number;
-  severeUnderruns?: number;
-}): RecentRecoveryStabilitySummary {
-  const minBufferedMs =
-    opts.minBufferedMs ?? ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS;
-  const maxUnderTargetFraction =
-    opts.maxUnderTargetFraction ?? ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX;
-  const maxUnderruns =
-    opts.maxUnderruns ?? ADAPTIVE_RECOVERY_EXIT_MAX_UNDERRUNS;
-  const severeUnderTargetFraction =
-    opts.severeUnderTargetFraction ??
-    ADAPTIVE_RECOVERY_SEVERE_UNDERTARGET_FRACTION;
-  const severeUnderruns =
-    opts.severeUnderruns ?? ADAPTIVE_RECOVERY_SEVERE_UNDERRUNS;
-  const windowStartMs = opts.nowMs - Math.max(1, opts.windowMs);
-  const samples = opts.samples.filter((sample) => sample.atMs >= windowStartMs);
-  const underrunCount = opts.underrunTimesMs.filter(
-    (atMs) => atMs >= windowStartMs
-  ).length;
-  const sampleCount = samples.length;
-  const avgPcmBufferedMs =
-    sampleCount > 0
-      ? samples.reduce((sum, sample) => sum + sample.bufferedMs, 0) /
-        sampleCount
-      : 0;
-  const playoutUnderTargetFraction =
-    sampleCount > 0
-      ? samples.reduce((sum, sample) => sum + (sample.underTarget ? 1 : 0), 0) /
-        sampleCount
-      : 0;
-  const stable =
-    sampleCount >= 2 &&
-    avgPcmBufferedMs > minBufferedMs &&
-    playoutUnderTargetFraction < maxUnderTargetFraction &&
-    underrunCount <= maxUnderruns;
-  const severeInstability =
-    underrunCount >= severeUnderruns ||
-    (sampleCount >= 2 &&
-      playoutUnderTargetFraction >= severeUnderTargetFraction);
-  return {
-    sampleCount,
-    avgPcmBufferedMs,
-    playoutUnderTargetFraction,
-    underrunCount,
-    stable,
-    severeInstability,
-  };
-}
-
-export function shouldBypassRecoveryReentryCooldown(opts: {
-  severity: number;
-  severeInstability: boolean;
-}): boolean {
-  return opts.severity >= 3 || opts.severeInstability;
-}
-
-export function computeSteadyTargetDecayThresholdMs(opts: {
-  adaptiveMaxTargetMs: number;
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-}): number {
-  if (opts.activeSourceCount === 1 && opts.adaptiveNetworkMode !== 'recovery') {
-    return Math.min(
-      GCALL_DECAY_GUARD_HIGH_TARGET_MS,
-      Math.max(
-        ADAPTIVE_BASE_TARGET_MS + 20,
-        opts.adaptiveMaxTargetMs - GCALL_STEADY_TARGET_DECAY_HEADROOM_MS
-      )
-    );
-  }
-  return GCALL_DECAY_GUARD_HIGH_TARGET_MS;
-}
-
-export function shouldSuppressHealthySingleRemoteMicroWiden(opts: {
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-  shouldTightenRecovery: boolean;
-  severeWindowSource: boolean;
-  ingressPeerRecovery: boolean;
-  recentStability: RecentRecoveryStabilitySummary;
-}): boolean {
-  return (
-    opts.activeSourceCount === 1 &&
-    opts.adaptiveNetworkMode !== 'recovery' &&
-    !opts.shouldTightenRecovery &&
-    !opts.severeWindowSource &&
-    !opts.ingressPeerRecovery &&
-    opts.recentStability.stable &&
-    !opts.recentStability.severeInstability &&
-    opts.recentStability.sampleCount >=
-      GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_SAMPLE_COUNT_MIN &&
-    opts.recentStability.avgPcmBufferedMs >=
-      GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_PCM_MIN_MS &&
-    opts.recentStability.playoutUnderTargetFraction <=
-      GCALL_HEALTHY_SINGLE_REMOTE_MICRO_WIDEN_UNDERTARGET_MAX
-  );
-}
-
-export function shouldDropActiveJitterSource(opts: {
-  emptyTicks: number;
-  playoutActive: boolean;
-  hysteresisTicks?: number;
-}): boolean {
-  const hysteresisTicks = opts.hysteresisTicks ?? JITTER_EMPTY_HYSTERESIS_TICKS;
-  return opts.emptyTicks >= hysteresisTicks && !opts.playoutActive;
-}
-
-export function shouldDropNonParticipantRemoteAudioSource(opts: {
-  sourceAddr: string;
-  localAddress: string;
-  participantAddresses: Iterable<string>;
-  nowMs: number;
-  startupMediaGateUntilMs: number;
-  topologySettleUntilMs: number;
-  startupSessionGraceUntilMs: number;
-  authoritySettleUntilMs: number;
-}): boolean {
-  const sourceAddr = opts.sourceAddr.trim();
-  if (!sourceAddr) return true;
-
-  const localAddress = opts.localAddress.trim();
-  if (localAddress && sourceAddr === localAddress) return false;
-
-  for (const participantAddress of opts.participantAddresses) {
-    if (participantAddress.trim() === sourceAddr) return false;
-  }
-
-  const graceUntilMs = Math.max(
-    opts.startupMediaGateUntilMs,
-    opts.topologySettleUntilMs,
-    opts.startupSessionGraceUntilMs,
-    opts.authoritySettleUntilMs
-  );
-  return opts.nowMs >= graceUntilMs;
-}
-
-export function shouldAccelerateMultiSourceRecoveryDecay(opts: {
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-  starvationSeverity: PlayoutStarvationSeverity;
-  bufferAdequacy: number;
-  avgPlayoutDeltaMs: number;
-  shouldTightenRecovery: boolean;
-  severeWindowSource: boolean;
-  ingressPeerRecovery: boolean;
-}): boolean {
-  return (
-    opts.activeSourceCount >= 2 &&
-    opts.adaptiveNetworkMode === 'recovery' &&
-    opts.starvationSeverity !== 'none' &&
-    opts.bufferAdequacy < 0.65 &&
-    opts.avgPlayoutDeltaMs <= -40 &&
-    !opts.shouldTightenRecovery &&
-    !opts.severeWindowSource &&
-    !opts.ingressPeerRecovery
-  );
-}
-
-export function shouldAccelerateSingleRemoteRecoveryDecay(opts: {
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-  shouldTightenRecovery: boolean;
-  severeWindowSource: boolean;
-  ingressPeerRecovery: boolean;
-  recentStability: RecentRecoveryStabilitySummary;
-}): boolean {
-  return (
-    opts.activeSourceCount === 1 &&
-    opts.adaptiveNetworkMode === 'recovery' &&
-    !opts.shouldTightenRecovery &&
-    !opts.severeWindowSource &&
-    !opts.ingressPeerRecovery &&
-    !opts.recentStability.severeInstability &&
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.avgPcmBufferedMs >=
-      ADAPTIVE_RECOVERY_ACCEL_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE &&
-    opts.recentStability.playoutUnderTargetFraction <=
-      ADAPTIVE_RECOVERY_ACCEL_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE
-  );
-}
-
-export function computeN1AccumulationDecodeCap(opts: {
-  accumulationActive: boolean;
-  recoverySingleRemote: boolean;
-  forcedReleaseRebuildActive?: boolean;
-  opusBufferedMs: number;
-  tier: GcallN1BufferEnforceTier;
-  targetMs?: number;
-}): number | null {
-  if (!opts.accumulationActive) return null;
-  const severeRebuildHoldOpusMs =
-    computeN1SevereRebuildAccumulationHoldOpusMs(opts.targetMs);
-  if (
-    opts.recoverySingleRemote &&
-    opts.opusBufferedMs <=
-      (opts.forcedReleaseRebuildActive
-        ? severeRebuildHoldOpusMs
-        : OPUS_FRAME_DURATION_MS) &&
-    (opts.forcedReleaseRebuildActive || opts.tier === 'deep')
-  ) {
-    return 0;
-  }
-  if (opts.recoverySingleRemote && opts.forcedReleaseRebuildActive) {
-    return GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP;
-  }
-  return 1;
-}
-
-export function computeN1SevereRebuildAccumulationHoldOpusMs(
-  targetMs?: number
-): number {
-  const normalizedTargetMs =
-    Number.isFinite(targetMs) && targetMs !== undefined
-      ? Math.max(GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS, targetMs)
-      : GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS;
-  return Math.max(
-    GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS,
-    Math.min(
-      GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_CEIL_MS,
-      normalizedTargetMs * GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_RATIO
-    )
-  );
-}
-
-export function computeEffectiveN1AccumulationDecodeCap(opts: {
-  accumulationDecodeCap: number;
-  n1PcmRebuildActive: boolean;
-  n1ReceivePriorityModeActive: boolean;
-}): number {
-  if (opts.n1PcmRebuildActive) {
-    return Math.max(
-      GCALL_N1_SEVERE_RELEASE_REBUILD_MIN_DECODE_CAP,
-      opts.accumulationDecodeCap
-    );
-  }
-  if (opts.n1ReceivePriorityModeActive) {
-    return Math.max(
-      GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_DECODE_CAP,
-      opts.accumulationDecodeCap
-    );
-  }
-  if (opts.accumulationDecodeCap === 0) return 0;
-  return opts.accumulationDecodeCap;
-}
-
-export function shouldPreserveN1SevereSingleRemoteTarget(opts: {
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-  severeWindowSource: boolean;
-  isolatedSource: boolean;
-  liveN1DeadzoneStrong: boolean;
-  playoutStarvationSeverity?: PlayoutStarvationSeverity;
-  starvationCooldownActive?: boolean;
-}): boolean {
-  return (
-    opts.adaptiveNetworkMode === 'recovery' &&
-    opts.activeSourceCount === 1 &&
-    (opts.liveN1DeadzoneStrong ||
-      (opts.severeWindowSource && opts.isolatedSource) ||
-      opts.playoutStarvationSeverity === 'strong' ||
-      opts.starvationCooldownActive === true)
-  );
-}
-
-export function shouldUseN1SevereSingleRemoteCeiling(opts: {
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-  severeWindowSource: boolean;
-  isolatedSource: boolean;
-  liveN1DeadzoneStrong: boolean;
-  playoutStarvationSeverity: PlayoutStarvationSeverity;
-}): boolean {
-  return (
-    opts.adaptiveNetworkMode === 'recovery' &&
-    opts.activeSourceCount === 1 &&
-    (opts.liveN1DeadzoneStrong ||
-      opts.playoutStarvationSeverity === 'strong' ||
-      (opts.severeWindowSource && opts.isolatedSource))
-  );
-}
-
-export function shouldExtendN1SevereRebuildAccumulation(opts: {
-  recoverySingleRemote: boolean;
-  prerollActive: boolean;
-  severeForcedReleaseRebuildActive: boolean;
-  sourceRecentlyPushed: boolean;
-  opusBufferedMs: number;
-  targetMs?: number;
-  recentStability: RecentRecoveryStabilitySummary | null;
-  playoutStarvationSeverity: PlayoutStarvationSeverity;
-}): boolean {
-  const severeRebuildHoldOpusMs =
-    computeN1SevereRebuildAccumulationHoldOpusMs(opts.targetMs);
-  const lowPcmHoldMaxMs =
-    computeN1SevereRebuildLowPcmHoldMaxMs(opts.targetMs);
-  if (
-    !opts.recoverySingleRemote ||
-    opts.prerollActive ||
-    !opts.severeForcedReleaseRebuildActive ||
-    opts.opusBufferedMs > severeRebuildHoldOpusMs
-  ) {
-    return false;
-  }
-  if (
-    opts.recentStability !== null &&
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_SEVERE_REBUILD_ACCUMULATION_UNDERTARGET_MIN
-  ) {
-    return true;
-  }
-  if (
-    opts.recentStability !== null &&
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.severeInstability &&
-    opts.recentStability.avgPcmBufferedMs <= lowPcmHoldMaxMs &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_UNDERTARGET_MIN
-  ) {
-    return true;
-  }
-  if (!opts.sourceRecentlyPushed) return false;
-  return opts.playoutStarvationSeverity === 'strong';
-}
-
-function computeN1SevereRebuildLowPcmHoldMaxMs(targetMs?: number): number {
-  const normalizedTargetMs =
-    Number.isFinite(targetMs) && targetMs !== undefined
-      ? Math.max(ADAPTIVE_BASE_TARGET_MS, targetMs)
-      : ADAPTIVE_BASE_TARGET_MS;
-  return Math.max(
-    GCALL_N1_SEVERE_REBUILD_ACCUMULATION_PCM_MAX_MS,
-    Math.min(
-      GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_PCM_CEIL_MS,
-      normalizedTargetMs * GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_TARGET_RATIO
-    )
-  );
-}
-
-export function shouldHoldN1SteadyStarvedAccumulation(opts: {
-  steadySingleRemote: boolean;
-  sourceRecentlyPushed: boolean;
-  hasReadyFrame: boolean;
-  opusBufferedMs: number;
-  recentStability: RecentRecoveryStabilitySummary | null;
-  playoutStarvationSeverity: PlayoutStarvationSeverity;
-}): boolean {
-  if (
-    !opts.steadySingleRemote ||
-    !opts.sourceRecentlyPushed ||
-    !opts.hasReadyFrame ||
-    opts.opusBufferedMs > GCALL_N1_STEADY_STARVED_HOLD_OPUS_MAX_MS
-  ) {
-    return false;
-  }
-  if (
-    opts.recentStability !== null &&
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN
-  ) {
-    return true;
-  }
-  return (
-    opts.playoutStarvationSeverity === 'strong' &&
-    opts.opusBufferedMs <= GCALL_N1_STEADY_STARVED_HOLD_OPUS_FALLBACK_MS
-  );
-}
-
-export function computeN1SteadyThinDeadzoneHoldMs(targetMs: number): number {
-  const normalizedTargetMs = Math.max(
-    ADAPTIVE_BASE_TARGET_MS,
-    Number.isFinite(targetMs) ? targetMs : ADAPTIVE_BASE_TARGET_MS
-  );
-  const ratioHoldMs =
-    Math.ceil(
-      (normalizedTargetMs * GCALL_N1_STEADY_THIN_DEADZONE_HOLD_TARGET_RATIO) /
-        OPUS_FRAME_DURATION_MS
-    ) * OPUS_FRAME_DURATION_MS;
-  return Math.max(
-    GCALL_N1_STEADY_THIN_DEADZONE_HOLD_MIN_MS,
-    Math.min(GCALL_N1_STEADY_THIN_DEADZONE_HOLD_MAX_MS, ratioHoldMs)
-  );
-}
-
-export function shouldHoldN1SteadyThinDeadzoneAccumulation(opts: {
-  steadySingleRemote: boolean;
-  sourceRecentlyPushed: boolean;
-  hasReadyFrame: boolean;
-  tier: GcallN1BufferEnforceTier;
-  opusBufferedMs: number;
-  targetMs: number;
-  thinLiveForMs: number;
-  recentStability: RecentRecoveryStabilitySummary | null;
-  playoutStarvationSeverity: PlayoutStarvationSeverity;
-}): boolean {
-  if (
-    !opts.steadySingleRemote ||
-    !opts.sourceRecentlyPushed ||
-    !opts.hasReadyFrame ||
-    opts.tier === 'normal' ||
-    opts.thinLiveForMs < GCALL_N1_STEADY_THIN_DEADZONE_TRIGGER_MS ||
-    opts.opusBufferedMs >= computeN1SteadyThinDeadzoneHoldMs(opts.targetMs)
-  ) {
-    return false;
-  }
-  if (
-    opts.opusBufferedMs <= GCALL_N1_STEADY_THIN_DEADZONE_OPUS_MAX_MS &&
-    opts.targetMs >= ADAPTIVE_BASE_TARGET_MS
-  ) {
-    return true;
-  }
-  if (
-    opts.recentStability !== null &&
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN
-  ) {
-    return true;
-  }
-  return opts.playoutStarvationSeverity === 'strong';
-}
-
-export function shouldPromoteLiveN1PlayoutDeadzoneToStrong(opts: {
-  activeSourceCount: number;
-  lastRecvAgeMs: number;
-  recentStability: RecentRecoveryStabilitySummary;
-}): boolean {
-  return (
-    opts.activeSourceCount === 1 &&
-    Number.isFinite(opts.lastRecvAgeMs) &&
-    opts.lastRecvAgeMs <= GCALL_N1_LIVE_DEADZONE_STARVATION_LAST_RECV_MAX_MS &&
-    opts.recentStability.sampleCount >=
-      GCALL_N1_LIVE_DEADZONE_STARVATION_MIN_SAMPLES &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN
-  );
-}
-
-export function shouldRetainN1RecoveryPrerollSatisfied(opts: {
-  bufferedFrames: number;
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-  lastPushAgeMs: number;
-  recentPushMaxMs?: number;
-}): boolean {
-  const recentPushMaxMs = opts.recentPushMaxMs ?? GCALL_N1_STALL_ESCAPE_MS;
-  return (
-    opts.bufferedFrames === 0 &&
-    opts.activeSourceCount === 1 &&
-    opts.adaptiveNetworkMode === 'recovery' &&
-    Number.isFinite(opts.lastPushAgeMs) &&
-    opts.lastPushAgeMs <= recentPushMaxMs
-  );
-}
-
 function incrementSourceTickCounter(
   map: Map<string, number>,
   sourceAddr: string,
@@ -1220,7 +868,7 @@ function summarizeSourceTickCounters(map: ReadonlyMap<string, number>): {
       count,
       share: total > 0 ? Math.round((count / total) * 1000) / 1000 : 0,
     }));
-  const dominantShare = total > 0 ? topSources[0]?.share ?? 0 : 0;
+  const dominantShare = total > 0 ? (topSources[0]?.share ?? 0) : 0;
   return { total, dominantShare, topSources };
 }
 
@@ -1229,7 +877,10 @@ function summarizeSourceTickMaxCounters(map: ReadonlyMap<string, number>): {
   topSources: Array<{ sourceAddr: string; max: number }>;
 } {
   const entries = [...map.entries()].filter(([, max]) => max > 0);
-  const max = entries.reduce((currentMax, [, value]) => Math.max(currentMax, value), 0);
+  const max = entries.reduce(
+    (currentMax, [, value]) => Math.max(currentMax, value),
+    0
+  );
   const topSources = entries
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -1267,7 +918,10 @@ function summarizeLatencyTickCounters(
 } {
   const entries = [...map.entries()].filter(([, stats]) => stats.count > 0);
   const total = entries.reduce((sum, [, stats]) => sum + stats.count, 0);
-  const maxMs = entries.reduce((max, [, stats]) => Math.max(max, stats.maxMs), 0);
+  const maxMs = entries.reduce(
+    (max, [, stats]) => Math.max(max, stats.maxMs),
+    0
+  );
   const topSources = entries
     .sort((a, b) => b[1].maxMs - a[1].maxMs)
     .slice(0, 3)
@@ -1283,38 +937,7 @@ function summarizeLatencyTickCounters(
 function normalizeGcallAudioIngressTransport(
   transport: string | undefined
 ): GcallAudioIngressTransport {
-  return transport === 'packet' || transport === 'link'
-    ? transport
-    : 'unknown';
-}
-
-export function shouldRelaxSingleRemoteWindowRecovery(opts: {
-  activeSourceCount: number;
-  shouldTightenRecovery: boolean;
-  avgOpusBufferedMs: number;
-  adaptiveTargetMedianMs: number;
-  avgPcmBufferedMs: number;
-  playoutUnderTargetFraction: number;
-  avgPlayoutDeltaMs: number;
-  concealmentTicks: number;
-}): boolean {
-  const target = Math.max(1, opts.adaptiveTargetMedianMs);
-  const opusAdequacy = opts.avgOpusBufferedMs / target;
-  const thinButUsableReserve =
-    opts.avgPcmBufferedMs >=
-      ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE + 35 &&
-    opts.playoutUnderTargetFraction <= 0.4 &&
-    opts.avgPlayoutDeltaMs >= -35 &&
-    opts.concealmentTicks <= 25;
-  return (
-    opts.activeSourceCount === 1 &&
-    !opts.shouldTightenRecovery &&
-    (opusAdequacy >= 0.3 || thinButUsableReserve) &&
-    opts.avgPcmBufferedMs >= ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE - 5 &&
-    opts.playoutUnderTargetFraction <= 0.6 &&
-    opts.avgPlayoutDeltaMs >= -80 &&
-    opts.concealmentTicks <= 100
-  );
+  return transport === 'packet' || transport === 'link' ? transport : 'unknown';
 }
 
 const GCALL_N1_WEAK_LIVE_HOLD_PCM_MAX_MS = 132;
@@ -1356,6 +979,14 @@ const GCALL_N1_SEVERE_PLAYOUT_WARM_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_PCM_MAX_MS = 90;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_UNDERTARGET_MIN = 0.55;
 const GCALL_N1_SEVERE_PLAYOUT_WARM_DELTA_MAX_MS = -45;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_INSTABILITY_UNDERTARGET_MIN = 0.72;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_INSTABILITY_DELTA_MAX_MS = -60;
+const GCALL_N1_SEVERE_PLAYOUT_WARM_INSTABILITY_UNDERRUN_MIN = 1;
+const GCALL_V2_PLAYOUT_POST_LATENCY_DIAG_MS = 2_000;
+const GCALL_V2_PLAYOUT_POST_LATENCY_DIAG_MIN_INTERVAL_MS = 5_000;
+const GCALL_SOURCE_TIMESTAMP_MAX_EXCESS_LATENESS_MS = 4_000;
+const GCALL_SOURCE_TIMESTAMP_MAX_REGRESSION_MS = 2_400;
+const GCALL_STALE_TIMESTAMP_DROP_LOG_MIN_INTERVAL_MS = 5_000;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS = 450;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS = 70;
 const GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO = 0.55;
@@ -1390,7 +1021,6 @@ const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_MIN_MS = 900;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_PCM_MAX_MS = 60;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN = 0.7;
 const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS = -20;
-const GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_REARM_MS = 140;
 const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_HOLD_OPUS_MS =
   OPUS_FRAME_DURATION_MS * 5;
@@ -1402,17 +1032,6 @@ const GCALL_N1_SEVERE_REBUILD_ACCUMULATION_UNDERTARGET_MIN = 0.9;
 const GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_PCM_CEIL_MS = 72;
 const GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_TARGET_RATIO = 0.45;
 const GCALL_N1_SEVERE_REBUILD_LOW_PCM_HOLD_UNDERTARGET_MIN = 0.7;
-const GCALL_N1_STEADY_STARVED_HOLD_OPUS_MAX_MS = 80;
-const GCALL_N1_STEADY_STARVED_HOLD_OPUS_FALLBACK_MS =
-  OPUS_FRAME_DURATION_MS * 2;
-const GCALL_N1_STEADY_STARVED_HOLD_PCM_MAX_MS = 64;
-const GCALL_N1_STEADY_STARVED_HOLD_UNDERTARGET_MIN = 0.7;
-const GCALL_N1_STEADY_THIN_DEADZONE_TRIGGER_MS = 2_000;
-const GCALL_N1_STEADY_THIN_DEADZONE_OPUS_MAX_MS =
-  OPUS_FRAME_DURATION_MS * 2;
-const GCALL_N1_STEADY_THIN_DEADZONE_HOLD_MIN_MS = 60;
-const GCALL_N1_STEADY_THIN_DEADZONE_HOLD_MAX_MS = 100;
-const GCALL_N1_STEADY_THIN_DEADZONE_HOLD_TARGET_RATIO = 0.55;
 const GCALL_N1_LIVE_DEADZONE_STARVATION_MIN_SAMPLES = 8;
 const GCALL_N1_LIVE_DEADZONE_STARVATION_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_SEVERE_READY_ESCAPE_FRAMES_MIN = 4;
@@ -1433,1517 +1052,8 @@ const GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX = 1;
 const GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS = 12;
 const GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN = 0.9;
 
-function computeN1SevereReadyEscapeMinFrames(targetMs: number): number {
-  const normalizedTargetMs = Math.max(
-    OPUS_FRAME_DURATION_MS,
-    Number.isFinite(targetMs) ? targetMs : ADAPTIVE_BASE_TARGET_MS
-  );
-  return Math.max(
-    GCALL_N1_SEVERE_READY_ESCAPE_FRAMES_MIN,
-    Math.ceil(normalizedTargetMs / OPUS_FRAME_DURATION_MS)
-  );
-}
-
-export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
-  activeSourceCount: number;
-  lastRecvAgeMs: number;
-  avgOpusBufferedMs: number;
-  adaptiveTargetMedianMs: number;
-  adaptiveTargetMaxMs: number;
-  avgPcmBufferedMs: number;
-  playoutUnderTargetFraction: number;
-  avgPlayoutDeltaMs: number;
-  missingFrames: number;
-  packetsDroppedPendingDecrypt: number;
-  reticulumAudioStaleDrops: number;
-  reticulumAudioPacketSendFailures: number;
-  reticulumAudioPacketPathTimeouts: number;
-}): boolean {
-  const target = Math.max(
-    1,
-    opts.adaptiveTargetMedianMs || opts.adaptiveTargetMaxMs || 1
-  );
-  const freshLive =
-    Number.isFinite(opts.lastRecvAgeMs) &&
-    opts.lastRecvAgeMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_LAST_RECV_MAX_MS;
-  const noHardRemoteFailure =
-    opts.missingFrames <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX &&
-    opts.packetsDroppedPendingDecrypt <= 0 &&
-    opts.reticulumAudioStaleDrops <= 0 &&
-    opts.reticulumAudioPacketSendFailures <= 0 &&
-    opts.reticulumAudioPacketPathTimeouts <= 0;
-  return (
-    opts.activeSourceCount === 1 &&
-    freshLive &&
-    noHardRemoteFailure &&
-    (opts.avgOpusBufferedMs >= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_MS ||
-      opts.avgOpusBufferedMs / target >=
-        GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MIN_OPUS_RATIO) &&
-    opts.avgOpusBufferedMs >=
-      opts.avgPcmBufferedMs + GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_OPUS_PCM_GAP_MIN_MS &&
-    opts.avgPcmBufferedMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_PCM_MAX_MS &&
-    opts.playoutUnderTargetFraction >=
-      GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS
-  );
-}
-
-export function shouldKeepSingleRemoteSevereRebuildDeadzoneLocal(opts: {
-  activeSourceCount: number;
-  lastRecvAgeMs: number;
-  avgOpusBufferedMs: number;
-  avgPcmBufferedMs: number;
-  playoutUnderTargetFraction: number;
-  avgPlayoutDeltaMs: number;
-  missingFrames: number;
-  jitterBufferDepthFramesMean?: number;
-  severeForcedReleaseRebuildActive?: boolean;
-  severeForcedReleaseRebuildActiveForMs?: number;
-  packetsDroppedPendingDecrypt: number;
-  reticulumAudioStaleDrops: number;
-  reticulumAudioPacketSendFailures: number;
-  reticulumAudioPacketPathTimeouts: number;
-}): boolean {
-  const freshLive =
-    Number.isFinite(opts.lastRecvAgeMs) &&
-    opts.lastRecvAgeMs <= GCALL_N1_SEVERE_REBUILD_DEADZONE_LAST_RECV_MAX_MS;
-  const hardRemoteFailure =
-    opts.packetsDroppedPendingDecrypt > 0 ||
-    opts.reticulumAudioStaleDrops > 0 ||
-    opts.reticulumAudioPacketSendFailures > 0 ||
-    opts.reticulumAudioPacketPathTimeouts > 0;
-  const thinJitter =
-    opts.avgOpusBufferedMs <=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX *
-        OPUS_FRAME_DURATION_MS ||
-    (opts.jitterBufferDepthFramesMean ?? Number.POSITIVE_INFINITY) <=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX;
-  const severeRebuildActiveLongEnough =
-    opts.severeForcedReleaseRebuildActive === true &&
-    (opts.severeForcedReleaseRebuildActiveForMs ?? 0) >=
-      GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS;
-  return (
-    opts.activeSourceCount === 1 &&
-    freshLive &&
-    !hardRemoteFailure &&
-    opts.missingFrames <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_MISSING_FRAMES_MAX &&
-    thinJitter &&
-    opts.avgPcmBufferedMs <= GCALL_N1_SEVERE_REBUILD_DEADZONE_PCM_MAX_MS &&
-    opts.playoutUnderTargetFraction >=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_SEVERE_REBUILD_DEADZONE_DELTA_MAX_MS &&
-    (severeRebuildActiveLongEnough ||
-      opts.avgOpusBufferedMs <=
-        GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX *
-          OPUS_FRAME_DURATION_MS)
-  );
-}
-
-export function shouldSuppressSingleRemoteBufferedWindowRecovery(opts: {
-  activeSourceCount: number;
-  avgPcmBufferedMs: number;
-  adaptiveTargetMedianMs: number;
-  avgPlayoutDeltaMs: number;
-  playoutUnderTargetFraction: number;
-  jitterNotReadyFraction: number;
-  jitterRawEmptyFraction: number;
-  packetsDropped: number;
-  packetsDroppedPendingDecrypt: number;
-  reticulumAudioQueuePressureDrops: number;
-  reticulumAudioStaleDrops: number;
-  reticulumAudioPacketSendFailures: number;
-  reticulumAudioPacketPathTimeouts: number;
-}): boolean {
-  const target = Math.max(1, opts.adaptiveTargetMedianMs || ADAPTIVE_BASE_TARGET_MS);
-  const hardTransportFailure =
-    opts.packetsDropped > 0 ||
-    opts.packetsDroppedPendingDecrypt > 0 ||
-    opts.reticulumAudioQueuePressureDrops > 0 ||
-    opts.reticulumAudioStaleDrops > 0 ||
-    opts.reticulumAudioPacketSendFailures > 0 ||
-    opts.reticulumAudioPacketPathTimeouts > 0;
-  return (
-    opts.activeSourceCount === 1 &&
-    !hardTransportFailure &&
-    opts.avgPcmBufferedMs >=
-      target + GCALL_SINGLE_REMOTE_OVERBUFFER_PCM_HEADROOM_MS &&
-    opts.avgPlayoutDeltaMs >= GCALL_SINGLE_REMOTE_OVERBUFFER_DELTA_MIN_MS &&
-    opts.playoutUnderTargetFraction <=
-      GCALL_SINGLE_REMOTE_OVERBUFFER_UNDERTARGET_MAX &&
-    opts.jitterNotReadyFraction <=
-      GCALL_SINGLE_REMOTE_OVERBUFFER_JITTER_NOT_READY_MAX &&
-    opts.jitterRawEmptyFraction <=
-      GCALL_SINGLE_REMOTE_OVERBUFFER_JITTER_NOT_READY_MAX
-  );
-}
-
-export function shouldKeepSingleRemoteDegradedRebuildLocal(opts: {
-  activeSourceCount: number;
-  pathDegradedUntilMs: number;
-  nowMs: number;
-  lastRecvAgeMs: number;
-  recentStability: RecentRecoveryStabilitySummary;
-  avgOpusBufferedMs: number;
-  avgPlayoutDeltaMs: number;
-  windowAvgPcmBufferedMs?: number;
-  windowPlayoutUnderTargetFraction?: number;
-  windowJitterBufferDepthFramesMean?: number;
-  severeForcedReleaseRebuildActive?: boolean;
-  severeForcedReleaseRebuildActiveForMs?: number;
-  packetsDroppedPendingDecrypt: number;
-  reticulumAudioStaleDrops: number;
-  reticulumAudioPacketSendFailures: number;
-}): boolean {
-  const explicitDegradedRebuild =
-    opts.pathDegradedUntilMs > opts.nowMs &&
-    opts.severeForcedReleaseRebuildActive === true &&
-    opts.recentStability.sampleCount >= 2 &&
-    !opts.recentStability.stable &&
-    opts.recentStability.avgPcmBufferedMs <= GCALL_N1_DEGRADED_REBUILD_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_DEGRADED_REBUILD_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_DEGRADED_REBUILD_DELTA_MAX_MS &&
-    opts.avgOpusBufferedMs <= GCALL_N1_DEGRADED_REBUILD_OPUS_MAX_MS;
-  const stuckSevereRebuild =
-    opts.severeForcedReleaseRebuildActive === true &&
-    opts.recentStability.sampleCount >= 2 &&
-    !opts.recentStability.stable &&
-    opts.recentStability.severeInstability === true &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_SEVERE_REBUILD_RELIEF_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS &&
-    opts.avgOpusBufferedMs <= GCALL_N1_SEVERE_REBUILD_RELIEF_OPUS_MAX_MS;
-  const sustainedSevereRebuild =
-    opts.severeForcedReleaseRebuildActive === true &&
-    (opts.severeForcedReleaseRebuildActiveForMs ?? 0) >=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_MIN_MS &&
-    opts.recentStability.sampleCount >= 2 &&
-    !opts.recentStability.stable &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS;
-  const oneFrameDeadzoneSevereRebuild =
-    opts.severeForcedReleaseRebuildActive === true &&
-    (opts.severeForcedReleaseRebuildActiveForMs ?? 0) >=
-      GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS &&
-    opts.avgPlayoutDeltaMs <=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS &&
-    (opts.avgOpusBufferedMs <= GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS ||
-      (opts.windowJitterBufferDepthFramesMean ?? Number.POSITIVE_INFINITY) <=
-        GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX) &&
-    ((opts.recentStability.sampleCount >= 2 &&
-      opts.recentStability.avgPcmBufferedMs <=
-        GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS &&
-      opts.recentStability.playoutUnderTargetFraction >=
-        GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN) ||
-      ((opts.windowAvgPcmBufferedMs ?? Number.POSITIVE_INFINITY) <=
-        GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS &&
-        (opts.windowPlayoutUnderTargetFraction ?? 0) >=
-          GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN));
-  return (
-    opts.activeSourceCount === 1 &&
-    (
-      explicitDegradedRebuild ||
-      stuckSevereRebuild ||
-      sustainedSevereRebuild ||
-      oneFrameDeadzoneSevereRebuild
-    ) &&
-    Number.isFinite(opts.lastRecvAgeMs) &&
-    opts.lastRecvAgeMs <= GCALL_N1_DEGRADED_REBUILD_LIVE_LAST_RECV_MAX_MS &&
-    opts.packetsDroppedPendingDecrypt <= 0 &&
-    opts.reticulumAudioStaleDrops <= 0 &&
-    opts.reticulumAudioPacketSendFailures <= 0
-  );
-}
-
-export function shouldForceN1SustainedSevereRebuildReceiveRelief(opts: {
-  activeSourceCount: number;
-  lastRecvAgeMs: number;
-  recentStability: RecentRecoveryStabilitySummary;
-  avgPlayoutDeltaMs: number;
-  playoutStarvationSeverity: PlayoutStarvationSeverity;
-  avgOpusBufferedMs?: number;
-  jitterBufferedFrames?: number;
-  severeForcedReleaseRebuildActive?: boolean;
-  severeForcedReleaseRebuildActiveForMs?: number;
-}): boolean {
-  if (
-    opts.activeSourceCount !== 1 ||
-    opts.severeForcedReleaseRebuildActive !== true ||
-    (opts.severeForcedReleaseRebuildActiveForMs ?? 0) <
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_MIN_MS ||
-    !Number.isFinite(opts.lastRecvAgeMs) ||
-    opts.lastRecvAgeMs >
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS
-  ) {
-    return false;
-  }
-  const exactOneFrameDeadzone =
-    (opts.severeForcedReleaseRebuildActiveForMs ?? 0) >=
-      GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS &&
-    ((opts.jitterBufferedFrames ?? Number.POSITIVE_INFINITY) <=
-      GCALL_N1_ONE_FRAME_DEADZONE_FRAMES_MAX ||
-      (opts.avgOpusBufferedMs ?? Number.POSITIVE_INFINITY) <=
-        GCALL_N1_ONE_FRAME_DEADZONE_OPUS_MAX_MS);
-  if (exactOneFrameDeadzone) return true;
-  if (opts.playoutStarvationSeverity === 'strong') return true;
-  return (
-    opts.recentStability.sampleCount >= 2 &&
-    !opts.recentStability.stable &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <=
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_DELTA_MAX_MS
-  );
-}
-
-export function shouldForceN1SevereRebuildReadyEscape(opts: {
-  recoverySingleRemote: boolean;
-  prerollActive: boolean;
-  severeForcedReleaseRebuildActive: boolean;
-  severeForcedReleaseRebuildActiveForMs: number;
-  sourceRecentlyPushed: boolean;
-  hasReadyFrame: boolean;
-  bufferedFrames: number;
-  targetMs: number;
-  recentStability: RecentRecoveryStabilitySummary | null;
-  playoutStarvationSeverity: PlayoutStarvationSeverity;
-}): boolean {
-  const minEscapeFrames = computeN1SevereReadyEscapeMinFrames(opts.targetMs);
-  if (
-    !opts.recoverySingleRemote ||
-    opts.prerollActive ||
-    !opts.severeForcedReleaseRebuildActive ||
-    opts.severeForcedReleaseRebuildActiveForMs <
-      GCALL_N1_ONE_FRAME_DEADZONE_RELIEF_MIN_MS ||
-    !opts.sourceRecentlyPushed ||
-    opts.bufferedFrames <= 0
-  ) {
-    return false;
-  }
-  const exactTwoFrameDeadzone =
-    opts.severeForcedReleaseRebuildActiveForMs >=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_DRIP_MIN_MS &&
-    opts.bufferedFrames === GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX &&
-    opts.recentStability !== null &&
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_UNDERTARGET_MIN;
-  if (exactTwoFrameDeadzone) {
-    return true;
-  }
-  if (opts.hasReadyFrame || opts.bufferedFrames < minEscapeFrames) {
-    return false;
-  }
-  if (
-    opts.recentStability !== null &&
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_ONE_FRAME_DEADZONE_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_ONE_FRAME_DEADZONE_UNDERTARGET_MIN
-  ) {
-    return true;
-  }
-  return opts.playoutStarvationSeverity === 'strong';
-}
-
-export function shouldResetN1SevereRebuildDeadzone(opts: {
-  recoverySingleRemote: boolean;
-  prerollActive: boolean;
-  severeForcedReleaseRebuildActive: boolean;
-  severeForcedReleaseRebuildActiveForMs: number;
-  sourceRecentlyPushed: boolean;
-  lastRecvAgeMs: number;
-  bufferedFrames: number;
-  recentStability: RecentRecoveryStabilitySummary | null;
-  playoutStarvationSeverity: PlayoutStarvationSeverity;
-}): boolean {
-  if (
-    !opts.recoverySingleRemote ||
-    opts.prerollActive ||
-    !opts.severeForcedReleaseRebuildActive ||
-    opts.severeForcedReleaseRebuildActiveForMs <
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_RESET_MIN_MS ||
-    !opts.sourceRecentlyPushed ||
-    !Number.isFinite(opts.lastRecvAgeMs) ||
-    opts.lastRecvAgeMs > GCALL_N1_SEVERE_REBUILD_DEADZONE_LAST_RECV_MAX_MS ||
-    opts.recentStability === null ||
-    opts.recentStability.sampleCount < 2
-  ) {
-    return false;
-  }
-  const stillExactDeadzone =
-    opts.bufferedFrames <= GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX;
-  return (
-    stillExactDeadzone &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_SEVERE_REBUILD_DEADZONE_UNDERTARGET_MIN &&
-    (opts.playoutStarvationSeverity === 'strong' ||
-      opts.recentStability.severeInstability)
-  );
-}
-
-export function shouldBlockN1RecoveryExitForCurrentJitter(opts: {
-  activeSourceCount: number;
-  bufferedFrames: number;
-  hasReadyFrame: boolean;
-}): boolean {
-  return (
-    opts.activeSourceCount === 1 &&
-    opts.bufferedFrames > 0 &&
-    (!opts.hasReadyFrame ||
-      opts.bufferedFrames <
-        computeN1SevereReadyEscapeMinFrames(ADAPTIVE_BASE_TARGET_MS))
-  );
-}
-
-export function shouldKeepMultiSourceWindowRecoveryLocal(opts: {
-  activeSourceCount: number;
-  shouldTightenRecovery: boolean;
-  severePressure: boolean;
-  packetsDroppedPendingDecrypt: number;
-  reticulumAudioQueuePressureDrops: number;
-  reticulumAudioDecodedQueueDepthHighWater: number;
-  reticulumAudioBinaryOutQueueDepthHighWater: number;
-  reticulumAudioBridgeQueuedFramesHighWater: number;
-  degradedSourceCount: number;
-}): boolean {
-  if (
-    opts.activeSourceCount < 2 ||
-    !opts.shouldTightenRecovery ||
-    !opts.severePressure ||
-    opts.degradedSourceCount < 2
-  ) {
-    return false;
-  }
-  return (
-    opts.packetsDroppedPendingDecrypt > 0 ||
-    opts.reticulumAudioQueuePressureDrops > 0 ||
-    opts.reticulumAudioDecodedQueueDepthHighWater >= 16 ||
-    opts.reticulumAudioBinaryOutQueueDepthHighWater >= 24 ||
-    opts.reticulumAudioBridgeQueuedFramesHighWater >= 12
-  );
-}
-
-export function computeN1RoughLinkBitrateCapBps(opts: {
-  activeSourceCount: number;
-  pathDegradedUntilMs: number;
-  nowMs: number;
-  lastRecvAgeMs: number;
-  recentStability: RecentRecoveryStabilitySummary;
-  avgOpusBufferedMs: number;
-  avgPlayoutDeltaMs: number;
-  missingFrames: number;
-  concealmentTicks: number;
-  avgIncomingPacketMs: number;
-  lastRemoteDecodeAtMs: number;
-  nominalBitrateBps: number;
-  severeForcedReleaseRebuildActive?: boolean;
-}): number | null {
-  if (
-    opts.activeSourceCount !== 1 ||
-    !Number.isFinite(opts.nominalBitrateBps) ||
-    opts.nominalBitrateBps <= 0 ||
-    opts.pathDegradedUntilMs <= opts.nowMs ||
-    opts.recentStability.sampleCount < 2
-  ) {
-    return null;
-  }
-  const forceDegradedRebuildRelief = shouldKeepSingleRemoteDegradedRebuildLocal({
-    activeSourceCount: opts.activeSourceCount,
-    pathDegradedUntilMs: opts.pathDegradedUntilMs,
-    nowMs: opts.nowMs,
-    lastRecvAgeMs: opts.lastRecvAgeMs,
-    recentStability: opts.recentStability,
-    avgOpusBufferedMs: opts.avgOpusBufferedMs,
-    avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
-    severeForcedReleaseRebuildActive: opts.severeForcedReleaseRebuildActive,
-    packetsDroppedPendingDecrypt: 0,
-    reticulumAudioStaleDrops: 0,
-    reticulumAudioPacketSendFailures: 0,
-  });
-  if (forceDegradedRebuildRelief) {
-    return Math.min(opts.nominalBitrateBps, GCALL_N1_ROUGH_LINK_CAP_BPS);
-  }
-  if (opts.avgOpusBufferedMs < GCALL_N1_ROUGH_LINK_MIN_OPUS_MS) {
-    return null;
-  }
-  const lastRemoteDecodeAgeMs =
-    opts.lastRemoteDecodeAtMs > 0
-      ? opts.nowMs - opts.lastRemoteDecodeAtMs
-      : Number.POSITIVE_INFINITY;
-  if (lastRemoteDecodeAgeMs > GCALL_N1_ROUGH_LINK_REMOTE_DECODE_AGE_MAX_MS) {
-    return null;
-  }
-  const pathEvidence =
-    opts.missingFrames >= GCALL_N1_ROUGH_LINK_MISSING_FRAMES_MIN ||
-    opts.concealmentTicks >= GCALL_N1_ROUGH_LINK_CONCEALMENT_TICKS_MIN ||
-    opts.avgIncomingPacketMs >= GCALL_N1_ROUGH_LINK_INCOMING_PACKET_MS_MIN;
-  const struggling =
-    opts.recentStability.avgPcmBufferedMs <= GCALL_N1_ROUGH_LINK_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_ROUGH_LINK_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_ROUGH_LINK_DELTA_MAX_MS;
-  const rebuildStruggling =
-    opts.severeForcedReleaseRebuildActive === true &&
-    opts.recentStability.avgPcmBufferedMs <= GCALL_N1_ROUGH_LINK_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_ROUGH_LINK_REBUILD_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_ROUGH_LINK_REBUILD_DELTA_MAX_MS &&
-    !opts.recentStability.stable;
-  if ((!pathEvidence && !rebuildStruggling) || !struggling) return null;
-  return Math.min(opts.nominalBitrateBps, GCALL_N1_ROUGH_LINK_CAP_BPS);
-}
-
-export function computeWeakSingleRemoteRecoveryHoldState(opts: {
-  activeSourceCount: number;
-  adaptiveNetworkMode: 'low-latency' | 'recovery';
-  recentStability: RecentRecoveryStabilitySummary;
-  lastPushAgeMs: number;
-  nowMs: number;
-  holdUntilMs: number;
-  recentPushMaxMs?: number;
-}): { holdActive: boolean; nextHoldUntilMs: number } {
-  const recentPushMaxMs =
-    opts.recentPushMaxMs ?? GCALL_N1_WEAK_LIVE_HOLD_RECENT_PUSH_MAX_MS;
-  if (
-    opts.adaptiveNetworkMode !== 'recovery' ||
-    opts.activeSourceCount !== 1
-  ) {
-    return { holdActive: false, nextHoldUntilMs: 0 };
-  }
-  const recentStability = opts.recentStability;
-  const sourceRecentlyPushed =
-    Number.isFinite(opts.lastPushAgeMs) &&
-    opts.lastPushAgeMs <= recentPushMaxMs;
-  const weakLiveRecovery =
-    recentStability.sampleCount >= 2 &&
-    !recentStability.stable &&
-    Number.isFinite(recentStability.avgPcmBufferedMs) &&
-    recentStability.avgPcmBufferedMs <= GCALL_N1_WEAK_LIVE_HOLD_PCM_MAX_MS &&
-    recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_WEAK_LIVE_HOLD_UNDERTARGET_MIN &&
-    sourceRecentlyPushed;
-  if (weakLiveRecovery) {
-    return {
-      holdActive: true,
-      nextHoldUntilMs: opts.nowMs + GCALL_N1_WEAK_LIVE_HOLD_RELEASE_MS,
-    };
-  }
-  if (
-    sourceRecentlyPushed &&
-    Number.isFinite(opts.holdUntilMs) &&
-    opts.holdUntilMs > opts.nowMs
-  ) {
-    return { holdActive: true, nextHoldUntilMs: opts.holdUntilMs };
-  }
-  return { holdActive: false, nextHoldUntilMs: 0 };
-}
-
-export function computeWeakSingleRemoteRecoveryTargetHoldMaxMs(opts: {
-  currentAdaptiveMaxTargetMs: number;
-  holdActive: boolean;
-  recentStability: RecentRecoveryStabilitySummary;
-}): number | null {
-  if (
-    !opts.holdActive ||
-    !Number.isFinite(opts.currentAdaptiveMaxTargetMs) ||
-    opts.currentAdaptiveMaxTargetMs <= ADAPTIVE_MIN_TARGET_MS
-  ) {
-    return null;
-  }
-  const targetRatioCap = Math.round(
-    opts.currentAdaptiveMaxTargetMs * GCALL_N1_WEAK_LIVE_HOLD_TARGET_RATIO_MAX
-  );
-  const feasibleMaxMs = Math.max(
-    ADAPTIVE_MIN_TARGET_MS,
-    Math.min(
-      targetRatioCap,
-      Math.round(
-        opts.recentStability.avgPcmBufferedMs + GCALL_N1_WEAK_LIVE_HOLD_HEADROOM_MS
-      )
-    )
-  );
-  return Math.min(opts.currentAdaptiveMaxTargetMs, feasibleMaxMs);
-}
-
-export function computeSingleRemoteOverbufferTargetMaxMs(opts: {
-  currentAdaptiveMaxTargetMs: number;
-  activeSourceCount: number;
-  avgPcmBufferedMs: number;
-  avgPlayoutDeltaMs: number;
-  playoutUnderTargetFraction: number;
-  jitterNotReadyFraction: number;
-  jitterRawEmptyFraction: number;
-  observedTargetMs: number;
-  packetsDropped: number;
-  packetsDroppedPendingDecrypt: number;
-  reticulumAudioQueuePressureDrops: number;
-  reticulumAudioStaleDrops: number;
-  reticulumAudioPacketSendFailures: number;
-  reticulumAudioPacketPathTimeouts: number;
-}): number | null {
-  if (
-    !Number.isFinite(opts.currentAdaptiveMaxTargetMs) ||
-    opts.currentAdaptiveMaxTargetMs <= ADAPTIVE_MIN_TARGET_MS
-  ) {
-    return null;
-  }
-  if (
-    !shouldSuppressSingleRemoteBufferedWindowRecovery({
-      activeSourceCount: opts.activeSourceCount,
-      avgPcmBufferedMs: opts.avgPcmBufferedMs,
-      adaptiveTargetMedianMs: opts.observedTargetMs,
-      avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
-      playoutUnderTargetFraction: opts.playoutUnderTargetFraction,
-      jitterNotReadyFraction: opts.jitterNotReadyFraction,
-      jitterRawEmptyFraction: opts.jitterRawEmptyFraction,
-      packetsDropped: opts.packetsDropped,
-      packetsDroppedPendingDecrypt: opts.packetsDroppedPendingDecrypt,
-      reticulumAudioQueuePressureDrops: opts.reticulumAudioQueuePressureDrops,
-      reticulumAudioStaleDrops: opts.reticulumAudioStaleDrops,
-      reticulumAudioPacketSendFailures:
-        opts.reticulumAudioPacketSendFailures,
-      reticulumAudioPacketPathTimeouts:
-        opts.reticulumAudioPacketPathTimeouts,
-    })
-  ) {
-    return null;
-  }
-  const observedTarget = Math.max(
-    ADAPTIVE_MIN_TARGET_MS,
-    opts.observedTargetMs || ADAPTIVE_BASE_TARGET_MS
-  );
-  const targetDropCap = Math.max(
-    ADAPTIVE_MIN_TARGET_MS,
-    observedTarget - GCALL_SINGLE_REMOTE_OVERBUFFER_TARGET_DROP_MS
-  );
-  const drainHeadroomCap = Math.max(
-    ADAPTIVE_MIN_TARGET_MS,
-    opts.avgPcmBufferedMs - GCALL_SINGLE_REMOTE_OVERBUFFER_DRAIN_HEADROOM_MS
-  );
-  const cap = Math.min(
-    opts.currentAdaptiveMaxTargetMs,
-    targetDropCap,
-    drainHeadroomCap
-  );
-  return Math.max(ADAPTIVE_MIN_TARGET_MS, Math.round(cap));
-}
-
-export function computeN1ReceivePrioritySendBitrateCapBps(opts: {
-  activeSourceCount: number;
-  recentStability: RecentRecoveryStabilitySummary;
-  avgPlayoutDeltaMs: number;
-  starvationSeverity: PlayoutStarvationSeverity;
-  lastRemoteDecodeAtMs: number;
-  nowMs: number;
-  localSendPressure: boolean;
-  nominalBitrateBps: number;
-}): number | null {
-  if (
-    opts.activeSourceCount !== 1 ||
-    !opts.localSendPressure ||
-    opts.recentStability.sampleCount < 2 ||
-    !Number.isFinite(opts.avgPlayoutDeltaMs) ||
-    !Number.isFinite(opts.nominalBitrateBps) ||
-    opts.nominalBitrateBps <= 0
-  ) {
-    return null;
-  }
-  const lastRemoteDecodeAgeMs =
-    opts.lastRemoteDecodeAtMs > 0 ? opts.nowMs - opts.lastRemoteDecodeAtMs : Number.POSITIVE_INFINITY;
-  if (lastRemoteDecodeAgeMs > GCALL_N1_RECEIVE_PRIORITY_CAP_REMOTE_DECODE_AGE_MAX_MS) {
-    return null;
-  }
-  const severeCollapse =
-    opts.starvationSeverity === 'strong' &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_STRONG_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_STRONG_MIN &&
-    opts.avgPlayoutDeltaMs <=
-      GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_STRONG_MAX_MS;
-  if (severeCollapse) {
-    return Math.min(
-      opts.nominalBitrateBps,
-      GCALL_N1_RECEIVE_PRIORITY_CAP_STRONG_BPS
-    );
-  }
-  const weakCollapse =
-    opts.starvationSeverity !== 'none' &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_RECEIVE_PRIORITY_CAP_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_RECEIVE_PRIORITY_CAP_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_RECEIVE_PRIORITY_CAP_DELTA_MAX_MS;
-  if (!weakCollapse) return null;
-  return Math.min(opts.nominalBitrateBps, GCALL_N1_RECEIVE_PRIORITY_CAP_MILD_BPS);
-}
-
-export interface N1ReceivePrioritySendBitrateCapState {
-  holdUntilMs: number;
-  stableSinceMs: number | null;
-}
-
-export function shouldEnterN1ReceivePriorityMode(opts: {
-  recentStability: RecentRecoveryStabilitySummary;
-  avgPlayoutDeltaMs: number;
-  avgOpusBufferedMs: number;
-  starvationSeverity: PlayoutStarvationSeverity;
-  sourceLive: boolean;
-  directCapBps: number | null;
-  severeForcedReleaseRebuildActive?: boolean;
-  forceDegradedRebuildRelief?: boolean;
-}): boolean {
-  if (!opts.sourceLive) return false;
-  if (opts.forceDegradedRebuildRelief === true) {
-    return true;
-  }
-  if (opts.recentStability.sampleCount < 2) {
-    return false;
-  }
-  if (
-    opts.severeForcedReleaseRebuildActive === true &&
-    opts.recentStability.playoutUnderTargetFraction >= 0.45 &&
-    opts.avgPlayoutDeltaMs <= -5 &&
-    !opts.recentStability.stable
-  ) {
-    return true;
-  }
-  if (opts.avgOpusBufferedMs < GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_OPUS_MS) {
-    return false;
-  }
-  if (opts.directCapBps !== null) return true;
-  return (
-    opts.starvationSeverity === 'strong' &&
-    opts.avgOpusBufferedMs >= GCALL_N1_RECEIVE_PRIORITY_MODE_MIN_OPUS_MS &&
-    opts.recentStability.avgPcmBufferedMs <=
-      GCALL_N1_RECEIVE_PRIORITY_MODE_PCM_MAX_MS &&
-    opts.recentStability.playoutUnderTargetFraction >=
-      GCALL_N1_RECEIVE_PRIORITY_MODE_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_RECEIVE_PRIORITY_MODE_DELTA_MAX_MS &&
-    !opts.recentStability.stable
-  );
-}
-
-export function shouldEnableN1DrainReceivePriorityMode(opts: {
-  recoverySingleRemote: boolean;
-  prerollActive: boolean;
-  forceReceivePriorityModeActive: boolean;
-  hasReceivePrioritySendCapState: boolean;
-  lastRecvAgeMs: number;
-  recentStability: RecentRecoveryStabilitySummary | null;
-  severeForcedReleaseRebuildActive?: boolean;
-}): boolean {
-  if (!opts.recoverySingleRemote || opts.prerollActive) return false;
-  if (opts.forceReceivePriorityModeActive) return true;
-  if (!opts.hasReceivePrioritySendCapState) return false;
-  if (
-    !Number.isFinite(opts.lastRecvAgeMs) ||
-    opts.lastRecvAgeMs >
-      GCALL_N1_SUSTAINED_SEVERE_REBUILD_RELIEF_LAST_RECV_MAX_MS
-  ) {
-    return false;
-  }
-  if (opts.severeForcedReleaseRebuildActive === true) return true;
-  return opts.recentStability !== null && !opts.recentStability.stable;
-}
-
-export function shouldTriggerN1InboundMediaWatchdog(opts: {
-  roomConnected: boolean;
-  hasRoomKey: boolean;
-  remotePeerCount: number;
-  activeSourceCount: number;
-  packetsReceived: number;
-  packetsDecoded: number;
-  relayPacketsSent: number;
-  reticulumAudioPacketFreshSends: number;
-  missingForMs: number;
-  lastActionAgeMs: number;
-}): boolean {
-  if (!opts.roomConnected || !opts.hasRoomKey) return false;
-  if (opts.remotePeerCount !== 1) return false;
-  if (opts.activeSourceCount !== 0) return false;
-  const outboundFreshSends = Math.max(
-    opts.relayPacketsSent,
-    opts.reticulumAudioPacketFreshSends
-  );
-  if (outboundFreshSends < GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS) {
-    return false;
-  }
-  const missingForMs = Number.isFinite(opts.missingForMs)
-    ? opts.missingForMs
-    : 0;
-  const lastActionAgeMs = Number.isFinite(opts.lastActionAgeMs)
-    ? opts.lastActionAgeMs
-    : Number.POSITIVE_INFINITY;
-  return (
-    missingForMs >= GCALL_N1_INBOUND_MEDIA_MISSING_MIN_MS &&
-    lastActionAgeMs >= GCALL_N1_INBOUND_MEDIA_WATCHDOG_COOLDOWN_MS
-  );
-}
-
-export function shouldTriggerN1InboundMediaReannounce(opts: {
-  roomConnected: boolean;
-  hasRoomKey: boolean;
-  remotePeerCount: number;
-  activeSourceCount: number;
-  relayPacketsSent: number;
-  reticulumAudioPacketFreshSends: number;
-  missingForMs: number;
-  lastReannounceAgeMs: number;
-}): boolean {
-  if (!opts.roomConnected || !opts.hasRoomKey) return false;
-  if (opts.remotePeerCount !== 1 || opts.activeSourceCount !== 0) return false;
-  const outboundFreshSends = Math.max(
-    opts.relayPacketsSent,
-    opts.reticulumAudioPacketFreshSends
-  );
-  if (outboundFreshSends < GCALL_N1_INBOUND_MEDIA_MISSING_MIN_FRESH_SENDS) {
-    return false;
-  }
-  const missingForMs = Number.isFinite(opts.missingForMs)
-    ? opts.missingForMs
-    : 0;
-  const lastReannounceAgeMs = Number.isFinite(opts.lastReannounceAgeMs)
-    ? opts.lastReannounceAgeMs
-    : Number.POSITIVE_INFINITY;
-  return (
-    missingForMs >= GCALL_N1_INBOUND_MEDIA_REANNOUNCE_MIN_MS &&
-    lastReannounceAgeMs >= GCALL_N1_INBOUND_MEDIA_REANNOUNCE_COOLDOWN_MS
-  );
-}
-
-export function shouldTriggerN1SeverePlayoutPathWarm(opts: {
-  remotePeerCount: number;
-  activeSourceCount: number;
-  lastRecvAgeMs: number;
-  recentStability: RecentRecoveryStabilitySummary | null;
-  avgPlayoutDeltaMs: number;
-  starvationSeverity: PlayoutStarvationSeverity;
-  lastActionAgeMs: number;
-  /**
-   * Number of consecutive severe-warm fires against this peer without an
-   * intervening `stable` recent-recovery window. Used to extend the cooldown
-   * when repeated warms aren't helping (see backoff constants above).
-   */
-  consecutiveFires?: number;
-}): boolean {
-  if (opts.remotePeerCount !== 1 || opts.activeSourceCount !== 1) return false;
-  if (
-    !Number.isFinite(opts.lastRecvAgeMs) ||
-    opts.lastRecvAgeMs > GCALL_N1_SEVERE_PLAYOUT_WARM_LAST_RECV_MAX_MS
-  ) {
-    return false;
-  }
-  const lastActionAgeMs = Number.isFinite(opts.lastActionAgeMs)
-    ? opts.lastActionAgeMs
-    : Number.POSITIVE_INFINITY;
-  const consecutiveFires = Math.max(0, opts.consecutiveFires ?? 0);
-  const cooldownMs =
-    consecutiveFires >= GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_AFTER_FIRES
-      ? GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_COOLDOWN_MS
-      : GCALL_N1_SEVERE_PLAYOUT_WARM_COOLDOWN_MS;
-  if (lastActionAgeMs < cooldownMs) {
-    return false;
-  }
-  const recent = opts.recentStability;
-  if (recent === null || recent.sampleCount < 2 || recent.stable) return false;
-  const severelyUnderfed =
-    recent.avgPcmBufferedMs <= GCALL_N1_SEVERE_PLAYOUT_WARM_PCM_MAX_MS &&
-    recent.playoutUnderTargetFraction >=
-      GCALL_N1_SEVERE_PLAYOUT_WARM_UNDERTARGET_MIN &&
-    opts.avgPlayoutDeltaMs <= GCALL_N1_SEVERE_PLAYOUT_WARM_DELTA_MAX_MS;
-  return (
-    severelyUnderfed &&
-    (opts.starvationSeverity === 'strong' || recent.severeInstability)
-  );
-}
-
-export function tickN1ReceivePrioritySendBitrateCapState(opts: {
-  previousState: N1ReceivePrioritySendBitrateCapState | null;
-  activeSourceCount: number;
-  pathDegradedUntilMs: number;
-  recentStability: RecentRecoveryStabilitySummary;
-  avgPlayoutDeltaMs: number;
-  avgOpusBufferedMs: number;
-  jitterBufferedFrames?: number;
-  starvationSeverity: PlayoutStarvationSeverity;
-  lastRemoteDecodeAtMs: number;
-  lastRecvAgeMs: number;
-  nowMs: number;
-  localSendPressure: boolean;
-  nominalBitrateBps: number;
-  severeForcedReleaseRebuildActive?: boolean;
-  severeForcedReleaseRebuildActiveForMs?: number;
-}): {
-  capBps: number | null;
-  nextState: N1ReceivePrioritySendBitrateCapState | null;
-} {
-  if (
-    opts.activeSourceCount !== 1 ||
-    !Number.isFinite(opts.nominalBitrateBps) ||
-    opts.nominalBitrateBps <= 0
-  ) {
-    return { capBps: null, nextState: null };
-  }
-  const lastRemoteDecodeAgeMs =
-    opts.lastRemoteDecodeAtMs > 0
-      ? opts.nowMs - opts.lastRemoteDecodeAtMs
-      : Number.POSITIVE_INFINITY;
-  const forceSustainedSevereRebuildRelief =
-    shouldForceN1SustainedSevereRebuildReceiveRelief({
-      activeSourceCount: opts.activeSourceCount,
-      lastRecvAgeMs: opts.lastRecvAgeMs,
-      recentStability: opts.recentStability,
-      avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
-      playoutStarvationSeverity: opts.starvationSeverity,
-      avgOpusBufferedMs: opts.avgOpusBufferedMs,
-      jitterBufferedFrames: opts.jitterBufferedFrames,
-      severeForcedReleaseRebuildActive: opts.severeForcedReleaseRebuildActive,
-      severeForcedReleaseRebuildActiveForMs:
-        opts.severeForcedReleaseRebuildActiveForMs,
-    });
-  const forceDegradedRebuildRelief = shouldKeepSingleRemoteDegradedRebuildLocal({
-    activeSourceCount: opts.activeSourceCount,
-    pathDegradedUntilMs: opts.pathDegradedUntilMs,
-    nowMs: opts.nowMs,
-    lastRecvAgeMs: opts.lastRecvAgeMs,
-    recentStability: opts.recentStability,
-    avgOpusBufferedMs: opts.avgOpusBufferedMs,
-    avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
-    severeForcedReleaseRebuildActive: opts.severeForcedReleaseRebuildActive,
-    severeForcedReleaseRebuildActiveForMs:
-      opts.severeForcedReleaseRebuildActiveForMs,
-    packetsDroppedPendingDecrypt: 0,
-    reticulumAudioStaleDrops: 0,
-    reticulumAudioPacketSendFailures: 0,
-  });
-  const forceReceiveRelief =
-    forceDegradedRebuildRelief || forceSustainedSevereRebuildRelief;
-  if (
-    lastRemoteDecodeAgeMs > GCALL_N1_RECEIVE_PRIORITY_CAP_REMOTE_DECODE_AGE_MAX_MS &&
-    !forceReceiveRelief
-  ) {
-    return { capBps: null, nextState: null };
-  }
-
-  const directCapBps = computeN1ReceivePrioritySendBitrateCapBps({
-    activeSourceCount: opts.activeSourceCount,
-    recentStability: opts.recentStability,
-    avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
-    starvationSeverity: opts.starvationSeverity,
-    lastRemoteDecodeAtMs: opts.lastRemoteDecodeAtMs,
-    nowMs: opts.nowMs,
-    localSendPressure: opts.localSendPressure,
-    nominalBitrateBps: opts.nominalBitrateBps,
-  });
-  if (
-    shouldEnterN1ReceivePriorityMode({
-      recentStability: opts.recentStability,
-      avgPlayoutDeltaMs: opts.avgPlayoutDeltaMs,
-      avgOpusBufferedMs: opts.avgOpusBufferedMs,
-      starvationSeverity: opts.starvationSeverity,
-      sourceLive: true,
-      directCapBps,
-      severeForcedReleaseRebuildActive: opts.severeForcedReleaseRebuildActive,
-      forceDegradedRebuildRelief: forceReceiveRelief,
-    })
-  ) {
-    return {
-      capBps: Math.min(
-        opts.nominalBitrateBps,
-        GCALL_N1_RECEIVE_PRIORITY_CAP_STRONG_BPS
-      ),
-      nextState: {
-        holdUntilMs: Math.max(
-          opts.previousState?.holdUntilMs ?? 0,
-          opts.nowMs + GCALL_N1_RECEIVE_PRIORITY_CAP_MIN_HOLD_MS
-        ),
-        stableSinceMs: null,
-      },
-    };
-  }
-
-  if (opts.previousState === null) {
-    return { capBps: null, nextState: null };
-  }
-
-  const exitStable =
-    opts.recentStability.sampleCount >= 2 &&
-    opts.recentStability.stable &&
-    opts.recentStability.avgPcmBufferedMs >=
-      ADAPTIVE_RECOVERY_EXIT_PCM_BUFFERED_MIN_MS_SINGLE_REMOTE &&
-    opts.recentStability.playoutUnderTargetFraction <=
-      ADAPTIVE_RECOVERY_EXIT_UNDERTARGET_MAX_SINGLE_REMOTE &&
-    opts.avgPlayoutDeltaMs >= GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_DELTA_MIN_MS &&
-    opts.starvationSeverity === 'none';
-  const stableSinceMs = exitStable
-    ? (opts.previousState.stableSinceMs ?? opts.nowMs)
-    : null;
-  const heldActive = opts.nowMs < opts.previousState.holdUntilMs;
-  const stableLongEnough =
-    stableSinceMs !== null &&
-    opts.nowMs - stableSinceMs >= GCALL_N1_RECEIVE_PRIORITY_CAP_EXIT_STABLE_MS;
-  if (!heldActive && stableLongEnough) {
-    return { capBps: null, nextState: null };
-  }
-
-  return {
-    capBps: Math.min(
-      opts.nominalBitrateBps,
-      GCALL_N1_RECEIVE_PRIORITY_CAP_STRONG_BPS
-    ),
-    nextState: {
-      holdUntilMs: opts.previousState.holdUntilMs,
-      stableSinceMs,
-    },
-  };
-}
-
-/**
- * `join()` should seed renderer session state only on the first local join.
- * After that, the root-owned media session identity is authoritative and must
- * come from `GC_KEY`, `GC_KEY_ROTATE`, or `gcall:session-updated`.
- */
-export function shouldApplyJoinSessionSnapshot(opts: {
-  currentCallSessionId: string;
-  hasInstalledRoomKey: boolean;
-  needsSessionKey: boolean;
-}): boolean {
-  if (opts.hasInstalledRoomKey) return false;
-  if (!opts.needsSessionKey) return false;
-  return opts.currentCallSessionId === '';
-}
-
-/**
- * Freshly elected root with no key should mint immediately for a cold-start room.
- * If we already have signs of an established session, prefer the request/fallback
- * path so failover can preserve continuity when another peer still holds K.
- */
-export function getStartupKeyAuthorityDecision(opts: {
-  myAddress: string;
-  designatedRoot?: string | null | undefined;
-  otherParticipantCount: number;
-  nowMs: number;
-  authoritySettleUntilMs: number;
-  pendingVerifiedKeyCount: number;
-  lastRemoteDecodeAtMs: number;
-  trustedRemoteRoot?: string | null | undefined;
-  conflictingRemoteRoot?: string | null | undefined;
-  recentMediaEvidenceWindowMs?: number;
-  hasOccupiedRoomEvidence?: boolean;
-  hydratedRemoteParticipantCount?: number;
-  bootstrapHasTopology?: boolean;
-}):
-  | {
-      allowMint: true;
-      reason: 'authority-wait-expired';
-    }
-  | {
-      allowMint: false;
-      reason:
-        | 'not-designated-root'
-        | 'startup-authority-wait'
-        | 'other-participants-visible'
-        | 'occupied-room-evidence'
-        | 'trusted-remote-root'
-        | 'conflicting-remote-root'
-        | 'pending-verified-key'
-        | 'recent-remote-media';
-    } {
-  const designatedRoot = opts.designatedRoot?.trim() ?? '';
-  if (designatedRoot && designatedRoot !== opts.myAddress) {
-    return { allowMint: false, reason: 'not-designated-root' };
-  }
-  const otherParticipantsVisible = opts.otherParticipantCount > 0;
-  const occupiedRoomEvidence =
-    opts.hasOccupiedRoomEvidence === true ||
-    (opts.hydratedRemoteParticipantCount ?? 0) > 0 ||
-    opts.bootstrapHasTopology === true;
-  const trustedRoot = opts.trustedRemoteRoot?.trim() ?? '';
-  if (trustedRoot && trustedRoot !== opts.myAddress) {
-    return { allowMint: false, reason: 'trusted-remote-root' };
-  }
-  const conflictingRoot = opts.conflictingRemoteRoot?.trim() ?? '';
-  if (conflictingRoot && conflictingRoot !== opts.myAddress) {
-    return { allowMint: false, reason: 'conflicting-remote-root' };
-  }
-  if (opts.pendingVerifiedKeyCount > 0) {
-    return { allowMint: false, reason: 'pending-verified-key' };
-  }
-  if (
-    opts.lastRemoteDecodeAtMs > 0 &&
-    opts.nowMs - opts.lastRemoteDecodeAtMs <=
-      (opts.recentMediaEvidenceWindowMs ?? RECENT_REMOTE_MEDIA_EVIDENCE_MS)
-  ) {
-    return { allowMint: false, reason: 'recent-remote-media' };
-  }
-  // Occupied-room evidence should delay mint during startup settle, not permanently
-  // veto the deterministic root once no authoritative remote key arrives.
-  if (otherParticipantsVisible && opts.nowMs < opts.authoritySettleUntilMs) {
-    return { allowMint: false, reason: 'other-participants-visible' };
-  }
-  if (occupiedRoomEvidence && opts.nowMs < opts.authoritySettleUntilMs) {
-    return { allowMint: false, reason: 'occupied-room-evidence' };
-  }
-  if (opts.nowMs < opts.authoritySettleUntilMs) {
-    return { allowMint: false, reason: 'startup-authority-wait' };
-  }
-  return { allowMint: true, reason: 'authority-wait-expired' };
-}
-
-export function shouldMintRootSessionKeyImmediately(opts: {
-  myAddress: string;
-  designatedRoot?: string | null | undefined;
-  otherParticipantCount: number;
-  nowMs: number;
-  authoritySettleUntilMs: number;
-  pendingVerifiedKeyCount: number;
-  lastRemoteDecodeAtMs: number;
-  decryptFailureStreak: number;
-  trustedRemoteRoot?: string | null | undefined;
-  conflictingRemoteRoot?: string | null | undefined;
-  recentMediaEvidenceWindowMs?: number;
-  hasOccupiedRoomEvidence?: boolean;
-  hydratedRemoteParticipantCount?: number;
-  bootstrapHasTopology?: boolean;
-}): boolean {
-  return getStartupKeyAuthorityDecision(opts).allowMint;
-}
-
-export function getSessionUpdatedKeyRecoveryAction(opts: {
-  myAddress: string;
-  isLocalRoot: boolean;
-  hasOwnedRoomKey: boolean;
-  designatedRoot?: string | null | undefined;
-  otherParticipantCount: number;
-  nowMs: number;
-  authoritySettleUntilMs: number;
-  pendingVerifiedKeyCount: number;
-  lastRemoteDecodeAtMs: number;
-  decryptFailureStreak: number;
-  trustedRemoteRoot?: string | null | undefined;
-  conflictingRemoteRoot?: string | null | undefined;
-  recentMediaEvidenceWindowMs?: number;
-  hasOccupiedRoomEvidence?: boolean;
-  hydratedRemoteParticipantCount?: number;
-  bootstrapHasTopology?: boolean;
-}): 'redistribute-existing' | 'mint-immediately' | 'request-recovery' {
-  if (!opts.isLocalRoot) return 'request-recovery';
-  if (opts.hasOwnedRoomKey) return 'redistribute-existing';
-  return shouldMintRootSessionKeyImmediately({
-    myAddress: opts.myAddress,
-    designatedRoot: opts.designatedRoot,
-    otherParticipantCount: opts.otherParticipantCount,
-    nowMs: opts.nowMs,
-    authoritySettleUntilMs: opts.authoritySettleUntilMs,
-    pendingVerifiedKeyCount: opts.pendingVerifiedKeyCount,
-    lastRemoteDecodeAtMs: opts.lastRemoteDecodeAtMs,
-    decryptFailureStreak: opts.decryptFailureStreak,
-    trustedRemoteRoot: opts.trustedRemoteRoot,
-    conflictingRemoteRoot: opts.conflictingRemoteRoot,
-    recentMediaEvidenceWindowMs: opts.recentMediaEvidenceWindowMs,
-    hasOccupiedRoomEvidence: opts.hasOccupiedRoomEvidence,
-    hydratedRemoteParticipantCount: opts.hydratedRemoteParticipantCount,
-    bootstrapHasTopology: opts.bootstrapHasTopology,
-  })
-    ? 'mint-immediately'
-    : 'request-recovery';
-}
-
-/** Subscribe to room-scoped GC_* events only after main has acknowledged the join. */
-export function shouldSubscribeToJoinedGroupCallEvents(opts: {
-  roomState: RoomState;
-  mainJoinReady: boolean;
-}): boolean {
-  return opts.roomState === 'connected' && opts.mainJoinReady;
-}
-
-/**
- * If main already shows other peers in the room but we still do not know any
- * authoritative root, give the established room a short window to replay its
- * topology before we run our first local election.
- */
-export function shouldDelayPostJoinRosterElection(opts: {
-  hydratedRemoteParticipantCount: number;
-  currentRoot: string | null | undefined;
-  trustedRemoteRoot: string | null | undefined;
-  hasOccupiedRoomEvidence?: boolean;
-}): boolean {
-  if ((opts.currentRoot?.trim() ?? '') !== '') return false;
-  if ((opts.trustedRemoteRoot?.trim() ?? '') !== '') return false;
-  return (
-    opts.hydratedRemoteParticipantCount > 0 ||
-    opts.hasOccupiedRoomEvidence === true
-  );
-}
-
-export function hasOccupiedRoomEvidenceForJoin(opts: {
-  sameRoomRejoin: boolean;
-  hydratedRemoteParticipantCount: number;
-  bootstrapParticipantCount: number;
-  bootstrapTopologyEpoch: number;
-  bootstrapHasTopology: boolean;
-  lastObservedEpoch: number;
-  trustedRemoteRoot: string | null | undefined;
-  bootstrapCallSessionId: string | null | undefined;
-  bootstrapMediaSessionGeneration: number | null | undefined;
-}): boolean {
-  if (opts.hydratedRemoteParticipantCount > 0) return true;
-  if (opts.bootstrapParticipantCount > 1) return true;
-  if (opts.bootstrapHasTopology) return true;
-  if (opts.bootstrapTopologyEpoch > 0) return true;
-  if (opts.lastObservedEpoch > 0) return true;
-  if ((opts.trustedRemoteRoot?.trim() ?? '') !== '') return true;
-  if (!opts.sameRoomRejoin) return false;
-  return (
-    (opts.bootstrapCallSessionId?.trim() ?? '') !== '' ||
-    (opts.bootstrapMediaSessionGeneration ?? 0) > 1
-  );
-}
-
-export function shouldDeferLocalTopologyElection(opts: {
-  nowMs: number;
-  authorityDelayUntilMs: number;
-}): boolean {
-  return opts.authorityDelayUntilMs > opts.nowMs;
-}
-
-/** Main may already know remote peers before the renderer subscribes to events. */
-export function getPostJoinHydratedParticipants(opts: {
-  localAddress: string;
-  mainRoster: Array<{ address: string; publicKey: string }>;
-  existingParticipants: ReadonlyMap<
-    string,
-    { publicKey: string; lastJoinTs: number; joinGeneration?: number }
-  >;
-}): Array<{ address: string; publicKey: string }> {
-  const hydrated: Array<{ address: string; publicKey: string }> = [];
-  const seen = new Set<string>();
-  for (const participant of opts.mainRoster ?? []) {
-    const address = participant?.address?.trim?.() ?? '';
-    if (!address || address === opts.localAddress) continue;
-    if (opts.existingParticipants.has(address) || seen.has(address)) continue;
-    seen.add(address);
-    hydrated.push({
-      address,
-      publicKey: participant?.publicKey?.trim?.() ?? '',
-    });
-  }
-  return hydrated;
-}
-
-export function mergeHydratedParticipantsIntoUiList(opts: {
-  previousParticipants: Participant[];
-  hydratedParticipants: Array<{ address: string; publicKey: string }>;
-}): Participant[] {
-  const existing = new Set(opts.previousParticipants.map((p) => p.address));
-  const next = opts.hydratedParticipants
-    .filter((p) => !existing.has(p.address))
-    .map((p) => ({
-      address: p.address,
-      publicKey: p.publicKey,
-      speaking: false,
-      role: 'participant' as const,
-    }));
-  return next.length > 0
-    ? [...opts.previousParticipants, ...next]
-    : opts.previousParticipants;
-}
-
-/**
- * A hydrated peer may exist in the renderer before we've seen their first
- * authoritative GC_JOIN with joinGeneration. Treat that first generation-bearing
- * join as a discovery signal so we still re-announce ourselves and flush topology.
- */
-export function shouldContinueAfterParticipantJoinRefresh(opts: {
-  existingJoinGeneration?: number;
-  incomingJoinGeneration?: number;
-}): boolean {
-  return (
-    opts.existingJoinGeneration === undefined &&
-    opts.incomingJoinGeneration !== undefined
-  );
-}
-
-export function shouldIgnoreParticipantLeftEvent(opts: {
-  localAddress: string;
-  leavingAddress: string;
-}): boolean {
-  return opts.localAddress === opts.leavingAddress;
-}
-
-export function shouldSendCachedQuitLeave(opts: {
-  roomState: RoomState;
-  hasGroupCallApi: boolean;
-  hasCachedLeave: boolean;
-  alreadySent: boolean;
-}): boolean {
-  return (
-    opts.roomState === 'connected' &&
-    opts.hasGroupCallApi &&
-    opts.hasCachedLeave &&
-    !opts.alreadySent
-  );
-}
-
-/**
- * Once topology knows the current root, only that root may hand us room keys.
- * Before a root is known, any roster member may still be the first authoritative key source.
- */
-export function shouldAcceptIncomingRoomKeySender(opts: {
-  currentRoot: string;
-  senderAddress: string;
-  senderInRoster: boolean;
-}): boolean {
-  if (opts.currentRoot) {
-    return opts.senderAddress === opts.currentRoot;
-  }
-  return opts.senderInRoster;
-}
-
-/**
- * When GC_KEY / GC_KEY_ROTATE can arrive before GC_TOPOLOGY is applied locally, `currentRoot`
- * may still be empty or still point at this node. While we are waiting for the authoritative
- * key from the elected root, accept verified keys from the trusted remote root, designated
- * election winner, or (2-party) the sole remote peer when we still believe we are root —
- * otherwise the demoted peer drops the real root's key and never decrypts.
- */
-export function shouldAcceptIncomingRoomKeySenderRelaxed(opts: {
-  currentRoot: string;
-  senderAddress: string;
-  senderInRoster: boolean;
-  awaitingAuthoritativeKey: boolean;
-  myAddress: string;
-  trustedRemoteRoot: string;
-  designatedRoot: string | null;
-  participantCount: number;
-}): boolean {
-  if (
-    shouldAcceptIncomingRoomKeySender({
-      currentRoot: opts.currentRoot,
-      senderAddress: opts.senderAddress,
-      senderInRoster: opts.senderInRoster,
-    })
-  ) {
-    return true;
-  }
-  if (!opts.awaitingAuthoritativeKey || !opts.senderInRoster) return false;
-  const s = opts.senderAddress.trim();
-  const me = opts.myAddress.trim();
-  if (!s || !me || s === me) return false;
-  const tr = opts.trustedRemoteRoot.trim();
-  if (tr && s === tr) return true;
-  const dr = opts.designatedRoot?.trim() ?? '';
-  if (dr && s === dr) return true;
-  const cr = opts.currentRoot.trim();
-  if (opts.participantCount === 2 && cr === me && s !== me) {
-    return true;
-  }
-  return false;
-}
-
-export function shouldAcceptKeyRecoveryRequestGeneration(opts: {
-  requestMediaSessionGeneration: number;
-  localMediaSessionGeneration: number;
-}): boolean {
-  return opts.requestMediaSessionGeneration >= opts.localMediaSessionGeneration;
-}
-
-export function countRecentlyHealthyRemoteSources(opts: {
-  lastSuccessfulDecodeAtBySource: ReadonlyMap<string, number>;
-  nowMs: number;
-  healthyWindowMs: number;
-}): number {
-  let count = 0;
-  for (const [, ts] of opts.lastSuccessfulDecodeAtBySource) {
-    if (opts.nowMs - ts <= opts.healthyWindowMs) count++;
-  }
-  return count;
-}
-
-export function shouldEscalateRoomWideKeyRecovery(opts: {
-  hasRoomKey: boolean;
-  repeatedFailures: boolean;
-  noRecentDecode: boolean;
-  recentlyHealthyRemoteSourceCount: number;
-  withinPostKeyGrace?: boolean;
-  prolongedNoRecentDecode?: boolean;
-}): boolean {
-  if (!opts.hasRoomKey) return true;
-  if (opts.repeatedFailures) {
-    return opts.recentlyHealthyRemoteSourceCount === 0;
-  }
-  if (opts.withinPostKeyGrace) return false;
-  if (!opts.noRecentDecode) return false;
-  return opts.prolongedNoRecentDecode === true;
-}
-
-export function shouldIgnoreRedundantRoomKeyDelivery(opts: {
-  hasInstalledRoomKey: boolean;
-  payloadCallSessionId: string;
-  localCallSessionId: string;
-  payloadMediaSessionGeneration: number;
-  localMediaSessionGeneration: number;
-  payloadKeyCommitment: string;
-  installedKeyCommitment: string | null;
-  sameIdentityInstallInFlight: boolean;
-}): boolean {
-  const sameSession =
-    opts.payloadCallSessionId === opts.localCallSessionId &&
-    opts.payloadMediaSessionGeneration === opts.localMediaSessionGeneration;
-  if (!sameSession) return false;
-  if (opts.sameIdentityInstallInFlight) return true;
-  if (!opts.hasInstalledRoomKey) return false;
-  return (
-    !!opts.installedKeyCommitment &&
-    opts.payloadKeyCommitment === opts.installedKeyCommitment
-  );
-}
-
-export function shouldAdoptTrustedRootSessionDuringRecovery(opts: {
-  hasInstalledRoomKey: boolean;
-  senderAddress: string;
-  currentRoot: string;
-  payloadCallSessionId: string;
-  localCallSessionId: string;
-  payloadMediaSessionGeneration: number;
-  localMediaSessionGeneration: number;
-  decryptFailureStreak: number;
-  lastRemoteDecodeAtMs: number;
-  nowMs: number;
-  noDecodeWindowMs: number;
-  startupGraceUntilMs: number;
-}): boolean {
-  if (!opts.hasInstalledRoomKey) return false;
-  if (!opts.currentRoot || opts.senderAddress !== opts.currentRoot)
-    return false;
-  const sessionMismatch =
-    opts.payloadCallSessionId !== opts.localCallSessionId ||
-    opts.payloadMediaSessionGeneration !== opts.localMediaSessionGeneration;
-  if (!sessionMismatch) return false;
-  if (opts.payloadMediaSessionGeneration > opts.localMediaSessionGeneration)
-    return true;
-  if (opts.nowMs <= opts.startupGraceUntilMs) return true;
-  const repeatedFailures =
-    opts.decryptFailureStreak >= KEY_RECOVERY_FAILURE_STREAK_THRESHOLD;
-  const noRecentDecode =
-    opts.lastRemoteDecodeAtMs <= 0 ||
-    opts.nowMs - opts.lastRemoteDecodeAtMs >= opts.noDecodeWindowMs;
-  return repeatedFailures || noRecentDecode;
-}
-
-export function getTrustedRootForRejoinElection(opts: {
-  currentRoot: string | null | undefined;
-  trustedRemoteRoot: string | null | undefined;
-  trustedRemoteRootLastSeenAtMs: number;
-  nowMs: number;
-  staleAfterMs: number;
-  rosterAddresses: Iterable<string>;
-}): string | null {
-  const roster = new Set<string>();
-  for (const rawAddress of opts.rosterAddresses) {
-    const address = rawAddress.trim();
-    if (address) roster.add(address);
-  }
-
-  const currentRoot = opts.currentRoot?.trim() ?? '';
-  if (currentRoot && roster.has(currentRoot)) {
-    return currentRoot;
-  }
-
-  const trustedRemoteRoot = opts.trustedRemoteRoot?.trim() ?? '';
-  if (!trustedRemoteRoot || !roster.has(trustedRemoteRoot)) return null;
-  if (opts.trustedRemoteRootLastSeenAtMs <= 0) return null;
-  if (opts.nowMs - opts.trustedRemoteRootLastSeenAtMs > opts.staleAfterMs) {
-    return null;
-  }
-  return trustedRemoteRoot;
-}
-
-export function getConflictingRootForAuthorityWait(opts: {
-  currentRoot: string | null | undefined;
-  conflictingRemoteRoot: string | null | undefined;
-  conflictingRemoteRootLastSeenAtMs: number;
-  nowMs: number;
-  staleAfterMs: number;
-  rosterAddresses: Iterable<string>;
-}): string | null {
-  const roster = new Set<string>();
-  for (const rawAddress of opts.rosterAddresses) {
-    const address = rawAddress.trim();
-    if (address) roster.add(address);
-  }
-  const currentRoot = opts.currentRoot?.trim() ?? '';
-  const conflictingRoot = opts.conflictingRemoteRoot?.trim() ?? '';
-  if (!conflictingRoot || conflictingRoot === currentRoot) return null;
-  if (!roster.has(conflictingRoot)) return null;
-  if (opts.conflictingRemoteRootLastSeenAtMs <= 0) return null;
-  if (opts.nowMs - opts.conflictingRemoteRootLastSeenAtMs > opts.staleAfterMs) {
-    return null;
-  }
-  return conflictingRoot;
-}
-
-export function shouldAllowSimultaneousJoinKeyFallback(opts: {
-  myAddress: string;
-  designatedRoot?: string | null | undefined;
-  otherParticipantCount: number;
-  trustedRemoteRoot: string | null | undefined;
-  conflictingRemoteRoot: string | null | undefined;
-  nowMs: number;
-  authoritySettleUntilMs: number;
-  pendingVerifiedKeyCount?: number;
-  lastRemoteDecodeAtMs?: number;
-  recentMediaEvidenceWindowMs?: number;
-  hasOccupiedRoomEvidence?: boolean;
-  hydratedRemoteParticipantCount?: number;
-  bootstrapHasTopology?: boolean;
-}): boolean {
-  return getStartupKeyAuthorityDecision({
-    myAddress: opts.myAddress,
-    designatedRoot: opts.designatedRoot,
-    otherParticipantCount: opts.otherParticipantCount,
-    nowMs: opts.nowMs,
-    authoritySettleUntilMs: opts.authoritySettleUntilMs,
-    pendingVerifiedKeyCount: opts.pendingVerifiedKeyCount ?? 0,
-    lastRemoteDecodeAtMs: opts.lastRemoteDecodeAtMs ?? 0,
-    trustedRemoteRoot: opts.trustedRemoteRoot,
-    conflictingRemoteRoot: opts.conflictingRemoteRoot,
-    recentMediaEvidenceWindowMs: opts.recentMediaEvidenceWindowMs,
-    hasOccupiedRoomEvidence: opts.hasOccupiedRoomEvidence,
-    hydratedRemoteParticipantCount: opts.hydratedRemoteParticipantCount,
-    bootstrapHasTopology: opts.bootstrapHasTopology,
-  }).allowMint;
-}
-
-export function shouldSuppressStartupDecodeFailure(opts: {
-  nowMs: number;
-  startupMediaGateUntilMs: number;
-}): boolean {
-  return opts.startupMediaGateUntilMs > opts.nowMs;
-}
-
-export function shouldPromoteStandbyRootAfterHeartbeatTimeout(opts: {
-  heartbeatSilentMs: number;
-  heartbeatTimeoutMs: number;
-  rootPeerRequiresReconnect: boolean;
-}): boolean {
-  if (opts.heartbeatSilentMs < opts.heartbeatTimeoutMs) return false;
-  return opts.rootPeerRequiresReconnect;
+function roundDiagnosticMs(value: number): number {
+  return Number((Number.isFinite(value) ? value : 0).toFixed(3));
 }
 
 /** sha256 → Uint8Array. Used for deterministic election. */
@@ -2979,34 +1089,6 @@ async function buildGcKeyRotateDigest(
   return sha256Hex(canonicalizeStringMap(encryptedKeys));
 }
 
-export function chooseSameEpochTopologyWinner(
-  current: GroupTopology,
-  incoming: GroupTopology,
-  roomId: string,
-  electionDigests?: ReadonlyMap<string, string>,
-  sameEpochRootConflictStickyMs: number = DEFAULT_SAME_EPOCH_ROOT_CONFLICT_STICKY_MS
-): { acceptIncoming: boolean; reason: string } {
-  const decision = chooseRouterTopologyAuthority(current, incoming, {
-    roomId,
-    sameEpochRootConflictStickyMs,
-    compareRoots: (incomingRoot, currentRoot) => {
-      const cachedComparison =
-        electionDigests &&
-        compareGroupCallElectionAddresses(
-          incomingRoot,
-          currentRoot,
-          electionDigests
-        );
-      if (typeof cachedComparison === 'number') return cachedComparison;
-      return compareRootForwardersSameEpoch(incomingRoot, currentRoot, roomId);
-    },
-  });
-  return {
-    acceptIncoming: decision.acceptIncoming,
-    reason: decision.reason,
-  };
-}
-
 /** Compute election scores for all participants. Returns sorted list (lowest score first). */
 async function computeElectionOrder(
   addresses: string[],
@@ -3030,109 +1112,6 @@ async function computeElectionOrder(
   return scores.map((s) => s.addr);
 }
 
-function getDesignatedRootFromElectionDigests(
-  addresses: string[],
-  electionDigests: ReadonlyMap<string, string>,
-  fallbackRoot?: string | null | undefined
-): string | null {
-  let winner = '';
-  let winningDigest = '';
-  for (const address of addresses) {
-    const digest = electionDigests.get(address)?.trim() ?? '';
-    if (!digest) continue;
-    if (!winner || digest.localeCompare(winningDigest) < 0) {
-      winner = address;
-      winningDigest = digest;
-    }
-  }
-  if (winner) return winner;
-  const fallback = fallbackRoot?.trim() ?? '';
-  return fallback && addresses.includes(fallback) ? fallback : null;
-}
-
-/**
- * Digest-min winner and elected `rootForwarder` can disagree during simultaneous
- * join (partial digest cache, roster ordering). The room session key must be
- * minted by the **topology** root-forwarder so that peer can distribute `GC_KEY`.
- * When both picks are in the roster and differ, prefer the topology root.
- */
-export function resolveDesignatedRootForSessionKey(opts: {
-  rosterAddresses: readonly string[];
-  electionDigests: ReadonlyMap<string, string>;
-  topologyRootForwarder?: string | null;
-}): string | null {
-  const roster = [...opts.rosterAddresses];
-  const digestPick = getDesignatedRootFromElectionDigests(
-    roster,
-    opts.electionDigests,
-    opts.topologyRootForwarder
-  );
-  const topo = opts.topologyRootForwarder?.trim() ?? '';
-  if (!topo || !roster.includes(topo)) {
-    return digestPick;
-  }
-  if (digestPick && digestPick !== topo && roster.includes(digestPick)) {
-    return topo;
-  }
-  return digestPick;
-}
-
-/** Normalize cluster rows from IPC (older peers may omit `standby2`). */
-function normalizeClusterDef(c: ClusterDef): ClusterDef {
-  return {
-    ...c,
-    standby2: c.standby2 ?? '',
-  };
-}
-
-function normalizeGroupTopologyClusters(topo: GroupTopology): GroupTopology {
-  return {
-    ...topo,
-    clusters: topo.clusters.map(normalizeClusterDef),
-  };
-}
-
-/** Build topology from a sorted participant list. */
-function buildTopology(sorted: string[], topologyEpoch: number): GroupTopology {
-  if (sorted.length <= CLUSTER_SIZE) {
-    const root = sorted[0] ?? '';
-    const standby = sorted[1] ?? '';
-    const standby2 = sorted[2] ?? '';
-    return {
-      topologyEpoch,
-      rootForwarder: root,
-      standbyForwarder: sorted[1] ?? '',
-      clusters: [
-        {
-          members: sorted,
-          forwarder: root,
-          standby: standby || root,
-          standby2,
-        },
-      ],
-    };
-  }
-
-  // Hierarchical: cluster forwarders + root
-  const clusters: ClusterDef[] = [];
-  for (let i = 0; i < sorted.length; i += CLUSTER_SIZE) {
-    const chunk = sorted.slice(i, i + CLUSTER_SIZE);
-    clusters.push({
-      members: chunk,
-      forwarder: chunk[0],
-      standby: chunk[1] ?? chunk[0],
-      standby2: chunk[2] ?? '',
-    });
-  }
-
-  // Root forwarder is the cluster forwarder with the lowest overall score
-  const clusterForwarders = clusters.map((c) => c.forwarder);
-  const rootForwarder = clusterForwarders[0];
-  const standbyForwarder = clusterForwarders[1] ?? clusterForwarders[0];
-
-  return { topologyEpoch, rootForwarder, standbyForwarder, clusters };
-}
-
 function buildTopologyWithTrustedRoot(
   sorted: string[],
   topologyEpoch: number,
@@ -3140,137 +1119,23 @@ function buildTopologyWithTrustedRoot(
 ): GroupTopology {
   const trusted = trustedRoot?.trim() ?? '';
   if (sorted.length <= CLUSTER_SIZE) {
-    return (
+    return normalizeGroupTopologyClusters(
       buildSingleClusterTopologyWithStickyRoot(
         sorted,
         topologyEpoch,
         trusted,
         CLUSTER_SIZE
-      ) ?? buildTopology(sorted, topologyEpoch)
+      ) ?? buildTopology(sorted, topologyEpoch, CLUSTER_SIZE)
     );
   }
-  return (
+  return normalizeGroupTopologyClusters(
     buildHierarchicalTopologyWithStickyRoot(
       sorted,
       topologyEpoch,
       trusted,
       CLUSTER_SIZE
-    ) ?? buildTopology(sorted, topologyEpoch)
+    ) ?? buildTopology(sorted, topologyEpoch, CLUSTER_SIZE)
   );
-}
-
-/** Determine this node's role given a topology. */
-function computeMyRole(myAddress: string, topology: GroupTopology): MyRole {
-  if (myAddress === topology.rootForwarder) return 'root-forwarder';
-  if (myAddress === topology.standbyForwarder) return 'standby-forwarder';
-  for (const cluster of topology.clusters) {
-    if (myAddress === cluster.forwarder) return 'cluster-forwarder';
-  }
-  return 'participant';
-}
-
-/** Find which cluster forwarder a participant should send to. */
-function findAssignedForwarder(
-  myAddress: string,
-  topology: GroupTopology
-): string {
-  const topo = normalizeGroupTopologyClusters(topology);
-  for (const cluster of topo.clusters) {
-    if (cluster.members.includes(myAddress)) {
-      return cluster.forwarder;
-    }
-  }
-  return topo.rootForwarder;
-}
-
-function findMyCluster(
-  myAddress: string,
-  topology: GroupTopology
-): ClusterDef | null {
-  const topo = normalizeGroupTopologyClusters(topology);
-  for (const c of topo.clusters) {
-    if (c.members.includes(myAddress)) return c;
-  }
-  return null;
-}
-
-export function getReticulumTransportTargets(
-  myAddress: string,
-  topology: GroupTopology
-): string[] {
-  if (!myAddress) return [];
-  const topo = normalizeGroupTopologyClusters(topology);
-  const role = computeMyRole(myAddress, topo);
-  const targets = new Set<string>();
-
-  if (role === 'root-forwarder') {
-    for (const cluster of topo.clusters) {
-      if (cluster.forwarder === myAddress) {
-        for (const member of cluster.members) {
-          if (member && member !== myAddress) targets.add(member);
-        }
-      } else if (cluster.forwarder) {
-        targets.add(cluster.forwarder);
-      }
-    }
-    const sf = topo.standbyForwarder?.trim() ?? '';
-    if (sf && sf !== myAddress) targets.add(sf);
-  } else if (role === 'cluster-forwarder') {
-    if (topo.rootForwarder && topo.rootForwarder !== myAddress) {
-      targets.add(topo.rootForwarder);
-    }
-    const myCluster = findMyCluster(myAddress, topo);
-    if (myCluster) {
-      for (const member of myCluster.members) {
-        if (member && member !== myAddress) targets.add(member);
-      }
-    }
-  } else {
-    const assignedForwarder = findAssignedForwarder(myAddress, topo);
-    if (assignedForwarder && assignedForwarder !== myAddress) {
-      targets.add(assignedForwarder);
-    }
-  }
-
-  return [...targets];
-}
-
-/**
- * Peers whose uplink paths toward this node should be warmed when the root sees outbound
- * media but no decoded ingress (asymmetric Reticulum packet paths).
- */
-function getRootInboundWarmPeers(
-  myAddress: string,
-  topology: GroupTopology
-): string[] {
-  if (!myAddress) return [];
-  const topo = normalizeGroupTopologyClusters(topology);
-  const out = new Set<string>();
-  const sf = topo.standbyForwarder?.trim() ?? '';
-  if (sf && sf !== myAddress) out.add(sf);
-  for (const c of topo.clusters) {
-    if (c.forwarder === myAddress) {
-      for (const m of c.members) {
-        if (m && m !== myAddress) out.add(m);
-      }
-    } else if (c.forwarder && c.forwarder.trim() !== myAddress) {
-      out.add(c.forwarder.trim());
-    }
-  }
-  return [...out];
-}
-
-/**
- * Union of inbound-warm peers and transport targets for predictive path pre-warm (N-way).
- */
-export function getPredictiveWarmPeers(
-  myAddress: string,
-  topology: GroupTopology
-): string[] {
-  const out = new Set<string>();
-  for (const p of getRootInboundWarmPeers(myAddress, topology)) out.add(p);
-  for (const p of getReticulumTransportTargets(myAddress, topology)) out.add(p);
-  return [...out].filter((p) => p && p !== myAddress);
 }
 
 function sortPeersForPredictiveWarm(
@@ -3283,34 +1148,6 @@ function sortPeersForPredictiveWarm(
     if (bb !== aa) return bb - aa;
     return a.localeCompare(b);
   });
-}
-
-/** Standby promotion for non-root cluster forwarder failure (hierarchical rooms). */
-function findNonRootClusterStandbyDuty(
-  myAddress: string,
-  topology: GroupTopology
-): { index: number; cluster: ClusterDef } | null {
-  const topo = normalizeGroupTopologyClusters(topology);
-  if (topo.clusters.length < 2) return null;
-  for (let i = 0; i < topo.clusters.length; i++) {
-    const c = topo.clusters[i]!;
-    if (c.forwarder === topo.rootForwarder) continue;
-    if (c.standby === myAddress && c.forwarder !== myAddress) {
-      return { index: i, cluster: c };
-    }
-  }
-  return null;
-}
-
-function findClusterIndexForForwarder(
-  forwarder: string,
-  topology: GroupTopology
-): number {
-  const topo = normalizeGroupTopologyClusters(topology);
-  for (let i = 0; i < topo.clusters.length; i++) {
-    if (topo.clusters[i]!.forwarder === forwarder) return i;
-  }
-  return -1;
 }
 
 /** Convert Float32 PCM to Int16 PCM for WebCodecs AudioData. */
@@ -3515,7 +1352,8 @@ export function useGroupVoiceCall(uiActive = false) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [myRole, setMyRole] = useState<MyRole>('participant');
   const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
-  const [topologyLabel, setTopologyLabel] = useState<TopologyLabel>('Reticulum');
+  const [topologyLabel, setTopologyLabel] =
+    useState<TopologyLabel>('Reticulum');
   const [metrics, setMetrics] = useState(() =>
     new GroupCallPerformanceTracker().getSnapshot()
   );
@@ -3676,6 +1514,12 @@ export function useGroupVoiceCall(uiActive = false) {
   const localSpeakerUiRefreshTimerRef = useRef<ReturnType<
     typeof setTimeout
   > | null>(null);
+  /** Coalesces speaker UI reconciliation so the audio drain tick never drives React directly. */
+  const speakerUiSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const lastAdaptiveTickAtRef = useRef(0);
+  const lastAdaptiveSourceCountRef = useRef(0);
 
   const lastAudioMixUpdateAtRef = useRef(0);
   const lastTuningSnapshotJsonRef = useRef('');
@@ -3686,7 +1530,8 @@ export function useGroupVoiceCall(uiActive = false) {
     (
       data: ArrayBuffer,
       fromAddress: string,
-      transport?: GcallAudioIngressTransport
+      transport?: GcallAudioIngressTransport,
+      bridgeReceivedAtWallMs?: number
     ) => void
   >(() => {});
   const requestMediaRecoveryForPeerRef = useRef<
@@ -3793,6 +1638,47 @@ export function useGroupVoiceCall(uiActive = false) {
   // IPC unsubscribe function
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
+  /** V2 receive session for the active playout path. Disposed in cleanup. */
+  const v2SessionRef = useRef<GcallV2Session | null>(null);
+
+  /** Per-source last worklet-reported bufferedMs (from gcallPlayoutMetrics messages).
+   *  Used by the feedback-driven V2 drain loop to decide how many frames to post. */
+  const v2WorkletBufferedMsRef = useRef<Map<string, number>>(new Map());
+
+  /** Per-source wall-clock timestamp (Date.now()) when the last gcallPlayoutMetrics
+   *  message was received from the worklet. Used together with v2WorkletBufferedMsRef
+   *  to dead-reckon the worklet's current buffer level between metric reports. */
+  const v2WorkletReportTimeRef = useRef<Map<string, number>>(new Map());
+
+  /** Per-source total milliseconds of PCM posted to the worklet since the last
+   *  gcallPlayoutMetrics report.  Added to the dead-reckoning estimate so that
+   *  frames we've already sent are not treated as "drained": without this the
+   *  formula would re-burst on every tick until the next report arrives (every
+   *  ~125ms), causing a flood→shed→starvation oscillation. Reset to 0 on each
+   *  new metrics message; incremented by actualFramesPosted × OPUS_FRAME_DURATION_MS
+   *  after each drain loop iteration. */
+  const v2WorkletPostedSinceReportRef = useRef<Map<string, number>>(new Map());
+
+  /** Per-source last worklet-reported playout rate. */
+  const v2WorkletRateRef = useRef<Map<string, number>>(new Map());
+
+  /** Per-source last V2 policy targetBufferMs sent to the worklet.
+   *  Avoids redundant postMessage calls when the target hasn't changed. */
+  const v2LastSentTargetRef = useRef<Map<string, number>>(new Map());
+
+  /** Per-source flag: was the PCM ring below the 2-frame refill threshold on
+   *  the previous drain tick? Used to detect ring-just-refilled events so the
+   *  drain loop can burst immediately rather than waiting for the dead-reckoning
+   *  estimate to decay below PANIC_SAFE_MS (~60–70 ms later). The 2-frame
+   *  threshold prevents a 1-frame flicker from falsely triggering a burst. */
+  const v2RingWasEmptyRef = useRef<Map<string, boolean>>(new Map());
+  /** Only one async V2 receive/playout tick may run at a time. */
+  const v2DrainTickInFlightRef = useRef(false);
+  /** Latest coalesced scheduler request while a V2 tick is in flight. */
+  const v2DrainTickPendingNowMsRef = useRef<number | null>(null);
+  /** Monotonic token; stale async completions are ignored after reset/rejoin. */
+  const v2DrainSessionTokenRef = useRef(0);
+
   /** Skip first group input-device effect after capture starts (stream already matches prefs). */
   const groupInputSwapSeededRef = useRef(false);
   const groupPrevInputPrefRef = useRef<string | null | undefined>(undefined);
@@ -3812,9 +1698,9 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastReticulumLinkFallbackDiagAtPeerRef = useRef<Map<string, number>>(
     new Map()
   );
-  const lastReticulumLinkFallbackExitCountPeerRef = useRef<
-    Map<string, number>
-  >(new Map());
+  const lastReticulumLinkFallbackExitCountPeerRef = useRef<Map<string, number>>(
+    new Map()
+  );
   const predictiveWarmHistoryRef = useRef<Array<{ at: number; peer: string }>>(
     []
   );
@@ -3858,15 +1744,42 @@ export function useGroupVoiceCall(uiActive = false) {
     setParticipants((prev) => reconcileParticipantSpeaking(prev, speakers));
   }, []);
 
+  const scheduleSpeakerUiSync = useCallback(
+    (requestedNow?: number) => {
+      if (speakerUiSyncTimerRef.current !== null) return;
+      speakerUiSyncTimerRef.current = setTimeout(() => {
+        speakerUiSyncTimerRef.current = null;
+        const startedAt = performance.now();
+        syncSpeakerUiState(requestedNow ?? Date.now());
+        if (gcallPerfEnabledRef.current) {
+          const reactMs = performance.now() - startedAt;
+          const activeSourceCount = Math.max(
+            activeJitterSourcesRef.current.size,
+            playbackWorkletsRef.current.size,
+            1
+          );
+          gcallPerfRef.current.recordDuration('reactTickMs', reactMs);
+          gcallPerfRef.current.recordDuration(
+            'reactTickPerSourceMs',
+            reactMs / activeSourceCount
+          );
+          gcallPerfRef.current.incrementCounter('reactSpeakerUpdates');
+          gcallPerfRef.current.incrementCounter('reactSpeakerUpdatesDeferred');
+        }
+      }, 0);
+    },
+    [syncSpeakerUiState]
+  );
+
   const scheduleLocalSpeakerUiRefresh = useCallback(() => {
     if (localSpeakerUiRefreshTimerRef.current) {
       clearTimeout(localSpeakerUiRefreshTimerRef.current);
     }
     localSpeakerUiRefreshTimerRef.current = setTimeout(() => {
       localSpeakerUiRefreshTimerRef.current = null;
-      syncSpeakerUiState();
+      scheduleSpeakerUiSync();
     }, ACTIVE_SPEAKER_WINDOW_MS + 50);
-  }, [syncSpeakerUiState]);
+  }, [scheduleSpeakerUiSync]);
   const gcallStarvationTicksSinceProtectedRef = useRef<Map<string, number>>(
     new Map()
   );
@@ -3918,9 +1831,9 @@ export function useGroupVoiceCall(uiActive = false) {
     new Map()
   );
   /** `performance.now()` when the current severe forced-release rebuild streak started. */
-  const n1SevereForcedReleaseRebuildStartedAtPerfRef = useRef<Map<string, number>>(
-    new Map()
-  );
+  const n1SevereForcedReleaseRebuildStartedAtPerfRef = useRef<
+    Map<string, number>
+  >(new Map());
   /** Cooldown after a local deadzone reset; prevents immediately re-entering 20-40ms forced release. */
   const n1SevereRebuildDeadzoneResetCooldownUntilPerfRef = useRef<
     Map<string, number>
@@ -3946,9 +1859,7 @@ export function useGroupVoiceCall(uiActive = false) {
   /** Last stall-escape minimal decode time (`performance.now()`). */
   const lastStallEscapePerfRef = useRef<Map<string, number>>(new Map());
   const lastBufferEnforceLogAtRef = useRef<Map<string, number>>(new Map());
-  const lastN1AccumulationHoldLogAtRef = useRef<Map<string, number>>(
-    new Map()
-  );
+  const lastN1AccumulationHoldLogAtRef = useRef<Map<string, number>>(new Map());
   const lastN1SevereReadyEscapeLogAtRef = useRef<Map<string, number>>(
     new Map()
   );
@@ -3968,6 +1879,10 @@ export function useGroupVoiceCall(uiActive = false) {
   const lastUnknownRemoteAudioDropLogAtRef = useRef<Map<string, number>>(
     new Map()
   );
+  const sourceTimestampLatenessRef = useRef<
+    Map<string, SourceTimestampLatenessState>
+  >(new Map());
+  const lastStaleTimestampDropLogAtRef = useRef<Map<string, number>>(new Map());
   const lastStaleRemoteAudioPruneAtRef = useRef(0);
   const lastPlayoutStressLogAtRef = useRef<Map<string, number>>(new Map());
   const playoutStarvationSeverityRef = useRef<
@@ -3985,15 +1900,33 @@ export function useGroupVoiceCall(uiActive = false) {
   const decayGuardCalmStartRef = useRef<Map<string, number>>(new Map());
   const decayGuardDiagLoggedRef = useRef<Set<string>>(new Set());
   const lastPanicZoneDiagAtRef = useRef<Map<string, number>>(new Map());
+  const lastV2PlayoutPostLatencyDiagAtRef = useRef<Map<string, number>>(
+    new Map()
+  );
   /** Wall timestamps of decrypt batches per source (for forwarder suppression diagnostics). */
   const forwardPacketRecvTimestampsRef = useRef<Map<string, number[]>>(
     new Map()
   );
 
-  // Off-thread audio packet decryption worker
-  const decryptWorkerRef = useRef<Worker | null>(null);
+  // Off-thread audio packet decryption worker pool (ingress-sharded, 2-4 slots).
+  // Exposed as `decryptWorkerRef` for historical reasons; the underlying value is a
+  // {@link DecryptWorkerPool} which encapsulates both the decrypt shards and a dedicated
+  // encrypt worker. A single ref keeps the hook's existing lifecycle logic intact.
+  const decryptWorkerRef = useRef<DecryptWorkerPool | null>(null);
   const decryptIdRef = useRef<number>(0);
   const encryptIdRef = useRef<number>(0);
+  /** Rolling peak of {@link pendingDecryptsRef.size} for decrypt-pool scaling signals. */
+  const decryptPoolPeakDepthRecentRef = useRef<number>(0);
+  /** Wall time (ms) the peak signal has been at/above the "grow to 3" depth threshold. */
+  const decryptPoolSustainedAboveGrow3MsRef = useRef<number>(0);
+  /** Wall time (ms) the peak signal has been at/above the "grow to 4" depth threshold. */
+  const decryptPoolSustainedAboveGrow4MsRef = useRef<number>(0);
+  /** Wall time (ms) the pool has been idle (low depth) — guards shrink decisions. */
+  const decryptPoolSustainedLowPressureMsRef = useRef<number>(0);
+  /** `performance.now()` at the previous scaling tick (for delta accumulation). */
+  const decryptPoolScalingLastTickAtRef = useRef<number>(0);
+  /** Size the pool is currently routing at (informational; authoritative value is in pool). */
+  const decryptPoolSizeRef = useRef<number>(DECRYPT_POOL_MIN_SIZE);
   /** Decrypt worker result correlation; retains DC ArrayBuffer for opaque forward (never transfer). */
   const pendingDecryptsRef = useRef(
     new Map<
@@ -4170,6 +2103,16 @@ export function useGroupVoiceCall(uiActive = false) {
   const processPendingVerifiedKeysRef = useRef<() => void>(() => {});
   const maybeRequestKeyRecoveryRef = useRef<(reason: string) => void>(() => {});
   const metricsRef = useRef(new GroupCallPerformanceTracker());
+  /**
+   * FIFO timing samples aligned with WebCodecs encoder output order.
+   * One entry per frame received from the capture worklet.
+   */
+  const gcallPendingSenderPcmTimingRef = useRef<
+    Array<{
+      workletToMainThreadMs: number;
+      mainThreadRecvPerfMs: number;
+    }>
+  >([]);
   const wasmFecPipelineRef = useRef<GcallOpusFecPlayoutPipeline | null>(null);
   const getWasmFecPipeline = useCallback(() => {
     if (!wasmFecPipelineRef.current) {
@@ -4302,6 +2245,11 @@ export function useGroupVoiceCall(uiActive = false) {
   const snapshotGcallPerfStats = useCallback(() => {
     const breaches = tickBudgetBreachesRef.current;
     return gcallPerfRef.current.snapshot({
+      perfCollectionEnabled: gcallPerfEnabledRef.current,
+      perfCollectionMode: gcallPerfEnabledRef.current ? 'enabled' : 'disabled',
+      perfCollectionHint: gcallPerfEnabledRef.current
+        ? null
+        : 'Set localStorage qortal:gcall-perf=1 to capture perf series/counters in production exports.',
       roomState: roomStateRef.current,
       roomId: roomIdRef.current || null,
       chatId: chatIdRef.current || null,
@@ -4855,25 +2803,27 @@ export function useGroupVoiceCall(uiActive = false) {
         }
       >();
       const activePeers = new Set<string>();
-      const degradedSourceCount = windowMetrics.sources.filter((source) =>
-        assessGroupCallSourceWindowForRecovery(source).shouldEscalate
+      const degradedSourceCount = windowMetrics.sources.filter(
+        (source) =>
+          assessGroupCallSourceWindowForRecovery(source).shouldEscalate
       ).length;
-      const multiSourceLocalOnlyRecovery = shouldKeepMultiSourceWindowRecoveryLocal({
-        activeSourceCount: windowMetrics.sources.length,
-        shouldTightenRecovery: pressureAssessment.shouldTightenRecovery,
-        severePressure: pressureAssessment.severe,
-        packetsDroppedPendingDecrypt:
-          windowMetrics.packetsDroppedPendingDecrypt,
-        reticulumAudioQueuePressureDrops:
-          windowMetrics.reticulumAudioQueuePressureDrops,
-        reticulumAudioDecodedQueueDepthHighWater:
-          windowMetrics.reticulumAudioDecodedQueueDepthHighWater,
-        reticulumAudioBinaryOutQueueDepthHighWater:
-          windowMetrics.reticulumAudioBinaryOutQueueDepthHighWater,
-        reticulumAudioBridgeQueuedFramesHighWater:
-          windowMetrics.reticulumAudioBridgeQueuedFramesHighWater,
-        degradedSourceCount,
-      });
+      const multiSourceLocalOnlyRecovery =
+        shouldKeepMultiSourceWindowRecoveryLocal({
+          activeSourceCount: windowMetrics.sources.length,
+          shouldTightenRecovery: pressureAssessment.shouldTightenRecovery,
+          severePressure: pressureAssessment.severe,
+          packetsDroppedPendingDecrypt:
+            windowMetrics.packetsDroppedPendingDecrypt,
+          reticulumAudioQueuePressureDrops:
+            windowMetrics.reticulumAudioQueuePressureDrops,
+          reticulumAudioDecodedQueueDepthHighWater:
+            windowMetrics.reticulumAudioDecodedQueueDepthHighWater,
+          reticulumAudioBinaryOutQueueDepthHighWater:
+            windowMetrics.reticulumAudioBinaryOutQueueDepthHighWater,
+          reticulumAudioBridgeQueuedFramesHighWater:
+            windowMetrics.reticulumAudioBridgeQueuedFramesHighWater,
+          degradedSourceCount,
+        });
       const nowPerf = performance.now();
       for (const source of windowMetrics.sources) {
         const ingressPeer = getSourceIngressDiagnostic(
@@ -4913,7 +2863,9 @@ export function useGroupVoiceCall(uiActive = false) {
             ? Number.POSITIVE_INFINITY
             : nowPerf - lastRecvAt;
         const relaxedSingleRemote = shouldRelaxSingleRemoteWindowRecovery({
-          activeSourceCount: singleRemoteWindow ? 1 : windowMetrics.sources.length,
+          activeSourceCount: singleRemoteWindow
+            ? 1
+            : windowMetrics.sources.length,
           shouldTightenRecovery: pressureAssessment.shouldTightenRecovery,
           avgOpusBufferedMs: source.avgOpusBufferedMs,
           adaptiveTargetMedianMs: source.adaptiveTargetMedianMs,
@@ -4922,24 +2874,28 @@ export function useGroupVoiceCall(uiActive = false) {
           avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
           concealmentTicks: source.concealmentTicks,
         });
-        const localOnlySingleRemote = shouldKeepSingleRemoteWindowRecoveryLocal({
-          activeSourceCount: singleRemoteWindow ? 1 : windowMetrics.sources.length,
-          lastRecvAgeMs,
-          avgOpusBufferedMs: source.avgOpusBufferedMs,
-          adaptiveTargetMedianMs: source.adaptiveTargetMedianMs,
-          adaptiveTargetMaxMs: source.adaptiveTargetMaxMs,
-          avgPcmBufferedMs: source.avgPcmBufferedMs,
-          playoutUnderTargetFraction: source.playoutUnderTargetFraction ?? 0,
-          avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
-          missingFrames: source.missingFrames,
-          packetsDroppedPendingDecrypt:
-            windowMetrics.packetsDroppedPendingDecrypt,
-          reticulumAudioStaleDrops: windowMetrics.reticulumAudioStaleDrops,
-          reticulumAudioPacketSendFailures:
-            windowMetrics.reticulumAudioPacketSendFailures,
-          reticulumAudioPacketPathTimeouts:
-            windowMetrics.reticulumAudioPacketPathTimeouts,
-        });
+        const localOnlySingleRemote = shouldKeepSingleRemoteWindowRecoveryLocal(
+          {
+            activeSourceCount: singleRemoteWindow
+              ? 1
+              : windowMetrics.sources.length,
+            lastRecvAgeMs,
+            avgOpusBufferedMs: source.avgOpusBufferedMs,
+            adaptiveTargetMedianMs: source.adaptiveTargetMedianMs,
+            adaptiveTargetMaxMs: source.adaptiveTargetMaxMs,
+            avgPcmBufferedMs: source.avgPcmBufferedMs,
+            playoutUnderTargetFraction: source.playoutUnderTargetFraction ?? 0,
+            avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
+            missingFrames: source.missingFrames,
+            packetsDroppedPendingDecrypt:
+              windowMetrics.packetsDroppedPendingDecrypt,
+            reticulumAudioStaleDrops: windowMetrics.reticulumAudioStaleDrops,
+            reticulumAudioPacketSendFailures:
+              windowMetrics.reticulumAudioPacketSendFailures,
+            reticulumAudioPacketPathTimeouts:
+              windowMetrics.reticulumAudioPacketPathTimeouts,
+          }
+        );
         const severeForcedReleaseRebuildActive =
           n1SevereForcedReleaseRebuildUntilPerfRef.current.has(
             source.sourceAddr
@@ -4953,7 +2909,9 @@ export function useGroupVoiceCall(uiActive = false) {
         })();
         const severeRebuildDeadzoneLocalOnlySingleRemote =
           shouldKeepSingleRemoteSevereRebuildDeadzoneLocal({
-            activeSourceCount: singleRemoteWindow ? 1 : windowMetrics.sources.length,
+            activeSourceCount: singleRemoteWindow
+              ? 1
+              : windowMetrics.sources.length,
             lastRecvAgeMs,
             avgOpusBufferedMs: source.avgOpusBufferedMs,
             avgPcmBufferedMs: source.avgPcmBufferedMs,
@@ -4967,15 +2925,21 @@ export function useGroupVoiceCall(uiActive = false) {
             severeForcedReleaseRebuildActiveForMs,
             packetsDroppedPendingDecrypt:
               windowMetrics.packetsDroppedPendingDecrypt,
+            reticulumAudioQueuePressureDrops:
+              windowMetrics.reticulumAudioQueuePressureDrops,
             reticulumAudioStaleDrops: windowMetrics.reticulumAudioStaleDrops,
             reticulumAudioPacketSendFailures:
               windowMetrics.reticulumAudioPacketSendFailures,
             reticulumAudioPacketPathTimeouts:
               windowMetrics.reticulumAudioPacketPathTimeouts,
+            reticulumAudioBridgeQueuedFramesHighWater:
+              windowMetrics.reticulumAudioBridgeQueuedFramesHighWater,
           });
         const degradedRebuildLocalOnlySingleRemote =
           shouldKeepSingleRemoteDegradedRebuildLocal({
-            activeSourceCount: singleRemoteWindow ? 1 : windowMetrics.sources.length,
+            activeSourceCount: singleRemoteWindow
+              ? 1
+              : windowMetrics.sources.length,
             pathDegradedUntilMs:
               ingressPeer !== null
                 ? (n1PathDegradedUntilPeerRef.current.get(ingressPeer) ?? 0)
@@ -4998,18 +2962,23 @@ export function useGroupVoiceCall(uiActive = false) {
             severeForcedReleaseRebuildActiveForMs,
             packetsDroppedPendingDecrypt:
               windowMetrics.packetsDroppedPendingDecrypt,
+            reticulumAudioQueuePressureDrops:
+              windowMetrics.reticulumAudioQueuePressureDrops,
             reticulumAudioStaleDrops: windowMetrics.reticulumAudioStaleDrops,
             reticulumAudioPacketSendFailures:
               windowMetrics.reticulumAudioPacketSendFailures,
+            reticulumAudioBridgeQueuedFramesHighWater:
+              windowMetrics.reticulumAudioBridgeQueuedFramesHighWater,
           });
         prev.score += assessment.score;
         prev.severe =
           prev.severe ||
           assessment.severe ||
           (assessment.shouldEscalate &&
-              pressureAssessment.shouldTightenRecovery);
+            pressureAssessment.shouldTightenRecovery);
         prev.degradedSources++;
-        prev.relaxedSingleRemote = prev.relaxedSingleRemote || relaxedSingleRemote;
+        prev.relaxedSingleRemote =
+          prev.relaxedSingleRemote || relaxedSingleRemote;
         prev.localOnlySingleRemote =
           prev.localOnlySingleRemote ||
           localOnlySingleRemote ||
@@ -5263,9 +3232,14 @@ export function useGroupVoiceCall(uiActive = false) {
     incrementPerfCounter('mixActualUpdates');
 
     const wallNow = Date.now();
-    const recentSpeakerEstimate = computeRecentSpeakerEstimate(
+    const localAddress = userInfoRef.current?.address?.trim?.() ?? '';
+    const excludedSpeakerIds = localAddress
+      ? new Set([localAddress])
+      : new Set<string>();
+    const recentSpeakerEstimate = computeRecentSpeakerEstimateExcluding(
       localSpeakersRef.current,
       wallNow,
+      excludedSpeakerIds,
       RECENT_SPEAKER_WINDOW_MS
     );
     const masterGainTarget = computeMasterGainTarget(
@@ -5315,9 +3289,14 @@ export function useGroupVoiceCall(uiActive = false) {
     const mixBus = mixBusGainRef.current;
     if (!ctx || !mixBus || ctx.state === 'closed') return;
     const wallNow = Date.now();
-    const recentSpeakerEstimate = computeRecentSpeakerEstimate(
+    const localAddress = userInfoRef.current?.address?.trim?.() ?? '';
+    const excludedSpeakerIds = localAddress
+      ? new Set([localAddress])
+      : new Set<string>();
+    const recentSpeakerEstimate = computeRecentSpeakerEstimateExcluding(
       localSpeakersRef.current,
       wallNow,
+      excludedSpeakerIds,
       RECENT_SPEAKER_WINDOW_MS
     );
     const masterGainTarget = computeMasterGainTarget(
@@ -5639,12 +3618,11 @@ export function useGroupVoiceCall(uiActive = false) {
         nowMs: now,
         windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
       });
-      const liveN1DeadzoneStrong =
-        shouldPromoteLiveN1PlayoutDeadzoneToStrong({
-          activeSourceCount,
-          lastRecvAgeMs,
-          recentStability,
-        });
+      const liveN1DeadzoneStrong = shouldPromoteLiveN1PlayoutDeadzoneToStrong({
+        activeSourceCount,
+        lastRecvAgeMs,
+        recentStability,
+      });
       const playoutMetricTicks = previousWindowSource?.playoutMetricTicks ?? 0;
       const starvationHasMinSample =
         previousWindowSource !== null &&
@@ -5789,13 +3767,14 @@ export function useGroupVoiceCall(uiActive = false) {
         activeSourceCount,
         dynamicCeilingLiftMs,
       });
-      const multiSourceRecoveryTargetMaxMs = computeRecoveryMultiSourceTargetMaxMs({
-        profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
-        profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
-        activeSourceCount,
-        starvationSeverity: nextStarvationSev,
-        isolatedSource: isolateThisSource,
-      });
+      const multiSourceRecoveryTargetMaxMs =
+        computeRecoveryMultiSourceTargetMaxMs({
+          profileAdaptiveMaxMs: tuning.adaptiveMaxTargetMs,
+          profileAdaptiveSevereMaxMs: tuning.adaptiveSevereMaxTargetMs,
+          activeSourceCount,
+          starvationSeverity: nextStarvationSev,
+          isolatedSource: isolateThisSource,
+        });
       if (
         adaptiveNetworkMode === 'recovery' &&
         multiSourceRecoveryTargetMaxMs !== null &&
@@ -5875,14 +3854,13 @@ export function useGroupVoiceCall(uiActive = false) {
       } else {
         n1WeakLiveHoldUntilPerfRef.current.delete(addr);
       }
-      const weakSingleRemoteTargetHoldMaxMs =
-        preserveN1SevereSingleRemoteTarget
-          ? null
-          : computeWeakSingleRemoteRecoveryTargetHoldMaxMs({
-              currentAdaptiveMaxTargetMs: adaptiveMaxTargetMs,
-              holdActive: weakSingleRemoteHold.holdActive,
-              recentStability,
-            });
+      const weakSingleRemoteTargetHoldMaxMs = preserveN1SevereSingleRemoteTarget
+        ? null
+        : computeWeakSingleRemoteRecoveryTargetHoldMaxMs({
+            currentAdaptiveMaxTargetMs: adaptiveMaxTargetMs,
+            holdActive: weakSingleRemoteHold.holdActive,
+            recentStability,
+          });
       if (weakSingleRemoteTargetHoldMaxMs !== null) {
         adaptiveMaxTargetMs = Math.min(
           adaptiveMaxTargetMs,
@@ -5946,7 +3924,8 @@ export function useGroupVoiceCall(uiActive = false) {
           singleRemoteOverbufferTargetMaxMs
         );
         if (
-          wallNow - lastSingleRemoteOverbufferDecayDiagAtRef.current >= 5_000
+          wallNow - lastSingleRemoteOverbufferDecayDiagAtRef.current >=
+          5_000
         ) {
           lastSingleRemoteOverbufferDecayDiagAtRef.current = wallNow;
           gcallDiagnosticsPush('info', '[GCall] singleRemoteOverbufferDecay', {
@@ -6040,7 +4019,10 @@ export function useGroupVoiceCall(uiActive = false) {
           recentStability,
         });
       if (acceleratedSingleRemoteRecoveryDecay) {
-        alphaDown = Math.max(alphaDown, GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN);
+        alphaDown = Math.max(
+          alphaDown,
+          GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN
+        );
       }
       if (singleRemoteOverbufferTargetMaxMs !== null) {
         alphaDown = Math.max(
@@ -6049,7 +4031,10 @@ export function useGroupVoiceCall(uiActive = false) {
         );
       }
       if (weakSingleRemoteHold.holdActive) {
-        alphaDown = Math.max(alphaDown, GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN);
+        alphaDown = Math.max(
+          alphaDown,
+          GCALL_SINGLE_REMOTE_RECOVERY_ALPHA_DOWN
+        );
       }
 
       const stableSingleRemoteLowLatency =
@@ -6132,8 +4117,7 @@ export function useGroupVoiceCall(uiActive = false) {
       const starvationDiagKey = `${nextStarvationSev}:${starvationSeverityReason}`;
       const lastStarvDiagKey =
         lastPlayoutStarvationDiagKeyRef.current.get(addr) ?? '';
-      const starvationDiagStateChanged =
-        starvationDiagKey !== lastStarvDiagKey;
+      const starvationDiagStateChanged = starvationDiagKey !== lastStarvDiagKey;
       const shouldStarvationDiag =
         (starvationDiagStateChanged &&
           wallNow - lastStarvDiag >= starvationDiagTransitionThrottleMs) ||
@@ -6471,6 +4455,8 @@ export function useGroupVoiceCall(uiActive = false) {
         liveMetricsSnapshot: live,
         exportWindowMetrics: windowMetrics,
         gcallPerfSnapshot: snapshotGcallPerfStats(),
+        v2DiagnosticEvents: v2SessionRef.current?.getDiagnosticEvents(),
+        v2ManagedSourceAddrs: v2SessionRef.current?.getActiveSources() ?? [],
       });
       if (opts?.clipboard) {
         await copyGcallDiagnosticsToClipboard(json);
@@ -6487,6 +4473,18 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const exportGroupCallDiagnosticsRef = useRef(exportGroupCallDiagnostics);
   exportGroupCallDiagnosticsRef.current = exportGroupCallDiagnostics;
+
+  const invalidateV2DrainLoop = useCallback(() => {
+    v2DrainSessionTokenRef.current += 1;
+    v2DrainTickInFlightRef.current = false;
+    v2DrainTickPendingNowMsRef.current = null;
+    v2WorkletBufferedMsRef.current.clear();
+    v2WorkletReportTimeRef.current.clear();
+    v2WorkletPostedSinceReportRef.current.clear();
+    v2WorkletRateRef.current.clear();
+    v2LastSentTargetRef.current.clear();
+    v2RingWasEmptyRef.current.clear();
+  }, []);
 
   useEffect(() => {
     window.__qortalGCallExportDiagnostics = async () => {
@@ -6544,6 +4542,7 @@ export function useGroupVoiceCall(uiActive = false) {
         diagnostics?: {
           transport?: string;
           pendingFrames?: number;
+          pendingOldestAgeMs?: number;
           queuePressureDrops?: number;
           staleDrops?: number;
           linkUnreadyDrops?: number;
@@ -6562,9 +4561,12 @@ export function useGroupVoiceCall(uiActive = false) {
           linkFallbackLastDwellMs?: number;
           bridge?: {
             bridgeQueuedFrames?: number;
+            bridgeQueuedOldestAgeMs?: number;
             bridgeWaitingForDrain?: boolean;
             decodedQueueDepth?: number;
+            decodedQueueOldestAgeMs?: number;
             binaryOutQueueDepth?: number;
+            binaryOutQueueOldestAgeMs?: number;
             queuePressureDropsLast5s?: number;
             staleDropsLast5s?: number;
             queuePressureDrops?: number;
@@ -6590,10 +4592,15 @@ export function useGroupVoiceCall(uiActive = false) {
         }
         metricsRef.current.setReticulumAudioQueueDepths({
           pendingFrames: diagnostics.pendingFrames,
+          pendingOldestAgeMs: diagnostics.pendingOldestAgeMs,
           bridgeQueuedFrames: diagnostics.bridge?.bridgeQueuedFrames,
+          bridgeQueuedOldestAgeMs: diagnostics.bridge?.bridgeQueuedOldestAgeMs,
           bridgeWaitingForDrain: diagnostics.bridge?.bridgeWaitingForDrain,
           decodedQueueDepth: diagnostics.bridge?.decodedQueueDepth,
+          decodedQueueOldestAgeMs: diagnostics.bridge?.decodedQueueOldestAgeMs,
           binaryOutQueueDepth: diagnostics.bridge?.binaryOutQueueDepth,
+          binaryOutQueueOldestAgeMs:
+            diagnostics.bridge?.binaryOutQueueOldestAgeMs,
           queuePressureDropsLast5s:
             diagnostics.bridge?.queuePressureDropsLast5s,
           staleDropsLast5s: diagnostics.bridge?.staleDropsLast5s,
@@ -6689,10 +4696,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 nowMs - lastWarmAt >=
                 GCALL_N1_ROUGH_LINK_WARM_REQUEST_COOLDOWN_MS
               ) {
-                lastN1PathDegradedWarmAtPeerRef.current.set(
-                  peerAddress,
-                  nowMs
-                );
+                lastN1PathDegradedWarmAtPeerRef.current.set(peerAddress, nowMs);
                 requestMediaRecoveryForPeerRef.current(
                   peerAddress,
                   'path-degraded-warm'
@@ -6901,9 +4905,9 @@ export function useGroupVoiceCall(uiActive = false) {
       const forwarderFanout = forwarderRole && (snap.packetsForwarded ?? 0) > 0;
       const singleRemoteSourceAddr =
         activeSourceCount === 1
-          ? [...activeJitterSourcesRef.current][0] ??
+          ? ([...activeJitterSourcesRef.current][0] ??
             playbackWorkletsRef.current.keys().next().value ??
-            null
+            null)
           : null;
       const perfNow = performance.now();
       const singleRemoteRecentStability =
@@ -6933,8 +4937,8 @@ export function useGroupVoiceCall(uiActive = false) {
           : null;
       const singleRemoteIngressPeerAddress =
         singleRemoteSourceAddr !== null
-          ? sourceIngressPeerRef.current.get(singleRemoteSourceAddr) ??
-            singleRemoteSourceAddr
+          ? (sourceIngressPeerRef.current.get(singleRemoteSourceAddr) ??
+            singleRemoteSourceAddr)
           : null;
       const singleRemoteLastRecvAgeMs =
         singleRemoteSourceAddr !== null
@@ -6988,9 +4992,7 @@ export function useGroupVoiceCall(uiActive = false) {
         const lastActionAt =
           lastInboundMediaWatchdogAtPeerRef.current.get(peer) ?? 0;
         const lastActionAgeMs =
-          lastActionAt > 0
-            ? wallNow - lastActionAt
-            : Number.POSITIVE_INFINITY;
+          lastActionAt > 0 ? wallNow - lastActionAt : Number.POSITIVE_INFINITY;
         if (
           shouldTriggerN1InboundMediaWatchdog({
             roomConnected: roomStateRef.current === 'connected',
@@ -7083,9 +5085,7 @@ export function useGroupVoiceCall(uiActive = false) {
             singleRemoteIngressPeerAddress
           ) ?? 0;
         const lastActionAgeMs =
-          lastActionAt > 0
-            ? wallNow - lastActionAt
-            : Number.POSITIVE_INFINITY;
+          lastActionAt > 0 ? wallNow - lastActionAt : Number.POSITIVE_INFINITY;
         if (
           singleRemoteRecentStability !== null &&
           singleRemoteRecentStability.stable
@@ -7131,25 +5131,31 @@ export function useGroupVoiceCall(uiActive = false) {
               avgPcmBufferedMs:
                 singleRemoteRecentStability?.avgPcmBufferedMs ?? null,
               underTarget:
-                singleRemoteRecentStability?.playoutUnderTargetFraction ??
-                null,
+                singleRemoteRecentStability?.playoutUnderTargetFraction ?? null,
               avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
             },
           });
           gcallDiagnosticsPush('warn', '[GCall] n1SeverePlayoutPathWarm', {
-            peerAddress: truncateGcallDiagAddress(singleRemoteIngressPeerAddress),
+            peerAddress: truncateGcallDiagAddress(
+              singleRemoteIngressPeerAddress
+            ),
             sourceAddr: truncateGcallDiagAddress(singleRemoteSourceAddr),
             lastRecvAgeMs: Math.round(singleRemoteLastRecvAgeMs),
+            sampleCount: singleRemoteRecentStability?.sampleCount ?? null,
             avgPcmBufferedMs:
               singleRemoteRecentStability?.avgPcmBufferedMs ?? null,
             playoutUnderTargetFraction:
               singleRemoteRecentStability?.playoutUnderTargetFraction ?? null,
+            underrunCount: singleRemoteRecentStability?.underrunCount ?? null,
             avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
             starvationSeverity: singleRemoteStarvationSeverity,
+            severeInstability:
+              singleRemoteRecentStability?.severeInstability ?? null,
             consecutiveFires: consecutiveFires + 1,
             backoffActive:
               consecutiveFires + 1 >=
               GCALL_N1_SEVERE_PLAYOUT_WARM_BACKOFF_AFTER_FIRES,
+            lastActionAgeMs: Math.round(lastActionAgeMs),
           });
           requestMediaRecoveryForPeerRef.current(
             singleRemoteIngressPeerAddress,
@@ -7183,15 +5189,14 @@ export function useGroupVoiceCall(uiActive = false) {
                       singleRemoteIngressPeerAddress
                     ) ?? 0)
                   : 0,
-              recentStability:
-                singleRemoteRecentStability ?? {
-                  sampleCount: 0,
-                  avgPcmBufferedMs: 0,
-                  playoutUnderTargetFraction: 0,
-                  underrunCount: 0,
-                  stable: false,
-                  severeInstability: false,
-                },
+              recentStability: singleRemoteRecentStability ?? {
+                sampleCount: 0,
+                avgPcmBufferedMs: 0,
+                playoutUnderTargetFraction: 0,
+                underrunCount: 0,
+                stable: false,
+                severeInstability: false,
+              },
               avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
               avgOpusBufferedMs:
                 singleRemoteWindowSource?.avgOpusBufferedMs ??
@@ -7210,16 +5215,15 @@ export function useGroupVoiceCall(uiActive = false) {
                 n1SevereForcedReleaseRebuildUntilPerfRef.current.has(
                   singleRemoteSourceAddr
                 ),
-              severeForcedReleaseRebuildActiveForMs:
-                (() => {
-                  const startedAt =
-                    n1SevereForcedReleaseRebuildStartedAtPerfRef.current.get(
-                      singleRemoteSourceAddr
-                    );
-                  return startedAt === undefined
-                    ? 0
-                    : Math.max(0, perfNow - startedAt);
-                })(),
+              severeForcedReleaseRebuildActiveForMs: (() => {
+                const startedAt =
+                  n1SevereForcedReleaseRebuildStartedAtPerfRef.current.get(
+                    singleRemoteSourceAddr
+                  );
+                return startedAt === undefined
+                  ? 0
+                  : Math.max(0, perfNow - startedAt);
+              })(),
             })
           : { capBps: null, nextState: null };
       const receivePriorityBitrateCapBps =
@@ -7241,8 +5245,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 snap.jitterBufferDepthFramesMean * OPUS_FRAME_DURATION_MS,
               avgPlayoutDeltaMs: snap.avgPlayoutDeltaMs,
               missingFrames: singleRemoteWindowSource?.missingFrames ?? 0,
-              concealmentTicks:
-                singleRemoteWindowSource?.concealmentTicks ?? 0,
+              concealmentTicks: singleRemoteWindowSource?.concealmentTicks ?? 0,
               avgIncomingPacketMs: snap.avgIncomingPacketMs,
               lastRemoteDecodeAtMs: lastRemoteDecodeAtRef.current,
               nominalBitrateBps: nominalBitrate,
@@ -7260,7 +5263,9 @@ export function useGroupVoiceCall(uiActive = false) {
             receivePriorityBitrateCapDecision.nextState
           );
         } else {
-          n1ReceivePrioritySendCapStateRef.current.delete(singleRemoteSourceAddr);
+          n1ReceivePrioritySendCapStateRef.current.delete(
+            singleRemoteSourceAddr
+          );
         }
       }
       const tiers = buildOpusSendPressureTiers(
@@ -7282,11 +5287,12 @@ export function useGroupVoiceCall(uiActive = false) {
       ingress.received = snap.packetsReceived;
 
       const peerCount = Math.max(0, participantsRef.current.size - 1);
-      const pendingDecryptForwarderPolicy = shouldTreatPendingDecryptAsForwarder({
-        isForwarderRole: forwarderRole,
-        participantCount: participantsRef.current.size,
-        activeSourceCount,
-      });
+      const pendingDecryptForwarderPolicy =
+        shouldTreatPendingDecryptAsForwarder({
+          isForwarderRole: forwarderRole,
+          participantCount: participantsRef.current.size,
+          activeSourceCount,
+        });
       const pendingDepth = pendingDecryptsRef.current.size;
       const preOverloadActive = shouldPreemptivelyThrottlePendingDecrypt({
         pendingDepth,
@@ -7316,6 +5322,61 @@ export function useGroupVoiceCall(uiActive = false) {
       const burstWindow = wallNow < decryptBurstUntilMsRef.current;
       if (!burstWindow && burstRecoveryJitterHoldActiveRef.current) {
         applyBurstRecoveryJitterHold(false, 'window-expired');
+      }
+
+      // ── Decrypt pool scaling ────────────────────────────────────────────
+      // Cheap evaluation on the same tick that already has `peakDepthRecent` and
+      // `activeSourceCount` in scope. Accumulates sustained-pressure windows and
+      // asks `computeDesiredPoolSize` for a target; `pool.resize` is a no-op if
+      // the target matches the current size.
+      if (decryptWorkerRef.current) {
+        const nowMs = wallNow;
+        const lastTickAt = decryptPoolScalingLastTickAtRef.current;
+        const dtMs =
+          lastTickAt > 0 ? Math.max(0, Math.min(2000, nowMs - lastTickAt)) : 0;
+        decryptPoolScalingLastTickAtRef.current = nowMs;
+        const peak = peakDepthRecentRef.current;
+        if (peak >= DECRYPT_POOL_GROW_TO_4_DEPTH_THRESHOLD) {
+          decryptPoolSustainedAboveGrow4MsRef.current += dtMs;
+          decryptPoolSustainedAboveGrow3MsRef.current += dtMs;
+        } else if (peak >= DECRYPT_POOL_GROW_TO_3_DEPTH_THRESHOLD) {
+          decryptPoolSustainedAboveGrow4MsRef.current = 0;
+          decryptPoolSustainedAboveGrow3MsRef.current += dtMs;
+        } else {
+          decryptPoolSustainedAboveGrow4MsRef.current = 0;
+          decryptPoolSustainedAboveGrow3MsRef.current = 0;
+        }
+        if (peak < DECRYPT_POOL_LOW_DEPTH_MAX && !burstWindow) {
+          decryptPoolSustainedLowPressureMsRef.current += dtMs;
+        } else {
+          decryptPoolSustainedLowPressureMsRef.current = 0;
+        }
+
+        const hwHint =
+          typeof navigator !== 'undefined' &&
+          typeof navigator.hardwareConcurrency === 'number'
+            ? navigator.hardwareConcurrency
+            : 4;
+        const decision = computeDesiredPoolSize({
+          currentSize: decryptWorkerRef.current.size || DECRYPT_POOL_MIN_SIZE,
+          peakDepthRecent: peak,
+          sustainedAboveGrow3Ms: decryptPoolSustainedAboveGrow3MsRef.current,
+          sustainedAboveGrow4Ms: decryptPoolSustainedAboveGrow4MsRef.current,
+          sustainedLowPressureMs: decryptPoolSustainedLowPressureMsRef.current,
+          burstWindowActive: burstWindow,
+          activeSourceCount,
+          cpuCoreHint: hwHint,
+        });
+        if (
+          decision.desiredSize !==
+          (decryptWorkerRef.current.size || DECRYPT_POOL_MIN_SIZE)
+        ) {
+          // Fire-and-forget; internal drain is bounded to 500 ms.
+          void decryptWorkerRef.current.resize(
+            decision.desiredSize,
+            decision.reason
+          );
+        }
       }
       const slewDt = Math.max(0, wallNow - lastBurstMaxSlewAtMsRef.current);
       lastBurstMaxSlewAtMsRef.current = wallNow;
@@ -7404,8 +5465,7 @@ export function useGroupVoiceCall(uiActive = false) {
         baseHeadroomTuning,
         jitterBurstHeadroomStateRef.current.level
       );
-      const previousBurstHeadroomState =
-        jitterBurstHeadroomStateRef.current;
+      const previousBurstHeadroomState = jitterBurstHeadroomStateRef.current;
       const burstHeadroomUnderTarget =
         singleRemoteRecentStability?.playoutUnderTargetFraction ??
         snap.playoutUnderTargetFraction;
@@ -7436,11 +5496,9 @@ export function useGroupVoiceCall(uiActive = false) {
           trimCount: jitterPushTrimmedBySource.total,
           depthHighWaterMax: jitterPushDepthHighWaterBySource.max,
           maxDepthFrames: currentHeadroomTuning.jitterBufferSize * 2,
-          playoutUnderTargetFraction: Math.round(
-            burstHeadroomUnderTarget * 1000
-          ) / 1000,
-          avgPlayoutRate:
-            Math.round(burstHeadroomAvgPlayoutRate * 1000) / 1000,
+          playoutUnderTargetFraction:
+            Math.round(burstHeadroomUnderTarget * 1000) / 1000,
+          avgPlayoutRate: Math.round(burstHeadroomAvgPlayoutRate * 1000) / 1000,
           holdRemainingMs: Math.max(
             0,
             Math.round(burstHeadroomDecision.state.holdUntilMs - wallNow)
@@ -7458,8 +5516,9 @@ export function useGroupVoiceCall(uiActive = false) {
         lastJitterPushStatsDiagAtRef.current = wallNow;
         const singleRemoteDepthFrames =
           singleRemoteSourceAddr !== null
-            ? (jitterMapRef.current.get(singleRemoteSourceAddr)?.getBufferedFrames() ??
-              null)
+            ? (jitterMapRef.current
+                .get(singleRemoteSourceAddr)
+                ?.getBufferedFrames() ?? null)
             : null;
         gcallDiagnosticsPush('info', '[GCall] jitterPushStats', {
           attemptedBySource: jitterPushAttemptedBySource.topSources,
@@ -7539,6 +5598,7 @@ export function useGroupVoiceCall(uiActive = false) {
         wallNow - lastPendingDecryptPressureDiagAtRef.current >= 1_000;
       if (shouldLogPendingDecryptPressure) {
         lastPendingDecryptPressureDiagAtRef.current = wallNow;
+        const poolStats = decryptWorkerRef.current?.stats();
         gcallDiagnosticsPush('info', '[GCall] pendingDecryptPressure', {
           pendingDepth,
           applyQueueDepth: pendingDecryptApplyQueueRef.current.length,
@@ -7559,6 +5619,14 @@ export function useGroupVoiceCall(uiActive = false) {
           workerLatencyByTransport: pendingLatencyByTransport.topSources,
           workerLatencyMaxMs: pendingLatencyByIngress.maxMs,
           workerLatencyTransportMaxMs: pendingLatencyByTransport.maxMs,
+          decryptPool: poolStats
+            ? {
+                size: poolStats.poolSize,
+                rawSize: poolStats.rawSize,
+                perSlotPending: poolStats.perSlotPending,
+                perSlotInFlight: poolStats.perSlotInFlight,
+              }
+            : null,
         });
         pendingDecryptQueuedByIngressTickRef.current.clear();
         pendingDecryptCompletedByIngressTickRef.current.clear();
@@ -7587,7 +5655,9 @@ export function useGroupVoiceCall(uiActive = false) {
         pendingDecryptLatencyByIngressTickRef.current.clear();
         pendingDecryptLatencyByTransportTickRef.current.clear();
       }
-      if (preOverloadActive !== lastPendingDecryptPreOverloadActiveRef.current) {
+      if (
+        preOverloadActive !== lastPendingDecryptPreOverloadActiveRef.current
+      ) {
         lastPendingDecryptPreOverloadActiveRef.current = preOverloadActive;
         gcallDiagnosticsPush('info', '[GCall] pendingDecryptPreOverload', {
           active: preOverloadActive,
@@ -7740,6 +5810,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSourceStallLogAtRef.current.delete(address);
       lastForwarderGateLogAtRef.current.delete(address);
       lastPlayoutStressLogAtRef.current.delete(address);
+      sourceTimestampLatenessRef.current.delete(address);
+      lastStaleTimestampDropLogAtRef.current.delete(address);
       playoutStarvationSeverityRef.current.delete(address);
       playoutStarvationCooldownUntilRef.current.delete(address);
       lastPlayoutStarvationDiagAtRef.current.delete(address);
@@ -7749,6 +5821,7 @@ export function useGroupVoiceCall(uiActive = false) {
       decayGuardCalmStartRef.current.delete(address);
       decayGuardDiagLoggedRef.current.delete(address);
       lastPanicZoneDiagAtRef.current.delete(address);
+      lastV2PlayoutPostLatencyDiagAtRef.current.delete(address);
       emptyJitterDrainTicksRef.current.delete(address);
       gcallStarvationTicksSinceProtectedRef.current.delete(address);
       gcallStarvationOpusHistRef.current.delete(address);
@@ -7954,7 +6027,8 @@ export function useGroupVoiceCall(uiActive = false) {
         longTaskPressure: overloadLongTaskPressureRef.current,
         activeSourceCount,
       }),
-      pendingDecryptPreOverloadActiveRef.current
+      pendingDecryptPreOverloadActiveRef.current,
+      decryptWorkerRef.current?.size ?? decryptPoolSizeRef.current
     );
   }, []);
 
@@ -8007,28 +6081,31 @@ export function useGroupVoiceCall(uiActive = false) {
     return 'steady';
   }, []);
 
-  const logPendingDecryptDepthIfNeeded = useCallback((depth: number) => {
-    const threshold =
-      [...PENDING_DECRYPT_DEPTH_LOG_THRESHOLDS]
-        .reverse()
-        .find((t) => depth >= t) ?? null;
-    if (threshold === null) return;
-    const now = Date.now();
-    if (
-      now - lastPendingDecryptDepthWarnAtRef.current <
-      PENDING_DECRYPT_DEPTH_LOG_MIN_INTERVAL_MS
-    ) {
-      return;
-    }
-    lastPendingDecryptDepthWarnAtRef.current = now;
-    gcallDiagnosticsPush('info', '[GCall] pendingDecryptDepthHigh', {
-      depth,
-      threshold,
-      recovery: now < globalRecoveryUntilMsRef.current,
-      decryptBurst: now < decryptBurstUntilMsRef.current,
-      burstCause: getPendingDecryptBurstCause(now),
-    });
-  }, [getPendingDecryptBurstCause]);
+  const logPendingDecryptDepthIfNeeded = useCallback(
+    (depth: number) => {
+      const threshold =
+        [...PENDING_DECRYPT_DEPTH_LOG_THRESHOLDS]
+          .reverse()
+          .find((t) => depth >= t) ?? null;
+      if (threshold === null) return;
+      const now = Date.now();
+      if (
+        now - lastPendingDecryptDepthWarnAtRef.current <
+        PENDING_DECRYPT_DEPTH_LOG_MIN_INTERVAL_MS
+      ) {
+        return;
+      }
+      lastPendingDecryptDepthWarnAtRef.current = now;
+      gcallDiagnosticsPush('info', '[GCall] pendingDecryptDepthHigh', {
+        depth,
+        threshold,
+        recovery: now < globalRecoveryUntilMsRef.current,
+        decryptBurst: now < decryptBurstUntilMsRef.current,
+        burstCause: getPendingDecryptBurstCause(now),
+      });
+    },
+    [getPendingDecryptBurstCause]
+  );
 
   const recordPendingDecryptDepth = useCallback(
     (depth: number) => {
@@ -8301,6 +6378,13 @@ export function useGroupVoiceCall(uiActive = false) {
       const { sourceAddr } = head;
       const myAddress = userInfoRef.current?.address ?? userInfo?.address ?? '';
       const now = Date.now();
+      const freshestTimestampMs = decodedList.reduce(
+        (maxTs, decoded) =>
+          Number.isFinite(decoded.timestampMs)
+            ? Math.max(maxTs, Math.max(0, decoded.timestampMs))
+            : maxTs,
+        0
+      );
       if (shouldDropRemoteAudioSource(sourceAddr, now)) {
         metricsRef.current.recordPacketDroppedWithReason('unknown-source');
         metricsRef.current.recordIncomingPacketDuration(
@@ -8308,10 +6392,7 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         const lastLoggedAt =
           lastUnknownRemoteAudioDropLogAtRef.current.get(sourceAddr) ?? 0;
-        if (
-          now - lastLoggedAt >=
-          UNKNOWN_REMOTE_AUDIO_SOURCE_DROP_LOG_MIN_MS
-        ) {
+        if (now - lastLoggedAt >= UNKNOWN_REMOTE_AUDIO_SOURCE_DROP_LOG_MIN_MS) {
           lastUnknownRemoteAudioDropLogAtRef.current.set(sourceAddr, now);
           gcallDiagnosticsPush(
             'warn',
@@ -8327,6 +6408,49 @@ export function useGroupVoiceCall(uiActive = false) {
         disposeParticipantAudio(sourceAddr);
         return;
       }
+      const latenessAssessment = assessSourceTimestampLateness(
+        sourceTimestampLatenessRef.current.get(sourceAddr),
+        freshestTimestampMs,
+        receivedAt,
+        {
+          maxExcessLatenessMs: GCALL_SOURCE_TIMESTAMP_MAX_EXCESS_LATENESS_MS,
+          maxTimestampRegressionMs: GCALL_SOURCE_TIMESTAMP_MAX_REGRESSION_MS,
+        }
+      );
+      if (latenessAssessment.shouldDrop) {
+        metricsRef.current.recordPacketDroppedWithReason(
+          'stale-timestamp',
+          decodedList.length
+        );
+        metricsRef.current.recordIncomingPacketDuration(
+          performance.now() - startedAt
+        );
+        const lastLoggedAt =
+          lastStaleTimestampDropLogAtRef.current.get(sourceAddr) ?? 0;
+        if (
+          now - lastLoggedAt >=
+          GCALL_STALE_TIMESTAMP_DROP_LOG_MIN_INTERVAL_MS
+        ) {
+          lastStaleTimestampDropLogAtRef.current.set(sourceAddr, now);
+          gcallDiagnosticsPush('warn', '[GCall] staleTimestampAudioDropped', {
+            sourceAddr: truncateGcallDiagAddress(sourceAddr),
+            ingressPeerAddress: truncateGcallDiagAddress(ingressPeerAddress),
+            frameCount: decodedList.length,
+            freshestTimestampMs: roundDiagnosticMs(freshestTimestampMs),
+            excessLatenessMs: roundDiagnosticMs(
+              latenessAssessment.excessLatenessMs
+            ),
+            timestampRegressionMs: roundDiagnosticMs(
+              latenessAssessment.timestampRegressionMs
+            ),
+          });
+        }
+        return;
+      }
+      sourceTimestampLatenessRef.current.set(
+        sourceAddr,
+        latenessAssessment.nextState
+      );
       pruneStaleRemoteAudioSources('post-decrypt');
       lastRecvAtRef.current.set(sourceAddr, receivedAt);
       sourceIngressPeerRef.current.set(sourceAddr, ingressPeerAddress);
@@ -8439,132 +6563,156 @@ export function useGroupVoiceCall(uiActive = false) {
       const successfulDecodeAt = Date.now();
       lastRemoteDecodeAtRef.current = successfulDecodeAt;
       lastSuccessfulRemoteDecodeAtBySourceRef.current.set(
-          sourceAddr,
-          successfulDecodeAt
-        );
-        incrementSourceTickCounter(
-          ingressPacketsBySourceTickRef.current,
-          sourceAddr,
-          decodedList.length
-        );
-
-      let jb = jitterMapRef.current.get(sourceAddr);
-      if (!jb) {
-        const mode =
-          jitterGeomAppliedRef.current === 'recovery'
-            ? 'recovery'
-            : 'low-latency';
-        const nForTuning = Math.max(
-          activeJitterSourcesRef.current.size,
-          jitterMapRef.current.size + 1
-        );
-        jb = createGcallJitterBufferForIngress({
-          tuning: audioTuningRef.current,
-          adaptiveNetworkMode: mode,
-          extraHoldFrames: gcallWasmFecDesiredRef.current
-            ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES
-            : 0,
-          activeSourceCount: nForTuning,
-          tier2MultiSource: nForTuning >= 2,
-          applySteadyPrimedHoldNow: false,
-          burstRecoveryExtraHoldFrames: burstRecoveryJitterHoldActiveRef.current
-            ? GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES
-            : 0,
-        });
-        jitterMapRef.current.set(sourceAddr, jb);
-        updateMetricResourceCounts();
-      }
-      const beforeFrames = jb.getBufferedFrames();
-      let pushAccepted = 0;
-      let pushStale = 0;
-      let pushDuplicate = 0;
-      let pushTrimmed = 0;
-      let pushDepthHighWater = beforeFrames;
-      for (const decoded of decodedList) {
-        const pushResult = jb.push(decoded.seq, decoded.opusFrame);
-        pushDepthHighWater = Math.max(pushDepthHighWater, pushResult.depth);
-        pushTrimmed += pushResult.trimmed;
-        if (pushResult.status === 'accepted') {
-          pushAccepted++;
-        } else if (pushResult.status === 'stale') {
-          pushStale++;
-        } else {
-          pushDuplicate++;
-        }
-      }
+        sourceAddr,
+        successfulDecodeAt
+      );
       incrementSourceTickCounter(
-        jitterPushAttemptedBySourceTickRef.current,
+        ingressPacketsBySourceTickRef.current,
         sourceAddr,
         decodedList.length
       );
-      if (pushAccepted > 0) {
+
+      // V2 Stage 2: route decode+playout through V2 for peers the session
+      // controller knows about. The legacy jitter/N1 path is skipped entirely
+      // for V2-managed sources so we don't double-buffer or double-decode.
+      const isV2Managed =
+        v2SessionRef.current?.isKnownPeer(sourceAddr) ?? false;
+
+      if (!isV2Managed) {
+        let jb = jitterMapRef.current.get(sourceAddr);
+        if (!jb) {
+          const mode =
+            jitterGeomAppliedRef.current === 'recovery'
+              ? 'recovery'
+              : 'low-latency';
+          const nForTuning = Math.max(
+            activeJitterSourcesRef.current.size,
+            jitterMapRef.current.size + 1
+          );
+          jb = createGcallJitterBufferForIngress({
+            tuning: audioTuningRef.current,
+            adaptiveNetworkMode: mode,
+            extraHoldFrames: gcallWasmFecDesiredRef.current
+              ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES
+              : 0,
+            activeSourceCount: nForTuning,
+            tier2MultiSource: nForTuning >= 2,
+            applySteadyPrimedHoldNow: false,
+            burstRecoveryExtraHoldFrames:
+              burstRecoveryJitterHoldActiveRef.current
+                ? GCALL_BURST_RECOVERY_JITTER_EXTRA_HOLD_FRAMES
+                : 0,
+          });
+          jitterMapRef.current.set(sourceAddr, jb);
+          updateMetricResourceCounts();
+        }
+        const beforeFrames = jb.getBufferedFrames();
+        let pushAccepted = 0;
+        let pushStale = 0;
+        let pushDuplicate = 0;
+        let pushTrimmed = 0;
+        let pushDepthHighWater = beforeFrames;
+        for (const decoded of decodedList) {
+          const pushResult = jb.push(decoded.seq, decoded.opusFrame);
+          pushDepthHighWater = Math.max(pushDepthHighWater, pushResult.depth);
+          pushTrimmed += pushResult.trimmed;
+          if (pushResult.status === 'accepted') {
+            pushAccepted++;
+          } else if (pushResult.status === 'stale') {
+            pushStale++;
+          } else {
+            pushDuplicate++;
+          }
+        }
         incrementSourceTickCounter(
-          jitterPushAcceptedBySourceTickRef.current,
+          jitterPushAttemptedBySourceTickRef.current,
           sourceAddr,
-          pushAccepted
+          decodedList.length
         );
-      }
-      if (pushStale > 0) {
-        incrementSourceTickCounter(
-          jitterPushStaleBySourceTickRef.current,
-          sourceAddr,
-          pushStale
-        );
-      }
-      if (pushDuplicate > 0) {
-        incrementSourceTickCounter(
-          jitterPushDuplicateBySourceTickRef.current,
-          sourceAddr,
-          pushDuplicate
-        );
-      }
-      if (pushTrimmed > 0) {
-        incrementSourceTickCounter(
-          jitterPushTrimmedBySourceTickRef.current,
-          sourceAddr,
-          pushTrimmed
-        );
-      }
-      setSourceTickMaxCounter(
-        jitterPushDepthHighWaterBySourceTickRef.current,
-        sourceAddr,
-        pushDepthHighWater
-      );
-      const perfNow = performance.now();
-      lastJitterOpusPushPerfRef.current.set(sourceAddr, perfNow);
-      if (
-        beforeFrames === 0 &&
-        jb.getBufferedFrames() > 0 &&
-        activeJitterSourcesRef.current.size <= 1
-      ) {
-        const recoverySingleRemote =
-          jitterGeomAppliedRef.current === 'recovery' &&
-          jitterPrerollSatisfiedRef.current.get(sourceAddr) === true;
-        const steadySingleRemote =
-          jitterGeomAppliedRef.current !== 'recovery' && jb.hasReadyFrame();
-        if (recoverySingleRemote || steadySingleRemote) {
-          jitterAccumulationUntilPerfRef.current.set(
+        if (pushAccepted > 0) {
+          incrementSourceTickCounter(
+            jitterPushAcceptedBySourceTickRef.current,
             sourceAddr,
-            perfNow +
-              (recoverySingleRemote
-                ? GCALL_N1_ACCUMULATION_MS
-                : GCALL_N1_STEADY_ACCUMULATION_MS)
+            pushAccepted
           );
         }
-      }
-      recordInterArrivalForPlayout(sourceAddr, receivedAt);
-      metricsRef.current.recordOpusBufferedMetric(
-        sourceAddr,
-        jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
-      );
-      if (jb.hasReadyFrame()) {
-        activeJitterSourcesRef.current.add(sourceAddr);
-        emptyJitterDrainTicksRef.current.set(sourceAddr, 0);
-      }
+        if (pushStale > 0) {
+          incrementSourceTickCounter(
+            jitterPushStaleBySourceTickRef.current,
+            sourceAddr,
+            pushStale
+          );
+        }
+        if (pushDuplicate > 0) {
+          incrementSourceTickCounter(
+            jitterPushDuplicateBySourceTickRef.current,
+            sourceAddr,
+            pushDuplicate
+          );
+        }
+        if (pushTrimmed > 0) {
+          incrementSourceTickCounter(
+            jitterPushTrimmedBySourceTickRef.current,
+            sourceAddr,
+            pushTrimmed
+          );
+        }
+        setSourceTickMaxCounter(
+          jitterPushDepthHighWaterBySourceTickRef.current,
+          sourceAddr,
+          pushDepthHighWater
+        );
+        const perfNow = performance.now();
+        lastJitterOpusPushPerfRef.current.set(sourceAddr, perfNow);
+        if (
+          beforeFrames === 0 &&
+          jb.getBufferedFrames() > 0 &&
+          activeJitterSourcesRef.current.size <= 1
+        ) {
+          const recoverySingleRemote =
+            jitterGeomAppliedRef.current === 'recovery' &&
+            jitterPrerollSatisfiedRef.current.get(sourceAddr) === true;
+          const steadySingleRemote =
+            jitterGeomAppliedRef.current !== 'recovery' && jb.hasReadyFrame();
+          if (recoverySingleRemote || steadySingleRemote) {
+            jitterAccumulationUntilPerfRef.current.set(
+              sourceAddr,
+              perfNow +
+                (recoverySingleRemote
+                  ? GCALL_N1_ACCUMULATION_MS
+                  : GCALL_N1_STEADY_ACCUMULATION_MS)
+            );
+          }
+        }
+        recordInterArrivalForPlayout(sourceAddr, receivedAt);
+        metricsRef.current.recordOpusBufferedMetric(
+          sourceAddr,
+          jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
+        );
+        if (jb.hasReadyFrame()) {
+          activeJitterSourcesRef.current.add(sourceAddr);
+          emptyJitterDrainTicksRef.current.set(sourceAddr, 0);
+        }
+      } // end !isV2Managed
+
       metricsRef.current.recordPacketDecoded(decodedList.length);
       metricsRef.current.recordIncomingPacketDuration(
         performance.now() - startedAt
       );
+
+      // V2 shadow: feed each decoded packet into the v2 receive pipeline.
+      if (v2SessionRef.current) {
+        for (const decoded of decodedList) {
+          v2SessionRef.current.ingestDecodedPacket({
+            sourceAddr: decoded.sourceAddr,
+            seq: decoded.seq,
+            opusFrame: decoded.opusFrame,
+            vad: decoded.vad,
+            timestampMs: decoded.timestampMs,
+            receivedAtMs: receivedAt,
+          });
+        }
+      }
     },
     [
       getForwardRecipientCountForDiagnostics,
@@ -8730,10 +6878,9 @@ export function useGroupVoiceCall(uiActive = false) {
           const keyVersion = ++decryptWorkerKeyVersionRef.current;
           decryptWorkerAppliedKeyVersionRef.current = 0;
           flushPendingDecryptMap();
-          decryptWorkerRef.current.postMessage({
-            type: 'clearRoomKey',
-            keyVersion,
-          });
+          // Pool replicates `clearRoomKey` to every decrypt slot + the encrypt worker;
+          // Promise is fire-and-forget here — `onAllRoomKeyCleared` handles the ack.
+          void decryptWorkerRef.current.clearRoomKey(keyVersion);
         }
         return;
       }
@@ -8747,7 +6894,7 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       const hadPreviousKey = prev !== null;
       lastWorkerRoomKeyRef.current = new Uint8Array(roomKey);
-      if (!decryptWorkerRef.current) return; // sync path served; no worker to notify
+      if (!decryptWorkerRef.current) return; // sync path served; no pool to notify
       if (hadPreviousKey) {
         flushPendingDecryptMap();
       }
@@ -8756,12 +6903,12 @@ export function useGroupVoiceCall(uiActive = false) {
         keyVersion,
         roomKeyInstalledAtMs: roomKeyInstalledAtRef.current || null,
         flushedPendingDecrypt: hadPreviousKey,
+        poolSize: decryptWorkerRef.current.size,
       });
-      const roomKeyCopy = roomKey.slice().buffer;
-      decryptWorkerRef.current.postMessage(
-        { type: 'setRoomKey', roomKey: roomKeyCopy, keyVersion },
-        [roomKeyCopy]
-      );
+      // Pool `setRoomKey` replicates to every slot + encrypt worker. The Promise
+      // resolves once all slots have acked; we rely on `onAllRoomKeyApplied` for
+      // the in-tree arm of the burst-recovery window so this call stays void.
+      void decryptWorkerRef.current.setRoomKey(roomKey, keyVersion);
     },
     [flushPendingDecryptMap]
   );
@@ -9098,9 +7245,12 @@ export function useGroupVoiceCall(uiActive = false) {
         wallNowTopology >= topologySettleUntilMsRef.current;
       topologyRef.current = topo;
       pruneStaleRemoteAudioSources('topology-applied');
-      let topologySettleMs = GCALL_TOPOLOGY_SETTLE_MS;
+      const topologySettleMs = computeTopologySettleMs({
+        previousTopology: prevTopo,
+        nextTopology: topo,
+        baseSettleMs: GCALL_TOPOLOGY_SETTLE_MS,
+      });
       if (prevTopo && prevTopo.rootForwarder !== topo.rootForwarder) {
-        topologySettleMs = GCALL_TOPOLOGY_SETTLE_MS * 2;
         worstIsolationHysteresisRef.current =
           createWorstIsolationHysteresisState();
       }
@@ -9175,21 +7325,20 @@ export function useGroupVoiceCall(uiActive = false) {
       processPendingVerifiedKeysRef.current();
 
       const role = computeMyRole(myAddress, topo);
-      const shouldRestartTopologyHeartbeat =
-        role === 'root-forwarder' &&
-        (myRoleRef.current !== 'root-forwarder' ||
-          !prevTopo ||
-          prevTopo.topologyEpoch !== topo.topologyEpoch ||
-          prevTopo.rootForwarder !== topo.rootForwarder ||
-          prevTopo.standbyForwarder !== topo.standbyForwarder);
-      const shouldRestartClusterHeartbeat =
-        (role === 'cluster-forwarder' || role === 'root-forwarder') &&
-        findClusterIndexForForwarder(myAddress, topo) >= 0 &&
-        (myRoleRef.current !== role ||
-          !prevTopo ||
-          prevTopo.topologyEpoch !== topo.topologyEpoch ||
-          prevTopo.rootForwarder !== topo.rootForwarder ||
-          prevTopo.standbyForwarder !== topo.standbyForwarder);
+      const clusterForwarderIndex = findClusterIndexForForwarder(myAddress, topo);
+      const restartTopologyHeartbeat = shouldRestartTopologyHeartbeat({
+        role,
+        previousRole: myRoleRef.current,
+        previousTopology: prevTopo,
+        nextTopology: topo,
+      });
+      const restartClusterHeartbeat = shouldRestartClusterHeartbeat({
+        role,
+        previousRole: myRoleRef.current,
+        previousTopology: prevTopo,
+        nextTopology: topo,
+        clusterForwarderIndex,
+      });
       if (role === 'root-forwarder' && roomKeyRef.current) {
         awaitingAuthoritativeKeyRef.current = false;
       }
@@ -9218,6 +7367,17 @@ export function useGroupVoiceCall(uiActive = false) {
               epoch: topo.topologyEpoch,
             },
           });
+          // V2 shadow: notify session controller about root change.
+          if (prevTopo.rootForwarder !== topo.rootForwarder) {
+            v2SessionRef.current?.ingestTopologyEvent({
+              kind: 'topology-root-change',
+              detail: {
+                prevRoot: prevTopo.rootForwarder,
+                newRoot: topo.rootForwarder,
+                epoch: topo.topologyEpoch,
+              },
+            });
+          }
         }
       }
       myRoleRef.current = role;
@@ -9264,23 +7424,23 @@ export function useGroupVoiceCall(uiActive = false) {
 
       if (
         topologyHeartbeatTimerRef.current &&
-        (role !== 'root-forwarder' || shouldRestartTopologyHeartbeat)
+        (role !== 'root-forwarder' || restartTopologyHeartbeat)
       ) {
         clearInterval(topologyHeartbeatTimerRef.current);
         topologyHeartbeatTimerRef.current = null;
       }
-      if (shouldRestartTopologyHeartbeat) {
+      if (restartTopologyHeartbeat) {
         startTopologyHeartbeat(topo);
       }
 
       if (
         clusterHeartbeatTimerRef.current &&
         ((role !== 'cluster-forwarder' && role !== 'root-forwarder') ||
-          shouldRestartClusterHeartbeat)
+          restartClusterHeartbeat)
       ) {
         stopClusterHeartbeat();
       }
-      if (shouldRestartClusterHeartbeat) {
+      if (restartClusterHeartbeat) {
         startClusterHeartbeat();
       }
 
@@ -9493,19 +7653,15 @@ export function useGroupVoiceCall(uiActive = false) {
 
       if (currentTopo.standbyForwarder === myAddress) {
         const deadRoot = currentTopo.rootForwarder;
-        const overriddenStandby = sorted.find((a) => a !== myAddress) ?? '';
-        const overriddenClusters = promotedTopo.clusters.map((c) => ({
-          ...c,
-          forwarder: c.forwarder === deadRoot ? myAddress : c.forwarder,
-          standby: c.standby === deadRoot ? overriddenStandby : c.standby,
-        }));
-        const overriddenTopo: GroupTopology = {
-          ...promotedTopo,
-          rootForwarder: myAddress,
-          standbyForwarder: overriddenStandby,
-          clusters: overriddenClusters,
-          lastSeen: Date.now(),
-        };
+        const overriddenTopo = normalizeGroupTopologyClusters(
+          buildStandbyRootFailoverTopology({
+            promotedTopology: promotedTopo,
+            sortedAddresses: sorted,
+            deadRoot,
+            myAddress,
+            nowMs: Date.now(),
+          })
+        );
         applyTopology(overriddenTopo);
         const ts = Date.now();
         const sig = await signGroupCallFields({
@@ -9696,6 +7852,7 @@ export function useGroupVoiceCall(uiActive = false) {
 
   const teardownCapturePipelineRefs = useCallback(() => {
     teardownPlaybackMixGraph();
+    gcallPendingSenderPcmTimingRef.current = [];
     if (jitterSchedulerNodeRef.current) {
       incrementPerfCounter('schedulerNodeTeardowns');
       try {
@@ -9932,9 +8089,22 @@ export function useGroupVoiceCall(uiActive = false) {
         // Set up Opus encoder (runs on main thread but is fast — just packetizes)
         encoder = new (window as any).AudioEncoder({
           output: (chunk: any) => {
+            const timing = gcallPendingSenderPcmTimingRef.current.shift();
+            const encodeOutPerfMs = performance.now();
+            if (timing) {
+              const m2e = Math.max(
+                0,
+                encodeOutPerfMs - timing.mainThreadRecvPerfMs
+              );
+              metricsRef.current.recordGcallSenderPreEncodePipeline({
+                workletToMainThreadMs: timing.workletToMainThreadMs,
+                mainThreadToEncoderOutputMs: m2e,
+                workletToEncoderOutputMs: timing.workletToMainThreadMs + m2e,
+              });
+            }
             const frame = new Uint8Array(chunk.byteLength);
             chunk.copyTo(frame);
-            sendEncodedFrame(frame);
+            sendEncodedFrame(frame, encodeOutPerfMs);
           },
           error: (e: any) => console.error('[GCall] AudioEncoder error:', e),
         });
@@ -10061,13 +8231,28 @@ export function useGroupVoiceCall(uiActive = false) {
         // Apply current mute state to the freshly created worklet
         captureNode.port.postMessage({ type: 'mute', muted: mutedRef.current });
 
+        gcallPendingSenderPcmTimingRef.current = [];
         let micDebugWorkletSamples = 0;
         // Receive complete 960-sample Opus frames + VAD flag from the worklet thread
         captureNode.port.onmessage = (e) => {
-          const { frame, vad } = e.data as {
+          const mainThreadRecvPerfMs = performance.now();
+          const { frame, vad, workletPostAudioClockMs } = e.data as {
             frame: Float32Array;
             vad: boolean;
+            workletPostAudioClockMs?: number;
           };
+          if (
+            typeof workletPostAudioClockMs === 'number' &&
+            Number.isFinite(workletPostAudioClockMs)
+          ) {
+            gcallPendingSenderPcmTimingRef.current.push({
+              workletToMainThreadMs: Math.max(
+                0,
+                ctx.currentTime * 1000 - workletPostAudioClockMs
+              ),
+              mainThreadRecvPerfMs,
+            });
+          }
           if (isGcallMicDebugEnabled() && micDebugWorkletSamples < 8) {
             micDebugWorkletSamples++;
             let sumSq = 0;
@@ -10087,7 +8272,7 @@ export function useGroupVoiceCall(uiActive = false) {
             lastVadTrueAtRef.current.set(localAddress, now);
             localSpeakersRef.current.set(localAddress, now);
             if (!wasSpeaking) {
-              syncSpeakerUiState(now);
+              scheduleSpeakerUiSync(now);
             }
             scheduleLocalSpeakerUiRefresh();
           }
@@ -10406,7 +8591,7 @@ export function useGroupVoiceCall(uiActive = false) {
   );
 
   const sendEncodedFrame = useCallback(
-    (opusFrame: Uint8Array) => {
+    (opusFrame: Uint8Array, encodeOutPerfMs?: number) => {
       if (!roomKeyRef.current || !userInfo?.address) return;
       if (mutedRef.current) return; // mic is muted — drop frame
       if (!isTestingStableRoomKey) {
@@ -10453,6 +8638,14 @@ export function useGroupVoiceCall(uiActive = false) {
 
       const seq = seqRef.current++ & 0xffff;
       const timestampMs = Date.now() - callEpochRef.current;
+      if (
+        typeof encodeOutPerfMs === 'number' &&
+        Number.isFinite(encodeOutPerfMs)
+      ) {
+        metricsRef.current.recordGcallSenderEncoderToPacketTimestampGap(
+          Math.max(0, performance.now() - encodeOutPerfMs)
+        );
+      }
       const key = roomKeyRef.current;
       const addr = userInfo.address;
 
@@ -10460,21 +8653,18 @@ export function useGroupVoiceCall(uiActive = false) {
         const frameBuffer =
           opusFrame.byteOffset === 0 &&
           opusFrame.byteLength === opusFrame.buffer.byteLength
-            ? opusFrame.buffer
-            : opusFrame.slice().buffer;
-        decryptWorkerRef.current.postMessage(
-          {
-            type: 'encrypt',
-            id: encryptIdRef.current++,
-            sourceAddr: userInfo.address,
-            vad: isSpeakingRef.current,
-            seq,
-            timestampMs,
-            opusFrame: frameBuffer,
-          },
-          [frameBuffer]
+            ? (opusFrame.buffer as ArrayBuffer)
+            : (opusFrame.slice().buffer as ArrayBuffer);
+        const posted = decryptWorkerRef.current.postEncrypt(
+          encryptIdRef.current++,
+          userInfo.address,
+          isSpeakingRef.current,
+          seq,
+          timestampMs,
+          frameBuffer
         );
-        return;
+        if (posted) return;
+        // Pool unavailable (terminated mid-flight): fall through to sync path.
       }
 
       dispatchEncodedPacket(
@@ -10532,9 +8722,14 @@ export function useGroupVoiceCall(uiActive = false) {
         }
         const { mixBus } = ensurePlaybackMixGraph(ctx);
         const wallNow = Date.now();
-        const recentSpeakerEstimate = computeRecentSpeakerEstimate(
+        const localAddress = userInfoRef.current?.address?.trim?.() ?? '';
+        const excludedSpeakerIds = localAddress
+          ? new Set([localAddress])
+          : new Set<string>();
+        const recentSpeakerEstimate = computeRecentSpeakerEstimateExcluding(
           localSpeakersRef.current,
           wallNow,
+          excludedSpeakerIds,
           RECENT_SPEAKER_WINDOW_MS
         );
         const playNode = new AudioWorkletNode(ctx, 'group-playout-processor', {
@@ -10560,9 +8755,15 @@ export function useGroupVoiceCall(uiActive = false) {
             type?: string;
             sourceAddr?: string;
             bufferedMs?: number;
+            preProcessBufferedMs?: number;
             targetPlayoutMs?: number;
             rate?: number;
             panicZoneEntered?: boolean;
+            panicReason?: string;
+            panicEntryBufferedMs?: number | null;
+            panicEnterMs?: number;
+            panicExitMs?: number;
+            playoutBand?: 'under-target' | 'in-band' | 'over-target';
             outsideBand?: boolean;
             outsideBandUnder?: boolean;
             outsideBandOver?: boolean;
@@ -10573,6 +8774,15 @@ export function useGroupVoiceCall(uiActive = false) {
           if (d?.type !== 'gcallPlayoutMetrics') return;
           incrementPerfCounter('playoutMetricMessages');
           if (typeof d.bufferedMs !== 'number') return;
+          // Track worklet buffer level + report timestamp for V2 dead-reckoning drain.
+          // Also reset the posted-since-report accumulator so the estimate starts
+          // fresh from the new reading.
+          v2WorkletBufferedMsRef.current.set(sourceAddr, d.bufferedMs);
+          v2WorkletReportTimeRef.current.set(sourceAddr, Date.now());
+          v2WorkletPostedSinceReportRef.current.set(sourceAddr, 0);
+          if (typeof d.rate === 'number' && Number.isFinite(d.rate)) {
+            v2WorkletRateRef.current.set(sourceAddr, d.rate);
+          }
           if (!d.playoutStarted) return;
           if (!isSourcePlayoutActive(sourceAddr)) return;
           const wallNow = Date.now();
@@ -10596,9 +8806,43 @@ export function useGroupVoiceCall(uiActive = false) {
             const lastP = lastPanicZoneDiagAtRef.current.get(sourceAddr) ?? 0;
             if (wallNow - lastP >= 5_000) {
               lastPanicZoneDiagAtRef.current.set(sourceAddr, wallNow);
+              const playoutBand = d.playoutBand ?? 'in-band';
+              const interpretation =
+                playoutBand === 'over-target'
+                  ? 'absolute-low-buffer-entry-recovered-over-target'
+                  : playoutBand === 'under-target'
+                    ? 'absolute-low-buffer-entry-still-under-target'
+                    : 'absolute-low-buffer-entry-recovered-in-band';
               gcallDiagnosticsPush('info', '[GCall] panicZoneActivated', {
                 bufferMs: d.bufferedMs,
+                preProcessBufferedMs:
+                  typeof d.preProcessBufferedMs === 'number' &&
+                  Number.isFinite(d.preProcessBufferedMs)
+                    ? d.preProcessBufferedMs
+                    : null,
+                panicEntryBufferedMs:
+                  typeof d.panicEntryBufferedMs === 'number' &&
+                  Number.isFinite(d.panicEntryBufferedMs)
+                    ? d.panicEntryBufferedMs
+                    : null,
                 targetPlayoutMs: d.targetPlayoutMs,
+                panicReason: d.panicReason ?? 'absolute-low-buffer-entry',
+                panicEnterMs:
+                  typeof d.panicEnterMs === 'number' &&
+                  Number.isFinite(d.panicEnterMs)
+                    ? d.panicEnterMs
+                    : null,
+                panicExitMs:
+                  typeof d.panicExitMs === 'number' &&
+                  Number.isFinite(d.panicExitMs)
+                    ? d.panicExitMs
+                    : null,
+                playoutBand,
+                interpretation,
+                playoutRate:
+                  typeof d.rate === 'number' && Number.isFinite(d.rate)
+                    ? d.rate
+                    : null,
                 sourceAddr: truncateGcallDiagAddress(sourceAddr),
               });
             }
@@ -10775,13 +9019,23 @@ export function useGroupVoiceCall(uiActive = false) {
     (
       data: ArrayBuffer,
       fromAddress: string,
-      transport: GcallAudioIngressTransport = 'unknown'
+      transport: GcallAudioIngressTransport = 'unknown',
+      bridgeReceivedAtWallMs?: number
     ) => {
       const handlerStartedAt = performance.now();
       if (!roomKeyRef.current) return;
       incrementPerfCounter('incomingAudioPacketHandlers');
       const startedAt = performance.now();
       const receivedAt = startedAt;
+      if (
+        typeof bridgeReceivedAtWallMs === 'number' &&
+        Number.isFinite(bridgeReceivedAtWallMs) &&
+        bridgeReceivedAtWallMs > 0
+      ) {
+        metricsRef.current.recordReticulumAudioBridgeToRendererIngressLatency(
+          Math.max(0, Date.now() - bridgeReceivedAtWallMs)
+        );
+      }
       const ingressPeerAddress = fromAddress || RELAY_INGRESS_PEER;
       const ingressTransport = transport;
       metricsRef.current.recordPacketReceived();
@@ -10792,8 +9046,10 @@ export function useGroupVoiceCall(uiActive = false) {
       sweepStalePendingDecrypts(startedAt, decryptLimits.ttlMs);
 
       const workerReady =
+        decryptWorkerRef.current !== null &&
+        decryptWorkerRef.current.size > 0 &&
         decryptWorkerAppliedKeyVersionRef.current ===
-        decryptWorkerKeyVersionRef.current;
+          decryptWorkerKeyVersionRef.current;
       if (decryptWorkerRef.current && workerReady) {
         const forwarderRole = isFanoutForwarderRole(myRoleRef.current);
         const activeSourceCount = Math.max(
@@ -10807,7 +9063,31 @@ export function useGroupVoiceCall(uiActive = false) {
             activeSourceCount,
           });
         const pendingDepth = pendingDecryptsRef.current.size;
+        // Structural short-circuit: for 1:1 single-source calls the pool's stable-hash
+        // routing pins every packet to one slot, so the async hop is pure overhead. Under
+        // even modest main-thread pressure that overhead turns a ~0.5 ms inline decrypt
+        // into 200-400 ms end-to-end latency (observed on Kenny's side in call 58 with
+        // perSlotInFlight=88 and avgPcmBufferedMs≈20 ms against a 145 ms playout target).
+        // Sync-decode directly on the main thread in that shape; fall through to the
+        // worker path as soon as the session grows to multi-source / 3+ participants, or
+        // if long-task pressure is observed.
+        //
+        // IMPORTANT: pass `pendingDecryptForwarderPolicy` (the effective forwarder bit),
+        // NOT the raw `forwarderRole`. `isFanoutForwarderRole` is true for both
+        // `root-forwarder` and `cluster-forwarder` roles even in a 1:1 call where
+        // `packetsForwarded` is always 0 — forwarder role is just a cluster-topology
+        // label. Observed in call 59: Phil (standby-forwarder) hit the sync path and ran
+        // at 0.072 ms avgIncomingPacketMs, but Kenny (root-forwarder) was still routed
+        // through the worker pool and stayed at 213 ms / perSlotInFlight=10-88. Using
+        // the effective bit here makes both endpoints of a 1:1 call take the sync path
+        // regardless of which one was elected root.
         if (
+          shouldSyncDecodeForSmallSession({
+            participantCount: participantsRef.current.size,
+            activeSourceCount,
+            isForwarder: pendingDecryptForwarderPolicy,
+            longTaskPressure: overloadLongTaskPressureRef.current,
+          }) ||
           shouldBypassDecryptWorkerOnHotQueue({
             pendingDepth,
             pendingMax: decryptLimits.max,
@@ -10861,10 +9141,28 @@ export function useGroupVoiceCall(uiActive = false) {
           burstCause
         );
         recordPendingDecryptDepth(pendingDecryptsRef.current.size);
-        decryptWorkerRef.current.postMessage(
-          { type: 'decrypt', id, buffer: workerBuffer },
-          [workerBuffer]
+        const posted = decryptWorkerRef.current.postDecrypt(
+          ingressPeerAddress,
+          id,
+          workerBuffer
         );
+        if (!posted) {
+          // Pool transiently has no routable slot — fall back to sync decode so the
+          // frame is not dropped during a resize window or recovery from init failure.
+          pendingDecryptsRef.current.delete(id);
+          recordPendingDecryptDepth(pendingDecryptsRef.current.size);
+          const list = decodeAudioPackets(
+            new Uint8Array(data),
+            roomKeyRef.current
+          );
+          applyPostDecryptList(
+            wireForForward,
+            list,
+            startedAt,
+            receivedAt,
+            ingressPeerAddress
+          );
+        }
         recordPerfDuration(
           'incomingAudioPacketHandlerMs',
           performance.now() - handlerStartedAt
@@ -10919,7 +9217,6 @@ export function useGroupVoiceCall(uiActive = false) {
     let drainMs = 0;
     let adaptiveMs = 0;
     let mixMs = 0;
-    let reactMs = 0;
     incrementPerfCounter('drainTicks');
     if (gcallWasmFecActiveRef.current) {
       const prefetchStartedAt = performance.now();
@@ -11112,6 +9409,13 @@ export function useGroupVoiceCall(uiActive = false) {
       const frame = jb.pop();
       if (!frame) return null;
       const missedInc = jb.consumePendingMissedFrames();
+      // Push the post-pop watermark into the decrypt worker pool so subsequent batches
+      // can pre-skip frames whose seq is already behind the jitter buffer. Cheap: the
+      // pool only stores monotonic increases.
+      const playedSeq = jb.getLastPlayedSeq();
+      if (playedSeq >= 0) {
+        decryptWorkerRef.current?.setLastPlayedSeq(addr, playedSeq);
+      }
       if (!jitterFirstDrainLoggedRef.current) {
         jitterFirstDrainLoggedRef.current = true;
         debugLog(
@@ -11196,7 +9500,9 @@ export function useGroupVoiceCall(uiActive = false) {
       if (jb.getBufferedFrames() === 0) {
         const lastPush = lastJitterOpusPushPerfRef.current.get(addr) ?? 0;
         const lastPushAgeMs =
-          lastPush > 0 ? performance.now() - lastPush : Number.POSITIVE_INFINITY;
+          lastPush > 0
+            ? performance.now() - lastPush
+            : Number.POSITIVE_INFINITY;
         if (
           !shouldRetainN1RecoveryPrerollSatisfied({
             bufferedFrames: 0,
@@ -11228,6 +9534,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
     if (!starvationEnabled) {
       for (const addr of addrsOrdered) {
+        // V2 Stage 2: V2 manages decode and playout for known peers.
+        if (v2SessionRef.current?.isKnownPeer(addr)) continue;
         const jb = jitterMapRef.current.get(addr);
         const n1RecoverySingleRemote = sourceCountForDrain === 1 && isRecovery;
         const n1SteadySingleRemote = sourceCountForDrain === 1 && !isRecovery;
@@ -11335,8 +9643,9 @@ export function useGroupVoiceCall(uiActive = false) {
             n1RecoveryPrerollBlockedSincePerfRef.current.get(addr) ?? perfWall;
           n1RecoveryPrerollBlockedSincePerfRef.current.set(addr, blockedSince);
           const severeDeadzoneResetCooldownUntil =
-            n1SevereRebuildDeadzoneResetCooldownUntilPerfRef.current.get(addr) ??
-            0;
+            n1SevereRebuildDeadzoneResetCooldownUntilPerfRef.current.get(
+              addr
+            ) ?? 0;
           prerollBlockedForMs = perfWall - blockedSince;
           const severeForcedRelease = isSevereN1RecoveryPrerollRelease({
             blockedForMs: prerollBlockedForMs,
@@ -11387,20 +9696,24 @@ export function useGroupVoiceCall(uiActive = false) {
             }
             prerollActive = false;
             prerollBlockedForMs = 0;
-            gcallDiagnosticsPush('info', '[GCall] recoveryPrerollReleasedEarly', {
-              sourceAddr: truncateGcallDiagAddress(addr),
-              bufferMs: Math.round(opusMsPre),
-              minStartMs: Math.round(minStartMs),
-              earlyReleaseMinBufferMs: Math.round(
-                computeN1RecoveryEarlyReleaseMinBufferMs(smoothedTarget)
-              ),
-              targetMs: Math.round(smoothedTarget),
-              blockedForMs: Math.round(perfWall - blockedSince),
-              lastPushAgeMs: Math.round(lastPushAgeMs),
-              severeRelease: severeForcedRelease,
-              forcedPrime,
-              postReleaseAccumulationMs,
-            });
+            gcallDiagnosticsPush(
+              'info',
+              '[GCall] recoveryPrerollReleasedEarly',
+              {
+                sourceAddr: truncateGcallDiagAddress(addr),
+                bufferMs: Math.round(opusMsPre),
+                minStartMs: Math.round(minStartMs),
+                earlyReleaseMinBufferMs: Math.round(
+                  computeN1RecoveryEarlyReleaseMinBufferMs(smoothedTarget)
+                ),
+                targetMs: Math.round(smoothedTarget),
+                blockedForMs: Math.round(perfWall - blockedSince),
+                lastPushAgeMs: Math.round(lastPushAgeMs),
+                severeRelease: severeForcedRelease,
+                forcedPrime,
+                postReleaseAccumulationMs,
+              }
+            );
             metricsRef.current.recordOpusBufferedMetric(
               addr,
               jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
@@ -11412,14 +9725,16 @@ export function useGroupVoiceCall(uiActive = false) {
           n1RecoveryPrerollBlockedSincePerfRef.current.delete(addr);
         }
 
-        const n1RecentStability = sourceCountForDrain === 1
-          ? summarizeRecentRecoveryStability({
-              samples: recentPlayoutHealthSamplesRef.current.get(addr) ?? [],
-              underrunTimesMs: recentJitterUnderrunAtRef.current.get(addr) ?? [],
-              nowMs: perfWall,
-              windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
-            })
-          : null;
+        const n1RecentStability =
+          sourceCountForDrain === 1
+            ? summarizeRecentRecoveryStability({
+                samples: recentPlayoutHealthSamplesRef.current.get(addr) ?? [],
+                underrunTimesMs:
+                  recentJitterUnderrunAtRef.current.get(addr) ?? [],
+                nowMs: perfWall,
+                windowMs: ADAPTIVE_RECOVERY_STABLE_EXIT_WINDOW_MS,
+              })
+            : null;
         let n1SevereForcedReleaseRebuildActive = false;
         if (!n1RecoverySingleRemote || prerollActive) {
           n1SevereForcedReleaseRebuildUntilPerfRef.current.delete(addr);
@@ -11465,8 +9780,8 @@ export function useGroupVoiceCall(uiActive = false) {
                   ) ?? perfWall)
               )
             : 0;
-        const n1SevereRebuildDeadzoneReset =
-          shouldResetN1SevereRebuildDeadzone({
+        const n1SevereRebuildDeadzoneReset = shouldResetN1SevereRebuildDeadzone(
+          {
             recoverySingleRemote: n1RecoverySingleRemote,
             prerollActive,
             severeForcedReleaseRebuildActive:
@@ -11478,7 +9793,8 @@ export function useGroupVoiceCall(uiActive = false) {
             bufferedFrames: jb.getBufferedFrames(),
             recentStability: n1RecentStability,
             playoutStarvationSeverity: n1PlayoutStarvationSeverity,
-          });
+          }
+        );
         if (n1SevereRebuildDeadzoneReset) {
           jitterPrerollSatisfiedRef.current.delete(addr);
           n1RecoveryPrerollBlockedSincePerfRef.current.set(addr, perfWall);
@@ -11493,32 +9809,27 @@ export function useGroupVoiceCall(uiActive = false) {
             perfWall + GCALL_N1_SEVERE_REBUILD_DEADZONE_RESET_COOLDOWN_MS
           );
           lastN1SevereReadyEscapeLogAtRef.current.delete(addr);
-          gcallDiagnosticsPush(
-            'warn',
-            '[GCall] n1SevereRebuildDeadzoneReset',
-            {
-              sourceAddr: truncateGcallDiagAddress(addr),
-              bufferedFrames: jb.getBufferedFrames(),
-              bufferMs: Math.round(opusMsPre),
-              targetMs: Math.round(smoothedTarget),
-              severeForcedReleaseRebuildActiveForMs: Math.round(
-                n1SevereForcedReleaseRebuildActiveForMs
-              ),
-              avgPcmBufferedMs:
-                n1RecentStability !== null
-                  ? Math.round(n1RecentStability.avgPcmBufferedMs)
-                  : null,
-              playoutUnderTargetFraction:
-                n1RecentStability !== null
-                  ? Math.round(
-                      n1RecentStability.playoutUnderTargetFraction * 1000
-                    ) / 1000
-                  : null,
-              reprerollMs: GCALL_N1_SEVERE_REBUILD_DEADZONE_REPREROLL_MS,
-              cooldownMs:
-                GCALL_N1_SEVERE_REBUILD_DEADZONE_RESET_COOLDOWN_MS,
-            }
-          );
+          gcallDiagnosticsPush('warn', '[GCall] n1SevereRebuildDeadzoneReset', {
+            sourceAddr: truncateGcallDiagAddress(addr),
+            bufferedFrames: jb.getBufferedFrames(),
+            bufferMs: Math.round(opusMsPre),
+            targetMs: Math.round(smoothedTarget),
+            severeForcedReleaseRebuildActiveForMs: Math.round(
+              n1SevereForcedReleaseRebuildActiveForMs
+            ),
+            avgPcmBufferedMs:
+              n1RecentStability !== null
+                ? Math.round(n1RecentStability.avgPcmBufferedMs)
+                : null,
+            playoutUnderTargetFraction:
+              n1RecentStability !== null
+                ? Math.round(
+                    n1RecentStability.playoutUnderTargetFraction * 1000
+                  ) / 1000
+                : null,
+            reprerollMs: GCALL_N1_SEVERE_REBUILD_DEADZONE_REPREROLL_MS,
+            cooldownMs: GCALL_N1_SEVERE_REBUILD_DEADZONE_RESET_COOLDOWN_MS,
+          });
           metricsRef.current.recordOpusBufferedMetric(
             addr,
             jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS
@@ -11530,15 +9841,14 @@ export function useGroupVoiceCall(uiActive = false) {
           shouldForceN1SustainedSevereRebuildReceiveRelief({
             activeSourceCount: sourceCountForDrain,
             lastRecvAgeMs,
-            recentStability:
-              n1RecentStability ?? {
-                sampleCount: 0,
-                avgPcmBufferedMs: 0,
-                playoutUnderTargetFraction: 0,
-                underrunCount: 0,
-                stable: false,
-                severeInstability: false,
-              },
+            recentStability: n1RecentStability ?? {
+              sampleCount: 0,
+              avgPcmBufferedMs: 0,
+              playoutUnderTargetFraction: 0,
+              underrunCount: 0,
+              stable: false,
+              severeInstability: false,
+            },
             avgPlayoutDeltaMs: n1RecentStability
               ? smoothedTarget - n1RecentStability.avgPcmBufferedMs
               : 0,
@@ -11672,8 +9982,7 @@ export function useGroupVoiceCall(uiActive = false) {
             ? computeN1AccumulationDecodeCap({
                 accumulationActive,
                 recoverySingleRemote: n1RecoverySingleRemote,
-                forcedReleaseRebuildActive:
-                  n1SevereForcedReleaseRebuildActive,
+                forcedReleaseRebuildActive: n1SevereForcedReleaseRebuildActive,
                 opusBufferedMs: opusMsPre,
                 tier: n1Tier,
                 targetMs: smoothedTarget,
@@ -11691,10 +10000,7 @@ export function useGroupVoiceCall(uiActive = false) {
             const nowLog = Date.now();
             const lastHoldLog =
               lastN1AccumulationHoldLogAtRef.current.get(addr) ?? 0;
-            if (
-              nowLog - lastHoldLog >=
-              GCALL_N1_ACCUMULATION_HOLD_LOG_MIN_MS
-            ) {
+            if (nowLog - lastHoldLog >= GCALL_N1_ACCUMULATION_HOLD_LOG_MIN_MS) {
               lastN1AccumulationHoldLogAtRef.current.set(addr, nowLog);
               gcallDiagnosticsPush(
                 'info',
@@ -11704,9 +10010,7 @@ export function useGroupVoiceCall(uiActive = false) {
                   bufferMs: Math.round(opusMsPre),
                   targetMs: Math.round(smoothedTarget),
                   holdOpusMs: Math.round(
-                    computeN1SevereRebuildAccumulationHoldOpusMs(
-                      smoothedTarget
-                    )
+                    computeN1SevereRebuildAccumulationHoldOpusMs(smoothedTarget)
                   ),
                   tier: n1Tier,
                 }
@@ -11777,12 +10081,8 @@ export function useGroupVoiceCall(uiActive = false) {
             nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_LOG_MIN_MS;
           const tierChangeLogDue =
             tierChanged &&
-            nowLog - lastLog >=
-              GCALL_N1_BUFFER_ENFORCE_TIER_CHANGE_LOG_MIN_MS;
-          const logDue =
-            modeChanged ||
-            tierChangeLogDue ||
-            periodicLogDue;
+            nowLog - lastLog >= GCALL_N1_BUFFER_ENFORCE_TIER_CHANGE_LOG_MIN_MS;
+          const logDue = modeChanged || tierChangeLogDue || periodicLogDue;
           if (
             logDue &&
             (n1Tier !== 'normal' ||
@@ -11812,8 +10112,9 @@ export function useGroupVoiceCall(uiActive = false) {
               receivePriorityModeActive: n1ReceivePriorityModeActive,
               severeForcedReleaseRebuildActive:
                 n1SevereForcedReleaseRebuildActive,
-              severeForcedReleaseRebuildActiveForMs:
-                Math.round(n1SevereForcedReleaseRebuildActiveForMs),
+              severeForcedReleaseRebuildActiveForMs: Math.round(
+                n1SevereForcedReleaseRebuildActiveForMs
+              ),
               steadyHoldActive,
               steadyHoldMs: n1SteadySingleRemote
                 ? Math.round(steadyMinHoldMs)
@@ -11882,21 +10183,19 @@ export function useGroupVoiceCall(uiActive = false) {
           continue;
         }
 
-        const severeReadyEscapeAllowed =
-          shouldForceN1SevereRebuildReadyEscape({
-            recoverySingleRemote: n1RecoverySingleRemote,
-            prerollActive,
-            severeForcedReleaseRebuildActive:
-              n1SevereForcedReleaseRebuildActive,
-            severeForcedReleaseRebuildActiveForMs:
-              n1SevereForcedReleaseRebuildActiveForMs,
-            sourceRecentlyPushed,
-            hasReadyFrame: jb.hasReadyFrame(),
-            bufferedFrames: jb.getBufferedFrames(),
-            targetMs: smoothedTarget,
-            recentStability: n1RecentStability,
-            playoutStarvationSeverity: n1PlayoutStarvationSeverity,
-          });
+        const severeReadyEscapeAllowed = shouldForceN1SevereRebuildReadyEscape({
+          recoverySingleRemote: n1RecoverySingleRemote,
+          prerollActive,
+          severeForcedReleaseRebuildActive: n1SevereForcedReleaseRebuildActive,
+          severeForcedReleaseRebuildActiveForMs:
+            n1SevereForcedReleaseRebuildActiveForMs,
+          sourceRecentlyPushed,
+          hasReadyFrame: jb.hasReadyFrame(),
+          bufferedFrames: jb.getBufferedFrames(),
+          targetMs: smoothedTarget,
+          recentStability: n1RecentStability,
+          playoutStarvationSeverity: n1PlayoutStarvationSeverity,
+        });
         if (severeReadyEscapeAllowed) {
           // N=1 recovery sets steadyPrimedHoldFrames=1: after forcePrime, hasReadyFrame
           // needs two Opus frames; decodeOneJitterFrame no-ops until then (accumulation).
@@ -11906,31 +10205,27 @@ export function useGroupVoiceCall(uiActive = false) {
             lastN1SevereReadyEscapeLogAtRef.current.get(addr) ?? 0;
           if (nowLog - lastLog >= GCALL_N1_SEVERE_READY_ESCAPE_LOG_MIN_MS) {
             lastN1SevereReadyEscapeLogAtRef.current.set(addr, nowLog);
-            gcallDiagnosticsPush(
-              'info',
-              '[GCall] n1SevereRebuildReadyEscape',
-              {
-                sourceAddr: truncateGcallDiagAddress(addr),
-                bufferedFrames: jb.getBufferedFrames(),
-                bufferMs: Math.round(opusMsPre),
-                targetMs: Math.round(smoothedTarget),
-                minEscapeFrames:
-                  computeN1SevereReadyEscapeMinFrames(smoothedTarget),
-                severeForcedReleaseRebuildActiveForMs: Math.round(
-                  n1SevereForcedReleaseRebuildActiveForMs
-                ),
-                avgPcmBufferedMs:
-                  n1RecentStability !== null
-                    ? Math.round(n1RecentStability.avgPcmBufferedMs)
-                    : null,
-                playoutUnderTargetFraction:
-                  n1RecentStability !== null
-                    ? Math.round(
-                        n1RecentStability.playoutUnderTargetFraction * 1000
-                      ) / 1000
-                    : null,
-              }
-            );
+            gcallDiagnosticsPush('info', '[GCall] n1SevereRebuildReadyEscape', {
+              sourceAddr: truncateGcallDiagAddress(addr),
+              bufferedFrames: jb.getBufferedFrames(),
+              bufferMs: Math.round(opusMsPre),
+              targetMs: Math.round(smoothedTarget),
+              minEscapeFrames:
+                computeN1SevereReadyEscapeMinFrames(smoothedTarget),
+              severeForcedReleaseRebuildActiveForMs: Math.round(
+                n1SevereForcedReleaseRebuildActiveForMs
+              ),
+              avgPcmBufferedMs:
+                n1RecentStability !== null
+                  ? Math.round(n1RecentStability.avgPcmBufferedMs)
+                  : null,
+              playoutUnderTargetFraction:
+                n1RecentStability !== null
+                  ? Math.round(
+                      n1RecentStability.playoutUnderTargetFraction * 1000
+                    ) / 1000
+                  : null,
+            });
           }
           const missedEsc = decodeOneJitterFrame(addr, jb) ?? 0;
           runUnderrunAndMetricsTail(addr, jb, missedEsc);
@@ -12024,12 +10319,11 @@ export function useGroupVoiceCall(uiActive = false) {
       }
     } else {
       const readyAtStart = new Set<string>();
-      const drainStartInfo = new Map<
-        string,
-        { initialBuffered: number }
-      >();
+      const drainStartInfo = new Map<string, { initialBuffered: number }>();
 
       for (const addr of addrsOrdered) {
+        // V2 Stage 2: V2 manages decode and playout for known peers.
+        if (v2SessionRef.current?.isKnownPeer(addr)) continue;
         const jb = jitterMapRef.current.get(addr);
         if (!jb || !jb.hasReadyFrame()) {
           if (jb && isSourcePlayoutActive(addr, tickStartedAt)) {
@@ -12097,15 +10391,19 @@ export function useGroupVoiceCall(uiActive = false) {
           })
         ) {
           if (!gcallStarvationProtectedModeRef.current.has(addr)) {
-            gcallDiagnosticsPush('info', '[GCall] multiSourceProtectedModeEnter', {
-              sourceAddr: truncateGcallDiagAddress(addr),
-              starvationSeverity,
-              collapsedForStarvation,
-              nearCollapsedForStarvation,
-              bufferedFrames: frames,
-              opusBufferedMs: Math.round(opusMs),
-              targetMs: Math.round(targetMs),
-            });
+            gcallDiagnosticsPush(
+              'info',
+              '[GCall] multiSourceProtectedModeEnter',
+              {
+                sourceAddr: truncateGcallDiagAddress(addr),
+                starvationSeverity,
+                collapsedForStarvation,
+                nearCollapsedForStarvation,
+                bufferedFrames: frames,
+                opusBufferedMs: Math.round(opusMs),
+                targetMs: Math.round(targetMs),
+              }
+            );
           }
           gcallStarvationProtectedModeRef.current.add(addr);
         }
@@ -12127,8 +10425,7 @@ export function useGroupVoiceCall(uiActive = false) {
         if (
           shouldHoldMultiSourceAccumulation({
             bufferedFrames: jb.getBufferedFrames(),
-            opusBufferedMs:
-              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS,
+            opusBufferedMs: jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS,
             adaptiveTargetMedianMs: targetMs,
             protectedMode,
             playoutStarvationSeverity: starvationSeverity,
@@ -12166,8 +10463,7 @@ export function useGroupVoiceCall(uiActive = false) {
           shouldPrioritizeWeakMultiSourceLeg({
             activeSourceCount: readyAtStart.size,
             bufferedFrames: jb.getBufferedFrames(),
-            opusBufferedMs:
-              jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS,
+            opusBufferedMs: jb.getBufferedFrames() * OPUS_FRAME_DURATION_MS,
             adaptiveTargetMedianMs: targetMs,
             protectedMode,
             playoutStarvationSeverity: starvationSeverity,
@@ -12249,6 +10545,8 @@ export function useGroupVoiceCall(uiActive = false) {
 
       for (const addr of addrsOrdered) {
         if (!readyAtStart.has(addr)) continue;
+        // V2 Stage 2: V2 manages decode and playout for known peers.
+        if (v2SessionRef.current?.isKnownPeer(addr)) continue;
         const jb = jitterMapRef.current.get(addr);
         if (!jb) continue;
         const info = drainStartInfo.get(addr);
@@ -12363,13 +10661,17 @@ export function useGroupVoiceCall(uiActive = false) {
           if (streak >= GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS) {
             gcallStarvationProtectedModeRef.current.delete(addr);
             gcallStarvationProtectedExitStreakRef.current.set(addr, 0);
-            gcallDiagnosticsPush('info', '[GCall] multiSourceProtectedModeExit', {
-              sourceAddr: truncateGcallDiagAddress(addr),
-              bufferedFrames: frames,
-              opusBufferedMs: Math.round(opusMs),
-              targetMs: Math.round(targetMs),
-              starvationSeverity,
-            });
+            gcallDiagnosticsPush(
+              'info',
+              '[GCall] multiSourceProtectedModeExit',
+              {
+                sourceAddr: truncateGcallDiagAddress(addr),
+                bufferedFrames: frames,
+                opusBufferedMs: Math.round(opusMs),
+                targetMs: Math.round(targetMs),
+                starvationSeverity,
+              }
+            );
           }
         } else {
           gcallStarvationProtectedExitStreakRef.current.set(addr, 0);
@@ -12379,7 +10681,21 @@ export function useGroupVoiceCall(uiActive = false) {
     drainMs = performance.now() - drainStartedAt;
 
     const adaptiveStartedAt = performance.now();
-    tickAdaptivePlayoutTargets();
+    const adaptiveCadenceMs =
+      activeSourceCount <= 1
+        ? ADAPTIVE_FULL_TICK_MIN_MS
+        : ADAPTIVE_FULL_TICK_MULTI_SOURCE_MIN_MS;
+    const shouldRunAdaptiveFullPass =
+      activeSourceCount !== lastAdaptiveSourceCountRef.current ||
+      adaptiveStartedAt - lastAdaptiveTickAtRef.current >= adaptiveCadenceMs;
+    if (shouldRunAdaptiveFullPass) {
+      lastAdaptiveTickAtRef.current = adaptiveStartedAt;
+      lastAdaptiveSourceCountRef.current = activeSourceCount;
+      tickAdaptivePlayoutTargets();
+      incrementPerfCounter('adaptiveFullRuns');
+    } else {
+      incrementPerfCounter('adaptiveDeferredRuns');
+    }
     adaptiveMs = performance.now() - adaptiveStartedAt;
 
     const mixStartedAt = performance.now();
@@ -12389,11 +10705,250 @@ export function useGroupVoiceCall(uiActive = false) {
     // Throttle React state updates to ~200ms (10 scheduler ticks ≈ 10 × 20ms).
     jitterDrainReactTickCountRef.current++;
     if (jitterDrainReactTickCountRef.current >= 10) {
-      const reactStartedAt = performance.now();
       jitterDrainReactTickCountRef.current = 0;
-      syncSpeakerUiState();
-      reactMs = performance.now() - reactStartedAt;
+      scheduleSpeakerUiSync();
+      incrementPerfCounter('reactSpeakerUpdateRequests');
     }
+
+    // ── V2 Stage 2 playout tick ───────────────────────────────────────────────
+    // Fire the V2 session tick async (it awaits WebCodecs microtask flush).
+    // On resolution, use feedback-driven drain: post only enough frames to
+    // keep the worklet buffer near the V2 policy target, eliminating the
+    // burst-flood oscillation caused by dumping all decoded frames at once.
+    if (v2SessionRef.current) {
+      const startV2DrainTick = (
+        v2: GcallV2Session,
+        requestedNowMs: number,
+        sessionToken: number
+      ) => {
+        v2DrainTickInFlightRef.current = true;
+        const startedAt = performance.now();
+        void v2
+          .tick(requestedNowMs)
+          .then((tickResults) => {
+            if (sessionToken !== v2DrainSessionTokenRef.current) {
+              incrementPerfCounter('v2DrainTickStaleCompletions');
+              return;
+            }
+            if (!v2SessionRef.current || v2SessionRef.current !== v2) {
+              incrementPerfCounter('v2DrainTickSessionInvalidations');
+              return;
+            }
+            const completionStartedAt = performance.now();
+            let completionSourcesProcessed = 0;
+            let workletMessagesPosted = 0;
+            let workletFramesPosted = 0;
+            for (const sourceAddr of v2.getActiveSources()) {
+              // Ensure the playback worklet is set up for this source.
+              void schedulePlaybackWorkletSetupRef
+                .current(sourceAddr)
+                ?.catch(() => {});
+              if (!hearCallRef.current) continue;
+              const ring = v2.getPcmRing(sourceAddr);
+              if (!ring || !ring.hasData()) continue;
+              const node = playbackWorkletsRef.current.get(sourceAddr);
+              if (!node) continue;
+
+              const result = tickResults.get(sourceAddr);
+              const targetMs = result?.targetBufferMs ?? 120;
+
+              const lastSentTarget =
+                v2LastSentTargetRef.current.get(sourceAddr);
+              if (lastSentTarget !== targetMs) {
+                node.port.postMessage({
+                  type: 'target',
+                  targetPlayoutMs: targetMs,
+                });
+                v2LastSentTargetRef.current.set(sourceAddr, targetMs);
+              }
+
+              const lastBufferedMs =
+                v2WorkletBufferedMsRef.current.get(sourceAddr) ?? null;
+              const lastReportTime =
+                v2WorkletReportTimeRef.current.get(sourceAddr) ?? null;
+              const postedSinceReport =
+                v2WorkletPostedSinceReportRef.current.get(sourceAddr) ?? 0;
+              const reportAgeMs =
+                lastReportTime !== null
+                  ? Date.now() - lastReportTime
+                  : Infinity;
+              const estimatedMs = estimateWorkletBufferedMs({
+                lastBufferedMs,
+                postedSinceReportMs: postedSinceReport,
+                reportAgeMs,
+                lastReportedRate:
+                  v2WorkletRateRef.current.get(sourceAddr) ?? null,
+              });
+
+              const ringHasFrames =
+                ring.filledSamples >= 2 * OPUS_FRAME_SAMPLES;
+              const prevRingWasEmpty =
+                v2RingWasEmptyRef.current.get(sourceAddr) ?? false;
+              v2RingWasEmptyRef.current.set(sourceAddr, !ringHasFrames);
+              const ringJustRefilled = prevRingWasEmpty && ringHasFrames;
+
+              const framesToPost = decideFramesToPost({
+                estimatedBufferedMs: estimatedMs,
+                lastReportedBufferedMs: lastBufferedMs,
+                targetBufferMs: targetMs,
+                upstreamBufferedMs: Math.max(
+                  ring.bufferedMs(),
+                  result?.pcmBufferedMs ?? 0
+                ),
+                ringJustRefilled,
+                reportAgeMs,
+              });
+
+              const availableFrames = Math.min(
+                framesToPost,
+                Math.floor(ring.filledSamples / OPUS_FRAME_SAMPLES)
+              );
+              let framesActuallyPosted = 0;
+              if (availableFrames > 0) {
+                const pcmBatch = new Float32Array(
+                  availableFrames * OPUS_FRAME_SAMPLES
+                );
+                const { samplesRead, frameIngressAtMs } =
+                  ring.readWithFrameMetadata(pcmBatch, pcmBatch.length);
+                framesActuallyPosted = Math.floor(
+                  samplesRead / OPUS_FRAME_SAMPLES
+                );
+                if (framesActuallyPosted > 0) {
+                  const postNowMs = performance.now();
+                  const wallNowMs = Date.now();
+                  let postLatencySampleCount = 0;
+                  let postLatencySumMs = 0;
+                  let postLatencyMaxMs = 0;
+                  for (let f = 0; f < framesActuallyPosted; f++) {
+                    const ingressAtMs = frameIngressAtMs[f] ?? null;
+                    if (
+                      typeof ingressAtMs !== 'number' ||
+                      !Number.isFinite(ingressAtMs)
+                    ) {
+                      continue;
+                    }
+                    const latencyMs = Math.max(0, postNowMs - ingressAtMs);
+                    metricsRef.current.recordReceiverIngressToPlayoutPostLatency(
+                      sourceAddr,
+                      latencyMs
+                    );
+                    postLatencySampleCount++;
+                    postLatencySumMs += latencyMs;
+                    postLatencyMaxMs = Math.max(postLatencyMaxMs, latencyMs);
+                  }
+                  if (
+                    postLatencySampleCount > 0 &&
+                    postLatencyMaxMs >= GCALL_V2_PLAYOUT_POST_LATENCY_DIAG_MS
+                  ) {
+                    const lastDiagAt =
+                      lastV2PlayoutPostLatencyDiagAtRef.current.get(
+                        sourceAddr
+                      ) ?? 0;
+                    if (
+                      wallNowMs - lastDiagAt >=
+                      GCALL_V2_PLAYOUT_POST_LATENCY_DIAG_MIN_INTERVAL_MS
+                    ) {
+                      lastV2PlayoutPostLatencyDiagAtRef.current.set(
+                        sourceAddr,
+                        wallNowMs
+                      );
+                      gcallDiagnosticsPush(
+                        'warn',
+                        '[GCall] v2PlayoutPostLatencyHigh',
+                        {
+                          sourceAddr: truncateGcallDiagAddress(sourceAddr),
+                          sampleCount: postLatencySampleCount,
+                          avgReceiverIngressToPlayoutPostMs: roundDiagnosticMs(
+                            postLatencySumMs / postLatencySampleCount
+                          ),
+                          maxReceiverIngressToPlayoutPostMs:
+                            roundDiagnosticMs(postLatencyMaxMs),
+                          estimatedWorkletBufferedMs:
+                            typeof estimatedMs === 'number' &&
+                            Number.isFinite(estimatedMs)
+                              ? roundDiagnosticMs(estimatedMs)
+                              : null,
+                          upstreamBufferedMs: roundDiagnosticMs(
+                            Math.max(
+                              ring.bufferedMs(),
+                              result?.pcmBufferedMs ?? 0
+                            )
+                          ),
+                          targetBufferMs: roundDiagnosticMs(targetMs),
+                          policyState: result?.state ?? null,
+                          availableFrames,
+                          framesActuallyPosted,
+                        }
+                      );
+                    }
+                  }
+                }
+                node.port.postMessage(
+                  {
+                    type: 'pcm-batch',
+                    pcmBatch,
+                    frameCount: framesActuallyPosted,
+                  },
+                  [pcmBatch.buffer]
+                );
+                workletMessagesPosted++;
+                workletFramesPosted += framesActuallyPosted;
+              }
+              if (framesActuallyPosted > 0) {
+                completionSourcesProcessed++;
+                const prev =
+                  v2WorkletPostedSinceReportRef.current.get(sourceAddr) ?? 0;
+                v2WorkletPostedSinceReportRef.current.set(
+                  sourceAddr,
+                  prev + framesActuallyPosted * OPUS_FRAME_DURATION_MS
+                );
+              }
+            }
+            if (workletMessagesPosted > 0) {
+              incrementPerfCounter(
+                'v2WorkletPostMessages',
+                workletMessagesPosted
+              );
+              incrementPerfCounter('v2WorkletPostFrames', workletFramesPosted);
+            }
+            const completionMs = performance.now() - completionStartedAt;
+            recordPerfDuration('v2DrainCompletionMs', completionMs);
+            if (completionSourcesProcessed > 0) {
+              recordPerfDurationPerSource(
+                'v2DrainCompletionPerSourceMs',
+                completionMs,
+                completionSourcesProcessed
+              );
+            }
+          })
+          .catch((error) => {
+            incrementPerfCounter('v2DrainTickErrors');
+            debugWarn('[GCall] V2 drain tick failed', error);
+          })
+          .finally(() => {
+            if (sessionToken !== v2DrainSessionTokenRef.current) return;
+            if (!v2SessionRef.current || v2SessionRef.current !== v2) return;
+            v2DrainTickInFlightRef.current = false;
+            recordPerfDuration('v2DrainTickMs', performance.now() - startedAt);
+            const pendingNowMs = v2DrainTickPendingNowMsRef.current;
+            if (pendingNowMs === null) return;
+            v2DrainTickPendingNowMsRef.current = null;
+            incrementPerfCounter('v2DrainTickCoalescedRuns');
+            startV2DrainTick(v2, pendingNowMs, sessionToken);
+          });
+      };
+
+      const v2 = v2SessionRef.current;
+      const v2NowMs = Date.now();
+      const sessionToken = v2DrainSessionTokenRef.current;
+      if (v2DrainTickInFlightRef.current) {
+        v2DrainTickPendingNowMsRef.current = v2NowMs;
+        incrementPerfCounter('v2DrainTickCoalescedRequests');
+      } else {
+        startV2DrainTick(v2, v2NowMs, sessionToken);
+      }
+    }
+
     const tickTotalMs = performance.now() - tickStartedAt;
     lastJitterTickTotalMsRef.current = tickTotalMs;
     metricsRef.current.recordJitterTickDuration(tickTotalMs);
@@ -12413,15 +10968,6 @@ export function useGroupVoiceCall(uiActive = false) {
     );
     recordPerfDuration('mixTickMs', mixMs);
     recordPerfDurationPerSource('mixTickPerSourceMs', mixMs, activeSourceCount);
-    if (reactMs > 0) {
-      recordPerfDuration('reactTickMs', reactMs);
-      recordPerfDurationPerSource(
-        'reactTickPerSourceMs',
-        reactMs,
-        activeSourceCount
-      );
-      incrementPerfCounter('reactSpeakerUpdates');
-    }
     if (tickTotalMs >= GCALL_PERF_TICK_BUDGET_WARN_MS) {
       tickBudgetBreachesMonotonicRef.current += 1;
       tickBudgetBreachesRef.current.push(tickTotalMs);
@@ -12444,7 +10990,7 @@ export function useGroupVoiceCall(uiActive = false) {
     pruneStaleRemoteAudioSources,
     recordPerfDuration,
     recordPerfDurationPerSource,
-    syncSpeakerUiState,
+    scheduleSpeakerUiSync,
     tickAdaptivePlayoutTargets,
     tickPlaybackMixTargets,
     updatePeerRecoveryStability,
@@ -12456,6 +11002,8 @@ export function useGroupVoiceCall(uiActive = false) {
   postWasmFecBatchToPlayoutRef.current = postWasmFecBatchToPlayout;
   const pumpWasmFecQueueRef = useRef(pumpWasmFecQueue);
   pumpWasmFecQueueRef.current = pumpWasmFecQueue;
+  const schedulePlaybackWorkletSetupRef = useRef(schedulePlaybackWorkletSetup);
+  schedulePlaybackWorkletSetupRef.current = schedulePlaybackWorkletSetup;
 
   useEffect(() => {
     if (!gcallWasmFecDesiredRef.current) return;
@@ -13583,103 +12131,32 @@ export function useGroupVoiceCall(uiActive = false) {
 
   // ── Decrypt Worker lifecycle ──────────────────────────────────────────────
 
-  /** Create the off-thread decrypt Worker and attach its message handler.
-   *  Called at join time; the Worker is terminated in cleanup().
-   *  Successful decrypt results go through `enqueueDecryptApply` (wall-time–budgeted drain + fast
-   *  single-frame path). Decode failures still use `applyPostDecrypt` synchronously. */
+  /**
+   * Spin up the decrypt worker pool (see `lib/group-call/decryptWorkerPool.ts`).
+   * The pool replaces the previous single worker; it runs 2-4 libsodium-backed decrypt
+   * slots plus a dedicated encrypt worker. All slot fan-out, key replication, and
+   * batching is handled inside the pool — this function just wires result handlers to
+   * the existing `enqueueDecryptApply` path.
+   */
   const setupDecryptWorker = useCallback(() => {
     if (decryptWorkerRef.current) return; // already running
     lastWorkerRoomKeyRef.current = null;
-    const worker = new AudioDecryptWorker();
-    decryptWorkerRef.current = worker;
     decryptIdRef.current = 0;
     encryptIdRef.current = 0;
-    syncDecryptWorkerRoomKey(roomKeyRef.current);
+    decryptPoolPeakDepthRecentRef.current = 0;
+    decryptPoolSustainedAboveGrow3MsRef.current = 0;
+    decryptPoolSustainedAboveGrow4MsRef.current = 0;
+    decryptPoolSustainedLowPressureMsRef.current = 0;
+    decryptPoolScalingLastTickAtRef.current = performance.now();
+    decryptPoolSizeRef.current = DECRYPT_POOL_MIN_SIZE;
 
-    worker.onmessage = (
-      e: MessageEvent<{
-        type: 'result' | 'encryptResult' | 'roomKeyApplied' | 'roomKeyCleared';
-        id?: number;
-        keyVersion?: number;
-        decoded?: {
-          sourceAddr: string;
-          vad: boolean;
-          seq: number;
-          timestampMs: number;
-          opusFrame: ArrayBuffer;
-        } | null;
-        decodedMulti?: Array<{
-          sourceAddr: string;
-          vad: boolean;
-          seq: number;
-          timestampMs: number;
-          opusFrame: ArrayBuffer;
-        }>;
-        packet?: ArrayBuffer | null;
-        error?: string;
-      }>
-    ) => {
+    const handleDecryptEntry = (
+      entry: DecryptPoolDecryptBatchHandlerInput
+    ): void => {
       const handlerStartedAt = performance.now();
       incrementPerfCounter('decryptWorkerMessages');
-      if (e.data.type === 'roomKeyApplied') {
-        const keyVersion = e.data.keyVersion ?? 0;
-        decryptWorkerAppliedKeyVersionRef.current = Math.max(
-          decryptWorkerAppliedKeyVersionRef.current,
-          keyVersion
-        );
-        gcallDiagnosticsPush('info', '[GCall] workerRoomKeySyncApplied', {
-          keyVersion,
-        });
-        armDecryptBurstRecoveryWindow('workerRoomKeySyncApplied');
-        recordPerfDuration(
-          'decryptWorkerHandlerMs',
-          performance.now() - handlerStartedAt
-        );
-        return;
-      }
-      if (e.data.type === 'roomKeyCleared') {
-        decryptWorkerAppliedKeyVersionRef.current = 0;
-        recordPerfDuration(
-          'decryptWorkerHandlerMs',
-          performance.now() - handlerStartedAt
-        );
-        return;
-      }
-      if (e.data.type === 'encryptResult') {
-        incrementPerfCounter('decryptWorkerEncryptResults');
-        if (e.data.packet) {
-          dispatchEncodedPacket(new Uint8Array(e.data.packet as ArrayBuffer));
-        } else {
-          if (e.data.error === 'missing-room-key' && roomKeyRef.current) {
-            syncDecryptWorkerRoomKey(roomKeyRef.current);
-          }
-          logSendPathDiagnostic('encrypt-worker-empty-result', {
-            error: e.data.error ?? 'unknown',
-            hasMainThreadRoomKey: roomKeyRef.current !== null,
-          });
-        }
-        recordPerfDuration(
-          'decryptWorkerHandlerMs',
-          performance.now() - handlerStartedAt
-        );
-        return;
-      }
-      if (e.data.type !== 'result') {
-        recordPerfDuration(
-          'decryptWorkerHandlerMs',
-          performance.now() - handlerStartedAt
-        );
-        return;
-      }
       incrementPerfCounter('decryptWorkerResults');
-      const id = e.data.id;
-      if (typeof id !== 'number') {
-        recordPerfDuration(
-          'decryptWorkerHandlerMs',
-          performance.now() - handlerStartedAt
-        );
-        return;
-      }
+      const { id } = entry;
       const pending = pendingDecryptsRef.current.get(id);
       pendingDecryptsRef.current.delete(id);
       recordPendingDecryptDepth(pendingDecryptsRef.current.size);
@@ -13714,7 +12191,36 @@ export function useGroupVoiceCall(uiActive = false) {
         ingressPeerAddress,
         ingressTransport,
       } = pending;
-      const multi = e.data.decodedMulti;
+
+      if (entry.status === 'stale-pre-push') {
+        // Worker already classified this frame as stale vs the jitter buffer watermark.
+        // Do NOT call applyPostDecrypt* — that would double-count the drop via decode-
+        // failure accounting. Count it in the dedicated stale-skip counter so field
+        // diagnostics can see the pre-skip savings.
+        incrementPerfCounter('decryptWorkerStaleSkipped');
+        recordPerfDuration(
+          'decryptWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
+        return;
+      }
+
+      if (entry.status === 'decode-failed') {
+        applyPostDecrypt(
+          wireForForward,
+          null,
+          startedAt,
+          receivedAt,
+          ingressPeerAddress
+        );
+        recordPerfDuration(
+          'decryptWorkerHandlerMs',
+          performance.now() - handlerStartedAt
+        );
+        return;
+      }
+
+      const multi = entry.decodedMulti;
       if (multi && multi.length > 0) {
         incrementPerfCounter('decryptWorkerDecodedMultiFrames', multi.length);
         const list: DecodedAudioPacket[] = [];
@@ -13741,7 +12247,8 @@ export function useGroupVoiceCall(uiActive = false) {
         );
         return;
       }
-      const raw = e.data.decoded;
+
+      const raw = entry.decoded;
       const decoded: DecodedAudioPacket | null = raw
         ? {
             sourceAddr: raw.sourceAddr,
@@ -13779,12 +12286,77 @@ export function useGroupVoiceCall(uiActive = false) {
       );
     };
 
-    worker.onerror = (err) => {
-      console.error('[GCall] AudioDecryptWorker error:', err);
-    };
+    const pool = new DecryptWorkerPool({
+      initialSize: DECRYPT_POOL_MIN_SIZE,
+      maxSize: DECRYPT_POOL_HARD_CEILING,
+      workerFactory: () => new AudioDecryptWorker(),
+      handlers: {
+        onDecryptResult: handleDecryptEntry,
+        onEncryptResult: (_id, packet, error) => {
+          incrementPerfCounter('decryptWorkerEncryptResults');
+          if (packet) {
+            dispatchEncodedPacket(new Uint8Array(packet));
+          } else {
+            if (error === 'missing-room-key' && roomKeyRef.current) {
+              syncDecryptWorkerRoomKey(roomKeyRef.current);
+            }
+            logSendPathDiagnostic('encrypt-worker-empty-result', {
+              error: error ?? 'unknown',
+              hasMainThreadRoomKey: roomKeyRef.current !== null,
+            });
+          }
+        },
+        onAllRoomKeyApplied: (keyVersion) => {
+          decryptWorkerAppliedKeyVersionRef.current = Math.max(
+            decryptWorkerAppliedKeyVersionRef.current,
+            keyVersion
+          );
+          gcallDiagnosticsPush('info', '[GCall] workerRoomKeySyncApplied', {
+            keyVersion,
+            poolSize: decryptWorkerRef.current?.size ?? 0,
+          });
+          armDecryptBurstRecoveryWindow('workerRoomKeySyncApplied');
+        },
+        onAllRoomKeyCleared: (keyVersion) => {
+          decryptWorkerAppliedKeyVersionRef.current = 0;
+          gcallDiagnosticsPush('info', '[GCall] workerRoomKeyCleared', {
+            keyVersion,
+          });
+        },
+        onSlotInitFailed: (slotIndex, error) => {
+          gcallDiagnosticsPush('warn', '[GCall] decryptPoolSlotInitFailed', {
+            slotIndex,
+            error,
+          });
+        },
+        onSlotError: (slotIndex, err) => {
+          console.error(
+            '[GCall] DecryptWorkerPool slot error (slot',
+            slotIndex,
+            '):',
+            err
+          );
+        },
+        onResized: (from, to, reason) => {
+          decryptPoolSizeRef.current = to;
+          gcallDiagnosticsPush('info', '[GCall] decryptPoolScaled', {
+            from,
+            to,
+            reason,
+          });
+        },
+        onBatchCompleted: (info) => {
+          // Sampled: one in ~16 batches to keep the ring light under heavy bursts.
+          if ((info.batchSize + info.slotIndex) % 16 !== 0) return;
+          gcallDiagnosticsPush('log', '[GCall] decryptBatchCompleted', info);
+        },
+      },
+    });
+    decryptWorkerRef.current = pool;
+
+    syncDecryptWorkerRoomKey(roomKeyRef.current);
   }, [
     applyPostDecrypt,
-    applyPostDecryptList,
     dispatchEncodedPacket,
     enqueueDecryptApply,
     incrementPerfCounter,
@@ -14073,7 +12645,9 @@ export function useGroupVoiceCall(uiActive = false) {
           setMemberGateGroupName('');
         }
 
-        const electronApi = window.electronAPI;
+        const electronApi = (window as Window & {
+          electronAPI?: Window['electronAPI'];
+        }).electronAPI;
         if (typeof electronApi?.reticulumGetStatus !== 'function') {
           setGcallJoinError('p2p_health_not_good');
           return;
@@ -14443,6 +13017,14 @@ export function useGroupVoiceCall(uiActive = false) {
 
         setRoomState('connected');
 
+        invalidateV2DrainLoop();
+        // V2 session: instantiate fresh for this call on the active playout path.
+        v2SessionRef.current?.dispose();
+        v2SessionRef.current = new GcallV2Session({
+          roomId,
+          myAddr: userInfo.address,
+        });
+
         // Reset the root-heartbeat timestamp to now so the standby-forwarder timeout
         // check doesn't misfire immediately if the hook was mounted long before joining.
         lastRootHeartbeatRef.current = Date.now();
@@ -14484,6 +13066,7 @@ export function useGroupVoiceCall(uiActive = false) {
       userInfo,
       myStatus,
       installTestingStableRoomKey,
+      invalidateV2DrainLoop,
     ]
   );
 
@@ -14535,6 +13118,12 @@ export function useGroupVoiceCall(uiActive = false) {
         clearTimeout(localSpeakerUiRefreshTimerRef.current);
         localSpeakerUiRefreshTimerRef.current = null;
       }
+      if (speakerUiSyncTimerRef.current) {
+        clearTimeout(speakerUiSyncTimerRef.current);
+        speakerUiSyncTimerRef.current = null;
+      }
+      lastAdaptiveTickAtRef.current = 0;
+      lastAdaptiveSourceCountRef.current = 0;
       if (topologyHeartbeatTimerRef.current) {
         clearInterval(topologyHeartbeatTimerRef.current);
         topologyHeartbeatTimerRef.current = null;
@@ -14591,6 +13180,10 @@ export function useGroupVoiceCall(uiActive = false) {
       }
       decoderMapRef.current.clear();
       jitterMapRef.current.clear();
+      invalidateV2DrainLoop();
+      // V2 session teardown — dispose all engines and controllers.
+      v2SessionRef.current?.dispose();
+      v2SessionRef.current = null;
       jitterGeomAppliedRef.current = 'profile';
       lastEffectiveJitterKeyRef.current = '';
       jitterDrainRotationTickRef.current = 0;
@@ -14632,8 +13225,7 @@ export function useGroupVoiceCall(uiActive = false) {
         lastDrainMissed: lastDrainMissedRef.current,
         n1WeakLiveHoldUntilPerf: n1WeakLiveHoldUntilPerfRef.current,
         n1SteadyThinLiveSincePerf: n1SteadyThinLiveSincePerfRef.current,
-        n1ReceivePrioritySendCapState:
-          n1ReceivePrioritySendCapStateRef.current,
+        n1ReceivePrioritySendCapState: n1ReceivePrioritySendCapStateRef.current,
       });
       recentPlayoutHealthSamplesRef.current.clear();
       recentJitterUnderrunAtRef.current.clear();
@@ -14641,6 +13233,8 @@ export function useGroupVoiceCall(uiActive = false) {
       lastSourceStallLogAtRef.current.clear();
       lastForwarderGateLogAtRef.current.clear();
       lastUnknownRemoteAudioDropLogAtRef.current.clear();
+      sourceTimestampLatenessRef.current.clear();
+      lastStaleTimestampDropLogAtRef.current.clear();
       lastStaleRemoteAudioPruneAtRef.current = 0;
       lastPlayoutStressLogAtRef.current.clear();
       playoutStarvationSeverityRef.current.clear();
@@ -14652,6 +13246,7 @@ export function useGroupVoiceCall(uiActive = false) {
       decayGuardCalmStartRef.current.clear();
       decayGuardDiagLoggedRef.current.clear();
       lastPanicZoneDiagAtRef.current.clear();
+      lastV2PlayoutPostLatencyDiagAtRef.current.clear();
       forwardPacketRecvTimestampsRef.current.clear();
 
       peerRecoveryProfileRef.current.clear();
@@ -14722,15 +13317,23 @@ export function useGroupVoiceCall(uiActive = false) {
       overloadLongTaskPressureRef.current = false;
       lastLongTaskCountAtIntervalRef.current = 0;
 
-      // Terminate the decrypt Worker (sync clears pending + worker key)
+      // Terminate the decrypt pool (sync clears pending + pool key)
       if (decryptWorkerRef.current) {
+        const poolToTerminate = decryptWorkerRef.current;
         syncDecryptWorkerRoomKey(null);
-        decryptWorkerRef.current.terminate();
         decryptWorkerRef.current = null;
+        // Fire-and-forget: the pool drains slots with a 500 ms fallback internally.
+        void poolToTerminate.terminate();
       }
       decryptIdRef.current = 0;
       decryptWorkerKeyVersionRef.current = 0;
       decryptWorkerAppliedKeyVersionRef.current = 0;
+      decryptPoolPeakDepthRecentRef.current = 0;
+      decryptPoolSustainedAboveGrow3MsRef.current = 0;
+      decryptPoolSustainedAboveGrow4MsRef.current = 0;
+      decryptPoolSustainedLowPressureMsRef.current = 0;
+      decryptPoolScalingLastTickAtRef.current = 0;
+      decryptPoolSizeRef.current = DECRYPT_POOL_MIN_SIZE;
 
       // Reset state
       roomKeyRef.current = null;
@@ -14881,6 +13484,7 @@ export function useGroupVoiceCall(uiActive = false) {
     stopWindowMetricsLoop,
     syncDecryptWorkerRoomKey,
     teardownCapturePipelineRefs,
+    invalidateV2DrainLoop,
   ]);
 
   const leaveGroupCall = useCallback(async () => {
@@ -15606,6 +14210,8 @@ export function useGroupVoiceCall(uiActive = false) {
         const applyParticipantJoinedBody = () => {
           const wasExisting = participantsRef.current.has(address);
           const existing = participantsRef.current.get(address);
+          /** Tracks which v2 topology event to emit at the end of this function. */
+          let v2TopologyKind: 'peer-joined' | 'peer-rejoined' | null = null;
           // Same or older GC_JOIN (relay duplicate) — ignore to avoid topology churn.
           if (existing && joinTs <= existing.lastJoinTs) {
             debugLog(
@@ -15618,8 +14224,6 @@ export function useGroupVoiceCall(uiActive = false) {
             );
             return;
           }
-
-          // Same session mesh re-announce: newer ts, same publicKey, compatible joinGeneration.
           if (
             existing &&
             joinTs > existing.lastJoinTs &&
@@ -15685,6 +14289,7 @@ export function useGroupVoiceCall(uiActive = false) {
               }
             );
             disposeParticipantAudio(address);
+            v2TopologyKind = 'peer-rejoined';
             setParticipants((prev) => {
               const i = prev.findIndex((p) => p.address === address);
               if (i === -1) {
@@ -15705,6 +14310,7 @@ export function useGroupVoiceCall(uiActive = false) {
                 ? { joinGeneration: incomingGen }
                 : {}),
             });
+            v2TopologyKind = 'peer-joined';
             gcallWindowDiagnosticTagsRef.current.push({
               ts: Date.now(),
               type: 'participant-joined',
@@ -15735,6 +14341,7 @@ export function useGroupVoiceCall(uiActive = false) {
               }
             );
             disposeParticipantAudio(address);
+            v2TopologyKind = 'peer-rejoined';
             setParticipants((prev) => {
               const i = prev.findIndex((p) => p.address === address);
               if (i === -1) {
@@ -15750,6 +14357,21 @@ export function useGroupVoiceCall(uiActive = false) {
           }
 
           maybeSendRosterLearnedTargetedKey(address, publicKey);
+
+          // V2 shadow: forward lifecycle event to new receive session.
+          if (v2TopologyKind) {
+            const resolvedGen =
+              participantsRef.current.get(address)?.joinGeneration;
+            const v2Event: TopologyEvent = {
+              kind:
+                v2TopologyKind === 'peer-rejoined'
+                  ? 'peer-rejoined'
+                  : 'peer-joined',
+              sourceAddr: address,
+              joinGeneration: resolvedGen,
+            };
+            v2SessionRef.current?.ingestTopologyEvent(v2Event);
+          }
 
           if (!wasExisting && roomKeyRef.current && userInfo?.address) {
             const myAddr = userInfo.address;
@@ -15944,6 +14566,11 @@ export function useGroupVoiceCall(uiActive = false) {
         if (addrs.length === 0) return;
 
         requestTopologyElectionFlush('participant-left');
+        // V2 shadow: peer left — dispose their receive engine.
+        v2SessionRef.current?.ingestTopologyEvent({
+          kind: 'peer-left',
+          sourceAddr: address,
+        });
       }
 
       if (event === 'gcall:topology') {
@@ -16039,6 +14666,7 @@ export function useGroupVoiceCall(uiActive = false) {
           routeKey,
           peerPresenceHash,
           peerDestinationHash,
+          bridgeReceivedAtWallMs,
           resolvedFromAddress,
         } = payload as {
           data: Uint8Array;
@@ -16047,6 +14675,7 @@ export function useGroupVoiceCall(uiActive = false) {
           routeKey?: string;
           peerPresenceHash?: string;
           peerDestinationHash?: string;
+          bridgeReceivedAtWallMs?: number | null;
           resolvedFromAddress?: string | null;
         };
         metricsRef.current.recordRelayReceived();
@@ -16094,7 +14723,10 @@ export function useGroupVoiceCall(uiActive = false) {
         handleIncomingAudioPacket(
           relayBuffer as ArrayBuffer,
           typeof fromAddress === 'string' ? fromAddress : '',
-          normalizeGcallAudioIngressTransport(transport)
+          normalizeGcallAudioIngressTransport(transport),
+          typeof bridgeReceivedAtWallMs === 'number'
+            ? bridgeReceivedAtWallMs
+            : undefined
         );
       }
 

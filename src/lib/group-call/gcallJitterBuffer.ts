@@ -49,6 +49,7 @@ export class JitterBuffer {
   private entries: JitterEntry[] = [];
   private lastPlayedSeq = -1;
   private pendingMissedSeq = 0;
+  private lastPoppedReceivedAtMs: number | null = null;
   private primed = false;
   /** When buffer became empty after `pop`; delays resetting `primed` (Phase C/D soft un-prime). */
   private emptySinceMs: number | null = null;
@@ -114,6 +115,15 @@ export class JitterBuffer {
   }
 
   /**
+   * Highest seq this buffer has handed to the Opus decoder ("played"). Returns -1 if no
+   * frame has been popped yet. Consumed by the decrypt-worker pool's stale-seq pre-skip:
+   * incoming packets whose `seq <= lastPlayedSeq` would be rejected on push anyway.
+   */
+  getLastPlayedSeq(): number {
+    return this.lastPlayedSeq;
+  }
+
+  /**
    * Exact-1-remote recovery can intentionally leave preroll before the normal
    * unprimed threshold. Mark the buffer primed so a live one-frame trickle can
    * actually drain on the next tick instead of remaining stuck below threshold.
@@ -146,6 +156,12 @@ export class JitterBuffer {
     return m;
   }
 
+  consumeLastPoppedReceivedAtMs(): number | null {
+    const value = this.lastPoppedReceivedAtMs;
+    this.lastPoppedReceivedAtMs = null;
+    return value;
+  }
+
   push(seq: number, opusFrame: Uint8Array): JitterPushResult {
     this.checkSoftUnprime();
     if (seq <= this.lastPlayedSeq) {
@@ -163,7 +179,7 @@ export class JitterBuffer {
     this.entries.splice(insertAt, 0, {
       seq,
       opusFrame,
-      receivedAt: performance.now(),
+      receivedAt: Date.now(),
     });
     this.emptySinceMs = null;
     const maxEntries = this.jitterBufferSize * 2;
@@ -196,6 +212,7 @@ export class JitterBuffer {
     const entry = this.entries.shift();
     if (!entry) return null;
     this.primed = true;
+    this.lastPoppedReceivedAtMs = entry.receivedAt;
     if (this.lastPlayedSeq >= 0) {
       const expected = (this.lastPlayedSeq + 1) & 0xffff;
       const gap = (entry.seq - expected + 65536) % 65536;
@@ -235,6 +252,7 @@ export class JitterBuffer {
     this.entries = [];
     this.lastPlayedSeq = -1;
     this.pendingMissedSeq = 0;
+    this.lastPoppedReceivedAtMs = null;
     this.primed = false;
     this.emptySinceMs = null;
     this.lastRawGapAfterPop = 0;

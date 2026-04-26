@@ -17,6 +17,7 @@ import {
   getEffectiveJitterTuning,
   getGroupCallAudioTuning,
   readGroupCallAudioProfile,
+  type GroupCallAudioQualityProfile,
   type GroupCallAudioTuning,
 } from '../group-call/groupCallAudioProfile';
 import type { GroupCallPerformanceTracker } from '../group-call/router';
@@ -24,18 +25,25 @@ import {
   GCALL_WASM_FEC_EXTRA_HOLD_FRAMES,
   readGcallWasmFecDesired,
 } from '../group-call/gcallWasmFecEnv';
-import { OPUS_CHANNELS, OPUS_SAMPLE_RATE } from '../group-call/gcallVoiceAudioConstants';
+import {
+  OPUS_CHANNELS,
+  OPUS_FRAME_SAMPLES,
+  OPUS_SAMPLE_RATE,
+} from '../group-call/gcallVoiceAudioConstants';
+import { PerSourcePcmRing } from '../group-call/v2/perSourcePcmRing';
 import OpusFecWorker from '../../workers/gcall-opus-fec.worker?worker';
 
 export interface DmVoiceGcallPlayoutWorkletMessage {
   type?: string;
   bufferedMs?: number;
+  preProcessBufferedMs?: number;
   targetPlayoutMs?: number;
   rate?: number;
   outsideBand?: boolean;
   outsideBandUnder?: boolean;
   outsideBandOver?: boolean;
   deltaMs?: number;
+  oldestFrameAgeMs?: number;
   concealmentUsed?: boolean;
   playoutStarted?: boolean;
   panicZoneEntered?: boolean;
@@ -44,10 +52,30 @@ export interface DmVoiceGcallPlayoutWorkletMessage {
 export interface DmVoiceGcallInboundOptions {
   /** Same tracker as group voice for playout metrics + adaptive mode. */
   metricsRef?: { current: GroupCallPerformanceTracker | null };
+  /** Optional explicit quality profile instead of localStorage-backed default. */
+  profile?: GroupCallAudioQualityProfile;
   /** After each jitter drain tick (aligned with group `runJitterDrainTick` tail). */
   afterDrain?: (info: { missedFramesThisTick: number }) => void;
+  /** Fired after a jitter pop advances the played sequence watermark. */
+  onPlayedSeqAdvanced?: (info: { sourceAddr: string; playedSeq: number }) => void;
   /** `gcallPlayoutMetrics` from `group-playout-processor`. */
   onPlayoutWorkletMessage?: (d: DmVoiceGcallPlayoutWorkletMessage) => void;
+  /** One sample per jitter scheduler tick for the active hidden playout path. */
+  onJitterTickTelemetry?: (info: {
+    sourceAddr: string;
+    durationMs: number;
+    bufferedFrames: number;
+    hasReadyFrame: boolean;
+    rawEmpty: boolean;
+  }) => void;
+  /** WASM FEC decode stats from the active hidden playout path. */
+  onWasmFecDecodeStats?: (info: {
+    sourceAddr: string;
+    plcFrames: number;
+    fecAttempts: number;
+    fecSuccessCoarse: number;
+    deferredPcmTick: boolean;
+  }) => void;
 }
 
 function disconnectSafe(node: AudioNode | null | undefined): void {
@@ -69,6 +97,7 @@ export class DmVoiceGcallInboundPlayout {
   private schedulerNode: AudioWorkletNode | null = null;
   private schedulerGain: GainNode | null = null;
   private speakerGain: GainNode | null = null;
+  private pcmRing: PerSourcePcmRing | null = null;
   private workletsLoadedForContext: WeakMap<AudioContext, Promise<void>> =
     new WeakMap();
 
@@ -80,9 +109,131 @@ export class DmVoiceGcallInboundPlayout {
   private callbacks: DmVoiceGcallInboundOptions | null = null;
   /** Last applied `metrics.adaptiveNetworkMode` for jitter geometry. */
   private lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null = null;
+  private pendingDecodedIngressAtMs: Array<number | null> = [];
+  private lastDrainMetricSampleAtMs = 0;
+
+  private async ensureWebCodecsDecoder(): Promise<void> {
+    if (this.decoder && this.decoder.state !== 'closed') return;
+    const tuning = this.tuning;
+    const node = this.playbackNode;
+    if (!tuning || !node) return;
+    const AudioDecoderCtor = globalThis.AudioDecoder;
+    if (!AudioDecoderCtor) {
+      throw new Error('AudioDecoder unavailable');
+    }
+    const decoder = new AudioDecoderCtor({
+      output: (audioData: AudioData) => {
+        const pcm = new Float32Array(audioData.numberOfFrames);
+        audioData.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
+        audioData.close();
+        const ingressAtMs =
+          this.pendingDecodedIngressAtMs.length > 0
+            ? (this.pendingDecodedIngressAtMs.shift() ?? null)
+            : null;
+        this.pushPcmToPlayout(pcm, ingressAtMs);
+      },
+      error: (e: Error) => {
+        console.error('[DM voice] inbound AudioDecoder:', e);
+      },
+    });
+    await configureWebCodecsOpusDecoderForGcall(decoder, tuning, {
+      sampleRate: OPUS_SAMPLE_RATE,
+      numberOfChannels: OPUS_CHANNELS,
+    });
+    this.decoder = decoder;
+  }
+
+  private fallbackFromWasmFecToWebCodecs(reason: string): void {
+    if (!this.wasmFecActive && this.decoder) return;
+    this.wasmFecActive = false;
+    if (this.opusFecWorker) {
+      try {
+        this.opusFecWorker.terminate();
+      } catch {
+        /* ignore */
+      }
+      this.opusFecWorker = null;
+    }
+    this.fecPipeline = null;
+    void this.ensureWebCodecsDecoder().catch((error) => {
+      console.error('[DM voice] WebCodecs fallback failed after WASM FEC error', {
+        reason,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
 
   getPlaybackWorkletNode(): AudioWorkletNode | null {
     return this.playbackNode;
+  }
+
+  getDiagnosticsSnapshot(): {
+    peerAddress: string;
+    decodePath: 'wasm-fec' | 'webcodecs' | 'uninitialized';
+    wasmFecActive: boolean;
+    hasOpusFecWorker: boolean;
+    hasWebCodecsDecoder: boolean;
+    decoderState: string | null;
+    hasSharedPcmRing: boolean;
+    sharedRingEnabled: boolean;
+    jitterActive: boolean;
+    jitterBufferedFrames: number;
+    jitterHasReadyFrame: boolean;
+    playbackNodeActive: boolean;
+    schedulerNodeActive: boolean;
+    lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
+  } {
+    return {
+      peerAddress: this.peerAddress,
+      decodePath: this.wasmFecActive
+        ? 'wasm-fec'
+        : this.decoder
+          ? 'webcodecs'
+          : 'uninitialized',
+      wasmFecActive: this.wasmFecActive,
+      hasOpusFecWorker: this.opusFecWorker !== null,
+      hasWebCodecsDecoder: this.decoder !== null,
+      decoderState: this.decoder?.state ?? null,
+      hasSharedPcmRing: this.pcmRing !== null,
+      sharedRingEnabled: this.pcmRing !== null,
+      jitterActive: this.jitter !== null,
+      jitterBufferedFrames: this.jitter?.getBufferedFrames() ?? 0,
+      jitterHasReadyFrame: this.jitter?.hasReadyFrame() ?? false,
+      playbackNodeActive: this.playbackNode !== null,
+      schedulerNodeActive: this.schedulerNode !== null,
+      lastJitterAdaptiveMode: this.lastJitterAdaptiveMode,
+    };
+  }
+
+  private canUseSharedPcmRing(): boolean {
+    return typeof SharedArrayBuffer !== 'undefined';
+  }
+
+  private pushPcmToPlayout(
+    pcm: Float32Array,
+    ingressAtMs: number | null = null
+  ): boolean {
+    const ring = this.pcmRing;
+    if (ring) {
+      ring.write(pcm, { ingressAtMs });
+      return true;
+    }
+    const currentNode = this.playbackNode;
+    if (!currentNode) return false;
+    if (
+      typeof ingressAtMs === 'number' &&
+      Number.isFinite(ingressAtMs) &&
+      this.callbacks?.metricsRef?.current
+    ) {
+      this.callbacks.metricsRef.current.recordReceiverIngressToPlayoutPostLatency(
+        this.peerAddress,
+        Math.max(0, Date.now() - ingressAtMs)
+      );
+    }
+    const copy = new Float32Array(pcm.length);
+    copy.set(pcm);
+    currentNode.port.postMessage({ pcm: copy }, [copy.buffer]);
+    return true;
   }
 
   /**
@@ -99,7 +250,9 @@ export class DmVoiceGcallInboundPlayout {
     this.callbacks = options ?? null;
     this.lastJitterAdaptiveMode = null;
     this.peerAddress = peerAddress;
-    const tuning = getGroupCallAudioTuning(readGroupCallAudioProfile());
+    const tuning = getGroupCallAudioTuning(
+      options?.profile ?? readGroupCallAudioProfile()
+    );
     this.tuning = tuning;
 
     const fecDesired = readGcallWasmFecDesired();
@@ -122,10 +275,18 @@ export class DmVoiceGcallInboundPlayout {
     }
     await load;
 
+    const pcmRing = this.canUseSharedPcmRing()
+      ? new PerSourcePcmRing({ sampleRateHz: OPUS_SAMPLE_RATE })
+      : null;
     const playNode = new AudioWorkletNode(ctx, 'group-playout-processor', {
       processorOptions: {
         sourceAddr: peerAddress,
         maxPlayoutTargetMs: GCALL_GLOBAL_PLAYOUT_CAP_MS,
+        ...(pcmRing
+          ? {
+              sharedRing: pcmRing.getSharedBridgeConfig(),
+            }
+          : {}),
       },
     } as AudioWorkletNodeOptions);
 
@@ -143,84 +304,80 @@ export class DmVoiceGcallInboundPlayout {
     speakerGain.connect(connectTo);
 
     this.playbackNode = playNode;
+    this.pcmRing = pcmRing;
 
     if (fecDesired) {
-      this.fecPipeline = new GcallOpusFecPlayoutPipeline((addr) =>
-        addr === this.peerAddress ? this.playbackNode ?? undefined : undefined
-      );
-      const w = new OpusFecWorker();
-      w.onmessage = (
-        ev: MessageEvent<
-          | {
-              type: 'decoded';
-              sourceAddr: string;
-              pcm: Float32Array;
-              frameCount: number;
-              stats: {
-                plcFrames: number;
-                fecAttempts: number;
-                fecSuccessCoarse: number;
-              };
-            }
-          | { type: 'error'; sourceAddr?: string; message: string }
-        >
-      ) => {
-        const d = ev.data;
-        if (d.type === 'error') {
-          console.error('[DM voice] opus-fec worker:', d.message);
-          if (d.sourceAddr && this.fecPipeline && this.opusFecWorker) {
-            this.fecPipeline.completeInflight(d.sourceAddr);
-            this.fecPipeline.pump(this.opusFecWorker, d.sourceAddr);
-          }
-          return;
+      this.fecPipeline = new GcallOpusFecPlayoutPipeline(
+        (addr) => (addr === this.peerAddress ? this.playbackNode ?? undefined : undefined),
+        (addr, stats) => {
+          this.callbacks?.metricsRef?.current?.recordWasmFecDecodeStats(addr, stats);
+          this.callbacks?.onWasmFecDecodeStats?.({
+            sourceAddr: addr,
+            ...stats,
+          });
+        },
+        (addr, pcmBatch, _frameCount, ingressAtMs) => {
+          if (addr !== this.peerAddress) return false;
+          return this.pushPcmToPlayout(pcmBatch, ingressAtMs);
         }
-        if (d.type !== 'decoded' || !this.fecPipeline || !this.opusFecWorker) return;
-        this.fecPipeline.completeInflight(d.sourceAddr);
-        this.fecPipeline.postBatch(
-          d.sourceAddr,
-          d.pcm,
-          d.frameCount,
-          d.stats,
-          false
-        );
-        this.fecPipeline.pump(this.opusFecWorker, d.sourceAddr);
-      };
-      w.onerror = (err) => {
-        console.error('[DM voice] opus-fec worker error', err);
-        this.wasmFecActive = false;
-      };
-      this.opusFecWorker = w;
-      this.wasmFecActive = true;
-    } else {
-      const AudioDecoderCtor = globalThis.AudioDecoder;
-      if (!AudioDecoderCtor) {
-        throw new Error('AudioDecoder unavailable');
-      }
-      const decoder = new AudioDecoderCtor({
-        output: (audioData: AudioData) => {
-          const pcm = new Float32Array(audioData.numberOfFrames);
-          audioData.copyTo(pcm, { planeIndex: 0, format: 'f32-planar' });
-          audioData.close();
-          const node = this.playbackNode;
-          if (node) {
-            node.port.postMessage({ pcm }, [pcm.buffer]);
+      );
+      try {
+        const w = new OpusFecWorker();
+        w.onmessage = (
+          ev: MessageEvent<
+            | {
+                type: 'decoded';
+                sourceAddr: string;
+                pcm: Float32Array;
+                frameCount: number;
+                stats: {
+                  plcFrames: number;
+                  fecAttempts: number;
+                  fecSuccessCoarse: number;
+                };
+              }
+            | { type: 'error'; sourceAddr?: string; message: string }
+          >
+        ) => {
+          const d = ev.data;
+          if (d.type === 'error') {
+            console.error('[DM voice] opus-fec worker:', d.message);
+            this.fallbackFromWasmFecToWebCodecs('worker-message-error');
+            return;
           }
-        },
-        error: (e: Error) => {
-          console.error('[DM voice] inbound AudioDecoder:', e);
-        },
-      });
-      await configureWebCodecsOpusDecoderForGcall(decoder, tuning, {
-        sampleRate: OPUS_SAMPLE_RATE,
-        numberOfChannels: OPUS_CHANNELS,
-      });
-      this.decoder = decoder;
+          if (d.type !== 'decoded' || !this.fecPipeline || !this.opusFecWorker) return;
+          const ingressAtMs =
+            this.fecPipeline.consumeInflightIngressAtMs(d.sourceAddr);
+          this.fecPipeline.completeInflight(d.sourceAddr);
+          this.fecPipeline.postBatch(
+            d.sourceAddr,
+            d.pcm,
+            d.frameCount,
+            d.stats,
+            true,
+            ingressAtMs
+          );
+          this.fecPipeline.pump(this.opusFecWorker, d.sourceAddr);
+        };
+        w.onerror = (err) => {
+          console.error('[DM voice] opus-fec worker error', err);
+          this.fallbackFromWasmFecToWebCodecs('worker-onerror');
+        };
+        this.opusFecWorker = w;
+        this.wasmFecActive = true;
+      } catch (error) {
+        console.error('[DM voice] opus-fec worker init failed', error);
+        this.fallbackFromWasmFecToWebCodecs('worker-init');
+      }
+    } else {
+      await this.ensureWebCodecsDecoder();
       this.wasmFecActive = false;
     }
 
     const jitterSched = new AudioWorkletNode(ctx, 'gcall-jitter-scheduler');
     jitterSched.port.onmessage = (ev: MessageEvent) => {
       if (ev.data?.type !== 'tick') return;
+      const tickStartedAt = performance.now();
       this.syncJitterGeometryFromMetrics();
       const jb = this.jitter;
       let missedFramesThisTick = 0;
@@ -228,15 +385,49 @@ export class DmVoiceGcallInboundPlayout {
         this.callbacks?.afterDrain?.({ missedFramesThisTick: 0 });
         return;
       }
-      if (!jb.hasReadyFrame()) {
-        missedFramesThisTick = 1;
+      const hasReadyFrame = jb.hasReadyFrame();
+      const bufferedFrames = jb.getBufferedFrames();
+      if (!hasReadyFrame) {
+        missedFramesThisTick = 0;
       } else {
         if (this.wasmFecActive && this.fecPipeline && this.opusFecWorker) {
           this.fecPipeline.clearPostedThisTick();
           this.fecPipeline.prefetchDeferredForAllSources([this.peerAddress]);
         }
-        this.drainOneFrame();
+        missedFramesThisTick = this.drainOneFrame();
       }
+      const tickFinishedAt = performance.now();
+      if (
+        tickFinishedAt - this.lastDrainMetricSampleAtMs >=
+        OPUS_FRAME_SAMPLES / OPUS_SAMPLE_RATE * 1000
+      ) {
+        this.lastDrainMetricSampleAtMs = tickFinishedAt;
+        this.callbacks?.metricsRef?.current?.recordJitterTickDuration(
+          tickFinishedAt - tickStartedAt
+        );
+        if (!this.pcmRing) {
+          this.callbacks?.metricsRef?.current?.recordJitterDrainTelemetry({
+            sourceCount: 1,
+            depthSum: bufferedFrames,
+            worstDepth: bufferedFrames,
+            notReadyCount: hasReadyFrame ? 0 : 1,
+            rawEmptyCount: bufferedFrames === 0 ? 1 : 0,
+          });
+        }
+        if (!hasReadyFrame && !this.pcmRing) {
+          this.callbacks?.metricsRef?.current?.recordJitterUnderrun(
+            1,
+            this.peerAddress
+          );
+        }
+      }
+      this.callbacks?.onJitterTickTelemetry?.({
+        sourceAddr: this.peerAddress,
+        durationMs: tickFinishedAt - tickStartedAt,
+        bufferedFrames,
+        hasReadyFrame,
+        rawEmpty: bufferedFrames === 0,
+      });
       this.callbacks?.afterDrain?.({ missedFramesThisTick });
     };
     const jitterSchedGain = ctx.createGain();
@@ -269,23 +460,32 @@ export class DmVoiceGcallInboundPlayout {
     jb.setSteadyPrimedHoldFrames(mode !== 'recovery' ? 1 : 0);
   }
 
-  private drainOneFrame(): void {
+  private drainOneFrame(): number {
     if (this.wasmFecActive) {
-      this.drainOneWasmFrame();
+      return this.drainOneWasmFrame();
     } else {
-      this.drainOneWebCodecsFrame();
+      return this.drainOneWebCodecsFrame();
     }
   }
 
-  private drainOneWasmFrame(): void {
+  private drainOneWasmFrame(): number {
     const jb = this.jitter;
     const w = this.opusFecWorker;
     const pipeline = this.fecPipeline;
     const tuning = this.tuning;
-    if (!jb || !w || !pipeline || !tuning) return;
-    if (!jb.hasReadyFrame()) return;
+    if (!jb || !w || !pipeline || !tuning) return 0;
+    if (!jb.hasReadyFrame()) return 0;
     const frame = jb.pop();
-    if (!frame) return;
+    if (!frame) return 0;
+    const missedInc = jb.consumePendingMissedFrames();
+    const ingressAtMs = jb.consumeLastPoppedReceivedAtMs();
+    const playedSeq = jb.getLastPlayedSeq();
+    if (playedSeq >= 0) {
+      this.callbacks?.onPlayedSeqAdvanced?.({
+        sourceAddr: this.peerAddress,
+        playedSeq,
+      });
+    }
     const rawGap = jb.consumeLastRawGapAfterPop();
     if (rawGap > tuning.wasmFecMaxGapReset) {
       w.postMessage({ type: 'reset', sourceAddr: this.peerAddress });
@@ -293,26 +493,44 @@ export class DmVoiceGcallInboundPlayout {
     const gapForWorker = Math.min(rawGap, 48);
     const packetCopy = new Uint8Array(frame.byteLength);
     packetCopy.set(frame);
-    pipeline.enqueueDecode(w, this.peerAddress, packetCopy, gapForWorker);
+    pipeline.enqueueDecode(
+      w,
+      this.peerAddress,
+      packetCopy,
+      gapForWorker,
+      ingressAtMs
+    );
+    return missedInc;
   }
 
-  private drainOneWebCodecsFrame(): void {
+  private drainOneWebCodecsFrame(): number {
     const jb = this.jitter;
     const decoder = this.decoder;
-    if (!jb || !decoder || decoder.state === 'closed') return;
-    if (!jb.hasReadyFrame()) return;
+    if (!jb || !decoder || decoder.state === 'closed') return 0;
+    if (!jb.hasReadyFrame()) return 0;
     const frame = jb.pop();
-    if (!frame) return;
+    if (!frame) return 0;
+    const missedInc = jb.consumePendingMissedFrames();
+    const ingressAtMs = jb.consumeLastPoppedReceivedAtMs();
+    const playedSeq = jb.getLastPlayedSeq();
+    if (playedSeq >= 0) {
+      this.callbacks?.onPlayedSeqAdvanced?.({
+        sourceAddr: this.peerAddress,
+        playedSeq,
+      });
+    }
     try {
       const chunk = new EncodedAudioChunk({
         type: 'key',
         timestamp: performance.now() * 1000,
         data: frame,
       });
+      this.pendingDecodedIngressAtMs.push(ingressAtMs);
       decoder.decode(chunk);
     } catch {
       /* ignore */
     }
+    return missedInc;
   }
 
   pushDecoded(packets: DecodedAudioPacket[]): void {
@@ -329,6 +547,7 @@ export class DmVoiceGcallInboundPlayout {
     const spGain = this.speakerGain;
     const sched = this.schedulerNode;
     const schedGain = this.schedulerGain;
+    const pcmRing = this.pcmRing;
     const w = this.opusFecWorker;
 
     this.decoder = null;
@@ -336,6 +555,7 @@ export class DmVoiceGcallInboundPlayout {
     this.speakerGain = null;
     this.schedulerNode = null;
     this.schedulerGain = null;
+    this.pcmRing = null;
     this.jitter = null;
     this.tuning = null;
     this.fecPipeline = null;
@@ -344,7 +564,10 @@ export class DmVoiceGcallInboundPlayout {
     this.peerAddress = '';
     this.callbacks = null;
     this.lastJitterAdaptiveMode = null;
+    this.pendingDecodedIngressAtMs = [];
+    this.lastDrainMetricSampleAtMs = 0;
 
+    pcmRing?.reset();
     disconnectSafe(playNode);
     disconnectSafe(spGain);
     disconnectSafe(sched);

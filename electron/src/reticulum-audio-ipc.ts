@@ -11,7 +11,7 @@
 import { Buffer } from 'buffer';
 
 export const RETICULUM_AUDIO_MAGIC = Buffer.from('QAUD', 'ascii');
-export const RETICULUM_AUDIO_VERSION = 1;
+export const RETICULUM_AUDIO_VERSION = 2;
 export const RETICULUM_AUDIO_HEADER_BYTES = 9;
 
 /** Max single-frame Opus-ish payload per frame (before base64 expansion in RNS JSON wire). */
@@ -29,6 +29,8 @@ export type ReticulumAudioFrame = {
   peerPresenceHash?: string;
   /** Inbound: peer destination hash hex (`r` on GCA wire). */
   peerDestinationHash?: string;
+  /** Python bridge wall-clock when inbound audio hit the daemon callback; `0`/absent when unknown. */
+  receivedAtWallMs?: number;
   payload: Buffer;
 };
 
@@ -45,6 +47,20 @@ function writeU16BE(buf: Buffer, offset: number, v: number): void {
 
 function readU16BE(buf: Buffer, offset: number): number {
   return buf.readUInt16BE(offset);
+}
+
+function writeU64BE(buf: Buffer, offset: number, value: number): void {
+  const normalized = Math.max(0, Math.trunc(value));
+  const hi = Math.floor(normalized / 0x1_0000_0000);
+  const lo = normalized >>> 0;
+  buf.writeUInt32BE(hi >>> 0, offset);
+  buf.writeUInt32BE(lo, offset + 4);
+}
+
+function readU64BE(buf: Buffer, offset: number): number {
+  const hi = buf.readUInt32BE(offset);
+  const lo = buf.readUInt32BE(offset + 4);
+  return hi * 0x1_0000_0000 + lo;
 }
 
 /**
@@ -82,6 +98,7 @@ export function encodeReticulumAudioBatch(frames: ReticulumAudioFrame[]): Buffer
       1 +
       pch.length +
       2 +
+      8 +
       f.payload.length;
   }
 
@@ -112,6 +129,8 @@ export function encodeReticulumAudioBatch(frames: ReticulumAudioFrame[]): Buffer
     o += pch.length;
     writeU16BE(body, o, f.payload.length);
     o += 2;
+    writeU64BE(body, o, f.receivedAtWallMs ?? 0);
+    o += 8;
     f.payload.copy(body, o);
     o += f.payload.length;
   }
@@ -193,12 +212,22 @@ export function decodeReticulumAudioMessage(buf: Buffer): ReticulumAudioFrame[] 
     if (o + 2 > body.length) throw new ReticulumAudioIpcError('truncated len');
     const plen = readU16BE(body, o);
     o += 2;
+    if (o + 8 > body.length) throw new ReticulumAudioIpcError('truncated received-at');
+    const receivedAtWallMs = readU64BE(body, o);
+    o += 8;
     if (plen > RETICULUM_AUDIO_MAX_PAYLOAD || o + plen > body.length) {
       throw new ReticulumAudioIpcError('bad payload length');
     }
     const payload = Buffer.from(body.subarray(o, o + plen));
     o += plen;
-    out.push({ linkId, roomId, peerPresenceHash, peerDestinationHash, payload });
+    out.push({
+      linkId,
+      roomId,
+      peerPresenceHash,
+      peerDestinationHash,
+      receivedAtWallMs,
+      payload,
+    });
   }
   if (o !== body.length) {
     throw new ReticulumAudioIpcError('leftover bytes in body');

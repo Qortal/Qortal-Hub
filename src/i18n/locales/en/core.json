@@ -119,6 +119,8 @@
   "group_call_blocked": "finish your other call first",
   "group_call_members_fetch_failed": "Could not load group members.",
   "group_call_not_member": "Only group members can join this call.",
+  "group_call_join_sign_or_setup_failed": "Could not prepare the call (signing or setup). Try again, or re-open the app if this persists.",
+  "group_call_join_failed_generic": "Could not join the call ({{code}}).",
   "group_call_presence_offline": "Switch your status to online to join a group voice call.",
   "group_call_reticulum_not_ready": "Reticulum is not ready yet. Wait a moment and try joining again.",
   "group_call_p2p_health_not_good": "Group voice calls need good P2P health: at least two remote interfaces online, and at least three inbound and three outbound overlay peers. Check Core information for details.",

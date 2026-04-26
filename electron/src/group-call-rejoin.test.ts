@@ -118,8 +118,148 @@ type ReticulumBridgeStub = {
   off: () => void;
 };
 
+function makeAudioQueueSnapshot(
+  overrides: Partial<Record<string, number | boolean>> = {}
+) {
+  return {
+    bridgeQueuedFrames: 0,
+    bridgeQueuedBytes: 0,
+    bridgeBinaryWritesQueued: 0,
+    bridgeWaitingForDrain: false,
+    perLinkQueuedFrames: 0,
+    queuePressureDrops: 0,
+    queuePressureDropsLast5s: 0,
+    staleDrops: 0,
+    staleDropsLast5s: 0,
+    decodedQueueDepth: 0,
+    decodedQueueMax: 0,
+    decodedQueueDrops: 0,
+    binaryOutQueueDepth: 0,
+    binaryOutQueueMax: 0,
+    binaryOutQueueDrops: 0,
+    jsonOutQueueDrops: 0,
+    packetSendFailures: 0,
+    packetPathRequests: 0,
+    packetPathResolutions: 0,
+    packetPathTimeouts: 0,
+    packetFreshSends: 0,
+    packetStaleSends: 0,
+    packetUnknownSends: 0,
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe('reticulum audio batching', () => {
+  it('sendAudioBatch coalesces enqueue and flush work without calling sendAudio per peer', () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    const diagnosticsFor = (address?: string, queuePressureDrops = 0, staleDrops = 0) => ({
+      transport: 'packet' as const,
+      pendingFrames: 1,
+      queuePressureDrops,
+      staleDrops,
+      linkUnreadyDrops: 0,
+      packetSendFailures: 0,
+      ...(address ? { targetAddress: address } : {}),
+    });
+    const fakeState = { transport: 'packet', established: true } as any;
+
+    const sendAudioSpy = vi.spyOn(manager, 'sendAudio');
+    vi.spyOn(manager as any, 'ensureReticulumAudioPeerState').mockReturnValue(fakeState);
+    vi.spyOn(manager as any, 'enqueuePendingReticulumAudio').mockReturnValue({
+      queuePressureDrops: 1,
+      staleDrops: 0,
+    });
+    const scheduleFlushSpy = vi
+      .spyOn(manager as any, 'scheduleReticulumAudioFlush')
+      .mockImplementation(() => {});
+    const flushSpy = vi.spyOn(manager as any, 'flushReticulumAudioQueuesFair').mockReturnValue({
+      diagnostics: diagnosticsFor('Q-a'),
+      framesEnqueued: 2,
+      bridgePressured: false,
+      nextDelayMs: 0,
+    });
+    vi.spyOn(manager as any, 'buildReticulumAudioSendDiagnostics').mockImplementation(
+      (_state: unknown, address?: string, deltas?: { queuePressureDrops?: number; staleDrops?: number }) =>
+        diagnosticsFor(address, deltas?.queuePressureDrops ?? 0, deltas?.staleDrops ?? 0)
+    );
+
+    const result = manager.sendAudioBatch('room-1', ['Q-a', 'Q-b'], Buffer.from([1, 2, 3]));
+
+    expect(result.success).toBe(true);
+    expect(sendAudioSpy).not.toHaveBeenCalled();
+    expect((manager as any).enqueuePendingReticulumAudio).toHaveBeenCalledTimes(2);
+    expect(scheduleFlushSpy).toHaveBeenCalledTimes(1);
+    expect(flushSpy).toHaveBeenCalledTimes(1);
+    expect(flushSpy).toHaveBeenCalledWith('Q-a');
+    expect(result.diagnostics?.queuePressureDrops).toBe(2);
+  });
+
+  it('flushPendingReticulumAudioForAddress uses stricter forwarder pressure thresholds', () => {
+    const snapshot = makeAudioQueueSnapshot({ bridgeQueuedFrames: 6 });
+    const bridge = {
+      enqueuePacketGroupAudio: vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot,
+      })),
+    };
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    vi.spyOn(manager as any, 'isLocalAddressAnyForwarder').mockReturnValue(true);
+    vi.spyOn(manager as any, 'buildReticulumAudioSendDiagnostics').mockImplementation(
+      () => ({
+        transport: 'packet' as const,
+        pendingFrames: 0,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        linkUnreadyDrops: 0,
+        packetSendFailures: 0,
+      })
+    );
+    vi.spyOn(manager as any, 'maybeActivateReticulumPacketFallback').mockImplementation(
+      () => {}
+    );
+
+    (manager as any).reticulumAudioPeersByAddress.set('Q-peer', {
+      address: 'Q-peer',
+      transport: 'packet',
+      established: false,
+      linkId: '',
+      peerPresenceHash: 'peer-hash',
+      peerDestinationHash: 'dest-hash',
+      routeKey: 'packet:peer-hash',
+      recoveryHoldUntilMs: 0,
+      packetDegradedSinceMs: 0,
+      lastOutboundPacketAtMs: 0,
+      pending: [
+        {
+          roomId: 'room-1',
+          data: Buffer.from([1, 2, 3]),
+          enqueuedAtMs: Date.now(),
+        },
+      ],
+    });
+
+    const pressureSpy = vi.spyOn(manager as any, 'isReticulumAudioBridgePressured');
+    const result = (manager as any).flushPendingReticulumAudioForAddress('Q-peer', {
+      maxFrames: 1,
+      stopOnPressure: true,
+    });
+
+    expect(result?.bridgePressured).toBe(true);
+    expect(pressureSpy).toHaveBeenCalledWith(snapshot, true);
+  });
 });
 
 describe('mergeRoomTopologyEpochWithFloor', () => {
@@ -1835,6 +1975,7 @@ describe('Reticulum group audio transport', () => {
     expect(seen).toEqual([
       {
         roomId: 'room-1',
+        bridgeReceivedAtWallMs: null,
         data: Buffer.from([7, 8, 9]),
         transport: 'link',
         routeKey: 'link-1',
@@ -1944,6 +2085,7 @@ describe('Reticulum group audio transport', () => {
     expect(seen).toEqual([
       {
         roomId: 'room-1',
+        bridgeReceivedAtWallMs: null,
         data: Buffer.from([7, 8, 9]),
         transport: 'link',
         routeKey: 'unmapped-link',
@@ -2057,6 +2199,7 @@ describe('Reticulum group audio transport', () => {
     expect(seen).toEqual([
       {
         roomId: 'room-1',
+        bridgeReceivedAtWallMs: null,
         data: Buffer.from([7, 8, 9]),
         transport: 'packet',
         routeKey: 'packet:d:Q-peer',
@@ -2165,6 +2308,7 @@ describe('Reticulum group audio transport', () => {
     expect(seen).toEqual([
       {
         roomId: dmRoomId,
+        bridgeReceivedAtWallMs: null,
         data: Buffer.from([7, 8, 9]),
         transport: 'packet',
         routeKey: 'packet:unknown',

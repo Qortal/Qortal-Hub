@@ -54,6 +54,7 @@ describe('gcall-perf', () => {
     });
 
     const snapshot = perf.snapshot({ roomState: 'connected' });
+    expect(snapshot.enabled).toBe(true);
     expect(snapshot.series.tickTotalMs.avgMs).toBe(5);
     expect(snapshot.series.tickTotalPerSourceMs.avgMs).toBe(3);
     expect(snapshot.counters.adaptiveRuns).toBe(1);
@@ -71,7 +72,8 @@ describe('gcall-perf', () => {
     const p = perf.getLongTaskPressure();
     expect(p.count).toBe(2);
     expect(p.recentHeavy).toBe(true);
-    const snap = perf.snapshot();
+    const snap = perf.snapshot({ perfCollectionEnabled: false });
+    expect(snap.enabled).toBe(false);
     expect(snap.series).toEqual({});
     expect(snap.longTasks.count).toBe(2);
   });
@@ -88,6 +90,7 @@ describe('gcall-perf', () => {
     perf.reset();
 
     const snapshot = perf.snapshot();
+    expect(snapshot.enabled).toBe(true);
     expect(snapshot.series).toEqual({});
     expect(snapshot.counters).toEqual({});
     expect(snapshot.longTasks.count).toBe(0);

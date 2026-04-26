@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 1,
+  "mode": "deterministic",
+  "scenarioId": "call60-two-party-regression",
+  "scenarioDescription": "Recreates the call-60 rebuild oscillation, but the paired call should still recover to healthy.",
+  "fixtureId": "call-60-rebuild-oscillation",
+  "generatedAt": "2026-04-26T13:13:48.921Z",
+  "seed": 808,
+  "pairedAnalysis": {
+    "peerA": {
+      "addr": "peer-A",
+      "role": "root-forwarder",
+      "primaryClass": "mixed",
+      "secondaryClass": "transport-dominated",
+      "provisionalBars": [
+        {
+          "metric": "packetsDroppedPendingDecryptRatePerSec",
+          "observed": 0,
+          "threshold": 1,
+          "operator": "<",
+          "passed": true,
+          "description": "Decrypt drop rate < 1.0/s (decrypt pass bar)"
+        },
+        {
+          "metric": "playoutUnderTargetFraction",
+          "observed": 0.00672107537205953,
+          "threshold": 0.35,
+          "operator": "<=",
+          "passed": true,
+          "description": "Under-target fraction ≤ 0.35 (provisional jitter pass)"
+        },
+        {
+          "metric": "playoutOutsideTargetFraction",
+          "observed": 0.0070571291406625065,
+          "threshold": 0.5,
+          "operator": "<=",
+          "passed": true,
+          "description": "Outside-target fraction ≤ 0.5"
+        }
+      ],
+      "passedAllBars": true,
+      "severity": "healthy",
+      "diagnosticNotes": [
+        "V2-managed sources: 1; using v2 jitter summary instead of legacy Opus window fields",
+        "Tick budget: 145 breaches, P95=26.0ms",
+        "Transport triad: bridgeHW=22, binaryHW=16"
+      ]
+    },
+    "peerB": {
+      "addr": "peer-B",
+      "role": "standby-forwarder",
+      "primaryClass": "policy-dominated",
+      "provisionalBars": [
+        {
+          "metric": "packetsDroppedPendingDecryptRatePerSec",
+          "observed": 0,
+          "threshold": 1,
+          "operator": "<",
+          "passed": true,
+          "description": "Decrypt drop rate < 1.0/s (decrypt pass bar)"
+        },
+        {
+          "metric": "playoutUnderTargetFraction",
+          "observed": 0.004889975550122249,
+          "threshold": 0.35,
+          "operator": "<=",
+          "passed": true,
+          "description": "Under-target fraction ≤ 0.35 (provisional jitter pass)"
+        },
+        {
+          "metric": "playoutOutsideTargetFraction",
+          "observed": 0.005134474327628362,
+          "threshold": 0.5,
+          "operator": "<=",
+          "passed": true,
+          "description": "Outside-target fraction ≤ 0.5"
+        }
+      ],
+      "passedAllBars": true,
+      "severity": "healthy",
+      "diagnosticNotes": [
+        "V2-managed sources: 1; using v2 jitter summary instead of legacy Opus window fields"
+      ]
+    },
+    "bothPassed": true,
+    "worseAddr": "peer-A",
+    "qualityScore": 9.223115698511762,
+    "callSummary": "[Good 9.2/10] BOTH PEERS PASS — peer-A (root-forwarder): mixed, severity=healthy; peer-B (standby-forwarder): policy-dominated, severity=healthy"
+  },
+  "firstDegradedPeer": "peer-A",
+  "firstDegradedStage": "playout",
+  "likelyFixSurfaces": [
+    "mixed",
+    "transport-dominated",
+    "policy-dominated"
+  ],
+  "peerA": {
+    "addr": "peer-A",
+    "role": "root-forwarder",
+    "senderProfileId": "call60FixtureSender",
+    "senderProfileLabel": "Call-60 fixture sender",
+    "impairmentSummary": "Bursty transport-flap arrival shape from call-60 rebuild oscillation.",
+    "metrics": {
+      "avgPcmBufferedMs": 119.31445031204993,
+      "avgPlayoutDeltaMs": -0.685549687950072,
+      "playoutUnderTargetFraction": 0.00672107537205953,
+      "playoutOutsideTargetFraction": 0.0070571291406625065,
+      "playoutRateFractionBelow1": 0.15,
+      "jitterUnderruns": 0,
+      "missingFrames": 5,
+      "concealmentTicks": 5,
+      "packetsDroppedStaleTimestamp": 0,
+      "packetsDroppedStaleTimestampRatePerSec": 0,
+      "packetsDroppedPendingDecrypt": 0,
+      "packetsDroppedPendingDecryptRatePerSec": 0,
+      "pendingDecryptDepthHighWater": 0,
+      "reticulumAudioBridgeQueuedFramesHighWater": 22,
+      "reticulumAudioBinaryOutQueueDepthHighWater": 16,
+      "reticulumAudioBridgeWaitingForDrain": true,
+      "reticulumAudioQueuePressureDrops": 0,
+      "reticulumAudioStaleDrops": 0,
+      "avgOpusBufferedMs": 317.753240518483,
+      "maxOpusBufferedMs": 320,
+      "adaptiveTargetMedianMs": 120,
+      "wasmFecDeferredPcmTicks": 0,
+      "durationMs": 83320,
+      "adaptiveNetworkMode": "steady",
+      "playoutStarvationWorstSeverity": "none",
+      "gcallAudioStage5BoostCumulativeMs": 0,
+      "tickBudgetBreachCount": 145,
+      "tickBudgetBreachP95Ms": 26,
+      "tickBudgetBreachMaxMs": 26,
+      "longTaskCount": 0,
+      "role": "root-forwarder",
+      "v2ManagedSourceCount": 1,
+      "legacyWindowOpusMetricsMeaningful": false,
+      "avgPcmRingBufferedMs": 219.51512241958713,
+      "avgTargetBufferMs": 120
+    },
+    "timeline": {
+      "firstIssueAtMs": 20,
+      "firstIssueStage": "playout",
+      "arrival": {
+        "firstIssueAtMs": 238,
+        "totalPackets": 4496,
+        "deliveredPackets": 3908,
+        "droppedPackets": 588,
+        "dropRate": 0.1307829181494662,
+        "staleTimestampDrops": 0,
+        "maxExcessLatenessMs": 255,
+        "maxTimestampRegressionMs": 180
+      },
+      "jitter": {
+        "firstIssueAtMs": 66,
+        "avgBufferedMs": 317.753240518483,
+        "maxBufferedMs": 320,
+        "maxDepthFrames": 16
+      },
+      "decode": {
+        "firstIssueAtMs": 206,
+        "framesDecoded": 10,
+        "concealmentFrames": 5,
+        "concealmentTicks": 5
+      },
+      "pcmRing": {
+        "firstIssueAtMs": null,
+        "avgBufferedMs": 219.51512241958713,
+        "minBufferedMs": 0,
+        "maxBufferedMs": 220,
+        "underruns": 0,
+        "overruns": 0
+      },
+      "playout": {
+        "firstIssueAtMs": 20,
+        "avgDeltaMs": 23.356697071531446,
+        "underTargetFraction": 0.00672107537205953,
+        "outsideTargetFraction": 0.0070571291406625065,
+        "targetBufferMs": 120
+      },
+      "perf": {
+        "tickBudgetBreachCount": 145,
+        "tickBudgetBreachP95Ms": 26,
+        "tickBudgetBreachMaxMs": 26,
+        "longTaskCount": 0
+      }
+    },
+    "stateTransitions": [
+      {
+        "state": "missingMedia",
+        "count": 3
+      },
+      {
+        "state": "coldStart",
+        "count": 3
+      },
+      {
+        "state": "steady",
+        "count": 4160
+      }
+    ],
+    "classification": {
+      "addr": "peer-A",
+      "role": "root-forwarder",
+      "primaryClass": "mixed",
+      "secondaryClass": "transport-dominated",
+      "provisionalBars": [
+        {
+          "metric": "packetsDroppedPendingDecryptRatePerSec",
+          "observed": 0,
+          "threshold": 1,
+          "operator": "<",
+          "passed": true,
+          "description": "Decrypt drop rate < 1.0/s (decrypt pass bar)"
+        },
+        {
+          "metric": "playoutUnderTargetFraction",
+          "observed": 0.00672107537205953,
+          "threshold": 0.35,
+          "operator": "<=",
+          "passed": true,
+          "description": "Under-target fraction ≤ 0.35 (provisional jitter pass)"
+        },
+        {
+          "metric": "playoutOutsideTargetFraction",
+          "observed": 0.0070571291406625065,
+          "threshold": 0.5,
+          "operator": "<=",
+          "passed": true,
+          "description": "Outside-target fraction ≤ 0.5"
+        }
+      ],
+      "passedAllBars": true,
+      "severity": "healthy",
+      "diagnosticNotes": [
+        "V2-managed sources: 1; using v2 jitter summary instead of legacy Opus window fields",
+        "Tick budget: 145 breaches, P95=26.0ms",
+        "Transport triad: bridgeHW=22, binaryHW=16"
+      ]
+    }
+  },
+  "peerB": {
+    "addr": "peer-B",
+    "role": "standby-forwarder",
+    "senderProfileId": "cleanSender",
+    "senderProfileLabel": "Clean sender",
+    "impairmentSummary": "Low jitter, no intentional loss, stable cadence.",
+    "metrics": {
+      "avgPcmBufferedMs": 119.50122249388754,
+      "avgPlayoutDeltaMs": -0.49877750611246086,
+      "playoutUnderTargetFraction": 0.004889975550122249,
+      "playoutOutsideTargetFraction": 0.005134474327628362,
+      "playoutRateFractionBelow1": 0,
+      "jitterUnderruns": 0,
+      "missingFrames": 1,
+      "concealmentTicks": 1,
+      "packetsDroppedStaleTimestamp": 0,
+      "packetsDroppedStaleTimestampRatePerSec": 0,
+      "packetsDroppedPendingDecrypt": 0,
+      "packetsDroppedPendingDecryptRatePerSec": 0,
+      "pendingDecryptDepthHighWater": 0,
+      "reticulumAudioBridgeQueuedFramesHighWater": 0,
+      "reticulumAudioBinaryOutQueueDepthHighWater": 0,
+      "reticulumAudioBridgeWaitingForDrain": false,
+      "reticulumAudioQueuePressureDrops": 0,
+      "reticulumAudioStaleDrops": 0,
+      "avgOpusBufferedMs": 318.19959991109135,
+      "maxOpusBufferedMs": 320,
+      "adaptiveTargetMedianMs": 120,
+      "wasmFecDeferredPcmTicks": 0,
+      "durationMs": 89980,
+      "adaptiveNetworkMode": "steady",
+      "playoutStarvationWorstSeverity": "none",
+      "gcallAudioStage5BoostCumulativeMs": 0,
+      "tickBudgetBreachCount": 0,
+      "tickBudgetBreachP95Ms": 0,
+      "tickBudgetBreachMaxMs": 0,
+      "longTaskCount": 0,
+      "role": "standby-forwarder",
+      "v2ManagedSourceCount": 1,
+      "legacyWindowOpusMetricsMeaningful": false,
+      "avgPcmRingBufferedMs": 219.60435652367192,
+      "avgTargetBufferMs": 120
+    },
+    "timeline": {
+      "firstIssueAtMs": 20,
+      "firstIssueStage": "jitter",
+      "arrival": {
+        "firstIssueAtMs": null,
+        "totalPackets": 4497,
+        "deliveredPackets": 4497,
+        "droppedPackets": 0,
+        "dropRate": 0,
+        "staleTimestampDrops": 0,
+        "maxExcessLatenessMs": 5,
+        "maxTimestampRegressionMs": 0
+      },
+      "jitter": {
+        "firstIssueAtMs": 20,
+        "avgBufferedMs": 318.19959991109135,
+        "maxBufferedMs": 320,
+        "maxDepthFrames": 16
+      },
+      "decode": {
+        "firstIssueAtMs": 180,
+        "framesDecoded": 16,
+        "concealmentFrames": 1,
+        "concealmentTicks": 1
+      },
+      "pcmRing": {
+        "firstIssueAtMs": null,
+        "avgBufferedMs": 219.60435652367192,
+        "minBufferedMs": 0,
+        "maxBufferedMs": 220,
+        "underruns": 0,
+        "overruns": 0
+      },
+      "playout": {
+        "firstIssueAtMs": 20,
+        "avgDeltaMs": 23.485218937541674,
+        "underTargetFraction": 0.004889975550122249,
+        "outsideTargetFraction": 0.005134474327628362,
+        "targetBufferMs": 120
+      },
+      "perf": {
+        "tickBudgetBreachCount": 0,
+        "tickBudgetBreachP95Ms": 0,
+        "tickBudgetBreachMaxMs": 0,
+        "longTaskCount": 0
+      }
+    },
+    "stateTransitions": [
+      {
+        "state": "missingMedia",
+        "count": 3
+      },
+      {
+        "state": "coldStart",
+        "count": 3
+      },
+      {
+        "state": "steady",
+        "count": 4492
+      },
+      {
+        "state": "backlogDrain",
+        "count": 1
+      }
+    ],
+    "classification": {
+      "addr": "peer-B",
+      "role": "standby-forwarder",
+      "primaryClass": "policy-dominated",
+      "provisionalBars": [
+        {
+          "metric": "packetsDroppedPendingDecryptRatePerSec",
+          "observed": 0,
+          "threshold": 1,
+          "operator": "<",
+          "passed": true,
+          "description": "Decrypt drop rate < 1.0/s (decrypt pass bar)"
+        },
+        {
+          "metric": "playoutUnderTargetFraction",
+          "observed": 0.004889975550122249,
+          "threshold": 0.35,
+          "operator": "<=",
+          "passed": true,
+          "description": "Under-target fraction ≤ 0.35 (provisional jitter pass)"
+        },
+        {
+          "metric": "playoutOutsideTargetFraction",
+          "observed": 0.005134474327628362,
+          "threshold": 0.5,
+          "operator": "<=",
+          "passed": true,
+          "description": "Outside-target fraction ≤ 0.5"
+        }
+      ],
+      "passedAllBars": true,
+      "severity": "healthy",
+      "diagnosticNotes": [
+        "V2-managed sources: 1; using v2 jitter summary instead of legacy Opus window fields"
+      ]
+    }
+  }
+}

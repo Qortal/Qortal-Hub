@@ -1,5 +1,20 @@
+import type {
+  AudioSurfaceCommand,
+  AudioSurfaceCommandEnvelope,
+  AudioSurfaceCommandResultEnvelope,
+  AudioSurfaceEvent,
+} from '../lib/group-call/audioSurfaceBridge';
+
 declare global {
   interface Window {
+    sendMessage?: (
+      action: string,
+      data?: unknown,
+      timeout?: number,
+      isExtension?: unknown,
+      appInfo?: unknown,
+      skipAuth?: unknown
+    ) => Promise<unknown>;
     appStorage?: {
       get: (key: string) => Promise<unknown>;
       set: (key: string, value: unknown) => Promise<void>;
@@ -90,9 +105,26 @@ declare global {
       reticulumGetLocalIdentityPublicKeyBase64?: () => Promise<{
         publicKeyBase64: string | null;
       }>;
+      /** Hidden audio-surface: proxy signing to the main shell (wallet key in-memory). */
+      gcallProxySignPresenceMessage?: (payload: Record<string, unknown>) => Promise<{
+        signature?: string;
+        error?: string;
+        message?: string;
+      }>;
+      gcallProxyDecryptBoxWithMyKey?: (payload: {
+        ephemeralPublicKey: string;
+        nonce: string;
+        ciphertext: string;
+      }) => Promise<{
+        decryptedKey?: string;
+        error?: string;
+        message?: string;
+      }>;
     };
     videoServer?: {
-      start: (port?: number) => Promise<{ success: boolean; port?: number; error?: string }>;
+      start: (
+        port?: number
+      ) => Promise<{ success: boolean; port?: number; error?: string }>;
       stop: () => Promise<{ success: boolean; error?: string }>;
       getPort: () => Promise<number | null>;
       isRunning: () => Promise<boolean>;
@@ -104,7 +136,12 @@ declare global {
         port?: number;
         maxPeers?: number;
         initialPeers?: string[];
-      }) => Promise<{ success: boolean; port?: number; peerId?: string; error?: string }>;
+      }) => Promise<{
+        success: boolean;
+        port?: number;
+        peerId?: string;
+        error?: string;
+      }>;
       stop: () => Promise<{ success: boolean; error?: string }>;
       send: (
         to: string | null,
@@ -129,11 +166,20 @@ declare global {
       addPeer: (addr: string) => Promise<{ success: boolean; error?: string }>;
       /** Subscribe to incoming data messages. Returns unsubscribe fn. */
       onMessage: (
-        cb: (payload: { id: string; from: string; via?: string; to?: string; data: unknown }) => void
+        cb: (payload: {
+          id: string;
+          from: string;
+          via?: string;
+          to?: string;
+          data: unknown;
+        }) => void
       ) => () => void;
       /** Subscribe to peer connect/disconnect events. Returns unsubscribe fn. */
       onPeerChange: (
-        cb: (payload: { type: 'connected' | 'disconnected'; id: string }) => void
+        cb: (payload: {
+          type: 'connected' | 'disconnected';
+          id: string;
+        }) => void
       ) => () => void;
     };
 
@@ -149,13 +195,18 @@ declare global {
       }) => Promise<{ success: boolean; error?: string }>;
 
       /** Subscribe to a chat (start receiving events + request sync). */
-      subscribe: (chatId: string) => Promise<{ success: boolean; error?: string }>;
+      subscribe: (
+        chatId: string
+      ) => Promise<{ success: boolean; error?: string }>;
 
       /** Unsubscribe from a chat. */
       unsubscribe: (chatId: string) => Promise<{ success: boolean }>;
 
       /** Broadcast an ephemeral typing indicator. */
-      sendTyping: (chatId: string, authorAddress: string) => Promise<{ success: boolean }>;
+      sendTyping: (
+        chatId: string,
+        authorAddress: string
+      ) => Promise<{ success: boolean }>;
 
       /** Retrieve message history. Pass `beforeTimestamp` for pagination. */
       getHistory: (
@@ -175,7 +226,10 @@ declare global {
       >;
 
       /** Advance the read watermark for a chat. */
-      markRead: (chatId: string, upToTimestamp: number) => Promise<{ success: boolean }>;
+      markRead: (
+        chatId: string,
+        upToTimestamp: number
+      ) => Promise<{ success: boolean }>;
 
       /**
        * Register the local user's address(es) for DM auto-delivery.
@@ -218,13 +272,21 @@ declare global {
        * Returns an unsubscribe function.
        */
       onTyping: (
-        cb: (payload: { chatId: string; authorAddress: string; active: boolean }) => void
+        cb: (payload: {
+          chatId: string;
+          authorAddress: string;
+          active: boolean;
+        }) => void
       ) => () => void;
 
       /** Subscribe to typing events for one chatId only. */
       onTypingForChat: (
         chatId: string,
-        cb: (payload: { chatId: string; authorAddress: string; active: boolean }) => void
+        cb: (payload: {
+          chatId: string;
+          authorAddress: string;
+          active: boolean;
+        }) => void
       ) => () => void;
 
       /**
@@ -232,13 +294,21 @@ declare global {
        * Returns an unsubscribe function.
        */
       onRead: (
-        cb: (payload: { chatId: string; readerAddress: string; eventIds: string[] }) => void
+        cb: (payload: {
+          chatId: string;
+          readerAddress: string;
+          eventIds: string[];
+        }) => void
       ) => () => void;
 
       /** Subscribe to read receipt events for one chatId only. */
       onReadForChat: (
         chatId: string,
-        cb: (payload: { chatId: string; readerAddress: string; eventIds: string[] }) => void
+        cb: (payload: {
+          chatId: string;
+          readerAddress: string;
+          eventIds: string[];
+        }) => void
       ) => () => void;
     };
 
@@ -265,7 +335,11 @@ declare global {
        * Returns an unsubscribe function.
        */
       onUpdate: (
-        cb: (payload: { address: string; online: boolean; status: UserStatus | null }) => void
+        cb: (payload: {
+          address: string;
+          online: boolean;
+          status: UserStatus | null;
+        }) => void
       ) => () => void;
       /** Subscribe to coalesced presence updates. */
       onUpdateBatch: (
@@ -298,10 +372,34 @@ declare global {
 
     // ── Call (1v1) ────────────────────────────────────────────────────────────
     call?: {
-      initiate: (targetAddress: string, chatId: string, localAddress: string, signature: string, publicKey: string, callId: string, timestamp: number) => Promise<{ success: boolean; callId?: string; error?: string }>;
-      accept: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      reject: (callId: string, reason?: string, signature?: string, publicKey?: string, timestamp?: number) => Promise<{ success: boolean }>;
-      hangup: (callId: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      initiate: (
+        targetAddress: string,
+        chatId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        callId: string,
+        timestamp: number
+      ) => Promise<{ success: boolean; callId?: string; error?: string }>;
+      accept: (
+        callId: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
+      reject: (
+        callId: string,
+        reason?: string,
+        signature?: string,
+        publicKey?: string,
+        timestamp?: number
+      ) => Promise<{ success: boolean }>;
+      hangup: (
+        callId: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
       setLocalAddresses: (
         addresses: string[],
         source?: string
@@ -329,9 +427,27 @@ declare global {
         callSessionId?: string;
         mediaSessionGeneration?: number;
       }>;
-      leave: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
-      leaveSync?: (roomId: string, localAddress: string, signature: string, publicKey: string, timestamp: number) => { success: boolean; error?: string };
-      broadcastTopology: (roomId: string, topology: unknown, signature: string, publicKey: string, timestamp: number) => Promise<{ success: boolean }>;
+      leave: (
+        roomId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
+      leaveSync?: (
+        roomId: string,
+        localAddress: string,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => { success: boolean; error?: string };
+      broadcastTopology: (
+        roomId: string,
+        topology: unknown,
+        signature: string,
+        publicKey: string,
+        timestamp: number
+      ) => Promise<{ success: boolean }>;
       sendClusterHeartbeat?: (
         roomId: string,
         payload: {
@@ -497,7 +613,9 @@ declare global {
         callSessionId: string,
         mediaSessionGeneration: number
       ) => Promise<{ success: boolean }>;
-      requestSessionBreak: (roomId: string) => Promise<{ success: boolean; error?: string }>;
+      requestSessionBreak: (
+        roomId: string
+      ) => Promise<{ success: boolean; error?: string }>;
       setLocalAddresses: (
         addresses: string[],
         source?: string
@@ -513,7 +631,9 @@ declare global {
       reportGcallAudioEscalation?: (opts: {
         failSafeActive?: boolean;
       }) => Promise<{ success: boolean; error?: string }>;
-      getRoomParticipants: (roomId: string) => Promise<Array<{ address: string; publicKey: string }>>;
+      getRoomParticipants: (
+        roomId: string
+      ) => Promise<Array<{ address: string; publicKey: string }>>;
       getRoomBootstrapState?: (roomId: string) => Promise<{
         roomId: string;
         chatId: string;
@@ -540,9 +660,7 @@ declare global {
         updatedAtMs: number;
         fromRecentCache: boolean;
       } | null>;
-      setWatchedQortalGroupIds?: (
-        ids: number[]
-      ) => Promise<{
+      setWatchedQortalGroupIds?: (ids: number[]) => Promise<{
         success: boolean;
         error?: string;
         activeByGroupId?: Record<string, boolean>;
@@ -555,7 +673,29 @@ declare global {
         pending_key_expired: number;
         pendingRooms: number;
       }>;
+      /** Replays retained verified keys from main (use after join if initial replay was empty). */
+      requestRetainedKeyReplay?: () => void;
       onEvent: (cb: (event: string, payload: unknown) => void) => () => void;
+    };
+    audioSurface?: {
+            ensureReady: () => Promise<{ success: boolean; error?: string }>;
+      sendCommand: (command: AudioSurfaceCommand) => Promise<{
+        ok: boolean;
+        payload?: unknown;
+        error?: string;
+      }>;
+      onEvent: (cb: (event: AudioSurfaceEvent) => void) => () => void;
+      getWindowRole: () => Promise<string>;
+    };
+    audioSurfaceHost?: {
+      notifyReady: () => void;
+      emitEvent: (event: AudioSurfaceEvent) => void;
+      resolveCommand: (
+        envelope: AudioSurfaceCommandResultEnvelope
+      ) => void;
+      onCommand: (
+        cb: (envelope: AudioSurfaceCommandEnvelope) => void
+      ) => () => void;
     };
     __qortalGCallExportDiagnostics?: () => Promise<void>;
     __qortalGCallPerfStats?: () => unknown;

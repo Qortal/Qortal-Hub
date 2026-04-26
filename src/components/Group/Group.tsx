@@ -78,6 +78,7 @@ import { useTranslation } from 'react-i18next';
 import { GroupList } from './GroupList';
 import { useAtom, useSetAtom, useAtomValue } from 'jotai';
 import { useGroupCallContext } from '../../contexts/GroupCallContext';
+import { traceGcallAudioSurface } from '../../lib/group-call/gcallAudioSurfaceTrace';
 import {
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_MINUTES_2_IN_MILLISECONDS,
@@ -349,8 +350,21 @@ export const Group = ({
     gcallRoomState !== 'idle' && gcallActiveRoomId !== gcallRoomIdForGroup;
 
   const handleGroupCallHeaderClick = useCallback(async () => {
-    if (gcallGroupNumericId === null || !gcallRoomIdForGroup) return;
+    traceGcallAudioSurface('ui.Group: header call icon clicked', {
+      gcallGroupNumericId,
+      gcallRoomIdForGroup,
+      hasAudioSurface: Boolean(
+        typeof window !== 'undefined' &&
+          (window as Window & { audioSurface?: unknown }).audioSurface
+      ),
+      desktopViewMode,
+    });
+    if (gcallGroupNumericId === null || !gcallRoomIdForGroup) {
+      traceGcallAudioSurface('ui.Group: early exit (no room id for selected group)', {});
+      return;
+    }
     if (inThisGroupGcall) {
+      traceGcallAudioSurface('ui.Group: leaving call', { gcallRoomIdForGroup });
       await leaveGroupCall();
       return;
     }
@@ -360,6 +374,7 @@ export const Group = ({
       memberGateGroupName: selectedGroup?.groupName,
     });
   }, [
+    desktopViewMode,
     gcallGroupNumericId,
     gcallRoomIdForGroup,
     inThisGroupGcall,

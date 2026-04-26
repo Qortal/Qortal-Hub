@@ -3,7 +3,7 @@
  *
  * Renders as a fixed bottom-right panel (same position as SupportChat).
  * Uses GROUP_SUPPORT_ADDRESSES as the list of agents, and GroupCallContext
- * (single useGroupVoiceCall instance) for the audio layer. Text chat re-uses useSupportChat.
+ * (audio-surface engine controller) for the audio layer. Text chat re-uses useSupportChat.
  */
 
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';

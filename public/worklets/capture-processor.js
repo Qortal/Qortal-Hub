@@ -105,8 +105,12 @@ class CaptureProcessor extends AudioWorkletProcessor {
       }
       const vad = rms > threshold;
 
+      // Use the audio render clock here; comparing this against the window's
+      // `performance.now()` produced bogus multi-minute deltas in exports.
+      const workletPostAudioClockMs = currentTime * 1000;
+
       // Transfer the frame buffer to avoid copying
-      this.port.postMessage({ frame, vad }, [frame.buffer]);
+      this.port.postMessage({ frame, vad, workletPostAudioClockMs }, [frame.buffer]);
     }
 
     return true; // keep processor alive

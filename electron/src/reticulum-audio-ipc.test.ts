@@ -28,12 +28,14 @@ describe('reticulum-audio-ipc', () => {
         roomId: 'r1',
         peerPresenceHash: 'a'.repeat(64),
         peerDestinationHash: 'b'.repeat(32),
+        receivedAtWallMs: 1_234_567,
         payload,
       },
     ]);
     const frames = decodeReticulumAudioMessage(wire);
     expect(frames[0]!.peerPresenceHash).toHaveLength(64);
     expect(frames[0]!.peerDestinationHash).toHaveLength(32);
+    expect(frames[0]!.receivedAtWallMs).toBe(1_234_567);
   });
 
   it('round-trips multiple frames in one batch', () => {

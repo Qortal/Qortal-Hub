@@ -1,7 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
 type GroupPlayoutProcessorCtor = new (options?: {
-  processorOptions?: { sourceAddr?: string };
+  processorOptions?: {
+    sourceAddr?: string;
+    sharedRing?: {
+      sampleBuffer: SharedArrayBuffer;
+      stateBuffer: SharedArrayBuffer;
+      ingressTimestampBuffer: SharedArrayBuffer;
+      capacitySamples: number;
+      frameSamples: number;
+      ingressCapacityFrames: number;
+    };
+  };
 }) => {
   process: (inputs: unknown[], outputs: Float32Array[][]) => boolean;
   _computeRawTargetRate: (
@@ -96,6 +106,79 @@ describe('group playout processor concealment', () => {
 
     const concealed = nextBlock(processor);
     expect(concealed[0]).toBeGreaterThan(0.7);
+  });
+
+  it('accepts batched pcm messages without requiring per-frame posts', async () => {
+    const Processor = await loadProcessorCtor();
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } }) as any;
+    const batch = new Float32Array(960 * 3);
+    batch.fill(0.25);
+
+    processor.port.onmessage?.({
+      data: {
+        type: 'pcm-batch',
+        pcmBatch: batch,
+        frameCount: 3,
+      },
+    } as MessageEvent);
+
+    expect(processor._available).toBe(batch.length);
+  });
+
+  it('reads directly from a shared PCM ring when configured', async () => {
+    const Processor = await loadProcessorCtor();
+    const capacitySamples = 960 * 4;
+    const sampleBuffer = new SharedArrayBuffer(
+      capacitySamples * Float32Array.BYTES_PER_ELEMENT
+    );
+    const stateBuffer = new SharedArrayBuffer(6 * Int32Array.BYTES_PER_ELEMENT);
+    const ingressTimestampBuffer = new SharedArrayBuffer(4 * Int32Array.BYTES_PER_ELEMENT);
+    const samples = new Float32Array(sampleBuffer);
+    const state = new Int32Array(stateBuffer);
+    const ingress = new Int32Array(ingressTimestampBuffer);
+    samples.fill(0.35, 0, 960);
+    state[2] = 960; // filled samples
+    ingress[0] = 100;
+
+    const processor = new Processor({
+      processorOptions: {
+        sourceAddr: 'peer',
+        sharedRing: {
+          sampleBuffer,
+          stateBuffer,
+          ingressTimestampBuffer,
+          capacitySamples,
+          frameSamples: 960,
+          ingressCapacityFrames: 4,
+        },
+      },
+    }) as any;
+
+    processor._playoutStarted = true;
+    const block = nextBlock(processor);
+
+    expect(hasAudibleSample(block)).toBe(true);
+    expect(state[2]).toBeLessThan(960);
+  });
+
+  it('reports absolute panic entry separately from the later playout band', async () => {
+    const Processor = await loadProcessorCtor();
+    const processor = new Processor({ processorOptions: { sourceAddr: 'peer' } }) as any;
+
+    processor._playoutStarted = true;
+    processor._targetPlayoutMs = 40;
+    processor._available = Math.round((50 / 1000) * 48_000);
+    processor._metricsQuantumCount = 46;
+
+    nextBlock(processor);
+
+    const payload = processor.port.postMessage.mock.calls.at(-1)?.[0];
+    expect(payload?.panicZoneEntered).toBe(true);
+    expect(payload?.panicReason).toBe('absolute-low-buffer-entry');
+    expect(payload?.panicEntryBufferedMs).toBeCloseTo(50, 0);
+    expect(payload?.preProcessBufferedMs).toBeCloseTo(50, 0);
+    expect(payload?.playoutBand).toBe('in-band');
+    expect(payload?.bufferedMs).toBeLessThan(payload?.preProcessBufferedMs ?? 0);
   });
 });
 

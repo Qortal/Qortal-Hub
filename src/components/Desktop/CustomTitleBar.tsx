@@ -34,18 +34,6 @@ const TITLE_BAR_MENU_WIDTH_PX = 40;
 export const CUSTOM_TITLE_BAR_HEIGHT = TITLE_BAR_HEIGHT;
 export const appHeighOffsetPx = `${TITLE_BAR_HEIGHT}px`;
 export const appHeighOffset = TITLE_BAR_HEIGHT;
-declare global {
-  interface Window {
-    electronAPI?: {
-      windowMinimize?: () => Promise<void>;
-      windowMaximize?: () => Promise<void>;
-      windowClose?: () => Promise<void>;
-      getWindowState?: () => Promise<{ isMaximized: boolean }>;
-      getPlatform?: () => Promise<string>;
-      showAppMenu?: (x?: number, y?: number) => Promise<void>;
-    };
-  }
-}
 
 export const titleBarIconButtonProps = {
   disableFocusRipple: true,

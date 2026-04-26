@@ -1554,9 +1554,11 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActive: true,
         severeForcedReleaseRebuildActiveForMs: 300_000,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
         reticulumAudioPacketPathTimeouts: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
       })
     ).toBe(true);
 
@@ -1573,9 +1575,11 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActive: false,
         severeForcedReleaseRebuildActiveForMs: 0,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
         reticulumAudioPacketPathTimeouts: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
       })
     ).toBe(true);
 
@@ -1592,9 +1596,31 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActive: true,
         severeForcedReleaseRebuildActiveForMs: 300_000,
         packetsDroppedPendingDecrypt: 1,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
         reticulumAudioPacketPathTimeouts: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
+      })
+    ).toBe(false);
+    expect(
+      shouldKeepSingleRemoteSevereRebuildDeadzoneLocal({
+        activeSourceCount: 1,
+        lastRecvAgeMs: 120,
+        avgOpusBufferedMs: 40,
+        avgPcmBufferedMs: 0.021,
+        playoutUnderTargetFraction: 1,
+        avgPlayoutDeltaMs: -99.979,
+        missingFrames: 0,
+        jitterBufferDepthFramesMean: 2,
+        severeForcedReleaseRebuildActive: true,
+        severeForcedReleaseRebuildActiveForMs: 300_000,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 2,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioPacketPathTimeouts: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 16,
       })
     ).toBe(false);
   });
@@ -1714,8 +1740,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         avgPlayoutDeltaMs: -107.096,
         severeForcedReleaseRebuildActive: true,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
       })
     ).toBe(true);
 
@@ -1737,8 +1765,34 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         avgPlayoutDeltaMs: -107.096,
         severeForcedReleaseRebuildActive: true,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
+      })
+    ).toBe(false);
+    expect(
+      shouldKeepSingleRemoteDegradedRebuildLocal({
+        activeSourceCount: 1,
+        pathDegradedUntilMs: 10_000,
+        nowMs: 4_000,
+        lastRecvAgeMs: 180,
+        recentStability: {
+          sampleCount: 4,
+          avgPcmBufferedMs: 17.33,
+          playoutUnderTargetFraction: 1,
+          underrunCount: 8,
+          stable: false,
+          severeInstability: true,
+        },
+        avgOpusBufferedMs: 20,
+        avgPlayoutDeltaMs: -107.096,
+        severeForcedReleaseRebuildActive: true,
+        packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 1,
+        reticulumAudioStaleDrops: 0,
+        reticulumAudioPacketSendFailures: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 16,
       })
     ).toBe(false);
   });
@@ -1762,8 +1816,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         avgPlayoutDeltaMs: -107.096,
         severeForcedReleaseRebuildActive: true,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
       })
     ).toBe(true);
   });
@@ -1788,8 +1844,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActive: true,
         severeForcedReleaseRebuildActiveForMs: 1_500,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
       })
     ).toBe(true);
 
@@ -1812,8 +1870,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActive: true,
         severeForcedReleaseRebuildActiveForMs: 400,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
       })
     ).toBe(false);
   });
@@ -1841,8 +1901,10 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         severeForcedReleaseRebuildActive: true,
         severeForcedReleaseRebuildActiveForMs: 1_500,
         packetsDroppedPendingDecrypt: 0,
+        reticulumAudioQueuePressureDrops: 0,
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
+        reticulumAudioBridgeQueuedFramesHighWater: 0,
       })
     ).toBe(true);
   });
@@ -2798,6 +2860,19 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
           severeInstability: false,
         },
         avgPlayoutDeltaMs: -5,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerN1SeverePlayoutPathWarm({
+        ...base,
+        starvationSeverity: 'none',
+        recentStability: {
+          ...base.recentStability,
+          playoutUnderTargetFraction: 0.82,
+          underrunCount: 0,
+          severeInstability: true,
+        },
+        avgPlayoutDeltaMs: -70,
       })
     ).toBe(false);
     expect(

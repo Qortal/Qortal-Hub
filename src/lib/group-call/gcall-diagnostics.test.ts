@@ -108,6 +108,49 @@ describe('gcall-diagnostics', () => {
     expect(parsed.events[0].payload.sourceAddr).toBe('QcrJnv…Prc3');
   });
 
+  it('export JSON includes audio-surface runtime diagnostics when provided', () => {
+    const json = buildGcallDiagnosticsExportJson({
+      context: {
+        buildMode: 'test',
+        appVersionLabel: '0.0.0',
+        userAgent: 'vitest',
+        roomId: 'room-x',
+        chatId: 'chat-y',
+        roomState: 'connected',
+        myAddressTruncated: 'QcrJnv…Prc3',
+      },
+      liveMetricsSnapshot: { packetsReceived: 1 },
+      exportWindowMetrics: { durationMs: 1000 },
+      audioSurfaceRuntimeDiagnostics: {
+        pipelineMode: {
+          crossOriginIsolated: true,
+          sharedArrayBufferDefined: true,
+        },
+        recentEvents: [
+          {
+            t: 1,
+            tag: 'room-key-applied',
+            payload: {
+              fromAddress: 'QcrJnvVB2Tr47QyD7FNm9PDJDWqWy7Prc3',
+            },
+          },
+        ],
+      },
+    });
+    const parsed = JSON.parse(json) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        pipelineMode: { crossOriginIsolated: boolean; sharedArrayBufferDefined: boolean };
+        recentEvents: Array<{ payload: { fromAddress: string } }>;
+      };
+    };
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.pipelineMode.crossOriginIsolated
+    ).toBe(true);
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.recentEvents[0]?.payload?.fromAddress
+    ).toBe('QcrJnv…Prc3');
+  });
+
   it('export JSON includes transport triad interpretation and snapshot when live metrics have fields', () => {
     const json = buildGcallDiagnosticsExportJson({
       context: {
@@ -228,6 +271,62 @@ describe('gcall-diagnostics', () => {
     expect(parsed.phase5PairedVerificationHint).toBe(
       GCALL_PHASE5_PAIRED_VERIFICATION_HINT
     );
+  });
+
+  it('export JSON includes v2 diagnostics summary for v2-managed peers', () => {
+    const json = buildGcallDiagnosticsExportJson({
+      context: {
+        buildMode: 'test',
+        appVersionLabel: '0.0.0',
+        userAgent: 'vitest',
+        roomId: null,
+        chatId: null,
+        roomState: null,
+        myAddressTruncated: null,
+      },
+      liveMetricsSnapshot: {},
+      exportWindowMetrics: {},
+      v2ManagedSourceAddrs: ['QcrJnvVB2Tr47QyD7FNm9PDJDWqWy7Prc3'],
+      v2DiagnosticEvents: [
+        {
+          schemaVersion: 2,
+          kind: 'state-transition',
+          wallClockMs: 1,
+          payload: {
+            fromState: 'coldStart',
+            toState: 'steady',
+            reason: 'test',
+            atMs: 1,
+            streamKey: 'peer-A:0:1',
+            policyOutput: { maxDecodePerTick: 3, targetBufferMs: 120 },
+          },
+        },
+        {
+          schemaVersion: 2,
+          kind: 'jitter-stats',
+          wallClockMs: 2,
+          payload: {
+            streamKey: 'peer-A:0:1',
+            depth: 5,
+            bufferedMs: 140,
+            lastPushAgeMs: 20,
+            state: 'steady',
+          },
+        },
+      ],
+    });
+    const parsed = JSON.parse(json) as {
+      v2Diagnostics?: {
+        legacyWindowOpusMetricsMeaningful: boolean;
+        avgJitterBufferedMs: number;
+        stateTransitionCounts: Record<string, number>;
+        v2ManagedSourceAddrs: string[];
+      };
+    };
+    expect(parsed.v2Diagnostics?.legacyWindowOpusMetricsMeaningful).toBe(false);
+    expect(parsed.v2Diagnostics?.avgJitterBufferedMs).toBe(140);
+    expect(parsed.v2Diagnostics?.stateTransitionCounts.steady).toBe(1);
+    expect(parsed.v2Diagnostics?.v2ManagedSourceAddrs[0]).toBe('QcrJnv…Prc3');
   });
 
   it('extractTransportTriadFromLiveMetrics pulls bridge triad fields', () => {

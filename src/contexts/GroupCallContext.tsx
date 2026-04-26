@@ -1,69 +1,45 @@
-import React, { createContext, useContext, useEffect } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useTranslation } from 'react-i18next';
-import {
-  groupChatOpenAtom,
-  infoSnackGlobalAtom,
-  openSnackGlobalAtom,
-} from '../atoms/global';
-import { useGroupVoiceCall } from '../hooks/useGroupVoiceCall';
+import React, { useEffect, useMemo } from 'react';
+import { useAtomValue } from 'jotai';
+import { groupChatOpenAtom } from '../atoms/global';
+import { useAudioSurfaceGroupCallController } from '../hooks/useAudioSurfaceGroupCallController';
 import { useQortalGroupCallSidebarActivitySync } from '../hooks/useQortalGroupCallSidebarActivitySync';
-
-export type GroupCallContextValue = ReturnType<typeof useGroupVoiceCall>;
-
-const GroupCallContext = createContext<GroupCallContextValue | null>(null);
-
-/**
- * Surfaces join errors from useGroupVoiceCall via the app-wide snackbar (all entry points).
- */
-function GroupCallJoinErrorNotifier() {
-  const { gcallJoinError, clearGcallJoinError } = useGroupCallContext();
-  const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
-  const setOpenSnack = useSetAtom(openSnackGlobalAtom);
-  const { t } = useTranslation(['core']);
-
-  useEffect(() => {
-    if (!gcallJoinError) return;
-    const message =
-      gcallJoinError === 'members_fetch_failed'
-        ? t('core:group_call_members_fetch_failed', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        : gcallJoinError === 'presence_offline'
-          ? t('core:group_call_presence_offline', {
-              postProcess: 'capitalizeFirstChar',
-            })
-          : gcallJoinError === 'reticulum_not_ready'
-            ? t('core:group_call_reticulum_not_ready', {
-                postProcess: 'capitalizeFirstChar',
-              })
-            : gcallJoinError === 'p2p_health_not_good'
-              ? t('core:group_call_p2p_health_not_good', {
-                  postProcess: 'capitalizeFirstChar',
-                })
-              : t('core:group_call_not_member', {
-                  postProcess: 'capitalizeFirstChar',
-                });
-    setInfoSnack({ type: 'error', message });
-    setOpenSnack(true);
-    clearGcallJoinError();
-  }, [gcallJoinError, clearGcallJoinError, t, setInfoSnack, setOpenSnack]);
-
-  return null;
-}
+import { buildUnavailableGroupCallControllerApi } from '../lib/group-call/audioSurfaceBridge';
+import { traceGcallAudioSurface } from '../lib/group-call/gcallAudioSurfaceTrace';
+import {
+  GroupCallContext,
+  GroupCallJoinErrorNotifier,
+  useGroupCallContext,
+} from './groupCallContextShared';
 
 /**
- * Single useGroupVoiceCall instance for support UI, agent dashboard, and Qortal group header.
+ * Group call controller for the main shell: IPC to the cross-origin-isolated
+ * audio-surface engine only (no `useGroupVoiceCall` in this layer).
  * uiActive follows the group support panel so metrics flush while that panel is open.
  */
-export function GroupCallProvider({
+export function GroupCallProvider({ children }: { children: React.ReactNode }) {
+  const hasAudioSurface =
+    typeof window !== 'undefined' &&
+    Boolean((window as Window & { audioSurface?: unknown }).audioSurface);
+  if (hasAudioSurface) {
+    return <AudioSurfaceGroupCallProvider>{children}</AudioSurfaceGroupCallProvider>;
+  }
+  return <UnavailableGroupCallProvider>{children}</UnavailableGroupCallProvider>;
+}
+
+function UnavailableGroupCallProvider({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const groupChatOpen = useAtomValue(groupChatOpenAtom);
-  useQortalGroupCallSidebarActivitySync();
-  const value = useGroupVoiceCall(groupChatOpen);
+  useEffect(() => {
+    traceGcallAudioSurface('GroupCallProvider: using no-op API (no window.audioSurface on preload)', {
+      hasWindow: typeof window !== 'undefined',
+    });
+  }, []);
+  const value = useMemo(
+    () => buildUnavailableGroupCallControllerApi(),
+    []
+  );
   return (
     <GroupCallContext.Provider value={value}>
       <GroupCallJoinErrorNotifier />
@@ -72,10 +48,23 @@ export function GroupCallProvider({
   );
 }
 
-export function useGroupCallContext(): GroupCallContextValue {
-  const ctx = useContext(GroupCallContext);
-  if (!ctx) {
-    throw new Error('useGroupCallContext must be used within GroupCallProvider');
-  }
-  return ctx;
+function AudioSurfaceGroupCallProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  useEffect(() => {
+    traceGcallAudioSurface('GroupCallProvider: audio-surface IPC path (window.audioSurface present)');
+  }, []);
+  const groupChatOpen = useAtomValue(groupChatOpenAtom);
+  useQortalGroupCallSidebarActivitySync();
+  const value = useAudioSurfaceGroupCallController(groupChatOpen);
+  return (
+    <GroupCallContext.Provider value={value}>
+      <GroupCallJoinErrorNotifier />
+      {children}
+    </GroupCallContext.Provider>
+  );
 }
+
+export { useGroupCallContext };
