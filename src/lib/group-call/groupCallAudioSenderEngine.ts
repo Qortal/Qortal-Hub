@@ -52,6 +52,7 @@ export interface GroupCallAudioSenderEngineConfig {
   muted: boolean;
   profile: GroupCallAudioQualityProfile;
   onEncodedFrame: (frame: GroupCallAudioSenderFrame) => void;
+  onVadChanged?: (vad: boolean) => void;
 }
 
 export class GroupCallAudioSenderEngine {
@@ -64,6 +65,8 @@ export class GroupCallAudioSenderEngine {
   private startToken = 0;
   private activeConfig: Omit<GroupCallAudioSenderEngineConfig, 'onEncodedFrame'> | null =
     null;
+  private onVadChanged: ((vad: boolean) => void) | null = null;
+  private lastReportedVad = false;
 
   async startOrUpdate(config: GroupCallAudioSenderEngineConfig): Promise<void> {
     const nextShape = {
@@ -80,7 +83,9 @@ export class GroupCallAudioSenderEngine {
       currentShape.muted === nextShape.muted &&
       currentShape.profile === nextShape.profile;
     if (sameShape && this.audioContext && this.captureNode && this.encoder) {
+      this.onVadChanged = config.onVadChanged ?? null;
       this.captureNode.port.postMessage({ type: 'mute', muted: nextShape.muted });
+      if (nextShape.muted) this.updateVad(false);
       return;
     }
     await this.stop();
@@ -95,6 +100,7 @@ export class GroupCallAudioSenderEngine {
       return;
     }
     this.activeConfig = nextShape;
+    this.onVadChanged = config.onVadChanged ?? null;
     const token = ++this.startToken;
     const gum = await getUserAudioStreamForCall(nextShape.inputDeviceId);
     const stream = gum.stream;
@@ -159,6 +165,7 @@ export class GroupCallAudioSenderEngine {
         data: pcm16,
       });
       this.lastVad = typeof vad === 'boolean' ? vad : false;
+      this.updateVad(this.lastVad);
       encoder.encode(audioData);
       audioData.close();
     };
@@ -185,6 +192,13 @@ export class GroupCallAudioSenderEngine {
       ? { ...this.activeConfig, muted }
       : this.activeConfig;
     this.captureNode?.port.postMessage({ type: 'mute', muted });
+    if (muted) this.updateVad(false);
+  }
+
+  private updateVad(vad: boolean): void {
+    if (this.lastReportedVad === vad) return;
+    this.lastReportedVad = vad;
+    this.onVadChanged?.(vad);
   }
 
   async stop(): Promise<void> {
@@ -202,6 +216,8 @@ export class GroupCallAudioSenderEngine {
     this.audioContext = null;
     this.encoder = null;
     this.lastVad = false;
+    this.updateVad(false);
+    this.onVadChanged = null;
     if (captureNode) {
       captureNode.port.onmessage = null;
     }

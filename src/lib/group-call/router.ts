@@ -343,6 +343,10 @@ export type GroupCallPacketDropReason =
 
 export interface GroupCallMetricsSnapshot {
   role: RouterRole;
+  /** Topology-derived role when the live metrics source is receive-only. */
+  topologyRole?: RouterRole;
+  /** Current number of intended fan-out recipients for local outbound audio. */
+  forwardRecipientCount?: number;
   packetsReceived: number;
   packetsForwarded: number;
   packetsDecoded: number;

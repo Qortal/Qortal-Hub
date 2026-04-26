@@ -9,6 +9,8 @@ import type {
   AudioEngineJoinOptions,
   GroupCallControllerSnapshot,
   AudioEngineUserIdentity,
+  AudioEngineParticipant,
+  AudioEngineRole,
 } from './audioEngineTypes';
 import {
   buildGcallDiagnosticsExportJson,
@@ -540,6 +542,7 @@ export class GroupCallAudioEngineRuntime {
         decryptPoolKeyVersion: this.decryptPoolKeyVersion >>> 0,
         decryptPoolAppliedKeyVersion: this.decryptPoolAppliedKeyVersion >>> 0,
         role,
+        forwardRecipientCount: this.getForwardRecipientCount(),
       },
       topologyState: topology
         ? {
@@ -569,11 +572,14 @@ export class GroupCallAudioEngineRuntime {
   private withDerivedSnapshotState(
     snapshot: GroupCallControllerSnapshot
   ): GroupCallControllerSnapshot {
+    const myRole = this.deriveTopologyRoleForAddress(this.userInfo?.address ?? '');
+    const participants = this.withTopologyRoles(snapshot.participants);
+    const metrics = this.withTopologyMetrics(snapshot.metrics, myRole);
     const myAddress = this.userInfo?.address ?? '';
     let mediaViable = true;
     if (snapshot.roomState === 'connected') {
       const roomKeyPresent = this.roomKey !== null;
-      const remoteOthers = snapshot.participants.filter(
+      const remoteOthers = participants.filter(
         (participant) => participant.address !== myAddress
       );
       const soloCall = remoteOthers.length === 0;
@@ -588,9 +594,46 @@ export class GroupCallAudioEngineRuntime {
     const localConnectionHint = this.deriveLocalConnectionHint(snapshot);
     return {
       ...snapshot,
+      myRole,
+      participants,
+      metrics,
       mediaViable,
       localConnectionHint,
       topologyLabel: 'Reticulum',
+    };
+  }
+
+  private deriveTopologyRoleForAddress(address: string): AudioEngineRole {
+    if (!address || !this.topology) return 'participant';
+    return computeGroupCallRole(address, this.topology);
+  }
+
+  private withTopologyRoles(
+    participants: AudioEngineParticipant[]
+  ): AudioEngineParticipant[] {
+    return participants.map((participant) => ({
+      ...participant,
+      role: this.deriveTopologyRoleForAddress(participant.address),
+    }));
+  }
+
+  private getForwardRecipientCount(): number {
+    if (!this.topology || !this.userInfo?.address) return 0;
+    return getReticulumTransportTargets(
+      this.userInfo.address,
+      this.topology
+    ).length;
+  }
+
+  private withTopologyMetrics(
+    metrics: GroupCallControllerSnapshot['metrics'],
+    myRole: AudioEngineRole
+  ): GroupCallControllerSnapshot['metrics'] {
+    return {
+      ...metrics,
+      role: myRole,
+      topologyRole: myRole,
+      forwardRecipientCount: this.getForwardRecipientCount(),
     };
   }
 
@@ -656,7 +699,9 @@ export class GroupCallAudioEngineRuntime {
     download?: boolean;
     clipboard?: boolean;
   }): Promise<string> {
-    const liveMetricsSnapshot = this.receiveEngine.getSnapshot();
+    const derivedSnapshot = this.withDerivedSnapshotState(this.snapshot);
+    this.snapshot = derivedSnapshot;
+    const liveMetricsSnapshot = derivedSnapshot.metrics;
     const context: GcallDiagExportContext = {
       buildMode: import.meta.env.MODE,
       appVersionLabel: packageJson.version,
@@ -1964,6 +2009,21 @@ export class GroupCallAudioEngineRuntime {
     this.scheduleActiveSpeakerRefresh(now);
   }
 
+  private noteLocalVadActivity(vad: boolean): void {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!myAddress) return;
+    if (vad) {
+      const now = Date.now();
+      this.activeSpeakerLastSeenAt.set(myAddress, now);
+      this.refreshActiveSpeakerState(now);
+      this.scheduleActiveSpeakerRefresh(now);
+      return;
+    }
+    if (!this.activeSpeakerLastSeenAt.has(myAddress)) return;
+    this.activeSpeakerLastSeenAt.delete(myAddress);
+    this.refreshActiveSpeakerState();
+  }
+
   private refreshActiveSpeakerState(now = Date.now()): void {
     const nextSpeakers = collectActiveSpeakers(
       this.activeSpeakerLastSeenAt,
@@ -2267,6 +2327,9 @@ export class GroupCallAudioEngineRuntime {
         outputDeviceId: this.outputDeviceId,
         muted: this.snapshot.muted,
         profile: this.snapshot.audioQualityProfile,
+        onVadChanged: (vad) => {
+          this.noteLocalVadActivity(vad);
+        },
         onEncodedFrame: ({ opusFrame, encodeOutPerfMs }) => {
           void this.dispatchEncodedFrame(opusFrame, encodeOutPerfMs);
         },

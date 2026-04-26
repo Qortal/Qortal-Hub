@@ -155,7 +155,7 @@ export const DEFAULT_POLICY_CONFIG: ReceivePolicyConfig = {
   startupWarmupMs: 6_000,
   steadyMaxDecodePerTick: 3,
   startupMaxDecodePerTick: 8,
-  drainMaxDecodePerTick: 8,
+  drainMaxDecodePerTick: 9,
   backlogDrainTriggerRatio: 1.0,
   pcmDeficitDrainThreshold: 0.65,
   pcmDeficitOpusMinRatio: 0.35,
@@ -174,14 +174,14 @@ export const DEFAULT_POLICY_CONFIG: ReceivePolicyConfig = {
   steadyStateRecoveryExtraBufferMs: 60,
   steadyStateRecoveryHoldMs: 3_000,
   steadyStateRecoveryLowPcmMs: 18,
-  steadyStateRecoveryLowPcmTicks: 4,
-  steadyStateRecoveryRecentPacketAgeMs: 240,
-  steadyStateRecoverySpikeGapMs: 220,
+  steadyStateRecoveryLowPcmTicks: 3,
+  steadyStateRecoveryRecentPacketAgeMs: 300,
+  steadyStateRecoverySpikeGapMs: 180,
   steadyStateRecoverySpikeWindowMs: 4_000,
   steadyStateRecoveryConcealmentFrames: 1,
   steadyStateRecoveryPostSpikeHoldMs: 5_000,
   steadyStateRecoveryExitMinPcmMs: 96,
-  steadyStateRecoveryPcmDeficitDrainThreshold: 0.8,
+  steadyStateRecoveryPcmDeficitDrainThreshold: 0.9,
 };
 
 export const DEFAULT_DECODED_PCM_LATENCY_MIN_EXTRA_MS = 80;

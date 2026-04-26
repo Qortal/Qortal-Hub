@@ -349,6 +349,13 @@ describe('GroupCallAudioEngineRuntime', () => {
       roomId: 'room-1',
       chatId: 'chat-1',
     });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' }],
+    });
     const result = await runtime.handleCommand({
       type: 'export-diagnostics',
       options: { download: false, clipboard: false },
@@ -356,14 +363,33 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(result.ok).toBe(true);
     expect(typeof result.ok === 'boolean' && result.ok ? typeof result.payload : null).toBe('string');
     const parsed = JSON.parse(String(result.ok ? result.payload : 'null')) as {
+      liveMetricsSnapshot?: {
+        role?: string;
+        topologyRole?: string;
+        forwardRecipientCount?: number;
+      };
       audioSurfaceRuntimeDiagnostics?: {
         pipelineMode?: { sharedArrayBufferDefined?: boolean };
-        sessionState?: { roomId?: string | null; roomState?: string };
+        sessionState?: {
+          roomId?: string | null;
+          roomState?: string;
+          role?: string;
+          forwardRecipientCount?: number;
+        };
         recentEvents?: Array<{ tag: string }>;
       };
     };
+    expect(parsed.liveMetricsSnapshot?.role).toBe('standby-forwarder');
+    expect(parsed.liveMetricsSnapshot?.topologyRole).toBe('standby-forwarder');
+    expect(parsed.liveMetricsSnapshot?.forwardRecipientCount).toBe(1);
     expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.roomId).toBe('room-1');
     expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.roomState).toBe('connected');
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.role).toBe(
+      'standby-forwarder'
+    );
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.forwardRecipientCount
+    ).toBe(1);
     expect(
       parsed.audioSurfaceRuntimeDiagnostics?.pipelineMode?.sharedArrayBufferDefined
     ).toBeTypeOf('boolean');
@@ -823,10 +849,98 @@ describe('GroupCallAudioEngineRuntime', () => {
     const lastSnapshot = [...events]
       .reverse()
       .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.myRole).toBe('standby-forwarder');
     expect(lastSnapshot?.snapshot?.activeSpeakers).toEqual(['Qpeer']);
     expect(lastSnapshot?.snapshot?.participants).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ address: 'Qpeer', speaking: true }),
+        expect.objectContaining({
+          address: 'Qpeer',
+          speaking: true,
+          role: 'root-forwarder',
+        }),
+        expect.objectContaining({
+          address: 'Qlocal',
+          role: 'standby-forwarder',
+        }),
+      ])
+    );
+  });
+
+  it('marks the local participant as speaking from sender VAD changes without polling', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const events: Array<{
+      type: string;
+      snapshot?: {
+        activeSpeakers?: string[];
+        participants?: Array<{
+          address: string;
+          speaking: boolean;
+          role: string;
+        }>;
+      };
+    }> = [];
+    runtime.onEvent((event) => {
+      events.push(event as never);
+    });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    (runtime as any).roomKey = new Uint8Array(32).fill(3);
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+    });
+    await (runtime as any).syncSenderState();
+    expect(latestCapturePort?.onmessage).toBeTypeOf('function');
+
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array([0]), vad: true },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.activeSpeakers).toContain('Qlocal');
+    expect(lastSnapshot?.snapshot?.participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          address: 'Qlocal',
+          speaking: true,
+          role: 'root-forwarder',
+        }),
+      ])
+    );
+
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array([0]), vad: false },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.activeSpeakers ?? []).not.toContain('Qlocal');
+    expect(lastSnapshot?.snapshot?.participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          address: 'Qlocal',
+          speaking: false,
+          role: 'root-forwarder',
+        }),
       ])
     );
   });

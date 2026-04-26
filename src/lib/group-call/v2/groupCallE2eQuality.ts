@@ -113,6 +113,12 @@ interface GroupCallE2eReceiverModel {
   readonly startupBridgePressureUntilMs?: number;
 }
 
+interface GroupCallE2eExtraParticipant {
+  readonly addr: string;
+  readonly senderProfile: SenderImpairmentProfile;
+  readonly targets?: ReadonlyArray<'peer-A' | 'peer-B'>;
+}
+
 export interface GroupCallE2eScenario {
   readonly id: string;
   readonly description: string;
@@ -131,6 +137,7 @@ export interface GroupCallE2eScenario {
     readonly senderProfile: SenderImpairmentProfile;
     readonly receiverModel?: GroupCallE2eReceiverModel;
   };
+  readonly extraParticipants?: readonly GroupCallE2eExtraParticipant[];
   readonly expectations: GroupCallE2eScenarioExpectation;
 }
 
@@ -151,9 +158,9 @@ interface StageIssueTracker {
 }
 
 interface SimulatedPeerPath {
-  readonly receiverAddr: 'peer-A' | 'peer-B';
+  readonly receiverAddr: string;
   readonly receiverRole: string;
-  readonly senderAddr: 'peer-A' | 'peer-B';
+  readonly senderAddr: string;
   readonly senderProfile: SenderImpairmentProfile;
   readonly receiverModel?: GroupCallE2eReceiverModel;
   readonly diag: BufferingDiagnosticsRecorder;
@@ -196,6 +203,11 @@ interface SimulatedPeerPath {
   startupPcmSamples: number[];
   startupDecodeDropCount: number;
   stageIssues: StageIssueTracker;
+}
+
+interface ReceiverSourceSpec {
+  readonly senderAddr: string;
+  readonly senderProfile: SenderImpairmentProfile;
 }
 
 const GCALL_SOURCE_TIMESTAMP_MAX_EXCESS_LATENESS_MS = 4_000;
@@ -260,6 +272,103 @@ function cloneFaults(faults: readonly FaultSpec[] | undefined): FaultSpec[] {
 function average(values: readonly number[]): number {
   if (values.length === 0) return 0;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function stableStringSeed(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function severityRank(value: string): number {
+  switch (value) {
+    case 'strong':
+      return 3;
+    case 'moderate':
+      return 2;
+    case 'mild':
+      return 1;
+    case 'none':
+    default:
+      return 0;
+  }
+}
+
+function higherSeverity(a: string, b: string): string {
+  return severityRank(a) >= severityRank(b) ? a : b;
+}
+
+function mergeStateCounts(
+  paths: readonly SimulatedPeerPath[]
+): ReadonlyArray<{ readonly state: string; readonly count: number }> {
+  const counts = new Map<string, number>();
+  for (const path of paths) {
+    for (const [state, count] of path.stateCounts.entries()) {
+      counts.set(state, (counts.get(state) ?? 0) + count);
+    }
+  }
+  return [...counts.entries()].map(([state, count]) => ({ state, count }));
+}
+
+function sourcesForReceiver(
+  scenario: GroupCallE2eScenario,
+  receiverAddr: 'peer-A' | 'peer-B'
+): ReceiverSourceSpec[] {
+  const primary =
+    receiverAddr === 'peer-A'
+      ? {
+          senderAddr: scenario.peerB.addr,
+          senderProfile: scenario.peerB.senderProfile,
+        }
+      : {
+          senderAddr: scenario.peerA.addr,
+          senderProfile: scenario.peerA.senderProfile,
+        };
+  const extras = (scenario.extraParticipants ?? [])
+    .filter((participant) => {
+      const targets = participant.targets;
+      return !targets || targets.length === 0 || targets.includes(receiverAddr);
+    })
+    .map<ReceiverSourceSpec>((participant) => ({
+      senderAddr: participant.addr,
+      senderProfile: participant.senderProfile,
+    }));
+  return [primary, ...extras];
+}
+
+function impairmentSummaryForSources(
+  sources: readonly ReceiverSourceSpec[]
+): string {
+  if (sources.length === 1) {
+    return sources[0]!.senderProfile.impairmentSummary;
+  }
+  return sources
+    .map(
+      (source) =>
+        `${source.senderAddr}: ${source.senderProfile.label.toLowerCase()}`
+    )
+    .join('; ');
+}
+
+function senderProfileLabelForSources(
+  sources: readonly ReceiverSourceSpec[]
+): string {
+  if (sources.length === 1) {
+    return sources[0]!.senderProfile.label;
+  }
+  return `${sources.length} remote sources`;
+}
+
+function senderProfileIdForSources(
+  sources: readonly ReceiverSourceSpec[]
+): string {
+  if (sources.length === 1) {
+    return sources[0]!.senderProfile.id;
+  }
+  return `multi-source:${sources.map((source) => source.senderProfile.id).join('+')}`;
 }
 
 function generatePackets(
@@ -680,6 +789,244 @@ function buildStartupSummary(
   };
 }
 
+function buildAggregateStartupSummary(
+  paths: readonly SimulatedPeerPath[]
+): GroupCallE2ePeerStartupSummary {
+  const tickCount = paths.reduce((sum, path) => sum + path.startupTickCount, 0);
+  const underTargetTicks = paths.reduce(
+    (sum, path) => sum + path.startupUnderTargetTicks,
+    0
+  );
+  const outsideTargetTicks = paths.reduce(
+    (sum, path) => sum + path.startupOutsideTargetTicks,
+    0
+  );
+  const concealmentTicks = paths.reduce(
+    (sum, path) => sum + path.startupConcealmentTicks,
+    0
+  );
+  const decodeDrops = paths.reduce(
+    (sum, path) => sum + path.startupDecodeDropCount,
+    0
+  );
+  const pcmSamples = paths.flatMap((path) => path.startupPcmSamples);
+  const safeTickCount = Math.max(1, tickCount);
+  return {
+    windowMs: STARTUP_QUALITY_WINDOW_MS,
+    tickCount,
+    avgPcmBufferedMs: average(pcmSamples),
+    underTargetFraction: underTargetTicks / safeTickCount,
+    outsideTargetFraction: outsideTargetTicks / safeTickCount,
+    concealmentTicks,
+    decodeDrops,
+  };
+}
+
+function combineMetrics(
+  metrics: readonly PeerExportMetrics[],
+  role: string,
+  durationMs: number
+): PeerExportMetrics {
+  if (metrics.length === 1) {
+    return {
+      ...metrics[0]!,
+      role,
+    };
+  }
+  const averageOf = <K extends keyof PeerExportMetrics>(key: K): number =>
+    average(metrics.map((metric) => Number(metric[key] ?? 0)));
+  const sumOf = <K extends keyof PeerExportMetrics>(key: K): number =>
+    metrics.reduce((sum, metric) => sum + Number(metric[key] ?? 0), 0);
+  const maxOf = <K extends keyof PeerExportMetrics>(key: K): number =>
+    metrics.reduce(
+      (max, metric) => Math.max(max, Number(metric[key] ?? 0)),
+      Number.NEGATIVE_INFINITY
+    );
+  const anyTrue = <K extends keyof PeerExportMetrics>(key: K): boolean =>
+    metrics.some((metric) => Boolean(metric[key]));
+  const adaptiveNetworkMode = metrics.some(
+    (metric) => metric.adaptiveNetworkMode === 'recovery'
+  )
+    ? 'recovery'
+    : 'low-latency';
+  let worstSeverity = 'none';
+  for (const metric of metrics) {
+    worstSeverity = higherSeverity(
+      worstSeverity,
+      metric.playoutStarvationWorstSeverity
+    );
+  }
+  return {
+    avgPcmBufferedMs: averageOf('avgPcmBufferedMs'),
+    avgPlayoutDeltaMs: averageOf('avgPlayoutDeltaMs'),
+    playoutUnderTargetFraction: averageOf('playoutUnderTargetFraction'),
+    playoutOutsideTargetFraction: averageOf('playoutOutsideTargetFraction'),
+    playoutRateFractionBelow1: averageOf('playoutRateFractionBelow1'),
+    jitterUnderruns: sumOf('jitterUnderruns'),
+    missingFrames: sumOf('missingFrames'),
+    concealmentTicks: sumOf('concealmentTicks'),
+    packetsDroppedStaleTimestamp: sumOf('packetsDroppedStaleTimestamp'),
+    packetsDroppedStaleTimestampRatePerSec: sumOf(
+      'packetsDroppedStaleTimestampRatePerSec'
+    ),
+    packetsDroppedPendingDecrypt: sumOf('packetsDroppedPendingDecrypt'),
+    packetsDroppedPendingDecryptRatePerSec: sumOf(
+      'packetsDroppedPendingDecryptRatePerSec'
+    ),
+    pendingDecryptDepthHighWater: maxOf('pendingDecryptDepthHighWater'),
+    reticulumAudioBridgeQueuedFramesHighWater: maxOf(
+      'reticulumAudioBridgeQueuedFramesHighWater'
+    ),
+    reticulumAudioBinaryOutQueueDepthHighWater: maxOf(
+      'reticulumAudioBinaryOutQueueDepthHighWater'
+    ),
+    reticulumAudioBridgeWaitingForDrain: anyTrue(
+      'reticulumAudioBridgeWaitingForDrain'
+    ),
+    reticulumAudioQueuePressureDrops: sumOf('reticulumAudioQueuePressureDrops'),
+    reticulumAudioStaleDrops: sumOf('reticulumAudioStaleDrops'),
+    avgOpusBufferedMs: averageOf('avgOpusBufferedMs'),
+    maxOpusBufferedMs: maxOf('maxOpusBufferedMs'),
+    adaptiveTargetMedianMs: averageOf('adaptiveTargetMedianMs'),
+    wasmFecDeferredPcmTicks: sumOf('wasmFecDeferredPcmTicks'),
+    durationMs,
+    adaptiveNetworkMode,
+    playoutStarvationWorstSeverity: worstSeverity,
+    gcallAudioStage5BoostCumulativeMs: maxOf(
+      'gcallAudioStage5BoostCumulativeMs'
+    ),
+    tickBudgetBreachCount: sumOf('tickBudgetBreachCount'),
+    tickBudgetBreachP95Ms: maxOf('tickBudgetBreachP95Ms'),
+    tickBudgetBreachMaxMs: maxOf('tickBudgetBreachMaxMs'),
+    longTaskCount: sumOf('longTaskCount'),
+    role,
+    v2ManagedSourceCount: metrics.length,
+    legacyWindowOpusMetricsMeaningful: metrics.some(
+      (metric) => metric.legacyWindowOpusMetricsMeaningful
+    ),
+    avgPcmRingBufferedMs: averageOf('avgPcmRingBufferedMs'),
+    avgPcmRingOldestFrameAgeMs: averageOf('avgPcmRingOldestFrameAgeMs'),
+    maxPcmRingOldestFrameAgeMs: maxOf('maxPcmRingOldestFrameAgeMs'),
+    stalePcmDrops: sumOf('stalePcmDrops'),
+    avgTargetBufferMs: averageOf('avgTargetBufferMs'),
+  };
+}
+
+function buildAggregateTimelineSummary(
+  paths: readonly SimulatedPeerPath[],
+  metrics: PeerExportMetrics
+): GroupCallE2ePeerTimelineSummary {
+  const timelines = paths.map((path) => buildTimelineSummary(path, metrics));
+  const stageMin = (
+    selector: (timeline: GroupCallE2ePeerTimelineSummary) => number | null
+  ): number | null => {
+    const values = timelines
+      .map(selector)
+      .filter((value): value is number => typeof value === 'number');
+    return values.length > 0 ? Math.min(...values) : null;
+  };
+  const arrival = {
+    firstIssueAtMs: stageMin((timeline) => timeline.arrival.firstIssueAtMs),
+    totalPackets: paths.reduce((sum, path) => sum + path.totalPackets, 0),
+    deliveredPackets: paths.reduce((sum, path) => sum + path.deliveredPackets, 0),
+    droppedPackets: paths.reduce((sum, path) => sum + path.droppedPackets, 0),
+    dropRate: average(timelines.map((timeline) => timeline.arrival.dropRate)),
+    staleTimestampDrops: paths.reduce(
+      (sum, path) => sum + path.staleTimestampDrops,
+      0
+    ),
+    maxExcessLatenessMs: Math.max(
+      0,
+      ...timelines.map((timeline) => timeline.arrival.maxExcessLatenessMs)
+    ),
+    maxTimestampRegressionMs: Math.max(
+      0,
+      ...timelines.map((timeline) => timeline.arrival.maxTimestampRegressionMs)
+    ),
+  };
+  const jitter = {
+    firstIssueAtMs: stageMin((timeline) => timeline.jitter.firstIssueAtMs),
+    avgBufferedMs: average(timelines.map((timeline) => timeline.jitter.avgBufferedMs)),
+    maxBufferedMs: Math.max(
+      0,
+      ...timelines.map((timeline) => timeline.jitter.maxBufferedMs)
+    ),
+    maxDepthFrames: Math.max(
+      0,
+      ...timelines.map((timeline) => timeline.jitter.maxDepthFrames)
+    ),
+  };
+  const decode = {
+    firstIssueAtMs: stageMin((timeline) => timeline.decode.firstIssueAtMs),
+    framesDecoded: paths.reduce((sum, path) => sum + path.framesDecoded, 0),
+    concealmentFrames: paths.reduce(
+      (sum, path) => sum + path.engine.getConcealmentFrames(),
+      0
+    ),
+    concealmentTicks: paths.reduce((sum, path) => sum + path.concealmentTicks, 0),
+  };
+  const pcmRing = {
+    firstIssueAtMs: stageMin((timeline) => timeline.pcmRing.firstIssueAtMs),
+    avgBufferedMs: average(timelines.map((timeline) => timeline.pcmRing.avgBufferedMs)),
+    minBufferedMs: Math.min(
+      ...timelines.map((timeline) => timeline.pcmRing.minBufferedMs)
+    ),
+    maxBufferedMs: Math.max(
+      0,
+      ...timelines.map((timeline) => timeline.pcmRing.maxBufferedMs)
+    ),
+    underruns: paths.reduce(
+      (sum, path) => sum + path.engine.getPcmRing().underruns,
+      0
+    ),
+    overruns: paths.reduce(
+      (sum, path) => sum + path.engine.getPcmRing().overruns,
+      0
+    ),
+  };
+  const playout = {
+    firstIssueAtMs: stageMin((timeline) => timeline.playout.firstIssueAtMs),
+    avgDeltaMs: average(timelines.map((timeline) => timeline.playout.avgDeltaMs)),
+    underTargetFraction: metrics.playoutUnderTargetFraction,
+    outsideTargetFraction: metrics.playoutOutsideTargetFraction,
+    targetBufferMs: average(timelines.map((timeline) => timeline.playout.targetBufferMs)),
+  };
+  const allFirstIssues = timelines
+    .filter((timeline) => typeof timeline.firstIssueAtMs === 'number')
+    .sort(
+      (a, b) =>
+        (a.firstIssueAtMs ?? Number.POSITIVE_INFINITY) -
+        (b.firstIssueAtMs ?? Number.POSITIVE_INFINITY)
+    );
+  return {
+    firstIssueAtMs: allFirstIssues[0]?.firstIssueAtMs ?? null,
+    firstIssueStage: allFirstIssues[0]?.firstIssueStage ?? null,
+    arrival,
+    jitter,
+    decode,
+    pcmRing,
+    playout,
+    perf: {
+      tickBudgetBreachCount: timelines.reduce(
+        (sum, timeline) => sum + timeline.perf.tickBudgetBreachCount,
+        0
+      ),
+      tickBudgetBreachP95Ms: Math.max(
+        0,
+        ...timelines.map((timeline) => timeline.perf.tickBudgetBreachP95Ms)
+      ),
+      tickBudgetBreachMaxMs: Math.max(
+        0,
+        ...timelines.map((timeline) => timeline.perf.tickBudgetBreachMaxMs)
+      ),
+      longTaskCount: paths.reduce(
+        (sum, path) => sum + path.tickStallsMs.filter((value) => value > 50).length,
+        0
+      ),
+    },
+  };
+}
+
 function isInScoredStartupWindow(
   path: SimulatedPeerPath,
   nowMs: number
@@ -695,9 +1042,9 @@ function isInScoredStartupWindow(
 }
 
 function createPath(
-  receiverAddr: 'peer-A' | 'peer-B',
+  receiverAddr: string,
   receiverRole: string,
-  senderAddr: 'peer-A' | 'peer-B',
+  senderAddr: string,
   senderProfile: SenderImpairmentProfile,
   receiverModel: GroupCallE2eReceiverModel | undefined,
   durationMs: number,
@@ -739,7 +1086,7 @@ function createPath(
   const tracker = new GroupCallPerformanceTracker();
   tracker.setRole(receiverRole as Parameters<GroupCallPerformanceTracker['setRole']>[0]);
   tracker.setResourceCounts({ decoders: 1, playbackNodes: 1, jitterBuffers: 1 });
-  const packetSeed = seed ^ (receiverAddr === 'peer-A' ? 0xa5a5a5a5 : 0x5a5a5a5a);
+  const packetSeed = seed ^ stableStringSeed(`${receiverAddr}:${senderAddr}`);
   const packets = generatePackets(senderProfile, durationMs, packetSeed);
   const packetRng = xorshift32(seed ^ 0x9e3779b9);
   const faultInjector = new FaultInjector(sessionController, cloneFaults(senderProfile.faults));
@@ -1556,7 +1903,6 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
       qualityScoreAtLeastByMode: {
         'audio-surface-sim': 9,
       },
-      worseAddr: 'peer-A',
     },
   },
   {
@@ -1584,6 +1930,139 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
     },
     expectations: {
       qualityScoreAtLeast: 6.5,
+    },
+  },
+  {
+    id: 'three-person-clean-single-cluster',
+    description:
+      'Single-cluster 3-person call with one extra clean remote source; root and participant should both stay healthy.',
+    durationMs: 24_000,
+    seed: 1717,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+    },
+    extraParticipants: [
+      {
+        addr: 'peer-C',
+        senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+        targets: ['peer-A', 'peer-B'],
+      },
+    ],
+    expectations: {
+      bothPassed: true,
+      qualityScoreAtLeast: 8.8,
+      bothPassedByMode: {
+        'audio-surface-sim': true,
+      },
+      qualityScoreAtLeastByMode: {
+        'audio-surface-sim': 9.2,
+      },
+    },
+  },
+  {
+    id: 'three-person-root-fanout-one-bursty-remote',
+    description:
+      'Single-cluster 3-person call where the root listener handles one clean and one bursty remote source at the same time.',
+    durationMs: 26_000,
+    seed: 1818,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+    },
+    extraParticipants: [
+      {
+        addr: 'peer-C',
+        senderProfile: {
+          ...SENDER_PROFILE_PRESETS.burstySender,
+          label: 'Single-cluster bursty remote',
+          impairmentSummary:
+            'One remote sender is moderately bursty with brief bridge pressure and a shorter latency spike, matching a healthy-but-not-perfect 3-person single-cluster call.',
+          jitterStdDevMs: 38,
+          burstFraction: 0.58,
+          faults: [
+            {
+              kind: 'bridge-pressure',
+              atMs: 5_000,
+              durationMs: 6_000,
+              params: { depth: 16 },
+            },
+            {
+              kind: 'latency-spike',
+              atMs: 8_500,
+              durationMs: 4_000,
+              params: { addMs: 70 },
+            },
+          ],
+        },
+        targets: ['peer-A', 'peer-B'],
+      },
+    ],
+    expectations: {
+      bothPassed: true,
+      qualityScoreAtLeast: 8.2,
+      bothPassedByMode: {
+        'audio-surface-sim': true,
+      },
+      qualityScoreAtLeastByMode: {
+        'audio-surface-sim': 8.7,
+      },
+    },
+  },
+  {
+    id: 'five-person-single-cluster-root-fanout-pressure',
+    description:
+      'Single-cluster 5-person call with several concurrent remotes, stressing the root listener without triggering multi-cluster routing.',
+    durationMs: 28_000,
+    seed: 1919,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+    },
+    extraParticipants: [
+      {
+        addr: 'peer-C',
+        senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+        targets: ['peer-A', 'peer-B'],
+      },
+      {
+        addr: 'peer-D',
+        senderProfile: SENDER_PROFILE_PRESETS.moderateSpikeSender,
+        targets: ['peer-A', 'peer-B'],
+      },
+      {
+        addr: 'peer-E',
+        senderProfile: SENDER_PROFILE_PRESETS.burstySender,
+        targets: ['peer-A', 'peer-B'],
+      },
+    ],
+    expectations: {
+      bothPassed: true,
+      qualityScoreAtLeast: 7.8,
+      bothPassedByMode: {
+        'audio-surface-sim': true,
+      },
+      qualityScoreAtLeastByMode: {
+        'audio-surface-sim': 9,
+      },
     },
   },
 ];
@@ -1731,57 +2210,79 @@ export async function runGroupCallE2eScenario(
   if (useTrackedMetrics) {
     Date.now = () => simulatedNowMs;
   }
-  const peerAPath = createPath(
-    scenario.peerA.addr,
-    scenario.peerA.role,
-    scenario.peerB.addr,
-    scenario.peerB.senderProfile,
-    scenario.peerA.receiverModel,
-    scenario.durationMs,
-    scenario.seed ^ 0x11111111
+  const peerASources = sourcesForReceiver(scenario, scenario.peerA.addr);
+  const peerBSources = sourcesForReceiver(scenario, scenario.peerB.addr);
+  const peerAPaths = peerASources.map((source, index) =>
+    createPath(
+      scenario.peerA.addr,
+      scenario.peerA.role,
+      source.senderAddr,
+      source.senderProfile,
+      scenario.peerA.receiverModel,
+      scenario.durationMs,
+      scenario.seed ^ 0x11111111 ^ ((index + 1) * 0x01010101)
+    )
   );
-  const peerBPath = createPath(
-    scenario.peerB.addr,
-    scenario.peerB.role,
-    scenario.peerA.addr,
-    scenario.peerA.senderProfile,
-    scenario.peerB.receiverModel,
-    scenario.durationMs,
-    scenario.seed ^ 0x22222222
+  const peerBPaths = peerBSources.map((source, index) =>
+    createPath(
+      scenario.peerB.addr,
+      scenario.peerB.role,
+      source.senderAddr,
+      source.senderProfile,
+      scenario.peerB.receiverModel,
+      scenario.durationMs,
+      scenario.seed ^ 0x22222222 ^ ((index + 1) * 0x02020202)
+    )
   );
 
   try {
     for (let simulatedMs = 0; simulatedMs < scenario.durationMs; simulatedMs += 1) {
       simulatedNowMs = simulatedMs;
-      setPathClock(peerAPath, simulatedMs);
-      setPathClock(peerBPath, simulatedMs);
-      deliverPackets(peerAPath, simulatedMs);
-      deliverPackets(peerBPath, simulatedMs);
-      if (simulatedMs >= peerAPath.nextTickMs) {
-        await drainTick(peerAPath, simulatedMs);
+      for (const path of peerAPaths) {
+        setPathClock(path, simulatedMs);
+        deliverPackets(path, simulatedMs);
+        if (simulatedMs >= path.nextTickMs) {
+          await drainTick(path, simulatedMs);
+        }
       }
-      if (simulatedMs >= peerBPath.nextTickMs) {
-        await drainTick(peerBPath, simulatedMs);
+      for (const path of peerBPaths) {
+        setPathClock(path, simulatedMs);
+        deliverPackets(path, simulatedMs);
+        if (simulatedMs >= path.nextTickMs) {
+          await drainTick(path, simulatedMs);
+        }
       }
     }
 
     simulatedNowMs = scenario.durationMs;
-    const peerAMetrics = useTrackedMetrics
-      ? buildTrackedPeerMetrics(
-          peerAPath,
-          activeTransportDuration(peerAPath),
-          scenario.durationMs
-        )
-      : buildLegacyPeerMetrics(peerAPath, activeTransportDuration(peerAPath));
-    const peerBMetrics = useTrackedMetrics
-      ? buildTrackedPeerMetrics(
-          peerBPath,
-          activeTransportDuration(peerBPath),
-          scenario.durationMs
-        )
-      : buildLegacyPeerMetrics(peerBPath, activeTransportDuration(peerBPath));
-    const peerATimeline = buildTimelineSummary(peerAPath, peerAMetrics);
-    const peerBTimeline = buildTimelineSummary(peerBPath, peerBMetrics);
+    const peerAMetrics = combineMetrics(
+      peerAPaths.map((path) =>
+        useTrackedMetrics
+          ? buildTrackedPeerMetrics(
+              path,
+              activeTransportDuration(path),
+              scenario.durationMs
+            )
+          : buildLegacyPeerMetrics(path, activeTransportDuration(path))
+      ),
+      scenario.peerA.role,
+      scenario.durationMs
+    );
+    const peerBMetrics = combineMetrics(
+      peerBPaths.map((path) =>
+        useTrackedMetrics
+          ? buildTrackedPeerMetrics(
+              path,
+              activeTransportDuration(path),
+              scenario.durationMs
+            )
+          : buildLegacyPeerMetrics(path, activeTransportDuration(path))
+      ),
+      scenario.peerB.role,
+      scenario.durationMs
+    );
+    const peerATimeline = buildAggregateTimelineSummary(peerAPaths, peerAMetrics);
+    const peerBTimeline = buildAggregateTimelineSummary(peerBPaths, peerBMetrics);
 
     const bundle = buildGroupCallE2eArtifactBundle({
       mode,
@@ -1792,24 +2293,24 @@ export async function runGroupCallE2eScenario(
       peerA: {
         addr: scenario.peerA.addr,
         role: scenario.peerA.role,
-        senderProfileId: scenario.peerB.senderProfile.id,
-        senderProfileLabel: scenario.peerB.senderProfile.label,
-        impairmentSummary: scenario.peerB.senderProfile.impairmentSummary,
+        senderProfileId: senderProfileIdForSources(peerASources),
+        senderProfileLabel: senderProfileLabelForSources(peerASources),
+        impairmentSummary: impairmentSummaryForSources(peerASources),
         metrics: peerAMetrics,
         timeline: peerATimeline,
-        startup: buildStartupSummary(peerAPath),
-        stateTransitions: [...peerAPath.stateCounts.entries()].map(([state, count]) => ({ state, count })),
+        startup: buildAggregateStartupSummary(peerAPaths),
+        stateTransitions: mergeStateCounts(peerAPaths),
       },
       peerB: {
         addr: scenario.peerB.addr,
         role: scenario.peerB.role,
-        senderProfileId: scenario.peerA.senderProfile.id,
-        senderProfileLabel: scenario.peerA.senderProfile.label,
-        impairmentSummary: scenario.peerA.senderProfile.impairmentSummary,
+        senderProfileId: senderProfileIdForSources(peerBSources),
+        senderProfileLabel: senderProfileLabelForSources(peerBSources),
+        impairmentSummary: impairmentSummaryForSources(peerBSources),
         metrics: peerBMetrics,
         timeline: peerBTimeline,
-        startup: buildStartupSummary(peerBPath),
-        stateTransitions: [...peerBPath.stateCounts.entries()].map(([state, count]) => ({ state, count })),
+        startup: buildAggregateStartupSummary(peerBPaths),
+        stateTransitions: mergeStateCounts(peerBPaths),
       },
     });
     if (process.env.GCALL_E2E_SKIP_EXPECTATIONS !== '1') {
@@ -1818,10 +2319,10 @@ export async function runGroupCallE2eScenario(
     return bundle;
   } finally {
     Date.now = originalDateNow;
-    peerAPath.sessionController.dispose();
-    peerBPath.sessionController.dispose();
-    peerAPath.engine.dispose();
-    peerBPath.engine.dispose();
+    for (const path of [...peerAPaths, ...peerBPaths]) {
+      path.sessionController.dispose();
+      path.engine.dispose();
+    }
   }
 }
 
