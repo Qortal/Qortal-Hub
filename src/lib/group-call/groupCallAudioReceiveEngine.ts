@@ -1,6 +1,9 @@
 import { DmVoiceGcallInboundPlayout } from '../call/dmVoiceGcallInboundPlayout';
 import { applyCallAudioOutput } from '../call/audioDevices';
-import { decodeAudioPackets, type DecodedAudioPacket } from './audioPacketCodec';
+import {
+  decodeAudioPackets,
+  type DecodedAudioPacket,
+} from './audioPacketCodec';
 import type { GroupCallAudioQualityProfile } from './groupCallAudioProfile';
 import {
   GroupCallPerformanceTracker,
@@ -40,8 +43,13 @@ export class GroupCallAudioReceiveEngine {
   private readonly metricsRef = { current: this.metrics };
   private readonly playouts = new Map<string, DmVoiceGcallInboundPlayout>();
   private readonly outputNodeBySource = new Map<string, GainNode>();
-  private readonly onMetricsChanged: (snapshot: GroupCallMetricsSnapshot) => void;
-  private readonly onPlayedSeqAdvanced?: (sourceAddr: string, playedSeq: number) => void;
+  private readonly onMetricsChanged: (
+    snapshot: GroupCallMetricsSnapshot
+  ) => void;
+  private readonly onPlayedSeqAdvanced?: (
+    sourceAddr: string,
+    playedSeq: number
+  ) => void;
   private readonly onDecodedPacketsObserved?: (
     packets: Array<{
       sourceAddr: string;
@@ -80,7 +88,9 @@ export class GroupCallAudioReceiveEngine {
     this.emitMetricsNow();
   }
 
-  async configure(config: Partial<GroupCallAudioReceiveEngineConfig>): Promise<void> {
+  async configure(
+    config: Partial<GroupCallAudioReceiveEngineConfig>
+  ): Promise<void> {
     this.config = {
       ...this.config,
       ...config,
@@ -171,7 +181,10 @@ export class GroupCallAudioReceiveEngine {
   ): Promise<void> {
     if (packets.length === 0) {
       this.recordDecodeFailure();
-      traceGcallAudioSurface('pipeline: decodeAudioPackets returned 0 packets', {});
+      traceGcallAudioSurface(
+        'pipeline: decodeAudioPackets returned 0 packets',
+        {}
+      );
       return;
     }
     if (!this.loggedFirstDecodedPacket) {
@@ -274,7 +287,9 @@ export class GroupCallAudioReceiveEngine {
     this.clearMetricsEmitTimer();
   }
 
-  private async getOrCreatePlayout(sourceAddr: string): Promise<DmVoiceGcallInboundPlayout> {
+  private async getOrCreatePlayout(
+    sourceAddr: string
+  ): Promise<DmVoiceGcallInboundPlayout> {
     const existing = this.playouts.get(sourceAddr);
     if (existing) return existing;
     const ctx = await this.ensureAudioContext();
@@ -305,7 +320,9 @@ export class GroupCallAudioReceiveEngine {
           traceGcallAudioSurface('pipeline: playout worklet started', {
             sourceAddr,
             bufferedMs:
-              typeof message.bufferedMs === 'number' ? message.bufferedMs : null,
+              typeof message.bufferedMs === 'number'
+                ? message.bufferedMs
+                : null,
           });
         }
         if (typeof message.bufferedMs === 'number') {
@@ -345,7 +362,9 @@ export class GroupCallAudioReceiveEngine {
               outsideUnder: !!message.outsideBandUnder,
               outsideOver: !!message.outsideBandOver,
               deltaMs:
-                typeof message.deltaMs === 'number' ? message.deltaMs : undefined,
+                typeof message.deltaMs === 'number'
+                  ? message.deltaMs
+                  : undefined,
               playoutRate:
                 typeof message.rate === 'number' ? message.rate : undefined,
             }
@@ -376,10 +395,7 @@ export class GroupCallAudioReceiveEngine {
     let jitterBuffers = 0;
     for (const playout of this.playouts.values()) {
       const snapshot = playout.getDiagnosticsSnapshot();
-      if (
-        snapshot.decodePath === 'wasm-fec' ||
-        snapshot.hasWebCodecsDecoder
-      ) {
+      if (snapshot.decodePath === 'wasm-fec' || snapshot.hasWebCodecsDecoder) {
         decoders++;
       }
       if (snapshot.playbackNodeActive) playbackNodes++;

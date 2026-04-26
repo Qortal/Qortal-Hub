@@ -21,9 +21,13 @@ export function GroupCallProvider({ children }: { children: React.ReactNode }) {
     typeof window !== 'undefined' &&
     Boolean((window as Window & { audioSurface?: unknown }).audioSurface);
   if (hasAudioSurface) {
-    return <AudioSurfaceGroupCallProvider>{children}</AudioSurfaceGroupCallProvider>;
+    return (
+      <AudioSurfaceGroupCallProvider>{children}</AudioSurfaceGroupCallProvider>
+    );
   }
-  return <UnavailableGroupCallProvider>{children}</UnavailableGroupCallProvider>;
+  return (
+    <UnavailableGroupCallProvider>{children}</UnavailableGroupCallProvider>
+  );
 }
 
 function UnavailableGroupCallProvider({
@@ -32,14 +36,14 @@ function UnavailableGroupCallProvider({
   children: React.ReactNode;
 }) {
   useEffect(() => {
-    traceGcallAudioSurface('GroupCallProvider: using no-op API (no window.audioSurface on preload)', {
-      hasWindow: typeof window !== 'undefined',
-    });
+    traceGcallAudioSurface(
+      'GroupCallProvider: using no-op API (no window.audioSurface on preload)',
+      {
+        hasWindow: typeof window !== 'undefined',
+      }
+    );
   }, []);
-  const value = useMemo(
-    () => buildUnavailableGroupCallControllerApi(),
-    []
-  );
+  const value = useMemo(() => buildUnavailableGroupCallControllerApi(), []);
   return (
     <GroupCallContext.Provider value={value}>
       <GroupCallJoinErrorNotifier />
@@ -54,7 +58,9 @@ function AudioSurfaceGroupCallProvider({
   children: React.ReactNode;
 }) {
   useEffect(() => {
-    traceGcallAudioSurface('GroupCallProvider: audio-surface IPC path (window.audioSurface present)');
+    traceGcallAudioSurface(
+      'GroupCallProvider: audio-surface IPC path (window.audioSurface present)'
+    );
   }, []);
   const groupChatOpen = useAtomValue(groupChatOpenAtom);
   useQortalGroupCallSidebarActivitySync();

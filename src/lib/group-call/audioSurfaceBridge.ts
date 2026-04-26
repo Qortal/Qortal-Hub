@@ -126,15 +126,20 @@ const joinUnavailable: GroupCallControllerApi['joinGroupCall'] = async (
   chatId,
   options
 ) => {
-  traceGcallAudioSurface('unavailable-api.joinGroupCall: window.audioSurface is missing; join is a no-op', {
-    roomId,
-    chatId,
-    hasMemberGate: options?.memberGateGroupId != null,
-  });
+  traceGcallAudioSurface(
+    'unavailable-api.joinGroupCall: window.audioSurface is missing; join is a no-op',
+    {
+      roomId,
+      chatId,
+      hasMemberGate: options?.memberGateGroupId != null,
+    }
+  );
 };
 
 const leaveUnavailable: GroupCallControllerApi['leaveGroupCall'] = async () => {
-  traceGcallAudioSurface('unavailable-api.leaveGroupCall: no window.audioSurface');
+  traceGcallAudioSurface(
+    'unavailable-api.leaveGroupCall: no window.audioSurface'
+  );
 };
 
 /**

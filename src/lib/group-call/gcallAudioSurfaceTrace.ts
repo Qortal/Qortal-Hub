@@ -105,6 +105,9 @@ export function tracePipelineReceiveDroppedNoRoomKey(
     noRoomKeyDropCount = 0;
     noRoomKeyWindowStart = now;
   } else if (noRoomKeyDropCount === 1) {
-    traceGcallAudioSurface('pipeline: receive drop (no room key) [first in window]', detail);
+    traceGcallAudioSurface(
+      'pipeline: receive drop (no room key) [first in window]',
+      detail
+    );
   }
 }
