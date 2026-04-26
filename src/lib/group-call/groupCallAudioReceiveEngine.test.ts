@@ -123,4 +123,87 @@ describe('GroupCallAudioReceiveEngine', () => {
     expect(snapshot.jitterNotReadyFraction).toBe(0);
     expect(snapshot.jitterRawEmptyFraction).toBe(0);
   });
+
+  it('ignores SAB startup gating and only counts audible under-target pressure as not-ready', async () => {
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockReturnValue({
+      peerAddress: 'alice',
+      decodePath: 'wasm-fec',
+      wasmFecActive: true,
+      hasOpusFecWorker: true,
+      hasWebCodecsDecoder: false,
+      decoderState: null,
+      hasSharedPcmRing: true,
+      sharedRingEnabled: true,
+      jitterActive: true,
+      jitterBufferedFrames: 0,
+      jitterHasReadyFrame: false,
+      playbackNodeActive: true,
+      schedulerNodeActive: true,
+      lastJitterAdaptiveMode: null,
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 0,
+      preProcessBufferedMs: 0,
+      oldestFrameAgeMs: 0,
+      rate: 1,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -100,
+      playoutStarted: false,
+      concealmentUsed: false,
+    });
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 12,
+      preProcessBufferedMs: 12,
+      oldestFrameAgeMs: 120,
+      rate: 0.96,
+      outsideBand: true,
+      outsideBandUnder: true,
+      outsideBandOver: false,
+      deltaMs: -88,
+      playoutStarted: true,
+      concealmentUsed: true,
+    });
+
+    const snapshot = engine.getSnapshot();
+    expect(snapshot.jitterBufferDepthFramesMean).toBe(0.5);
+    expect(snapshot.jitterBufferDepthFramesWorst).toBe(1);
+    expect(snapshot.jitterNotReadyFraction).toBe(0.5);
+    expect(snapshot.jitterRawEmptyFraction).toBe(0);
+  });
 });

@@ -172,6 +172,11 @@ export function scorePeerQuality(m: PeerExportMetrics): number {
     m.playoutUnderTargetFraction > 0.25 ||
     m.avgPcmBufferedMs < 95 ||
     concealmentFraction > 0.03;
+  const mildTransportQueuePressure =
+    m.playoutUnderTargetFraction <= 0.1 &&
+    m.playoutOutsideTargetFraction <= 0.08 &&
+    m.avgPcmBufferedMs >= 140 &&
+    concealmentFraction <= 0.01;
   score -= m.playoutUnderTargetFraction * 4;
   if (m.avgPcmBufferedMs < 80) score -= (80 - m.avgPcmBufferedMs) / 20;
   if (m.avgPcmRingOldestFrameAgeMs > Math.max(m.avgTargetBufferMs * 1.5, 180)) {
@@ -193,7 +198,7 @@ export function scorePeerQuality(m: PeerExportMetrics): number {
     score -= staleTimestampImpactingPlayout ? 1 : 0.25;
   }
   if (m.reticulumAudioBridgeQueuedFramesHighWater > 16) {
-    score -= transportImpactingPlayout ? 1 : 0.25;
+    score -= mildTransportQueuePressure ? 0.25 : transportImpactingPlayout ? 1 : 0.25;
   }
   if (m.tickBudgetBreachP95Ms > 15) {
     score -= stallImpactingPlayout ? 2 : 0.5;

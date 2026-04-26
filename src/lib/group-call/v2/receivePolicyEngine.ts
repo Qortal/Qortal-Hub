@@ -59,8 +59,14 @@ export interface ReceivePolicyConfig {
   startThresholdFrames: number;
   /** Target PCM buffer depth in ms. */
   targetBufferMs: number;
+  /** Temporary target increase applied just after startup/media resume. */
+  startupExtraBufferMs: number;
+  /** How long startup warmup stays active after startup/media resume. */
+  startupWarmupMs: number;
   /** Max decode frames per tick in steady state. */
   steadyMaxDecodePerTick: number;
+  /** Max decode frames per tick during startup warmup. */
+  startupMaxDecodePerTick: number;
   /** Max decode frames per tick in backlogDrain (higher = faster drain). */
   drainMaxDecodePerTick: number;
   /**
@@ -75,6 +81,13 @@ export interface ReceivePolicyConfig {
   pcmDeficitDrainThreshold: number;
   /** Minimum Opus reserve ratio required for the PCM-deficit drain trigger. */
   pcmDeficitOpusMinRatio: number;
+  /**
+   * More aggressive PCM-deficit trigger used during startup warmup so shallow
+   * reserve enters recovery sooner.
+   */
+  startupPcmDeficitDrainThreshold: number;
+  /** Lower Opus reserve floor used during startup warmup. */
+  startupPcmDeficitOpusMinRatio: number;
   /**
    * Exit backlogDrain when Opus buffered < target * this ratio AND pcm is healthy.
    * Default 0.5.
@@ -111,16 +124,31 @@ export interface ReceivePolicyConfig {
   transportDegradedHardTtlMs: number;
   /** PCM target increase in transportDegraded state (ms). */
   transportDegradedExtraBufferMs: number;
+  /** Extra target buffer while steady-state spike recovery is active. */
+  steadyStateRecoveryExtraBufferMs: number;
+  /** How long steady-state spike recovery stays active once armed. */
+  steadyStateRecoveryHoldMs: number;
+  /** Thin-PCM floor that arms steady-state spike recovery. */
+  steadyStateRecoveryLowPcmMs: number;
+  /** Consecutive thin-PCM ticks required to arm steady-state spike recovery. */
+  steadyStateRecoveryLowPcmTicks: number;
+  /** Only arm steady-state spike recovery while packet activity is recent. */
+  steadyStateRecoveryRecentPacketAgeMs: number;
 }
 
 export const DEFAULT_POLICY_CONFIG: ReceivePolicyConfig = {
   startThresholdFrames: 4,
   targetBufferMs: 120,
+  startupExtraBufferMs: 80,
+  startupWarmupMs: 6_000,
   steadyMaxDecodePerTick: 3,
+  startupMaxDecodePerTick: 8,
   drainMaxDecodePerTick: 8,
   backlogDrainTriggerRatio: 1.0,
   pcmDeficitDrainThreshold: 0.65,
   pcmDeficitOpusMinRatio: 0.35,
+  startupPcmDeficitDrainThreshold: 0.9,
+  startupPcmDeficitOpusMinRatio: 0.15,
   backlogDrainExitRatio: 0.45,
   backlogDrainExitMinPcmMs: 20,
   backlogDrainExitTargetFloorRatio: 0.6,
@@ -131,6 +159,11 @@ export const DEFAULT_POLICY_CONFIG: ReceivePolicyConfig = {
   lossRecoveryTimeoutMs: 500,
   transportDegradedHardTtlMs: 8_000,
   transportDegradedExtraBufferMs: 40,
+  steadyStateRecoveryExtraBufferMs: 60,
+  steadyStateRecoveryHoldMs: 3_000,
+  steadyStateRecoveryLowPcmMs: 18,
+  steadyStateRecoveryLowPcmTicks: 4,
+  steadyStateRecoveryRecentPacketAgeMs: 240,
 };
 
 export const DEFAULT_DECODED_PCM_LATENCY_MIN_EXTRA_MS = 80;
@@ -198,6 +231,9 @@ export class ReceivePolicyEngine {
   private _lastTransition: ReceiveStateTransition | null = null;
   private _transitionHistory: ReceiveStateTransition[] = [];
   private _backlogDrainReentryBlockedUntilMs = 0;
+  private _startupWarmupUntilMs = 0;
+  private _steadyStateRecoveryUntilMs = 0;
+  private _consecutiveThinPcmTicks = 0;
 
   constructor(
     readonly streamId: StreamIdentity,
@@ -255,16 +291,20 @@ export class ReceivePolicyEngine {
   private _evaluateTransitions(input: PolicyTickInput): void {
     const { nowMs, opusBufferedMs, pcmBufferedMs, lastPushAgeMs, jitterDepth, lastGapFrames } = input;
     const cfg = this._config;
+    this._observeSteadyStateRecovery(input);
+    const effectiveTargetBufferMs = this._effectiveTargetBufferMs(nowMs);
     const backlogDrainResumePcmCeiling = computeDecodedPcmLatencyResumeMs(
-      cfg.targetBufferMs,
+      effectiveTargetBufferMs,
       cfg.decodedPcmLatencyResumeRatio
     );
-    const backlogDrainLatencyCeiling = computeDecodedPcmLatencyCeilingMs(
+    const backlogDrainExitPcmCeiling = computeDecodedPcmLatencyCeilingMs(
       cfg.targetBufferMs,
       cfg.decodedPcmLatencyCeilingRatio
     );
     const backlogDrainReentryBlocked =
       nowMs < this._backlogDrainReentryBlockedUntilMs;
+    const pcmDeficitDrainThreshold = this._effectivePcmDeficitDrainThreshold(nowMs);
+    const pcmDeficitOpusMinRatio = this._effectivePcmDeficitOpusMinRatio(nowMs);
 
     // Missing media check applies from any state.
     const sourceGone = lastPushAgeMs > cfg.missingMediaThresholdMs;
@@ -286,11 +326,22 @@ export class ReceivePolicyEngine {
           this._transition('missingMedia', nowMs, 'no-packets-steady');
           break;
         }
+        // Transport degradation signal from control plane should win over
+        // buffer-growth policy so genuine control-plane trouble is classified
+        // correctly instead of being masked as a local backlog drain.
+        if (
+          input.peerHealth &&
+          (input.peerHealth.level === 'degraded' || input.peerHealth.level === 'recovering') &&
+          !input.peerHealth.freshLocalMediaConfirmed
+        ) {
+          this._transition('transportDegraded', nowMs, `peer-health:${input.peerHealth.level}`);
+          break;
+        }
         if (
           !backlogDrainReentryBlocked &&
           pcmBufferedMs < backlogDrainResumePcmCeiling &&
-          pcmBufferedMs < cfg.targetBufferMs * cfg.pcmDeficitDrainThreshold &&
-          opusBufferedMs >= cfg.targetBufferMs * cfg.pcmDeficitOpusMinRatio
+          pcmBufferedMs < effectiveTargetBufferMs * pcmDeficitDrainThreshold &&
+          opusBufferedMs >= effectiveTargetBufferMs * pcmDeficitOpusMinRatio
         ) {
           this._transition(
             'backlogDrain',
@@ -303,18 +354,9 @@ export class ReceivePolicyEngine {
         if (
           !backlogDrainReentryBlocked &&
           pcmBufferedMs < backlogDrainResumePcmCeiling &&
-          opusBufferedMs >= cfg.targetBufferMs * cfg.backlogDrainTriggerRatio
+          opusBufferedMs >= effectiveTargetBufferMs * cfg.backlogDrainTriggerRatio
         ) {
-          this._transition('backlogDrain', nowMs, `opus-overflow:${opusBufferedMs.toFixed(0)}ms>=${cfg.targetBufferMs}ms`);
-          break;
-        }
-        // Transport degradation signal from control plane.
-        if (
-          input.peerHealth &&
-          (input.peerHealth.level === 'degraded' || input.peerHealth.level === 'recovering') &&
-          !input.peerHealth.freshLocalMediaConfirmed
-        ) {
-          this._transition('transportDegraded', nowMs, `peer-health:${input.peerHealth.level}`);
+          this._transition('backlogDrain', nowMs, `opus-overflow:${opusBufferedMs.toFixed(0)}ms>=${effectiveTargetBufferMs}ms`);
           break;
         }
         // Loss recovery.
@@ -352,7 +394,7 @@ export class ReceivePolicyEngine {
           // Transition to backlogDrain if there's a backlog, else steady.
           if (
             pcmBufferedMs < backlogDrainResumePcmCeiling &&
-            opusBufferedMs >= cfg.targetBufferMs * 0.5
+            opusBufferedMs >= effectiveTargetBufferMs * 0.5
           ) {
             this._transition('backlogDrain', nowMs,
               hardTtlExpired ? 'transport-degraded-hard-ttl' : 'transport-evidence-expired-backlog');
@@ -378,7 +420,7 @@ export class ReceivePolicyEngine {
           this._transition('transportDegraded', nowMs, `peer-health-renewed:${input.peerHealth.level}`);
           break;
         }
-        if (pcmBufferedMs >= backlogDrainLatencyCeiling) {
+        if (pcmBufferedMs >= backlogDrainExitPcmCeiling) {
           this._transition(
             'steady',
             nowMs,
@@ -412,7 +454,7 @@ export class ReceivePolicyEngine {
           // If there's a backlog, go to drain first.
           if (
             pcmBufferedMs < backlogDrainResumePcmCeiling &&
-            opusBufferedMs >= cfg.targetBufferMs * cfg.backlogDrainTriggerRatio
+            opusBufferedMs >= effectiveTargetBufferMs * cfg.backlogDrainTriggerRatio
           ) {
             this._transition('backlogDrain', nowMs, 'loss-recovered-backlog');
           } else {
@@ -439,6 +481,15 @@ export class ReceivePolicyEngine {
       this._backlogDrainReentryBlockedUntilMs =
         nowMs + this._config.backlogDrainReentryCooldownMs;
     }
+    if (
+      (fromState === 'coldStart' || fromState === 'missingMedia') &&
+      (to === 'steady' || to === 'backlogDrain')
+    ) {
+      this._armStartupWarmup(nowMs);
+    }
+    if (fromState === 'missingMedia' && to === 'coldStart') {
+      this._armStartupWarmup(nowMs);
+    }
     const hardExpiry = to === 'transportDegraded'
       ? nowMs + this._config.transportDegradedHardTtlMs
       : undefined;
@@ -459,12 +510,17 @@ export class ReceivePolicyEngine {
 
   private _buildOutput(input: PolicyTickInput): ReceivePolicyOutput {
     const cfg = this._config;
+    const startupWarmup = this._isStartupWarmupActive(input.nowMs);
+    const steadyStateRecovery = this._isSteadyStateRecoveryActive(input.nowMs);
+    const effectiveTargetBufferMs = this._effectiveTargetBufferMs(input.nowMs);
     switch (this._state) {
       case 'coldStart':
         return {
           state: 'coldStart',
-          maxDecodePerTick: cfg.steadyMaxDecodePerTick,
-          targetBufferMs: cfg.targetBufferMs,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
+            : cfg.steadyMaxDecodePerTick,
+          targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: true,
           aggressiveDrain: false,
           enableConcealment: false,
@@ -473,8 +529,10 @@ export class ReceivePolicyEngine {
       case 'steady':
         return {
           state: 'steady',
-          maxDecodePerTick: cfg.steadyMaxDecodePerTick,
-          targetBufferMs: cfg.targetBufferMs,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
+            : cfg.steadyMaxDecodePerTick,
+          targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
           enableConcealment: true,
@@ -483,8 +541,10 @@ export class ReceivePolicyEngine {
       case 'transportDegraded':
         return {
           state: 'transportDegraded',
-          maxDecodePerTick: cfg.steadyMaxDecodePerTick,
-          targetBufferMs: cfg.targetBufferMs + cfg.transportDegradedExtraBufferMs,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
+            : cfg.steadyMaxDecodePerTick,
+          targetBufferMs: effectiveTargetBufferMs + cfg.transportDegradedExtraBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
           enableConcealment: true,
@@ -494,7 +554,7 @@ export class ReceivePolicyEngine {
         return {
           state: 'backlogDrain',
           maxDecodePerTick: cfg.drainMaxDecodePerTick,
-          targetBufferMs: cfg.targetBufferMs,
+          targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: true,
           enableConcealment: false,
@@ -503,8 +563,10 @@ export class ReceivePolicyEngine {
       case 'lossRecovery':
         return {
           state: 'lossRecovery',
-          maxDecodePerTick: cfg.steadyMaxDecodePerTick,
-          targetBufferMs: cfg.targetBufferMs,
+          maxDecodePerTick: startupWarmup || steadyStateRecovery
+            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
+            : cfg.steadyMaxDecodePerTick,
+          targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
           enableConcealment: true,
@@ -514,11 +576,100 @@ export class ReceivePolicyEngine {
         return {
           state: 'missingMedia',
           maxDecodePerTick: 0,
-          targetBufferMs: cfg.targetBufferMs,
+          targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: true,
           aggressiveDrain: false,
           enableConcealment: false,
         };
+    }
+  }
+
+  private _armStartupWarmup(nowMs: number): void {
+    this._startupWarmupUntilMs = Math.max(
+      this._startupWarmupUntilMs,
+      nowMs + this._config.startupWarmupMs
+    );
+  }
+
+  private _isStartupWarmupActive(nowMs: number): boolean {
+    return nowMs < this._startupWarmupUntilMs;
+  }
+
+  private _armSteadyStateRecovery(nowMs: number): void {
+    this._steadyStateRecoveryUntilMs = Math.max(
+      this._steadyStateRecoveryUntilMs,
+      nowMs + this._config.steadyStateRecoveryHoldMs
+    );
+  }
+
+  private _isSteadyStateRecoveryActive(nowMs: number): boolean {
+    return nowMs < this._steadyStateRecoveryUntilMs;
+  }
+
+  private _effectiveTargetBufferMs(nowMs: number): number {
+    let targetBufferMs = this._config.targetBufferMs;
+    if (this._isStartupWarmupActive(nowMs)) {
+      targetBufferMs += this._config.startupExtraBufferMs;
+    }
+    if (this._isSteadyStateRecoveryActive(nowMs)) {
+      targetBufferMs += this._config.steadyStateRecoveryExtraBufferMs;
+    }
+    return targetBufferMs;
+  }
+
+  private _effectivePcmDeficitDrainThreshold(nowMs: number): number {
+    return this._isStartupWarmupActive(nowMs)
+      ? Math.max(
+          this._config.pcmDeficitDrainThreshold,
+          this._config.startupPcmDeficitDrainThreshold
+        )
+      : this._config.pcmDeficitDrainThreshold;
+  }
+
+  private _effectivePcmDeficitOpusMinRatio(nowMs: number): number {
+    return this._isStartupWarmupActive(nowMs)
+      ? Math.min(
+          this._config.pcmDeficitOpusMinRatio,
+          this._config.startupPcmDeficitOpusMinRatio
+        )
+      : this._config.pcmDeficitOpusMinRatio;
+  }
+
+  private _observeSteadyStateRecovery(input: PolicyTickInput): void {
+    const { nowMs, pcmBufferedMs, lastPushAgeMs } = input;
+    if (this._state === 'coldStart' || this._state === 'missingMedia') {
+      this._consecutiveThinPcmTicks = 0;
+      return;
+    }
+
+    const recentPacketActivity =
+      lastPushAgeMs <= this._config.steadyStateRecoveryRecentPacketAgeMs;
+    const thinPcm =
+      pcmBufferedMs <= Math.max(
+        this._config.steadyStateRecoveryLowPcmMs,
+        this._config.targetBufferMs * 0.18
+      );
+    if (recentPacketActivity && thinPcm) {
+      this._consecutiveThinPcmTicks += 1;
+      if (
+        this._consecutiveThinPcmTicks >=
+        this._config.steadyStateRecoveryLowPcmTicks
+      ) {
+        this._armSteadyStateRecovery(nowMs);
+      }
+      return;
+    }
+
+    if (
+      pcmBufferedMs >=
+      Math.max(
+        this._config.steadyStateRecoveryLowPcmMs + 8,
+        this._config.targetBufferMs * 0.28
+      )
+    ) {
+      this._consecutiveThinPcmTicks = 0;
+    } else if (!recentPacketActivity) {
+      this._consecutiveThinPcmTicks = 0;
     }
   }
 
@@ -535,5 +686,9 @@ export class ReceivePolicyEngine {
     this._stateData = { enteredAtMs: performance.now() };
     this._lastTransition = null;
     this._transitionHistory = [];
+    this._startupWarmupUntilMs = 0;
+    this._backlogDrainReentryBlockedUntilMs = 0;
+    this._steadyStateRecoveryUntilMs = 0;
+    this._consecutiveThinPcmTicks = 0;
   }
 }

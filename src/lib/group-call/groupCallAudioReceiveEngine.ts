@@ -334,13 +334,22 @@ export class GroupCallAudioReceiveEngine {
               0,
               Math.round(message.preProcessBufferedMs / OPUS_FRAME_DURATION_MS)
             );
+            const playoutStarted = message.playoutStarted !== false;
+            // On the shared-ring path, "not ready" should reflect audible
+            // under-run pressure, not strict pre-process frame scarcity.
+            // Otherwise startup gating and low-but-still-usable reserve
+            // overstate trouble in healthy calls.
             this.metrics.recordJitterDrainTelemetry({
               sourceCount: 1,
               depthSum: bufferedFrames,
               worstDepth: bufferedFrames,
               notReadyCount:
-                message.preProcessBufferedMs < OPUS_FRAME_DURATION_MS ? 1 : 0,
-              rawEmptyCount: message.preProcessBufferedMs <= 0 ? 1 : 0,
+                playoutStarted &&
+                (message.concealmentUsed || message.outsideBandUnder)
+                  ? 1
+                  : 0,
+              rawEmptyCount:
+                playoutStarted && message.preProcessBufferedMs <= 0 ? 1 : 0,
             });
           }
           if (

@@ -8,6 +8,7 @@ import {
 
 export type GroupCallE2eMode =
   | 'deterministic'
+  | 'audio-surface-sim'
   | 'electron'
   | 'live-export';
 
@@ -65,6 +66,16 @@ export interface GroupCallE2ePeerTimelineSummary {
   };
 }
 
+export interface GroupCallE2ePeerStartupSummary {
+  readonly windowMs: number;
+  readonly tickCount: number;
+  readonly avgPcmBufferedMs: number;
+  readonly underTargetFraction: number;
+  readonly outsideTargetFraction: number;
+  readonly concealmentTicks: number;
+  readonly decodeDrops: number;
+}
+
 export interface GroupCallE2ePeerArtifact {
   readonly addr: string;
   readonly role: string;
@@ -74,6 +85,7 @@ export interface GroupCallE2ePeerArtifact {
   readonly metrics: PeerExportMetrics;
   readonly classification: PeerClassification;
   readonly timeline: GroupCallE2ePeerTimelineSummary | null;
+  readonly startup: GroupCallE2ePeerStartupSummary | null;
   readonly stateTransitions: ReadonlyArray<{
     readonly state: string;
     readonly count: number;
@@ -247,6 +259,11 @@ export function buildGroupCallE2eArtifactBundle(
     `## Peer Notes`,
     ...[report.peerA, report.peerB].flatMap((peer) => [
       `- \`${peer.addr}\` (${peer.role}) via \`${peer.senderProfileId}\`: ${peer.classification.primaryClass}, severity=${peer.classification.severity}, underTarget=${formatMetric(peer.metrics.playoutUnderTargetFraction)}, avgPcmMs=${formatMetric(peer.metrics.avgPcmBufferedMs)}${arrivalNote(peer)}`,
+      ...(peer.startup
+        ? [
+            `  startup: underTarget=${formatMetric(peer.startup.underTargetFraction)}, avgPcmMs=${formatMetric(peer.startup.avgPcmBufferedMs)}, decodeDrops=${peer.startup.decodeDrops}, concealmentTicks=${peer.startup.concealmentTicks}`,
+          ]
+        : []),
       ...peer.classification.diagnosticNotes.map((note) => `  ${note}`),
     ]),
   ].join('\n');
