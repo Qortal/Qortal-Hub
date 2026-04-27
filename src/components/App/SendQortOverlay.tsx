@@ -209,9 +209,7 @@ export function SendQortOverlay({
               clipPath: 'inset(0 round 14px)',
               display: 'flex',
               flexDirection: 'column',
-              height: isAnchoredLayout
-                ? '100%'
-                : 'min(620px, calc(100vh - 48px))',
+              height: isAnchoredLayout ? '100%' : 'auto',
               isolation: 'isolate',
               maxHeight: isAnchoredLayout ? undefined : 'calc(100vh - 48px)',
               overflow: 'hidden',
@@ -273,7 +271,7 @@ export function SendQortOverlay({
             <Box
               sx={{
                 borderTop: `1px solid ${headerDivider}`,
-                flex: 1,
+                flex: isAnchoredLayout ? 1 : '0 1 auto',
                 minHeight: 0,
                 overflowY: 'auto',
                 overscrollBehavior: 'contain',

@@ -776,7 +776,6 @@ const AppTile = ({
 
   const handleImageError = () => {
     if (hasRetriedRef.current) return;
-    console.log('handleImageError', appName);
     hasRetriedRef.current = true;
     retryTimeoutRef.current = setTimeout(() => {
       retryTimeoutRef.current = null;

@@ -95,8 +95,6 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
         .then((response) => {
           if (response?.error) {
             console.error('Error adding user settings:', response.error);
-          } else {
-            console.log('User settings added successfully');
           }
         })
         .catch((error) => {

@@ -739,12 +739,6 @@ function App() {
     getUserInfo();
   }, [address]);
 
-  useEffect(() => {
-    return () => {
-      console.log('exit');
-    };
-  }, []);
-
   const saveFileToDiskFunc = useCallback(async () => {
     try {
       if (!walletToBeDownloaded?.wallet || !walletToBeDownloaded?.qortAddress) {

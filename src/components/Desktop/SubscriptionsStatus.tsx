@@ -1,5 +1,5 @@
-import CardMembershipRoundedIcon from '@mui/icons-material/CardMembershipRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import ListAltRoundedIcon from '@mui/icons-material/ListAltRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import {
   Box,
@@ -131,7 +131,7 @@ export function SubscriptionsStatus({
 
   const title = 'Subscriptions';
   const tooltipLabel =
-    totalActions > 0 ? `${title} · ${totalActions} action needed` : title;
+    totalActions > 0 ? `${title} - ${totalActions} action needed` : title;
 
   const panelBorderColor = alpha('#A9BCD8', 0.18);
   const itemBorderColor = alpha('#A9BCD8', 0.13);
@@ -205,7 +205,7 @@ export function SubscriptionsStatus({
             }}
           >
             {subscription?.priceQort} QORT / {subscription?.billingInterval}
-            {tone === 'active' && dueText ? ` · Expires ${dueText}` : ''}
+            {tone === 'active' && dueText ? ` - Expires ${dueText}` : ''}
           </Typography>
         </Box>
         <Box
@@ -304,9 +304,9 @@ export function SubscriptionsStatus({
           >
             {entry?.group?.memberCount ?? 0} members
             {pendingJoinRequests > 0
-              ? ` · ${pendingJoinRequests} join request${pendingJoinRequests === 1 ? '' : 's'}`
+              ? ` - ${pendingJoinRequests} join request${pendingJoinRequests === 1 ? '' : 's'}`
               : ''}
-            {needsReEncryption ? ' · Re-encryption needed' : ''}
+            {needsReEncryption ? ' - Re-encryption needed' : ''}
           </Typography>
         </Box>
         {hasAction ? (
@@ -384,13 +384,13 @@ export function SubscriptionsStatus({
             },
           }}
         >
-          <CardMembershipRoundedIcon
+          <ListAltRoundedIcon
             sx={{
               color:
                 totalActions > 0
                   ? theme.palette.warning.main
                   : theme.palette.text.secondary,
-              fontSize: compact ? 20 : undefined,
+              fontSize: compact ? 17 : 19,
               ...(iconSx || {}),
             }}
           />
@@ -452,8 +452,8 @@ export function SubscriptionsStatus({
           }}
         >
           <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
-            <CardMembershipRoundedIcon
-              sx={{ color: theme.palette.primary.light, fontSize: 19 }}
+            <ListAltRoundedIcon
+              sx={{ color: theme.palette.primary.light, fontSize: 18 }}
             />
             <Typography
               sx={{

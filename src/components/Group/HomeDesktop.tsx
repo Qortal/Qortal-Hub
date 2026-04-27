@@ -650,6 +650,7 @@ const InfoPreviewPanel = ({
   theme,
   maxExpandedHeightPx = null,
   forceExpanded = false,
+  resetKey = 'default',
 }) => {
   const enableOverlay = useMediaQuery(theme.breakpoints.up('xl'));
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
@@ -680,6 +681,13 @@ const InfoPreviewPanel = ({
   useEffect(() => {
     return () => clearHoverTimers();
   }, []);
+
+  useEffect(() => {
+    clearHoverTimers();
+    setIsExpanded(false);
+    setCollapsedHeight(0);
+    setContentHeight(0);
+  }, [resetKey]);
 
   useEffect(() => {
     if (!enableOverlay) {
@@ -851,6 +859,8 @@ const InfoPreviewPanel = ({
             justifySelf: 'end',
             maxWidth: '100%',
             minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
             ...SYSTEM_BADGE_SX,
           }}
         >
@@ -1022,6 +1032,8 @@ const InfoPreviewPanel = ({
             display: 'grid',
             gridTemplateColumns: 'minmax(0, 1fr) auto',
             height: '46px',
+            minWidth: 0,
+            overflow: 'hidden',
             py: 0,
           }}
         >
@@ -1035,6 +1047,9 @@ const InfoPreviewPanel = ({
               fontWeight: 500,
               letterSpacing: '0.012em',
               minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
             {row.label}
@@ -1086,6 +1101,7 @@ const InfoPreviewPanel = ({
               flexDirection: 'column',
               justifyContent: 'space-between',
               minHeight: '70px',
+              minWidth: 0,
               overflow: 'hidden',
               position: 'relative',
               px: '12px',
@@ -1102,7 +1118,11 @@ const InfoPreviewPanel = ({
                 fontWeight: 500,
                 letterSpacing: '0.03em',
                 lineHeight: 1.1,
+                minWidth: 0,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
               }}
             >
               {metric.label}
@@ -1114,7 +1134,11 @@ const InfoPreviewPanel = ({
                 fontWeight: 700,
                 letterSpacing: '0.01em',
                 lineHeight: 1.1,
+                minWidth: 0,
                 mt: '8px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
               {metric.value}
@@ -1191,7 +1215,9 @@ const InfoPreviewPanel = ({
                           display: 'grid',
                           gridTemplateColumns: 'minmax(0, 1fr) auto',
                           height: '46px',
+                          minWidth: 0,
                           mt: index === 0 ? '14px' : 0,
+                          overflow: 'hidden',
                           py: 0,
                           width: '100%',
                         }
@@ -1246,6 +1272,9 @@ const InfoPreviewPanel = ({
                             letterSpacing: '0.012em',
                             lineHeight: 1.1,
                             minWidth: 0,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
                         >
                           {row.label}
@@ -1273,6 +1302,9 @@ const InfoPreviewPanel = ({
                         letterSpacing: '0.012em',
                         lineHeight: 1.1,
                         minWidth: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
                       }}
                     >
                       {row.label}
@@ -1287,6 +1319,7 @@ const InfoPreviewPanel = ({
                         letterSpacing: '0.01em',
                         lineHeight: 1.2,
                         maxWidth: '100%',
+                        minWidth: 0,
                         overflow: 'hidden',
                         ...(isNodeSection
                           ? {
@@ -1460,12 +1493,14 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       )
     );
   const reduce = useReducedMotion();
-  const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
+  const { i18n, t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const td = useCallback(
     (key: string, defaultValue: string) =>
       t(`group:dashboard.${key}`, { defaultValue }),
     [t]
   );
+  const dashboardLanguageKey = (i18n.resolvedLanguage || i18n.language || 'en')
+    .split('-')[0];
   const theme = useTheme();
   const isSplitDashboardLayout = useMediaQuery(theme.breakpoints.up('md'));
   const isWideDashboardLayout = useMediaQuery(theme.breakpoints.up('xl'));
@@ -3541,6 +3576,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                 <Box ref={rightRailRef} sx={{ alignContent: 'start', display: 'flex', flexDirection: 'column', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, minWidth: 0, [theme.breakpoints.up('xl')]: { display: 'grid', gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`, gridTemplateRows: `${HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX}px ${resolvedWalletActivityHeightPx != null ? `${resolvedWalletActivityHeightPx}px` : 'auto'}`, marginTop: `${HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX}px` } }}>
                   <Box ref={infoDebugRef} sx={{ minWidth: 0, position: 'relative', width: '100%', '& > *': { height: '100%' } }}>
                     <InfoPreviewPanel
+                      resetKey={dashboardLanguageKey}
                       rows={infoRows}
                       theme={theme}
                       maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}

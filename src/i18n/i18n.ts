@@ -1,7 +1,5 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import HttpBackend from 'i18next-http-backend';
-import LanguageDetector from 'i18next-browser-languagedetector';
 import {
   capitalizeAll,
   capitalizeEachFirstChar,
@@ -10,42 +8,33 @@ import {
 } from './processors';
 
 export const supportedLanguages = {
-  ar: { name: 'Arab', flag: '🇦🇪' },
-  de: { name: 'Deutsch', flag: '🇩🇪' },
   en: { name: 'English', flag: '🇺🇸' },
-  es: { name: 'Español', flag: '🇪🇸' },
-  fi: { name: 'Suomi', flag: '🇫🇮' },
-  et: { name: 'Eesti', flag: '🇪🇪' },
-  fr: { name: 'Français', flag: '🇫🇷' },
-  it: { name: 'Italiano', flag: '🇮🇹' },
-  pt: { name: 'Português', flag: '🇧🇷' },
-  ru: { name: 'Русский', flag: '🇷🇺' },
-  ja: { name: '日本語', flag: '🇯🇵' },
-  zh: { name: '中文', flag: '🇨🇳' },
 };
 
-// Load all JSON files under locales/**/*
-const modules = import.meta.glob('./locales/**/*.json', {
+const modules = import.meta.glob('./locales/en/*.json', {
   eager: true,
 }) as Record<string, any>;
 
-// Construct i18n resources object
-const resources: Record<string, Record<string, any>> = {};
+const resources: Record<string, Record<string, any>> = {
+  en: {},
+};
 
 for (const path in modules) {
-  // Path format: './locales/en/core.json'
-  const match = path.match(/\.\/locales\/([^/]+)\/([^/]+)\.json$/);
+  const match = path.match(/\.\/locales\/en\/([^/]+)\.json$/);
   if (!match) continue;
 
-  const [, lang, ns] = match;
-  resources[lang] = resources[lang] || {};
-  resources[lang][ns] = modules[path].default;
+  const [, ns] = match;
+  resources.en[ns] = modules[path].default;
+}
+
+try {
+  localStorage.setItem('i18nextLng', 'en');
+} catch (_error) {
+  // Ignore storage failures and continue with English-only resources.
 }
 
 i18n
-  .use(HttpBackend)
   .use(initReactI18next)
-  .use(LanguageDetector)
   .use(capitalizeAll as any)
   .use(capitalizeEachFirstChar as any)
   .use(capitalizeFirstChar as any)
@@ -53,17 +42,14 @@ i18n
   .init({
     resources,
     fallbackLng: 'en',
-    lng: localStorage.getItem('i18nextLng') || 'en',
-    supportedLngs: Object.keys(supportedLanguages),
-    backend: {
-      loadPath: '/locales/{{lng}}/{{ns}}.json',
-    },
+    lng: 'en',
+    supportedLngs: ['en'],
     ns: ['auth', 'core', 'group', 'question', 'tutorial'],
     defaultNS: 'core',
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
-    returnEmptyString: false, // return fallback instead of empty string
-    returnNull: false, // return fallback instead of null
+    returnEmptyString: false,
+    returnNull: false,
     debug: import.meta.env.MODE === 'development',
   });
 

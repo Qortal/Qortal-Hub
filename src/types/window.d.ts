@@ -12,6 +12,9 @@ declare global {
       windowMaximize?: () => Promise<void>;
       windowClose?: () => void;
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
+      onWindowStateChange?: (
+        callback: (state: { isMaximized: boolean }) => void
+      ) => () => void;
       getPlatform?: () => Promise<string>;
       showAppMenu?: (x?: number, y?: number) => void;
       getAppSettings?: () => Promise<{ closeAction?: 'ask' | 'minimizeToTray' | 'quit' }>;

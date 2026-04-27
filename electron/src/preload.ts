@@ -20,6 +20,15 @@ try {
     windowClose: () => ipcRenderer.invoke('window:close'),
     getWindowState: () =>
       ipcRenderer.invoke('window:isMaximized').then((isMaximized: boolean) => ({ isMaximized })),
+    onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => {
+      const handler = (_event, isMaximized: boolean) => {
+        callback({ isMaximized });
+      };
+      ipcRenderer.on('window:state-changed', handler);
+      return () => {
+        ipcRenderer.removeListener('window:state-changed', handler);
+      };
+    },
     getPlatform: () => ipcRenderer.invoke('window:getPlatform'),
     showAppMenu: (x?: number, y?: number) =>
       ipcRenderer.invoke('window:showAppMenu', { x, y }),

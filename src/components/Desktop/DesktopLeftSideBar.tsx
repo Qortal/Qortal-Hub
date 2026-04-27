@@ -79,8 +79,8 @@ import {
 } from '../Snackbar/qortinoInletDebug';
 
 const SIDEBAR_WIDTH_PX = 72;
-const EDGE_SENSOR_WIDTH_PX = 12;
-const EDGE_SENSOR_TOP_EXCLUSION_PX = 300;
+const EDGE_SENSOR_WIDTH_PX = 8;
+const EDGE_SENSOR_HEIGHT_PX = 124;
 const TRIGGER_WIDTH_PX = 10;
 const TRIGGER_HEIGHT_PX = 96;
 const ITEM_WIDTH_PX = 56;
@@ -711,8 +711,9 @@ export const DesktopSideBar = ({
         sx={{
           position: 'fixed',
           left: 0,
-          top: `${EDGE_SENSOR_TOP_EXCLUSION_PX}px`,
-          bottom: 0,
+          top: '50%',
+          height: `${EDGE_SENSOR_HEIGHT_PX}px`,
+          transform: 'translateY(-50%)',
           width: `${EDGE_SENSOR_WIDTH_PX}px`,
           opacity: 0,
           pointerEvents: isVisible ? 'none' : 'auto',
@@ -722,7 +723,6 @@ export const DesktopSideBar = ({
 
       <Box
         onMouseEnter={showSidebarImmediate}
-        className={!isVisible ? (effectiveUnreadChat ? 'hasUnread' : '') : ''}
         sx={{
           position: 'fixed',
           left: 0,
@@ -752,32 +752,24 @@ export const DesktopSideBar = ({
                 content: '""',
                 position: 'absolute',
                 top: '50%',
-                right: -4,
+                right: 2,
                 transform: 'translateY(-50%)',
-                width: 7,
-                height: 7,
+                width: 6,
+                height: 6,
                 borderRadius: '50%',
                 background: unreadAccent,
-                boxShadow: `0 0 0 3px ${alpha(unreadAccent, 0.16)}`,
+                boxShadow: `0 0 0 2px ${alpha(unreadAccent, 0.14)}`,
+                animation: 'sidebarUnreadDotPulse 1.75s ease-in-out infinite',
               }
             : undefined,
-          '&.hasUnread': !isVisible
-            ? {
-                animation: 'sidebarUnreadPulse 2s ease-in-out infinite',
-              }
-            : undefined,
-          '@keyframes sidebarUnreadPulse': {
-            '0%': {
-              background: 'rgba(255, 110, 140, 0.18)',
-              boxShadow: '0 0 0 rgba(255, 110, 140, 0)',
+          '@keyframes sidebarUnreadDotPulse': {
+            '0%, 100%': {
+              boxShadow: `0 0 0 2px ${alpha(unreadAccent, 0.14)}`,
+              transform: 'translateY(-50%) scale(1)',
             },
             '50%': {
-              background: 'rgba(255, 110, 140, 0.42)',
-              boxShadow: '0 0 14px rgba(255, 110, 140, 0.35)',
-            },
-            '100%': {
-              background: 'rgba(255, 110, 140, 0.18)',
-              boxShadow: '0 0 0 rgba(255, 110, 140, 0)',
+              boxShadow: `0 0 0 5px ${alpha(unreadAccent, 0.2)}`,
+              transform: 'translateY(-50%) scale(1.08)',
             },
           },
         }}

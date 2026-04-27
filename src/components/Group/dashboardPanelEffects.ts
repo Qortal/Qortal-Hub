@@ -2,6 +2,10 @@ import { useEffect, useRef } from 'react';
 import { Theme } from '@mui/material/styles';
 
 const PANEL_MOUSE_LIGHT_PROXIMITY_PX = 18;
+const registeredDashboardPanels = new Set<HTMLElement>();
+let dashboardMouseLightInitialized = false;
+let pendingMouseEvent: MouseEvent | null = null;
+let dashboardMouseLightRafId = 0;
 
 type DashboardPanelVariant = 'base' | 'accent' | 'utility';
 
@@ -155,46 +159,69 @@ export const useDashboardPanelMouseLight = <T extends HTMLElement>() => {
     const resetLight = () => {
       panelNode.style.setProperty('--panel-edge-opacity', '0');
     };
-
-    const updateLight = (event: MouseEvent) => {
-      const rect = panelNode.getBoundingClientRect();
-      const clampedX = Math.min(Math.max(event.clientX, rect.left), rect.right);
-      const clampedY = Math.min(Math.max(event.clientY, rect.top), rect.bottom);
-      const offsetX = event.clientX - clampedX;
-      const offsetY = event.clientY - clampedY;
-      const distance = Math.hypot(offsetX, offsetY);
-
-      if (distance > PANEL_MOUSE_LIGHT_PROXIMITY_PX) {
-        resetLight();
-        return;
-      }
-
-      const relativeX = clampedX - rect.left;
-      const relativeY = clampedY - rect.top;
-      const intensity = Math.max(
-        0,
-        Math.min(1, 1 - distance / PANEL_MOUSE_LIGHT_PROXIMITY_PX)
-      );
-      const resolvedOpacity = rect.width > 0 && rect.height > 0
-        ? Math.min(1, (0.2 + intensity * 0.9) * 1.5)
-        : 0;
-
-      panelNode.style.setProperty('--panel-mx', `${relativeX}px`);
-      panelNode.style.setProperty('--panel-my', `${relativeY}px`);
-      panelNode.style.setProperty(
-        '--panel-edge-opacity',
-        resolvedOpacity.toFixed(3)
-      );
+    const resetAllLights = () => {
+      registeredDashboardPanels.forEach((node) => {
+        node.style.setProperty('--panel-edge-opacity', '0');
+      });
     };
 
-    window.addEventListener('mousemove', updateLight, { passive: true });
-    window.addEventListener('blur', resetLight);
-    document.addEventListener('mouseleave', resetLight);
+    const processMouseLightFrame = () => {
+      dashboardMouseLightRafId = 0;
+      const event = pendingMouseEvent;
+      if (!event) return;
+
+      registeredDashboardPanels.forEach((node) => {
+        const rect = node.getBoundingClientRect();
+        const clampedX = Math.min(Math.max(event.clientX, rect.left), rect.right);
+        const clampedY = Math.min(Math.max(event.clientY, rect.top), rect.bottom);
+        const offsetX = event.clientX - clampedX;
+        const offsetY = event.clientY - clampedY;
+        const distance = Math.hypot(offsetX, offsetY);
+
+        if (distance > PANEL_MOUSE_LIGHT_PROXIMITY_PX) {
+          node.style.setProperty('--panel-edge-opacity', '0');
+          return;
+        }
+
+        const relativeX = clampedX - rect.left;
+        const relativeY = clampedY - rect.top;
+        const intensity = Math.max(
+          0,
+          Math.min(1, 1 - distance / PANEL_MOUSE_LIGHT_PROXIMITY_PX)
+        );
+        const resolvedOpacity =
+          rect.width > 0 && rect.height > 0
+            ? Math.min(1, (0.2 + intensity * 0.9) * 1.5)
+            : 0;
+
+        node.style.setProperty('--panel-mx', `${relativeX}px`);
+        node.style.setProperty('--panel-my', `${relativeY}px`);
+        node.style.setProperty('--panel-edge-opacity', resolvedOpacity.toFixed(3));
+      });
+    };
+
+    const queueMouseLightUpdate = (event: MouseEvent) => {
+      pendingMouseEvent = event;
+      if (!dashboardMouseLightRafId) {
+        dashboardMouseLightRafId = window.requestAnimationFrame(
+          processMouseLightFrame
+        );
+      }
+    };
+
+    if (!dashboardMouseLightInitialized) {
+      window.addEventListener('mousemove', queueMouseLightUpdate, {
+        passive: true,
+      });
+      window.addEventListener('blur', resetAllLights);
+      document.addEventListener('mouseleave', resetAllLights);
+      dashboardMouseLightInitialized = true;
+    }
+
+    registeredDashboardPanels.add(panelNode);
 
     return () => {
-      window.removeEventListener('mousemove', updateLight);
-      window.removeEventListener('blur', resetLight);
-      document.removeEventListener('mouseleave', resetLight);
+      registeredDashboardPanels.delete(panelNode);
       resetLight();
     };
   }, []);

@@ -26,6 +26,7 @@ import {
 import { alpha } from '@mui/material/styles';
 import { LoadingButton } from '@mui/lab';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
+import BlockRoundedIcon from '@mui/icons-material/BlockRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import CloseIcon from '@mui/icons-material/Close';
@@ -88,7 +89,12 @@ type HomeProfileCardProps = {
 
 type AccountStatus = 'busy' | 'invisible' | 'online';
 type NameAvailability = 'available' | 'loading' | 'not-available' | 'null';
-type AccountSettingsTab = 'developer' | 'profile' | 'security' | 'system';
+type AccountSettingsTab =
+  | 'blocked'
+  | 'developer'
+  | 'profile'
+  | 'security'
+  | 'system';
 
 const ACCOUNT_STATUS_STORAGE_KEY = 'home_profile_account_status';
 const ACCOUNT_SETTINGS_PRIVACY_STORAGE_KEY = 'home_account_settings_privacy_mode';
@@ -199,7 +205,12 @@ export const HomeProfileCard = ({
     useState<HTMLElement | null>(null);
   const [accountStatusOverride, setAccountStatusOverride] =
     useState<AccountStatus | null>(null);
-  const { refreshBlockedUsers, removeBlockFromList } = useBlockedAddresses(true);
+  const {
+    carryOverBlockedUsersEnabled,
+    refreshBlockedUsers,
+    removeBlockFromList,
+    setCarryOverBlockedUsersEnabled,
+  } = useBlockedAddresses(true);
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
@@ -299,6 +310,16 @@ export const HomeProfileCard = ({
       },
       {
         description: td(
+          'blocked_settings_description',
+          'Manage blocked names and addresses for this wallet or across this device.'
+        ),
+        icon: BlockRoundedIcon,
+        key: 'blocked' as const,
+        label: td('blocked', 'Blocked'),
+        title: td('blocked_settings', 'Blocked Accounts'),
+      },
+      {
+        description: td(
           'developer_settings_description',
           'Enable developer tools and diagnostics for advanced testing.'
         ),
@@ -310,7 +331,7 @@ export const HomeProfileCard = ({
       {
         description: td(
           'system_settings_description',
-          'Control notifications, motion, pinned apps, and blocked accounts.'
+          'Control notifications, motion, and pinned Q-App backup preferences.'
         ),
         icon: TuneRoundedIcon,
         key: 'system' as const,
@@ -625,10 +646,10 @@ export const HomeProfileCard = ({
   );
 
   useEffect(() => {
-    if (!isAccountSettingsOpen || activeSettingsTab !== 'system') return;
+    if (!isAccountSettingsOpen || activeSettingsTab !== 'blocked') return;
 
     // Q-Apps such as Quitter can update Core block lists outside Hub's atoms.
-    // Refresh on tab entry so System reflects the real local block list.
+    // Refresh on tab entry so the blocked section reflects the active wallet scope.
     refreshBlockedUsers().catch((error) => {
       console.error('Unable to refresh blocked users.', error);
     });
@@ -2658,6 +2679,289 @@ export const HomeProfileCard = ({
                 </Box>
               ) : null}
 
+              {activeSettingsTab === 'blocked' ? (
+                <Box
+                  sx={{
+                    background: avatarModalSurfaceSoft,
+                    border: `1px solid ${avatarFieldBorder}`,
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1.2,
+                      justifyContent: 'space-between',
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        {td(
+                          'blocked_scope_toggle',
+                          'Carry blocked accounts across all accounts on this device'
+                        )}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                          mt: 0.4,
+                        }}
+                      >
+                        {td(
+                          'blocked_scope_toggle_desc',
+                          'Turn on to reuse one shared block list everywhere on this device. Leave it off to keep blocks tied to the current wallet.'
+                        )}
+                      </Typography>
+                    </Box>
+                    <Switch
+                      checked={carryOverBlockedUsersEnabled}
+                      onChange={async (_, checked) => {
+                        await setCarryOverBlockedUsersEnabled(checked);
+                      }}
+                      sx={settingsSwitchSx}
+                    />
+                  </Box>
+
+                  <Box
+                    sx={{
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      mx: 1.35,
+                    }}
+                  />
+
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 1,
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        alignItems: 'flex-start',
+                        display: 'flex',
+                        gap: 1.2,
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.01em',
+                          }}
+                        >
+                          {td('block_list', 'Block list')}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            fontSize: '0.75rem',
+                            lineHeight: 1.45,
+                            mt: 0.4,
+                          }}
+                        >
+                          {td(
+                            'block_list_desc',
+                            'Review blocked names and addresses, then unblock accounts whenever you are ready.'
+                          )}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          flexShrink: 0,
+                          fontSize: '0.73rem',
+                          fontWeight: 700,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {td('blocked_count', '{{count}} blocked', {
+                          count: blockedCount,
+                        })}
+                      </Typography>
+                    </Box>
+
+                    {blockedCount > 0 ? (
+                      <Box sx={{ display: 'grid', gap: 1 }}>
+                        {blockedNameEntries.length > 0 ? (
+                          <Box sx={{ display: 'grid', gap: 0.7 }}>
+                            <Typography
+                              sx={{
+                                color: theme.palette.text.secondary,
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {td('names', 'Names')}
+                            </Typography>
+                            {blockedNameEntries.map((blockedName) => (
+                              <Box
+                                key={blockedName}
+                                sx={{
+                                  alignItems: 'center',
+                                  borderRadius: '10px',
+                                  display: 'flex',
+                                  gap: 1,
+                                  justifyContent: 'space-between',
+                                  px: 0.85,
+                                  py: 0.55,
+                                  transition: 'background-color 0.14s ease',
+                                  '&:hover': {
+                                    backgroundColor: alpha(
+                                      theme.palette.primary.main,
+                                      0.08
+                                    ),
+                                  },
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    color: theme.palette.text.primary,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {blockedName}
+                                </Typography>
+                                <ButtonBase
+                                  onClick={() =>
+                                    removeBlockFromList(undefined, blockedName)
+                                  }
+                                  sx={{
+                                    borderRadius: '8px',
+                                    color: theme.palette.primary.light,
+                                    flexShrink: 0,
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    px: 0.9,
+                                    py: 0.55,
+                                    '&:hover': {
+                                      backgroundColor: alpha(
+                                        theme.palette.primary.main,
+                                        0.1
+                                      ),
+                                    },
+                                  }}
+                                >
+                                  {td('unblock', 'Unblock')}
+                                </ButtonBase>
+                              </Box>
+                            ))}
+                          </Box>
+                        ) : null}
+
+                        {blockedAddressEntries.length > 0 ? (
+                          <Box sx={{ display: 'grid', gap: 0.7 }}>
+                            <Typography
+                              sx={{
+                                color: theme.palette.text.secondary,
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {td('addresses', 'Addresses')}
+                            </Typography>
+                            {blockedAddressEntries.map((blockedAddress) => (
+                              <Box
+                                key={blockedAddress}
+                                sx={{
+                                  alignItems: 'center',
+                                  borderRadius: '10px',
+                                  display: 'flex',
+                                  gap: 1,
+                                  justifyContent: 'space-between',
+                                  px: 0.85,
+                                  py: 0.55,
+                                  transition: 'background-color 0.14s ease',
+                                  '&:hover': {
+                                    backgroundColor: alpha(
+                                      theme.palette.primary.main,
+                                      0.08
+                                    ),
+                                  },
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    color: theme.palette.text.primary,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {blockedAddress}
+                                </Typography>
+                                <ButtonBase
+                                  onClick={() =>
+                                    removeBlockFromList(blockedAddress, undefined)
+                                  }
+                                  sx={{
+                                    borderRadius: '8px',
+                                    color: theme.palette.primary.light,
+                                    flexShrink: 0,
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    px: 0.9,
+                                    py: 0.55,
+                                    '&:hover': {
+                                      backgroundColor: alpha(
+                                        theme.palette.primary.main,
+                                        0.1
+                                      ),
+                                    },
+                                  }}
+                                >
+                                  {td('unblock', 'Unblock')}
+                                </ButtonBase>
+                              </Box>
+                            ))}
+                          </Box>
+                        ) : null}
+                      </Box>
+                    ) : (
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {td('no_blocked_accounts', 'No blocked accounts yet.')}
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              ) : null}
+
               {activeSettingsTab === 'system' ? (
                 <Box
                   sx={{
@@ -2827,211 +3131,6 @@ export const HomeProfileCard = ({
                         />
                       </Box>
                     </Tooltip>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      borderTop: `1px solid ${avatarSectionDivider}`,
-                      mx: 1.35,
-                    }}
-                  />
-
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 1,
-                      px: 1.35,
-                      py: 1.2,
-                    }}
-                  >
-                    <Box
-                      sx={{
-                        alignItems: 'flex-start',
-                        display: 'flex',
-                        gap: 1.2,
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.primary,
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            letterSpacing: '0.01em',
-                          }}
-                        >
-                          {td('block_list', 'Block list')}
-                        </Typography>
-                        <Typography
-                          sx={{
-                            color: theme.palette.text.secondary,
-                            fontSize: '0.75rem',
-                            lineHeight: 1.45,
-                            mt: 0.4,
-                          }}
-                        >
-                          {td(
-                            'block_list_desc',
-                            'Review blocked names and addresses, then unblock accounts when you are ready.'
-                          )}
-                        </Typography>
-                      </Box>
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.secondary,
-                          flexShrink: 0,
-                          fontSize: '0.73rem',
-                          fontWeight: 700,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {td('blocked_count', '{{count}} blocked', {
-                          count: blockedCount,
-                        })}
-                      </Typography>
-                    </Box>
-
-                    {blockedCount > 0 ? (
-                      <Box sx={{ display: 'grid', gap: 1 }}>
-                        {blockedNameEntries.length > 0 ? (
-                          <Box sx={{ display: 'grid', gap: 0.7 }}>
-                            <Typography
-                              sx={{
-                                color: theme.palette.text.secondary,
-                                fontSize: '0.68rem',
-                                fontWeight: 700,
-                                letterSpacing: '0.04em',
-                                textTransform: 'uppercase',
-                              }}
-                            >
-                              {td('names', 'Names')}
-                            </Typography>
-                            {blockedNameEntries.map((blockedName) => (
-                              <Box
-                                key={blockedName}
-                                sx={{
-                                  alignItems: 'center',
-                                  display: 'flex',
-                                  gap: 1,
-                                  justifyContent: 'space-between',
-                                }}
-                              >
-                                <Typography
-                                  sx={{
-                                    color: theme.palette.text.primary,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
-                                    minWidth: 0,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {blockedName}
-                                </Typography>
-                                <ButtonBase
-                                  onClick={() =>
-                                    removeBlockFromList(undefined, blockedName)
-                                  }
-                                  sx={{
-                                    borderRadius: '8px',
-                                    color: theme.palette.primary.light,
-                                    flexShrink: 0,
-                                    fontSize: '0.74rem',
-                                    fontWeight: 700,
-                                    px: 0.9,
-                                    py: 0.55,
-                                    '&:hover': {
-                                      backgroundColor: alpha(
-                                        theme.palette.primary.main,
-                                        0.1
-                                      ),
-                                    },
-                                  }}
-                                >
-                                  {td('unblock', 'Unblock')}
-                                </ButtonBase>
-                              </Box>
-                            ))}
-                          </Box>
-                        ) : null}
-
-                        {blockedAddressEntries.length > 0 ? (
-                          <Box sx={{ display: 'grid', gap: 0.7 }}>
-                            <Typography
-                              sx={{
-                                color: theme.palette.text.secondary,
-                                fontSize: '0.68rem',
-                                fontWeight: 700,
-                                letterSpacing: '0.04em',
-                                textTransform: 'uppercase',
-                              }}
-                            >
-                              {td('addresses', 'Addresses')}
-                            </Typography>
-                            {blockedAddressEntries.map((blockedAddress) => (
-                              <Box
-                                key={blockedAddress}
-                                sx={{
-                                  alignItems: 'center',
-                                  display: 'flex',
-                                  gap: 1,
-                                  justifyContent: 'space-between',
-                                }}
-                              >
-                                <Typography
-                                  sx={{
-                                    color: theme.palette.text.primary,
-                                    fontSize: '0.8rem',
-                                    fontWeight: 600,
-                                    minWidth: 0,
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    whiteSpace: 'nowrap',
-                                  }}
-                                >
-                                  {blockedAddress}
-                                </Typography>
-                                <ButtonBase
-                                  onClick={() =>
-                                    removeBlockFromList(blockedAddress, undefined)
-                                  }
-                                  sx={{
-                                    borderRadius: '8px',
-                                    color: theme.palette.primary.light,
-                                    flexShrink: 0,
-                                    fontSize: '0.74rem',
-                                    fontWeight: 700,
-                                    px: 0.9,
-                                    py: 0.55,
-                                    '&:hover': {
-                                      backgroundColor: alpha(
-                                        theme.palette.primary.main,
-                                        0.1
-                                      ),
-                                    },
-                                  }}
-                                >
-                                  {td('unblock', 'Unblock')}
-                                </ButtonBase>
-                              </Box>
-                            ))}
-                          </Box>
-                        ) : null}
-                      </Box>
-                    ) : (
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.secondary,
-                          fontSize: '0.75rem',
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {td('no_blocked_accounts', 'No blocked accounts yet.')}
-                      </Typography>
-                    )}
                   </Box>
                 </Box>
               ) : null}

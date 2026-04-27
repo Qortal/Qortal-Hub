@@ -1687,7 +1687,7 @@ export const UserLookup = ({
                     borderRadius: '12px',
                     display: 'grid',
                     gap: 0,
-                    gridTemplateColumns: { xs: '1fr', md: '1.35fr 0.9fr' },
+                    gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
                     overflow: 'hidden',
                   }}
                 >
@@ -1745,12 +1745,13 @@ export const UserLookup = ({
                     </Typography>
                     <Typography
                       sx={{
-                        fontFamily: 'monospace',
-                        fontSize: '0.74rem',
-                        lineHeight: 1.45,
-                        mt: 0.5,
-                        opacity: 0.86,
-                        wordBreak: 'break-all',
+                        fontSize: '0.86rem',
+                        fontWeight: 600,
+                        letterSpacing: '-0.01em',
+                        lineHeight: 1.52,
+                        mt: 0.45,
+                        overflowWrap: 'anywhere',
+                        wordBreak: 'break-word',
                       }}
                     >
                       {addressInfo.publicKey || '—'}

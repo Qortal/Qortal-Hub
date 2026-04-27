@@ -200,6 +200,12 @@ export class ElectronCapacitorApp {
       },
     });
     this.mainWindowState.manage(this.MainWindow);
+    this.MainWindow.on('maximize', () => {
+      this.MainWindow?.webContents.send('window:state-changed', true);
+    });
+    this.MainWindow.on('unmaximize', () => {
+      this.MainWindow?.webContents.send('window:state-changed', false);
+    });
 
     if (this.CapacitorFileConfig.backgroundColor) {
       this.MainWindow.setBackgroundColor(

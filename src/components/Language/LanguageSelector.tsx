@@ -1,10 +1,7 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supportedLanguages } from '../../i18n/i18n';
 import {
   ButtonBase,
-  Menu,
-  MenuItem,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -16,9 +13,9 @@ type LanguageSelectorProps = {
 };
 
 const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
-  const { i18n, t } = useTranslation(['core']);
+  const { t } = useTranslation(['core']);
   const theme = useTheme();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const englishLanguage = supportedLanguages.en;
   const sidebarButtonSx = {
     alignItems: 'center',
     borderRadius: '14px',
@@ -61,23 +58,15 @@ const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
     },
   } as const;
 
-  const handleChange = (newLang: string) => {
-    i18n.changeLanguage(newLang);
-    setAnchorEl(null);
-  };
-
-  const currentLang = i18n.language;
-  const { name } =
-    supportedLanguages[currentLang] || supportedLanguages['en'];
-  const currentLangCode = currentLang.startsWith('en')
-    ? 'US'
-    : currentLang.slice(0, 2).toUpperCase();
+  const currentLang = 'en';
+  const { name } = englishLanguage;
+  const currentLangCode = 'US';
 
   return (
     <>
       <ButtonBase
         disableRipple
-        onClick={(event) => setAnchorEl(event.currentTarget)}
+        onClick={() => undefined}
         aria-label={t('core:current_language', {
           language: name,
           postProcess: 'capitalizeFirstChar',
@@ -146,37 +135,6 @@ const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
         )}
       </ButtonBase>
 
-      <Menu
-        anchorEl={anchorEl}
-        open={!!anchorEl}
-        onClose={() => setAnchorEl(null)}
-        anchorOrigin={{ vertical: 'center', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'center', horizontal: 'left' }}
-        slotProps={{
-          paper: {
-            sx: {
-              backgroundColor: theme.palette.background.paper,
-              border: `1px solid ${theme.palette.border.subtle}`,
-              boxShadow:
-                theme.palette.mode === 'dark'
-                  ? '0 12px 28px rgba(0,0,0,0.35)'
-                  : '0 10px 24px rgba(0,0,0,0.14)',
-              minWidth: 170,
-              ml: 1,
-            },
-          },
-        }}
-      >
-        {Object.entries(supportedLanguages).map(([code, langData]) => (
-          <MenuItem
-            key={code}
-            selected={code === currentLang}
-            onClick={() => handleChange(code)}
-          >
-            {langData.flag} {code.toUpperCase()} - {langData.name}
-          </MenuItem>
-        ))}
-      </Menu>
     </>
   );
 };

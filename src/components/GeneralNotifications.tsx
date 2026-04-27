@@ -474,7 +474,7 @@ export const GeneralNotifications = ({
             fontWeight: 650,
             justifyContent: 'space-between',
             px: 3,
-            py: 2.2,
+            py: 2.35,
           }}
         >
           {t('message.generic.notification_settings', {
@@ -494,25 +494,48 @@ export const GeneralNotifications = ({
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ px: 3, py: 2.5 }}>
+        <DialogContent
+          sx={{
+            display: 'grid',
+            gap: 1.9,
+            px: 3,
+            pb: 2.9,
+            '&&': {
+              pt: 3.1,
+            },
+          }}
+        >
+          <Box
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.82),
+              fontSize: '0.84rem',
+              lineHeight: 1.52,
+            }}
+          >
+            {t('message.generic.notification_settings_desc', {
+              defaultValue:
+                'Choose which apps can send desktop alerts while keeping in-Hub activity visible.',
+            })}
+          </Box>
           {settingsLoading ? (
             <Typography sx={{ color: alpha(theme.palette.text.secondary, 0.82) }}>
               {t('message.generic.loading', { defaultValue: 'Loading...' })}
             </Typography>
           ) : settingsApps.length === 0 ? (
-            <Typography
+            <Box
               sx={{
                 color: alpha(theme.palette.text.secondary, 0.82),
                 fontSize: '0.92rem',
                 lineHeight: 1.55,
+                pt: 0.1,
               }}
             >
               {t('message.generic.no_notification_apps', {
                 defaultValue: 'No apps have notification permission yet.',
               })}
-            </Typography>
+            </Box>
           ) : (
-            <List disablePadding sx={{ display: 'grid', gap: 1.1 }}>
+            <List disablePadding sx={{ display: 'grid', gap: 1.2 }}>
               {settingsApps.map((appName) => (
                 <Box
                   key={appName}
@@ -524,8 +547,8 @@ export const GeneralNotifications = ({
                     display: 'flex',
                     gap: 2,
                     justifyContent: 'space-between',
-                    px: 1.6,
-                    py: 1.45,
+                    px: 1.7,
+                    py: 1.55,
                   }}
                 >
                   <Box sx={{ alignItems: 'center', display: 'flex', gap: 1.2 }}>

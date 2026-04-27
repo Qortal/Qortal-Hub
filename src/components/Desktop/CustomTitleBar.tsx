@@ -30,6 +30,9 @@ declare global {
       windowMaximize?: () => Promise<void>;
       windowClose?: () => Promise<void>;
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
+      onWindowStateChange?: (
+        callback: (state: { isMaximized: boolean }) => void
+      ) => () => void;
       getPlatform?: () => Promise<string>;
       showAppMenu?: (x?: number, y?: number) => Promise<void>;
     };
@@ -113,10 +116,11 @@ export function CustomTitleBar(props?: {
   }, [isElectron, refreshMaximized]);
 
   useEffect(() => {
-    if (!isElectron || typeof window.electronAPI?.getWindowState !== 'function')
+    if (!isElectron || typeof window.electronAPI?.onWindowStateChange !== 'function')
       return;
-    const interval = setInterval(refreshMaximized, 500);
-    return () => clearInterval(interval);
+    return window.electronAPI.onWindowStateChange((state) => {
+      setIsMaximized(Boolean(state?.isMaximized));
+    });
   }, [isElectron, refreshMaximized]);
 
   const handleMinimize = useCallback(() => {
