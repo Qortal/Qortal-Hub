@@ -54,6 +54,8 @@ import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import SchoolRoundedIcon from '@mui/icons-material/SchoolRounded';
 import {
   balanceAtom,
+  blockedAddressesAtom,
+  blockedNamesAtom,
   resourceKeySelector,
   txListAtom,
   userInfoAtom,
@@ -61,6 +63,7 @@ import {
 import { getArbitraryEndpointReact, getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 import ErrorBoundary from '../../common/ErrorBoundary';
+import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 import { useFetchResources } from '../../hooks/useFetchResources';
 import {
   executeEvent,
@@ -134,7 +137,6 @@ export const QORTINO_WORKSPACE_SETTINGS_KEY = 'home-qortino-workspace-v1';
 const ONBOARDING_URL = 'https://qortal.dev/onboarding';
 const SUPPORT_CHAT_URL = 'https://link.qortal.dev/support';
 const ONBOARDING_RECOGNITION_DURATION_MS = 2600;
-const ONBOARDING_COMPLETION_MESSAGE_DURATION_MS = 3200;
 const QORTINO_MASCOT_BASE_SIZE = 168;
 const QORTINO_MASCOT_SCALE = 0.68;
 const QORTINO_MASCOT_SIZE = Math.round(
@@ -151,7 +153,7 @@ const CURATED_HOTKEY_APP_NAMES = [
   'Q-Mail',
   'Q-Blog',
   'Q-Trade',
-  'Earbump',
+  'Ear-Bump',
 ] as const;
 type QortinoSandboxPresetKey =
   | 'guide'
@@ -340,7 +342,12 @@ const WORKSPACE_MODULES: WorkspaceModuleDefinition[] = [
 ];
 
 const LEGACY_HOTKEY_APP_NAME_MAP: Record<string, string> = {
-  earbump: 'Earbump',
+  earbump: 'Ear-Bump',
+  earbumpupdated: 'Ear-Bump',
+  'ear-bump updated': 'Ear-Bump',
+  'earbump updated': 'Ear-Bump',
+  Earbump: 'Ear-Bump',
+  'Ear-Bump Updated': 'Ear-Bump',
   'q-blog': 'Q-Blog',
   'q-mail': 'Q-Mail',
   'q-mintership': 'q-mintership',
@@ -764,6 +771,31 @@ const buildTrackPlaybackUrl = (track: Pick<MusicTrack, 'id' | 'name'>) =>
         track.name
       )}/${encodeURIComponent(track.id)}`
     : '';
+
+const normalizeBlockedPublisherName = (value: string) =>
+  value.trim().toLowerCase();
+
+const fetchNamesForBlockedAddress = async (
+  address: string,
+  signal?: AbortSignal
+) => {
+  const normalizedAddress = address.trim();
+  if (!normalizedAddress) return [];
+
+  const response = await fetch(
+    `${getBaseApiReact()}/names/address/${encodeURIComponent(normalizedAddress)}?limit=0`,
+    { signal }
+  );
+
+  if (!response.ok) return [];
+
+  const data = await response.json();
+  return Array.isArray(data)
+    ? data
+        .map((item) => (typeof item?.name === 'string' ? item.name.trim() : ''))
+        .filter(Boolean)
+    : [];
+};
 
 const getTrackReadyState = (
   rawStatus: string | null | undefined,
@@ -1485,7 +1517,10 @@ export const HomeQortinoWorkspaceCard = ({
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
+  const blockedAddresses = useAtomValue(blockedAddressesAtom);
+  const blockedNames = useAtomValue(blockedNamesAtom);
   const txList = useAtomValue(txListAtom);
+  const { refreshBlockedUsers } = useBlockedAddresses(true);
   const userAddress = userInfo?.address;
   const name = userInfo?.name;
   const openApp = useCallback(
@@ -1507,7 +1542,10 @@ export const HomeQortinoWorkspaceCard = ({
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   const [paymentsFallbackTotal, setPaymentsFallbackTotal] = useState<number | null>(null);
   const [hasAvatar, setHasAvatar] = useState(false);
+  const [avatarStepCompleted, setAvatarStepCompleted] = useState(false);
   const [checkingAvatar, setCheckingAvatar] = useState(false);
+  const [qortsAcquiredAcknowledged, setQortsAcquiredAcknowledged] = useState(false);
+  const [showRegisterNameDelayHint, setShowRegisterNameDelayHint] = useState(false);
   const [openQortsDialog, setOpenQortsDialog] = useState(false);
   const [openMusicSearchDialog, setOpenMusicSearchDialog] = useState(false);
   const [openModulePickerDialog, setOpenModulePickerDialog] = useState(false);
@@ -1570,12 +1608,16 @@ export const HomeQortinoWorkspaceCard = ({
     null
   );
   const [musicStreamError, setMusicStreamError] = useState<string | null>(null);
+  const [blockedNamesResolvedFromAddresses, setBlockedNamesResolvedFromAddresses] =
+    useState<string[]>([]);
   const [ephemeralReaction, setEphemeralReaction] = useState<string | null>(null);
   const [onboardingTransitionMessage, setOnboardingTransitionMessage] =
     useState<string | null>(null);
   const [postOnboardingMessage, setPostOnboardingMessage] = useState<
     string | null
   >(null);
+  const [showOnboardingCompletionConfetti, setShowOnboardingCompletionConfetti] =
+    useState(false);
   const [openQortinoSandboxDialog, setOpenQortinoSandboxDialog] =
     useState(false);
   const [qortinoSandboxPresetKey, setQortinoSandboxPresetKey] =
@@ -1602,6 +1644,9 @@ export const HomeQortinoWorkspaceCard = ({
   const onboardingMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const onboardingConfettiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const lastReactionRef = useRef<string | null>(null);
   const lastReactionAtRef = useRef(0);
   const onboardingBubbleLockRef = useRef(false);
@@ -1609,6 +1654,7 @@ export const HomeQortinoWorkspaceCard = ({
   const previousOnboardingStepRef = useRef<StepKey | null>(null);
   const onboardingJustCompletedRef = useRef(false);
   const wasOnboardingVisibleRef = useRef(false);
+  const avatarCompletionAfterPanelCloseRef = useRef(false);
   const musicProgressBarRef = useRef<HTMLDivElement | null>(null);
   const qortinoSandboxBaseSnapshotRef = useRef<QortinoSandboxSnapshot>({
     bubbleMessage: QORTINO_SANDBOX_PRESET_BY_KEY.standby.bubbleMessage,
@@ -1616,6 +1662,36 @@ export const HomeQortinoWorkspaceCard = ({
     statusLabel: QORTINO_SANDBOX_PRESET_BY_KEY.standby.statusLabel,
   });
   const downloadResource = useFetchResources();
+  const blockedAddressList = useMemo(
+    () => Object.keys(blockedAddresses || {}).filter(Boolean),
+    [blockedAddresses]
+  );
+  const blockedPublisherNames = useMemo(
+    () =>
+      [
+        ...Object.keys(blockedNames || {}),
+        ...blockedNamesResolvedFromAddresses,
+      ]
+        .map(normalizeBlockedPublisherName)
+        .filter(Boolean),
+    [blockedNames, blockedNamesResolvedFromAddresses]
+  );
+  const blockedPublisherNameSet = useMemo(
+    () => new Set(blockedPublisherNames),
+    [blockedPublisherNames]
+  );
+  const isBlockedPublisherName = useCallback(
+    (publisherName: string) =>
+      blockedPublisherNameSet.has(normalizeBlockedPublisherName(publisherName)),
+    [blockedPublisherNameSet]
+  );
+  const filterBlockedMusicTracks = useCallback(
+    (tracks: MusicTrack[]) =>
+      blockedPublisherNameSet.size === 0
+        ? tracks
+        : tracks.filter((track) => !isBlockedPublisherName(track.name)),
+    [blockedPublisherNameSet.size, isBlockedPublisherName]
+  );
 
   const pushReaction = useCallback(
     (
@@ -1686,6 +1762,10 @@ export const HomeQortinoWorkspaceCard = ({
 
       if (onboardingMessageTimeoutRef.current) {
         window.clearTimeout(onboardingMessageTimeoutRef.current);
+      }
+
+      if (onboardingConfettiTimeoutRef.current) {
+        window.clearTimeout(onboardingConfettiTimeoutRef.current);
       }
 
       if (qortinoGratefulTimeoutRef.current) {
@@ -1881,13 +1961,58 @@ export const HomeQortinoWorkspaceCard = ({
   useEffect(() => {
     if (userAddress == null) {
       setDismissed(null);
+      setAvatarStepCompleted(false);
+      setQortsAcquiredAcknowledged(false);
+      setShowRegisterNameDelayHint(false);
+      setShowOnboardingCompletionConfetti(false);
+      setBlockedNamesResolvedFromAddresses([]);
+      avatarCompletionAfterPanelCloseRef.current = false;
       return;
     }
 
     setDismissed(
       localStorage.getItem(`${LS_KEY}_${userAddress}`) === 'completed'
     );
+    setAvatarStepCompleted(false);
+    setQortsAcquiredAcknowledged(false);
+    setShowRegisterNameDelayHint(false);
+    setShowOnboardingCompletionConfetti(false);
+    setBlockedNamesResolvedFromAddresses([]);
+    avatarCompletionAfterPanelCloseRef.current = false;
   }, [userAddress, debugReplayToken]);
+
+  useEffect(() => {
+    refreshBlockedUsers().catch((error) => {
+      console.error('Failed to refresh QORTINO Space block list.', error);
+    });
+  }, [refreshBlockedUsers, userAddress]);
+
+  useEffect(() => {
+    if (blockedAddressList.length === 0) {
+      setBlockedNamesResolvedFromAddresses([]);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+
+    void Promise.all(
+      blockedAddressList.map((address) =>
+        fetchNamesForBlockedAddress(address, controller.signal).catch((error) => {
+          if (!controller.signal.aborted) {
+            console.error('Failed to resolve blocked publisher names.', error);
+          }
+          return [];
+        })
+      )
+    ).then((resolvedNames) => {
+      if (controller.signal.aborted) return;
+      setBlockedNamesResolvedFromAddresses([...new Set(resolvedNames.flat())]);
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [blockedAddressList]);
 
   useEffect(() => {
     let active = true;
@@ -2058,7 +2183,7 @@ export const HomeQortinoWorkspaceCard = ({
     !realHasName;
   const resolvedHasAvatar = debugUseOverridesOnly
     ? hasAvatarDebugOverride
-    : hasAvatarDebugOverride || hasAvatar;
+    : hasAvatarDebugOverride || hasAvatar || avatarStepCompleted;
   const hasCompletionChecksPending = debugUseOverridesOnly ? false : checkingAvatar;
 
   useEffect(() => {
@@ -2073,9 +2198,14 @@ export const HomeQortinoWorkspaceCard = ({
       localStorage.setItem(`${LS_KEY}_${userAddress}`, 'completed');
       onboardingJustCompletedRef.current = true;
       setDismissed(true);
+      applyWorkspaceState((current) => ({
+        ...current,
+        onboardingCelebrationSeen: true,
+      }));
       onGettingStartedComplete?.();
     }
   }, [
+    applyWorkspaceState,
     dismissed,
     hasCompletionChecksPending,
     hasName,
@@ -2087,18 +2217,16 @@ export const HomeQortinoWorkspaceCard = ({
   ]);
 
   const isWorkspaceFreshlyUnlocked =
-    dismissed === true &&
-    workspaceHydrated &&
-    !workspaceState.onboardingCelebrationSeen;
+    showOnboardingCompletionConfetti && Boolean(postOnboardingMessage);
 
   const hotkeyActions = useMemo<Record<HotkeyActionId, HotkeyActionDefinition>>(
     () => ({
       earbump: {
-        description: 'Launch Earbump',
+        description: 'Launch Ear-Bump',
         icon: LibraryMusicRoundedIcon,
         id: 'earbump',
-        label: 'Earbump',
-        run: () => openApp('Earbump'),
+        label: 'Ear-Bump',
+        run: () => openApp('Ear-Bump'),
       },
       'q-blog': {
         description: 'Launch Q-Blog',
@@ -2147,17 +2275,25 @@ export const HomeQortinoWorkspaceCard = ({
     []
   );
 
+  const filteredAvailableHotkeyApps = useMemo(
+    () =>
+      availableHotkeyApps.filter(
+        (app) => !isBlockedPublisherName(app.appName)
+      ),
+    [availableHotkeyApps, isBlockedPublisherName]
+  );
+
   const hotkeyCatalog = useMemo(
     () =>
       availableHotkeyApps.length > 0
-        ? availableHotkeyApps
+        ? filteredAvailableHotkeyApps
         : (Object.keys(hotkeyActions) as HotkeyActionId[]).map((id) => ({
             appName: hotkeyActions[id].label,
             description: hotkeyActions[id].description,
             label: hotkeyActions[id].label,
             service: 'APP' as const,
           })),
-    [availableHotkeyApps, hotkeyActions]
+    [availableHotkeyApps.length, filteredAvailableHotkeyApps, hotkeyActions]
   );
 
   const loadHotkeyApps = useCallback(async () => {
@@ -2170,8 +2306,8 @@ export const HomeQortinoWorkspaceCard = ({
 
     try {
       const urls = [
-        `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true`,
-        `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true`,
+        `${getBaseApiReact()}/arbitrary/resources/search?service=APP&mode=ALL&limit=0&includestatus=true&includemetadata=true&excludeblocked=true`,
+        `${getBaseApiReact()}/arbitrary/resources/search?service=WEBSITE&mode=ALL&limit=0&includestatus=true&includemetadata=true&excludeblocked=true`,
       ];
       const responses = await Promise.all(
         urls.map((url) =>
@@ -2199,7 +2335,7 @@ export const HomeQortinoWorkspaceCard = ({
                 typeof resource?.name === 'string' ? resource.name.trim() : '';
               const service =
                 resource?.service === 'WEBSITE' ? 'WEBSITE' : 'APP';
-              if (!appName) {
+              if (!appName || isBlockedPublisherName(appName)) {
                 return null;
               }
 
@@ -2242,7 +2378,7 @@ export const HomeQortinoWorkspaceCard = ({
     } finally {
       setIsHotkeyAppsLoading(false);
     }
-  }, [isHotkeyAppsLoading]);
+  }, [isBlockedPublisherName, isHotkeyAppsLoading]);
 
   useEffect(() => {
     if (
@@ -2332,7 +2468,7 @@ export const HomeQortinoWorkspaceCard = ({
         icon: DriveFileRenameOutlineRoundedIcon,
         key: 'register_name' as const,
         label: hasPendingRegisterName
-          ? t('tutorial:home.confirming_transaction', 'Confirming transaction')
+          ? t('tutorial:home.confirming', 'Confirming')
           : t('tutorial:home.register_name', 'Register your name'),
         loading:
           !debugUseOverridesOnly &&
@@ -2380,10 +2516,32 @@ export const HomeQortinoWorkspaceCard = ({
     () => Math.min(completedCount + 1, steps.length),
     [completedCount, steps.length]
   );
-  const currentStep =
+  const isOnboardingVisible = dismissed === false;
+  const isQortsAcquiredAwaitingNext =
+    isOnboardingVisible &&
+    hasQorts &&
+    !hasName &&
+    !hasPendingRegisterName &&
+    !qortsAcquiredAcknowledged;
+  const currentProgressStepDisplay = isQortsAcquiredAwaitingNext
+    ? 1
+    : currentProgressStep;
+  const baseCurrentStep =
     steps.find((step) => !step.done) ?? steps[steps.length - 1];
+  const currentStep = isQortsAcquiredAwaitingNext
+    ? {
+        ...steps[0],
+        ctaLabel: t('tutorial:home.next', 'Next'),
+        done: true,
+        helper: t(
+          'tutorial:home.qorts_acquired_hint',
+          'The hardest part is over. Press Next when you are ready to register your name.'
+        ),
+        label: t('tutorial:home.qorts_acquired', '6 QORT acquired'),
+        loading: false,
+      }
+    : baseCurrentStep;
   const CurrentStepIcon = currentStep.icon;
-  const isOnboardingVisible = dismissed !== true;
 
   useEffect(() => {
     onboardingBubbleLockRef.current = isOnboardingVisible;
@@ -2419,6 +2577,7 @@ export const HomeQortinoWorkspaceCard = ({
 
     if (onboardingMessageTimeoutRef.current) {
       window.clearTimeout(onboardingMessageTimeoutRef.current);
+      onboardingMessageTimeoutRef.current = null;
     }
 
     setOnboardingTransitionMessage(nextRecognitionMessage);
@@ -2427,6 +2586,57 @@ export const HomeQortinoWorkspaceCard = ({
       setOnboardingTransitionMessage(null);
     }, ONBOARDING_RECOGNITION_DURATION_MS);
   }, [currentStep.key, isOnboardingVisible]);
+
+  useEffect(() => {
+    if (
+      !isOnboardingVisible ||
+      currentStep.key !== 'register_name' ||
+      !hasPendingRegisterName
+    ) {
+      setShowRegisterNameDelayHint(false);
+      return;
+    }
+
+    setShowRegisterNameDelayHint(false);
+    const hintTimer = window.setTimeout(() => {
+      setShowRegisterNameDelayHint(true);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(hintTimer);
+    };
+  }, [currentStep.key, hasPendingRegisterName, isOnboardingVisible]);
+
+  useEffect(() => {
+    const handleAvatarUploaded = () => {
+      if (isOnboardingVisible && currentStep.key === 'load_avatar') {
+        avatarCompletionAfterPanelCloseRef.current = true;
+        return;
+      }
+
+      setHasAvatar(true);
+      void checkAvatar();
+    };
+
+    const handleAvatarUploadClosed = () => {
+      if (!avatarCompletionAfterPanelCloseRef.current) {
+        return;
+      }
+
+      avatarCompletionAfterPanelCloseRef.current = false;
+      setAvatarStepCompleted(true);
+      setHasAvatar(true);
+      void checkAvatar();
+    };
+
+    subscribeToEvent('avatarUploaded', handleAvatarUploaded);
+    subscribeToEvent('avatarUploadClosed', handleAvatarUploadClosed);
+
+    return () => {
+      unsubscribeFromEvent('avatarUploaded', handleAvatarUploaded);
+      unsubscribeFromEvent('avatarUploadClosed', handleAvatarUploadClosed);
+    };
+  }, [checkAvatar, currentStep.key, isOnboardingVisible]);
 
   useEffect(() => {
     const wasOnboardingVisible = wasOnboardingVisibleRef.current;
@@ -2463,12 +2673,25 @@ export const HomeQortinoWorkspaceCard = ({
     setPostOnboardingMessage(
       'All set. You can start building your workspace above.'
     );
+    setShowOnboardingCompletionConfetti(true);
 
-    onboardingMessageTimeoutRef.current = window.setTimeout(() => {
-      onboardingMessageTimeoutRef.current = null;
-      setPostOnboardingMessage(null);
-    }, ONBOARDING_COMPLETION_MESSAGE_DURATION_MS);
+    if (onboardingConfettiTimeoutRef.current) {
+      window.clearTimeout(onboardingConfettiTimeoutRef.current);
+    }
+
+    onboardingConfettiTimeoutRef.current = window.setTimeout(() => {
+      onboardingConfettiTimeoutRef.current = null;
+      setShowOnboardingCompletionConfetti(false);
+    }, 4200);
   }, [isOnboardingVisible]);
+
+  useEffect(() => {
+    if (workspaceState.mode === 'empty' || postOnboardingMessage == null) {
+      return;
+    }
+
+    setPostOnboardingMessage(null);
+  }, [postOnboardingMessage, workspaceState.mode]);
 
   const musicSearchQuery = workspaceState.musicQuery.trim();
   const knownMusicTracksById = useMemo(() => {
@@ -2523,21 +2746,22 @@ export const HomeQortinoWorkspaceCard = ({
       signal: controller.signal,
     })
       .then((tracks) => {
-        setEarbumpDiscoveryTracks(tracks);
+        const visibleTracks = filterBlockedMusicTracks(tracks);
+        setEarbumpDiscoveryTracks(visibleTracks);
         setEarbumpDiscoveryError(null);
 
-        if (tracks.length === 0) {
+        if (visibleTracks.length === 0) {
           return;
         }
 
-        setSelectedTrackSnapshot((current) => current ?? tracks[0]);
+        setSelectedTrackSnapshot((current) => current ?? visibleTracks[0]);
 
         applyWorkspaceState((current) =>
           current.selectedTrackId
             ? current
             : {
                 ...current,
-                selectedTrackId: tracks[0].id,
+                selectedTrackId: visibleTracks[0].id,
               }
         );
       })
@@ -2559,7 +2783,7 @@ export const HomeQortinoWorkspaceCard = ({
     return () => {
       controller.abort();
     };
-  }, [applyWorkspaceState, workspaceHydrated]);
+  }, [applyWorkspaceState, filterBlockedMusicTracks, workspaceHydrated]);
 
   useEffect(() => {
     searchRequestRef.current?.abort();
@@ -2581,7 +2805,7 @@ export const HomeQortinoWorkspaceCard = ({
         signal: controller.signal,
       })
         .then((tracks) => {
-          setEarbumpSearchTracks(tracks);
+          setEarbumpSearchTracks(filterBlockedMusicTracks(tracks));
           setEarbumpSearchError(null);
         })
         .catch((error: unknown) => {
@@ -2604,7 +2828,7 @@ export const HomeQortinoWorkspaceCard = ({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [musicSearchQuery]);
+  }, [filterBlockedMusicTracks, musicSearchQuery]);
 
   useEffect(() => {
     if (!workspaceHydrated || !workspaceState.selectedTrackId) {
@@ -2613,7 +2837,9 @@ export const HomeQortinoWorkspaceCard = ({
 
     const matchedTrack = knownMusicTracksById.get(workspaceState.selectedTrackId);
     if (matchedTrack) {
-      setSelectedTrackSnapshot(matchedTrack);
+      if (!isBlockedPublisherName(matchedTrack.name)) {
+        setSelectedTrackSnapshot(matchedTrack);
+      }
       return undefined;
     }
 
@@ -2625,7 +2851,7 @@ export const HomeQortinoWorkspaceCard = ({
       signal: controller.signal,
     })
       .then((track) => {
-        if (track) {
+        if (track && !isBlockedPublisherName(track.name)) {
           setSelectedTrackSnapshot(track);
         }
       })
@@ -2638,22 +2864,61 @@ export const HomeQortinoWorkspaceCard = ({
     return () => {
       controller.abort();
     };
-  }, [knownMusicTracksById, workspaceHydrated, workspaceState.selectedTrackId]);
+  }, [
+    isBlockedPublisherName,
+    knownMusicTracksById,
+    workspaceHydrated,
+    workspaceState.selectedTrackId,
+  ]);
 
-  const activeTrackSource =
-    (workspaceState.selectedTrackId
+  const visibleDiscoveryTracks = useMemo(
+    () => filterBlockedMusicTracks(earbumpDiscoveryTracks),
+    [earbumpDiscoveryTracks, filterBlockedMusicTracks]
+  );
+  const visibleSearchTracks = useMemo(
+    () => filterBlockedMusicTracks(earbumpSearchTracks),
+    [earbumpSearchTracks, filterBlockedMusicTracks]
+  );
+  const selectedTrackCandidate =
+    workspaceState.selectedTrackId
       ? knownMusicTracksById.get(workspaceState.selectedTrackId) ??
         (selectedTrackSnapshot?.id === workspaceState.selectedTrackId
           ? selectedTrackSnapshot
           : null)
+      : null;
+  const activeTrackSource =
+    (selectedTrackCandidate && !isBlockedPublisherName(selectedTrackCandidate.name)
+      ? selectedTrackCandidate
       : null) ??
-    earbumpDiscoveryTracks[0] ??
-    selectedTrackSnapshot;
+    visibleDiscoveryTracks[0] ??
+    (selectedTrackSnapshot && !isBlockedPublisherName(selectedTrackSnapshot.name)
+      ? selectedTrackSnapshot
+      : null);
   const activeTrack = useMemo(
     () =>
       activeTrackSource ? resolveMusicTrack(activeTrackSource) : EMPTY_MUSIC_TRACK,
     [activeTrackSource, resolveMusicTrack]
   );
+  useEffect(() => {
+    if (!selectedTrackCandidate || !isBlockedPublisherName(selectedTrackCandidate.name)) {
+      return;
+    }
+
+    stopSharedEarbumpAudio(audioRef.current);
+    setMusicPlaybackTime(0);
+    setMusicProgress(0);
+    setSelectedTrackSnapshot(visibleDiscoveryTracks[0] ?? null);
+    applyWorkspaceState((current) => ({
+      ...current,
+      musicPlaying: false,
+      selectedTrackId: visibleDiscoveryTracks[0]?.id ?? '',
+    }));
+  }, [
+    applyWorkspaceState,
+    isBlockedPublisherName,
+    selectedTrackCandidate,
+    visibleDiscoveryTracks,
+  ]);
   const activeTrackResourceKey = useMemo(
     () => buildTrackResourceKey(activeTrack),
     [activeTrack]
@@ -2713,20 +2978,21 @@ export const HomeQortinoWorkspaceCard = ({
   const discoveryTracks = useMemo(
     () =>
       earbumpDiscoveryTracks
+        .filter((track) => !isBlockedPublisherName(track.name))
         .filter((track) => track.id !== activeTrack.id)
         .slice(0, 3)
         .map(resolveMusicTrack),
-    [activeTrack.id, earbumpDiscoveryTracks, resolveMusicTrack]
+    [activeTrack.id, earbumpDiscoveryTracks, isBlockedPublisherName, resolveMusicTrack]
   );
   const browserTracks = useMemo(() => {
     if (musicSearchQuery) {
-      return earbumpSearchTracks.map(resolveMusicTrack);
+      return visibleSearchTracks.map(resolveMusicTrack);
     }
 
     return discoveryTracks;
-  }, [discoveryTracks, earbumpSearchTracks, musicSearchQuery, resolveMusicTrack]);
+  }, [discoveryTracks, musicSearchQuery, resolveMusicTrack, visibleSearchTracks]);
   const playbackQueue = useMemo(() => {
-    const sourceTracks = musicSearchQuery ? earbumpSearchTracks : earbumpDiscoveryTracks;
+    const sourceTracks = musicSearchQuery ? visibleSearchTracks : visibleDiscoveryTracks;
     const resolvedTracks = sourceTracks.map(resolveMusicTrack);
 
     if (!activeTrack.id) {
@@ -2739,10 +3005,10 @@ export const HomeQortinoWorkspaceCard = ({
     ];
   }, [
     activeTrack,
-    earbumpDiscoveryTracks,
-    earbumpSearchTracks,
     musicSearchQuery,
     resolveMusicTrack,
+    visibleDiscoveryTracks,
+    visibleSearchTracks,
   ]);
   const isMusicBrowserLoading = musicSearchQuery
     ? isEarbumpSearchLoading
@@ -2902,7 +3168,13 @@ export const HomeQortinoWorkspaceCard = ({
   ]);
 
   const persistentOnboardingMessage = isOnboardingVisible
-    ? getPersistentOnboardingMessage(currentStep.key)
+    ? isQortsAcquiredAwaitingNext
+      ? 'Nice work. The hardest part is done. Press Next when you are ready.'
+      : currentStep.key === 'register_name' &&
+          hasPendingRegisterName &&
+          showRegisterNameDelayHint
+        ? 'Saving name on-chain. This can take a moment.'
+        : getPersistentOnboardingMessage(currentStep.key)
     : null;
   const qortinoDisplayedMessage = truncateQortinoBubbleMessage(
     qortinoGratefulState?.message?.trim() ||
@@ -3662,6 +3934,23 @@ export const HomeQortinoWorkspaceCard = ({
   }, [currentStep, pushReaction]);
 
   const currentStepPrimaryAction = useMemo(() => {
+    if (isQortsAcquiredAwaitingNext) {
+      return {
+        label: t('tutorial:home.next', 'Next'),
+        onClick: () => {
+          setQortsAcquiredAcknowledged(true);
+          if (onboardingMessageTimeoutRef.current) {
+            window.clearTimeout(onboardingMessageTimeoutRef.current);
+          }
+          setOnboardingTransitionMessage('Nice work. The hardest part is done.');
+          onboardingMessageTimeoutRef.current = window.setTimeout(() => {
+            onboardingMessageTimeoutRef.current = null;
+            setOnboardingTransitionMessage(null);
+          }, ONBOARDING_RECOGNITION_DURATION_MS);
+        },
+      };
+    }
+
     if (currentStep.key === 'get_six_qorts') {
       return {
         label: t(
@@ -3685,12 +3974,13 @@ export const HomeQortinoWorkspaceCard = ({
     currentStep.key,
     currentStep.loading,
     handleRunCurrentStepAction,
+    isQortsAcquiredAwaitingNext,
     pushReaction,
     t,
   ]);
 
   const currentStepSecondaryActions = useMemo(() => {
-    if (currentStep.key !== 'get_six_qorts') {
+    if (currentStep.key !== 'get_six_qorts' || isQortsAcquiredAwaitingNext) {
       return [];
     }
 
@@ -3720,10 +4010,10 @@ export const HomeQortinoWorkspaceCard = ({
         },
       },
     ];
-  }, [currentStep.key, pushReaction, t]);
+  }, [currentStep.key, isQortsAcquiredAwaitingNext, pushReaction, t]);
 
   const currentStepGetQortMethods = useMemo(() => {
-    if (currentStep.key !== 'get_six_qorts') {
+    if (currentStep.key !== 'get_six_qorts' || isQortsAcquiredAwaitingNext) {
       return [];
     }
 
@@ -3778,7 +4068,7 @@ export const HomeQortinoWorkspaceCard = ({
         recommended: false,
       },
     ];
-  }, [currentStep.key, currentStepPrimaryAction.label, currentStepPrimaryAction.onClick, pushReaction, t]);
+  }, [currentStep.key, currentStepPrimaryAction.label, currentStepPrimaryAction.onClick, isQortsAcquiredAwaitingNext, pushReaction, t]);
 
   const workspaceBayBackground =
     theme.palette.mode === 'dark'
@@ -3865,10 +4155,10 @@ export const HomeQortinoWorkspaceCard = ({
                 letterSpacing: '0.04em',
               }}
             >
-              Step {currentProgressStep} / {steps.length}
+              Step {currentProgressStepDisplay} / {steps.length}
             </Typography>
           </Box>
-          {currentStep.key === 'get_six_qorts' ? (
+          {currentStep.key === 'get_six_qorts' && !isQortsAcquiredAwaitingNext ? (
             <Box
               sx={{
                 display: 'flex',
@@ -4812,6 +5102,7 @@ export const HomeQortinoWorkspaceCard = ({
       onMascotDrop,
       onMascotPointerDown,
       onMascotPointerRelease,
+      showConfetti = false,
       statusLabel,
       }: {
         displayedMessage: string | null;
@@ -4830,13 +5121,10 @@ export const HomeQortinoWorkspaceCard = ({
         onMascotDrop?: (event: ReactDragEvent<HTMLDivElement>) => void;
         onMascotPointerDown?: (event: ReactPointerEvent<HTMLDivElement>) => void;
         onMascotPointerRelease?: () => void;
+        showConfetti?: boolean;
         statusLabel: string;
       }) => {
-        const shouldShowQortinoConfetti =
-          mood === 'celebrate' ||
-          mood === 'grateful' ||
-          statusLabel === 'happy' ||
-          statusLabel === 'grateful';
+        const shouldShowQortinoConfetti = showConfetti;
 
       return (
       <Box
@@ -5197,6 +5485,7 @@ export const HomeQortinoWorkspaceCard = ({
     onMascotDrop: handleQortinoDonationDrop,
     onMascotPointerDown: handleQortinoPointerDown,
     onMascotPointerRelease: handleQortinoPointerRelease,
+    showConfetti: showOnboardingCompletionConfetti && Boolean(postOnboardingMessage),
     statusLabel: qortinoStatusLabel,
   });
   const qortinoDonationOverlayMessage = truncateQortinoBubbleMessage(
@@ -7049,7 +7338,7 @@ const GettingStartedPrimaryAction = ({
           },
         }}
       >
-        {loading ? 'Loading...' : label}
+        {loading ? 'Confirming...' : label}
       </Typography>
     </ButtonBase>
   );

@@ -13,6 +13,7 @@ import DownloadRoundedIcon from '@mui/icons-material/DownloadRounded';
 import CloseIcon from '@mui/icons-material/Close';
 import { motion, useReducedMotion } from 'framer-motion';
 import QRCode from 'react-qr-code';
+import { useTranslation } from 'react-i18next';
 import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 
 type ReceiveQortOverlayProps = {
@@ -39,6 +40,9 @@ export function ReceiveQortOverlay({
   onReturn,
 }: ReceiveQortOverlayProps) {
   const theme = useTheme();
+  const { t } = useTranslation(['group']);
+  const td = (key: string, defaultValue: string) =>
+    t(`group:dashboard.${key}`, { defaultValue });
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
   const qrContainerRef = useRef<HTMLDivElement | null>(null);
@@ -161,7 +165,7 @@ export function ReceiveQortOverlay({
         <Box
           component={motion.button}
           type="button"
-          aria-label="Close receive QORT modal"
+          aria-label={td('close_receive_qort_modal', 'Close receive QORT modal')}
           initial={{
             opacity: 0,
             backdropFilter: 'blur(0px) brightness(1) saturate(1)',
@@ -275,7 +279,7 @@ export function ReceiveQortOverlay({
                     letterSpacing: '-0.02em',
                   }}
                 >
-                  Receive QORT
+                  {td('receive_qort', 'Receive QORT')}
                 </Typography>
                 <Typography
                   sx={{
@@ -285,7 +289,7 @@ export function ReceiveQortOverlay({
                     lineHeight: 1.45,
                   }}
                 >
-                  Scan to receive QORT
+                  {td('receive_qort_subtitle', 'Scan to receive QORT')}
                 </Typography>
               </Box>
               <ButtonBase
@@ -362,8 +366,9 @@ export function ReceiveQortOverlay({
                 <Typography
                   sx={{
                     color: alpha(theme.palette.text.secondary, isDarkMode ? 0.9 : 0.82),
-                    fontFamily: 'monospace',
-                    fontSize: '0.78rem',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    letterSpacing: '-0.01em',
                     lineHeight: 1.55,
                     textAlign: 'center',
                     wordBreak: 'break-all',
@@ -404,7 +409,7 @@ export function ReceiveQortOverlay({
                     },
                   }}
                 >
-                  Copy address
+                  {td('copy_address', 'Copy address')}
                 </Button>
                 <Button
                   variant="contained"
@@ -420,7 +425,7 @@ export function ReceiveQortOverlay({
                     textTransform: 'none',
                   }}
                 >
-                  Download QR
+                  {td('download_qr', 'Download QR')}
                 </Button>
               </Box>
             </Box>

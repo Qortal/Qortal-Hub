@@ -20,7 +20,12 @@ import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qortalLogoOfficial from '../../assets/sidebar/qortal-logo-official.png';
 import { enabledDevModeAtom, hasUnreadGroupsAtom } from '../../atoms/global';
-import { executeEvent } from '../../utils/events';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../../utils/events';
+import { openQChatTab, QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
 import {
   DASHBOARD_LOGIN_INTRO_PREVIEW_EVENT,
   DASHBOARD_LOGIN_INTRO_PREVIEW_STORAGE_KEY,
@@ -373,6 +378,7 @@ export const DesktopSideBar = ({
         localStorage.getItem(QORTINO_INLET_DEBUG_STORAGE_KEY)
       )
     );
+  const [selectedAppsTab, setSelectedAppsTab] = useState<any>(null);
   const [isQortinoLookDialogOpen, setIsQortinoLookDialogOpen] = useState(false);
   const [isQortinoLayoutDialogOpen, setIsQortinoLayoutDialogOpen] =
     useState(false);
@@ -385,6 +391,9 @@ export const DesktopSideBar = ({
   const closeTimerRef = useRef<number | null>(null);
   const hasUnreadChat = hasUnreadDirects || hasUnreadGroups;
   const effectiveUnreadChat = hasUnreadChat || debugUnread;
+  const isQChatActive =
+    desktopViewMode === 'apps' &&
+    selectedAppsTab?.internal === QCHAT_INTERNAL_TAB_ID;
   const isLocalPreview =
     typeof window !== 'undefined' &&
     (window.location.hostname === '127.0.0.1' ||
@@ -497,6 +506,17 @@ export const DesktopSideBar = ({
     debugQortinoLookSettings,
     DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS
   );
+
+  useEffect(() => {
+    const handleTabsToNav = (e: CustomEvent) => {
+      setSelectedAppsTab(e.detail?.data?.selectedTab || null);
+    };
+
+    subscribeToEvent('setTabsToNav', handleTabsToNav);
+    return () => {
+      unsubscribeFromEvent('setTabsToNav', handleTabsToNav);
+    };
+  }, []);
 
   const emitQortinoLayoutDebugSettings = (
     nextSettings: QortinoLayoutDebugSettings
@@ -845,7 +865,7 @@ export const DesktopSideBar = ({
               </SidebarItem>
 
               <SidebarItem
-                active={isApps}
+                active={isApps && !isQChatActive}
                 label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
                 onClick={() =>
                   runSidebarAction(() => {
@@ -862,10 +882,10 @@ export const DesktopSideBar = ({
 
               <Box sx={{ position: 'relative' }}>
                 <SidebarItem
-                  active={desktopViewMode === 'chat'}
+                  active={desktopViewMode === 'chat' || isQChatActive}
                   label="Q-Chat"
                   onClick={() =>
-                    runSidebarAction(() => setDesktopViewMode('chat'))
+                    runSidebarAction(() => openQChatTab())
                   }
                 >
                   <MessagingIconFilled height={24} color="currentColor" />

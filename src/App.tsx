@@ -34,6 +34,7 @@ import {
   CreateWalletView,
   InfoDialog,
   NotAuthenticatedFooter,
+  NotificationPermissionSlideDown,
   PaymentPublishDialog,
   PaymentRequestScreen,
   QortalRequestExtensionDialog,
@@ -71,7 +72,6 @@ import {
   infoSnackGlobalAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
-  isOpenDialogCoreRecommendationAtom,
   isPublicNodeUnavailableAtom,
   isRunningPublicNodeAtom,
   openSnackGlobalAtom,
@@ -98,6 +98,7 @@ import { DownloadWallet } from './components/Auth/DownloadWallet.tsx';
 import { BackupWalletModal } from './components/Auth/BackupWalletModal.tsx';
 import { useAtom, useSetAtom } from 'jotai';
 import {
+  HTTP_LOCALHOST_12391,
   HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
   TIME_SECONDS_10_IN_MILLISECONDS,
@@ -119,6 +120,7 @@ import { HUB_UI_BUILD_VERSION } from './constants/uiBuildVersion.ts';
 import type { AuthUnlockTransitionSnapshot } from './types/authTransition';
 
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
+const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
 
 // Re-export for consumers that still import from App
 export type { extStates } from './types/app';
@@ -227,9 +229,6 @@ function App() {
   const [walletToBeDownloadedPassword, setWalletToBeDownloadedPassword] =
     useState<string>('');
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
-  const setOpenCoreRecommendation = useSetAtom(
-    isOpenDialogCoreRecommendationAtom
-  );
   const setPublicNodeUnavailable = useSetAtom(isPublicNodeUnavailableAtom);
   const setAuthenticatePassword = useSetAtom(authenticatePasswordAtom);
   const [sendqortState, setSendqortState] = useState<any>(null);
@@ -262,6 +261,7 @@ function App() {
 
   const downloadResource = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
+  const suppressWalletInfoRestoreRef = useRef(false);
   const isFocusedRef = useRef<boolean>(true);
   const permissionHandlerRef = useRef<
     ((message: any, event: MessageEvent) => void) | null
@@ -331,6 +331,7 @@ function App() {
     isNodeValid,
     authenticate,
     getBalanceFunc,
+    handleSaveNodeInfo,
     validateApiKeyFromRegistration,
   } = useAuth();
   useBlockedAddressesLoader(extState === 'authenticated');
@@ -479,18 +480,21 @@ function App() {
             .sendMessage('getWalletInfo')
             .then((response) => {
               if (response && response?.walletInfo) {
-                setRawWallet(response?.walletInfo);
+                if (suppressWalletInfoRestoreRef.current) return;
+
                 if (
                   holdRefExtState.current === 'web-app-request-payment' ||
                   holdRefExtState.current === 'web-app-request-connection' ||
                   holdRefExtState.current === 'web-app-request-buy-order'
                 )
                   return;
+
+                if (holdRefExtState.current !== 'not-authenticated') return;
+
                 if (response?.hasKeyPair) {
+                  setRawWallet(response?.walletInfo);
                   setExtstate('authenticated');
                   window.sendMessage('startNotificationCheck').catch(() => {});
-                } else {
-                  setExtstate('wallet-dropped');
                 }
               }
             })
@@ -743,14 +747,21 @@ function App() {
 
   const saveFileToDiskFunc = useCallback(async () => {
     try {
-      await saveFileToDisk(
+      if (!walletToBeDownloaded?.wallet || !walletToBeDownloaded?.qortAddress) {
+        setWalletToBeDownloadedError('No wallet backup is ready yet.');
+        return false;
+      }
+
+      const saved = await saveFileToDisk(
         walletToBeDownloaded.wallet,
         walletToBeDownloaded.qortAddress
       );
+      return Boolean(saved);
     } catch (error: any) {
       setWalletToBeDownloadedError(
         getWalletErrorMessage(error, 'Unable to save this wallet backup.')
       );
+      return false;
     }
   }, [walletToBeDownloaded]);
 
@@ -904,6 +915,8 @@ function App() {
   }, [hasSettingsChanged, extState]);
 
   const returnToMain = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'authenticated';
     setPaymentTo('');
     setSendPaymentError('');
     setCountdown(null);
@@ -924,6 +937,8 @@ function App() {
   }, []);
 
   const resetAllStates = () => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
     setExtstate('not-authenticated');
     setRawWallet(null);
     setRequestConnection(null);
@@ -1146,6 +1161,8 @@ function App() {
     [confirmPayment]
   );
   const onGoToCreateWallet = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'create-wallet';
     prepareNewSeedphrase();
     setWalletToBeDownloadedError('');
     setWalletToBeDownloadedPassword('');
@@ -1159,11 +1176,15 @@ function App() {
     setWalletToBeDownloadedPasswordConfirm,
   ]);
   const onWalletsBack = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
     setRawWallet(null);
     setExtstate('not-authenticated');
     logoutFunc();
   }, [setExtstate, logoutFunc]);
   const onAuthenticationFormBack = useCallback(() => {
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
     setRawWallet(null);
     setExtstate('not-authenticated');
     setAuthenticatePassword('');
@@ -1176,6 +1197,8 @@ function App() {
       setWalletToBeDownloadedPassword('');
       return;
     }
+    suppressWalletInfoRestoreRef.current = true;
+    holdRefExtState.current = 'not-authenticated';
     setExtstate('not-authenticated');
     setShowSeed(false);
     setCreationStep(1);
@@ -1208,67 +1231,95 @@ function App() {
     }
   }, []);
 
-  const onBackupAccountConfirm = useCallback(async () => {
-    await saveFileToDiskFunc();
+  const isLocalCoreReadyForHub = useCallback(async () => {
+    try {
+      const response = await fetch(`${HTTP_LOCALHOST_12391}/admin/status`);
+      if (!response.ok) return false;
 
+      const status = await response.json();
+      const syncPercent = Number(status?.syncPercent);
+      return (
+        Number.isFinite(syncPercent) &&
+        syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT
+      );
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
+  const prepareNodeForHubEntry = useCallback(async () => {
     const selectedUrl = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
     const usingDefaultPublic = selectedUrl === HTTPS_EXT_NODE_QORTAL_LINK;
+    const blockedEntry = {
+      canEnter: false,
+      shouldOpenCoreSetupAfterEntry: false,
+    };
 
-    if (usingDefaultPublic && !(await isPublicNodeReachable())) {
+    if (usingDefaultPublic) {
+      if (!(await isPublicNodeReachable())) {
+        setPublicNodeUnavailable(true);
+        setOpenCoreSetup(true);
+        return blockedEntry;
+      }
+
+      setPublicNodeUnavailable(false);
+      return {
+        canEnter: true,
+        shouldOpenCoreSetupAfterEntry: true,
+      };
+    }
+
+    if (isLocalNodeUrl(selectedUrl) && !(await isLocalCoreReadyForHub())) {
+      if (await isPublicNodeReachable()) {
+        setPublicNodeUnavailable(false);
+        await handleSaveNodeInfo({
+          url: HTTPS_EXT_NODE_QORTAL_LINK,
+          apikey: '',
+        });
+        return {
+          canEnter: true,
+          shouldOpenCoreSetupAfterEntry: true,
+        };
+      }
+
       setPublicNodeUnavailable(true);
-      setOpenCoreRecommendation(true);
-      return;
+      setOpenCoreSetup(true);
+      return blockedEntry;
     }
 
     setPublicNodeUnavailable(false);
-    returnToMain();
-    executeEvent('openGlobalSnackBar', {
-      message: t('auth:tips.wallet_secure', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      type: 'info',
-      duration: 5600,
-    });
-
-    if (window?.coreSetup && usingDefaultPublic) {
-      window.setTimeout(() => {
-        setOpenCoreRecommendation(true);
-      }, 650);
-    }
+    return {
+      canEnter: true,
+      shouldOpenCoreSetupAfterEntry: false,
+    };
   }, [
+    handleSaveNodeInfo,
+    isLocalCoreReadyForHub,
     isPublicNodeReachable,
-    returnToMain,
-    saveFileToDiskFunc,
     selectedNode?.url,
-    setOpenCoreRecommendation,
+    setOpenCoreSetup,
     setPublicNodeUnavailable,
-    t,
   ]);
 
+  const onBackupAccountConfirm = useCallback(async () => {
+    return saveFileToDiskFunc();
+  }, [saveFileToDiskFunc]);
+
   const onEnterHubAfterCreate = useCallback(async () => {
-    const selectedUrl = selectedNode?.url || HTTPS_EXT_NODE_QORTAL_LINK;
-    const usingDefaultPublic = selectedUrl === HTTPS_EXT_NODE_QORTAL_LINK;
+    const entryPreparation = await prepareNodeForHubEntry();
+    if (!entryPreparation.canEnter) return;
 
-    if (usingDefaultPublic && !(await isPublicNodeReachable())) {
-      setPublicNodeUnavailable(true);
-      setOpenCoreRecommendation(true);
-      return;
-    }
-
-    setPublicNodeUnavailable(false);
     returnToMain();
 
-    if (window?.coreSetup && usingDefaultPublic) {
+    if (window?.coreSetup && entryPreparation.shouldOpenCoreSetupAfterEntry) {
       window.setTimeout(() => {
-        setOpenCoreRecommendation(true);
+        setOpenCoreSetup(true);
       }, 650);
     }
   }, [
-    isPublicNodeReachable,
+    prepareNodeForHubEntry,
     returnToMain,
-    selectedNode?.url,
-    setOpenCoreRecommendation,
-    setPublicNodeUnavailable,
+    setOpenCoreSetup,
   ]);
   const onCountdownComplete = useCallback(() => {
     window.close();
@@ -1666,6 +1717,7 @@ function App() {
           }
         />
         <BuyQortInformation balance={balance} />
+        {isMainWindow && <NotificationPermissionSlideDown />}
       </QORTAL_APP_CONTEXT.Provider>
 
       {extState === 'create-wallet' && walletToBeDownloaded && (

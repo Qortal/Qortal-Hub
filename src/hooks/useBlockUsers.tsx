@@ -5,6 +5,58 @@ import {
   blockedNamesAtom,
 } from '../atoms/global';
 
+const normalizeListItems = (items: unknown): string[] => {
+  if (!Array.isArray(items)) return [];
+
+  return items
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
+const toBlockedRecord = (items: string[]): Record<string, boolean> =>
+  items.reduce<Record<string, boolean>>((record, item) => {
+    record[item] = true;
+    return record;
+  }, {});
+
+const fetchCoreList = async (listName: string): Promise<string[]> => {
+  const response = await new Promise<unknown>((res, rej) => {
+    window
+      .sendMessage('listActions', {
+        type: 'get',
+        listName,
+      })
+      .then((response) => {
+        if (response.error) {
+          rej(response?.message);
+          return;
+        }
+
+        res(response);
+      })
+      .catch((error) => {
+        console.error('Failed qortalRequest', error);
+        rej(error);
+      });
+  });
+
+  return normalizeListItems(response);
+};
+
+const loadBlockedLists = async (
+  setBlockedAddresses: (blockedAddresses: Record<string, boolean>) => void,
+  setBlockedNames: (blockedNames: Record<string, boolean>) => void
+) => {
+  const [blockedAddresses, blockedNames] = await Promise.all([
+    fetchCoreList('blockedAddresses'),
+    fetchCoreList('blockedNames'),
+  ]);
+
+  setBlockedAddresses(toBlockedRecord(blockedAddresses));
+  setBlockedNames(toBlockedRecord(blockedNames));
+};
+
 /**
  * Loads blocked list into atoms when authenticated. Uses only setters so the
  * component that calls this does NOT subscribe to the atoms and will not
@@ -19,62 +71,9 @@ export const useBlockedAddressesLoader = (isAuthenticated?: boolean) => {
     if (!isAuthenticated) return;
     setBlockedAddresses({});
     setBlockedNames({});
-    const fetchBlockedList = async () => {
-      try {
-        const response = await new Promise((res, rej) => {
-          window
-            .sendMessage('listActions', {
-              type: 'get',
-              listName: `blockedAddresses`,
-            })
-            .then((response) => {
-              if (response.error) {
-                rej(response?.message);
-                return;
-              } else {
-                res(response);
-              }
-            })
-            .catch((error) => {
-              console.error('Failed qortalRequest', error);
-            });
-        });
-
-        const blockedUsers: Record<string, boolean> = {};
-        response?.forEach((item) => {
-          blockedUsers[item] = true;
-        });
-        setBlockedAddresses(blockedUsers);
-
-        const response2 = await new Promise((res, rej) => {
-          window
-            .sendMessage('listActions', {
-              type: 'get',
-              listName: `blockedNames`,
-            })
-            .then((response) => {
-              if (response.error) {
-                rej(response?.message);
-                return;
-              } else {
-                res(response);
-              }
-            })
-            .catch((error) => {
-              console.error('Failed qortalRequest', error);
-            });
-        });
-
-        const blockedUsers2: Record<string, boolean> = {};
-        response2?.forEach((item) => {
-          blockedUsers2[item] = true;
-        });
-        setBlockedNames(blockedUsers2);
-      } catch (error) {
-        console.error(error);
-      }
-    };
-    fetchBlockedList();
+    loadBlockedLists(setBlockedAddresses, setBlockedNames).catch((error) => {
+      console.error(error);
+    });
   }, [isAuthenticated, setBlockedAddresses, setBlockedNames]);
 };
 
@@ -89,6 +88,12 @@ export const useBlockedAddresses = (isAuthenticated?: boolean) => {
     }),
     [blockedAddresses, blockedNames]
   );
+
+  const refreshBlockedUsers = useCallback(async () => {
+    if (!isAuthenticated) return;
+
+    await loadBlockedLists(setBlockedAddresses, setBlockedNames);
+  }, [isAuthenticated, setBlockedAddresses, setBlockedNames]);
 
   const isUserBlocked = useCallback(
     (address) => {
@@ -219,7 +224,14 @@ export const useBlockedAddresses = (isAuthenticated?: boolean) => {
       addToBlockList,
       removeBlockFromList,
       getAllBlockedUsers,
+      refreshBlockedUsers,
     }),
-    [isUserBlocked, addToBlockList, removeBlockFromList, getAllBlockedUsers]
+    [
+      isUserBlocked,
+      addToBlockList,
+      removeBlockFromList,
+      getAllBlockedUsers,
+      refreshBlockedUsers,
+    ]
   );
 };

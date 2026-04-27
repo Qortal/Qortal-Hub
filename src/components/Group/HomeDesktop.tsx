@@ -16,7 +16,14 @@ import DensityLargeRoundedIcon from '@mui/icons-material/DensityLargeRounded';
 import { alpha, darken } from '@mui/material/styles';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { balanceAtom, memberGroupsAtom, nodeInfosAtom, selectedNodeInfoAtom, userInfoAtom } from '../../atoms/global';
+import {
+  balanceAtom,
+  memberGroupsAtom,
+  nodeInfosAtom,
+  paymentNotificationsAtom,
+  selectedNodeInfoAtom,
+  userInfoAtom,
+} from '../../atoms/global';
 import ErrorBoundary from '../../common/ErrorBoundary';
 import { Spacer } from '../../common/Spacer';
 import { GroupJoinRequests } from './GroupJoinRequests';
@@ -54,6 +61,7 @@ import { AnimatePresence, LazyMotion, domAnimation, motion, useReducedMotion } f
 import { getBaseApiReact } from '../../App';
 import { manifestData } from '../NotAuthenticated';
 import { executeEvent, subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
+import { openQChatTab } from '../../utils/openQChatTab';
 import { dashboardPanelSx, handleDashboardPanelPointerLeave, handleDashboardPanelPointerMove, useDashboardPanelMouseLight } from './dashboardPanelEffects';
 import { useHandleUserInfo } from '../../hooks/useHandleUserInfo';
 import {
@@ -88,8 +96,18 @@ type MinterProgressSnapshot = {
 type MinterInfoView = 'dots' | 'progress';
 type WalletActivityTransaction = {
   amount?: number | string;
+  creator?: string;
   creatorAddress?: string;
+  recipientAddress?: string;
   recipient?: string;
+  sender?: string;
+  senderAddress?: string;
+  signature?: string;
+  timestamp?: number | string;
+};
+type WalletActivityPaymentNotification = {
+  data?: WalletActivityTransaction;
+  event?: string;
   timestamp?: number | string;
 };
 type WalletActivityDirection = 'incoming' | 'outgoing';
@@ -192,6 +210,7 @@ const SYSTEM_BADGE_SX = {
 } as const;
 const WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 const WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT = 50;
+const WALLET_ACTIVITY_PAYMENT_RECEIVED_EVENT = 'PAYMENT_RECEIVED';
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 52;
@@ -363,6 +382,21 @@ const formatWalletActivityAmount = (
   amount: number,
   direction: WalletActivityDirection
 ) => `${direction === 'outgoing' ? '-' : '+'}${Math.abs(amount).toFixed(2)} QORT`;
+
+const getWalletActivityCreatorAddress = (
+  transaction: WalletActivityTransaction
+) =>
+  (
+    transaction.creatorAddress ||
+    transaction.senderAddress ||
+    transaction.sender ||
+    transaction.creator ||
+    ''
+  ).trim();
+
+const getWalletActivityRecipientAddress = (
+  transaction: WalletActivityTransaction
+) => (transaction.recipient || transaction.recipientAddress || '').trim();
 
 const parseDashboardStatusPreviewMode = (
   value: string | null
@@ -1347,10 +1381,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const rightRailRef = useRef<HTMLDivElement | null>(null);
   const layoutStabilizeFrameRef = useRef<number | null>(null);
   const walletActivityNameCacheRef = useRef<Record<string, string>>({});
+  const lastWalletActivityBalanceRef = useRef<string | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
   const nodeInfos = useAtomValue(nodeInfosAtom);
+  const paymentNotifications = useAtomValue(paymentNotificationsAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setNodeInfos = useSetAtom(nodeInfosAtom);
   const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
@@ -1425,6 +1461,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     );
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
+  const td = useCallback(
+    (key: string, defaultValue: string) =>
+      t(`group:dashboard.${key}`, { defaultValue }),
+    [t]
+  );
   const theme = useTheme();
   const isSplitDashboardLayout = useMediaQuery(theme.breakpoints.up('md'));
   const isWideDashboardLayout = useMediaQuery(theme.breakpoints.up('xl'));
@@ -1639,6 +1680,15 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         : null,
     });
   }, [myAddress, userAddress]);
+  const handleOpenWalletActivityCounterparty = useCallback(
+    (address: string) => {
+      if (!address) return;
+      executeEvent('openUserLookupDrawer', {
+        addressOrName: address,
+      });
+    },
+    []
+  );
   const resolveWalletActivityAddressLabel = useCallback(
     async (address: string) => {
       if (!address) return 'Unknown address';
@@ -1665,14 +1715,60 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     },
     []
   );
+  const fetchWalletActivityTransactionBySignature = useCallback(
+    async (signature?: string) => {
+      if (!signature) return null;
+
+      try {
+        const response = await fetch(
+          `${getBaseApiReact()}/transactions/signature/${encodeURIComponent(signature)}`
+        );
+
+        if (!response.ok) return null;
+
+        const responseData = await response.json();
+        return responseData && typeof responseData === 'object'
+          ? (responseData as WalletActivityTransaction)
+          : null;
+      } catch (error) {
+        console.error('Failed to load wallet activity transaction by signature:', error);
+        return null;
+      }
+    },
+    []
+  );
   const buildWalletActivityEntry = useCallback(
     async (transaction: WalletActivityTransaction | null | undefined) => {
       if (!transaction || !userAddress) return null;
 
-      const timestamp = Number(transaction.timestamp);
-      const amount = Number(transaction.amount);
-      const isOutgoing = transaction.creatorAddress === userAddress;
-      const isIncoming = transaction.recipient === userAddress;
+      let resolvedTransaction = transaction;
+      let creatorAddress = getWalletActivityCreatorAddress(resolvedTransaction);
+      let recipientAddress = getWalletActivityRecipientAddress(resolvedTransaction);
+
+      if (
+        (!creatorAddress || !recipientAddress) &&
+        resolvedTransaction.signature
+      ) {
+        const fullTransaction = await fetchWalletActivityTransactionBySignature(
+          resolvedTransaction.signature
+        );
+
+        if (fullTransaction) {
+          resolvedTransaction = {
+            ...resolvedTransaction,
+            ...fullTransaction,
+            timestamp:
+              resolvedTransaction.timestamp ?? fullTransaction.timestamp,
+          };
+          creatorAddress = getWalletActivityCreatorAddress(resolvedTransaction);
+          recipientAddress = getWalletActivityRecipientAddress(resolvedTransaction);
+        }
+      }
+
+      const timestamp = Number(resolvedTransaction.timestamp);
+      const amount = Number(resolvedTransaction.amount);
+      const isOutgoing = creatorAddress === userAddress;
+      const isIncoming = recipientAddress === userAddress;
 
       if (
         !Number.isFinite(timestamp) ||
@@ -1684,8 +1780,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       }
 
       const counterpartyAddress = isOutgoing
-        ? transaction.recipient || ''
-        : transaction.creatorAddress || '';
+        ? recipientAddress
+        : creatorAddress;
+
+      if (!counterpartyAddress) return null;
+
       const counterpartyLabel = await resolveWalletActivityAddressLabel(
         counterpartyAddress
       );
@@ -1698,8 +1797,51 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         timestamp,
       };
     },
-    [resolveWalletActivityAddressLabel, userAddress]
+    [
+      fetchWalletActivityTransactionBySignature,
+      resolveWalletActivityAddressLabel,
+      userAddress,
+    ]
   );
+  const latestPaymentNotificationTransaction =
+    useMemo<WalletActivityTransaction | null>(() => {
+      if (!userAddress || !Array.isArray(paymentNotifications)) return null;
+
+      return paymentNotifications
+        .map((notification: WalletActivityPaymentNotification) => {
+          if (
+            notification?.event !== WALLET_ACTIVITY_PAYMENT_RECEIVED_EVENT ||
+            !notification?.data
+          ) {
+            return null;
+          }
+
+          const transaction = {
+            ...notification.data,
+            timestamp: notification.data.timestamp ?? notification.timestamp,
+          };
+          const timestamp = Number(transaction.timestamp);
+          const creatorAddress = getWalletActivityCreatorAddress(transaction);
+          const recipientAddress = getWalletActivityRecipientAddress(transaction);
+
+          if (
+            !Number.isFinite(timestamp) ||
+            !isWalletActivityTimestampRecent(timestamp) ||
+            (creatorAddress !== userAddress && recipientAddress !== userAddress)
+          ) {
+            return null;
+          }
+
+          return transaction;
+        })
+        .filter((transaction): transaction is WalletActivityTransaction =>
+          Boolean(transaction)
+        )
+        .sort(
+          (first, second) =>
+            Number(second.timestamp) - Number(first.timestamp)
+        )[0] ?? null;
+    }, [paymentNotifications, userAddress]);
   const loadRecentWalletActivity = useCallback(async () => {
     if (!userAddress) {
       setRecentWalletActivity(null);
@@ -1722,18 +1864,39 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       const latestRelevantPayment = Array.isArray(responseData)
         ? responseData.find(
             (transaction: WalletActivityTransaction) =>
-              (transaction?.creatorAddress === userAddress ||
-                transaction?.recipient === userAddress) &&
+              (getWalletActivityCreatorAddress(transaction) === userAddress ||
+                getWalletActivityRecipientAddress(transaction) === userAddress) &&
               Number.isFinite(Number(transaction?.timestamp)) &&
               isWalletActivityTimestampRecent(Number(transaction.timestamp))
           )
         : null;
 
       const recentEntry = await buildWalletActivityEntry(latestRelevantPayment);
-      setRecentWalletActivity(recentEntry);
+      setRecentWalletActivity((currentEntry) => {
+        if (!recentEntry) {
+          return currentEntry &&
+            isWalletActivityTimestampRecent(currentEntry.timestamp)
+            ? currentEntry
+            : null;
+        }
+
+        if (
+          currentEntry &&
+          isWalletActivityTimestampRecent(currentEntry.timestamp) &&
+          currentEntry.timestamp > recentEntry.timestamp
+        ) {
+          return currentEntry;
+        }
+
+        return recentEntry;
+      });
     } catch (error) {
       console.error('Failed to load recent wallet activity:', error);
-      setRecentWalletActivity(null);
+      setRecentWalletActivity((currentEntry) =>
+        currentEntry && isWalletActivityTimestampRecent(currentEntry.timestamp)
+          ? currentEntry
+          : null
+      );
     } finally {
       setIsWalletActivityLoading(false);
     }
@@ -1761,6 +1924,72 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, []);
 
   useEffect(() => {
+    setRecentWalletActivity(null);
+    lastWalletActivityBalanceRef.current = null;
+  }, [userAddress]);
+
+  useEffect(() => {
+    if (!userAddress || balance == null) {
+      return;
+    }
+
+    const nextBalanceKey = String(balance);
+    if (lastWalletActivityBalanceRef.current == null) {
+      lastWalletActivityBalanceRef.current = nextBalanceKey;
+      return;
+    }
+
+    if (lastWalletActivityBalanceRef.current === nextBalanceKey) {
+      return;
+    }
+
+    lastWalletActivityBalanceRef.current = nextBalanceKey;
+    const refreshTimer = window.setTimeout(() => {
+      loadRecentWalletActivity();
+    }, 650);
+
+    return () => {
+      window.clearTimeout(refreshTimer);
+    };
+  }, [balance, loadRecentWalletActivity, userAddress]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const updateRecentActivityFromNotifications = async () => {
+      if (!latestPaymentNotificationTransaction) return;
+
+      const notificationEntry = await buildWalletActivityEntry(
+        latestPaymentNotificationTransaction
+      );
+
+      if (isCancelled || !notificationEntry) return;
+
+      setRecentWalletActivity((currentEntry) => {
+        if (
+          currentEntry &&
+          isWalletActivityTimestampRecent(currentEntry.timestamp) &&
+          currentEntry.timestamp > notificationEntry.timestamp
+        ) {
+          return currentEntry;
+        }
+
+        return notificationEntry;
+      });
+      setIsWalletActivityLoading(false);
+    };
+
+    // The notification websocket now supplies recent PAYMENT_RECEIVED history
+    // faster than transaction search. The bell filters those entries out, but
+    // Wallet Activity can still use them as the fast path and keep search as a fallback.
+    updateRecentActivityFromNotifications();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [buildWalletActivityEntry, latestPaymentNotificationTransaction]);
+
+  useEffect(() => {
     let isCancelled = false;
 
     loadRecentWalletActivity();
@@ -1774,7 +2003,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         return;
       }
 
-      if (message.payload?.recipient !== userAddress) {
+      if (getWalletActivityRecipientAddress(message.payload) !== userAddress) {
         return;
       }
 
@@ -1784,7 +2013,18 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       }
 
       if (!isCancelled) {
-        setRecentWalletActivity(incomingEntry);
+        setRecentWalletActivity((currentEntry) => {
+          if (
+            currentEntry &&
+            isWalletActivityTimestampRecent(currentEntry.timestamp) &&
+            currentEntry.timestamp > incomingEntry.timestamp
+          ) {
+            return currentEntry;
+          }
+
+          return incomingEntry;
+        });
+        setIsWalletActivityLoading(false);
       }
     };
 
@@ -2538,8 +2778,8 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const handleOpenQChatPanel = useCallback(() => {
     setSelectedGroup(null);
     setGroupSection('chat');
-    setDesktopViewMode('chat');
-  }, [setDesktopViewMode, setGroupSection, setSelectedGroup]);
+    openQChatTab();
+  }, [setGroupSection, setSelectedGroup]);
   const handleOpenGroupsWidget = useCallback(() => {
     handleOpenQChatPanel();
   }, [handleOpenQChatPanel]);
@@ -2552,8 +2792,11 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       ? Math.round(nodeInfos?.syncPercent || 0)
       : 100;
   const nodeStatusValue = hasLiveNodeConnection
-    ? `${liveSyncPercent}% Synced`
-    : 'Node unavailable';
+    ? t('group:dashboard.sync_percent', {
+        defaultValue: '{{percent}}% Synced',
+        percent: liveSyncPercent,
+      })
+    : td('node_unavailable', 'Node unavailable');
   const peersLabel = `${nodeInfos?.numberOfConnections || 0}`;
   const blockHeightLabel = `${nodeInfos?.height || '—'}`;
   const hubVersionLabel = manifestData.version || '—';
@@ -2579,7 +2822,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
           letterSpacing: '-0.02em',
         }}
       >
-        QORTINO card shell hit a runtime snag.
+        {td('qortino_runtime_title', 'QORTINO card shell hit a runtime snag.')}
       </Typography>
       <Typography
         sx={{
@@ -2589,7 +2832,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
           maxWidth: '34ch',
         }}
       >
-        The rest of the dashboard is still safe. Refresh the Hub and if this keeps happening report to George on Discord/Qortal.
+        {td(
+          'qortino_runtime_body',
+          'The rest of the dashboard is still safe. Refresh the Hub and if this keeps happening report it to the team.'
+        )}
       </Typography>
     </Box>
   );
@@ -2602,10 +2848,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     }
   })();
   const nodeTypeLabel = isLocalNodeUrl(nodeBase)
-    ? 'Local node'
+    ? td('local_node', 'Local node')
     : nodeBase.includes('ext-node.qortal.link')
-      ? 'Public node'
-      : 'Custom node';
+      ? td('public_node', 'Public node')
+      : td('custom_node', 'Custom node');
   const isSystemOperational =
     hasLiveNodeConnection &&
     !(nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100);
@@ -2619,11 +2865,14 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
             hubVersion: hubVersionLabel,
             isOperational: false,
             nodeHost: 'ext-node.qortal.link',
-            nodeStatus: '62% Synced',
-            nodeType: 'Public node',
+            nodeStatus: t('group:dashboard.sync_percent', {
+              defaultValue: '{{percent}}% Synced',
+              percent: 62,
+            }),
+            nodeType: td('public_node', 'Public node'),
             peers: '184',
             qdnPeers: '97',
-            statusLabel: 'Synchronizing',
+            statusLabel: td('synchronizing', 'Synchronizing'),
           }
         : statusPreviewMode === 'local'
           ? {
@@ -2632,11 +2881,14 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
               hubVersion: hubVersionLabel,
               isOperational: true,
               nodeHost: '127.0.0.1:12391',
-              nodeStatus: '100% Synced',
-              nodeType: 'Local node',
+              nodeStatus: t('group:dashboard.sync_percent', {
+                defaultValue: '{{percent}}% Synced',
+                percent: 100,
+              }),
+              nodeType: td('local_node', 'Local node'),
               peers: '42',
               qdnPeers: '28',
-              statusLabel: 'Fully operational',
+              statusLabel: td('fully_operational', 'Fully operational'),
             }
           : statusPreviewMode === 'custom'
             ? {
@@ -2645,11 +2897,14 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                 hubVersion: hubVersionLabel,
                 isOperational: true,
                 nodeHost: 'node.qortal.example',
-                nodeStatus: '100% Synced',
-                nodeType: 'Custom node',
+                nodeStatus: t('group:dashboard.sync_percent', {
+                  defaultValue: '{{percent}}% Synced',
+                  percent: 100,
+                }),
+                nodeType: td('custom_node', 'Custom node'),
                 peers: '221',
                 qdnPeers: '153',
-                statusLabel: 'Fully operational',
+                statusLabel: td('fully_operational', 'Fully operational'),
               }
             : {
                 blockHeight: '—',
@@ -2657,15 +2912,17 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                 hubVersion: hubVersionLabel,
                 isOperational: false,
                 nodeHost: 'node.qortal.example',
-                nodeStatus: 'Node unavailable',
-                nodeType: 'Custom node',
+                nodeStatus: td('node_unavailable', 'Node unavailable'),
+                nodeType: td('custom_node', 'Custom node'),
                 peers: '0',
                 qdnPeers: '0',
-                statusLabel: 'Attention needed',
+                statusLabel: td('attention_needed', 'Attention needed'),
               };
   const resolvedInfoStatusLabel =
     statusPreviewOverrides?.statusLabel ??
-    (isSystemOperational ? 'Fully operational' : 'Not operational');
+    (isSystemOperational
+      ? td('fully_operational', 'Fully operational')
+      : td('not_operational', 'Not operational'));
   const resolvedIsSystemOperational =
     statusPreviewOverrides?.isOperational ?? isSystemOperational;
   const resolvedInfoStatusTone: DashboardInfoStatusTone =
@@ -2996,7 +3253,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                     transition: 'color 140ms ease, text-shadow 140ms ease',
                   }}
                 >
-                  Apply
+                  {td('apply', 'Apply')}
                 </Box>
                 <Box
                   component="span"
@@ -3026,68 +3283,72 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     primaryItems: [
       {
         emphasize: true,
-        label: 'QORT Balance',
+        label: td('qort_balance', 'QORT Balance'),
         value: balanceLabel,
       },
       {
-        label: 'Node Status',
+        label: td('node_status', 'Node Status'),
         pillTone:
-          resolvedNodeStatusValue === 'Node unavailable'
+          resolvedNodeStatusValue === td('node_unavailable', 'Node unavailable')
             ? 'negative'
-            : resolvedNodeStatusValue === '100% Synced'
+            : resolvedNodeStatusValue ===
+                t('group:dashboard.sync_percent', {
+                  defaultValue: '{{percent}}% Synced',
+                  percent: 100,
+                })
               ? 'positive'
               : 'warning',
         value: resolvedNodeStatusValue,
         variant: 'pill',
       },
       {
-        label: 'Minter Level',
+        label: td('minter_level', 'Minter Level'),
         valueNode: minterValue,
       },
     ],
     metricItems: [
       {
         accent: 'blue',
-        label: 'Peers',
+        label: td('peers', 'Peers'),
         value: resolvedPeersLabel,
       },
       {
         accent: 'blue',
-        label: 'QDN',
+        label: td('qdn', 'QDN'),
         value: resolvedQdnPeersLabel,
       },
       {
         accent: 'green',
-        label: 'Core',
+        label: td('core', 'Core'),
         value: coreVersionMetricLabel,
       },
       {
         accent: 'violet',
-        label: 'Hub',
+        label: td('hub', 'Hub'),
         value: hubVersionLabel,
       },
     ],
     footerSections: [
       {
-        title: 'Node',
+        title: td('node', 'Node'),
         offsetTopPx: 10,
         items: [
           {
-            label: 'Using Node',
+            label: td('using_node', 'Using Node'),
             labelAction: {
-              ariaLabel: 'Change node',
+              ariaLabel: td('change_node', 'Change node'),
               isOpen: Boolean(nodeMenuAnchorEl),
               onClick: handleOpenNodeMenu,
-              tooltip: 'Change node',
+              tooltip: td('change_node', 'Change node'),
             },
             value: resolvedNodeHostLabel,
           },
           {
-            label: 'Node Type',
+            label: td('node_type', 'Node Type'),
             value: resolvedNodeTypeLabel,
           },
           {
-            label: 'Node Height',
+            label: td('node_height', 'Node Height'),
             value: resolvedBlockHeightLabel,
             valueNode: (
               <BlockHeightValue
@@ -3316,7 +3577,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                         (option) => option.type === 'custom'
                       ).length === 0 && (
                         <MenuItem disabled sx={nodeMenuItemSx(theme, false)}>
-                          No custom nodes saved
+                          {td('no_custom_nodes_saved', 'No custom nodes saved')}
                         </MenuItem>
                       )}
                       {dashboardNodeOptions.map((option) => {
@@ -3399,12 +3660,12 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                     </Menu>
                   </Box>
                   <Box ref={walletActivityDebugRef} sx={{ maxWidth: { xs: '100%', md: '360px' }, position: 'relative', width: '100%', minHeight: '182px', height: resolvedWalletActivityHeightPx != null ? `${resolvedWalletActivityHeightPx}px` : undefined, '& > *': { height: '100%' } }}>
-                  <DashboardUtilityPanel title="WALLET ACTIVITY" theme={theme} sx={{ gap: '12px', height: '100%', minHeight: '182px', padding: '14px 16px 16px' }}>
+                  <DashboardUtilityPanel title={td('wallet_activity', 'Wallet Activity')} theme={theme} sx={{ gap: '12px', height: '100%', minHeight: '182px', padding: '14px 16px 16px' }}>
                     <Box sx={{ ...sepSx(theme), pb: 1.35 }} />
                     <Box sx={{ display: 'grid', gap: '8px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', pt: 0.5 }}>
                       <WalletActionButton
                         icon={<SendRoundedIcon sx={{ fontSize: '16px' }} />}
-                        label="Send"
+                        label={td('send', 'Send')}
                         onClick={(event) => {
                           const rect = (
                             event.currentTarget as HTMLElement
@@ -3432,13 +3693,13 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       />
                       <WalletActionButton
                         icon={<SouthWestRoundedIcon sx={{ fontSize: '16px' }} />}
-                        label="Receive"
+                        label={td('receive', 'Receive')}
                         onClick={(event) => {
                           handleOpenReceiveQort(event.currentTarget as HTMLElement);
                         }}
                         theme={theme}
                       />
-                      <WalletActionButton icon={<ShoppingBagRoundedIcon sx={{ fontSize: '16px' }} />} label="Buy" onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-trade' } }); executeEvent('open-apps-mode', {}); }} theme={theme} />
+                      <WalletActionButton icon={<ShoppingBagRoundedIcon sx={{ fontSize: '16px' }} />} label={td('buy', 'Buy')} onClick={() => { executeEvent('addTab', { data: { service: 'APP', name: 'q-trade' } }); executeEvent('open-apps-mode', {}); }} theme={theme} />
                     </Box>
                     <Box
                       sx={{
@@ -3462,7 +3723,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           textTransform: 'uppercase',
                         }}
                       >
-                        Recent Transaction
+                        {td('recent_transaction', 'Recent Transaction')}
                       </Typography>
                       {isWalletActivityLoading ? (
                         <Typography
@@ -3472,7 +3733,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             lineHeight: 1.45,
                           }}
                         >
-                          Loading recent wallet activity...
+                          {td('loading_wallet_activity', 'Loading recent wallet activity...')}
                         </Typography>
                       ) : recentWalletActivity ? (
                         [recentWalletActivity].map((activityEntry, index) => (
@@ -3533,15 +3794,38 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                                   sx={{ color: walletActivitySecondaryTextColor }}
                                 >
                                   {activityEntry.direction === 'outgoing'
-                                    ? 'sent to '
-                                    : 'received from '}
+                                    ? td('sent_to', 'sent to ')
+                                    : td('received_from', 'received from ')}
                                 </Box>
-                                <Box
+                                <ButtonBase
                                   component="span"
-                                  sx={{ color: theme.palette.text.primary, fontWeight: 600 }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleOpenWalletActivityCounterparty(
+                                      activityEntry.counterpartyAddress
+                                    );
+                                  }}
+                                  sx={{
+                                    borderRadius: '6px',
+                                    color: theme.palette.text.primary,
+                                    display: 'inline-flex',
+                                    font: 'inherit',
+                                    fontWeight: 600,
+                                    lineHeight: 'inherit',
+                                    maxWidth: '100%',
+                                    minWidth: 0,
+                                    p: 0,
+                                    textAlign: 'left',
+                                    verticalAlign: 'baseline',
+                                    '&:hover': {
+                                      color: theme.palette.primary.light,
+                                      textDecoration: 'underline',
+                                      textUnderlineOffset: '2px',
+                                    },
+                                  }}
                                 >
                                   {activityEntry.counterpartyLabel}
-                                </Box>
+                                </ButtonBase>
                               </Typography>
                             </Box>
                             <Typography
@@ -3567,7 +3851,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             lineHeight: 1.45,
                           }}
                         >
-                          No new wallet activity.
+                          {td('no_wallet_activity', 'No new wallet activity.')}
                         </Typography>
                       )}
                       <Box
@@ -3584,7 +3868,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                             textAlign: 'left',
                           }}
                         >
-                          Latest transaction within the past 7 days
+                          {td(
+                            'wallet_activity_window',
+                            'Latest transaction within the past 7 days'
+                          )}
                         </Typography>
                       </Box>
                     </Box>
@@ -3620,7 +3907,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                   >
                     <DashboardWidgetFrame
                       actionIcon={<ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />}
-                      actionLabel="Open in Q-Chat"
+                      actionLabel={td('open_in_q_chat', 'Open in Q-Chat')}
                       height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
                       onAction={handleOpenGroupsWidget}
                       onRefresh={handleRefreshGroupActivity}
@@ -3643,7 +3930,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
 
                     <DashboardWidgetFrame
                       actionIcon={<OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />}
-                      actionLabel="Open in Q-Apps"
+                      actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
                       height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
                       onAction={handleOpenEmbeddedQuitter}
                       onRefresh={handleRefreshQuitterWidget}
@@ -3651,7 +3938,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                       order={quitterCardOrder}
                       panelRef={quitterCardHeightRef}
                       refreshing={isQuitterWidgetRefreshing}
-                      title="Quitter Feed"
+                      title={td('quitter_feed', 'Quitter Feed')}
                       widgetId="quitter"
                     >
                       <QuitterFeedWidget

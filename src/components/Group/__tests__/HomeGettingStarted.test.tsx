@@ -43,6 +43,7 @@ i18n.init({
       tutorial: {
         'home.getting_started': 'Getting Started',
         'home.confirming_transaction': 'Confirming transaction',
+        'home.confirming': 'Confirming',
         'home.get_six_qorts': 'Get your 6 QORT',
         'home.register_name': 'Register your name',
         'home.load_avatar': 'Load your avatar',

@@ -170,64 +170,46 @@ export const RegisterName = ({
         }),
         publishFee: fee.fee + ' QORT',
       });
+      const nameToRegister = registerNameValue.trim();
       setIsLoadingRegisterName(true);
-      new Promise((res, rej) => {
-        window
-          .sendMessage('registerName', {
-            name: registerNameValue,
-          })
-          .then((response) => {
-            if (!response?.error) {
-              res(response);
-              setIsLoadingRegisterName(false);
-              setInfoSnack({
-                type: 'success',
-                message: t('group:message.success.registered_name', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-              });
-              setIsOpen(false);
-              setRegisterNameValue('');
-              setOpenSnack(true);
-              setTxList((prev) => [
-                {
-                  ...response,
-                  type: 'register-name',
-                  label: t('group:message.success.registered_name_label', {
-                    postProcess: 'capitalizeFirstChar',
-                  }),
-                  labelDone: t(
-                    'group:message.success.registered_name_success',
-                    {
-                      postProcess: 'capitalizeFirstChar',
-                    }
-                  ),
-                  done: false,
-                },
-                ...prev.filter((item) => !item.done),
-              ]);
-              return;
-            }
-            setInfoSnack({
-              type: 'error',
-              message: response?.error,
-            });
-            setOpenSnack(true);
-            rej(response.error);
-          })
-          .catch((error) => {
-            setInfoSnack({
-              type: 'error',
-              message:
-                error.message ||
-                t('core:message.error.generic', {
-                  postProcess: 'capitalizeFirstChar',
-                }),
-            });
-            setOpenSnack(true);
-            rej(error);
-          });
+      setIsOpen(false);
+      setRegisterNameValue('');
+      setIsNameAvailable(NameAvailability.NULL);
+
+      const response = await window.sendMessage('registerName', {
+        name: nameToRegister,
       });
+
+      if (response?.error) {
+        setInfoSnack({
+          type: 'error',
+          message: response.error,
+        });
+        setOpenSnack(true);
+        return;
+      }
+
+      setInfoSnack({
+        type: 'success',
+        message: t('group:message.success.registered_name', {
+          postProcess: 'capitalizeFirstChar',
+        }),
+      });
+      setOpenSnack(true);
+      setTxList((prev) => [
+        {
+          ...response,
+          type: 'register-name',
+          label: t('group:message.success.registered_name_label', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          labelDone: t('group:message.success.registered_name_success', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+          done: false,
+        },
+        ...prev.filter((item) => !item.done),
+      ]);
     } catch (error) {
       if (error?.message) {
         setOpenSnack(true);

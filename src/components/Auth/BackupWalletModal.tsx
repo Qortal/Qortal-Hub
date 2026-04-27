@@ -35,7 +35,9 @@ export const BackupWalletModal = ({
   rawWallet,
 }: BackupWalletModalProps) => {
   const theme = useTheme();
-  const { t } = useTranslation(['auth', 'core']);
+  const { t } = useTranslation(['auth', 'core', 'group']);
+  const td = (key: string, defaultValue: string) =>
+    t(`group:dashboard.${key}`, { defaultValue });
   const isDarkMode = theme.palette.mode === 'dark';
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -329,19 +331,19 @@ export const BackupWalletModal = ({
                 textTransform: 'uppercase',
               }}
             >
-              Wallet address
+              {td('wallet_address', 'Wallet address')}
             </Typography>
             <Typography
               sx={{
                 color: theme.palette.text.primary,
-                fontFamily: 'monospace',
-                fontSize: '0.8rem',
-                fontWeight: 600,
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                letterSpacing: '-0.01em',
                 lineHeight: 1.45,
                 wordBreak: 'break-all',
               }}
             >
-              {walletAddress || 'No active wallet'}
+              {walletAddress || td('no_active_wallet', 'No active wallet')}
             </Typography>
           </Box>
 

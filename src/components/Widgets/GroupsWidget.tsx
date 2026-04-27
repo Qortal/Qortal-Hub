@@ -1721,14 +1721,17 @@ export const GroupsWidget = ({
 
   const renderNotificationList = () => (
     <QAppWidgetContainer
-      emptyMessage="Recent group conversations will surface here once your groups have message activity."
+      emptyMessage="Join communities in Q-Chat to populate this feed with group messages, mentions, and activity."
       emptyTitle={
-        isGroupsDebugMode ? 'Debug notifications' : 'No recent group notifications'
+        isGroupsDebugMode ? 'Debug notifications' : 'Start with Q-Chat groups'
       }
       hasContent={effectiveNotificationItems.length > 0}
       isEmpty={effectiveNotificationItems.length === 0}
       isLoading={false}
       loadingLabel="Loading notifications"
+      onSecondaryAction={handleOpenGroupDiscovery}
+      secondaryActionLabel="Discover Groups"
+      secondaryActionVariant="link"
       stateVerticalOffset="-24px"
     >
       <Box

@@ -20,10 +20,10 @@ import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { APP_NAV_BAR_HEIGHT, type CustomTitleBarRightNavProps } from './CustomTitleBar';
 import { QMailStatus } from '../QMailStatus';
 import { GeneralNotifications } from '../GeneralNotifications';
-import { Save } from '../Save/Save';
 import { TaskManager } from '../TaskManager/TaskManager';
 import { GlobalActions } from '../GlobalActions/GlobalActions';
 import { ChatWidgetReopenIcon } from '../Profile/ChatWidgetReopenIcon';
+import { SubscriptionsStatus } from './SubscriptionsStatus';
 
 type GlobalQortalNavBarProps = {
   desktopViewMode: string;
@@ -783,6 +783,21 @@ export function GlobalQortalNavBar({
                 transition={utilityLayoutTransition}
                 sx={{ display: 'inline-flex', flexShrink: 0 }}
               >
+                <SubscriptionsStatus
+                  compact
+                  buttonSx={utilityModuleButtonSx}
+                  iconSx={utilityModuleIconSx}
+                  tooltipPlacement="bottom"
+                />
+              </Box>
+            )}
+            {utilityNav.extState === 'authenticated' && (
+              <Box
+                component={motion.span}
+                layout
+                transition={utilityLayoutTransition}
+                sx={{ display: 'inline-flex', flexShrink: 0 }}
+              >
                 <GeneralNotifications
                   address={utilityNav.userInfo?.address}
                   tooltipPlacement="bottom"
@@ -792,30 +807,6 @@ export function GlobalQortalNavBar({
                 />
               </Box>
             )}
-            <Tooltip
-              title={tooltipTitle(
-                t('core:action.save', { postProcess: 'capitalizeFirstChar' })
-              )}
-              placement="bottom"
-              arrow
-              slotProps={tooltipSlotProps}
-            >
-              <Box
-                component={motion.span}
-                layout
-                transition={utilityLayoutTransition}
-                sx={{ display: 'inline-flex', flexShrink: 0 }}
-              >
-                <Save
-                  isDesktop
-                  disableWidth={false}
-                  myName={utilityNav.userInfo?.name}
-                  toolbarModule
-                  buttonSx={utilityModuleButtonSx}
-                  iconSx={utilityModuleIconSx}
-                />
-              </Box>
-            </Tooltip>
             {hasActiveTasks && (
               <Tooltip
                 title={tooltipTitle(

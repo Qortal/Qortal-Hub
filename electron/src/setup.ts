@@ -395,6 +395,9 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         customScheme,
         ...new Set(expandedDomains),
       ];
+      // Custom nodes can be added after the app loads. Allow node traffic and
+      // frames by protocol so Electron does not need to reload and lose auth.
+      const dynamicNodeSources = ['http:', 'https:', 'ws:', 'wss:'];
       const frameSources = [
         "'self'",
         'http://localhost:*',
@@ -403,18 +406,29 @@ export function setupContentSecurityPolicy(customScheme: string): void {
         'ws://127.0.0.1:*',
         'http://127.0.0.1:*',
         'https://127.0.0.1:*',
+        ...dynamicNodeSources,
         ...allowedSources,
       ];
+      const scriptSources = [
+        "'self'",
+        "'wasm-unsafe-eval'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        ...allowedSources,
+      ];
+      const defaultSourceList = [...new Set(allowedSources)].join(' ');
+      const frameSourceList = [...new Set(frameSources)].join(' ');
+      const scriptSourceList = [...new Set(scriptSources)].join(' ');
 
       // Create the Content Security Policy (CSP) string
       const csp = `
-    default-src 'self' ${frameSources.join(' ')};
-    frame-src ${frameSources.join(' ')};
-    script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' 'unsafe-eval' ${frameSources.join(' ')};
+    default-src ${defaultSourceList};
+    frame-src ${frameSourceList};
+    script-src ${scriptSourceList};
     object-src 'self';
-    connect-src 'self' blob: ${frameSources.join(' ')};
-    img-src 'self' data: blob: ${frameSources.join(' ')};
-    media-src 'self' blob: ${frameSources.join(' ')};  
+    connect-src 'self' blob: ${frameSourceList};
+    img-src 'self' data: blob: ${frameSourceList};
+    media-src 'self' blob: ${frameSourceList};
     style-src 'self' 'unsafe-inline';
     font-src 'self' data:;
   `
@@ -510,14 +524,10 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
       (domain, index) => domain !== sortedNewDomains[index]
     );
 
-  // If there's a change, update allowedDomains and reload the window
+  // Request handlers read domainHolder.allowedDomains at request time.
+  // Reloading here drops the in-memory decrypted wallet session after login.
   if (hasChanged) {
     domainHolder.allowedDomains = newAllowedDomains;
-
-    const mainWindow = myCapacitorApp.getMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.reload();
-    }
   }
 });
 

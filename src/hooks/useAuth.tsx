@@ -16,7 +16,6 @@ import {
   extStateAtom,
   isLoadingAuthenticateAtom,
   isOpenCoreSetup,
-  isOpenDialogCoreRecommendationAtom,
   isOpenDialogCustomApikey,
   isOpenDialogResetApikey,
   isOpenSettingUpLocalCoreAtom,
@@ -53,9 +52,6 @@ export const useAuth = () => {
   const setIsOpenCustomApikeyDialog = useSetAtom(isOpenDialogCustomApikey);
   const setBalance = useSetAtom(balanceAtom);
   const setQortBalanceLoading = useSetAtom(qortBalanceLoadingAtom);
-  const setIsOpenRecommendation = useSetAtom(
-    isOpenDialogCoreRecommendationAtom
-  );
   const setIsOpenSettingUpCore = useSetAtom(isOpenSettingUpLocalCoreAtom);
   const actions = useModalGlobal({ setGlobalOpen: setIsOpenSettingUpCore });
 
@@ -133,8 +129,7 @@ export const useAuth = () => {
             ? await window.coreSetup.isCoreRunning()
             : await checkIfLocalIsRunning(baseUrl);
           if (!runningRes && !disablePopup) {
-            setIsOpenCoreSetup(false);
-            setIsOpenRecommendation(true);
+            setIsOpenCoreSetup(true);
             return { isValid: false, validatedNodeInfo };
           }
           if (isLocal && isElectron && !disablePopup) {
@@ -169,12 +164,16 @@ export const useAuth = () => {
             if (!disablePopup) {
               if (validatedNodeInfo?.url === HTTPS_EXT_NODE_QORTAL_LINK) {
                 setPublicNodeUnavailable(true);
-                setIsOpenRecommendation(true);
+                setIsOpenCoreSetup(true);
               } else {
                 setIsUrlInvalid(true);
               }
             }
             return { isValid: false, validatedNodeInfo };
+          }
+
+          if (validatedNodeInfo?.url === HTTPS_EXT_NODE_QORTAL_LINK) {
+            setPublicNodeUnavailable(false);
           }
         }
 
@@ -236,7 +235,6 @@ export const useAuth = () => {
     },
     [
       setIsOpenCustomApikeyDialog,
-      setIsOpenRecommendation,
       setIsOpenResetApikey,
       checkIfLocalIsRunning,
       generateApiKey,
@@ -375,7 +373,10 @@ export const useAuth = () => {
       if (!res?.ok) return false;
       const data = await res.json();
       if (!isLocalCoreStatusSynced(data)) {
-        setIsOpenRecommendation(true);
+        if (enableAuthWhenSyncing) {
+          return true;
+        }
+        setIsOpenCoreSetup(true);
         return false;
       }
       return true;
@@ -384,7 +385,7 @@ export const useAuth = () => {
     }
   }, [
     useLocalNode,
-    setIsOpenRecommendation,
+    setIsOpenCoreSetup,
     enableAuthWhenSyncing,
   ]);
 

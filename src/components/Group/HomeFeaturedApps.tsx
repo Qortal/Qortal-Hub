@@ -3,6 +3,7 @@ import { alpha } from '@mui/material/styles';
 import { Avatar, Box, Button, ButtonBase, Tooltip, Typography, useTheme } from '@mui/material';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
+import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../utils/events';
 import { getBaseApiReactForAvatar } from '../../utils/globalApi';
 import BorderGlow from '../common/BorderGlow';
@@ -85,6 +86,9 @@ export const HomeFeaturedApps = ({
   panelBoxRef = undefined,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['group']);
+  const td = (key: string, defaultValue: string) =>
+    t(`group:dashboard.${key}`, { defaultValue });
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const assignPanelNode = (node) => {
     panelRef.current = node;
@@ -337,9 +341,9 @@ export const HomeFeaturedApps = ({
           width: '100%',
         }}
       >
-        <Tooltip enterDelay={320} title="Reduce motion">
+        <Tooltip enterDelay={320} title={td('reduce_motion', 'Reduce motion')}>
           <ButtonBase
-            aria-label="Reduce motion"
+            aria-label={td('reduce_motion', 'Reduce motion')}
             aria-pressed={isCalmMode}
             onClick={() => setIsCalmMode((current) => !current)}
             sx={{
@@ -400,7 +404,7 @@ export const HomeFeaturedApps = ({
               fontWeight: 600,
             }}
           >
-            Featured Q-Apps
+            {td('featured_q_apps', 'Featured Q-Apps')}
           </Typography>
           <Typography
             sx={{
@@ -411,7 +415,10 @@ export const HomeFeaturedApps = ({
               maxWidth: '420px',
             }}
           >
-            Launch trusted community apps directly from your dashboard.
+            {td(
+              'featured_q_apps_subtitle',
+              'Launch trusted community apps directly from your dashboard.'
+            )}
           </Typography>
         </Box>
       </Box>
@@ -655,22 +662,7 @@ export const HomeFeaturedApps = ({
                     `color ${FEATURED_STRIP_HOVER_TRANSITION}, text-shadow ${FEATURED_STRIP_HOVER_TRANSITION}, opacity ${FEATURED_STRIP_HOVER_TRANSITION}`,
                 }}
               >
-                Explore
-              </Box>
-              <Box
-                component="span"
-                className="featured-apps-strip-subtle"
-                sx={{
-                  color: theme.palette.text.secondary,
-                  display: 'inline-flex',
-                  fontSize: 'inherit',
-                  fontWeight: 400,
-                  lineHeight: 1,
-                  opacity: theme.palette.mode === 'dark' ? 0.88 : 1,
-                  transition: `color ${FEATURED_STRIP_HOVER_TRANSITION}, opacity ${FEATURED_STRIP_HOVER_TRANSITION}`,
-                }}
-              >
-                All Q-Apps
+                {td('explore_all_q_apps', 'Explore All Q-Apps')}
               </Box>
               <Box
                 component="span"

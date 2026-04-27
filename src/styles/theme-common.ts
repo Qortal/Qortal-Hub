@@ -22,8 +22,12 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
   body: {
     backgroundColor: theme.palette.background.default,
     color: theme.palette.text.primary,
+    fontSynthesis: 'none',
     padding: 0,
     margin: 0,
+    textRendering: 'geometricPrecision',
+    WebkitFontSmoothing: 'antialiased',
+    MozOsxFontSmoothing: 'grayscale',
     wordBreak: 'break-word',
   },
 
@@ -69,7 +73,7 @@ export const getCommonGlobalStyles = (theme: Theme) => ({
 // Extend the Theme interface
 const commonThemeOptions = {
   typography: {
-    fontFamily: ['Inter'].join(','),
+    fontFamily: ['Inter', 'Segoe UI', 'ui-sans-serif', 'system-ui', 'sans-serif'].join(','),
     h1: {
       fontSize: '2rem',
       fontWeight: 600,

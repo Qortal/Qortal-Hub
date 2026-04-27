@@ -43,6 +43,11 @@ const shortenAddress = (address?: string) => {
   return `${address.slice(0, 8)}...${address.slice(-8)}`;
 };
 
+const parsefilenameQortal = (filename?: string) => {
+  if (!filename) return '';
+  return filename.startsWith('qortal_backup_') ? filename.slice(14) : filename;
+};
+
 export const AuthenticationForm = ({
   rawWallet,
   selectedNode,
@@ -60,10 +65,20 @@ export const AuthenticationForm = ({
   const addressRef = useRef<HTMLParagraphElement | null>(null);
   const avatarRef = useRef<HTMLDivElement | null>(null);
   const nameRef = useRef<HTMLParagraphElement | null>(null);
-  const [primaryName, setPrimaryName] = useState<string | null>(null);
+  const initialPrimaryNameRef = useRef({
+    address: unlockTransition?.walletAddress,
+    name: unlockTransition?.primaryName ?? null,
+  });
+  const [primaryName, setPrimaryName] = useState<string | null>(
+    initialPrimaryNameRef.current.address === rawWallet?.address0
+      ? initialPrimaryNameRef.current.name
+      : null
+  );
   const [isConnectionModeOpen, setIsConnectionModeOpen] = useState(false);
   const [sharedTransition, setSharedTransition] = useState<{
+    isExiting: boolean;
     isRunning: boolean;
+    isTargetVisible: boolean;
     snapshot: AuthUnlockTransitionSnapshot;
     targetAddressRect: SharedElementRect;
     targetAvatarRect: SharedElementRect;
@@ -75,9 +90,30 @@ export const AuthenticationForm = ({
       setPrimaryName(null);
       return;
     }
+
+    const seededPrimaryName =
+      initialPrimaryNameRef.current.address === rawWallet.address0
+        ? initialPrimaryNameRef.current.name
+        : null;
+
+    if (seededPrimaryName) {
+      setPrimaryName(seededPrimaryName);
+      return;
+    }
+
+    setPrimaryName(null);
+    let isMounted = true;
     getPrimaryNameForAvatar(rawWallet.address0)
-      .then((name) => setPrimaryName(name || null))
-      .catch(() => setPrimaryName(null));
+      .then((name) => {
+        if (isMounted) setPrimaryName(name || null);
+      })
+      .catch(() => {
+        if (isMounted) setPrimaryName(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, [rawWallet?.address0]);
 
   useEffect(() => {
@@ -90,7 +126,7 @@ export const AuthenticationForm = ({
   const displayLabel =
     primaryName ||
     rawWallet?.name ||
-    rawWallet?.filename ||
+    parsefilenameQortal(rawWallet?.filename) ||
     rawWallet?.address0 ||
     'Unnamed account';
   const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
@@ -129,7 +165,9 @@ export const AuthenticationForm = ({
     });
 
     setSharedTransition({
+      isExiting: false,
       isRunning: false,
+      isTargetVisible: false,
       snapshot: unlockTransition,
       targetAddressRect: rectToObject(addressRef.current.getBoundingClientRect()),
       targetAvatarRect: rectToObject(avatarRef.current.getBoundingClientRect()),
@@ -138,10 +176,17 @@ export const AuthenticationForm = ({
 
     let firstFrame = 0;
     let secondFrame = 0;
+    const handoffTimer = window.setTimeout(() => {
+      setSharedTransition((current) =>
+        current
+          ? { ...current, isExiting: true, isTargetVisible: true }
+          : current
+      );
+    }, 410);
     const finishTimer = window.setTimeout(() => {
       setSharedTransition(null);
       onUnlockTransitionComplete?.();
-    }, 460);
+    }, 560);
 
     firstFrame = window.requestAnimationFrame(() => {
       secondFrame = window.requestAnimationFrame(() => {
@@ -152,6 +197,7 @@ export const AuthenticationForm = ({
     });
 
     return () => {
+      window.clearTimeout(handoffTimer);
       window.clearTimeout(finishTimer);
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
@@ -159,8 +205,11 @@ export const AuthenticationForm = ({
   }, [onUnlockTransitionComplete, shouldReduceMotion, unlockTransition]);
 
   const sharedOpacitySx = {
-    opacity: isSharedTransitionActive ? 0 : 1,
-    transition: 'opacity 120ms cubic-bezier(0.4, 0, 0.2, 1)',
+    opacity:
+      isSharedTransitionActive && !sharedTransition?.isTargetVisible ? 0 : 1,
+    transition: isSharedTransitionActive
+      ? 'none'
+      : 'opacity 120ms cubic-bezier(0.4, 0, 0.2, 1)',
   };
   const revealFormSx = unlockTransition
     ? {
@@ -171,7 +220,7 @@ export const AuthenticationForm = ({
 
   return (
     <>
-      <AuthFrame maxWidth={390}>
+      <AuthFrame maxWidth={390} disableInitialAnimation>
         <Box
           sx={{
             display: 'flex',
@@ -386,10 +435,12 @@ const buildSharedTransform = (
 };
 
 const sharedOverlayBaseSx = {
+  opacity: 1,
   pointerEvents: 'none',
   position: 'fixed',
   transformOrigin: 'top left',
-  transition: 'transform 400ms cubic-bezier(0.4, 0, 0.2, 1)',
+  transition:
+    'transform 400ms cubic-bezier(0.4, 0, 0.2, 1), opacity 140ms cubic-bezier(0.4, 0, 0.2, 1)',
   zIndex: 5200,
 };
 
@@ -397,7 +448,9 @@ const SharedUnlockTransitionOverlay = ({
   transition,
 }: {
   transition: {
+    isExiting: boolean;
     isRunning: boolean;
+    isTargetVisible: boolean;
     snapshot: AuthUnlockTransitionSnapshot;
     targetAddressRect: SharedElementRect;
     targetAvatarRect: SharedElementRect;
@@ -405,6 +458,7 @@ const SharedUnlockTransitionOverlay = ({
   };
 }) => {
   const {
+    isExiting,
     isRunning,
     snapshot,
     targetAddressRect,
@@ -421,6 +475,7 @@ const SharedUnlockTransitionOverlay = ({
           ...sharedOverlayBaseSx,
           height: snapshot.avatarRect.height,
           left: snapshot.avatarRect.left,
+          opacity: isExiting ? 0 : 1,
           top: snapshot.avatarRect.top,
           transform: buildSharedTransform(
             snapshot.avatarRect,
@@ -441,6 +496,7 @@ const SharedUnlockTransitionOverlay = ({
           fontWeight: 700,
           left: snapshot.nameRect.left,
           lineHeight: 1.25,
+          opacity: isExiting ? 0 : 1,
           top: snapshot.nameRect.top,
           transform: buildSharedTransform(
             snapshot.nameRect,
@@ -460,6 +516,7 @@ const SharedUnlockTransitionOverlay = ({
           fontWeight: 400,
           left: snapshot.addressRect.left,
           lineHeight: 1.35,
+          opacity: isExiting ? 0 : 1,
           top: snapshot.addressRect.top,
           transform: buildSharedTransform(
             snapshot.addressRect,

@@ -66,6 +66,12 @@ export interface CoreSetupDialogProps {
   verifyCoreNotRunningFunc: () => void;
   startAtIntro?: boolean;
   isCoreSyncing?: boolean;
+  coreSyncPercent?: number;
+  publicNodeUnavailable?: boolean;
+  contextualActionLabel?: string;
+  contextualActionDisabled?: boolean;
+  contextualActionLoading?: boolean;
+  onContextualAction?: () => void;
 }
 
 const statusIcon = (status: StepStatus) => {
@@ -106,6 +112,12 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     verifyCoreNotRunningFunc,
     startAtIntro = false,
     isCoreSyncing = false,
+    coreSyncPercent,
+    publicNodeUnavailable = false,
+    contextualActionLabel,
+    contextualActionDisabled = false,
+    contextualActionLoading = false,
+    onContextualAction,
   } = props;
   const setOpenSnackGlobal = useSetAtom(openSnackGlobalAtom);
   const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
@@ -175,11 +187,23 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     []
   );
 
-  const stepStates = stepDefs.map((def) => ({
-    ...def,
-    state: steps[def.key],
-    label: def.getLabel(steps[def.key]),
-  }));
+  const stepStates = stepDefs.map((def) => {
+    const state =
+      def.key === 'coreRunning' &&
+      isCoreSyncing &&
+      typeof coreSyncPercent === 'number'
+        ? {
+            ...steps[def.key],
+            progress: Math.max(0, Math.min(100, coreSyncPercent)),
+          }
+        : steps[def.key];
+
+    return {
+      ...def,
+      state,
+      label: def.getLabel(state),
+    };
+  });
 
   const downloaded = steps.downloadedCore.status === 'done';
   const running = steps.coreRunning.status === 'done';
@@ -198,6 +222,8 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   );
 
   const actionLabel = actionLabelOverride ?? computedActionLabel;
+  const hasContextualAction =
+    Boolean(contextualActionLabel) && Boolean(onContextualAction);
 
   // Enable action if Java is installed and core is not already running
   const canAction = !actionLoading;
@@ -210,7 +236,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const coreLocationDescription = customQortalPath
     ? 'Qortal Core will run from this folder.'
     : 'Qortal Core will use the default folder for this system.';
-  const advancedCoreToolsDisabled = true;
+  const advancedCoreToolsDisabled = isActive || isCoreSyncing;
 
   const copyCoreLocation = async () => {
     if (!customQortalPath) return;
@@ -381,6 +407,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       console.error(error);
     } finally {
       setStopCoreLoading(false);
+      stopCoreLoadingRef.current = false;
     }
   };
   const bootstrap = async () => {
@@ -406,6 +433,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       console.error(error);
     } finally {
       setBootstrapLoading(false);
+      bootstrapLoadingRef.current = false;
     }
   };
 
@@ -432,6 +460,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       console.error(error);
     } finally {
       setDeleteDBLoading(false);
+      deleteDBLoadingRef.current = false;
     }
   };
   const handleDialogClose = (
@@ -589,6 +618,16 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 </Typography>
               </Box>
             </Box>
+
+            {publicNodeUnavailable && (
+              <Box sx={publicNodeWarningSx}>
+                <ErrorOutlineIcon sx={{ color: '#D8BA8A', fontSize: 20 }} />
+                <Typography sx={publicNodeWarningTextSx}>
+                  Public nodes are currently unavailable. Keep this screen open
+                  while local Core starts and syncs.
+                </Typography>
+              </Box>
+            )}
 
             <Box sx={stepsListSx}>
               {stepStates.map(({ key, label, state }) => {
@@ -749,10 +788,12 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
               </ButtonBase>
               <Collapse in={isExtended} timeout="auto" unmountOnExit>
                 <Box sx={advancedToolsSx}>
-                  <Typography sx={{ ...advancedCopySx, py: 1.1 }}>
-                    Core maintenance tools are unavailable while Core is
-                    starting or syncing.
-                  </Typography>
+                  {advancedCoreToolsDisabled && (
+                    <Typography sx={{ ...advancedCopySx, py: 1.1 }}>
+                      Core maintenance tools are unavailable while Core is
+                      starting or syncing.
+                    </Typography>
+                  )}
                   <Box sx={toolRowSx}>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography sx={toolTitleSx}>Stop Core</Typography>
@@ -870,32 +911,50 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 </Button>
               )}
 
-              <Button
-                onClick={() => {
-                  setErrorStop('');
-                  setErrorBootstrap('');
-                  setErrorDeleteDB('');
-                  if (onAction) {
-                    startPause.current = true;
-                    onAction();
-                    setTimeout(() => {
-                      startPause.current = false;
-                    }, 7000);
+              {hasContextualAction ? (
+                <Button
+                  onClick={onContextualAction}
+                  color="success"
+                  variant="contained"
+                  disabled={
+                    contextualActionDisabled ||
+                    contextualActionLoading ||
+                    stopCoreLoading ||
+                    bootstrapLoading
                   }
-                }}
-                color="success"
-                variant="contained"
-                disabled={!canAction || stopCoreLoading || bootstrapLoading}
-                loading={actionLoading as unknown as undefined} // if using @mui/lab LoadingButton, swap below
-                sx={primaryActionSx}
-                startIcon={
-                  !running ? (
-                    <PlayArrowRoundedIcon sx={{ fontSize: 18 }} />
-                  ) : null
-                }
-              >
-                {actionLabel}
-              </Button>
+                  loading={contextualActionLoading as unknown as undefined}
+                  sx={primaryActionSx}
+                >
+                  {contextualActionLabel}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => {
+                    setErrorStop('');
+                    setErrorBootstrap('');
+                    setErrorDeleteDB('');
+                    if (onAction) {
+                      startPause.current = true;
+                      onAction();
+                      setTimeout(() => {
+                        startPause.current = false;
+                      }, 7000);
+                    }
+                  }}
+                  color="success"
+                  variant="contained"
+                  disabled={!canAction || stopCoreLoading || bootstrapLoading}
+                  loading={actionLoading as unknown as undefined} // if using @mui/lab LoadingButton, swap below
+                  sx={primaryActionSx}
+                  startIcon={
+                    !running ? (
+                      <PlayArrowRoundedIcon sx={{ fontSize: 18 }} />
+                    ) : null
+                  }
+                >
+                  {actionLabel}
+                </Button>
+              )}
             </Box>
           </DialogActions>
         </>
@@ -1035,6 +1094,24 @@ const introTitleSx = {
   fontSize: '0.96rem',
   fontWeight: 800,
   lineHeight: 1.25,
+};
+
+const publicNodeWarningSx = {
+  alignItems: 'center',
+  backgroundColor: 'rgba(216,186,138,0.08)',
+  border: '1px solid rgba(216,186,138,0.18)',
+  borderRadius: '8px',
+  display: 'flex',
+  gap: 1.1,
+  mb: 2.2,
+  px: 1.35,
+  py: 1.1,
+};
+
+const publicNodeWarningTextSx = {
+  color: 'rgba(239,228,202,0.9)',
+  fontSize: '0.82rem',
+  lineHeight: 1.5,
 };
 
 const stepsListSx = {

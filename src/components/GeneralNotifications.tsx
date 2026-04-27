@@ -1,93 +1,197 @@
-import { useState } from 'react';
+import AppsIcon from '@mui/icons-material/Apps';
+import CloseIcon from '@mui/icons-material/Close';
+import MailOutlineIcon from '@mui/icons-material/MailOutline';
+import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
+import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
+import SettingsIcon from '@mui/icons-material/Settings';
 import {
+  Avatar,
   Box,
   ButtonBase,
   Card,
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  List,
   MenuItem,
   Popover,
+  Switch,
   Tooltip,
   Typography,
+  alpha,
   useTheme,
 } from '@mui/material';
-import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
-import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import { alpha } from '@mui/material/styles';
-import { formatDate } from '../utils/time';
-import { useHandlePaymentNotification } from '../hooks/useHandlePaymentNotification';
-import { executeEvent } from '../utils/events';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getBaseApiReact } from '../App';
+import {
+  customWebsocketSubscriptionsAtom,
+  getNotificationSeenKey,
+  getNotificationSeenPrefixKey,
+  lastPaymentSeenTimestampAtom,
+  notificationSeenInAppKeysAtom,
+  paymentNotificationsAtom,
+} from '../atoms/global';
+import LogoSelected from '../assets/svgs/LogoSelected.svg';
+import {
+  getAppsWithNotificationPermission,
+  getNotificationOsPushDisabledMap,
+  getNotificationPermissionKey,
+  setNotificationOsPushDisabled,
+  setPermission,
+} from '../qortal/qortal-requests';
+import { extractComponents } from './Chat/MessageDisplay';
+import {
+  executeEvent,
+  subscribeToEvent,
+  unsubscribeFromEvent,
+} from '../utils/events';
+import { formatDate } from '../utils/time';
+
+const RESOURCE_EVENT = 'RESOURCE_PUBLISHED';
+
+function toTimestampMs(value) {
+  if (value == null || typeof value !== 'number') return null;
+  return value < 1e12 ? value * 1000 : value;
+}
+
+function getNotificationTimestamp(notification) {
+  return toTimestampMs(
+    notification?.data?.created ??
+      notification?.data?.timestamp ??
+      notification?.timestamp
+  );
+}
+
+function getNotificationMessage(messageObj, currentLang, fallback) {
+  if (!messageObj || typeof messageObj !== 'object') return fallback;
+  const lang = (currentLang || 'en').split('-')[0];
+  return (
+    messageObj[lang]?.trim() ||
+    messageObj.en?.trim() ||
+    Object.values(messageObj).find((value: any) => value?.trim()) ||
+    fallback
+  );
+}
+
+function isSeenInApp(notification, seenKeysSet) {
+  if (!seenKeysSet?.size) return false;
+  return (
+    seenKeysSet.has(getNotificationSeenKey(notification)) ||
+    seenKeysSet.has(getNotificationSeenPrefixKey(notification))
+  );
+}
 
 export const GeneralNotifications = ({
-  address,
   tooltipPlacement = 'left',
   compact = false,
   buttonSx = undefined,
   iconSx = undefined,
 }) => {
   const [anchorEl, setAnchorEl] = useState(null);
-
-  const {
-    latestTx,
-    getNameOrAddressOfSenderMiddle,
-    hasNewPayment,
-    setLastEnteredTimestampPayment,
-    nameAddressOfSender,
-  } = useHandlePaymentNotification(address);
-
-  const handlePopupClick = (event) => {
-    event.stopPropagation(); // Prevent parent onClick from firing
-    setAnchorEl(event.currentTarget);
-  };
-
-  const { t } = useTranslation([
-    'auth',
-    'core',
-    'group',
-    'question',
-    'tutorial',
-  ]);
-
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsApps, setSettingsApps] = useState<string[]>([]);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [osPushDisabledMap, setOsPushDisabledMap] = useState<
+    Record<string, boolean>
+  >({});
+  const notifications = useAtomValue(paymentNotificationsAtom);
+  const customSubscriptions = useAtomValue(customWebsocketSubscriptionsAtom);
+  const setCustomSubscriptions = useSetAtom(customWebsocketSubscriptionsAtom);
+  const lastSeenTimestamp = useAtomValue(lastPaymentSeenTimestampAtom);
+  const setLastSeenTimestamp = useSetAtom(lastPaymentSeenTimestampAtom);
+  const seenKeys = useAtomValue(notificationSeenInAppKeysAtom);
+  const setSeenKeys = useSetAtom(notificationSeenInAppKeysAtom);
   const theme = useTheme();
-  const isOpen = !!anchorEl;
-  const NotificationIcon = hasNewPayment
+  const { t, i18n } = useTranslation(['core']);
+
+  useEffect(() => {
+    const handler = (event) => {
+      const detail = event.detail;
+      if (detail?.address && Array.isArray(detail?.keys)) {
+        setSeenKeys({ address: detail.address, keys: detail.keys });
+      }
+    };
+    subscribeToEvent('notification-seen-in-app-updated', handler);
+    return () =>
+      unsubscribeFromEvent('notification-seen-in-app-updated', handler);
+  }, [setSeenKeys]);
+
+  const seenKeysSet = useMemo(
+    () => new Set(Array.isArray(seenKeys) ? seenKeys : []),
+    [seenKeys]
+  );
+
+  const resourceNotifications = useMemo(
+    () => (notifications ?? []).filter((item) => item?.event === RESOURCE_EVENT),
+    [notifications]
+  );
+
+  const unseenCount = useMemo(() => {
+    return resourceNotifications.filter((notification) => {
+      const timestamp = getNotificationTimestamp(notification);
+      if (timestamp == null) return false;
+      if (isSeenInApp(notification, seenKeysSet)) return false;
+      return !lastSeenTimestamp || timestamp > lastSeenTimestamp;
+    }).length;
+  }, [resourceNotifications, seenKeysSet, lastSeenTimestamp]);
+
+  const hasNewNotifications = unseenCount > 0;
+  const NotificationIcon = hasNewNotifications
     ? NotificationsActiveRoundedIcon
     : NotificationsRoundedIcon;
+
+  const openSettings = () => {
+    setSettingsOpen(true);
+    setSettingsLoading(true);
+    Promise.all([
+      getAppsWithNotificationPermission(),
+      getNotificationOsPushDisabledMap(),
+    ])
+      .then(([apps, disabledMap]) => {
+        setSettingsApps(apps);
+        setOsPushDisabledMap(disabledMap || {});
+      })
+      .finally(() => setSettingsLoading(false));
+  };
 
   return (
     <>
       <ButtonBase
-        onClick={(e) => {
-          handlePopupClick(e);
+        aria-label="Notifications"
+        onClick={(event) => {
+          event.stopPropagation();
+          setAnchorEl(event.currentTarget);
         }}
-        sx={buttonSx || undefined}
-        aria-label="Payment notifications"
+        sx={{
+          position: 'relative',
+          ...(buttonSx || {}),
+        }}
       >
         <Tooltip
+          arrow
+          placement={tooltipPlacement}
           title={
             <span
               style={{
                 color: theme.palette.text.primary,
                 fontSize: '14px',
-                fontWeight: 700,
+                fontWeight: 600,
                 textTransform: 'uppercase',
               }}
             >
-              {t('core:payment_notification')}
+              {t('message.generic.notifications', {
+                defaultValue: 'Notifications',
+              })}
             </span>
           }
-          placement={tooltipPlacement}
-          arrow
-          sx={{ fontSize: '24' }}
           slotProps={{
+            arrow: { sx: { color: theme.palette.background.paper } },
             tooltip: {
               sx: {
-                color: theme.palette.text.primary,
                 backgroundColor: theme.palette.background.paper,
-              },
-            },
-            arrow: {
-              sx: {
                 color: theme.palette.text.primary,
               },
             },
@@ -95,7 +199,7 @@ export const GeneralNotifications = ({
         >
           <NotificationIcon
             sx={{
-              color: hasNewPayment
+              color: hasNewNotifications
                 ? theme.palette.other.unread
                 : theme.palette.text.secondary,
               fontSize: compact ? 20 : undefined,
@@ -103,63 +207,88 @@ export const GeneralNotifications = ({
             }}
           />
         </Tooltip>
+        {hasNewNotifications && (
+          <Box
+            component="span"
+            sx={{
+              bgcolor: theme.palette.other.unread,
+              borderRadius: '7px',
+              color: '#fff',
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              height: 14,
+              lineHeight: '14px',
+              minWidth: 14,
+              pointerEvents: 'none',
+              position: 'absolute',
+              px: '3px',
+              right: compact ? 0 : -5,
+              textAlign: 'center',
+              top: compact ? 0 : -5,
+            }}
+          >
+            {unseenCount > 99 ? '99+' : unseenCount}
+          </Box>
+        )}
       </ButtonBase>
 
       <Popover
-        open={isOpen}
         anchorEl={anchorEl}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
         onClose={() => {
-          if (hasNewPayment) {
-            setLastEnteredTimestampPayment(Date.now());
-          }
+          if (hasNewNotifications) setLastSeenTimestamp(Date.now());
           setAnchorEl(null);
-        }} // Close popover on click outside
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
         }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
+        open={!!anchorEl}
         slotProps={{
           paper: {
             sx: {
-              background: `linear-gradient(180deg, ${alpha('#252A33', 0.98)} 0%, ${alpha(
-                '#1C2129',
-                0.98
-              )} 100%)`,
+              background: '#111820',
               backgroundImage: 'none',
-              border: `1px solid ${alpha('#FFFFFF', 0.06)}`,
+              border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
               borderRadius: '16px',
-              boxShadow: `0 18px 40px ${alpha('#000000', 0.34)}`,
+              boxShadow: `0 22px 46px ${alpha('#000', 0.44)}`,
               mt: 1,
               overflow: 'hidden',
             },
           },
         }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
       >
         <Box
           sx={{
-            alignItems: hasNewPayment ? 'stretch' : 'center',
+            alignItems: resourceNotifications.length ? 'stretch' : 'center',
             display: 'flex',
             flexDirection: 'column',
-            gap: hasNewPayment ? 0 : 1.25,
-            justifyContent: hasNewPayment ? 'flex-start' : 'center',
-            minHeight: hasNewPayment ? 'unset' : 152,
+            gap: resourceNotifications.length ? 1 : 1.2,
             maxHeight: '60vh',
-            maxWidth: '100%',
             overflow: 'auto',
-            padding: hasNewPayment ? '8px' : '18px 20px',
-            width: '320px',
+            p: resourceNotifications.length ? 1 : '18px 20px',
+            position: 'relative',
+            width: 360,
           }}
         >
-          {!hasNewPayment && (
+          <IconButton
+            aria-label="Notification settings"
+            onClick={openSettings}
+            size="small"
+            sx={{
+              color: theme.palette.text.secondary,
+              position: 'absolute',
+              right: 8,
+              top: 8,
+            }}
+          >
+            <SettingsIcon fontSize="small" />
+          </IconButton>
+
+          {!resourceNotifications.length && (
             <>
               <NotificationIcon
                 sx={{
                   color: alpha(theme.palette.text.secondary, 0.82),
                   fontSize: 22,
+                  mt: 2,
                 }}
               />
               <Typography
@@ -168,120 +297,277 @@ export const GeneralNotifications = ({
                   fontSize: '0.96rem',
                   fontWeight: 600,
                   textAlign: 'center',
-                  userSelect: 'none',
                 }}
               >
-                No new payment notifications
+                {t('message.generic.no_app_notifications', {
+                  defaultValue: 'No app notifications yet',
+                })}
               </Typography>
               <Typography
                 sx={{
                   color: alpha(theme.palette.text.secondary, 0.76),
                   fontSize: '0.78rem',
                   lineHeight: 1.5,
-                  maxWidth: '240px',
+                  maxWidth: 250,
                   textAlign: 'center',
-                  userSelect: 'none',
                 }}
               >
-                Latest incoming payment notification from the past 24 hours will
-                appear here.
+                {t('message.generic.app_notifications_hint', {
+                  defaultValue:
+                    'Mentions, Q-Mail, and Q-App activity will appear here.',
+                })}
               </Typography>
             </>
           )}
-          {hasNewPayment && (
-            <MenuItem
-              sx={{
-                alignItems: 'flex-start',
-                borderRadius: '12px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '5px',
-                textWrap: 'auto',
-                width: '100%',
-                '&:hover': {
-                  backgroundColor: alpha('#FFFFFF', 0.035),
-                },
-              }}
-              onClick={() => {
-                setAnchorEl(null);
-                executeEvent('openWalletsApp', {});
-              }}
-            >
-              <Card
+
+          {resourceNotifications.map((notification, index) => {
+            const isQMail =
+              notification?.notificationId === 'q-mail-notification' ||
+              notification?.appName === 'Q-Mail';
+            const timestamp = getNotificationTimestamp(notification);
+            const unseen =
+              timestamp != null &&
+              (!lastSeenTimestamp || timestamp > lastSeenTimestamp) &&
+              !isSeenInApp(notification, seenKeysSet);
+
+            return (
+              <MenuItem
+                key={
+                  notification?.data?.identifier ||
+                  notification?.data?.created ||
+                  index
+                }
+                onClick={() => {
+                  if (hasNewNotifications) setLastSeenTimestamp(Date.now());
+                  setAnchorEl(null);
+                  const link = notification?.link;
+                  if (!link) return;
+                  const data = extractComponents(link);
+                  if (!data) return;
+                  executeEvent('addTab', {
+                    data: { ...data, navigateIfAlreadyOpen: true },
+                  });
+                  executeEvent('open-apps-mode', {});
+                }}
                 sx={{
-                  background: `linear-gradient(180deg, ${alpha('#242A34', 0.98)} 0%, ${alpha(
-                    '#1A1F27',
-                    0.98
-                  )} 100%)`,
-                  border: `1px solid ${alpha('#FFFFFF', 0.055)}`,
-                  borderRadius: '14px',
-                  boxShadow: `0 10px 24px ${alpha('#000000', 0.22)}`,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '5px',
-                  padding: '12px',
-                  width: '100%',
+                  borderRadius: '12px',
+                  display: 'block',
+                  p: 0,
+                  whiteSpace: 'normal',
+                  '&:hover': { bgcolor: alpha('#FFFFFF', 0.045) },
                 }}
               >
-                <Box
+                <Card
+                  elevation={0}
                   sx={{
-                    alignItems: 'center',
+                    bgcolor: unseen
+                      ? alpha(theme.palette.other.unread, 0.11)
+                      : alpha('#FFFFFF', 0.025),
+                    border: `1px solid ${
+                      unseen
+                        ? alpha(theme.palette.other.unread, 0.36)
+                        : alpha('#A9BCD8', 0.12)
+                    }`,
+                    borderRadius: '12px',
                     display: 'flex',
-                    gap: '5px',
-                    justifyContent: 'space-between',
+                    gap: 1.2,
+                    p: 1.35,
                   }}
                 >
-                  <AccountBalanceWalletIcon
+                  <Avatar
+                    alt={notification?.appName || 'App'}
+                    src={`${getBaseApiReact()}${
+                      notification?.image ||
+                      `/arbitrary/THUMBNAIL/${notification?.appName || 'Q-Mail'}/qortal_avatar?async=true`
+                    }`}
                     sx={{
-                      color: theme.palette.text.primary,
-                      fontSize: 19,
-                    }}
-                  />
-                  <Typography
-                    sx={{
-                      color: alpha(theme.palette.text.secondary, 0.82),
-                      fontSize: '0.72rem',
-                      fontWeight: 500,
+                      bgcolor: alpha('#FFFFFF', 0.06),
+                      height: 34,
+                      width: 34,
+                      '& img': { objectFit: 'contain' },
                     }}
                   >
-                    {formatDate(latestTx?.timestamp)}
-                  </Typography>
-                </Box>
-
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      color: theme.palette.text.primary,
-                      fontSize: '1rem',
-                      fontWeight: 700,
-                      letterSpacing: '-0.01em',
-                    }}
-                  >
-                    {latestTx?.amount}
-                  </Typography>
-                </Box>
-
-                <Typography
-                  sx={{
-                    color: alpha(theme.palette.text.secondary, 0.86),
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  {nameAddressOfSender.current[latestTx?.creatorAddress] ||
-                    getNameOrAddressOfSenderMiddle(latestTx?.creatorAddress)}
-                </Typography>
-              </Card>
-            </MenuItem>
-          )}
+                    {isQMail ? (
+                      <MailOutlineIcon sx={{ fontSize: 18 }} />
+                    ) : (
+                      <img
+                        alt="app-icon"
+                        src={LogoSelected}
+                        style={{ height: 'auto', width: 20 }}
+                      />
+                    )}
+                  </Avatar>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        display: 'flex',
+                        gap: 1,
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Typography
+                        sx={{ fontSize: '0.86rem', fontWeight: 650 }}
+                      >
+                        {notification?.appName || 'Q-App'}
+                      </Typography>
+                      {timestamp && (
+                        <Typography
+                          sx={{
+                            color: alpha(theme.palette.text.secondary, 0.72),
+                            fontSize: '0.72rem',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatDate(timestamp)}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.92),
+                        fontSize: '0.8rem',
+                        lineHeight: 1.45,
+                        mt: 0.35,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {getNotificationMessage(
+                        notification?.message,
+                        i18n.language,
+                        t('message.generic.new_notification', {
+                          defaultValue: 'New notification',
+                        })
+                      )}
+                    </Typography>
+                  </Box>
+                </Card>
+              </MenuItem>
+            );
+          })}
         </Box>
       </Popover>
+
+      <Dialog
+        fullWidth
+        maxWidth="sm"
+        onClose={() => setSettingsOpen(false)}
+        open={settingsOpen}
+      >
+        <DialogTitle
+          sx={{
+            alignItems: 'center',
+            display: 'flex',
+            justifyContent: 'space-between',
+          }}
+        >
+          {t('message.generic.notification_settings', {
+            defaultValue: 'Notification settings',
+          })}
+          <IconButton onClick={() => setSettingsOpen(false)} size="small">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          {settingsLoading ? (
+            <Typography color="text.secondary">
+              {t('message.generic.loading', { defaultValue: 'Loading...' })}
+            </Typography>
+          ) : settingsApps.length === 0 ? (
+            <Typography color="text.secondary">
+              {t('message.generic.no_notification_apps', {
+                defaultValue: 'No apps have notification permission yet.',
+              })}
+            </Typography>
+          ) : (
+            <List disablePadding>
+              {settingsApps.map((appName) => (
+                <Box
+                  key={appName}
+                  sx={{
+                    alignItems: 'center',
+                    borderBottom: `1px solid ${alpha('#A9BCD8', 0.12)}`,
+                    display: 'flex',
+                    gap: 2,
+                    justifyContent: 'space-between',
+                    py: 1.5,
+                  }}
+                >
+                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
+                    <AppsIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    <Typography sx={{ fontWeight: 600 }}>{appName}</Typography>
+                  </Box>
+                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
+                    <Typography color="text.secondary" variant="body2">
+                      {t('message.generic.disable_os_push', {
+                        defaultValue: 'Disable OS push',
+                      })}
+                    </Typography>
+                    <Switch
+                      checked={osPushDisabledMap[appName] === true}
+                      onChange={async (_, checked) => {
+                        await setNotificationOsPushDisabled(appName, checked);
+                        setOsPushDisabledMap((prev) => ({
+                          ...prev,
+                          [appName]: checked,
+                        }));
+                      }}
+                      size="small"
+                    />
+                    <ButtonBase
+                      onClick={async () => {
+                        const notificationIds = (customSubscriptions ?? [])
+                          .filter(
+                            (sub) =>
+                              sub?.event === RESOURCE_EVENT &&
+                              sub?.appName === appName
+                          )
+                          .map((sub) => sub?.notificationId)
+                          .filter(Boolean);
+                        await setPermission(
+                          getNotificationPermissionKey(appName),
+                          false
+                        );
+                        setCustomSubscriptions((prev) =>
+                          (prev ?? []).filter(
+                            (sub) =>
+                              !(
+                                sub?.event === RESOURCE_EVENT &&
+                                sub?.appName === appName
+                              )
+                          )
+                        );
+                        if (notificationIds.length) {
+                          executeEvent(
+                            'custom-ws-unsubscribe',
+                            notificationIds
+                          );
+                        }
+                        executeEvent(
+                          'notifications-websocket-reconnect',
+                          undefined
+                        );
+                        setSettingsApps((prev) =>
+                          prev.filter((name) => name !== appName)
+                        );
+                      }}
+                      sx={{
+                        color: theme.palette.error.light,
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {t('message.generic.revoke_permission', {
+                        defaultValue: 'Revoke',
+                      })}
+                    </ButtonBase>
+                  </Box>
+                </Box>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

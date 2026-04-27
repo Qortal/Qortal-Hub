@@ -71,12 +71,8 @@ export function loadAuthGlowSettings(): AuthGlowSettings {
 export function buildAuthCardGlowBackground(settings: AuthGlowSettings) {
   const primaryAlpha = clamp(settings.cardGlowIntensity, 0, 1);
   const secondaryAlpha = clamp(settings.cardGlowIntensity * 0.53, 0, 1);
-  const washAlpha = clamp(settings.cardGlowIntensity * 0.53, 0, 1);
 
-  return [
-    `radial-gradient(ellipse ${settings.cardGlowWidth}px ${settings.cardGlowHeight}px at ${settings.cardGlowX}% ${settings.cardGlowY}%, ${rgbaFromHex(settings.cardGlowColor, primaryAlpha)}, ${rgbaFromHex(settings.cardGlowColor, secondaryAlpha)} 35%, transparent ${settings.cardGlowFade}%)`,
-    `linear-gradient(180deg, ${rgbaFromHex(settings.cardGlowColor, washAlpha)} 0%, rgba(8,13,22,0) 44%)`,
-  ].join(', ');
+  return `radial-gradient(ellipse ${settings.cardGlowWidth}px ${settings.cardGlowHeight}px at ${settings.cardGlowX}% ${settings.cardGlowY}%, ${rgbaFromHex(settings.cardGlowColor, primaryAlpha)}, ${rgbaFromHex(settings.cardGlowColor, secondaryAlpha)} 35%, transparent ${settings.cardGlowFade}%)`;
 }
 
 export function buildAuthEdgeGradient(settings: AuthGlowSettings) {

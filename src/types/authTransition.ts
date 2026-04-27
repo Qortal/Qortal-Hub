@@ -12,4 +12,6 @@ export type AuthUnlockTransitionSnapshot = {
   avatarSrc?: string;
   displayName: string;
   nameRect: SharedElementRect;
+  primaryName?: string;
+  walletAddress?: string;
 };

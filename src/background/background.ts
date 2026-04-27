@@ -1,5 +1,6 @@
 // @ts-nocheck
 import '../qortal/qortal-requests.ts';
+import { getNotificationOsPushDisabled } from '../qortal/qortal-requests';
 import { isArray } from 'lodash';
 import { uint8ArrayToObject } from '../encryption/encryption.ts';
 import Base58 from '../encryption/Base58';
@@ -31,7 +32,6 @@ import {
   LOCALHOST_12391,
   MIN_REQUIRED_QORTS,
   RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS,
-  TIME_MINUTES_3_IN_MILLISECONDS,
   TIME_MINUTES_10_IN_MILLISECONDS,
   TIME_WEEKS_1_IN_MILLISECONDS,
   TIME_MINUTES_6_IN_MILLISECONDS,
@@ -138,7 +138,12 @@ export const groupApiSocketLocal = 'ws://' + LOCALHOST_12391;
 const timeDifferenceForNotificationChatsBackground = 86400000;
 const requestQueueAnnouncements = new RequestQueueWithPromise(1);
 
+const generalNotificationPayloadById = new Map();
+
 function handleNotificationClick(notificationId) {
+  if (typeof window?.electronAPI?.focusWindow === 'function') {
+    window.electronAPI.focusWindow();
+  }
   // Decode the notificationId if it was encoded
   const decodedNotificationId = decodeURIComponent(notificationId);
 
@@ -149,6 +154,9 @@ function handleNotificationClick(notificationId) {
     '_type=group-announcement_'
   );
   const isNewThreadPost = decodedNotificationId.includes('_type=thread-post_');
+  const isGeneralNotification = decodedNotificationId.includes(
+    '_type=general-notification'
+  );
 
   // Helper function to extract parameter values safely
   function getParameterValue(id, key) {
@@ -157,7 +165,16 @@ function handleNotificationClick(notificationId) {
   }
   const targetOrigin = window.location.origin;
   // Handle specific notification types and post the message accordingly
-  if (isDirect) {
+  if (isGeneralNotification) {
+    const payload = generalNotificationPayloadById.get(notificationId);
+    generalNotificationPayloadById.delete(notificationId);
+    if (payload) {
+      window.postMessage(
+        { action: 'NOTIFICATION_OPEN_APP', payload },
+        targetOrigin
+      );
+    }
+  } else if (isDirect) {
     const fromValue = getParameterValue(decodedNotificationId, '_from');
     window.postMessage(
       { action: 'NOTIFICATION_OPEN_DIRECT', payload: { from: fromValue } },
@@ -3374,10 +3391,6 @@ function setupMessageListener() {
                 clearInterval(notificationCheckInterval);
                 notificationCheckInterval = null;
               }
-              if (paymentsCheckInterval) {
-                clearInterval(paymentsCheckInterval);
-                paymentsCheckInterval = null;
-              }
               groupSecretkeys = {};
               const wallet = await getSaveWallet();
               const address = wallet.address0;
@@ -3571,82 +3584,52 @@ export const checkNewMessages = async () => {
   }
 };
 
-export const checkPaymentsForNotifications = async (address) => {
+export const fireOsNotificationPayment = async (
+  notificationPayload,
+  title,
+  messageBody,
+  icon,
+  qortalLink
+) => {
   try {
     const isDisableNotifications =
       (await getUserSettings({ key: 'disable-push-notifications' })) || false;
     if (isDisableNotifications) return;
-    let latestPayment = null;
-    const savedtimestamp = await getTimestampLatestPayment();
 
-    const url = await createEndpoint(
-      `/transactions/search?txType=PAYMENT&address=${address}&confirmationStatus=CONFIRMED&limit=5&reverse=true`
+    if (
+      notificationPayload?.event === 'RESOURCE_PUBLISHED' &&
+      notificationPayload?.appName
+    ) {
+      const osPushDisabled = await getNotificationOsPushDisabled(
+        notificationPayload.appName
+      );
+      if (osPushDisabled) return;
+    }
+
+    const notificationId = encodeURIComponent(
+      'general_notification_' + Date.now() + '_type=general-notification'
     );
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+    generalNotificationPayloadById.set(
+      notificationId,
+      qortalLink ? { link: qortalLink } : { openWallets: true }
+    );
+
+    const notification = new window.Notification(title, {
+      body: messageBody,
+      icon,
+      data: { id: notificationId },
     });
 
-    const responseData = await response.json();
+    notification.onclick = () => {
+      handleNotificationClick(notificationId);
+      notification.close();
+    };
 
-    const latestTx = responseData.filter(
-      (tx) => tx?.creatorAddress !== address && tx?.recipient === address
-    )[0];
-    if (!latestTx) {
-      return; // continue to the next group
-    }
-    if (
-      checkDifference(latestTx.timestamp) &&
-      (!savedtimestamp || latestTx.timestamp > savedtimestamp)
-    ) {
-      if (latestTx.timestamp) {
-        latestPayment = latestTx;
-        await addTimestampLatestPayment(latestTx.timestamp);
-      }
-
-      // save new timestamp
-    }
-
-    if (latestPayment) {
-      // Create a unique notification ID with type and group announcement details
-      const notificationId = encodeURIComponent(
-        'payment_notification_' + Date.now() + '_type=payment-announcement'
-      );
-
-      const title = 'New payment!';
-      const body = `You have received a new payment of ${latestPayment?.amount} QORT`;
-
-      // Create and show the notification
-      const notification = new window.Notification(title, {
-        body,
-        icon: window.location.origin + '/qortal192.png',
-        data: { id: notificationId },
-      });
-
-      // Handle notification click with specific actions based on `notificationId`
-      notification.onclick = () => {
-        handleNotificationClick(notificationId);
-        notification.close(); // Clean up the notification on click
-      };
-
-      // Automatically close the notification after 5 seconds if it’s not clicked
-      setTimeout(() => {
-        notification.close();
-      }, 10000); // Close after 5 seconds
-
-      const targetOrigin = window.location.origin;
-
-      window.postMessage(
-        {
-          action: 'SET_PAYMENT_ANNOUNCEMENT',
-          payload: latestPayment,
-        },
-        targetOrigin
-      );
-    }
+    setTimeout(() => {
+      generalNotificationPayloadById.delete(notificationId);
+      notification.close();
+    }, 10000);
   } catch (error) {
     console.error(error);
   }
@@ -3819,7 +3802,6 @@ export const checkThreads = async (bringBack) => {
 };
 
 let notificationCheckInterval;
-let paymentsCheckInterval;
 
 const createNotificationCheck = () => {
   // Check if an interval already exists before creating it
@@ -3840,20 +3822,6 @@ const createNotificationCheck = () => {
     }, TIME_MINUTES_10_IN_MILLISECONDS);
   }
 
-  if (!paymentsCheckInterval) {
-    paymentsCheckInterval = setInterval(async () => {
-      try {
-        // This would replace the Chrome alarm callback
-        const wallet = await getSaveWallet();
-        const address = wallet?.address0;
-        if (!address) return;
-
-        checkPaymentsForNotifications(address);
-      } catch (error) {
-        console.error('Error checking payments:', error);
-      }
-    }, TIME_MINUTES_3_IN_MILLISECONDS);
-  }
 };
 
 // Call this function when initializing your app or after user logs in (intervals are cleared on logout)

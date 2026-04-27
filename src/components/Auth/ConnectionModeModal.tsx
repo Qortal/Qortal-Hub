@@ -21,7 +21,7 @@ import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import { AuthButton, AuthInput } from './AuthShell';
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
-  isOpenDialogCoreRecommendationAtom,
+  isOpenCoreSetup,
   selectedNodeInfoAtom,
 } from '../../atoms/global';
 import {
@@ -68,7 +68,7 @@ export function ConnectionModeModal({
 }: ConnectionModeModalProps) {
   const theme = useTheme();
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
-  const setOpenRecommendation = useSetAtom(isOpenDialogCoreRecommendationAtom);
+  const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const { handleSaveNodeInfo } = useAuth();
   const [selectedMode, setSelectedMode] = useState<ConnectionMode>('local');
   const [showManual, setShowManual] = useState(false);
@@ -208,7 +208,7 @@ export function ConnectionModeModal({
     if (selectedMode === 'local') {
       if (localCoreStatus === 'missing') {
         onClose();
-        setOpenRecommendation(true);
+        setOpenCoreSetup(true);
         return;
       }
       await handleSaveNodeInfo({

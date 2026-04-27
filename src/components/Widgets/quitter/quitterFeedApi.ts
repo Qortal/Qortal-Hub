@@ -321,6 +321,7 @@ const fetchQuitterDocumentPayload = async (
 };
 
 export const fetchQuitterFeed = async ({
+  blockedAuthors,
   debugLabel,
   excludeIds = [],
   itemLimit = QUITTER_WIDGET_ITEM_LIMIT,
@@ -329,6 +330,7 @@ export const fetchQuitterFeed = async ({
   signal,
 }: FetchQuitterFeedOptions = {}): Promise<QuitterFeedItem[]> => {
   const page = await fetchQuitterFeedPage({
+    blockedAuthors,
     debugLabel,
     excludeIds,
     itemLimit,
@@ -342,6 +344,7 @@ export const fetchQuitterFeed = async ({
 
 export const fetchQuitterFeedPage = async ({
   allowedAuthors,
+  blockedAuthors,
   debugLabel,
   excludeIds = [],
   itemLimit = QUITTER_WIDGET_ITEM_LIMIT,
@@ -358,6 +361,12 @@ export const fetchQuitterFeedPage = async ({
     normalizedAllowedAuthors != null
       ? new Set(normalizedAllowedAuthors)
       : null;
+  const blockedAuthorsSet = new Set(
+    blockedAuthors?.map((author) => author.trim().toLowerCase()).filter(Boolean) ??
+      []
+  );
+  const isBlockedAuthor = (author: string) =>
+    blockedAuthorsSet.has(author.trim().toLowerCase());
 
   if (allowedAuthorsSet && allowedAuthorsSet.size === 0) {
     if (debugLabel) {
@@ -404,16 +413,16 @@ export const fetchQuitterFeedPage = async ({
       signal
     );
     const searchDurationMs = getElapsedMs(searchStartedAt);
-    const filteredResources = allowedAuthorsSet
-      ? resources
-          .map((resource, resourceIndex) => ({
-            resource,
-            resourceIndex,
-          }))
-          .filter(({ resource }) =>
-            allowedAuthorsSet.has(resource.name.trim().toLowerCase())
-          )
-      : resources;
+    const filteredResources = resources
+      .map((resource, resourceIndex) => ({
+        resource,
+        resourceIndex,
+      }))
+      .filter(({ resource }) => {
+        const normalizedName = resource.name.trim().toLowerCase();
+        if (isBlockedAuthor(normalizedName)) return false;
+        return allowedAuthorsSet ? allowedAuthorsSet.has(normalizedName) : true;
+      });
 
     if (debugLabel) {
       console.info(`[QuitterFeedWidget:${debugLabel}] search response`, {
@@ -438,9 +447,7 @@ export const fetchQuitterFeedPage = async ({
     const documentFetchStartedAt = getNow();
     const settled = await Promise.allSettled(
       filteredResources.map(async (resourceEntry) => {
-        const resource = allowedAuthorsSet
-          ? resourceEntry.resource
-          : resourceEntry;
+        const resource = resourceEntry.resource;
         const payload = await fetchQuitterDocumentPayload(resource, signal);
         return mapDocumentToFeedItem(resource, payload);
       })
@@ -471,9 +478,7 @@ export const fetchQuitterFeedPage = async ({
         appendedCount += 1;
 
         if (items.length >= itemLimit) {
-          consumedResourceCount = allowedAuthorsSet
-            ? filteredResources[index].resourceIndex + 1
-            : index + 1;
+          consumedResourceCount = filteredResources[index].resourceIndex + 1;
           reachedItemLimit = true;
           break;
         }

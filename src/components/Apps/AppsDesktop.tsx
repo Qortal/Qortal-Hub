@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { ReactNode } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -67,6 +68,7 @@ import { TIME_MINUTES_20_IN_MILLISECONDS } from '../../constants/constants';
 import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 import { extractComponents } from '../Chat/MessageDisplay';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
+import { QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
@@ -106,7 +108,32 @@ function normalizeQortalInput(value: string) {
   return `${QORTAL_PROTOCOL}${trimmed}`;
 }
 
-export const AppsDesktop = ({ mode, setMode, show }) => {
+type InternalTabVisibilityArgs = {
+  isVisible: boolean;
+  tab: any;
+};
+
+type RenderInternalTabArgs = {
+  hide: boolean;
+  isSelected: boolean;
+  tab: any;
+};
+
+type AppsDesktopProps = {
+  mode: string;
+  onInternalTabVisibilityChange?: (args: InternalTabVisibilityArgs) => void;
+  renderInternalTab?: (args: RenderInternalTabArgs) => ReactNode;
+  setMode: (mode: string) => void;
+  show: boolean;
+};
+
+export const AppsDesktop = ({
+  mode,
+  onInternalTabVisibilityChange,
+  renderInternalTab,
+  setMode,
+  show,
+}: AppsDesktopProps) => {
   const navigationController = useAtomValue(navigationControllerAtom);
   const userInfo = useAtomValue(userInfoAtom);
   const publishEditTarget = useAtomValue(publishEditTargetAtom);
@@ -222,6 +249,21 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
       }
     };
   }, []);
+
+  useEffect(() => {
+    onInternalTabVisibilityChange?.({
+      isVisible:
+        !!show &&
+        !isNewTabWindow &&
+        selectedTab?.internal === QCHAT_INTERNAL_TAB_ID,
+      tab: selectedTab,
+    });
+  }, [
+    isNewTabWindow,
+    onInternalTabVisibilityChange,
+    selectedTab,
+    show,
+  ]);
 
   useEffect(() => {
     const trackPointer = (event: PointerEvent) => {
@@ -456,6 +498,25 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
 
   const addTabFunc = (e) => {
     const data = e.detail?.data;
+    if (data?.internal) {
+      const existingInternalTab = tabs.find(
+        (tab) => tab?.internal === data.internal
+      );
+      if (existingInternalTab) {
+        setPendingVisualTabActivationId(null);
+        setDelayedVisualActiveTabId(null);
+        setEnteringTabIds((prev) =>
+          prev.filter((id) => id !== existingInternalTab.tabId)
+        );
+        setIsAddTabFocused(false);
+        setIsAddTabWaitingForPointerMove(false);
+        addTabPointerOriginRef.current = null;
+        setSelectedTab(existingInternalTab);
+        setMode('viewer');
+        setIsNewTabWindow(false);
+        return;
+      }
+    }
     if (tabs.length >= MAX_OPEN_APP_TABS) {
       setInfoSnack({
         message: 'Maximum number of tabs reached. Close one to open another.',
@@ -1078,6 +1139,30 @@ export const AppsDesktop = ({ mode, setMode, show }) => {
             )}
 
           {tabs.map((tab) => {
+            const internalTabContent = renderInternalTab?.({
+              hide: isNewTabWindow,
+              isSelected: tab?.tabId === selectedTab?.tabId,
+              tab,
+            });
+            if (internalTabContent) {
+              return (
+                <Box
+                  key={tab?.tabId}
+                  sx={{
+                    display:
+                      tab?.tabId === selectedTab?.tabId && !isNewTabWindow
+                        ? 'flex'
+                        : 'none',
+                    height: '100%',
+                    minHeight: 0,
+                    overflow: 'hidden',
+                    width: '100%',
+                  }}
+                >
+                  {internalTabContent}
+                </Box>
+              );
+            }
             if (!iframeRefs.current[tab.tabId]) {
               iframeRefs.current[tab.tabId] = createRef();
             }

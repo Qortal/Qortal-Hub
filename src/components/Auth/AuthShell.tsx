@@ -48,7 +48,7 @@ export function AuthFrame({
     <Box
       sx={{
         background:
-          'radial-gradient(ellipse 820px 520px at 50% 29%, rgba(39,112,224,0.26), rgba(19,54,106,0.14) 32%, transparent 63%), linear-gradient(180deg, #07101b 0%, #05070c 55%, #030509 100%)',
+          'linear-gradient(180deg, #07101b 0%, #05070c 55%, #030509 100%)',
         color: theme.palette.text.primary,
         display: 'flex',
         flex: 1,
@@ -68,17 +68,6 @@ export function AuthFrame({
           opacity: 0.42,
           pointerEvents: 'none',
           position: 'absolute',
-        },
-        '&::after': {
-          background:
-            'radial-gradient(ellipse 640px 420px at 50% 31%, rgba(54,123,246,0.13), transparent 60%)',
-          content: '""',
-          height: '100%',
-          left: 0,
-          pointerEvents: 'none',
-          position: 'absolute',
-          right: 0,
-          top: 0,
         },
       }}
     >
@@ -230,14 +219,20 @@ export function AuthButton({
             : '#f6f8fc'
           : 'rgba(230,236,247,0.88)',
         display: 'inline-flex',
+        fontFamily: 'Inter, Segoe UI, ui-sans-serif, system-ui, sans-serif',
         fontSize: isSubtlePrimary ? '0.88rem' : '0.92rem',
-        fontWeight: 600,
+        fontSynthesis: 'none',
+        fontWeight: 500,
         height: isSubtlePrimary ? 38 : 42,
         justifyContent: 'center',
+        letterSpacing: 0,
+        lineHeight: 1,
         opacity: disabled ? 0.45 : 1,
         px: isSubtlePrimary ? 1.6 : 2,
+        textRendering: 'geometricPrecision',
         transition:
           'background-color 160ms ease, border-color 160ms ease, opacity 160ms ease',
+        WebkitFontSmoothing: 'antialiased',
         width: fullWidth ? '100%' : 'auto',
         '&:hover': disabled
           ? undefined

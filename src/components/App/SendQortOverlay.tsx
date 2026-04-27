@@ -9,6 +9,7 @@ import {
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { motion, useReducedMotion } from 'framer-motion';
+import { useTranslation } from 'react-i18next';
 import { QortPayment } from '../QortPayment';
 
 type SendQortOriginRect = {
@@ -38,6 +39,9 @@ export function SendQortOverlay({
   show,
 }: SendQortOverlayProps) {
   const theme = useTheme();
+  const { t } = useTranslation(['group']);
+  const td = (key: string, defaultValue: string) =>
+    t(`group:dashboard.${key}`, { defaultValue });
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
   const isAnchoredLayout = !!targetRect;
@@ -119,7 +123,7 @@ export function SendQortOverlay({
         <Box
           component={motion.button}
           type="button"
-          aria-label="Close send QORT modal"
+          aria-label={td('close_send_qort_modal', 'Close send QORT modal')}
           initial={{
             opacity: 0,
             backdropFilter: 'blur(0px) brightness(1) saturate(1)',
@@ -233,7 +237,7 @@ export function SendQortOverlay({
                     letterSpacing: '-0.02em',
                   }}
                 >
-                  Send QORT
+                  {td('send_qort', 'Send QORT')}
                 </Typography>
                 <Typography
                   sx={{
@@ -243,7 +247,10 @@ export function SendQortOverlay({
                     lineHeight: 1.45,
                   }}
                 >
-                  Transfer QORT to any registered name or address.
+                  {td(
+                    'send_qort_subtitle',
+                    'Transfer QORT to any registered name or address.'
+                  )}
                 </Typography>
               </Box>
               <ButtonBase

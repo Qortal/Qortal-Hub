@@ -1,4 +1,4 @@
-import { CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -221,7 +221,9 @@ export const HomeGettingStarted = ({
   const txList = useAtomValue(txListAtom);
 
   const [hasAvatar, setHasAvatar] = useState(false);
+  const [avatarStepCompleted, setAvatarStepCompleted] = useState(false);
   const [checkingAvatar, setCheckingAvatar] = useState(false);
+  const avatarCompletionAfterPanelCloseRef = useRef(false);
   const [openQortsDialog, setOpenQortsDialog] = useState(false);
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   const [startBorderGlowIntro, setStartBorderGlowIntro] = useState(false);
@@ -236,11 +238,15 @@ export const HomeGettingStarted = ({
   useEffect(() => {
     if (userAddress == null) {
       setDismissed(null);
+      setAvatarStepCompleted(false);
+      avatarCompletionAfterPanelCloseRef.current = false;
       return;
     }
     setDismissed(
       localStorage.getItem(`${LS_KEY}_${userAddress}`) === 'completed'
     );
+    setAvatarStepCompleted(false);
+    avatarCompletionAfterPanelCloseRef.current = false;
   }, [userAddress, debugReplayToken]);
 
   // Step completion flags: balance >= 6 OR (fallback) cumulative payments to user's address >= 6
@@ -262,7 +268,7 @@ export const HomeGettingStarted = ({
     ? hasNameDebugOverride
     : hasNameDebugOverride || realHasName;
 
-  // Pending register-name tx (same as TaskManager): show "Confirming transaction" on step 2
+  // Pending register-name tx (same as TaskManager): show "Confirming" so the step does not look stuck.
   const hasPendingRegisterName =
     (txList?.some((tx) => tx?.type === 'register-name' && !tx?.done) ??
       false) &&
@@ -314,19 +320,30 @@ export const HomeGettingStarted = ({
     checkAvatar();
   }, [checkAvatar]);
 
-  // When avatar is published, mark step done right away (re-check via API in background)
+  // Avatar upload runs in a floating panel; complete the step only after
+  // that panel closes so the celebration does not happen behind the modal.
   useEffect(() => {
     const onUploaded = () => {
+      avatarCompletionAfterPanelCloseRef.current = true;
+    };
+    const onClosed = () => {
+      if (!avatarCompletionAfterPanelCloseRef.current) return;
+      avatarCompletionAfterPanelCloseRef.current = false;
+      setAvatarStepCompleted(true);
       setHasAvatar(true);
       checkAvatar();
     };
     subscribeToEvent('avatarUploaded', onUploaded);
-    return () => unsubscribeFromEvent('avatarUploaded', onUploaded);
+    subscribeToEvent('avatarUploadClosed', onClosed);
+    return () => {
+      unsubscribeFromEvent('avatarUploaded', onUploaded);
+      unsubscribeFromEvent('avatarUploadClosed', onClosed);
+    };
   }, [checkAvatar]);
 
   const resolvedHasAvatar = debugUseOverridesOnly
     ? hasAvatarDebugOverride
-    : hasAvatarDebugOverride || hasAvatar;
+    : hasAvatarDebugOverride || hasAvatar || avatarStepCompleted;
   const hasCompletionChecksPending = debugUseOverridesOnly ? false : checkingAvatar;
 
   // Once all steps are complete, persist and hide the section (per-account)
@@ -364,7 +381,7 @@ export const HomeGettingStarted = ({
       {
         key: 'register_name',
         label: hasPendingRegisterName
-          ? t('tutorial:home.confirming_transaction')
+          ? t('tutorial:home.confirming', 'Confirming')
           : t('tutorial:home.register_name'),
         done: hasName,
         loading:
@@ -381,7 +398,9 @@ export const HomeGettingStarted = ({
           !debugUseOverridesOnly &&
           !hasAvatarDebugOverride &&
           checkingAvatar,
-        onAction: () => executeEvent('openAvatarUpload', {}),
+        onAction: () => {
+          executeEvent('openAvatarUpload', {});
+        },
       },
     ],
     [
@@ -446,6 +465,10 @@ export const HomeGettingStarted = ({
         : null;
   const showTools =
     previewPanel != null ? previewPanel === 'tools' : dismissed === true;
+
+  if (dismissed == null && previewPanel == null) {
+    return null;
+  }
 
   useEffect(() => {
     if (showTools) {

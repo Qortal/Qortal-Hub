@@ -16,4 +16,5 @@ export { PaymentPublishDialog } from './PaymentPublishDialog';
 export { InfoDialog } from './InfoDialog';
 export { UnsavedChangesDialog } from './UnsavedChangesDialog';
 export { QortalRequestExtensionDialog } from './QortalRequestExtensionDialog';
+export { NotificationPermissionSlideDown } from './NotificationPermissionSlideDown';
 export type { MessageQortalRequestExtension } from './QortalRequestExtensionDialog';

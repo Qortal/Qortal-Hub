@@ -19,11 +19,17 @@ import {
   isRunningPublicNodeAtom,
   joinRequestsCacheAtom,
   lastPaymentSeenTimestampAtom,
+  managedSubscriptionsAtom,
+  managedSubscriptionsLoadingAtom,
   mailsAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
+  myMemberGroupsAtom,
+  myMemberGroupsLastFetchedAtom,
+  mySubscriptionsAtom,
   navigationControllerAtom,
+  notificationsByAddressAtom,
   oldPinnedAppsAtom,
   promotionTimeIntervalAtom,
   promotionsAtom,
@@ -33,10 +39,12 @@ import {
   settingsLocalLastUpdatedAtom,
   settingsQDNLastUpdatedAtom,
   sortablePinnedAppsAtom,
+  subscriptionsLoadingAtom,
   timestampEnterDataAtom,
   txListAtom,
   isUsingImportExportSettingsAtom,
 } from '../atoms/global';
+import { clearMemberGroupsPolling } from '../subscriptions/useInitializeMySubscriptions';
 import {
   appCategoryFilterAtom,
   appSearchQueryAtom,
@@ -88,6 +96,16 @@ export function useAppReset() {
   const resetMyGroupsWhereIAmAdminAtom = useResetAtom(
     myGroupsWhereIAmAdminAtom
   );
+  const resetMyMemberGroupsAtom = useResetAtom(myMemberGroupsAtom);
+  const resetMyMemberGroupsLastFetchedAtom = useResetAtom(
+    myMemberGroupsLastFetchedAtom
+  );
+  const resetMySubscriptionsAtom = useResetAtom(mySubscriptionsAtom);
+  const resetManagedSubscriptionsAtom = useResetAtom(managedSubscriptionsAtom);
+  const resetSubscriptionsLoadingAtom = useResetAtom(subscriptionsLoadingAtom);
+  const resetManagedSubscriptionsLoadingAtom = useResetAtom(
+    managedSubscriptionsLoadingAtom
+  );
   const resetResourceDownloadControllerAtom = useResetAtom(
     resourceDownloadControllerAtom
   );
@@ -96,6 +114,7 @@ export function useAppReset() {
   const resetAddressInfoControllerAtom = useResetAtom(addressInfoControllerAtom);
   const resetBlobControllerAtom = useResetAtom(blobControllerAtom);
   const resetNavigationControllerAtom = useResetAtom(navigationControllerAtom);
+  const resetNotificationsByAddressAtom = useResetAtom(notificationsByAddressAtom);
   const resetEnabledDevModeAtom = useResetAtom(enabledDevModeAtom);
   const resetFullScreenAtom = useResetAtom(fullScreenAtom);
   const resetHasSettingsChangedAtom = useResetAtom(hasSettingsChangedAtom);
@@ -143,11 +162,19 @@ export function useAppReset() {
     resettxListAtomAtom();
     resetmemberGroupsAtomAtom();
     resetMyGroupsWhereIAmAdminAtom();
+    resetMyMemberGroupsAtom();
+    resetMyMemberGroupsLastFetchedAtom();
+    resetMySubscriptionsAtom();
+    resetManagedSubscriptionsAtom();
+    resetSubscriptionsLoadingAtom();
+    resetManagedSubscriptionsLoadingAtom();
+    clearMemberGroupsPolling();
     resetResourceDownloadControllerAtom();
     resetGlobalDownloadsAtom();
     resetAddressInfoControllerAtom();
     resetBlobControllerAtom();
     resetNavigationControllerAtom();
+    resetNotificationsByAddressAtom();
     resetEnabledDevModeAtom();
     resetFullScreenAtom();
     resetHasSettingsChangedAtom();
@@ -185,11 +212,18 @@ export function useAppReset() {
     resettxListAtomAtom,
     resetmemberGroupsAtomAtom,
     resetMyGroupsWhereIAmAdminAtom,
+    resetMyMemberGroupsAtom,
+    resetMyMemberGroupsLastFetchedAtom,
+    resetMySubscriptionsAtom,
+    resetManagedSubscriptionsAtom,
+    resetSubscriptionsLoadingAtom,
+    resetManagedSubscriptionsLoadingAtom,
     resetResourceDownloadControllerAtom,
     resetGlobalDownloadsAtom,
     resetAddressInfoControllerAtom,
     resetBlobControllerAtom,
     resetNavigationControllerAtom,
+    resetNotificationsByAddressAtom,
     resetEnabledDevModeAtom,
     resetFullScreenAtom,
     resetHasSettingsChangedAtom,

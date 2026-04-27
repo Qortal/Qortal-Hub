@@ -1713,8 +1713,9 @@ export const UserLookup = ({
                     >
                       <Typography
                         sx={{
-                          fontFamily: 'monospace',
-                          fontSize: '0.82rem',
+                          fontSize: '0.86rem',
+                          fontWeight: 600,
+                          letterSpacing: '-0.01em',
                           lineHeight: 1.52,
                           wordBreak: 'break-all',
                         }}

@@ -13,12 +13,11 @@ import { subscribeToEvent, unsubscribeFromEvent } from '../utils/events';
 import {
   extStateAtom,
   isOpenCoreSetup,
-  isOpenDialogCoreRecommendationAtom,
+  isPublicNodeUnavailableAtom,
   selectedNodeInfoAtom,
   statusesAtom,
 } from '../atoms/global';
 import { useAtom } from 'jotai';
-import { CoreSetupRecommendationDialog } from './CoreSetupRecommendationDialog';
 import { CoreSetupResetApikeyDialog } from './CoreSetupResetApikeyDialog';
 import { CustomNodeApikeyDialog } from './CustomNodeApikeyDialog';
 import { CoreSyncing } from './CoreSyncing';
@@ -33,11 +32,11 @@ export const CoreSetup = () => {
   const [statuses, setStatuses] = useAtom(statusesAtom);
   const [selectedNode] = useAtom(selectedNodeInfoAtom);
   const [extState] = useAtom(extStateAtom);
-  const [isOpenRecommendation, setIsOpenRecommendation] = useAtom(
-    isOpenDialogCoreRecommendationAtom
+  const [publicNodeUnavailable, setPublicNodeUnavailable] = useAtom(
+    isPublicNodeUnavailableAtom
   );
   const isLocal = cleanUrl(selectedNode?.url) === LOCALHOST_12391;
-  const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
+  const { authenticate, getBalanceFunc, handleSaveNodeInfo } = useAuth();
   const [customQortalPath, setCustomQortalPath] = useState('');
   const [showLocalReadyNotice, setShowLocalReadyNotice] = useState(false);
   const [localNodeRuntimeStatus, setLocalNodeRuntimeStatus] = useState<{
@@ -46,6 +45,8 @@ export const CoreSetup = () => {
   } | null>(null);
   const [startCoreSetupAtIntro, setStartCoreSetupAtIntro] = useState(false);
   const [localReadySwitchError, setLocalReadySwitchError] = useState('');
+  const [setupContextActionLoading, setSetupContextActionLoading] =
+    useState(false);
   const inFlight = useRef(false);
   const autoStartAttemptedRef = useRef(false);
   const localReadyDismissedRef = useRef(false);
@@ -138,7 +139,7 @@ export const CoreSetup = () => {
           window.coreSetup.startCore();
         } else {
           setStartCoreSetupAtIntro(true);
-          setIsOpenRecommendation(true);
+          setOpen(true);
         }
       } catch (error) {
         console.error('Failed to auto-start local Core:', error);
@@ -150,7 +151,7 @@ export const CoreSetup = () => {
     return () => {
       canceled = true;
     };
-  }, [extState, isReady, setIsOpenRecommendation, usingDefaultPublicNode]);
+  }, [extState, isReady, setOpen, usingDefaultPublicNode]);
 
   const isCoreInstalledState = statuses['downloadedCore']?.status === 'done';
   const isCoreRunningState = statuses['coreRunning']?.status === 'done';
@@ -258,7 +259,62 @@ export const CoreSetup = () => {
     };
   }, [extState, isLocal, selectedNode?.url]);
 
-  const switchToLocalNode = useCallback(async () => {
+  useEffect(() => {
+    if (!window?.coreSetup || !open) return;
+
+    let canceled = false;
+
+    const checkLocalNodeStatusForSetup = async () => {
+      try {
+        const running = Boolean(await window.coreSetup.isCoreRunning());
+        if (canceled) return;
+
+        if (!running) {
+          setLocalNodeRuntimeStatus({ running: false });
+          return;
+        }
+
+        try {
+          const statusResponse = await fetch(
+            `${HTTP_LOCALHOST_12391}/admin/status`
+          );
+          if (canceled) return;
+
+          if (!statusResponse.ok) {
+            setLocalNodeRuntimeStatus({ running: true });
+            return;
+          }
+
+          const status = await statusResponse.json();
+          const syncPercent = Number(status?.syncPercent);
+          setLocalNodeRuntimeStatus({
+            running: true,
+            syncPercent: Number.isFinite(syncPercent) ? syncPercent : undefined,
+          });
+        } catch (error) {
+          if (!canceled) {
+            setLocalNodeRuntimeStatus({ running: true });
+          }
+        }
+      } catch (error) {
+        if (!canceled) {
+          setLocalNodeRuntimeStatus({ running: false });
+        }
+      }
+    };
+
+    checkLocalNodeStatusForSetup();
+    const interval = window.setInterval(checkLocalNodeStatusForSetup, 5000);
+
+    return () => {
+      canceled = true;
+      window.clearInterval(interval);
+    };
+  }, [open]);
+
+  const switchToLocalNode = useCallback(async (options?: {
+    authenticateAfterSwitch?: boolean;
+  }) => {
     if (switchingToLocalRef.current) return;
     switchingToLocalRef.current = true;
 
@@ -286,7 +342,13 @@ export const CoreSetup = () => {
         url: localNodeUrl,
         apikey: apiKey || '',
       });
-      await getBalanceFunc();
+
+      if (options?.authenticateAfterSwitch) {
+        await authenticate(true);
+      } else if (extState === 'authenticated') {
+        await getBalanceFunc();
+      }
+
       dismissLocalReadyNotice();
     } catch (error) {
       console.error('Failed to switch to local node:', error);
@@ -296,7 +358,102 @@ export const CoreSetup = () => {
     } finally {
       switchingToLocalRef.current = false;
     }
-  }, [dismissLocalReadyNotice, getBalanceFunc, handleSaveNodeInfo]);
+  }, [
+    authenticate,
+    dismissLocalReadyNotice,
+    extState,
+    getBalanceFunc,
+    handleSaveNodeInfo,
+  ]);
+
+  const isPublicNodeReachable = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${HTTPS_EXT_NODE_QORTAL_LINK}/admin/status`
+      );
+      return response.ok;
+    } catch (error) {
+      return false;
+    }
+  }, []);
+
+  const usePublicNodeWhileSyncing = useCallback(async () => {
+    setSetupContextActionLoading(true);
+    try {
+      if (!(await isPublicNodeReachable())) {
+        setPublicNodeUnavailable(true);
+        return;
+      }
+
+      setPublicNodeUnavailable(false);
+      await handleSaveNodeInfo({
+        url: HTTPS_EXT_NODE_QORTAL_LINK,
+        apikey: '',
+      });
+      setOpen(false);
+      setStartCoreSetupAtIntro(false);
+
+      if (extState === 'wallet-dropped') {
+        await authenticate(true);
+      } else if (extState === 'authenticated') {
+        await getBalanceFunc();
+      }
+    } catch (error) {
+      console.error('Failed to use public node while Core syncs:', error);
+    } finally {
+      setSetupContextActionLoading(false);
+    }
+  }, [
+    authenticate,
+    extState,
+    getBalanceFunc,
+    handleSaveNodeInfo,
+    isPublicNodeReachable,
+    setOpen,
+    setPublicNodeUnavailable,
+  ]);
+
+  const useLocalNodeFromSetup = useCallback(async () => {
+    setSetupContextActionLoading(true);
+    try {
+      await switchToLocalNode({
+        authenticateAfterSwitch: extState === 'wallet-dropped',
+      });
+      setOpen(false);
+      setStartCoreSetupAtIntro(false);
+    } finally {
+      setSetupContextActionLoading(false);
+    }
+  }, [extState, setOpen, switchToLocalNode]);
+
+  const localCoreSynced = isLocalCoreStatusSynced(
+    localNodeRuntimeStatus?.syncPercent
+  );
+  const localCoreRunning = Boolean(
+    isCoreRunningState || localNodeRuntimeStatus?.running
+  );
+  const isCoreSyncingForDialog = localCoreRunning && !localCoreSynced;
+  const shouldOfferPublicLobby =
+    isLocal &&
+    isCoreSyncingForDialog &&
+    !publicNodeUnavailable &&
+    extState !== 'authenticated';
+  const shouldOfferLocalFallback =
+    !isLocal && publicNodeUnavailable && localCoreRunning;
+  const contextualActionLabel = shouldOfferPublicLobby
+    ? 'Use Public'
+    : shouldOfferLocalFallback
+      ? localCoreSynced
+        ? 'Use Local'
+        : 'Local not ready'
+      : undefined;
+  const contextualActionDisabled =
+    shouldOfferLocalFallback && !localCoreSynced;
+  const contextualAction = shouldOfferPublicLobby
+    ? usePublicNodeWhileSyncing
+    : shouldOfferLocalFallback
+      ? useLocalNodeFromSetup
+      : undefined;
 
   const coreStatusNotice = useMemo(() => {
     const downloadedState = statuses.downloadedCore;
@@ -441,22 +598,15 @@ export const CoreSetup = () => {
           }
         }}
         steps={statuses}
-        isCoreSyncing={
-          isCoreRunningState &&
-          !showLocalReadyNotice &&
-          !isLocal &&
-          !isLocalCoreStatusSynced(localNodeRuntimeStatus?.syncPercent)
-        }
+        isCoreSyncing={isCoreSyncingForDialog}
+        coreSyncPercent={localNodeRuntimeStatus?.syncPercent}
         customQortalPath={customQortalPath}
         verifyCoreNotRunningFunc={verifyCoreNotRunningFunc}
-      />
-      <CoreSetupRecommendationDialog
-        open={isOpenRecommendation}
-        openLocalSetup={() => {
-          setStartCoreSetupAtIntro(true);
-          setOpen(true);
-        }}
-        onClose={() => setIsOpenRecommendation(false)}
+        publicNodeUnavailable={publicNodeUnavailable}
+        contextualActionLabel={contextualActionLabel}
+        contextualActionDisabled={contextualActionDisabled}
+        contextualActionLoading={setupContextActionLoading}
+        onContextualAction={contextualAction}
       />
       {coreStatusNotice && (
         <Box

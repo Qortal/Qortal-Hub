@@ -4,6 +4,7 @@ import GroupsIcon from '@mui/icons-material/Groups';
 import VideoLibraryIcon from '@mui/icons-material/VideoLibrary';
 import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../../utils/events';
+import { openQChatTab } from '../../utils/openQChatTab';
 
 // TODO: replace with real group IDs once confirmed
 const CORE_SUPPORT_GROUP = { id: 120, name: 'Qortal-CORE-Support' };
@@ -11,7 +12,6 @@ const DEVNET_TESTING_GROUP = { id: 269, name: 'Q-App-DevNet-Testing' };
 
 interface HomeDeveloperTabProps {
   getTimestampEnterChat: () => void;
-  setDesktopViewMode: (mode: string) => void;
   setGroupSection: (section: string) => void;
   setMobileViewMode: (mode: string) => void;
   setSelectedGroup: (group: any) => void;
@@ -19,7 +19,6 @@ interface HomeDeveloperTabProps {
 
 export const HomeDeveloperTab = ({
   getTimestampEnterChat,
-  setDesktopViewMode,
   setGroupSection,
   setMobileViewMode,
   setSelectedGroup,
@@ -37,7 +36,7 @@ export const HomeDeveloperTab = ({
     setMobileViewMode('group');
     getTimestampEnterChat();
     setGroupSection('default');
-    setDesktopViewMode('chat');
+    openQChatTab();
   };
 
   const cards = [

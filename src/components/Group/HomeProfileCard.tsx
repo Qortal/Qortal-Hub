@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { LoadingButton } from '@mui/lab';
+import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import CloseIcon from '@mui/icons-material/Close';
@@ -42,6 +43,8 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import {
+  blockedAddressesAtom,
+  blockedNamesAtom,
   enabledDevModeAtom,
   rawWalletAtom,
   userInfoAtom,
@@ -76,6 +79,8 @@ import { getBlueTier1ButtonSx } from '../../styles/blueMaterial';
 import BorderGlow from '../common/BorderGlow';
 import TiltedCard from '../common/TiltedCard';
 import { GROUP_ACTIVITY_BLUE } from './groupActivityColorSystem';
+import { Save } from '../Save/Save';
+import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 
 type HomeProfileCardProps = {
   onOpenReceive?: (anchorEl: HTMLElement) => void;
@@ -133,6 +138,8 @@ export const HomeProfileCard = ({
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const userInfo = useAtomValue(userInfoAtom);
   const rawWallet = useAtomValue(rawWalletAtom);
+  const blockedAddresses = useAtomValue(blockedAddressesAtom);
+  const blockedNames = useAtomValue(blockedNamesAtom);
   const setUserInfo = useSetAtom(userInfoAtom);
   const setOpenSnack = useSetAtom(openSnackGlobalAtom);
   const setInfoSnack = useSetAtom(infoSnackGlobalAtom);
@@ -152,6 +159,7 @@ export const HomeProfileCard = ({
   );
   const [avatarPanelHeight, setAvatarPanelHeight] = useState(430);
   const [isAvatarLoading, setIsAvatarLoading] = useState(false);
+  const avatarPanelWasOpenRef = useRef(false);
   const [isAddressFieldHovered, setIsAddressFieldHovered] = useState(false);
   const [isAvatarGlowHovered, setIsAvatarGlowHovered] = useState(false);
   const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
@@ -191,6 +199,7 @@ export const HomeProfileCard = ({
     useState<HTMLElement | null>(null);
   const [accountStatusOverride, setAccountStatusOverride] =
     useState<AccountStatus | null>(null);
+  const { refreshBlockedUsers, removeBlockFromList } = useBlockedAddresses(true);
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
@@ -261,39 +270,55 @@ export const HomeProfileCard = ({
     ? alpha(theme.palette.primary.light, 0.88)
     : alpha(theme.palette.primary.main, 0.84);
   const privacyBlurClassName = isPrivacyModeActive ? 'privacy-blur' : undefined;
+  const td = useCallback(
+    (key: string, defaultValue: string, options = {}) =>
+      t(`group:dashboard.${key}`, { defaultValue, ...options }),
+    [t]
+  );
   const accountSettingsTabs = useMemo(
     () => [
       {
-        description: 'Update your registered name directly from the dashboard.',
+        description: td(
+          'profile_settings_description',
+          'Review your name and account identity.'
+        ),
         icon: PersonIcon,
         key: 'profile' as const,
-        label: 'Profile',
-        title: 'Profile Settings',
+        label: td('profile', 'Profile'),
+        title: td('profile_settings', 'Profile Settings'),
       },
       {
-        description:
-          'Reveal and copy your private key (not recommended for most users).',
+        description: td(
+          'security_settings_description',
+          'Reveal and copy your private key only when absolutely needed.'
+        ),
         icon: LockOutlinedIcon,
         key: 'security' as const,
-        label: 'Security',
-        title: 'Security Settings',
+        label: td('security', 'Security'),
+        title: td('security_settings', 'Security Settings'),
       },
       {
-        description: 'Enable developer tools and diagnostics for advanced testing.',
+        description: td(
+          'developer_settings_description',
+          'Enable developer tools and diagnostics for advanced testing.'
+        ),
         icon: CodeRoundedIcon,
         key: 'developer' as const,
-        label: 'Developer',
-        title: 'Developer Settings',
+        label: td('developer', 'Developer'),
+        title: td('developer_settings', 'Developer Settings'),
       },
       {
-        description: 'Control notifications and motion preferences across the Hub.',
+        description: td(
+          'system_settings_description',
+          'Control notifications, motion, pinned apps, and blocked accounts.'
+        ),
         icon: TuneRoundedIcon,
         key: 'system' as const,
-        label: 'System',
-        title: 'System Settings',
+        label: td('system', 'System'),
+        title: td('system_settings', 'System Settings'),
       },
     ],
-    []
+    [td]
   );
 
   const openAvatarPanel = useCallback((target: HTMLElement | null) => {
@@ -372,6 +397,16 @@ export const HomeProfileCard = ({
   const accountIdentitySecondaryText = address ?? '—';
   const shouldRevealAddressOnHover = hasRegisteredName && Boolean(address);
   const showAnimatedAddress = shouldRevealAddressOnHover && isAddressFieldHovered;
+  const blockedAddressEntries = useMemo(
+    () => Object.keys(blockedAddresses || {}),
+    [blockedAddresses]
+  );
+  const blockedNameEntries = useMemo(
+    () => Object.keys(blockedNames || {}),
+    [blockedNames]
+  );
+  const blockedCount =
+    blockedAddressEntries.length + blockedNameEntries.length;
   const addressFieldActionButtonSizePx = 26;
   const addressFieldActionGapPx = 1;
   const addressFieldActionBaseColor = isDarkMode
@@ -560,7 +595,6 @@ export const HomeProfileCard = ({
   const closeAccountSettingsModal = useCallback(() => {
     if (isChangeNameLoading) return;
     setIsAccountSettingsOpen(false);
-    setActiveSettingsTab('profile');
     setChangeNameValue('');
     setChangeNameAvailability('null');
     setCurrentNameMetaError(null);
@@ -589,6 +623,16 @@ export const HomeProfileCard = ({
     },
     [loadAppNotificationsPreference]
   );
+
+  useEffect(() => {
+    if (!isAccountSettingsOpen || activeSettingsTab !== 'system') return;
+
+    // Q-Apps such as Quitter can update Core block lists outside Hub's atoms.
+    // Refresh on tab entry so System reflects the real local block list.
+    refreshBlockedUsers().catch((error) => {
+      console.error('Unable to refresh blocked users.', error);
+    });
+  }, [activeSettingsTab, isAccountSettingsOpen, refreshBlockedUsers]);
 
   const handleOpenAccountStatusMenu = useCallback(
     (event: MouseEvent<HTMLElement>) => {
@@ -638,12 +682,15 @@ export const HomeProfileCard = ({
         setAreAppNotificationsEnabled(shouldReduceNotifications);
         setInfoSnack({
           type: 'error',
-          message: 'We could not update app notifications right now.',
+          message: td(
+            'notifications_update_error',
+            'We could not update app notifications right now.'
+          ),
         });
         setOpenSnack(true);
       }
     },
-    [setInfoSnack, setOpenSnack]
+    [setInfoSnack, setOpenSnack, td]
   );
 
   const handleToggleDevMode = useCallback(
@@ -670,12 +717,19 @@ export const HomeProfileCard = ({
 
   const revealPrivateKey = useCallback(async () => {
     if (!rawWallet) {
-      setPrivateKeyError('Wallet data is unavailable right now.');
+      setPrivateKeyError(
+        td('wallet_unavailable_error', 'Wallet data is unavailable right now.')
+      );
       return;
     }
 
     if (!securityPassword.trim()) {
-      setPrivateKeyError('Enter your wallet password to decrypt the private key.');
+      setPrivateKeyError(
+        td(
+          'wallet_password_required',
+          'Enter your wallet password to decrypt the private key.'
+        )
+      );
       return;
     }
 
@@ -701,13 +755,18 @@ export const HomeProfileCard = ({
       setRevealedPrivateKey('');
       setPrivateKeyError(
         error instanceof Error && error.message
-          ? `We could not decrypt your wallet: ${error.message}`
-          : 'We could not decrypt your wallet with that password.'
+          ? td('wallet_decrypt_error_with_message', 'We could not decrypt your wallet: {{message}}', {
+              message: error.message,
+            })
+          : td(
+              'wallet_decrypt_error',
+              'We could not decrypt your wallet with that password.'
+            )
       );
     } finally {
       setIsRevealingPrivateKey(false);
     }
-  }, [rawWallet, securityPassword]);
+  }, [rawWallet, securityPassword, td]);
 
   const copyPrivateKey = useCallback(() => {
     if (!revealedPrivateKey) return;
@@ -715,10 +774,10 @@ export const HomeProfileCard = ({
     navigator.clipboard.writeText(revealedPrivateKey);
     setInfoSnack({
       type: 'success',
-      message: 'Private key copied to clipboard.',
+      message: td('private_key_copied', 'Private key copied to clipboard.'),
     });
     setOpenSnack(true);
-  }, [revealedPrivateKey, setInfoSnack, setOpenSnack]);
+  }, [revealedPrivateKey, setInfoSnack, setOpenSnack, td]);
 
   const avatarUrl =
     tempAvatar ??
@@ -1029,6 +1088,20 @@ export const HomeProfileCard = ({
   };
 
   const isAvatarPanelOpen = Boolean(avatarAnchorEl);
+  useEffect(() => {
+    if (isAvatarPanelOpen) {
+      avatarPanelWasOpenRef.current = true;
+      return;
+    }
+
+    if (!avatarPanelWasOpenRef.current) {
+      return;
+    }
+
+    avatarPanelWasOpenRef.current = false;
+    executeEvent('avatarUploadClosed', {});
+  }, [isAvatarPanelOpen]);
+
   const avatarPanelOriginRadius = 22;
   const avatarPanelTargetRadius = 20;
   const avatarPanelWidth =
@@ -1496,7 +1569,7 @@ export const HomeProfileCard = ({
               width: '100%',
             }}
           >
-            Account Overview
+            {td('account_overview', 'Account Overview')}
           </Typography>
 
           <Box
@@ -1575,14 +1648,8 @@ export const HomeProfileCard = ({
                     : alpha(theme.palette.text.primary, 0.72),
                   display: 'flex',
                   flex: '1 1 auto',
-                  fontFamily: shouldRevealAddressOnHover
-                    ? showAnimatedAddress
-                      ? 'monospace'
-                      : 'inherit'
-                    : hasRegisteredName
-                      ? 'inherit'
-                      : 'monospace',
                   fontSize: '0.84rem',
+                  fontWeight: 560,
                   justifyContent: 'flex-start',
                   minWidth: 0,
                   pr: '4px',
@@ -1655,7 +1722,7 @@ export const HomeProfileCard = ({
                   }}
                 >
                   {onOpenReceive ? (
-                    <Tooltip enterDelay={450} title="Show receive QR">
+                    <Tooltip enterDelay={450} title={td('show_receive_qr', 'Show receive QR')}>
                       <Box component="span">
                         <ButtonBase
                           onClick={(event) => {
@@ -1663,7 +1730,7 @@ export const HomeProfileCard = ({
                             onOpenReceive(event.currentTarget);
                           }}
                           disabled={!address}
-                          aria-label="Show receive QR"
+                          aria-label={td('show_receive_qr', 'Show receive QR')}
                           sx={{
                             alignItems: 'center',
                             borderRadius: '8px',
@@ -1692,7 +1759,7 @@ export const HomeProfileCard = ({
                       handleCopyAddress();
                     }}
                     disabled={!address}
-                    aria-label="Copy address"
+                    aria-label={td('copy_address', 'Copy address')}
                     sx={{
                       alignItems: 'center',
                       borderRadius: '8px',
@@ -1782,7 +1849,7 @@ export const HomeProfileCard = ({
               width: '100%',
             }}
           >
-            QORTAL NAME & ADDRESS
+            {td('qortal_name_address', 'QORTAL NAME & ADDRESS')}
           </Typography>
         </Box>
       </Box>
@@ -1982,10 +2049,15 @@ export const HomeProfileCard = ({
             })}
 
             <Box sx={{ mt: 'auto', pt: 1.6, display: 'flex', justifyContent: 'center' }}>
-              <Tooltip title="Privacy Mode: Blurs sensitive info for screen sharing">
+              <Tooltip
+                title={td(
+                  'privacy_mode_tooltip',
+                  'Privacy Mode: Blurs sensitive info for screen sharing'
+                )}
+              >
                 <ButtonBase
                   onClick={handleTogglePrivacyMode}
-                  aria-label="Toggle privacy mode"
+                  aria-label={td('toggle_privacy_mode', 'Toggle privacy mode')}
                   sx={{
                     borderRadius: '999px',
                     color: isPrivacyModeActive
@@ -2089,6 +2161,7 @@ export const HomeProfileCard = ({
                 flex: 1,
                 flexDirection: 'column',
                 gap: 1.25,
+                overflowY: 'auto',
                 px: 2.3,
                 pb: 2.2,
                 pt: 1.9,
@@ -2114,7 +2187,7 @@ export const HomeProfileCard = ({
                           textTransform: 'uppercase',
                         }}
                       >
-                        Current name
+                        {td('current_name', 'Current name')}
                       </Typography>
                       <Typography
                         className={privacyBlurClassName}
@@ -2125,8 +2198,48 @@ export const HomeProfileCard = ({
                           letterSpacing: '-0.01em',
                         }}
                       >
-                        {name ?? 'No name registered'}
+                        {name ?? td('no_name_registered', 'No name registered')}
                       </Typography>
+                      {!hasRegisteredName ? (
+                        <ButtonBase
+                          aria-label={td('register_name', 'Register name')}
+                          onClick={() => {
+                            closeAccountSettingsModal();
+                            window.setTimeout(() => {
+                              executeEvent('openRegisterName', {});
+                            }, 80);
+                          }}
+                          sx={{
+                            alignItems: 'center',
+                            alignSelf: 'flex-start',
+                            borderRadius: '8px',
+                            color: theme.palette.primary.light,
+                            display: 'inline-flex',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            gap: 0.45,
+                            mt: 0.55,
+                            px: 0.15,
+                            py: 0.35,
+                            transition: 'color 140ms ease, opacity 140ms ease',
+                            '&:hover': {
+                              color: theme.palette.primary.main,
+                            },
+                          }}
+                        >
+                          <Typography
+                            component="span"
+                            sx={{
+                              fontSize: 'inherit',
+                              fontWeight: 'inherit',
+                              lineHeight: 1.25,
+                            }}
+                          >
+                            {td('register_name', 'Register name')}
+                          </Typography>
+                          <ArrowForwardRoundedIcon sx={{ fontSize: 15 }} />
+                        </ButtonBase>
+                      ) : null}
                     </Box>
 
                     <Box
@@ -2146,20 +2259,19 @@ export const HomeProfileCard = ({
                           textTransform: 'uppercase',
                         }}
                       >
-                        Wallet address
+                        {td('wallet_address', 'Wallet address')}
                       </Typography>
                       <Typography
                         className={privacyBlurClassName}
                         sx={{
                           color: theme.palette.text.primary,
-                          fontFamily: 'monospace',
-                          fontSize: '0.81rem',
-                          fontWeight: 600,
+                          fontSize: '0.9rem',
+                          fontWeight: 700,
                           letterSpacing: '-0.01em',
                           wordBreak: 'break-all',
                         }}
                       >
-                        {address ?? 'Unavailable'}
+                        {address ?? td('unavailable', 'Unavailable')}
                       </Typography>
                     </Box>
                   </Box>
@@ -2191,137 +2303,12 @@ export const HomeProfileCard = ({
                         lineHeight: 1.48,
                       }}
                     >
-                      {name
-                        ? `Changing your name updates the current one on-chain and keeps its existing name data attached.${formattedChangeNameFee ? ` Fee: ${formattedChangeNameFee} QORT.` : ''}`
-                        : 'Register a name first, then you can rename it here any time from the dashboard.'}
+                      {td(
+                        'names_qapp_actions_hint',
+                        'Buy, sell, and name-change actions should be handled in the Names Q-App.'
+                      )}
                     </Typography>
                   </Box>
-
-                  <Box sx={{ display: 'grid', gap: 1.05 }}>
-                    <Box
-                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}
-                    >
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.secondary,
-                          display: 'block',
-                          fontSize: '0.74rem',
-                          fontWeight: 600,
-                          letterSpacing: '0.01em',
-                        }}
-                      >
-                        New name
-                      </Typography>
-                      <TextField
-                        autoComplete="off"
-                        autoFocus={activeSettingsTab === 'profile'}
-                        fullWidth
-                        variant="outlined"
-                        size="small"
-                        onChange={(event) => setChangeNameValue(event.target.value)}
-                        value={changeNameValue}
-                        placeholder="Enter a new name"
-                        sx={compactProfileFieldSx}
-                      />
-                    </Box>
-
-                    <Box
-                      sx={{ display: 'flex', flexDirection: 'column', gap: 0.72 }}
-                    >
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.secondary,
-                          display: 'block',
-                          fontSize: '0.74rem',
-                          fontWeight: 600,
-                          letterSpacing: '0.01em',
-                        }}
-                      >
-                        Wallet password
-                      </Typography>
-                      <TextField
-                        autoComplete="off"
-                        fullWidth
-                        type="password"
-                        variant="outlined"
-                        size="small"
-                        name="hub-change-name-confirmation"
-                        onFocus={() => setIsChangeNamePasswordEditable(true)}
-                        onMouseDown={() =>
-                          setIsChangeNamePasswordEditable(true)
-                        }
-                        onBlur={() => {
-                          if (!changeNamePassword) {
-                            setIsChangeNamePasswordEditable(false);
-                          }
-                        }}
-                        onChange={(event) =>
-                          setChangeNamePassword(event.target.value)
-                        }
-                        value={changeNamePassword}
-                        placeholder="Enter your wallet password"
-                        sx={compactProfileFieldSx}
-                        InputProps={{
-                          readOnly: !isChangeNamePasswordEditable,
-                        }}
-                        inputProps={{
-                          autoComplete: 'new-password',
-                          'data-1p-ignore': 'true',
-                          'data-lpignore': 'true',
-                          spellCheck: 'false',
-                        }}
-                      />
-                    </Box>
-                  </Box>
-
-                  <Box sx={{ minHeight: '20px' }}>
-                    {changeNameStatusTone ? (
-                      <Typography
-                        sx={{
-                          color: changeNameStatusTone.color,
-                          fontSize: '0.73rem',
-                          fontWeight:
-                            changeNameAvailability === 'loading' ? 500 : 600,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {changeNameStatusTone.label}
-                      </Typography>
-                    ) : null}
-                  </Box>
-
-                  {currentNameMetaError ? (
-                    <Box
-                      sx={{
-                        alignItems: 'flex-start',
-                        backgroundColor: avatarWarningTone.background,
-                        border: `1px solid ${avatarWarningTone.border}`,
-                        borderRadius: '12px',
-                        display: 'flex',
-                        gap: 1,
-                        px: 1.25,
-                        py: 1.1,
-                      }}
-                    >
-                      <ErrorIcon
-                        sx={{
-                          color: avatarWarningTone.icon,
-                          flexShrink: 0,
-                          fontSize: 18,
-                          mt: '1px',
-                        }}
-                      />
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.secondary,
-                          fontSize: '0.76rem',
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {currentNameMetaError}
-                      </Typography>
-                    </Box>
-                  ) : null}
 
                   <Box
                     sx={{
@@ -2337,7 +2324,7 @@ export const HomeProfileCard = ({
                         lineHeight: 1.5,
                       }}
                     >
-                      For selling or buying names, check the Q-App called:{' '}
+                      {td('open_the', 'Open the')}{' '}
                       <Box
                         component="span"
                         sx={{
@@ -2345,41 +2332,15 @@ export const HomeProfileCard = ({
                           fontWeight: 700,
                         }}
                       >
-                        Names
+                        {td('names', 'Names')}
                       </Box>
-                      .
+                      {' '}
+                      {td(
+                        'names_qapp_hint_suffix',
+                        'Q-App for buying names, selling names, or changing your registered name.'
+                      )}
                     </Typography>
                   </Box>
-
-                  <LoadingButton
-                    loading={isChangeNameLoading}
-                    disabled={isChangeNameSubmitDisabled || !hasRegisteredName}
-                    onClick={submitNameChange}
-                    variant="contained"
-                    fullWidth
-                    sx={{
-                      borderRadius: '10px',
-                      ...getBlueTier1ButtonSx(),
-                      fontSize: '0.82rem',
-                      fontWeight: 600,
-                      minHeight: 42,
-                      textTransform: 'none',
-                      '&.Mui-disabled': {
-                        background: isDarkMode
-                          ? 'rgba(255,255,255,0.035)'
-                          : 'rgba(24,29,36,0.04)',
-                        border: isDarkMode
-                          ? '1px solid rgba(255,255,255,0.055)'
-                          : '1px solid rgba(24,29,36,0.06)',
-                        boxShadow: 'none',
-                        color: isDarkMode
-                          ? 'rgba(255,255,255,0.34)'
-                          : 'rgba(24,29,36,0.34)',
-                      },
-                    }}
-                  >
-                    Save new name
-                  </LoadingButton>
                 </>
               ) : null}
 
@@ -2412,8 +2373,10 @@ export const HomeProfileCard = ({
                         lineHeight: 1.45,
                       }}
                     >
-                      Never share your private key. Anyone who has it could
-                      potentially control this wallet and its funds.
+                      {td(
+                        'private_key_warning',
+                        'Never share your private key. Anyone who has it could potentially control this wallet and its funds.'
+                      )}
                     </Typography>
                   </Box>
 
@@ -2434,19 +2397,19 @@ export const HomeProfileCard = ({
                         textTransform: 'uppercase',
                       }}
                     >
-                      Wallet address
+                      {td('wallet_address', 'Wallet address')}
                     </Typography>
                     <Typography
                       className={privacyBlurClassName}
                       sx={{
                         color: theme.palette.text.primary,
-                        fontFamily: 'monospace',
-                        fontSize: '0.81rem',
-                        fontWeight: 600,
+                        fontSize: '0.9rem',
+                        fontWeight: 700,
+                        letterSpacing: '-0.01em',
                         wordBreak: 'break-all',
                       }}
                     >
-                      {address ?? 'Unavailable'}
+                      {address ?? td('unavailable', 'Unavailable')}
                     </Typography>
                   </Box>
 
@@ -2467,7 +2430,7 @@ export const HomeProfileCard = ({
                         letterSpacing: '0.01em',
                       }}
                     >
-                      Wallet password
+                      {td('wallet_password', 'Wallet password')}
                     </Typography>
                     <TextField
                       autoComplete="off"
@@ -2485,7 +2448,10 @@ export const HomeProfileCard = ({
                       }}
                       onChange={(event) => setSecurityPassword(event.target.value)}
                       value={securityPassword}
-                      placeholder="Enter your wallet password"
+                      placeholder={td(
+                        'wallet_password_placeholder',
+                        'Enter your wallet password'
+                      )}
                       sx={compactNeutralFieldSx}
                       InputProps={{
                         readOnly: !isSecurityPasswordEditable,
@@ -2525,7 +2491,7 @@ export const HomeProfileCard = ({
                         },
                       }}
                     >
-                      Decrypt
+                      {td('decrypt', 'Decrypt')}
                     </LoadingButton>
                     <LoadingButton
                       disabled={!revealedPrivateKey}
@@ -2540,7 +2506,7 @@ export const HomeProfileCard = ({
                         textTransform: 'none',
                       }}
                     >
-                      Copy key
+                      {td('copy_key', 'Copy key')}
                     </LoadingButton>
                   </Box>
 
@@ -2580,7 +2546,7 @@ export const HomeProfileCard = ({
                         textTransform: 'uppercase',
                       }}
                     >
-                      Private key
+                      {td('private_key', 'Private key')}
                     </Typography>
                     <Typography
                       className={revealedPrivateKey ? privacyBlurClassName : undefined}
@@ -2597,7 +2563,10 @@ export const HomeProfileCard = ({
                       }}
                     >
                       {revealedPrivateKey ||
-                        'Decrypt your private key only when you need to recover or migrate this wallet.'}
+                        td(
+                          'private_key_hint',
+                          'Decrypt your private key only when you need to recover or migrate this wallet.'
+                        )}
                     </Typography>
                   </Box>
                 </>
@@ -2631,7 +2600,7 @@ export const HomeProfileCard = ({
                           letterSpacing: '0.01em',
                         }}
                       >
-                        Enable Dev Mode
+                        {td('enable_dev_mode', 'Enable Dev Mode')}
                       </Typography>
                       <Typography
                         sx={{
@@ -2641,8 +2610,10 @@ export const HomeProfileCard = ({
                           mt: 0.4,
                         }}
                       >
-                        Unlock local developer surfaces, diagnostics, and testing tools
-                        across the Hub.
+                        {td(
+                          'enable_dev_mode_desc',
+                          'Unlock local developer surfaces, diagnostics, and testing tools across the Hub.'
+                        )}
                       </Typography>
                     </Box>
                     <Switch
@@ -2678,9 +2649,10 @@ export const HomeProfileCard = ({
                         lineHeight: 1.45,
                       }}
                     >
-                      Tip: "Once enabled, a new Developer Tools icon will appear
-                      in your sidebar. You might need to hover over the left edge
-                      to reveal it."
+                      {td(
+                        'dev_mode_tip',
+                        'Tip: Once enabled, a new Developer Tools icon will appear in your sidebar. You might need to hover over the left edge to reveal it.'
+                      )}
                     </Typography>
                   </Box>
                 </Box>
@@ -2714,7 +2686,7 @@ export const HomeProfileCard = ({
                           letterSpacing: '0.01em',
                         }}
                       >
-                        Reduce App Notifications
+                        {td('reduce_app_notifications', 'Reduce App Notifications')}
                       </Typography>
                       <Typography
                         sx={{
@@ -2724,8 +2696,10 @@ export const HomeProfileCard = ({
                           mt: 0.4,
                         }}
                       >
-                        Turn on to mute desktop push notifications. Leave off for
-                        normal Hub alerts.
+                        {td(
+                          'reduce_app_notifications_desc',
+                          'Turn on to mute desktop push notifications. Leave off for normal Hub alerts.'
+                        )}
                       </Typography>
                     </Box>
                     <Switch
@@ -2761,7 +2735,7 @@ export const HomeProfileCard = ({
                           letterSpacing: '0.01em',
                         }}
                       >
-                        Reduce UI Animations
+                        {td('reduce_ui_animations', 'Reduce UI Animations')}
                       </Typography>
                       <Typography
                         sx={{
@@ -2771,8 +2745,10 @@ export const HomeProfileCard = ({
                           mt: 0.4,
                         }}
                       >
-                        Turn on to minimize motion throughout the Hub. Leave off
-                        for the normal animated interface.
+                        {td(
+                          'reduce_ui_animations_desc',
+                          'Turn on to minimize motion throughout the Hub. Leave off for the normal animated interface.'
+                        )}
                       </Typography>
                     </Box>
                     <Switch
@@ -2780,6 +2756,282 @@ export const HomeProfileCard = ({
                       onChange={handleToggleUiAnimations}
                       sx={settingsSwitchSx}
                     />
+                  </Box>
+
+                  <Box
+                    sx={{
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      mx: 1.35,
+                    }}
+                  />
+
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'flex',
+                      gap: 1.2,
+                      justifyContent: 'space-between',
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.82rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        {td('pinned_qapp_backup', 'Pinned Q-App backup')}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                          mt: 0.4,
+                        }}
+                      >
+                        {td(
+                          'pinned_qapp_backup_desc',
+                          'Save your pinned Q-Apps to encrypted QDN settings so the same layout can follow you across devices.'
+                        )}
+                      </Typography>
+                    </Box>
+                    <Tooltip title={td('manage_backup', 'Manage backup')}>
+                      <Box component="span" sx={{ flexShrink: 0 }}>
+                        <Save
+                          isDesktop
+                          disableWidth={false}
+                          myName={userInfo?.name}
+                          toolbarModule
+                          buttonSx={{
+                            alignItems: 'center',
+                            backgroundColor: avatarModalSurfaceSoft,
+                            border: `1px solid ${avatarFieldBorder}`,
+                            borderRadius: '10px',
+                            display: 'inline-flex',
+                            height: 38,
+                            justifyContent: 'center',
+                            width: 42,
+                            '&:hover': {
+                              backgroundColor: alpha(
+                                theme.palette.primary.main,
+                                isDarkMode ? 0.12 : 0.08
+                              ),
+                              borderColor: alpha(theme.palette.primary.main, 0.32),
+                            },
+                          }}
+                        />
+                      </Box>
+                    </Tooltip>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      borderTop: `1px solid ${avatarSectionDivider}`,
+                      mx: 1.35,
+                    }}
+                  />
+
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 1,
+                      px: 1.35,
+                      py: 1.2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        alignItems: 'flex-start',
+                        display: 'flex',
+                        gap: 1.2,
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontSize: '0.82rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.01em',
+                          }}
+                        >
+                          {td('block_list', 'Block list')}
+                        </Typography>
+                        <Typography
+                          sx={{
+                            color: theme.palette.text.secondary,
+                            fontSize: '0.75rem',
+                            lineHeight: 1.45,
+                            mt: 0.4,
+                          }}
+                        >
+                          {td(
+                            'block_list_desc',
+                            'Review blocked names and addresses, then unblock accounts when you are ready.'
+                          )}
+                        </Typography>
+                      </Box>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          flexShrink: 0,
+                          fontSize: '0.73rem',
+                          fontWeight: 700,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {td('blocked_count', '{{count}} blocked', {
+                          count: blockedCount,
+                        })}
+                      </Typography>
+                    </Box>
+
+                    {blockedCount > 0 ? (
+                      <Box sx={{ display: 'grid', gap: 1 }}>
+                        {blockedNameEntries.length > 0 ? (
+                          <Box sx={{ display: 'grid', gap: 0.7 }}>
+                            <Typography
+                              sx={{
+                                color: theme.palette.text.secondary,
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {td('names', 'Names')}
+                            </Typography>
+                            {blockedNameEntries.map((blockedName) => (
+                              <Box
+                                key={blockedName}
+                                sx={{
+                                  alignItems: 'center',
+                                  display: 'flex',
+                                  gap: 1,
+                                  justifyContent: 'space-between',
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    color: theme.palette.text.primary,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {blockedName}
+                                </Typography>
+                                <ButtonBase
+                                  onClick={() =>
+                                    removeBlockFromList(undefined, blockedName)
+                                  }
+                                  sx={{
+                                    borderRadius: '8px',
+                                    color: theme.palette.primary.light,
+                                    flexShrink: 0,
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    px: 0.9,
+                                    py: 0.55,
+                                    '&:hover': {
+                                      backgroundColor: alpha(
+                                        theme.palette.primary.main,
+                                        0.1
+                                      ),
+                                    },
+                                  }}
+                                >
+                                  {td('unblock', 'Unblock')}
+                                </ButtonBase>
+                              </Box>
+                            ))}
+                          </Box>
+                        ) : null}
+
+                        {blockedAddressEntries.length > 0 ? (
+                          <Box sx={{ display: 'grid', gap: 0.7 }}>
+                            <Typography
+                              sx={{
+                                color: theme.palette.text.secondary,
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                              }}
+                            >
+                              {td('addresses', 'Addresses')}
+                            </Typography>
+                            {blockedAddressEntries.map((blockedAddress) => (
+                              <Box
+                                key={blockedAddress}
+                                sx={{
+                                  alignItems: 'center',
+                                  display: 'flex',
+                                  gap: 1,
+                                  justifyContent: 'space-between',
+                                }}
+                              >
+                                <Typography
+                                  sx={{
+                                    color: theme.palette.text.primary,
+                                    fontSize: '0.8rem',
+                                    fontWeight: 600,
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {blockedAddress}
+                                </Typography>
+                                <ButtonBase
+                                  onClick={() =>
+                                    removeBlockFromList(blockedAddress, undefined)
+                                  }
+                                  sx={{
+                                    borderRadius: '8px',
+                                    color: theme.palette.primary.light,
+                                    flexShrink: 0,
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700,
+                                    px: 0.9,
+                                    py: 0.55,
+                                    '&:hover': {
+                                      backgroundColor: alpha(
+                                        theme.palette.primary.main,
+                                        0.1
+                                      ),
+                                    },
+                                  }}
+                                >
+                                  {td('unblock', 'Unblock')}
+                                </ButtonBase>
+                              </Box>
+                            ))}
+                          </Box>
+                        ) : null}
+                      </Box>
+                    ) : (
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          fontSize: '0.75rem',
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {td('no_blocked_accounts', 'No blocked accounts yet.')}
+                      </Typography>
+                    )}
                   </Box>
                 </Box>
               ) : null}

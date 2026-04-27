@@ -35,6 +35,8 @@ export const QortPayment = ({
     'question',
     'tutorial',
   ]);
+  const td = (key: string, defaultValue: string) =>
+    t(`group:dashboard.${key}`, { defaultValue });
   const [paymentTo, setPaymentTo] = useState<string>(defaultPaymentTo);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');
@@ -72,6 +74,23 @@ export const QortPayment = ({
     flexDirection: 'column',
     gap: compact ? '6px' : '7px',
   } as const;
+  const formatSendPaymentError = (message: unknown) => {
+    const rawMessage =
+      typeof message === 'string'
+        ? message.trim()
+        : message instanceof Error
+          ? message.message.trim()
+          : '';
+
+    if (/\bNO_BALANCE\b/i.test(rawMessage)) {
+      return t('question:message.error.insufficient_balance_qort', {
+        defaultValue: 'Your QORT balance is insufficient.',
+        postProcess: 'capitalizeFirstChar',
+      });
+    }
+
+    return rawMessage;
+  };
 
   const textFieldSurfaceSx = {
     '& .MuiOutlinedInput-root': {
@@ -158,7 +177,7 @@ export const QortPayment = ({
         })
         .then((response) => {
           if (response?.error) {
-            setSendPaymentError(response.error);
+            setSendPaymentError(formatSendPaymentError(response.error));
           } else {
             executeEvent(QORTINO_DONATION_COMPLETED_EVENT, {
               recipient: paymentTo.trim(),
@@ -169,6 +188,7 @@ export const QortPayment = ({
         })
         .catch((error) => {
           console.error('Failed to send coin:', error);
+          setSendPaymentError(formatSendPaymentError(error));
           setIsLoadingSendCoin(false);
         });
     } catch (error) {
@@ -230,7 +250,10 @@ export const QortPayment = ({
           value={paymentTo}
           onChange={(e) => setPaymentTo(e.target.value)}
           autoComplete="off"
-          placeholder="Qortal address or registered name"
+          placeholder={td(
+            'qortal_address_or_name',
+            'Qortal address or registered name'
+          )}
           fullWidth
           sx={textFieldSurfaceSx}
         />

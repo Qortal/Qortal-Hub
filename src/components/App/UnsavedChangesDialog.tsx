@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  alpha,
   useTheme,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -28,41 +29,59 @@ export function UnsavedChangesDialog({
   return (
     <Dialog
       open={open}
+      onClose={onCancel}
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
+      PaperProps={{
+        sx: {
+          bgcolor: '#111820',
+          backgroundImage: 'none',
+          border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+          borderRadius: '18px',
+          boxShadow: `0 24px 58px ${alpha('#000', 0.42)}`,
+          maxWidth: 360,
+          width: 'calc(100% - 40px)',
+        },
+      }}
     >
       <DialogTitle
         id="alert-dialog-title"
         sx={{
-          textAlign: 'center',
           color: theme.palette.text.primary,
-          fontWeight: 'bold',
-          opacity: 1,
+          fontSize: '1.08rem',
+          fontWeight: 650,
+          pb: 0.8,
+          pt: 2.3,
+          textAlign: 'center',
         }}
       >
-        {t('core:action.logout', { postProcess: 'capitalizeAll' })}
+        {t('core:action.logout', { postProcess: 'capitalizeFirstChar' })}?
       </DialogTitle>
       <DialogContent>
         <DialogContentText
           id="alert-dialog-description"
-          sx={{ textAlign: 'center' }}
+          sx={{
+            color: alpha(theme.palette.text.secondary, 0.9),
+            fontSize: '0.88rem',
+            lineHeight: 1.48,
+            textAlign: 'center',
+          }}
         >
           {message}
         </DialogContentText>
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{ gap: 1, justifyContent: 'center', px: 2.3, pb: 2.3 }}>
         <Button
-          variant="contained"
           onClick={onCancel}
           sx={{
-            backgroundColor: theme.palette.other.danger,
-            color: theme.palette.text.primary,
-            fontWeight: 'bold',
-            opacity: 0.7,
+            border: `1px solid ${alpha('#A9BCD8', 0.16)}`,
+            borderRadius: '10px',
+            color: theme.palette.text.secondary,
+            fontWeight: 600,
+            minWidth: 116,
+            textTransform: 'none',
             '&:hover': {
-              backgroundColor: theme.palette.other.danger,
-              color: 'black',
-              opacity: 1,
+              bgcolor: alpha('#FFFFFF', 0.045),
             },
           }}
         >
@@ -73,14 +92,14 @@ export function UnsavedChangesDialog({
           onClick={onConfirm}
           autoFocus
           sx={{
-            backgroundColor: theme.palette.other.positive,
-            color: theme.palette.text.primary,
-            fontWeight: 'bold',
-            opacity: 0.7,
+            bgcolor: theme.palette.primary.main,
+            borderRadius: '10px',
+            color: theme.palette.primary.contrastText,
+            fontWeight: 600,
+            minWidth: 140,
+            textTransform: 'none',
             '&:hover': {
-              backgroundColor: theme.palette.other.positive,
-              color: 'black',
-              opacity: 1,
+              bgcolor: theme.palette.primary.dark,
             },
           }}
         >

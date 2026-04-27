@@ -131,6 +131,18 @@ export const Wallets = ({
     };
   }, []);
 
+  const persistWallets = useCallback(async (nextWallets: any[]) => {
+    setWallets(nextWallets);
+    await storeWallets(nextWallets);
+  }, []);
+
+  const getLatestWallets = useCallback(async () => {
+    // Import flows can outlive the initial wallet load/migration. Re-read
+    // storage before merging so a stale local list cannot overwrite accounts.
+    const latestWallets = await getWallets();
+    return Array.isArray(latestWallets) ? latestWallets : wallets;
+  }, [wallets]);
+
   useEffect(() => {
     setIsLoading(true);
     getWallets()
@@ -145,12 +157,6 @@ export const Wallets = ({
         setIsLoading(false);
       });
   }, []);
-
-  useEffect(() => {
-    if (!isLoading && Array.isArray(wallets)) {
-      storeWallets(wallets);
-    }
-  }, [wallets, isLoading]);
 
   useEffect(() => {
     if (!isLoading) {
@@ -180,29 +186,27 @@ export const Wallets = ({
       setEditingWalletIndex(null);
     }
 
-    setWallets((prev) => {
-      const copyPrev = [...prev];
-      if (wallet === null) {
-        copyPrev.splice(idx, 1);
-        return copyPrev;
-      }
-      copyPrev[idx] = wallet;
-      return copyPrev;
-    });
+    const nextWallets = [...wallets];
+    if (wallet === null) {
+      nextWallets.splice(idx, 1);
+    } else {
+      nextWallets[idx] = wallet;
+    }
+
+    void persistWallets(nextWallets).catch(console.error);
   };
 
   const moveWalletItem = useCallback((fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
 
-    setWallets((prev) => {
-      if (fromIndex >= prev.length || toIndex >= prev.length) return prev;
+    if (fromIndex >= wallets.length || toIndex >= wallets.length) return;
 
-      const nextWallets = [...prev];
-      const [movedWallet] = nextWallets.splice(fromIndex, 1);
-      nextWallets.splice(toIndex, 0, movedWallet);
-      return nextWallets;
-    });
-  }, []);
+    const nextWallets = [...wallets];
+    const [movedWallet] = nextWallets.splice(fromIndex, 1);
+    nextWallets.splice(toIndex, 0, movedWallet);
+
+    void persistWallets(nextWallets).catch(console.error);
+  }, [persistWallets, wallets]);
 
   const importSeedphrase = async () => {
     try {
@@ -217,13 +221,14 @@ export const Wallets = ({
       );
 
       if (wallet?.address0) {
-        const existsAlready = wallets.some(
+        const latestWallets = await getLatestWallets();
+        const existsAlready = latestWallets.some(
           (existingWallet) => existingWallet?.address0 === wallet.address0
         );
         const nextWallets = existsAlready
-          ? wallets
+          ? latestWallets
           : [
-              ...wallets,
+              ...latestWallets,
               {
                 ...wallet,
                 name: '',
@@ -231,8 +236,7 @@ export const Wallets = ({
             ];
 
         if (!existsAlready) {
-          setWallets(nextWallets);
-          await storeWallets(nextWallets);
+          await persistWallets(nextWallets);
         }
         setSeedValue('');
         setPassword('');
@@ -290,17 +294,17 @@ export const Wallets = ({
       const uniqueWallets = Array.from(uniqueInitialMap.values());
       if (!uniqueWallets.length) return;
 
+      const latestWallets = await getLatestWallets();
       const uniqueNewWallets = uniqueWallets.filter(
         (newWallet) =>
-          !wallets.some(
+          !latestWallets.some(
             (existingWallet) => existingWallet?.address0 === newWallet?.address0
           )
       );
 
       if (uniqueNewWallets.length > 0) {
-        const nextWallets = [...wallets, ...uniqueNewWallets];
-        setWallets(nextWallets);
-        await storeWallets(nextWallets);
+        const nextWallets = [...latestWallets, ...uniqueNewWallets];
+        await persistWallets(nextWallets);
       }
 
       setBackupImportHint(
@@ -734,6 +738,8 @@ const WalletRow = ({
       avatarSrc: qortalAvatarSrc || undefined,
       displayName,
       nameRect: rectToObject(nameRef.current.getBoundingClientRect()),
+      primaryName: primaryName || undefined,
+      walletAddress: wallet?.address0,
     };
   };
 
@@ -742,13 +748,10 @@ const WalletRow = ({
     setSelectedWallet(wallet, getTransitionSnapshot());
   };
   const isEntryRow = mode === 'entry';
-  const isLeadingEntryRow = isEntryRow && idx === 0;
-  const entryRowBackground = isLeadingEntryRow
-    ? 'linear-gradient(180deg, rgba(12,19,32,0.92), rgba(6,10,17,0.96))'
-    : 'linear-gradient(180deg, rgba(8,13,22,0.86), rgba(5,8,14,0.92))';
-  const entryRowHoverBackground = isLeadingEntryRow
-    ? 'linear-gradient(180deg, rgba(14,23,39,0.95), rgba(7,12,20,0.98))'
-    : 'linear-gradient(180deg, rgba(10,16,27,0.9), rgba(5,9,15,0.94))';
+  const entryRowBackground =
+    'linear-gradient(180deg, rgba(7,12,21,0.9), rgba(4,7,12,0.94))';
+  const entryRowHoverBackground =
+    'linear-gradient(180deg, rgba(8,14,24,0.93), rgba(5,8,14,0.96))';
 
   return (
     <Box
@@ -816,7 +819,7 @@ const WalletRow = ({
                 ? 'rgba(255,255,255,0.03)'
                 : 'transparent',
           border:
-            mode === 'entry' ? '1px solid rgba(160,184,224,0.16)' : 'none',
+            mode === 'entry' ? '1px solid rgba(123,145,174,0.2)' : 'none',
           borderRadius: mode === 'entry' ? '8px' : '7px',
           cursor: isEdit ? 'default' : 'grab',
           display: 'grid',
@@ -839,10 +842,10 @@ const WalletRow = ({
                 ? entryRowHoverBackground
                 : 'rgba(255,255,255,0.03)',
             borderColor:
-              mode === 'entry' ? 'rgba(125,169,245,0.32)' : undefined,
+              mode === 'entry' ? 'rgba(188,213,246,0.34)' : undefined,
             boxShadow:
               mode === 'entry' && !isEdit
-                ? 'inset 2px 0 0 rgba(83,144,255,0.74), 0 0 0 1px rgba(70,120,210,0.04)'
+                ? '0 0 0 1px rgba(70,120,210,0.04)'
                 : 'none',
           },
           '&:active': {

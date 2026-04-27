@@ -6,6 +6,7 @@ import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
 import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import SecurityRoundedIcon from '@mui/icons-material/SecurityRounded';
+import authIntroAudioSrc from '../assets/audio/light-transition-351939.mp3';
 import Logo1Dark from '../assets/svgs/Logo1Dark.svg';
 import { useAtomValue } from 'jotai';
 import { selectedNodeInfoAtom } from '../atoms/global';
@@ -15,16 +16,8 @@ import {
 } from '../constants/constants';
 import { Wallets } from './Wallets';
 import { AuthButton, AuthFrame } from './Auth/AuthShell';
-import {
-  AuthGlowDebugPanel,
-  buildAuthCardGlowBackground,
-  buildAuthEdgeGradient,
-  loadAuthGlowSettings,
-  rgbaFromHex,
-  type AuthGlowSettings,
-} from './Auth/AuthGlowDebugPanel';
 import { ConnectionModeModal } from './Auth/ConnectionModeModal';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AuthUnlockTransitionSnapshot } from '../types/authTransition';
 
 type IntroLogoMetrics = {
@@ -43,7 +36,49 @@ type IntroStage = 'pending' | 'ready' | 'running' | 'settling' | 'complete';
 
 const AUTH_UI_ANIMATIONS_STORAGE_KEY = 'hub_ui_animations_enabled';
 const AUTH_INTRO_OVERSHOOT_PX = 7;
+const AUTH_INTRO_START_DELAY_MS = 560;
+const AUTH_INTRO_FRAME_SETTLE_MS = 32;
+const AUTH_INTRO_MOVE_MS = 860;
+const AUTH_INTRO_SETTLE_MS = 300;
+const AUTH_INTRO_COMPLETE_DELAY_MS = 620;
 const AUTH_INTRO_SETTLE_EASING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
+const AUTH_INTRO_AUDIO_DURATION_SECONDS = 8.1;
+const AUTH_INTRO_AUDIO_PEAK_SECONDS = 2.44;
+const AUTH_INTRO_AUDIO_VOLUME = 0.42;
+const AUTH_INTRO_AUDIO_START_OFFSET_SECONDS = Math.max(
+  0,
+  AUTH_INTRO_AUDIO_PEAK_SECONDS -
+    (AUTH_INTRO_START_DELAY_MS +
+      AUTH_INTRO_FRAME_SETTLE_MS +
+      AUTH_INTRO_MOVE_MS +
+      AUTH_INTRO_SETTLE_MS) /
+      1000
+);
+const AUTH_INTRO_LOGO_RING_DOWN_MS = Math.round(
+  (AUTH_INTRO_AUDIO_DURATION_SECONDS - AUTH_INTRO_AUDIO_PEAK_SECONDS) *
+    1000
+);
+const AUTH_INTRO_LOGO_RING_MS =
+  AUTH_INTRO_SETTLE_MS + AUTH_INTRO_LOGO_RING_DOWN_MS;
+const AUTH_INTRO_LOGO_RING_PEAK_PERCENT = `${Math.round(
+  (AUTH_INTRO_SETTLE_MS / AUTH_INTRO_LOGO_RING_MS) * 100
+)}%`;
+const AUTH_INTRO_LOGO_FINAL_FILTER =
+  'brightness(1.23) contrast(1.06) saturate(1.1) drop-shadow(0 0 10px rgba(26,130,255,0.24))';
+const AUTH_INTRO_LOGO_PEAK_FILTER =
+  'brightness(1.32) contrast(1.08) saturate(1.14) drop-shadow(0 0 17px rgba(31,136,255,0.38))';
+const AUTH_INTRO_LOGO_MID_RING_FILTER =
+  'brightness(1.29) contrast(1.075) saturate(1.13) drop-shadow(0 0 15px rgba(31,136,255,0.32))';
+const AUTH_INTRO_LOGO_LATE_RING_FILTER =
+  'brightness(1.26) contrast(1.065) saturate(1.115) drop-shadow(0 0 12px rgba(29,132,255,0.27))';
+const AUTH_INTRO_LOGO_SETTLING_FILTER =
+  'brightness(1.2) contrast(1.05) saturate(1.08)';
+const AUTH_INTRO_LOGO_SETTLING_PEAK_FILTER =
+  'brightness(1.3) contrast(1.08) saturate(1.13) drop-shadow(0 0 14px rgba(31,136,255,0.32))';
+const AUTH_INTRO_LOGO_SETTLING_MID_FILTER =
+  'brightness(1.265) contrast(1.07) saturate(1.12) drop-shadow(0 0 12px rgba(31,136,255,0.27))';
+const AUTH_INTRO_LOGO_SETTLING_LATE_FILTER =
+  'brightness(1.225) contrast(1.055) saturate(1.095) drop-shadow(0 0 8px rgba(29,132,255,0.18))';
 let hasAuthIntroPlayedThisSession = false;
 
 const areAuthAnimationsEnabled = () => {
@@ -77,7 +112,9 @@ export const NotAuthenticated = ({
   const [isConnectionModeOpen, setIsConnectionModeOpen] = useState(false);
   const [isEntryAccountsReady, setIsEntryAccountsReady] = useState(false);
   const [isUnlockLeaving, setIsUnlockLeaving] = useState(false);
+  const [isLogoRingDownActive, setIsLogoRingDownActive] = useState(false);
   const logoRef = useRef<HTMLImageElement | null>(null);
+  const introAudioRef = useRef<HTMLAudioElement | null>(null);
   const globalMotionOverrideRef = useRef<{
     element: HTMLStyleElement;
     wasDisabled?: boolean;
@@ -85,9 +122,6 @@ export const NotAuthenticated = ({
   const [isIntroLogoReady, setIsIntroLogoReady] = useState(false);
   const [introMetrics, setIntroMetrics] = useState<IntroLogoMetrics | null>(null);
   const [introStage, setIntroStage] = useState<IntroStage>('pending');
-  const [authGlowSettings, setAuthGlowSettings] = useState<AuthGlowSettings>(
-    () => loadAuthGlowSettings()
-  );
   const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
   const connectionLabel = usingLocalNode
     ? 'Using local node'
@@ -121,6 +155,16 @@ export const NotAuthenticated = ({
   }, []);
   const handleWalletUnlockStart = useCallback(
     (snapshot: AuthUnlockTransitionSnapshot) => {
+      const audio = introAudioRef.current;
+      if (audio) {
+        audio.pause();
+        try {
+          audio.currentTime = 0;
+        } catch {
+          // Some media backends reject seeking before metadata is ready.
+        }
+      }
+      setIsLogoRingDownActive(false);
       setIsUnlockLeaving(true);
       onWalletUnlockStart?.(snapshot);
     },
@@ -139,30 +183,12 @@ export const NotAuthenticated = ({
   const introComplete = introStage === 'complete';
   const introCardGlowOpacity =
     introComplete ? 1 : introStage === 'settling' ? 0.76 : 0;
-  const introLogoGlowOpacity =
-    introComplete ? 1 : introStage === 'settling' ? 0.82 : 0;
-  const introAmbientOpacity =
-    introComplete ? 0.72 : introStage === 'settling' ? 0.52 : 0;
-  const authCardGlowBackground = useMemo(
-    () => buildAuthCardGlowBackground(authGlowSettings),
-    [authGlowSettings]
-  );
-  const authCardEdgeGradient = useMemo(
-    () => buildAuthEdgeGradient(authGlowSettings),
-    [authGlowSettings]
-  );
-  const authCardEdgeGlow = useMemo(
-    () =>
-      `0 0 18px ${rgbaFromHex(
-        authGlowSettings.edgeCenterColor,
-        authGlowSettings.edgeGlowIntensity * 0.34
-      )}`,
-    [authGlowSettings.edgeCenterColor, authGlowSettings.edgeGlowIntensity]
-  );
   const shouldAnimateIntro = !introComplete;
   const isLogoAnimating =
     introStage === 'running' || introStage === 'settling';
   const isMainAuthContentVisible = introComplete || isLogoAnimating;
+  const shouldRenderIntroOverlay = shouldAnimateIntro || isLogoRingDownActive;
+  const isIntroOverlayAtRest = isLogoAnimating || isLogoRingDownActive;
   const restoreGlobalMotionOverride = () => {
     const override = globalMotionOverrideRef.current;
 
@@ -223,6 +249,38 @@ export const NotAuthenticated = ({
           opacity: 0,
           pointerEvents: 'none',
     };
+  const stopIntroAudio = useCallback(() => {
+    const audio = introAudioRef.current;
+
+    if (!audio) return;
+
+    audio.pause();
+    audio.volume = AUTH_INTRO_AUDIO_VOLUME;
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Some media backends reject seeking before metadata is ready.
+    }
+  }, []);
+  const playIntroAudio = useCallback(() => {
+    if (!areAuthAnimationsEnabled()) return;
+
+    const audio = introAudioRef.current ?? new Audio(authIntroAudioSrc);
+    introAudioRef.current = audio;
+
+    audio.pause();
+    audio.preload = 'auto';
+    audio.volume = AUTH_INTRO_AUDIO_VOLUME;
+    try {
+      audio.currentTime = AUTH_INTRO_AUDIO_START_OFFSET_SECONDS;
+    } catch {
+      // If metadata is still loading, playback can start from the beginning.
+    }
+
+    void audio.play().catch(() => {
+      // Autoplay can be blocked outside Electron before user interaction.
+    });
+  }, []);
 
   useEffect(() => {
     if (!areAuthAnimationsEnabled()) {
@@ -267,6 +325,21 @@ export const NotAuthenticated = ({
       window.clearTimeout(fallbackTimer);
     };
   }, []);
+
+  useEffect(() => {
+    if (!areAuthAnimationsEnabled()) return undefined;
+
+    const audio = new Audio(authIntroAudioSrc);
+    audio.preload = 'auto';
+    audio.volume = AUTH_INTRO_AUDIO_VOLUME;
+    introAudioRef.current = audio;
+    audio.load();
+
+    return () => {
+      stopIntroAudio();
+      introAudioRef.current = null;
+    };
+  }, [stopIntroAudio]);
 
   useLayoutEffect(() => {
     if (!isEntryAccountsReady) return;
@@ -314,13 +387,14 @@ export const NotAuthenticated = ({
     let secondFrame = 0;
     let firstFrame = 0;
     const startIntro = () => {
+      playIntroAudio();
       loadTimer = window.setTimeout(() => {
         firstFrame = window.requestAnimationFrame(() => {
           secondFrame = window.requestAnimationFrame(() => {
             setIntroStage('running');
           });
         });
-      }, 560);
+      }, AUTH_INTRO_START_DELAY_MS);
     };
 
     if (document.readyState === 'complete') {
@@ -335,14 +409,15 @@ export const NotAuthenticated = ({
       window.cancelAnimationFrame(firstFrame);
       window.cancelAnimationFrame(secondFrame);
     };
-  }, [introStage, isIntroLogoReady]);
+  }, [introStage, isIntroLogoReady, playIntroAudio]);
 
   useEffect(() => {
     if (introStage !== 'running') return;
 
     const settleTimer = window.setTimeout(() => {
+      setIsLogoRingDownActive(true);
       setIntroStage('settling');
-    }, 860);
+    }, AUTH_INTRO_MOVE_MS);
 
     return () => {
       window.clearTimeout(settleTimer);
@@ -350,23 +425,36 @@ export const NotAuthenticated = ({
   }, [introStage]);
 
   useEffect(() => {
+    if (!isLogoRingDownActive) return;
+
+    const ringTimer = window.setTimeout(() => {
+      setIsLogoRingDownActive(false);
+    }, AUTH_INTRO_LOGO_RING_MS);
+
+    return () => {
+      window.clearTimeout(ringTimer);
+    };
+  }, [isLogoRingDownActive]);
+
+  useEffect(() => {
     if (introStage !== 'settling') return;
 
     const completeTimer = window.setTimeout(() => {
       setIntroStage('complete');
       restoreGlobalMotionOverride();
-    }, 620);
+    }, AUTH_INTRO_COMPLETE_DELAY_MS);
 
     return () => {
       window.clearTimeout(completeTimer);
     };
-  }, [introStage]);
+  }, [introStage, stopIntroAudio]);
 
   useEffect(() => {
     if (introStage !== 'running' && introStage !== 'settling') return;
 
     const completeIntroOnResize = () => {
       setIntroStage('complete');
+      setIsLogoRingDownActive(false);
       restoreGlobalMotionOverride();
     };
 
@@ -375,7 +463,7 @@ export const NotAuthenticated = ({
     return () => {
       window.removeEventListener('resize', completeIntroOnResize);
     };
-  }, [introStage]);
+  }, [introStage, stopIntroAudio]);
 
   return (
     <>
@@ -410,18 +498,88 @@ export const NotAuthenticated = ({
                 opacity: 1,
               },
             },
+            '@keyframes authIntroLogoRing': {
+              '0%': {
+                filter: AUTH_INTRO_LOGO_FINAL_FILTER,
+              },
+              [AUTH_INTRO_LOGO_RING_PEAK_PERCENT]: {
+                filter: AUTH_INTRO_LOGO_PEAK_FILTER,
+              },
+              '42%': {
+                filter: AUTH_INTRO_LOGO_MID_RING_FILTER,
+              },
+              '76%': {
+                filter: AUTH_INTRO_LOGO_LATE_RING_FILTER,
+              },
+              '100%': {
+                filter: AUTH_INTRO_LOGO_FINAL_FILTER,
+              },
+            },
+            '@keyframes authIntroLogoHaloRing': {
+              '0%': {
+                filter: 'blur(15px) brightness(1)',
+                opacity: 0.76,
+                transform: 'scale(1)',
+              },
+              [AUTH_INTRO_LOGO_RING_PEAK_PERCENT]: {
+                filter: 'blur(15px) brightness(1.22)',
+                opacity: 1,
+                transform: 'scale(1.07)',
+              },
+              '42%': {
+                filter: 'blur(15px) brightness(1.16)',
+                opacity: 0.98,
+                transform: 'scale(1.045)',
+              },
+              '76%': {
+                filter: 'blur(15px) brightness(1.07)',
+                opacity: 0.96,
+                transform: 'scale(1.018)',
+              },
+              '100%': {
+                filter: 'blur(15px) brightness(1)',
+                opacity: 1,
+                transform: 'scale(1)',
+              },
+            },
+            '@keyframes authIntroOverlayLogoRing': {
+              '0%': {
+                filter: AUTH_INTRO_LOGO_SETTLING_FILTER,
+                opacity: 1,
+              },
+              [AUTH_INTRO_LOGO_RING_PEAK_PERCENT]: {
+                filter: AUTH_INTRO_LOGO_SETTLING_PEAK_FILTER,
+                opacity: 0.94,
+              },
+              '42%': {
+                filter: AUTH_INTRO_LOGO_SETTLING_MID_FILTER,
+                opacity: 0.8,
+              },
+              '76%': {
+                filter: AUTH_INTRO_LOGO_SETTLING_LATE_FILTER,
+                opacity: 0.45,
+              },
+              '100%': {
+                filter: AUTH_INTRO_LOGO_SETTLING_FILTER,
+                opacity: 0,
+              },
+            },
           }}
         >
           <Box
             aria-hidden
             sx={{
               background:
-                'radial-gradient(ellipse 700px 430px at 50% 27%, rgba(48,130,255,0.22), rgba(30,86,170,0.12) 32%, transparent 66%)',
-              inset: 0,
-              opacity: introAmbientOpacity,
+                'radial-gradient(ellipse 430px 280px at 50% 22%, rgba(39,125,255,0.24), rgba(22,78,170,0.13) 34%, rgba(8,34,88,0.045) 62%, transparent 86%), radial-gradient(ellipse 610px 820px at 27% 52%, rgba(25,82,175,0.16), rgba(12,42,96,0.085) 38%, rgba(5,20,52,0.035) 64%, transparent 91%), radial-gradient(ellipse 610px 820px at 73% 52%, rgba(25,82,175,0.16), rgba(12,42,96,0.085) 38%, rgba(5,20,52,0.035) 64%, transparent 91%)',
+              filter: 'blur(24px)',
+              height: { xs: 880, md: 980 },
+              left: '50%',
+              opacity: 0.96,
               pointerEvents: 'none',
-              position: 'fixed',
-              transition: 'opacity 620ms cubic-bezier(0.4, 0, 0.2, 1)',
+              position: 'absolute',
+              top: { xs: '47%', md: '48%' },
+              transform: 'translate(-50%, -50%)',
+              width: { xs: 1180, md: 1500 },
               zIndex: 0,
             }}
           />
@@ -430,11 +588,11 @@ export const NotAuthenticated = ({
               ...cardRevealSx(820),
               alignItems: 'center',
               background:
-                'linear-gradient(180deg, rgba(12,24,42,0.99) 0%, rgba(7,12,21,0.99) 48%, rgba(4,7,12,0.99) 100%)',
-              border: '1px solid rgba(154,181,224,0.28)',
+                'linear-gradient(180deg, rgba(8,15,27,0.985) 0%, rgba(5,8,14,0.992) 54%, rgba(3,5,9,0.995) 100%)',
+              border: '1px solid rgba(142,164,196,0.2)',
               borderRadius: '16px',
               boxShadow:
-                '0 26px 62px rgba(0,0,0,0.46), 0 0 0 1px rgba(79,132,224,0.06), inset 0 1px 0 rgba(255,255,255,0.04)',
+                '0 28px 70px rgba(0,0,0,0.5), 0 0 46px rgba(28,86,178,0.1), inset 0 1px 0 rgba(255,255,255,0.04)',
               display: 'flex',
               flexDirection: 'column',
               maxWidth: 640,
@@ -446,7 +604,8 @@ export const NotAuthenticated = ({
               width: '100%',
               zIndex: 1,
               '&::before': {
-                background: authCardGlowBackground,
+                background:
+                  'radial-gradient(ellipse 560px 310px at 50% -9%, rgba(37,126,255,0.32), rgba(27,82,170,0.16) 35%, rgba(12,35,84,0.055) 62%, transparent 90%)',
                 borderRadius: '16px',
                 content: '""',
                 inset: 0,
@@ -456,13 +615,13 @@ export const NotAuthenticated = ({
                 transition: 'opacity 620ms cubic-bezier(0.4, 0, 0.2, 1)',
               },
               '&::after': {
-                background: authCardEdgeGradient,
+                background:
+                  'linear-gradient(180deg, rgba(224,238,255,0.54) 0%, rgba(158,188,231,0.3) 38%, rgba(123,145,174,0.2) 100%)',
                 borderRadius: '16px',
-                boxShadow: authCardEdgeGlow,
+                boxShadow: '0 0 20px rgba(81,137,239,0.12)',
                 content: '""',
                 inset: 0,
                 maskComposite: 'exclude',
-                opacity: authGlowSettings.edgeGlowIntensity,
                 padding: '1px',
                 pointerEvents: 'none',
                 position: 'absolute',
@@ -485,28 +644,35 @@ export const NotAuthenticated = ({
                 zIndex: 1,
                 '&::before': {
                   background:
-                    'radial-gradient(circle, rgba(41,137,255,0.58), rgba(41,137,255,0.24) 38%, transparent 70%)',
+                    'radial-gradient(circle at 50% 40%, rgba(42,142,255,0.5), rgba(42,142,255,0.2) 34%, rgba(19,82,184,0.075) 62%, transparent 88%)',
                   content: '""',
-                  filter: 'blur(8px)',
-                  inset: '-26px',
-                  opacity: introLogoGlowOpacity,
+                  filter: 'blur(15px)',
+                  inset: '-46px',
+                  opacity: introCardGlowOpacity,
                   pointerEvents: 'none',
                   position: 'absolute',
+                  transform: 'scale(1)',
+                  transformOrigin: 'center',
                   transition: 'opacity 620ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  animation:
+                    isLogoRingDownActive
+                      ? `authIntroLogoHaloRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
+                      : 'none',
                 },
                 '&::after': {
                   background:
-                    'radial-gradient(ellipse at 50% 76%, rgba(55,135,255,0.2), rgba(55,135,255,0.08) 42%, transparent 70%)',
+                    'radial-gradient(ellipse 430px 260px at 50% 30%, rgba(39,124,255,0.22), rgba(28,88,190,0.12) 38%, rgba(10,40,105,0.045) 66%, transparent 92%)',
                   content: '""',
-                  height: 72,
+                  filter: 'blur(14px)',
+                  height: 320,
                   left: '50%',
-                  opacity: introLogoGlowOpacity,
+                  opacity: introCardGlowOpacity,
                   pointerEvents: 'none',
                   position: 'absolute',
-                  top: 44,
+                  top: -30,
                   transform: 'translateX(-50%)',
                   transition: 'opacity 620ms cubic-bezier(0.4, 0, 0.2, 1)',
-                  width: 280,
+                  width: 560,
                   zIndex: -1,
                 },
               }}
@@ -518,9 +684,12 @@ export const NotAuthenticated = ({
                 data-auth-logo-target="entry-logo"
                 src={Logo1Dark}
                 sx={{
+                  animation:
+                    isLogoRingDownActive
+                      ? `authIntroLogoRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
+                      : 'none',
                   display: 'block',
-                  filter:
-                    'brightness(1.2) contrast(1.05) saturate(1.08) drop-shadow(0 0 18px rgba(34,132,255,0.32))',
+                  filter: AUTH_INTRO_LOGO_FINAL_FILTER,
                   height: { xs: 94, md: 108 },
                   opacity:
                     introStage === 'settling' || introComplete ? 1 : 0,
@@ -595,7 +764,13 @@ export const NotAuthenticated = ({
                 zIndex: 1,
               }}
             >
-              <AuthButton onClick={() => setExtstate('create-wallet')}>
+              <AuthButton
+                onClick={() => {
+                  setIsLogoRingDownActive(false);
+                  stopIntroAudio();
+                  setExtstate('create-wallet');
+                }}
+              >
                 <Box
                   sx={{
                     alignItems: 'center',
@@ -609,7 +784,11 @@ export const NotAuthenticated = ({
               </AuthButton>
 
               <ButtonBase
-                onClick={() => setExtstate('wallets')}
+                onClick={() => {
+                  setIsLogoRingDownActive(false);
+                  stopIntroAudio();
+                  setExtstate('wallets');
+                }}
                 sx={{
                   alignItems: 'center',
                   border: '1px solid rgba(255,255,255,0.1)',
@@ -629,7 +808,17 @@ export const NotAuthenticated = ({
                 }}
               >
                 <DownloadRoundedIcon sx={{ fontSize: 18 }} />
-                <Typography sx={{ fontSize: '0.92rem', fontWeight: 600 }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.92rem',
+                    fontSynthesis: 'none',
+                    fontWeight: 500,
+                    letterSpacing: 0,
+                    lineHeight: 1,
+                    textRendering: 'geometricPrecision',
+                    WebkitFontSmoothing: 'antialiased',
+                  }}
+                >
                   Import account
                 </Typography>
               </ButtonBase>
@@ -666,7 +855,13 @@ export const NotAuthenticated = ({
                     width: 7,
                   }}
                 />
-                <Typography sx={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                <Typography
+                  sx={{
+                    fontSize: '0.8rem',
+                    fontWeight: 500,
+                    lineHeight: 1,
+                  }}
+                >
                   {connectionLabel}
                 </Typography>
               </Box>
@@ -688,12 +883,18 @@ export const NotAuthenticated = ({
                   minWidth: 0,
                   p: 0,
                   '&:hover': {
-                    color: 'rgba(214,221,233,0.78)',
+                    color: 'rgba(214,221,233,0.86)',
                   },
                 }}
               >
-                <CodeRoundedIcon sx={{ fontSize: 13 }} />
-                <Typography sx={{ fontSize: '0.74rem', fontWeight: 600 }}>
+                <CodeRoundedIcon sx={{ fontSize: 14 }} />
+                <Typography
+                  sx={{
+                    fontSize: '0.8rem',
+                    fontWeight: 500,
+                    lineHeight: 1,
+                  }}
+                >
                   Connection Mode
                 </Typography>
               </ButtonBase>
@@ -753,11 +954,11 @@ export const NotAuthenticated = ({
         </Box>
       </AuthFrame>
 
-      {shouldAnimateIntro && introMetrics && (
+      {shouldRenderIntroOverlay && introMetrics && (
         <Box
           aria-hidden
           sx={{
-            backgroundColor: isLogoAnimating
+            backgroundColor: isIntroOverlayAtRest
               ? 'rgba(6,8,13,0)'
               : 'rgba(6,8,13,1)',
             inset: 0,
@@ -774,33 +975,37 @@ export const NotAuthenticated = ({
             alt=""
             src={Logo1Dark}
             sx={{
+              animation:
+                isLogoRingDownActive
+                  ? `authIntroOverlayLogoRing ${AUTH_INTRO_LOGO_RING_MS}ms linear both`
+                  : 'none',
               display: 'block',
               filter:
                 introStage === 'settling'
-                  ? 'brightness(1.2) contrast(1.05) saturate(1.08) drop-shadow(0 0 18px rgba(34,132,255,0.32))'
+                  ? AUTH_INTRO_LOGO_SETTLING_FILTER
                   : introStage === 'running'
-                    ? 'brightness(0.88) contrast(0.99) saturate(0.96) drop-shadow(0 0 4px rgba(34,132,255,0.08))'
+                    ? 'brightness(0.88) contrast(0.99) saturate(0.96)'
                     : 'brightness(0.78) contrast(0.96) saturate(0.92)',
-              height: isLogoAnimating
+              height: isIntroOverlayAtRest
                 ? introMetrics.finalHeight
                 : introMetrics.initialHeight,
-              left: isLogoAnimating
+              left: isIntroOverlayAtRest
                 ? introMetrics.finalLeft
                 : introMetrics.initialLeft,
               position: 'fixed',
               top:
                 introStage === 'running'
                   ? introMetrics.overshootTop
-                  : isLogoAnimating
+                  : isIntroOverlayAtRest
                     ? introMetrics.finalTop
                     : introMetrics.initialTop,
               transition:
                 introStage === 'running'
-                  ? 'top 860ms cubic-bezier(0.4, 0, 0.2, 1), left 860ms cubic-bezier(0.4, 0, 0.2, 1), width 860ms cubic-bezier(0.4, 0, 0.2, 1), height 860ms cubic-bezier(0.4, 0, 0.2, 1), filter 260ms cubic-bezier(0.4, 0, 0.2, 1)'
+                  ? `top ${AUTH_INTRO_MOVE_MS}ms cubic-bezier(0.4, 0, 0.2, 1), left ${AUTH_INTRO_MOVE_MS}ms cubic-bezier(0.4, 0, 0.2, 1), width ${AUTH_INTRO_MOVE_MS}ms cubic-bezier(0.4, 0, 0.2, 1), height ${AUTH_INTRO_MOVE_MS}ms cubic-bezier(0.4, 0, 0.2, 1), filter 260ms cubic-bezier(0.4, 0, 0.2, 1)`
                   : introStage === 'settling'
-                    ? `top 300ms ${AUTH_INTRO_SETTLE_EASING}, filter 620ms cubic-bezier(0.4, 0, 0.2, 1)`
+                    ? `top ${AUTH_INTRO_SETTLE_MS}ms ${AUTH_INTRO_SETTLE_EASING}, filter ${AUTH_INTRO_COMPLETE_DELAY_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`
                     : 'none',
-              width: isLogoAnimating
+              width: isIntroOverlayAtRest
                 ? introMetrics.finalWidth
                 : introMetrics.initialWidth,
             }}
@@ -811,10 +1016,6 @@ export const NotAuthenticated = ({
       <ConnectionModeModal
         open={isConnectionModeOpen}
         onClose={() => setIsConnectionModeOpen(false)}
-      />
-      <AuthGlowDebugPanel
-        settings={authGlowSettings}
-        onChange={setAuthGlowSettings}
       />
     </>
   );

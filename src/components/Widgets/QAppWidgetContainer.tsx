@@ -1,3 +1,4 @@
+import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { Box, ButtonBase, CircularProgress, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
@@ -19,6 +20,7 @@ type QAppWidgetContainerProps = {
   onSecondaryAction?: () => void;
   retryLabel?: string;
   secondaryActionLabel?: string;
+  secondaryActionVariant?: 'button' | 'link';
   stateVerticalOffset?: number | string;
 };
 
@@ -29,6 +31,7 @@ export const QAppWidgetStatePanel = ({
   onSecondaryAction,
   retryLabel = 'Retry',
   secondaryActionLabel,
+  secondaryActionVariant = 'button',
   title,
   verticalOffset = 0,
 }: {
@@ -38,6 +41,7 @@ export const QAppWidgetStatePanel = ({
   onSecondaryAction?: () => void;
   retryLabel?: string;
   secondaryActionLabel?: string;
+  secondaryActionVariant?: 'button' | 'link';
   title: string;
   verticalOffset?: number | string;
 }) => {
@@ -146,21 +150,37 @@ export const QAppWidgetStatePanel = ({
               onClick={onSecondaryAction}
               sx={{
                 alignItems: 'center',
-                border: `1px solid ${alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.22 : 0.14)}`,
-                borderRadius: '999px',
-                color: theme.palette.text.secondary,
+                border:
+                  secondaryActionVariant === 'button'
+                    ? `1px solid ${alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.22 : 0.14)}`
+                    : 'none',
+                borderRadius:
+                  secondaryActionVariant === 'button' ? '999px' : '8px',
+                color:
+                  secondaryActionVariant === 'button'
+                    ? theme.palette.text.secondary
+                    : theme.palette.primary.light,
                 display: 'inline-flex',
-                px: 1.45,
-                py: 0.8,
+                gap: secondaryActionVariant === 'button' ? 0 : '2px',
+                px: secondaryActionVariant === 'button' ? 1.45 : 0.35,
+                py: secondaryActionVariant === 'button' ? 0.8 : 0.25,
                 transition:
                   'background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 120ms ease',
                 '&:hover': {
                   backgroundColor:
-                    theme.palette.mode === 'dark'
-                      ? alpha(theme.palette.common.white, 0.035)
-                      : alpha(theme.palette.text.primary, 0.035),
-                  borderColor: alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.34 : 0.2),
-                  color: theme.palette.text.primary,
+                    secondaryActionVariant === 'button'
+                      ? theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.common.white, 0.035)
+                        : alpha(theme.palette.text.primary, 0.035)
+                      : 'transparent',
+                  borderColor:
+                    secondaryActionVariant === 'button'
+                      ? alpha(theme.palette.border.main, theme.palette.mode === 'dark' ? 0.34 : 0.2)
+                      : 'transparent',
+                  color:
+                    secondaryActionVariant === 'button'
+                      ? theme.palette.text.primary
+                      : theme.palette.primary.main,
                   transform: 'translateY(-1px)',
                 },
                 '&:active': {
@@ -171,6 +191,9 @@ export const QAppWidgetStatePanel = ({
               <Typography sx={{ fontSize: '0.74rem', fontWeight: 700 }}>
                 {secondaryActionLabel}
               </Typography>
+              {secondaryActionVariant === 'link' ? (
+                <ChevronRightRoundedIcon sx={{ fontSize: '1rem' }} />
+              ) : null}
             </ButtonBase>
           ) : null}
         </Box>
@@ -195,6 +218,7 @@ export const QAppWidgetContainer = ({
   onSecondaryAction,
   retryLabel = 'Retry',
   secondaryActionLabel,
+  secondaryActionVariant = 'button',
   stateVerticalOffset = 0,
 }: QAppWidgetContainerProps) => {
   const theme = useTheme();
@@ -220,6 +244,7 @@ export const QAppWidgetContainer = ({
         onSecondaryAction={onSecondaryAction}
         retryLabel={retryLabel}
         secondaryActionLabel={secondaryActionLabel}
+        secondaryActionVariant={secondaryActionVariant}
         title={errorTitle}
         verticalOffset={stateVerticalOffset}
       />
@@ -229,7 +254,10 @@ export const QAppWidgetContainer = ({
       <QAppWidgetStatePanel
         description={emptyMessage}
         onRetry={onRetry}
+        onSecondaryAction={onSecondaryAction}
         retryLabel={retryLabel}
+        secondaryActionLabel={secondaryActionLabel}
+        secondaryActionVariant={secondaryActionVariant}
         title={emptyTitle}
         verticalOffset={stateVerticalOffset}
       />

@@ -94,6 +94,7 @@ import {
 } from '../qdn/encryption/group-encryption.ts';
 import { publishData } from '../qdn/publish/publish.ts';
 import {
+  getNotificationPermissionKey,
   getPermission,
   isRunningGateway,
   setPermission,
@@ -442,6 +443,7 @@ function getFileFromContentScript(fileId) {
 }
 
 const responseResolvers = new Map();
+const notificationPermissionResolvers = new Map();
 
 const handleMessage = (event) => {
   const { action, requestId, result } = event.data;
@@ -454,6 +456,12 @@ const handleMessage = (event) => {
     // Resolve the stored promise with the result
     responseResolvers.get(requestId)(result || false);
     responseResolvers.delete(requestId); // Clean up after resolving
+  } else if (
+    action === 'NOTIFICATION_PERMISSION_RESPONSE' &&
+    notificationPermissionResolvers.has(requestId)
+  ) {
+    notificationPermissionResolvers.get(requestId)(result || false);
+    notificationPermissionResolvers.delete(requestId);
   }
 };
 
@@ -576,6 +584,106 @@ export const getUserAccount = async ({
       })
     );
   }
+};
+
+export const getNotificationPermission = async ({
+  appInfo,
+  skipAuth,
+}) => {
+  try {
+    const stored =
+      (await getPermission(getNotificationPermissionKey(appInfo?.name))) ||
+      false;
+    let skip = !!stored || !!skipAuth;
+    let hadSessionPermissions = false;
+
+    if (
+      appInfo?.tabId &&
+      appInfo?.name &&
+      hasSessionPermission(
+        appInfo.tabId,
+        appInfo.name,
+        'NOTIFICATION_PERMISSION'
+      )
+    ) {
+      skip = true;
+      hadSessionPermissions = true;
+    }
+
+    let resPermission;
+    if (!skip) {
+      resPermission = await new Promise((resolve) => {
+        const requestId = `notificationPermission_${Date.now()}`;
+        notificationPermissionResolvers.set(requestId, resolve);
+        window.postMessage(
+          {
+            action: 'NOTIFICATION_PERMISSION_REQUEST',
+            requestId,
+            appInfo,
+            payload: {
+              text1: i18n.t('question:permission.notification', {
+                defaultValue: 'Allow this app to send you Hub notifications?',
+                postProcess: 'capitalizeFirstChar',
+              }),
+            },
+          },
+          window.location.origin
+        );
+        setTimeout(() => {
+          if (notificationPermissionResolvers.has(requestId)) {
+            notificationPermissionResolvers.get(requestId)(false);
+            notificationPermissionResolvers.delete(requestId);
+          }
+        }, TIME_MINUTES_1_IN_MILLISECONDS);
+      });
+    }
+
+    const { accepted = false } = resPermission || {};
+    if (resPermission && accepted) {
+      setPermission(getNotificationPermissionKey(appInfo?.name), true);
+    }
+    if (accepted || skip) {
+      if (!hadSessionPermissions && appInfo?.tabId && appInfo?.name) {
+        setSessionPermissions(appInfo.tabId, appInfo.name, [
+          'NOTIFICATION_PERMISSION',
+        ]);
+      }
+      return true;
+    }
+    throw new Error(
+      i18n.t('question:message.generic.user_declined_request', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  } catch (error) {
+    throw new Error(
+      error?.message ||
+        i18n.t('auth:message.error.fetch_user_account', {
+          postProcess: 'capitalizeFirstChar',
+        })
+    );
+  }
+};
+
+export const notificationHasPermission = async ({
+  appInfo,
+  skipAuth,
+}: {
+  appInfo?: { name?: string; tabId?: number };
+  skipAuth?: boolean;
+}) => {
+  if (skipAuth) return true;
+  if (!appInfo?.name) return false;
+  const stored =
+    (await getPermission(getNotificationPermissionKey(appInfo.name))) === true;
+  const session =
+    appInfo.tabId != null &&
+    hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'NOTIFICATION_PERMISSION'
+    );
+  return stored || session;
 };
 
 export const sessionPermissions = async (data, isFromExtension, appInfo) => {
@@ -4991,6 +5099,276 @@ export const getArrrSyncStatus = async () => {
         })
     );
   }
+};
+
+const CUSTOM_WS_SUBSCRIPTIONS_KEY = 'qortal_custom_ws_subscriptions_by_address';
+const NOTIFICATION_SEEN_IN_APP_KEY = 'qortal_notification_seen_in_app_by_address';
+const NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
+async function getCurrentAddressForNotifications(): Promise<string | null> {
+  try {
+    const wallet = await getSaveWallet();
+    return wallet?.address0 || null;
+  } catch {
+    return null;
+  }
+}
+
+function parseAddressRecord(value: unknown): Record<string, any[]> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, any[]>;
+  }
+  if (Array.isArray(value)) return { __legacy: value };
+  return {};
+}
+
+function readJsonFromLocalStorage<T>(key: string, fallback: T): T {
+  if (typeof localStorage === 'undefined') return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function getStoredCustomSubscriptions() {
+  const address = await getCurrentAddressForNotifications();
+  if (!address) return [];
+  const record = parseAddressRecord(
+    readJsonFromLocalStorage(CUSTOM_WS_SUBSCRIPTIONS_KEY, {})
+  );
+  return Array.isArray(record[address]) ? record[address] : [];
+}
+
+async function setStoredCustomSubscriptions(list: any[]) {
+  const address = await getCurrentAddressForNotifications();
+  if (!address || typeof localStorage === 'undefined') return;
+  const record = parseAddressRecord(
+    readJsonFromLocalStorage(CUSTOM_WS_SUBSCRIPTIONS_KEY, {})
+  );
+  record[address] = list;
+  localStorage.setItem(CUSTOM_WS_SUBSCRIPTIONS_KEY, JSON.stringify(record));
+  executeEvent('custom-ws-subscriptions-updated', list);
+}
+
+const NOTIFICATION_FILTER_SPEC = {
+  service: 'string',
+  query: 'string',
+  identifier: 'string',
+  names: 'arrayOfString',
+  title: 'string',
+  description: 'string',
+  keywords: 'arrayOfString',
+  prefix: 'boolean',
+  defaultResource: 'boolean',
+  followedOnly: 'boolean',
+  excludeBlocked: 'boolean',
+  after: 'long',
+  before: 'long',
+  mode: 'string',
+};
+
+function validateNotificationFilters(filters) {
+  if (!filters || typeof filters !== 'object') return;
+  for (const [key, value] of Object.entries(filters)) {
+    if (!(key in NOTIFICATION_FILTER_SPEC)) {
+      throw new Error(`Unknown filter key: "${key}"`);
+    }
+    if (value === undefined || value === null) continue;
+    const type = NOTIFICATION_FILTER_SPEC[key];
+    if (type === 'string' && typeof value !== 'string') {
+      throw new Error(`Filter "${key}" must be a string`);
+    }
+    if (type === 'arrayOfString') {
+      if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
+        throw new Error(`Filter "${key}" must be an array of strings`);
+      }
+    }
+    if (type === 'boolean' && typeof value !== 'boolean') {
+      throw new Error(`Filter "${key}" must be a boolean`);
+    }
+    if (
+      (type === 'integer' || type === 'long') &&
+      (typeof value !== 'number' || !Number.isInteger(value))
+    ) {
+      throw new Error(`Filter "${key}" must be an integer`);
+    }
+  }
+}
+
+export const addNotificationSubscriptions = async (payload, appInfo) => {
+  if (
+    !appInfo?.tabId ||
+    !appInfo?.name ||
+    !hasSessionPermission(
+      appInfo.tabId,
+      appInfo.name,
+      'NOTIFICATION_PERMISSION'
+    )
+  ) {
+    throw new Error(
+      'Notification permission required. Call NOTIFICATION_PERMISSION first.'
+    );
+  }
+
+  const notifications = payload?.notifications;
+  if (!Array.isArray(notifications) || notifications.length === 0) {
+    throw new Error('notifications must be a non-empty array');
+  }
+  const appName = (appInfo.name ?? '').toLowerCase();
+  const appService = appInfo?.service ?? 'APP';
+
+  const transformed = notifications.map((item) => {
+    if (
+      !item ||
+      typeof item.notificationId !== 'string' ||
+      !item.notificationId.trim()
+    ) {
+      throw new Error('Each notification must have a notificationId');
+    }
+    if (typeof item.link !== 'string' || !item.link.trim()) {
+      throw new Error('Each notification must have a link');
+    }
+    if (!item.filters || typeof item.filters !== 'object') {
+      throw new Error('Each notification must have filters');
+    }
+    validateNotificationFilters(item.filters);
+    if (
+      !item.message ||
+      typeof item.message !== 'object' ||
+      typeof item.message.en !== 'string' ||
+      !item.message.en.trim()
+    ) {
+      throw new Error("Each notification must have message.en");
+    }
+    return {
+      event: 'RESOURCE_PUBLISHED',
+      resourceFilter: { ...item.filters, mode: item.filters.mode ?? 'ALL' },
+      image: typeof item.image === 'string' ? item.image : undefined,
+      link: item.link.trim(),
+      notificationId: item.notificationId.trim(),
+      appName,
+      appService,
+      message: { ...item.message },
+    };
+  });
+
+  const key = (sub) => `${sub.notificationId}-${sub.appName}-${sub.appService}`;
+  const current = await getStoredCustomSubscriptions();
+  const byKey = new Map(current.map((sub) => [key(sub), sub]));
+  transformed.forEach((sub) => byKey.set(key(sub), sub));
+  await setStoredCustomSubscriptions(Array.from(byKey.values()));
+  return true;
+};
+
+export const removeNotificationSubscriptions = async (payload, appInfo) => {
+  const appName = (appInfo?.name ?? '').toLowerCase();
+  const appService = appInfo?.service ?? 'APP';
+  const ids =
+    Array.isArray(payload?.notificationIds) && payload.notificationIds.length
+      ? new Set(payload.notificationIds.map((id) => String(id).trim()))
+      : null;
+
+  const current = await getStoredCustomSubscriptions();
+  const toUnsubscribe = [];
+  const filtered = current.filter((sub) => {
+    const sameApp =
+      (sub.appName ?? '').toLowerCase() === appName &&
+      (sub.appService ?? 'APP') === appService;
+    if (!sameApp) return true;
+    if (ids == null || ids.has(sub.notificationId ?? '')) {
+      toUnsubscribe.push({
+        notificationId: sub.notificationId ?? '',
+        appName: sub.appName ?? '',
+        appService: sub.appService ?? 'APP',
+      });
+      return false;
+    }
+    return true;
+  });
+  await setStoredCustomSubscriptions(filtered);
+  if (toUnsubscribe.length) executeEvent('custom-ws-unsubscribe', toUnsubscribe);
+  return true;
+};
+
+function parseSeenRecord(value: unknown): Record<string, Record<string, number>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, Record<string, number>>)
+      .map(([address, keys]) => [
+        address,
+        Object.fromEntries(
+          Object.entries(keys || {}).filter(
+            ([, seenAt]) => typeof seenAt === 'number' && seenAt > cutoff
+          )
+        ),
+      ])
+      .filter(([, keys]) => Object.keys(keys as Record<string, number>).length)
+  );
+}
+
+export const markNotificationSeenInApp = async (payload, appInfo) => {
+  const notificationIds = payload?.notificationIds;
+  if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
+    return [];
+  }
+  const address = await getCurrentAddressForNotifications();
+  if (!address || typeof localStorage === 'undefined') return [];
+
+  const appName = (appInfo?.name ?? '').toLowerCase();
+  const appService = appInfo?.service ?? 'APP';
+  const record = parseSeenRecord(
+    readJsonFromLocalStorage(NOTIFICATION_SEEN_IN_APP_KEY, {})
+  );
+  const current = record[address] ?? {};
+  const now = Date.now();
+
+  notificationIds.forEach((item) => {
+    const notificationId =
+      typeof item === 'string'
+        ? item.trim()
+        : item && typeof item === 'object' && item.notificationId != null
+          ? String(item.notificationId).trim()
+          : '';
+    if (!notificationId) return;
+    const prefix = `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
+    const identifier =
+      item && typeof item === 'object' && item.identifier != null
+        ? String(item.identifier).trim()
+        : '';
+    current[identifier ? `${prefix}-${identifier}` : prefix] = now;
+  });
+
+  const next = parseSeenRecord({ ...record, [address]: current });
+  localStorage.setItem(NOTIFICATION_SEEN_IN_APP_KEY, JSON.stringify(next));
+  const keys = Object.keys(next[address] ?? {});
+  executeEvent('notification-seen-in-app-updated', { address, keys });
+  return keys;
+};
+
+export const getNotificationSubscriptions = async (_payload, appInfo) => {
+  const appName = (appInfo?.name ?? '').toLowerCase();
+  const appService = appInfo?.service ?? 'APP';
+  const current = await getStoredCustomSubscriptions();
+  return current
+    .filter(
+      (sub) =>
+        (sub.appName ?? '').toLowerCase() === appName &&
+        (sub.appService ?? 'APP') === appService
+    )
+    .map((sub) => ({
+      image: typeof sub.image === 'string' ? sub.image : undefined,
+      link: typeof sub.link === 'string' ? sub.link : '',
+      notificationId:
+        typeof sub.notificationId === 'string' ? sub.notificationId : '',
+      message:
+        sub.message && typeof sub.message === 'object'
+          ? { ...sub.message }
+          : { en: '' },
+      filters: sub.resourceFilter ?? {},
+    }));
 };
 
 export const sendCoin = async (data, isFromExtension) => {

@@ -6,7 +6,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { RefObject, useState } from 'react';
+import { RefObject, useEffect, useState } from 'react';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
@@ -35,7 +35,7 @@ type CreateWalletViewProps = {
   setWalletToBeDownloadedPasswordConfirm: (v: string) => void;
   setStoredAccount: (v: boolean) => void;
   onCreateAccount: () => void;
-  onBackupAccountConfirm: () => void;
+  onBackupAccountConfirm: () => Promise<boolean>;
   onEnterHub: () => void;
   exportSeedphrase: () => void;
 };
@@ -60,11 +60,22 @@ export function CreateWalletView({
   exportSeedphrase,
 }: CreateWalletViewProps) {
   const theme = useTheme();
-  const [seedphraseSaved, setSeedphraseSaved] = useState(false);
+  const [backupDownloaded, setBackupDownloaded] = useState(false);
   const [seedphraseCopied, setSeedphraseCopied] = useState(false);
   const [seedphraseRevealed, setSeedphraseRevealed] = useState(false);
   const [passwordStepError, setPasswordStepError] = useState('');
   const generatedSeedphrase = generatorRef.current?.parsedString || '';
+  const successAccent = backupDownloaded
+    ? {
+        border: 'rgba(126,171,255,0.36)',
+        icon: 'rgb(126,171,255)',
+        surface: 'rgba(64,111,213,0.1)',
+      }
+    : {
+        border: 'rgba(88,199,113,0.34)',
+        icon: 'rgb(88,199,113)',
+        surface: 'rgba(88,199,113,0)',
+      };
 
   const passwordsMatch =
     walletToBeDownloadedPassword &&
@@ -107,6 +118,17 @@ export function CreateWalletView({
     }
   };
 
+  useEffect(() => {
+    setBackupDownloaded(false);
+  }, [walletToBeDownloaded?.qortAddress]);
+
+  const handleDownloadBackup = async () => {
+    const saved = await onBackupAccountConfirm();
+    if (saved) {
+      setBackupDownloaded(true);
+    }
+  };
+
   if (walletToBeDownloaded) {
     return (
       <AuthScreen maxWidth={400}>
@@ -122,18 +144,22 @@ export function CreateWalletView({
           <Box
             sx={{
               alignItems: 'center',
-              border: '1px solid rgba(88,199,113,0.34)',
+              backgroundColor: successAccent.surface,
+              border: `1px solid ${successAccent.border}`,
               borderRadius: '999px',
               display: 'inline-flex',
               height: 84,
               justifyContent: 'center',
+              transition:
+                'background-color 360ms ease, border-color 360ms ease, box-shadow 360ms ease',
               width: 84,
             }}
           >
             <CheckCircleRoundedIcon
               sx={{
-                color: 'rgb(88,199,113)',
+                color: successAccent.icon,
                 fontSize: 54,
+                transition: 'color 360ms ease',
               }}
             />
           </Box>
@@ -146,7 +172,7 @@ export function CreateWalletView({
                 letterSpacing: '-0.03em',
               }}
             >
-              Account created
+              {backupDownloaded ? 'Wallet saved' : 'Account created'}
             </Typography>
             <Typography
               sx={{
@@ -156,16 +182,41 @@ export function CreateWalletView({
                 mt: 0.9,
               }}
             >
-              Keep your seedphrase safe.
+              {backupDownloaded
+                ? "You're now ready to enter Hub."
+                : 'Back up your encrypted wallet before entering Hub.'}
             </Typography>
           </Box>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.9, width: '100%' }}>
-            <AuthButton onClick={onEnterHub}>Enter Hub</AuthButton>
-            <AuthButton onClick={onBackupAccountConfirm} primary={false}>
-              Backup again
-            </AuthButton>
+            {backupDownloaded ? (
+              <>
+                <AuthButton onClick={onEnterHub}>Enter Hub</AuthButton>
+                <AuthButton onClick={handleDownloadBackup} primary={false}>
+                  Download another copy
+                </AuthButton>
+              </>
+            ) : (
+              <>
+                <AuthButton onClick={handleDownloadBackup}>
+                  Backup wallet
+                </AuthButton>
+                <AuthButton disabled primary={false}>
+                  Enter Hub
+                </AuthButton>
+              </>
+            )}
           </Box>
+
+          <Typography
+            sx={{
+              color: 'rgba(214,221,233,0.5)',
+              fontSize: '0.78rem',
+              lineHeight: 1.5,
+            }}
+          >
+            This backup is encrypted with your wallet password.
+          </Typography>
         </Box>
       </AuthScreen>
     );
@@ -176,7 +227,7 @@ export function CreateWalletView({
       <AuthScreen
         maxWidth={460}
         title="Your Seedphrase"
-        subtitle="Alongside your backup file, this is the only way to retrieve your account."
+        subtitle="This can recover your account. Your encrypted wallet backup comes next."
       >
         <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
           <ButtonBase
@@ -239,27 +290,12 @@ export function CreateWalletView({
         >
           <WarningAmberRoundedIcon sx={{ color: '#E2B454', fontSize: 20, mt: 0.15 }} />
           <Typography sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
-            Never share this. Anyone with it can access your account.
+            Never share this. Anyone with it can access your account. For daily
+            safekeeping, use the encrypted wallet backup after creation.
           </Typography>
         </Box>
 
-        <FormControlLabel
-          sx={{ alignItems: 'center', m: 0 }}
-          control={
-            <Checkbox
-              checked={seedphraseSaved}
-              onChange={(event) => setSeedphraseSaved(event.target.checked)}
-              sx={{ color: theme.palette.text.secondary }}
-            />
-          }
-          label={
-            <Typography sx={{ fontSize: '0.88rem', lineHeight: 1.55 }}>
-              I saved my seedphrase securely.
-            </Typography>
-          }
-        />
-
-        <AuthButton disabled={!seedphraseSaved} onClick={onCreateAccount}>
+        <AuthButton onClick={onCreateAccount}>
           Create account
         </AuthButton>
       </AuthScreen>
