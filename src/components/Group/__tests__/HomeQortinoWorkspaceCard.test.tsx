@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { balanceAtom, txListAtom, userInfoAtom } from '../../../atoms/global';
 import ErrorBoundary from '../../../common/ErrorBoundary';
 import { HomeQortinoWorkspaceCard } from '../HomeQortinoWorkspaceCard';
-import { QORTINO_LOOK_DEBUG_STORAGE_KEY } from '../qortinoLookDebug';
 
 vi.mock('../../../App', () => ({
   getBaseApiReact: () => 'http://localhost:12391',
@@ -121,10 +120,10 @@ describe('HomeQortinoWorkspaceCard', () => {
     expect(screen.queryByText('boundary fallback')).not.toBeInTheDocument();
   });
 
-  it('renders with qortino look debug overrides applied from local storage', async () => {
+  it('ignores stale qortino look debug overrides from local storage', async () => {
     localStorage.setItem(`${LS_KEY}_QADDR`, 'completed');
     localStorage.setItem(
-      QORTINO_LOOK_DEBUG_STORAGE_KEY,
+      'homeQortinoLookDebug',
       JSON.stringify({
         antennaScale: 1.2,
         bodyScale: 1.15,

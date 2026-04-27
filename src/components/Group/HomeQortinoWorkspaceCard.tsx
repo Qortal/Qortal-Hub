@@ -89,26 +89,14 @@ import type { GettingStartedDebugOverrides } from './homeGettingStartedDebug';
 import { GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
 import {
   DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS,
-  parseQortinoCompanionDebugSettings,
-  QORTINO_COMPANION_DEBUG_EVENT,
-  QORTINO_COMPANION_DEBUG_STORAGE_KEY,
-  sanitizeQortinoCompanionDebugSettings,
   type QortinoCompanionDebugSettings,
 } from './qortinoCompanionDebug';
 import {
   DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS,
-  parseQortinoLookDebugSettings,
-  QORTINO_LOOK_DEBUG_EVENT,
-  QORTINO_LOOK_DEBUG_STORAGE_KEY,
-  sanitizeQortinoLookDebugSettings,
   type QortinoLookDebugSettings,
 } from './qortinoLookDebug';
 import {
   DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS,
-  parseQortinoLayoutDebugSettings,
-  QORTINO_LAYOUT_DEBUG_EVENT,
-  QORTINO_LAYOUT_DEBUG_STORAGE_KEY,
-  sanitizeQortinoLayoutDebugSettings,
   type QortinoLayoutDebugSettings,
 } from './qortinoLayoutDebug';
 import {
@@ -1558,30 +1546,12 @@ export const HomeQortinoWorkspaceCard = ({
   const [workspaceState, setWorkspaceState] = useState<WorkspaceState>(() =>
     loadWorkspaceStateFromFallbackStorage(userAddress)
   );
-  const [qortinoLookDebug, setQortinoLookDebug] =
-    useState<QortinoLookDebugSettings>(() =>
-      typeof window === 'undefined'
-        ? { ...DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS }
-        : parseQortinoLookDebugSettings(
-            localStorage.getItem(QORTINO_LOOK_DEBUG_STORAGE_KEY)
-          )
-    );
-  const [qortinoLayoutDebug, setQortinoLayoutDebug] =
-    useState<QortinoLayoutDebugSettings>(() =>
-      typeof window === 'undefined'
-        ? { ...DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS }
-        : parseQortinoLayoutDebugSettings(
-            localStorage.getItem(QORTINO_LAYOUT_DEBUG_STORAGE_KEY)
-          )
-    );
-  const [qortinoCompanionDebug, setQortinoCompanionDebug] =
-    useState<QortinoCompanionDebugSettings>(() =>
-      typeof window === 'undefined'
-        ? { ...DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS }
-        : parseQortinoCompanionDebugSettings(
-            localStorage.getItem(QORTINO_COMPANION_DEBUG_STORAGE_KEY)
-          )
-    );
+  const qortinoLookDebug: QortinoLookDebugSettings =
+    DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS;
+  const qortinoLayoutDebug: QortinoLayoutDebugSettings =
+    DEFAULT_QORTINO_LAYOUT_DEBUG_SETTINGS;
+  const qortinoCompanionDebug: QortinoCompanionDebugSettings =
+    DEFAULT_QORTINO_COMPANION_DEBUG_SETTINGS;
   const [workspaceHydrated, setWorkspaceHydrated] = useState(false);
   const [selectedHotkeySlot, setSelectedHotkeySlot] = useState(0);
   const [hotkeySearchQuery, setHotkeySearchQuery] = useState('');
@@ -2029,76 +1999,6 @@ export const HomeQortinoWorkspaceCard = ({
       active = false;
     };
   }, [userAddress, debugReplayToken]);
-
-  useEffect(() => {
-    const handleSetQortinoLookDebug = (
-      e: CustomEvent<{
-        data?: { settings?: QortinoLookDebugSettings };
-        settings?: QortinoLookDebugSettings;
-      }>
-    ) => {
-      setQortinoLookDebug(
-        sanitizeQortinoLookDebugSettings(e.detail?.settings ?? e.detail?.data?.settings)
-      );
-    };
-
-    subscribeToEvent(QORTINO_LOOK_DEBUG_EVENT, handleSetQortinoLookDebug);
-
-    return () => {
-      unsubscribeFromEvent(QORTINO_LOOK_DEBUG_EVENT, handleSetQortinoLookDebug);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleSetQortinoLayoutDebug = (
-      e: CustomEvent<{
-        data?: { settings?: QortinoLayoutDebugSettings };
-        settings?: QortinoLayoutDebugSettings;
-      }>
-    ) => {
-      setQortinoLayoutDebug(
-        sanitizeQortinoLayoutDebugSettings(
-          e.detail?.settings ?? e.detail?.data?.settings
-        )
-      );
-    };
-
-    subscribeToEvent(QORTINO_LAYOUT_DEBUG_EVENT, handleSetQortinoLayoutDebug);
-
-    return () => {
-      unsubscribeFromEvent(
-        QORTINO_LAYOUT_DEBUG_EVENT,
-        handleSetQortinoLayoutDebug
-      );
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleSetQortinoCompanionDebug = (
-      e: CustomEvent<{
-        data?: { settings?: QortinoCompanionDebugSettings };
-        settings?: QortinoCompanionDebugSettings;
-      }>
-    ) => {
-      setQortinoCompanionDebug(
-        sanitizeQortinoCompanionDebugSettings(
-          e.detail?.settings ?? e.detail?.data?.settings
-        )
-      );
-    };
-
-    subscribeToEvent(
-      QORTINO_COMPANION_DEBUG_EVENT,
-      handleSetQortinoCompanionDebug
-    );
-
-    return () => {
-      unsubscribeFromEvent(
-        QORTINO_COMPANION_DEBUG_EVENT,
-        handleSetQortinoCompanionDebug
-      );
-    };
-  }, []);
 
   useEffect(() => {
     if (!workspaceHydrated) return;

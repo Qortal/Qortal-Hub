@@ -5,9 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { QORTINO_NO_ANTENNA_SAVED_VARIANT } from '../Group/qortinoSavedVariants';
 import {
-  parseQortinoInletDebugSettings,
-  QORTINO_INLET_DEBUG_EVENT,
-  QORTINO_INLET_DEBUG_STORAGE_KEY,
+  DEFAULT_QORTINO_INLET_DEBUG_SETTINGS,
   type QortinoInletDebugSettings,
 } from './qortinoInletDebug';
 import { subscribeToEvent, unsubscribeFromEvent } from '../../utils/events';
@@ -336,38 +334,12 @@ export const QortinoNotificationHost = ({
   const theme = useTheme();
   const infoRef = useRef<NotificationInfo>(info);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [inletDebugSettings, setInletDebugSettings] =
-    useState<QortinoInletDebugSettings>(() =>
-      parseQortinoInletDebugSettings(
-        localStorage.getItem(QORTINO_INLET_DEBUG_STORAGE_KEY)
-      )
-    );
+  const inletDebugSettings: QortinoInletDebugSettings =
+    DEFAULT_QORTINO_INLET_DEBUG_SETTINGS;
 
   useEffect(() => {
     infoRef.current = info;
   }, [info]);
-
-  useEffect(() => {
-    const handleInletDebug = (
-      event: CustomEvent<{
-        data?: { settings?: QortinoInletDebugSettings };
-        settings?: QortinoInletDebugSettings;
-      }>
-    ) => {
-      const payload = event.detail?.data ?? event.detail ?? {};
-      setInletDebugSettings(
-        parseQortinoInletDebugSettings(
-          JSON.stringify(payload.settings ?? {})
-        )
-      );
-    };
-
-    subscribeToEvent(QORTINO_INLET_DEBUG_EVENT, handleInletDebug);
-
-    return () => {
-      unsubscribeFromEvent(QORTINO_INLET_DEBUG_EVENT, handleInletDebug);
-    };
-  }, []);
 
   const closeNotification = useCallback(() => {
     setOpen(false);
