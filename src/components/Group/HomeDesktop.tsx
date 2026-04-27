@@ -1409,7 +1409,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     )
   );
   const [isMinterFieldHovered, setIsMinterFieldHovered] = useState(false);
-  const minterPreviewMode = minterLevel && minterLevel > 0 ? 'on' : 'off';
   const statusPreviewMode: string = 'live';
   const reduce = useReducedMotion();
   const { i18n, t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
@@ -2824,11 +2823,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     statusPreviewOverrides?.coreVersion ?? coreVersionLabel;
   const resolvedHubVersionLabel =
     statusPreviewOverrides?.hubVersion ?? hubVersionLabel;
-  const minterDotsFilled =
-    minterPreviewMode === 'on'
-      ? Math.max(1, Math.min(9, minterLevel ?? 5))
-      : 0;
-  const isMinterOn = minterPreviewMode === 'on';
+  const isMinterOn = Boolean(minterLevel && minterLevel > 0);
+  const minterDotsFilled = isMinterOn
+    ? Math.max(1, Math.min(9, minterLevel ?? 5))
+    : 0;
   const formattedMinterCurrentBlocks =
     minterProgress?.currentBlocks != null
       ? minterProgress.currentBlocks.toLocaleString()
