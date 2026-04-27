@@ -25,16 +25,16 @@ export const FEATURED_INITIAL_PREVIEW_DURATION_MS = 3500;
 export const FEATURED_INTRO_TOTAL_DURATION_MS =
   FEATURED_PREVIEW_EXPAND_DELAY_MS + FEATURED_INITIAL_PREVIEW_DURATION_MS;
 const FEATURED_STRIP_HOVER_DURATION_MS = 190;
-const FEATURED_INITIAL_PREVIEW_SESSION_KEY = 'dashboard-featured-pirate-preview-seen';
+const FEATURED_INITIAL_PREVIEW_SESSION_KEY = 'dashboard-featured-subwire-preview-seen';
 const FEATURED_CALM_MODE_STORAGE_KEY = 'dashboard-featured-apps-calm-mode';
 const FEATURED_TEASER_FADE_DURATION_MS = 300;
-const PIRATE_APP_NAME = 'Pirate Nintendo';
+const SUBWIRE_APP_NAME = 'SubWire';
 const Q_TUBE_APP_NAME = 'Q-Tube';
-const PIRATE_PREVIEW_VIDEO_SRC = '/pirate-nintendo-preview.mp4';
+const SUBWIRE_PREVIEW_VIDEO_SRC = '/subwire-preview.mp4';
 const Q_TUBE_PREVIEW_VIDEO_SRC = '/q-tube-preview.mp4';
 const FEATURED_TILE_VIDEO_SRC = {
   [Q_TUBE_APP_NAME]: Q_TUBE_PREVIEW_VIDEO_SRC,
-  [PIRATE_APP_NAME]: PIRATE_PREVIEW_VIDEO_SRC,
+  [SUBWIRE_APP_NAME]: SUBWIRE_PREVIEW_VIDEO_SRC,
 } as const;
 const FEATURED_STRIP_HOVER_TRANSITION =
   `${FEATURED_STRIP_HOVER_DURATION_MS}ms ease`;
@@ -48,13 +48,14 @@ const FEATURED_PREVIEW_CONFIG = {
     videoSrc: Q_TUBE_PREVIEW_VIDEO_SRC,
     videoPosition: 'center center',
   },
-  [PIRATE_APP_NAME]: {
-    accent: '#B893FF',
+  [SUBWIRE_APP_NAME]: {
+    accent: '#78AFFF',
     align: 'right',
-    eyebrow: 'Community vault',
-    subtitle: 'Retro discoveries, preserved libraries, and cartridge-era nostalgia.',
-    title: PIRATE_APP_NAME,
-    videoSrc: PIRATE_PREVIEW_VIDEO_SRC,
+    eyebrow: 'Creator-owned',
+    subtitle:
+      'Tell your stories without limits. Own your work and earn directly from your subscribers.',
+    title: SUBWIRE_APP_NAME,
+    videoSrc: SUBWIRE_PREVIEW_VIDEO_SRC,
     videoPosition: 'center center',
   },
 } as const;
@@ -65,7 +66,7 @@ const FEATURED_APP_GRID = [
   'Q-Mail',
   'Q-Blog',
   'Q-Trade',
-  PIRATE_APP_NAME,
+  SUBWIRE_APP_NAME,
 ] as const;
 
 const openApp = (appName: string) => {
@@ -102,8 +103,8 @@ export const HomeFeaturedApps = ({
       panelBoxRef.current = node;
     }
   };
-  const pirateExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pirateCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialPreviewStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandedPreviewApp, setExpandedPreviewApp] = useState<PreviewAppName | null>(null);
@@ -194,8 +195,8 @@ export const HomeFeaturedApps = ({
       setAutoPreviewActive(false);
       setExpandedPreviewApp(null);
       return () => {
-        if (pirateExpandTimerRef.current) clearTimeout(pirateExpandTimerRef.current);
-        if (pirateCollapseTimerRef.current) clearTimeout(pirateCollapseTimerRef.current);
+        if (previewExpandTimerRef.current) clearTimeout(previewExpandTimerRef.current);
+        if (previewCollapseTimerRef.current) clearTimeout(previewCollapseTimerRef.current);
         clearInitialPreviewTimers();
       };
     }
@@ -212,8 +213,8 @@ export const HomeFeaturedApps = ({
     if (!shouldRunInitialPreview) {
       setAutoPreviewActive(false);
       return () => {
-        if (pirateExpandTimerRef.current) clearTimeout(pirateExpandTimerRef.current);
-        if (pirateCollapseTimerRef.current) clearTimeout(pirateCollapseTimerRef.current);
+        if (previewExpandTimerRef.current) clearTimeout(previewExpandTimerRef.current);
+        if (previewCollapseTimerRef.current) clearTimeout(previewCollapseTimerRef.current);
         clearInitialPreviewTimers();
       };
     }
@@ -228,30 +229,30 @@ export const HomeFeaturedApps = ({
 
     initialPreviewStartTimerRef.current = setTimeout(() => {
       initialPreviewStartTimerRef.current = null;
-      setExpandedPreviewApp(PIRATE_APP_NAME);
+      setExpandedPreviewApp(SUBWIRE_APP_NAME);
     }, FEATURED_PREVIEW_EXPAND_DELAY_MS);
 
     initialPreviewEndTimerRef.current = setTimeout(() => {
       initialPreviewEndTimerRef.current = null;
       setAutoPreviewActive(false);
-      setExpandedPreviewApp((current) => (current === PIRATE_APP_NAME ? null : current));
+      setExpandedPreviewApp((current) => (current === SUBWIRE_APP_NAME ? null : current));
     }, FEATURED_INTRO_TOTAL_DURATION_MS);
 
     return () => {
-      if (pirateExpandTimerRef.current) clearTimeout(pirateExpandTimerRef.current);
-      if (pirateCollapseTimerRef.current) clearTimeout(pirateCollapseTimerRef.current);
+      if (previewExpandTimerRef.current) clearTimeout(previewExpandTimerRef.current);
+      if (previewCollapseTimerRef.current) clearTimeout(previewCollapseTimerRef.current);
       clearInitialPreviewTimers();
     };
   }, [clearInitialPreviewTimers, isCalmMode]);
 
   const clearPirateTimers = () => {
-    if (pirateExpandTimerRef.current) {
-      clearTimeout(pirateExpandTimerRef.current);
-      pirateExpandTimerRef.current = null;
+    if (previewExpandTimerRef.current) {
+      clearTimeout(previewExpandTimerRef.current);
+      previewExpandTimerRef.current = null;
     }
-    if (pirateCollapseTimerRef.current) {
-      clearTimeout(pirateCollapseTimerRef.current);
-      pirateCollapseTimerRef.current = null;
+    if (previewCollapseTimerRef.current) {
+      clearTimeout(previewCollapseTimerRef.current);
+      previewCollapseTimerRef.current = null;
     }
   };
 
@@ -282,17 +283,17 @@ export const HomeFeaturedApps = ({
     if (autoPreviewActive) {
       stopInitialPreview();
     }
-    if (expandedPreviewApp === appName && !pirateExpandTimerRef.current) return;
-    if (pirateCollapseTimerRef.current) {
-      clearTimeout(pirateCollapseTimerRef.current);
-      pirateCollapseTimerRef.current = null;
+    if (expandedPreviewApp === appName && !previewExpandTimerRef.current) return;
+    if (previewCollapseTimerRef.current) {
+      clearTimeout(previewCollapseTimerRef.current);
+      previewCollapseTimerRef.current = null;
     }
-    if (pirateExpandTimerRef.current) {
-      clearTimeout(pirateExpandTimerRef.current);
-      pirateExpandTimerRef.current = null;
+    if (previewExpandTimerRef.current) {
+      clearTimeout(previewExpandTimerRef.current);
+      previewExpandTimerRef.current = null;
     }
-    pirateExpandTimerRef.current = setTimeout(() => {
-      pirateExpandTimerRef.current = null;
+    previewExpandTimerRef.current = setTimeout(() => {
+      previewExpandTimerRef.current = null;
       setExpandedPreviewApp(appName);
     }, FEATURED_PREVIEW_EXPAND_DELAY_MS);
   };
@@ -300,13 +301,13 @@ export const HomeFeaturedApps = ({
   const schedulePreviewCollapse = () => {
     if (isCalmMode) return;
     if (autoPreviewActive) return;
-    if (pirateExpandTimerRef.current) {
-      clearTimeout(pirateExpandTimerRef.current);
-      pirateExpandTimerRef.current = null;
+    if (previewExpandTimerRef.current) {
+      clearTimeout(previewExpandTimerRef.current);
+      previewExpandTimerRef.current = null;
     }
-    if (!expandedPreviewApp || pirateCollapseTimerRef.current) return;
-    pirateCollapseTimerRef.current = setTimeout(() => {
-      pirateCollapseTimerRef.current = null;
+    if (!expandedPreviewApp || previewCollapseTimerRef.current) return;
+    previewCollapseTimerRef.current = setTimeout(() => {
+      previewCollapseTimerRef.current = null;
       setExpandedPreviewApp(null);
     }, 70);
   };
@@ -497,7 +498,7 @@ export const HomeFeaturedApps = ({
               appName={expandedPreviewApp}
               theme={theme}
               visible={!!expandedPreviewApp}
-              teaserMode={autoPreviewActive && expandedPreviewApp === PIRATE_APP_NAME}
+              teaserMode={autoPreviewActive && expandedPreviewApp === SUBWIRE_APP_NAME}
               onMouseEnter={() => {
                 clearPirateTimers();
               }}
@@ -717,7 +718,7 @@ const AppTile = ({
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isPreviewableTile = appName in FEATURED_PREVIEW_CONFIG;
   const isWideLeftTile = appName === Q_TUBE_APP_NAME;
-  const isWideRightTile = appName === PIRATE_APP_NAME;
+  const isWideRightTile = appName === SUBWIRE_APP_NAME;
   const isWideTile = isWideLeftTile || isWideRightTile;
   const tileVideoSrc = appName in FEATURED_TILE_VIDEO_SRC
     ? FEATURED_TILE_VIDEO_SRC[appName as keyof typeof FEATURED_TILE_VIDEO_SRC]
@@ -1052,13 +1053,13 @@ const AppTile = ({
               }}
             >
               <Box component="span" sx={{ display: 'block' }}>
-                community.
+                write.
               </Box>
               <Box component="span" sx={{ display: 'block' }}>
-                rom.library.
+                own.
               </Box>
               <Box component="span" sx={{ display: 'block' }}>
-                bowser.
+                earn.
               </Box>
             </Typography>
           </Box>
@@ -1128,7 +1129,7 @@ const FeaturedExpandedPreview = ({
   onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) => {
-  const lastResolvedAppRef = useRef<PreviewAppName>(PIRATE_APP_NAME);
+  const lastResolvedAppRef = useRef<PreviewAppName>(SUBWIRE_APP_NAME);
   if (appName) {
     lastResolvedAppRef.current = appName;
   }

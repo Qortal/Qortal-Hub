@@ -453,52 +453,130 @@ export const GeneralNotifications = ({
         maxWidth="sm"
         onClose={() => setSettingsOpen(false)}
         open={settingsOpen}
+        PaperProps={{
+          sx: {
+            background: '#121821',
+            backgroundImage: 'none',
+            border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+            borderRadius: '18px',
+            boxShadow: `0 26px 56px ${alpha('#000', 0.46)}`,
+            overflow: 'hidden',
+          },
+        }}
       >
         <DialogTitle
           sx={{
             alignItems: 'center',
+            borderBottom: `1px solid ${alpha('#A9BCD8', 0.1)}`,
+            color: theme.palette.text.primary,
             display: 'flex',
+            fontSize: '1.08rem',
+            fontWeight: 650,
             justifyContent: 'space-between',
+            px: 3,
+            py: 2.2,
           }}
         >
           {t('message.generic.notification_settings', {
             defaultValue: 'Notification settings',
           })}
-          <IconButton onClick={() => setSettingsOpen(false)} size="small">
+          <IconButton
+            onClick={() => setSettingsOpen(false)}
+            size="small"
+            sx={{
+              color: alpha(theme.palette.text.secondary, 0.92),
+              '&:hover': {
+                backgroundColor: alpha('#FFFFFF', 0.05),
+                color: theme.palette.text.primary,
+              },
+            }}
+          >
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ px: 3, py: 2.5 }}>
           {settingsLoading ? (
-            <Typography color="text.secondary">
+            <Typography sx={{ color: alpha(theme.palette.text.secondary, 0.82) }}>
               {t('message.generic.loading', { defaultValue: 'Loading...' })}
             </Typography>
           ) : settingsApps.length === 0 ? (
-            <Typography color="text.secondary">
+            <Typography
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.82),
+                fontSize: '0.92rem',
+                lineHeight: 1.55,
+              }}
+            >
               {t('message.generic.no_notification_apps', {
                 defaultValue: 'No apps have notification permission yet.',
               })}
             </Typography>
           ) : (
-            <List disablePadding>
+            <List disablePadding sx={{ display: 'grid', gap: 1.1 }}>
               {settingsApps.map((appName) => (
                 <Box
                   key={appName}
                   sx={{
                     alignItems: 'center',
-                    borderBottom: `1px solid ${alpha('#A9BCD8', 0.12)}`,
+                    backgroundColor: alpha('#FFFFFF', 0.026),
+                    border: `1px solid ${alpha('#A9BCD8', 0.12)}`,
+                    borderRadius: '14px',
                     display: 'flex',
                     gap: 2,
                     justifyContent: 'space-between',
-                    py: 1.5,
+                    px: 1.6,
+                    py: 1.45,
                   }}
                 >
-                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
-                    <AppsIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
-                    <Typography sx={{ fontWeight: 600 }}>{appName}</Typography>
+                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1.2 }}>
+                    <Box
+                      sx={{
+                        alignItems: 'center',
+                        backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                        border: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`,
+                        borderRadius: '10px',
+                        color: alpha(theme.palette.primary.light, 0.96),
+                        display: 'inline-flex',
+                        height: 34,
+                        justifyContent: 'center',
+                        width: 34,
+                      }}
+                    >
+                      <AppsIcon sx={{ fontSize: 18 }} />
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.92rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {appName}
+                      </Typography>
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.76),
+                          fontSize: '0.76rem',
+                          lineHeight: 1.45,
+                          mt: 0.3,
+                        }}
+                      >
+                        {t('message.generic.disable_os_push_desc', {
+                          defaultValue:
+                            'Mute desktop alerts for this app while keeping in-Hub activity visible.',
+                        })}
+                      </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
-                    <Typography color="text.secondary" variant="body2">
+                  <Box sx={{ alignItems: 'center', display: 'flex', gap: 1.2 }}>
+                    <Typography
+                      sx={{
+                        color: alpha(theme.palette.text.secondary, 0.82),
+                        fontSize: '0.78rem',
+                        fontWeight: 500,
+                      }}
+                    >
                       {t('message.generic.disable_os_push', {
                         defaultValue: 'Disable OS push',
                       })}
@@ -552,9 +630,15 @@ export const GeneralNotifications = ({
                         );
                       }}
                       sx={{
+                        borderRadius: '10px',
                         color: theme.palette.error.light,
-                        fontSize: '0.78rem',
+                        fontSize: '0.8rem',
                         fontWeight: 600,
+                        px: 1.1,
+                        py: 0.6,
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.error.main, 0.08),
+                        },
                       }}
                     >
                       {t('message.generic.revoke_permission', {
