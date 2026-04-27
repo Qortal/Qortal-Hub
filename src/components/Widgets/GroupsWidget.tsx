@@ -49,11 +49,7 @@ import {
   userInfoAtom,
 } from '../../atoms/global';
 import { getFee } from '../../background/background';
-import {
-  executeEvent,
-  subscribeToEvent,
-  unsubscribeFromEvent,
-} from '../../utils/events';
+import { executeEvent } from '../../utils/events';
 import { formatTimestamp } from '../../utils/time';
 import {
   APP_BLUE_SURFACE_TEXT,
@@ -124,7 +120,6 @@ type GroupJoinRequestItem = {
 
 type GroupPromotionItem = {
   created: number;
-  debugState?: GroupPromotionVisualState;
   description?: string;
   groupId: number;
   groupName: string;
@@ -593,39 +588,6 @@ export const GroupsWidget = ({
   const messageLineClamp = isCompact ? 1 : 2;
   const currentAddress = userInfo?.address;
   const isAnyLoading = invitesLoading || requestsLoading || promotionsLoading;
-  const [isGroupsDebugMode, setIsGroupsDebugMode] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const queryToggle = (
-        params.get('groupsWidgetDebug') ??
-        params.get('widgetDebug') ??
-        ''
-      )
-        .trim()
-        .toLowerCase();
-      const storedToggle = (
-        window.localStorage.getItem('hub.groupsWidgetDebug') ?? ''
-      )
-        .trim()
-        .toLowerCase();
-
-      return (
-        queryToggle === '1' ||
-        queryToggle === 'true' ||
-        queryToggle === 'groups' ||
-        queryToggle === 'all' ||
-        storedToggle === '1' ||
-        storedToggle === 'true'
-      );
-    } catch (error) {
-      console.error('Failed to read groups widget debug toggle', error);
-      return false;
-    }
-  });
   const memberGroupIds = useMemo(
     () =>
       new Set(
@@ -728,170 +690,6 @@ export const GroupsWidget = ({
     [notificationItems]
   );
 
-  const debugNotificationItems = useMemo<GroupNotificationItem[]>(
-    () => [
-      {
-        avatarUrl: null,
-        groupId: '101',
-        groupName: 'Core Builders',
-        id: 'debug-notification-1',
-        isEncryptedLike: false,
-        isUnread: true,
-        openedAt: 0,
-        senderLabel: 'Q-Bot',
-        snippet: 'The new weekly roadmap summary is ready for review.',
-        timestamp: Date.now() - 1000 * 60 * 12,
-      },
-      {
-        avatarUrl: null,
-        groupId: '102',
-        groupName: 'Design Loop',
-        id: 'debug-notification-2',
-        isEncryptedLike: false,
-        isUnread: false,
-        openedAt: Date.now() - 1000 * 60 * 8,
-        senderLabel: 'Luna',
-        snippet: 'Updated concepts just landed in the shared folder.',
-        timestamp: Date.now() - 1000 * 60 * 54,
-      },
-      {
-        avatarUrl: null,
-        groupId: '103',
-        groupName: 'Marketplace',
-        id: 'debug-notification-3',
-        isEncryptedLike: false,
-        isUnread: true,
-        openedAt: 0,
-        senderLabel: 'Marek',
-        snippet: 'Can someone confirm the onboarding copy before tonight?',
-        timestamp: Date.now() - 1000 * 60 * 115,
-      },
-    ],
-    []
-  );
-
-  const debugInviteItems = useMemo<GroupInviteItem[]>(
-    () => [
-      {
-        description: 'Private working group for launch partners',
-        groupId: 201,
-        groupName: 'Launch Partners',
-        id: 'debug-invite-1',
-        isOpen: false,
-        participantCount: 18,
-      },
-      {
-        description: 'Open discussion around UI experiments and feedback',
-        groupId: 202,
-        groupName: 'UX Sandbox',
-        id: 'debug-invite-2',
-        isOpen: true,
-        participantCount: 64,
-      },
-    ],
-    []
-  );
-
-  const debugRequestItems = useMemo<GroupJoinRequestItem[]>(
-    () => [
-      {
-        groupId: 301,
-        groupName: 'Moderators',
-        id: 'debug-request-1',
-        joiner: 'Qd3bugjoiner1111111111111111111111111',
-        requesterLabel: 'Ayla',
-      },
-      {
-        groupId: 302,
-        groupName: 'Builders Guild',
-        id: 'debug-request-2',
-        joiner: 'Qd3bugjoiner2222222222222222222222222',
-        requesterLabel: 'Torin',
-      },
-    ],
-    []
-  );
-
-  const debugPromotions = useMemo<GroupPromotionItem[]>(
-    () => [
-      {
-        created: Date.now() - 1000 * 60 * 22,
-        debugState: 'join',
-        groupId: 401,
-        groupName: 'Open Traders',
-        id: 'debug-promotion-join',
-        isOpen: true,
-        memberCount: 148,
-        promoterName: 'Q-Trade Hub',
-        snippet:
-          'Real-time trade chatter, listings, and quick peer support for active market sessions.',
-      },
-      {
-        created: Date.now() - 1000 * 60 * 45,
-        debugState: 'request',
-        groupId: 402,
-        groupName: 'Creators Circle',
-        id: 'debug-promotion-request',
-        isOpen: false,
-        memberCount: 41,
-        promoterName: 'Mina',
-        snippet:
-          'A curated space for launches, feedback swaps, and collaboration invites across Q-Apps.',
-      },
-      {
-        created: Date.now() - 1000 * 60 * 78,
-        debugState: 'connecting',
-        groupId: 403,
-        groupName: 'Node Builders',
-        id: 'debug-promotion-connecting',
-        isOpen: true,
-        memberCount: 26,
-        promoterName: 'Nox',
-        snippet:
-          'Diagnostics, setup help, and coordination for users bringing fresh infrastructure online.',
-      },
-      {
-        created: Date.now() - 1000 * 60 * 124,
-        debugState: 'request_sent',
-        groupId: 404,
-        groupName: 'Audio Garden',
-        id: 'debug-promotion-request-sent',
-        isOpen: false,
-        memberCount: 12,
-        promoterName: 'Carys',
-        snippet:
-          'Shared listening sessions, release previews, and artist feedback inside a smaller private room.',
-      },
-      {
-        created: Date.now() - 1000 * 60 * 170,
-        debugState: 'member',
-        groupId: 405,
-        groupName: 'Hub Operators',
-        id: 'debug-promotion-member',
-        isOpen: true,
-        memberCount: 9,
-        promoterName: 'George',
-        snippet:
-          'Already joined. This card previews the member-state action and compact promoted layout.',
-      },
-    ],
-    []
-  );
-
-  const debugPromotionAdminGroups = useMemo(
-    () => [
-      {
-        groupId: 801,
-        groupName: 'Debug Launch Council',
-      },
-      {
-        groupId: 802,
-        groupName: 'Debug Creator Circle',
-      },
-    ],
-    []
-  );
-
   const adminGroupIds = useMemo(
     () =>
       [...(myGroupsWhereIAmAdmin ?? [])]
@@ -902,11 +700,8 @@ export const GroupsWidget = ({
   );
 
   const promotionAdminGroups = useMemo(
-    () =>
-      isGroupsDebugMode
-        ? [...(myGroupsWhereIAmAdmin?.length ? myGroupsWhereIAmAdmin : debugPromotionAdminGroups)]
-        : [...(myGroupsWhereIAmAdmin ?? [])],
-    [debugPromotionAdminGroups, isGroupsDebugMode, myGroupsWhereIAmAdmin]
+    () => [...(myGroupsWhereIAmAdmin ?? [])],
+    [myGroupsWhereIAmAdmin]
   );
 
   const hasPromotionAdminAccess = promotionAdminGroups.length > 0;
@@ -1231,17 +1026,14 @@ export const GroupsWidget = ({
   );
 
   const showInitialInvitesLoading =
-    !isGroupsDebugMode &&
     invitesLoading &&
     !hasLoadedInvitesOnce &&
     visibleInvites.length === 0;
   const showInitialRequestsLoading =
-    !isGroupsDebugMode &&
     requestsLoading &&
     !hasLoadedRequestsOnce &&
     visibleRequests.length === 0;
   const showInitialPromotionsLoading =
-    !isGroupsDebugMode &&
     promotionsLoading &&
     !hasLoadedPromotionsOnce &&
     promotions.length === 0;
@@ -1420,22 +1212,6 @@ export const GroupsWidget = ({
       setPublishingPromotion(true);
       setActionFeedback(null);
 
-      if (isGroupsDebugMode) {
-        await new Promise((resolve) => {
-          window.setTimeout(resolve, 420);
-        });
-
-        setPromotionDialogOpen(false);
-        setPromotionGroupId('');
-        setPromotionText('');
-        setActionFeedback({
-          message: 'Debug promotion preview submitted.',
-          tone: 'success',
-        });
-        setActiveTab('promoted');
-        return;
-      }
-
       const identifier = `group-promotions-ui24-group-${promotionGroupId}-${Date.now().toString(36)}`;
 
       const response = await window.sendMessage('publishOnQDN', {
@@ -1468,7 +1244,7 @@ export const GroupsWidget = ({
     } finally {
       setPublishingPromotion(false);
     }
-  }, [fetchPromotions, isGroupsDebugMode, promotionGroupId, promotionText]);
+  }, [fetchPromotions, promotionGroupId, promotionText]);
 
   const handleOpenPromotionDialog = useCallback(() => {
     if (!hasPromotionAdminAccess) {
@@ -1668,41 +1444,19 @@ export const GroupsWidget = ({
       : alpha(theme.palette.primary.main, 0.085);
 
   const effectiveNotificationItems = useMemo(
-    () =>
-      [...(isGroupsDebugMode ? debugNotificationItems : notificationItems)].sort(
-        sortGroupNotificationItems
-      ),
-    [debugNotificationItems, isGroupsDebugMode, notificationItems]
+    () => [...notificationItems].sort(sortGroupNotificationItems),
+    [notificationItems]
   );
-  const effectiveInvites = isGroupsDebugMode ? debugInviteItems : visibleInvites;
-  const effectiveRequests = isGroupsDebugMode ? debugRequestItems : visibleRequests;
-  const effectivePromotions = isGroupsDebugMode ? debugPromotions : promotions;
-  const effectiveUnreadNotificationCount = isGroupsDebugMode
-    ? debugNotificationItems.filter((item) => item.isUnread).length
-    : unreadNotificationCount;
-
-  useEffect(() => {
-    const handleSetGroupsWidgetDebug = (event: CustomEvent) => {
-      const nextEnabled = !!event.detail?.data?.enabled;
-      setIsGroupsDebugMode(nextEnabled);
-    };
-
-    subscribeToEvent('setGroupsWidgetDebug', handleSetGroupsWidgetDebug);
-
-    return () => {
-      unsubscribeFromEvent('setGroupsWidgetDebug', handleSetGroupsWidgetDebug);
-    };
-  }, []);
+  const effectiveInvites = visibleInvites;
+  const effectiveRequests = visibleRequests;
+  const effectivePromotions = promotions;
+  const effectiveUnreadNotificationCount = unreadNotificationCount;
 
   const getPromotionVisualState = useCallback(
     (
       promotion: GroupPromotionItem,
       isMember: boolean
     ): GroupPromotionVisualState => {
-      if (isGroupsDebugMode && promotion.debugState) {
-        return promotion.debugState;
-      }
-
       if (isMember) {
         return 'member';
       }
@@ -1716,15 +1470,13 @@ export const GroupsWidget = ({
         (promotion.isOpen === false ? 'request' : 'join')
       );
     },
-    [isGroupsDebugMode, joiningPromotionGroupId, promotionActionStates]
+    [joiningPromotionGroupId, promotionActionStates]
   );
 
   const renderNotificationList = () => (
     <QAppWidgetContainer
       emptyMessage="Join communities in Q-Chat to populate this feed with group messages, mentions, and activity."
-      emptyTitle={
-        isGroupsDebugMode ? 'Debug notifications' : 'Start with Q-Chat groups'
-      }
+      emptyTitle="Start with Q-Chat groups"
       hasContent={effectiveNotificationItems.length > 0}
       isEmpty={effectiveNotificationItems.length === 0}
       isLoading={false}
@@ -1753,11 +1505,7 @@ export const GroupsWidget = ({
           {effectiveNotificationItems.map((item) => (
             <ButtonBase
               key={item.id}
-              onClick={() => {
-                if (!isGroupsDebugMode) {
-                  handleOpenGroupChat(item.groupId);
-                }
-              }}
+              onClick={() => handleOpenGroupChat(item.groupId)}
               sx={{
                 alignItems: 'flex-start',
                 background: item.isUnread
@@ -1976,16 +1724,12 @@ export const GroupsWidget = ({
 
   const renderInvitesList = () => (
     <QAppWidgetContainer
-      error={isGroupsDebugMode ? null : invitesError}
+      error={invitesError}
       hasContent={effectiveInvites.length > 0}
       isEmpty={false}
-      isLoading={!isGroupsDebugMode && showInitialInvitesLoading}
+      isLoading={showInitialInvitesLoading}
       loadingLabel="Loading invites"
-      onRetry={() => {
-        if (!isGroupsDebugMode) {
-          void fetchInvites(true);
-        }
-      }}
+      onRetry={() => void fetchInvites(true)}
       stateVerticalOffset="-24px"
     >
       <Box
@@ -2005,16 +1749,12 @@ export const GroupsWidget = ({
         ) : null}
         {effectiveInvites.length === 0 &&
         !showInitialInvitesLoading &&
-        !(isGroupsDebugMode ? null : invitesError) ? (
+        !invitesError ? (
           <IllustratedEmptyState
             compact={isCompact}
             description="Fresh group invitations will appear here as they arrive."
-            onAction={() => {
-              if (!isGroupsDebugMode) {
-                void fetchInvites(true);
-              }
-            }}
-            title={isGroupsDebugMode ? 'Debug invites' : 'No pending invites'}
+            onAction={() => void fetchInvites(true)}
+            title="No pending invites"
             variant="invites"
           />
         ) : (
@@ -2087,11 +1827,7 @@ export const GroupsWidget = ({
                 </Box>
                 <Box sx={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                   <ButtonBase
-                    onClick={() => {
-                      if (!isGroupsDebugMode) {
-                        handleIgnoreInvite(invite.id);
-                      }
-                    }}
+                    onClick={() => handleIgnoreInvite(invite.id)}
                     sx={{
                       alignItems: 'center',
                       border: `1px solid ${alpha(
@@ -2116,11 +1852,7 @@ export const GroupsWidget = ({
                   </ButtonBase>
                   <LoadingButton
                     loading={joiningGroupId === invite.groupId}
-                    onClick={() => {
-                      if (!isGroupsDebugMode) {
-                        void handleAcceptInvite(invite);
-                      }
-                    }}
+                    onClick={() => void handleAcceptInvite(invite)}
                     sx={{
                       borderRadius: '999px',
                       fontSize: '0.7rem',
@@ -2144,16 +1876,12 @@ export const GroupsWidget = ({
 
   const renderRequestsList = () => (
     <QAppWidgetContainer
-      error={isGroupsDebugMode ? null : requestsError}
+      error={requestsError}
       hasContent={effectiveRequests.length > 0}
       isEmpty={false}
-      isLoading={!isGroupsDebugMode && showInitialRequestsLoading}
+      isLoading={showInitialRequestsLoading}
       loadingLabel="Loading requests"
-      onRetry={() => {
-        if (!isGroupsDebugMode) {
-          void fetchJoinRequests(true);
-        }
-      }}
+      onRetry={() => void fetchJoinRequests(true)}
       stateVerticalOffset="-24px"
     >
       <Box
@@ -2173,16 +1901,12 @@ export const GroupsWidget = ({
         ) : null}
         {effectiveRequests.length === 0 &&
         !showInitialRequestsLoading &&
-        !(isGroupsDebugMode ? null : requestsError) ? (
+        !requestsError ? (
           <IllustratedEmptyState
             compact={isCompact}
             description="Join requests from groups you manage will appear here."
-            onAction={() => {
-              if (!isGroupsDebugMode) {
-                void fetchJoinRequests(true);
-              }
-            }}
-            title={isGroupsDebugMode ? 'Debug requests' : 'No pending requests'}
+            onAction={() => void fetchJoinRequests(true)}
+            title="No pending requests"
             variant="requests"
           />
         ) : (
@@ -2261,11 +1985,7 @@ export const GroupsWidget = ({
                 </Box>
                 <Box sx={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                   <ButtonBase
-                    onClick={() => {
-                      if (!isGroupsDebugMode) {
-                        handleRejectRequest(request.id);
-                      }
-                    }}
+                    onClick={() => handleRejectRequest(request.id)}
                     sx={{
                       alignItems: 'center',
                       border: `1px solid ${alpha(
@@ -2289,11 +2009,7 @@ export const GroupsWidget = ({
                   </ButtonBase>
                   <LoadingButton
                     loading={resolvingRequestId === request.id}
-                    onClick={() => {
-                      if (!isGroupsDebugMode) {
-                        void handleApproveRequest(request);
-                      }
-                    }}
+                    onClick={() => void handleApproveRequest(request)}
                     sx={{
                       borderRadius: '999px',
                       fontSize: '0.7rem',
@@ -2318,17 +2034,13 @@ export const GroupsWidget = ({
   const renderPromotionsList = () => (
     <QAppWidgetContainer
       emptyMessage="Promoted groups will appear here when fresh highlights are available."
-      emptyTitle={isGroupsDebugMode ? 'Debug promoted groups' : 'No promoted groups'}
-      error={isGroupsDebugMode ? null : promotionsError}
+      emptyTitle="No promoted groups"
+      error={promotionsError}
       hasContent={effectivePromotions.length > 0}
       isEmpty={!showInitialPromotionsLoading && effectivePromotions.length === 0}
-      isLoading={!isGroupsDebugMode && showInitialPromotionsLoading}
+      isLoading={showInitialPromotionsLoading}
       loadingLabel="Loading promoted groups"
-      onRetry={() => {
-        if (!isGroupsDebugMode) {
-          void fetchPromotions();
-        }
-      }}
+      onRetry={() => void fetchPromotions()}
       stateVerticalOffset="-24px"
     >
       <Box
@@ -2489,11 +2201,9 @@ export const GroupsWidget = ({
                     {promotionVisualState === 'member' ? (
                       <Button
                         disableElevation
-                        onClick={() => {
-                          if (!isGroupsDebugMode) {
-                            handleOpenGroupChat(String(promotion.groupId));
-                          }
-                        }}
+                        onClick={() =>
+                          handleOpenGroupChat(String(promotion.groupId))
+                        }
                         startIcon={<OpenInNewRoundedIcon sx={{ fontSize: '0.85rem' }} />}
                         sx={promotionPrimaryActionSx}
                       >
@@ -2518,11 +2228,7 @@ export const GroupsWidget = ({
                     ) : (
                       <Button
                         disableElevation
-                        onClick={() => {
-                          if (!isGroupsDebugMode) {
-                            void handleJoinPromotedGroup(promotion);
-                          }
-                        }}
+                        onClick={() => void handleJoinPromotedGroup(promotion)}
                         sx={promotionPrimaryActionSx}
                       >
                         {promotionVisualState === 'request'
