@@ -45,6 +45,7 @@ import {
   shouldKeepSingleRemoteSevereRebuildDeadzoneLocal,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
   shouldForceN1SevereRebuildReadyEscape,
+  shouldForceSingleRemoteFullRecovery,
   shouldResetN1SevereRebuildDeadzone,
   shouldBlockN1RecoveryExitForCurrentJitter,
   shouldEnableN1DrainReceivePriorityMode,
@@ -1536,6 +1537,53 @@ describe('useGroupVoiceCall lifecycle helpers', () => {
         reticulumAudioStaleDrops: 0,
         reticulumAudioPacketSendFailures: 0,
         reticulumAudioPacketPathTimeouts: 0,
+      })
+    ).toBe(false);
+  });
+
+  it('forces full single-remote recovery when a live path is collapsing under real ingress pressure', () => {
+    expect(
+      shouldForceSingleRemoteFullRecovery({
+        activeSourceCount: 1,
+        avgPcmBufferedMs: 1.237,
+        playoutUnderTargetFraction: 0.221,
+        avgPlayoutDeltaMs: -98.763,
+        concealmentTicks: 18417,
+        missingFrames: 1821,
+        avgIncomingPacketMs: 7.746,
+        maxIncomingPacketMs: 2605.23,
+        avgReticulumAudioBridgeToRendererIngressMs: 52.115,
+        maxReticulumAudioBridgeToRendererIngressMs: 2104,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldForceSingleRemoteFullRecovery({
+        activeSourceCount: 1,
+        avgPcmBufferedMs: 15.569,
+        playoutUnderTargetFraction: 0.013,
+        avgPlayoutDeltaMs: -84.431,
+        concealmentTicks: 81,
+        missingFrames: 3087,
+        avgIncomingPacketMs: 0.063,
+        maxIncomingPacketMs: 17.275,
+        avgReticulumAudioBridgeToRendererIngressMs: 3.456,
+        maxReticulumAudioBridgeToRendererIngressMs: 19,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldForceSingleRemoteFullRecovery({
+        activeSourceCount: 1,
+        avgPcmBufferedMs: 50.69,
+        playoutUnderTargetFraction: 0.103,
+        avgPlayoutDeltaMs: -49.31,
+        concealmentTicks: 325,
+        missingFrames: 2693,
+        avgIncomingPacketMs: 0.095,
+        maxIncomingPacketMs: 70.7,
+        avgReticulumAudioBridgeToRendererIngressMs: 2.876,
+        maxReticulumAudioBridgeToRendererIngressMs: 23,
       })
     ).toBe(false);
   });

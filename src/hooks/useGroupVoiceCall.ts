@@ -231,6 +231,7 @@ import {
   shouldExtendN1SevereRebuildAccumulation,
   shouldForceN1SevereRebuildReadyEscape,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
+  shouldForceSingleRemoteFullRecovery,
   shouldKeepSingleRemoteDegradedRebuildLocal,
   shouldKeepSingleRemoteSevereRebuildDeadzoneLocal,
   shouldKeepSingleRemoteWindowRecoveryLocal,
@@ -536,6 +537,7 @@ export {
   shouldExtendN1SevereRebuildAccumulation,
   shouldForceN1SevereRebuildReadyEscape,
   shouldForceN1SustainedSevereRebuildReceiveRelief,
+  shouldForceSingleRemoteFullRecovery,
   shouldHoldN1SteadyStarvedAccumulation,
   shouldHoldN1SteadyThinDeadzoneAccumulation,
   shouldIgnoreParticipantLeftEvent,
@@ -2874,6 +2876,24 @@ export function useGroupVoiceCall(uiActive = false) {
           avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
           concealmentTicks: source.concealmentTicks,
         });
+        const forceFullSingleRemoteRecovery =
+          shouldForceSingleRemoteFullRecovery({
+            activeSourceCount: singleRemoteWindow
+              ? 1
+              : windowMetrics.sources.length,
+            avgPcmBufferedMs: source.avgPcmBufferedMs,
+            playoutUnderTargetFraction:
+              source.playoutUnderTargetFraction ?? 0,
+            avgPlayoutDeltaMs: source.avgPlayoutDeltaMs ?? 0,
+            concealmentTicks: source.concealmentTicks,
+            missingFrames: source.missingFrames,
+            avgIncomingPacketMs: source.avgIncomingPacketMs,
+            maxIncomingPacketMs: source.maxIncomingPacketMs,
+            avgReticulumAudioBridgeToRendererIngressMs:
+              source.avgReticulumAudioBridgeToRendererIngressMs,
+            maxReticulumAudioBridgeToRendererIngressMs:
+              source.maxReticulumAudioBridgeToRendererIngressMs,
+          });
         const localOnlySingleRemote = shouldKeepSingleRemoteWindowRecoveryLocal(
           {
             activeSourceCount: singleRemoteWindow
@@ -2974,6 +2994,7 @@ export function useGroupVoiceCall(uiActive = false) {
         prev.severe =
           prev.severe ||
           assessment.severe ||
+          forceFullSingleRemoteRecovery ||
           (assessment.shouldEscalate &&
             pressureAssessment.shouldTightenRecovery);
         prev.degradedSources++;
@@ -2981,13 +3002,17 @@ export function useGroupVoiceCall(uiActive = false) {
           prev.relaxedSingleRemote || relaxedSingleRemote;
         prev.localOnlySingleRemote =
           prev.localOnlySingleRemote ||
-          localOnlySingleRemote ||
-          degradedRebuildLocalOnlySingleRemote ||
-          severeRebuildDeadzoneLocalOnlySingleRemote;
+          (!forceFullSingleRemoteRecovery && localOnlySingleRemote) ||
+          (!forceFullSingleRemoteRecovery &&
+            degradedRebuildLocalOnlySingleRemote) ||
+          (!forceFullSingleRemoteRecovery &&
+            severeRebuildDeadzoneLocalOnlySingleRemote);
         prev.degradedRebuildLocalOnlySingleRemote =
           prev.degradedRebuildLocalOnlySingleRemote ||
-          degradedRebuildLocalOnlySingleRemote ||
-          severeRebuildDeadzoneLocalOnlySingleRemote;
+          (!forceFullSingleRemoteRecovery &&
+            degradedRebuildLocalOnlySingleRemote) ||
+          (!forceFullSingleRemoteRecovery &&
+            severeRebuildDeadzoneLocalOnlySingleRemote);
         prev.localOnlyMultiSourceOverload =
           prev.localOnlyMultiSourceOverload || multiSourceLocalOnlyRecovery;
         peerScores.set(ingressPeer, prev);

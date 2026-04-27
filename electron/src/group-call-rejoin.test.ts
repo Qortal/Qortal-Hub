@@ -549,7 +549,7 @@ describe('recent room bootstrap state', () => {
     });
   });
 
-  it('preserves cached topology and session on rejoin without reviving cached participants', () => {
+  it('preserves cached topology and session on rejoin while restoring fresh recent peers for bootstrap', () => {
     const t0 = Date.now();
     const manager = new GroupCallManager(
       reticulumAwarePresenceStub() as any,
@@ -620,14 +620,6 @@ describe('recent room bootstrap state', () => {
     const bootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
 
     expect(bootstrap).toMatchObject({
-      participants: [
-        {
-          address: 'Q-user3',
-          publicKey: 'pk3',
-          joinedAt: t0 + 500,
-          reticulumDestinationHash: TEST_D32,
-        },
-      ],
       topologyEpoch: 17,
       lastTopology: {
         topologyEpoch: 17,
@@ -637,6 +629,29 @@ describe('recent room bootstrap state', () => {
       callSessionId: firstJoin.callSessionId,
       mediaSessionGeneration: firstJoin.mediaSessionGeneration,
     });
+    expect(bootstrap?.participants).toHaveLength(3);
+    expect(bootstrap?.participants).toEqual(
+      expect.arrayContaining([
+        {
+          address: 'Q-root',
+          publicKey: 'pk-root',
+          joinedAt: t0,
+          reticulumDestinationHash: TEST_D32,
+        },
+        {
+          address: 'Q-user2',
+          publicKey: 'pk2',
+          joinedAt: t0 + 100,
+          reticulumDestinationHash: TEST_D32,
+        },
+        {
+          address: 'Q-user3',
+          publicKey: 'pk3',
+          joinedAt: t0 + 500,
+          reticulumDestinationHash: TEST_D32,
+        },
+      ])
+    );
   });
 
   it('delegates Reticulum overlay fanout to the bridge-owned fanout path', async () => {

@@ -48,6 +48,15 @@ const GCALL_N1_DEGRADED_REBUILD_PCM_MAX_MS = 24;
 const GCALL_N1_DEGRADED_REBUILD_UNDERTARGET_MIN = 0.9;
 const GCALL_N1_DEGRADED_REBUILD_DELTA_MAX_MS = -80;
 const GCALL_N1_DEGRADED_REBUILD_OPUS_MAX_MS = 40;
+const GCALL_N1_FORCE_FULL_RECOVERY_PCM_MAX_MS = 18;
+const GCALL_N1_FORCE_FULL_RECOVERY_UNDERTARGET_MIN = 0.1;
+const GCALL_N1_FORCE_FULL_RECOVERY_CONCEALMENT_TICKS_MIN = 120;
+const GCALL_N1_FORCE_FULL_RECOVERY_MISSING_FRAMES_MIN = 120;
+const GCALL_N1_FORCE_FULL_RECOVERY_AVG_INCOMING_PACKET_MS_MIN = 6;
+const GCALL_N1_FORCE_FULL_RECOVERY_MAX_INCOMING_PACKET_MS_MIN = 120;
+const GCALL_N1_FORCE_FULL_RECOVERY_AVG_BRIDGE_INGRESS_MS_MIN = 20;
+const GCALL_N1_FORCE_FULL_RECOVERY_MAX_BRIDGE_INGRESS_MS_MIN = 200;
+const GCALL_N1_FORCE_FULL_RECOVERY_DELTA_MAX_MS = -80;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_RESET_MIN_MS = 6_000;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_LAST_RECV_MAX_MS = 1_500;
 const GCALL_N1_SEVERE_REBUILD_DEADZONE_OPUS_FRAMES_MAX = 2;
@@ -333,6 +342,40 @@ export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
     opts.playoutUnderTargetFraction >=
       GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_UNDERTARGET_MIN &&
     opts.avgPlayoutDeltaMs <= GCALL_N1_LOCAL_ONLY_WINDOW_RECOVERY_DELTA_MAX_MS
+  );
+}
+
+export function shouldForceSingleRemoteFullRecovery(opts: {
+  activeSourceCount: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  avgPlayoutDeltaMs: number;
+  concealmentTicks: number;
+  missingFrames: number;
+  avgIncomingPacketMs?: number;
+  maxIncomingPacketMs?: number;
+  avgReticulumAudioBridgeToRendererIngressMs?: number;
+  maxReticulumAudioBridgeToRendererIngressMs?: number;
+}): boolean {
+  const severePathEvidence =
+    opts.missingFrames >= GCALL_N1_FORCE_FULL_RECOVERY_MISSING_FRAMES_MIN ||
+    (opts.avgIncomingPacketMs ?? 0) >=
+      GCALL_N1_FORCE_FULL_RECOVERY_AVG_INCOMING_PACKET_MS_MIN ||
+    (opts.maxIncomingPacketMs ?? 0) >=
+      GCALL_N1_FORCE_FULL_RECOVERY_MAX_INCOMING_PACKET_MS_MIN ||
+    (opts.avgReticulumAudioBridgeToRendererIngressMs ?? 0) >=
+      GCALL_N1_FORCE_FULL_RECOVERY_AVG_BRIDGE_INGRESS_MS_MIN ||
+    (opts.maxReticulumAudioBridgeToRendererIngressMs ?? 0) >=
+      GCALL_N1_FORCE_FULL_RECOVERY_MAX_BRIDGE_INGRESS_MS_MIN;
+  return (
+    opts.activeSourceCount === 1 &&
+    opts.avgPcmBufferedMs <= GCALL_N1_FORCE_FULL_RECOVERY_PCM_MAX_MS &&
+    opts.playoutUnderTargetFraction >=
+      GCALL_N1_FORCE_FULL_RECOVERY_UNDERTARGET_MIN &&
+    opts.concealmentTicks >=
+      GCALL_N1_FORCE_FULL_RECOVERY_CONCEALMENT_TICKS_MIN &&
+    opts.avgPlayoutDeltaMs <= GCALL_N1_FORCE_FULL_RECOVERY_DELTA_MAX_MS &&
+    severePathEvidence
   );
 }
 

@@ -6647,8 +6647,19 @@ export class GroupCallManager extends EventEmitter {
     if (!liveRoom) {
       return {
         ...recent!,
-        // Recent cached participants are not authoritative roster truth.
-        participants: [],
+        // Fresh recent participants are a bootstrap roster only. They let a
+        // fast leave/rejoin restore visible peers until live GC_JOIN traffic
+        // or an updated room snapshot arrives again.
+        participants: recent!.participants.map((participant) => ({
+          ...participant,
+          reticulumDestinationHash: participant.reticulumDestinationHash,
+          ...(participant.reticulumIdentityPublicKeyBase64
+            ? {
+                reticulumIdentityPublicKeyBase64:
+                  participant.reticulumIdentityPublicKeyBase64,
+              }
+            : {}),
+        })),
         lastTopology: recent!.lastTopology
           ? {
               ...recent!.lastTopology,
@@ -6666,8 +6677,20 @@ export class GroupCallManager extends EventEmitter {
     const live = buildGroupRoomBootstrapState(liveRoom, Date.now(), false);
     if (!recent) return live;
 
+    const participantsByAddress = new Map(
+      live.participants.map((participant) => [participant.address, participant])
+    );
+    if (live.participants.length <= 1 && recent.participants.length > live.participants.length) {
+      for (const participant of recent.participants) {
+        if (!participantsByAddress.has(participant.address)) {
+          participantsByAddress.set(participant.address, participant);
+        }
+      }
+    }
+
     return {
       ...live,
+      participants: [...participantsByAddress.values()],
       topologyEpoch: Math.max(live.topologyEpoch, recent.topologyEpoch),
       lastTopology: live.lastTopology ?? recent.lastTopology,
       callSessionId: live.callSessionId || recent.callSessionId,
