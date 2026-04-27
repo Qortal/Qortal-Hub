@@ -31,10 +31,7 @@ import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
 import { GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
-import {
-  HomeQortinoWorkspaceCard,
-  resetQortinoWorkspaceOnboardingCelebration,
-} from './HomeQortinoWorkspaceCard';
+import { HomeQortinoWorkspaceCard } from './HomeQortinoWorkspaceCard';
 import { HomeQuickToolsPad } from './HomeQuickToolsPad';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
 import { HomeFeaturedGroups } from './HomeFeaturedGroups';
@@ -49,13 +46,6 @@ import {
   getBlueTier2BadgeSx,
   getBlueTier3DotSx,
 } from './groupActivityColorSystem';
-import {
-  DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
-  DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
-  EMPTY_GETTING_STARTED_DEBUG_OVERRIDES,
-  parseGettingStartedDebugOverrides,
-  type GettingStartedDebugOverrides,
-} from './homeGettingStartedDebug';
 import { useTranslation } from 'react-i18next';
 import { AnimatePresence, LazyMotion, domAnimation, motion, useReducedMotion } from 'framer-motion';
 import { getBaseApiReact } from '../../App';
@@ -80,12 +70,6 @@ import type { ApiKey } from '../../types/auth';
 type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
 type HomeCustomizableCardId = 'groupActivity' | 'quitter';
-type DashboardStatusPreviewMode =
-  | 'live'
-  | 'syncing'
-  | 'local'
-  | 'custom'
-  | 'issue';
 type DashboardInfoStatusTone = 'operational' | 'syncing' | 'issue';
 type MinterProgressSnapshot = {
   currentBlocks: number;
@@ -343,8 +327,6 @@ function BlockHeightValue({ theme, value }) {
 }
 
 const DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY = 'dashboardMinterDefaultView';
-const DASHBOARD_STATUS_PREVIEW_EVENT = 'setDashboardStatusPreview';
-const DASHBOARD_STATUS_PREVIEW_STORAGE_KEY = 'dashboardStatusPreviewMode';
 const DASHBOARD_EMBEDDED_QUITTER_APP = {
   identifier: '',
   name: 'Quitter',
@@ -397,54 +379,6 @@ const getWalletActivityCreatorAddress = (
 const getWalletActivityRecipientAddress = (
   transaction: WalletActivityTransaction
 ) => (transaction.recipient || transaction.recipientAddress || '').trim();
-
-const parseDashboardStatusPreviewMode = (
-  value: string | null
-): DashboardStatusPreviewMode => {
-  switch (value) {
-    case 'syncing':
-    case 'local':
-    case 'custom':
-    case 'issue':
-      return value;
-    default:
-      return 'live';
-  }
-};
-
-const getNextDashboardStatusPreviewMode = (
-  currentMode: DashboardStatusPreviewMode
-): DashboardStatusPreviewMode => {
-  switch (currentMode) {
-    case 'live':
-      return 'syncing';
-    case 'syncing':
-      return 'local';
-    case 'local':
-      return 'custom';
-    case 'custom':
-      return 'issue';
-    default:
-      return 'live';
-  }
-};
-
-const getDashboardStatusPreviewModeLabel = (
-  mode: DashboardStatusPreviewMode
-) => {
-  switch (mode) {
-    case 'syncing':
-      return 'Syncing';
-    case 'local':
-      return 'Local';
-    case 'custom':
-      return 'Custom';
-    case 'issue':
-      return 'Issue';
-    default:
-      return 'Live';
-  }
-};
 
 const parseMinterInfoView = (value: string | null): MinterInfoView =>
   value === 'progress' ? 'progress' : 'dots';
@@ -1430,13 +1364,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [promotionsCount, setPromotionsCount] = useState(0);
   const [showMostActiveGroups, setShowMostActiveGroups] = useState(false);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
-  const [gettingStartedDebugOverrides, setGettingStartedDebugOverrides] = useState<GettingStartedDebugOverrides>(() =>
-    parseGettingStartedDebugOverrides(
-      localStorage.getItem(DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY)
-    )
-  );
-  const [gettingStartedDebugPathActive, setGettingStartedDebugPathActive] = useState(false);
-  const [gettingStartedDebugReplayToken, setGettingStartedDebugReplayToken] = useState(0);
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
@@ -1476,22 +1403,14 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const [groupActivityMeasuredViewportHeightPx, setGroupActivityMeasuredViewportHeightPx] =
     useState<number | null>(null);
   const [coreVersionLabel, setCoreVersionLabel] = useState('—');
-  const [minterPreviewMode, setMinterPreviewMode] = useState<'off' | 'on'>(() => {
-    const saved = localStorage.getItem('dashboardMinterPreviewMode');
-    return saved === 'on' ? 'on' : 'off';
-  });
   const [minterDefaultView, setMinterDefaultView] = useState<MinterInfoView>(() =>
     parseMinterInfoView(
       localStorage.getItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY)
     )
   );
   const [isMinterFieldHovered, setIsMinterFieldHovered] = useState(false);
-  const [statusPreviewMode, setStatusPreviewMode] =
-    useState<DashboardStatusPreviewMode>(() =>
-      parseDashboardStatusPreviewMode(
-        localStorage.getItem(DASHBOARD_STATUS_PREVIEW_STORAGE_KEY)
-      )
-    );
+  const minterPreviewMode = minterLevel && minterLevel > 0 ? 'on' : 'off';
+  const statusPreviewMode: string = 'live';
   const reduce = useReducedMotion();
   const { i18n, t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const td = useCallback(
@@ -1546,7 +1465,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       : null;
   const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
-  const isLocalPreview = typeof window !== 'undefined' && (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost');
   const selectedNodeUrl = normalizeDashboardNodeUrl(
     selectedNode?.url || getBaseApiReact()
   );
@@ -2428,7 +2346,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, [
     activeTab,
     desktopViewMode,
-    isLocalPreview,
     isOnboardingComplete,
     isWideDashboardLayout,
     showMostActiveGroups,
@@ -2675,11 +2592,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, [userAddress]);
 
   useEffect(() => {
-    if (localStorage.getItem('dashboardMinterPreviewMode')) return;
-    setMinterPreviewMode(minterLevel && minterLevel > 0 ? 'on' : 'off');
-  }, [minterLevel]);
-
-  useEffect(() => {
     let active = true;
 
     const loadCoreInfo = async () => {
@@ -2709,82 +2621,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     };
   }, []);
 
-  useEffect(() => {
-    const handleSetDashboardMinterPreview = (e: CustomEvent) => {
-      const mode = e.detail?.data?.mode === 'on' ? 'on' : 'off';
-      setMinterPreviewMode(mode);
-      localStorage.setItem('dashboardMinterPreviewMode', mode);
-    };
-
-    subscribeToEvent('setDashboardMinterPreview', handleSetDashboardMinterPreview);
-    return () => {
-      unsubscribeFromEvent('setDashboardMinterPreview', handleSetDashboardMinterPreview);
-    };
-  }, []);
-
   const handleSetMinterDefaultView = useCallback((nextView: MinterInfoView) => {
     setMinterDefaultView(nextView);
     localStorage.setItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY, nextView);
   }, []);
-
-  useEffect(() => {
-    const handleSetDashboardStatusPreview = (e: CustomEvent) => {
-      const nextMode = parseDashboardStatusPreviewMode(
-        e.detail?.data?.mode ?? null
-      );
-      setStatusPreviewMode(nextMode);
-      localStorage.setItem(DASHBOARD_STATUS_PREVIEW_STORAGE_KEY, nextMode);
-    };
-
-    subscribeToEvent(
-      DASHBOARD_STATUS_PREVIEW_EVENT,
-      handleSetDashboardStatusPreview
-    );
-    return () => {
-      unsubscribeFromEvent(
-        DASHBOARD_STATUS_PREVIEW_EVENT,
-        handleSetDashboardStatusPreview
-      );
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleSetDashboardGettingStartedDebugOverrides = async (
-      e: CustomEvent
-    ) => {
-      const nextOverrides = {
-        ...EMPTY_GETTING_STARTED_DEBUG_OVERRIDES,
-        ...(e.detail?.data?.overrides ?? {}),
-      };
-      setGettingStartedDebugPathActive(true);
-      setGettingStartedDebugOverrides(nextOverrides);
-      localStorage.setItem(
-        DASHBOARD_GETTING_STARTED_DEBUG_STORAGE_KEY,
-        JSON.stringify(nextOverrides)
-      );
-
-      if (e.detail?.data?.resetReplay) {
-        if (userAddress) {
-          localStorage.removeItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`);
-          await resetQortinoWorkspaceOnboardingCelebration(userAddress);
-        }
-        setIsOnboardingComplete(false);
-        setShowMostActiveGroups(false);
-        setGettingStartedDebugReplayToken((prev) => prev + 1);
-      }
-    };
-
-    subscribeToEvent(
-      DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
-      handleSetDashboardGettingStartedDebugOverrides
-    );
-    return () => {
-      unsubscribeFromEvent(
-        DASHBOARD_GETTING_STARTED_DEBUG_EVENT,
-        handleSetDashboardGettingStartedDebugOverrides
-      );
-    };
-  }, [userAddress]);
 
   const handleRefreshGroupActivity = () => {
     setGroupWidgetRefreshToken((value) => value + 1);
@@ -3461,9 +3301,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           >
                             <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
                               <HomeQortinoWorkspaceCard
-                                debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
-                                debugReplayToken={gettingStartedDebugReplayToken}
-                                debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
                                 onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
                                 onOpenAppsPanel={handleOpenAppsPanel}
                               />
@@ -3542,9 +3379,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           >
                             <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
                               <HomeQortinoWorkspaceCard
-                                debugCompletionOverrides={isLocalPreview ? gettingStartedDebugOverrides : undefined}
-                                debugReplayToken={gettingStartedDebugReplayToken}
-                                debugUseOverridesOnly={isLocalPreview && gettingStartedDebugPathActive}
                                 onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
                                 onOpenAppsPanel={handleOpenAppsPanel}
                               />
