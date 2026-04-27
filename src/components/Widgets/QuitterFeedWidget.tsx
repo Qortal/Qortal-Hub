@@ -23,11 +23,7 @@ import {
   userInfoAtom,
 } from '../../atoms/global';
 import { useBlockedAddresses } from '../../hooks/useBlockUsers';
-import {
-  executeEvent,
-  subscribeToEvent,
-  unsubscribeFromEvent,
-} from '../../utils/events';
+import { executeEvent } from '../../utils/events';
 import type { WidgetDisplayMode } from './DashboardWidgetFrame';
 import {
   QAppWidgetContainer,
@@ -65,20 +61,12 @@ const FOLLOWING_TIMEOUT_ERROR_MESSAGE =
 const FOLLOWING_LOAD_TIMEOUT_MS = 40_000;
 const FEED_POLL_INTERVAL_MS = 30_000;
 const NEW_POST_REVEAL_DURATION_MS = 420;
-const QUITTER_NEW_POSTS_DEBUG_STORAGE_KEY = 'hub.quitterWidgetNewPostsDebug';
-const QUITTER_NEW_POSTS_DEBUG_ID_PREFIX = 'debug-quitter-new-post:';
 
 const getPostCountLabel = (count: number) =>
   `${count} post${count === 1 ? '' : 's'}`;
 
 const getNewPostCountLabel = (count: number) =>
   `${count} new post${count === 1 ? '' : 's'}`;
-
-const isDebugPendingItem = (item: QuitterFeedItem) =>
-  item.id.startsWith(QUITTER_NEW_POSTS_DEBUG_ID_PREFIX);
-
-const removeDebugPendingItems = (items: QuitterFeedItem[]) =>
-  items.filter((item) => !isDebugPendingItem(item));
 
 const normalizeAuthorName = (value: string) => value.trim().toLowerCase();
 
@@ -99,39 +87,6 @@ const fetchNamesForAddress = async (address: string, signal?: AbortSignal) => {
         .map((item) => (typeof item?.name === 'string' ? item.name.trim() : ''))
         .filter(Boolean)
     : [];
-};
-
-const buildDebugPendingItems = (
-  sourceItems: QuitterFeedItem[],
-  feedMode: QuitterFeedMode
-): QuitterFeedItem[] => {
-  const now = Date.now();
-  const primaryTemplate = sourceItems[0] ?? null;
-  const secondaryTemplate = sourceItems[1] ?? primaryTemplate;
-  const templates = [primaryTemplate, secondaryTemplate];
-
-  return templates.map((template, index) => {
-    const suffix = `${feedMode}-${index + 1}`;
-    const publishedAt = now - index * 90_000;
-
-    return {
-      author: template?.author ?? 'Quitter Debug',
-      avatarUrl: template?.avatarUrl ?? '',
-      hasVideo: false,
-      id: `${QUITTER_NEW_POSTS_DEBUG_ID_PREFIX}${suffix}`,
-      identifier: `debug-new-post-${suffix}`,
-      images: [],
-      latestSignature: `debug-signature-${suffix}`,
-      publishedAt,
-      searchCreatedAt: publishedAt,
-      service: 'DOCUMENT',
-      text:
-        index === 0
-          ? 'Debug preview post. Use this to inspect the new-posts bar without waiting for live QDN updates.'
-          : 'Second debug preview item for testing top-of-feed insertion and the apply-new-posts interaction.',
-      updatedAt: publishedAt,
-    };
-  });
 };
 
 class FeedLoadTimeoutError extends Error {
@@ -239,33 +194,6 @@ export const QuitterFeedWidget = ({
     useState<string[]>([]);
   const [revealedItemIds, setRevealedItemIds] = useState<string[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
-  const [isDebugNewPostsEnabled, setIsDebugNewPostsEnabled] = useState(() => {
-    if (typeof window === 'undefined') {
-      return false;
-    }
-
-    try {
-      const storedToggle =
-        window.localStorage.getItem(QUITTER_NEW_POSTS_DEBUG_STORAGE_KEY) ?? '';
-      return storedToggle === '1' || storedToggle === 'true';
-    } catch (error) {
-      console.error('Failed to read Quitter widget new-post debug toggle', error);
-      return false;
-    }
-  });
-  const [debugNewPostsTrigger, setDebugNewPostsTrigger] = useState(() => {
-    if (typeof window === 'undefined') {
-      return 0;
-    }
-
-    try {
-      const storedToggle =
-        window.localStorage.getItem(QUITTER_NEW_POSTS_DEBUG_STORAGE_KEY) ?? '';
-      return storedToggle === '1' || storedToggle === 'true' ? 1 : 0;
-    } catch {
-      return 0;
-    }
-  });
   const itemsRef = useRef<QuitterFeedItem[]>([]);
   const pendingItemsRef = useRef<QuitterFeedItem[]>([]);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -273,7 +201,6 @@ export const QuitterFeedWidget = ({
   const activeFeedRequestIdRef = useRef(0);
   const activeUpdateRequestIdRef = useRef(0);
   const isUpdateCheckInFlightRef = useRef(false);
-  const handledDebugTriggerRef = useRef(0);
   const isFollowingFeed = feedMode === 'following';
   const blockedAddressList = useMemo(
     () => Object.keys(blockedAddresses || {}).filter(Boolean),
@@ -377,32 +304,6 @@ export const QuitterFeedWidget = ({
   }, [pendingItems]);
 
   useEffect(() => {
-    const handleSetQuitterWidgetNewPostsDebug = (event: CustomEvent) => {
-      const nextEnabled = !!event.detail?.data?.enabled;
-      setIsDebugNewPostsEnabled(nextEnabled);
-
-      if (nextEnabled) {
-        setDebugNewPostsTrigger((value) => value + 1);
-        return;
-      }
-
-      commitPendingItems(removeDebugPendingItems(pendingItemsRef.current));
-    };
-
-    subscribeToEvent(
-      'setQuitterWidgetNewPostsDebug',
-      handleSetQuitterWidgetNewPostsDebug
-    );
-
-    return () => {
-      unsubscribeFromEvent(
-        'setQuitterWidgetNewPostsDebug',
-        handleSetQuitterWidgetNewPostsDebug
-      );
-    };
-  }, [commitPendingItems]);
-
-  useEffect(() => {
     onRefreshStateChange?.(isRefreshing);
   }, [isRefreshing, onRefreshStateChange]);
 
@@ -426,36 +327,6 @@ export const QuitterFeedWidget = ({
       window.clearTimeout(timeoutId);
     };
   }, [revealedItemIds]);
-
-  useEffect(() => {
-    if (!isDebugNewPostsEnabled || debugNewPostsTrigger === 0) {
-      return;
-    }
-
-    if (initialFeedState !== 'success') {
-      return;
-    }
-
-    if (handledDebugTriggerRef.current === debugNewPostsTrigger) {
-      return;
-    }
-
-    handledDebugTriggerRef.current = debugNewPostsTrigger;
-
-    const debugPendingItems = buildDebugPendingItems(itemsRef.current, feedMode);
-    const nextPendingItems = prependUniqueFeedItems(
-      debugPendingItems,
-      removeDebugPendingItems(pendingItemsRef.current)
-    );
-
-    commitPendingItems(nextPendingItems);
-  }, [
-    commitPendingItems,
-    debugNewPostsTrigger,
-    feedMode,
-    initialFeedState,
-    isDebugNewPostsEnabled,
-  ]);
 
   const fetchFeedPageForMode = useEffectEvent(
     async (
