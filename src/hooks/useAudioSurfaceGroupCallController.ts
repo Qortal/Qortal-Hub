@@ -11,7 +11,6 @@ import type {
   AudioEngineJoinOptions,
   GroupCallControllerApi,
 } from '../lib/group-call/audioEngineTypes';
-import type { GroupCallAudioQualityProfile } from '../lib/group-call/groupCallAudioProfile';
 
 export function useAudioSurfaceGroupCallController(
   uiActive = false
@@ -199,16 +198,6 @@ export function useAudioSurfaceGroupCallController(
     [sendCommand]
   );
 
-  const setAudioQualityProfile = useCallback(
-    (profile: GroupCallAudioQualityProfile) => {
-      void sendCommand({
-        type: 'set-audio-quality-profile',
-        profile,
-      });
-    },
-    [sendCommand]
-  );
-
   return useMemo(
     () => ({
       roomState: snapshot.roomState,
@@ -233,14 +222,12 @@ export function useAudioSurfaceGroupCallController(
       memberPrimaryNames: snapshot.memberPrimaryNames,
       memberGateGroupName: snapshot.memberGateGroupName,
       audioQualityProfile: snapshot.audioQualityProfile,
-      setAudioQualityProfile,
     }),
     [
       clearGcallJoinError,
       exportGroupCallDiagnostics,
       joinGroupCall,
       leaveGroupCall,
-      setAudioQualityProfile,
       setHearCall,
       setMuted,
       snapshot.activeSpeakers,

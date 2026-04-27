@@ -15,7 +15,6 @@ const audioSurfaceController: GroupCallControllerApi = {
   setMuted: vi.fn(),
   setHearCall: vi.fn(),
   toggleHearCall: vi.fn(),
-  setAudioQualityProfile: vi.fn(),
 };
 
 const { useAudioSurfaceGroupCallControllerMock } = vi.hoisted(() => ({

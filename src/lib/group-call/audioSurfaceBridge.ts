@@ -158,7 +158,6 @@ export function buildUnavailableGroupCallControllerApi(): GroupCallControllerApi
     setMuted: noop,
     setHearCall: noop,
     toggleHearCall: noop,
-    setAudioQualityProfile: noop,
   };
 }
 

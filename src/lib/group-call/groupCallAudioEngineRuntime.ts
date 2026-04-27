@@ -58,16 +58,25 @@ import {
 import {
   buildGroupCallTopology,
   computeGroupCallRole,
+  DEFAULT_GROUP_CALL_CLUSTER_SIZE,
   getReticulumTransportTargets,
   normalizeGroupCallTopology,
   type GroupCallTopology,
 } from './groupCallTopology';
 import { chooseSameEpochTopologyWinner } from './groupCallTopologyAuthority';
 import {
+  buildHierarchicalTopologyWithStickyRoot,
+  buildSingleClusterTopologyWithStickyRoot,
   collectActiveSpeakers,
   reconcileParticipantSpeaking,
   sameAddressList,
 } from './router';
+import {
+  hasOccupiedRoomEvidenceForJoin,
+  shouldDeferLocalTopologyElection,
+  shouldDelayPostJoinRosterElection,
+} from './groupCallJoinLifecycleDecisions';
+import { getTrustedRootForRejoinElection } from './groupCallSessionKeyPolicy';
 import AudioDecryptWorker from '../../workers/audio-decrypt.worker?worker';
 import nacl from '../../encryption/nacl-fast';
 import ed2curve from '../../encryption/ed2curve';
@@ -128,6 +137,9 @@ type HeldIncomingAudioPayload = {
 const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
+const GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS = 1_000;
+const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
+const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const AUTHORITATIVE_KEY_RECOVERY_RETRY_MS = 1_500;
 const AUTHORITATIVE_KEY_RECOVERY_FAILURE_LOG_COOLDOWN_MS = 1_000;
 const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS = 48;
@@ -179,6 +191,31 @@ async function buildGcKeyRotateDigest(
   encryptedKeys: Record<string, string>
 ): Promise<string> {
   return sha256Hex(canonicalizeStringMap(encryptedKeys));
+}
+
+function buildTopologyWithTrustedRoot(
+  sorted: string[],
+  topologyEpoch: number,
+  trustedRoot: string | null | undefined
+): GroupCallTopology {
+  if (sorted.length <= DEFAULT_GROUP_CALL_CLUSTER_SIZE) {
+    return normalizeGroupCallTopology(
+      buildSingleClusterTopologyWithStickyRoot(
+        sorted,
+        topologyEpoch,
+        trustedRoot,
+        DEFAULT_GROUP_CALL_CLUSTER_SIZE
+      ) ?? buildGroupCallTopology(sorted, topologyEpoch)
+    );
+  }
+  return normalizeGroupCallTopology(
+    buildHierarchicalTopologyWithStickyRoot(
+      sorted,
+      topologyEpoch,
+      trustedRoot,
+      DEFAULT_GROUP_CALL_CLUSTER_SIZE
+    ) ?? buildGroupCallTopology(sorted, topologyEpoch)
+  );
 }
 
 function base58DecodeRenderer(value: string): Uint8Array {
@@ -259,6 +296,9 @@ export class GroupCallAudioEngineRuntime {
   private memberGateRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private topologyAsyncGeneration = 0;
   private lastObservedTopologyEpoch = 0;
+  private trustedRemoteRoot = '';
+  private trustedRemoteRootLastSeenAt = 0;
+  private topologyElectionDelayUntilMs = 0;
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
@@ -617,6 +657,40 @@ export class GroupCallAudioEngineRuntime {
     }));
   }
 
+  private mergeParticipantsFromTopology(
+    participants: AudioEngineParticipant[],
+    topology: GroupCallTopology
+  ): AudioEngineParticipant[] {
+    const nextByAddress = new Map<string, AudioEngineParticipant>();
+    for (const participant of participants) {
+      const address = participant.address?.trim() ?? '';
+      if (!address) continue;
+      nextByAddress.set(address, participant);
+    }
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (myAddress && !nextByAddress.has(myAddress)) {
+      nextByAddress.set(myAddress, {
+        address: myAddress,
+        publicKey: this.userInfo?.publicKey ?? '',
+        speaking: false,
+        role: 'participant',
+      });
+    }
+    for (const cluster of topology.clusters) {
+      for (const address of cluster.members) {
+        const normalizedAddress = address?.trim() ?? '';
+        if (!normalizedAddress || nextByAddress.has(normalizedAddress)) continue;
+        nextByAddress.set(normalizedAddress, {
+          address: normalizedAddress,
+          publicKey: '',
+          speaking: false,
+          role: 'participant',
+        });
+      }
+    }
+    return [...nextByAddress.values()];
+  }
+
   private getForwardRecipientCount(): number {
     if (!this.topology || !this.userInfo?.address) return 0;
     return getReticulumTransportTargets(
@@ -793,6 +867,9 @@ export class GroupCallAudioEngineRuntime {
     this.mediaSessionGeneration = 1;
     this.topology = null;
     this.lastObservedTopologyEpoch = 0;
+    this.trustedRemoteRoot = '';
+    this.trustedRemoteRootLastSeenAt = 0;
+    this.topologyElectionDelayUntilMs = 0;
     this.memberGateGroupId =
       options?.memberGateGroupId != null &&
       Number.isFinite(options.memberGateGroupId)
@@ -995,6 +1072,9 @@ export class GroupCallAudioEngineRuntime {
     this.mediaSessionGeneration = 1;
     this.topology = null;
     this.lastObservedTopologyEpoch = 0;
+    this.trustedRemoteRoot = '';
+    this.trustedRemoteRootLastSeenAt = 0;
+    this.topologyElectionDelayUntilMs = 0;
     this.seq = 0;
     this.shouldReplayRetainedKeysAfterNextTopology = false;
     this.stopTopologyHeartbeat();
@@ -1414,6 +1494,10 @@ export class GroupCallAudioEngineRuntime {
     }
 
     const bootstrapTopology = bootstrap?.lastTopology;
+    const bootstrapUpdatedAtMs =
+      bootstrap?.updatedAtMs && Number.isFinite(bootstrap.updatedAtMs)
+        ? bootstrap.updatedAtMs
+        : Date.now();
     if (bootstrapTopology?.rootForwarder) {
       this.topology = {
         roomId,
@@ -1426,13 +1510,18 @@ export class GroupCallAudioEngineRuntime {
           standby: cluster.standby,
           standby2: cluster.standby2 ?? '',
         })),
-        lastSeen: bootstrapTopology.lastSeen ?? bootstrap.updatedAtMs ?? Date.now(),
+        lastSeen: bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs,
       };
       const myAddress = this.userInfo?.address ?? '';
       this.snapshot = {
         ...this.snapshot,
         myRole: computeGroupCallRole(myAddress, this.topology),
       };
+      this.updateTrustedRemoteRoot(
+        bootstrapTopology.rootForwarder,
+        bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs
+      );
+      this.topologyElectionDelayUntilMs = 0;
       this.lastObservedTopologyEpoch = Math.max(
         this.lastObservedTopologyEpoch,
         this.topology.topologyEpoch >>> 0
@@ -1463,6 +1552,46 @@ export class GroupCallAudioEngineRuntime {
       await this.requestRoomKeyFrom(root, 'topology');
     }
     if (!root) {
+      const trustedElectionRoot = getTrustedRootForRejoinElection({
+        currentRoot: null,
+        trustedRemoteRoot: this.trustedRemoteRoot,
+        trustedRemoteRootLastSeenAtMs: this.trustedRemoteRootLastSeenAt,
+        nowMs: Date.now(),
+        staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+        rosterAddresses: participantMap.keys(),
+      });
+      const remoteParticipantCount = [...participantMap.keys()].filter(
+        (address) => address !== myAddress
+      ).length;
+      const occupiedRoomEvidence = hasOccupiedRoomEvidenceForJoin({
+        sameRoomRejoin: false,
+        hydratedRemoteParticipantCount: remoteParticipantCount,
+        bootstrapParticipantCount: bootstrap?.participants?.length ?? 0,
+        bootstrapTopologyEpoch: bootstrap?.topologyEpoch ?? 0,
+        bootstrapHasTopology: false,
+        lastObservedEpoch: this.lastObservedTopologyEpoch,
+        trustedRemoteRoot: trustedElectionRoot,
+        bootstrapCallSessionId: bootstrap?.callSessionId,
+        bootstrapMediaSessionGeneration: bootstrap?.mediaSessionGeneration ?? 0,
+      });
+      if (roomId.startsWith('gcall-qortal-') && remoteParticipantCount === 0) {
+        this.topologyElectionDelayUntilMs = Math.max(
+          this.topologyElectionDelayUntilMs,
+          Date.now() + GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS
+        );
+      } else if (
+        shouldDelayPostJoinRosterElection({
+          hydratedRemoteParticipantCount: remoteParticipantCount,
+          currentRoot: null,
+          trustedRemoteRoot: trustedElectionRoot,
+          hasOccupiedRoomEvidence: occupiedRoomEvidence,
+        })
+      ) {
+        this.topologyElectionDelayUntilMs = Math.max(
+          this.topologyElectionDelayUntilMs,
+          Date.now() + OCCUPIED_JOIN_AUTHORITY_WAIT_MS
+        );
+      }
       this.scheduleTopologyElection('bootstrap-no-topology');
     }
   }
@@ -1545,11 +1674,21 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     this.clearTopologyElectionTimer();
+    const nowMs = Date.now();
+    const delayMs = shouldDeferLocalTopologyElection({
+      nowMs,
+      authorityDelayUntilMs: this.topologyElectionDelayUntilMs,
+    })
+      ? Math.max(
+          TOPOLOGY_ELECTION_DEBOUNCE_MS,
+          this.topologyElectionDelayUntilMs - nowMs
+        )
+      : TOPOLOGY_ELECTION_DEBOUNCE_MS;
     this.topologyElectionTimer = setTimeout(() => {
       this.topologyElectionTimer = null;
       const generation = ++this.topologyAsyncGeneration;
       void this.runTopologyElection(generation, reason);
-    }, TOPOLOGY_ELECTION_DEBOUNCE_MS);
+    }, delayMs);
   }
 
   private async runTopologyElection(
@@ -1571,13 +1710,21 @@ export class GroupCallAudioEngineRuntime {
     if (generation !== this.topologyAsyncGeneration || roomId !== this.snapshot.roomId) {
       return;
     }
+    const trustedElectionRoot = getTrustedRootForRejoinElection({
+      currentRoot: this.topology?.rootForwarder,
+      trustedRemoteRoot: this.trustedRemoteRoot,
+      trustedRemoteRootLastSeenAtMs: this.trustedRemoteRootLastSeenAt,
+      nowMs: Date.now(),
+      staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+      rosterAddresses: addresses,
+    });
     const topologyEpoch =
       Math.max(
         this.topology?.topologyEpoch ?? 0,
         this.lastObservedTopologyEpoch ?? 0
       ) + 1;
     const topology = normalizeGroupCallTopology({
-      ...buildGroupCallTopology(sorted, topologyEpoch),
+      ...buildTopologyWithTrustedRoot(sorted, topologyEpoch, trustedElectionRoot),
       roomId,
       lastSeen: Date.now(),
     });
@@ -1873,6 +2020,18 @@ export class GroupCallAudioEngineRuntime {
       this.lastObservedTopologyEpoch,
       normalized.topologyEpoch >>> 0
     );
+    const myAddress = this.userInfo?.address ?? '';
+    if (normalized.rootForwarder?.trim() && normalized.rootForwarder !== myAddress) {
+      this.updateTrustedRemoteRoot(
+        normalized.rootForwarder,
+        normalized.lastSeen ?? Date.now()
+      );
+      this.topologyElectionDelayUntilMs = 0;
+    } else if (source === 'local-election') {
+      this.trustedRemoteRoot = '';
+      this.trustedRemoteRootLastSeenAt = 0;
+      this.topologyElectionDelayUntilMs = 0;
+    }
     if (this.isSameTopologyStructure(current, normalized)) {
       this.topology = {
         ...normalized,
@@ -1888,9 +2047,12 @@ export class GroupCallAudioEngineRuntime {
       ...normalized,
       roomId: this.snapshot.roomId,
     };
-    const myAddress = this.userInfo?.address ?? '';
     this.snapshot = {
       ...this.snapshot,
+      participants: this.mergeParticipantsFromTopology(
+        this.snapshot.participants,
+        this.topology
+      ),
       myRole: computeGroupCallRole(myAddress, this.topology),
     };
     this.emitSnapshot();
@@ -1915,6 +2077,19 @@ export class GroupCallAudioEngineRuntime {
     await this.ensureRoomKeyAuthorityForTopology(previousRoot, this.topology);
     await this.syncSenderState();
     return true;
+  }
+
+  private updateTrustedRemoteRoot(rootForwarder: string, seenAtMs: number): void {
+    const nextRoot = rootForwarder.trim();
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!nextRoot || nextRoot === myAddress) {
+      this.trustedRemoteRoot = '';
+      this.trustedRemoteRootLastSeenAt = 0;
+      return;
+    }
+    this.trustedRemoteRoot = nextRoot;
+    this.trustedRemoteRootLastSeenAt =
+      seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
   }
 
   private async syncQortalGroupReticulumTargets(

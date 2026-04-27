@@ -1040,7 +1040,6 @@ describe('GroupCallAudioEngineRuntime', () => {
   it('elects and broadcasts a topology after join when bootstrap has no authority', async () => {
     getRoomParticipants.mockResolvedValue([
       { address: 'Qlocal', publicKey: 'pub-local' },
-      { address: 'Qpeer', publicKey: 'pub-peer' },
     ]);
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
@@ -1069,5 +1068,283 @@ describe('GroupCallAudioEngineRuntime', () => {
       'pub-local',
       expect.any(Number)
     );
+  });
+
+  it('keeps an established remote root when a new participant joins shortly after bootstrap', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+      { address: 'Qnew', publicKey: 'pub-new' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: Date.now(),
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: Date.now(),
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qlocal',
+      'Qpeer',
+      'Qnew',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    broadcastTopology.mockClear();
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qnew',
+      publicKey: 'pub-new',
+    });
+
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(broadcastTopology).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qpeer',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    vi.useRealTimers();
+  });
+
+  it('defers the first local election on occupied-room joins without topology authority', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 0,
+      callSessionId: '',
+      mediaSessionGeneration: 1,
+      updatedAtMs: Date.now(),
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qlocal',
+      'Qpeer',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    const joinPromise = runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    await vi.runAllTicks();
+    await joinPromise;
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(broadcastTopology).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(broadcastTopology.mock.calls.length).toBeGreaterThanOrEqual(1);
+    vi.useRealTimers();
+  });
+
+  it('re-elects locally once the trusted remote root is no longer in the roster', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qnew', publicKey: 'pub-new' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: Date.now(),
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: Date.now(),
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qlocal',
+      'Qnew',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    broadcastTopology.mockClear();
+    groupCallEventHandler?.('gcall:participant-left', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+    });
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qnew',
+      publicKey: 'pub-new',
+    });
+
+    await vi.advanceTimersByTimeAsync(250);
+
+    expect(broadcastTopology).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    vi.useRealTimers();
+  });
+
+  it('hydrates missing participants from accepted remote topology for late joiners', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const events: Array<{
+      type: string;
+      snapshot?: {
+        participants?: Array<{ address: string; role: string }>;
+      };
+    }> = [];
+    runtime.onEvent((event) => {
+      events.push(event as never);
+    });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlate', publicKey: 'pub-late' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'gcall-qortal-812',
+      topologyEpoch: 3,
+      rootForwarder: 'Qroot',
+      standbyForwarder: 'Qstandby',
+      clusters: [
+        {
+          members: ['Qroot', 'Qstandby', 'Qlate'],
+          forwarder: 'Qroot',
+          standby: 'Qstandby',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: 'Qroot', role: 'root-forwarder' }),
+        expect.objectContaining({
+          address: 'Qstandby',
+          role: 'standby-forwarder',
+        }),
+        expect.objectContaining({ address: 'Qlate', role: 'participant' }),
+      ])
+    );
+  });
+
+  it('waits briefly before self-electing in self-only qortal group joins', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlate', publicKey: 'pub-late' },
+    ]);
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlate', publicKey: 'pub-late' },
+      myStatus: 'online',
+    });
+    const joinPromise = runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+    await vi.runAllTicks();
+    await joinPromise;
+
+    await vi.advanceTimersByTimeAsync(500);
+    expect(broadcastTopology).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(700);
+    expect(broadcastTopology.mock.calls.length).toBeGreaterThanOrEqual(1);
+    vi.useRealTimers();
   });
 });

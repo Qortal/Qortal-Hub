@@ -13,6 +13,7 @@ import {
   isRecentRoomStateFresh,
   mergeRoomTopologyEpochWithFloor,
   pendingKeyEnvelopeWinsOver,
+  shouldDelayPresenceEvictionForRecentCallActivity,
   shouldDelayPresenceEvictionForHealthyTransport,
   shouldApplyVerifiedLeaveToParticipant,
   shouldIgnoreLeaveForLocalAddress,
@@ -873,9 +874,9 @@ describe('recent room bootstrap state', () => {
     );
     await Promise.resolve();
 
-    expect(bridge.fanoutGroupCallDetailed).toHaveBeenCalledWith(
-      [expect.objectContaining({ t: 'GK' })],
-      []
+    expect(bridge.sendGroupCallDetailed).toHaveBeenCalledWith(
+      'b'.repeat(32),
+      expect.objectContaining({ t: 'GK' })
     );
     manager.stop();
   });
@@ -2003,6 +2004,205 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
+  it('root-forwarder re-forwards inbound standby audio to the participant in a 3-way single-cluster call', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => ({
+        bridgeQueuedFrames: 0,
+        bridgeQueuedBytes: 0,
+        bridgeBinaryWritesQueued: 0,
+        bridgeWaitingForDrain: false,
+        perLinkQueuedFrames: 0,
+        queuePressureDrops: 0,
+        queuePressureDropsLast5s: 0,
+        staleDrops: 0,
+        staleDropsLast5s: 0,
+        decodedQueueDepth: 0,
+        decodedQueueMax: 48,
+        decodedQueueDrops: 0,
+        binaryOutQueueDepth: 0,
+        binaryOutQueueMax: 128,
+        binaryOutQueueDrops: 0,
+        jsonOutQueueDrops: 0,
+        packetSendFailures: 0,
+        packetPathRequests: 0,
+        packetPathResolutions: 0,
+        packetPathTimeouts: 0,
+        packetFreshSends: 0,
+        packetStaleSends: 0,
+        packetUnknownSends: 0,
+      }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    const sendAudioBatchSpy = vi.spyOn(manager, 'sendAudioBatch');
+
+    manager.start();
+    manager.setLocalAddresses(['Q-root']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-root',
+      'sig',
+      'pk',
+      100,
+      TEST_D32
+    );
+
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-standby', {
+      publicKey: 'pk-standby',
+      joinedAt: 101,
+      reticulumDestinationHash: 'd:Q-standby',
+    });
+    room.participants.set('Q-participant', {
+      publicKey: 'pk-participant',
+      joinedAt: 102,
+      reticulumDestinationHash: 'd:Q-participant',
+    });
+    room.lastTopology = {
+      topologyEpoch: 1,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-standby',
+      clusters: [
+        {
+          members: ['Q-root', 'Q-standby', 'Q-participant'],
+          forwarder: 'Q-root',
+          standby: 'Q-standby',
+          standby2: 'Q-participant',
+        },
+      ],
+      lastSeen: Date.now(),
+    };
+    (manager as any).rememberReticulumPeerPresenceHash('Q-standby', 'd:Q-standby');
+    (manager as any).rememberReticulumPeerPresenceHash(
+      'Q-participant',
+      'd:Q-participant'
+    );
+
+    bridge.emit('group-audio-packet', {
+      linkId: 'link-standby',
+      roomId: 'room-1',
+      data: Buffer.from([7, 8, 9]),
+      peerPresenceHash: 'd:Q-standby',
+      peerDestinationHash: 'call-standby',
+      incoming: true,
+    });
+
+    expect(sendAudioBatchSpy).toHaveBeenCalledWith(
+      'room-1',
+      ['Q-participant'],
+      Buffer.from([7, 8, 9])
+    );
+    manager.stop();
+  });
+
+  it('replays retained join identity directly to a late joiner so they can resolve existing peers immediately', async () => {
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    const now = Date.now();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub(sent) as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-root']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-root',
+      'sig-root',
+      'pk-root',
+      now,
+      TEST_D32
+    );
+
+    const room = (manager as any).rooms.get('room-1');
+    room.participants.set('Q-standby', {
+      publicKey: 'pk-standby',
+      joinedAt: now + 1,
+      reticulumDestinationHash: 'd:q-standby',
+    });
+    room.lastTopology = {
+      topologyEpoch: 1,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-standby',
+      clusters: [
+        {
+          members: ['Q-root', 'Q-standby'],
+          forwarder: 'Q-root',
+          standby: 'Q-standby',
+          standby2: '',
+        },
+      ],
+      lastSeen: Date.now(),
+    };
+    (manager as any).rememberRetainedVerifiedJoin({
+      type: 'GC_JOIN',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      fromAddress: 'Q-standby',
+      fromPublicKey: 'pk-standby',
+      signature: 'sig-standby',
+      timestamp: now + 1,
+      reticulumDestinationHash: 'd:q-standby',
+    });
+
+    (manager as any).applyVerifiedJoin({
+      type: 'GC_JOIN',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      fromAddress: 'Q-new',
+      fromPublicKey: 'pk-new',
+      signature: 'sig-new',
+      timestamp: now + 2,
+      reticulumDestinationHash: 'd:q-new',
+    });
+
+    expect(
+      sent
+        .filter((entry) => entry.hash === 'd:q-new')
+        .map((entry) => entry.msg.t)
+    ).toEqual(['GJ']);
+    manager.stop();
+  });
+
   it('resolves inbound link audio from peerDestinationHash when peerPresenceHash is empty', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {
@@ -2737,12 +2937,12 @@ describe('Reticulum group activity hints', () => {
     });
   });
 
-  it('ignores relayed mesh control traffic for watched sidebar activity', () => {
-    const relayed: unknown[] = [];
+  it('uses verified watched-room join and topology traffic to light sidebar activity', async () => {
     const manager = new GroupCallManager(
       reticulumAwarePresenceStub() as any,
       reticulumBridgeReadyStub([]) as any
     );
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
     expect(manager.setWatchedQortalGroupIds([812])).toEqual({});
 
     manager.handleIncoming({
@@ -2756,6 +2956,7 @@ describe('Reticulum group activity hints', () => {
       reticulumDestinationHash: TEST_D32,
       hopsRemaining: 2,
     });
+    await Promise.resolve();
 
     manager.handleIncoming({
       type: 'GC_TOPOLOGY',
@@ -2771,9 +2972,11 @@ describe('Reticulum group activity hints', () => {
       lastSeen: Date.now(),
       hopsRemaining: 2,
     });
+    await Promise.resolve();
 
-    expect(relayed.length).toBe(0);
-    expect(manager.setWatchedQortalGroupIds([812])).toEqual({});
+    expect(manager.setWatchedQortalGroupIds([812])).toEqual({
+      '812': true,
+    });
   });
 });
 
@@ -3052,6 +3255,185 @@ describe('shouldDelayPresenceEvictionForHealthyTransport', () => {
         staleAfterMs: 15_000,
       })
     ).toBe(false);
+  });
+});
+
+describe('shouldDelayPresenceEvictionForRecentCallActivity', () => {
+  it('delays eviction when the peer had recent call activity', () => {
+    expect(
+      shouldDelayPresenceEvictionForRecentCallActivity({
+        lastActivityAtMs: 10_000,
+        nowMs: 22_000,
+        staleAfterMs: 15_000,
+      })
+    ).toBe(true);
+  });
+
+  it('does not delay eviction when recent call activity is stale', () => {
+    expect(
+      shouldDelayPresenceEvictionForRecentCallActivity({
+        lastActivityAtMs: 10_000,
+        nowMs: 26_000,
+        staleAfterMs: 15_000,
+      })
+    ).toBe(false);
+  });
+
+  it('does not delay eviction without prior call activity', () => {
+    expect(
+      shouldDelayPresenceEvictionForRecentCallActivity({
+        lastActivityAtMs: 0,
+        nowMs: 12_000,
+        staleAfterMs: 15_000,
+      })
+    ).toBe(false);
+  });
+});
+
+describe('presence eviction with recent call activity', () => {
+  it('keeps an in-call participant when offline presence flips but call activity is still fresh', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-27T16:00:00.000Z'));
+
+    const presence = {
+      on: () => {},
+      off: () => {},
+      isAddressOnline: vi.fn(() => false),
+      getRouteForAddress: (address: string) => ({
+        kind: 'reticulum' as const,
+        destinationHash: `d:${address}`,
+      }),
+      getReticulumActiveNeighborHashes: () => [],
+      getNodeIdForAddress: () => null,
+    };
+
+    const manager = new GroupCallManager(
+      presence as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+
+    const handleLeaveSpy = vi.spyOn(manager as any, 'handleLeave');
+    (manager as any).rooms.set('room-1', {
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      participants: new Map([
+        [
+          'Q-remote',
+          {
+            publicKey: 'pk-remote',
+            joinedAt: Date.now() - 30_000,
+            reticulumDestinationHash: TEST_D32,
+          },
+        ],
+      ]),
+      topologyEpoch: 1,
+      callSessionId: 'call-1',
+      mediaSessionGeneration: 1,
+    });
+
+    (manager as any).noteRecentCallActivity(
+      'room-1',
+      'Q-remote',
+      Date.now() - 5_000
+    );
+    (manager as any).schedulePresenceEviction('Q-remote');
+
+    vi.advanceTimersByTime(12_000);
+
+    expect(handleLeaveSpy).not.toHaveBeenCalled();
+    expect((manager as any).rooms.get('room-1')?.participants.has('Q-remote')).toBe(
+      true
+    );
+
+    manager.stop();
+  });
+
+  it('keeps a silent participant when incoming topology still names them as active', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-27T16:00:00.000Z'));
+
+    const presence = {
+      on: () => {},
+      off: () => {},
+      isAddressOnline: vi.fn(() => false),
+      getRouteForAddress: (address: string) => ({
+        kind: 'reticulum' as const,
+        destinationHash: `d:${address}`,
+      }),
+      getReticulumActiveNeighborHashes: () => [],
+      getNodeIdForAddress: () => null,
+    };
+
+    const manager = new GroupCallManager(
+      presence as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+
+    const handleLeaveSpy = vi.spyOn(manager as any, 'handleLeave');
+    (manager as any).rooms.set('room-1', {
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      participants: new Map([
+        [
+          'Q-root',
+          {
+            publicKey: 'pk-root',
+            joinedAt: Date.now() - 30_000,
+            reticulumDestinationHash: TEST_D32,
+          },
+        ],
+        [
+          'Q-standby',
+          {
+            publicKey: 'pk-standby',
+            joinedAt: Date.now() - 30_000,
+            reticulumDestinationHash: TEST_D32,
+          },
+        ],
+        [
+          'Q-participant',
+          {
+            publicKey: 'pk-participant',
+            joinedAt: Date.now() - 30_000,
+            reticulumDestinationHash: TEST_D32,
+          },
+        ],
+      ]),
+      topologyEpoch: 3,
+      callSessionId: 'call-1',
+      mediaSessionGeneration: 1,
+    });
+
+    (manager as any).applyVerifiedTopology({
+      type: 'GC_TOPOLOGY',
+      roomId: 'room-1',
+      fromAddress: 'Q-root',
+      fromPublicKey: 'pk-root',
+      signature: 'sig',
+      timestamp: Date.now() - 5_000,
+      topologyEpoch: 4,
+      rootForwarder: 'Q-root',
+      standbyForwarder: 'Q-standby',
+      clusters: [
+        {
+          members: ['Q-root', 'Q-standby', 'Q-participant'],
+          forwarder: 'Q-root',
+          standby: 'Q-standby',
+          standby2: 'Q-participant',
+        },
+      ],
+      lastSeen: Date.now() - 5_000,
+    });
+
+    (manager as any).schedulePresenceEviction('Q-participant');
+    vi.advanceTimersByTime(12_000);
+
+    expect(handleLeaveSpy).not.toHaveBeenCalled();
+    expect(
+      (manager as any).rooms.get('room-1')?.participants.has('Q-participant')
+    ).toBe(true);
+
+    manager.stop();
   });
 });
 

@@ -632,20 +632,26 @@ function buildTrackedPeerMetrics(
     0.25,
     path.startupConcealmentTicks / startupTickCount
   );
-  const calibratedUnderTargetFraction = Math.max(
+  const severeStartupCollapse =
+    startupUnderTargetFraction >= 0.22 &&
+    startupOutsideTargetFraction >= 0.2 &&
+    (window.reticulumAudioBridgeQueuedFramesHighWater >= 24 ||
+      window.reticulumAudioBinaryOutQueueDepthHighWater >= 16 ||
+      window.reticulumAudioBridgeWaitingForDrain);
+  let calibratedUnderTargetFraction = Math.max(
     rawUnderTargetFraction,
     rawUnderTargetFraction * (1 - startupTickWeight) +
       startupUnderTargetFraction * startupTickWeight +
       startupDecodePressure +
       startupConcealmentPressure
   );
-  const calibratedOutsideTargetFraction = Math.max(
+  let calibratedOutsideTargetFraction = Math.max(
     rawOutsideTargetFraction,
     rawOutsideTargetFraction * (1 - startupTickWeight) +
       startupOutsideTargetFraction * startupTickWeight +
       startupDecodePressure * 0.6
   );
-  const calibratedAvgPcmBufferedMs =
+  let calibratedAvgPcmBufferedMs =
     startupAvgPcmBufferedMs > 0
       ? Math.min(
           rawAvgPcmBufferedMs,
@@ -653,6 +659,35 @@ function buildTrackedPeerMetrics(
             startupAvgPcmBufferedMs * startupTickWeight
         )
       : rawAvgPcmBufferedMs;
+  if (severeStartupCollapse) {
+    calibratedUnderTargetFraction = Math.max(
+      calibratedUnderTargetFraction,
+      Math.min(
+        0.99,
+        startupUnderTargetFraction * 0.65 +
+          startupOutsideTargetFraction * 0.2 +
+          startupConcealmentPressure +
+          0.03
+      )
+    );
+    calibratedOutsideTargetFraction = Math.max(
+      calibratedOutsideTargetFraction,
+      Math.min(
+        0.99,
+        startupOutsideTargetFraction * 0.75 +
+          startupDecodePressure * 0.4 +
+          startupConcealmentPressure +
+          0.02
+      )
+    );
+    calibratedAvgPcmBufferedMs = Math.min(
+      calibratedAvgPcmBufferedMs,
+      Math.max(
+        40,
+        targetMedianMs * (1 - Math.min(0.75, calibratedUnderTargetFraction * 1.15))
+      )
+    );
+  }
   const avgPcmBufferedMs = calibratedAvgPcmBufferedMs;
   const underTargetFraction = Math.min(0.99, calibratedUnderTargetFraction);
   return {
@@ -1952,7 +1987,7 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
       {
         addr: 'peer-C',
         senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
-        targets: ['peer-A', 'peer-B'],
+        targets: ['peer-A'],
       },
     ],
     expectations: {
@@ -2018,6 +2053,61 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
       },
       qualityScoreAtLeastByMode: {
         'audio-surface-sim': 8.7,
+      },
+    },
+  },
+  {
+    id: 'three-person-participant-collapse-clean-root',
+    description:
+      'Single-cluster 3-person call where the root stays healthy with two clean remotes, but one plain participant listener collapses under persistent local receive-side impairment.',
+    durationMs: 26_000,
+    seed: 1868,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: {
+        ...SENDER_PROFILE_PRESETS.stalledSender,
+        label: 'Participant-collapse root outbound',
+        impairmentSummary:
+          'Root stays healthy as a listener, but its outbound media path to the plain participant repeatedly stalls, spikes, and bursts loss badly enough to collapse that listener.',
+        jitterStdDevMs: 220,
+        burstFraction: 0.82,
+        lossRate: 0.18,
+        faults: [
+          { kind: 'latency-spike', atMs: 2_000, durationMs: 7_000, params: { addMs: 260 } },
+          { kind: 'latency-spike', atMs: 11_000, durationMs: 7_500, params: { addMs: 320 } },
+          { kind: 'bridge-pressure', atMs: 3_500, durationMs: 14_000, params: { depth: 36 } },
+          { kind: 'packet-loss-burst', atMs: 6_500, durationMs: 4_500, params: { rate: 0.42 } },
+          { kind: 'packet-loss-burst', atMs: 14_000, durationMs: 3_500, params: { rate: 0.36 } },
+        ],
+      },
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'participant',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+      receiverModel: {
+        startupLatencyAddMs: 1_250,
+        startupLatencyUntilMs: 25_000,
+        startupBridgePressureDepth: 84,
+        startupBridgePressureUntilMs: 25_000,
+      },
+    },
+    extraParticipants: [
+      {
+        addr: 'peer-C',
+        senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+        targets: ['peer-A', 'peer-B'],
+      },
+    ],
+    expectations: {
+      bothPassed: true,
+      worseAddr: 'peer-B',
+      qualityScoreAtMost: 8.5,
+      startupFailure: {
+        peer: 'peer-B',
+        minUnderTargetFraction: 0.12,
+        maxAvgPcmBufferedMs: 210,
       },
     },
   },

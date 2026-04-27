@@ -69,5 +69,4 @@ export interface GroupCallControllerApi extends GroupCallControllerSnapshot {
   setMuted: (muted: boolean) => void;
   setHearCall: (hearCall: boolean) => void;
   toggleHearCall: () => void;
-  setAudioQualityProfile: (profile: GroupCallAudioQualityProfile) => void;
 }

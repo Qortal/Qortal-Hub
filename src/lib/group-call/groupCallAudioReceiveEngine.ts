@@ -12,6 +12,23 @@ import {
 import { tracePipelineReceiveDroppedNoRoomKey } from './gcallAudioSurfaceTrace';
 import { traceGcallAudioSurface } from './gcallAudioSurfaceTrace';
 import { OPUS_FRAME_DURATION_MS } from './gcallVoiceAudioConstants';
+import {
+  createDmPeerRecoveryState,
+  dmMarkPeerStable,
+  dmMarkPeerUnstable,
+  dmRecomputeAdaptiveNetworkMode,
+  type DmPeerRecoveryState,
+} from './gcallDmPeerRecovery';
+
+const GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_PCM_MAX_MS = 24;
+const GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_DELTA_MAX_MS = -70;
+const GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_INGRESS_AGE_MIN_MS = 250;
+const GCALL_AUDIO_SURFACE_RECOVERY_MODERATE_PCM_MAX_MS = 36;
+const GCALL_AUDIO_SURFACE_RECOVERY_MODERATE_DELTA_MAX_MS = -45;
+const GCALL_AUDIO_SURFACE_STABLE_PCM_MIN_MS = 64;
+const GCALL_AUDIO_SURFACE_STABLE_STRONG_PCM_MIN_MS = 96;
+const GCALL_AUDIO_SURFACE_STABLE_DELTA_MIN_MS = -35;
+const GCALL_AUDIO_SURFACE_STABLE_STRONG_DELTA_MIN_MS = -20;
 
 function disconnectNodeSafe(node: AudioNode | null): void {
   if (!node) return;
@@ -64,6 +81,7 @@ export class GroupCallAudioReceiveEngine {
   private metricsEmitQueued = false;
   private loggedFirstDecodedPacket = false;
   private loggedFirstPlayoutStartBySource = new Set<string>();
+  private peerRecoveryState: DmPeerRecoveryState = createDmPeerRecoveryState();
   private config: GroupCallAudioReceiveEngineConfig = {
     outputDeviceId: null,
     hearCall: true,
@@ -267,6 +285,7 @@ export class GroupCallAudioReceiveEngine {
     this.outputNodeBySource.clear();
     this.loggedFirstDecodedPacket = false;
     this.loggedFirstPlayoutStartBySource.clear();
+    this.peerRecoveryState = createDmPeerRecoveryState();
     this.clearMetricsEmitTimer();
     this.metrics = new GroupCallPerformanceTracker();
     this.metricsRef.current = this.metrics;
@@ -287,6 +306,81 @@ export class GroupCallAudioReceiveEngine {
     this.clearMetricsEmitTimer();
   }
 
+  private recomputeAdaptiveNetworkMode(nowMs = Date.now()): void {
+    dmRecomputeAdaptiveNetworkMode(
+      this.peerRecoveryState,
+      (mode) => this.metrics.setAdaptiveNetworkMode(mode),
+      nowMs
+    );
+  }
+
+  private syncAllPlayoutAdaptiveGeometry(): void {
+    for (const playout of this.playouts.values()) {
+      playout.syncAdaptiveJitterGeometry();
+    }
+  }
+
+  private updatePeerRecoveryFromPlayoutMetrics(
+    sourceAddr: string,
+    message: DmVoiceGcallPlayoutWorkletMessage
+  ): void {
+    if (message.playoutStarted === false) return;
+    const bufferedMs =
+      typeof message.bufferedMs === 'number' && Number.isFinite(message.bufferedMs)
+        ? message.bufferedMs
+        : Number.POSITIVE_INFINITY;
+    const deltaMs =
+      typeof message.deltaMs === 'number' && Number.isFinite(message.deltaMs)
+        ? message.deltaMs
+        : 0;
+    const oldestFrameAgeMs =
+      typeof message.oldestFrameAgeMs === 'number' &&
+      Number.isFinite(message.oldestFrameAgeMs)
+        ? message.oldestFrameAgeMs
+        : 0;
+    const preProcessBufferedMs =
+      typeof message.preProcessBufferedMs === 'number' &&
+      Number.isFinite(message.preProcessBufferedMs)
+        ? message.preProcessBufferedMs
+        : Number.POSITIVE_INFINITY;
+    const underPressure = !!message.outsideBandUnder || !!message.concealmentUsed;
+    const nowMs = Date.now();
+
+    const severeCollapse =
+      underPressure &&
+      bufferedMs <= GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_PCM_MAX_MS &&
+      deltaMs <= GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_DELTA_MAX_MS &&
+      (oldestFrameAgeMs >= GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_INGRESS_AGE_MIN_MS ||
+        bufferedMs <= 8 ||
+        preProcessBufferedMs <= OPUS_FRAME_DURATION_MS);
+    const moderateCollapse =
+      underPressure &&
+      bufferedMs <= GCALL_AUDIO_SURFACE_RECOVERY_MODERATE_PCM_MAX_MS &&
+      deltaMs <= GCALL_AUDIO_SURFACE_RECOVERY_MODERATE_DELTA_MAX_MS;
+    const stronglyStable =
+      !underPressure &&
+      bufferedMs >= GCALL_AUDIO_SURFACE_STABLE_STRONG_PCM_MIN_MS &&
+      deltaMs >= GCALL_AUDIO_SURFACE_STABLE_STRONG_DELTA_MIN_MS;
+    const mildlyStable =
+      !underPressure &&
+      bufferedMs >= GCALL_AUDIO_SURFACE_STABLE_PCM_MIN_MS &&
+      deltaMs >= GCALL_AUDIO_SURFACE_STABLE_DELTA_MIN_MS;
+
+    if (severeCollapse) {
+      dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 3, nowMs);
+    } else if (moderateCollapse) {
+      dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 2, nowMs);
+    } else if (stronglyStable) {
+      dmMarkPeerStable(this.peerRecoveryState, sourceAddr, {
+        allowRecoveryExit: true,
+        nowMs,
+      });
+    } else if (mildlyStable) {
+      dmMarkPeerStable(this.peerRecoveryState, sourceAddr, { nowMs });
+    }
+    this.recomputeAdaptiveNetworkMode(nowMs);
+  }
+
   private async getOrCreatePlayout(
     sourceAddr: string
   ): Promise<DmVoiceGcallInboundPlayout> {
@@ -300,6 +394,7 @@ export class GroupCallAudioReceiveEngine {
     await playout.start(ctx, sourceAddr, output, {
       metricsRef: this.metricsRef,
       profile: this.config.profile,
+      getActiveSourceCount: () => this.playouts.size,
       afterDrain: ({ missedFramesThisTick }) => {
         if (missedFramesThisTick > 0) {
           this.metrics.recordMissingFrames(missedFramesThisTick, sourceAddr);
@@ -310,6 +405,7 @@ export class GroupCallAudioReceiveEngine {
         this.onPlayedSeqAdvanced?.(playedSourceAddr, playedSeq);
       },
       onPlayoutWorkletMessage: (message) => {
+        this.updatePeerRecoveryFromPlayoutMetrics(sourceAddr, message);
         const sharedRingEnabled =
           playout.getDiagnosticsSnapshot().sharedRingEnabled;
         if (
@@ -393,6 +489,7 @@ export class GroupCallAudioReceiveEngine {
     });
     this.playouts.set(sourceAddr, playout);
     this.outputNodeBySource.set(sourceAddr, output);
+    this.syncAllPlayoutAdaptiveGeometry();
     this.updateResourceCounts();
     this.emitMetricsNow();
     return playout;

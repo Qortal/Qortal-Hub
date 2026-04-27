@@ -76,6 +76,8 @@ export interface DmVoiceGcallInboundOptions {
     fecSuccessCoarse: number;
     deferredPcmTick: boolean;
   }) => void;
+  /** Current number of active remote sources on this hidden receive path. */
+  getActiveSourceCount?: () => number;
 }
 
 function disconnectSafe(node: AudioNode | null | undefined): void {
@@ -109,8 +111,14 @@ export class DmVoiceGcallInboundPlayout {
   private callbacks: DmVoiceGcallInboundOptions | null = null;
   /** Last applied `metrics.adaptiveNetworkMode` for jitter geometry. */
   private lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null = null;
+  private lastJitterActiveSourceCount = 1;
   private pendingDecodedIngressAtMs: Array<number | null> = [];
   private lastDrainMetricSampleAtMs = 0;
+
+  private resolveActiveSourceCount(): number {
+    const n = this.callbacks?.getActiveSourceCount?.() ?? 1;
+    return Number.isFinite(n) ? Math.max(1, Math.floor(n)) : 1;
+  }
 
   private async ensureWebCodecsDecoder(): Promise<void> {
     if (this.decoder && this.decoder.state !== 'closed') return;
@@ -205,6 +213,10 @@ export class DmVoiceGcallInboundPlayout {
     };
   }
 
+  syncAdaptiveJitterGeometry(): void {
+    this.syncJitterGeometryFromMetrics();
+  }
+
   private canUseSharedPcmRing(): boolean {
     return typeof SharedArrayBuffer !== 'undefined';
   }
@@ -260,8 +272,8 @@ export class DmVoiceGcallInboundPlayout {
       tuning,
       adaptiveNetworkMode: 'low-latency',
       extraHoldFrames: fecDesired ? GCALL_WASM_FEC_EXTRA_HOLD_FRAMES : 0,
-      activeSourceCount: 1,
-      tier2MultiSource: false,
+      activeSourceCount: this.resolveActiveSourceCount(),
+      tier2MultiSource: true,
       applySteadyPrimedHoldNow: true,
     });
 
@@ -446,17 +458,29 @@ export class DmVoiceGcallInboundPlayout {
     const m = this.callbacks?.metricsRef?.current;
     if (!jb || !tuning || !m) return;
     const mode = m.getSnapshot().adaptiveNetworkMode;
-    if (this.lastJitterAdaptiveMode === mode) return;
+    const activeSourceCount = this.resolveActiveSourceCount();
+    if (
+      this.lastJitterAdaptiveMode === mode &&
+      this.lastJitterActiveSourceCount === activeSourceCount
+    ) {
+      return;
+    }
     this.lastJitterAdaptiveMode = mode;
+    this.lastJitterActiveSourceCount = activeSourceCount;
     const eff =
       mode === 'recovery'
         ? getEffectiveJitterTuning(tuning, 'recovery', {
-            tier2MultiSource: false,
-            activeSourceCount: 1,
+            tier2MultiSource: true,
+            activeSourceCount,
           })
         : getEffectiveJitterTuning(tuning, 'low-latency');
     jb.applyJitterTuning(eff);
-    jb.setSoftUnprimeMs(computeSoftUnprimeMsForTier2(1, mode === 'recovery'));
+    jb.setSoftUnprimeMs(
+      computeSoftUnprimeMsForTier2(
+        activeSourceCount,
+        mode === 'recovery' && activeSourceCount >= 2
+      )
+    );
     jb.setSteadyPrimedHoldFrames(mode !== 'recovery' ? 1 : 0);
   }
 
