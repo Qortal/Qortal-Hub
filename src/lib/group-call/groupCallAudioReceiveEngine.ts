@@ -4,7 +4,10 @@ import {
   decodeAudioPackets,
   type DecodedAudioPacket,
 } from './audioPacketCodec';
-import type { GroupCallAudioQualityProfile } from './groupCallAudioProfile';
+import {
+  getGroupCallAudioTuning,
+  type GroupCallAudioQualityProfile,
+} from './groupCallAudioProfile';
 import {
   GroupCallPerformanceTracker,
   type GroupCallMetricsSnapshot,
@@ -12,6 +15,24 @@ import {
 import { tracePipelineReceiveDroppedNoRoomKey } from './gcallAudioSurfaceTrace';
 import { traceGcallAudioSurface } from './gcallAudioSurfaceTrace';
 import { OPUS_FRAME_DURATION_MS } from './gcallVoiceAudioConstants';
+import {
+  classifyStrongStarvationCandidate,
+  computeBufferAdequacy,
+  computeMildEntryCandidate,
+  stepPlayoutStarvationSeverity,
+  strongCStarvationStreakTick,
+  type PlayoutStarvationSeverity,
+} from './gcallPlayoutStarvation';
+import {
+  computeMultiSourceAccumulationTargetFrames,
+  isCollapsedForStarvation,
+  isNearCollapsedForStarvation,
+  shouldEnterProtectedMode,
+  shouldHoldMultiSourceAccumulation,
+  shouldPrioritizeWeakMultiSourceLeg,
+} from './gcallJitterDrainPhaseD';
+import { computeFeasibleMultiSourceRecoveryTargetMaxMs } from './gcallPlayoutPolicy';
+import { computeStaticPlayoutTargetMsForTuning } from './gcallInboundPlayoutTarget';
 import {
   createDmPeerRecoveryState,
   dmMarkPeerStable,
@@ -29,6 +50,21 @@ const GCALL_AUDIO_SURFACE_STABLE_PCM_MIN_MS = 64;
 const GCALL_AUDIO_SURFACE_STABLE_STRONG_PCM_MIN_MS = 96;
 const GCALL_AUDIO_SURFACE_STABLE_DELTA_MIN_MS = -35;
 const GCALL_AUDIO_SURFACE_STABLE_STRONG_DELTA_MIN_MS = -20;
+const GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS = 20;
+const GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS = 40;
+const GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
+
+interface LiveMultiSourceState {
+  sampleCount: number;
+  bufferedMsEma: number;
+  deltaMsEma: number;
+  underTargetEma: number;
+  targetPlayoutMs: number;
+  preProcessBufferedFrames: number;
+  starvationSeverity: PlayoutStarvationSeverity;
+  strongCStreak: number;
+  protectedMode: boolean;
+}
 
 function disconnectNodeSafe(node: AudioNode | null): void {
   if (!node) return;
@@ -82,6 +118,8 @@ export class GroupCallAudioReceiveEngine {
   private loggedFirstDecodedPacket = false;
   private loggedFirstPlayoutStartBySource = new Set<string>();
   private peerRecoveryState: DmPeerRecoveryState = createDmPeerRecoveryState();
+  private liveMultiSourceStateBySource = new Map<string, LiveMultiSourceState>();
+  private resumeAudioContextPromise: Promise<void> | null = null;
   private config: GroupCallAudioReceiveEngineConfig = {
     outputDeviceId: null,
     hearCall: true,
@@ -286,6 +324,8 @@ export class GroupCallAudioReceiveEngine {
     this.loggedFirstDecodedPacket = false;
     this.loggedFirstPlayoutStartBySource.clear();
     this.peerRecoveryState = createDmPeerRecoveryState();
+    this.liveMultiSourceStateBySource.clear();
+    this.resumeAudioContextPromise = null;
     this.clearMetricsEmitTimer();
     this.metrics = new GroupCallPerformanceTracker();
     this.metricsRef.current = this.metrics;
@@ -317,6 +357,224 @@ export class GroupCallAudioReceiveEngine {
   private syncAllPlayoutAdaptiveGeometry(): void {
     for (const playout of this.playouts.values()) {
       playout.syncAdaptiveJitterGeometry();
+    }
+  }
+
+  private async ensureAudioContextRunning(): Promise<void> {
+    const ctx = this.audioContext;
+    if (!ctx || ctx.state === 'running') return;
+    if (this.resumeAudioContextPromise) {
+      await this.resumeAudioContextPromise;
+      return;
+    }
+    this.resumeAudioContextPromise = (async () => {
+      try {
+        if (ctx.state !== 'running') {
+          await ctx.resume();
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        this.resumeAudioContextPromise = null;
+      }
+    })();
+    await this.resumeAudioContextPromise;
+  }
+
+  private getOrCreateLiveMultiSourceState(
+    sourceAddr: string,
+    targetPlayoutMs: number
+  ): LiveMultiSourceState {
+    let state = this.liveMultiSourceStateBySource.get(sourceAddr);
+    if (!state) {
+      state = {
+        sampleCount: 0,
+        bufferedMsEma: Math.max(0, targetPlayoutMs),
+        deltaMsEma: 0,
+        underTargetEma: 0,
+        targetPlayoutMs: Math.max(40, targetPlayoutMs),
+        preProcessBufferedFrames: 0,
+        starvationSeverity: 'none',
+        strongCStreak: 0,
+        protectedMode: false,
+      };
+      this.liveMultiSourceStateBySource.set(sourceAddr, state);
+    }
+    return state;
+  }
+
+  private updateLiveMultiSourceState(
+    sourceAddr: string,
+    message: DmVoiceGcallPlayoutWorkletMessage
+  ): void {
+    const staticTargetMs = computeStaticPlayoutTargetMsForTuning(
+      getGroupCallAudioTuning(this.config.profile)
+    );
+    const targetPlayoutMs =
+      typeof message.targetPlayoutMs === 'number' &&
+      Number.isFinite(message.targetPlayoutMs)
+        ? Math.max(40, message.targetPlayoutMs)
+        : staticTargetMs;
+    const bufferedMs =
+      typeof message.bufferedMs === 'number' && Number.isFinite(message.bufferedMs)
+        ? Math.max(0, message.bufferedMs)
+        : 0;
+    const deltaMs =
+      typeof message.deltaMs === 'number' && Number.isFinite(message.deltaMs)
+        ? message.deltaMs
+        : bufferedMs - targetPlayoutMs;
+    const preProcessBufferedFrames =
+      typeof message.preProcessBufferedMs === 'number' &&
+      Number.isFinite(message.preProcessBufferedMs)
+        ? Math.max(
+            0,
+            Math.round(message.preProcessBufferedMs / OPUS_FRAME_DURATION_MS)
+          )
+        : 0;
+    const state = this.getOrCreateLiveMultiSourceState(
+      sourceAddr,
+      targetPlayoutMs
+    );
+    const alpha = state.sampleCount === 0 ? 1 : 0.2;
+    state.sampleCount += 1;
+    state.targetPlayoutMs = targetPlayoutMs;
+    state.preProcessBufferedFrames = preProcessBufferedFrames;
+    state.bufferedMsEma =
+      state.sampleCount === 1
+        ? bufferedMs
+        : state.bufferedMsEma * (1 - alpha) + bufferedMs * alpha;
+    state.deltaMsEma =
+      state.sampleCount === 1
+        ? deltaMs
+        : state.deltaMsEma * (1 - alpha) + deltaMs * alpha;
+    const underTargetSample =
+      message.outsideBandUnder || message.concealmentUsed ? 1 : 0;
+    state.underTargetEma =
+      state.sampleCount === 1
+        ? underTargetSample
+        : state.underTargetEma * (1 - alpha) + underTargetSample * alpha;
+
+    const bufferAdequacy = computeBufferAdequacy({
+      avgPcmBufferedMs: state.bufferedMsEma,
+      smoothedTargetMs: targetPlayoutMs,
+    });
+    state.strongCStreak = strongCStarvationStreakTick(state.strongCStreak, {
+      playoutUnderTargetFraction: state.underTargetEma,
+      avgPlayoutDeltaMs: state.deltaMsEma,
+    });
+    const strongMeta = classifyStrongStarvationCandidate(
+      {
+        playoutUnderTargetFraction: state.underTargetEma,
+        avgPlayoutDeltaMs: state.deltaMsEma,
+      },
+      bufferAdequacy,
+      state.strongCStreak
+    );
+    const mildCandidate = computeMildEntryCandidate(
+      bufferAdequacy,
+      strongMeta.strong
+    );
+    state.starvationSeverity = stepPlayoutStarvationSeverity({
+      held: state.starvationSeverity,
+      bufferAdequacy,
+      strongMeta,
+      mildCandidate,
+    }).next;
+    state.protectedMode = shouldEnterProtectedMode({
+      collapsed: isCollapsedForStarvation({
+        bufferedFrames: preProcessBufferedFrames,
+        opusBufferedMs: state.bufferedMsEma,
+        adaptiveTargetMedianMs: targetPlayoutMs,
+      }),
+      nearCollapsed: isNearCollapsedForStarvation({
+        bufferedFrames: preProcessBufferedFrames,
+        opusBufferedMs: state.bufferedMsEma,
+        adaptiveTargetMedianMs: targetPlayoutMs,
+      }),
+      starvationSeverity: state.starvationSeverity,
+    });
+  }
+
+  private syncLiveMultiSourceControls(): void {
+    const activeSourceCount = this.playouts.size;
+    const mode = this.metrics.getSnapshot().adaptiveNetworkMode;
+    const staticTargetMs = computeStaticPlayoutTargetMsForTuning(
+      getGroupCallAudioTuning(this.config.profile)
+    );
+    const weakLegPresent =
+      activeSourceCount >= 2 &&
+      [...this.liveMultiSourceStateBySource.values()].some(
+        (state) => state.protectedMode || state.starvationSeverity !== 'none'
+      );
+
+    for (const [sourceAddr, playout] of this.playouts) {
+      const state = this.liveMultiSourceStateBySource.get(sourceAddr);
+      if (!state || activeSourceCount < 2 || mode !== 'recovery') {
+        playout.setBurstRecoveryExtraHoldFrames(0);
+        playout.resetDynamicTargetPlayoutMs();
+        continue;
+      }
+
+      const prioritizeWeakLeg = shouldPrioritizeWeakMultiSourceLeg({
+        activeSourceCount,
+        bufferedFrames: state.preProcessBufferedFrames,
+        opusBufferedMs: state.bufferedMsEma,
+        adaptiveTargetMedianMs: state.targetPlayoutMs,
+        protectedMode: state.protectedMode,
+        playoutStarvationSeverity: state.starvationSeverity,
+      });
+
+      let targetMs = staticTargetMs;
+      if (prioritizeWeakLeg) {
+        targetMs +=
+          state.starvationSeverity === 'strong'
+            ? GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS
+            : GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS;
+      }
+      const feasibleTargetMs = computeFeasibleMultiSourceRecoveryTargetMaxMs({
+        currentAdaptiveMaxTargetMs: targetMs,
+        activeSourceCount,
+        adaptiveNetworkMode: mode,
+        starvationSeverity: state.starvationSeverity,
+        isolatedSource: prioritizeWeakLeg,
+        shouldTightenRecovery: state.protectedMode || weakLegPresent,
+        previousStarvationSeverity: state.starvationSeverity,
+        playoutUnderTargetFraction: state.underTargetEma,
+        avgPlayoutDeltaMs: state.deltaMsEma,
+        avgOpusBufferedMs: state.bufferedMsEma,
+        observedTargetMs: state.targetPlayoutMs,
+      });
+      if (feasibleTargetMs !== null) {
+        targetMs = feasibleTargetMs;
+      }
+
+      const shouldHold = shouldHoldMultiSourceAccumulation({
+        bufferedFrames: state.preProcessBufferedFrames,
+        opusBufferedMs: state.bufferedMsEma,
+        adaptiveTargetMedianMs: targetMs,
+        protectedMode: state.protectedMode,
+        playoutStarvationSeverity: state.starvationSeverity,
+      });
+      const accumulationTargetFrames =
+        computeMultiSourceAccumulationTargetFrames({
+          adaptiveTargetMedianMs: targetMs,
+          protectedMode: state.protectedMode,
+          playoutStarvationSeverity: state.starvationSeverity,
+        });
+      const extraHoldFrames =
+        shouldHold && accumulationTargetFrames !== null
+          ? Math.max(
+              0,
+              Math.min(
+                GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES,
+                accumulationTargetFrames -
+                  Math.max(1, state.preProcessBufferedFrames)
+              )
+            )
+          : 0;
+
+      playout.setBurstRecoveryExtraHoldFrames(extraHoldFrames);
+      playout.setDynamicTargetPlayoutMs(targetMs);
     }
   }
 
@@ -405,6 +663,17 @@ export class GroupCallAudioReceiveEngine {
         this.onPlayedSeqAdvanced?.(playedSourceAddr, playedSeq);
       },
       onPlayoutWorkletMessage: (message) => {
+        const hasAudibleReadiness =
+          message.playoutStarted === true ||
+          (typeof message.preProcessBufferedMs === 'number' &&
+            Number.isFinite(message.preProcessBufferedMs) &&
+            message.preProcessBufferedMs > 0) ||
+          (typeof message.bufferedMs === 'number' &&
+            Number.isFinite(message.bufferedMs) &&
+            message.bufferedMs > 0);
+        if (hasAudibleReadiness && this.audioContext?.state !== 'running') {
+          void this.ensureAudioContextRunning();
+        }
         this.updatePeerRecoveryFromPlayoutMetrics(sourceAddr, message);
         const sharedRingEnabled =
           playout.getDiagnosticsSnapshot().sharedRingEnabled;
@@ -436,7 +705,7 @@ export class GroupCallAudioReceiveEngine {
             // Otherwise startup gating and low-but-still-usable reserve
             // overstate trouble in healthy calls.
             this.metrics.recordJitterDrainTelemetry({
-              sourceCount: 1,
+              sourceCount: Math.max(1, this.playouts.size),
               depthSum: bufferedFrames,
               worstDepth: bufferedFrames,
               notReadyCount:
@@ -474,6 +743,8 @@ export class GroupCallAudioReceiveEngine {
                 typeof message.rate === 'number' ? message.rate : undefined,
             }
           );
+          this.updateLiveMultiSourceState(sourceAddr, message);
+          this.syncLiveMultiSourceControls();
           if (message.concealmentUsed) {
             this.metrics.recordConcealmentTick(1, sourceAddr);
           }
@@ -490,6 +761,7 @@ export class GroupCallAudioReceiveEngine {
     this.playouts.set(sourceAddr, playout);
     this.outputNodeBySource.set(sourceAddr, output);
     this.syncAllPlayoutAdaptiveGeometry();
+    this.syncLiveMultiSourceControls();
     this.updateResourceCounts();
     this.emitMetricsNow();
     return playout;
@@ -516,13 +788,7 @@ export class GroupCallAudioReceiveEngine {
 
   private async ensureAudioContext(): Promise<AudioContext> {
     if (this.audioContext && this.masterGain) {
-      if (this.audioContext.state !== 'running') {
-        try {
-          await this.audioContext.resume();
-        } catch {
-          /* ignore */
-        }
-      }
+      await this.ensureAudioContextRunning();
       return this.audioContext;
     }
     const ctx = new AudioContext({ sampleRate: 48_000 });
@@ -532,15 +798,9 @@ export class GroupCallAudioReceiveEngine {
     await applyCallAudioOutput(this.config.outputDeviceId, {
       audioContext: ctx,
     });
-    if (ctx.state !== 'running') {
-      try {
-        await ctx.resume();
-      } catch {
-        /* ignore */
-      }
-    }
     this.audioContext = ctx;
     this.masterGain = masterGain;
+    await this.ensureAudioContextRunning();
     return ctx;
   }
 

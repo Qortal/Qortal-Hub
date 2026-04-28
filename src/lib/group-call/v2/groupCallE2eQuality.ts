@@ -105,6 +105,7 @@ export interface GroupCallE2eScenarioExpectation {
 
 interface GroupCallE2eReceiverModel {
   readonly authoritativeKeyReadyAtMs?: number;
+  readonly policyTargetBufferMs?: number;
   readonly startupTargetBoostMs?: number;
   readonly startupTargetBoostUntilMs?: number;
   readonly startupLatencyAddMs?: number;
@@ -162,6 +163,7 @@ interface SimulatedPeerPath {
   readonly receiverRole: string;
   readonly senderAddr: string;
   readonly senderProfile: SenderImpairmentProfile;
+  readonly receiverSourceCount: number;
   readonly receiverModel?: GroupCallE2eReceiverModel;
   readonly diag: BufferingDiagnosticsRecorder;
   readonly sessionController: ReticulumSessionController;
@@ -1081,6 +1083,7 @@ function createPath(
   receiverRole: string,
   senderAddr: string,
   senderProfile: SenderImpairmentProfile,
+  receiverSourceCount: number,
   receiverModel: GroupCallE2eReceiverModel | undefined,
   durationMs: number,
   seed: number
@@ -1111,7 +1114,9 @@ function createPath(
   const policy = new ReceivePolicyEngine(
     streamId,
     {
-      targetBufferMs: 120,
+      targetBufferMs:
+        receiverModel?.policyTargetBufferMs
+        ?? (receiverSourceCount >= 2 ? 160 : 120),
       backlogDrainTriggerRatio: 1.0,
       transportDegradedHardTtlMs: 8_000,
     },
@@ -1120,7 +1125,11 @@ function createPath(
   const sendPressure = new SendPressureController(sessionController, {}, diag);
   const tracker = new GroupCallPerformanceTracker();
   tracker.setRole(receiverRole as Parameters<GroupCallPerformanceTracker['setRole']>[0]);
-  tracker.setResourceCounts({ decoders: 1, playbackNodes: 1, jitterBuffers: 1 });
+  tracker.setResourceCounts({
+    decoders: receiverSourceCount,
+    playbackNodes: receiverSourceCount,
+    jitterBuffers: receiverSourceCount,
+  });
   const packetSeed = seed ^ stableStringSeed(`${receiverAddr}:${senderAddr}`);
   const packets = generatePackets(senderProfile, durationMs, packetSeed);
   const packetRng = xorshift32(seed ^ 0x9e3779b9);
@@ -1130,6 +1139,7 @@ function createPath(
     receiverRole,
     senderAddr,
     senderProfile,
+    receiverSourceCount,
     receiverModel,
     diag,
     sessionController,
@@ -1228,6 +1238,7 @@ async function drainTick(path: SimulatedPeerPath, nowMs: number): Promise<void> 
     lastGapFrames: path.engine.getLastGapFrames(),
     totalConcealmentFrames: path.engine.getConcealmentFrames(),
     recentArrivalGapMs: path.engine.getRecentArrivalGapMs(),
+    activeSourceCount: path.receiverSourceCount,
     peerHealth,
   });
   const prevConcealmentFrames = path.engine.getConcealmentFrames();
@@ -1279,7 +1290,7 @@ async function drainTick(path: SimulatedPeerPath, nowMs: number): Promise<void> 
   path.tracker.recordAdaptiveTargetSample(path.senderAddr, effectiveTargetBufferMs);
   path.tracker.recordOpusBufferedMetric(path.senderAddr, tickResult.opusBufferedMs);
   path.tracker.recordJitterDrainTelemetry({
-    sourceCount: 1,
+    sourceCount: path.receiverSourceCount,
     depthSum: path.engine.getJitterDepth(),
     worstDepth: path.engine.getJitterDepth(),
     notReadyCount: effectivePlayoutBufferedMs < effectiveTargetBufferMs * 0.85 ? 1 : 0,
@@ -1968,6 +1979,52 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
     },
   },
   {
+    id: 'one-on-one-standby-collapse-severe-spike',
+    description:
+      'Two-person call where the root stays materially better, but the standby-forwarder listener takes the worse arrival/ingress spike while the strengthened receive path keeps the call healthy overall.',
+    durationMs: 28_000,
+    seed: 184,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      receiverModel: {
+        policyTargetBufferMs: 160,
+      },
+      senderProfile: {
+        ...SENDER_PROFILE_PRESETS.moderateSpikeSender,
+        label: '1:1 standby-collapse root outbound',
+        impairmentSummary:
+          'Root outbound path into standby still takes the worse spike and some bridge pressure, but the tuned receive path should keep the standby listener only slightly weaker than root instead of collapsing.',
+        jitterStdDevMs: 42,
+        burstFraction: 0.16,
+        lossRate: 0.01,
+        faults: [
+          { kind: 'latency-spike', atMs: 3_500, durationMs: 3_500, params: { addMs: 60 } },
+          { kind: 'latency-spike', atMs: 13_500, durationMs: 3_000, params: { addMs: 70 } },
+          { kind: 'bridge-pressure', atMs: 4_000, durationMs: 4_000, params: { depth: 6 } },
+          { kind: 'packet-loss-burst', atMs: 7_500, durationMs: 1_500, params: { rate: 0.04 } },
+        ],
+      },
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+      receiverModel: {
+        policyTargetBufferMs: 160,
+        startupLatencyAddMs: 140,
+        startupLatencyUntilMs: 5_000,
+        startupBridgePressureDepth: 6,
+        startupBridgePressureUntilMs: 5_000,
+      },
+    },
+    expectations: {
+      bothPassed: true,
+      worseAddr: 'peer-B',
+      qualityScoreAtLeast: 9,
+    },
+  },
+  {
     id: 'three-person-clean-single-cluster',
     description:
       'Single-cluster 3-person call with one extra clean remote source; root and participant should both stay healthy.',
@@ -2109,6 +2166,75 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         minUnderTargetFraction: 0.12,
         maxAvgPcmBufferedMs: 210,
       },
+    },
+  },
+  {
+    id: 'three-person-standby-collapse-clean-others',
+    description:
+      'Single-cluster 3-person call where root and participant remain relatively healthy, but the standby-forwarder becomes the weak listener under severe multi-source receive-side collapse.',
+    durationMs: 28_000,
+    seed: 1884,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+      receiverModel: {
+        startupLatencyAddMs: 180,
+        startupLatencyUntilMs: 6_000,
+        startupBridgePressureDepth: 8,
+        startupBridgePressureUntilMs: 6_000,
+      },
+    },
+    extraParticipants: [
+      {
+        addr: 'peer-C',
+        senderProfile: {
+          ...SENDER_PROFILE_PRESETS.moderateSpikeSender,
+          label: 'Standby-collapse remote',
+          impairmentSummary:
+            'One remote sender stays moderately bursty during standby join and early recovery, but the strengthened multi-source receive path should keep root and participant clean while standby remains only slightly weaker.',
+          jitterStdDevMs: 58,
+          burstFraction: 0.24,
+          lossRate: 0.02,
+          faults: [
+            {
+              kind: 'latency-spike',
+              atMs: 2_500,
+              durationMs: 3_500,
+              params: { addMs: 60 },
+            },
+            {
+              kind: 'latency-spike',
+              atMs: 11_500,
+              durationMs: 3_500,
+              params: { addMs: 70 },
+            },
+            {
+              kind: 'bridge-pressure',
+              atMs: 3_000,
+              durationMs: 5_500,
+              params: { depth: 8 },
+            },
+            {
+              kind: 'packet-loss-burst',
+              atMs: 6_000,
+              durationMs: 2_000,
+              params: { rate: 0.08 },
+            },
+          ],
+        },
+        targets: ['peer-A', 'peer-B'],
+      },
+    ],
+    expectations: {
+      bothPassed: true,
+      worseAddr: 'peer-B',
+      qualityScoreAtLeast: 9,
     },
   },
   {
@@ -2308,6 +2434,7 @@ export async function runGroupCallE2eScenario(
       scenario.peerA.role,
       source.senderAddr,
       source.senderProfile,
+      peerASources.length,
       scenario.peerA.receiverModel,
       scenario.durationMs,
       scenario.seed ^ 0x11111111 ^ ((index + 1) * 0x01010101)
@@ -2319,6 +2446,7 @@ export async function runGroupCallE2eScenario(
       scenario.peerB.role,
       source.senderAddr,
       source.senderProfile,
+      peerBSources.length,
       scenario.peerB.receiverModel,
       scenario.durationMs,
       scenario.seed ^ 0x22222222 ^ ((index + 1) * 0x02020202)

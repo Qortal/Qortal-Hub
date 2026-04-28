@@ -311,7 +311,7 @@ export class ReplayHarness {
     const policy = new ReceivePolicyEngine(
       streamId,
       {
-        targetBufferMs: 120,
+        targetBufferMs: Math.max(120, sourceCount >= 2 ? 160 : 120),
         backlogDrainTriggerRatio: 1.0,
         transportDegradedHardTtlMs: 8_000,
       },
@@ -334,7 +334,7 @@ export class ReplayHarness {
     const playoutDeltaSamples: number[] = [];
     const targetSamples: number[] = [];
     const tickStallDurations: number[] = [];
-    let stateDeadzoneResets = 0;
+    const stateDeadzoneResets = 0;
     let backlogDrainActivations = 0;
     let transportDegradedMs = 0;
     let prevStateWasDegraded = false;

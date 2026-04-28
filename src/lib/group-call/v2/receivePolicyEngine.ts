@@ -146,6 +146,26 @@ export interface ReceivePolicyConfig {
   steadyStateRecoveryExitMinPcmMs: number;
   /** Under steady-state instability, enter drain sooner while reserve is still shallow. */
   steadyStateRecoveryPcmDeficitDrainThreshold: number;
+  /** Extra steady decode budget when multiple remote sources are active. */
+  multiSourceSteadyDecodeBoost: number;
+  /** Extra startup decode budget when multiple remote sources are active. */
+  multiSourceStartupDecodeBoost: number;
+  /** Extra drain decode budget when multiple remote sources are active. */
+  multiSourceDrainDecodeBoost: number;
+  /** Longer hold for multi-source steady-state recovery once armed. */
+  multiSourceSteadyStateRecoveryHoldMs: number;
+  /** Higher low-PCM trigger floor for multi-source listeners. */
+  multiSourceSteadyStateRecoveryLowPcmMs: number;
+  /** Fewer thin-PCM ticks needed to arm multi-source recovery. */
+  multiSourceSteadyStateRecoveryLowPcmTicks: number;
+  /** Higher drain exit floor while a weak multi-source listener is recovering. */
+  multiSourceSteadyStateRecoveryExitMinPcmMs: number;
+  /** Lower backlog trigger used for weak multi-source listeners. */
+  multiSourceBacklogDrainTriggerRatio: number;
+  /** Earlier PCM-deficit drain trigger used for multi-source listeners. */
+  multiSourcePcmDeficitDrainThreshold: number;
+  /** Smaller Opus reserve needed before a weak multi-source listener can enter drain. */
+  multiSourcePcmDeficitOpusMinRatio: number;
 }
 
 export const DEFAULT_POLICY_CONFIG: ReceivePolicyConfig = {
@@ -182,6 +202,16 @@ export const DEFAULT_POLICY_CONFIG: ReceivePolicyConfig = {
   steadyStateRecoveryPostSpikeHoldMs: 5_000,
   steadyStateRecoveryExitMinPcmMs: 96,
   steadyStateRecoveryPcmDeficitDrainThreshold: 0.9,
+  multiSourceSteadyDecodeBoost: 2,
+  multiSourceStartupDecodeBoost: 4,
+  multiSourceDrainDecodeBoost: 4,
+  multiSourceSteadyStateRecoveryHoldMs: 7_500,
+  multiSourceSteadyStateRecoveryLowPcmMs: 28,
+  multiSourceSteadyStateRecoveryLowPcmTicks: 2,
+  multiSourceSteadyStateRecoveryExitMinPcmMs: 132,
+  multiSourceBacklogDrainTriggerRatio: 0.55,
+  multiSourcePcmDeficitDrainThreshold: 1.1,
+  multiSourcePcmDeficitOpusMinRatio: 0.08,
 };
 
 export const DEFAULT_DECODED_PCM_LATENCY_MIN_EXTRA_MS = 80;
@@ -240,6 +270,8 @@ export interface PolicyTickInput {
   readonly totalConcealmentFrames: number;
   /** Most recent inter-arrival gap seen on this source, if still fresh. */
   readonly recentArrivalGapMs: number;
+  /** Number of concurrently active remote sources on this listener. */
+  readonly activeSourceCount?: number;
   /** Current peer health from the control plane. */
   readonly peerHealth: PeerHealthSnapshot | null;
 }
@@ -326,8 +358,9 @@ export class ReceivePolicyEngine {
     );
     const backlogDrainReentryBlocked =
       nowMs < this._backlogDrainReentryBlockedUntilMs;
-    const pcmDeficitDrainThreshold = this._effectivePcmDeficitDrainThreshold(nowMs);
-    const pcmDeficitOpusMinRatio = this._effectivePcmDeficitOpusMinRatio(nowMs);
+    const pcmDeficitDrainThreshold = this._effectivePcmDeficitDrainThreshold(nowMs, input);
+    const pcmDeficitOpusMinRatio = this._effectivePcmDeficitOpusMinRatio(nowMs, input);
+    const backlogDrainTriggerRatio = this._effectiveBacklogDrainTriggerRatio(input);
 
     // Missing media check applies from any state.
     const sourceGone = lastPushAgeMs > cfg.missingMediaThresholdMs;
@@ -377,9 +410,15 @@ export class ReceivePolicyEngine {
         if (
           !backlogDrainReentryBlocked &&
           pcmBufferedMs < backlogDrainResumePcmCeiling &&
-          opusBufferedMs >= effectiveTargetBufferMs * cfg.backlogDrainTriggerRatio
+          opusBufferedMs >= effectiveTargetBufferMs * backlogDrainTriggerRatio
         ) {
-          this._transition('backlogDrain', nowMs, `opus-overflow:${opusBufferedMs.toFixed(0)}ms>=${effectiveTargetBufferMs}ms`);
+          this._transition(
+            'backlogDrain',
+            nowMs,
+            `opus-overflow:${opusBufferedMs.toFixed(0)}ms>=${(
+              effectiveTargetBufferMs * backlogDrainTriggerRatio
+            ).toFixed(0)}ms`
+          );
           break;
         }
         // Loss recovery.
@@ -452,7 +491,10 @@ export class ReceivePolicyEngine {
           break;
         }
         // Exit when backlog is drained and PCM has enough content.
-        const exitPcmFloor = this._effectiveBacklogDrainExitPcmFloor(nowMs);
+        const exitPcmFloor = this._effectiveBacklogDrainExitPcmFloor(
+          nowMs,
+          input
+        );
         if (
           opusBufferedMs < cfg.targetBufferMs * cfg.backlogDrainExitRatio &&
           pcmBufferedMs >= exitPcmFloor
@@ -474,7 +516,7 @@ export class ReceivePolicyEngine {
           // If there's a backlog, go to drain first.
           if (
             pcmBufferedMs < backlogDrainResumePcmCeiling &&
-            opusBufferedMs >= effectiveTargetBufferMs * cfg.backlogDrainTriggerRatio
+            opusBufferedMs >= effectiveTargetBufferMs * backlogDrainTriggerRatio
           ) {
             this._transition('backlogDrain', nowMs, 'loss-recovered-backlog');
           } else {
@@ -532,14 +574,27 @@ export class ReceivePolicyEngine {
     const cfg = this._config;
     const startupWarmup = this._isStartupWarmupActive(input.nowMs);
     const steadyStateRecovery = this._isSteadyStateRecoveryActive(input.nowMs);
+    const multiSourceListener = this._isMultiSourceListener(input);
     const effectiveTargetBufferMs = this._effectiveTargetBufferMs(input.nowMs);
+    const steadyDecodeBoost = multiSourceListener
+      ? cfg.multiSourceSteadyDecodeBoost
+      : 0;
+    const startupDecodeBoost = multiSourceListener
+      ? cfg.multiSourceStartupDecodeBoost
+      : 0;
+    const drainDecodeBoost = multiSourceListener
+      ? cfg.multiSourceDrainDecodeBoost
+      : 0;
     switch (this._state) {
       case 'coldStart':
         return {
           state: 'coldStart',
           maxDecodePerTick: startupWarmup || steadyStateRecovery
-            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
-            : cfg.steadyMaxDecodePerTick,
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: true,
           aggressiveDrain: false,
@@ -550,8 +605,11 @@ export class ReceivePolicyEngine {
         return {
           state: 'steady',
           maxDecodePerTick: startupWarmup || steadyStateRecovery
-            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
-            : cfg.steadyMaxDecodePerTick,
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
@@ -562,8 +620,11 @@ export class ReceivePolicyEngine {
         return {
           state: 'transportDegraded',
           maxDecodePerTick: startupWarmup || steadyStateRecovery
-            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
-            : cfg.steadyMaxDecodePerTick,
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs + cfg.transportDegradedExtraBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
@@ -573,7 +634,7 @@ export class ReceivePolicyEngine {
       case 'backlogDrain':
         return {
           state: 'backlogDrain',
-          maxDecodePerTick: cfg.drainMaxDecodePerTick,
+          maxDecodePerTick: cfg.drainMaxDecodePerTick + drainDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: true,
@@ -584,8 +645,11 @@ export class ReceivePolicyEngine {
         return {
           state: 'lossRecovery',
           maxDecodePerTick: startupWarmup || steadyStateRecovery
-            ? Math.max(cfg.steadyMaxDecodePerTick, cfg.startupMaxDecodePerTick)
-            : cfg.steadyMaxDecodePerTick,
+            ? Math.max(
+                cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
+                cfg.startupMaxDecodePerTick + startupDecodeBoost
+              )
+            : cfg.steadyMaxDecodePerTick + steadyDecodeBoost,
           targetBufferMs: effectiveTargetBufferMs,
           holdPlayout: false,
           aggressiveDrain: false,
@@ -629,6 +693,19 @@ export class ReceivePolicyEngine {
     return nowMs < this._steadyStateRecoveryUntilMs;
   }
 
+  private _isMultiSourceListener(input: PolicyTickInput): boolean {
+    return Math.max(1, input.activeSourceCount ?? 1) >= 2;
+  }
+
+  private _effectiveSteadyStateRecoveryHoldMs(input: PolicyTickInput): number {
+    return this._isMultiSourceListener(input)
+      ? Math.max(
+          this._config.steadyStateRecoveryHoldMs,
+          this._config.multiSourceSteadyStateRecoveryHoldMs
+        )
+      : this._config.steadyStateRecoveryHoldMs;
+  }
+
   private _effectiveTargetBufferMs(nowMs: number): number {
     let targetBufferMs = this._config.targetBufferMs;
     if (this._isStartupWarmupActive(nowMs)) {
@@ -640,37 +717,75 @@ export class ReceivePolicyEngine {
     return targetBufferMs;
   }
 
-  private _effectivePcmDeficitDrainThreshold(nowMs: number): number {
+  private _effectiveBacklogDrainTriggerRatio(input: PolicyTickInput): number {
+    return this._isMultiSourceListener(input)
+      ? Math.min(
+          this._config.backlogDrainTriggerRatio,
+          this._config.multiSourceBacklogDrainTriggerRatio
+        )
+      : this._config.backlogDrainTriggerRatio;
+  }
+
+  private _effectivePcmDeficitDrainThreshold(
+    nowMs: number,
+    input: PolicyTickInput
+  ): number {
+    const baseThreshold = this._isMultiSourceListener(input)
+      ? Math.max(
+          this._config.pcmDeficitDrainThreshold,
+          this._config.multiSourcePcmDeficitDrainThreshold
+        )
+      : this._config.pcmDeficitDrainThreshold;
     if (this._isSteadyStateRecoveryActive(nowMs)) {
       return Math.max(
-        this._config.pcmDeficitDrainThreshold,
+        baseThreshold,
         this._config.steadyStateRecoveryPcmDeficitDrainThreshold
       );
     }
     return this._isStartupWarmupActive(nowMs)
       ? Math.max(
-          this._config.pcmDeficitDrainThreshold,
+          baseThreshold,
           this._config.startupPcmDeficitDrainThreshold
         )
-      : this._config.pcmDeficitDrainThreshold;
+      : baseThreshold;
   }
 
-  private _effectivePcmDeficitOpusMinRatio(nowMs: number): number {
-    return this._isStartupWarmupActive(nowMs)
+  private _effectivePcmDeficitOpusMinRatio(
+    nowMs: number,
+    input: PolicyTickInput
+  ): number {
+    const baseRatio = this._isMultiSourceListener(input)
       ? Math.min(
           this._config.pcmDeficitOpusMinRatio,
-          this._config.startupPcmDeficitOpusMinRatio
+          this._config.multiSourcePcmDeficitOpusMinRatio
         )
       : this._config.pcmDeficitOpusMinRatio;
+    return this._isStartupWarmupActive(nowMs)
+      ? Math.min(
+          baseRatio,
+          this._config.startupPcmDeficitOpusMinRatio
+        )
+      : baseRatio;
   }
 
-  private _effectiveBacklogDrainExitPcmFloor(nowMs: number): number {
+  private _effectiveBacklogDrainExitPcmFloor(
+    nowMs: number,
+    input: PolicyTickInput
+  ): number {
     const baseFloor = Math.max(
       this._config.backlogDrainExitMinPcmMs,
       this._config.targetBufferMs * this._config.backlogDrainExitTargetFloorRatio
     );
     if (this._isSteadyStateRecoveryActive(nowMs)) {
-      return Math.max(baseFloor, this._config.steadyStateRecoveryExitMinPcmMs);
+      return Math.max(
+        baseFloor,
+        this._isMultiSourceListener(input)
+          ? Math.max(
+              this._config.steadyStateRecoveryExitMinPcmMs,
+              this._config.multiSourceSteadyStateRecoveryExitMinPcmMs
+            )
+          : this._config.steadyStateRecoveryExitMinPcmMs
+      );
     }
     return baseFloor;
   }
@@ -688,6 +803,7 @@ export class ReceivePolicyEngine {
 
     const recentPacketActivity =
       lastPushAgeMs <= this._config.steadyStateRecoveryRecentPacketAgeMs;
+    const multiSourceListener = this._isMultiSourceListener(input);
     const concealmentDelta = Math.max(
       0,
       totalConcealmentFrames - this._lastObservedConcealmentFrames
@@ -695,7 +811,12 @@ export class ReceivePolicyEngine {
     this._lastObservedConcealmentFrames = totalConcealmentFrames;
     const thinPcm =
       pcmBufferedMs <= Math.max(
-        this._config.steadyStateRecoveryLowPcmMs,
+        multiSourceListener
+          ? Math.max(
+              this._config.steadyStateRecoveryLowPcmMs,
+              this._config.multiSourceSteadyStateRecoveryLowPcmMs
+            )
+          : this._config.steadyStateRecoveryLowPcmMs,
         this._config.targetBufferMs * 0.18
       );
     const recentSpike =
@@ -704,11 +825,16 @@ export class ReceivePolicyEngine {
     if (recentPacketActivity && recentSpike) {
       this._armSteadyStateRecovery(
         nowMs,
-        this._config.steadyStateRecoveryPostSpikeHoldMs
+        Math.max(
+          this._config.steadyStateRecoveryPostSpikeHoldMs,
+          this._effectiveSteadyStateRecoveryHoldMs(input)
+        )
       );
       this._consecutiveThinPcmTicks = Math.max(
         this._consecutiveThinPcmTicks,
-        this._config.steadyStateRecoveryLowPcmTicks - 1
+        (multiSourceListener
+          ? this._config.multiSourceSteadyStateRecoveryLowPcmTicks
+          : this._config.steadyStateRecoveryLowPcmTicks) - 1
       );
       return;
     }
@@ -717,21 +843,31 @@ export class ReceivePolicyEngine {
       recentPacketActivity &&
       concealmentDelta >= this._config.steadyStateRecoveryConcealmentFrames
     ) {
-      this._armSteadyStateRecovery(nowMs);
+      this._armSteadyStateRecovery(
+        nowMs,
+        this._effectiveSteadyStateRecoveryHoldMs(input)
+      );
       this._consecutiveThinPcmTicks = Math.max(
         this._consecutiveThinPcmTicks,
-        this._config.steadyStateRecoveryLowPcmTicks - 1
+        (multiSourceListener
+          ? this._config.multiSourceSteadyStateRecoveryLowPcmTicks
+          : this._config.steadyStateRecoveryLowPcmTicks) - 1
       );
       return;
     }
 
     if (recentPacketActivity && thinPcm) {
       this._consecutiveThinPcmTicks += 1;
+      const lowPcmTicks = multiSourceListener
+        ? this._config.multiSourceSteadyStateRecoveryLowPcmTicks
+        : this._config.steadyStateRecoveryLowPcmTicks;
       if (
-        this._consecutiveThinPcmTicks >=
-        this._config.steadyStateRecoveryLowPcmTicks
+        this._consecutiveThinPcmTicks >= lowPcmTicks
       ) {
-        this._armSteadyStateRecovery(nowMs);
+        this._armSteadyStateRecovery(
+          nowMs,
+          this._effectiveSteadyStateRecoveryHoldMs(input)
+        );
       }
       return;
     }
@@ -739,7 +875,12 @@ export class ReceivePolicyEngine {
     if (
       pcmBufferedMs >=
       Math.max(
-        this._config.steadyStateRecoveryLowPcmMs + 8,
+        (multiSourceListener
+          ? Math.max(
+              this._config.steadyStateRecoveryLowPcmMs,
+              this._config.multiSourceSteadyStateRecoveryLowPcmMs
+            )
+          : this._config.steadyStateRecoveryLowPcmMs) + 8,
         this._config.targetBufferMs * 0.28
       )
     ) {

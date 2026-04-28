@@ -4,7 +4,10 @@
  */
 
 import type { DecodedAudioPacket } from '../group-call/audioPacketCodec';
-import { postStaticPlayoutTargetForTuning } from '../group-call/gcallInboundPlayoutTarget';
+import {
+  computeStaticPlayoutTargetMsForTuning,
+  postStaticPlayoutTargetForTuning,
+} from '../group-call/gcallInboundPlayoutTarget';
 import { JitterBuffer } from '../group-call/gcallJitterBuffer';
 import { createGcallJitterBufferForIngress } from '../group-call/gcallInboundJitterSetup';
 import {
@@ -112,6 +115,7 @@ export class DmVoiceGcallInboundPlayout {
   /** Last applied `metrics.adaptiveNetworkMode` for jitter geometry. */
   private lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null = null;
   private lastJitterActiveSourceCount = 1;
+  private lastPostedTargetPlayoutMs: number | null = null;
   private pendingDecodedIngressAtMs: Array<number | null> = [];
   private lastDrainMetricSampleAtMs = 0;
 
@@ -217,6 +221,28 @@ export class DmVoiceGcallInboundPlayout {
     this.syncJitterGeometryFromMetrics();
   }
 
+  setDynamicTargetPlayoutMs(targetPlayoutMs: number): void {
+    const node = this.playbackNode;
+    if (!node || !Number.isFinite(targetPlayoutMs)) return;
+    const rounded = Math.max(40, Math.round(targetPlayoutMs));
+    if (this.lastPostedTargetPlayoutMs === rounded) return;
+    this.lastPostedTargetPlayoutMs = rounded;
+    node.port.postMessage({
+      type: 'target',
+      targetPlayoutMs: rounded,
+    });
+  }
+
+  resetDynamicTargetPlayoutMs(): void {
+    const tuning = this.tuning;
+    if (!tuning) return;
+    this.setDynamicTargetPlayoutMs(computeStaticPlayoutTargetMsForTuning(tuning));
+  }
+
+  setBurstRecoveryExtraHoldFrames(frames: number): void {
+    this.jitter?.setBurstRecoveryExtraHoldFrames(frames);
+  }
+
   private canUseSharedPcmRing(): boolean {
     return typeof SharedArrayBuffer !== 'undefined';
   }
@@ -303,6 +329,7 @@ export class DmVoiceGcallInboundPlayout {
     } as AudioWorkletNodeOptions);
 
     postStaticPlayoutTargetForTuning(playNode, tuning);
+    this.lastPostedTargetPlayoutMs = computeStaticPlayoutTargetMsForTuning(tuning);
 
     playNode.port.onmessage = (e: MessageEvent) => {
       const d = e.data as DmVoiceGcallPlayoutWorkletMessage;
@@ -588,6 +615,7 @@ export class DmVoiceGcallInboundPlayout {
     this.peerAddress = '';
     this.callbacks = null;
     this.lastJitterAdaptiveMode = null;
+    this.lastPostedTargetPlayoutMs = null;
     this.pendingDecodedIngressAtMs = [];
     this.lastDrainMetricSampleAtMs = 0;
 
