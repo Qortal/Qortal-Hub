@@ -58,10 +58,19 @@ const GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS = 40;
 const GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS = 28;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS = 48;
-const GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES = 6;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS = 72;
+const GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
+const GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS = 156;
 const GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS = -35;
 const GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX = 36;
+const GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN = 48;
+const GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX = 12;
+const GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS = -80;
+const GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS = 900;
+const GCALL_SINGLE_SOURCE_SEVERE_LATCH_MS = 7_000;
+const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_BUFFERED_MS_MIN = 96;
+const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_DELTA_MIN_MS = -20;
 
 interface LiveMultiSourceState {
   sampleCount: number;
@@ -73,6 +82,7 @@ interface LiveMultiSourceState {
   starvationSeverity: PlayoutStarvationSeverity;
   strongCStreak: number;
   protectedMode: boolean;
+  severeSingleSourceHoldUntilMs: number;
 }
 
 function disconnectNodeSafe(node: AudioNode | null): void {
@@ -425,6 +435,7 @@ export class GroupCallAudioReceiveEngine {
         starvationSeverity: 'none',
         strongCStreak: 0,
         protectedMode: false,
+        severeSingleSourceHoldUntilMs: 0,
       };
       this.liveMultiSourceStateBySource.set(sourceAddr, state);
     }
@@ -435,6 +446,7 @@ export class GroupCallAudioReceiveEngine {
     sourceAddr: string,
     message: DmVoiceGcallPlayoutWorkletMessage
   ): void {
+    const nowMs = Date.now();
     const staticTargetMs = computeStaticPlayoutTargetMsForTuning(
       getGroupCallAudioTuning(this.config.profile)
     );
@@ -458,6 +470,11 @@ export class GroupCallAudioReceiveEngine {
             0,
             Math.round(message.preProcessBufferedMs / OPUS_FRAME_DURATION_MS)
           )
+        : 0;
+    const oldestFrameAgeMs =
+      typeof message.oldestFrameAgeMs === 'number' &&
+      Number.isFinite(message.oldestFrameAgeMs)
+        ? Math.max(0, message.oldestFrameAgeMs)
         : 0;
     const state = this.getOrCreateLiveMultiSourceState(
       sourceAddr,
@@ -521,11 +538,33 @@ export class GroupCallAudioReceiveEngine {
       }),
       starvationSeverity: state.starvationSeverity,
     });
+
+    const severeSingleSourcePressure =
+      (!!message.outsideBandUnder || !!message.concealmentUsed) &&
+      bufferedMs <= GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX &&
+      deltaMs <= GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS &&
+      (oldestFrameAgeMs >= GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS ||
+        preProcessBufferedFrames <= 0);
+    if (severeSingleSourcePressure) {
+      state.severeSingleSourceHoldUntilMs = Math.max(
+        state.severeSingleSourceHoldUntilMs,
+        nowMs + GCALL_SINGLE_SOURCE_SEVERE_LATCH_MS
+      );
+    } else if (
+      state.severeSingleSourceHoldUntilMs > 0 &&
+      !message.outsideBandUnder &&
+      !message.concealmentUsed &&
+      bufferedMs >= GCALL_SINGLE_SOURCE_SEVERE_CLEAR_BUFFERED_MS_MIN &&
+      deltaMs >= GCALL_SINGLE_SOURCE_SEVERE_CLEAR_DELTA_MIN_MS
+    ) {
+      state.severeSingleSourceHoldUntilMs = 0;
+    }
   }
 
   private syncLiveMultiSourceControls(): void {
     const activeSourceCount = this.playouts.size;
     const mode = this.metrics.getSnapshot().adaptiveNetworkMode;
+    const nowMs = Date.now();
     const staticTargetMs = computeStaticPlayoutTargetMsForTuning(
       getGroupCallAudioTuning(this.config.profile)
     );
@@ -544,13 +583,22 @@ export class GroupCallAudioReceiveEngine {
       }
 
       if (activeSourceCount < 2) {
-        const weakSingleSource =
-          mode === 'recovery' ||
+        const severeSingleSourceHold =
+          state.severeSingleSourceHoldUntilMs > nowMs;
+        const bufferedPressure =
+          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
+        const lingeringPressure =
+          (state.underTargetEma >= GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN ||
+            state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS) &&
+          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN;
+        const singleSourcePressure =
+          severeSingleSourceHold ||
           state.protectedMode ||
           state.starvationSeverity !== 'none' ||
-          state.underTargetEma >= GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN ||
-          state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS ||
-          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
+          bufferedPressure ||
+          lingeringPressure;
+        const weakSingleSource =
+          mode === 'recovery' || singleSourcePressure;
         if (!weakSingleSource) {
           playout.setBurstRecoveryExtraHoldFrames(0);
           playout.resetDynamicTargetPlayoutMs();
@@ -559,9 +607,14 @@ export class GroupCallAudioReceiveEngine {
 
         let targetMs =
           staticTargetMs +
-          (state.protectedMode || state.starvationSeverity === 'strong'
-            ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
-            : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS);
+          (severeSingleSourceHold
+            ? GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS
+            : state.protectedMode || state.starvationSeverity === 'strong'
+              ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
+              : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS);
+        if (singleSourcePressure) {
+          targetMs = Math.max(targetMs, GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS);
+        }
         const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs({
           currentAdaptiveMaxTargetMs: targetMs,
           activeSourceCount,

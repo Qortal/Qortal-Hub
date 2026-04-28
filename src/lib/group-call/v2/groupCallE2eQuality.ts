@@ -2025,6 +2025,55 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
     },
   },
   {
+    id: 'one-on-one-root-collapse-severe-spike',
+    description:
+      'Two-person call where the standby stays materially better, but the root-forwarder listener takes the worse arrival/ingress spike while the strengthened receive path keeps the call healthy overall.',
+    durationMs: 28_000,
+    seed: 185,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: SENDER_PROFILE_PRESETS.cleanSender,
+      receiverModel: {
+        policyTargetBufferMs: 160,
+        startupLatencyAddMs: 140,
+        startupLatencyUntilMs: 5_000,
+        startupBridgePressureDepth: 6,
+        startupBridgePressureUntilMs: 5_000,
+      },
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      receiverModel: {
+        policyTargetBufferMs: 160,
+      },
+      senderProfile: {
+        ...SENDER_PROFILE_PRESETS.moderateSpikeSender,
+        label: '1:1 root-collapse standby outbound',
+        impairmentSummary:
+          'Standby outbound path into root still takes the worse spike and some bridge pressure, but the tuned receive path should keep the root listener only slightly weaker than standby instead of collapsing.',
+        jitterStdDevMs: 42,
+        burstFraction: 0.16,
+        lossRate: 0.01,
+        faults: [
+          { kind: 'latency-spike', atMs: 3_500, durationMs: 3_500, params: { addMs: 60 } },
+          { kind: 'latency-spike', atMs: 13_500, durationMs: 3_000, params: { addMs: 70 } },
+          { kind: 'bridge-pressure', atMs: 4_000, durationMs: 4_000, params: { depth: 6 } },
+          { kind: 'packet-loss-burst', atMs: 7_500, durationMs: 1_500, params: { rate: 0.04 } },
+        ],
+      },
+    },
+    expectations: {
+      bothPassed: true,
+      worseAddr: 'peer-A',
+      qualityScoreAtLeast: 8.8,
+      qualityScoreAtLeastByMode: {
+        'audio-surface-sim': 9,
+      },
+    },
+  },
+  {
     id: 'three-person-clean-single-cluster',
     description:
       'Single-cluster 3-person call with one extra clean remote source; root and participant should both stay healthy.',
