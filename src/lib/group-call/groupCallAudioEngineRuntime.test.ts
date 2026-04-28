@@ -1705,4 +1705,101 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(broadcastTopology.mock.calls.length).toBeGreaterThanOrEqual(1);
     vi.useRealTimers();
   });
+
+  it('does not restore cached local root authority on occupied-room rejoin from recent cache', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 5,
+      lastTopology: {
+        topologyEpoch: 5,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: 'Qpeer',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qlocal',
+            standby: 'Qpeer',
+          },
+        ],
+        lastSeen: Date.now(),
+      },
+      callSessionId: 'csid-recent',
+      mediaSessionGeneration: 1,
+      updatedAtMs: Date.now(),
+      fromRecentCache: true,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+
+    broadcastTopology.mockClear();
+    sendKey.mockClear();
+    sendKeyRotate.mockClear();
+
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(broadcastTopology).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+    expect(sendKeyRotate).not.toHaveBeenCalled();
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'gcall-qortal-812',
+      topologyEpoch: 6,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: Date.now(),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const result = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const parsed = JSON.parse(String(result.ok ? result.payload : 'null')) as {
+      liveMetricsSnapshot?: { topologyRole?: string };
+      audioSurfaceRuntimeDiagnostics?: {
+        sessionState?: { role?: string; ownsRoomKey?: boolean };
+        recentEvents?: Array<{ tag: string }>;
+      };
+    };
+    expect(parsed.liveMetricsSnapshot?.topologyRole).toBe('standby-forwarder');
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.role).toBe(
+      'standby-forwarder'
+    );
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.ownsRoomKey).toBe(false);
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.recentEvents?.some(
+        (event) => event.tag === 'cached-local-root-authority-suppressed'
+      )
+    ).toBe(true);
+    vi.useRealTimers();
+  });
 });
