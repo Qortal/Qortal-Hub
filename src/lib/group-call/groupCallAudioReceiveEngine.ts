@@ -31,7 +31,10 @@ import {
   shouldHoldMultiSourceAccumulation,
   shouldPrioritizeWeakMultiSourceLeg,
 } from './gcallJitterDrainPhaseD';
-import { computeFeasibleMultiSourceRecoveryTargetMaxMs } from './gcallPlayoutPolicy';
+import {
+  computeFeasibleMultiSourceRecoveryTargetMaxMs,
+  computeFeasibleSingleRemoteRecoveryTargetMaxMs,
+} from './gcallPlayoutPolicy';
 import { computeStaticPlayoutTargetMsForTuning } from './gcallInboundPlayoutTarget';
 import {
   createDmPeerRecoveryState,
@@ -53,6 +56,12 @@ const GCALL_AUDIO_SURFACE_STABLE_STRONG_DELTA_MIN_MS = -20;
 const GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS = 20;
 const GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS = 40;
 const GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS = 28;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS = 48;
+const GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES = 6;
+const GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN = 0.08;
+const GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS = -35;
+const GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX = 36;
 
 interface LiveMultiSourceState {
   sampleCount: number;
@@ -509,7 +518,62 @@ export class GroupCallAudioReceiveEngine {
 
     for (const [sourceAddr, playout] of this.playouts) {
       const state = this.liveMultiSourceStateBySource.get(sourceAddr);
-      if (!state || activeSourceCount < 2 || mode !== 'recovery') {
+      if (!state) {
+        playout.setBurstRecoveryExtraHoldFrames(0);
+        playout.resetDynamicTargetPlayoutMs();
+        continue;
+      }
+
+      if (activeSourceCount < 2) {
+        const weakSingleSource =
+          mode === 'recovery' ||
+          state.protectedMode ||
+          state.starvationSeverity !== 'none' ||
+          state.underTargetEma >= GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN ||
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS ||
+          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
+        if (!weakSingleSource) {
+          playout.setBurstRecoveryExtraHoldFrames(0);
+          playout.resetDynamicTargetPlayoutMs();
+          continue;
+        }
+
+        let targetMs =
+          staticTargetMs +
+          (state.protectedMode || state.starvationSeverity === 'strong'
+            ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
+            : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS);
+        const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs({
+          currentAdaptiveMaxTargetMs: targetMs,
+          activeSourceCount,
+          adaptiveNetworkMode: 'recovery',
+          starvationSeverity: state.starvationSeverity,
+          previousStarvationSeverity: state.starvationSeverity,
+          playoutUnderTargetFraction: state.underTargetEma,
+          avgPlayoutDeltaMs: state.deltaMsEma,
+          avgOpusBufferedMs: state.bufferedMsEma,
+          observedTargetMs: state.targetPlayoutMs,
+        });
+        if (feasibleTargetMs !== null) {
+          targetMs = Math.max(targetMs, feasibleTargetMs);
+        }
+        const desiredBufferedFrames = Math.max(
+          2,
+          Math.round(targetMs / OPUS_FRAME_DURATION_MS)
+        );
+        const extraHoldFrames = Math.max(
+          0,
+          Math.min(
+            GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES,
+            desiredBufferedFrames - Math.max(1, state.preProcessBufferedFrames)
+          )
+        );
+        playout.setBurstRecoveryExtraHoldFrames(extraHoldFrames);
+        playout.setDynamicTargetPlayoutMs(targetMs);
+        continue;
+      }
+
+      if (mode !== 'recovery') {
         playout.setBurstRecoveryExtraHoldFrames(0);
         playout.resetDynamicTargetPlayoutMs();
         continue;

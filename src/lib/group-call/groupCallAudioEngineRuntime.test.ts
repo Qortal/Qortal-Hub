@@ -481,6 +481,75 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(lastSnapshot?.snapshot?.metrics?.packetsDecoded).toBe(1);
   });
 
+  it('backfills a visible participant from successfully decoded remote audio', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const events: Array<{
+      type: string;
+      snapshot?: {
+        participants?: Array<{ address: string }>;
+      };
+    }> = [];
+    runtime.onEvent((event) => {
+      events.push(event as never);
+    });
+    const roomKey = new Uint8Array(32).fill(7);
+    const decryptedKey = btoa(String.fromCharCode(...roomKey));
+    const keyCommitment = await buildMediaKeyCommitmentHex(roomKey, 'csid-1', 1);
+    (window as unknown as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage = vi
+      .fn()
+      .mockImplementation(async (action: string) => {
+        if (action === 'decryptBoxWithMyKey') {
+          return { decryptedKey };
+        }
+        return { signature: 'sig' };
+      });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:key', {
+      roomId: 'room-1',
+      encryptedKey: btoa(String.fromCharCode(...new Uint8Array(64).fill(1))),
+      fromAddress: 'Qpeer',
+      fromPublicKey: 'pub-peer',
+      keyMessageVersion: 3,
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+      keyCommitment,
+      verified: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:audio', {
+      roomId: 'room-1',
+      data: encodeAudioPacketV2(
+        'Qpeer',
+        false,
+        1,
+        10,
+        new Uint8Array([9, 8, 7]),
+        roomKey
+      ).buffer,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.participants).toEqual(
+      expect.arrayContaining([expect.objectContaining({ address: 'Qpeer' })])
+    );
+  });
+
   it('holds early media while awaiting the authoritative key and flushes it after key apply', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
@@ -1315,6 +1384,114 @@ describe('GroupCallAudioEngineRuntime', () => {
           role: 'standby-forwarder',
         }),
         expect.objectContaining({ address: 'Qlate', role: 'participant' }),
+      ])
+    );
+  });
+
+  it('hydrates root and standby from accepted remote topology even when cluster members are incomplete', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const events: Array<{
+      type: string;
+      snapshot?: {
+        participants?: Array<{ address: string; role: string }>;
+      };
+    }> = [];
+    runtime.onEvent((event) => {
+      events.push(event as never);
+    });
+
+    getRoomParticipants.mockResolvedValue([{ address: 'Qstandby', publicKey: 'pub-standby' }]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qstandby', publicKey: 'pub-standby' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'gcall-qortal-812',
+      topologyEpoch: 5,
+      rootForwarder: 'Qroot',
+      standbyForwarder: 'Qstandby',
+      clusters: [
+        {
+          members: ['Qstandby'],
+          forwarder: 'Qroot',
+          standby: 'Qstandby',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: 'Qroot', role: 'root-forwarder' }),
+        expect.objectContaining({
+          address: 'Qstandby',
+          role: 'standby-forwarder',
+        }),
+      ])
+    );
+  });
+
+  it('adds runtime join payloads into the standby roster immediately on rejoin', async () => {
+    getRoomParticipants.mockResolvedValue([{ address: 'Qstandby', publicKey: 'pub-standby' }]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+      participants: [{ address: 'Qstandby', publicKey: 'pub-standby' }],
+      topologyEpoch: 0,
+      callSessionId: 'csid-standby',
+      mediaSessionGeneration: 1,
+      updatedAtMs: Date.now(),
+      fromRecentCache: true,
+    });
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const events: Array<{
+      type: string;
+      snapshot?: {
+        participants?: Array<{ address: string; role: string }>;
+      };
+    }> = [];
+    runtime.onEvent((event) => {
+      events.push(event as never);
+    });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qstandby', publicKey: 'pub-standby' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'gcall-qortal-812',
+      address: 'Qroot',
+      publicKey: 'pub-root',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: 'Qroot' }),
+        expect.objectContaining({ address: 'Qstandby' }),
       ])
     );
   });

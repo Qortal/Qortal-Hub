@@ -662,33 +662,89 @@ export class GroupCallAudioEngineRuntime {
     topology: GroupCallTopology
   ): AudioEngineParticipant[] {
     const nextByAddress = new Map<string, AudioEngineParticipant>();
+    const ensureParticipant = (address: string, publicKey = ''): void => {
+      const normalizedAddress = address.trim();
+      if (!normalizedAddress || nextByAddress.has(normalizedAddress)) return;
+      nextByAddress.set(normalizedAddress, {
+        address: normalizedAddress,
+        publicKey,
+        speaking: false,
+        role: 'participant',
+      });
+    };
     for (const participant of participants) {
       const address = participant.address?.trim() ?? '';
       if (!address) continue;
       nextByAddress.set(address, participant);
     }
     const myAddress = this.userInfo?.address?.trim() ?? '';
-    if (myAddress && !nextByAddress.has(myAddress)) {
-      nextByAddress.set(myAddress, {
-        address: myAddress,
-        publicKey: this.userInfo?.publicKey ?? '',
-        speaking: false,
-        role: 'participant',
-      });
-    }
+    ensureParticipant(myAddress, this.userInfo?.publicKey ?? '');
+    ensureParticipant(topology.rootForwarder);
+    ensureParticipant(topology.standbyForwarder);
     for (const cluster of topology.clusters) {
+      ensureParticipant(cluster.forwarder);
+      ensureParticipant(cluster.standby);
+      ensureParticipant(cluster.standby2 ?? '');
       for (const address of cluster.members) {
-        const normalizedAddress = address?.trim() ?? '';
-        if (!normalizedAddress || nextByAddress.has(normalizedAddress)) continue;
-        nextByAddress.set(normalizedAddress, {
-          address: normalizedAddress,
-          publicKey: '',
-          speaking: false,
-          role: 'participant',
-        });
+        ensureParticipant(address ?? '');
       }
     }
     return [...nextByAddress.values()];
+  }
+
+  private upsertParticipantFromRuntimeEvent(
+    addressValue: string | null | undefined,
+    publicKeyValue?: string | null
+  ): void {
+    const address = addressValue?.trim() ?? '';
+    if (!address) return;
+    const existing = this.snapshot.participants.find(
+      (participant) => participant.address === address
+    );
+    const publicKey = publicKeyValue?.trim() ?? '';
+    if (existing) {
+      if (!publicKey || existing.publicKey === publicKey) return;
+      this.snapshot = {
+        ...this.snapshot,
+        participants: this.snapshot.participants.map((participant) =>
+          participant.address === address
+            ? { ...participant, publicKey }
+            : participant
+        ),
+      };
+      this.emitSnapshot();
+      return;
+    }
+    this.snapshot = {
+      ...this.snapshot,
+      participants: this.withTopologyRoles([
+        ...this.snapshot.participants,
+        {
+          address,
+          publicKey,
+          speaking: false,
+          role: 'participant',
+        },
+      ]),
+    };
+    this.emitSnapshot();
+  }
+
+  private removeParticipantFromRuntimeEvent(
+    addressValue: string | null | undefined
+  ): void {
+    const address = addressValue?.trim() ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!address || address === myAddress) return;
+    const nextParticipants = this.snapshot.participants.filter(
+      (participant) => participant.address !== address
+    );
+    if (nextParticipants.length === this.snapshot.participants.length) return;
+    this.snapshot = {
+      ...this.snapshot,
+      participants: this.withTopologyRoles(nextParticipants),
+    };
+    this.emitSnapshot();
   }
 
   private getForwardRecipientCount(): number {
@@ -1117,6 +1173,16 @@ export class GroupCallAudioEngineRuntime {
             this.activeSpeakerLastSeenAt.delete(leavingAddress);
             this.refreshActiveSpeakerState();
           }
+          this.removeParticipantFromRuntimeEvent(leavingAddress);
+        } else {
+          const joining = payload as
+            | { address?: string; publicKey?: string }
+            | null
+            | undefined;
+          this.upsertParticipantFromRuntimeEvent(
+            joining?.address,
+            joining?.publicKey
+          );
         }
         this.scheduleTopologyElection(event);
       }
@@ -2175,6 +2241,9 @@ export class GroupCallAudioEngineRuntime {
     let sawVad = false;
     const now = Date.now();
     for (const packet of packets) {
+      if (packet.sourceAddr) {
+        this.upsertParticipantFromRuntimeEvent(packet.sourceAddr);
+      }
       if (!packet.vad || !packet.sourceAddr) continue;
       this.activeSpeakerLastSeenAt.set(packet.sourceAddr, now);
       sawVad = true;
