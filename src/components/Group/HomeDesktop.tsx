@@ -1409,7 +1409,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
     )
   );
   const [isMinterFieldHovered, setIsMinterFieldHovered] = useState(false);
-  const statusPreviewMode: string = 'live';
   const reduce = useReducedMotion();
   const { i18n, t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const td = useCallback(
@@ -2729,100 +2728,25 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const isSystemOperational =
     hasLiveNodeConnection &&
     !(nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100);
-  const statusPreviewOverrides =
-    statusPreviewMode === 'live'
-      ? null
-      : statusPreviewMode === 'syncing'
-        ? {
-            blockHeight: '1,944,216',
-            coreVersion: coreVersionLabel,
-            hubVersion: hubVersionLabel,
-            isOperational: false,
-            nodeHost: 'ext-node.qortal.link',
-            nodeStatus: t('group:dashboard.sync_percent', {
-              defaultValue: '{{percent}}% Synced',
-              percent: 62,
-            }),
-            nodeType: td('public_node', 'Public node'),
-            peers: '184',
-            qdnPeers: '97',
-            statusLabel: td('synchronizing', 'Synchronizing'),
-          }
-        : statusPreviewMode === 'local'
-          ? {
-              blockHeight: '1,944,882',
-              coreVersion: coreVersionLabel,
-              hubVersion: hubVersionLabel,
-              isOperational: true,
-              nodeHost: '127.0.0.1:12391',
-              nodeStatus: t('group:dashboard.sync_percent', {
-                defaultValue: '{{percent}}% Synced',
-                percent: 100,
-              }),
-              nodeType: td('local_node', 'Local node'),
-              peers: '42',
-              qdnPeers: '28',
-              statusLabel: td('fully_operational', 'Fully operational'),
-            }
-          : statusPreviewMode === 'custom'
-            ? {
-                blockHeight: '1,944,801',
-                coreVersion: coreVersionLabel,
-                hubVersion: hubVersionLabel,
-                isOperational: true,
-                nodeHost: 'node.qortal.example',
-                nodeStatus: t('group:dashboard.sync_percent', {
-                  defaultValue: '{{percent}}% Synced',
-                  percent: 100,
-                }),
-                nodeType: td('custom_node', 'Custom node'),
-                peers: '221',
-                qdnPeers: '153',
-                statusLabel: td('fully_operational', 'Fully operational'),
-              }
-            : {
-                blockHeight: '—',
-                coreVersion: coreVersionLabel,
-                hubVersion: hubVersionLabel,
-                isOperational: false,
-                nodeHost: 'node.qortal.example',
-                nodeStatus: td('node_unavailable', 'Node unavailable'),
-                nodeType: td('custom_node', 'Custom node'),
-                peers: '0',
-                qdnPeers: '0',
-                statusLabel: td('attention_needed', 'Attention needed'),
-              };
   const resolvedInfoStatusLabel =
-    statusPreviewOverrides?.statusLabel ??
     (isSystemOperational
       ? td('fully_operational', 'Fully operational')
       : td('not_operational', 'Not operational'));
-  const resolvedIsSystemOperational =
-    statusPreviewOverrides?.isOperational ?? isSystemOperational;
+  const resolvedIsSystemOperational = isSystemOperational;
   const resolvedInfoStatusTone: DashboardInfoStatusTone =
-    statusPreviewMode === 'issue'
-      ? 'issue'
-      : statusPreviewMode === 'syncing' ||
-          (!statusPreviewOverrides && nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100)
-        ? 'syncing'
-        : resolvedIsSystemOperational
-          ? 'operational'
-          : 'issue';
-  const resolvedNodeStatusValue =
-    statusPreviewOverrides?.nodeStatus ?? nodeStatusValue;
-  const resolvedPeersLabel = statusPreviewOverrides?.peers ?? peersLabel;
-  const resolvedBlockHeightLabel =
-    statusPreviewOverrides?.blockHeight ?? blockHeightLabel;
-  const resolvedQdnPeersLabel =
-    statusPreviewOverrides?.qdnPeers ?? qdnPeersLabel;
-  const resolvedNodeHostLabel =
-    statusPreviewOverrides?.nodeHost ?? nodeHostLabel;
-  const resolvedNodeTypeLabel =
-    statusPreviewOverrides?.nodeType ?? nodeTypeLabel;
-  const resolvedCoreVersionLabel =
-    statusPreviewOverrides?.coreVersion ?? coreVersionLabel;
-  const resolvedHubVersionLabel =
-    statusPreviewOverrides?.hubVersion ?? hubVersionLabel;
+    nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100
+      ? 'syncing'
+      : resolvedIsSystemOperational
+        ? 'operational'
+        : 'issue';
+  const resolvedNodeStatusValue = nodeStatusValue;
+  const resolvedPeersLabel = peersLabel;
+  const resolvedBlockHeightLabel = blockHeightLabel;
+  const resolvedQdnPeersLabel = qdnPeersLabel;
+  const resolvedNodeHostLabel = nodeHostLabel;
+  const resolvedNodeTypeLabel = nodeTypeLabel;
+  const resolvedCoreVersionLabel = coreVersionLabel;
+  const resolvedHubVersionLabel = hubVersionLabel;
   const isMinterOn = Boolean(minterLevel && minterLevel > 0);
   const minterDotsFilled = isMinterOn
     ? Math.max(1, Math.min(9, minterLevel ?? 5))
