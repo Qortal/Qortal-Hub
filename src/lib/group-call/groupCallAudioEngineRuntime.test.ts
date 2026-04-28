@@ -550,6 +550,124 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('tears down a leaving source so same-address rejoin does not inherit stale jitter state', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const roomKey = new Uint8Array(32).fill(7);
+    const decryptedKey = btoa(String.fromCharCode(...roomKey));
+    const keyCommitment = await buildMediaKeyCommitmentHex(roomKey, 'csid-1', 1);
+    (window as unknown as { sendMessage: ReturnType<typeof vi.fn> }).sendMessage = vi
+      .fn()
+      .mockImplementation(async (action: string) => {
+        if (action === 'decryptBoxWithMyKey') {
+          return { decryptedKey };
+        }
+        return { signature: 'sig' };
+      });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:key', {
+      roomId: 'room-1',
+      encryptedKey: btoa(String.fromCharCode(...new Uint8Array(64).fill(1))),
+      fromAddress: 'Qpeer',
+      fromPublicKey: 'pub-peer',
+      keyMessageVersion: 3,
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+      keyCommitment,
+      verified: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    for (let seq = 100; seq < 104; seq++) {
+      groupCallEventHandler?.('gcall:audio', {
+        roomId: 'room-1',
+        data: encodeAudioPacketV2(
+          'Qpeer',
+          false,
+          seq,
+          seq * 10,
+          new Uint8Array([9, 8, 7]),
+          roomKey
+        ).buffer,
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:participant-left', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    let result = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    let parsed = JSON.parse(String(result.ok ? result.payload : 'null')) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        receiveEngine?: { playoutCount?: number };
+      };
+    };
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.receiveEngine?.playoutCount).toBe(0);
+
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+      publicKey: 'pub-peer',
+    });
+    for (let seq = 1; seq < 5; seq++) {
+      groupCallEventHandler?.('gcall:audio', {
+        roomId: 'room-1',
+        data: encodeAudioPacketV2(
+          'Qpeer',
+          false,
+          seq,
+          seq * 10,
+          new Uint8Array([9, 8, 7]),
+          roomKey
+        ).buffer,
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    result = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    parsed = JSON.parse(String(result.ok ? result.payload : 'null')) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        receiveEngine?: {
+          playoutCount?: number;
+          playouts?: Array<{ peerAddress?: string; jitterBufferedFrames?: number }>;
+        };
+      };
+    };
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.receiveEngine?.playoutCount).toBe(1);
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.receiveEngine?.playouts?.[0]
+    ).toEqual(
+      expect.objectContaining({
+        peerAddress: 'Qpeer',
+        jitterBufferedFrames: expect.any(Number),
+      })
+    );
+    expect(
+      (parsed.audioSurfaceRuntimeDiagnostics?.receiveEngine?.playouts?.[0]
+        ?.jitterBufferedFrames ?? 0) > 0
+    ).toBe(true);
+  });
+
   it('holds early media while awaiting the authoritative key and flushes it after key apply', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
@@ -1321,6 +1439,69 @@ describe('GroupCallAudioEngineRuntime', () => {
     });
 
     await vi.advanceTimersByTimeAsync(250);
+
+    expect(broadcastTopology).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    vi.useRealTimers();
+  });
+
+  it('promotes standby to root after the remote root heartbeat times out', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue(['Qlocal']);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    broadcastTopology.mockClear();
+    await vi.advanceTimersByTimeAsync(17_000);
 
     expect(broadcastTopology).toHaveBeenCalledWith(
       'room-1',

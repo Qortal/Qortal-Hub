@@ -73,10 +73,12 @@ import {
 } from './router';
 import {
   hasOccupiedRoomEvidenceForJoin,
+  shouldPromoteStandbyRootAfterHeartbeatTimeout,
   shouldDeferLocalTopologyElection,
   shouldDelayPostJoinRosterElection,
 } from './groupCallJoinLifecycleDecisions';
 import { getTrustedRootForRejoinElection } from './groupCallSessionKeyPolicy';
+import { buildStandbyRootFailoverTopology } from './groupCallTopologyLifecycle';
 import AudioDecryptWorker from '../../workers/audio-decrypt.worker?worker';
 import nacl from '../../encryption/nacl-fast';
 import ed2curve from '../../encryption/ed2curve';
@@ -137,6 +139,7 @@ type HeldIncomingAudioPayload = {
 const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
+const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
 const GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS = 1_000;
 const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
@@ -291,6 +294,7 @@ export class GroupCallAudioEngineRuntime {
   private awaitingAuthoritativeKey = false;
   private keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private topologyHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  private rootFailoverTimer: ReturnType<typeof setTimeout> | null = null;
   private topologyElectionTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSpeakerRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private memberGateRefreshTimer: ReturnType<typeof setInterval> | null = null;
@@ -312,6 +316,7 @@ export class GroupCallAudioEngineRuntime {
   private shouldReplayRetainedKeysAfterNextTopology = false;
   private heldIncomingAudio: HeldIncomingAudioPayload[] = [];
   private lastAwaitingAuthoritativeKeyFailureLogAt = 0;
+  private rootHeartbeatLastSeenAt = 0;
 
   constructor() {
     this.receiveEngine = new GroupCallAudioReceiveEngine(
@@ -343,6 +348,7 @@ export class GroupCallAudioEngineRuntime {
     this.unsubscribeGroupCallEvents?.();
     this.unsubscribeGroupCallEvents = null;
     this.stopTopologyHeartbeat();
+    this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
@@ -925,6 +931,7 @@ export class GroupCallAudioEngineRuntime {
     this.lastObservedTopologyEpoch = 0;
     this.trustedRemoteRoot = '';
     this.trustedRemoteRootLastSeenAt = 0;
+    this.rootHeartbeatLastSeenAt = 0;
     this.topologyElectionDelayUntilMs = 0;
     this.memberGateGroupId =
       options?.memberGateGroupId != null &&
@@ -933,6 +940,7 @@ export class GroupCallAudioEngineRuntime {
         : null;
     this.electionDigestCache.clear();
     this.stopTopologyHeartbeat();
+    this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
@@ -1130,10 +1138,12 @@ export class GroupCallAudioEngineRuntime {
     this.lastObservedTopologyEpoch = 0;
     this.trustedRemoteRoot = '';
     this.trustedRemoteRootLastSeenAt = 0;
+    this.rootHeartbeatLastSeenAt = 0;
     this.topologyElectionDelayUntilMs = 0;
     this.seq = 0;
     this.shouldReplayRetainedKeysAfterNextTopology = false;
     this.stopTopologyHeartbeat();
+    this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
@@ -1164,6 +1174,18 @@ export class GroupCallAudioEngineRuntime {
       await this.applyTopology(topology, 'remote-event');
       return;
     }
+    if (event === 'gcall:heartbeat') {
+      const heartbeat = payload as
+        | { roomId?: string; rootForwarder?: string; lastSeen?: number | null }
+        | null
+        | undefined;
+      if (heartbeat?.roomId !== this.snapshot.roomId) return;
+      this.noteRootLiveness(
+        heartbeat?.rootForwarder,
+        heartbeat?.lastSeen ?? Date.now()
+      );
+      return;
+    }
     if (event === 'gcall:participant-joined' || event === 'gcall:participant-left') {
       const roomId = (payload as { roomId?: string } | null | undefined)?.roomId;
       if (roomId === this.snapshot.roomId) {
@@ -1172,6 +1194,7 @@ export class GroupCallAudioEngineRuntime {
           if (leavingAddress) {
             this.activeSpeakerLastSeenAt.delete(leavingAddress);
             this.refreshActiveSpeakerState();
+            await this.receiveEngine.removeSource(leavingAddress);
           }
           this.removeParticipantFromRuntimeEvent(leavingAddress);
         } else {
@@ -1202,6 +1225,9 @@ export class GroupCallAudioEngineRuntime {
         verified: keyP?.verified === true,
         keyMessageVersion: keyP?.keyMessageVersion,
       });
+      if (keyP?.verified === true) {
+        this.noteRootLiveness(keyP.fromAddress, Date.now());
+      }
       await this.handleIncomingRoomKey(keyP);
       return;
     }
@@ -1587,6 +1613,10 @@ export class GroupCallAudioEngineRuntime {
         bootstrapTopology.rootForwarder,
         bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs
       );
+      this.noteRootLiveness(
+        bootstrapTopology.rootForwarder,
+        bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs
+      );
       this.topologyElectionDelayUntilMs = 0;
       this.lastObservedTopologyEpoch = Math.max(
         this.lastObservedTopologyEpoch,
@@ -1721,6 +1751,13 @@ export class GroupCallAudioEngineRuntime {
     if (this.keyRecoveryRetryTimer) {
       clearTimeout(this.keyRecoveryRetryTimer);
       this.keyRecoveryRetryTimer = null;
+    }
+  }
+
+  private clearRootFailoverTimer(): void {
+    if (this.rootFailoverTimer) {
+      clearTimeout(this.rootFailoverTimer);
+      this.rootFailoverTimer = null;
     }
   }
 
@@ -1968,8 +2005,10 @@ export class GroupCallAudioEngineRuntime {
     const topology = this.topology;
     if (!myAddress || !topology || topology.rootForwarder !== myAddress) {
       this.stopTopologyHeartbeat();
+      this.scheduleRootFailoverWatch();
       return;
     }
+    this.clearRootFailoverTimer();
     if (this.topologyHeartbeatTimer) {
       return;
     }
@@ -1982,6 +2021,106 @@ export class GroupCallAudioEngineRuntime {
       }
       void this.broadcastTopology(current, 'heartbeat');
     }, TOPOLOGY_HEARTBEAT_MS);
+  }
+
+  private noteRootLiveness(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    const address = addressValue?.trim() ?? '';
+    const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
+    if (!address || !currentRoot || address !== currentRoot) return;
+    this.rootHeartbeatLastSeenAt =
+      seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+    this.scheduleRootFailoverWatch();
+  }
+
+  private scheduleRootFailoverWatch(): void {
+    this.clearRootFailoverTimer();
+    const topology = this.topology;
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!topology || !myAddress) return;
+    const currentRoot = topology.rootForwarder?.trim() ?? '';
+    if (!currentRoot || currentRoot === myAddress) return;
+    if ((topology.standbyForwarder?.trim() ?? '') !== myAddress) return;
+    const lastSeenAt =
+      this.rootHeartbeatLastSeenAt > 0
+        ? this.rootHeartbeatLastSeenAt
+        : typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
+          ? topology.lastSeen
+          : Date.now();
+    const delayMs = Math.max(
+      250,
+      lastSeenAt + ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS - Date.now()
+    );
+    this.rootFailoverTimer = setTimeout(() => {
+      this.rootFailoverTimer = null;
+      void this.maybePromoteStandbyAfterRootHeartbeatTimeout();
+    }, delayMs);
+  }
+
+  private async maybePromoteStandbyAfterRootHeartbeatTimeout(): Promise<void> {
+    const topology = this.topology;
+    const roomId = this.snapshot.roomId;
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!topology || !roomId || !myAddress) return;
+    const currentRoot = topology.rootForwarder?.trim() ?? '';
+    const standby = topology.standbyForwarder?.trim() ?? '';
+    if (!currentRoot || currentRoot === myAddress || standby !== myAddress) return;
+    const lastSeenAt =
+      this.rootHeartbeatLastSeenAt > 0
+        ? this.rootHeartbeatLastSeenAt
+        : typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
+          ? topology.lastSeen
+          : 0;
+    const nowMs = Date.now();
+    const heartbeatSilentMs =
+      lastSeenAt > 0 ? Math.max(0, nowMs - lastSeenAt) : ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
+    if (
+      !shouldPromoteStandbyRootAfterHeartbeatTimeout({
+        heartbeatSilentMs,
+        heartbeatTimeoutMs: ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS,
+        rootPeerRequiresReconnect: true,
+      })
+    ) {
+      this.scheduleRootFailoverWatch();
+      return;
+    }
+    const survivingAddresses = new Set<string>();
+    for (const participant of this.snapshot.participants) {
+      const address = participant.address?.trim() ?? '';
+      if (!address || address === currentRoot) continue;
+      survivingAddresses.add(address);
+    }
+    survivingAddresses.add(myAddress);
+    const sorted = await this.computeElectionOrder([...survivingAddresses], roomId);
+    const topologyEpoch =
+      Math.max(this.topology?.topologyEpoch ?? 0, this.lastObservedTopologyEpoch ?? 0) + 1;
+    const promoted = normalizeGroupCallTopology({
+      ...buildTopologyWithTrustedRoot(sorted, topologyEpoch, myAddress),
+      roomId,
+      lastSeen: nowMs,
+    });
+    const failoverTopology = normalizeGroupCallTopology(
+      buildStandbyRootFailoverTopology({
+        promotedTopology: promoted,
+        sortedAddresses: sorted,
+        deadRoot: currentRoot,
+        myAddress,
+        nowMs,
+      })
+    );
+    this.recordDiagEvent('root-heartbeat-timeout-failover', {
+      roomId,
+      deadRoot: currentRoot,
+      topologyEpoch,
+      heartbeatSilentMs,
+    });
+    this.removeParticipantFromRuntimeEvent(currentRoot);
+    const applied = await this.applyTopology(failoverTopology, 'local-election');
+    if (applied) {
+      await this.broadcastTopology(failoverTopology, 'root-heartbeat-timeout');
+    }
   }
 
   private async ensureRoomKeyAuthorityForTopology(
@@ -2092,10 +2231,12 @@ export class GroupCallAudioEngineRuntime {
         normalized.rootForwarder,
         normalized.lastSeen ?? Date.now()
       );
+      this.noteRootLiveness(normalized.rootForwarder, normalized.lastSeen ?? Date.now());
       this.topologyElectionDelayUntilMs = 0;
     } else if (source === 'local-election') {
       this.trustedRemoteRoot = '';
       this.trustedRemoteRootLastSeenAt = 0;
+      this.rootHeartbeatLastSeenAt = 0;
       this.topologyElectionDelayUntilMs = 0;
     }
     if (this.isSameTopologyStructure(current, normalized)) {
@@ -2243,6 +2384,7 @@ export class GroupCallAudioEngineRuntime {
     for (const packet of packets) {
       if (packet.sourceAddr) {
         this.upsertParticipantFromRuntimeEvent(packet.sourceAddr);
+        this.noteRootLiveness(packet.sourceAddr, now);
       }
       if (!packet.vad || !packet.sourceAddr) continue;
       this.activeSpeakerLastSeenAt.set(packet.sourceAddr, now);

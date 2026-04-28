@@ -342,6 +342,25 @@ export class GroupCallAudioReceiveEngine {
     this.emitMetricsNow();
   }
 
+  async removeSource(sourceAddr: string): Promise<void> {
+    const normalized = sourceAddr.trim();
+    if (!normalized) return;
+    const playout = this.playouts.get(normalized);
+    const output = this.outputNodeBySource.get(normalized) ?? null;
+    this.playouts.delete(normalized);
+    this.outputNodeBySource.delete(normalized);
+    this.loggedFirstPlayoutStartBySource.delete(normalized);
+    this.liveMultiSourceStateBySource.delete(normalized);
+    if (playout) {
+      await playout.stop();
+    }
+    disconnectNodeSafe(output);
+    this.updateResourceCounts();
+    this.syncAllPlayoutAdaptiveGeometry();
+    this.syncLiveMultiSourceControls();
+    this.emitMetricsNow();
+  }
+
   async dispose(): Promise<void> {
     await this.reset();
     const audioContext = this.audioContext;
