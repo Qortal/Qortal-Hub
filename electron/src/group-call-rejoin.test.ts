@@ -722,6 +722,173 @@ describe('recent room bootstrap state', () => {
     ]);
   });
 
+  it('does not revive stale cached remote topology or participants after leave without fresh off-call liveness', () => {
+    const now = Date.now();
+    const t0 = now - 10_000;
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+
+    const firstJoin = manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-root',
+      'sig',
+      'pk-root',
+      t0,
+      TEST_D32
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-peer',
+      'sig',
+      'pk-peer',
+      t0 + 100,
+      TEST_D32
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-ghost',
+      'sig',
+      'pk-ghost',
+      t0 + 200,
+      TEST_D32
+    );
+
+    manager.broadcastTopology(
+      'gcall-qortal-812',
+      {
+        fromAddress: 'Q-root',
+        topologyEpoch: 9,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-peer',
+        clusters: [
+          {
+            members: ['Q-root', 'Q-peer', 'Q-ghost'],
+            forwarder: 'Q-root',
+            standby: 'Q-peer',
+            standby2: 'Q-ghost',
+          },
+        ],
+        lastSeen: t0 + 300,
+      },
+      'sig',
+      'pk-root',
+      t0 + 300
+    );
+
+    manager.leaveRoom('gcall-qortal-812', 'Q-root', 'sig', 'pk-root', t0 + 400);
+
+    const bootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
+    expect(bootstrap).toMatchObject({
+      roomId: 'gcall-qortal-812',
+      fromRecentCache: false,
+      participants: [],
+      topologyEpoch: 0,
+      mediaSessionGeneration: 1,
+      callSessionId: '',
+    });
+    expect(bootstrap?.lastTopology).toBeUndefined();
+
+    const rejoin = manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-root',
+      'sig',
+      'pk-root',
+      now,
+      TEST_D32
+    );
+
+    expect(rejoin.callSessionId).not.toBe(firstJoin.callSessionId);
+    expect(manager.getRoomParticipants('gcall-qortal-812')).toEqual([
+      {
+        address: 'Q-root',
+        publicKey: 'pk-root',
+        reticulumDestinationHash: TEST_D32,
+      },
+    ]);
+  });
+
+  it('keeps recent remote topology when fresh spectator liveness proves the room stayed alive after leave', () => {
+    const now = Date.now();
+    const t0 = now - 10_000;
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+
+    const firstJoin = manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-root',
+      'sig',
+      'pk-root',
+      t0,
+      TEST_D32
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-peer',
+      'sig',
+      'pk-peer',
+      t0 + 100,
+      TEST_D32
+    );
+
+    manager.broadcastTopology(
+      'gcall-qortal-812',
+      {
+        fromAddress: 'Q-root',
+        topologyEpoch: 11,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-peer',
+        clusters: [
+          {
+            members: ['Q-root', 'Q-peer'],
+            forwarder: 'Q-root',
+            standby: 'Q-peer',
+            standby2: '',
+          },
+        ],
+        lastSeen: t0 + 300,
+      },
+      'sig',
+      'pk-root',
+      t0 + 300
+    );
+
+    manager.leaveRoom('gcall-qortal-812', 'Q-root', 'sig', 'pk-root', t0 + 400);
+    (manager as any).noteSpectatorReticulumLiveness('gcall-qortal-812');
+
+    const bootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
+    expect(bootstrap).toMatchObject({
+      fromRecentCache: true,
+      topologyEpoch: 11,
+      callSessionId: firstJoin.callSessionId,
+    });
+    expect(bootstrap?.participants).toEqual(
+      expect.arrayContaining([
+        {
+          address: 'Q-root',
+          publicKey: 'pk-root',
+          joinedAt: t0,
+          reticulumDestinationHash: TEST_D32,
+        },
+        {
+          address: 'Q-peer',
+          publicKey: 'pk-peer',
+          joinedAt: t0 + 100,
+          reticulumDestinationHash: TEST_D32,
+        },
+      ])
+    );
+  });
+
   it('delegates Reticulum overlay fanout to the bridge-owned fanout path', async () => {
     const fanoutGroupCallDetailed = vi.fn(
       async (messages: Record<string, unknown>[]) => {

@@ -800,6 +800,7 @@ interface RecentRoomState extends GroupRoomBootstrapState {
 
 const RECENT_ROOM_STATE_TTL_MS = 20_000;
 const RECENT_BOOTSTRAP_PARTICIPANT_ACTIVITY_TTL_MS = 45_000;
+const RECENT_ROOM_REMOTE_REJOIN_GRACE_MS = 3_500;
 
 export function isRecentRoomStateFresh(
   cachedAtMs: number,
@@ -1419,6 +1420,55 @@ export class GroupCallManager extends EventEmitter {
       return null;
     }
     return cached;
+  }
+
+  private hasFreshSpectatorReticulumLivenessSince(
+    roomId: string,
+    sinceMs: number,
+    nowMs = Date.now()
+  ): boolean {
+    const at = this.spectatorReticulumLivenessAt.get(roomId);
+    if (typeof at !== 'number') return false;
+    return at > sinceMs && nowMs - at <= GC_RETICULUM_ACTIVITY_MAX_AGE_MS;
+  }
+
+  private shouldTrustRecentRemoteState(
+    recent: RecentRoomState,
+    nowMs = Date.now()
+  ): boolean {
+    if (recent.participants.length <= 1 && !recent.lastTopology) {
+      return true;
+    }
+    if (nowMs - recent.cachedAtMs <= RECENT_ROOM_REMOTE_REJOIN_GRACE_MS) {
+      return true;
+    }
+    return this.hasFreshSpectatorReticulumLivenessSince(
+      recent.roomId,
+      recent.cachedAtMs,
+      nowMs
+    );
+  }
+
+  private getUsableRecentRoomState(
+    roomId: string,
+    nowMs = Date.now()
+  ): RecentRoomState | null {
+    const recent = this.getFreshRecentRoomState(roomId, nowMs);
+    if (!recent) return null;
+    if (this.shouldTrustRecentRemoteState(recent, nowMs)) {
+      return recent;
+    }
+    return {
+      ...recent,
+      participants: recent.participants.filter((participant) =>
+        this.localAddresses.has(participant.address)
+      ),
+      topologyEpoch: 0,
+      lastTopology: undefined,
+      callSessionId: '',
+      mediaSessionGeneration: 1,
+      fromRecentCache: false,
+    };
   }
 
   private rememberRecentRoomState(room: GroupRoom, nowMs = Date.now()): void {
@@ -3345,7 +3395,7 @@ export class GroupCallManager extends EventEmitter {
     const destNorm = reticulumDestinationHash.trim().toLowerCase();
     let room = this.rooms.get(roomId);
     if (!room) {
-      const recent = this.getFreshRecentRoomState(roomId);
+      const recent = this.getUsableRecentRoomState(roomId);
       room = {
         roomId,
         chatId,
@@ -6985,7 +7035,7 @@ export class GroupCallManager extends EventEmitter {
 
   getRoomBootstrapState(roomId: string): GroupRoomBootstrapState | null {
     const liveRoom = this.rooms.get(roomId);
-    const recent = this.getFreshRecentRoomState(roomId);
+    const recent = this.getUsableRecentRoomState(roomId);
     if (!liveRoom && !recent) return null;
     if (!liveRoom) {
       return {
