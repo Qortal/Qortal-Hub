@@ -1,7 +1,7 @@
 import moment from 'moment';
 import { TIME_WEEKS_1_IN_MILLISECONDS } from '../../constants/constants';
 
-export function isLessThanOneWeekOld(timestamp: number): boolean {
+function isLessThanOneWeekOld(timestamp: number): boolean {
   return timestamp > Date.now() - TIME_WEEKS_1_IN_MILLISECONDS;
 }
 

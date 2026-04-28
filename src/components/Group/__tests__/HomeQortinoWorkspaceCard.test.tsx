@@ -120,37 +120,4 @@ describe('HomeQortinoWorkspaceCard', () => {
     expect(screen.queryByText('boundary fallback')).not.toBeInTheDocument();
   });
 
-  it('ignores stale qortino look debug overrides from local storage', async () => {
-    localStorage.setItem(`${LS_KEY}_QADDR`, 'completed');
-    localStorage.setItem(
-      'homeQortinoLookDebug',
-      JSON.stringify({
-        antennaScale: 1.2,
-        bodyScale: 1.15,
-        faceScale: 0.9,
-      })
-    );
-
-    renderCard({
-      balance: 10,
-      name: 'b-test',
-      qortinoSettings: {
-        hotkeys: Array.from({ length: 8 }, () => null),
-        mode: 'empty',
-        musicPlaying: false,
-        musicQuery: '',
-        onboardingCelebrationSeen: true,
-        repeatMode: 'all',
-        selectedTrackId: 'midnight-relay',
-        version: 1,
-      },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText('QORTINO')).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('Choose what lives above QORTINO.')).toBeInTheDocument();
-    expect(screen.queryByText('boundary fallback')).not.toBeInTheDocument();
-  });
 });

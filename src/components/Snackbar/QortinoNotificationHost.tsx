@@ -3,7 +3,7 @@ import { Box, IconButton, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { QORTINO_NO_ANTENNA_SAVED_VARIANT } from '../Group/qortinoSavedVariants';
+import { DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS } from '../Group/qortinoLookDebug';
 import {
   DEFAULT_QORTINO_INLET_DEBUG_SETTINGS,
   type QortinoInletDebugSettings,
@@ -40,7 +40,7 @@ type NotificationPayload = {
 const DEFAULT_NOTIFICATION_DURATION_MS = 5200;
 const ERROR_NOTIFICATION_DURATION_MS = 7200;
 
-const QORTINO_INLET_LOOK = QORTINO_NO_ANTENNA_SAVED_VARIANT.lookDebug;
+const QORTINO_INLET_LOOK = DEFAULT_QORTINO_LOOK_DEBUG_SETTINGS;
 const QORTINO_INLET_BAR_START_PX = 12;
 
 type QortinoInletHeadGeometry = {

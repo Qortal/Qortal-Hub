@@ -30,12 +30,10 @@ import { GroupJoinRequests } from './GroupJoinRequests';
 import { GroupInvites } from './GroupInvites';
 import { ListOfGroupPromotions } from './ListOfGroupPromotions';
 import { HomeProfileCard } from './HomeProfileCard';
-import { GETTING_STARTED_LS_KEY } from './HomeGettingStarted';
+import { GETTING_STARTED_LS_KEY } from './gettingStartedStorage';
 import { HomeQortinoWorkspaceCard } from './HomeQortinoWorkspaceCard';
 import { HomeQuickToolsPad } from './HomeQuickToolsPad';
 import { HomeFeaturedApps } from './HomeFeaturedApps';
-import { HomeFeaturedGroups } from './HomeFeaturedGroups';
-import { HomeDeveloperTab } from './HomeDeveloperTab';
 import { accountTargetBlocks } from '../Minting/MintingStats';
 import {
   APP_BLUE_SURFACE_TEXT,
@@ -67,7 +65,6 @@ import { ProgressiveBlur } from '../ui/progressive-blur';
 import { useAuth } from '../../hooks/useAuth';
 import type { ApiKey } from '../../types/auth';
 
-type HomeTab = 'user' | 'developer';
 type ActivityTab = 'requests' | 'invites' | 'promotions';
 type HomeCustomizableCardId = 'groupActivity' | 'quitter';
 type DashboardInfoStatusTone = 'operational' | 'syncing' | 'issue';
@@ -123,9 +120,6 @@ const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
     mass: 0.74,
   },
 };
-
-const SHOW_USER_DEVELOPER_TOGGLE = false;
-const SHOW_MOST_ACTIVE_GROUPS = false;
 
 // Home dashboard desktop layout invariants:
 // - Info top aligns visually with Account Overview top.
@@ -1357,12 +1351,10 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setNodeInfos = useSetAtom(nodeInfosAtom);
   const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
-  const [activeTab, setActiveTab] = useState<HomeTab>('user');
   const [activityTab, setActivityTab] = useState<ActivityTab>('promotions');
   const [requestsCount, setRequestsCount] = useState(0);
   const [invitesCount, setInvitesCount] = useState(0);
   const [promotionsCount, setPromotionsCount] = useState(0);
-  const [showMostActiveGroups, setShowMostActiveGroups] = useState(false);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [requestsCountLoading, setRequestsCountLoading] = useState(true);
   const [invitesCountLoading, setInvitesCountLoading] = useState(true);
@@ -2342,11 +2334,9 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       window.removeEventListener('resize', startLayoutStabilizePass);
     };
   }, [
-    activeTab,
     desktopViewMode,
     isOnboardingComplete,
     isWideDashboardLayout,
-    showMostActiveGroups,
   ]);
 
   const setActivityToggleSegmentRef = useCallback(
@@ -2498,7 +2488,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   useEffect(() => {
     if (!userAddress) {
       setIsOnboardingComplete(false);
-      setShowMostActiveGroups(false);
       return;
     }
 
@@ -2506,7 +2495,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       localStorage.getItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`) ===
       'completed';
     setIsOnboardingComplete(isComplete);
-    setShowMostActiveGroups(isComplete);
   }, [userAddress]);
 
   useEffect(() => {
@@ -3223,7 +3211,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           >
                             <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
                               <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                                onGettingStartedComplete={() => { setIsOnboardingComplete(true); }}
                                 onOpenAppsPanel={handleOpenAppsPanel}
                               />
                             </ErrorBoundary>
@@ -3301,7 +3289,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                           >
                             <ErrorBoundary fallback={qortinoWorkspaceShellFallback}>
                               <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={() => { setShowMostActiveGroups(true); setIsOnboardingComplete(true); }}
+                                onGettingStartedComplete={() => { setIsOnboardingComplete(true); }}
                                 onOpenAppsPanel={handleOpenAppsPanel}
                               />
                             </ErrorBoundary>
@@ -3672,81 +3660,64 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
                 </Box>
               </Box>
 
-              {SHOW_USER_DEVELOPER_TOGGLE && (
-                <Box sx={{ alignSelf: 'center', bgcolor: theme.palette.background.paper, borderRadius: '50px', display: 'flex', gap: '4px', padding: '4px' }}>
-                  {(['user', 'developer'] as HomeTab[]).map((tab) => (
-                    <ButtonBase key={tab} onClick={() => setActiveTab(tab)} sx={{ bgcolor: activeTab === tab ? theme.palette.primary.main : 'transparent', borderRadius: '50px', color: activeTab === tab ? theme.palette.primary.contrastText : theme.palette.text.secondary, fontSize: '0.85rem', fontWeight: activeTab === tab ? 600 : 400, minWidth: '100px', px: 2, py: 1, textTransform: 'none' }}>
-                      {t(`tutorial:home.tab_${tab}`, { postProcess: 'capitalizeFirstChar' })}
-                    </ButtonBase>
-                  ))}
-                </Box>
-              )}
+              <Box
+                sx={{
+                  alignItems: 'start',
+                  display: 'grid',
+                  gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    xl: 'repeat(2, minmax(0, 1fr))',
+                  },
+                  width: '100%',
+                }}
+              >
+                <DashboardWidgetFrame
+                  actionIcon={<ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />}
+                  actionLabel={td('open_in_q_chat', 'Open in Q-Chat')}
+                  height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                  onAction={handleOpenGroupsWidget}
+                  onRefresh={handleRefreshGroupActivity}
+                  onSwap={handleSwapDashboardWidgets}
+                  order={groupActivityCardOrder}
+                  panelRef={assignGroupActivityPanelNode}
+                  refreshing={isGroupWidgetRefreshing}
+                  title={t('tutorial:home.group_activity', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                  widgetId="groups"
+                >
+                  <GroupsWidget
+                    displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                    myAddress={myAddress}
+                    onRefreshStateChange={setIsGroupWidgetRefreshing}
+                    refreshToken={groupWidgetRefreshToken}
+                  />
+                </DashboardWidgetFrame>
 
-              {activeTab === 'user' && (
-                <>
-                  {SHOW_MOST_ACTIVE_GROUPS && showMostActiveGroups && <HomeFeaturedGroups {...sharedGroupNavProps} />}
-                  <Box
-                    sx={{
-                      alignItems: 'start',
-                      display: 'grid',
-                      gap: `${HOME_DASHBOARD_VERTICAL_GAP_PX}px`,
-                      gridTemplateColumns: {
-                        xs: '1fr',
-                        xl: 'repeat(2, minmax(0, 1fr))',
-                      },
-                      width: '100%',
-                    }}
-                  >
-                    <DashboardWidgetFrame
-                      actionIcon={<ForumRoundedIcon sx={{ fontSize: '0.86rem' }} />}
-                      actionLabel={td('open_in_q_chat', 'Open in Q-Chat')}
-                      height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                      onAction={handleOpenGroupsWidget}
-                      onRefresh={handleRefreshGroupActivity}
-                      onSwap={handleSwapDashboardWidgets}
-                      order={groupActivityCardOrder}
-                      panelRef={assignGroupActivityPanelNode}
-                      refreshing={isGroupWidgetRefreshing}
-                      title={t('tutorial:home.group_activity', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                      widgetId="groups"
-                    >
-                      <GroupsWidget
-                        displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
-                        myAddress={myAddress}
-                        onRefreshStateChange={setIsGroupWidgetRefreshing}
-                        refreshToken={groupWidgetRefreshToken}
-                      />
-                    </DashboardWidgetFrame>
-
-                    <DashboardWidgetFrame
-                      actionIcon={<OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />}
-                      actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
-                      height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
-                      onAction={handleOpenEmbeddedQuitter}
-                      onRefresh={handleRefreshQuitterWidget}
-                      onSwap={handleSwapDashboardWidgets}
-                      order={quitterCardOrder}
-                      panelRef={quitterCardHeightRef}
-                      refreshing={isQuitterWidgetRefreshing}
-                      title={td('quitter_feed', 'Quitter Feed')}
-                      widgetId="quitter"
-                    >
-                      <QuitterFeedWidget
-                        batchSize={quitterWidgetLoadMoreBatchSize}
-                        displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
-                        initialBatchSize={quitterWidgetInitialBatchSize}
-                        onRefreshStateChange={setIsQuitterWidgetRefreshing}
-                        refreshToken={quitterWidgetRefreshToken}
-                        searchLimit={quitterWidgetSearchLimit}
-                      />
-                    </DashboardWidgetFrame>
-                  </Box>
-                </>
-              )}
-
-              {activeTab === 'developer' && <HomeDeveloperTab {...sharedGroupNavProps} />}
+                <DashboardWidgetFrame
+                  actionIcon={<OpenInNewRoundedIcon sx={{ fontSize: '0.86rem' }} />}
+                  actionLabel={td('open_in_q_apps', 'Open in Q-Apps')}
+                  height={HOME_DASHBOARD_WIDGET_HEIGHT_PX}
+                  onAction={handleOpenEmbeddedQuitter}
+                  onRefresh={handleRefreshQuitterWidget}
+                  onSwap={handleSwapDashboardWidgets}
+                  order={quitterCardOrder}
+                  panelRef={quitterCardHeightRef}
+                  refreshing={isQuitterWidgetRefreshing}
+                  title={td('quitter_feed', 'Quitter Feed')}
+                  widgetId="quitter"
+                >
+                  <QuitterFeedWidget
+                    batchSize={quitterWidgetLoadMoreBatchSize}
+                    displayMode={HOME_DASHBOARD_WIDGET_DISPLAY_MODE}
+                    initialBatchSize={quitterWidgetInitialBatchSize}
+                    onRefreshStateChange={setIsQuitterWidgetRefreshing}
+                    refreshToken={quitterWidgetRefreshToken}
+                    searchLimit={quitterWidgetSearchLimit}
+                  />
+                </DashboardWidgetFrame>
+              </Box>
             </Box>
             <Spacer height="120px" />
           </motion.div>

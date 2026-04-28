@@ -43,12 +43,6 @@ const toSafeString = (value: unknown) =>
 const toSafeNumber = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
 
-const getNow = () =>
-  typeof performance !== 'undefined' ? performance.now() : Date.now();
-
-const getElapsedMs = (startTime: number) =>
-  Number((getNow() - startTime).toFixed(1));
-
 const detectImageMimeType = (base64: string): string => {
   try {
     const binary = atob(base64.slice(0, 20));
@@ -322,7 +316,6 @@ const fetchQuitterDocumentPayload = async (
 
 export const fetchQuitterFeed = async ({
   blockedAuthors,
-  debugLabel,
   excludeIds = [],
   itemLimit = QUITTER_WIDGET_ITEM_LIMIT,
   offset = 0,
@@ -331,7 +324,6 @@ export const fetchQuitterFeed = async ({
 }: FetchQuitterFeedOptions = {}): Promise<QuitterFeedItem[]> => {
   const page = await fetchQuitterFeedPage({
     blockedAuthors,
-    debugLabel,
     excludeIds,
     itemLimit,
     offset,
@@ -345,14 +337,12 @@ export const fetchQuitterFeed = async ({
 export const fetchQuitterFeedPage = async ({
   allowedAuthors,
   blockedAuthors,
-  debugLabel,
   excludeIds = [],
   itemLimit = QUITTER_WIDGET_ITEM_LIMIT,
   offset = 0,
   searchLimit = QUITTER_PUBLIC_FEED_SEARCH_LIMIT,
   signal,
 }: FetchQuitterFeedOptions = {}): Promise<QuitterFeedPage> => {
-  const pageStartedAt = getNow();
   const seenIds = new Set(excludeIds);
   const normalizedAllowedAuthors =
     allowedAuthors?.map((author) => author.trim().toLowerCase()).filter(Boolean) ??
@@ -369,18 +359,6 @@ export const fetchQuitterFeedPage = async ({
     blockedAuthorsSet.has(author.trim().toLowerCase());
 
   if (allowedAuthorsSet && allowedAuthorsSet.size === 0) {
-    if (debugLabel) {
-      console.info(`[QuitterFeedWidget:${debugLabel}] mapped page`, {
-        excludeCount: excludeIds.length,
-        hasMore: false,
-        itemCount: 0,
-        itemIds: [],
-        nextOffset: offset,
-        pageDurationMs: getElapsedMs(pageStartedAt),
-        requestedInitialOffset: offset,
-      });
-    }
-
     return {
       hasMore: false,
       items: [],
@@ -406,13 +384,11 @@ export const fetchQuitterFeedPage = async ({
         Math.max(searchLimit, remaining + 4)
       )
     );
-    const searchStartedAt = getNow();
     const resources = await fetchQuitterSearchResources(
       requestLimit,
       requestedOffset,
       signal
     );
-    const searchDurationMs = getElapsedMs(searchStartedAt);
     const filteredResources = resources
       .map((resource, resourceIndex) => ({
         resource,
@@ -424,19 +400,6 @@ export const fetchQuitterFeedPage = async ({
         return allowedAuthorsSet ? allowedAuthorsSet.has(normalizedName) : true;
       });
 
-    if (debugLabel) {
-      console.info(`[QuitterFeedWidget:${debugLabel}] search response`, {
-        filteredResourceCount: filteredResources.length,
-        hasMoreBeforeFiltering: hasMore,
-        identifiers: resources.map((resource) => resource.identifier),
-        pass,
-        requestLimit,
-        requestedOffset,
-        resourceCount: resources.length,
-        searchDurationMs,
-      });
-    }
-
     const reachedSearchEnd = resources.length < requestLimit;
 
     if (resources.length === 0) {
@@ -444,7 +407,6 @@ export const fetchQuitterFeedPage = async ({
       break;
     }
 
-    const documentFetchStartedAt = getNow();
     const settled = await Promise.allSettled(
       filteredResources.map(async (resourceEntry) => {
         const resource = resourceEntry.resource;
@@ -452,11 +414,7 @@ export const fetchQuitterFeedPage = async ({
         return mapDocumentToFeedItem(resource, payload);
       })
     );
-    const documentFetchBatchDurationMs = getElapsedMs(documentFetchStartedAt);
     let consumedResourceCount = resources.length;
-    let duplicateCount = 0;
-    let skippedMalformedCount = 0;
-    let appendedCount = 0;
     let reachedItemLimit = false;
 
     for (let index = 0; index < settled.length; index += 1) {
@@ -464,18 +422,15 @@ export const fetchQuitterFeedPage = async ({
 
       if (result.status === 'fulfilled') {
         if (!result.value) {
-          skippedMalformedCount += 1;
           continue;
         }
 
         if (seenIds.has(result.value.id)) {
-          duplicateCount += 1;
           continue;
         }
 
         seenIds.add(result.value.id);
         items.push(result.value);
-        appendedCount += 1;
 
         if (items.length >= itemLimit) {
           consumedResourceCount = filteredResources[index].resourceIndex + 1;
@@ -489,8 +444,6 @@ export const fetchQuitterFeedPage = async ({
       if (!isAbortError(result.reason)) {
         console.error('Failed to load Quitter feed document', result.reason);
       }
-
-      skippedMalformedCount += 1;
     }
 
     nextOffset = requestedOffset + consumedResourceCount;
@@ -501,33 +454,6 @@ export const fetchQuitterFeedPage = async ({
       hasMore = false;
     }
 
-    if (debugLabel) {
-      console.info(`[QuitterFeedWidget:${debugLabel}] document fetch batch`, {
-        appendedCount,
-        consumedResourceCount,
-        documentFetchBatchDurationMs,
-        duplicateCount,
-        filteredResourceCount: filteredResources.length,
-        hasBufferedResources,
-        nextOffset,
-        reachedItemLimit,
-        reachedSearchEnd,
-        requestedOffset,
-        skippedMalformedCount,
-      });
-    }
-  }
-
-  if (debugLabel) {
-    console.info(`[QuitterFeedWidget:${debugLabel}] mapped page`, {
-      excludeCount: excludeIds.length,
-      hasMore,
-      itemCount: items.length,
-      itemIds: items.map((item) => item.id),
-      nextOffset,
-      pageDurationMs: getElapsedMs(pageStartedAt),
-      requestedInitialOffset: offset,
-    });
   }
 
   return {
