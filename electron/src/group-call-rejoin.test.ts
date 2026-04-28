@@ -655,6 +655,73 @@ describe('recent room bootstrap state', () => {
     );
   });
 
+  it('filters stale cached participants that lacked recent peer activity before rejoin', () => {
+    const t0 = Date.now();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-root',
+      'sig',
+      'pk-root',
+      t0,
+      TEST_D32
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-active',
+      'sig',
+      'pk-active',
+      t0 + 100,
+      TEST_D32
+    );
+    manager.joinRoom(
+      'gcall-qortal-812',
+      'chat-812',
+      'Q-ghost',
+      'sig',
+      'pk-ghost',
+      t0 + 200,
+      TEST_D32
+    );
+
+    (manager as any).noteBootstrapParticipantActivity(
+      'gcall-qortal-812',
+      'Q-root',
+      t0 + 60_000
+    );
+    (manager as any).noteBootstrapParticipantActivity(
+      'gcall-qortal-812',
+      'Q-active',
+      t0 + 60_000
+    );
+
+    manager.leaveRoom('gcall-qortal-812', 'Q-root', 'sig', 'pk-root', t0 + 60_000);
+
+    const bootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
+
+    expect(bootstrap?.fromRecentCache).toBe(true);
+    expect(bootstrap?.participants).toEqual([
+      {
+        address: 'Q-root',
+        publicKey: 'pk-root',
+        joinedAt: t0,
+        reticulumDestinationHash: TEST_D32,
+      },
+      {
+        address: 'Q-active',
+        publicKey: 'pk-active',
+        joinedAt: t0 + 100,
+        reticulumDestinationHash: TEST_D32,
+      },
+    ]);
+  });
+
   it('delegates Reticulum overlay fanout to the bridge-owned fanout path', async () => {
     const fanoutGroupCallDetailed = vi.fn(
       async (messages: Record<string, unknown>[]) => {
@@ -2977,6 +3044,34 @@ describe('Reticulum group activity hints', () => {
     expect(manager.setWatchedQortalGroupIds([812])).toEqual({
       '812': true,
     });
+  });
+
+  it('does not retain watcher-only join identity as future room membership', async () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
+    expect(manager.setWatchedQortalGroupIds([812])).toEqual({});
+
+    manager.handleIncoming({
+      type: 'GC_JOIN',
+      roomId: 'gcall-qortal-812',
+      chatId: 'chat-812',
+      fromAddress: 'Q-ghost',
+      fromPublicKey: 'pk-ghost',
+      signature: 'sig',
+      timestamp: Date.now(),
+      reticulumDestinationHash: TEST_D32,
+      hopsRemaining: 2,
+    });
+    await Promise.resolve();
+
+    expect(manager.setWatchedQortalGroupIds([812])).toEqual({
+      '812': true,
+    });
+    expect((manager as any).retainedVerifiedJoinByRoomAndAddress.size).toBe(0);
+    expect((manager as any).retainedVerifiedJoinRkByRoomAndAddress.size).toBe(0);
   });
 });
 
