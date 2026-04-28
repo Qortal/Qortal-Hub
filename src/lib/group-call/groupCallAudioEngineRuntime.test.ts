@@ -1706,6 +1706,79 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('does not self-elect early on self-only qortal rejoin when prior room evidence exists', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlate', publicKey: 'pub-late' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+      participants: [{ address: 'Qlate', publicKey: 'pub-late', joinedAt: 1 }],
+      topologyEpoch: 0,
+      callSessionId: 'csid-prior-room',
+      mediaSessionGeneration: 1,
+      updatedAtMs: Date.now(),
+      fromRecentCache: false,
+    });
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlate', publicKey: 'pub-late' },
+      myStatus: 'online',
+    });
+    const joinPromise = runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+    await vi.runAllTicks();
+    await joinPromise;
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(broadcastTopology).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+    expect(sendKeyRotate).not.toHaveBeenCalled();
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'gcall-qortal-812',
+      topologyEpoch: 3,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlate',
+      clusters: [
+        {
+          members: ['Qlate', 'Qpeer'],
+          forwarder: 'Qpeer',
+          standby: 'Qlate',
+        },
+      ],
+      lastSeen: Date.now(),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const result = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const parsed = JSON.parse(String(result.ok ? result.payload : 'null')) as {
+      liveMetricsSnapshot?: { topologyRole?: string };
+      audioSurfaceRuntimeDiagnostics?: {
+        sessionState?: { role?: string; ownsRoomKey?: boolean; selfMintedRoomKey?: boolean };
+      };
+    };
+    expect(parsed.liveMetricsSnapshot?.topologyRole).toBe('standby-forwarder');
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.role).toBe(
+      'standby-forwarder'
+    );
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.ownsRoomKey).toBe(false);
+    expect(parsed.audioSurfaceRuntimeDiagnostics?.sessionState?.selfMintedRoomKey).toBe(
+      false
+    );
+    vi.useRealTimers();
+  });
+
   it('does not restore cached local root authority on occupied-room rejoin from recent cache', async () => {
     vi.useFakeTimers();
     getRoomParticipants.mockResolvedValue([

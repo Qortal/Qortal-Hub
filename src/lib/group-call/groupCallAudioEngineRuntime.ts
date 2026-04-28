@@ -1685,7 +1685,7 @@ export class GroupCallAudioEngineRuntime {
         rosterAddresses: participantMap.keys(),
       });
       const occupiedRoomEvidence = hasOccupiedRoomEvidenceForJoin({
-        sameRoomRejoin: false,
+        sameRoomRejoin: true,
         hydratedRemoteParticipantCount: remoteParticipantCount,
         bootstrapParticipantCount: bootstrap?.participants?.length ?? 0,
         bootstrapTopologyEpoch: bootstrapTopology?.topologyEpoch ?? bootstrap?.topologyEpoch ?? 0,
@@ -1696,9 +1696,12 @@ export class GroupCallAudioEngineRuntime {
         bootstrapMediaSessionGeneration: bootstrap?.mediaSessionGeneration ?? 0,
       });
       if (roomId.startsWith('gcall-qortal-') && remoteParticipantCount === 0) {
+        const selfOnlyDelayMs = occupiedRoomEvidence
+          ? ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS
+          : GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS;
         this.topologyElectionDelayUntilMs = Math.max(
           this.topologyElectionDelayUntilMs,
-          Date.now() + GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS
+          Date.now() + selfOnlyDelayMs
         );
       } else if (
         shouldDelayPostJoinRosterElection({
