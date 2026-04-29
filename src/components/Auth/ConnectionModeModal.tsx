@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
+  Button,
   ButtonBase,
   Dialog,
   IconButton,
@@ -623,10 +624,14 @@ export function ConnectionModeModal({
             >
               Manual node setup
             </Link>
-            <ButtonBase onClick={saveMode} sx={saveSettingsButtonSx}>
-              <SaveRoundedIcon sx={{ fontSize: 18 }} />
-              Save settings
-            </ButtonBase>
+            <Button
+              onClick={saveMode}
+              startIcon={<SaveRoundedIcon sx={{ fontSize: 18 }} />}
+              sx={saveSettingsButtonSx}
+              variant="contained"
+            >
+              Save Settings
+            </Button>
           </Box>
         </Box>
       </Dialog>
@@ -919,13 +924,18 @@ const saveSettingsButtonSx = {
   borderRadius: '6px',
   color: '#f6f8fc',
   display: 'inline-flex',
-  fontSize: '0.9rem',
+  fontSize: '0.86rem',
   fontWeight: 600,
-  gap: 0.7,
+  letterSpacing: 0,
+  lineHeight: 1.75,
   minHeight: 40,
   minWidth: 174,
-  px: 2,
+  px: 2.4,
+  textTransform: 'none',
   transition: 'background 160ms ease, border-color 160ms ease, transform 160ms ease',
+  '& .MuiButton-startIcon': {
+    mr: 0.8,
+  },
   '&:hover': {
     background: 'linear-gradient(180deg, rgba(69,115,224,1), rgba(44,90,193,1))',
     borderColor: 'rgba(118,165,255,0.3)',

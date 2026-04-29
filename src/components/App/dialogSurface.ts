@@ -54,7 +54,7 @@ export const dialogActionsSx = {
 };
 
 export const getDialogSecondaryButtonSx = (theme: Theme) => ({
-  backgroundColor: alpha('#FFFFFF', 0.035),
+  backgroundColor: '#1A212C',
   border: '1px solid rgba(169,188,216,0.16)',
   borderRadius: '11px',
   color: theme.palette.text.primary,
@@ -65,7 +65,7 @@ export const getDialogSecondaryButtonSx = (theme: Theme) => ({
   px: 2.2,
   textTransform: 'none',
   '&:hover': {
-    backgroundColor: alpha('#FFFFFF', 0.055),
+    backgroundColor: '#1D2633',
     borderColor: 'rgba(169,188,216,0.24)',
   },
 });
@@ -87,7 +87,7 @@ export const getDialogPrimaryButtonSx = (theme: Theme) => ({
 });
 
 export const getDialogDangerButtonSx = () => ({
-  backgroundColor: 'rgba(176, 78, 78, 0.16)',
+  backgroundColor: '#2A1B20',
   border: '1px solid rgba(214, 112, 112, 0.18)',
   borderRadius: '11px',
   color: '#F2C1C1',
@@ -98,13 +98,13 @@ export const getDialogDangerButtonSx = () => ({
   px: 2.2,
   textTransform: 'none',
   '&:hover': {
-    backgroundColor: 'rgba(176, 78, 78, 0.22)',
+    backgroundColor: '#312026',
     borderColor: 'rgba(214, 112, 112, 0.26)',
   },
 });
 
 export const dialogInfoCardSx = {
-  backgroundColor: alpha('#FFFFFF', 0.032),
+  backgroundColor: '#1A212C',
   border: '1px solid rgba(169,188,216,0.13)',
   borderRadius: '12px',
   display: 'grid',
