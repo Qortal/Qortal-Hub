@@ -974,10 +974,8 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
         onClose={onCancel}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
-        slotProps={{
-          paper: {
-            sx: getDialogPaperSx(theme, { maxWidth: 420 }),
-          },
+        PaperProps={{
+          sx: getDialogPaperSx(theme, { maxWidth: 420 }),
         }}
       >
         <DialogTitle id="alert-dialog-title" sx={dialogTitleSx}>

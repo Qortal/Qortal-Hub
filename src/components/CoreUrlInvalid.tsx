@@ -31,10 +31,8 @@ export function CoreUrlInvalid() {
       fullWidth
       maxWidth="sm"
       aria-labelledby="core-setup-title"
-      slotProps={{
-        paper: {
-          sx: getDialogPaperSx(theme, { maxWidth: 460 }),
-        },
+      PaperProps={{
+        sx: getDialogPaperSx(theme, { maxWidth: 460 }),
       }}
     >
       <DialogTitle id="core-setup-title" sx={dialogTitleSx}>

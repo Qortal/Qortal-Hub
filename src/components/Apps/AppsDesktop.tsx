@@ -1254,10 +1254,8 @@ export const AppsDesktop = ({
         onClose={handleCloseTabDialogCancel}
         aria-labelledby="close-tab-dialog-title"
         aria-describedby="close-tab-dialog-description"
-        slotProps={{
-          paper: {
-            sx: getDialogPaperSx(theme, { maxWidth: 430 }),
-          },
+        PaperProps={{
+          sx: getDialogPaperSx(theme, { maxWidth: 430 }),
         }}
       >
         <DialogTitle id="close-tab-dialog-title" sx={dialogTitleSx}>

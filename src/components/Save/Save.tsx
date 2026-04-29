@@ -316,10 +316,8 @@ export const Save = ({
         onClose={() => setOpenDialog(false)}
         maxWidth="sm"
         fullWidth
-        slotProps={{
-          paper: {
-            sx: getDialogPaperSx(theme, { maxWidth: 540 }),
-          },
+        PaperProps={{
+          sx: getDialogPaperSx(theme, { maxWidth: 540 }),
         }}
       >
         {isUsingImportExportSettings && (

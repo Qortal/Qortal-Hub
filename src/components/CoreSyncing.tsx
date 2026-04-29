@@ -113,10 +113,8 @@ export function CoreSyncing() {
       fullWidth
       maxWidth="sm"
       aria-labelledby="core-setup-title"
-      slotProps={{
-        paper: {
-          sx: getDialogPaperSx(theme, { maxWidth: 500 }),
-        },
+      PaperProps={{
+        sx: getDialogPaperSx(theme, { maxWidth: 500 }),
       }}
     >
       {!canContinue && (
