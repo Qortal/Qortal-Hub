@@ -741,8 +741,11 @@ export const NotAuthenticated = ({
                 flexDirection: 'column',
                 gap: 1.2,
                 mt: 2.9,
+                opacity: isUnlockLeaving ? 0 : 1,
+                pointerEvents: isUnlockLeaving ? 'none' : 'auto',
                 position: 'relative',
                 textAlign: 'left',
+                transition: 'opacity 180ms cubic-bezier(0.4, 0, 0.2, 1)',
                 width: '100%',
                 zIndex: 1,
               }}

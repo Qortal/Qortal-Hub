@@ -20,7 +20,6 @@ import {
   balanceAtom,
   memberGroupsAtom,
   nodeInfosAtom,
-  paymentNotificationsAtom,
   selectedNodeInfoAtom,
   userInfoAtom,
 } from '../../atoms/global';
@@ -84,11 +83,6 @@ type WalletActivityTransaction = {
   sender?: string;
   senderAddress?: string;
   signature?: string;
-  timestamp?: number | string;
-};
-type WalletActivityPaymentNotification = {
-  data?: WalletActivityTransaction;
-  event?: string;
   timestamp?: number | string;
 };
 type WalletActivityDirection = 'incoming' | 'outgoing';
@@ -188,7 +182,6 @@ const SYSTEM_BADGE_SX = {
 } as const;
 const WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 const WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT = 50;
-const WALLET_ACTIVITY_PAYMENT_RECEIVED_EVENT = 'PAYMENT_RECEIVED';
 const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
 const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
 const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 52;
@@ -1347,7 +1340,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   const balance = useAtomValue(balanceAtom);
   const groups = useAtomValue(memberGroupsAtom);
   const nodeInfos = useAtomValue(nodeInfosAtom);
-  const paymentNotifications = useAtomValue(paymentNotificationsAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setNodeInfos = useSetAtom(nodeInfosAtom);
   const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
@@ -1746,45 +1738,6 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
       userAddress,
     ]
   );
-  const latestPaymentNotificationTransaction =
-    useMemo<WalletActivityTransaction | null>(() => {
-      if (!userAddress || !Array.isArray(paymentNotifications)) return null;
-
-      return paymentNotifications
-        .map((notification: WalletActivityPaymentNotification) => {
-          if (
-            notification?.event !== WALLET_ACTIVITY_PAYMENT_RECEIVED_EVENT ||
-            !notification?.data
-          ) {
-            return null;
-          }
-
-          const transaction = {
-            ...notification.data,
-            timestamp: notification.data.timestamp ?? notification.timestamp,
-          };
-          const timestamp = Number(transaction.timestamp);
-          const creatorAddress = getWalletActivityCreatorAddress(transaction);
-          const recipientAddress = getWalletActivityRecipientAddress(transaction);
-
-          if (
-            !Number.isFinite(timestamp) ||
-            !isWalletActivityTimestampRecent(timestamp) ||
-            (creatorAddress !== userAddress && recipientAddress !== userAddress)
-          ) {
-            return null;
-          }
-
-          return transaction;
-        })
-        .filter((transaction): transaction is WalletActivityTransaction =>
-          Boolean(transaction)
-        )
-        .sort(
-          (first, second) =>
-            Number(second.timestamp) - Number(first.timestamp)
-        )[0] ?? null;
-    }, [paymentNotifications, userAddress]);
   const loadRecentWalletActivity = useCallback(async () => {
     if (!userAddress) {
       setRecentWalletActivity(null);
@@ -1897,87 +1850,8 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
   }, [balance, loadRecentWalletActivity, userAddress]);
 
   useEffect(() => {
-    let isCancelled = false;
-
-    const updateRecentActivityFromNotifications = async () => {
-      if (!latestPaymentNotificationTransaction) return;
-
-      const notificationEntry = await buildWalletActivityEntry(
-        latestPaymentNotificationTransaction
-      );
-
-      if (isCancelled || !notificationEntry) return;
-
-      setRecentWalletActivity((currentEntry) => {
-        if (
-          currentEntry &&
-          isWalletActivityTimestampRecent(currentEntry.timestamp) &&
-          currentEntry.timestamp > notificationEntry.timestamp
-        ) {
-          return currentEntry;
-        }
-
-        return notificationEntry;
-      });
-      setIsWalletActivityLoading(false);
-    };
-
-    // The notification websocket now supplies recent PAYMENT_RECEIVED history
-    // faster than transaction search. The bell filters those entries out, but
-    // Wallet Activity can still use them as the fast path and keep search as a fallback.
-    updateRecentActivityFromNotifications();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [buildWalletActivityEntry, latestPaymentNotificationTransaction]);
-
-  useEffect(() => {
-    let isCancelled = false;
-
     loadRecentWalletActivity();
-
-    const handleRecentWalletPaymentMessage = async (event: MessageEvent) => {
-      if (!userAddress) return;
-      if (event.origin !== window.location.origin) return;
-
-      const message = event.data;
-      if (message?.action !== 'SET_PAYMENT_ANNOUNCEMENT' || !message?.payload) {
-        return;
-      }
-
-      if (getWalletActivityRecipientAddress(message.payload) !== userAddress) {
-        return;
-      }
-
-      const incomingEntry = await buildWalletActivityEntry(message.payload);
-      if (!incomingEntry) {
-        return;
-      }
-
-      if (!isCancelled) {
-        setRecentWalletActivity((currentEntry) => {
-          if (
-            currentEntry &&
-            isWalletActivityTimestampRecent(currentEntry.timestamp) &&
-            currentEntry.timestamp > incomingEntry.timestamp
-          ) {
-            return currentEntry;
-          }
-
-          return incomingEntry;
-        });
-        setIsWalletActivityLoading(false);
-      }
-    };
-
-    window.addEventListener('message', handleRecentWalletPaymentMessage);
-
-    return () => {
-      isCancelled = true;
-      window.removeEventListener('message', handleRecentWalletPaymentMessage);
-    };
-  }, [buildWalletActivityEntry, loadRecentWalletActivity, userAddress]);
+  }, [loadRecentWalletActivity]);
 
   useEffect(() => {
     setCustomizableCardsLayout((currentLayout) => {
@@ -3072,7 +2946,7 @@ export const HomeDesktop = ({ myAddress, setGroupSection, setSelectedGroup, getT
         value: balanceLabel,
       },
       {
-        label: td('node_status', 'Node Status'),
+        label: resolvedNodeTypeLabel,
         pillTone:
           resolvedNodeStatusValue === td('node_unavailable', 'Node unavailable')
             ? 'negative'

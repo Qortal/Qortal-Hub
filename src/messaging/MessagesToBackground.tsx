@@ -56,7 +56,7 @@ export const sendMessageBackground = async (
       callbackMap.delete(requestId);
       reject({
         error: 'timeout',
-        message: `Request timed out after ${timeout} ms`,
+        message: `Request timed out after ${timeout} ms (action: ${action})`,
       });
     }, timeout);
 

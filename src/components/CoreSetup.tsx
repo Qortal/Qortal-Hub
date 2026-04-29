@@ -49,10 +49,14 @@ export const CoreSetup = () => {
     useState(false);
   const inFlight = useRef(false);
   const autoStartAttemptedRef = useRef(false);
+  const backgroundNoticeDismissedRef = useRef(false);
   const localReadyDismissedRef = useRef(false);
   const switchingToLocalRef = useRef(false);
   const usingDefaultPublicNode =
     cleanUrl(selectedNode?.url || '') === cleanUrl(HTTPS_EXT_NODE_QORTAL_LINK);
+  const dismissBackgroundNotice = useCallback(() => {
+    backgroundNoticeDismissedRef.current = true;
+  }, []);
   const dismissLocalReadyNotice = useCallback(() => {
     localReadyDismissedRef.current = true;
     setShowLocalReadyNotice(false);
@@ -192,9 +196,11 @@ export const CoreSetup = () => {
     if (!window?.coreSetup || isLocal || extState !== 'authenticated') {
       setShowLocalReadyNotice(false);
       setLocalNodeRuntimeStatus(null);
+      backgroundNoticeDismissedRef.current = false;
       return;
     }
 
+    backgroundNoticeDismissedRef.current = false;
     localReadyDismissedRef.current = false;
     setShowLocalReadyNotice(false);
     setLocalNodeRuntimeStatus(null);
@@ -208,6 +214,7 @@ export const CoreSetup = () => {
       try {
         running = Boolean(await window.coreSetup.isCoreRunning());
         if (!running) {
+          backgroundNoticeDismissedRef.current = false;
           if (!canceled) {
             setLocalNodeRuntimeStatus({ running: false });
           }
@@ -475,10 +482,6 @@ export const CoreSetup = () => {
     const translatedMessage =
       runningState?.message || downloadedState?.message || '';
 
-    if (localReadyDismissedRef.current) {
-      return null;
-    }
-
     if (showLocalReadyNotice) {
       return {
         description:
@@ -503,6 +506,10 @@ export const CoreSetup = () => {
       };
     }
 
+    if (backgroundNoticeDismissedRef.current) {
+      return null;
+    }
+
     if (downloadedState?.status === 'active') {
       return {
         description: 'Downloading and installing Qortal Core.',
@@ -512,7 +519,10 @@ export const CoreSetup = () => {
       };
     }
 
-    if (runningState?.status === 'active') {
+    if (
+      runningState?.status === 'active' &&
+      localNodeRuntimeStatus?.running !== false
+    ) {
       return {
         description:
           translatedMessage === '001'
@@ -675,20 +685,22 @@ export const CoreSetup = () => {
                 </Typography>
               )}
             </Box>
-            {coreStatusNotice.ready && (
-              <ButtonBase
-                onClick={() => {
+            <ButtonBase
+              onClick={() => {
+                if (coreStatusNotice.ready) {
                   dismissLocalReadyNotice();
-                }}
-                sx={{
-                  color: theme.palette.text.secondary,
-                  p: 0.25,
-                  '&:hover': { color: theme.palette.text.primary },
-                }}
-              >
-                <CloseRoundedIcon sx={{ fontSize: 18 }} />
-              </ButtonBase>
-            )}
+                  return;
+                }
+                dismissBackgroundNotice();
+              }}
+              sx={{
+                color: theme.palette.text.secondary,
+                p: 0.25,
+                '&:hover': { color: theme.palette.text.primary },
+              }}
+            >
+              <CloseRoundedIcon sx={{ fontSize: 18 }} />
+            </ButtonBase>
           </Box>
           <Box
             sx={{

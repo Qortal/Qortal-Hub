@@ -69,6 +69,15 @@ import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 import { extractComponents } from '../Chat/MessageDisplay';
 import { QORTAL_PROTOCOL } from '../../constants/constants';
 import { QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
+import {
+  dialogActionsSx,
+  dialogContentSx,
+  dialogContentTextSx,
+  dialogTitleSx,
+  getDialogDangerButtonSx,
+  getDialogPaperSx,
+  getDialogSecondaryButtonSx,
+} from '../App/dialogSurface';
 
 const uid = new ShortUniqueId({ length: 8 });
 const MAX_OPEN_APP_TABS = 10;
@@ -894,6 +903,39 @@ export const AppsDesktop = ({
     setMode,
   ]);
 
+  useEffect(() => {
+    if (mode !== 'viewer' || isNewTabWindow || tabs.length === 0) {
+      return;
+    }
+
+    const selectedTabId = selectedTab?.tabId;
+    const selectedTabStillExists =
+      !!selectedTabId && tabs.some((tab) => tab?.tabId === selectedTabId);
+
+    if (selectedTabStillExists) {
+      return;
+    }
+
+    const fallbackTab = tabs[tabs.length - 1];
+    if (!fallbackTab) {
+      return;
+    }
+
+    setSelectedTab(fallbackTab);
+    tabsTokenRef.current += 1;
+    const tabsToken = tabsTokenRef.current;
+    window.setTimeout(() => {
+      executeEvent('setTabsToNav', {
+        data: {
+          tabs,
+          selectedTab: fallbackTab,
+          isNewTabWindow: false,
+          tabsToken,
+        },
+      });
+    }, 0);
+  }, [isNewTabWindow, mode, selectedTab, tabs]);
+
   const handleTabDragEnd = useCallback((event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -953,13 +995,14 @@ export const AppsDesktop = ({
               >
                 <Box
                   sx={{
-                    display: 'flex',
+                    display: 'inline-flex',
                     flex: '0 1 auto',
+                    flexShrink: 1,
                     gap: '2px',
                     minWidth: 0,
                     maxWidth: 'calc(100% - 34px)',
                     overflow: 'hidden',
-                    width: 'fit-content',
+                    width: 'auto',
                   }}
                 >
                   {tabs.map((tab) => (
@@ -1209,14 +1252,22 @@ export const AppsDesktop = ({
         onClose={handleCloseTabDialogCancel}
         aria-labelledby="close-tab-dialog-title"
         aria-describedby="close-tab-dialog-description"
+        slotProps={{
+          paper: {
+            sx: getDialogPaperSx(theme, { maxWidth: 430 }),
+          },
+        }}
       >
-        <DialogTitle id="close-tab-dialog-title">
+        <DialogTitle id="close-tab-dialog-title" sx={dialogTitleSx}>
           {t('question:permission.close_tab_confirmation', {
             postProcess: 'capitalizeFirstChar',
           })}
         </DialogTitle>
-        <DialogContent>
-          <DialogContentText id="close-tab-dialog-description">
+        <DialogContent sx={dialogContentSx}>
+          <DialogContentText
+            id="close-tab-dialog-description"
+            sx={dialogContentTextSx}
+          >
             {t('question:permission.close_tab_permission', {
               postProcess: 'capitalizeFirstChar',
             })}
@@ -1224,26 +1275,31 @@ export const AppsDesktop = ({
           {pendingTabToRemove?.lockMessage && (
             <DialogContentText
               sx={{
-                marginTop: 2,
-                fontWeight: 500,
-                color: theme.palette.text.primary,
+                ...dialogContentTextSx,
+                color: 'rgba(246,248,252,0.9)',
+                fontWeight: 600,
+                marginTop: 1.4,
               }}
             >
               {pendingTabToRemove.lockMessage}
             </DialogContentText>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseTabDialogCancel} color="primary">
+        <DialogActions sx={dialogActionsSx}>
+          <Button
+            onClick={handleCloseTabDialogCancel}
+            variant="outlined"
+            sx={getDialogSecondaryButtonSx(theme)}
+          >
             {t('core:action.cancel', {
               postProcess: 'capitalizeFirstChar',
             })}
           </Button>
           <Button
             onClick={handleCloseTabDialogConfirm}
-            color="error"
             variant="contained"
             autoFocus
+            sx={getDialogDangerButtonSx()}
           >
             {t('question:permission.close_tab', {
               postProcess: 'capitalizeFirstChar',

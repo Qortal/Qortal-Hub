@@ -41,6 +41,19 @@ export const CustomInput = styled(TextField)(({ theme }) => ({
       border: `0.5px solid ${theme.palette.divider}`,
     },
   },
+  '& .MuiInputAdornment-root .MuiButtonBase-root': {
+    borderRadius: 6,
+    color: 'rgba(214,221,233,0.42)',
+    minWidth: 0,
+    opacity: 0.88,
+    padding: 4,
+    transition: 'color 160ms ease, opacity 160ms ease, background-color 160ms ease',
+  },
+  '& .MuiInputAdornment-root .MuiButtonBase-root:hover': {
+    backgroundColor: 'rgba(255,255,255,0.035)',
+    color: theme.palette.text.primary,
+    opacity: 1,
+  },
   '& .MuiInput-underline:before': {
     borderBottom: 'none',
   },

@@ -31,6 +31,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useModal } from '../hooks/useModal';
 import { useSetAtom } from 'jotai';
 import { infoSnackGlobalAtom, openSnackGlobalAtom } from '../atoms/global';
+import {
+  dialogActionsSx,
+  dialogContentSx,
+  dialogContentTextSx,
+  dialogTitleSx,
+  getDialogDangerButtonSx,
+  getDialogPaperSx,
+  getDialogPrimaryButtonSx,
+} from './App/dialogSurface';
 
 export type StepStatus = 'idle' | 'active' | 'done' | 'error';
 
@@ -965,39 +974,31 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
         onClose={onCancel}
         aria-labelledby="alert-dialog-title"
         aria-describedby="alert-dialog-description"
+        slotProps={{
+          paper: {
+            sx: getDialogPaperSx(theme, { maxWidth: 420 }),
+          },
+        }}
       >
-        <DialogTitle
-          id="alert-dialog-title"
-          sx={{
-            textAlign: 'center',
-            color: theme.palette.text.primary,
-            fontWeight: 'bold',
-            opacity: 1,
-          }}
-        ></DialogTitle>
+        <DialogTitle id="alert-dialog-title" sx={dialogTitleSx}>
+          Confirm action
+        </DialogTitle>
 
-        <DialogContent>
-          <DialogContentText id="alert-dialog-description">
+        <DialogContent sx={dialogContentSx}>
+          <DialogContentText
+            id="alert-dialog-description"
+            sx={dialogContentTextSx}
+          >
             {message?.message}
           </DialogContentText>
         </DialogContent>
 
-        <DialogActions>
+        <DialogActions sx={dialogActionsSx}>
           <Button
-            sx={{
-              backgroundColor: theme.palette.other.positive,
-              color: theme.palette.text.primary,
-              fontWeight: 'bold',
-              opacity: 0.7,
-              '&:hover': {
-                backgroundColor: theme.palette.other.positive,
-                color: 'black',
-                opacity: 1,
-              },
-            }}
             variant="contained"
             onClick={onOk}
             autoFocus
+            sx={getDialogPrimaryButtonSx(theme)}
           >
             {t('core:action.accept', {
               postProcess: 'capitalizeFirstChar',
@@ -1005,19 +1006,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
           </Button>
 
           <Button
-            sx={{
-              backgroundColor: theme.palette.other.danger,
-              color: 'black',
-              fontWeight: 'bold',
-              opacity: 0.7,
-              '&:hover': {
-                backgroundColor: theme.palette.other.danger,
-                color: 'black',
-                opacity: 1,
-              },
-            }}
             variant="contained"
             onClick={onCancel}
+            sx={getDialogDangerButtonSx()}
           >
             {t('core:action.decline', {
               postProcess: 'capitalizeFirstChar',

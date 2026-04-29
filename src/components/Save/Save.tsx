@@ -35,6 +35,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useAtom, useSetAtom } from 'jotai';
 import { TIME_MINUTES_1_IN_MILLISECONDS } from '../../constants/constants.ts';
+import {
+  dialogInfoCardSx,
+  getDialogPaperSx,
+  getDialogPrimaryButtonSx,
+  getDialogSecondaryButtonSx,
+} from '../App/dialogSurface';
 
 export const handleImportClick = async () => {
   const fileInput = document.createElement('input');
@@ -310,37 +316,37 @@ export const Save = ({
         onClose={() => setOpenDialog(false)}
         maxWidth="sm"
         fullWidth
+        slotProps={{
+          paper: {
+            sx: getDialogPaperSx(theme, { maxWidth: 540 }),
+          },
+        }}
       >
         {isUsingImportExportSettings && (
           <Box
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 1,
-              padding: '15px',
+              gap: 1.4,
+              padding: '24px',
               width: '100%',
             }}
           >
-            <Box
-              sx={{
-                alignItems: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                width: '100%',
-              }}
-            >
+            <Box sx={dialogInfoCardSx}>
               <Typography
                 sx={{
-                  fontSize: '14px',
+                  color: 'rgba(246,248,252,0.96)',
+                  fontSize: '0.92rem',
+                  lineHeight: 1.55,
+                  textAlign: 'center',
                 }}
               >
                 {t('core:message.generic.settings', {
                   postProcess: 'capitalizeFirstChar',
                 })}
               </Typography>
-
-              <Spacer height="40px" />
-
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
               <Button
                 size="small"
                 onClick={() => {
@@ -353,17 +359,7 @@ export const Save = ({
                   setIsUsingImportExportSettings(false);
                 }}
                 variant="contained"
-                sx={{
-                  backgroundColor: theme.palette.other.danger,
-                  color: 'black',
-                  fontWeight: 'bold',
-                  opacity: 0.7,
-                  '&:hover': {
-                    backgroundColor: theme.palette.other.danger,
-                    color: 'black',
-                    opacity: 1,
-                  },
-                }}
+                sx={getDialogPrimaryButtonSx(theme)}
               >
                 {t('core:message.generic.qdn', {
                   postProcess: 'capitalizeFirstChar',
@@ -377,23 +373,19 @@ export const Save = ({
             sx={{
               display: 'flex',
               flexDirection: 'column',
-              gap: 1,
-              padding: '15px',
+              gap: 1.4,
+              padding: '24px',
               width: '100%',
             }}
           >
             {!myName ? (
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  width: '100%',
-                }}
-              >
+              <Box sx={dialogInfoCardSx}>
                 <Typography
                   sx={{
-                    fontSize: '14px',
+                    color: 'rgba(246,248,252,0.96)',
+                    fontSize: '0.92rem',
+                    lineHeight: 1.55,
+                    textAlign: 'center',
                   }}
                 >
                   {t('core:message.generic.register_name', {
@@ -406,104 +398,105 @@ export const Save = ({
                 {hasChanged && (
                   <Box
                     sx={{
-                      width: '100%',
                       display: 'flex',
                       flexDirection: 'column',
-                      alignItems: 'center',
+                      gap: 1.25,
+                      width: '100%',
                     }}
                   >
-                    <Typography
+                    <Box sx={dialogInfoCardSx}>
+                      <Typography
+                        sx={{
+                          color: 'rgba(246,248,252,0.96)',
+                          fontSize: '0.92rem',
+                          lineHeight: 1.55,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {t('core:message.generic.unsaved_changes', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                    </Box>
+                    <Box
                       sx={{
-                        fontSize: '14px',
+                        display: 'flex',
+                        justifyContent: 'center',
                       }}
                     >
-                      {t('core:message.generic.unsaved_changes', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </Typography>
-
-                    <Spacer height="10px" />
-
-                    <LoadingButton
-                      sx={{
-                        backgroundColor: theme.palette.other.positive,
-                        color: 'black',
-                        opacity: 0.7,
-                        fontWeight: 'bold',
-                        '&:hover': {
-                          backgroundColor: theme.palette.other.positive,
-                          color: 'black',
-                          opacity: 1,
-                        },
-                      }}
-                      size="small"
-                      loading={isLoading}
-                      onClick={saveToQdn}
-                      variant="contained"
-                    >
-                      {t('core:message.generic.save_qdn', {
-                        postProcess: 'capitalizeFirstChar',
-                      })}
-                    </LoadingButton>
-                    <Spacer height="20px" />
+                      <LoadingButton
+                        size="small"
+                        loading={isLoading}
+                        onClick={saveToQdn}
+                        variant="contained"
+                        sx={getDialogPrimaryButtonSx(theme)}
+                      >
+                        {t('core:message.generic.save_qdn', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </LoadingButton>
+                    </Box>
                     {!isNaN(settingsQdnLastUpdated) &&
                       settingsQdnLastUpdated > 0 && (
                         <>
-                          <Typography
-                            sx={{
-                              fontSize: '14px',
-                            }}
-                          >
-                            {t('core:message.question.reset_qdn', {
-                              postProcess: 'capitalizeFirstChar',
-                            })}
-                          </Typography>
-                          <Spacer height="10px" />
-                          <LoadingButton
-                            size="small"
-                            loading={isLoading}
-                            onClick={revertChanges}
-                            variant="contained"
-                            sx={{
-                              backgroundColor: theme.palette.other.danger,
-                              color: 'black',
-                              fontWeight: 'bold',
-                              opacity: 0.7,
-                              '&:hover': {
-                                backgroundColor: theme.palette.other.danger,
-                                color: 'black',
-                                opacity: 1,
-                              },
-                            }}
-                          >
-                            {t('core:message.generic.revert_qdn', {
-                              postProcess: 'capitalizeFirstChar',
-                            })}
-                          </LoadingButton>
+                          <Box sx={dialogInfoCardSx}>
+                            <Typography
+                              sx={{
+                                color: 'rgba(214,221,233,0.78)',
+                                fontSize: '0.88rem',
+                                lineHeight: 1.55,
+                                textAlign: 'center',
+                              }}
+                            >
+                              {t('core:message.question.reset_qdn', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                            <LoadingButton
+                              size="small"
+                              loading={isLoading}
+                              onClick={revertChanges}
+                              variant="outlined"
+                              sx={getDialogSecondaryButtonSx(theme)}
+                            >
+                              {t('core:message.generic.revert_qdn', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                            </LoadingButton>
+                          </Box>
                         </>
                       )}
                     {!isNaN(settingsQdnLastUpdated) &&
                       settingsQdnLastUpdated === 0 && (
                         <>
-                          <Typography
-                            sx={{
-                              fontSize: '14px',
-                            }}
-                          >
-                            {t('core:message.question.reset_pinned', {
-                              postProcess: 'capitalizeFirstChar',
-                            })}
-                          </Typography>
-                          <Spacer height="10px" />
-                          <LoadingButton
-                            loading={isLoading}
-                            onClick={revertChanges}
-                            variant="contained"
-                          >
-                            {t('core:message.generic.revert_default', {
-                              postProcess: 'capitalizeFirstChar',
-                            })}
-                          </LoadingButton>
+                          <Box sx={dialogInfoCardSx}>
+                            <Typography
+                              sx={{
+                                color: 'rgba(214,221,233,0.78)',
+                                fontSize: '0.88rem',
+                                lineHeight: 1.55,
+                                textAlign: 'center',
+                              }}
+                            >
+                              {t('core:message.question.reset_pinned', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                            <LoadingButton
+                              loading={isLoading}
+                              onClick={revertChanges}
+                              variant="outlined"
+                              sx={getDialogSecondaryButtonSx(theme)}
+                            >
+                              {t('core:message.generic.revert_default', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                            </LoadingButton>
+                          </Box>
                         </>
                       )}
                   </Box>
@@ -513,57 +506,49 @@ export const Save = ({
                   isUsingImportExportSettings !== true && (
                     <Box
                       sx={{
-                        width: '100%',
                         display: 'flex',
                         flexDirection: 'column',
-                        alignItems: 'center',
+                        gap: 1.25,
+                        width: '100%',
                       }}
                     >
-                      <Typography
-                        sx={{
-                          fontSize: '14px',
-                        }}
-                      >
-                        {t('core:message.question.overwrite_changes', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Typography>
-                      <Spacer height="10px" />
-                      <LoadingButton
-                        size="small"
-                        loading={isLoading}
-                        onClick={saveToQdn}
-                        variant="contained"
-                        sx={{
-                          backgroundColor: theme.palette.other.danger,
-                          color: 'black',
-                          fontWeight: 'bold',
-                          opacity: 0.7,
-                          '&:hover': {
-                            backgroundColor: theme.palette.other.danger,
-                            color: 'black',
-                            opacity: 1,
-                          },
-                        }}
-                      >
-                        {t('core:message.generic.overwrite_qdn', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </LoadingButton>
+                      <Box sx={dialogInfoCardSx}>
+                        <Typography
+                          sx={{
+                            color: 'rgba(246,248,252,0.96)',
+                            fontSize: '0.92rem',
+                            lineHeight: 1.55,
+                            textAlign: 'center',
+                          }}
+                        >
+                          {t('core:message.question.overwrite_changes', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                      </Box>
+                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        <LoadingButton
+                          size="small"
+                          loading={isLoading}
+                          onClick={saveToQdn}
+                          variant="contained"
+                          sx={getDialogPrimaryButtonSx(theme)}
+                        >
+                          {t('core:message.generic.overwrite_qdn', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </LoadingButton>
+                      </Box>
                     </Box>
                   )}
                 {!hasChanged && (
-                  <Box
-                    sx={{
-                      width: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                    }}
-                  >
+                  <Box sx={dialogInfoCardSx}>
                     <Typography
                       sx={{
-                        fontSize: '14px',
+                        color: 'rgba(246,248,252,0.96)',
+                        fontSize: '0.92rem',
+                        lineHeight: 1.55,
+                        textAlign: 'center',
                       }}
                     >
                       {t('core:message.generic.no_pinned_changes', {
@@ -578,81 +563,77 @@ export const Save = ({
         )}
         <Box
           sx={{
-            padding: '15px',
+            borderTop: '1px solid rgba(169,188,216,0.1)',
             display: 'flex',
-            flexDirection: 'column',
-            gap: 1,
+            justifyContent: 'flex-end',
+            gap: 1.1,
+            padding: '16px 24px 20px',
             width: '100%',
           }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              gap: '10px',
-              justifyContent: 'flex-end',
-              width: '100%',
-            }}
-          >
-            <ButtonBase
-              onClick={async () => {
-                try {
-                  const fileContent = await handleImportClick();
-                  const decryptedData = await decryptData({
-                    encryptedData: fileContent,
-                  });
-                  const decryptToUnit8ArraySubject =
-                    base64ToUint8Array(decryptedData);
-                  const responseData = uint8ArrayToObject(
-                    decryptToUnit8ArraySubject
+          <Button
+            onClick={async () => {
+              try {
+                const fileContent = await handleImportClick();
+                const decryptedData = await decryptData({
+                  encryptedData: fileContent,
+                });
+                const decryptToUnit8ArraySubject =
+                  base64ToUint8Array(decryptedData);
+                const responseData = uint8ArrayToObject(
+                  decryptToUnit8ArraySubject
+                );
+                if (Array.isArray(responseData)) {
+                  saveToLocalStorage(
+                    'ext_saved_settings_import_export',
+                    'sortablePinnedApps',
+                    responseData,
+                    {
+                      isUsingImportExport: true,
+                    }
                   );
-                  if (Array.isArray(responseData)) {
-                    saveToLocalStorage(
-                      'ext_saved_settings_import_export',
-                      'sortablePinnedApps',
-                      responseData,
-                      {
-                        isUsingImportExport: true,
-                      }
-                    );
-                    setPinnedApps(responseData);
-                    setOldPinnedApps(responseData);
-                    setIsUsingImportExportSettings(true);
-                  }
-                } catch (error) {
-                  console.log('error', error);
+                  setPinnedApps(responseData);
+                  setOldPinnedApps(responseData);
+                  setIsUsingImportExportSettings(true);
                 }
-              }}
-            >
-              {t('core:action.import', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </ButtonBase>
+              } catch (error) {
+                console.log('error', error);
+              }
+            }}
+            variant="outlined"
+            sx={getDialogSecondaryButtonSx(theme)}
+          >
+            {t('core:action.import', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
 
-            <ButtonBase
-              onClick={async () => {
-                try {
-                  const data64 = await objectToBase64(pinnedApps);
+          <Button
+            onClick={async () => {
+              try {
+                const data64 = await objectToBase64(pinnedApps);
 
-                  const encryptedData = await encryptData({
-                    data64,
-                  });
-                  const blob = new Blob([encryptedData], {
-                    type: 'text/plain',
-                  });
+                const encryptedData = await encryptData({
+                  data64,
+                });
+                const blob = new Blob([encryptedData], {
+                  type: 'text/plain',
+                });
 
-                  const timestamp = new Date().toISOString().replace(/:/g, '-'); // Safe timestamp for filenames
-                  const filename = `qortal-new-ui-backup-settings-${timestamp}.txt`;
-                  await saveFileToDiskGeneric(blob, filename);
-                } catch (error) {
-                  console.log('error', error);
-                }
-              }}
-            >
-              {t('core:action.export', {
-                postProcess: 'capitalizeFirstChar',
-              })}
-            </ButtonBase>
-          </Box>
+                const timestamp = new Date().toISOString().replace(/:/g, '-');
+                const filename = `qortal-new-ui-backup-settings-${timestamp}.txt`;
+                await saveFileToDiskGeneric(blob, filename);
+              } catch (error) {
+                console.log('error', error);
+              }
+            }}
+            variant="outlined"
+            sx={getDialogSecondaryButtonSx(theme)}
+          >
+            {t('core:action.export', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+          </Button>
         </Box>
       </Dialog>
       <CustomizedSnackbars

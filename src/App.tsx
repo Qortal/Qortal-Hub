@@ -197,6 +197,36 @@ const formatRuntimeFaultMessage = (
   return fallbackMessage;
 };
 
+const isIgnorableRuntimeFault = (value: unknown): boolean => {
+  const extractMessage = (): string => {
+    if (typeof value === 'string') return value;
+    if (value instanceof Error) return value.message || '';
+    if (
+      value &&
+      typeof value === 'object' &&
+      'message' in value &&
+      typeof (value as { message?: unknown }).message === 'string'
+    ) {
+      return (value as { message: string }).message;
+    }
+    return '';
+  };
+
+  const message = extractMessage().trim();
+  const errorCode =
+    value &&
+    typeof value === 'object' &&
+    'error' in value &&
+    typeof (value as { error?: unknown }).error === 'string'
+      ? (value as { error: string }).error
+      : '';
+
+  return (
+    errorCode === 'timeout' &&
+    /^Request timed out after \d+ ms\b/i.test(message)
+  );
+};
+
 function App() {
   type SendQortOriginRect = {
     left: number;
@@ -395,6 +425,14 @@ function App() {
 
   useEffect(() => {
     const handleWindowError = (event: ErrorEvent) => {
+      if (isIgnorableRuntimeFault(event.error ?? event.message)) {
+        console.warn(
+          'Ignoring non-fatal runtime timeout',
+          event.error || event.message,
+          event
+        );
+        return;
+      }
       console.error(
         'Global runtime error',
         event.error || event.message,
@@ -411,6 +449,10 @@ function App() {
 
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
+      if (isIgnorableRuntimeFault(reason)) {
+        console.warn('Ignoring non-fatal runtime timeout', reason, event);
+        return;
+      }
       console.error('Unhandled promise rejection', reason, event);
       setGlobalRuntimeFault({
         message: formatRuntimeFaultMessage(

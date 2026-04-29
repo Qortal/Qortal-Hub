@@ -1,7 +1,6 @@
 import { Box, IconButton, Tooltip } from '@mui/material';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import LanguageSelector from '../Language/LanguageSelector';
-import ThemeSelector from '../Theme/ThemeSelector';
 
 type NotAuthenticatedFooterProps = {
   showCoreSetup: boolean;
@@ -39,9 +38,6 @@ export function NotAuthenticatedFooter({
       )}
       <Box>
         <LanguageSelector />
-      </Box>
-      <Box>
-        <ThemeSelector />
       </Box>
     </Box>
   );

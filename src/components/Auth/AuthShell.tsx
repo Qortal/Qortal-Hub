@@ -2,8 +2,10 @@ import { ReactNode } from 'react';
 import {
   Box,
   ButtonBase,
+  SxProps,
   TextField,
   TextFieldProps,
+  Theme,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -24,6 +26,7 @@ type AuthButtonProps = {
   fullWidth?: boolean;
   type?: 'button' | 'submit';
   prominence?: 'normal' | 'subtle';
+  sx?: SxProps<Theme>;
 };
 
 type AuthScreenProps = {
@@ -190,6 +193,7 @@ export function AuthButton({
   fullWidth = true,
   type = 'button',
   prominence = 'normal',
+  sx,
 }: AuthButtonProps) {
   const isSubtlePrimary = primary && prominence === 'subtle';
 
@@ -198,7 +202,8 @@ export function AuthButton({
       type={type}
       disabled={disabled}
       onClick={onClick}
-      sx={{
+      sx={[
+        {
         alignItems: 'center',
         background: primary
           ? isSubtlePrimary
@@ -248,7 +253,9 @@ export function AuthButton({
                   : 'rgba(118,165,255,0.28)'
                 : 'rgba(255,255,255,0.12)',
             },
-      }}
+      },
+      sx,
+      ]}
     >
       {children}
     </ButtonBase>

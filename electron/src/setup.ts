@@ -14,6 +14,7 @@ import {
   nativeImage,
   Tray,
   session,
+  type Session as ElectronSession,
   ipcMain,
   dialog,
 } from 'electron';
@@ -159,6 +160,28 @@ export class ElectronCapacitorApp {
   // Helper function to load in the app.
   private async loadMainWindow(thisRef: any) {
     await thisRef.loadWebApp(thisRef.MainWindow);
+  }
+
+  private async clearDevWebCache() {
+    if (!electronIsDev || !this.MainWindow) return;
+
+    try {
+      const activeSession = this.MainWindow.webContents.session;
+      const clearSession = async (targetSession: ElectronSession) => {
+        await targetSession.clearCache();
+        await targetSession.clearStorageData();
+      };
+      await clearSession(session.defaultSession);
+      if (activeSession !== session.defaultSession) {
+        await clearSession(activeSession);
+      }
+
+      loggerLog(
+        `Cleared Electron dev session caches for userData path: ${app.getPath('userData')}`
+      );
+    } catch (error) {
+      loggerError('Failed to clear Electron dev web cache:', error);
+    }
   }
 
   // Expose the mainWindow ref for use outside of the class.
@@ -317,6 +340,8 @@ export class ElectronCapacitorApp {
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(this.AppMenuBarMenuTemplate)
     );
+
+    await this.clearDevWebCache();
 
     // If the splashscreen is enabled, show it first while the main window loads then switch it out for the main window, or just load the main window from the start.
     if (this.CapacitorFileConfig.electron?.splashScreenEnabled) {
