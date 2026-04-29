@@ -1,6 +1,20 @@
-import { CSSProperties, useEffect, useEffectEvent, useRef, useState } from 'react';
+import {
+  CSSProperties,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from 'react';
 import { alpha } from '@mui/material/styles';
-import { Avatar, Box, Button, ButtonBase, Tooltip, Typography, useTheme } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  Button,
+  ButtonBase,
+  Tooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import { useTranslation } from 'react-i18next';
@@ -25,25 +39,26 @@ export const FEATURED_INITIAL_PREVIEW_DURATION_MS = 3500;
 export const FEATURED_INTRO_TOTAL_DURATION_MS =
   FEATURED_PREVIEW_EXPAND_DELAY_MS + FEATURED_INITIAL_PREVIEW_DURATION_MS;
 const FEATURED_STRIP_HOVER_DURATION_MS = 190;
-const FEATURED_INITIAL_PREVIEW_SESSION_KEY = 'dashboard-featured-subwire-preview-seen';
+const FEATURED_INITIAL_PREVIEW_SESSION_KEY =
+  'dashboard-featured-subwire-preview-seen';
 const FEATURED_CALM_MODE_STORAGE_KEY = 'dashboard-featured-apps-calm-mode';
 const FEATURED_TEASER_FADE_DURATION_MS = 300;
 const SUBWIRE_APP_NAME = 'SubWire';
 const Q_TUBE_APP_NAME = 'Q-Tube';
-const SUBWIRE_PREVIEW_VIDEO_SRC = '/subwire-preview.mp4';
-const Q_TUBE_PREVIEW_VIDEO_SRC = '/q-tube-preview.mp4';
+const SUBWIRE_PREVIEW_VIDEO_SRC = '/subwire-preview.webm';
+const Q_TUBE_PREVIEW_VIDEO_SRC = '/q-tube-preview.webm';
 const FEATURED_TILE_VIDEO_SRC = {
   [Q_TUBE_APP_NAME]: Q_TUBE_PREVIEW_VIDEO_SRC,
   [SUBWIRE_APP_NAME]: SUBWIRE_PREVIEW_VIDEO_SRC,
 } as const;
-const FEATURED_STRIP_HOVER_TRANSITION =
-  `${FEATURED_STRIP_HOVER_DURATION_MS}ms ease`;
+const FEATURED_STRIP_HOVER_TRANSITION = `${FEATURED_STRIP_HOVER_DURATION_MS}ms ease`;
 const FEATURED_PREVIEW_CONFIG = {
   [Q_TUBE_APP_NAME]: {
     accent: '#78AFFF',
     align: 'left',
     eyebrow: 'Always on',
-    subtitle: 'Network-hosted video drops, weird clips, and creator rabbit holes.',
+    subtitle:
+      'Network-hosted video drops, weird clips, and creator rabbit holes.',
     title: Q_TUBE_APP_NAME,
     videoSrc: Q_TUBE_PREVIEW_VIDEO_SRC,
     videoPosition: 'center center',
@@ -83,9 +98,7 @@ const openAppsLibrary = () => {
   executeEvent('open-apps-mode', {});
 };
 
-export const HomeFeaturedApps = ({
-  panelBoxRef = undefined,
-}) => {
+export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
   const theme = useTheme();
   const { t } = useTranslation(['group']);
   const td = (key: string, defaultValue: string) =>
@@ -103,15 +116,26 @@ export const HomeFeaturedApps = ({
       panelBoxRef.current = node;
     }
   };
-  const previewExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const previewCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialPreviewStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [expandedPreviewApp, setExpandedPreviewApp] = useState<PreviewAppName | null>(null);
+  const previewExpandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const previewCollapseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const initialPreviewStartTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const initialPreviewEndTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
+  const [expandedPreviewApp, setExpandedPreviewApp] =
+    useState<PreviewAppName | null>(null);
   const [autoPreviewActive, setAutoPreviewActive] = useState(false);
   const [isCalmMode, setIsCalmMode] = useState(() => {
     try {
-      return window.localStorage.getItem(FEATURED_CALM_MODE_STORAGE_KEY) === '1';
+      return (
+        window.localStorage.getItem(FEATURED_CALM_MODE_STORAGE_KEY) === '1'
+      );
     } catch {
       return false;
     }
@@ -195,8 +219,10 @@ export const HomeFeaturedApps = ({
       setAutoPreviewActive(false);
       setExpandedPreviewApp(null);
       return () => {
-        if (previewExpandTimerRef.current) clearTimeout(previewExpandTimerRef.current);
-        if (previewCollapseTimerRef.current) clearTimeout(previewCollapseTimerRef.current);
+        if (previewExpandTimerRef.current)
+          clearTimeout(previewExpandTimerRef.current);
+        if (previewCollapseTimerRef.current)
+          clearTimeout(previewCollapseTimerRef.current);
         clearInitialPreviewTimers();
       };
     }
@@ -205,7 +231,8 @@ export const HomeFeaturedApps = ({
 
     try {
       shouldRunInitialPreview =
-        window.sessionStorage.getItem(FEATURED_INITIAL_PREVIEW_SESSION_KEY) !== '1';
+        window.sessionStorage.getItem(FEATURED_INITIAL_PREVIEW_SESSION_KEY) !==
+        '1';
     } catch {
       shouldRunInitialPreview = true;
     }
@@ -213,8 +240,10 @@ export const HomeFeaturedApps = ({
     if (!shouldRunInitialPreview) {
       setAutoPreviewActive(false);
       return () => {
-        if (previewExpandTimerRef.current) clearTimeout(previewExpandTimerRef.current);
-        if (previewCollapseTimerRef.current) clearTimeout(previewCollapseTimerRef.current);
+        if (previewExpandTimerRef.current)
+          clearTimeout(previewExpandTimerRef.current);
+        if (previewCollapseTimerRef.current)
+          clearTimeout(previewCollapseTimerRef.current);
         clearInitialPreviewTimers();
       };
     }
@@ -235,12 +264,16 @@ export const HomeFeaturedApps = ({
     initialPreviewEndTimerRef.current = setTimeout(() => {
       initialPreviewEndTimerRef.current = null;
       setAutoPreviewActive(false);
-      setExpandedPreviewApp((current) => (current === SUBWIRE_APP_NAME ? null : current));
+      setExpandedPreviewApp((current) =>
+        current === SUBWIRE_APP_NAME ? null : current
+      );
     }, FEATURED_INTRO_TOTAL_DURATION_MS);
 
     return () => {
-      if (previewExpandTimerRef.current) clearTimeout(previewExpandTimerRef.current);
-      if (previewCollapseTimerRef.current) clearTimeout(previewCollapseTimerRef.current);
+      if (previewExpandTimerRef.current)
+        clearTimeout(previewExpandTimerRef.current);
+      if (previewCollapseTimerRef.current)
+        clearTimeout(previewCollapseTimerRef.current);
       clearInitialPreviewTimers();
     };
   }, [clearInitialPreviewTimers, isCalmMode]);
@@ -283,7 +316,8 @@ export const HomeFeaturedApps = ({
     if (autoPreviewActive) {
       stopInitialPreview();
     }
-    if (expandedPreviewApp === appName && !previewExpandTimerRef.current) return;
+    if (expandedPreviewApp === appName && !previewExpandTimerRef.current)
+      return;
     if (previewCollapseTimerRef.current) {
       clearTimeout(previewCollapseTimerRef.current);
       previewCollapseTimerRef.current = null;
@@ -350,7 +384,10 @@ export const HomeFeaturedApps = ({
             sx={{
               alignItems: 'center',
               borderRadius: '9px',
-              color: alpha(theme.palette.text.secondary, isCalmMode ? 0.9 : 0.68),
+              color: alpha(
+                theme.palette.text.secondary,
+                isCalmMode ? 0.9 : 0.68
+              ),
               display: 'inline-flex',
               height: 30,
               justifyContent: 'center',
@@ -498,7 +535,9 @@ export const HomeFeaturedApps = ({
               appName={expandedPreviewApp}
               theme={theme}
               visible={!!expandedPreviewApp}
-              teaserMode={autoPreviewActive && expandedPreviewApp === SUBWIRE_APP_NAME}
+              teaserMode={
+                autoPreviewActive && expandedPreviewApp === SUBWIRE_APP_NAME
+              }
               onMouseEnter={() => {
                 clearPirateTimers();
               }}
@@ -659,8 +698,7 @@ export const HomeFeaturedApps = ({
                   fontWeight: 700,
                   lineHeight: 1,
                   opacity: theme.palette.mode === 'dark' ? 0.94 : 1,
-                  transition:
-                    `color ${FEATURED_STRIP_HOVER_TRANSITION}, text-shadow ${FEATURED_STRIP_HOVER_TRANSITION}, opacity ${FEATURED_STRIP_HOVER_TRANSITION}`,
+                  transition: `color ${FEATURED_STRIP_HOVER_TRANSITION}, text-shadow ${FEATURED_STRIP_HOVER_TRANSITION}, opacity ${FEATURED_STRIP_HOVER_TRANSITION}`,
                 }}
               >
                 {td('explore_all_q_apps', 'Explore All Q-Apps')}
@@ -720,11 +758,14 @@ const AppTile = ({
   const isWideLeftTile = appName === Q_TUBE_APP_NAME;
   const isWideRightTile = appName === SUBWIRE_APP_NAME;
   const isWideTile = isWideLeftTile || isWideRightTile;
-  const tileVideoSrc = appName in FEATURED_TILE_VIDEO_SRC
-    ? FEATURED_TILE_VIDEO_SRC[appName as keyof typeof FEATURED_TILE_VIDEO_SRC]
-    : null;
-  const fadeOutForPreview = !calmMode && !!expandedPreviewApp && expandedPreviewApp !== appName;
-  const hideBasePreviewTile = !calmMode && !!expandedPreviewApp && expandedPreviewApp === appName;
+  const tileVideoSrc =
+    appName in FEATURED_TILE_VIDEO_SRC
+      ? FEATURED_TILE_VIDEO_SRC[appName as keyof typeof FEATURED_TILE_VIDEO_SRC]
+      : null;
+  const fadeOutForPreview =
+    !calmMode && !!expandedPreviewApp && expandedPreviewApp !== appName;
+  const hideBasePreviewTile =
+    !calmMode && !!expandedPreviewApp && expandedPreviewApp === appName;
   const allowTileHover = !expandedPreviewApp && !calmMode;
   const hiddenTileStyles = {
     opacity: fadeOutForPreview ? 0 : hideBasePreviewTile ? 0 : 1,
@@ -792,9 +833,15 @@ const AppTile = ({
           ? () => onPreviewExpandStart(appName as PreviewAppName)
           : undefined
       }
-      onMouseLeave={isPreviewableTile && !calmMode ? onPreviewExpandEnd : undefined}
+      onMouseLeave={
+        isPreviewableTile && !calmMode ? onPreviewExpandEnd : undefined
+      }
       sx={{
-        alignItems: isWideLeftTile ? 'flex-start' : isWideRightTile ? 'flex-end' : 'center',
+        alignItems: isWideLeftTile
+          ? 'flex-start'
+          : isWideRightTile
+            ? 'flex-end'
+            : 'center',
         bgcolor:
           theme.palette.mode === 'dark'
             ? '#181a20'
@@ -1089,11 +1136,7 @@ const AppTile = ({
       glowRadius={40}
       glowIntensity={0.5}
       coneSpread={25}
-      colors={[
-        '#c084fc',
-        '#f472b6',
-        '#38bdf8',
-      ]}
+      colors={['#c084fc', '#f472b6', '#38bdf8']}
       style={
         {
           '--card-border': 'transparent',
@@ -1286,7 +1329,9 @@ const FeaturedExpandedPreview = ({
                   ? 'rgba(16,18,24,0.34)'
                   : 'rgba(252,248,241,0.34)',
               border: `1px solid ${alpha(
-                theme.palette.mode === 'dark' ? '#ffffff' : theme.palette.text.primary,
+                theme.palette.mode === 'dark'
+                  ? '#ffffff'
+                  : theme.palette.text.primary,
                 0.08
               )}`,
               borderRadius: '999px',
