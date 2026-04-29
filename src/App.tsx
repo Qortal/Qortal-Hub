@@ -1413,7 +1413,7 @@ function App() {
         {extState === 'authenticated' && isMainWindow && (
           <Suspense fallback={<Loader />}>
             <ErrorBoundary
-              fallback={
+              fallback={({ error, componentStack }) => (
                 <Box
                   sx={{
                     alignItems: 'flex-start',
@@ -1449,8 +1449,38 @@ function App() {
                     The authenticated shell crashed during render. The latest
                     safe marker is {HUB_UI_BUILD_VERSION}.
                   </Typography>
+                  {error?.message ? (
+                    <Typography
+                      sx={{
+                        color: 'rgba(246,248,252,0.9)',
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace',
+                        fontSize: '0.78rem',
+                        lineHeight: 1.5,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {error.message}
+                    </Typography>
+                  ) : null}
+                  {componentStack ? (
+                    <Typography
+                      sx={{
+                        color: 'rgba(214,221,233,0.55)',
+                        fontFamily:
+                          'ui-monospace, SFMono-Regular, SF Mono, Menlo, monospace',
+                        fontSize: '0.7rem',
+                        lineHeight: 1.45,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {componentStack.trim()}
+                    </Typography>
+                  ) : null}
                 </Box>
-              }
+              )}
             >
               <Box
                 sx={{

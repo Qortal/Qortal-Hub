@@ -54,6 +54,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -143,6 +144,7 @@ export const AppsDesktop = ({
   setMode,
   show,
 }: AppsDesktopProps) => {
+  const theme = useTheme();
   const navigationController = useAtomValue(navigationControllerAtom);
   const userInfo = useAtomValue(userInfoAtom);
   const publishEditTarget = useAtomValue(publishEditTargetAtom);
