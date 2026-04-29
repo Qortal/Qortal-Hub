@@ -8,7 +8,6 @@ import { app, MenuItem, dialog, session } from 'electron';
 import electronIsDev from 'electron-is-dev';
 import unhandled from 'electron-unhandled';
 import { autoUpdater } from 'electron-updater';
-import fs from 'fs';
 import path from 'path';
 import {
   installCertificateVerification,
@@ -142,9 +141,7 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
     if (!(await isPortTaken(port))) {
       // First instance — use default Electron behavior
       if (i === 0) {
-        loggerLog(
-          `🟢 Using default userData path: ${app.getPath('userData')}`
-        );
+        loggerLog(`🟢 Using default userData path: ${app.getPath('userData')}`);
       } else {
         const instanceName = `qortal-instance-${i + 1}`;
         const userDataPath = path.join(app.getPath('appData'), instanceName);
@@ -162,42 +159,9 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
   app.quit();
 }
 
-function clearDevUserDataCaches() {
-  if (!electronIsDev) return;
-
-  const cacheFolders = [
-    'Cache',
-    'Code Cache',
-    'GPUCache',
-    'Service Worker',
-    'blob_storage',
-    'DawnCache',
-    'DawnGraphiteCache',
-    'DawnWebGPUCache',
-    'Shared Dictionary',
-  ];
-
-  for (const folderName of cacheFolders) {
-    const folderPath = path.join(app.getPath('userData'), folderName);
-    try {
-      fs.rmSync(folderPath, { force: true, recursive: true });
-    } catch (error) {
-      loggerError(
-        `Failed to remove Electron prelaunch dev cache folder: ${folderPath}`,
-        error
-      );
-    }
-  }
-
-  loggerLog(
-    `Cleared Electron prelaunch dev caches for userData path: ${app.getPath('userData')}`
-  );
-}
-
 // Run Application
 (async () => {
   await setupMultiInstanceUserData();
-  clearDevUserDataCaches();
 
   await app.whenReady();
 
