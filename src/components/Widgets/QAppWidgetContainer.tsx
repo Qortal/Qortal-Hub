@@ -3,6 +3,7 @@ import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import { Box, ButtonBase, CircularProgress, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type QAppWidgetContainerProps = {
   children?: ReactNode;
@@ -29,7 +30,7 @@ export const QAppWidgetStatePanel = ({
   loadingLabel,
   onRetry,
   onSecondaryAction,
-  retryLabel = 'Retry',
+  retryLabel,
   secondaryActionLabel,
   secondaryActionVariant = 'button',
   title,
@@ -46,6 +47,8 @@ export const QAppWidgetStatePanel = ({
   verticalOffset?: number | string;
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation('core');
+  const resolvedRetryLabel = retryLabel ?? t('widget_container.retry');
   const translateValue =
     typeof verticalOffset === 'number' ? `${verticalOffset}px` : verticalOffset;
 
@@ -141,7 +144,7 @@ export const QAppWidgetStatePanel = ({
             >
               <RefreshRoundedIcon sx={{ fontSize: '1rem' }} />
               <Typography sx={{ fontSize: '0.76rem', fontWeight: 700 }}>
-                {retryLabel}
+                {resolvedRetryLabel}
               </Typography>
             </ButtonBase>
           ) : null}
@@ -204,24 +207,32 @@ export const QAppWidgetStatePanel = ({
 
 export const QAppWidgetContainer = ({
   children,
-  emptyMessage = 'Nothing to show right now.',
-  emptyTitle = 'No items yet',
+  emptyMessage,
+  emptyTitle,
   error = null,
   errorMessage,
-  errorTitle = 'Unable to load this widget',
+  errorTitle,
   hasContent,
   isEmpty = false,
   isLoading = false,
-  loadingLabel = 'Loading',
-  loadingMessage = 'Pulling the latest public data from the default Qortal node.',
+  loadingLabel,
+  loadingMessage,
   onRetry,
   onSecondaryAction,
-  retryLabel = 'Retry',
+  retryLabel,
   secondaryActionLabel,
   secondaryActionVariant = 'button',
   stateVerticalOffset = 0,
 }: QAppWidgetContainerProps) => {
-  const theme = useTheme();
+  const { t } = useTranslation('core');
+  const resolvedRetryLabel = retryLabel ?? t('widget_container.retry');
+  const resolvedEmptyTitle = emptyTitle ?? t('widget_container.empty_title');
+  const resolvedEmptyMessage =
+    emptyMessage === undefined ? t('widget_container.empty_message') : emptyMessage;
+  const resolvedErrorTitle = errorTitle ?? t('widget_container.error_title');
+  const resolvedLoadingLabel = loadingLabel ?? t('widget_container.loading');
+  const resolvedLoadingMessage =
+    loadingMessage === undefined ? t('widget_container.loading_message') : loadingMessage;
   const resolvedHasContent = hasContent ?? (!!children && !isEmpty);
 
   let state: ReactNode = null;
@@ -229,10 +240,10 @@ export const QAppWidgetContainer = ({
   if (isLoading && !resolvedHasContent) {
     state = (
       <QAppWidgetStatePanel
-        description={loadingMessage}
-        loadingLabel={loadingLabel}
-        retryLabel={retryLabel}
-        title={loadingLabel}
+        description={resolvedLoadingMessage}
+        loadingLabel={resolvedLoadingLabel}
+        retryLabel={resolvedRetryLabel}
+        title={resolvedLoadingLabel}
         verticalOffset={stateVerticalOffset}
       />
     );
@@ -242,23 +253,23 @@ export const QAppWidgetContainer = ({
         description={errorMessage !== undefined ? errorMessage : error}
         onRetry={onRetry}
         onSecondaryAction={onSecondaryAction}
-        retryLabel={retryLabel}
+        retryLabel={resolvedRetryLabel}
         secondaryActionLabel={secondaryActionLabel}
         secondaryActionVariant={secondaryActionVariant}
-        title={errorTitle}
+        title={resolvedErrorTitle}
         verticalOffset={stateVerticalOffset}
       />
     );
   } else if (isEmpty) {
     state = (
       <QAppWidgetStatePanel
-        description={emptyMessage}
+        description={resolvedEmptyMessage}
         onRetry={onRetry}
         onSecondaryAction={onSecondaryAction}
-        retryLabel={retryLabel}
+        retryLabel={resolvedRetryLabel}
         secondaryActionLabel={secondaryActionLabel}
         secondaryActionVariant={secondaryActionVariant}
-        title={emptyTitle}
+        title={resolvedEmptyTitle}
         verticalOffset={stateVerticalOffset}
       />
     );

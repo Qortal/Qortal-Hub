@@ -529,6 +529,41 @@
     "wallet": "钱包",
     "wallet_other": "钱包"
   },
+  "widget_container": {
+    "empty_message": "目前没有可显示的内容。",
+    "empty_title": "尚无项目",
+    "error_title": "无法加载此小组件",
+    "loading": "加载中",
+    "loading_message": "正在从默认 Qortal 节点获取最新公开数据。",
+    "retry": "重试"
+  },
+  "quitter_feed": {
+    "error_generic": "公开 Quitter 动态暂时不可用。请稍后再试。",
+    "error_following": "个性化 Quitter 动态暂时不可用。请重试。",
+    "error_timeout": "动态加载失败。你可以重试或返回「综合」。",
+    "loading_following": "正在加载关注动态…",
+    "loading_general": "正在加载动态…",
+    "error_title_following": "动态加载失败",
+    "error_title_general": "无法加载帖子",
+    "empty_title_no_name": "登录以个性化你的动态",
+    "empty_title_no_following": "你似乎还没有关注任何人。",
+    "empty_title_no_posts": "暂无已关注账号的帖子",
+    "empty_title_general": "暂无帖子",
+    "empty_message_no_name": "使用 Qortal 名称登录以建立个性化动态。",
+    "empty_message_no_following": "浏览 Quitter 并关注账号以构建你的动态。",
+    "empty_message_no_posts": "你关注的账号尚未在 Quitter 发帖。",
+    "tab_general": "综合",
+    "tab_following": "关注",
+    "subtitle_personalized": "个性化动态",
+    "subtitle_public": "公开动态",
+    "retry_following": "再试一次",
+    "retry_general": "重试",
+    "return_to_general": "返回综合",
+    "posts_showing_one": "显示 {{count}} 条帖子",
+    "posts_showing_other": "显示 {{count}} 条帖子",
+    "new_posts_one": "{{count}} 条新帖子",
+    "new_posts_other": "{{count}} 条新帖子"
+  },
   "website": "网站",
   "welcome": "欢迎"
 }

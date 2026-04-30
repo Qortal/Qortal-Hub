@@ -531,6 +531,41 @@
     "wallet": "محفظة",
     "wallet_other": "محافظ"
   },
+  "widget_container": {
+    "empty_message": "لا يوجد شيء لعرضه حاليًا.",
+    "empty_title": "لا عناصر بعد",
+    "error_title": "تعذّر تحميل هذه الأداة",
+    "loading": "جاري التحميل",
+    "loading_message": "جلب أحدث البيانات العامة من عقدة Qortal الافتراضية.",
+    "retry": "إعادة المحاولة"
+  },
+  "quitter_feed": {
+    "error_generic": "موجز Quitter العام غير متاح مؤقتًا. أعِد المحاولة بعد لحظة.",
+    "error_following": "موجز Quitter المخصّص غير متاح مؤقتًا. يُرجى إعادة المحاولة.",
+    "error_timeout": "فشل تحميل الموجز. يمكنك إعادة المحاولة أو العودة إلى العام.",
+    "loading_following": "جاري تحميل موجز المتابَعين...",
+    "loading_general": "جاري تحميل الموجز...",
+    "error_title_following": "فشل تحميل الموجز",
+    "error_title_general": "تعذّر تحميل المنشورات",
+    "empty_title_no_name": "سجّل الدخول لتخصيص موجزك",
+    "empty_title_no_following": "يبدو أنك لا تتابع أحدًا بعد.",
+    "empty_title_no_posts": "لا منشورات من الحسابات التي تتابعها",
+    "empty_title_general": "لا منشورات متاحة",
+    "empty_message_no_name": "سجّل الدخول باسم Qortal لبناء موجز مخصّص.",
+    "empty_message_no_following": "تصفّح Quitter وتابع الحسابات لبناء موجزك.",
+    "empty_message_no_posts": "الحسابات التي تتابعها لم تنشر على Quitter بعد.",
+    "tab_general": "عام",
+    "tab_following": "المتابَعون",
+    "subtitle_personalized": "موجز مخصّص",
+    "subtitle_public": "موجز عام",
+    "retry_following": "حاول مرة أخرى",
+    "retry_general": "إعادة المحاولة",
+    "return_to_general": "العودة إلى العام",
+    "posts_showing_one": "عرض {{count}} منشور",
+    "posts_showing_other": "عرض {{count}} منشورات",
+    "new_posts_one": "{{count}} منشور جديد",
+    "new_posts_other": "{{count}} منشورات جديدة"
+  },
   "website": "موقع ويب",
   "welcome": "مرحبًا"
 }

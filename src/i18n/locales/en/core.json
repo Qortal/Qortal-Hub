@@ -534,6 +534,41 @@
     "wallet": "wallet",
     "wallet_other": "wallets"
   },
+  "widget_container": {
+    "empty_message": "Nothing to show right now.",
+    "empty_title": "No items yet",
+    "error_title": "Unable to load this widget",
+    "loading": "Loading",
+    "loading_message": "Pulling the latest public data from the default Qortal node.",
+    "retry": "Retry"
+  },
+  "quitter_feed": {
+    "error_generic": "The public Quitter feed is temporarily unavailable. Give it another try in a moment.",
+    "error_following": "The personalized Quitter feed is temporarily unavailable. Please try again.",
+    "error_timeout": "Feed load failed. You can try again or return to General.",
+    "loading_following": "Loading following feed...",
+    "loading_general": "Loading feed...",
+    "error_title_following": "Feed load failed",
+    "error_title_general": "Unable to load posts",
+    "empty_title_no_name": "Sign in to personalize your feed",
+    "empty_title_no_following": "It looks like you’re not following anyone yet.",
+    "empty_title_no_posts": "No followed posts available",
+    "empty_title_general": "No posts available",
+    "empty_message_no_name": "Sign in with a Qortal name to build a personalized feed.",
+    "empty_message_no_following": "Browse Quitter and follow accounts to build your feed.",
+    "empty_message_no_posts": "The accounts you follow haven’t posted to Quitter yet.",
+    "tab_general": "General",
+    "tab_following": "Following",
+    "subtitle_personalized": "Personalized feed",
+    "subtitle_public": "Public feed",
+    "retry_following": "Try Again",
+    "retry_general": "Retry",
+    "return_to_general": "Return to General",
+    "posts_showing_one": "{{count}} post showing",
+    "posts_showing_other": "{{count}} posts showing",
+    "new_posts_one": "{{count}} new post",
+    "new_posts_other": "{{count}} new posts"
+  },
   "website": "website",
   "welcome": "welcome"
 }

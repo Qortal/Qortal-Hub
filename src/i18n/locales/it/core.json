@@ -528,6 +528,41 @@
     "wallet": "portafoglio",
     "wallet_other": "wallet"
   },
+  "widget_container": {
+    "empty_message": "Al momento non c’è nulla da mostrare.",
+    "empty_title": "Nessun elemento ancora",
+    "error_title": "Impossibile caricare questo widget",
+    "loading": "Caricamento",
+    "loading_message": "Recupero degli ultimi dati pubblici dal nodo Qortal predefinito.",
+    "retry": "Riprova"
+  },
+  "quitter_feed": {
+    "error_generic": "Il feed pubblico Quitter è temporaneamente non disponibile. Riprova fra un momento.",
+    "error_following": "Il feed Quitter personalizzato è temporaneamente non disponibile. Riprova.",
+    "error_timeout": "Caricamento del feed non riuscito. Puoi riprovare o tornare a Generale.",
+    "loading_following": "Caricamento feed Seguiti...",
+    "loading_general": "Caricamento feed...",
+    "error_title_following": "Caricamento feed non riuscito",
+    "error_title_general": "Impossibile caricare i post",
+    "empty_title_no_name": "Accedi per personalizzare il feed",
+    "empty_title_no_following": "Sembra che tu non segua ancora nessuno.",
+    "empty_title_no_posts": "Nessun post dagli account che segui",
+    "empty_title_general": "Nessun post disponibile",
+    "empty_message_no_name": "Accedi con un nome Qortal per creare un feed personalizzato.",
+    "empty_message_no_following": "Sfoglia Quitter e segui account per costruire il tuo feed.",
+    "empty_message_no_posts": "Gli account che segui non hanno ancora pubblicato su Quitter.",
+    "tab_general": "Generale",
+    "tab_following": "Seguiti",
+    "subtitle_personalized": "Feed personalizzato",
+    "subtitle_public": "Feed pubblico",
+    "retry_following": "Riprova",
+    "retry_general": "Riprova",
+    "return_to_general": "Torna a Generale",
+    "posts_showing_one": "{{count}} post in visualizzazione",
+    "posts_showing_other": "{{count}} post in visualizzazione",
+    "new_posts_one": "{{count}} nuovo post",
+    "new_posts_other": "{{count}} nuovi post"
+  },
   "website": "sito web",
   "welcome": "benvenuto"
 }

@@ -529,6 +529,41 @@
     "wallet": "billetera",
     "wallet_other": "billeteras"
   },
+  "widget_container": {
+    "empty_message": "No hay nada que mostrar por ahora.",
+    "empty_title": "Sin elementos por ahora",
+    "error_title": "No se pudo cargar este widget",
+    "loading": "Cargando",
+    "loading_message": "Obteniendo los últimos datos públicos del nodo Qortal predeterminado.",
+    "retry": "Reintentar"
+  },
+  "quitter_feed": {
+    "error_generic": "El feed público de Quitter no está disponible temporalmente. Vuelve a intentarlo en un momento.",
+    "error_following": "El feed personalizado de Quitter no está disponible temporalmente. Inténtalo de nuevo.",
+    "error_timeout": "Error al cargar el feed. Puedes reintentar o volver a General.",
+    "loading_following": "Cargando feed siguiendo...",
+    "loading_general": "Cargando feed...",
+    "error_title_following": "Error al cargar el feed",
+    "error_title_general": "No se pudieron cargar las publicaciones",
+    "empty_title_no_name": "Inicia sesión para personalizar tu feed",
+    "empty_title_no_following": "Parece que aún no sigues a nadie.",
+    "empty_title_no_posts": "No hay publicaciones de cuentas que sigues",
+    "empty_title_general": "No hay publicaciones",
+    "empty_message_no_name": "Inicia sesión con un nombre Qortal para crear un feed personalizado.",
+    "empty_message_no_following": "Explora Quitter y sigue cuentas para armar tu feed.",
+    "empty_message_no_posts": "Las cuentas que sigues aún no han publicado en Quitter.",
+    "tab_general": "General",
+    "tab_following": "Siguiendo",
+    "subtitle_personalized": "Feed personalizado",
+    "subtitle_public": "Feed público",
+    "retry_following": "Intentar de nuevo",
+    "retry_general": "Reintentar",
+    "return_to_general": "Volver a General",
+    "posts_showing_one": "{{count}} publicación mostrada",
+    "posts_showing_other": "{{count}} publicaciones mostradas",
+    "new_posts_one": "{{count}} publicación nueva",
+    "new_posts_other": "{{count}} publicaciones nuevas"
+  },
   "website": "sitio web",
   "welcome": "bienvenido"
 }

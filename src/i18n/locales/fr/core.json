@@ -529,6 +529,41 @@
     "wallet": "portefeuille",
     "wallet_other": "portefeuilles"
   },
+  "widget_container": {
+    "empty_message": "Rien à afficher pour le moment.",
+    "empty_title": "Pas encore d’éléments",
+    "error_title": "Impossible de charger ce widget",
+    "loading": "Chargement",
+    "loading_message": "Récupération des dernières données publiques depuis le nœud Qortal par défaut.",
+    "retry": "Réessayer"
+  },
+  "quitter_feed": {
+    "error_generic": "Le flux public Quitter est temporairement indisponible. Réessayez dans un instant.",
+    "error_following": "Le flux Quitter personnalisé est temporairement indisponible. Veuillez réessayer.",
+    "error_timeout": "Échec du chargement du flux. Vous pouvez réessayer ou revenir au général.",
+    "loading_following": "Chargement du flux suivis…",
+    "loading_general": "Chargement du flux…",
+    "error_title_following": "Échec du chargement du flux",
+    "error_title_general": "Impossible de charger les publications",
+    "empty_title_no_name": "Connectez-vous pour personnaliser votre flux",
+    "empty_title_no_following": "Il semble que vous ne suiviez personne pour l’instant.",
+    "empty_title_no_posts": "Aucune publication des comptes suivis",
+    "empty_title_general": "Aucune publication disponible",
+    "empty_message_no_name": "Connectez-vous avec un nom Qortal pour créer un flux personnalisé.",
+    "empty_message_no_following": "Parcourez Quitter et suivez des comptes pour composer votre flux.",
+    "empty_message_no_posts": "Les comptes que vous suivez n’ont pas encore publié sur Quitter.",
+    "tab_general": "Général",
+    "tab_following": "Abonnements",
+    "subtitle_personalized": "Flux personnalisé",
+    "subtitle_public": "Flux public",
+    "retry_following": "Réessayer",
+    "retry_general": "Réessayer",
+    "return_to_general": "Retour au général",
+    "posts_showing_one": "{{count}} publication affichée",
+    "posts_showing_other": "{{count}} publications affichées",
+    "new_posts_one": "{{count}} nouvelle publication",
+    "new_posts_other": "{{count}} nouvelles publications"
+  },
   "website": "site web",
   "welcome": "accueillir"
 }

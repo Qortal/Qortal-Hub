@@ -528,6 +528,41 @@
     "wallet": "Geldbörse",
     "wallet_other": "Brieftaschen"
   },
+  "widget_container": {
+    "empty_message": "Im Moment gibt es nichts anzuzeigen.",
+    "empty_title": "Noch keine Einträge",
+    "error_title": "Dieses Widget konnte nicht geladen werden",
+    "loading": "Wird geladen",
+    "loading_message": "Die neuesten öffentlichen Daten werden vom Standard-Qortal-Knoten geladen.",
+    "retry": "Erneut versuchen"
+  },
+  "quitter_feed": {
+    "error_generic": "Der öffentliche Quitter-Feed ist vorübergehend nicht verfügbar. Bitte gleich noch einmal versuchen.",
+    "error_following": "Der personalisierte Quitter-Feed ist vorübergehend nicht verfügbar. Bitte versuche es erneut.",
+    "error_timeout": "Feed-Laden fehlgeschlagen. Du kannst es erneut versuchen oder zu Allgemein zurückkehren.",
+    "loading_following": "Persönlicher Feed wird geladen...",
+    "loading_general": "Feed wird geladen...",
+    "error_title_following": "Feed-Laden fehlgeschlagen",
+    "error_title_general": "Beiträge konnten nicht geladen werden",
+    "empty_title_no_name": "Melde dich an, um deinen Feed zu personalisieren",
+    "empty_title_no_following": "Du folgst noch niemandem.",
+    "empty_title_no_posts": "Keine gefolgten Beiträge verfügbar",
+    "empty_title_general": "Keine Beiträge verfügbar",
+    "empty_message_no_name": "Melde dich mit einem Qortal-Namen an, um einen personalisierten Feed zu erstellen.",
+    "empty_message_no_following": "Stöbere in Quitter und folge Konten, um deinen Feed aufzubauen.",
+    "empty_message_no_posts": "Die Konten, denen du folgst, haben noch keine Beiträge auf Quitter.",
+    "tab_general": "Allgemein",
+    "tab_following": "Folge ich",
+    "subtitle_personalized": "Personalisierter Feed",
+    "subtitle_public": "Öffentlicher Feed",
+    "retry_following": "Erneut versuchen",
+    "retry_general": "Erneut versuchen",
+    "return_to_general": "Zurück zu Allgemein",
+    "posts_showing_one": "{{count}} Beitrag wird angezeigt",
+    "posts_showing_other": "{{count}} Beiträge werden angezeigt",
+    "new_posts_one": "{{count}} neuer Beitrag",
+    "new_posts_other": "{{count}} neue Beiträge"
+  },
   "website": "Webseite",
   "welcome": "Willkommen"
 }

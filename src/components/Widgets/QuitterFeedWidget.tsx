@@ -16,6 +16,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../../App';
 import {
   blockedAddressesAtom,
@@ -52,21 +53,9 @@ type InitialFeedState = 'error' | 'loading' | 'success';
 type QuitterFeedMode = 'following' | 'general';
 type FollowingEmptyReason = 'no-following' | 'no-name' | 'no-posts' | null;
 
-const GENERIC_ERROR_MESSAGE =
-  'The public Quitter feed is temporarily unavailable. Give it another try in a moment.';
-const FOLLOWING_ERROR_MESSAGE =
-  'The personalized Quitter feed is temporarily unavailable. Please try again.';
-const FOLLOWING_TIMEOUT_ERROR_MESSAGE =
-  'Feed load failed. You can try again or return to General.';
 const FOLLOWING_LOAD_TIMEOUT_MS = 40_000;
 const FEED_POLL_INTERVAL_MS = 30_000;
 const NEW_POST_REVEAL_DURATION_MS = 420;
-
-const getPostCountLabel = (count: number) =>
-  `${count} post${count === 1 ? '' : 's'}`;
-
-const getNewPostCountLabel = (count: number) =>
-  `${count} new post${count === 1 ? '' : 's'}`;
 
 const normalizeAuthorName = (value: string) => value.trim().toLowerCase();
 
@@ -171,6 +160,7 @@ export const QuitterFeedWidget = ({
   searchLimit = 8,
 }: QuitterFeedWidgetProps) => {
   const theme = useTheme();
+  const { t } = useTranslation('core');
   const userInfo = useAtomValue(userInfoAtom);
   const blockedAddresses = useAtomValue(blockedAddressesAtom);
   const blockedNames = useAtomValue(blockedNamesAtom);
@@ -226,12 +216,12 @@ export const QuitterFeedWidget = ({
     [blockedAuthorNames]
   );
   const loadedPostLabel = useMemo(
-    () => `${getPostCountLabel(items.length)} showing`,
-    [items.length]
+    () => t('quitter_feed.posts_showing', { count: items.length }),
+    [items.length, t]
   );
   const pendingPostLabel = useMemo(
-    () => getNewPostCountLabel(pendingItems.length),
-    [pendingItems.length]
+    () => t('quitter_feed.new_posts', { count: pendingItems.length }),
+    [pendingItems.length, t]
   );
   const revealedItemIdSet = useMemo(
     () => new Set(revealedItemIds),
@@ -366,7 +356,7 @@ export const QuitterFeedWidget = ({
               signal: timedSignal,
             });
           },
-          FOLLOWING_TIMEOUT_ERROR_MESSAGE
+          t('quitter_feed.error_timeout')
         );
       }
 
@@ -454,7 +444,7 @@ export const QuitterFeedWidget = ({
                   page,
                 };
               },
-              FOLLOWING_TIMEOUT_ERROR_MESSAGE
+              t('quitter_feed.error_timeout')
             );
 
             nextPage = followingResult.page;
@@ -500,8 +490,8 @@ export const QuitterFeedWidget = ({
           error instanceof FeedLoadTimeoutError
             ? error.message
             : resolvedFeedMode === 'following'
-              ? FOLLOWING_ERROR_MESSAGE
-              : GENERIC_ERROR_MESSAGE
+              ? t('quitter_feed.error_following')
+              : t('quitter_feed.error_generic')
         );
       } finally {
         if (activeFeedRequestIdRef.current === requestId) {
@@ -788,26 +778,47 @@ export const QuitterFeedWidget = ({
     setFeedMode('general');
   }, []);
 
-  const loadingLabel = isFollowingFeed
-    ? 'Loading following feed...'
-    : 'Loading feed...';
-  const errorTitle = isFollowingFeed
-    ? 'Feed load failed'
-    : 'Unable to load posts';
-  const emptyTitle = isFollowingFeed
-    ? followingEmptyReason === 'no-name'
-      ? 'Sign in to personalize your feed'
-      : followingEmptyReason === 'no-following'
-        ? 'It looks like you’re not following anyone yet.'
-        : 'No followed posts available'
-    : 'No posts available';
-  const emptyMessage = isFollowingFeed
-    ? followingEmptyReason === 'no-name'
-      ? 'Sign in with a Qortal name to build a personalized feed.'
-      : followingEmptyReason === 'no-following'
-        ? 'Browse Quitter and follow accounts to build your feed.'
-        : 'The accounts you follow haven’t posted to Quitter yet.'
-    : null;
+  const loadingLabel = useMemo(
+    () =>
+      isFollowingFeed
+        ? t('quitter_feed.loading_following')
+        : t('quitter_feed.loading_general'),
+    [isFollowingFeed, t]
+  );
+
+  const errorTitle = useMemo(
+    () =>
+      isFollowingFeed
+        ? t('quitter_feed.error_title_following')
+        : t('quitter_feed.error_title_general'),
+    [isFollowingFeed, t]
+  );
+
+  const emptyTitle = useMemo(() => {
+    if (!isFollowingFeed) {
+      return t('quitter_feed.empty_title_general');
+    }
+    if (followingEmptyReason === 'no-name') {
+      return t('quitter_feed.empty_title_no_name');
+    }
+    if (followingEmptyReason === 'no-following') {
+      return t('quitter_feed.empty_title_no_following');
+    }
+    return t('quitter_feed.empty_title_no_posts');
+  }, [followingEmptyReason, isFollowingFeed, t]);
+
+  const emptyMessage = useMemo(() => {
+    if (!isFollowingFeed) {
+      return null;
+    }
+    if (followingEmptyReason === 'no-name') {
+      return t('quitter_feed.empty_message_no_name');
+    }
+    if (followingEmptyReason === 'no-following') {
+      return t('quitter_feed.empty_message_no_following');
+    }
+    return t('quitter_feed.empty_message_no_posts');
+  }, [followingEmptyReason, isFollowingFeed, t]);
   const showStatePanel =
     showInitialLoadingState || showInitialErrorState || showEmptyState;
   const segmentedToggleSx = {
@@ -888,7 +899,7 @@ export const QuitterFeedWidget = ({
                       : theme.palette.text.secondary,
                 }}
               >
-                General
+                {t('quitter_feed.tab_general')}
               </ButtonBase>
               <ButtonBase
                 disableRipple
@@ -913,7 +924,7 @@ export const QuitterFeedWidget = ({
                       : theme.palette.text.secondary,
                 }}
               >
-                Following
+                {t('quitter_feed.tab_following')}
               </ButtonBase>
             </Box>
           <Typography
@@ -925,7 +936,9 @@ export const QuitterFeedWidget = ({
               whiteSpace: 'nowrap',
             }}
           >
-            {feedMode === 'following' ? 'Personalized feed' : 'Public feed'}
+            {feedMode === 'following'
+              ? t('quitter_feed.subtitle_personalized')
+              : t('quitter_feed.subtitle_public')}
           </Typography>
         </Box>
 
@@ -1053,10 +1066,14 @@ export const QuitterFeedWidget = ({
                   ? handleSelectGeneralFeed
                   : undefined
               }
-              retryLabel={isFollowingFeed ? 'Try Again' : 'Retry'}
+              retryLabel={
+                isFollowingFeed
+                  ? t('quitter_feed.retry_following')
+                  : t('quitter_feed.retry_general')
+              }
               secondaryActionLabel={
                 (showInitialErrorState || showEmptyState) && isFollowingFeed
-                  ? 'Return to General'
+                  ? t('quitter_feed.return_to_general')
                   : undefined
               }
               title={

@@ -462,6 +462,41 @@
     "wallet": "lompakko",
     "wallet_other": "lompakot"
   },
+  "widget_container": {
+    "empty_message": "Ei juuri nyt näytettävää.",
+    "empty_title": "Ei merkintöjä vielä",
+    "error_title": "Tätä widgettiä ei voitu ladata",
+    "loading": "Ladataan",
+    "loading_message": "Haetaan uusimpia julkisia tietoja oletus-Qortal-solmusta.",
+    "retry": "Yritä uudelleen"
+  },
+  "quitter_feed": {
+    "error_generic": "Julkinen Quitter-syöte ei ole juuri nyt käytettävissä. Yritä hetken kuluttua uudelleen.",
+    "error_following": "Personoitu Quitter-syöte ei ole juuri nyt käytettävissä. Yritä uudelleen.",
+    "error_timeout": "Syöteen lataus epäonnistui. Voit yrittää uudelleen tai palata Yleiseen.",
+    "loading_following": "Ladataan seurattujen syötettä...",
+    "loading_general": "Ladataan syötettä...",
+    "error_title_following": "Syöteen lataus epäonnistui",
+    "error_title_general": "Julkaisuja ei voitu ladata",
+    "empty_title_no_name": "Kirjaudu sisään personoidaksesi syötteesi",
+    "empty_title_no_following": "Et näytä seuraavan vielä ketään.",
+    "empty_title_no_posts": "Ei julkaisuja seuraamiltasi tileiltä",
+    "empty_title_general": "Ei julkaisuja saatavilla",
+    "empty_message_no_name": "Kirjaudu Qortal-nimellä rakentaaksesi personoidun syötteen.",
+    "empty_message_no_following": "Selaa Quitteria ja seuraa tilejä syöttesi rakentamiseksi.",
+    "empty_message_no_posts": "Seuraamasi tilit eivät ole vielä julkaisseet Quitterissa.",
+    "tab_general": "Yleinen",
+    "tab_following": "Seuratut",
+    "subtitle_personalized": "Personoitu syöte",
+    "subtitle_public": "Julkinen syöte",
+    "retry_following": "Yritä uudelleen",
+    "retry_general": "Yritä uudelleen",
+    "return_to_general": "Palaa Yleiseen",
+    "posts_showing_one": "{{count}} julkaisu näkyvissä",
+    "posts_showing_other": "{{count}} julkaisua näkyvissä",
+    "new_posts_one": "{{count}} uusi julkaisu",
+    "new_posts_other": "{{count}} uutta julkaisua"
+  },
   "website": "verkkosivusto",
   "welcome": "tervetuloa"
 }

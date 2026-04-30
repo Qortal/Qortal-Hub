@@ -531,6 +531,41 @@
     "wallet": "rahakott",
     "wallet_other": "rahakotid"
   },
+  "widget_container": {
+    "empty_message": "Hetkel pole midagi näidata.",
+    "empty_title": "Kirjeid veel pole",
+    "error_title": "Seda vidinat ei õnnestunud laadida",
+    "loading": "Laadimine",
+    "loading_message": "Värskete avalike andmete toomine vaikimisi Qortali sõlmest.",
+    "retry": "Proovi uuesti"
+  },
+  "quitter_feed": {
+    "error_generic": "Avalik Quitteri voog pole ajutiselt saadaval. Proovi hetke pärast uuesti.",
+    "error_following": "Isikupärastatud Quitteri voog pole ajutiselt saadaval. Palun proovi uuesti.",
+    "error_timeout": "Voo laadimine ebaõnnestus. Võid proovida uuesti või naasta Üldise juurde.",
+    "loading_following": "Jälgimisvoo laadimine...",
+    "loading_general": "Voo laadimine...",
+    "error_title_following": "Voo laadimine ebaõnnestus",
+    "error_title_general": "Postitusi ei õnnestunud laadida",
+    "empty_title_no_name": "Logi sisse, et oma voogu isikupärastada",
+    "empty_title_no_following": "Paistab, et sa ei järgi veel kedagi.",
+    "empty_title_no_posts": "Jälgitavatelt kontodelt pole postitusi",
+    "empty_title_general": "Postitusi pole saadaval",
+    "empty_message_no_name": "Logi sisse Qortali nimelaadiga, et luua isikupärastatud voog.",
+    "empty_message_no_following": "Sirvi Quitteri ja järgi kontosid oma voo koostamiseks.",
+    "empty_message_no_posts": "Kontod, keda järgid, ei ole Quitterisse veel postitanud.",
+    "tab_general": "Üldine",
+    "tab_following": "Jälgitavad",
+    "subtitle_personalized": "Isikupärastatud voog",
+    "subtitle_public": "Avalik voog",
+    "retry_following": "Proovi uuesti",
+    "retry_general": "Proovi uuesti",
+    "return_to_general": "Tagasi üldisse",
+    "posts_showing_one": "{{count}} postitus nähtaval",
+    "posts_showing_other": "{{count}} postitust nähtaval",
+    "new_posts_one": "{{count}} uus postitus",
+    "new_posts_other": "{{count}} uut postitust"
+  },
   "website": "veebileht",
   "welcome": "tere tulemast"
 }

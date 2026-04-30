@@ -531,6 +531,41 @@
     "wallet": "кошелек",
     "wallet_other": "кошельки"
   },
+  "widget_container": {
+    "empty_message": "Сейчас нечего показывать.",
+    "empty_title": "Пока нет записей",
+    "error_title": "Не удалось загрузить этот виджет",
+    "loading": "Загрузка",
+    "loading_message": "Получение последних публичных данных с узла Qortal по умолчанию.",
+    "retry": "Повторить"
+  },
+  "quitter_feed": {
+    "error_generic": "Публичная лента Quitter временно недоступна. Попробуйте ещё раз через мгновение.",
+    "error_following": "Персональная лента Quitter временно недоступна. Попробуйте снова.",
+    "error_timeout": "Не удалось загрузить ленту. Можно повторить или вернуться к общей.",
+    "loading_following": "Загрузка ленты подписок...",
+    "loading_general": "Загрузка ленты...",
+    "error_title_following": "Не удалось загрузить ленту",
+    "error_title_general": "Не удалось загрузить публикации",
+    "empty_title_no_name": "Войдите, чтобы персонализировать ленту",
+    "empty_title_no_following": "Похоже, вы пока ни на кого не подписаны.",
+    "empty_title_no_posts": "Нет публикаций от подписок",
+    "empty_title_general": "Нет доступных публикаций",
+    "empty_message_no_name": "Войдите с именем Qortal, чтобы создать персональную ленту.",
+    "empty_message_no_following": "Просматривайте Quitter и подписывайтесь на аккаунты, чтобы собрать ленту.",
+    "empty_message_no_posts": "Аккаунты, на которые вы подписаны, ещё не публиковали в Quitter.",
+    "tab_general": "Общее",
+    "tab_following": "Подписки",
+    "subtitle_personalized": "Персональная лента",
+    "subtitle_public": "Публичная лента",
+    "retry_following": "Попробовать снова",
+    "retry_general": "Повторить",
+    "return_to_general": "Вернуться к общему",
+    "posts_showing_one": "Показана {{count}} публикация",
+    "posts_showing_other": "Показано публикаций: {{count}}",
+    "new_posts_one": "{{count}} новая публикация",
+    "new_posts_other": "{{count}} новых публикаций"
+  },
   "website": "веб -сайт",
   "welcome": "добро пожаловать"
 }

@@ -529,6 +529,41 @@
     "wallet": "財布",
     "wallet_other": "財布"
   },
+  "widget_container": {
+    "empty_message": "今すぐ表示できる内容はありません。",
+    "empty_title": "まだ項目がありません",
+    "error_title": "このウィジェットを読み込めませんでした",
+    "loading": "読み込み中",
+    "loading_message": "既定の Qortal ノードから最新の公開データを取得しています。",
+    "retry": "再試行"
+  },
+  "quitter_feed": {
+    "error_generic": "公開の Quitter フィードは一時的に利用できません。しばらくしてからもう一度お試しください。",
+    "error_following": "パーソナライズされた Quitter フィードは一時的に利用できません。もう一度お試しください。",
+    "error_timeout": "フィードの読み込みに失敗しました。再試行するか「一般」に戻れます。",
+    "loading_following": "フォロー中のフィードを読み込み中…",
+    "loading_general": "フィードを読み込み中…",
+    "error_title_following": "フィードの読み込みに失敗しました",
+    "error_title_general": "投稿を読み込めませんでした",
+    "empty_title_no_name": "フィードをパーソナライズするにはサインインしてください",
+    "empty_title_no_following": "まだ誰もフォローしていないようです。",
+    "empty_title_no_posts": "フォロー中のアカウントの投稿はありません",
+    "empty_title_general": "投稿がありません",
+    "empty_message_no_name": "パーソナライズされたフィードを作るには Qortal 名でサインインしてください。",
+    "empty_message_no_following": "Quitter を見てアカウントをフォローし、フィードを作りましょう。",
+    "empty_message_no_posts": "フォロー中のアカウントはまだ Quitter に投稿していません。",
+    "tab_general": "一般",
+    "tab_following": "フォロー中",
+    "subtitle_personalized": "パーソナライズされたフィード",
+    "subtitle_public": "公開フィード",
+    "retry_following": "再試行",
+    "retry_general": "再試行",
+    "return_to_general": "一般に戻る",
+    "posts_showing_one": "表示中の投稿 {{count}} 件",
+    "posts_showing_other": "表示中の投稿 {{count}} 件",
+    "new_posts_one": "新しい投稿 {{count}} 件",
+    "new_posts_other": "新しい投稿 {{count}} 件"
+  },
   "website": "Webサイト",
   "welcome": "いらっしゃいませ"
 }

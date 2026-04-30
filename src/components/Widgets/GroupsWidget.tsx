@@ -32,6 +32,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   QORTAL_APP_CONTEXT,
   getArbitraryEndpointReact,
@@ -396,14 +397,14 @@ const TabButton = ({
 };
 
 const IllustratedEmptyState = ({
-  actionLabel = 'Refresh',
+  actionLabel,
   compact = false,
   description,
   onAction,
   title,
   variant,
 }: {
-  actionLabel?: string;
+  actionLabel: string;
   compact?: boolean;
   description: string;
   onAction: () => void;
@@ -531,6 +532,7 @@ export const GroupsWidget = ({
   refreshToken = 0,
 }: GroupsWidgetProps) => {
   const theme = useTheme();
+  const { t } = useTranslation('group');
   const { show } = useContext(QORTAL_APP_CONTEXT);
   const memberGroups = useAtomValue(memberGroupsAtom);
   const myGroupsWhereIAmAdmin = useAtomValue(myGroupsWhereIAmAdminAtom);
@@ -642,16 +644,17 @@ export const GroupsWidget = ({
         const timestamp = typeof group.timestamp === 'number' ? group.timestamp : 0;
         const snippet = normalizeSnippet(
           group.data,
-          'Recent group activity will appear here.'
+          t('groups_widget.recent_activity_placeholder')
         );
         const groupName =
           group.groupId === '0'
-            ? 'General'
-            : group.groupName || `Group ${groupId}`;
+            ? t('groups_widget.group_general')
+            : group.groupName || t('groups_widget.group_named', { id: groupId });
         const senderLabel =
           group.sender === currentAddress
-            ? 'You'
-            : group.senderName || truncateAddress(String(group.sender || 'Unknown'));
+            ? t('groups_widget.you')
+            : group.senderName ||
+              truncateAddress(String(group.sender || t('groups_widget.unknown')));
         const isUnread =
           !!group.data &&
           !!groupChatTimestamps[groupId] &&
@@ -682,6 +685,7 @@ export const GroupsWidget = ({
     groupChatTimestamps,
     memberGroups,
     ownerNamesByGroupId,
+    t,
     timestampEnterData,
   ]);
 
@@ -745,7 +749,7 @@ export const GroupsWidget = ({
           currentCache.data.map((group: any) => ({
             description: group.description,
             groupId: group.groupId,
-            groupName: group.groupName ?? `Group ${group.groupId}`,
+            groupName: group.groupName ?? t('groups_widget.group_named', { id: group.groupId }),
             id: `invite:${group.groupId}`,
             isOpen: group.isOpen,
             participantCount:
@@ -777,7 +781,8 @@ export const GroupsWidget = ({
         const nextInvites = withNames.map((group: any) => ({
           description: group.description,
           groupId: group.groupId,
-          groupName: group.groupName ?? `Group ${group.groupId}`,
+          groupName:
+            group.groupName ?? t('groups_widget.group_named', { id: group.groupId }),
           id: `invite:${group.groupId}`,
           isOpen: group.isOpen,
           participantCount:
@@ -792,13 +797,13 @@ export const GroupsWidget = ({
         });
       } catch (error) {
         console.error('Failed to load group invites widget data', error);
-        setInvitesError('Could not load group invites right now.');
+        setInvitesError(t('groups_widget.error_load_invites'));
       } finally {
         setHasLoadedInvitesOnce(true);
         setInvitesLoading(false);
       }
     },
-    [myAddress, setGroupInvitesCache]
+    [myAddress, setGroupInvitesCache, t]
   );
 
   const fetchJoinRequests = useCallback(
@@ -824,11 +829,14 @@ export const GroupsWidget = ({
         const nextRequests = currentCache.data.flatMap((entry: any) =>
           (entry?.data ?? []).map((request: any) => ({
             groupId: entry.group?.groupId,
-            groupName: entry.group?.groupName ?? `Group ${entry.group?.groupId}`,
+            groupName:
+              entry.group?.groupName ??
+              t('groups_widget.group_named', { id: entry.group?.groupId }),
             id: `request:${entry.group?.groupId}:${request?.joiner}`,
             joiner: request?.joiner ?? '',
             requesterLabel:
-              request?.name || truncateAddress(String(request?.joiner ?? 'Unknown')),
+              request?.name ||
+              truncateAddress(String(request?.joiner ?? t('groups_widget.unknown'))),
           }))
         );
         setRequests(nextRequests);
@@ -860,11 +868,14 @@ export const GroupsWidget = ({
         const nextRequests = normalized.flatMap((entry: any) =>
           (entry?.data ?? []).map((request: any) => ({
             groupId: entry.group?.groupId,
-            groupName: entry.group?.groupName ?? `Group ${entry.group?.groupId}`,
+            groupName:
+              entry.group?.groupName ??
+              t('groups_widget.group_named', { id: entry.group?.groupId }),
             id: `request:${entry.group?.groupId}:${request?.joiner}`,
             joiner: request?.joiner ?? '',
             requesterLabel:
-              request?.name || truncateAddress(String(request?.joiner ?? 'Unknown')),
+              request?.name ||
+              truncateAddress(String(request?.joiner ?? t('groups_widget.unknown'))),
           }))
         );
 
@@ -876,13 +887,13 @@ export const GroupsWidget = ({
         });
       } catch (error) {
         console.error('Failed to load group join requests widget data', error);
-        setRequestsError('Could not load join requests right now.');
+        setRequestsError(t('groups_widget.error_load_requests'));
       } finally {
         setHasLoadedRequestsOnce(true);
         setRequestsLoading(false);
       }
     },
-    [adminGroupIds, myAddress, setJoinRequestsCache]
+    [adminGroupIds, myAddress, setJoinRequestsCache, t]
   );
 
   const fetchPromotions = useCallback(async () => {
@@ -970,28 +981,29 @@ export const GroupsWidget = ({
           created: promotion.created,
           description: promotion.description,
           groupId: promotion.groupId,
-          groupName: promotion.groupName ?? `Group ${promotion.groupId}`,
+          groupName:
+            promotion.groupName ?? t('groups_widget.group_named', { id: promotion.groupId }),
           id: `promotion:${promotion.identifier}`,
           isOpen:
             typeof promotion.isOpen === 'boolean' ? promotion.isOpen : undefined,
           memberCount:
             promotion.memberCount ?? promotion.participantCount ?? undefined,
-          promoterName: promotion.name ?? 'Unknown',
+          promoterName: promotion.name ?? t('groups_widget.unknown'),
           snippet: normalizeSnippet(
             promotion.data,
-            'This group has a fresh promoted update.'
+            t('groups_widget.fresh_promotion_snippet')
           ),
         }))
       );
       setHasLoadedPromotionsOnce(true);
     } catch (error) {
       console.error('Failed to load group promotions widget data', error);
-      setPromotionsError('Could not load promoted groups right now.');
+      setPromotionsError(t('groups_widget.error_load_promotions'));
     } finally {
       setHasLoadedPromotionsOnce(true);
       setPromotionsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     setDismissedInviteIds([]);
@@ -1053,7 +1065,7 @@ export const GroupsWidget = ({
       try {
         const fee = await getFee('JOIN_GROUP');
         await show({
-          message: 'Join this group now?',
+          message: t('groups_widget.confirm_join_group'),
           publishFee: `${fee.fee} QORT`,
         });
         setJoiningGroupId(invite.groupId);
@@ -1070,21 +1082,21 @@ export const GroupsWidget = ({
         setDismissedInviteIds((current) => [...current, invite.id]);
         setGroupInvitesCache(null);
         setActionFeedback({
-          message: `Joined ${invite.groupName}.`,
+          message: t('groups_widget.joined_group', { name: invite.groupName }),
           tone: 'success',
         });
       } catch (error: any) {
         console.error('Failed to join group invite from widget', error);
         setActionFeedback({
           message:
-            error?.message || 'Could not accept that invite right now.',
+            error?.message || t('groups_widget.error_accept_invite'),
           tone: 'error',
         });
       } finally {
         setJoiningGroupId(null);
       }
     },
-    [setGroupInvitesCache, show]
+    [setGroupInvitesCache, show, t]
   );
 
   const handleIgnoreInvite = useCallback((inviteId: string) => {
@@ -1092,17 +1104,17 @@ export const GroupsWidget = ({
       current.includes(inviteId) ? current : [...current, inviteId]
     );
     setActionFeedback({
-      message: 'Invite hidden from this widget for now.',
+      message: t('groups_widget.invite_hidden'),
       tone: 'success',
     });
-  }, []);
+  }, [t]);
 
   const handleApproveRequest = useCallback(
     async (request: GroupJoinRequestItem) => {
       try {
         const fee = await getFee('GROUP_INVITE');
         await show({
-          message: 'Approve this request and invite them into the group?',
+          message: t('groups_widget.confirm_approve_request'),
           publishFee: `${fee.fee} QORT`,
         });
         setResolvingRequestId(request.id);
@@ -1121,21 +1133,24 @@ export const GroupsWidget = ({
         setDismissedRequestIds((current) => [...current, request.id]);
         setJoinRequestsCache(null);
         setActionFeedback({
-          message: `${request.requesterLabel} was approved for ${request.groupName}.`,
+          message: t('groups_widget.request_approved', {
+            requester: request.requesterLabel,
+            group: request.groupName,
+          }),
           tone: 'success',
         });
       } catch (error: any) {
         console.error('Failed to approve join request from widget', error);
         setActionFeedback({
           message:
-            error?.message || 'Could not approve that request right now.',
+            error?.message || t('groups_widget.error_approve_request'),
           tone: 'error',
         });
       } finally {
         setResolvingRequestId(null);
       }
     },
-    [setJoinRequestsCache, show]
+    [setJoinRequestsCache, show, t]
   );
 
   const handleRejectRequest = useCallback((requestId: string) => {
@@ -1143,10 +1158,10 @@ export const GroupsWidget = ({
       current.includes(requestId) ? current : [...current, requestId]
     );
     setActionFeedback({
-      message: 'Request removed from this widget for now.',
+      message: t('groups_widget.request_removed'),
       tone: 'success',
     });
-  }, []);
+  }, [t]);
 
   const handleJoinPromotedGroup = useCallback(
     async (promotion: GroupPromotionItem) => {
@@ -1154,8 +1169,8 @@ export const GroupsWidget = ({
         const fee = await getFee('JOIN_GROUP');
         await show({
           message: promotion.isOpen
-            ? 'Join this promoted group now?'
-            : 'Send a join request to this promoted group?',
+            ? t('groups_widget.confirm_join_promoted_open')
+            : t('groups_widget.confirm_join_promoted_closed'),
           publishFee: `${fee.fee} QORT`,
         });
         setPromotionActionStates((currentStates) => ({
@@ -1180,8 +1195,10 @@ export const GroupsWidget = ({
         }));
         setActionFeedback({
           message: promotion.isOpen
-            ? `Joined ${promotion.groupName}.`
-            : `Join request sent for ${promotion.groupName}.`,
+            ? t('groups_widget.joined_promoted', { name: promotion.groupName })
+            : t('groups_widget.join_request_sent', {
+                name: promotion.groupName,
+              }),
           tone: 'success',
         });
       } catch (error: any) {
@@ -1193,14 +1210,14 @@ export const GroupsWidget = ({
         });
         setActionFeedback({
           message:
-            error?.message || 'Could not act on that promoted group right now.',
+            error?.message || t('groups_widget.error_promoted'),
           tone: 'error',
         });
       } finally {
         setJoiningPromotionGroupId(null);
       }
     },
-    [show]
+    [show, t]
   );
 
   const handlePublishPromotion = useCallback(async () => {
@@ -1229,7 +1246,7 @@ export const GroupsWidget = ({
       setPromotionGroupId('');
       setPromotionText('');
       setActionFeedback({
-        message: 'Group promotion published.',
+        message: t('groups_widget.promotion_published'),
         tone: 'success',
       });
       await fetchPromotions();
@@ -1238,13 +1255,13 @@ export const GroupsWidget = ({
       console.error('Failed to publish group promotion from widget', error);
       setActionFeedback({
         message:
-          error?.message || 'Could not publish that promotion right now.',
+          error?.message || t('groups_widget.error_publish_promotion'),
         tone: 'error',
       });
     } finally {
       setPublishingPromotion(false);
     }
-  }, [fetchPromotions, promotionGroupId, promotionText]);
+  }, [fetchPromotions, promotionGroupId, promotionText, t]);
 
   const handleOpenPromotionDialog = useCallback(() => {
     if (!hasPromotionAdminAccess) {
@@ -1475,14 +1492,14 @@ export const GroupsWidget = ({
 
   const renderNotificationList = () => (
     <QAppWidgetContainer
-      emptyMessage="Join communities in Q-Chat to populate this feed with group messages, mentions, and activity."
-      emptyTitle="Start with Q-Chat groups"
+      emptyMessage={t('groups_widget.notifications_empty_message')}
+      emptyTitle={t('groups_widget.notifications_empty_title')}
       hasContent={effectiveNotificationItems.length > 0}
       isEmpty={effectiveNotificationItems.length === 0}
       isLoading={false}
-      loadingLabel="Loading notifications"
+      loadingLabel={t('groups_widget.loading_notifications')}
       onSecondaryAction={handleOpenGroupDiscovery}
-      secondaryActionLabel="Discover Groups"
+      secondaryActionLabel={t('groups_widget.discover_groups')}
       secondaryActionVariant="link"
       stateVerticalOffset="-24px"
     >
@@ -1629,7 +1646,7 @@ export const GroupsWidget = ({
                       lineHeight: 1.3,
                     }}
                   >
-                    from
+                    {t('groups_widget.from_label')}
                   </Typography>
                   <Typography
                     component="span"
@@ -1678,7 +1695,7 @@ export const GroupsWidget = ({
                           lineHeight: 1.25,
                         }}
                         >
-                        New encrypted message
+                        {t('groups_widget.new_encrypted_message')}
                       </Typography>
                     </Box>
                   ) : (
@@ -1712,7 +1729,9 @@ export const GroupsWidget = ({
                   }}
                 >
                   <OpenInNewRoundedIcon sx={{ fontSize: '0.82rem' }} />
-                  {item.isEncryptedLike ? 'View conversation' : 'Open conversation'}
+                  {item.isEncryptedLike
+                    ? t('groups_widget.view_conversation')
+                    : t('groups_widget.open_conversation')}
                 </Box>
               </Box>
             </ButtonBase>
@@ -1728,7 +1747,7 @@ export const GroupsWidget = ({
       hasContent={effectiveInvites.length > 0}
       isEmpty={false}
       isLoading={showInitialInvitesLoading}
-      loadingLabel="Loading invites"
+      loadingLabel={t('groups_widget.loading_invites')}
       onRetry={() => void fetchInvites(true)}
       stateVerticalOffset="-24px"
     >
@@ -1751,10 +1770,11 @@ export const GroupsWidget = ({
         !showInitialInvitesLoading &&
         !invitesError ? (
           <IllustratedEmptyState
+            actionLabel={t('groups_widget.refresh')}
             compact={isCompact}
-            description="Fresh group invitations will appear here as they arrive."
+            description={t('groups_widget.invites_empty_description')}
             onAction={() => void fetchInvites(true)}
-            title="No pending invites"
+            title={t('groups_widget.invites_empty_title')}
             variant="invites"
           />
         ) : (
@@ -1818,10 +1838,15 @@ export const GroupsWidget = ({
                       }}
                     >
                       {invite.description
-                        ? normalizeSnippet(invite.description, 'Private group invite')
-                        : invite.participantCount
-                          ? `${invite.participantCount} members`
-                          : 'Invitation ready to review'}
+                        ? normalizeSnippet(
+                            invite.description,
+                            t('groups_widget.private_group_invite')
+                          )
+                        : invite.participantCount != null
+                          ? t('groups_widget.members_count', {
+                              count: invite.participantCount,
+                            })
+                          : t('groups_widget.invitation_ready')}
                     </Typography>
                   </Box>
                 </Box>
@@ -1848,7 +1873,7 @@ export const GroupsWidget = ({
                       },
                     }}
                   >
-                    Ignore
+                    {t('groups_widget.ignore')}
                   </ButtonBase>
                   <LoadingButton
                     loading={joiningGroupId === invite.groupId}
@@ -1863,7 +1888,7 @@ export const GroupsWidget = ({
                     }}
                     variant="contained"
                   >
-                    Accept
+                    {t('groups_widget.accept')}
                   </LoadingButton>
                 </Box>
               </Box>
@@ -1880,7 +1905,7 @@ export const GroupsWidget = ({
       hasContent={effectiveRequests.length > 0}
       isEmpty={false}
       isLoading={showInitialRequestsLoading}
-      loadingLabel="Loading requests"
+      loadingLabel={t('groups_widget.loading_requests')}
       onRetry={() => void fetchJoinRequests(true)}
       stateVerticalOffset="-24px"
     >
@@ -1903,10 +1928,11 @@ export const GroupsWidget = ({
         !showInitialRequestsLoading &&
         !requestsError ? (
           <IllustratedEmptyState
+            actionLabel={t('groups_widget.refresh')}
             compact={isCompact}
-            description="Join requests from groups you manage will appear here."
+            description={t('groups_widget.requests_empty_description')}
             onAction={() => void fetchJoinRequests(true)}
-            title="No pending requests"
+            title={t('groups_widget.requests_empty_title')}
             variant="requests"
           />
         ) : (
@@ -1979,7 +2005,7 @@ export const GroupsWidget = ({
                         mt: '2px',
                       }}
                     >
-                      Wants to join this group.
+                      {t('groups_widget.wants_to_join')}
                     </Typography>
                   </Box>
                 </Box>
@@ -2005,7 +2031,7 @@ export const GroupsWidget = ({
                       },
                     }}
                   >
-                    Reject
+                    {t('groups_widget.reject')}
                   </ButtonBase>
                   <LoadingButton
                     loading={resolvingRequestId === request.id}
@@ -2020,7 +2046,7 @@ export const GroupsWidget = ({
                     }}
                     variant="contained"
                   >
-                    Approve
+                    {t('groups_widget.approve')}
                   </LoadingButton>
                 </Box>
               </Box>
@@ -2033,13 +2059,13 @@ export const GroupsWidget = ({
 
   const renderPromotionsList = () => (
     <QAppWidgetContainer
-      emptyMessage="Promoted groups will appear here when fresh highlights are available."
-      emptyTitle="No promoted groups"
+      emptyMessage={t('groups_widget.promoted_empty_message')}
+      emptyTitle={t('groups_widget.promoted_empty_title')}
       error={promotionsError}
       hasContent={effectivePromotions.length > 0}
       isEmpty={!showInitialPromotionsLoading && effectivePromotions.length === 0}
       isLoading={showInitialPromotionsLoading}
-      loadingLabel="Loading promoted groups"
+      loadingLabel={t('groups_widget.loading_promoted')}
       onRetry={() => void fetchPromotions()}
       stateVerticalOffset="-24px"
     >
@@ -2132,7 +2158,9 @@ export const GroupsWidget = ({
                         mt: '1px',
                       }}
                     >
-                      Promoted by {promotion.promoterName}
+                      {t('groups_widget.promoted_by', {
+                        name: promotion.promoterName,
+                      })}
                     </Typography>
                   </Box>
                   <Typography
@@ -2183,10 +2211,12 @@ export const GroupsWidget = ({
                       }}
                     >
                       {promotion.memberCount != null
-                        ? `${promotion.memberCount} members`
+                        ? t('groups_widget.members_count', {
+                            count: promotion.memberCount,
+                          })
                         : promotion.isOpen === false
-                          ? 'Private group'
-                          : 'Public group'}
+                          ? t('groups_widget.private_group')
+                          : t('groups_widget.public_group')}
                     </Typography>
                   </Box>
                   <Box
@@ -2207,7 +2237,7 @@ export const GroupsWidget = ({
                         startIcon={<OpenInNewRoundedIcon sx={{ fontSize: '0.85rem' }} />}
                         sx={promotionPrimaryActionSx}
                       >
-                        Open
+                        {t('groups_widget.open')}
                       </Button>
                     ) : promotionVisualState === 'connecting' ? (
                       <LoadingButton
@@ -2215,15 +2245,15 @@ export const GroupsWidget = ({
                         loading
                         sx={promotionPrimaryActionSx}
                       >
-                        Connecting...
+                        {t('groups_widget.connecting')}
                       </LoadingButton>
                     ) : promotionVisualState === 'processing' ? (
                       <Button disabled sx={promotionSecondaryActionSx}>
-                        Processing...
+                        {t('groups_widget.processing')}
                       </Button>
                     ) : promotionVisualState === 'request_sent' ? (
                       <Button disabled sx={promotionSecondaryActionSx}>
-                        Request sent
+                        {t('groups_widget.request_sent')}
                       </Button>
                     ) : (
                       <Button
@@ -2232,8 +2262,8 @@ export const GroupsWidget = ({
                         sx={promotionPrimaryActionSx}
                       >
                         {promotionVisualState === 'request'
-                          ? 'Request access'
-                          : 'Join group'}
+                          ? t('groups_widget.request_access')
+                          : t('groups_widget.join_group')}
                       </Button>
                     )}
                   </Box>
@@ -2291,7 +2321,7 @@ export const GroupsWidget = ({
           <TabButton
             active={activeTab === 'notifications'}
             count={effectiveUnreadNotificationCount}
-            label="Notifications"
+            label={t('groups_widget.tab_notifications')}
             onClick={() => {
               setActiveTab('notifications');
             }}
@@ -2300,7 +2330,7 @@ export const GroupsWidget = ({
           <TabButton
             active={activeTab === 'invites'}
             count={invitesCount}
-            label="Invites"
+            label={t('groups_widget.tab_invites')}
             onClick={() => {
               setActiveTab('invites');
             }}
@@ -2309,7 +2339,7 @@ export const GroupsWidget = ({
           <TabButton
             active={activeTab === 'requests'}
             count={requestsCount}
-            label="Requests"
+            label={t('groups_widget.tab_requests')}
             onClick={() => {
               setActiveTab('requests');
             }}
@@ -2317,7 +2347,7 @@ export const GroupsWidget = ({
           />
           <TabButton
             active={activeTab === 'promoted'}
-            label="Promoted"
+            label={t('groups_widget.tab_promoted')}
             onClick={() => {
               setActiveTab('promoted');
             }}
@@ -2340,13 +2370,13 @@ export const GroupsWidget = ({
             sx={discoverGroupsActionSx}
           >
             <SearchRoundedIcon sx={{ fontSize: '0.9rem' }} />
-            Discover Groups
+            {t('groups_widget.discover_groups')}
           </ButtonBase>
           {activeTab === 'promoted' ? (
             <Tooltip
               disableHoverListener={hasPromotionAdminAccess}
               placement="top"
-              title="Group admin only"
+              title={t('groups_widget.group_admin_only')}
             >
               <Box sx={{ display: 'inline-flex' }}>
                 <ButtonBase
@@ -2355,12 +2385,12 @@ export const GroupsWidget = ({
                   sx={headerUtilityActionSx}
                   title={
                     hasPromotionAdminAccess
-                      ? 'Promote one of your groups'
+                      ? t('groups_widget.promote_page_title')
                       : undefined
                   }
                 >
                   <CampaignRoundedIcon sx={{ fontSize: '0.9rem' }} />
-                  Promote Group
+                  {t('groups_widget.promote_group')}
                 </ButtonBase>
               </Box>
             </Tooltip>
@@ -2397,7 +2427,7 @@ export const GroupsWidget = ({
         }}
       >
         <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700 }}>
-          Promote Group
+          {t('groups_widget.promote_group')}
         </DialogTitle>
         <DialogContent
           sx={{
@@ -2414,8 +2444,10 @@ export const GroupsWidget = ({
               lineHeight: 1.5,
             }}
           >
-            Share a short highlighted update for one of your admin groups.
-            {promotionFee ? ` Publish fee: ${promotionFee} QORT.` : ''}
+            {t('groups_widget.promote_dialog_intro')}
+            {promotionFee
+              ? t('groups_widget.promote_dialog_fee', { fee: promotionFee })
+              : ''}
           </Typography>
           <Select
             displayEmpty
@@ -2426,7 +2458,7 @@ export const GroupsWidget = ({
             size="small"
           >
             <MenuItem disabled value="">
-              Select a group you admin
+              {t('groups_widget.select_admin_group')}
             </MenuItem>
             {promotionAdminGroups.map((group: any) => (
               <MenuItem key={group?.groupId} value={String(group?.groupId)}>
@@ -2437,7 +2469,7 @@ export const GroupsWidget = ({
           <TextField
             minRows={4}
             multiline
-            placeholder="Write a short promotion for this group."
+            placeholder={t('groups_widget.promotion_placeholder')}
             value={promotionText}
             onChange={(event) => {
               setPromotionText(event.target.value.slice(0, 200));
@@ -2450,7 +2482,10 @@ export const GroupsWidget = ({
               textAlign: 'right',
             }}
           >
-            {promotionText.length}/200
+            {t('groups_widget.characters_count', {
+              current: promotionText.length,
+              max: 200,
+            })}
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, pt: 0 }}>
@@ -2461,7 +2496,7 @@ export const GroupsWidget = ({
             }}
             sx={{ textTransform: 'none' }}
           >
-            Cancel
+            {t('groups_widget.cancel')}
           </Button>
           <LoadingButton
             disabled={!promotionGroupId || !promotionText.trim()}
@@ -2476,7 +2511,7 @@ export const GroupsWidget = ({
               ...getBlueTier1ButtonSx(),
             }}
           >
-            Publish
+            {t('groups_widget.publish')}
           </LoadingButton>
         </DialogActions>
       </Dialog>

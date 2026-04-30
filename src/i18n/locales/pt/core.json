@@ -531,6 +531,41 @@
     "wallet": "carteira",
     "wallet_other": "carteiras"
   },
+  "widget_container": {
+    "empty_message": "Nada para mostrar no momento.",
+    "empty_title": "Ainda sem itens",
+    "error_title": "Não foi possível carregar este widget",
+    "loading": "A carregar",
+    "loading_message": "A obter os dados públicos mais recentes do nó Qortal predefinido.",
+    "retry": "Tentar novamente"
+  },
+  "quitter_feed": {
+    "error_generic": "O feed público Quitter está temporariamente indisponível. Tenta novamente daqui a pouco.",
+    "error_following": "O feed personalizado Quitter está temporariamente indisponível. Tenta novamente.",
+    "error_timeout": "Falha ao carregar o feed. Podes tentar de novo ou voltar ao Geral.",
+    "loading_following": "A carregar feed de contas seguidas...",
+    "loading_general": "A carregar feed...",
+    "error_title_following": "Falha ao carregar o feed",
+    "error_title_general": "Não foi possível carregar as publicações",
+    "empty_title_no_name": "Inicia sessão para personalizares o teu feed",
+    "empty_title_no_following": "Parece que ainda não segues ninguém.",
+    "empty_title_no_posts": "Sem publicações de contas que segues",
+    "empty_title_general": "Sem publicações disponíveis",
+    "empty_message_no_name": "Inicia sessão com um nome Qortal para criares um feed personalizado.",
+    "empty_message_no_following": "Explora o Quitter e segue contas para construíres o teu feed.",
+    "empty_message_no_posts": "As contas que segues ainda não publicaram no Quitter.",
+    "tab_general": "Geral",
+    "tab_following": "A seguir",
+    "subtitle_personalized": "Feed personalizado",
+    "subtitle_public": "Feed público",
+    "retry_following": "Tentar de novo",
+    "retry_general": "Tentar novamente",
+    "return_to_general": "Voltar ao Geral",
+    "posts_showing_one": "{{count}} publicação a ser mostrada",
+    "posts_showing_other": "{{count}} publicações a ser mostradas",
+    "new_posts_one": "{{count}} publicação nova",
+    "new_posts_other": "{{count}} publicações novas"
+  },
   "website": "página na web",
   "welcome": "bem-vindo"
 }
