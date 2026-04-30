@@ -236,11 +236,7 @@ export const QortPayment = ({
       </Box>
 
       <Box sx={fieldGroupSx}>
-        <Typography
-          component="label"
-          htmlFor="payment-to"
-          sx={fieldLabelSx}
-        >
+        <Typography component="label" htmlFor="payment-to" sx={fieldLabelSx}>
           {t('core:to', { postProcess: 'capitalizeFirstChar' })}
         </Typography>
         <TextField
