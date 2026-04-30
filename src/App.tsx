@@ -116,7 +116,6 @@ import {
 } from './components/Desktop/CustomTitleBar';
 import { roundUpToDecimals } from './utils/numberFunctions.ts';
 import { GlobalQortalNavBar } from './components/Desktop/GlobalQortalNavBar.tsx';
-import { HUB_UI_BUILD_VERSION } from './constants/uiBuildVersion.ts';
 import type { AuthUnlockTransitionSnapshot } from './types/authTransition';
 
 const MINTING_LOCAL_DEBUG_STORAGE_KEY = 'hub.mintingLocalDebug';
@@ -1357,11 +1356,7 @@ function App() {
         setOpenCoreSetup(true);
       }, 650);
     }
-  }, [
-    prepareNodeForHubEntry,
-    returnToMain,
-    setOpenCoreSetup,
-  ]);
+  }, [prepareNodeForHubEntry, returnToMain, setOpenCoreSetup]);
   const onCountdownComplete = useCallback(() => {
     window.close();
   }, []);
@@ -1451,8 +1446,7 @@ function App() {
                       lineHeight: 1.55,
                     }}
                   >
-                    The authenticated shell crashed during render. The latest
-                    safe marker is {HUB_UI_BUILD_VERSION}.
+                    The authenticated shell crashed during render.
                   </Typography>
                   {error?.message ? (
                     <Typography
