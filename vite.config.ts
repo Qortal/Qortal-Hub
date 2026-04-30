@@ -30,7 +30,7 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       manifest: {
         name: 'Qortal Hub',
         short_name: 'Hub',
@@ -53,10 +53,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
         maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10MB limit
-        skipWaiting: true,
         disableDevLogs: true, // Suppresses logs in development
       },
     }),
