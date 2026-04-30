@@ -7,6 +7,7 @@
     "add_custom_framework": "添加自定义框架",
     "add_reaction": "添加反应",
     "add_theme": "添加主题",
+    "back": "返回",
     "backup_account": "备份帐户",
     "backup_wallet": "备用钱包",
     "cancel": "取消",
@@ -393,7 +394,8 @@
     "q_mail": "Q邮件",
     "q_manager": "Q-Manager",
     "q_sandbox": "q-sandbox",
-    "q_wallets": "Q-WALLETS"
+    "q_wallets": "Q-WALLETS",
+    "wallets_workspace": "钱包工作区"
   },
   "app_detail": {
     "about": "关于",

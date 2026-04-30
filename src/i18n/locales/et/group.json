@@ -174,6 +174,19 @@
     "tab_subscriptions": "Tellimused",
     "tab_subwire": "SubWire"
   },
+  "group_invites": {
+    "empty_title": "kutseid pole",
+    "empty_secondary_1": "sul pole ootel kutseid",
+    "empty_secondary_2": "praegu.",
+    "empty_tertiary_no_groups": "sa ei kuulu veel ühegi grupiga.",
+    "cta_find_groups": "leia gruppe"
+  },
+  "group_join_requests": {
+    "empty_title": "ühtegi liitumistaotlust pole",
+    "empty_secondary_1": "sul pole ootel taotlusi",
+    "empty_secondary_2": "praegu.",
+    "empty_tertiary_no_admin_groups": "sa ei halda veel ühtki gruppi."
+  },
   "advanced_options": "lisavalikud",
   "block_delay": {
     "minimum": "minimaalne ploki viivitus",
@@ -251,6 +264,7 @@
       "node_minting_key": "sul on hetkel selles sõlmes alloelvad aktiivsed mintimise kontod",
       "no_announcement": "teadaandeid ei ole",
       "no_display": "midagi ei ole kuvamiseks",
+      "no_description": "kirjeldus puudub",
       "no_selection": "rühma ei ole valitud",
       "not_part_group": "sa ei kuulu krüpteeritud liikmete rühma. Oota, kuni administraator võtmed uuesti krüpteerib.",
       "only_encrypted": "kuvatakse ainult krüpteerimata sõnumid.",

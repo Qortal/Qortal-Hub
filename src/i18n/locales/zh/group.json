@@ -174,6 +174,19 @@
     "tab_subscriptions": "订阅",
     "tab_subwire": "SubWire"
   },
+  "group_invites": {
+    "empty_title": "没有邀请",
+    "empty_secondary_1": "你目前没有待处理的邀请，",
+    "empty_secondary_2": "请稍后再查看。",
+    "empty_tertiary_no_groups": "你还未加入任何群组。",
+    "cta_find_groups": "查找群组"
+  },
+  "group_join_requests": {
+    "empty_title": "没有加入申请",
+    "empty_secondary_1": "你目前没有待处理的申请",
+    "empty_secondary_2": "请稍后再查看。",
+    "empty_tertiary_no_admin_groups": "你还没有管理任何群组。"
+  },
   "advanced_options": "高级选项",
   "block_delay": {
     "minimum": "最小区块延迟",
@@ -251,6 +264,7 @@
       "node_minting_key": "你已有该账户的铸币密钥与该节点绑定",
       "no_announcement": "暂无公告",
       "no_display": "无显示内容",
+      "no_description": "没有描述",
       "no_selection": "未选择任何群组",
       "not_part_group": "你不是该加密群组的成员。请等待管理员重新加密密钥",
       "only_encrypted": "只显示未加密消息",

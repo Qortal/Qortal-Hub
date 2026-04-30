@@ -7,6 +7,7 @@
     "add_custom_framework": "adicionar framework personalizado",
     "add_reaction": "adicionar reação",
     "add_theme": "adicionar tema",
+    "back": "voltar",
     "backup_account": "conta backup",
     "backup_wallet": "carteira backup",
     "cancel": "cancelar",
@@ -393,7 +394,8 @@
     "q_mail": "q-mail",
     "q_manager": "q-Gerente",
     "q_sandbox": "q-Sandbox",
-    "q_wallets": "q-Casteiras"
+    "q_wallets": "q-Casteiras",
+    "wallets_workspace": "área de trabalho das carteiras"
   },
   "app_detail": {
     "about": "sobre",

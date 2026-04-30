@@ -7,6 +7,7 @@
     "add_custom_framework": "カスタムフレームワークを追加します",
     "add_reaction": "反応を追加します",
     "add_theme": "テーマを追加します",
+    "back": "戻る",
     "backup_account": "バックアップアカウント",
     "backup_wallet": "バックアップウォレット",
     "cancel": "キャンセル",
@@ -393,7 +394,8 @@
     "q_mail": "Qメール",
     "q_manager": "Qマネージャー",
     "q_sandbox": "Q-Sandbox",
-    "q_wallets": "Q-Wallets"
+    "q_wallets": "Q-Wallets",
+    "wallets_workspace": "ウォレットのワークスペース"
   },
   "app_detail": {
     "about": "概要",

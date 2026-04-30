@@ -7,6 +7,7 @@
     "add_custom_framework": "إضافة إطار مخصص",
     "add_reaction": "إضافة تفاعل",
     "add_theme": "إضافة سمة",
+    "back": "رجوع",
     "backup_account": "نسخ احتياطي للحساب",
     "backup_wallet": "نسخ احتياطي للمحفظة",
     "cancel": "إلغاء",
@@ -393,7 +394,8 @@
     "q_mail": "بريد Q",
     "q_manager": "مدير Q",
     "q_sandbox": "ساحة تطوير Q",
-    "q_wallets": "محافظ Q"
+    "q_wallets": "محافظ Q",
+    "wallets_workspace": "مساحة عمل المحافظ"
   },
   "app_detail": {
     "about": "حول",

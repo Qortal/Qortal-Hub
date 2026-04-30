@@ -174,6 +174,19 @@
     "tab_subscriptions": "Abonnements",
     "tab_subwire": "SubWire"
   },
+  "group_invites": {
+    "empty_title": "aucune invitation",
+    "empty_secondary_1": "vous n’avez pas d’invitations en attente",
+    "empty_secondary_2": "pour le moment.",
+    "empty_tertiary_no_groups": "vous ne faites encore partie d’aucun groupe.",
+    "cta_find_groups": "trouver des groupes"
+  },
+  "group_join_requests": {
+    "empty_title": "aucune demande d’adhésion",
+    "empty_secondary_1": "vous n’avez pas de demandes en attente",
+    "empty_secondary_2": "pour le moment.",
+    "empty_tertiary_no_admin_groups": "vous n’administrez encore aucun groupe."
+  },
   "advanced_options": "options avancées",
   "block_delay": {
     "minimum": "délai minimum de bloc",
@@ -251,6 +264,7 @@
       "node_minting_key": "vous avez déjà une clé de minage attachée à ce nœud",
       "no_announcement": "aucune annonce",
       "no_display": "rien à afficher",
+      "no_description": "Aucune description",
       "no_selection": "aucun groupe sélectionné",
       "not_part_group": "vous ne faites pas partie du groupe chiffré. Attendez qu’un admin rechiffre les clés.",
       "only_encrypted": "seuls les messages non chiffrés seront affichés.",

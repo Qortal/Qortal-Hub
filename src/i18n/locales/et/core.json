@@ -7,6 +7,7 @@
     "add_custom_framework": "lisa kohandatud raamistik",
     "add_reaction": "lisa reaktsioon",
     "add_theme": "lisa teema",
+    "back": "tagasi",
     "backup_account": "varunda konto",
     "backup_wallet": "varunda rahakott",
     "cancel": "tühista",
@@ -393,7 +394,8 @@
     "q_mail": "q-mail",
     "q_manager": "q-manager",
     "q_sandbox": "q-sandbox",
-    "q_wallets": "q-walletid"
+    "q_wallets": "q-walletid",
+    "wallets_workspace": "rahakottide tööruum"
   },
   "app_detail": {
     "about": "teave",

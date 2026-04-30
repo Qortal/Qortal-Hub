@@ -174,6 +174,19 @@
     "tab_subscriptions": "サブスクリプション",
     "tab_subwire": "SubWire"
   },
+  "group_invites": {
+    "empty_title": "招待はありません",
+    "empty_secondary_1": "保留中の招待はありません",
+    "empty_secondary_2": "現時点では。",
+    "empty_tertiary_no_groups": "まだどのグループにも参加していません。",
+    "cta_find_groups": "グループを探す"
+  },
+  "group_join_requests": {
+    "empty_title": "参加リクエストはありません",
+    "empty_secondary_1": "保留中のリクエストはありません",
+    "empty_secondary_2": "現時点では。",
+    "empty_tertiary_no_admin_groups": "まだ管理しているグループはありません。"
+  },
   "advanced_options": "高度なオプション",
   "block_delay": {
     "minimum": "最小ブロック遅延",
@@ -251,6 +264,7 @@
       "node_minting_key": "このノードに現在接続されているアカウントのマイニング鍵があります",
       "no_announcement": "お知らせはありません",
       "no_display": "表示するものがありません",
+      "no_description": "説明なし",
       "no_selection": "グループが選択されていません",
       "not_part_group": "暗号化されたグループの一員ではありません。管理者による鍵の再暗号化をお待ちください。",
       "only_encrypted": "暗号化されていないメッセージのみ表示されます",

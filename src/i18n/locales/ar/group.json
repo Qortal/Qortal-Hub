@@ -174,6 +174,19 @@
     "tab_subscriptions": "الاشتراكات",
     "tab_subwire": "SubWire"
   },
+  "group_invites": {
+    "empty_title": "لا توجد دعوات",
+    "empty_secondary_1": "ليس لديك دعوات معلقة",
+    "empty_secondary_2": "في الوقت الحالي.",
+    "empty_tertiary_no_groups": "أنت لم تنضم إلى أي مجموعات بعد.",
+    "cta_find_groups": "البحث عن مجموعات"
+  },
+  "group_join_requests": {
+    "empty_title": "لا توجد طلبات انضمام",
+    "empty_secondary_1": "ليس لديك طلبات معلقة",
+    "empty_secondary_2": "في الوقت الحالي.",
+    "empty_tertiary_no_admin_groups": "أنت لا تدير أي مجموعات بعد."
+  },
   "advanced_options": "خيارات متقدمة",
   "block_delay": {
     "minimum": "أقل وقت بين البلوكات",
@@ -251,6 +264,7 @@
       "node_minting_key": "عندك بالفعل مفتاح تعدين لهذا الحساب على النود ده",
       "no_announcement": "مفيش إعلانات",
       "no_display": "مفيش حاجة للعرض",
+      "no_description": "لا يوجد وصف",
       "no_selection": "مفيش جروب محدد",
       "not_part_group": "انت مش من أعضاء الجروب المشفر، استنى لحد ما الأدمن يشفر المفاتيح تاني",
       "only_encrypted": "هتظهر بس الرسائل المشفرة",

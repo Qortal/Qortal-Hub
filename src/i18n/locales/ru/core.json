@@ -7,6 +7,7 @@
     "add_custom_framework": "Добавьте пользовательскую структуру",
     "add_reaction": "Добавить реакцию",
     "add_theme": "Добавить тему",
+    "back": "назад",
     "backup_account": "резервная учетная запись",
     "backup_wallet": "резервный кошелек",
     "cancel": "отмена",
@@ -393,7 +394,8 @@
     "q_mail": "Q-Mail",
     "q_manager": "Q-Manager",
     "q_sandbox": "Q-SANDBOX",
-    "q_wallets": "Q-Wallet"
+    "q_wallets": "Q-Wallet",
+    "wallets_workspace": "рабочая область кошельков"
   },
   "app_detail": {
     "about": "о приложении",

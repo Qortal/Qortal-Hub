@@ -15,6 +15,17 @@ import {
 } from '../../utils/events';
 import { appChromeOffsetPx } from '../Desktop/CustomTitleBar';
 
+/** Official Q-App listing name — kept in English everywhere. */
+const Q_WALLETS_APP_NAME = 'Q-Wallets';
+
+type WalletsEmbeddedTab = {
+  tabId: string;
+  name: string;
+  service: string;
+  path: string;
+  refreshFunc?: (tabId: string) => void;
+};
+
 export const WalletsAppWrapper = () => {
   const { t } = useTranslation([
     'auth',
@@ -27,12 +38,15 @@ export const WalletsAppWrapper = () => {
   const iframeRef = useRef(null);
   const [isOpen, setIsOpen] = useState(false);
   const [navigationController] = useAtom(navigationControllerAtom);
-  const [selectedTab] = useState({
-    tabId: '5558589',
-    name: 'Q-Wallets',
-    service: 'APP',
-    path: 'qortal?authOnMount=true',
-  });
+  const selectedTab = useMemo<WalletsEmbeddedTab>(
+    () => ({
+      tabId: '5558589',
+      name: Q_WALLETS_APP_NAME,
+      service: 'APP',
+      path: 'qortal?authOnMount=true',
+    }),
+    []
+  );
 
   const isDisableBackButton = useMemo(() => {
     if (selectedTab && navigationController[selectedTab?.tabId]?.hasBack) {
@@ -173,9 +187,7 @@ export const WalletsAppWrapper = () => {
                   lineHeight: 1.1,
                 }}
               >
-                {t('core:q_apps.q_wallets', {
-                  postProcess: 'capitalizeFirstChar',
-                })}
+                {Q_WALLETS_APP_NAME}
               </Typography>
             </Box>
 
@@ -209,6 +221,8 @@ export const WalletsAppWrapper = () => {
             <AppViewerContainer
               customHeight="100%"
               app={selectedTab}
+              hide={false}
+              isDevMode={false}
               isSelected
               ref={iframeRef}
               skipAuth={true}
@@ -269,7 +283,7 @@ export const WalletsAppWrapper = () => {
               >
                 <ArrowBackRoundedIcon sx={{ fontSize: '1rem' }} />
                 <Typography sx={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                  Back
+                  {t('core:action.back', { postProcess: 'capitalizeFirstChar' })}
                 </Typography>
               </ButtonBase>
 
@@ -297,7 +311,9 @@ export const WalletsAppWrapper = () => {
               >
                 <RefreshRoundedIcon sx={{ fontSize: '1rem' }} />
                 <Typography sx={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                  Refresh
+                  {t('core:action.refresh', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Typography>
               </ButtonBase>
             </Box>
@@ -310,7 +326,9 @@ export const WalletsAppWrapper = () => {
                 px: 1,
               }}
             >
-              Wallet workspace
+              {t('core:q_apps.wallets_workspace', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </Box>
         </Box>

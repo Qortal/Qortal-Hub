@@ -7,6 +7,7 @@
     "add_custom_framework": "add custom framework",
     "add_reaction": "add reaction",
     "add_theme": "add theme",
+    "back": "back",
     "backup_account": "backup account",
     "backup_wallet": "backup wallet",
     "cancel": "cancel",
@@ -396,7 +397,8 @@
     "q_mail": "q-mail",
     "q_manager": "q-manager",
     "q_sandbox": "q-Sandbox",
-    "q_wallets": "q-Wallets"
+    "q_wallets": "q-Wallets",
+    "wallets_workspace": "wallet workspace"
   },
   "app_detail": {
     "about": "about",

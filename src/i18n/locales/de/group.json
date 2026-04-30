@@ -174,6 +174,19 @@
     "tab_subscriptions": "Abonnements",
     "tab_subwire": "SubWire"
   },
+  "group_invites": {
+    "empty_title": "keine Einladungsanfragen",
+    "empty_secondary_1": "du hast derzeit keine ausstehenden Einladungen",
+    "empty_secondary_2": "im Moment.",
+    "empty_tertiary_no_groups": "du gehörst noch keiner Gruppe an.",
+    "cta_find_groups": "Gruppen finden"
+  },
+  "group_join_requests": {
+    "empty_title": "keine Beitrittsanfragen",
+    "empty_secondary_1": "du hast derzeit keine ausstehenden Anfragen",
+    "empty_secondary_2": "im Moment.",
+    "empty_tertiary_no_admin_groups": "du verwaltest noch keine Gruppen."
+  },
   "advanced_options": "Erweiterte Optionen",
   "block_delay": {
     "minimum": "Minimale Blockverzögerung",
@@ -251,6 +264,7 @@
       "node_minting_key": "Du hast bereits einen Minting-Schlüssel für dieses Konto auf diesem Node",
       "no_announcement": "Keine Ankündigungen",
       "no_display": "Nichts anzuzeigen",
+      "no_description": "Keine Beschreibung",
       "no_selection": "Keine Gruppe ausgewählt",
       "not_part_group": "Du bist nicht Teil der verschlüsselten Mitgliedergruppe. Bitte warte, bis ein Admin den Schlüssel neu verschlüsselt.",
       "only_encrypted": "Nur unverschlüsselte Nachrichten werden angezeigt.",

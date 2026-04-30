@@ -7,6 +7,7 @@
     "add_custom_framework": "Fügen Sie benutzerdefiniertes Framework hinzu",
     "add_reaction": "Reaktion hinzufügen",
     "add_theme": "Thema hinzufügen",
+    "back": "zurück",
     "backup_account": "Sicherungskonto",
     "backup_wallet": "Backup -Brieftasche",
     "cancel": "stornieren",
@@ -392,7 +393,8 @@
     "q_mail": "Q-Mail",
     "q_manager": "Q-Manager",
     "q_sandbox": "q-sandbox",
-    "q_wallets": "q-wallets"
+    "q_wallets": "q-wallets",
+    "wallets_workspace": "Wallet-Arbeitsbereich"
   },
   "app_detail": {
     "about": "über",

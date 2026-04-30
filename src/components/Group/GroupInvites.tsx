@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { Box, Button, ButtonBase, Collapse, Popover, Typography, useTheme } from '@mui/material';
 import { LoadingButton } from '@mui/lab';
@@ -227,9 +227,27 @@ export const GroupInvites = ({
 
   const hasAnyGroups =
     (memberGroups?.length ?? 0) > 0 || (myGroupsWhereIAmAdmin?.length ?? 0) > 0;
-  const emptyStateTertiaryText = hasAnyGroups
-    ? undefined
-    : 'You are not part of any groups yet.';
+  const emptyStateTertiaryText = useMemo(
+    () =>
+      hasAnyGroups
+        ? undefined
+        : t('group:group_invites.empty_tertiary_no_groups', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+    [hasAnyGroups, t]
+  );
+
+  const emptyInviteSecondaryLines = useMemo(
+    () => [
+      t('group:group_invites.empty_secondary_1', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      t('group:group_invites.empty_secondary_2', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    ],
+    [t]
+  );
 
   const handleFindGroups = useCallback(() => {
     setOpenAddGroupTab?.(1);
@@ -284,13 +302,14 @@ export const GroupInvites = ({
           <GroupActivityEmptyState
             compact={compact}
             isVisible={isVisible}
-            title="No invite requests"
-            secondaryLines={[
-              "You don't have any pending invites",
-              'at the moment.',
-            ]}
+            title={t('group:group_invites.empty_title', {
+              postProcess: 'capitalizeFirstChar',
+            })}
+            secondaryLines={emptyInviteSecondaryLines}
             tertiaryText={emptyStateTertiaryText}
-            ctaLabel="Find groups"
+            ctaLabel={t('group:group_invites.cta_find_groups', {
+              postProcess: 'capitalizeFirstChar',
+            })}
             onCtaClick={handleFindGroups}
             graphicVariant="invites"
           />
@@ -465,7 +484,9 @@ export const GroupInvites = ({
             </Box>
             <Box sx={{ px: 2.5, py: 2 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75, fontWeight: 600 }}>
-                {t('group:group.description', { postProcess: 'capitalizeFirstChar', defaultValue: 'Description' })}
+                {t('group:group.description', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
               <Typography
                 variant="body2"
@@ -480,7 +501,9 @@ export const GroupInvites = ({
                 }}
               >
                 {selectedGroupForPopover.description ||
-                  t('group:message.generic.no_description', { postProcess: 'capitalizeFirstChar', defaultValue: 'No description' })}
+                  t('group:message.generic.no_description', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
               </Typography>
               {selectedGroupForPopover.isOpen === false && (
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

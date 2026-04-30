@@ -7,6 +7,7 @@
     "add_custom_framework": "lisää oma kehys",
     "add_reaction": "lisää reaktio",
     "add_theme": "lisää teema",
+    "back": "takaisin",
     "backup_account": "varmuuskopioi tili",
     "backup_wallet": "varmuuskopioi lompakko",
     "cancel": "peruuta",
@@ -324,7 +325,8 @@
     "q_mail": "q-mail",
     "q_manager": "q-manager",
     "q_sandbox": "q-sandbox",
-    "q_wallets": "q-lompakot"
+    "q_wallets": "q-lompakot",
+    "wallets_workspace": "lompakoiden työtila"
   },
   "app_detail": {
     "about": "tietoja",

@@ -7,6 +7,7 @@
     "add_custom_framework": "Agregar marco personalizado",
     "add_reaction": "Agregar reacción",
     "add_theme": "Agregar tema",
+    "back": "volver",
     "backup_account": "cuenta de respaldo",
     "backup_wallet": "billetera de respaldo",
     "cancel": "Cancelar",
@@ -393,7 +394,8 @@
     "q_mail": "QAIL",
     "q_manager": "manager",
     "q_sandbox": "Q-Sandbox",
-    "q_wallets": "Medillas Q"
+    "q_wallets": "Medillas Q",
+    "wallets_workspace": "espacio de trabajo de carteras"
   },
   "app_detail": {
     "about": "acerca de",

@@ -174,6 +174,19 @@
     "tab_subscriptions": "Abbonamenti",
     "tab_subwire": "SubWire"
   },
+  "group_invites": {
+    "empty_title": "nessun invito",
+    "empty_secondary_1": "non hai inviti in sospeso",
+    "empty_secondary_2": "al momento.",
+    "empty_tertiary_no_groups": "non fai ancora parte di nessun gruppo.",
+    "cta_find_groups": "trova gruppi"
+  },
+  "group_join_requests": {
+    "empty_title": "nessuna richiesta di ingresso",
+    "empty_secondary_1": "non hai richieste in sospeso",
+    "empty_secondary_2": "al momento.",
+    "empty_tertiary_no_admin_groups": "non stai ancora gestendo nessun gruppo."
+  },
   "advanced_options": "opzioni avanzate",
   "block_delay": {
     "minimum": "ritardo del blocco minimo",
@@ -251,6 +264,7 @@
       "node_minting_key": "hai una chiave di minting per questo account collegata al nodo",
       "no_announcement": "nessun annuncio",
       "no_display": "niente da visualizzare",
+      "no_description": "nessuna descrizione",
       "no_selection": "nessun gruppo selezionato",
       "not_part_group": "non fai parte del gruppo crittografato di membri. Attendere che un amministratore recripti le chiavi.",
       "only_encrypted": "verranno visualizzati solo messaggi non crittografati.",

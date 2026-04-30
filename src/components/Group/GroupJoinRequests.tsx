@@ -197,9 +197,27 @@ export const GroupJoinRequests = ({
     setOpenAddGroup?.(true);
   };
 
-  const emptyStateTertiaryText = shouldShowEmptyStateHelper
-    ? "You're not managing any groups yet."
-    : undefined;
+  const emptyStateTertiaryText = useMemo(
+    () =>
+      shouldShowEmptyStateHelper
+        ? t('group:group_join_requests.empty_tertiary_no_admin_groups', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : undefined,
+    [shouldShowEmptyStateHelper, t]
+  );
+
+  const emptyJoinRequestsSecondaryLines = useMemo(
+    () => [
+      t('group:group_join_requests.empty_secondary_1', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+      t('group:group_join_requests.empty_secondary_2', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    ],
+    [t]
+  );
 
   const listContent = (
     <Box
@@ -239,13 +257,14 @@ export const GroupJoinRequests = ({
             <GroupActivityEmptyState
               compact={compact}
               isVisible={isVisible}
-              title="No join requests"
-              secondaryLines={[
-                "You don't have any pending requests",
-                'at the moment.',
-              ]}
+              title={t('group:group_join_requests.empty_title', {
+                postProcess: 'capitalizeFirstChar',
+              })}
+              secondaryLines={emptyJoinRequestsSecondaryLines}
               tertiaryText={emptyStateTertiaryText}
-              ctaLabel="Create group"
+              ctaLabel={t('group:action.create_group', {
+                postProcess: 'capitalizeFirstChar',
+              })}
               onCtaClick={handleCreateGroup}
               graphicVariant="requests"
             />
@@ -309,11 +328,13 @@ export const GroupJoinRequests = ({
                       mt: 0.25,
                     }}
                   >
-                    {t('group:message.generic.pending_join_requests_count', {
-                      count,
-                      postProcess: 'capitalizeFirstChar',
-                      defaultValue: '{{count}} pending join request(s)',
-                    })}
+                    {t(
+                      'group:message.generic.pending_join_requests_count',
+                      {
+                        count,
+                        postProcess: 'capitalizeFirstChar',
+                      }
+                    )}
                   </Typography>
                 </Box>
                 <Button
