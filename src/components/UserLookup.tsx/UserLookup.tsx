@@ -389,7 +389,7 @@ export const UserLookup = ({
     (addressInfo.address === currentUserAddress ||
       (targetUserName && targetUserName === currentUserName));
   const isBlocked =
-    !!addressInfo?.address && isUserBlocked(addressInfo.address, targetUserName);
+    !!addressInfo?.address && isUserBlocked(addressInfo.address);
 
   const lookupOptions = useMemo(() => {
     if (!inputValue.trim()) {
@@ -548,7 +548,12 @@ export const UserLookup = ({
         setPayments(nextPayments);
         setTotalPaymentsCount(nextPayments.length);
       } catch (error: any) {
-        setErrorMessage(error?.message || 'Unable to look up this user.');
+        setErrorMessage(
+          error?.message ||
+            tRef.current('core:account_lookup.error_lookup_failed', {
+              postProcess: 'capitalizeFirstChar',
+            }),
+        );
       } finally {
         lookupInProgressRef.current = false;
         setIsLoadingUser(false);
@@ -688,7 +693,9 @@ export const UserLookup = ({
     navigator.clipboard.writeText(addressInfo.address);
     pushSnack(
       'success',
-      'Address copied to clipboard'
+      t('tutorial:home.address_copied', {
+        postProcess: 'capitalizeFirstChar',
+      }),
     );
   }, [addressInfo?.address, pushSnack, t]);
 
@@ -924,28 +931,6 @@ export const UserLookup = ({
     alpha(theme.palette.mode === 'dark' ? '#D9DFEA' : '#314055', 0.78)
   );
 
-  const statRows = [
-    {
-      label: t('core:balance', { postProcess: 'capitalizeFirstChar' }),
-      value: `${formatBalance(addressInfo?.balance)} QORT`,
-    },
-    {
-      label: t('core:total_received', { postProcess: 'capitalizeFirstChar' }),
-      value:
-        totalReceived != null ? `${formatBalance(totalReceived)} QORT` : '—',
-    },
-    {
-      label: t('core:total_sent', { postProcess: 'capitalizeFirstChar' }),
-      value: totalSent != null ? `${formatBalance(totalSent)} QORT` : '—',
-    },
-    {
-      label: t('core:total_blocks_minted', {
-        postProcess: 'capitalizeFirstChar',
-      }),
-      value: currentBlocks.toLocaleString(),
-    },
-  ];
-
   const displayStatRows = [
     {
       label: t('core:balance', { postProcess: 'capitalizeFirstChar' }),
@@ -954,11 +939,16 @@ export const UserLookup = ({
     {
       label: t('core:total_received', { postProcess: 'capitalizeFirstChar' }),
       value:
-        totalReceived != null ? `${formatStatBalance(totalReceived)} QORT` : 'â€”',
+        totalReceived != null
+          ? `${formatStatBalance(totalReceived)} QORT`
+          : '\u2014',
     },
     {
       label: t('core:total_sent', { postProcess: 'capitalizeFirstChar' }),
-      value: totalSent != null ? `${formatStatBalance(totalSent)} QORT` : 'â€”',
+      value:
+        totalSent != null
+          ? `${formatStatBalance(totalSent)} QORT`
+          : '\u2014',
     },
     {
       label: t('core:total_blocks_minted', {
@@ -997,9 +987,11 @@ export const UserLookup = ({
           startIcon={<NorthEastRoundedIcon />}
           sx={sendActionButtonSx}
         >
-          Send QORT
+          {t('core:action.send_qort', { postProcess: 'capitalizeFirstChar' })}
         </Button>,
-        isCurrentUserProfile ? 'This is your own profile' : undefined
+        isCurrentUserProfile
+          ? t('core:account_lookup.tooltip_send_disabled')
+          : undefined
       )}
 
       {renderActionButton(
@@ -1022,12 +1014,18 @@ export const UserLookup = ({
           }
           sx={blockActionButtonSx}
         >
-          {isBlocked ? 'Unblock' : 'Block'}
+          {isBlocked
+            ? t('core:account_lookup.action_unblock', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('core:account_lookup.action_block', {
+                postProcess: 'capitalizeFirstChar',
+              })}
         </Button>,
         isRunningPublicNode
-          ? 'Blocking users is unavailable while running on a public node.'
+          ? t('core:account_lookup.tooltip_block_public_node')
           : isCurrentUserProfile
-            ? 'You cannot block yourself.'
+            ? t('core:account_lookup.tooltip_block_self')
             : undefined,
         isRunningPublicNode || isCurrentUserProfile
       )}
@@ -1142,7 +1140,9 @@ export const UserLookup = ({
                 lineHeight: 1.1,
               }}
             >
-              User search
+              {t('core:account_lookup.dialog_title', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
             </Box>
 
@@ -1376,7 +1376,9 @@ export const UserLookup = ({
                         lineHeight: 1.14,
                       }}
                     >
-                      Search accounts
+                      {t('core:account_lookup.empty_title', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Typography>
                     <Typography
                       sx={{
@@ -1386,7 +1388,9 @@ export const UserLookup = ({
                         lineHeight: 1.55,
                       }}
                     >
-                      Enter a name or address
+                      {t('core:account_lookup.empty_subtitle', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Typography>
                   </Box>
               </Box>
@@ -1504,7 +1508,10 @@ export const UserLookup = ({
                       }}
                     >
                       <Chip
-                        label={`Level ${addressInfo.level ?? 0}`}
+                        label={t('core:account_lookup.chip_level', {
+                          level: addressInfo.level ?? 0,
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                         size="small"
                         sx={{
                           backgroundColor: alpha(theme.palette.primary.main, 0.14),
@@ -1515,7 +1522,9 @@ export const UserLookup = ({
                       {isBlocked ? (
                         <Chip
                           icon={<ShieldRoundedIcon />}
-                          label="Blocked"
+                          label={t('core:account_lookup.chip_blocked', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                           size="small"
                           sx={{
                             backgroundColor: alpha(theme.palette.error.main, 0.12),
@@ -1526,7 +1535,9 @@ export const UserLookup = ({
                       ) : null}
                       {!addressInfo.name ? (
                         <Chip
-                          label="No registered name"
+                          label={t('core:account_lookup.chip_no_registered_name', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                           size="small"
                           sx={{
                             backgroundColor: alpha(
@@ -1550,7 +1561,9 @@ export const UserLookup = ({
                       }}
                     >
                       <Typography sx={sectionLabelSx}>
-                        Minting progress
+                        {t('core:account_lookup.section_minting_progress', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </Typography>
                       <LinearProgress
                         value={progress * 100}
@@ -1579,8 +1592,17 @@ export const UserLookup = ({
                         }}
                       >
                         {nextLevelNumber != null
-                          ? `${remainingBlocks.toLocaleString()} to level ${nextLevelNumber}`
-                          : `${remainingBlocks.toLocaleString()} remaining`}
+                          ? t('core:account_lookup.minting_blocks_to_level', {
+                              remaining:
+                                remainingBlocks.toLocaleString(),
+                              level: nextLevelNumber,
+                              postProcess: 'capitalizeFirstChar',
+                            })
+                          : t('core:account_lookup.minting_remaining', {
+                              remaining:
+                                remainingBlocks.toLocaleString(),
+                              postProcess: 'capitalizeFirstChar',
+                            })}
                       </Typography>
                       {daysToLevel != null && daysToLevel >= 0 ? (
                         <Typography
@@ -1590,7 +1612,11 @@ export const UserLookup = ({
                             mt: 0.25,
                           }}
                         >
-                          Minting for: ~{Math.round(daysToLevel)} days
+                          {t('core:account_lookup.minting_days_label')}{' '}
+                          {t('core:account_lookup.minting_approx', {
+                            count: Math.round(daysToLevel),
+                            postProcess: 'capitalizeFirstChar',
+                          })}
                         </Typography>
                       ) : null}
                     </Box>
@@ -1698,7 +1724,9 @@ export const UserLookup = ({
                     }}
                   >
                     <Typography sx={sectionLabelSx}>
-                      Address
+                      {t('core:account_lookup.label_address', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Typography>
                     <ButtonBase
                       onClick={handleCopyAddress}
@@ -1741,7 +1769,9 @@ export const UserLookup = ({
                     }}
                   >
                     <Typography sx={sectionLabelSx}>
-                      Public key
+                      {t('core:account_lookup.label_public_key', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Typography>
                     <Typography
                       sx={{
@@ -1754,7 +1784,7 @@ export const UserLookup = ({
                         wordBreak: 'break-word',
                       }}
                     >
-                      {addressInfo.publicKey || '—'}
+                      {addressInfo.publicKey || '\u2014'}
                     </Typography>
                   </Box>
                 </Box>
@@ -1789,7 +1819,9 @@ export const UserLookup = ({
                           letterSpacing: '-0.03em',
                         }}
                       >
-                        Recent payments
+                        {t('core:account_lookup.payments_title', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </Typography>
                       <Typography
                         sx={{
@@ -1842,10 +1874,26 @@ export const UserLookup = ({
                     >
                       <TableHead>
                         <TableRow>
-                          <TableCell>Sender</TableCell>
-                          <TableCell>Receiver</TableCell>
-                          <TableCell align="right">Amount</TableCell>
-                          <TableCell align="right">Time</TableCell>
+                          <TableCell>
+                            {t('core:sender', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            {t('core:receiver', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </TableCell>
+                          <TableCell align="right">
+                            {t('core:amount', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </TableCell>
+                          <TableCell align="right">
+                            {t('core:time.time', {
+                              postProcess: 'capitalizeFirstChar',
+                            })}
+                          </TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1987,6 +2035,14 @@ export const UserLookup = ({
                     page={paymentsPage}
                     rowsPerPage={paymentsRowsPerPage}
                     rowsPerPageOptions={[5, 10, 20]}
+                    labelRowsPerPage={t('core:account_lookup.pagination_rows_per_page')}
+                    labelDisplayedRows={({ from, to, count }) =>
+                      t('core:account_lookup.pagination_displayed_rows', {
+                        from,
+                        to,
+                        count,
+                      })
+                    }
                     sx={{
                       borderTop: `1px solid ${alpha(theme.palette.divider, 0.16)}`,
                       mt: 1,
