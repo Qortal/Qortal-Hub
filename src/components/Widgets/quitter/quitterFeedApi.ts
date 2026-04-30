@@ -8,8 +8,8 @@ import type {
   QuitterFeedSearchResource,
   QuitterFeedVideoRef,
 } from './quitterFeedTypes';
+import { getBaseApiReact } from '../../../utils/globalApi';
 
-export const QUITTER_PUBLIC_NODE_URL = 'https://ext-node.qortal.link';
 export const QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT =
   '/arbitrary/resources/searchsimple';
 
@@ -229,7 +229,7 @@ const buildQuitterFeedSearchUrl = (searchLimit: number, offset: number) => {
     service: 'DOCUMENT',
   });
 
-  return `${QUITTER_PUBLIC_NODE_URL}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;
+  return `${getBaseApiReact()}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;
 };
 
 const buildQuitterUserResourceSearchUrl = (
@@ -248,14 +248,14 @@ const buildQuitterUserResourceSearchUrl = (
     service: 'DOCUMENT',
   });
 
-  return `${QUITTER_PUBLIC_NODE_URL}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;
+  return `${getBaseApiReact()}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;
 };
 
 const buildQuitterDocumentUrl = (name: string, identifier: string) =>
-  `${QUITTER_PUBLIC_NODE_URL}/arbitrary/DOCUMENT/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
+  `${getBaseApiReact()}/arbitrary/DOCUMENT/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
 
 export const getQuitterAvatarUrl = (author: string) =>
-  `${QUITTER_PUBLIC_NODE_URL}/arbitrary/THUMBNAIL/${encodeURIComponent(author)}/qortal_avatar?async=true`;
+  `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(author)}/qortal_avatar?async=true`;
 
 const fetchQuitterSearchResources = async (
   searchLimit: number,

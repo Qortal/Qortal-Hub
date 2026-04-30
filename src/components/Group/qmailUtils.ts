@@ -1,10 +1,6 @@
 import moment from 'moment';
 import { TIME_WEEKS_1_IN_MILLISECONDS } from '../../constants/constants';
 
-function isLessThanOneWeekOld(timestamp: number): boolean {
-  return timestamp > Date.now() - TIME_WEEKS_1_IN_MILLISECONDS;
-}
-
 export function formatEmailDate(timestamp: number): string {
   const date = moment(timestamp);
   const now = moment();

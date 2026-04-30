@@ -1,3 +1,5 @@
+import { getBaseApiReact } from '../../utils/globalApi';
+
 export type EarbumpTrack = {
   artist: string;
   coverColors: [string, string, string];
@@ -12,7 +14,6 @@ export type EarbumpTrack = {
   uploaded: string;
 };
 
-const EARBUMP_PUBLIC_NODE_URL = 'https://ext-node.qortal.link';
 const EARBUMP_SEARCH_ENDPOINT = '/arbitrary/resources/search';
 const EARBUMP_SONG_IDENTIFIER_PREFIX = 'earbump_song_';
 
@@ -189,7 +190,7 @@ const mapSearchResponseItem = (value: unknown): EarbumpTrack | null => {
     length: '--:--',
     name,
     status: toSafeString(resource.status?.status).trim() || null,
-    streamUrl: `${EARBUMP_PUBLIC_NODE_URL}/arbitrary/AUDIO/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`,
+    streamUrl: `${getBaseApiReact()}/arbitrary/AUDIO/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`,
     title,
     updated: toSafeNumber(resource.updated),
     uploaded: formatRelativeTimestamp(created),
@@ -214,7 +215,7 @@ const fetchTrackSearch = async (
   signal?: AbortSignal
 ) => {
   const response = await fetch(
-    `${EARBUMP_PUBLIC_NODE_URL}${EARBUMP_SEARCH_ENDPOINT}?${params.toString()}`,
+    `${getBaseApiReact()}${EARBUMP_SEARCH_ENDPOINT}?${params.toString()}`,
     {
       cache: 'no-store',
       signal,
