@@ -54,6 +54,17 @@
     "devnet_testing_desc": "Тестируйте ваши Q-Apps в среде DevNet-Testing",
     "open_app": "Открыть",
     "address_copied": "Адрес скопирован в буфер обмена",
-    "group_activity": "Активность группы"
+    "group_activity": "Активность группы",
+    "get_qorts_workspace_hint": "Разблокируй первые 6 QORT, чтобы продолжить настройку.",
+    "register_name_workspace_hint": "Зарегистрированное имя превращает этот аккаунт в узнаваемую личность.",
+    "load_avatar_workspace_hint": "Добавь аватар, чтобы область управления была твоей.",
+    "onboarding_transition_hard_part_done": "Отлично. Самое сложное позади.",
+    "onboarding_transition_one_more": "Так держать. Остался ещё один шаг.",
+    "onboarding_press_next_when_ready": "Отлично. Самое сложное позади. Нажми «Дальше», когда будешь готов.",
+    "register_name_pending_hint": "Имя сохраняется в блокчейне; это может занять время.",
+    "persistent_guide_get_qorts": "Начинаем с 6 QORT. Выберите любой способ выше.",
+    "persistent_guide_register_name": "Далее зарегистрируй своё имя.",
+    "persistent_guide_load_avatar": "Наконец добавь аватар.",
+    "post_onboarding_workspace_ready": "Готово. Выше можно настраивать рабочую область."
   }
 }

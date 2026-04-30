@@ -99,25 +99,21 @@ type AccountSettingsTab =
 const ACCOUNT_STATUS_STORAGE_KEY = 'home_profile_account_status';
 const ACCOUNT_SETTINGS_PRIVACY_STORAGE_KEY = 'home_account_settings_privacy_mode';
 const ACCOUNT_SETTINGS_UI_ANIMATIONS_STORAGE_KEY = 'hub_ui_animations_enabled';
-const ACCOUNT_STATUS_OPTIONS: Array<{
+const ACCOUNT_STATUS_DEFS: Array<{
   color: string;
   key: AccountStatus;
-  label: string;
 }> = [
   {
     color: 'var(--account-status-online)',
     key: 'online',
-    label: 'Online',
   },
   {
     color: 'var(--account-status-busy)',
     key: 'busy',
-    label: 'Busy',
   },
   {
     color: 'var(--account-status-invisible)',
     key: 'invisible',
-    label: 'Invisible',
   },
 ];
 
@@ -285,6 +281,19 @@ export const HomeProfileCard = ({
     (key: string, defaultValue: string, options = {}) =>
       t(`group:dashboard.${key}`, { defaultValue, ...options }),
     [t]
+  );
+  const accountStatusOptions = useMemo(
+    () =>
+      ACCOUNT_STATUS_DEFS.map((def) => ({
+        ...def,
+        label:
+          def.key === 'online'
+            ? td('account_status_online', 'Online')
+            : def.key === 'busy'
+              ? td('account_status_busy', 'Busy')
+              : td('account_status_invisible', 'Invisible'),
+      })),
+    [td]
   );
   const accountSettingsTabs = useMemo(
     () => [
@@ -480,7 +489,7 @@ export const HomeProfileCard = ({
     if (accountStatus === 'busy') {
       return {
         color: isDarkMode ? '#D8A34D' : '#C48A26',
-        label: 'Busy',
+        label: td('account_status_busy', 'Busy'),
       };
     }
 
@@ -489,17 +498,18 @@ export const HomeProfileCard = ({
         color: isDarkMode
           ? alpha(theme.palette.common.white, 0.36)
           : alpha(theme.palette.text.primary, 0.32),
-        label: 'Invisible',
+        label: td('account_status_invisible', 'Invisible'),
       };
     }
 
     return {
       color: isDarkMode ? '#56C47B' : '#2F9E5E',
-      label: 'Online',
+      label: td('account_status_online', 'Online'),
     };
   }, [
     accountStatus,
     isDarkMode,
+    td,
     theme.palette.common.white,
     theme.palette.text.primary,
   ]);
@@ -886,7 +896,9 @@ export const HomeProfileCard = ({
         if (cancelled) return;
 
         if (!nameResponse.ok || data?.error || data?.message === 'name unknown') {
-          throw new Error('We could not load your current name details.');
+          throw new Error(
+            td('current_name_details_load_failed', 'We could not load your current name details.')
+          );
         }
 
         const preservedDescription =
@@ -903,7 +915,7 @@ export const HomeProfileCard = ({
         setCurrentNameMetaError(
           error instanceof Error
             ? error.message
-            : 'We could not load your current name details.'
+            : td('current_name_details_load_failed', 'We could not load your current name details.')
         );
       } finally {
         if (!cancelled) {
@@ -917,7 +929,7 @@ export const HomeProfileCard = ({
     return () => {
       cancelled = true;
     };
-  }, [activeSettingsTab, isAccountSettingsOpen, name]);
+  }, [activeSettingsTab, isAccountSettingsOpen, name, td]);
 
   const formattedChangeNameFee = useMemo(() => {
     const numericFee = Number(changeNameFee);
@@ -935,20 +947,29 @@ export const HomeProfileCard = ({
       const newName = changeNameValue.trim();
 
       if (!oldName) {
-        throw new Error('Register a name first before changing it.');
+        throw new Error(
+          td('name_change_register_first', 'Register a name first before changing it.')
+        );
       }
 
       if (!newName) {
-        throw new Error('Enter the new name you want to use.');
+        throw new Error(
+          td('name_change_enter_new_name', 'Enter the new name you want to use.')
+        );
       }
 
       if (newName.toLowerCase() === oldName.toLowerCase()) {
-        throw new Error('Choose a different name from your current one.');
+        throw new Error(
+          td('name_change_different_from_current', 'Choose a different name from your current one.')
+        );
       }
 
       if (isCurrentNameMetaLoading) {
         throw new Error(
-          'Still loading your current name details. Try again in a moment.'
+          td(
+            'name_change_details_still_loading',
+            'Still loading your current name details. Try again in a moment.'
+          )
         );
       }
 
@@ -957,28 +978,43 @@ export const HomeProfileCard = ({
       }
 
       if (changeNameAvailability !== 'available') {
-        throw new Error('Choose an available name before continuing.');
+        throw new Error(
+          td('name_change_choose_available', 'Choose an available name before continuing.')
+        );
       }
 
       if (!rawWallet) {
-        throw new Error('Wallet data is unavailable right now.');
+        throw new Error(
+          td('wallet_unavailable_error', 'Wallet data is unavailable right now.')
+        );
       }
 
       if (!changeNamePassword.trim()) {
-        throw new Error('Enter your wallet password before changing your name.');
+        throw new Error(
+          td(
+            'name_change_wallet_password_required',
+            'Enter your wallet password before changing your name.'
+          )
+        );
       }
 
       try {
         const walletCopy = structuredClone(rawWallet);
         await decryptStoredWallet(changeNamePassword, walletCopy);
-      } catch (error) {
-        throw new Error('We could not verify your wallet password.');
+      } catch {
+        throw new Error(
+          td('name_change_wallet_password_failed', 'We could not verify your wallet password.')
+        );
       }
 
       const fee = await getFee('UPDATE_NAME');
 
       await show({
-        message: `Change your registered name from ${oldName} to ${newName}?`,
+        message: td(
+          'name_change_confirm',
+          'Change your registered name from {{oldName}} to {{newName}}?',
+          { oldName, newName }
+        ),
         publishFee: `${fee.fee} QORT`,
       });
 
@@ -1003,7 +1039,9 @@ export const HomeProfileCard = ({
             reject(
               error instanceof Error
                 ? error
-                : new Error('Something went wrong while changing your name.')
+                : new Error(
+                    td('name_change_unknown_error', 'Something went wrong while changing your name.')
+                  )
             );
           });
       });
@@ -1018,7 +1056,7 @@ export const HomeProfileCard = ({
       );
       setInfoSnack({
         type: 'success',
-        message: 'Name change submitted successfully.',
+        message: td('name_change_success', 'Name change submitted successfully.'),
       });
       setOpenSnack(true);
       closeAccountSettingsModal();
@@ -1052,6 +1090,7 @@ export const HomeProfileCard = ({
     setOpenSnack,
     setUserInfo,
     show,
+    td,
     userInfo,
   ]);
 
@@ -1209,14 +1248,14 @@ export const HomeProfileCard = ({
     if (changeNameAvailability === 'available') {
       return {
         color: isDarkMode ? '#78D29A' : '#2E8B57',
-        label: 'Name is available.',
+        label: td('name_availability_available', 'Name is available.'),
       };
     }
 
     if (changeNameAvailability === 'loading') {
       return {
         color: theme.palette.text.secondary,
-        label: 'Checking name availability...',
+        label: td('name_availability_checking', 'Checking name availability...'),
       };
     }
 
@@ -1225,8 +1264,11 @@ export const HomeProfileCard = ({
         color: avatarWarningTone.icon,
         label:
           changeNameValue.trim().toLowerCase() === normalizedCurrentName
-            ? 'Choose a different name from the one you already use.'
-            : 'That name is already taken.',
+            ? td(
+                'name_availability_same_as_current',
+                'Choose a different name from the one you already use.'
+              )
+            : td('name_availability_taken', 'That name is already taken.'),
       };
     }
 
@@ -1237,6 +1279,7 @@ export const HomeProfileCard = ({
     changeNameValue,
     isDarkMode,
     normalizedCurrentName,
+    td,
     theme.palette.text.secondary,
   ]);
 
@@ -1802,10 +1845,13 @@ export const HomeProfileCard = ({
               </Box>
             </Box>
 
-            <Tooltip enterDelay={320} title="Account settings">
+            <Tooltip
+              enterDelay={320}
+              title={td('account_settings_tooltip', 'Account settings')}
+            >
               <ButtonBase
                 onClick={openAccountSettingsModal}
-                aria-label="Open account settings"
+                aria-label={td('open_account_settings_aria', 'Open account settings')}
                 sx={{
                   alignItems: 'center',
                   background: isDarkMode
@@ -1913,7 +1959,7 @@ export const HomeProfileCard = ({
           },
         }}
       >
-        {ACCOUNT_STATUS_OPTIONS.map((option) => {
+        {accountStatusOptions.map((option) => {
           const isSelected = option.key === accountStatus;
 
           return (

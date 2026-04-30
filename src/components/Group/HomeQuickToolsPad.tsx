@@ -6,6 +6,7 @@ import {
   type DragEvent,
   type MouseEvent,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   ButtonBase,
@@ -106,6 +107,7 @@ export const HomeQuickToolsPad = ({
   onOpenChat,
 }: HomeQuickToolsPadProps) => {
   const theme = useTheme();
+  const { t } = useTranslation('core');
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const transparentDragImageRef = useRef<HTMLCanvasElement | null>(null);
   const [notificationsMuted, setNotificationsMuted] = useState(false);
@@ -159,8 +161,7 @@ export const HomeQuickToolsPad = ({
 
       executeEvent('qortinoContextHint', {
         data: {
-          message:
-            'This only mutes desktop alerts. In-Hub notifications still continue.',
+          message: t('quick_tools_pad.hint_notifications_desktop_only'),
         },
       });
     } catch {
@@ -194,7 +195,7 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         iconScale: 1.08,
         key: 'lookup-user',
-        label: 'User Search',
+        label: t('quick_tools_pad.user_search'),
         onAction: () => {
           executeEvent('openUserLookupDrawer', {});
         },
@@ -205,7 +206,7 @@ export const HomeQuickToolsPad = ({
         draggable: true,
         iconScale: 1.08,
         key: 'wallets',
-        label: 'Wallets',
+        label: t('quick_tools_pad.wallets'),
         onAction: () => {
           executeEvent('openWalletsApp', {});
         },
@@ -228,12 +229,11 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         iconScale: 1.04,
         key: 'minting',
-        label: 'Minting',
+        label: t('quick_tools_pad.minting'),
         onAction: () => {
           executeEvent('qortinoContextHint', {
             data: {
-              message:
-                'This panel unlocks once you’re a minter. Swing by Q-Mintership to get started!',
+              message: t('quick_tools_pad.hint_minting_panel'),
             },
           });
           executeEvent('openMintingPanel', {});
@@ -246,11 +246,10 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         iconScale: 1.08,
         key: 'backup-wallet',
-        label: 'Backup Wallet',
+        label: t('quick_tools_pad.backup_wallet'),
         onAction: () => {
           executeEvent('openGlobalSnackBar', {
-            message:
-              'Download your wallet file. This is required to access your account',
+            message: t('quick_tools_pad.snackbar_backup_wallet'),
             type: 'info',
             duration: 5600,
           });
@@ -265,7 +264,7 @@ export const HomeQuickToolsPad = ({
         iconOffsetY: -0.15,
         iconScale: 0.9,
         key: 'q-chat',
-        label: 'Q-Chat',
+        label: t('quick_tools_pad.q_chat'),
         onAction: () => {
           onOpenChat?.();
         },
@@ -283,8 +282,8 @@ export const HomeQuickToolsPad = ({
         isActive: !notificationsMuted,
         key: 'notifications',
         label: notificationsMuted
-          ? 'Enable Notifications'
-          : 'Mute Notifications',
+          ? t('quick_tools_pad.notifications_enable')
+          : t('quick_tools_pad.notifications_mute'),
         onAction: () => {
           void handleToggleNotifications();
         },
@@ -303,7 +302,7 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         iconScale: 0.9,
         key: 'apps',
-        label: 'Apps',
+        label: t('quick_tools_pad.apps'),
         onAction: () => {
           onOpenApps?.();
         },
@@ -315,7 +314,7 @@ export const HomeQuickToolsPad = ({
         accent: QUICK_TOOL_LED_COLOR,
         iconScale: 1.1,
         key: 'qortino-sandbox',
-        label: '',
+        label: t('quick_tools_pad.extras'),
         onAction: () => {},
         renderIcon: () => (
           <AddRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
@@ -326,6 +325,7 @@ export const HomeQuickToolsPad = ({
       notificationsMuted,
       onOpenApps,
       onOpenChat,
+      t,
     ]
   );
 
@@ -385,7 +385,12 @@ export const HomeQuickToolsPad = ({
         }}
       >
         {items.map((item) => (
-          <Tooltip key={item.key} enterDelay={350} title={item.label}>
+          <Tooltip
+            key={item.key}
+            disableHoverListener={!item.label}
+            enterDelay={350}
+            title={item.label}
+          >
             <ButtonBase
               draggable={item.draggable}
               onClick={(event) => item.onAction(event)}

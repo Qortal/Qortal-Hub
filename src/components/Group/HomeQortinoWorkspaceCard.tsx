@@ -213,6 +213,11 @@ type HotkeyAppDefinition = {
   service: HotkeyAppService;
 };
 
+type WorkspaceCompanionReactionPayload =
+  | string
+  | { kind: 'locked_track'; title: string }
+  | { kind: 'track_rotation'; title: string };
+
 type QAppResourceRecord = {
   metadata?: {
     description?: string;
@@ -242,31 +247,6 @@ const DEFAULT_WORKSPACE_STATE: WorkspaceState = {
   selectedTrackId: '',
   version: 1,
 };
-
-const WORKSPACE_MODULES: WorkspaceModuleDefinition[] = [
-  {
-    description: 'Curated shortcuts for your most-used routes.',
-    icon: AppsRoundedIcon,
-    key: 'hotkeys',
-    label: 'Hotkeys',
-    mode: 'hotkeys',
-  },
-  {
-    description: 'A compact Earbump player with search and quick playback.',
-    icon: LibraryMusicRoundedIcon,
-    key: 'music',
-    label: 'Music player',
-    mode: 'music',
-  },
-  {
-    appName: 'q-mail',
-    appPath: 'to/Qortino',
-    description: 'Compose > Add Subject + Message & Send it our way!',
-    icon: MailOutlineRoundedIcon,
-    key: 'suggest-module',
-    label: 'Suggest a module',
-  },
-];
 
 const LEGACY_HOTKEY_APP_NAME_MAP: Record<string, string> = {
   earbump: 'Ear-Bump',
@@ -353,39 +333,6 @@ const HotkeyAppAvatar = ({
     />
   </Avatar>
 );
-
-const getPersistentOnboardingMessage = (stepKey: StepKey) => {
-  if (stepKey === 'get_six_qorts') {
-    return 'LetÃ¢â‚¬â„¢s start with 6 QORT. Pick any option above.';
-  }
-
-  if (stepKey === 'register_name') {
-    return 'Next, register your name.';
-  }
-
-  return 'Finally, add your avatar.';
-};
-
-const getOnboardingRecognitionMessage = (
-  previousStepKey: StepKey,
-  nextStepKey: StepKey
-) => {
-  if (
-    previousStepKey === 'get_six_qorts' &&
-    nextStepKey === 'register_name'
-  ) {
-    return 'Nice work. The hardest part is done.';
-  }
-
-  if (
-    previousStepKey === 'register_name' &&
-    nextStepKey === 'load_avatar'
-  ) {
-    return 'Great. One more to go.';
-  }
-
-  return null;
-};
 
 const truncateQortinoBubbleMessage = (
   message: string | null,
@@ -749,7 +696,7 @@ const getTrackReadyPercent = (rawStatus: string | null | undefined, percent: num
   return 0;
 };
 
-const EMPTY_MUSIC_TRACK: MusicTrack = {
+const EMPTY_MUSIC_TRACK_BASE: MusicTrack = {
   artist: 'EarBump',
   coverColors: ['#6EA7FF', '#243B72', '#9CCBFF'],
   created: 0,
@@ -758,9 +705,9 @@ const EMPTY_MUSIC_TRACK: MusicTrack = {
   name: 'earbump',
   status: null,
   streamUrl: '',
-  title: 'EarBump library',
+  title: '',
   updated: null,
-  uploaded: 'Waiting for library',
+  uploaded: '',
 };
 
 const MusicCoverArt = ({
@@ -1425,7 +1372,21 @@ export const HomeQortinoWorkspaceCard = ({
   onGettingStartedComplete,
   onOpenAppsPanel,
 }: HomeQortinoWorkspaceCardProps) => {
-  const { t } = useTranslation(['tutorial']);
+  const { t } = useTranslation(['tutorial', 'core']);
+  const qw = useCallback(
+    (
+      suffix: string,
+      fallback: string,
+      options?: Record<string, string | number>
+    ) => {
+      const key = `core:qortino_workspace.${suffix}` as const;
+      if (options) {
+        return String(t(key, { ...options, defaultValue: fallback }));
+      }
+      return String(t(key, fallback));
+    },
+    [t]
+  );
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
@@ -1451,6 +1412,52 @@ export const HomeQortinoWorkspaceCard = ({
       }, 90);
     },
     [onOpenAppsPanel]
+  );
+
+  const workspaceModules = useMemo<WorkspaceModuleDefinition[]>(
+    () => [
+      {
+        description: qw(
+          'modules_hotkeys_description',
+          'Curated shortcuts for your most-used routes.'
+        ),
+        icon: AppsRoundedIcon,
+        key: 'hotkeys',
+        label: qw('modules_hotkeys_label', 'Hotkeys'),
+        mode: 'hotkeys',
+      },
+      {
+        description: qw(
+          'modules_music_description',
+          'A compact Earbump player with search and quick playback.'
+        ),
+        icon: LibraryMusicRoundedIcon,
+        key: 'music',
+        label: qw('modules_music_label', 'Music player'),
+        mode: 'music',
+      },
+      {
+        appName: 'q-mail',
+        appPath: 'to/Qortino',
+        description: qw(
+          'modules_suggest_description',
+          'Compose > Add Subject + Message & Send it our way!'
+        ),
+        icon: MailOutlineRoundedIcon,
+        key: 'suggest-module',
+        label: qw('modules_suggest_label', 'Suggest a module'),
+      },
+    ],
+    [qw]
+  );
+
+  const emptyMusicTrack = useMemo(
+    (): MusicTrack => ({
+      ...EMPTY_MUSIC_TRACK_BASE,
+      title: qw('music_empty_title', 'EarBump library'),
+      uploaded: qw('music_empty_uploaded', 'Waiting for library'),
+    }),
+    [qw]
   );
 
   const [dismissed, setDismissed] = useState<boolean | null>(null);
@@ -1573,12 +1580,56 @@ export const HomeQortinoWorkspaceCard = ({
     [blockedPublisherNameSet.size, isBlockedPublisherName]
   );
 
+  const runtimeReactionFingerprints = useMemo(
+    () =>
+      new Set([
+        String(t('core:quick_tools_pad.hint_notifications_desktop_only')),
+        String(t('core:quick_tools_pad.hint_minting_panel')),
+        qw('reaction_hotkeys_ready', 'Hotkeys panel ready.'),
+        qw('reaction_music_panel_ready', 'Music panel ready.'),
+        qw('reaction_music_player_ready', 'Music player ready.'),
+        qw('reaction_panel_cleared', 'Panel cleared.'),
+      ]),
+    [t, qw]
+  );
+
+  const resolveCompanionReaction = useCallback(
+    (
+      payload: WorkspaceCompanionReactionPayload
+    ): { allowStructuredBypass: boolean; text: string } => {
+      if (typeof payload === 'string') {
+        return {
+          allowStructuredBypass: false,
+          text: payload.trim(),
+        };
+      }
+
+      if (payload.kind === 'locked_track') {
+        return {
+          allowStructuredBypass: true,
+          text: qw('reaction_locked_track', 'Locked on {{title}}.', {
+            title: payload.title,
+          }).trim(),
+        };
+      }
+
+      return {
+        allowStructuredBypass: true,
+        text: qw('reaction_track_rotation', '{{title}} is in rotation.', {
+          title: payload.title,
+        }).trim(),
+      };
+    },
+    [qw]
+  );
+
   const pushReaction = useCallback(
     (
-      nextMessage: string,
+      payload: WorkspaceCompanionReactionPayload,
       options?: { allowDuringOnboarding?: boolean }
     ) => {
-      const trimmedMessage = nextMessage.trim();
+      const { allowStructuredBypass, text: trimmedMessage } =
+        resolveCompanionReaction(payload);
       if (!trimmedMessage) return;
 
       if (
@@ -1589,18 +1640,8 @@ export const HomeQortinoWorkspaceCard = ({
       }
 
       const isAllowedRuntimeReaction =
-        trimmedMessage ===
-          'This only mutes desktop alerts. In-Hub notifications still continue.' ||
-        trimmedMessage === 'Only available for minters. Apply at Q-Mintership.' ||
-        /^This panel unlocks once you.+ minter\. Swing by Q-Mintership to get started!$/.test(
-          trimmedMessage
-        ) ||
-        trimmedMessage === 'Hotkeys panel ready.' ||
-        trimmedMessage === 'Music panel ready.' ||
-        trimmedMessage === 'Music player ready.' ||
-        trimmedMessage === 'Panel cleared.' ||
-        /^Locked on .+\.$/.test(trimmedMessage) ||
-        /^.+ is in rotation\.$/.test(trimmedMessage);
+        allowStructuredBypass ||
+        runtimeReactionFingerprints.has(trimmedMessage);
 
       if (
         onboardingBubbleLockRef.current !== true &&
@@ -1629,7 +1670,7 @@ export const HomeQortinoWorkspaceCard = ({
         setEphemeralReaction(null);
       }, 6800);
     },
-    []
+    [resolveCompanionReaction, runtimeReactionFingerprints]
   );
 
   useEffect(() => {
@@ -2006,57 +2047,70 @@ export const HomeQortinoWorkspaceCard = ({
   const hotkeyActions = useMemo<Record<HotkeyActionId, HotkeyActionDefinition>>(
     () => ({
       earbump: {
-        description: 'Launch Ear-Bump',
+        description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
+          appName: 'Ear-Bump',
+        }),
         icon: LibraryMusicRoundedIcon,
         id: 'earbump',
         label: 'Ear-Bump',
         run: () => openApp('Ear-Bump'),
       },
       'q-blog': {
-        description: 'Launch Q-Blog',
+        description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
+          appName: 'Q-Blog',
+        }),
         icon: EditRoundedIcon,
         id: 'q-blog',
         label: 'Q-Blog',
         run: () => openApp('Q-Blog'),
       },
       'q-mail': {
-        description: 'Launch Q-Mail',
+        description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
+          appName: 'Q-Mail',
+        }),
         icon: MailOutlineRoundedIcon,
         id: 'q-mail',
         label: 'Q-Mail',
         run: () => openApp('q-mail'),
       },
       'q-trade': {
-        description: 'Launch Q-Trade',
+        description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
+          appName: 'Q-Trade',
+        }),
         icon: ShoppingBagRoundedIcon,
         id: 'q-trade',
         label: 'Q-Trade',
-        reaction: 'Q-Trade is up. LetÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s make the next move.',
         run: () => openApp('Q-Trade'),
       },
       'q-mintership': {
-        description: 'Launch Q-Mintership',
+        description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
+          appName: 'Q-Mintership',
+        }),
         icon: SpaRoundedIcon,
         id: 'q-mintership',
         label: 'Q-Mintership',
         run: () => openApp('q-mintership'),
       },
       'q-tube': {
-        description: 'Launch Q-Tube',
+        description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
+          appName: 'Q-Tube',
+        }),
         icon: VideoLibraryRoundedIcon,
         id: 'q-tube',
         label: 'Q-Tube',
         run: () => openApp('Q-Tube'),
       },
       quitter: {
-        description: 'Launch Quitter',
+        description: qw('hotkeys_launch_description', 'Launch {{appName}}', {
+          appName: 'Quitter',
+        }),
         icon: ForumRoundedIcon,
         id: 'quitter',
         label: 'Quitter',
         run: () => openApp('Quitter'),
       },
     }),
-    []
+    [openApp, qw]
   );
 
   const filteredAvailableHotkeyApps = useMemo(
@@ -2158,11 +2212,13 @@ export const HomeQortinoWorkspaceCard = ({
       setAvailableHotkeyApps(nextCatalog);
     } catch (error) {
       console.error(error);
-      setHotkeyAppsError('Unable to load Q-Apps right now.');
+      setHotkeyAppsError(
+        qw('error_hotkey_catalog', 'Unable to load Q-Apps right now.')
+      );
     } finally {
       setIsHotkeyAppsLoading(false);
     }
-  }, [isBlockedPublisherName, isHotkeyAppsLoading]);
+  }, [isBlockedPublisherName, isHotkeyAppsLoading, qw]);
 
   useEffect(() => {
     if (
@@ -2216,12 +2272,12 @@ export const HomeQortinoWorkspaceCard = ({
 
       return {
         appName: parsedSlot.appName,
-        description: 'Launch Q-App',
+        description: qw('hotkeys_fallback_launch', 'Launch Q-App'),
         label: formatHotkeyAppLabel(parsedSlot.appName),
         service: parsedSlot.service,
       };
     },
-    [hotkeyAppsByName]
+    [hotkeyAppsByName, qw]
   );
 
   const steps = useMemo(
@@ -2340,10 +2396,20 @@ export const HomeQortinoWorkspaceCard = ({
       return;
     }
 
-    const nextRecognitionMessage = getOnboardingRecognitionMessage(
-      previousStepKey,
-      currentStep.key
-    );
+    const nextRecognitionMessage =
+      previousStepKey === 'get_six_qorts' &&
+      currentStep.key === 'register_name'
+        ? t(
+            'tutorial:home.onboarding_transition_hard_part_done',
+            'Nice work. The hardest part is done.'
+          )
+        : previousStepKey === 'register_name' &&
+            currentStep.key === 'load_avatar'
+          ? t(
+              'tutorial:home.onboarding_transition_one_more',
+              'Great. One more to go.'
+            )
+          : null;
 
     if (!nextRecognitionMessage) {
       setOnboardingTransitionMessage(null);
@@ -2360,7 +2426,7 @@ export const HomeQortinoWorkspaceCard = ({
       onboardingMessageTimeoutRef.current = null;
       setOnboardingTransitionMessage(null);
     }, ONBOARDING_RECOGNITION_DURATION_MS);
-  }, [currentStep.key, isOnboardingVisible]);
+  }, [currentStep.key, isOnboardingVisible, t]);
 
   useEffect(() => {
     if (
@@ -2446,7 +2512,10 @@ export const HomeQortinoWorkspaceCard = ({
     setEphemeralReaction(null);
     setOnboardingTransitionMessage(null);
     setPostOnboardingMessage(
-      'All set. You can start building your workspace above.'
+      t(
+        'tutorial:home.post_onboarding_workspace_ready',
+        'All set. You can start building your workspace above.'
+      )
     );
     setShowOnboardingCompletionConfetti(true);
 
@@ -2458,7 +2527,7 @@ export const HomeQortinoWorkspaceCard = ({
       onboardingConfettiTimeoutRef.current = null;
       setShowOnboardingCompletionConfetti(false);
     }, 4200);
-  }, [isOnboardingVisible]);
+  }, [isOnboardingVisible, t]);
 
   useEffect(() => {
     if (workspaceState.mode === 'empty' || postOnboardingMessage == null) {
@@ -2547,7 +2616,9 @@ export const HomeQortinoWorkspaceCard = ({
 
         console.error('Failed to load EarBump discovery tracks', error);
         setEarbumpDiscoveryTracks([]);
-        setEarbumpDiscoveryError('Unable to load EarBump right now.');
+        setEarbumpDiscoveryError(
+          qw('error_earbump_discovery', 'Unable to load EarBump right now.')
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -2558,7 +2629,7 @@ export const HomeQortinoWorkspaceCard = ({
     return () => {
       controller.abort();
     };
-  }, [applyWorkspaceState, filterBlockedMusicTracks, workspaceHydrated]);
+  }, [applyWorkspaceState, filterBlockedMusicTracks, qw, workspaceHydrated]);
 
   useEffect(() => {
     searchRequestRef.current?.abort();
@@ -2590,7 +2661,9 @@ export const HomeQortinoWorkspaceCard = ({
 
           console.error('Failed to search EarBump tracks', error);
           setEarbumpSearchTracks([]);
-          setEarbumpSearchError('Unable to search EarBump right now.');
+          setEarbumpSearchError(
+            qw('error_earbump_search', 'Unable to search EarBump right now.')
+          );
         })
         .finally(() => {
           if (!controller.signal.aborted) {
@@ -2603,7 +2676,7 @@ export const HomeQortinoWorkspaceCard = ({
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [filterBlockedMusicTracks, musicSearchQuery]);
+  }, [filterBlockedMusicTracks, musicSearchQuery, qw]);
 
   useEffect(() => {
     if (!workspaceHydrated || !workspaceState.selectedTrackId) {
@@ -2671,8 +2744,8 @@ export const HomeQortinoWorkspaceCard = ({
       : null);
   const activeTrack = useMemo(
     () =>
-      activeTrackSource ? resolveMusicTrack(activeTrackSource) : EMPTY_MUSIC_TRACK,
-    [activeTrackSource, resolveMusicTrack]
+      activeTrackSource ? resolveMusicTrack(activeTrackSource) : emptyMusicTrack,
+    [activeTrackSource, emptyMusicTrack, resolveMusicTrack]
   );
   useEffect(() => {
     if (!selectedTrackCandidate || !isBlockedPublisherName(selectedTrackCandidate.name)) {
@@ -2794,31 +2867,67 @@ export const HomeQortinoWorkspaceCard = ({
   const musicLoadingHint = useMemo(() => {
     if (!activeTrack.id) return null;
     if (musicStreamError) return musicStreamError;
-    if (isTrackLoadError) return 'This track could not finish loading on your node.';
+    if (isTrackLoadError) {
+      return qw(
+        'music_track_load_failed',
+        'This track could not finish loading on your node.'
+      );
+    }
     if (hasTrackPlaybackMetadata) return null;
     if (!isTrackPreparing || isTrackPlayable) return null;
 
     if (isTrackPeerStarved) {
-      return 'No peers for remaining data';
+      return qw(
+        'music_no_peers_data',
+        'No peers for remaining data'
+      );
     }
 
+    const roundedPercent = Math.round(activeTrackReadyPercent);
+    const peerCount = activeTrackPeerCount ?? 0;
+
     if (activeTrackReadyPercent > 0) {
-      return (activeTrackPeerCount ?? 0) > 0
-        ? `Preparing on your node... ${Math.round(activeTrackReadyPercent)}% (${activeTrackPeerCount} peer${
-            activeTrackPeerCount === 1 ? '' : 's'
-          })`
-        : `Preparing on your node... ${Math.round(activeTrackReadyPercent)}%`;
+      if (peerCount > 0) {
+        return peerCount === 1
+          ? qw(
+              'music_preparing_peers_one',
+              'Preparing on your node... {{percent}}% ({{count}} peer)',
+              {
+                percent: roundedPercent,
+                count: peerCount,
+              }
+            )
+          : qw(
+              'music_preparing_peers_other',
+              'Preparing on your node... {{percent}}% ({{count}} peers)',
+              {
+                percent: roundedPercent,
+                count: peerCount,
+              }
+            );
+      }
+
+      return qw(
+        'music_preparing_percent_only',
+        'Preparing on your node... {{percent}}%',
+        {
+          percent: roundedPercent,
+        }
+      );
     }
 
     if (activeTrackResourceStatus === 'SEARCHING') {
-      return 'Looking for peers...';
+      return qw('music_searching_peers', 'Looking for peers...');
     }
 
     if (activeTrackResourceStatus === 'BUILDING') {
-      return 'Finalizing the track on your node...';
+      return qw(
+        'music_finalizing_track',
+        'Finalizing the track on your node...'
+      );
     }
 
-    return 'Preparing on your node...';
+    return qw('music_preparing_base', 'Preparing on your node...');
   }, [
     activeTrack.id,
     activeTrackPeerCount,
@@ -2832,12 +2941,16 @@ export const HomeQortinoWorkspaceCard = ({
     isTrackPlayable,
     isTrackReady,
     musicStreamError,
+    qw,
   ]);
-  const musicStatusSlotMessage =
-    musicLoadingHint ??
-    (isEarbumpDiscoveryLoading
-      ? 'Syncing with EarBump library...'
-      : earbumpDiscoveryError);
+  const musicStatusSlotMessage = useMemo(
+    () =>
+      musicLoadingHint ??
+      (isEarbumpDiscoveryLoading
+        ? qw('music_syncing_library', 'Syncing with EarBump library...')
+        : earbumpDiscoveryError),
+    [earbumpDiscoveryError, isEarbumpDiscoveryLoading, musicLoadingHint, qw]
+  );
   useEffect(() => {
     if (!activeTrack.id || !activeTrack.name) {
       setMusicStreamError(null);
@@ -2942,15 +3055,55 @@ export const HomeQortinoWorkspaceCard = ({
     workspaceState.musicPlaying,
   ]);
 
-  const persistentOnboardingMessage = isOnboardingVisible
-    ? isQortsAcquiredAwaitingNext
-      ? 'Nice work. The hardest part is done. Press Next when you are ready.'
-      : currentStep.key === 'register_name' &&
-          hasPendingRegisterName &&
-          showRegisterNameDelayHint
-        ? 'Saving name on-chain. This can take a moment.'
-        : getPersistentOnboardingMessage(currentStep.key)
-    : null;
+  const persistentOnboardingMessage = useMemo(() => {
+    if (!isOnboardingVisible) {
+      return null;
+    }
+
+    if (isQortsAcquiredAwaitingNext) {
+      return t(
+        'tutorial:home.onboarding_press_next_when_ready',
+        'Nice work. The hardest part is done. Press Next when you are ready.'
+      );
+    }
+
+    if (
+      currentStep.key === 'register_name' &&
+      hasPendingRegisterName &&
+      showRegisterNameDelayHint
+    ) {
+      return t(
+        'tutorial:home.register_name_pending_hint',
+        'Saving name on-chain. This can take a moment.'
+      );
+    }
+
+    if (currentStep.key === 'get_six_qorts') {
+      return t(
+        'tutorial:home.persistent_guide_get_qorts',
+        "Let's start with 6 QORT. Pick any option above."
+      );
+    }
+
+    if (currentStep.key === 'register_name') {
+      return t(
+        'tutorial:home.persistent_guide_register_name',
+        'Next, register your name.'
+      );
+    }
+
+    return t(
+      'tutorial:home.persistent_guide_load_avatar',
+      'Finally, add your avatar.'
+    );
+  }, [
+    currentStep.key,
+    hasPendingRegisterName,
+    isOnboardingVisible,
+    isQortsAcquiredAwaitingNext,
+    showRegisterNameDelayHint,
+    t,
+  ]);
   const qortinoDisplayedMessage = truncateQortinoBubbleMessage(
     qortinoGratefulState?.message?.trim() ||
       postOnboardingMessage?.trim() ||
@@ -3074,7 +3227,7 @@ export const HomeQortinoWorkspaceCard = ({
         musicPlaying: true,
         selectedTrackId: nextTrack.id,
       }));
-      pushReaction(`${nextTrack.title} is in rotation.`);
+      pushReaction({ kind: 'track_rotation', title: nextTrack.title });
     },
     [applyWorkspaceState, playbackQueue, pushReaction, workspaceState.selectedTrackId]
   );
@@ -3139,7 +3292,9 @@ export const HomeQortinoWorkspaceCard = ({
 
     const handleError = () => {
       console.error('Failed to stream EarBump audio track', activeTrack);
-      setMusicStreamError('Playback stalled. Press play to retry.');
+      setMusicStreamError(
+        qw('music_playback_stalled', 'Playback stalled. Press play to retry.')
+      );
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
@@ -3154,7 +3309,9 @@ export const HomeQortinoWorkspaceCard = ({
         return;
       }
 
-      setMusicStreamError('Track stalled. Rebuilding the stream...');
+      setMusicStreamError(
+        qw('music_stream_stalled', 'Track stalled. Rebuilding the stream...')
+      );
       void downloadResource({
         identifier: activeTrack.id,
         name: activeTrack.name,
@@ -3187,6 +3344,7 @@ export const HomeQortinoWorkspaceCard = ({
     downloadResource,
     handleCycleTrack,
     musicTrackDurations,
+    qw,
     workspaceState.repeatMode,
   ]);
 
@@ -3302,18 +3460,18 @@ export const HomeQortinoWorkspaceCard = ({
       if (mode === 'hotkeys') {
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(true);
-        pushReaction('Hotkeys panel ready.');
+        pushReaction(qw('reaction_hotkeys_ready', 'Hotkeys panel ready.'));
       } else if (mode === 'music') {
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(false);
-        pushReaction('Music panel ready.');
+        pushReaction(qw('reaction_music_panel_ready', 'Music panel ready.'));
       } else {
         setOpenModulePickerDialog(false);
         setOpenHotkeyPickerDialog(false);
-        pushReaction('Panel cleared.');
+        pushReaction(qw('reaction_panel_cleared', 'Panel cleared.'));
       }
     },
-    [applyWorkspaceState, dismissed, pushReaction]
+    [applyWorkspaceState, dismissed, pushReaction, qw]
   );
 
   const handleSetHotkey = useCallback(
@@ -3449,17 +3607,16 @@ export const HomeQortinoWorkspaceCard = ({
       }
 
       if (track && !isSameTrack) {
-        pushReaction(`Locked on ${track.title}.`);
+        pushReaction({ kind: 'locked_track', title: track.title });
         return;
       }
       if (!wasPlaying && isTrackPlayable) {
-        pushReaction('Music player ready.');
+        pushReaction(
+          qw('reaction_music_player_ready', 'Music player ready.')
+        );
         return;
       }
       return;
-      /*
-        pushReaction(`Locked on ${track.title}. IÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢m listening with you.`);
-      */
     },
     [
       applyWorkspaceState,
@@ -3470,6 +3627,7 @@ export const HomeQortinoWorkspaceCard = ({
       knownMusicTracksById,
       musicStreamError,
       pushReaction,
+      qw,
       workspaceState.musicPlaying,
       workspaceState.selectedTrackId,
     ]
@@ -3700,13 +3858,23 @@ export const HomeQortinoWorkspaceCard = ({
 
   const handleRunCurrentStepAction = useCallback(() => {
     if (currentStep.key === 'register_name') {
-      pushReaction('Name flow open. This is where the hub starts recognizing you.');
+      pushReaction(
+        qw(
+          'reaction_name_flow',
+          'Name flow open. This is where the hub starts recognizing you.'
+        )
+      );
     } else if (currentStep.key === 'load_avatar') {
-      pushReaction('Avatar flow ready. LetÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢s give this place a face.');
+      pushReaction(
+        qw(
+          'reaction_avatar_flow',
+          "Avatar flow ready. Let's give this place a face."
+        )
+      );
     }
 
     currentStep.onAction();
-  }, [currentStep, pushReaction]);
+  }, [currentStep, pushReaction, qw]);
 
   const currentStepPrimaryAction = useMemo(() => {
     if (isQortsAcquiredAwaitingNext) {
@@ -3717,7 +3885,12 @@ export const HomeQortinoWorkspaceCard = ({
           if (onboardingMessageTimeoutRef.current) {
             window.clearTimeout(onboardingMessageTimeoutRef.current);
           }
-          setOnboardingTransitionMessage('Nice work. The hardest part is done.');
+          setOnboardingTransitionMessage(
+            t(
+              'tutorial:home.onboarding_transition_hard_part_done',
+              'Nice work. The hardest part is done.'
+            )
+          );
           onboardingMessageTimeoutRef.current = window.setTimeout(() => {
             onboardingMessageTimeoutRef.current = null;
             setOnboardingTransitionMessage(null);
@@ -3733,7 +3906,12 @@ export const HomeQortinoWorkspaceCard = ({
           'Go to onboarding'
         ),
         onClick: () => {
-          pushReaction("Onboarding route open. I'll keep the next step warm.");
+          pushReaction(
+            qw(
+              'reaction_onboarding_route',
+              "Onboarding route open. I'll keep the next step warm."
+            )
+          );
           openExternalUrl(ONBOARDING_URL);
         },
       };
@@ -3751,6 +3929,7 @@ export const HomeQortinoWorkspaceCard = ({
     handleRunCurrentStepAction,
     isQortsAcquiredAwaitingNext,
     pushReaction,
+    qw,
     t,
   ]);
 
@@ -3767,7 +3946,10 @@ export const HomeQortinoWorkspaceCard = ({
         ),
         onClick: () => {
           pushReaction(
-            "Support chat is open. Ask for the 6 QORT and I'll queue step two."
+            qw(
+              'reaction_support_chat',
+              "Support chat is open. Ask for the 6 QORT and I'll queue step two."
+            )
           );
           openExternalUrl(SUPPORT_CHAT_URL);
         },
@@ -3779,13 +3961,16 @@ export const HomeQortinoWorkspaceCard = ({
         ),
         onClick: () => {
           pushReaction(
-            "Q-Trade is up. If you grab QORT there, I'll take you forward."
+            qw(
+              'reaction_q_trade_open',
+              "Q-Trade is up. If you grab QORT there, I'll take you forward."
+            )
           );
           openApp('Q-Trade');
         },
       },
     ];
-  }, [currentStep.key, isQortsAcquiredAwaitingNext, pushReaction, t]);
+  }, [currentStep.key, isQortsAcquiredAwaitingNext, openApp, pushReaction, qw, t]);
 
   const currentStepGetQortMethods = useMemo(() => {
     if (currentStep.key !== 'get_six_qorts' || isQortsAcquiredAwaitingNext) {
@@ -3817,7 +4002,10 @@ export const HomeQortinoWorkspaceCard = ({
         ),
         onClick: () => {
           pushReaction(
-            "Support chat is open. Ask for the 6 QORT and I'll queue step two."
+            qw(
+              'reaction_support_chat',
+              "Support chat is open. Ask for the 6 QORT and I'll queue step two."
+            )
           );
           openExternalUrl(SUPPORT_CHAT_URL);
         },
@@ -3836,14 +4024,26 @@ export const HomeQortinoWorkspaceCard = ({
         ),
         onClick: () => {
           pushReaction(
-            "Q-Trade is up. If you grab QORT there, I'll take you forward."
+            qw(
+              'reaction_q_trade_open',
+              "Q-Trade is up. If you grab QORT there, I'll take you forward."
+            )
           );
           openApp('Q-Trade');
         },
         recommended: false,
       },
     ];
-  }, [currentStep.key, currentStepPrimaryAction.label, currentStepPrimaryAction.onClick, isQortsAcquiredAwaitingNext, pushReaction, t]);
+  }, [
+    currentStep.key,
+    currentStepPrimaryAction.label,
+    currentStepPrimaryAction.onClick,
+    isQortsAcquiredAwaitingNext,
+    openApp,
+    pushReaction,
+    qw,
+    t,
+  ]);
 
   const workspaceBayBackground =
     theme.palette.mode === 'dark'
@@ -3920,7 +4120,7 @@ export const HomeQortinoWorkspaceCard = ({
                 textTransform: 'uppercase',
               }}
             >
-              Getting started
+              {t('tutorial:home.getting_started', 'Getting started')}
             </Typography>
             <Typography
               sx={{
@@ -3930,7 +4130,10 @@ export const HomeQortinoWorkspaceCard = ({
                 letterSpacing: '0.04em',
               }}
             >
-              Step {currentProgressStepDisplay} / {steps.length}
+              {qw('onboarding_step_progress', 'Step {{current}} / {{total}}', {
+                current: currentProgressStepDisplay,
+                total: steps.length,
+              })}
             </Typography>
           </Box>
           {currentStep.key === 'get_six_qorts' && !isQortsAcquiredAwaitingNext ? (
@@ -4227,7 +4430,10 @@ export const HomeQortinoWorkspaceCard = ({
           maxWidth: '24ch',
         }}
       >
-        Choose what lives above QORTINO.
+        {qw(
+          'workspace_empty_prompt',
+          'Choose what lives above QORTINO.'
+        )}
       </Typography>
     </Box>
   ) : workspaceState.mode === 'hotkeys' ? (
@@ -4266,7 +4472,7 @@ export const HomeQortinoWorkspaceCard = ({
             textTransform: 'uppercase',
           }}
         >
-          Hotkeys
+          {qw('workspace_header_hotkeys', 'Hotkeys')}
         </Typography>
         <Box sx={{ display: 'flex', gap: '6px' }}>
           <IconButton
@@ -4401,8 +4607,8 @@ export const HomeQortinoWorkspaceCard = ({
                       lineHeight: 1.12,
                       textAlign: 'center',
                     }}
-                  >
-                    Add app
+                    >
+                    {qw('workspace_add_app', 'Add app')}
                   </Typography>
                 </>
               )}
@@ -4441,7 +4647,7 @@ export const HomeQortinoWorkspaceCard = ({
             textTransform: 'uppercase',
           }}
         >
-          Music player
+          {qw('workspace_header_music', 'Music player')}
         </Typography>
         <IconButton
           onClick={() => handleSelectWorkspaceMode('empty')}
@@ -5431,9 +5637,15 @@ export const HomeQortinoWorkspaceCard = ({
         <ErrorBoundary
           fallback={
             <QortinoSectionRuntimeFallback
-              body="QORTINO below is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here."
+              body={qw(
+                'runtime_workspace_bay_body',
+                'QORTINO below is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.'
+              )}
               theme={theme}
-              title="Workspace bay hit a runtime snag."
+              title={qw(
+                'runtime_workspace_bay_title',
+                'Workspace bay hit a runtime snag.'
+              )}
               variant="workspace"
             />
           }
@@ -5444,9 +5656,15 @@ export const HomeQortinoWorkspaceCard = ({
         <ErrorBoundary
           fallback={
             <QortinoSectionRuntimeFallback
-              body="The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here."
+              body={qw(
+                'runtime_qortino_body',
+                'The workspace bay above is still safe. Refresh the Hub and if this keeps happening we will trace the exact crash from here.'
+              )}
               theme={theme}
-              title="QORTINO hit a runtime snag."
+              title={qw(
+                'runtime_qortino_title',
+                'QORTINO hit a runtime snag.'
+              )}
               variant="qortino"
             />
           }
@@ -5488,7 +5706,7 @@ export const HomeQortinoWorkspaceCard = ({
         >
           <Box>
             <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
-              Choose a module
+              {qw('dialog_module_title', 'Choose a module')}
             </Typography>
             <Typography
               sx={{
@@ -5497,7 +5715,10 @@ export const HomeQortinoWorkspaceCard = ({
                 mt: 0.3,
               }}
             >
-              Pick what lives above QORTINO.
+              {qw(
+                'dialog_module_subtitle',
+                'Pick what lives above QORTINO.'
+              )}
             </Typography>
           </Box>
           <IconButton onClick={() => setOpenModulePickerDialog(false)} size="small">
@@ -5505,7 +5726,7 @@ export const HomeQortinoWorkspaceCard = ({
           </IconButton>
         </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 0.8, pb: 2.1 }}>
-          {WORKSPACE_MODULES.map((module) => (
+          {workspaceModules.map((module) => (
             <ButtonBase
               key={module.key}
               onClick={() => {
@@ -5614,7 +5835,7 @@ export const HomeQortinoWorkspaceCard = ({
         >
           <Box>
             <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
-              Select hotkeys
+              {qw('dialog_hotkeys_title', 'Select hotkeys')}
             </Typography>
             <Typography
               sx={{
@@ -5623,7 +5844,10 @@ export const HomeQortinoWorkspaceCard = ({
                 mt: 0.3,
               }}
             >
-              Saved automatically for this account.
+              {qw(
+                'dialog_hotkeys_subtitle',
+                'Saved automatically for this account.'
+              )}
             </Typography>
           </Box>
           <IconButton onClick={() => setOpenHotkeyPickerDialog(false)} size="small">
@@ -5682,7 +5906,9 @@ export const HomeQortinoWorkspaceCard = ({
                 >
                   {app ? (
                     <ButtonBase
-                      aria-label={`Clear Slot ${index + 1}`}
+                      aria-label={qw('a11y_clear_hotkey_slot', 'Clear slot {{n}}', {
+                        n: index + 1,
+                      })}
                       onClick={(event) => {
                         event.preventDefault();
                         event.stopPropagation();
@@ -5744,7 +5970,9 @@ export const HomeQortinoWorkspaceCard = ({
                           fontWeight: 600,
                         }}
                       >
-                        Slot {index + 1}
+                        {qw('hotkey_slot_number', 'Slot {{n}}', {
+                          n: index + 1,
+                        })}
                       </Typography>
                     </>
                   )}
@@ -5758,7 +5986,10 @@ export const HomeQortinoWorkspaceCard = ({
             onChange={(event: React.ChangeEvent<HTMLInputElement>) =>
               setHotkeySearchQuery(event.target.value)
             }
-            placeholder="Search Q-Apps"
+            placeholder={qw(
+              'search_placeholder_qapps',
+              'Search Q-Apps'
+            )}
             sx={{
               appearance: 'none',
               background:
@@ -5811,7 +6042,7 @@ export const HomeQortinoWorkspaceCard = ({
                       textTransform: 'uppercase',
                     }}
                   >
-                    Recommended
+                    {t('core:qortino_workspace.section_recommended', 'Recommended')}
                   </Typography>
                   {featuredHotkeyCatalog.map((app) => (
                     <ButtonBase
@@ -5857,13 +6088,7 @@ export const HomeQortinoWorkspaceCard = ({
                           top: '9px',
                         }}
                       >
-                        <Box component="span" sx={{ color: alpha(theme.palette.text.secondary, 0.62) }}>
-                          [
-                        </Box>{' '}
-                        CURATED{' '}
-                        <Box component="span" sx={{ color: alpha(theme.palette.text.secondary, 0.62) }}>
-                          ]
-                        </Box>
+                        {qw('curated_badge', '[ CURATED ]')}
                       </Typography>
                       <Box
                         sx={{
@@ -6003,7 +6228,10 @@ export const HomeQortinoWorkspaceCard = ({
                         lineHeight: 1.4,
                       }}
                     >
-                      Loading Q-Apps library...
+                      {qw(
+                        'hotkeys_loading_library',
+                        'Loading Q-Apps library...'
+                      )}
                     </Typography>
                   </>
                 ) : (
@@ -6015,7 +6243,15 @@ export const HomeQortinoWorkspaceCard = ({
                         fontWeight: 700,
                       }}
                     >
-                      {hotkeyAppsError ? 'Q-Apps unavailable' : 'No Q-Apps match yet'}
+                      {hotkeyAppsError
+                        ? qw(
+                            'hotkeys_unavailable_title',
+                            'Q-Apps unavailable'
+                          )
+                        : qw(
+                            'hotkeys_no_match_title',
+                            'No Q-Apps match yet'
+                          )}
                     </Typography>
                     <Typography
                       sx={{
@@ -6026,7 +6262,10 @@ export const HomeQortinoWorkspaceCard = ({
                       }}
                     >
                       {hotkeyAppsError ||
-                        'Try another app name to wire a shortcut into the selected slot.'}
+                        qw(
+                          'hotkeys_no_match_hint',
+                          'Try another app name to wire a shortcut into the selected slot.'
+                        )}
                     </Typography>
                   </>
                 )}
@@ -6069,7 +6308,7 @@ export const HomeQortinoWorkspaceCard = ({
         >
           <Box>
             <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
-              Search Earbump
+              {qw('dialog_music_search_title', 'Search Earbump')}
             </Typography>
             <Typography
               sx={{
@@ -6078,7 +6317,10 @@ export const HomeQortinoWorkspaceCard = ({
                 mt: 0.3,
               }}
             >
-              Find a track, press play, and drop it into the player above.
+              {qw(
+                'dialog_music_search_subtitle',
+                'Find a track, press play, and drop it into the player above.'
+              )}
             </Typography>
           </Box>
           <IconButton onClick={() => setOpenMusicSearchDialog(false)} size="small">
@@ -6094,7 +6336,10 @@ export const HomeQortinoWorkspaceCard = ({
                 musicQuery: event.target.value,
               }))
             }
-            placeholder="Search tracks or artists"
+            placeholder={qw(
+              'search_placeholder_tracks',
+              'Search tracks or artists'
+            )}
             sx={{
               appearance: 'none',
               background:
@@ -6126,7 +6371,9 @@ export const HomeQortinoWorkspaceCard = ({
                 textTransform: 'uppercase',
               }}
             >
-              {workspaceState.musicQuery.trim() ? 'Results' : 'Discovery'}
+              {workspaceState.musicQuery.trim()
+                ? qw('music_section_results', 'Results')
+                : qw('music_section_discovery', 'Discovery')}
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.55 }}>
               {isMusicBrowserLoading ? (
@@ -6154,8 +6401,14 @@ export const HomeQortinoWorkspaceCard = ({
                     }}
                   >
                     {musicSearchQuery
-                      ? 'Searching the EarBump library...'
-                      : 'Loading EarBump discovery...'}
+                      ? qw(
+                          'music_loading_search',
+                          'Searching the EarBump library...'
+                        )
+                      : qw(
+                          'music_loading_discovery',
+                          'Loading EarBump discovery...'
+                        )}
                   </Typography>
                 </Box>
               ) : null}
@@ -6182,7 +6435,7 @@ export const HomeQortinoWorkspaceCard = ({
                       fontWeight: 700,
                     }}
                   >
-                    EarBump is quiet right now
+                    {qw('music_quiet_title', 'EarBump is quiet right now')}
                   </Typography>
                   <Typography
                     sx={{
@@ -6241,7 +6494,10 @@ export const HomeQortinoWorkspaceCard = ({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {track.artist} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {track.uploaded}
+                      {`${track.artist} ${qw(
+                        'track_meta_separator',
+                        '\u00b7'
+                      )} ${track.uploaded}`}
                     </Typography>
                   </Box>
                   <Typography
@@ -6296,7 +6552,7 @@ export const HomeQortinoWorkspaceCard = ({
                       fontWeight: 700,
                     }}
                   >
-                    No tracks surfaced
+                    {qw('music_no_tracks_title', 'No tracks surfaced')}
                   </Typography>
                   <Typography
                     sx={{
@@ -6306,7 +6562,10 @@ export const HomeQortinoWorkspaceCard = ({
                       maxWidth: '28ch',
                     }}
                   >
-                    Try another title or artist to pull something into the player.
+                    {qw(
+                      'music_no_tracks_hint',
+                      'Try another title or artist to pull something into the player.'
+                    )}
                   </Typography>
                 </Box>
               ) : null}
@@ -6430,6 +6689,7 @@ const GettingStartedMethodRow = ({
   showDivider?: boolean;
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['tutorial', 'core']);
   const isDarkMode = theme.palette.mode === 'dark';
 
   return (
@@ -6526,7 +6786,7 @@ const GettingStartedMethodRow = ({
               textTransform: 'uppercase',
             }}
           >
-            Recommended
+            {t('core:qortino_workspace.section_recommended', 'Recommended')}
           </Typography>
         ) : null}
         <Typography

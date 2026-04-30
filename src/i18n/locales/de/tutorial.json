@@ -54,6 +54,17 @@
     "devnet_testing_desc": "Teste deine Q-Apps in der DevNet-Testing-Umgebung",
     "open_app": "Öffnen",
     "address_copied": "Adresse in die Zwischenablage kopiert",
-    "group_activity": "Gruppenaktivität"
+    "group_activity": "Gruppenaktivität",
+    "get_qorts_workspace_hint": "Schalte deine ersten 6 QORT frei, um den Rest der Einrichtung zu aktivieren.",
+    "register_name_workspace_hint": "Ein registrierter Name macht aus diesem Konto eine erkennbare Identität.",
+    "load_avatar_workspace_hint": "Gib dem Dashboard ein Gesicht, damit sich der Raum wie deiner anfühlt.",
+    "onboarding_transition_hard_part_done": "Gute Arbeit. Der schwierigste Teil ist geschafft.",
+    "onboarding_transition_one_more": "Super. Noch einer.",
+    "onboarding_press_next_when_ready": "Gute Arbeit. Der schwierigste Teil ist geschafft. Tippe auf Weiter, wenn du soweit bist.",
+    "register_name_pending_hint": "Name wird on-chain gespeichert. Das kann einen Moment dauern.",
+    "persistent_guide_get_qorts": "Wir starten mit 6 QORT. Wähle oben eine Option.",
+    "persistent_guide_register_name": "Als Nächstes registrierst du deinen Namen.",
+    "persistent_guide_load_avatar": "Zum Schluss fügst du deinen Avatar hinzu.",
+    "post_onboarding_workspace_ready": "Alles bereit. Du kannst deinen Workspace oben aufbauen."
   }
 }
