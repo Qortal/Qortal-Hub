@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Avatar, Box, ButtonBase, Divider, Typography, useTheme } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
@@ -68,6 +69,7 @@ export const AuthenticationForm = ({
   onUnlockTransitionComplete,
 }: AuthenticationFormProps) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth']);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
     authenticatePasswordAtom
   );
@@ -539,7 +541,7 @@ export const AuthenticationForm = ({
               >
                 <SettingsEthernetRoundedIcon sx={{ fontSize: 11 }} />
                 <Typography sx={{ fontSize: '0.76rem', fontWeight: 500 }}>
-                  Connection Mode
+                  {t('auth:connection_mode.title')}
                 </Typography>
               </ButtonBase>
             </Box>

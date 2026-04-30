@@ -21,6 +21,7 @@ import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
 import { AuthButton, AuthInput } from './AuthShell';
 import { useAtomValue, useSetAtom } from 'jotai';
+import { useTranslation } from 'react-i18next';
 import {
   isOpenCoreSetup,
   selectedNodeInfoAtom,
@@ -68,6 +69,7 @@ export function ConnectionModeModal({
   onClose,
 }: ConnectionModeModalProps) {
   const theme = useTheme();
+  const { t } = useTranslation(['auth', 'core']);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setOpenCoreSetup = useSetAtom(isOpenCoreSetup);
   const { handleSaveNodeInfo } = useAuth();
@@ -194,10 +196,14 @@ export function ConnectionModeModal({
   }, [open]);
 
   const localStatusLabel = useMemo(() => {
-    if (localCoreStatus === 'running') return 'Core running';
-    if (localCoreStatus === 'missing') return 'Core not detected';
-    return 'Checking local node';
-  }, [localCoreStatus]);
+    if (localCoreStatus === 'running') {
+      return t('auth:connection_mode.status_running');
+    }
+    if (localCoreStatus === 'missing') {
+      return t('auth:connection_mode.status_missing');
+    }
+    return t('auth:connection_mode.status_checking');
+  }, [localCoreStatus, t]);
 
   const localStatusColor = useMemo(() => {
     if (localCoreStatus === 'running') return theme.palette.other.positive;
@@ -385,7 +391,7 @@ export function ConnectionModeModal({
                 lineHeight: 1.2,
               }}
             >
-              Connection Mode
+              {t('auth:connection_mode.title')}
             </Typography>
             <Typography
               sx={{
@@ -394,7 +400,7 @@ export function ConnectionModeModal({
                 mt: 1,
               }}
             >
-              Choose how Qortal connects to the network.
+              {t('auth:connection_mode.subtitle')}
             </Typography>
           </Box>
           <IconButton onClick={onClose} sx={{ color: theme.palette.text.secondary }}>
@@ -411,12 +417,22 @@ export function ConnectionModeModal({
               <ComputerRoundedIcon sx={{ color: '#62A1FF', fontSize: 29, flexShrink: 0 }} />
               <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                 <Box sx={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
-                  <Typography sx={modeTitleSx}>Local Node</Typography>
-                  <Box sx={recommendedPillSx}>Recommended</Box>
+                  <Typography sx={modeTitleSx}>
+                    {t('auth:connection_mode.local_title')}
+                  </Typography>
+                  <Box sx={recommendedPillSx}>
+                    {t('auth:connection_mode.recommended')}
+                  </Box>
                 </Box>
-                <Typography sx={{ ...modeCopySx, mt: 0.75 }}>Full decentralized access</Typography>
-                <Typography sx={modeCopySx}>Faster performance</Typography>
-                <Typography sx={modeCopySx}>Your data stays local</Typography>
+                <Typography sx={{ ...modeCopySx, mt: 0.75 }}>
+                  {t('auth:connection_mode.local_full_decentralized')}
+                </Typography>
+                <Typography sx={modeCopySx}>
+                  {t('auth:connection_mode.local_faster')}
+                </Typography>
+                <Typography sx={modeCopySx}>
+                  {t('auth:connection_mode.local_data_local')}
+                </Typography>
               </Box>
               <Box sx={modeTrailingSx}>
                 <Box sx={statusDotSx(localStatusColor)} />
@@ -433,10 +449,18 @@ export function ConnectionModeModal({
               </Box>
               <CloudRoundedIcon sx={{ color: '#9f75ff', fontSize: 30, flexShrink: 0 }} />
               <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <Typography sx={modeTitleSx}>Public Node</Typography>
-                <Typography sx={{ ...modeCopySx, mt: 0.75 }}>Quick access</Typography>
-                <Typography sx={modeCopySx}>Limited decentralization</Typography>
-                <Typography sx={modeCopySx}>Shared infrastructure</Typography>
+                <Typography sx={modeTitleSx}>
+                  {t('auth:connection_mode.public_title')}
+                </Typography>
+                <Typography sx={{ ...modeCopySx, mt: 0.75 }}>
+                  {t('auth:connection_mode.public_quick')}
+                </Typography>
+                <Typography sx={modeCopySx}>
+                  {t('auth:connection_mode.public_limited_decentralization')}
+                </Typography>
+                <Typography sx={modeCopySx}>
+                  {t('auth:connection_mode.public_shared_infrastructure')}
+                </Typography>
               </Box>
               <ChevronRightRoundedIcon sx={{ color: 'rgba(214,221,233,0.7)', fontSize: 25, flexShrink: 0 }} />
             </ButtonBase>
@@ -452,13 +476,15 @@ export function ConnectionModeModal({
                   pt: 2.5,
                 }}
               >
-                <Typography sx={sectionTitleSx}>Custom Nodes</Typography>
+                <Typography sx={sectionTitleSx}>
+                  {t('auth:connection_mode.section_custom_nodes')}
+                </Typography>
                 <ButtonBase
                   onClick={openAddCustomNode}
                   sx={addCustomNodeSx}
                 >
                   <AddRoundedIcon sx={{ fontSize: 18 }} />
-                  Add custom node
+                  {t('auth:connection_mode.add_custom_node')}
                 </ButtonBase>
               </Box>
 
@@ -483,7 +509,7 @@ export function ConnectionModeModal({
                       py: 1.1,
                     }}
                   >
-                    No custom nodes saved
+                    {t('auth:connection_mode.empty_custom_nodes')}
                   </Box>
                 )}
 
@@ -622,7 +648,7 @@ export function ConnectionModeModal({
               onClick={openAddCustomNode}
               sx={manualNodeLinkSx}
             >
-              Manual node setup
+              {t('auth:connection_mode.manual_setup_link')}
             </Link>
             <Button
               onClick={saveMode}
@@ -630,7 +656,7 @@ export function ConnectionModeModal({
               sx={saveSettingsButtonSx}
               variant="contained"
             >
-              Save Settings
+              {t('auth:connection_mode.save_settings')}
             </Button>
           </Box>
         </Box>
@@ -675,34 +701,42 @@ export function ConnectionModeModal({
             <ArrowBackRoundedIcon />
           </IconButton>
           <Typography sx={{ flex: 1, fontSize: '1.06rem', fontWeight: 700, textAlign: 'center' }}>
-            {editingNodeUrl ? 'Edit custom node' : 'Manual node setup'}
+            {editingNodeUrl
+              ? t('auth:connection_mode.manual_edit_title')
+              : t('auth:connection_mode.manual_add_title')}
           </Typography>
           <Box sx={{ width: 40 }} />
         </Box>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.3, px: 2.4, pb: 2.4 }}>
           <Box>
-            <Typography sx={fieldLabelSx}>Name</Typography>
+            <Typography sx={fieldLabelSx}>
+              {t('auth:connection_mode.field_name')}
+            </Typography>
             <AuthInput
               value={manualNodeName}
               onChange={(event) => setManualNodeName(event.target.value)}
-              placeholder="My Qortal node"
+              placeholder={t('auth:connection_mode.placeholder_node_name')}
             />
           </Box>
           <Box>
-            <Typography sx={fieldLabelSx}>Node URL</Typography>
+            <Typography sx={fieldLabelSx}>
+              {t('auth:connection_mode.field_node_url')}
+            </Typography>
             <AuthInput
               value={manualNodeUrl}
               onChange={(event) => setManualNodeUrl(event.target.value)}
-              placeholder="https://127.0.0.1:12391"
+              placeholder={t('auth:connection_mode.placeholder_node_url')}
             />
           </Box>
           <Box>
-            <Typography sx={fieldLabelSx}>API key (optional)</Typography>
+            <Typography sx={fieldLabelSx}>
+              {t('auth:connection_mode.field_api_key_optional')}
+            </Typography>
             <AuthInput
               value={manualApiKey}
               onChange={(event) => setManualApiKey(event.target.value)}
-              placeholder="Enter API key"
+              placeholder={t('auth:connection_mode.placeholder_api_key')}
             />
           </Box>
 
@@ -726,14 +760,14 @@ export function ConnectionModeModal({
                 textDecoration: 'none',
               }}
             >
-              Return
+              {t('core:action.return', { postProcess: 'capitalizeFirstChar' })}
             </Link>
             <AuthButton
               disabled={!manualNodeUrl.trim()}
               onClick={saveManualNode}
               fullWidth={false}
             >
-              Save
+              {t('core:action.save', { postProcess: 'capitalizeFirstChar' })}
             </AuthButton>
           </Box>
         </Box>

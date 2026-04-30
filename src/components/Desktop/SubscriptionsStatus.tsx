@@ -13,7 +13,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { useAtomValue } from 'jotai';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   managedSubscriptionsAtom,
@@ -31,45 +31,6 @@ type SubscriptionsStatusProps = {
   tooltipPlacement?: 'bottom' | 'left' | 'right' | 'top';
 };
 
-function openSubscriptionApp(path?: string) {
-  executeEvent('addTab', {
-    data: {
-      name: 'Subscriptions',
-      navigateIfAlreadyOpen: true,
-      path,
-      service: 'APP',
-    },
-  });
-  executeEvent('open-apps-mode', {});
-}
-
-function openSubWire() {
-  executeEvent('addTab', {
-    data: {
-      name: 'SubWire',
-      navigateIfAlreadyOpen: true,
-      service: 'APP',
-    },
-  });
-  executeEvent('open-apps-mode', {});
-}
-
-function useFormatTimeUntil() {
-  return (timestamp: number | null | undefined) => {
-    if (!timestamp) return '';
-    const diff = timestamp - Date.now();
-    if (diff <= 0) return 'soon';
-    const minutes = Math.floor(diff / 60_000);
-    if (minutes < 60) return `in ${minutes} min${minutes === 1 ? '' : 's'}`;
-    const hours = Math.floor(diff / 3_600_000);
-    if (hours < 24) return `in ${hours} hour${hours === 1 ? '' : 's'}`;
-    const days = Math.floor(diff / 86_400_000);
-    if (days < 30) return `in ${days} day${days === 1 ? '' : 's'}`;
-    const months = Math.floor(days / 30);
-    return `in ${months} month${months === 1 ? '' : 's'}`;
-  };
-}
-
 export function SubscriptionsStatus({
   buttonSx,
   compact = false,
@@ -80,7 +41,56 @@ export function SubscriptionsStatus({
 
   const theme = useTheme();
   const { t } = useTranslation(['group']);
-  const formatTimeUntil = useFormatTimeUntil();
+
+  const formatTimeUntil = useCallback(
+    (timestamp: number | null | undefined) => {
+      if (!timestamp) return '';
+      const diff = timestamp - Date.now();
+      if (diff <= 0) return t('group:subscription.relative_soon');
+      const minutes = Math.floor(diff / 60_000);
+      if (minutes < 60) {
+        return t('group:subscription.relative_in_minutes', { count: minutes });
+      }
+      const hours = Math.floor(diff / 3_600_000);
+      if (hours < 24) {
+        return t('group:subscription.relative_in_hours', { count: hours });
+      }
+      const days = Math.floor(diff / 86_400_000);
+      if (days < 30) {
+        return t('group:subscription.relative_in_days', { count: days });
+      }
+      const months = Math.floor(days / 30);
+      return t('group:subscription.relative_in_months', { count: months });
+    },
+    [t]
+  );
+
+  const openSubscriptionTab = useCallback(
+    (path?: string) => {
+      executeEvent('addTab', {
+        data: {
+          name: t('group:subscription.tab_subscriptions'),
+          navigateIfAlreadyOpen: true,
+          path,
+          service: 'APP',
+        },
+      });
+      executeEvent('open-apps-mode', {});
+    },
+    [t]
+  );
+
+  const openSubWireTab = useCallback(() => {
+    executeEvent('addTab', {
+      data: {
+        name: t('group:subscription.tab_subwire'),
+        navigateIfAlreadyOpen: true,
+        service: 'APP',
+      },
+    });
+    executeEvent('open-apps-mode', {});
+  }, [t]);
+
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const mySubscriptions = useAtomValue(mySubscriptionsAtom);
   const managedSubscriptions = useAtomValue(managedSubscriptionsAtom);
@@ -129,9 +139,16 @@ export function SubscriptionsStatus({
     managedActionSubscriptions.length > 0 ||
     managedQuietSubscriptions.length > 0;
 
-  const title = 'Subscriptions';
+  const subscriptionsTitle = t('group:subscription.subscriptions', {
+    postProcess: 'capitalizeFirstChar',
+  });
   const tooltipLabel =
-    totalActions > 0 ? `${title} - ${totalActions} action needed` : title;
+    totalActions > 0
+      ? t('group:subscription.tooltip_actions_needed', {
+          count: totalActions,
+          title: subscriptionsTitle,
+        })
+      : subscriptionsTitle;
 
   const panelBorderColor = alpha('#A9BCD8', 0.18);
   const itemBorderColor = alpha('#A9BCD8', 0.13);
@@ -155,7 +172,7 @@ export function SubscriptionsStatus({
         key={subscription?.id}
         onClick={() => {
           setAnchorEl(null);
-          openSubscriptionApp(subscription?.link);
+          openSubscriptionTab(subscription?.link);
         }}
         sx={{
           alignItems: 'center',
@@ -185,7 +202,10 @@ export function SubscriptionsStatus({
               whiteSpace: 'nowrap',
             }}
           >
-            {subscription?.title || 'Subscription'}
+            {subscription?.title ||
+              t('group:subscription.row_fallback_title', {
+                postProcess: 'capitalizeFirstChar',
+              })}
           </Typography>
           <Typography
             sx={{
@@ -195,7 +215,11 @@ export function SubscriptionsStatus({
               mt: 0.25,
             }}
           >
-            by {subscription?.ownerName || 'Qortal creator'}
+            {subscription?.ownerName
+              ? t('group:subscription.by_creator', {
+                  name: subscription.ownerName,
+                })
+              : t('group:subscription.creator_fallback')}
           </Typography>
           <Typography
             sx={{
@@ -204,8 +228,13 @@ export function SubscriptionsStatus({
               lineHeight: 1.45,
             }}
           >
-            {subscription?.priceQort} QORT / {subscription?.billingInterval}
-            {tone === 'active' && dueText ? ` - Expires ${dueText}` : ''}
+            {t('group:subscription.price_line', {
+              price: subscription?.priceQort,
+              interval: subscription?.billingInterval,
+            })}
+            {tone === 'active' && dueText
+              ? t('group:subscription.expires_suffix', { time: dueText })
+              : ''}
           </Typography>
         </Box>
         <Box
@@ -229,7 +258,9 @@ export function SubscriptionsStatus({
               width: 7,
             }}
           />
-          {tone === 'due' ? 'Due' : 'Active'}
+          {tone === 'due'
+            ? t('group:subscription.status_due')
+            : t('group:subscription.status_active')}
         </Box>
       </ButtonBase>
     );
@@ -248,7 +279,7 @@ export function SubscriptionsStatus({
         key={entry?.groupId}
         onClick={() => {
           setAnchorEl(null);
-          openSubscriptionApp(entry?.url);
+          openSubscriptionTab(entry?.url);
         }}
         sx={{
           alignItems: 'center',
@@ -278,7 +309,10 @@ export function SubscriptionsStatus({
               whiteSpace: 'nowrap',
             }}
           >
-            {entry?.group?.groupName || 'Managed subscription'}
+            {entry?.group?.groupName ||
+              t('group:subscription.managed_fallback', {
+                postProcess: 'capitalizeFirstChar',
+              })}
           </Typography>
           {entry?.group?.description ? (
             <Typography
@@ -302,11 +336,17 @@ export function SubscriptionsStatus({
               lineHeight: 1.45,
             }}
           >
-            {entry?.group?.memberCount ?? 0} members
+            {t('group:subscription.members', {
+              count: entry?.group?.memberCount ?? 0,
+            })}
             {pendingJoinRequests > 0
-              ? ` - ${pendingJoinRequests} join request${pendingJoinRequests === 1 ? '' : 's'}`
+              ? t('group:subscription.join_requests_suffix', {
+                  count: pendingJoinRequests,
+                })
               : ''}
-            {needsReEncryption ? ' - Re-encryption needed' : ''}
+            {needsReEncryption
+              ? t('group:subscription.re_encryption_suffix')
+              : ''}
           </Typography>
         </Box>
         {hasAction ? (
@@ -331,7 +371,7 @@ export function SubscriptionsStatus({
                 width: 7,
               }}
             />
-            {actionCount} action{actionCount === 1 ? '' : 's'}
+            {t('group:subscription.actions_badge', { count: actionCount })}
           </Box>
         ) : null}
       </ButtonBase>
@@ -462,10 +502,7 @@ export function SubscriptionsStatus({
                 fontWeight: 700,
               }}
             >
-              {t('group:subscription.subscriptions', {
-                defaultValue: 'Subscriptions',
-                postProcess: 'capitalizeFirstChar',
-              })}
+              {subscriptionsTitle}
             </Typography>
           </Box>
 
@@ -487,7 +524,9 @@ export function SubscriptionsStatus({
                   fontSize: '0.78rem',
                 }}
               >
-                Loading subscriptions
+                {t('group:subscription.loading', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
             </Box>
           ) : hasContent ? (
@@ -495,7 +534,11 @@ export function SubscriptionsStatus({
               {(paymentNeededSubscriptions.length > 0 ||
                 managedActionSubscriptions.length > 0) && (
                 <Box sx={{ display: 'grid', gap: 0.75 }}>
-                  <Typography sx={sectionTitleSx}>Needs action</Typography>
+                  <Typography sx={sectionTitleSx}>
+                    {t('group:subscription.section_needs_action', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
                   {paymentNeededSubscriptions.map((subscription: any) =>
                     renderSubscriptionRow(subscription, 'due')
                   )}
@@ -508,7 +551,11 @@ export function SubscriptionsStatus({
               {(activeSubscriptions.length > 0 ||
                 managedQuietSubscriptions.length > 0) && (
                 <Box sx={{ display: 'grid', gap: 0.75 }}>
-                  <Typography sx={sectionTitleSx}>Active</Typography>
+                  <Typography sx={sectionTitleSx}>
+                    {t('group:subscription.section_active', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
                   {activeSubscriptions.map((subscription: any) =>
                     renderSubscriptionRow(subscription, 'active')
                   )}
@@ -522,7 +569,7 @@ export function SubscriptionsStatus({
               <ButtonBase
                 onClick={() => {
                   setAnchorEl(null);
-                  openSubscriptionApp();
+                  openSubscriptionTab();
                 }}
                 sx={{
                   alignItems: 'center',
@@ -537,7 +584,9 @@ export function SubscriptionsStatus({
                   '&:hover': { color: theme.palette.primary.main },
                 }}
               >
-                Open Subscriptions
+                {t('group:subscription.open_subscriptions', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 <OpenInNewRoundedIcon sx={{ fontSize: '0.9rem' }} />
               </ButtonBase>
             </>
@@ -560,7 +609,7 @@ export function SubscriptionsStatus({
                   fontWeight: 700,
                 }}
               >
-                Discover subscription-powered Q-Apps
+                {t('group:subscription.empty_title')}
               </Typography>
               <Typography
                 sx={{
@@ -571,13 +620,12 @@ export function SubscriptionsStatus({
                   mt: 0.65,
                 }}
               >
-                Subscribe to creators and communities from Q-Apps that support
-                subscriptions, such as SubWire.
+                {t('group:subscription.empty_body')}
               </Typography>
               <ButtonBase
                 onClick={() => {
                   setAnchorEl(null);
-                  openSubWire();
+                  openSubWireTab();
                 }}
                 sx={{
                   alignItems: 'center',
@@ -590,7 +638,9 @@ export function SubscriptionsStatus({
                   '&:hover': { color: theme.palette.primary.main },
                 }}
               >
-                Open SubWire
+                {t('group:subscription.open_subwire', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 <ChevronRightRoundedIcon sx={{ fontSize: '1rem' }} />
               </ButtonBase>
             </Box>

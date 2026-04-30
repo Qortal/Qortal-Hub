@@ -18,6 +18,7 @@ import { Wallets } from './Wallets';
 import { AuthButton, AuthFrame } from './Auth/AuthShell';
 import { ConnectionModeModal } from './Auth/ConnectionModeModal';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { AuthUnlockTransitionSnapshot } from '../types/authTransition';
 
 type IntroLogoMetrics = {
@@ -108,6 +109,7 @@ export const NotAuthenticated = ({
   onWalletUnlockStart,
 }) => {
   const theme = useTheme();
+  const { t } = useTranslation(['auth']);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const [isConnectionModeOpen, setIsConnectionModeOpen] = useState(false);
   const [isEntryAccountsReady, setIsEntryAccountsReady] = useState(false);
@@ -898,7 +900,7 @@ export const NotAuthenticated = ({
                     lineHeight: 1,
                   }}
                 >
-                  Connection Mode
+                  {t('auth:connection_mode.title')}
                 </Typography>
               </ButtonBase>
             </Box>
