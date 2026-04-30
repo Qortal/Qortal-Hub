@@ -335,6 +335,7 @@
       "rated_app": "valutato con successo. Si prega di attendere un paio di minuti affinché la rete propaghi le modifiche.",
       "request_read": "ho letto questa richiesta",
       "transfer": "il trasferimento è stato di successo!",
+      "transfer_submitted": "Il tuo trasferimento è stato inviato con successo.",
       "voted": "votato con successo. Si prega di attendere un paio di minuti affinché la rete propaghi le modifiche."
     }
   },
@@ -453,7 +454,8 @@
     "official_apps": "app ufficiali"
   },
   "aria": {
-    "apps_library_tabs": "schede di navigazione della libreria app"
+    "apps_library_tabs": "schede di navigazione della libreria app",
+    "core_controls": "Controlli del core"
   },
   "supply": "offerta monetaria",
   "tags": "tag",

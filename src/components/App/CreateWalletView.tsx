@@ -7,15 +7,12 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { RefObject, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import { PasswordField, ErrorText } from '../index';
-import {
-  AuthButton,
-  AuthScreen,
-  AuthSectionLabel,
-} from '../Auth/AuthShell';
+import { AuthButton, AuthScreen, AuthSectionLabel } from '../Auth/AuthShell';
 
 type CreateWalletViewProps = {
   creationStep: number;
@@ -59,6 +56,7 @@ export function CreateWalletView({
   onEnterHub,
   exportSeedphrase,
 }: CreateWalletViewProps) {
+  const { t } = useTranslation(['auth']);
   const theme = useTheme();
   const [backupDownloaded, setBackupDownloaded] = useState(false);
   const [seedphraseCopied, setSeedphraseCopied] = useState(false);
@@ -84,17 +82,17 @@ export function CreateWalletView({
 
   const handleNextFromPassword = () => {
     if (!walletToBeDownloadedPassword) {
-      setPasswordStepError('Enter a wallet password.');
+      setPasswordStepError(t('auth:create_wallet.error_enter_password'));
       return;
     }
 
     if (!walletToBeDownloadedPasswordConfirm) {
-      setPasswordStepError('Confirm your wallet password.');
+      setPasswordStepError(t('auth:create_wallet.error_confirm_password'));
       return;
     }
 
     if (!passwordsMatch) {
-      setPasswordStepError('Passwords do not match.');
+      setPasswordStepError(t('auth:create_wallet.error_passwords_mismatch'));
       return;
     }
 
@@ -172,7 +170,9 @@ export function CreateWalletView({
                 letterSpacing: '-0.03em',
               }}
             >
-              {backupDownloaded ? 'Wallet saved' : 'Account created'}
+              {backupDownloaded
+                ? t('auth:create_wallet.success_wallet_saved')
+                : t('auth:create_wallet.success_account_created')}
             </Typography>
             <Typography
               sx={{
@@ -183,26 +183,35 @@ export function CreateWalletView({
               }}
             >
               {backupDownloaded
-                ? "You're now ready to enter Hub."
-                : 'Back up your encrypted wallet before entering Hub.'}
+                ? t('auth:create_wallet.success_ready_hub')
+                : t('auth:create_wallet.success_backup_before_hub')}
             </Typography>
           </Box>
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.9, width: '100%' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.9,
+              width: '100%',
+            }}
+          >
             {backupDownloaded ? (
               <>
-                <AuthButton onClick={onEnterHub}>Enter Hub</AuthButton>
+                <AuthButton onClick={onEnterHub}>
+                  {t('auth:create_wallet.enter_hub')}
+                </AuthButton>
                 <AuthButton onClick={handleDownloadBackup} primary={false}>
-                  Download another copy
+                  {t('auth:create_wallet.download_another_copy')}
                 </AuthButton>
               </>
             ) : (
               <>
                 <AuthButton onClick={handleDownloadBackup}>
-                  Backup wallet
+                  {t('auth:create_wallet.backup_wallet')}
                 </AuthButton>
                 <AuthButton disabled primary={false}>
-                  Enter Hub
+                  {t('auth:create_wallet.enter_hub')}
                 </AuthButton>
               </>
             )}
@@ -215,7 +224,7 @@ export function CreateWalletView({
               lineHeight: 1.5,
             }}
           >
-            This backup is encrypted with your wallet password.
+            {t('auth:create_wallet.backup_encrypted_notice')}
           </Typography>
         </Box>
       </AuthScreen>
@@ -226,10 +235,16 @@ export function CreateWalletView({
     return (
       <AuthScreen
         maxWidth={460}
-        title="Your Seedphrase"
-        subtitle="This can recover your account. Your encrypted wallet backup comes next."
+        title={t('auth:create_wallet.seed_title')}
+        subtitle={t('auth:create_wallet.seed_subtitle')}
       >
-        <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-start',
+            alignItems: 'center',
+          }}
+        >
           <ButtonBase
             onClick={onReturnBack}
             sx={{
@@ -239,7 +254,7 @@ export function CreateWalletView({
               '&:hover': { color: theme.palette.text.primary },
             }}
           >
-              <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
+            <ArrowBackRoundedIcon sx={{ fontSize: 18 }} />
           </ButtonBase>
         </Box>
 
@@ -268,10 +283,14 @@ export function CreateWalletView({
 
         <Box sx={{ display: 'grid', gap: 0.9, gridTemplateColumns: '1fr 1fr' }}>
           <AuthButton onClick={handleCopyPhrase} primary={false}>
-            {!seedphraseRevealed ? 'Reveal' : seedphraseCopied ? 'Copied' : 'Copy'}
+            {!seedphraseRevealed
+              ? t('auth:create_wallet.reveal')
+              : seedphraseCopied
+                ? t('auth:create_wallet.copied')
+                : t('auth:create_wallet.copy')}
           </AuthButton>
           <AuthButton onClick={exportSeedphrase} primary={false}>
-            Export
+            {t('auth:create_wallet.export')}
           </AuthButton>
         </Box>
 
@@ -288,15 +307,16 @@ export function CreateWalletView({
             py: 1,
           }}
         >
-          <WarningAmberRoundedIcon sx={{ color: '#E2B454', fontSize: 20, mt: 0.15 }} />
+          <WarningAmberRoundedIcon
+            sx={{ color: '#E2B454', fontSize: 20, mt: 0.15 }}
+          />
           <Typography sx={{ fontSize: '0.86rem', lineHeight: 1.55 }}>
-            Never share this. Anyone with it can access your account. For daily
-            safekeeping, use the encrypted wallet backup after creation.
+            {t('auth:create_wallet.seed_warning')}
           </Typography>
         </Box>
 
         <AuthButton onClick={onCreateAccount}>
-          Create account
+          {t('auth:create_wallet.create_account')}
         </AuthButton>
       </AuthScreen>
     );
@@ -305,10 +325,16 @@ export function CreateWalletView({
   return (
     <AuthScreen
       maxWidth={400}
-      title="Create password"
-      subtitle="This password protects your account on this device."
+      title={t('auth:create_wallet.password_title')}
+      subtitle={t('auth:create_wallet.password_subtitle')}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+        }}
+      >
         <ButtonBase
           onClick={onReturnBack}
           sx={{
@@ -323,7 +349,9 @@ export function CreateWalletView({
       </Box>
 
       <Box>
-        <AuthSectionLabel>Wallet password</AuthSectionLabel>
+        <AuthSectionLabel>
+          {t('auth:create_wallet.wallet_password')}
+        </AuthSectionLabel>
         <PasswordField
           value={walletToBeDownloadedPassword}
           onChange={(e) => setWalletToBeDownloadedPassword(e.target.value)}
@@ -337,11 +365,15 @@ export function CreateWalletView({
       </Box>
 
       <Box>
-        <AuthSectionLabel>Confirm password</AuthSectionLabel>
+        <AuthSectionLabel>
+          {t('auth:create_wallet.confirm_password')}
+        </AuthSectionLabel>
         <PasswordField
           inputRef={confirmRef}
           value={walletToBeDownloadedPasswordConfirm}
-          onChange={(e) => setWalletToBeDownloadedPasswordConfirm(e.target.value)}
+          onChange={(e) =>
+            setWalletToBeDownloadedPasswordConfirm(e.target.value)
+          }
           name="create-wallet-password-confirmation"
           suppressAutofill
           sx={{ width: '100%' }}
@@ -368,14 +400,16 @@ export function CreateWalletView({
               lineHeight: 1.55,
             }}
           >
-            Save account in Hub
+            {t('auth:create_wallet.save_account_in_hub')}
           </Typography>
         }
       />
 
       <ErrorText>{passwordStepError || walletToBeDownloadedError}</ErrorText>
 
-      <AuthButton onClick={handleNextFromPassword}>Continue</AuthButton>
+      <AuthButton onClick={handleNextFromPassword}>
+        {t('auth:create_wallet.continue')}
+      </AuthButton>
     </AuthScreen>
   );
 }

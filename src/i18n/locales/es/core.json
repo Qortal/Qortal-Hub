@@ -336,6 +336,7 @@
       "rated_app": "calificado con éxito. Espere un par de minutos para que la red propoque los cambios.",
       "request_read": "He leído esta solicitud",
       "transfer": "¡La transferencia fue exitosa!",
+      "transfer_submitted": "Tu transferencia se envió correctamente.",
       "voted": "votado con éxito. Espere un par de minutos para que la red propoque los cambios."
     }
   },
@@ -454,7 +455,8 @@
     "official_apps": "apps oficiales"
   },
   "aria": {
-    "apps_library_tabs": "pestañas de navegación de la biblioteca de apps"
+    "apps_library_tabs": "pestañas de navegación de la biblioteca de apps",
+    "core_controls": "Controles del núcleo"
   },
   "supply": "suministrar",
   "tags": "etiquetas",

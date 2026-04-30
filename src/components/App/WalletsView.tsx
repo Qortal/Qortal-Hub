@@ -1,5 +1,6 @@
 import { Box, ButtonBase } from '@mui/material';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
+import { useTranslation } from 'react-i18next';
 import { Wallets } from '../Wallets';
 import { AuthScreen } from '../Auth/AuthShell';
 import { useEffect, useState } from 'react';
@@ -17,6 +18,7 @@ export function WalletsView({
   setExtState,
   rawWallet,
 }: WalletsViewProps) {
+  const { t } = useTranslation(['auth']);
   const [importView, setImportView] = useState<'choice' | 'backup' | 'seedphrase'>(
     'choice'
   );
@@ -38,8 +40,8 @@ export function WalletsView({
 
   return (
     <AuthScreen
-      title="Import account"
-      subtitle="Choose how you want to restore your account."
+      title={t('auth:import_account.title')}
+      subtitle={t('auth:import_account.subtitle')}
       maxWidth={420}
     >
       {importView === 'choice' && (

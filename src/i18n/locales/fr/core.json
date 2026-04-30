@@ -336,6 +336,7 @@
       "rated_app": "Évalué avec succès. Veuillez patienter quelques minutes pour que le réseau propage les modifications.",
       "request_read": "J'ai lu cette demande",
       "transfer": "Le transfert a réussi!",
+      "transfer_submitted": "Votre transfert a été envoyé avec succès.",
       "voted": "voté avec succès. Veuillez patienter quelques minutes pour que le réseau propage les modifications."
     }
   },
@@ -454,7 +455,8 @@
     "official_apps": "apps officielles"
   },
   "aria": {
-    "apps_library_tabs": "onglets de navigation de la bibliothèque d'apps"
+    "apps_library_tabs": "onglets de navigation de la bibliothèque d'apps",
+    "core_controls": "Contrôles du Core"
   },
   "supply": "fournir",
   "tags": "balises",

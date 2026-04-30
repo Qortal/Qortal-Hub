@@ -336,6 +336,7 @@
       "rated_app": "成功评分。请等待几分钟，以使网络传播更改。",
       "request_read": "我读了这个请求",
       "transfer": "转会很成功！",
+      "transfer_submitted": "您的转账已成功提交。",
       "voted": "成功投票。请等待几分钟，以使网络传播更改。"
     }
   },
@@ -454,7 +455,8 @@
     "official_apps": "官方应用"
   },
   "aria": {
-    "apps_library_tabs": "应用库导航标签"
+    "apps_library_tabs": "应用库导航标签",
+    "core_controls": "核心控制"
   },
   "supply": "供应",
   "tags": "标签",

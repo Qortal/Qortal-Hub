@@ -1027,14 +1027,6 @@ const coreHeaderSx = {
   px: { xs: 2.5, sm: 3 },
 };
 
-const dialogTitleSx = {
-  color: 'rgba(246,248,252,0.96)',
-  fontSize: '1.12rem',
-  fontWeight: 800,
-  letterSpacing: '-0.01em',
-  lineHeight: 1.2,
-};
-
 const closeButtonSx = {
   color: 'rgba(214,221,233,0.68)',
   mr: -0.75,

@@ -795,11 +795,16 @@ function App() {
       return Boolean(saved);
     } catch (error: any) {
       setWalletToBeDownloadedError(
-        getWalletErrorMessage(error, 'Unable to save this wallet backup.')
+        getWalletErrorMessage(
+          error,
+          t('auth:wallet_errors.unable_to_save_backup', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        )
       );
       return false;
     }
-  }, [walletToBeDownloaded]);
+  }, [walletToBeDownloaded, t]);
 
   const saveWalletToLocalStorage = async (newWallet) => {
     try {

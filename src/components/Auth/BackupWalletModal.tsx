@@ -36,8 +36,6 @@ export const BackupWalletModal = ({
 }: BackupWalletModalProps) => {
   const theme = useTheme();
   const { t } = useTranslation(['auth', 'core', 'group']);
-  const td = (key: string, defaultValue: string) =>
-    t(`group:dashboard.${key}`, { defaultValue });
   const isDarkMode = theme.palette.mode === 'dark';
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -93,7 +91,11 @@ export const BackupWalletModal = ({
       setError('');
 
       if (!rawWallet) {
-        throw new Error('No active wallet was found for backup.');
+        throw new Error(
+          t('auth:backup_wallet_modal.error_no_active_wallet', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        );
       }
 
       if (!currentPassword) {
@@ -141,7 +143,9 @@ export const BackupWalletModal = ({
       setError(
         getWalletErrorMessage(
           downloadError,
-          'Unable to create the wallet backup.'
+          t('auth:backup_wallet_modal.error_unable_to_create_backup', {
+            postProcess: 'capitalizeFirstChar',
+          })
         )
       );
       setIsDownloading(false);
@@ -231,7 +235,9 @@ export const BackupWalletModal = ({
                 letterSpacing: '-0.02em',
               }}
             >
-              Backup wallet
+              {t('auth:create_wallet.backup_wallet', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
             <Typography
               id="backup-wallet-dialog-description"
@@ -241,7 +247,9 @@ export const BackupWalletModal = ({
                 lineHeight: 1.45,
               }}
             >
-              Download a local wallet file so you can restore this account later.
+              {t('auth:backup_wallet_modal.subtitle', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </Box>
           <ButtonBase
@@ -303,8 +311,9 @@ export const BackupWalletModal = ({
                 lineHeight: 1.48,
               }}
             >
-              This exports a wallet file locally on your device. Keep it stored
-              somewhere safe.
+              {t('auth:backup_wallet_modal.info_note', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
           </Box>
 
@@ -331,7 +340,7 @@ export const BackupWalletModal = ({
                 textTransform: 'uppercase',
               }}
             >
-              {td('wallet_address', 'Wallet address')}
+              {t('group:dashboard.wallet_address')}
             </Typography>
             <Typography
               sx={{
@@ -343,7 +352,7 @@ export const BackupWalletModal = ({
                 wordBreak: 'break-all',
               }}
             >
-              {walletAddress || td('no_active_wallet', 'No active wallet')}
+              {walletAddress || t('group:dashboard.no_active_wallet')}
             </Typography>
           </Box>
 
@@ -357,7 +366,9 @@ export const BackupWalletModal = ({
                 letterSpacing: '0.01em',
               }}
             >
-              Current password
+              {t('auth:backup_wallet_modal.current_password', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </Typography>
             <PasswordField
               id="backup-wallet-current-password"
@@ -439,7 +450,9 @@ export const BackupWalletModal = ({
                   lineHeight: 1.45,
                 }}
               >
-                Keep the current password in the exported wallet file
+                {t('auth:backup_wallet_modal.keep_password_in_export', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
             }
           />
@@ -455,7 +468,9 @@ export const BackupWalletModal = ({
                   letterSpacing: '0.01em',
                 }}
               >
-                New password for this backup
+                {t('auth:backup_wallet_modal.new_password_for_backup', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
               <PasswordField
                 id="backup-wallet-new-password"
@@ -553,7 +568,9 @@ export const BackupWalletModal = ({
               },
             }}
           >
-            Download wallet file
+            {t('auth:backup_wallet_modal.download_wallet_file', {
+              postProcess: 'capitalizeFirstChar',
+            })}
           </LoadingButton>
         </Box>
       </Box>

@@ -266,6 +266,10 @@
       "updating": "päivitetään",
       "wait": "odota hetki",
       "minimal_qort_balance": "Vähintään {{ quantity }} QORTin saldo mahdollistaa chat-viestien lähettämisen lähes välittömästi."
+    },
+    "success": {
+      "transfer": "siirto onnistui!",
+      "transfer_submitted": "siirtosi on lähetetty onnistuneesti."
     }
   },
   "minting": {
@@ -382,7 +386,8 @@
     "official_apps": "viralliset sovellukset"
   },
   "aria": {
-    "apps_library_tabs": "sovelluskirjaston navigointivälilehdet"
+    "apps_library_tabs": "sovelluskirjaston navigointivälilehdet",
+    "core_controls": "Ytimen hallinta"
   },
   "supply": "tarjonta",
   "tags": "tunnisteet",

@@ -336,6 +336,7 @@
       "rated_app": "avaliado com sucesso. Por favor, aguarde alguns minutos para que a rede propague as alterações.",
       "request_read": "eu li esta solicitação",
       "transfer": "a transferência foi bem-sucedida!",
+      "transfer_submitted": "Sua transferência foi enviada com sucesso.",
       "voted": "voto registrado com sucesso. Por favor, aguarde alguns minutos para que a rede propague as alterações."
     }
   },
@@ -454,7 +455,8 @@
     "official_apps": "apps oficiais"
   },
   "aria": {
-    "apps_library_tabs": "abas de navegação da biblioteca de apps"
+    "apps_library_tabs": "abas de navegação da biblioteca de apps",
+    "core_controls": "Controles do núcleo"
   },
   "supply": "fornecer",
   "tags": "tags",

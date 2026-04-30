@@ -335,6 +335,7 @@
       "rated_app": "erfolgreich bewertet. Bitte warten Sie ein paar Minuten, bis das Netzwerk die Änderungen vorschreibt.",
       "request_read": "Ich habe diese Anfrage gelesen",
       "transfer": "Die Übertragung war erfolgreich!",
+      "transfer_submitted": "Deine Überweisung wurde erfolgreich übermittelt.",
       "voted": "erfolgreich abgestimmt. Bitte warten Sie ein paar Minuten, bis das Netzwerk die Änderungen vorschreibt."
     }
   },
@@ -453,7 +454,8 @@
     "official_apps": "offizielle Apps"
   },
   "aria": {
-    "apps_library_tabs": "Apps-Bibliothek Navigationsreiter"
+    "apps_library_tabs": "Apps-Bibliothek Navigationsreiter",
+    "core_controls": "Core-Steuerung"
   },
   "supply": "liefern",
   "tags": "Tags",

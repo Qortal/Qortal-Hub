@@ -339,6 +339,7 @@
       "rated_app": "successfully rated. Please wait a couple minutes for the network to propagate the changes.",
       "request_read": "i have read this request",
       "transfer": "the transfer was successful!",
+      "transfer_submitted": "your transfer was submitted successfully.",
       "voted": "successfully voted. Please wait a couple minutes for the network to propagate the changes."
     }
   },
@@ -457,7 +458,8 @@
     "official_apps": "official apps"
   },
   "aria": {
-    "apps_library_tabs": "apps library navigation tabs"
+    "apps_library_tabs": "apps library navigation tabs",
+    "core_controls": "core controls"
   },
   "supply": "supply",
   "tags": "tags",

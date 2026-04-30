@@ -29,6 +29,10 @@ export function SuccessOverlay({
   const buttonLabel = t(`${buttonLabelNs}:${buttonLabelKey}`, {
     postProcess: 'capitalizeFirstChar',
   });
+  const transferSubmittedDetail = t(
+    `${messageNs}:message.success.transfer_submitted`,
+    { postProcess: 'capitalizeFirstChar' }
+  );
 
   if (fullPage) {
     return (
@@ -87,7 +91,7 @@ export function SuccessOverlay({
               mb: 2.4,
             }}
           >
-            Your transfer was submitted successfully.
+            {transferSubmittedDetail}
           </Typography>
           <ButtonBase autoFocus onClick={onAction} sx={{ width: '100%' }}>
             <CustomButton

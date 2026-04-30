@@ -470,7 +470,9 @@ export const AppsHomeDesktop = ({
               <HomeRoundedIcon />
             </AppCircle>
 
-            <AppCircleLabel>Home</AppCircleLabel>
+            <AppCircleLabel>
+              {t('core:home', { postProcess: 'capitalizeFirstChar' })}
+            </AppCircleLabel>
           </AppCircleContainer>
         </ButtonBase>
 

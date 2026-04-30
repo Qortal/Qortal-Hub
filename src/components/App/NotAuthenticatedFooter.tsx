@@ -1,5 +1,6 @@
 import { Box, IconButton, Tooltip } from '@mui/material';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
+import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../Language/LanguageSelector';
 
 type NotAuthenticatedFooterProps = {
@@ -11,6 +12,7 @@ export function NotAuthenticatedFooter({
   showCoreSetup,
   onOpenCoreSetup,
 }: NotAuthenticatedFooterProps) {
+  const { t } = useTranslation(['core']);
   return (
     <Box
       sx={{
@@ -29,7 +31,7 @@ export function NotAuthenticatedFooter({
     >
       {showCoreSetup && (
         <Box>
-          <Tooltip title="Core controls">
+          <Tooltip title={t('core:aria.core_controls')}>
             <IconButton onClick={onOpenCoreSetup}>
               <SettingsRoundedIcon sx={{ fontSize: 18 }} />
             </IconButton>

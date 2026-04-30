@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { supportedLanguages } from '../../i18n/i18n';
 import {
   ButtonBase,
+  Menu,
+  MenuItem,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -12,10 +15,14 @@ type LanguageSelectorProps = {
   sidebar?: boolean;
 };
 
+function languageBase(code: string) {
+  return code.split('-')[0];
+}
+
 const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
-  const { t } = useTranslation(['core']);
+  const { i18n, t } = useTranslation(['core']);
   const theme = useTheme();
-  const englishLanguage = supportedLanguages.en;
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const sidebarButtonSx = {
     alignItems: 'center',
     borderRadius: '14px',
@@ -58,19 +65,35 @@ const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
     },
   } as const;
 
-  const currentLang = 'en';
-  const { name } = englishLanguage;
-  const currentLangCode = 'US';
+  const handleChange = (newLang: string) => {
+    void i18n.changeLanguage(newLang);
+    try {
+      localStorage.setItem('i18nextLng', newLang);
+    } catch {
+      /* ignore quota / privacy mode */
+    }
+    setAnchorEl(null);
+  };
+
+  const currentBase = languageBase(i18n.language);
+  const { name } =
+    supportedLanguages[currentBase as keyof typeof supportedLanguages] ||
+    supportedLanguages.en;
+  const currentLangCode = currentBase.startsWith('en')
+    ? 'US'
+    : currentBase.slice(0, 2).toUpperCase();
 
   return (
     <>
       <ButtonBase
         disableRipple
-        onClick={() => undefined}
+        onClick={(event) => setAnchorEl(event.currentTarget)}
         aria-label={t('core:current_language', {
           language: name,
           postProcess: 'capitalizeFirstChar',
         })}
+        aria-haspopup="listbox"
+        aria-expanded={!!anchorEl}
         sx={
           sidebar
             ? sidebarButtonSx
@@ -135,6 +158,41 @@ const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
         )}
       </ButtonBase>
 
+      <Menu
+        anchorEl={anchorEl}
+        open={!!anchorEl}
+        onClose={() => setAnchorEl(null)}
+        anchorOrigin={{ vertical: 'center', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'center', horizontal: 'left' }}
+        /* Footer chrome (e.g. NotAuthenticatedFooter) uses z-index 2000; default modal menu is ~1300, so without this the anchor button paints over the panel. */
+        sx={{ zIndex: (muiTheme) => muiTheme.zIndex.modal + 1100 }}
+        slotProps={{
+          paper: {
+            sx: {
+              backgroundColor: theme.palette.background.paper,
+              border: `1px solid ${theme.palette.border.subtle}`,
+              boxShadow:
+                theme.palette.mode === 'dark'
+                  ? '0 12px 28px rgba(0,0,0,0.35)'
+                  : '0 10px 24px rgba(0,0,0,0.14)',
+              minWidth: 170,
+              ml: 1,
+            },
+          },
+        }}
+      >
+        {(Object.entries(supportedLanguages) as [string, { name: string; flag: string }][]).map(
+          ([code, langData]) => (
+            <MenuItem
+              key={code}
+              selected={currentBase === code}
+              onClick={() => handleChange(code)}
+            >
+              {langData.flag} {code.toUpperCase()} - {langData.name}
+            </MenuItem>
+          )
+        )}
+      </Menu>
     </>
   );
 };

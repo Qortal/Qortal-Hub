@@ -336,6 +336,7 @@
       "rated_app": "edukalt hinnatud. Palun oota paar minutit, kuni võrk muudatusi levitab.",
       "request_read": "olen selle päringu läbi lugenud",
       "transfer": "ülekanne õnnestus!",
+      "transfer_submitted": "Sinu ülekanne edastati edukalt.",
       "voted": "edukalt hääletatud. Palun oota paar minutit, kuni võrk muudatusi levitab."
     }
   },
@@ -454,7 +455,8 @@
     "official_apps": "ametlikud rakendused"
   },
   "aria": {
-    "apps_library_tabs": "rakenduste teegi navigeerimise vahelehed"
+    "apps_library_tabs": "rakenduste teegi navigeerimise vahelehed",
+    "core_controls": "Tuuma juhtimine"
   },
   "supply": "Üldine QORT varu",
   "tags": "sildid",

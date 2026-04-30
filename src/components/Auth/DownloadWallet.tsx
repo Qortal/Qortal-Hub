@@ -48,7 +48,12 @@ export const DownloadWallet = ({
       );
     } catch (error: any) {
       setWalletToBeDownloadedError(
-        getWalletErrorMessage(error, 'Unable to save this wallet backup.')
+        getWalletErrorMessage(
+          error,
+          t('auth:wallet_errors.unable_to_save_backup', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        )
       );
     }
   };
@@ -108,7 +113,12 @@ export const DownloadWallet = ({
       );
     } catch (error: any) {
       setWalletToBeDownloadedError(
-        getWalletErrorMessage(error, 'Unable to prepare this wallet backup.')
+        getWalletErrorMessage(
+          error,
+          t('auth:wallet_errors.unable_to_prepare_backup', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        )
       );
     } finally {
       setIsLoading(false);

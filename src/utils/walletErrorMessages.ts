@@ -1,33 +1,21 @@
-const WALLET_FIELD_LABELS: Record<string, string> = {
-  address0: 'wallet address',
-  encryptedSeed: 'encrypted seed (the locked wallet data needed to unlock it)',
-  iv: 'wallet encryption data',
-  kdfThreads: 'wallet password settings',
-  mac: 'wallet integrity check',
-  salt: 'wallet password security data',
-  version: 'wallet version',
-};
-
-const MISSING_WALLET_MESSAGE =
-  'This saved account could not be found. Choose another account or restore this wallet from a backup.';
-
-const INCOMPLETE_WALLET_MESSAGE =
-  'This saved account looks incomplete or damaged. Choose another account or restore this wallet from a backup.';
-
-const INVALID_WALLET_DATA_MESSAGE =
-  'This saved account contains invalid wallet security data. Choose another account or restore this wallet from a backup.';
+import i18n from '../i18n/i18n';
 
 export const getWalletFieldLabel = (field: string) =>
-  WALLET_FIELD_LABELS[field] || field;
+  i18n.t(`auth:wallet_errors.field.${field}`, {
+    defaultValue: field,
+  });
 
 export const getMissingWalletFieldMessage = (field: string) => {
   if (field === 'encryptedSeed') {
-    return 'This saved account is missing its encrypted seed (the locked wallet data needed to unlock it). Choose another account or restore this wallet from a backup.';
+    return i18n.t('auth:wallet_errors.missing_encrypted_seed', {
+      postProcess: 'capitalizeFirstChar',
+    });
   }
 
-  return `This saved account is missing its ${getWalletFieldLabel(
-    field
-  )}. Choose another account or restore this wallet from a backup.`;
+  return i18n.t('auth:wallet_errors.missing_field', {
+    field: getWalletFieldLabel(field),
+    postProcess: 'capitalizeFirstChar',
+  });
 };
 
 const getRawErrorMessage = (error: unknown) => {
@@ -42,14 +30,17 @@ const getRawErrorMessage = (error: unknown) => {
   return '';
 };
 
-export const getWalletErrorMessage = (
-  error: unknown,
-  fallback = 'Unable to unlock this wallet.'
-) => {
+export const getWalletErrorMessage = (error: unknown, fallback?: string) => {
+  const resolvedFallback =
+    fallback ??
+    i18n.t('auth:wallet_errors.unable_to_unlock_default', {
+      postProcess: 'capitalizeFirstChar',
+    });
+
   const rawMessage = getRawErrorMessage(error).trim();
   const normalizedMessage = rawMessage.toLowerCase();
 
-  if (!rawMessage) return fallback;
+  if (!rawMessage) return resolvedFallback;
 
   if (normalizedMessage.includes('encryptedseed')) {
     return getMissingWalletFieldMessage('encryptedSeed');
@@ -60,7 +51,9 @@ export const getWalletErrorMessage = (
     normalizedMessage.includes('undefined is not an object') ||
     normalizedMessage.includes('null is not an object')
   ) {
-    return INCOMPLETE_WALLET_MESSAGE;
+    return i18n.t('auth:wallet_errors.account_incomplete', {
+      postProcess: 'capitalizeFirstChar',
+    });
   }
 
   if (
@@ -68,7 +61,9 @@ export const getWalletErrorMessage = (
     normalizedMessage.includes('base58 alphabet') ||
     normalizedMessage.includes('unacceptable input')
   ) {
-    return INVALID_WALLET_DATA_MESSAGE;
+    return i18n.t('auth:wallet_errors.invalid_security_data', {
+      postProcess: 'capitalizeFirstChar',
+    });
   }
 
   if (
@@ -78,12 +73,16 @@ export const getWalletErrorMessage = (
     return rawMessage;
   }
 
-  return rawMessage || fallback;
+  return rawMessage || resolvedFallback;
 };
 
 export const validateStoredWalletForDecrypt = (wallet: unknown) => {
   if (!wallet || typeof wallet !== 'object') {
-    throw new Error(MISSING_WALLET_MESSAGE);
+    throw new Error(
+      i18n.t('auth:wallet_errors.account_not_found', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   const requiredFields = ['encryptedSeed', 'iv', 'salt', 'mac'];
