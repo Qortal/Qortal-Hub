@@ -134,16 +134,26 @@ export const AuthenticationForm = ({
   const parsedFilenameLabel = parsefilenameQortal(rawWallet?.filename).trim();
   const preferredIdentityLabel =
     primaryName?.trim() || rawWallet?.name?.trim() || parsedFilenameLabel || '';
-  const displayLabel = preferredIdentityLabel || addressLabel || 'Unnamed account';
+  const unnamedAccountLabel = t('auth:authentication_form.unnamed_account', {
+    postProcess: 'capitalizeFirstChar',
+  });
+  const displayLabel =
+    preferredIdentityLabel || addressLabel || unnamedAccountLabel;
   const titleLabel = isAddressLikeLabel(displayLabel, walletAddress)
-    ? addressLabel || 'Unnamed account'
+    ? addressLabel || unnamedAccountLabel
     : displayLabel;
   const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
   const connectionLabel = usingLocalNode
-    ? 'Using local node'
+    ? t('auth:authentication_form.using_local_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
     : selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
-      ? 'Using public node'
-      : 'Using custom node';
+      ? t('auth:authentication_form.using_public_node', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      : t('auth:authentication_form.using_custom_node', {
+          postProcess: 'capitalizeFirstChar',
+        });
   const isSharedTransitionActive = Boolean(sharedTransition);
   const storedAnimationPreference =
     typeof window !== 'undefined'
@@ -350,7 +360,7 @@ export const AuthenticationForm = ({
                   textTransform: 'uppercase',
                 }}
               >
-                Wallet password
+                {t('auth:wallet.password', { postProcess: 'capitalizeFirstChar' })}
               </Typography>
               <PasswordField
                 id="wallet-unlock-password"
@@ -362,6 +372,9 @@ export const AuthenticationForm = ({
                   }
                 }}
                 ref={passwordRef}
+                placeholder={t('auth:authentication_form.password_placeholder', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 sx={{
                   width: '100%',
                   '& .MuiOutlinedInput-root': {
@@ -406,7 +419,6 @@ export const AuthenticationForm = ({
                       color: 'rgba(214,221,233,0.74)',
                     },
                 }}
-                placeholder="Enter your password"
               />
             </Box>
 
@@ -433,7 +445,9 @@ export const AuthenticationForm = ({
                 },
               }}
             >
-              Unlock
+              {t('auth:authentication_form.unlock', {
+                postProcess: 'capitalizeFirstChar',
+              })}
             </AuthButton>
           </Box>
 
@@ -465,7 +479,9 @@ export const AuthenticationForm = ({
                 },
               }}
               >
-                Choose another account
+                {t('auth:authentication_form.choose_another_account', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 <ChevronRightRoundedIcon sx={{ fontSize: 15 }} />
               </ButtonBase>
 
