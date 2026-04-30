@@ -2,6 +2,7 @@ import PlayCircleOutlineRoundedIcon from '@mui/icons-material/PlayCircleOutlineR
 import { Avatar, Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { formatTimestamp } from '../../../utils/time';
 import type { WidgetDisplayMode } from '../DashboardWidgetFrame';
 import type { QuitterFeedItem } from './quitterFeedTypes';
@@ -18,6 +19,7 @@ export const QuitterFeedCard = ({
   onOpen,
 }: QuitterFeedCardProps) => {
   const theme = useTheme();
+  const { t } = useTranslation('group');
   const hasText = item.text.trim().length > 0;
   const imageCount = item.images.length;
   const hasMedia = imageCount > 0 || item.hasVideo;
@@ -278,7 +280,13 @@ export const QuitterFeedCard = ({
                     },
                   }}
                 >
-                  {isExpanded ? 'Show less' : 'Show more'}
+                  {isExpanded
+                    ? t('dashboard.quitter_show_less', {
+                        defaultValue: 'Show less',
+                      })
+                    : t('dashboard.quitter_show_more', {
+                        defaultValue: 'Show more',
+                      })}
                 </ButtonBase>
               ) : null}
             </Box>
@@ -365,7 +373,9 @@ export const QuitterFeedCard = ({
                   letterSpacing: '-0.01em',
                 }}
               >
-                Video attachment
+                {t('dashboard.quitter_video_attachment', {
+                  defaultValue: 'Video attachment',
+                })}
               </Typography>
               <Typography
                 sx={{
@@ -378,7 +388,9 @@ export const QuitterFeedCard = ({
                   mt: '2px',
                 }}
               >
-                Preview stays read-only in Hub
+                {t('dashboard.quitter_video_preview_hub', {
+                  defaultValue: 'Preview stays read-only in Hub',
+                })}
               </Typography>
             </Box>
             <Box
