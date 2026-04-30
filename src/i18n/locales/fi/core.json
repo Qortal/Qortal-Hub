@@ -133,9 +133,9 @@
   "core": {
     "block_height": "lohkon korkeus",
     "data_peers": "QDN (data) vertaiset",
-    "information": "ytimen tiedot",
+    "information": "Core-tiedot",
     "peers": "yhdistetyt vertaiset",
-    "version": "ytimen versio"
+    "version": "Core-versio"
   },
   "current_language": "nykyinen kieli: {{ language }}",
   "dev": "kehittäjä",
@@ -415,7 +415,7 @@
   },
   "aria": {
     "apps_library_tabs": "sovelluskirjaston navigointivälilehdet",
-    "core_controls": "Ytimen hallinta"
+    "core_controls": "Core-hallinta"
   },
   "supply": "tarjonta",
   "tags": "tunnisteet",

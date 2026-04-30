@@ -133,9 +133,9 @@
   "core": {
     "block_height": "ploki kõrgus",
     "data_peers": "QDN (andmed) sõlmed",
-    "information": "Sõlme info",
+    "information": "Core teave",
     "peers": "ühendatud sõlmed",
-    "version": "Sõlme versioon"
+    "version": "Core versioon"
   },
   "current_language": "praegune keel: {{ language }}",
   "dev": "arendus",
@@ -484,7 +484,7 @@
   },
   "aria": {
     "apps_library_tabs": "rakenduste teegi navigeerimise vahelehed",
-    "core_controls": "Tuuma juhtimine"
+    "core_controls": "Core juhtimine"
   },
   "supply": "Üldine QORT varu",
   "tags": "sildid",

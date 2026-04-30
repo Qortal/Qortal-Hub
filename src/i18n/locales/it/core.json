@@ -52,7 +52,7 @@
     "join": "unisciti a",
     "leave_comment": "lascia un commento",
     "load_announcements": "carica annunci più vecchi",
-    "logout": "logout",
+    "logout": "esci",
     "new": {
       "chat": "nuova chat",
       "post": "nuovo post",
@@ -133,9 +133,9 @@
   "core": {
     "block_height": "altezza del blocco",
     "data_peers": "peer QDN (dati)",
-    "information": "informazioni di base",
+    "information": "informazioni Core",
     "peers": "peer connessi",
-    "version": "versione core"
+    "version": "versione Core"
   },
   "current_language": "lingua corrente: {{ language }}",
   "dev": "dev",
@@ -483,7 +483,7 @@
   },
   "aria": {
     "apps_library_tabs": "schede di navigazione della libreria app",
-    "core_controls": "Controlli del core"
+    "core_controls": "Controlli Core"
   },
   "supply": "offerta monetaria",
   "tags": "tag",
@@ -510,7 +510,7 @@
   },
   "title": "titolo",
   "to": "a",
-  "tutorial": "tutorial",
+  "tutorial": "esercitazione guidata",
   "unknown": "sconosciuto",
   "url": "uRL",
   "user_lookup": "ricerca utente",
@@ -520,12 +520,12 @@
   "video_fetching": "recupero del video dalla rete Qortal...",
   "video_building": "download completato: creazione del video...",
   "vote": "votare",
-  "vote_other": "{{ count }} votes",
+  "vote_other": "{{ count }} voti",
   "zip": "zip",
   "wallet": {
     "litecoin": "wallet Litecoin",
     "qortal": "wallet Qortal",
-    "wallet": "wallet",
+    "wallet": "portafoglio",
     "wallet_other": "wallet"
   },
   "website": "sito web",

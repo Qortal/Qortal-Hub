@@ -6,7 +6,7 @@
     "removePath": "poista mukautettu Qortal-polku"
   },
   "introSetup": {
-    "paragraph1": "Qortal on hajautettu alusta, joka antaa sinulle täyden hallinnan tietoihisi, sovelluksiisi ja talouteesi. Aloittaaksesi suosittelemme asentamaan **Qortal Core** -ytimen, joka antaa virtaa verkolle ja mahdollistaa kaikki Qortalin ominaisuudet.",
+    "paragraph1": "Qortal on hajautettu alusta, joka antaa sinulle täyden hallinnan tietoihisi, sovelluksiisi ja talouteesi. Aloittaaksesi suosittelemme asentamaan **Qortal Core**, joka antaa virtaa verkolle ja mahdollistaa kaikki Qortalin ominaisuudet.",
     "paragraph2": "Tämä asennusohjelma opastaa sinua Qortal Coren asentamisessa ja määrittämisessä laitteellesi. Jatkaaksesi asennusta, napsauta **Seuraava**.",
     "note": "huomautus edistyneille käyttäjille",
     "advanced": "jos käytät etäsolmua, sulje tämä asennusohjelma ja napsauta sitten \"Valitse mukautettu solmu\""
@@ -22,7 +22,7 @@
   "steps": {
     "java": "java on asennettu",
     "downloaded": "Core ladattu",
-    "running": "core käynnissä"
+    "running": "Core käynnissä"
   },
   "actions": {
     "finished": "valmis",
@@ -49,7 +49,7 @@
     "error": "virhe"
   },
   "recommendation": {
-    "title": "paikallisen core-ytimen käyttö",
+    "title": "paikallisen Coren käyttö",
     "description": "Voit halutessasi jatkaa public nodella, mutta suosittelemme vahvasti käyttämään local nodea parhaan käyttökokemuksen saamiseksi. (Jos yrität käyttää ilman yhteyttä, voit jatkaa publicilla ilman yhteyttä.)",
     "subTitle": "paikallisen solmun käytön edut:",
     "point1": "täysi hajautettu pääsy",
@@ -63,16 +63,16 @@
     "resetDescription": "Apikeysi on virheellinen. Napsauta nollaa (reset) jatkaaksesi."
   },
   "messages": {
-    "001": "käynnistetään core-ydintä... odota hetki.",
+    "001": "käynnistetään Core... odota hetki.",
     "002": "virhe: tallennustilan käynnistäminen ei onnistu",
     "003": "virhe Qortal Coren ajamisessa",
     "004": "virhe Qortal Coren purkamisessa (unzipping)",
-    "005": "ladataan Qortal Core -ydintä... odota hetki.",
+    "005": "ladataan Qortal Core... odota hetki.",
     "006": "asetetaan Javaa... odota hetki.",
     "007": "virhe Javan lataamisessa.",
     "008": "virhe Javan purkamisessa (unzipping)",
-    "009": "ladataan Qortal Core -ydintä... odota hetki.",
-    "010": "virhe: core-ydintä ei voida ladata tai asentaa"
+    "009": "ladataan Qortal Core... odota hetki.",
+    "010": "virhe: Corea ei voida ladata tai asentaa"
   },
   "url": {
     "title": "url virheellinen",

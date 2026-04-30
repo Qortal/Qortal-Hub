@@ -52,7 +52,7 @@
     "join": "juntar",
     "leave_comment": "deixar comentario",
     "load_announcements": "carregar anuncios mais antigos",
-    "logout": "logout",
+    "logout": "terminar sessão",
     "new": {
       "chat": "nova conversa",
       "post": "nova postagem",
@@ -113,7 +113,7 @@
   "announcement_other": "anuncios",
   "api": "API",
   "app": "app",
-  "app_other": "apps",
+  "app_other": "aplicações",
   "app_name": "nome do app",
   "app_private": "privado",
   "app_service_type": "aplicativo tipo serviço",
@@ -133,9 +133,9 @@
   "core": {
     "block_height": "altura do bloco",
     "data_peers": "peers QDN (dados)",
-    "information": "informação do nó",
+    "information": "informações do Core",
     "peers": "nós conectados",
-    "version": "versão do nó"
+    "version": "versão do Core"
   },
   "current_language": "lingua atual: {{ language }}",
   "dev": "desenvolvedor",
@@ -484,7 +484,7 @@
   },
   "aria": {
     "apps_library_tabs": "abas de navegação da biblioteca de apps",
-    "core_controls": "Controles do núcleo"
+    "core_controls": "Controles do Core"
   },
   "supply": "fornecer",
   "tags": "tags",

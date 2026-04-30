@@ -133,9 +133,9 @@
   "core": {
     "block_height": "رقم البلوك",
     "data_peers": "أقران QDN (البيانات)",
-    "information": "معلومات السرفر",
+    "information": "معلومات Core",
     "peers": "السيرفرات المتصلة",
-    "version": "نسخة السرفر"
+    "version": "نسخة Core"
   },
   "current_language": "اللغة الحالية: {{ language }}",
   "dev": "ديف",
@@ -484,7 +484,7 @@
   },
   "aria": {
     "apps_library_tabs": "علامات تبويب التنقل في مكتبة التطبيقات",
-    "core_controls": "عناصر تحكم الأساس"
+    "core_controls": "عناصر التحكم Core"
   },
   "supply": "العرض",
   "tags": "الوسوم",

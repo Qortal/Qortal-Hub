@@ -134,9 +134,9 @@
   "core": {
     "block_height": "block height",
     "data_peers": "QDN (data) peers",
-    "information": "core information",
+    "information": "Core information",
     "peers": "connected peers",
-    "version": "core version"
+    "version": "Core version"
   },
   "current_language": "current language: {{ language }}",
   "dev": "dev",
@@ -487,7 +487,7 @@
   },
   "aria": {
     "apps_library_tabs": "apps library navigation tabs",
-    "core_controls": "core controls"
+    "core_controls": "Core controls"
   },
   "supply": "supply",
   "tags": "tags",

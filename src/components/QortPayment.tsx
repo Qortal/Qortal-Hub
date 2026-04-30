@@ -35,8 +35,6 @@ export const QortPayment = ({
     'question',
     'tutorial',
   ]);
-  const td = (key: string, defaultValue: string) =>
-    t(`group:dashboard.${key}`, { defaultValue });
   const [paymentTo, setPaymentTo] = useState<string>(defaultPaymentTo);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [paymentPassword, setPaymentPassword] = useState<string>('');
@@ -250,10 +248,7 @@ export const QortPayment = ({
           value={paymentTo}
           onChange={(e) => setPaymentTo(e.target.value)}
           autoComplete="off"
-          placeholder={td(
-            'qortal_address_or_name',
-            'Qortal address or registered name'
-          )}
+          placeholder={t('group:dashboard.qortal_address_or_name')}
           fullWidth
           sx={textFieldSurfaceSx}
         />

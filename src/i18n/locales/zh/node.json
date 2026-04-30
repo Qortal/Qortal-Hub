@@ -21,8 +21,8 @@
   },
   "steps": {
     "java": "已安装 Java",
-    "downloaded": "已下载核心",
-    "running": "核心正在运行"
+    "downloaded": "已下载 Core",
+    "running": "Core 正在运行"
   },
   "actions": {
     "finished": "已完成",
@@ -49,7 +49,7 @@
     "error": "错误"
   },
   "recommendation": {
-    "title": "使用你的本地核心",
+    "title": "使用你的本地 Core",
     "description": "如果你愿意，你可以继续使用 public node，但我们强烈建议使用你的 local node 以获得最佳体验。 (如果你在没有连接的情况下尝试访问，你可以在无连接时继续使用 public。)",
     "subTitle": "使用本地节点的优点：",
     "point1": "完全去中心化访问",
@@ -63,7 +63,7 @@
     "resetDescription": "你的 API 密钥无效。点击重置以继续。"
   },
   "messages": {
-    "001": "正在启动核心...请稍候。",
+    "001": "正在启动 Core...请稍候。",
     "002": "错误：无法启动存储库",
     "003": "运行 Qortal Core 时出错",
     "004": "解压 Qortal Core 出错",
@@ -72,7 +72,7 @@
     "007": "下载 Java 出错。",
     "008": "解压 Java 出错",
     "009": "正在下载 Qortal Core...请稍候。",
-    "010": "错误：无法下载或安装核心"
+    "010": "错误：无法下载或安装 Core"
   },
   "url": {
     "title": "URL 无效",

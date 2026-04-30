@@ -22,7 +22,7 @@
   "steps": {
     "java": "tiene Java",
     "downloaded": "Core descargado",
-    "running": "núcleo en ejecución"
+    "running": "Core en ejecución"
   },
   "actions": {
     "finished": "finalizado",
@@ -49,7 +49,7 @@
     "error": "error"
   },
   "recommendation": {
-    "title": "usar tu núcleo local",
+    "title": "usar tu Core local",
     "description": "Puedes continuar con el public node si lo deseas, pero recomendamos encarecidamente usar tu local node para la mejor experiencia. (Si estás intentando acceder sin conectividad, puedes continuar con public sin conexión.)",
     "subTitle": "ventajas de usar un nodo local:",
     "point1": "acceso completamente descentralizado",
@@ -63,7 +63,7 @@
     "resetDescription": "Tu clave API es inválida. Haz clic en restablecer para continuar."
   },
   "messages": {
-    "001": "iniciando el núcleo... por favor espera.",
+    "001": "iniciando Core... por favor espera.",
     "002": "error: no se puede iniciar el repositorio",
     "003": "error al ejecutar Qortal Core",
     "004": "error al descomprimir Qortal Core",
@@ -72,7 +72,7 @@
     "007": "error al descargar Java.",
     "008": "error al descomprimir Java",
     "009": "descargando Qortal Core... por favor espera.",
-    "010": "error: no se puede descargar o instalar el núcleo"
+    "010": "error: no se puede descargar o instalar Core"
   },
   "url": {
     "title": "URL inválida",
