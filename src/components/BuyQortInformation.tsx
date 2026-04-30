@@ -159,7 +159,9 @@ export const BuyQortInformation = ({ balance }) => {
                   mt: 0.25,
                 }}
               >
-                Open Q-Trade and buy QORT from the trade portal.
+                {t('core:message.generic.open_q_trade_subtitle', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
               </Typography>
             </Box>
           </ButtonBase>
@@ -188,7 +190,7 @@ export const BuyQortInformation = ({ balance }) => {
               p: 1.1,
               width: '100%',
             }}
-            aria-label={t('core:contact_other', {
+            aria-label={t('core:message.generic.benefits_qort', {
               postProcess: 'capitalizeFirstChar',
             })}
           >
