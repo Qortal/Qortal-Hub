@@ -4,16 +4,18 @@ import {
   Tooltip,
   Typography,
   useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
-import { alpha, type Theme } from '@mui/material/styles';
-import {
-  useEffect,
-  useRef,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-} from 'react';
+import { alpha } from '@mui/material/styles';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { InfoPreviewPrimaryRow } from './infoPreviewPanelTypes';
+export type {
+  InfoPreviewPanelRows,
+  InfoPreviewStatusTone,
+} from './infoPreviewPanelTypes';
+import { useDashboardInfoPreviewRows } from './useDashboardInfoPreviewRows';
 import { GROUP_ACTIVITY_BLUE } from '../groupActivityColorSystem';
 import {
   dashboardPanelSx,
@@ -30,52 +32,6 @@ import {
   SYSTEM_BADGE_SX,
 } from './homeDesktopConstants';
 
-export type InfoPreviewStatusTone = 'operational' | 'syncing' | 'issue';
-
-type InfoPreviewPrimaryRow = {
-  label: string;
-  emphasize?: boolean;
-  value?: string;
-  valueNode?: ReactNode;
-  variant?: 'pill';
-  pillTone?: 'negative' | 'warning' | 'positive';
-};
-
-type InfoPreviewMetricItem = {
-  label: string;
-  value: string;
-  accent?: string;
-};
-
-type InfoPreviewFooterRow = {
-  label: string;
-  value?: string;
-  valueNode?: ReactNode;
-  labelAction?: {
-    ariaLabel: string;
-    isOpen: boolean;
-    onClick: (event: MouseEvent<HTMLButtonElement>) => void;
-    tooltip: string;
-  };
-};
-
-type InfoPreviewFooterSection = {
-  title: string;
-  offsetTopPx?: number;
-  items: InfoPreviewFooterRow[];
-};
-
-export type InfoPreviewPanelRows = {
-  status: {
-    tone: InfoPreviewStatusTone;
-    isOperational?: boolean;
-    label?: string;
-  };
-  primaryItems: InfoPreviewPrimaryRow[];
-  metricItems: InfoPreviewMetricItem[];
-  footerSections: InfoPreviewFooterSection[];
-};
-
 const sepSx = (theme) => ({
   borderBottom: `1px solid ${theme.palette.border.subtle}`,
 });
@@ -83,18 +39,26 @@ const sepSx = (theme) => ({
 const infoSepSx = (theme, _index, _total) => sepSx(theme);
 
 export const InfoPreviewPanel = ({
-  rows,
-  theme,
   maxExpandedHeightPx = null,
-  forceExpanded = false,
-  resetKey = 'default',
+  nodeMenuAnchorEl,
+  onOpenNodeMenu,
 }: {
-  rows: InfoPreviewPanelRows;
-  theme: Theme;
   maxExpandedHeightPx?: number | null;
-  forceExpanded?: boolean;
-  resetKey?: string;
+  nodeMenuAnchorEl: HTMLElement | null;
+  onOpenNodeMenu: (event: MouseEvent<HTMLButtonElement>) => void;
 }) => {
+  const theme = useTheme();
+  const { i18n } = useTranslation(['core', 'group', 'tutorial', 'auth']);
+  const resetKey = (
+    i18n.resolvedLanguage ||
+    i18n.language ||
+    'en'
+  ).split('-')[0];
+  const rows = useDashboardInfoPreviewRows({
+    nodeMenuAnchorEl,
+    onOpenNodeMenu,
+  });
+  const forceExpanded = Boolean(nodeMenuAnchorEl);
   const enableOverlay = useMediaQuery(
     theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)
   );

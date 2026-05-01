@@ -4,13 +4,11 @@ import {
   CircularProgress,
   Menu,
   MenuItem,
-  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
-import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
@@ -39,11 +37,6 @@ import { GETTING_STARTED_LS_KEY } from '../gettingStartedStorage';
 import { HomeQortinoWorkspaceCard } from '../HomeQortinoWorkspaceCard';
 import { HomeQuickToolsPad } from '../HomeQuickToolsPad';
 import { HomeFeaturedApps } from '../HomeFeaturedApps';
-import { accountTargetBlocks } from '../../Minting/MintingStats';
-import {
-  GROUP_ACTIVITY_BLUE,
-  getBlueTier3DotSx,
-} from '../groupActivityColorSystem';
 import { useTranslation } from 'react-i18next';
 import {
   AnimatePresence,
@@ -53,20 +46,17 @@ import {
   useReducedMotion,
 } from 'framer-motion';
 import { getBaseApiReact } from '../../../App';
-import { manifestData } from '../../NotAuthenticated';
 import { executeEvent } from '../../../utils/events';
 import { openQChatTab } from '../../../utils/openQChatTab';
 import {
   dashboardPanelSx,
   useDashboardPanelMouseLight,
 } from '../dashboardPanelEffects';
-import { useHandleUserInfo } from '../../../hooks/useHandleUserInfo';
 import {
   getDefaultLocalNodeUrl,
   HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
 } from '../../../constants/constants';
-import { nodeDisplay } from '../../../utils/helpers';
 import { DashboardWidgetFrame } from '../../Widgets/DashboardWidgetFrame';
 import { GroupsWidget } from '../../Widgets/GroupsWidget';
 import { QuitterFeedWidget } from '../../Widgets/QuitterFeedWidget';
@@ -75,12 +65,8 @@ import type { ApiKey } from '../../../types/auth';
 import { BlockHeightValue } from './BlockHeightValue';
 import { DashboardUtilityPanel } from './DashboardUtilityPanel';
 import { WalletActionButton } from './WalletActionButton';
+import { InfoPreviewPanel } from './InfoPreviewPanel';
 import {
-  InfoPreviewPanel,
-  type InfoPreviewPanelRows,
-} from './InfoPreviewPanel';
-import {
-  DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY,
   HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY,
   HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS,
   HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS,
@@ -105,14 +91,11 @@ import {
   WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
 } from './homeDesktopConstants';
 import type {
-  DashboardInfoStatusTone,
   DashboardNodeOption,
   HomeCustomizableCardId,
   HomeCustomizableCardsLayout,
   HomeLayoutDebugKey,
   HomeLayoutDebugMetric,
-  MinterInfoView,
-  MinterProgressSnapshot,
   WalletActivityEntry,
   WalletActivityTransaction,
 } from './types';
@@ -129,7 +112,6 @@ import {
   normalizeDashboardCustomNodes,
   normalizeDashboardNodeUrl,
   parseHomeCustomizableCardsLayout,
-  parseMinterInfoView,
 } from './utils';
 
 export const HomeDesktop = ({
@@ -156,14 +138,10 @@ export const HomeDesktop = ({
   const lastWalletActivityBalanceRef = useRef<string | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
-  const nodeInfos = useAtomValue(nodeInfosAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setNodeInfos = useSetAtom(nodeInfosAtom);
   const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
-  const [minterLevel, setMinterLevel] = useState<number | null>(null);
-  const [minterProgress, setMinterProgress] =
-    useState<MinterProgressSnapshot | null>(null);
   const [walletActivityTargetHeightPx, setWalletActivityTargetHeightPx] =
     useState<number | null>(null);
   const [qortinoCardTargetHeightPx, setQortinoCardTargetHeightPx] = useState<
@@ -193,26 +171,13 @@ export const HomeDesktop = ({
   );
   const [isSwitchingNodeUrl, setIsSwitchingNodeUrl] = useState('');
   const [nodeSwitchError, setNodeSwitchError] = useState('');
-  const [coreVersionLabel, setCoreVersionLabel] = useState('—');
-  const [minterDefaultView, setMinterDefaultView] = useState<MinterInfoView>(
-    () =>
-      parseMinterInfoView(
-        localStorage.getItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY)
-      )
-  );
-  const [isMinterFieldHovered, setIsMinterFieldHovered] = useState(false);
   const reduce = useReducedMotion();
-  const { i18n, t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
+  const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const td = useCallback(
     (key: string, defaultValue: string) =>
       t(`group:dashboard.${key}`, { defaultValue }),
     [t]
   );
-  const dashboardLanguageKey = (
-    i18n.resolvedLanguage ||
-    i18n.language ||
-    'en'
-  ).split('-')[0];
   const theme = useTheme();
   const isSplitDashboardLayout = useMediaQuery(theme.breakpoints.up('md'));
   const isWideDashboardLayout = useMediaQuery(
@@ -229,9 +194,6 @@ export const HomeDesktop = ({
       HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX)
     : null;
 
-  const filledBlueDotSx = getBlueTier3DotSx(theme, true);
-  const emptyBlueDotSx = getBlueTier3DotSx(theme, false);
-
   const walletActivitySecondaryTextColor = alpha(
     theme.palette.text.primary,
     0.6
@@ -243,7 +205,6 @@ export const HomeDesktop = ({
         resolvedWalletActivityHeightPx +
         2
       : null;
-  const getIndividualUserInfo = useHandleUserInfo();
   const userAddress = userInfo?.address;
   const selectedNodeUrl = normalizeDashboardNodeUrl(
     selectedNode?.url || getBaseApiReact()
@@ -984,136 +945,9 @@ export const HomeDesktop = ({
     setIsOnboardingComplete(isComplete);
   }, [userAddress]);
 
-  useEffect(() => {
-    let active = true;
-    if (!userAddress) {
-      setMinterLevel(null);
-      return;
-    }
-    getIndividualUserInfo(userAddress)
-      .then((level) => {
-        if (active) setMinterLevel(typeof level === 'number' ? level : null);
-      })
-      .catch(() => {
-        if (active) setMinterLevel(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [getIndividualUserInfo, userAddress]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadMinterProgress = async () => {
-      if (!userAddress) {
-        if (active) setMinterProgress(null);
-        return;
-      }
-
-      try {
-        const response = await fetch(
-          `${getBaseApiReact()}/addresses/${userAddress}`
-        );
-        if (!response.ok) {
-          throw new Error('network error');
-        }
-
-        const data = await response.json();
-        if (!active) return;
-
-        const currentLevel =
-          typeof data?.level === 'number' && Number.isFinite(data.level)
-            ? data.level
-            : null;
-        const mintedBlocks =
-          typeof data?.blocksMinted === 'number' &&
-          Number.isFinite(data.blocksMinted)
-            ? data.blocksMinted
-            : 0;
-        const mintedAdjustment =
-          typeof data?.blocksMintedAdjustment === 'number' &&
-          Number.isFinite(data.blocksMintedAdjustment)
-            ? data.blocksMintedAdjustment
-            : 0;
-        const currentBlocks = Math.max(0, mintedBlocks + mintedAdjustment);
-        const requiredBlocks =
-          currentLevel != null
-            ? currentLevel >= 10
-              ? currentBlocks
-              : accountTargetBlocks(currentLevel)
-            : undefined;
-
-        if (currentLevel == null || requiredBlocks == null) {
-          setMinterProgress(null);
-          return;
-        }
-
-        setMinterProgress({
-          currentBlocks,
-          currentLevel,
-          progressRatio:
-            requiredBlocks > 0
-              ? Math.max(0, Math.min(1, currentBlocks / requiredBlocks))
-              : 0,
-          requiredBlocks,
-        });
-      } catch {
-        if (active) {
-          setMinterProgress(null);
-        }
-      }
-    };
-
-    loadMinterProgress();
-    const interval = window.setInterval(loadMinterProgress, 30000);
-
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, [userAddress]);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadCoreInfo = async () => {
-      try {
-        const response = await fetch(`${getBaseApiReact()}/admin/info`, {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          method: 'GET',
-        });
-        const data = await response.json();
-        if (!active) return;
-        setCoreVersionLabel(
-          data?.buildVersion ? String(data.buildVersion).substring(0, 20) : '—'
-        );
-      } catch {
-        if (active) {
-          setCoreVersionLabel('—');
-        }
-      }
-    };
-
-    loadCoreInfo();
-    const interval = window.setInterval(loadCoreInfo, 30000);
-
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  const handleSetMinterDefaultView = useCallback((nextView: MinterInfoView) => {
-    setMinterDefaultView(nextView);
-    localStorage.setItem(DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY, nextView);
-  }, []);
-
-  const handleRefreshGroupActivity = () => {
+  const handleRefreshGroupActivity = useCallback(() => {
     setGroupWidgetRefreshToken((value) => value + 1);
-  };
+  }, []);
 
   const handleRefreshQuitterWidget = useCallback(() => {
     setQuitterWidgetRefreshToken((value) => value + 1);
@@ -1126,16 +960,14 @@ export const HomeDesktop = ({
     }));
   }, []);
 
-  const balanceLabel =
-    balance != null ? `${Number(balance).toFixed(2)} QORT` : '—';
   const handleOpenAppsPanel = useCallback(() => {
     executeEvent('newTabWindow', {});
     setDesktopViewMode('apps');
   }, [setDesktopViewMode]);
-  const handleOpenEmbeddedQuitter = () => {
+  const handleOpenEmbeddedQuitter = useCallback(() => {
     executeEvent('addTab', { data: { service: 'APP', name: 'Quitter' } });
     executeEvent('open-apps-mode', {});
-  };
+  }, []);
   const handleOpenQChatPanel = useCallback(() => {
     setSelectedGroup(null);
     setGroupSection('chat');
@@ -1145,23 +977,6 @@ export const HomeDesktop = ({
     handleOpenQChatPanel();
   }, [handleOpenQChatPanel]);
 
-  const hasLiveNodeConnection = nodeInfos?.height != null;
-  const liveSyncPercent =
-    hasLiveNodeConnection &&
-    nodeInfos?.isSynchronizing &&
-    nodeInfos?.syncPercent !== 100
-      ? Math.round(nodeInfos?.syncPercent || 0)
-      : 100;
-  const nodeStatusValue = hasLiveNodeConnection
-    ? t('group:dashboard.sync_percent', {
-        defaultValue: '{{percent}}% Synced',
-        percent: liveSyncPercent,
-      })
-    : td('node_unavailable', 'Node unavailable');
-  const peersLabel = `${nodeInfos?.numberOfConnections || 0}`;
-  const blockHeightLabel = `${nodeInfos?.height || '—'}`;
-  const hubVersionLabel = manifestData.version || '—';
-  const qdnPeersLabel = `${nodeInfos?.numberOfDataConnections || 0}`;
   const qortinoWorkspaceShellFallback = (
     <Box
       sx={{
@@ -1200,468 +1015,6 @@ export const HomeDesktop = ({
       </Typography>
     </Box>
   );
-  const nodeBase = getBaseApiReact();
-  const nodeHostLabel = (() => {
-    try {
-      return new URL(nodeBase).host;
-    } catch {
-      return nodeDisplay(nodeBase);
-    }
-  })();
-  const nodeTypeLabel = isLocalNodeUrl(nodeBase)
-    ? td('local_node', 'Local node')
-    : nodeBase.includes('ext-node.qortal.link')
-      ? td('public_node', 'Public node')
-      : td('custom_node', 'Custom node');
-  const isSystemOperational =
-    hasLiveNodeConnection &&
-    !(nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100);
-  const resolvedInfoStatusLabel = isSystemOperational
-    ? td('fully_operational', 'Fully operational')
-    : td('not_operational', 'Not operational');
-  const resolvedIsSystemOperational = isSystemOperational;
-  const resolvedInfoStatusTone: DashboardInfoStatusTone =
-    nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100
-      ? 'syncing'
-      : resolvedIsSystemOperational
-        ? 'operational'
-        : 'issue';
-  const resolvedNodeStatusValue = nodeStatusValue;
-  const resolvedPeersLabel = peersLabel;
-  const resolvedBlockHeightLabel = blockHeightLabel;
-  const resolvedQdnPeersLabel = qdnPeersLabel;
-  const resolvedNodeHostLabel = nodeHostLabel;
-  const resolvedNodeTypeLabel = nodeTypeLabel;
-  const resolvedCoreVersionLabel = coreVersionLabel;
-  const isMinterOn = Boolean(minterLevel && minterLevel > 0);
-  const minterDotsFilled = isMinterOn
-    ? Math.max(1, Math.min(9, minterLevel ?? 5))
-    : 0;
-  const formattedMinterCurrentBlocks =
-    minterProgress?.currentBlocks != null
-      ? minterProgress.currentBlocks.toLocaleString()
-      : null;
-  const formattedMinterRequiredBlocks =
-    minterProgress?.requiredBlocks != null
-      ? minterProgress.requiredBlocks.toLocaleString()
-      : null;
-  const hasMinterProgressSummary =
-    minterProgress != null &&
-    formattedMinterCurrentBlocks != null &&
-    formattedMinterRequiredBlocks != null;
-  const resolvedMinterDefaultView: MinterInfoView =
-    hasMinterProgressSummary && minterDefaultView === 'progress'
-      ? 'progress'
-      : 'dots';
-  const minterHoverView: MinterInfoView =
-    resolvedMinterDefaultView === 'dots' ? 'progress' : 'dots';
-  const isShowingMinterHoverView =
-    hasMinterProgressSummary && isMinterFieldHovered;
-  const activeMinterInfoView: MinterInfoView = isShowingMinterHoverView
-    ? minterHoverView
-    : resolvedMinterDefaultView;
-  const minterPinActionLabel =
-    activeMinterInfoView === 'progress'
-      ? 'Save level bar as default view'
-      : 'Save minting dots as default view';
-  const minterValue = (
-    <Box
-      sx={{
-        alignItems: 'center',
-        display: 'inline-flex',
-        height: '22px',
-        justifyContent: 'flex-end',
-        minWidth: `${INFO_VALUE_COLUMN_MIN_WIDTH_PX}px`,
-        width: '100%',
-      }}
-    >
-      <AnimatePresence initial={false} mode="wait">
-        {isMinterOn ? (
-          <motion.div
-            key="minter-level"
-            initial={{ opacity: 0, y: 3 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -3 }}
-            transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            style={{
-              alignItems: 'center',
-              display: 'flex',
-              height: '22px',
-              justifyContent: 'flex-end',
-              width: '100%',
-            }}
-          >
-            <Box
-              onMouseEnter={
-                hasMinterProgressSummary
-                  ? () => setIsMinterFieldHovered(true)
-                  : undefined
-              }
-              onMouseLeave={
-                hasMinterProgressSummary
-                  ? () => setIsMinterFieldHovered(false)
-                  : undefined
-              }
-              onFocusCapture={
-                hasMinterProgressSummary
-                  ? () => setIsMinterFieldHovered(true)
-                  : undefined
-              }
-              onBlurCapture={
-                hasMinterProgressSummary
-                  ? (event) => {
-                      const nextFocusedElement = event.relatedTarget;
-
-                      if (
-                        !(nextFocusedElement instanceof Node) ||
-                        !event.currentTarget.contains(nextFocusedElement)
-                      ) {
-                        setIsMinterFieldHovered(false);
-                      }
-                    }
-                  : undefined
-              }
-              sx={{
-                alignItems: 'center',
-                display: 'inline-flex',
-                height: '22px',
-                justifyContent: 'flex-end',
-                maxWidth: '100%',
-                minWidth: '180px',
-                width: '180px',
-              }}
-            >
-              <AnimatePresence initial={false} mode="wait">
-                <motion.div
-                  key={activeMinterInfoView}
-                  initial={{ opacity: 0, y: 3 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -3 }}
-                  transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-                  style={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    gap: '8px',
-                    height: '22px',
-                    justifyContent: 'flex-end',
-                    width: '100%',
-                  }}
-                >
-                  {isShowingMinterHoverView ? (
-                    <Tooltip title={minterPinActionLabel}>
-                      <ButtonBase
-                        aria-label={minterPinActionLabel}
-                        disableRipple
-                        onClick={() =>
-                          handleSetMinterDefaultView(activeMinterInfoView)
-                        }
-                        sx={{
-                          alignItems: 'center',
-                          borderRadius: '999px',
-                          color: alpha(
-                            GROUP_ACTIVITY_BLUE.primary,
-                            theme.palette.mode === 'dark' ? 0.92 : 0.82
-                          ),
-                          display: 'inline-flex',
-                          flexShrink: 0,
-                          height: '18px',
-                          justifyContent: 'center',
-                          transition:
-                            'background-color 140ms ease, color 140ms ease, transform 120ms ease',
-                          width: '18px',
-                          '&:hover': {
-                            backgroundColor: alpha(
-                              GROUP_ACTIVITY_BLUE.primary,
-                              theme.palette.mode === 'dark' ? 0.18 : 0.12
-                            ),
-                            color: GROUP_ACTIVITY_BLUE.primary,
-                            transform: 'translateY(-1px)',
-                          },
-                          '&:active': {
-                            transform: 'translateY(0)',
-                          },
-                        }}
-                      >
-                        <LockOpenRoundedIcon sx={{ fontSize: '0.92rem' }} />
-                      </ButtonBase>
-                    </Tooltip>
-                  ) : null}
-
-                  {activeMinterInfoView === 'progress' &&
-                  hasMinterProgressSummary ? (
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'inline-flex',
-                        gap: '8px',
-                        justifyContent: 'flex-end',
-                        minWidth: 0,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          background:
-                            theme.palette.mode === 'dark'
-                              ? 'rgba(255,255,255,0.08)'
-                              : 'rgba(15,23,42,0.08)',
-                          borderRadius: '999px',
-                          flexShrink: 0,
-                          height: '6px',
-                          overflow: 'hidden',
-                          width: '56px',
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            background: GROUP_ACTIVITY_BLUE.primary,
-                            borderRadius: '999px',
-                            height: '100%',
-                            transition: 'width 180ms ease',
-                            width: `${Math.max(
-                              0,
-                              Math.min(100, minterProgress.progressRatio * 100)
-                            )}%`,
-                          }}
-                        />
-                      </Box>
-                      <Typography
-                        sx={{
-                          color: alpha(theme.palette.text.primary, 0.84),
-                          fontSize: '0.72rem',
-                          fontWeight: 600,
-                          letterSpacing: '0.01em',
-                          lineHeight: 1,
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {formattedMinterCurrentBlocks} /{' '}
-                        {formattedMinterRequiredBlocks}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        display: 'inline-flex',
-                        gap: '4px',
-                        height: '18px',
-                        justifyContent: 'flex-end',
-                      }}
-                    >
-                      {Array.from({ length: 9 }).map((_, index) => (
-                        <Box
-                          key={index}
-                          sx={{
-                            ...(index < minterDotsFilled
-                              ? filledBlueDotSx
-                              : emptyBlueDotSx),
-                            borderRadius: '50%',
-                            height: '11px',
-                            width: '11px',
-                          }}
-                        />
-                      ))}
-                    </Box>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </Box>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="minter-apply"
-            initial={{ opacity: 0, y: 3 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -3 }}
-            transition={{ duration: 0.18, ease: [0.2, 0, 0, 1] }}
-            style={{
-              alignItems: 'center',
-              display: 'flex',
-              height: '22px',
-              justifyContent: 'flex-end',
-              width: '100%',
-            }}
-          >
-            <ButtonBase
-              onClick={() => {
-                executeEvent('addTab', {
-                  data: { service: 'APP', name: 'q-mintership', path: '' },
-                });
-                executeEvent('open-apps-mode', {});
-              }}
-              sx={{
-                alignItems: 'center',
-                backgroundColor: 'transparent',
-                display: 'inline-flex',
-                justifyContent: 'center',
-                minWidth: 0,
-                ml: 'auto',
-                px: 0,
-                py: 0,
-                transition:
-                  'color 140ms ease, text-shadow 140ms ease, transform 120ms ease',
-                whiteSpace: 'nowrap',
-                '&:hover': {
-                  '& .minter-apply-text': {
-                    color:
-                      theme.palette.mode === 'dark'
-                        ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 1)
-                        : alpha(GROUP_ACTIVITY_BLUE.hover, 0.98),
-                    textShadow: `0 0 10px ${alpha(
-                      GROUP_ACTIVITY_BLUE.primary,
-                      theme.palette.mode === 'dark' ? 0.18 : 0.12
-                    )}`,
-                  },
-                  transform: 'translateY(-1px)',
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                },
-              }}
-            >
-              <Box
-                component="span"
-                sx={{
-                  alignItems: 'center',
-                  display: 'inline-flex',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  lineHeight: 1,
-                  textTransform: 'uppercase',
-                }}
-              >
-                <Box
-                  component="span"
-                  sx={{
-                    color: alpha(theme.palette.text.secondary, 0.52),
-                  }}
-                >
-                  [
-                </Box>
-                <Box
-                  component="span"
-                  className="minter-apply-text"
-                  sx={{
-                    color:
-                      theme.palette.mode === 'dark'
-                        ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.94)
-                        : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.9),
-                    px: '4px',
-                    transition: 'color 140ms ease, text-shadow 140ms ease',
-                  }}
-                >
-                  {td('apply', 'Apply')}
-                </Box>
-                <Box
-                  component="span"
-                  sx={{
-                    color: alpha(theme.palette.text.secondary, 0.52),
-                  }}
-                >
-                  ]
-                </Box>
-              </Box>
-            </ButtonBase>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </Box>
-  );
-  const coreVersionMetricLabel =
-    resolvedCoreVersionLabel && resolvedCoreVersionLabel !== '—'
-      ? resolvedCoreVersionLabel.replace(/^qortal-/i, '').split('-')[0] ||
-        resolvedCoreVersionLabel
-      : '—';
-  const infoRows: InfoPreviewPanelRows = {
-    status: {
-      isOperational: resolvedIsSystemOperational,
-      label: resolvedInfoStatusLabel,
-      tone: resolvedInfoStatusTone,
-    },
-    primaryItems: [
-      {
-        emphasize: true,
-        label: td('qort_balance', 'QORT Balance'),
-        value: balanceLabel,
-      },
-      {
-        label: resolvedNodeTypeLabel,
-        pillTone:
-          resolvedNodeStatusValue === td('node_unavailable', 'Node unavailable')
-            ? 'negative'
-            : resolvedNodeStatusValue ===
-                t('group:dashboard.sync_percent', {
-                  defaultValue: '{{percent}}% Synced',
-                  percent: 100,
-                })
-              ? 'positive'
-              : 'warning',
-        value: resolvedNodeStatusValue,
-        variant: 'pill',
-      },
-      {
-        label: td('minter_level', 'Minter Level'),
-        valueNode: minterValue,
-      },
-    ],
-    metricItems: [
-      {
-        accent: 'blue',
-        label: td('peers', 'Peers'),
-        value: resolvedPeersLabel,
-      },
-      {
-        accent: 'blue',
-        label: td('qdn', 'QDN'),
-        value: resolvedQdnPeersLabel,
-      },
-      {
-        accent: 'green',
-        label: td('core', 'Core'),
-        value: coreVersionMetricLabel,
-      },
-      {
-        accent: 'violet',
-        label: td('hub', 'Hub'),
-        value: hubVersionLabel,
-      },
-    ],
-    footerSections: [
-      {
-        title: td('node', 'Node'),
-        offsetTopPx: 10,
-        items: [
-          {
-            label: td('using_node', 'Using Node'),
-            labelAction: {
-              ariaLabel: td('change_node', 'Change node'),
-              isOpen: Boolean(nodeMenuAnchorEl),
-              onClick: handleOpenNodeMenu,
-              tooltip: td('change_node', 'Change node'),
-            },
-            value: resolvedNodeHostLabel,
-          },
-          {
-            label: td('node_type', 'Node Type'),
-            value: resolvedNodeTypeLabel,
-          },
-          {
-            label: td('node_height', 'Node Height'),
-            value: resolvedBlockHeightLabel,
-            valueNode: (
-              <BlockHeightValue
-                theme={theme}
-                value={resolvedBlockHeightLabel}
-              />
-            ),
-          },
-        ],
-      },
-    ],
-  };
-
   const groupActivityCardOrder = Math.max(
     0,
     customizableCardsLayout.order.indexOf('groupActivity')
@@ -1719,9 +1072,6 @@ export const HomeDesktop = ({
                 },
               }}
             >
-              {/*
-                    T/F Δb {(lowerRowDebugMetrics.toolsBottom - lowerRowDebugMetrics.featuredBottom).toFixed(1)} | F/W Δb {(lowerRowDebugMetrics.featuredBottom - lowerRowDebugMetrics.walletBottom).toFixed(1)}
-              */}
               <Box
                 sx={{
                   alignItems: 'start',
@@ -2005,11 +1355,9 @@ export const HomeDesktop = ({
                     }}
                   >
                     <InfoPreviewPanel
-                      resetKey={dashboardLanguageKey}
-                      rows={infoRows}
-                      theme={theme}
                       maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
-                      forceExpanded={Boolean(nodeMenuAnchorEl)}
+                      nodeMenuAnchorEl={nodeMenuAnchorEl}
+                      onOpenNodeMenu={handleOpenNodeMenu}
                     />
                     <Menu
                       anchorEl={nodeMenuAnchorEl}

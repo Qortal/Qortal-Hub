@@ -1,7 +1,6 @@
 import type { ApiKey } from '../../../types/auth';
 
 export type HomeCustomizableCardId = 'groupActivity' | 'quitter';
-export type DashboardInfoStatusTone = 'operational' | 'syncing' | 'issue';
 export type MinterProgressSnapshot = {
   currentBlocks: number;
   currentLevel: number;
