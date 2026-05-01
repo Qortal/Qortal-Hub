@@ -1,6 +1,5 @@
 import type { ApiKey } from '../../../types/auth';
 
-export type ActivityTab = 'requests' | 'invites' | 'promotions';
 export type HomeCustomizableCardId = 'groupActivity' | 'quitter';
 export type DashboardInfoStatusTone = 'operational' | 'syncing' | 'issue';
 export type MinterProgressSnapshot = {

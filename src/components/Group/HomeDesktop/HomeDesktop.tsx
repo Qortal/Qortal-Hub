@@ -2,7 +2,6 @@ import {
   Box,
   ButtonBase,
   CircularProgress,
-  IconButton,
   Menu,
   MenuItem,
   Tooltip,
@@ -35,9 +34,6 @@ import {
 } from '../../../atoms/global';
 import ErrorBoundary from '../../../common/ErrorBoundary';
 import { Spacer } from '../../../common/Spacer';
-import { GroupJoinRequests } from '../GroupJoinRequests';
-import { GroupInvites } from '../GroupInvites';
-import { ListOfGroupPromotions } from '../ListOfGroupPromotions';
 import { HomeProfileCard } from '../HomeProfileCard';
 import { GETTING_STARTED_LS_KEY } from '../gettingStartedStorage';
 import { HomeQortinoWorkspaceCard } from '../HomeQortinoWorkspaceCard';
@@ -46,9 +42,6 @@ import { HomeFeaturedApps } from '../HomeFeaturedApps';
 import { accountTargetBlocks } from '../../Minting/MintingStats';
 import {
   GROUP_ACTIVITY_BLUE,
-  getBlueAmbientPillGlowBackground,
-  getBlueTier1PillSurface,
-  getBlueTier2BadgeSx,
   getBlueTier3DotSx,
 } from '../groupActivityColorSystem';
 import { useTranslation } from 'react-i18next';
@@ -82,7 +75,10 @@ import type { ApiKey } from '../../../types/auth';
 import { BlockHeightValue } from './BlockHeightValue';
 import { DashboardUtilityPanel } from './DashboardUtilityPanel';
 import { WalletActionButton } from './WalletActionButton';
-import { InfoPreviewPanel, type InfoPreviewPanelRows } from './InfoPreviewPanel';
+import {
+  InfoPreviewPanel,
+  type InfoPreviewPanelRows,
+} from './InfoPreviewPanel';
 import {
   DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY,
   HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY,
@@ -109,7 +105,6 @@ import {
   WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
 } from './homeDesktopConstants';
 import type {
-  ActivityTab,
   DashboardInfoStatusTone,
   DashboardNodeOption,
   HomeCustomizableCardId,
@@ -141,28 +136,13 @@ export const HomeDesktop = ({
   myAddress,
   setGroupSection,
   setSelectedGroup,
-  getTimestampEnterChat,
-  setOpenManageMembers,
-  setOpenAddGroup,
-  setOpenAddGroupTab,
-  setMobileViewMode,
   setDesktopViewMode,
   desktopViewMode,
   onOpenSettings,
 }) => {
   const groupActivityPanelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const groupActivityCardHeightRef = useRef<HTMLDivElement | null>(null);
-  const groupActivityContentFrameRef = useRef<HTMLDivElement | null>(null);
-  const groupActivityTopControlsRef = useRef<HTMLDivElement | null>(null);
   const quitterCardHeightRef = useRef<HTMLDivElement | null>(null);
-  const activityToggleTrackRef = useRef<HTMLDivElement | null>(null);
-  const activityToggleSegmentRefs = useRef<
-    Record<ActivityTab, HTMLButtonElement | null>
-  >({
-    requests: null,
-    promotions: null,
-    invites: null,
-  });
   const homeLayoutDebugRootRef = useRef<HTMLDivElement | null>(null);
   const accountOverviewDebugRef = useRef<HTMLDivElement | null>(null);
   const infoDebugRef = useRef<HTMLDivElement | null>(null);
@@ -180,13 +160,7 @@ export const HomeDesktop = ({
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setNodeInfos = useSetAtom(nodeInfosAtom);
   const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
-  const [activityTab, setActivityTab] = useState<ActivityTab>('promotions');
-  const [requestsCount, setRequestsCount] = useState(0);
-  const [invitesCount, setInvitesCount] = useState(0);
-  const [promotionsCount, setPromotionsCount] = useState(0);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
-  const [requestsCountLoading, setRequestsCountLoading] = useState(true);
-  const [invitesCountLoading, setInvitesCountLoading] = useState(true);
   const [minterLevel, setMinterLevel] = useState<number | null>(null);
   const [minterProgress, setMinterProgress] =
     useState<MinterProgressSnapshot | null>(null);
@@ -219,15 +193,6 @@ export const HomeDesktop = ({
   );
   const [isSwitchingNodeUrl, setIsSwitchingNodeUrl] = useState('');
   const [nodeSwitchError, setNodeSwitchError] = useState('');
-  const [activityToggleIndicator, setActivityToggleIndicator] = useState({
-    ready: false,
-    width: 0,
-    x: 0,
-  });
-  const [
-    groupActivityMeasuredViewportHeightPx,
-    setGroupActivityMeasuredViewportHeightPx,
-  ] = useState<number | null>(null);
   const [coreVersionLabel, setCoreVersionLabel] = useState('—');
   const [minterDefaultView, setMinterDefaultView] = useState<MinterInfoView>(
     () =>
@@ -263,27 +228,10 @@ export const HomeDesktop = ({
     ? (walletActivityTargetHeightPx ??
       HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX)
     : null;
-  const groupActivityAccentTextColor = theme.palette.getContrastText(
-    GROUP_ACTIVITY_BLUE.primary
-  );
-  const groupActivityAccentBadgeTextColor = theme.palette.getContrastText(
-    GROUP_ACTIVITY_BLUE.pressed
-  );
-  const groupActivityToggleIndicatorSurface = getBlueTier1PillSurface(theme);
-  const groupActivityActiveBadgeSurface = getBlueTier2BadgeSx(theme, true);
-  const groupActivityInactiveBadgeSurface = getBlueTier2BadgeSx(theme, false);
+
   const filledBlueDotSx = getBlueTier3DotSx(theme, true);
   const emptyBlueDotSx = getBlueTier3DotSx(theme, false);
-  const sharedAmbientPillGlowBackground =
-    getBlueAmbientPillGlowBackground(theme);
-  const groupActivityToggleTrackBackground =
-    theme.palette.mode === 'dark'
-      ? darken(theme.palette.background.surface, 0.25)
-      : darken(theme.palette.background.paper, 0.25);
-  const groupActivityToggleTrackShadow =
-    theme.palette.mode === 'dark'
-      ? 'inset 0 1px 0 rgba(255,255,255,0.03), inset 0 -1px 0 rgba(0,0,0,0.32)'
-      : 'inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -1px 0 rgba(31,39,53,0.08)';
+
   const walletActivitySecondaryTextColor = alpha(
     theme.palette.text.primary,
     0.6
@@ -323,7 +271,6 @@ export const HomeDesktop = ({
     [loadDashboardCustomNodes]
   );
 
-  console.log('rendered');
   const handleCloseNodeMenu = useCallback(() => {
     if (isSwitchingNodeUrl) return;
     setNodeMenuAnchorEl(null);
@@ -1025,155 +972,6 @@ export const HomeDesktop = ({
     };
   }, [desktopViewMode, isOnboardingComplete, isWideDashboardLayout]);
 
-  const setActivityToggleSegmentRef = useCallback(
-    (tab: ActivityTab) => (node: HTMLButtonElement | null) => {
-      activityToggleSegmentRefs.current[tab] = node;
-    },
-    []
-  );
-  const updateActivityToggleIndicator = useCallback(() => {
-    const track = activityToggleTrackRef.current;
-    const activeSegment = activityToggleSegmentRefs.current[activityTab];
-
-    if (!track || !activeSegment) return;
-
-    const trackRect = track.getBoundingClientRect();
-    const segmentRect = activeSegment.getBoundingClientRect();
-    const nextIndicator = {
-      ready: true,
-      width: segmentRect.width,
-      x: segmentRect.left - trackRect.left,
-    };
-
-    setActivityToggleIndicator((prev) => {
-      if (
-        prev.ready === nextIndicator.ready &&
-        Math.abs(prev.width - nextIndicator.width) < 0.5 &&
-        Math.abs(prev.x - nextIndicator.x) < 0.5
-      ) {
-        return prev;
-      }
-
-      return nextIndicator;
-    });
-  }, [activityTab]);
-
-  useLayoutEffect(() => {
-    updateActivityToggleIndicator();
-  }, [
-    updateActivityToggleIndicator,
-    requestsCount,
-    invitesCount,
-    promotionsCount,
-    requestsCountLoading,
-    invitesCountLoading,
-  ]);
-
-  useLayoutEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const contentNode = groupActivityContentFrameRef.current;
-    const topControlsNode = groupActivityTopControlsRef.current;
-    if (!contentNode || !topControlsNode) return undefined;
-
-    let animationFrame = 0;
-
-    const updateViewportHeight = () => {
-      const contentRect = contentNode.getBoundingClientRect();
-      const topControlsRect = topControlsNode.getBoundingClientRect();
-      const computedStyle = window.getComputedStyle(contentNode);
-      const gapPx =
-        parseFloat(computedStyle.rowGap || computedStyle.gap || '0') || 0;
-      const nextViewportHeight = Math.max(
-        280,
-        Math.floor(contentRect.height - topControlsRect.height - gapPx)
-      );
-
-      setGroupActivityMeasuredViewportHeightPx((prev) =>
-        prev != null && Math.abs(prev - nextViewportHeight) < 1
-          ? prev
-          : nextViewportHeight
-      );
-    };
-
-    const scheduleViewportHeightUpdate = () => {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(updateViewportHeight);
-    };
-
-    scheduleViewportHeightUpdate();
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', scheduleViewportHeightUpdate);
-      return () => {
-        cancelAnimationFrame(animationFrame);
-        window.removeEventListener('resize', scheduleViewportHeightUpdate);
-      };
-    }
-
-    const resizeObserver = new ResizeObserver(scheduleViewportHeightUpdate);
-    resizeObserver.observe(contentNode);
-    resizeObserver.observe(topControlsNode);
-    window.addEventListener('resize', scheduleViewportHeightUpdate);
-
-    return () => {
-      cancelAnimationFrame(animationFrame);
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', scheduleViewportHeightUpdate);
-    };
-  }, [
-    activityTab,
-    customizableCardsLayout.heights.groupActivity,
-    invitesCount,
-    invitesCountLoading,
-    promotionsCount,
-    requestsCount,
-    requestsCountLoading,
-  ]);
-
-  useEffect(() => {
-    const track = activityToggleTrackRef.current;
-    if (!track) return;
-
-    let animationFrame = 0;
-    const scheduleIndicatorUpdate = () => {
-      cancelAnimationFrame(animationFrame);
-      animationFrame = window.requestAnimationFrame(
-        updateActivityToggleIndicator
-      );
-    };
-
-    scheduleIndicatorUpdate();
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', scheduleIndicatorUpdate);
-      return () => {
-        cancelAnimationFrame(animationFrame);
-        window.removeEventListener('resize', scheduleIndicatorUpdate);
-      };
-    }
-
-    const resizeObserver = new ResizeObserver(scheduleIndicatorUpdate);
-    resizeObserver.observe(track);
-    Object.values(activityToggleSegmentRefs.current).forEach((segment) => {
-      if (segment) resizeObserver.observe(segment);
-    });
-    window.addEventListener('resize', scheduleIndicatorUpdate);
-
-    return () => {
-      cancelAnimationFrame(animationFrame);
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', scheduleIndicatorUpdate);
-    };
-  }, [
-    updateActivityToggleIndicator,
-    requestsCount,
-    invitesCount,
-    promotionsCount,
-    requestsCountLoading,
-    invitesCountLoading,
-  ]);
-
   useEffect(() => {
     if (!userAddress) {
       setIsOnboardingComplete(false);
@@ -1435,7 +1233,6 @@ export const HomeDesktop = ({
   const resolvedNodeHostLabel = nodeHostLabel;
   const resolvedNodeTypeLabel = nodeTypeLabel;
   const resolvedCoreVersionLabel = coreVersionLabel;
-  const resolvedHubVersionLabel = hubVersionLabel;
   const isMinterOn = Boolean(minterLevel && minterLevel > 0);
   const minterDotsFilled = isMinterOn
     ? Math.max(1, Math.min(9, minterLevel ?? 5))
@@ -1865,13 +1662,6 @@ export const HomeDesktop = ({
     ],
   };
 
-  const sharedGroupNavProps = {
-    getTimestampEnterChat,
-    setDesktopViewMode,
-    setGroupSection,
-    setMobileViewMode,
-    setSelectedGroup,
-  };
   const groupActivityCardOrder = Math.max(
     0,
     customizableCardsLayout.order.indexOf('groupActivity')

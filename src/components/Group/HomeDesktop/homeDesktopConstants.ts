@@ -21,18 +21,6 @@ export const SYSTEM_BADGE_SX = {
 } as const;
 
 export const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
-export const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
-  width: {
-    duration: 0.24,
-    ease: [0.22, 1, 0.36, 1] as const,
-  },
-  x: {
-    type: 'spring' as const,
-    stiffness: 360,
-    damping: 31,
-    mass: 0.74,
-  },
-};
 
 // Home dashboard desktop layout invariants:
 // - Info top aligns visually with Account Overview top.
@@ -108,13 +96,6 @@ export const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
 
 export const DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY =
   'dashboardMinterDefaultView';
-export const DASHBOARD_EMBEDDED_QUITTER_APP = {
-  identifier: '',
-  name: 'Quitter',
-  path: '',
-  service: 'APP',
-  tabId: 'dashboard-embedded-quitter',
-} as const;
 export const HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT: HomeCustomizableCardId[] = [
   'groupActivity',
   'quitter',
