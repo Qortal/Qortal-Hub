@@ -11,19 +11,12 @@ import {
   useTheme,
 } from '@mui/material';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
-import KeyboardArrowUpRoundedIcon from '@mui/icons-material/KeyboardArrowUpRounded';
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import RemoveRoundedIcon from '@mui/icons-material/RemoveRounded';
 import LockOpenRoundedIcon from '@mui/icons-material/LockOpenRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
 import ShoppingBagRoundedIcon from '@mui/icons-material/ShoppingBagRounded';
 import SouthWestRoundedIcon from '@mui/icons-material/SouthWestRounded';
-import DensitySmallRoundedIcon from '@mui/icons-material/DensitySmallRounded';
-import DensityLargeRoundedIcon from '@mui/icons-material/DensityLargeRounded';
 import { alpha, darken } from '@mui/material/styles';
 import {
   useCallback,
@@ -36,31 +29,28 @@ import {
 import { useAtomValue, useSetAtom } from 'jotai';
 import {
   balanceAtom,
-  memberGroupsAtom,
   nodeInfosAtom,
   selectedNodeInfoAtom,
   userInfoAtom,
-} from '../../atoms/global';
-import ErrorBoundary from '../../common/ErrorBoundary';
-import { Spacer } from '../../common/Spacer';
-import { GroupJoinRequests } from './GroupJoinRequests';
-import { GroupInvites } from './GroupInvites';
-import { ListOfGroupPromotions } from './ListOfGroupPromotions';
-import { HomeProfileCard } from './HomeProfileCard';
-import { GETTING_STARTED_LS_KEY } from './gettingStartedStorage';
-import { HomeQortinoWorkspaceCard } from './HomeQortinoWorkspaceCard';
-import { HomeQuickToolsPad } from './HomeQuickToolsPad';
-import { HomeFeaturedApps } from './HomeFeaturedApps';
-import { accountTargetBlocks } from '../Minting/MintingStats';
+} from '../../../atoms/global';
+import ErrorBoundary from '../../../common/ErrorBoundary';
+import { Spacer } from '../../../common/Spacer';
+import { GroupJoinRequests } from '../GroupJoinRequests';
+import { GroupInvites } from '../GroupInvites';
+import { ListOfGroupPromotions } from '../ListOfGroupPromotions';
+import { HomeProfileCard } from '../HomeProfileCard';
+import { GETTING_STARTED_LS_KEY } from '../gettingStartedStorage';
+import { HomeQortinoWorkspaceCard } from '../HomeQortinoWorkspaceCard';
+import { HomeQuickToolsPad } from '../HomeQuickToolsPad';
+import { HomeFeaturedApps } from '../HomeFeaturedApps';
+import { accountTargetBlocks } from '../../Minting/MintingStats';
 import {
-  APP_BLUE_SURFACE_TEXT,
   GROUP_ACTIVITY_BLUE,
   getBlueAmbientPillGlowBackground,
-  getBlueTier1ButtonSx,
   getBlueTier1PillSurface,
   getBlueTier2BadgeSx,
   getBlueTier3DotSx,
-} from './groupActivityColorSystem';
+} from '../groupActivityColorSystem';
 import { useTranslation } from 'react-i18next';
 import {
   AnimatePresence,
@@ -69,1339 +59,83 @@ import {
   motion,
   useReducedMotion,
 } from 'framer-motion';
-import { getBaseApiReact } from '../../App';
-import { manifestData } from '../NotAuthenticated';
-import {
-  executeEvent,
-  subscribeToEvent,
-  unsubscribeFromEvent,
-} from '../../utils/events';
-import { openQChatTab } from '../../utils/openQChatTab';
+import { getBaseApiReact } from '../../../App';
+import { manifestData } from '../../NotAuthenticated';
+import { executeEvent } from '../../../utils/events';
+import { openQChatTab } from '../../../utils/openQChatTab';
 import {
   dashboardPanelSx,
-  handleDashboardPanelPointerLeave,
-  handleDashboardPanelPointerMove,
   useDashboardPanelMouseLight,
-} from './dashboardPanelEffects';
-import { useHandleUserInfo } from '../../hooks/useHandleUserInfo';
+} from '../dashboardPanelEffects';
+import { useHandleUserInfo } from '../../../hooks/useHandleUserInfo';
 import {
   getDefaultLocalNodeUrl,
   HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
-} from '../../constants/constants';
-import { nodeDisplay } from '../../utils/helpers';
+} from '../../../constants/constants';
+import { nodeDisplay } from '../../../utils/helpers';
+import { DashboardWidgetFrame } from '../../Widgets/DashboardWidgetFrame';
+import { GroupsWidget } from '../../Widgets/GroupsWidget';
+import { QuitterFeedWidget } from '../../Widgets/QuitterFeedWidget';
+import { useAuth } from '../../../hooks/useAuth';
+import type { ApiKey } from '../../../types/auth';
+import { BlockHeightValue } from './BlockHeightValue';
+import { DashboardUtilityPanel } from './DashboardUtilityPanel';
+import { WalletActionButton } from './WalletActionButton';
+import { InfoPreviewPanel, type InfoPreviewPanelRows } from './InfoPreviewPanel';
 import {
-  DashboardWidgetFrame,
-  type WidgetDisplayMode,
-} from '../Widgets/DashboardWidgetFrame';
-import { GroupsWidget } from '../Widgets/GroupsWidget';
-import { QuitterFeedWidget } from '../Widgets/QuitterFeedWidget';
-import { ProgressiveBlur } from '../ui/progressive-blur';
-import { useAuth } from '../../hooks/useAuth';
-import type { ApiKey } from '../../types/auth';
-
-type ActivityTab = 'requests' | 'invites' | 'promotions';
-type HomeCustomizableCardId = 'groupActivity' | 'quitter';
-type DashboardInfoStatusTone = 'operational' | 'syncing' | 'issue';
-type MinterProgressSnapshot = {
-  currentBlocks: number;
-  currentLevel: number;
-  progressRatio: number;
-  requiredBlocks: number;
-};
-type MinterInfoView = 'dots' | 'progress';
-type WalletActivityTransaction = {
-  amount?: number | string;
-  creator?: string;
-  creatorAddress?: string;
-  recipientAddress?: string;
-  recipient?: string;
-  sender?: string;
-  senderAddress?: string;
-  signature?: string;
-  timestamp?: number | string;
-};
-type WalletActivityDirection = 'incoming' | 'outgoing';
-type WalletActivityEntry = {
-  amount: number;
-  counterpartyAddress: string;
-  counterpartyLabel: string;
-  direction: WalletActivityDirection;
-  timestamp: number;
-};
-type DashboardNodeOption = {
-  key: string;
-  label: string;
-  node: ApiKey;
-  secondary: string;
-  type: 'custom' | 'local' | 'public';
-};
-const BLOCK_HEIGHT_TAIL_DIGITS = 4;
-const GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX = 680;
-const GROUP_ACTIVITY_TOGGLE_TRANSITION = {
-  width: {
-    duration: 0.24,
-    ease: [0.22, 1, 0.36, 1] as const,
-  },
-  x: {
-    type: 'spring' as const,
-    stiffness: 360,
-    damping: 31,
-    mass: 0.74,
-  },
-};
-
-// Home dashboard desktop layout invariants:
-// - Info top aligns visually with Account Overview top.
-// - Account Overview -> Featured Q-Apps gap = 20px.
-// - Info -> Wallet Activity gap = 20px.
-// - Info collapsed height stays fixed to preserve spacing and overlay behavior.
-const HOME_DASHBOARD_VERTICAL_GAP_PX = 20;
-/** Wide hub layout activates at this min viewport width (below theme xl / 1536). */
-const HOME_WIDE_DASHBOARD_MIN_WIDTH_PX = 1250;
-const HOME_SHARED_SIDE_RAIL_WIDTH_MD = 'minmax(285px, 330px)';
-const HOME_SHARED_SIDE_RAIL_WIDTH_XL = 'minmax(310px, 360px)';
-const HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS = {
-  xs: '1fr',
-  md: `${HOME_SHARED_SIDE_RAIL_WIDTH_MD} minmax(0, 1fr)`,
-  xl: `${HOME_SHARED_SIDE_RAIL_WIDTH_XL} minmax(0, 1fr)`,
-} as const;
-const HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS = {
-  xs: '1fr',
-  lg: `${HOME_SHARED_SIDE_RAIL_WIDTH_MD} minmax(0, 1fr)`,
-} as const;
-// Right rail is offset to visually align Info with Account Overview.
-// The left column includes the "Qortal Hub" eyebrow label above Account Overview,
-// while the right column starts directly with the rail cards, so this offset
-// compensates for that extra left-side content. The alignment is visual, not structural.
-const HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX = 29;
-const HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX = 322;
-const HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX = 426;
-const HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX = 720;
-const HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX = 100;
-const HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX =
-  GROUP_ACTIVITY_COMPACT_VIEWPORT_HEIGHT_PX +
-  HOME_GROUP_ACTIVITY_CARD_CHROME_HEIGHT_PX;
-const HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY =
-  'home-dashboard-customizable-cards-layout-v1';
-const HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX = 60;
-const HOME_DASHBOARD_WIDGET_HEIGHT_PX = 612;
-const HOME_DASHBOARD_WIDGET_DISPLAY_MODE: WidgetDisplayMode = 'expanded';
-const HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS: Record<
+  DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY,
+  HOME_CUSTOMIZABLE_CARD_LAYOUT_STORAGE_KEY,
+  HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS,
+  HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS,
+  HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
+  HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX,
+  HOME_DASHBOARD_VERTICAL_GAP_PX,
+  HOME_DASHBOARD_WIDGET_DISPLAY_MODE,
+  HOME_DASHBOARD_WIDGET_HEIGHT_PX,
+  HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX,
+  HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX,
+  HOME_INFO_COLLAPSED_VISIBLE_HEIGHT_PX,
+  HOME_LEFT_CENTER_GRID_TEMPLATE_COLUMNS,
+  HOME_LEFT_CENTER_LOWER_ROW_GRID_TEMPLATE_COLUMNS,
+  HOME_QUITTER_WIDGET_INITIAL_BATCH_SIZES,
+  HOME_QUITTER_WIDGET_LOAD_MORE_BATCH_SIZES,
+  HOME_QUITTER_WIDGET_SEARCH_LIMITS,
+  HOME_RIGHT_RAIL_TOP_ALIGNMENT_OFFSET_PX,
+  HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX,
+  HOME_SHARED_SIDE_RAIL_WIDTH_XL,
+  HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
+  INFO_VALUE_COLUMN_MIN_WIDTH_PX,
+  WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
+} from './homeDesktopConstants';
+import type {
+  ActivityTab,
+  DashboardInfoStatusTone,
+  DashboardNodeOption,
   HomeCustomizableCardId,
-  number
-> = {
-  groupActivity: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
-  quitter: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
-};
-const HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS: Record<
-  HomeCustomizableCardId,
-  number
-> = {
-  groupActivity: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
-  quitter: HOME_DASHBOARD_WIDGET_HEIGHT_PX,
-};
-const HOME_QUITTER_WIDGET_INITIAL_BATCH_SIZES: Record<
-  WidgetDisplayMode,
-  number
-> = {
-  compact: 6,
-  expanded: 8,
-};
-const HOME_QUITTER_WIDGET_LOAD_MORE_BATCH_SIZES: Record<
-  WidgetDisplayMode,
-  number
-> = {
-  compact: 4,
-  expanded: 4,
-};
-const HOME_QUITTER_WIDGET_SEARCH_LIMITS: Record<WidgetDisplayMode, number> = {
-  compact: 6,
-  expanded: 8,
-};
-const SYSTEM_BADGE_SX = {
-  borderRadius: '4px',
-  fontSize: '0.7rem',
-  fontWeight: 700,
-  height: '26px',
-  letterSpacing: '0.05em',
-  lineHeight: 1,
-  px: '10px',
-  textTransform: 'uppercase',
-  whiteSpace: 'nowrap',
-} as const;
-const WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
-const WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT = 50;
-const INFO_PANEL_EXPAND_OPEN_DELAY_MS = 35;
-const INFO_PANEL_EXPAND_CLOSE_DELAY_MS = 60;
-const INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX = 52;
-const INFO_VALUE_COLUMN_MIN_WIDTH_PX = 136;
-
-function normalizeDashboardNodeUrl(url?: string | null) {
-  return (url || '').trim().replace(/\/+$/, '');
-}
-
-function getDashboardNodeHost(url: string) {
-  try {
-    return new URL(url).host;
-  } catch {
-    return nodeDisplay(url);
-  }
-}
-
-function normalizeDashboardCustomNodes(nodes: unknown): ApiKey[] {
-  if (!Array.isArray(nodes)) return [];
-
-  return nodes
-    .map((node) => ({
-      url:
-        typeof node?.url === 'string'
-          ? normalizeDashboardNodeUrl(node.url)
-          : '',
-      apikey: typeof node?.apikey === 'string' ? node.apikey : '',
-      name: typeof node?.name === 'string' ? node.name.trim() : '',
-    }))
-    .filter((node) => Boolean(node.url));
-}
-
-function getBlockHeightParts(value?: string | null) {
-  const rawValue = `${value || ''}`.trim();
-  const digits = rawValue.replace(/\D/g, '');
-
-  if (digits.length <= BLOCK_HEIGHT_TAIL_DIGITS) {
-    return {
-      canHighlightTail: false,
-      fullValue: rawValue,
-      prefix: '',
-      tail: rawValue,
-    };
-  }
-
-  return {
-    canHighlightTail: true,
-    fullValue: digits,
-    prefix: digits.slice(0, -BLOCK_HEIGHT_TAIL_DIGITS),
-    tail: digits.slice(-BLOCK_HEIGHT_TAIL_DIGITS),
-  };
-}
-
-function BlockHeightValue({ theme, value }) {
-  const parts = getBlockHeightParts(value);
-
-  return (
-    <Box
-      aria-label={`Node height ${parts.fullValue || value}`}
-      component="span"
-      title={parts.fullValue ? `Full height: ${parts.fullValue}` : undefined}
-      sx={{
-        alignItems: 'center',
-        color: alpha(theme.palette.text.primary, 0.88),
-        display: 'inline-flex',
-        fontFamily:
-          '"IBM Plex Mono","SFMono-Regular","Cascadia Mono","Fira Code","Consolas",monospace',
-        fontSize: '0.9rem',
-        fontVariantNumeric: 'tabular-nums',
-        fontWeight: 700,
-        gap: '6px',
-        justifySelf: 'end',
-        letterSpacing: '0.028em',
-        lineHeight: 1,
-        maxWidth: '100%',
-        minWidth: 0,
-        overflow: 'hidden',
-        textAlign: 'right',
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {parts.canHighlightTail ? (
-        <>
-          <Box
-            component="span"
-            sx={{
-              minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {parts.prefix}
-          </Box>
-          <Box
-            component="span"
-            sx={{
-              backgroundColor: alpha(
-                GROUP_ACTIVITY_BLUE.primary,
-                theme.palette.mode === 'dark' ? 0.18 : 0.12
-              ),
-              border: `1px solid ${alpha(
-                GROUP_ACTIVITY_BLUE.gradientTop,
-                theme.palette.mode === 'dark' ? 0.42 : 0.34
-              )}`,
-              borderRadius: '6px',
-              boxShadow:
-                theme.palette.mode === 'dark'
-                  ? `0 0 0 1px ${alpha(GROUP_ACTIVITY_BLUE.primary, 0.08)}`
-                  : 'none',
-              color:
-                theme.palette.mode === 'dark'
-                  ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.96)
-                  : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.94),
-              display: 'inline-flex',
-              justifyContent: 'center',
-              letterSpacing: '0.05em',
-              minWidth: '5ch',
-              px: '7px',
-              py: '4px',
-            }}
-          >
-            {parts.tail}
-          </Box>
-        </>
-      ) : (
-        parts.tail
-      )}
-    </Box>
-  );
-}
-
-const DASHBOARD_MINTER_DEFAULT_VIEW_STORAGE_KEY = 'dashboardMinterDefaultView';
-const DASHBOARD_EMBEDDED_QUITTER_APP = {
-  identifier: '',
-  name: 'Quitter',
-  path: '',
-  service: 'APP',
-  tabId: 'dashboard-embedded-quitter',
-} as const;
-const HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT: HomeCustomizableCardId[] = [
-  'groupActivity',
-  'quitter',
-];
-
-const isWalletActivityTimestampRecent = (timestamp: number) =>
-  Date.now() - timestamp <= WALLET_ACTIVITY_RECENT_PAYMENT_LOOKBACK_MS;
-
-const formatWalletActivityRelativeTime = (timestamp: number, now: number) => {
-  const elapsedMs = Math.max(0, now - timestamp);
-  const elapsedMinutes = Math.floor(elapsedMs / 60000);
-
-  if (elapsedMinutes < 1) return 'Just now';
-  if (elapsedMinutes < 60) {
-    return `${elapsedMinutes} minute${elapsedMinutes === 1 ? '' : 's'} ago`;
-  }
-
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) {
-    return `${elapsedHours} hour${elapsedHours === 1 ? '' : 's'} ago`;
-  }
-
-  const elapsedDays = Math.floor(elapsedHours / 24);
-  return `${elapsedDays} day${elapsedDays === 1 ? '' : 's'} ago`;
-};
-
-const formatWalletActivityAmount = (
-  amount: number,
-  direction: WalletActivityDirection
-) =>
-  `${direction === 'outgoing' ? '-' : '+'}${Math.abs(amount).toFixed(2)} QORT`;
-
-const getWalletActivityCreatorAddress = (
-  transaction: WalletActivityTransaction
-) =>
-  (
-    transaction.creatorAddress ||
-    transaction.senderAddress ||
-    transaction.sender ||
-    transaction.creator ||
-    ''
-  ).trim();
-
-const getWalletActivityRecipientAddress = (
-  transaction: WalletActivityTransaction
-) => (transaction.recipient || transaction.recipientAddress || '').trim();
-
-const parseMinterInfoView = (value: string | null): MinterInfoView =>
-  value === 'progress' ? 'progress' : 'dots';
-
-type HomeCustomizableCardsLayout = {
-  heights: Partial<Record<HomeCustomizableCardId, number>>;
-  order: HomeCustomizableCardId[];
-};
-
-const clampHomeCustomizableCardHeight = (
-  cardId: HomeCustomizableCardId,
-  value: number
-) =>
-  Math.max(
-    HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS[cardId],
-    Math.min(HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS[cardId], Math.round(value))
-  );
-
-const parseHomeCustomizableCardsLayout = (
-  rawValue: string | null
-): HomeCustomizableCardsLayout => {
-  if (!rawValue) {
-    return {
-      heights: {},
-      order: HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue);
-    const parsedOrder = Array.isArray(parsed?.order)
-      ? parsed.order.filter(
-          (value): value is HomeCustomizableCardId =>
-            value === 'groupActivity' || value === 'quitter'
-        )
-      : [];
-    const order =
-      parsedOrder.length === HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.length &&
-      HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.every((value) =>
-        parsedOrder.includes(value)
-      )
-        ? parsedOrder
-        : HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT;
-
-    const nextHeights: Partial<Record<HomeCustomizableCardId, number>> = {};
-    const parsedHeights = parsed?.heights ?? {};
-
-    HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT.forEach((cardId) => {
-      const value = parsedHeights?.[cardId];
-      if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
-        nextHeights[cardId] = clampHomeCustomizableCardHeight(cardId, value);
-      }
-    });
-
-    return {
-      heights: nextHeights,
-      order,
-    };
-  } catch {
-    return {
-      heights: {},
-      order: HOME_CUSTOMIZABLE_CARD_ORDER_DEFAULT,
-    };
-  }
-};
-
-type HomeLayoutDebugMetric = {
-  bottom: number;
-  height: number;
-  left: number;
-  top: number;
-  width: number;
-};
-
-type HomeLayoutDebugKey =
-  | 'accountOverview'
-  | 'featuredApps'
-  | 'info'
-  | 'profileCard'
-  | 'tools'
-  | 'walletActivity';
-
-const measureHomeLayoutDebugMetric = (
-  node: HTMLElement,
-  rootRect: DOMRect
-): HomeLayoutDebugMetric => {
-  const rect = node.getBoundingClientRect();
-
-  return {
-    bottom: rect.bottom - rootRect.top,
-    height: rect.height,
-    left: rect.left - rootRect.left,
-    top: rect.top - rootRect.top,
-    width: rect.width,
-  };
-};
-
-const DashboardUtilityPanel = ({
-  title,
-  children,
-  theme,
-  sx = undefined,
-  titleSx = undefined,
-  panelBoxRef = undefined,
-}) => {
-  const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
-  const assignPanelNode = (node) => {
-    panelRef.current = node;
-
-    if (typeof panelBoxRef === 'function') {
-      panelBoxRef(node);
-      return;
-    }
-
-    if (panelBoxRef) {
-      panelBoxRef.current = node;
-    }
-  };
-
-  return (
-    <Box
-      ref={assignPanelNode}
-      sx={{
-        ...dashboardPanelSx(theme, 'utility'),
-        borderRadius: '14px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px',
-        padding: '14px 16px',
-        width: '100%',
-        ...sx,
-      }}
-      onMouseMove={handleDashboardPanelPointerMove}
-      onMouseLeave={handleDashboardPanelPointerLeave}
-    >
-      <Typography
-        sx={{
-          color: theme.palette.text.primary,
-          fontSize: '1rem',
-          fontWeight: 600,
-          ...titleSx,
-        }}
-      >
-        {title}
-      </Typography>
-      {children}
-    </Box>
-  );
-};
-
-const sepSx = (theme) => ({
-  borderBottom: `1px solid ${theme.palette.border.subtle}`,
-});
-
-const infoSepSx = (theme, index, total) => sepSx(theme);
-
-const WalletActionButton = ({ icon, label, onClick, theme }) => {
-  const blueStrongHover = getBlueTier1ButtonSx()['&:hover'];
-  const isDarkMode = theme.palette.mode === 'dark';
-
-  return (
-    <ButtonBase
-      onClick={onClick}
-      sx={{
-        alignItems: 'center',
-        background: isDarkMode
-          ? 'linear-gradient(145deg, rgba(53,58,68,0.99) 0%, rgba(41,45,54,1) 48%, rgba(30,34,41,1) 100%)'
-          : 'linear-gradient(145deg, rgba(251,253,255,0.99) 0%, rgba(232,237,245,0.99) 48%, rgba(216,223,234,1) 100%)',
-        border: `1px solid ${
-          isDarkMode
-            ? alpha(theme.palette.primary.main, 0.06)
-            : alpha(theme.palette.text.primary, 0.072)
-        }`,
-        borderRadius: '12px',
-        boxShadow: isDarkMode
-          ? 'inset 0 1px 0 rgba(255,255,255,0.075), inset 0 0 0 1px rgba(255,255,255,0.012), inset 0 -1px 0 rgba(0,0,0,0.44), inset -1px -1px 0 rgba(0,0,0,0.18), 0 4px 8px rgba(0,0,0,0.17)'
-          : 'inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -1px 0 rgba(104,116,140,0.22), inset -1px -1px 0 rgba(146,158,182,0.14), 0 4px 8px rgba(94,108,132,0.11)',
-        display: 'flex',
-        gap: '9px',
-        height: '46px',
-        justifyContent: 'center',
-        overflow: 'hidden',
-        px: 1.5,
-        position: 'relative',
-        transition:
-          'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, color 140ms ease, transform 120ms ease, filter 140ms ease',
-        width: '100%',
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          inset: '1px',
-          borderRadius: 'inherit',
-          pointerEvents: 'none',
-          background: isDarkMode
-            ? 'linear-gradient(145deg, rgba(255,255,255,0.052) 0%, rgba(255,255,255,0.02) 24%, rgba(255,255,255,0) 58%)'
-            : 'linear-gradient(145deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.22) 28%, rgba(255,255,255,0) 58%)',
-          opacity: 0.92,
-        },
-        '&:hover': {
-          ...blueStrongHover,
-          borderColor: 'rgba(143, 184, 243, 0.22)',
-          color: APP_BLUE_SURFACE_TEXT,
-          transform: 'translateY(-1px)',
-        },
-        '&:active': {
-          boxShadow:
-            'inset 2px 2px 6px rgba(0, 0, 0, 0.7), inset -1px -1px 3px rgba(255, 255, 255, 0.04)',
-          transform: 'scale(0.97)',
-        },
-      }}
-    >
-      <Box
-        sx={{
-          color: 'inherit',
-          display: 'inline-flex',
-        }}
-      >
-        {icon}
-      </Box>
-      <Typography
-        sx={{
-          color: 'inherit',
-          fontSize: '0.8rem',
-          fontWeight: 600,
-        }}
-      >
-        {label}
-      </Typography>
-    </ButtonBase>
-  );
-};
-
-const InfoPreviewPanel = ({
-  rows,
-  theme,
-  maxExpandedHeightPx = null,
-  forceExpanded = false,
-  resetKey = 'default',
-}) => {
-  const enableOverlay = useMediaQuery(
-    theme.breakpoints.up(HOME_WIDE_DASHBOARD_MIN_WIDTH_PX)
-  );
-  const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const contentRef = useRef<HTMLDivElement | null>(null);
-  const openTimerRef = useRef<number | null>(null);
-  const closeTimerRef = useRef<number | null>(null);
-  const [collapsedHeight, setCollapsedHeight] = useState(0);
-  const [contentHeight, setContentHeight] = useState(0);
-  const [isExpanded, setIsExpanded] = useState(false);
-  const footerSectionCount = rows.footerSections.length;
-  const footerItemCount = rows.footerSections.reduce(
-    (total, section) => total + section.items.length,
-    0
-  );
-
-  const clearHoverTimers = () => {
-    if (openTimerRef.current !== null) {
-      window.clearTimeout(openTimerRef.current);
-      openTimerRef.current = null;
-    }
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  };
-
-  useEffect(() => {
-    return () => clearHoverTimers();
-  }, []);
-
-  useEffect(() => {
-    clearHoverTimers();
-    setIsExpanded(false);
-    setCollapsedHeight(0);
-    setContentHeight(0);
-  }, [resetKey]);
-
-  useEffect(() => {
-    if (!enableOverlay) {
-      setIsExpanded(false);
-      return;
-    }
-
-    const wrapperNode = wrapperRef.current;
-    const contentNode = contentRef.current;
-    if (!wrapperNode || !contentNode) return;
-
-    const updateMeasurements = () => {
-      setCollapsedHeight(wrapperNode.getBoundingClientRect().height);
-      setContentHeight(contentNode.scrollHeight);
-    };
-
-    updateMeasurements();
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', updateMeasurements);
-      return () => {
-        window.removeEventListener('resize', updateMeasurements);
-      };
-    }
-
-    const resizeObserver = new ResizeObserver(updateMeasurements);
-    resizeObserver.observe(wrapperNode);
-    resizeObserver.observe(contentNode);
-    window.addEventListener('resize', updateMeasurements);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateMeasurements);
-    };
-  }, [
-    enableOverlay,
-    footerItemCount,
-    footerSectionCount,
-    rows.metricItems.length,
-    rows.primaryItems.length,
-  ]);
-
-  const hasOverflow =
-    enableOverlay && collapsedHeight > 0 && contentHeight > collapsedHeight + 4;
-  const isEffectivelyExpanded = isExpanded || (forceExpanded && hasOverflow);
-  const resolvedCollapsedHeight =
-    collapsedHeight > 0 ? collapsedHeight : undefined;
-  const rawExpandedHeight = resolvedCollapsedHeight
-    ? Math.max(
-        resolvedCollapsedHeight,
-        contentHeight + INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX
-      )
-    : contentHeight + INFO_PANEL_EXPANDED_EXTRA_BREATHING_PX;
-  const expandedHeight =
-    maxExpandedHeightPx != null
-      ? Math.max(
-          resolvedCollapsedHeight ?? 0,
-          Math.min(rawExpandedHeight, maxExpandedHeightPx)
-        )
-      : rawExpandedHeight;
-
-  const handleMouseEnter = () => {
-    if (!hasOverflow) return;
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    if (isExpanded || openTimerRef.current !== null) return;
-    openTimerRef.current = window.setTimeout(() => {
-      openTimerRef.current = null;
-      setIsExpanded(true);
-    }, INFO_PANEL_EXPAND_OPEN_DELAY_MS);
-  };
-
-  const handleMouseLeave = (event) => {
-    handleDashboardPanelPointerLeave(event);
-    if (forceExpanded) return;
-    if (!hasOverflow) return;
-    if (openTimerRef.current !== null) {
-      window.clearTimeout(openTimerRef.current);
-      openTimerRef.current = null;
-    }
-    if (!isExpanded || closeTimerRef.current !== null) return;
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      setIsExpanded(false);
-    }, INFO_PANEL_EXPAND_CLOSE_DELAY_MS);
-  };
-
-  const showCollapsedFade = hasOverflow && !isEffectivelyExpanded;
-  const statusAccentColor =
-    rows.status.tone === 'issue'
-      ? theme.palette.mode === 'dark'
-        ? alpha(theme.palette.error.light, 0.9)
-        : alpha(theme.palette.error.main, 0.88)
-      : rows.status.tone === 'syncing'
-        ? theme.palette.mode === 'dark'
-          ? alpha(theme.palette.warning.light, 0.9)
-          : alpha(theme.palette.warning.main, 0.88)
-        : theme.palette.mode === 'dark'
-          ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.96)
-          : alpha(GROUP_ACTIVITY_BLUE.gradientBottom, 0.92);
-  const statusGlowColor =
-    rows.status.tone === 'issue'
-      ? alpha(theme.palette.error.light, 0.16)
-      : rows.status.tone === 'syncing'
-        ? alpha(theme.palette.warning.light, 0.18)
-        : alpha(GROUP_ACTIVITY_BLUE.primary, 0.18);
-
-  const renderPrimaryValue = (row) => {
-    if (row.valueNode) return row.valueNode;
-
-    if (row.variant === 'pill') {
-      const pillTone =
-        row.pillTone === 'negative'
-          ? {
-              background:
-                theme.palette.mode === 'dark'
-                  ? 'rgba(104, 70, 74, 0.32)'
-                  : 'rgba(168, 90, 90, 0.12)',
-              border: alpha(
-                theme.palette.error.light,
-                theme.palette.mode === 'dark' ? 0.16 : 0.22
-              ),
-              color:
-                theme.palette.mode === 'dark'
-                  ? alpha(theme.palette.error.light, 0.88)
-                  : alpha(theme.palette.error.dark, 0.88),
-            }
-          : row.pillTone === 'warning'
-            ? {
-                background:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(123, 102, 62, 0.3)'
-                    : 'rgba(173, 140, 74, 0.14)',
-                border: alpha(
-                  theme.palette.warning.light,
-                  theme.palette.mode === 'dark' ? 0.18 : 0.24
-                ),
-                color:
-                  theme.palette.mode === 'dark'
-                    ? alpha(theme.palette.warning.light, 0.9)
-                    : alpha(theme.palette.warning.dark, 0.88),
-              }
-            : {
-                background:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(88, 122, 178, 0.3)'
-                    : 'rgba(117, 161, 227, 0.15)',
-                border: alpha(
-                  GROUP_ACTIVITY_BLUE.gradientTop,
-                  theme.palette.mode === 'dark' ? 0.18 : 0.24
-                ),
-                color:
-                  theme.palette.mode === 'dark'
-                    ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.92)
-                    : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.9),
-              };
-      return (
-        <Box
-          sx={{
-            alignItems: 'center',
-            background: pillTone.background,
-            border: `1px solid ${pillTone.border}`,
-            boxShadow: pillTone.boxShadow ?? 'none',
-            color: pillTone.color,
-            display: 'inline-flex',
-            justifyContent: 'center',
-            justifySelf: 'end',
-            maxWidth: '100%',
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            ...SYSTEM_BADGE_SX,
-          }}
-        >
-          {row.value}
-        </Box>
-      );
-    }
-
-    return (
-      <Typography
-        sx={{
-          color: row.emphasize
-            ? theme.palette.text.primary
-            : alpha(theme.palette.text.primary, 0.9),
-          fontSize: row.emphasize ? '0.96rem' : '0.88rem',
-          fontWeight: row.emphasize ? 700 : 600,
-          letterSpacing: row.emphasize ? '0.01em' : '0.012em',
-          lineHeight: 1.2,
-          maxWidth: '100%',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {row.value}
-      </Typography>
-    );
-  };
-
-  return (
-    <Box
-      ref={wrapperRef}
-      sx={{
-        minWidth: 0,
-        position: 'relative',
-        width: '100%',
-        ...(enableOverlay
-          ? {
-              height: '100%',
-              minHeight: 0,
-              zIndex: isEffectivelyExpanded ? 4 : 1,
-            }
-          : {}),
-      }}
-    >
-      <Box
-        ref={panelRef}
-        sx={{
-          ...dashboardPanelSx(theme, 'utility'),
-          borderRadius: '14px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0,
-          minWidth: 0,
-          overflow: 'hidden',
-          px: '16px',
-          py: '12px',
-          width: '100%',
-          ...(enableOverlay
-            ? {
-                borderColor: isEffectivelyExpanded
-                  ? theme.palette.border.main
-                  : theme.palette.border.subtle,
-                boxShadow: isEffectivelyExpanded
-                  ? theme.palette.mode === 'dark'
-                    ? '0 26px 34px -12px rgba(0, 0, 0, 0.34)'
-                    : '0 24px 28px -12px rgba(15, 23, 42, 0.16)'
-                  : undefined,
-                height:
-                  resolvedCollapsedHeight == null
-                    ? '100%'
-                    : `${
-                        isEffectivelyExpanded
-                          ? expandedHeight
-                          : resolvedCollapsedHeight
-                      }px`,
-                left: 0,
-                position: 'absolute',
-                right: 0,
-                top: 0,
-                transition:
-                  'height 160ms cubic-bezier(0.2, 0, 0, 1), box-shadow 140ms ease, border-color 140ms ease',
-              }
-            : {
-                height: '100%',
-              }),
-        }}
-        onMouseEnter={handleMouseEnter}
-        onMouseMove={handleDashboardPanelPointerMove}
-        onMouseLeave={handleMouseLeave}
-      >
-        <Box
-          className="dashboard-panel-decoration"
-          sx={{
-            display: 'none',
-          }}
-        />
-        <Box
-          ref={contentRef}
-          sx={{
-            '& > *': {
-              flexShrink: 0,
-            },
-            display: 'flex',
-            flexDirection: 'column',
-            minHeight: 0,
-            position: 'relative',
-            width: '100%',
-          }}
-        >
-          <Box
-            sx={{
-              alignItems: 'center',
-              display: 'flex',
-              justifyContent: 'flex-start',
-              mb: '14px',
-              width: '100%',
-            }}
-          >
-            <Typography
-              component="div"
-              sx={{
-                alignItems: 'center',
-                color: theme.palette.text.primary,
-                display: 'inline-flex',
-                fontFamily:
-                  '"IBM Plex Mono","SFMono-Regular","Cascadia Mono","Fira Code","Consolas",monospace',
-                fontSize: '0.95rem',
-                fontWeight: 600,
-                letterSpacing: '0.02em',
-                lineHeight: 1,
-                textTransform: 'none',
-              }}
-            >
-              <Box component="span">status</Box>
-              <Box
-                component="span"
-                aria-hidden="true"
-                sx={{
-                  animation:
-                    'homeStatusCursorBlink 1.08s steps(1, end) infinite',
-                  color: statusAccentColor,
-                  display: 'inline-block',
-                  ml: '1px',
-                  textShadow: `0 0 8px ${statusGlowColor}`,
-                  '@keyframes homeStatusCursorBlink': {
-                    '0%, 42%': {
-                      opacity: 1,
-                    },
-                    '43%, 100%': {
-                      opacity: 0.26,
-                    },
-                  },
-                }}
-              >
-                _
-              </Box>
-            </Typography>
-          </Box>
-
-          <Box sx={{ ...sepSx(theme), pb: '12px', mb: '8px' }} />
-
-          {rows.primaryItems.map((row, index) => (
-            <Box
-              key={row.label}
-              sx={{
-                ...(index < rows.primaryItems.length - 1
-                  ? infoSepSx(theme, index, rows.primaryItems.length)
-                  : {}),
-                alignItems: 'center',
-                columnGap: '18px',
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr) auto',
-                height: '46px',
-                minWidth: 0,
-                overflow: 'hidden',
-                py: 0,
-              }}
-            >
-              <Typography
-                sx={{
-                  color:
-                    theme.palette.mode === 'dark'
-                      ? alpha(theme.palette.common.white, 0.56)
-                      : alpha(theme.palette.text.primary, 0.62),
-                  fontSize: '0.82rem',
-                  fontWeight: 500,
-                  letterSpacing: '0.012em',
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {row.label}
-              </Typography>
-              <Box
-                sx={{
-                  alignItems: 'center',
-                  color: theme.palette.text.primary,
-                  display: 'flex',
-                  height: '100%',
-                  justifyContent: 'flex-end',
-                  maxWidth: '100%',
-                  minWidth: 0,
-                  textAlign: 'right',
-                }}
-              >
-                {renderPrimaryValue(row)}
-              </Box>
-            </Box>
-          ))}
-
-          <Box
-            sx={{
-              display: 'grid',
-              gap: '10px',
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              mb: '12px',
-              mt: '16px',
-            }}
-          >
-            {rows.metricItems.map((metric) => (
-              <Box
-                key={metric.label}
-                sx={{
-                  bgcolor:
-                    theme.palette.mode === 'dark'
-                      ? 'rgba(38, 42, 52, 0.9)'
-                      : 'rgba(248, 244, 238, 0.96)',
-                  border: `1px solid ${alpha(
-                    theme.palette.border.subtle,
-                    theme.palette.mode === 'dark' ? 0.92 : 0.68
-                  )}`,
-                  borderRadius: '10px',
-                  boxShadow:
-                    theme.palette.mode === 'dark'
-                      ? 'inset 0 1px 0 rgba(255,255,255,0.04)'
-                      : 'inset 0 1px 0 rgba(255,255,255,0.72)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  minHeight: '70px',
-                  minWidth: 0,
-                  overflow: 'hidden',
-                  position: 'relative',
-                  px: '12px',
-                  py: '10px',
-                }}
-              >
-                <Typography
-                  sx={{
-                    color:
-                      theme.palette.mode === 'dark'
-                        ? alpha(theme.palette.common.white, 0.46)
-                        : alpha(theme.palette.text.primary, 0.52),
-                    fontSize: '0.66rem',
-                    fontWeight: 500,
-                    letterSpacing: '0.03em',
-                    lineHeight: 1.1,
-                    minWidth: 0,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    textTransform: 'uppercase',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {metric.label}
-                </Typography>
-                <Typography
-                  sx={{
-                    color: theme.palette.text.primary,
-                    fontSize: '1.08rem',
-                    fontWeight: 700,
-                    letterSpacing: '0.01em',
-                    lineHeight: 1.1,
-                    minWidth: 0,
-                    mt: '8px',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {metric.value}
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px',
-              mt: '12px',
-              width: '100%',
-            }}
-          >
-            {rows.footerSections.map((section, sectionIndex) => {
-              const isNodeSection = section.title === 'Node';
-              const sectionHeaderLabel = isNodeSection
-                ? '// node_info'
-                : section.title;
-
-              return (
-                <Box
-                  key={section.title}
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                    mt:
-                      section.offsetTopPx != null
-                        ? `${section.offsetTopPx}px`
-                        : sectionIndex === 0
-                          ? 0
-                          : '2px',
-                  }}
-                >
-                  <Typography
-                    component="div"
-                    sx={{
-                      alignItems: 'center',
-                      color: isNodeSection
-                        ? theme.palette.mode === 'dark'
-                          ? alpha(theme.palette.common.white, 0.38)
-                          : alpha(theme.palette.text.secondary, 0.92)
-                        : theme.palette.text.primary,
-                      display: 'inline-flex',
-                      fontFamily:
-                        '"IBM Plex Mono","SFMono-Regular","Cascadia Mono","Fira Code","Consolas",monospace',
-                      fontSize: '0.95rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.02em',
-                      lineHeight: 1,
-                      mb: '8px',
-                      textTransform: 'none',
-                    }}
-                  >
-                    {sectionHeaderLabel}
-                  </Typography>
-
-                  {section.items.map((row, index) => (
-                    <Box
-                      key={row.label}
-                      sx={{
-                        ...(index < section.items.length - 1
-                          ? infoSepSx(theme, index, section.items.length)
-                          : {}),
-                        ...(isNodeSection
-                          ? {
-                              alignItems: 'center',
-                              columnGap: '18px',
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(0, 1fr) auto',
-                              height: '46px',
-                              minWidth: 0,
-                              mt: index === 0 ? '14px' : 0,
-                              overflow: 'hidden',
-                              py: 0,
-                              width: '100%',
-                            }
-                          : {
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '4px',
-                              minHeight: '50px',
-                              py: '6px',
-                            }),
-                      }}
-                    >
-                      {row.labelAction ? (
-                        <Tooltip title={row.labelAction.tooltip}>
-                          <ButtonBase
-                            aria-label={row.labelAction.ariaLabel}
-                            onClick={row.labelAction.onClick}
-                            sx={{
-                              alignItems: 'center',
-                              borderRadius: '6px',
-                              color:
-                                theme.palette.mode === 'dark'
-                                  ? alpha(theme.palette.common.white, 0.58)
-                                  : alpha(theme.palette.text.primary, 0.64),
-                              display: 'inline-flex',
-                              gap: '3px',
-                              justifySelf: 'start',
-                              minWidth: 0,
-                              px: '4px',
-                              py: '3px',
-                              transform: 'translateX(-4px)',
-                              transition:
-                                'background-color 140ms ease, color 140ms ease',
-                              '&:hover': {
-                                backgroundColor: alpha(
-                                  GROUP_ACTIVITY_BLUE.primary,
-                                  theme.palette.mode === 'dark' ? 0.13 : 0.09
-                                ),
-                                color:
-                                  theme.palette.mode === 'dark'
-                                    ? alpha(
-                                        GROUP_ACTIVITY_BLUE.gradientTop,
-                                        0.95
-                                      )
-                                    : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.94),
-                              },
-                            }}
-                          >
-                            <Typography
-                              component="span"
-                              sx={{
-                                color: 'inherit',
-                                fontSize: '0.79rem',
-                                fontWeight: 600,
-                                letterSpacing: '0.012em',
-                                lineHeight: 1.1,
-                                minWidth: 0,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {row.label}
-                            </Typography>
-                            <KeyboardArrowDownRoundedIcon
-                              sx={{
-                                fontSize: '0.95rem',
-                                transform: row.labelAction.isOpen
-                                  ? 'rotate(180deg)'
-                                  : 'none',
-                                transition: 'transform 140ms ease',
-                              }}
-                            />
-                          </ButtonBase>
-                        </Tooltip>
-                      ) : (
-                        <Typography
-                          sx={{
-                            color:
-                              theme.palette.mode === 'dark'
-                                ? alpha(theme.palette.common.white, 0.52)
-                                : alpha(theme.palette.text.primary, 0.58),
-                            fontSize: '0.79rem',
-                            fontWeight: 500,
-                            letterSpacing: '0.012em',
-                            lineHeight: 1.1,
-                            minWidth: 0,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {row.label}
-                        </Typography>
-                      )}
-                      {row.valueNode || (
-                        <Typography
-                          sx={{
-                            color: alpha(theme.palette.text.primary, 0.88),
-                            fontSize: '0.9rem',
-                            fontWeight: 600,
-                            letterSpacing: '0.01em',
-                            lineHeight: 1.2,
-                            maxWidth: '100%',
-                            minWidth: 0,
-                            overflow: 'hidden',
-                            ...(isNodeSection
-                              ? {
-                                  justifySelf: 'end',
-                                  textAlign: 'right',
-                                }
-                              : {}),
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {row.value}
-                        </Typography>
-                      )}
-                    </Box>
-                  ))}
-                </Box>
-              );
-            })}
-          </Box>
-
-          <Box sx={{ minHeight: '8px', width: '100%' }} />
-          {showCollapsedFade && (
-            <ProgressiveBlur
-              blurStrength={18}
-              height="78px"
-              position="bottom"
-              sx={{
-                bottom: -12,
-                left: '-16px',
-                right: '-16px',
-              }}
-              tintColor={
-                theme.palette.mode === 'dark'
-                  ? theme.palette.background.paper
-                  : theme.palette.common.white
-              }
-            />
-          )}
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-function nodeMenuItemSx(theme, selected: boolean) {
-  return {
-    alignItems: 'center',
-    borderRadius: '8px',
-    color: selected
-      ? theme.palette.mode === 'dark'
-        ? alpha(GROUP_ACTIVITY_BLUE.gradientTop, 0.96)
-        : alpha(GROUP_ACTIVITY_BLUE.pressed, 0.94)
-      : alpha(theme.palette.text.primary, 0.9),
-    display: 'flex',
-    gap: '12px',
-    minHeight: 52,
-    px: 1.15,
-    py: 0.9,
-    '&.Mui-disabled': {
-      color: alpha(theme.palette.text.secondary, 0.52),
-      opacity: 1,
-    },
-    '&:hover': {
-      backgroundColor: alpha(
-        GROUP_ACTIVITY_BLUE.primary,
-        theme.palette.mode === 'dark' ? 0.12 : 0.08
-      ),
-    },
-  };
-}
+  HomeCustomizableCardsLayout,
+  HomeLayoutDebugKey,
+  HomeLayoutDebugMetric,
+  MinterInfoView,
+  MinterProgressSnapshot,
+  WalletActivityEntry,
+  WalletActivityTransaction,
+} from './types';
+import {
+  clampHomeCustomizableCardHeight,
+  formatWalletActivityAmount,
+  formatWalletActivityRelativeTime,
+  getDashboardNodeHost,
+  getWalletActivityCreatorAddress,
+  getWalletActivityRecipientAddress,
+  isWalletActivityTimestampRecent,
+  measureHomeLayoutDebugMetric,
+  nodeMenuItemSx,
+  normalizeDashboardCustomNodes,
+  normalizeDashboardNodeUrl,
+  parseHomeCustomizableCardsLayout,
+  parseMinterInfoView,
+} from './utils';
 
 export const HomeDesktop = ({
   myAddress,
@@ -1442,7 +176,6 @@ export const HomeDesktop = ({
   const lastWalletActivityBalanceRef = useRef<string | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
-  const groups = useAtomValue(memberGroupsAtom);
   const nodeInfos = useAtomValue(nodeInfosAtom);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const setNodeInfos = useSetAtom(nodeInfosAtom);
@@ -3044,7 +1777,7 @@ export const HomeDesktop = ({
       ? resolvedCoreVersionLabel.replace(/^qortal-/i, '').split('-')[0] ||
         resolvedCoreVersionLabel
       : '—';
-  const infoRows = {
+  const infoRows: InfoPreviewPanelRows = {
     status: {
       isOperational: resolvedIsSystemOperational,
       label: resolvedInfoStatusLabel,
@@ -3625,7 +2358,12 @@ export const HomeDesktop = ({
                         padding: '14px 16px 16px',
                       }}
                     >
-                      <Box sx={{ ...sepSx(theme), pb: 1.35 }} />
+                      <Box
+                        sx={{
+                          borderBottom: `1px solid ${theme.palette.border.subtle}`,
+                          pb: 1.35,
+                        }}
+                      />
                       <Box
                         sx={{
                           display: 'grid',
