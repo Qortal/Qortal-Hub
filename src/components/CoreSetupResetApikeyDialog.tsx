@@ -24,6 +24,7 @@ import {
   dialogContentSx,
   dialogContentTextSx,
   dialogInfoCardSx,
+  dialogModalBackdropSx,
   dialogTitleSx,
   getDialogPaperSx,
   getDialogPrimaryButtonSx,
@@ -88,6 +89,9 @@ export function CoreSetupResetApikeyDialog() {
         fullWidth
         maxWidth="sm"
         aria-labelledby="core-setup-title"
+        slotProps={{
+          backdrop: { sx: dialogModalBackdropSx },
+        }}
         PaperProps={{
           sx: getDialogPaperSx(theme, { maxWidth: 460 }),
         }}
@@ -149,6 +153,9 @@ export function CoreSetupResetApikeyDialog() {
       fullWidth
       maxWidth="sm"
       aria-labelledby="core-setup-title"
+      slotProps={{
+        backdrop: { sx: dialogModalBackdropSx },
+      }}
       PaperProps={{
         sx: getDialogPaperSx(theme, { maxWidth: 460 }),
       }}

@@ -253,7 +253,7 @@ export function useSubscriptionsFromGroups(
                 await buildSubscriptionIdentifiers(subscriptionId);
 
               const matches = await fetch(
-                `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT&identifier=${indexIdentifier}&name=${ownerPrimaryName}&limit=1&exactmatchnames=true&prefix=true`
+                `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${indexIdentifier}&name=${ownerPrimaryName}&limit=1&exactmatchnames=true&prefix=true`
               );
               if (!matches.ok) return null;
               const matchesData = await matches.json();
@@ -284,7 +284,7 @@ export function useSubscriptionsFromGroups(
 
               try {
                 const paymentRecords = await fetch(
-                  `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&name=${name}&limit=1&exactmatchnames=true&reverse=true`
+                  `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&name=${name}&limit=1&exactmatchnames=true&reverse=true`
                 );
                 if (paymentRecords.ok) {
                   const paymentRecordsData = await paymentRecords.json();
@@ -349,7 +349,8 @@ export function useSubscriptionsFromGroups(
                 ownerName: ownerPrimaryName,
                 groupInfo: group,
                 priceQort,
-                billingInterval: intervalDaysToBillingInterval(resolvedIntervalDays),
+                billingInterval:
+                  intervalDaysToBillingInterval(resolvedIntervalDays),
                 nextPaymentDue,
                 link: '',
                 status:

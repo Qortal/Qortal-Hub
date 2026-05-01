@@ -7,6 +7,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtomValue } from 'jotai';
 import {
   useCallback,
@@ -54,7 +55,7 @@ type QuitterFeedMode = 'following' | 'general';
 type FollowingEmptyReason = 'no-following' | 'no-name' | 'no-posts' | null;
 
 const FOLLOWING_LOAD_TIMEOUT_MS = 40_000;
-const FEED_POLL_INTERVAL_MS = 30_000;
+const FEED_POLL_INTERVAL_MS = 90_000;
 const NEW_POST_REVEAL_DURATION_MS = 420;
 
 const normalizeAuthorName = (value: string) => value.trim().toLowerCase();
@@ -180,8 +181,10 @@ export const QuitterFeedWidget = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [items, setItems] = useState<QuitterFeedItem[]>([]);
   const [pendingItems, setPendingItems] = useState<QuitterFeedItem[]>([]);
-  const [blockedNamesResolvedFromAddresses, setBlockedNamesResolvedFromAddresses] =
-    useState<string[]>([]);
+  const [
+    blockedNamesResolvedFromAddresses,
+    setBlockedNamesResolvedFromAddresses,
+  ] = useState<string[]>([]);
   const [revealedItemIds, setRevealedItemIds] = useState<string[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
   const itemsRef = useRef<QuitterFeedItem[]>([]);
@@ -227,6 +230,21 @@ export const QuitterFeedWidget = ({
     () => new Set(revealedItemIds),
     [revealedItemIds]
   );
+
+  const rowGapPx = isCompact ? 9 : 12;
+  const scrollListBottomPadPx = 10;
+
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getItemKey: useCallback(
+      (index: number) => items[index]?.id ?? String(index),
+      [items]
+    ),
+    getScrollElement: () => scrollerRef.current,
+    estimateSize: useCallback(() => (isCompact ? 220 : 285), [isCompact]),
+    overscan: 6,
+  });
+
   const feedKey = `${feedMode}:${currentUserName ?? ''}:${blockedAuthorKey}`;
 
   useEffect(() => {
@@ -273,17 +291,23 @@ export const QuitterFeedWidget = ({
     [blockedAuthorNameSet]
   );
 
-  const commitVisibleItems = useCallback((nextItems: QuitterFeedItem[]) => {
-    const filteredItems = filterBlockedFeedItems(nextItems);
-    itemsRef.current = filteredItems;
-    setItems(filteredItems);
-  }, [filterBlockedFeedItems]);
+  const commitVisibleItems = useCallback(
+    (nextItems: QuitterFeedItem[]) => {
+      const filteredItems = filterBlockedFeedItems(nextItems);
+      itemsRef.current = filteredItems;
+      setItems(filteredItems);
+    },
+    [filterBlockedFeedItems]
+  );
 
-  const commitPendingItems = useCallback((nextItems: QuitterFeedItem[]) => {
-    const filteredItems = filterBlockedFeedItems(nextItems);
-    pendingItemsRef.current = filteredItems;
-    setPendingItems(filteredItems);
-  }, [filterBlockedFeedItems]);
+  const commitPendingItems = useCallback(
+    (nextItems: QuitterFeedItem[]) => {
+      const filteredItems = filterBlockedFeedItems(nextItems);
+      pendingItemsRef.current = filteredItems;
+      setPendingItems(filteredItems);
+    },
+    [filterBlockedFeedItems]
+  );
 
   useEffect(() => {
     itemsRef.current = items;
@@ -462,10 +486,7 @@ export const QuitterFeedWidget = ({
           });
         }
 
-        if (
-          signal.aborted ||
-          activeFeedRequestIdRef.current !== requestId
-        ) {
+        if (signal.aborted || activeFeedRequestIdRef.current !== requestId) {
           return;
         }
 
@@ -474,10 +495,7 @@ export const QuitterFeedWidget = ({
         setFollowingEmptyReason(nextFollowingEmptyReason);
         setInitialFeedState('success');
       } catch (error) {
-        if (
-          signal.aborted ||
-          activeFeedRequestIdRef.current !== requestId
-        ) {
+        if (signal.aborted || activeFeedRequestIdRef.current !== requestId) {
           return;
         }
 
@@ -540,10 +558,7 @@ export const QuitterFeedWidget = ({
           itemLimit: pollItemLimit,
         });
 
-        if (
-          signal.aborted ||
-          activeUpdateRequestIdRef.current !== requestId
-        ) {
+        if (signal.aborted || activeUpdateRequestIdRef.current !== requestId) {
           return;
         }
 
@@ -576,10 +591,7 @@ export const QuitterFeedWidget = ({
           prependUniqueFeedItems(nextPendingItems, pendingItemsRef.current)
         );
       } catch (error) {
-        if (
-          signal.aborted ||
-          activeUpdateRequestIdRef.current !== requestId
-        ) {
+        if (signal.aborted || activeUpdateRequestIdRef.current !== requestId) {
           return;
         }
 
@@ -612,13 +624,7 @@ export const QuitterFeedWidget = ({
     return () => {
       controller.abort();
     };
-  }, [
-    commitPendingItems,
-    commitVisibleItems,
-    feedKey,
-    feedMode,
-    reloadToken,
-  ]);
+  }, [commitPendingItems, commitVisibleItems, feedKey, feedMode, reloadToken]);
 
   useEffect(() => {
     if (refreshToken <= previousRefreshTokenRef.current) {
@@ -646,12 +652,7 @@ export const QuitterFeedWidget = ({
     return () => {
       controller.abort();
     };
-  }, [
-    feedMode,
-    initialFeedState,
-    isInitialLoading,
-    refreshToken,
-  ]);
+  }, [feedMode, initialFeedState, isInitialLoading, refreshToken]);
 
   useEffect(() => {
     if (initialFeedState !== 'success' || items.length === 0) {
@@ -749,13 +750,9 @@ export const QuitterFeedWidget = ({
 
   const showInitialLoadingState = isInitialLoading && items.length === 0;
   const showInitialErrorState =
-    !isInitialLoading &&
-    initialFeedState === 'error' &&
-    items.length === 0;
+    !isInitialLoading && initialFeedState === 'error' && items.length === 0;
   const showEmptyState =
-    !isInitialLoading &&
-    initialFeedState === 'success' &&
-    items.length === 0;
+    !isInitialLoading && initialFeedState === 'success' && items.length === 0;
 
   const handleRetryInitialFeed = useCallback(() => {
     setError(null);
@@ -836,9 +833,7 @@ export const QuitterFeedWidget = ({
 
   return (
     <>
-      <QAppWidgetContainer
-        hasContent
-      >
+      <QAppWidgetContainer hasContent>
         <Box
           sx={{
             display: 'flex',
@@ -927,128 +922,124 @@ export const QuitterFeedWidget = ({
                 {t('quitter_feed.tab_following')}
               </ButtonBase>
             </Box>
-          <Typography
-            sx={{
-              color: theme.palette.text.secondary,
-              fontSize: '0.67rem',
-              fontWeight: 600,
-              letterSpacing: '0.01em',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {feedMode === 'following'
-              ? t('quitter_feed.subtitle_personalized')
-              : t('quitter_feed.subtitle_public')}
-          </Typography>
-        </Box>
-
-        {!showStatePanel && items.length > 0 ? (
-          <Collapse
-            in={pendingItems.length > 0}
-            mountOnEnter
-            unmountOnExit
-          >
-            <Box
+            <Typography
               sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                mb: '26px',
-                mt: '-15px',
-                width: '100%',
+                color: theme.palette.text.secondary,
+                fontSize: '0.67rem',
+                fontWeight: 600,
+                letterSpacing: '0.01em',
+                whiteSpace: 'nowrap',
               }}
             >
-              <ButtonBase
-                disableRipple
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  handleApplyPendingPosts();
-                }}
+              {feedMode === 'following'
+                ? t('quitter_feed.subtitle_personalized')
+                : t('quitter_feed.subtitle_public')}
+            </Typography>
+          </Box>
+
+          {!showStatePanel && items.length > 0 ? (
+            <Collapse in={pendingItems.length > 0} mountOnEnter unmountOnExit>
+              <Box
                 sx={{
-                  alignItems: 'center',
-                  animation:
-                    'quitterNewPostsThresholdFade 5.8s ease-in-out infinite',
-                  display: 'inline-flex',
-                  gap: '9px',
-                  maxWidth: '100%',
-                  position: 'relative',
-                  px: '4px',
-                  py: '2px',
-                  zIndex: 1,
-                  '@keyframes quitterNewPostsThresholdFade': {
-                    '0%, 100%': {
-                      opacity: 0.84,
-                    },
-                    '50%': {
-                      opacity: 1,
-                    },
-                  },
-                  '&:hover': {
-                    opacity: 1,
-                  },
+                  display: 'flex',
+                  justifyContent: 'center',
+                  mb: '26px',
+                  mt: '-15px',
+                  width: '100%',
                 }}
               >
-                <Box
-                  sx={{
-                    background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0)} 0%, ${alpha(theme.palette.primary.main, 0.07)} 100%)`,
-                    flexShrink: 0,
-                    height: '1px',
-                    width: '26px',
+                <ButtonBase
+                  disableRipple
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleApplyPendingPosts();
                   }}
-                />
-                <Typography
                   sx={{
                     alignItems: 'center',
-                    color: alpha(theme.palette.text.primary, 0.9),
+                    animation:
+                      'quitterNewPostsThresholdFade 5.8s ease-in-out infinite',
                     display: 'inline-flex',
-                    flexShrink: 0,
-                    fontSize: '0.73rem',
-                    fontWeight: 760,
-                    gap: '7px',
-                    justifyContent: 'center',
-                    letterSpacing: '0.01em',
-                    lineHeight: 1.2,
-                  }}
-                >
-                  <Box
-                    component="span"
-                    sx={{
-                      animation:
-                        'quitterNewPostsDotBreathe 4.4s ease-in-out infinite',
-                      bgcolor: alpha(theme.palette.primary.main, 0.96),
-                      borderRadius: '50%',
-                      display: 'inline-block',
-                      flexShrink: 0,
-                    height: 6,
-                    width: 6,
-                    '@keyframes quitterNewPostsDotBreathe': {
+                    gap: '9px',
+                    maxWidth: '100%',
+                    position: 'relative',
+                    px: '4px',
+                    py: '2px',
+                    zIndex: 1,
+                    '@keyframes quitterNewPostsThresholdFade': {
                       '0%, 100%': {
-                        opacity: 0.86,
-                        transform: 'scale(0.86)',
+                        opacity: 0.84,
                       },
                       '50%': {
                         opacity: 1,
-                        transform: 'scale(1.12)',
                       },
                     },
+                    '&:hover': {
+                      opacity: 1,
+                    },
                   }}
-                />
-                  {pendingPostLabel}
-                </Typography>
-                <Box
-                  sx={{
-                    background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${alpha(theme.palette.primary.main, 0)} 100%)`,
-                    flexShrink: 0,
-                    height: '1px',
-                    width: '26px',
-                  }}
-                />
-              </ButtonBase>
-            </Box>
-          </Collapse>
-        ) : null}
+                >
+                  <Box
+                    sx={{
+                      background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0)} 0%, ${alpha(theme.palette.primary.main, 0.07)} 100%)`,
+                      flexShrink: 0,
+                      height: '1px',
+                      width: '26px',
+                    }}
+                  />
+                  <Typography
+                    sx={{
+                      alignItems: 'center',
+                      color: alpha(theme.palette.text.primary, 0.9),
+                      display: 'inline-flex',
+                      flexShrink: 0,
+                      fontSize: '0.73rem',
+                      fontWeight: 760,
+                      gap: '7px',
+                      justifyContent: 'center',
+                      letterSpacing: '0.01em',
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    <Box
+                      component="span"
+                      sx={{
+                        animation:
+                          'quitterNewPostsDotBreathe 4.4s ease-in-out infinite',
+                        bgcolor: alpha(theme.palette.primary.main, 0.96),
+                        borderRadius: '50%',
+                        display: 'inline-block',
+                        flexShrink: 0,
+                        height: 6,
+                        width: 6,
+                        '@keyframes quitterNewPostsDotBreathe': {
+                          '0%, 100%': {
+                            opacity: 0.86,
+                            transform: 'scale(0.86)',
+                          },
+                          '50%': {
+                            opacity: 1,
+                            transform: 'scale(1.12)',
+                          },
+                        },
+                      }}
+                    />
+                    {pendingPostLabel}
+                  </Typography>
+                  <Box
+                    sx={{
+                      background: `linear-gradient(90deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${alpha(theme.palette.primary.main, 0)} 100%)`,
+                      flexShrink: 0,
+                      height: '1px',
+                      width: '26px',
+                    }}
+                  />
+                </ButtonBase>
+              </Box>
+            </Collapse>
+          ) : null}
 
-        {showStatePanel ? (
+          {showStatePanel ? (
             <QAppWidgetStatePanel
               description={
                 showInitialErrorState
@@ -1091,8 +1082,9 @@ export const QuitterFeedWidget = ({
                 sx={{
                   flex: '1 1 auto',
                   minHeight: 0,
+                  // Avoid browser scroll anchoring fighting virtual row layout / height totals.
+                  overflowAnchor: 'none',
                   overflowY: 'auto',
-                  overscrollBehavior: 'contain',
                   pr: '2px',
                   scrollbarColor: `${alpha(theme.palette.text.secondary, 0.3)} transparent`,
                   scrollbarWidth: 'thin',
@@ -1107,48 +1099,76 @@ export const QuitterFeedWidget = ({
                   },
                 }}
               >
+                <Box
+                  sx={{
+                    height:
+                      rowVirtualizer.getTotalSize() + scrollListBottomPadPx,
+                    position: 'relative',
+                    width: '100%',
+                  }}
+                >
                   <Box
                     sx={{
-                      alignContent: 'start',
-                      display: 'grid',
-                      gap: isCompact ? '9px' : '12px',
-                      gridAutoRows: 'max-content',
-                      minHeight: 'min-content',
-                      pb: '10px',
+                      left: 0,
+                      position: 'absolute',
+                      top: 0,
+                      width: '100%',
                     }}
                   >
-                    {items.map((item) => (
-                      <Box
-                        key={item.id}
-                        sx={
-                          revealedItemIdSet.has(item.id)
-                            ? {
-                                '@keyframes quitterFeedInsert': {
-                                  '0%': {
-                                    opacity: 0,
-                                    transform: 'translateY(-6px)',
-                                  },
-                                  '100%': {
-                                    opacity: 1,
-                                    transform: 'translateY(0)',
-                                  },
-                                },
-                                animation:
-                                  'quitterFeedInsert 280ms ease both',
-                              }
-                            : undefined
-                        }
-                      >
-                        <QuitterFeedCard
-                          displayMode={displayMode}
-                          item={item}
-                          onOpen={() => {
-                            handleOpenPost(item);
+                    {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const item = items[virtualRow.index];
+                      if (!item) {
+                        return null;
+                      }
+
+                      const revealSx = revealedItemIdSet.has(item.id)
+                        ? {
+                            '@keyframes quitterFeedInsert': {
+                              '0%': {
+                                opacity: 0,
+                                transform: 'translateY(-6px)',
+                              },
+                              '100%': {
+                                opacity: 1,
+                                transform: 'translateY(0)',
+                              },
+                            },
+                            animation: 'quitterFeedInsert 280ms ease both',
+                          }
+                        : undefined;
+
+                      return (
+                        <Box
+                          key={virtualRow.key}
+                          data-index={virtualRow.index}
+                          ref={rowVirtualizer.measureElement}
+                          sx={{
+                            boxSizing: 'border-box',
+                            left: 0,
+                            paddingBottom:
+                              virtualRow.index < items.length - 1
+                                ? `${rowGapPx}px`
+                                : 0,
+                            position: 'absolute',
+                            top: 0,
+                            transform: `translate3d(0, ${virtualRow.start}px, 0)`,
+                            width: '100%',
                           }}
-                        />
-                      </Box>
-                    ))}
+                        >
+                          <Box sx={revealSx}>
+                            <QuitterFeedCard
+                              displayMode={displayMode}
+                              item={item}
+                              onOpen={() => {
+                                handleOpenPost(item);
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                      );
+                    })}
                   </Box>
+                </Box>
               </Box>
               {items.length > 0 && (
                 <Box
@@ -1200,10 +1220,9 @@ export const QuitterFeedWidget = ({
                     )}
                     <Typography
                       sx={{
-                        color:
-                          isRefreshing
-                            ? theme.palette.text.primary
-                            : theme.palette.text.secondary,
+                        color: isRefreshing
+                          ? theme.palette.text.primary
+                          : theme.palette.text.secondary,
                         fontSize: '0.7rem',
                         fontWeight: 600,
                         letterSpacing: '0.01em',
@@ -1225,4 +1244,3 @@ export const QuitterFeedWidget = ({
     </>
   );
 };
-

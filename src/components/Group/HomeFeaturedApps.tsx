@@ -83,6 +83,11 @@ const FEATURED_APP_GRID = [
   'Q-Trade',
   SUBWIRE_APP_NAME,
 ] as const;
+const FEATURED_GRID_GAP_PX = 12;
+const FEATURED_GRID_COL_MAX_PX = 124;
+/** Cap width when space allows; below this the grid scales down proportionally (avoids 3-col + span-2 orphan gaps). */
+const FEATURED_GRID_MAX_WIDTH_PX =
+  4 * FEATURED_GRID_COL_MAX_PX + 3 * FEATURED_GRID_GAP_PX;
 
 const openApp = (appName: string) => {
   executeEvent('addTab', { data: { service: 'APP', name: appName } });
@@ -486,24 +491,15 @@ export const HomeFeaturedApps = ({ panelBoxRef = undefined }) => {
             sx={{
               alignItems: 'stretch',
               display: 'grid',
-              gap: '12px',
-              gridAutoRows: '124px',
-              gridTemplateColumns: 'repeat(4, 124px)',
-              justifyContent: 'center',
-              maxWidth: '100%',
+              gap: `${FEATURED_GRID_GAP_PX}px`,
+              gridAutoRows: 'minmax(108px, 124px)',
+              gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+              justifyContent: 'stretch',
+              marginInline: 'auto',
+              maxWidth: `${FEATURED_GRID_MAX_WIDTH_PX}px`,
               position: 'relative',
-              width: 'max-content',
+              width: '100%',
               zIndex: 1,
-              '@container (max-width: 640px)': {
-                gridAutoRows: '116px',
-                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                justifyContent: 'stretch',
-                width: '100%',
-              },
-              '@container (max-width: 500px)': {
-                gridAutoRows: '108px',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              },
             }}
           >
             {FEATURED_APP_GRID.map((appName, index) =>
@@ -952,7 +948,8 @@ const AppTile = ({
           flexDirection: 'column',
           gap: '8px',
           position: 'relative',
-          width: isWideTile ? '104px' : '100%',
+          width: isWideTile ? 'clamp(72px, 32%, 104px)' : '100%',
+          flexShrink: isWideTile ? 0 : undefined,
           alignSelf: isWideRightTile ? 'flex-end' : 'auto',
           zIndex: 1,
         }}
@@ -1051,12 +1048,14 @@ const AppTile = ({
           aria-hidden="true"
           sx={{
             alignItems: 'center',
+            bottom: 0,
             display: 'flex',
-            inset: '0 124px 0 16px',
             justifyContent: 'center',
+            left: 'clamp(8px, 2.5%, 16px)',
             pointerEvents: 'none',
             position: 'absolute',
-            transform: 'translateX(20px)',
+            right: 'clamp(76px, 38%, 132px)',
+            top: 0,
             zIndex: 1,
           }}
         >

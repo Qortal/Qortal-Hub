@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { ApiKey } from '../types/auth';
 import { useEffect, useState } from 'react';
 import { AuthButton, AuthInput, AuthSectionLabel } from './Auth/AuthShell';
+import { dialogModalBackdropSx } from './App/dialogSurface';
 
 export function CustomNodeApikeyDialog() {
   const { validateApiKey, handleSaveNodeInfo, authenticate, saveCustomNodes } =
@@ -110,9 +111,11 @@ export function CustomNodeApikeyDialog() {
       maxWidth="sm"
       aria-labelledby="custom-api-key-title"
       slotProps={{
+        backdrop: { sx: dialogModalBackdropSx },
         paper: {
           sx: {
-            background: '#0d1117',
+            backgroundColor: '#0d1117',
+            backgroundImage: 'linear-gradient(180deg, #121821 0%, #0d1117 100%)',
             border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: '10px',
             boxShadow: '0 24px 50px rgba(0,0,0,0.34)',

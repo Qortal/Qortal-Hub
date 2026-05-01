@@ -1,4 +1,10 @@
-import { CSSProperties, ReactNode, useCallback, useEffect, useRef } from 'react';
+import {
+  CSSProperties,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+} from 'react';
 import './BorderGlow.css';
 
 type BorderGlowProps = {
@@ -74,7 +80,8 @@ function buildGradientVars(colors: string[]) {
   const vars: Record<string, string> = {};
   for (let i = 0; i < 7; i += 1) {
     const c = colors[Math.min(COLOR_MAP[i], colors.length - 1)];
-    vars[GRADIENT_KEYS[i]] = `radial-gradient(at ${GRADIENT_POSITIONS[i]}, ${c} 0px, transparent 50%)`;
+    vars[GRADIENT_KEYS[i]] =
+      `radial-gradient(at ${GRADIENT_POSITIONS[i]}, ${c} 0px, transparent 50%)`;
   }
   vars['--gradient-base'] = `linear-gradient(${colors[0]} 0 100%)`;
   return vars;
@@ -208,7 +215,8 @@ const BorderGlow = ({
         const progress =
           ((timestamp % animationDurationMs) + animationDurationMs) %
           animationDurationMs;
-        const angle = 110 + (progress / animationDurationMs) * (reverseSweep ? -360 : 360);
+        const angle =
+          110 + (progress / animationDurationMs) * (reverseSweep ? -360 : 360);
         card.style.setProperty('--cursor-angle', `${angle}deg`);
         rafId = requestAnimationFrame(animateContinuousSweep);
       };

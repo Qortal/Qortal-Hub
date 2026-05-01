@@ -997,14 +997,11 @@ export const AppsDesktop = ({
               >
                 <Box
                   sx={{
-                    display: 'inline-flex',
-                    flex: '0 1 auto',
-                    flexShrink: 1,
+                    display: 'flex',
+                    flex: 1,
                     gap: '2px',
                     minWidth: 0,
-                    maxWidth: 'calc(100% - 34px)',
                     overflow: 'hidden',
-                    width: 'auto',
                   }}
                 >
                   {tabs.map((tab) => (

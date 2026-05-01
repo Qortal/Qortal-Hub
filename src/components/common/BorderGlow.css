@@ -1,3 +1,38 @@
+/* Animated via compositor — avoids JS requestAnimationFrame + style writes every frame */
+@property --cursor-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 110deg;
+}
+
+@keyframes border-glow-sweep-angle {
+  from {
+    --cursor-angle: 110deg;
+  }
+
+  to {
+    --cursor-angle: 470deg;
+  }
+}
+
+.border-glow-card.border-glow-css-sweep {
+  animation: border-glow-sweep-angle var(--sweep-duration, 4000ms) linear infinite;
+}
+
+.border-glow-card.border-glow-css-sweep.border-glow-css-sweep-reverse {
+  animation-direction: reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .border-glow-card.border-glow-css-sweep {
+    animation: none;
+  }
+
+  .border-glow-card.border-glow-css-sweep.border-glow-card--always-on {
+    --cursor-angle: 118deg;
+  }
+}
+
 .border-glow-card {
   --edge-proximity: 0;
   --cursor-angle: 45deg;

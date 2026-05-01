@@ -84,7 +84,7 @@ export function useManagedSubscriptionsFromGroups(
                 );
 
                 const matchesResponse = await fetch(
-                  `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT&identifier=${baseIdentifierPrefix}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${name}`
+                  `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${baseIdentifierPrefix}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${name}`
                 );
                 if (!matchesResponse.ok) return null;
                 const matches = await matchesResponse.json();
@@ -111,7 +111,7 @@ export function useManagedSubscriptionsFromGroups(
                           if (!primaryName) return false;
 
                           const resourceResponse = await fetch(
-                            `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${primaryName}`
+                            `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=PRODUCT&identifier=${detailsIdentifier}&exactmatchnames=true&limit=1&prefix=true&reverse=true&name=${primaryName}`
                           );
                           const resources = await resourceResponse.json();
                           return resourceResponse.ok && resources.length > 0;
@@ -133,10 +133,12 @@ export function useManagedSubscriptionsFromGroups(
 
                   if (adminNames.length > 0) {
                     const queryString = adminNames
-                      .map((adminName) => `name=${encodeURIComponent(adminName)}`)
+                      .map(
+                        (adminName) => `name=${encodeURIComponent(adminName)}`
+                      )
                       .join('&');
                     const resourcesResponse = await fetch(
-                      `${getBaseApiReact()}/arbitrary/resources/searchsimple?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${group.groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`
+                      `${getBaseApiReact()}/arbitrary/resources/search?mode=ALL&service=DOCUMENT_PRIVATE&identifier=symmetric-qchat-group-${group.groupId}&exactmatchnames=true&limit=0&reverse=true&${queryString}&prefix=true`
                     );
 
                     if (!resourcesResponse.ok) {

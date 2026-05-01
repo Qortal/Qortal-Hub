@@ -70,6 +70,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   const { isShow: isShowNext, onOk, show: showNext } = useModal();
   const [info, setInfo] = useState(null);
   const [names, setNames] = useState({});
+  const [statsAccountInfo, setStatsAccountInfo] = useState(null);
+  const [isStatsLoading, setIsStatsLoading] = useState(false);
+  const [selectedMintingAccountKey, setSelectedMintingAccountKey] = useState(
+    null
+  );
   const [showWaitDialog, setShowWaitDialog] = useState(false);
   const timeoutNodeStatusRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -141,12 +146,23 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     }
   };
 
-  const daysToNextLevel = levelUpDays(
-    accountInfo,
-    adminInfo,
-    nodeHeightBlock,
-    nodeStatus
-  );
+  const getStatsAccountInfo = useCallback(async (address: string) => {
+    if (!address) return;
+    try {
+      setIsStatsLoading(true);
+      const url = `${getBaseApiReact()}/addresses/${address}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('network error');
+      }
+      const data = await response.json();
+      setStatsAccountInfo(data);
+    } catch (error) {
+      console.log(error);
+    } finally {
+      setIsStatsLoading(false);
+    }
+  }, []);
 
   const refreshRewardShare = () => {
     if (!myAddress) return;
@@ -519,6 +535,44 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     getAccountInfo(myAddress);
   }, [myAddress, getRewardShares]);
 
+  const effectiveSelectedMintingKey = useMemo(() => {
+    if (!mintingAccounts?.length) return null;
+    if (
+      selectedMintingAccountKey &&
+      mintingAccounts.some((a) => a?.mintingAccount === selectedMintingAccountKey)
+    ) {
+      return selectedMintingAccountKey;
+    }
+    const mine = mintingAccounts.find(
+      (a) =>
+        a?.recipientAccount === myAddress || a?.mintingAccount === myAddress
+    );
+    return mine?.mintingAccount ?? mintingAccounts[0]?.mintingAccount ?? null;
+  }, [mintingAccounts, selectedMintingAccountKey, myAddress]);
+
+  const statsAddress = useMemo(() => {
+    if (mintingAccounts?.length > 0 && effectiveSelectedMintingKey) {
+      return effectiveSelectedMintingKey;
+    }
+    return myAddress || '';
+  }, [mintingAccounts, effectiveSelectedMintingKey, myAddress]);
+
+  useEffect(() => {
+    if (!statsAddress) {
+      setStatsAccountInfo(null);
+      return;
+    }
+    if (statsAddress === myAddress) {
+      if (accountInfo?.address === statsAddress) {
+        setStatsAccountInfo(accountInfo);
+        return;
+      }
+      getStatsAccountInfo(statsAddress);
+      return;
+    }
+    getStatsAccountInfo(statsAddress);
+  }, [statsAddress, myAddress, accountInfo, getStatsAccountInfo]);
+
   const handleCloseSnack = () => {
     setOpenSnack(false);
     setTimeout(() => {
@@ -553,29 +607,56 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
   };
 
   const isNodeSynchronizing = nodeStatus?.isSynchronizing === true;
-  const progressLevel = nextLevel(accountInfo?.level);
-  const progressBlocks = formatMetric(levelUpBlocks(accountInfo, nodeStatus), 0);
+  const daysToNextLevel = levelUpDays(
+    statsAccountInfo,
+    adminInfo,
+    nodeHeightBlock,
+    nodeStatus
+  );
+  const progressLevel = nextLevel(statsAccountInfo?.level);
+  const progressBlocks = formatMetric(
+    levelUpBlocks(statsAccountInfo, nodeStatus),
+    0
+  );
   const progressDays =
     typeof daysToNextLevel === 'number' && Number.isFinite(daysToNextLevel)
       ? Math.max(0, Math.round(daysToNextLevel))
       : null;
-  const displayName = handleNames(accountInfo?.address) || myAddress || '-';
+  const walletDisplayName =
+    handleNames(accountInfo?.address) || myAddress || '-';
+  const statsDisplayName =
+    handleNames(statsAccountInfo?.address) || statsAddress || '-';
   const showAddressLine =
-    !!accountInfo?.address && displayName !== accountInfo?.address;
+    !!statsAccountInfo?.address && statsDisplayName !== statsAccountInfo?.address;
+  const showWalletAddressLine =
+    !!accountInfo?.address && walletDisplayName !== accountInfo?.address;
+  const viewingNodeMintingSelection =
+    !!effectiveSelectedMintingKey &&
+    !!mintingAccounts?.some(
+      (a) => a?.mintingAccount === effectiveSelectedMintingKey
+    );
 
   const userMintingState = useMemo(() => {
-    if (accountIsMinting) {
-      return {
-        tone: 'active',
-        title: 'Minting active',
-        description: 'This account is configured to mint on this node.',
-      };
-    }
     if (isNodeSynchronizing) {
       return {
         tone: 'syncing',
         title: 'Synchronizing',
         description: 'The node is still syncing, so minting cannot begin yet.',
+      };
+    }
+    if (viewingNodeMintingSelection) {
+      return {
+        tone: 'active',
+        title: 'Minting active',
+        description:
+          'This minter key is configured on this node. Stats reflect the selected account.',
+      };
+    }
+    if (accountIsMinting) {
+      return {
+        tone: 'active',
+        title: 'Minting active',
+        description: 'This account is configured to mint on this node.',
       };
     }
     if (!isPartOfMintingGroup) {
@@ -602,6 +683,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
     isNodeSynchronizing,
     isPartOfMintingGroup,
     mintingAccounts?.length,
+    viewingNodeMintingSelection,
   ]);
 
   const statusToneStyles = {
@@ -752,7 +834,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       value:
         formatMetric(
           countRewardDay(
-            accountInfo,
+            statsAccountInfo,
             addressLevel,
             adminInfo,
             nodeHeightBlock,
@@ -794,11 +876,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         postProcess: 'capitalizeEachFirstChar',
       }),
       value: t('core:minting.current_tier_content', {
-        tier: currentTier(accountInfo?.level)
-          ? currentTier(accountInfo?.level)[0]
+        tier: currentTier(statsAccountInfo?.level)
+          ? currentTier(statsAccountInfo?.level)[0]
           : '',
-        levels: currentTier(accountInfo?.level)
-          ? currentTier(accountInfo?.level)[1]
+        levels: currentTier(statsAccountInfo?.level)
+          ? currentTier(statsAccountInfo?.level)[1]
           : '',
         postProcess: 'capitalizeEachFirstChar',
       }),
@@ -807,7 +889,8 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       label: t('core:minting.tier_share_per_block', {
         postProcess: 'capitalizeEachFirstChar',
       }),
-      value: formatMetric(tierPercent(accountInfo, tier4Online), 0) + ' %',
+      value:
+        formatMetric(tierPercent(statsAccountInfo, tier4Online), 0) + ' %',
     },
     {
       label: t('core:minting.reward_per_block', {
@@ -815,7 +898,12 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
       }),
       value:
         formatMetric(
-          countReward(accountInfo, addressLevel, nodeStatus, tier4Online),
+          countReward(
+            statsAccountInfo,
+            addressLevel,
+            nodeStatus,
+            tier4Online
+          ),
           8
         ) + ' QORT',
     },
@@ -827,7 +915,11 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
         postProcess: 'capitalizeEachFirstChar',
       }),
       value: formatMetric(
-        countMintersInLevel(accountInfo?.level, addressLevel, tier4Online),
+        countMintersInLevel(
+          statsAccountInfo?.level,
+          addressLevel,
+          tier4Online
+        ),
         0
       ),
     },
@@ -1006,8 +1098,41 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 />
 
                 <Box sx={{ position: 'relative', zIndex: 1 }}>
+                {mintingAccounts?.length > 0 ? (
+                  <Box sx={{ mb: 2.25 }}>
+                    <Typography sx={sectionLabelSx}>Your wallet</Typography>
+                    <Typography
+                      sx={{
+                        fontSize: '1.05rem',
+                        fontWeight: 700,
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.15,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {walletDisplayName}
+                    </Typography>
+                    {showWalletAddressLine ? (
+                      <Typography
+                        sx={{
+                          color: alpha(theme.palette.text.secondary, 0.84),
+                          fontSize: '0.82rem',
+                          mt: 0.35,
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {accountInfo?.address}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                ) : null}
+
                 <Box>
-                  <Typography sx={sectionLabelSx}>Account identity</Typography>
+                  <Typography sx={sectionLabelSx}>
+                    {mintingAccounts?.length > 0
+                      ? 'Minter profile (stats)'
+                      : 'Account identity'}
+                  </Typography>
                   <Typography
                     sx={{
                       fontSize: '1.35rem',
@@ -1017,7 +1142,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       wordBreak: 'break-word',
                     }}
                   >
-                    {displayName}
+                    {statsDisplayName}
                   </Typography>
                   {showAddressLine ? (
                     <Typography
@@ -1028,7 +1153,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                         wordBreak: 'break-all',
                       }}
                     >
-                      {accountInfo?.address}
+                      {statsAccountInfo?.address}
                     </Typography>
                   ) : null}
                 </Box>
@@ -1059,7 +1184,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       }}
                     >
                       {t('core:level', { postProcess: 'capitalizeFirstChar' })}{' '}
-                      {accountInfo?.level ?? '-'}
+                      {statsAccountInfo?.level ?? '-'}
                     </Typography>
                   </Box>
                   <Typography
@@ -1154,47 +1279,104 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                     }}
                   >
                     <Typography sx={sectionLabelSx}>Node minting accounts</Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      sx={{ mb: 1.1, lineHeight: 1.45 }}
+                    >
+                      Select an account to update progress and reward stats on the
+                      right.
+                    </Typography>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                      {mintingAccounts?.map((acct) => (
-                        <Box
-                          key={acct?.mintingAccount}
-                          sx={{
-                            backgroundColor: alpha(
-                              theme.palette.background.default,
-                              theme.palette.mode === 'dark' ? 0.14 : 0.34
-                            ),
-                            border: `1px solid ${alpha(theme.palette.divider, 0.14)}`,
-                            borderRadius: '10px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 1,
-                            p: 1.15,
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
+                      {mintingAccounts?.map((acct) => {
+                        const isSelected =
+                          acct?.mintingAccount === effectiveSelectedMintingKey;
+                        return (
+                          <Box
+                            key={acct?.mintingAccount}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() =>
+                              setSelectedMintingAccountKey(acct?.mintingAccount)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedMintingAccountKey(acct?.mintingAccount);
+                              }
+                            }}
                             sx={{
-                              color: theme.palette.text.primary,
-                              fontWeight: 700,
-                              wordBreak: 'break-word',
+                              backgroundColor: alpha(
+                                theme.palette.background.default,
+                                theme.palette.mode === 'dark' ? 0.14 : 0.34
+                              ),
+                              border: `1px solid ${
+                                isSelected
+                                  ? alpha(theme.palette.primary.main, 0.55)
+                                  : alpha(theme.palette.divider, 0.14)
+                              }`,
+                              borderRadius: '10px',
+                              boxShadow: isSelected
+                                ? `0 0 0 1px ${alpha(theme.palette.primary.main, 0.35)}`
+                                : 'none',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 1,
+                              outline: 'none',
+                              p: 1.15,
+                              transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
                             }}
                           >
-                            {handleNames(acct?.mintingAccount)}
-                          </Typography>
-                          <Button
-                            size="small"
-                            sx={silkyDangerButtonSx}
-                            onClick={() => {
-                              removeMintingAccount(acct.publicKey, acct);
-                            }}
-                            variant="contained"
-                          >
-                            {t('group:action.remove_minting_account', {
-                              postProcess: 'capitalizeFirstChar',
-                            })}
-                          </Button>
-                        </Box>
-                      ))}
+                            <Box
+                              sx={{
+                                alignItems: 'center',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 0.75,
+                                justifyContent: 'space-between',
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  color: theme.palette.text.primary,
+                                  fontWeight: 700,
+                                  wordBreak: 'break-word',
+                                }}
+                              >
+                                {handleNames(acct?.mintingAccount)}
+                              </Typography>
+                              {isSelected ? (
+                                <Typography
+                                  variant="caption"
+                                  sx={{
+                                    color: theme.palette.primary.main,
+                                    fontWeight: 700,
+                                    letterSpacing: '0.06em',
+                                    textTransform: 'uppercase',
+                                  }}
+                                >
+                                  Viewing stats
+                                </Typography>
+                              ) : null}
+                            </Box>
+                            <Button
+                              size="small"
+                              sx={silkyDangerButtonSx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeMintingAccount(acct.publicKey, acct);
+                              }}
+                              variant="contained"
+                            >
+                              {t('group:action.remove_minting_account', {
+                                postProcess: 'capitalizeFirstChar',
+                              })}
+                            </Button>
+                          </Box>
+                        );
+                      })}
                     </Box>
                     {mintingAccounts?.length > 1 ? (
                       <Typography
@@ -1214,6 +1396,7 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
             </Box>
 
             <Box
+              aria-busy={isStatsLoading}
               sx={{
                 borderLeft: {
                   xs: 'none',
@@ -1223,7 +1406,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                 flexDirection: 'column',
                 gap: 2.4,
                 minWidth: 0,
+                opacity: isStatsLoading ? 0.62 : 1,
                 pl: { xs: 0, lg: 3 },
+                transition: 'opacity 0.2s ease',
               }}
             >
               <Box
@@ -1388,7 +1573,9 @@ export const Minting = ({ setIsOpenMinting, myAddress, show }) => {
                       mb: 1,
                     }}
                   >
-                    (your rewards info)
+                    {statsAddress === myAddress
+                      ? '(your rewards info)'
+                      : '(selected minter — rewards for this key)'}
                   </Typography>
                   <Box sx={{ display: 'flex', flexDirection: 'column' }}>
                     {directRewardRows.map((row) => (

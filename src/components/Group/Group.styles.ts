@@ -123,7 +123,9 @@ export const SelectedGroupWrapper = styled('div', {
   shouldForwardProp: (prop) => prop !== 'isVisible',
 })<SelectedGroupWrapperProps>(({ isVisible }) => ({
   width: '100%',
-  display: 'block',
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100%',
   opacity: !isVisible ? 0 : 1,
   position: isVisible ? 'absolute' : 'fixed',
   left: !isVisible ? '-100000px' : '0px',

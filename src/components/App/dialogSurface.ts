@@ -1,5 +1,10 @@
 import { alpha, type Theme } from '@mui/material/styles';
 
+/** Backdrop for modals that overlay the auth shell — default MUI backdrop is too light here. */
+export const dialogModalBackdropSx = {
+  backgroundColor: 'rgba(3, 5, 12, 0.94)',
+};
+
 export const getDialogPaperSx = (
   theme: Theme,
   options?: {
@@ -7,8 +12,8 @@ export const getDialogPaperSx = (
     radius?: number;
   }
 ) => ({
-  background: 'linear-gradient(180deg, #121821 0%, #0C1118 100%)',
-  backgroundImage: 'none',
+  backgroundColor: '#0C1118',
+  backgroundImage: 'linear-gradient(180deg, #121821 0%, #0C1118 100%)',
   border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
   borderRadius: `${options?.radius ?? 18}px`,
   boxShadow: '0 26px 56px rgba(0,0,0,0.44)',

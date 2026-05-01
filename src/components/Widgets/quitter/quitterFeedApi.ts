@@ -11,7 +11,7 @@ import type {
 import { getBaseApiReact } from '../../../utils/globalApi';
 
 export const QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT =
-  '/arbitrary/resources/searchsimple';
+  '/arbitrary/resources/search';
 
 const QUITTER_PUBLIC_FEED_SEARCH_LIMIT = 10;
 const QUITTER_WIDGET_ITEM_LIMIT = 6;
@@ -20,16 +20,47 @@ const QUITTER_FOLLOWING_SCAN_TOTAL_LIMIT = 60;
 const QUITTER_FOLLOW_CANDIDATE_MAX_SIZE = 160;
 const QUITTER_FOLLOW_CANDIDATE_LIMIT = 24;
 const QUITTER_FOLLOWING_CACHE_TTL_MS = 5 * 60 * 1000;
+/** Max entries; LRU eviction. Payloads can be large (e.g. embedded images). */
+const QUITTER_DOCUMENT_PAYLOAD_CACHE_MAX_ENTRIES = 250;
 
 // Verified against the public node on April 19, 2026.
 // This is Quitter's qapp-core-derived POST + ROOT search prefix.
-const QUITTER_PUBLIC_POST_PREFIX =
-  'MhNiRYdzkaP9dz-kX47dT-XrFXaYetyErMdF-';
+const QUITTER_PUBLIC_POST_PREFIX = 'MhNiRYdzkaP9dz-kX47dT-XrFXaYetyErMdF-';
 
 const followedNamesCache = new Map<
   string,
   { fetchedAt: number; names: string[] }
 >();
+
+const documentPayloadLru = new Map<string, unknown>();
+
+const documentPayloadCacheKey = (resource: QuitterFeedSearchResource) =>
+  `${resource.name}:${resource.identifier}:${resource.latestSignature}`;
+
+const readDocumentPayloadCache = (key: string): unknown | undefined => {
+  const value = documentPayloadLru.get(key);
+  if (value === undefined) {
+    return undefined;
+  }
+  documentPayloadLru.delete(key);
+  documentPayloadLru.set(key, value);
+  return value;
+};
+
+const writeDocumentPayloadCache = (key: string, value: unknown) => {
+  if (documentPayloadLru.has(key)) {
+    documentPayloadLru.delete(key);
+  }
+  documentPayloadLru.set(key, value);
+
+  while (documentPayloadLru.size > QUITTER_DOCUMENT_PAYLOAD_CACHE_MAX_ENTRIES) {
+    const oldest = documentPayloadLru.keys().next().value as string | undefined;
+    if (oldest === undefined) {
+      break;
+    }
+    documentPayloadLru.delete(oldest);
+  }
+};
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value != null && typeof value === 'object' && !Array.isArray(value);
@@ -274,7 +305,9 @@ const fetchQuitterSearchResources = async (
 
   return parsed
     .map(mapSearchResource)
-    .filter((resource): resource is QuitterFeedSearchResource => resource != null);
+    .filter(
+      (resource): resource is QuitterFeedSearchResource => resource != null
+    );
 };
 
 const fetchQuitterUserResources = async (
@@ -295,23 +328,35 @@ const fetchQuitterUserResources = async (
 
   return parsed
     .map(mapSearchResource)
-    .filter((resource): resource is QuitterFeedSearchResource => resource != null);
+    .filter(
+      (resource): resource is QuitterFeedSearchResource => resource != null
+    );
 };
 
 const fetchQuitterDocumentPayload = async (
   resource: QuitterFeedSearchResource,
   signal?: AbortSignal
 ) => {
+  const cacheKey = documentPayloadCacheKey(resource);
+  const cached = readDocumentPayloadCache(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const text = await fetchText(
     buildQuitterDocumentUrl(resource.name, resource.identifier),
     signal
   );
 
+  let parsed: unknown;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
-    return text;
+    parsed = text;
   }
+
+  writeDocumentPayloadCache(cacheKey, parsed);
+  return parsed;
 };
 
 export const fetchQuitterFeed = async ({
@@ -345,15 +390,15 @@ export const fetchQuitterFeedPage = async ({
 }: FetchQuitterFeedOptions = {}): Promise<QuitterFeedPage> => {
   const seenIds = new Set(excludeIds);
   const normalizedAllowedAuthors =
-    allowedAuthors?.map((author) => author.trim().toLowerCase()).filter(Boolean) ??
-    null;
+    allowedAuthors
+      ?.map((author) => author.trim().toLowerCase())
+      .filter(Boolean) ?? null;
   const allowedAuthorsSet =
-    normalizedAllowedAuthors != null
-      ? new Set(normalizedAllowedAuthors)
-      : null;
+    normalizedAllowedAuthors != null ? new Set(normalizedAllowedAuthors) : null;
   const blockedAuthorsSet = new Set(
-    blockedAuthors?.map((author) => author.trim().toLowerCase()).filter(Boolean) ??
-      []
+    blockedAuthors
+      ?.map((author) => author.trim().toLowerCase())
+      .filter(Boolean) ?? []
   );
   const isBlockedAuthor = (author: string) =>
     blockedAuthorsSet.has(author.trim().toLowerCase());
@@ -453,7 +498,6 @@ export const fetchQuitterFeedPage = async ({
     if (reachedSearchEnd && !hasBufferedResources) {
       hasMore = false;
     }
-
   }
 
   return {
@@ -474,7 +518,10 @@ export const fetchQuitterFollowedNames = async (
   }
 
   const cached = followedNamesCache.get(normalizedUserName);
-  if (cached && Date.now() - cached.fetchedAt < QUITTER_FOLLOWING_CACHE_TTL_MS) {
+  if (
+    cached &&
+    Date.now() - cached.fetchedAt < QUITTER_FOLLOWING_CACHE_TTL_MS
+  ) {
     return cached.names;
   }
 
@@ -500,7 +547,10 @@ export const fetchQuitterFollowedNames = async (
   for (const result of settled) {
     if (result.status !== 'fulfilled') {
       if (!isAbortError(result.reason)) {
-        console.error('Failed to inspect Quitter follow resource', result.reason);
+        console.error(
+          'Failed to inspect Quitter follow resource',
+          result.reason
+        );
       }
       continue;
     }

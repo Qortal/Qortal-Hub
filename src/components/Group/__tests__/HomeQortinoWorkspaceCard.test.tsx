@@ -11,7 +11,7 @@ import { HomeQortinoWorkspaceCard } from '../HomeQortinoWorkspaceCard';
 
 vi.mock('../../../App', () => ({
   getBaseApiReact: () => 'http://localhost:12391',
-  getArbitraryEndpointReact: () => '/arbitrary/resources/searchsimple',
+  getArbitraryEndpointReact: () => '/arbitrary/resources/search',
   QORTAL_APP_CONTEXT: createContext({ show: vi.fn() }),
   extStates: {},
 }));
@@ -116,8 +116,9 @@ describe('HomeQortinoWorkspaceCard', () => {
       expect(screen.getByText('QORTINO')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Choose what lives above QORTINO.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Choose what lives above QORTINO.')
+    ).toBeInTheDocument();
     expect(screen.queryByText('boundary fallback')).not.toBeInTheDocument();
   });
-
 });

@@ -23,6 +23,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   useCallback,
@@ -31,6 +32,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactElement,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -155,7 +157,10 @@ const stripHtml = (value: string) =>
 const truncateAddress = (value: string) =>
   value.length > 14 ? `${value.slice(0, 7)}...${value.slice(-5)}` : value;
 
-const getGroupAvatarUrl = (ownerName: string | null, groupId: string | number) =>
+const getGroupAvatarUrl = (
+  ownerName: string | null,
+  groupId: string | number
+) =>
   ownerName
     ? `${getBaseApiReact()}/arbitrary/THUMBNAIL/${encodeURIComponent(ownerName)}/qortal_group_avatar_${groupId}?async=true`
     : null;
@@ -236,9 +241,8 @@ const hydrateGroupsWithNames = async <T extends { groupId: number }>(
 
 const utf8ToBase64 = (input: string) =>
   btoa(
-    encodeURIComponent(input).replace(
-      /%([0-9A-F]{2})/g,
-      (_, code) => String.fromCharCode(Number(`0x${code}`))
+    encodeURIComponent(input).replace(/%([0-9A-F]{2})/g, (_, code) =>
+      String.fromCharCode(Number(`0x${code}`))
     )
   );
 
@@ -259,7 +263,10 @@ const TabButton = ({
 }) => {
   const theme = useTheme();
   const shouldPulseAttention =
-    !active && tabId === 'notifications' && typeof count === 'number' && count > 0;
+    !active &&
+    tabId === 'notifications' &&
+    typeof count === 'number' &&
+    count > 0;
 
   return (
     <ButtonBase
@@ -289,9 +296,7 @@ const TabButton = ({
           active ? 0.18 : theme.palette.mode === 'dark' ? 0.11 : 0.08
         )}`,
         borderRadius: '999px',
-        color: active
-          ? APP_BLUE_SURFACE_TEXT
-          : theme.palette.text.secondary,
+        color: active ? APP_BLUE_SURFACE_TEXT : theme.palette.text.secondary,
         display: 'inline-flex',
         flexShrink: 0,
         fontSize: subtle ? '0.69rem' : '0.72rem',
@@ -323,9 +328,11 @@ const TabButton = ({
                   opacity: theme.palette.mode === 'dark' ? 0.46 : 0.34,
                 },
               },
-              animation: 'groupsNotificationsPillInnerGlow 3.6s ease-in-out infinite',
+              animation:
+                'groupsNotificationsPillInnerGlow 3.6s ease-in-out infinite',
               '&::before': {
-                animation: 'groupsNotificationsPillInnerVeil 3.6s ease-in-out infinite',
+                animation:
+                  'groupsNotificationsPillInnerVeil 3.6s ease-in-out infinite',
                 background: `radial-gradient(circle at 50% 50%, ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.18 : 0.12)} 0%, ${alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.08 : 0.06)} 58%, transparent 100%)`,
                 borderRadius: 'inherit',
                 content: '""',
@@ -348,7 +355,10 @@ const TabButton = ({
           ...(active ? getBlueTier1PillSurface(theme) : {}),
           backgroundColor: active
             ? undefined
-            : alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.052 : 0.038),
+            : alpha(
+                theme.palette.text.primary,
+                theme.palette.mode === 'dark' ? 0.052 : 0.038
+              ),
           borderColor: alpha(
             theme.palette.border.main,
             theme.palette.mode === 'dark' ? 0.2 : 0.14
@@ -549,8 +559,12 @@ export const GroupsWidget = ({
     number | undefined
   >;
   const userInfo = useAtomValue(userInfoAtom);
-  const [groupInvitesCache, setGroupInvitesCache] = useAtom(groupInvitesCacheAtom);
-  const [joinRequestsCache, setJoinRequestsCache] = useAtom(joinRequestsCacheAtom);
+  const [groupInvitesCache, setGroupInvitesCache] = useAtom(
+    groupInvitesCacheAtom
+  );
+  const [joinRequestsCache, setJoinRequestsCache] = useAtom(
+    joinRequestsCacheAtom
+  );
   const groupInvitesCacheRef = useRef(groupInvitesCache);
   const joinRequestsCacheRef = useRef(joinRequestsCache);
   const [activeTab, setActiveTab] = useState<GroupsWidgetTab>('notifications');
@@ -565,7 +579,9 @@ export const GroupsWidget = ({
   const [hasLoadedInvitesOnce, setHasLoadedInvitesOnce] = useState(false);
   const [invitesLoading, setInvitesLoading] = useState(false);
   const [joiningGroupId, setJoiningGroupId] = useState<number | null>(null);
-  const [joiningPromotionGroupId, setJoiningPromotionGroupId] = useState<number | null>(null);
+  const [joiningPromotionGroupId, setJoiningPromotionGroupId] = useState<
+    number | null
+  >(null);
   const [promotionActionStates, setPromotionActionStates] = useState<
     Record<string, PromotionActionState>
   >({});
@@ -582,7 +598,9 @@ export const GroupsWidget = ({
   const [requestsError, setRequestsError] = useState<string | null>(null);
   const [hasLoadedRequestsOnce, setHasLoadedRequestsOnce] = useState(false);
   const [requestsLoading, setRequestsLoading] = useState(false);
-  const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(null);
+  const [resolvingRequestId, setResolvingRequestId] = useState<string | null>(
+    null
+  );
   const isCompact = displayMode === 'compact';
   const rowPadding = isCompact ? '11px 12px' : '13px 13px';
   const rowGap = isCompact ? '9px' : '11px';
@@ -641,7 +659,8 @@ export const GroupsWidget = ({
       .filter((group: any) => group?.groupId != null)
       .map((group: any) => {
         const groupId = String(group.groupId);
-        const timestamp = typeof group.timestamp === 'number' ? group.timestamp : 0;
+        const timestamp =
+          typeof group.timestamp === 'number' ? group.timestamp : 0;
         const snippet = normalizeSnippet(
           group.data,
           t('groups_widget.recent_activity_placeholder')
@@ -649,12 +668,15 @@ export const GroupsWidget = ({
         const groupName =
           group.groupId === '0'
             ? t('groups_widget.group_general')
-            : group.groupName || t('groups_widget.group_named', { id: groupId });
+            : group.groupName ||
+              t('groups_widget.group_named', { id: groupId });
         const senderLabel =
           group.sender === currentAddress
             ? t('groups_widget.you')
             : group.senderName ||
-              truncateAddress(String(group.sender || t('groups_widget.unknown')));
+              truncateAddress(
+                String(group.sender || t('groups_widget.unknown'))
+              );
         const isUnread =
           !!group.data &&
           !!groupChatTimestamps[groupId] &&
@@ -699,7 +721,7 @@ export const GroupsWidget = ({
       [...(myGroupsWhereIAmAdmin ?? [])]
         .map((group: any) => group?.groupId)
         .filter((groupId): groupId is number => typeof groupId === 'number')
-      .sort((left, right) => left - right),
+        .sort((left, right) => left - right),
     [myGroupsWhereIAmAdmin]
   );
 
@@ -749,7 +771,9 @@ export const GroupsWidget = ({
           currentCache.data.map((group: any) => ({
             description: group.description,
             groupId: group.groupId,
-            groupName: group.groupName ?? t('groups_widget.group_named', { id: group.groupId }),
+            groupName:
+              group.groupName ??
+              t('groups_widget.group_named', { id: group.groupId }),
             id: `invite:${group.groupId}`,
             isOpen: group.isOpen,
             participantCount:
@@ -782,7 +806,8 @@ export const GroupsWidget = ({
           description: group.description,
           groupId: group.groupId,
           groupName:
-            group.groupName ?? t('groups_widget.group_named', { id: group.groupId }),
+            group.groupName ??
+            t('groups_widget.group_named', { id: group.groupId }),
           id: `invite:${group.groupId}`,
           isOpen: group.isOpen,
           participantCount:
@@ -836,7 +861,9 @@ export const GroupsWidget = ({
             joiner: request?.joiner ?? '',
             requesterLabel:
               request?.name ||
-              truncateAddress(String(request?.joiner ?? t('groups_widget.unknown'))),
+              truncateAddress(
+                String(request?.joiner ?? t('groups_widget.unknown'))
+              ),
           }))
         );
         setRequests(nextRequests);
@@ -875,7 +902,9 @@ export const GroupsWidget = ({
             joiner: request?.joiner ?? '',
             requesterLabel:
               request?.name ||
-              truncateAddress(String(request?.joiner ?? t('groups_widget.unknown'))),
+              truncateAddress(
+                String(request?.joiner ?? t('groups_widget.unknown'))
+              ),
           }))
         );
 
@@ -982,10 +1011,13 @@ export const GroupsWidget = ({
           description: promotion.description,
           groupId: promotion.groupId,
           groupName:
-            promotion.groupName ?? t('groups_widget.group_named', { id: promotion.groupId }),
+            promotion.groupName ??
+            t('groups_widget.group_named', { id: promotion.groupId }),
           id: `promotion:${promotion.identifier}`,
           isOpen:
-            typeof promotion.isOpen === 'boolean' ? promotion.isOpen : undefined,
+            typeof promotion.isOpen === 'boolean'
+              ? promotion.isOpen
+              : undefined,
           memberCount:
             promotion.memberCount ?? promotion.participantCount ?? undefined,
           promoterName: promotion.name ?? t('groups_widget.unknown'),
@@ -1033,22 +1065,17 @@ export const GroupsWidget = ({
   );
 
   const visibleRequests = useMemo(
-    () => requests.filter((request) => !dismissedRequestIds.includes(request.id)),
+    () =>
+      requests.filter((request) => !dismissedRequestIds.includes(request.id)),
     [dismissedRequestIds, requests]
   );
 
   const showInitialInvitesLoading =
-    invitesLoading &&
-    !hasLoadedInvitesOnce &&
-    visibleInvites.length === 0;
+    invitesLoading && !hasLoadedInvitesOnce && visibleInvites.length === 0;
   const showInitialRequestsLoading =
-    requestsLoading &&
-    !hasLoadedRequestsOnce &&
-    visibleRequests.length === 0;
+    requestsLoading && !hasLoadedRequestsOnce && visibleRequests.length === 0;
   const showInitialPromotionsLoading =
-    promotionsLoading &&
-    !hasLoadedPromotionsOnce &&
-    promotions.length === 0;
+    promotionsLoading && !hasLoadedPromotionsOnce && promotions.length === 0;
 
   const handleOpenGroupChat = useCallback((groupId: string) => {
     executeEvent('openGroupMessage', {
@@ -1088,8 +1115,7 @@ export const GroupsWidget = ({
       } catch (error: any) {
         console.error('Failed to join group invite from widget', error);
         setActionFeedback({
-          message:
-            error?.message || t('groups_widget.error_accept_invite'),
+          message: error?.message || t('groups_widget.error_accept_invite'),
           tone: 'error',
         });
       } finally {
@@ -1099,15 +1125,18 @@ export const GroupsWidget = ({
     [setGroupInvitesCache, show, t]
   );
 
-  const handleIgnoreInvite = useCallback((inviteId: string) => {
-    setDismissedInviteIds((current) =>
-      current.includes(inviteId) ? current : [...current, inviteId]
-    );
-    setActionFeedback({
-      message: t('groups_widget.invite_hidden'),
-      tone: 'success',
-    });
-  }, [t]);
+  const handleIgnoreInvite = useCallback(
+    (inviteId: string) => {
+      setDismissedInviteIds((current) =>
+        current.includes(inviteId) ? current : [...current, inviteId]
+      );
+      setActionFeedback({
+        message: t('groups_widget.invite_hidden'),
+        tone: 'success',
+      });
+    },
+    [t]
+  );
 
   const handleApproveRequest = useCallback(
     async (request: GroupJoinRequestItem) => {
@@ -1142,8 +1171,7 @@ export const GroupsWidget = ({
       } catch (error: any) {
         console.error('Failed to approve join request from widget', error);
         setActionFeedback({
-          message:
-            error?.message || t('groups_widget.error_approve_request'),
+          message: error?.message || t('groups_widget.error_approve_request'),
           tone: 'error',
         });
       } finally {
@@ -1153,15 +1181,18 @@ export const GroupsWidget = ({
     [setJoinRequestsCache, show, t]
   );
 
-  const handleRejectRequest = useCallback((requestId: string) => {
-    setDismissedRequestIds((current) =>
-      current.includes(requestId) ? current : [...current, requestId]
-    );
-    setActionFeedback({
-      message: t('groups_widget.request_removed'),
-      tone: 'success',
-    });
-  }, [t]);
+  const handleRejectRequest = useCallback(
+    (requestId: string) => {
+      setDismissedRequestIds((current) =>
+        current.includes(requestId) ? current : [...current, requestId]
+      );
+      setActionFeedback({
+        message: t('groups_widget.request_removed'),
+        tone: 'success',
+      });
+    },
+    [t]
+  );
 
   const handleJoinPromotedGroup = useCallback(
     async (promotion: GroupPromotionItem) => {
@@ -1209,8 +1240,7 @@ export const GroupsWidget = ({
           return nextStates;
         });
         setActionFeedback({
-          message:
-            error?.message || t('groups_widget.error_promoted'),
+          message: error?.message || t('groups_widget.error_promoted'),
           tone: 'error',
         });
       } finally {
@@ -1254,8 +1284,7 @@ export const GroupsWidget = ({
     } catch (error: any) {
       console.error('Failed to publish group promotion from widget', error);
       setActionFeedback({
-        message:
-          error?.message || t('groups_widget.error_publish_promotion'),
+        message: error?.message || t('groups_widget.error_publish_promotion'),
         tone: 'error',
       });
     } finally {
@@ -1285,8 +1314,10 @@ export const GroupsWidget = ({
     flexDirection: 'column',
     gap: bodyGap,
     minHeight: 0,
+    // Virtualized lists adjust total height as rows measure — disable scroll anchoring.
+    overflowAnchor: 'none',
     overflowY: 'auto',
-    overscrollBehavior: 'contain',
+
     pr: '4px',
     scrollbarColor: `${alpha(theme.palette.text.secondary, 0.3)} transparent`,
     scrollbarWidth: 'thin',
@@ -1490,6 +1521,117 @@ export const GroupsWidget = ({
     [joiningPromotionGroupId, promotionActionStates]
   );
 
+  const groupsListScrollRef = useRef<HTMLDivElement | null>(null);
+  const bodyGapPx = isCompact ? 10 : 13;
+
+  const virtualListLength =
+    activeTab === 'notifications'
+      ? effectiveNotificationItems.length
+      : activeTab === 'invites'
+        ? effectiveInvites.length
+        : activeTab === 'requests'
+          ? effectiveRequests.length
+          : effectivePromotions.length;
+
+  const rowVirtualizer = useVirtualizer({
+    count: virtualListLength,
+    getScrollElement: () => groupsListScrollRef.current,
+    estimateSize: useCallback(() => {
+      switch (activeTab) {
+        case 'notifications':
+          return isCompact ? 132 : 152;
+        case 'invites':
+          return isCompact ? 168 : 182;
+        case 'requests':
+          return isCompact ? 185 : 200;
+        case 'promoted':
+          return isCompact ? 210 : 230;
+        default:
+          return 160;
+      }
+    }, [activeTab, isCompact]),
+    getItemKey: useCallback(
+      (index: number) => {
+        switch (activeTab) {
+          case 'notifications':
+            return `n:${effectiveNotificationItems[index]?.id ?? index}`;
+          case 'invites':
+            return `i:${effectiveInvites[index]?.id ?? index}`;
+          case 'requests':
+            return `r:${effectiveRequests[index]?.id ?? index}`;
+          case 'promoted':
+            return `p:${effectivePromotions[index]?.id ?? index}`;
+          default:
+            return `x:${index}`;
+        }
+      },
+      [
+        activeTab,
+        effectiveNotificationItems,
+        effectiveInvites,
+        effectiveRequests,
+        effectivePromotions,
+      ]
+    ),
+    overscan: 6,
+  });
+
+  const renderVirtualizedList = (
+    itemCount: number,
+    renderRow: (index: number) => ReactElement | null
+  ) => (
+    <Box
+      ref={groupsListScrollRef}
+      sx={{
+        ...sharedScrollerSx,
+        gap: 0,
+      }}
+    >
+      <Box
+        sx={{
+          height: rowVirtualizer.getTotalSize() + 6,
+          position: 'relative',
+          width: '100%',
+        }}
+      >
+        <Box
+          sx={{
+            left: 0,
+            position: 'absolute',
+            top: 0,
+            width: '100%',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const node = renderRow(virtualRow.index);
+            if (!node) {
+              return null;
+            }
+            return (
+              <Box
+                key={virtualRow.key}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                sx={{
+                  boxSizing: 'border-box',
+                  left: 0,
+                  paddingBottom:
+                    virtualRow.index < itemCount - 1 ? `${bodyGapPx}px` : 0,
+                  position: 'absolute',
+                  top: 0,
+                  transform: `translate3d(0, ${virtualRow.start}px, 0)`,
+                  width: '100%',
+                }}
+              >
+                {node}
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    </Box>
+  );
+
   const renderNotificationList = () => (
     <QAppWidgetContainer
       emptyMessage={t('groups_widget.notifications_empty_message')}
@@ -1518,10 +1660,12 @@ export const GroupsWidget = ({
             tone={actionFeedback.tone}
           />
         ) : null}
-        <Box sx={sharedScrollerSx}>
-          {effectiveNotificationItems.map((item) => (
+        {renderVirtualizedList(effectiveNotificationItems.length, (index) => {
+          const item = effectiveNotificationItems[index];
+          if (!item) return null;
+
+          return (
             <ButtonBase
-              key={item.id}
               onClick={() => handleOpenGroupChat(item.groupId)}
               sx={{
                 alignItems: 'flex-start',
@@ -1536,6 +1680,7 @@ export const GroupsWidget = ({
                 borderRadius: GROUP_WIDGET_CARD_RADIUS,
                 boxShadow: widgetItemInsetShadow,
                 display: 'flex',
+                flexShrink: 0,
                 gap: rowGap,
                 overflow: 'hidden',
                 p: rowPadding,
@@ -1592,9 +1737,32 @@ export const GroupsWidget = ({
                 {item.groupName.charAt(0).toUpperCase()}
               </Avatar>
 
-              <Box sx={{ display: 'flex', flex: '1 1 auto', flexDirection: 'column', gap: isCompact ? '4px' : '5px', minWidth: 0 }}>
-                <Box sx={{ alignItems: 'center', display: 'flex', gap: '8px', justifyContent: 'space-between', minWidth: 0 }}>
-                  <Box sx={{ alignItems: 'center', display: 'inline-flex', gap: '8px', minWidth: 0 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flex: '1 1 auto',
+                  flexDirection: 'column',
+                  gap: isCompact ? '4px' : '5px',
+                  minWidth: 0,
+                }}
+              >
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    gap: '8px',
+                    justifyContent: 'space-between',
+                    minWidth: 0,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      display: 'inline-flex',
+                      gap: '8px',
+                      minWidth: 0,
+                    }}
+                  >
                     <Typography
                       sx={{
                         color: theme.palette.text.primary,
@@ -1694,7 +1862,7 @@ export const GroupsWidget = ({
                           fontWeight: 600,
                           lineHeight: 1.25,
                         }}
-                        >
+                      >
                         {t('groups_widget.new_encrypted_message')}
                       </Typography>
                     </Box>
@@ -1735,8 +1903,8 @@ export const GroupsWidget = ({
                 </Box>
               </Box>
             </ButtonBase>
-          ))}
-        </Box>
+          );
+        })}
       </Box>
     </QAppWidgetContainer>
   );
@@ -1778,10 +1946,12 @@ export const GroupsWidget = ({
             variant="invites"
           />
         ) : (
-          <Box sx={sharedScrollerSx}>
-            {effectiveInvites.map((invite) => (
+          renderVirtualizedList(effectiveInvites.length, (index) => {
+            const invite = effectiveInvites[index];
+            if (!invite) return null;
+
+            return (
               <Box
-                key={invite.id}
                 sx={{
                   background: widgetItemSurfaceColor,
                   border: `1px solid ${widgetItemBorderColor}`,
@@ -1789,10 +1959,12 @@ export const GroupsWidget = ({
                   boxShadow: widgetItemInsetShadow,
                   display: 'flex',
                   flexDirection: 'column',
+                  flexShrink: 0,
                   gap: isCompact ? '7px' : '8px',
                   p: rowPadding,
                   transition:
                     'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                  width: '100%',
                   '&:hover': {
                     background: widgetItemHoverSurfaceColor,
                     borderColor: widgetItemHoverBorderColor,
@@ -1804,7 +1976,14 @@ export const GroupsWidget = ({
                   },
                 }}
               >
-                <Box sx={{ alignItems: 'center', display: 'flex', gap: '9px', minWidth: 0 }}>
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    gap: '9px',
+                    minWidth: 0,
+                  }}
+                >
                   <Avatar
                     sx={{
                       bgcolor: alpha(theme.palette.primary.main, 0.12),
@@ -1850,7 +2029,13 @@ export const GroupsWidget = ({
                     </Typography>
                   </Box>
                 </Box>
-                <Box sx={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    gap: '8px',
+                    justifyContent: 'flex-end',
+                  }}
+                >
                   <ButtonBase
                     onClick={() => handleIgnoreInvite(invite.id)}
                     sx={{
@@ -1892,8 +2077,8 @@ export const GroupsWidget = ({
                   </LoadingButton>
                 </Box>
               </Box>
-            ))}
-          </Box>
+            );
+          })
         )}
       </Box>
     </QAppWidgetContainer>
@@ -1936,10 +2121,12 @@ export const GroupsWidget = ({
             variant="requests"
           />
         ) : (
-          <Box sx={sharedScrollerSx}>
-            {effectiveRequests.map((request) => (
+          renderVirtualizedList(effectiveRequests.length, (index) => {
+            const request = effectiveRequests[index];
+            if (!request) return null;
+
+            return (
               <Box
-                key={request.id}
                 sx={{
                   background: widgetItemSurfaceColor,
                   border: `1px solid ${widgetItemBorderColor}`,
@@ -1947,10 +2134,12 @@ export const GroupsWidget = ({
                   boxShadow: widgetItemInsetShadow,
                   display: 'flex',
                   flexDirection: 'column',
+                  flexShrink: 0,
                   gap: isCompact ? '7px' : '8px',
                   p: rowPadding,
                   transition:
                     'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                  width: '100%',
                   '&:hover': {
                     background: widgetItemHoverSurfaceColor,
                     borderColor: widgetItemHoverBorderColor,
@@ -2009,7 +2198,13 @@ export const GroupsWidget = ({
                     </Typography>
                   </Box>
                 </Box>
-                <Box sx={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    gap: '8px',
+                    justifyContent: 'flex-end',
+                  }}
+                >
                   <ButtonBase
                     onClick={() => handleRejectRequest(request.id)}
                     sx={{
@@ -2050,8 +2245,8 @@ export const GroupsWidget = ({
                   </LoadingButton>
                 </Box>
               </Box>
-            ))}
-          </Box>
+            );
+          })
         )}
       </Box>
     </QAppWidgetContainer>
@@ -2063,7 +2258,9 @@ export const GroupsWidget = ({
       emptyTitle={t('groups_widget.promoted_empty_title')}
       error={promotionsError}
       hasContent={effectivePromotions.length > 0}
-      isEmpty={!showInitialPromotionsLoading && effectivePromotions.length === 0}
+      isEmpty={
+        !showInitialPromotionsLoading && effectivePromotions.length === 0
+      }
       isLoading={showInitialPromotionsLoading}
       loadingLabel={t('groups_widget.loading_promoted')}
       onRetry={() => void fetchPromotions()}
@@ -2084,194 +2281,205 @@ export const GroupsWidget = ({
             tone={actionFeedback.tone}
           />
         ) : null}
-        <Box sx={sharedScrollerSx}>
-          {effectivePromotions.map((promotion) => {
-            const isMember = memberGroupIds.has(Number(promotion.groupId));
-            const promotionVisualState = getPromotionVisualState(
-              promotion,
-              isMember
-            );
+        {renderVirtualizedList(effectivePromotions.length, (index) => {
+          const promotion = effectivePromotions[index];
+          if (!promotion) return null;
 
-            return (
+          const isMember = memberGroupIds.has(Number(promotion.groupId));
+          const promotionVisualState = getPromotionVisualState(
+            promotion,
+            isMember
+          );
+
+          return (
+            <Box
+              sx={{
+                background: widgetItemSurfaceColor,
+                border: `1px solid ${widgetItemBorderColor}`,
+                borderRadius: GROUP_WIDGET_CARD_RADIUS,
+                boxShadow: widgetItemInsetShadow,
+                display: 'flex',
+                flexDirection: 'column',
+                flexShrink: 0,
+                gap: isCompact ? '6px' : '7px',
+                px: isCompact ? '11px' : '12px',
+                py: isCompact ? '9px' : '10px',
+                transition:
+                  'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
+                width: '100%',
+                '&:hover': {
+                  background: widgetItemHoverSurfaceColor,
+                  borderColor: widgetItemHoverBorderColor,
+                  boxShadow:
+                    theme.palette.mode === 'dark'
+                      ? `0 14px 28px rgba(0,0,0,0.22), inset 0 1px 0 ${alpha(theme.palette.common.white, 0.05)}`
+                      : widgetItemInsetShadow,
+                  transform: 'translateY(-1px)',
+                },
+              }}
+            >
               <Box
-                key={promotion.id}
                 sx={{
-                  background: widgetItemSurfaceColor,
-                  border: `1px solid ${widgetItemBorderColor}`,
-                  borderRadius: GROUP_WIDGET_CARD_RADIUS,
-                  boxShadow: widgetItemInsetShadow,
+                  alignItems: 'center',
                   display: 'flex',
-                  flexDirection: 'column',
-                  gap: isCompact ? '6px' : '7px',
-                  px: isCompact ? '11px' : '12px',
-                  py: isCompact ? '9px' : '10px',
-                  transition:
-                    'background 140ms ease, border-color 140ms ease, transform 120ms ease, box-shadow 140ms ease',
-                  '&:hover': {
-                    background: widgetItemHoverSurfaceColor,
-                    borderColor: widgetItemHoverBorderColor,
-                    boxShadow:
-                      theme.palette.mode === 'dark'
-                        ? `0 14px 28px rgba(0,0,0,0.22), inset 0 1px 0 ${alpha(theme.palette.common.white, 0.05)}`
-                        : widgetItemInsetShadow,
-                    transform: 'translateY(-1px)',
-                  },
+                  gap: '9px',
+                  minWidth: 0,
                 }}
               >
-                <Box sx={{ alignItems: 'center', display: 'flex', gap: '9px', minWidth: 0 }}>
-                  <Avatar
+                <Avatar
+                  sx={{
+                    bgcolor:
+                      theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.primary.main, 0.18)
+                        : alpha(theme.palette.primary.main, 0.1),
+                    color:
+                      theme.palette.mode === 'dark'
+                        ? alpha(theme.palette.common.white, 0.92)
+                        : theme.palette.primary.dark,
+                    height: isCompact ? 34 : 38,
+                    width: isCompact ? 34 : 38,
+                  }}
+                >
+                  <CampaignRoundedIcon sx={{ fontSize: '1rem' }} />
+                </Avatar>
+                <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
+                  <Typography
                     sx={{
-                      bgcolor:
-                        theme.palette.mode === 'dark'
-                          ? alpha(theme.palette.primary.main, 0.18)
-                          : alpha(theme.palette.primary.main, 0.1),
-                      color:
-                        theme.palette.mode === 'dark'
-                          ? alpha(theme.palette.common.white, 0.92)
-                          : theme.palette.primary.dark,
-                      height: isCompact ? 34 : 38,
-                      width: isCompact ? 34 : 38,
+                      color: theme.palette.text.primary,
+                      fontSize: isCompact ? '0.8rem' : '0.84rem',
+                      fontWeight: 700,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
                     }}
                   >
-                    <CampaignRoundedIcon sx={{ fontSize: '1rem' }} />
-                  </Avatar>
-                  <Box sx={{ flex: '1 1 auto', minWidth: 0 }}>
-                    <Typography
-                      sx={{
-                        color: theme.palette.text.primary,
-                        fontSize: isCompact ? '0.8rem' : '0.84rem',
-                        fontWeight: 700,
-                        minWidth: 0,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {promotion.groupName}
-                    </Typography>
-                    <Typography
-                      sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        lineHeight: 1.35,
-                        mt: '1px',
-                      }}
-                    >
-                      {t('groups_widget.promoted_by', {
-                        name: promotion.promoterName,
-                      })}
-                    </Typography>
-                  </Box>
+                    {promotion.groupName}
+                  </Typography>
                   <Typography
                     sx={{
                       color: theme.palette.text.secondary,
-                      flexShrink: 0,
-                      fontSize: '0.67rem',
+                      fontSize: '0.7rem',
                       fontWeight: 600,
+                      lineHeight: 1.35,
+                      mt: '1px',
                     }}
                   >
-                    {formatTimestamp(promotion.created)}
+                    {t('groups_widget.promoted_by', {
+                      name: promotion.promoterName,
+                    })}
                   </Typography>
                 </Box>
                 <Typography
                   sx={{
                     color: theme.palette.text.secondary,
-                    display: '-webkit-box',
-                    fontSize: isCompact ? '0.72rem' : '0.75rem',
-                    lineHeight: 1.38,
-                    maxWidth: { xs: '100%', sm: '62%' },
-                    overflow: 'hidden',
-                    pr: { sm: '8px' },
-                    WebkitBoxOrient: 'vertical',
-                    WebkitLineClamp: 2,
-                    wordBreak: 'break-word',
+                    flexShrink: 0,
+                    fontSize: '0.67rem',
+                    fontWeight: 600,
                   }}
                 >
-                  {promotion.snippet}
+                  {formatTimestamp(promotion.created)}
                 </Typography>
+              </Box>
+              <Typography
+                sx={{
+                  color: theme.palette.text.secondary,
+                  display: '-webkit-box',
+                  fontSize: isCompact ? '0.72rem' : '0.75rem',
+                  lineHeight: 1.38,
+                  maxWidth: { xs: '100%', sm: '62%' },
+                  overflow: 'hidden',
+                  pr: { sm: '8px' },
+                  WebkitBoxOrient: 'vertical',
+                  WebkitLineClamp: 2,
+                  wordBreak: 'break-word',
+                }}
+              >
+                {promotion.snippet}
+              </Typography>
+              <Box
+                sx={{
+                  alignItems: 'center',
+                  color: theme.palette.text.secondary,
+                  columnGap: '12px',
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
+                  pt: '2px',
+                  rowGap: '8px',
+                }}
+              >
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography
+                    sx={{
+                      color: theme.palette.text.secondary,
+                      fontSize: '0.67rem',
+                      fontWeight: 600,
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {promotion.memberCount != null
+                      ? t('groups_widget.members_count', {
+                          count: promotion.memberCount,
+                        })
+                      : promotion.isOpen === false
+                        ? t('groups_widget.private_group')
+                        : t('groups_widget.public_group')}
+                  </Typography>
+                </Box>
                 <Box
                   sx={{
                     alignItems: 'center',
-                    color: theme.palette.text.secondary,
-                    columnGap: '12px',
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
-                    pt: '2px',
-                    rowGap: '8px',
+                    display: 'flex',
+                    justifySelf: { xs: 'stretch', sm: 'end' },
+                    justifyContent: { xs: 'stretch', sm: 'flex-end' },
+                    minHeight: '27px',
                   }}
                 >
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography
-                      sx={{
-                        color: theme.palette.text.secondary,
-                        fontSize: '0.67rem',
-                        fontWeight: 600,
-                        lineHeight: 1.3,
-                      }}
+                  {promotionVisualState === 'member' ? (
+                    <Button
+                      disableElevation
+                      onClick={() =>
+                        handleOpenGroupChat(String(promotion.groupId))
+                      }
+                      startIcon={
+                        <OpenInNewRoundedIcon sx={{ fontSize: '0.85rem' }} />
+                      }
+                      sx={promotionPrimaryActionSx}
                     >
-                      {promotion.memberCount != null
-                        ? t('groups_widget.members_count', {
-                            count: promotion.memberCount,
-                          })
-                        : promotion.isOpen === false
-                          ? t('groups_widget.private_group')
-                          : t('groups_widget.public_group')}
-                    </Typography>
-                  </Box>
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      justifySelf: { xs: 'stretch', sm: 'end' },
-                      justifyContent: { xs: 'stretch', sm: 'flex-end' },
-                      minHeight: '27px',
-                    }}
-                  >
-                    {promotionVisualState === 'member' ? (
-                      <Button
-                        disableElevation
-                        onClick={() =>
-                          handleOpenGroupChat(String(promotion.groupId))
-                        }
-                        startIcon={<OpenInNewRoundedIcon sx={{ fontSize: '0.85rem' }} />}
-                        sx={promotionPrimaryActionSx}
-                      >
-                        {t('groups_widget.open')}
-                      </Button>
-                    ) : promotionVisualState === 'connecting' ? (
-                      <LoadingButton
-                        disabled
-                        loading
-                        sx={promotionPrimaryActionSx}
-                      >
-                        {t('groups_widget.connecting')}
-                      </LoadingButton>
-                    ) : promotionVisualState === 'processing' ? (
-                      <Button disabled sx={promotionSecondaryActionSx}>
-                        {t('groups_widget.processing')}
-                      </Button>
-                    ) : promotionVisualState === 'request_sent' ? (
-                      <Button disabled sx={promotionSecondaryActionSx}>
-                        {t('groups_widget.request_sent')}
-                      </Button>
-                    ) : (
-                      <Button
-                        disableElevation
-                        onClick={() => void handleJoinPromotedGroup(promotion)}
-                        sx={promotionPrimaryActionSx}
-                      >
-                        {promotionVisualState === 'request'
-                          ? t('groups_widget.request_access')
-                          : t('groups_widget.join_group')}
-                      </Button>
-                    )}
-                  </Box>
+                      {t('groups_widget.open')}
+                    </Button>
+                  ) : promotionVisualState === 'connecting' ? (
+                    <LoadingButton
+                      disabled
+                      loading
+                      sx={promotionPrimaryActionSx}
+                    >
+                      {t('groups_widget.connecting')}
+                    </LoadingButton>
+                  ) : promotionVisualState === 'processing' ? (
+                    <Button disabled sx={promotionSecondaryActionSx}>
+                      {t('groups_widget.processing')}
+                    </Button>
+                  ) : promotionVisualState === 'request_sent' ? (
+                    <Button disabled sx={promotionSecondaryActionSx}>
+                      {t('groups_widget.request_sent')}
+                    </Button>
+                  ) : (
+                    <Button
+                      disableElevation
+                      onClick={() => void handleJoinPromotedGroup(promotion)}
+                      sx={promotionPrimaryActionSx}
+                    >
+                      {promotionVisualState === 'request'
+                        ? t('groups_widget.request_access')
+                        : t('groups_widget.join_group')}
+                    </Button>
+                  )}
                 </Box>
               </Box>
-            );
-          })}
-        </Box>
+            </Box>
+          );
+        })}
       </Box>
     </QAppWidgetContainer>
   );
@@ -2411,9 +2619,9 @@ export const GroupsWidget = ({
           ? renderNotificationList()
           : activeTab === 'invites'
             ? renderInvitesList()
-          : activeTab === 'requests'
-            ? renderRequestsList()
-            : renderPromotionsList()}
+            : activeTab === 'requests'
+              ? renderRequestsList()
+              : renderPromotionsList()}
       </Box>
 
       <Dialog

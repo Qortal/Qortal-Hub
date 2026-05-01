@@ -294,9 +294,9 @@ export const getCustomNodesFromStorage = async (): Promise<any | null> => {
 const getArbitraryEndpoint = async () => {
   const apiKey = await getApiKeyFromStorage(); // Retrieve apiKey asynchronously
   if (apiKey) {
-    return `/arbitrary/resources/searchsimple`;
+    return `/arbitrary/resources/search`;
   } else {
-    return `/arbitrary/resources/searchsimple`;
+    return `/arbitrary/resources/search`;
   }
 };
 
@@ -3821,7 +3821,6 @@ const createNotificationCheck = () => {
       }
     }, TIME_MINUTES_10_IN_MILLISECONDS);
   }
-
 };
 
 // Call this function when initializing your app or after user logs in (intervals are cleared on logout)

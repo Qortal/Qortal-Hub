@@ -88,6 +88,17 @@ const TabComponent = ({
       {...attributes}
       {...listeners}
       onClick={onSelect}
+      onMouseDown={(event) => {
+        if (event.button === 1) {
+          event.preventDefault();
+        }
+      }}
+      onAuxClick={(event) => {
+        if (event.button !== 1) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
         onSelect();
@@ -156,6 +167,7 @@ const TabComponent = ({
               ? selectedTabTextColor
               : theme.palette.text.secondary,
             display: 'flex',
+            flexShrink: 0,
             height: '22px',
             justifyContent: 'center',
             width: '22px',
@@ -166,6 +178,7 @@ const TabComponent = ({
       ) : (
         <Avatar
           sx={{
+            flexShrink: 0,
             height: '22px',
             width: '22px',
           }}
@@ -203,6 +216,12 @@ const TabComponent = ({
       <IconButton
         disableRipple
         onClick={(event) => {
+          event.stopPropagation();
+          onClose();
+        }}
+        onAuxClick={(event) => {
+          if (event.button !== 1) return;
+          event.preventDefault();
           event.stopPropagation();
           onClose();
         }}

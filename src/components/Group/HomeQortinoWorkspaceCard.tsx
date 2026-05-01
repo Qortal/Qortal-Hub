@@ -13,12 +13,14 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { alpha, type Theme } from '@mui/material/styles';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import {
   type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -586,6 +588,187 @@ const formatPlaybackTime = (seconds: number) => {
   const remainder = safeSeconds % 60;
   return `${minutes}:${String(remainder).padStart(2, '0')}`;
 };
+
+type EarbumpMusicProgressMeterProps = {
+  audioRef: RefObject<HTMLAudioElement | null>;
+  durationLabel: string;
+  durationSeconds: number;
+  isTrackPlayable: boolean;
+  onSeekInteraction?: () => void;
+  playbackUrl: string;
+  theme: Theme;
+  trackId: string;
+};
+
+const EarbumpMusicProgressMeter = memo(function EarbumpMusicProgressMeter({
+  audioRef,
+  durationLabel,
+  durationSeconds,
+  isTrackPlayable,
+  onSeekInteraction,
+  playbackUrl,
+  theme,
+  trackId,
+}: EarbumpMusicProgressMeterProps) {
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [progress01, setProgress01] = useState(0);
+  const rafPendingRef = useRef(false);
+  const rafIdRef = useRef(0);
+
+  useEffect(() => {
+    setElapsedSec(0);
+    setProgress01(0);
+  }, [trackId, playbackUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return undefined;
+    }
+
+    const flush = () => {
+      rafPendingRef.current = false;
+      const liveDur =
+        audio.duration > 0 ? audio.duration : durationSeconds > 0 ? durationSeconds : 0;
+      const t = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      setElapsedSec(t);
+      setProgress01(liveDur > 0 ? t / liveDur : 0);
+    };
+
+    const onTimeUpdate = () => {
+      if (rafPendingRef.current) {
+        return;
+      }
+      rafPendingRef.current = true;
+      rafIdRef.current = requestAnimationFrame(flush);
+    };
+
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    flush();
+
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      cancelAnimationFrame(rafIdRef.current);
+      rafPendingRef.current = false;
+    };
+  }, [audioRef, durationSeconds, playbackUrl, trackId]);
+
+  const seekAtClientX = useCallback(
+    (clientX: number) => {
+      const audio = audioRef.current;
+      const progressBar = barRef.current;
+      if (!audio || !progressBar || !isTrackPlayable || durationSeconds <= 0) {
+        return;
+      }
+
+      const rect = progressBar.getBoundingClientRect();
+      if (rect.width <= 0) {
+        return;
+      }
+
+      const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+      const nextTime = ratio * durationSeconds;
+
+      audio.currentTime = nextTime;
+      setElapsedSec(nextTime);
+      setProgress01(ratio);
+      onSeekInteraction?.();
+    },
+    [audioRef, durationSeconds, isTrackPlayable, onSeekInteraction]
+  );
+
+  const handleProgressPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (!isTrackPlayable || durationSeconds <= 0) {
+        return;
+      }
+
+      event.preventDefault();
+      seekAtClientX(event.clientX);
+
+      const handleWindowPointerMove = (moveEvent: PointerEvent) => {
+        seekAtClientX(moveEvent.clientX);
+      };
+
+      const handleWindowPointerUp = () => {
+        window.removeEventListener('pointermove', handleWindowPointerMove);
+        window.removeEventListener('pointerup', handleWindowPointerUp);
+      };
+
+      window.addEventListener('pointermove', handleWindowPointerMove);
+      window.addEventListener('pointerup', handleWindowPointerUp, {
+        once: true,
+      });
+    },
+    [durationSeconds, isTrackPlayable, seekAtClientX]
+  );
+
+  const clampedProgress = Math.min(Math.max(progress01, 0), 1);
+
+  return (
+    <>
+      <Typography
+        sx={{
+          color: alpha(theme.palette.text.secondary, 0.68),
+          fontSize: '0.55rem',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {formatPlaybackTime(elapsedSec)}
+      </Typography>
+      <Box
+        ref={barRef}
+        onPointerDown={handleProgressPointerDown}
+        sx={{
+          cursor:
+            isTrackPlayable && durationSeconds > 0 ? 'pointer' : 'default',
+          display: 'flex',
+          alignItems: 'center',
+          height: '12px',
+          position: 'relative',
+          touchAction: 'none',
+        }}
+      >
+        <Box
+          sx={{
+            background: getBlueTier3ProgressBackground(),
+            borderRadius: '999px',
+            height: '4px',
+            overflow: 'hidden',
+            position: 'relative',
+            width: '100%',
+          }}
+        >
+          <Box
+            sx={{
+              background:
+                'linear-gradient(90deg, rgba(144,186,255,0.96) 0%, rgba(111,166,255,0.9) 100%)',
+              borderRadius: '999px',
+              boxShadow: `0 0 14px ${alpha('#8DB8FF', 0.22)}`,
+              height: '100%',
+              transform: `scaleX(${clampedProgress})`,
+              transformOrigin: '0 50%',
+              width: '100%',
+              willChange: 'transform',
+            }}
+          />
+        </Box>
+      </Box>
+      <Typography
+        sx={{
+          color: alpha(theme.palette.text.secondary, 0.68),
+          fontSize: '0.55rem',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {durationLabel}
+      </Typography>
+    </>
+  );
+});
 
 const truncateTrackLabel = (value: string, maxLength = 30) => {
   const trimmedValue = value.trim();
@@ -1496,8 +1679,6 @@ export const HomeQortinoWorkspaceCard = ({
   );
   const [selectedTrackSnapshot, setSelectedTrackSnapshot] =
     useState<MusicTrack | null>(() => getSharedEarbumpTrackSnapshot());
-  const [musicProgress, setMusicProgress] = useState(0);
-  const [musicPlaybackTime, setMusicPlaybackTime] = useState(0);
   const [musicTrackDurations, setMusicTrackDurations] = useState<
     Record<string, number>
   >({});
@@ -1547,8 +1728,8 @@ export const HomeQortinoWorkspaceCard = ({
   const onboardingJustCompletedRef = useRef(false);
   const wasOnboardingVisibleRef = useRef(false);
   const avatarCompletionAfterPanelCloseRef = useRef(false);
-  const musicProgressBarRef = useRef<HTMLDivElement | null>(null);
   const downloadResource = useFetchResources();
+  const clearMusicStreamError = useCallback(() => setMusicStreamError(null), []);
   const blockedAddressList = useMemo(
     () => Object.keys(blockedAddresses || {}).filter(Boolean),
     [blockedAddresses]
@@ -1710,8 +1891,6 @@ export const HomeQortinoWorkspaceCard = ({
     const handleLogout = () => {
       stopSharedEarbumpAudio(audioRef.current);
       setSharedEarbumpTrackSnapshot(null);
-      setMusicPlaybackTime(0);
-      setMusicProgress(0);
       setMusicStreamError(null);
       applyWorkspaceState((current) =>
         current.musicPlaying
@@ -1739,8 +1918,6 @@ export const HomeQortinoWorkspaceCard = ({
     setIsQortinoTickled(false);
     setQortinoGratefulState(null);
     setSharedEarbumpTrackSnapshot(null);
-    setMusicPlaybackTime(0);
-    setMusicProgress(0);
     setMusicStreamError(null);
     setSelectedTrackSnapshot(null);
   }, [userAddress]);
@@ -2753,8 +2930,6 @@ export const HomeQortinoWorkspaceCard = ({
     }
 
     stopSharedEarbumpAudio(audioRef.current);
-    setMusicPlaybackTime(0);
-    setMusicProgress(0);
     setSelectedTrackSnapshot(visibleDiscoveryTracks[0] ?? null);
     applyWorkspaceState((current) => ({
       ...current,
@@ -2799,10 +2974,6 @@ export const HomeQortinoWorkspaceCard = ({
     workspaceHydrated &&
     Boolean(workspaceState.selectedTrackId) &&
     activeTrack.id !== workspaceState.selectedTrackId;
-  const currentPlaybackTime = useMemo(
-    () => formatPlaybackTime(musicPlaybackTime),
-    [musicPlaybackTime]
-  );
   const activeTrackDurationSeconds = useMemo(() => {
     if (!activeTrack.id) return 0;
 
@@ -3217,8 +3388,6 @@ export const HomeQortinoWorkspaceCard = ({
         return;
       }
 
-      setMusicPlaybackTime(0);
-      setMusicProgress(0);
       setMusicStreamError(null);
       setSelectedTrackSnapshot(nextTrack);
       applyWorkspaceState((current) => ({
@@ -3257,22 +3426,9 @@ export const HomeQortinoWorkspaceCard = ({
       });
     };
 
-    const handleTimeUpdate = () => {
-      const duration =
-        audio.duration > 0 ? audio.duration : musicTrackDurations[activeTrack.id] ?? 0;
-      const nextPlaybackTime = Number.isFinite(audio.currentTime)
-        ? audio.currentTime
-        : 0;
-
-      setMusicPlaybackTime(nextPlaybackTime);
-      setMusicProgress(duration > 0 ? nextPlaybackTime / duration : 0);
-    };
-
     const handleEnded = () => {
       if (workspaceState.repeatMode === 'one') {
         audio.currentTime = 0;
-        setMusicPlaybackTime(0);
-        setMusicProgress(0);
         void audio.play().catch((error) => {
           console.error('Failed to replay EarBump track', error);
           applyWorkspaceState((current) => ({
@@ -3321,17 +3477,14 @@ export const HomeQortinoWorkspaceCard = ({
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('canplay', handleCanPlay);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('error', handleError);
     audio.addEventListener('stalled', handleStalled);
     handleLoadedMetadata();
-    handleTimeUpdate();
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('canplay', handleCanPlay);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('error', handleError);
       audio.removeEventListener('stalled', handleStalled);
@@ -3343,7 +3496,6 @@ export const HomeQortinoWorkspaceCard = ({
     applyWorkspaceState,
     downloadResource,
     handleCycleTrack,
-    musicTrackDurations,
     qw,
     workspaceState.repeatMode,
   ]);
@@ -3362,8 +3514,6 @@ export const HomeQortinoWorkspaceCard = ({
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
-      setMusicPlaybackTime(0);
-      setMusicProgress(0);
       return;
     }
 
@@ -3371,8 +3521,6 @@ export const HomeQortinoWorkspaceCard = ({
       audio.pause();
       audio.src = activeTrackPlaybackUrl;
       audio.load();
-      setMusicPlaybackTime(0);
-      setMusicProgress(0);
     }
 
     if (workspaceState.mode !== 'music' || !workspaceState.musicPlaying) {
@@ -3396,56 +3544,6 @@ export const HomeQortinoWorkspaceCard = ({
     workspaceState.mode,
     workspaceState.musicPlaying,
   ]);
-
-  const seekMusicPlayback = useCallback(
-    (clientX: number) => {
-      const audio = audioRef.current;
-      const progressBar = musicProgressBarRef.current;
-      if (!audio || !progressBar || !isTrackPlayable || activeTrackDurationSeconds <= 0) {
-        return;
-      }
-
-      const rect = progressBar.getBoundingClientRect();
-      if (rect.width <= 0) {
-        return;
-      }
-
-      const ratio = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
-      const nextTime = ratio * activeTrackDurationSeconds;
-
-      audio.currentTime = nextTime;
-      setMusicPlaybackTime(nextTime);
-      setMusicProgress(ratio);
-      setMusicStreamError(null);
-    },
-    [activeTrackDurationSeconds, isTrackPlayable]
-  );
-
-  const handleMusicProgressPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (!isTrackPlayable || activeTrackDurationSeconds <= 0) {
-        return;
-      }
-
-      event.preventDefault();
-      seekMusicPlayback(event.clientX);
-
-      const handleWindowPointerMove = (moveEvent: PointerEvent) => {
-        seekMusicPlayback(moveEvent.clientX);
-      };
-
-      const handleWindowPointerUp = () => {
-        window.removeEventListener('pointermove', handleWindowPointerMove);
-        window.removeEventListener('pointerup', handleWindowPointerUp);
-      };
-
-      window.addEventListener('pointermove', handleWindowPointerMove);
-      window.addEventListener('pointerup', handleWindowPointerUp, {
-        once: true,
-      });
-    },
-    [activeTrackDurationSeconds, isTrackPlayable, seekMusicPlayback]
-  );
 
   const handleSelectWorkspaceMode = useCallback(
     (mode: WorkspaceMode) => {
@@ -3574,8 +3672,6 @@ export const HomeQortinoWorkspaceCard = ({
           audio.removeAttribute('src');
           audio.load();
         }
-        setMusicPlaybackTime(0);
-        setMusicProgress(0);
         setMusicStreamError(null);
         if (track) {
           void downloadResource({
@@ -3601,8 +3697,6 @@ export const HomeQortinoWorkspaceCard = ({
       }
 
       if (!isSameTrack) {
-        setMusicPlaybackTime(0);
-        setMusicProgress(0);
         setMusicStreamError(null);
       }
 
@@ -3642,8 +3736,6 @@ export const HomeQortinoWorkspaceCard = ({
 
   const handleSelectTrackFromBrowser = useCallback(
     (trackId: string) => {
-      setMusicPlaybackTime(0);
-      setMusicProgress(0);
       setOpenMusicSearchDialog(false);
       handleToggleTrack(trackId);
     },
@@ -4864,64 +4956,16 @@ export const HomeQortinoWorkspaceCard = ({
             zIndex: 1,
           }}
         >
-          <Typography
-            sx={{
-              color: alpha(theme.palette.text.secondary, 0.68),
-              fontSize: '0.55rem',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {currentPlaybackTime}
-          </Typography>
-          <Box
-            ref={musicProgressBarRef}
-            onPointerDown={handleMusicProgressPointerDown}
-            sx={{
-              cursor:
-                isTrackPlayable && activeTrackDurationSeconds > 0
-                  ? 'pointer'
-                  : 'default',
-              display: 'flex',
-              alignItems: 'center',
-              height: '12px',
-              position: 'relative',
-              touchAction: 'none',
-            }}
-          >
-            <Box
-              sx={{
-                background: getBlueTier3ProgressBackground(theme, isDarkMode),
-                borderRadius: '999px',
-                height: '4px',
-                overflow: 'hidden',
-                position: 'relative',
-                width: '100%',
-              }}
-            >
-              <Box
-                sx={{
-                  background:
-                    'linear-gradient(90deg, rgba(144,186,255,0.96) 0%, rgba(111,166,255,0.9) 100%)',
-                  borderRadius: '999px',
-                  boxShadow: `0 0 14px ${alpha('#8DB8FF', 0.22)}`,
-                  height: '100%',
-                  transition: 'width 260ms ease',
-                  width: `${Math.min(Math.max(musicProgress, 0), 1) * 100}%`,
-                }}
-              />
-            </Box>
-          </Box>
-          <Typography
-            sx={{
-              color: alpha(theme.palette.text.secondary, 0.68),
-              fontSize: '0.55rem',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {activeTrack.length}
-          </Typography>
+          <EarbumpMusicProgressMeter
+            audioRef={audioRef}
+            durationLabel={activeTrack.length}
+            durationSeconds={activeTrackDurationSeconds}
+            isTrackPlayable={isTrackPlayable}
+            onSeekInteraction={clearMusicStreamError}
+            playbackUrl={activeTrackPlaybackUrl}
+            theme={theme}
+            trackId={activeTrack.id}
+          />
           <ButtonBase
             onClick={handleToggleRepeatMode}
             sx={{
