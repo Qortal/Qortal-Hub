@@ -1,14 +1,10 @@
 import {
   Box,
   ButtonBase,
-  CircularProgress,
-  Menu,
-  MenuItem,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import SendRoundedIcon from '@mui/icons-material/SendRounded';
@@ -19,15 +15,12 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
 import {
   balanceAtom,
-  nodeInfosAtom,
-  selectedNodeInfoAtom,
   userInfoAtom,
 } from '../../../atoms/global';
 import ErrorBoundary from '../../../common/ErrorBoundary';
@@ -52,17 +45,9 @@ import {
   dashboardPanelSx,
   useDashboardPanelMouseLight,
 } from '../dashboardPanelEffects';
-import {
-  getDefaultLocalNodeUrl,
-  HTTPS_EXT_NODE_QORTAL_LINK,
-  isLocalNodeUrl,
-} from '../../../constants/constants';
 import { DashboardWidgetFrame } from '../../Widgets/DashboardWidgetFrame';
 import { GroupsWidget } from '../../Widgets/GroupsWidget';
 import { QuitterFeedWidget } from '../../Widgets/QuitterFeedWidget';
-import { useAuth } from '../../../hooks/useAuth';
-import type { ApiKey } from '../../../types/auth';
-import { BlockHeightValue } from './BlockHeightValue';
 import { DashboardUtilityPanel } from './DashboardUtilityPanel';
 import { WalletActionButton } from './WalletActionButton';
 import { InfoPreviewPanel } from './InfoPreviewPanel';
@@ -87,11 +72,9 @@ import {
   HOME_SHARED_LEFT_LOWER_ROW_PANEL_HEIGHT_PX,
   HOME_SHARED_SIDE_RAIL_WIDTH_XL,
   HOME_WIDE_DASHBOARD_MIN_WIDTH_PX,
-  INFO_VALUE_COLUMN_MIN_WIDTH_PX,
   WALLET_ACTIVITY_RECENT_PAYMENT_FETCH_LIMIT,
 } from './homeDesktopConstants';
 import type {
-  DashboardNodeOption,
   HomeCustomizableCardId,
   HomeCustomizableCardsLayout,
   HomeLayoutDebugKey,
@@ -103,14 +86,10 @@ import {
   clampHomeCustomizableCardHeight,
   formatWalletActivityAmount,
   formatWalletActivityRelativeTime,
-  getDashboardNodeHost,
   getWalletActivityCreatorAddress,
   getWalletActivityRecipientAddress,
   isWalletActivityTimestampRecent,
   measureHomeLayoutDebugMetric,
-  nodeMenuItemSx,
-  normalizeDashboardCustomNodes,
-  normalizeDashboardNodeUrl,
   parseHomeCustomizableCardsLayout,
 } from './utils';
 
@@ -138,9 +117,6 @@ export const HomeDesktop = ({
   const lastWalletActivityBalanceRef = useRef<string | null>(null);
   const userInfo = useAtomValue(userInfoAtom);
   const balance = useAtomValue(balanceAtom);
-  const selectedNode = useAtomValue(selectedNodeInfoAtom);
-  const setNodeInfos = useSetAtom(nodeInfosAtom);
-  const { getBalanceFunc, handleSaveNodeInfo } = useAuth();
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [walletActivityTargetHeightPx, setWalletActivityTargetHeightPx] =
     useState<number | null>(null);
@@ -163,14 +139,6 @@ export const HomeDesktop = ({
   const [isWalletActivityLoading, setIsWalletActivityLoading] = useState(false);
   const [walletActivityRelativeTimeNow, setWalletActivityRelativeTimeNow] =
     useState(() => Date.now());
-  const [dashboardCustomNodes, setDashboardCustomNodes] = useState<ApiKey[]>(
-    []
-  );
-  const [nodeMenuAnchorEl, setNodeMenuAnchorEl] = useState<HTMLElement | null>(
-    null
-  );
-  const [isSwitchingNodeUrl, setIsSwitchingNodeUrl] = useState('');
-  const [nodeSwitchError, setNodeSwitchError] = useState('');
   const reduce = useReducedMotion();
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const td = useCallback(
@@ -206,154 +174,6 @@ export const HomeDesktop = ({
         2
       : null;
   const userAddress = userInfo?.address;
-  const selectedNodeUrl = normalizeDashboardNodeUrl(
-    selectedNode?.url || getBaseApiReact()
-  );
-  const publicNodeUrl = normalizeDashboardNodeUrl(HTTPS_EXT_NODE_QORTAL_LINK);
-  const loadDashboardCustomNodes = useCallback(async () => {
-    try {
-      const nodes = normalizeDashboardCustomNodes(
-        await window.sendMessage('getCustomNodesFromStorage')
-      );
-      setDashboardCustomNodes(nodes);
-      window.electronAPI?.setAllowedDomains?.(nodes.map((node) => node.url));
-    } catch (error) {
-      console.error(error);
-      setDashboardCustomNodes([]);
-    }
-  }, []);
-  const handleOpenNodeMenu = useCallback(
-    (event) => {
-      event.stopPropagation();
-      setNodeSwitchError('');
-      setNodeMenuAnchorEl(event.currentTarget);
-      loadDashboardCustomNodes();
-    },
-    [loadDashboardCustomNodes]
-  );
-
-  const handleCloseNodeMenu = useCallback(() => {
-    if (isSwitchingNodeUrl) return;
-    setNodeMenuAnchorEl(null);
-  }, [isSwitchingNodeUrl]);
-  const dashboardNodeOptions = useMemo<DashboardNodeOption[]>(() => {
-    const nodes = dashboardCustomNodes.filter((node) => {
-      const nodeUrl = normalizeDashboardNodeUrl(node.url);
-      return nodeUrl && nodeUrl !== publicNodeUrl && !isLocalNodeUrl(nodeUrl);
-    });
-    const localNodeUrl = normalizeDashboardNodeUrl(getDefaultLocalNodeUrl());
-    const localNodeOption: DashboardNodeOption | null = isLocalNodeUrl(
-      selectedNodeUrl
-    )
-      ? null
-      : {
-          key: 'local',
-          label: 'Local Node',
-          node: { url: localNodeUrl, apikey: '' },
-          secondary: getDashboardNodeHost(localNodeUrl),
-          type: 'local',
-        };
-
-    if (
-      selectedNodeUrl &&
-      selectedNodeUrl !== publicNodeUrl &&
-      !isLocalNodeUrl(selectedNodeUrl) &&
-      !nodes.some(
-        (node) => normalizeDashboardNodeUrl(node.url) === selectedNodeUrl
-      )
-    ) {
-      nodes.unshift({
-        url: selectedNodeUrl,
-        apikey: selectedNode?.apikey || '',
-        name: selectedNode?.name || '',
-      });
-    }
-
-    return [
-      ...nodes.map((node) => {
-        const nodeUrl = normalizeDashboardNodeUrl(node.url);
-        const host = getDashboardNodeHost(nodeUrl);
-        return {
-          key: `custom:${nodeUrl}`,
-          label: node.name || host,
-          node: { ...node, url: nodeUrl },
-          secondary: host,
-          type: 'custom' as const,
-        };
-      }),
-      ...(localNodeOption ? [localNodeOption] : []),
-      {
-        key: 'public',
-        label: 'Public Node',
-        node: { url: HTTPS_EXT_NODE_QORTAL_LINK, apikey: '' },
-        secondary: getDashboardNodeHost(HTTPS_EXT_NODE_QORTAL_LINK),
-        type: 'public' as const,
-      },
-    ];
-  }, [
-    dashboardCustomNodes,
-    publicNodeUrl,
-    selectedNode?.apikey,
-    selectedNode?.name,
-    selectedNodeUrl,
-  ]);
-  const handleSelectDashboardNode = useCallback(
-    async (option: DashboardNodeOption) => {
-      const nextUrl = normalizeDashboardNodeUrl(option.node.url);
-      if (!nextUrl || isSwitchingNodeUrl) return;
-
-      if (nextUrl === selectedNodeUrl) {
-        setNodeMenuAnchorEl(null);
-        return;
-      }
-
-      try {
-        setNodeSwitchError('');
-        setIsSwitchingNodeUrl(nextUrl);
-        let nodeToSave = option.node;
-
-        if (option.type === 'local') {
-          const apiKey = window?.coreSetup?.getApiKey
-            ? await window.coreSetup.getApiKey()
-            : '';
-          nodeToSave = { ...option.node, apikey: apiKey || '' };
-
-          if (nextUrl.startsWith('https://')) {
-            const certResult = await window.electronAPI?.ensureCertForBase?.(
-              nextUrl,
-              apiKey || ''
-            );
-
-            if (!certResult?.success) {
-              throw new Error(
-                certResult?.error || 'Unable to prepare local HTTPS certificate'
-              );
-            }
-          }
-        }
-
-        await handleSaveNodeInfo(nodeToSave);
-        setNodeInfos({});
-        await getBalanceFunc();
-        setNodeMenuAnchorEl(null);
-      } catch (error) {
-        console.error(error);
-        setNodeSwitchError('Could not switch nodes right now.');
-      } finally {
-        setIsSwitchingNodeUrl('');
-      }
-    },
-    [
-      getBalanceFunc,
-      handleSaveNodeInfo,
-      isSwitchingNodeUrl,
-      selectedNodeUrl,
-      setNodeInfos,
-    ]
-  );
-  useEffect(() => {
-    loadDashboardCustomNodes();
-  }, [loadDashboardCustomNodes]);
   const handleOpenReceiveQort = useCallback(
     (target: HTMLElement | null) => {
       if (!target) return;
@@ -1356,121 +1176,7 @@ export const HomeDesktop = ({
                   >
                     <InfoPreviewPanel
                       maxExpandedHeightPx={infoPanelMaxExpandedHeightPx}
-                      nodeMenuAnchorEl={nodeMenuAnchorEl}
-                      onOpenNodeMenu={handleOpenNodeMenu}
                     />
-                    <Menu
-                      anchorEl={nodeMenuAnchorEl}
-                      open={Boolean(nodeMenuAnchorEl)}
-                      onClose={handleCloseNodeMenu}
-                      anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
-                      transformOrigin={{ horizontal: 'left', vertical: 'top' }}
-                      PaperProps={{
-                        sx: {
-                          background:
-                            theme.palette.mode === 'dark'
-                              ? 'rgba(18, 23, 32, 0.98)'
-                              : 'rgba(250, 252, 255, 0.98)',
-                          border: `1px solid ${alpha(
-                            theme.palette.border.subtle,
-                            0.88
-                          )}`,
-                          borderRadius: '10px',
-                          boxShadow:
-                            theme.palette.mode === 'dark'
-                              ? '0 18px 42px rgba(0,0,0,0.42)'
-                              : '0 16px 36px rgba(24,32,44,0.16)',
-                          minWidth: 260,
-                          mt: 0.7,
-                          p: 0.6,
-                        },
-                      }}
-                    >
-                      {dashboardNodeOptions.filter(
-                        (option) => option.type === 'custom'
-                      ).length === 0 && (
-                        <MenuItem disabled sx={nodeMenuItemSx(theme, false)}>
-                          {td('no_custom_nodes_saved', 'No custom nodes saved')}
-                        </MenuItem>
-                      )}
-                      {dashboardNodeOptions.map((option) => {
-                        const isCurrent =
-                          normalizeDashboardNodeUrl(option.node.url) ===
-                          selectedNodeUrl;
-                        const isSwitching =
-                          isSwitchingNodeUrl ===
-                          normalizeDashboardNodeUrl(option.node.url);
-                        return (
-                          <MenuItem
-                            key={option.key}
-                            disabled={Boolean(isSwitchingNodeUrl)}
-                            onClick={() => handleSelectDashboardNode(option)}
-                            sx={{
-                              ...nodeMenuItemSx(theme, isCurrent),
-                              ...(option.type === 'public'
-                                ? {
-                                    borderTop: `1px solid ${alpha(
-                                      theme.palette.text.primary,
-                                      0.08
-                                    )}`,
-                                    mt: 0.55,
-                                  }
-                                : {}),
-                            }}
-                          >
-                            <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Typography
-                                sx={{
-                                  color: 'inherit',
-                                  fontSize: '0.84rem',
-                                  fontWeight: 700,
-                                  lineHeight: 1.25,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {option.label}
-                              </Typography>
-                              <Typography
-                                sx={{
-                                  color: alpha(
-                                    theme.palette.text.secondary,
-                                    0.78
-                                  ),
-                                  fontSize: '0.72rem',
-                                  lineHeight: 1.3,
-                                  mt: 0.3,
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {option.secondary}
-                              </Typography>
-                            </Box>
-                            {isSwitching ? (
-                              <CircularProgress size={16} thickness={5} />
-                            ) : isCurrent ? (
-                              <CheckRoundedIcon sx={{ fontSize: 18 }} />
-                            ) : null}
-                          </MenuItem>
-                        );
-                      })}
-                      {nodeSwitchError && (
-                        <Typography
-                          sx={{
-                            color: theme.palette.warning.light,
-                            fontSize: '0.74rem',
-                            lineHeight: 1.35,
-                            px: 1.15,
-                            py: 0.8,
-                          }}
-                        >
-                          {nodeSwitchError}
-                        </Typography>
-                      )}
-                    </Menu>
                   </Box>
                   <Box
                     ref={walletActivityDebugRef}

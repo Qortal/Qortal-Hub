@@ -1,14 +1,18 @@
 import {
   Box,
   ButtonBase,
+  CircularProgress,
+  Menu,
+  MenuItem,
   Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
 import KeyboardArrowDownRoundedIcon from '@mui/icons-material/KeyboardArrowDownRounded';
+import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import { alpha } from '@mui/material/styles';
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { InfoPreviewPrimaryRow } from './infoPreviewPanelTypes';
 export type {
@@ -16,6 +20,11 @@ export type {
   InfoPreviewStatusTone,
 } from './infoPreviewPanelTypes';
 import { useDashboardInfoPreviewRows } from './useDashboardInfoPreviewRows';
+import { useDashboardNodeMenu } from './useDashboardNodeMenu';
+import {
+  nodeMenuItemSx,
+  normalizeDashboardNodeUrl,
+} from './utils';
 import { GROUP_ACTIVITY_BLUE } from '../groupActivityColorSystem';
 import {
   dashboardPanelSx,
@@ -40,14 +49,21 @@ const infoSepSx = (theme, _index, _total) => sepSx(theme);
 
 export const InfoPreviewPanel = ({
   maxExpandedHeightPx = null,
-  nodeMenuAnchorEl,
-  onOpenNodeMenu,
 }: {
   maxExpandedHeightPx?: number | null;
-  nodeMenuAnchorEl: HTMLElement | null;
-  onOpenNodeMenu: (event: MouseEvent<HTMLButtonElement>) => void;
 }) => {
   const theme = useTheme();
+  const {
+    dashboardNodeOptions,
+    handleCloseNodeMenu,
+    handleOpenNodeMenu,
+    handleSelectDashboardNode,
+    isSwitchingNodeUrl,
+    nodeMenuAnchorEl,
+    nodeSwitchError,
+    selectedNodeUrl,
+    td,
+  } = useDashboardNodeMenu();
   const { i18n } = useTranslation(['core', 'group', 'tutorial', 'auth']);
   const resetKey = (
     i18n.resolvedLanguage ||
@@ -56,7 +72,7 @@ export const InfoPreviewPanel = ({
   ).split('-')[0];
   const rows = useDashboardInfoPreviewRows({
     nodeMenuAnchorEl,
-    onOpenNodeMenu,
+    onOpenNodeMenu: handleOpenNodeMenu,
   });
   const forceExpanded = Boolean(nodeMenuAnchorEl);
   const enableOverlay = useMediaQuery(
@@ -301,7 +317,15 @@ export const InfoPreviewPanel = ({
 
   return (
     <Box
-      ref={wrapperRef}
+      sx={{
+        height: '100%',
+        minWidth: 0,
+        position: 'relative',
+        width: '100%',
+      }}
+    >
+      <Box
+        ref={wrapperRef}
       sx={{
         minWidth: 0,
         position: 'relative',
@@ -775,6 +799,113 @@ export const InfoPreviewPanel = ({
           )}
         </Box>
       </Box>
+    </Box>
+    <Menu
+      anchorEl={nodeMenuAnchorEl}
+      open={Boolean(nodeMenuAnchorEl)}
+      onClose={handleCloseNodeMenu}
+      anchorOrigin={{ horizontal: 'left', vertical: 'bottom' }}
+      transformOrigin={{ horizontal: 'left', vertical: 'top' }}
+      PaperProps={{
+        sx: {
+          background:
+            theme.palette.mode === 'dark'
+              ? 'rgba(18, 23, 32, 0.98)'
+              : 'rgba(250, 252, 255, 0.98)',
+          border: `1px solid ${alpha(
+            theme.palette.border.subtle,
+            0.88
+          )}`,
+          borderRadius: '10px',
+          boxShadow:
+            theme.palette.mode === 'dark'
+              ? '0 18px 42px rgba(0,0,0,0.42)'
+              : '0 16px 36px rgba(24,32,44,0.16)',
+          minWidth: 260,
+          mt: 0.7,
+          p: 0.6,
+        },
+      }}
+    >
+      {dashboardNodeOptions.filter((option) => option.type === 'custom')
+        .length === 0 && (
+        <MenuItem disabled sx={nodeMenuItemSx(theme, false)}>
+          {td('no_custom_nodes_saved', 'No custom nodes saved')}
+        </MenuItem>
+      )}
+      {dashboardNodeOptions.map((option) => {
+        const isCurrent =
+          normalizeDashboardNodeUrl(option.node.url) === selectedNodeUrl;
+        const isSwitching =
+          isSwitchingNodeUrl === normalizeDashboardNodeUrl(option.node.url);
+        return (
+          <MenuItem
+            key={option.key}
+            disabled={Boolean(isSwitchingNodeUrl)}
+            onClick={() => handleSelectDashboardNode(option)}
+            sx={{
+              ...nodeMenuItemSx(theme, isCurrent),
+              ...(option.type === 'public'
+                ? {
+                    borderTop: `1px solid ${alpha(
+                      theme.palette.text.primary,
+                      0.08
+                    )}`,
+                    mt: 0.55,
+                  }
+                : {}),
+            }}
+          >
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography
+                sx={{
+                  color: 'inherit',
+                  fontSize: '0.84rem',
+                  fontWeight: 700,
+                  lineHeight: 1.25,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {option.label}
+              </Typography>
+              <Typography
+                sx={{
+                  color: alpha(theme.palette.text.secondary, 0.78),
+                  fontSize: '0.72rem',
+                  lineHeight: 1.3,
+                  mt: 0.3,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {option.secondary}
+              </Typography>
+            </Box>
+            {isSwitching ? (
+              <CircularProgress size={16} thickness={5} />
+            ) : isCurrent ? (
+              <CheckRoundedIcon sx={{ fontSize: 18 }} />
+            ) : null}
+          </MenuItem>
+        );
+      })}
+      {nodeSwitchError && (
+        <Typography
+          sx={{
+            color: theme.palette.warning.light,
+            fontSize: '0.74rem',
+            lineHeight: 1.35,
+            px: 1.15,
+            py: 0.8,
+          }}
+        >
+          {nodeSwitchError}
+        </Typography>
+      )}
+    </Menu>
     </Box>
   );
 };
