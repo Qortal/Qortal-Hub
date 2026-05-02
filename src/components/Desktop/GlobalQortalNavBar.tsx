@@ -30,12 +30,16 @@ type GlobalQortalNavBarProps = {
   utilityNav?: CustomTitleBarRightNavProps | null;
 };
 
+/** Hub-owned surfaces in the app tab strip (e.g. Q-Chat), not arbitrary Q-Apps */
+const INTERNAL_TAB_SERVICE = 'INTERNAL';
+
 type SelectedTab = {
   tabId: string;
   name: string;
   service: string;
   identifier?: string;
   path?: string;
+  internal?: string;
   refreshFunc?: (tabId?: string) => void;
 } | null;
 
@@ -164,7 +168,10 @@ export function GlobalQortalNavBar({
 
   useEffect(() => {
     if (isInputFocusedRef.current) return;
-    if (desktopViewMode === 'apps' && currentLink) {
+    if (
+      (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
+      currentLink
+    ) {
       setInputValue(currentLink);
       return;
     }
@@ -195,9 +202,17 @@ export function GlobalQortalNavBar({
     executeEvent('open-apps-mode', {});
   }, [inputValue]);
 
-  const canGoBack = !!selectedTab?.tabId && !!currentNavigation?.hasBack;
-  const canRefresh = !!selectedTab?.tabId && desktopViewMode === 'apps';
+  const isInternalTabSelected = selectedTab?.service === INTERNAL_TAB_SERVICE;
+  const canGoBack =
+    !!selectedTab?.tabId &&
+    !!currentNavigation?.hasBack &&
+    !isInternalTabSelected;
+  const canRefresh =
+    !!selectedTab?.tabId &&
+    (desktopViewMode === 'apps' || desktopViewMode === 'dev') &&
+    !isInternalTabSelected;
   const isAppsMode = desktopViewMode === 'apps';
+  const isDevMode = desktopViewMode === 'dev';
   const isHomeMode = desktopViewMode === 'home';
   const chromeBackground =
     theme.palette.mode === 'dark'
@@ -399,6 +414,10 @@ export function GlobalQortalNavBar({
           <ButtonBase
             disableRipple
             onClick={() => {
+              if (isDevMode) {
+                executeEvent('devModeNavigateBack', {});
+                return;
+              }
               if (!selectedTab?.tabId) return;
               executeEvent(`navigateBackApp-${selectedTab.tabId}`, {});
             }}
@@ -448,12 +467,12 @@ export function GlobalQortalNavBar({
               display: 'flex',
               height: 32,
               justifyContent: 'center',
-              opacity: isHomeMode || isAppsMode ? 1 : 0.92,
+              opacity: isHomeMode || isAppsMode || isDevMode ? 1 : 0.92,
               transition:
                 'background-color 140ms ease, color 140ms ease, opacity 140ms ease, transform 120ms ease, box-shadow 140ms ease',
               width: 32,
               backgroundColor:
-                isHomeMode || isAppsMode
+                isHomeMode || isAppsMode || isDevMode
                   ? buttonHoverBackground
                   : 'transparent',
               '&:hover': {
@@ -471,7 +490,7 @@ export function GlobalQortalNavBar({
               },
             }}
           >
-            {isAppsMode ? (
+            {isAppsMode || isDevMode ? (
               <HomeRoundedIcon sx={{ fontSize: 19 }} />
             ) : (
               <QAppsNavIcon color={theme.palette.text.primary} />

@@ -12,7 +12,7 @@ import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CloseFullscreenRoundedIcon from '@mui/icons-material/CloseFullscreenRounded';
 import LockIcon from '@mui/icons-material/Lock';
-import { useState } from 'react';
+import { useRef, useState, type MutableRefObject } from 'react';
 import { alpha } from '@mui/material/styles';
 import { CSS } from '@dnd-kit/utilities';
 import { useSortable } from '@dnd-kit/sortable';
@@ -27,6 +27,21 @@ import {
 import { getBaseApiReact } from '../../App';
 import LogoSelected from '../../assets/svgs/LogoSelected.svg';
 
+function devTabLabel(app: any): string {
+  const base =
+    app?.privateAppProperties?.name || app?.metadata?.title || app?.name || '';
+  if (base) return base;
+  const url = app?.url;
+  if (typeof url === 'string' && url) {
+    try {
+      return new URL(url).hostname || url.slice(0, 28);
+    } catch {
+      return url.slice(0, 28);
+    }
+  }
+  return 'Dev';
+}
+
 type TabComponentProps = {
   app: any;
   onCloseAll: () => void;
@@ -36,6 +51,12 @@ type TabComponentProps = {
   isVisuallySelected?: boolean;
   onClose: () => void;
   onSelect: () => void;
+  /** Dev-mode / local preview tabs (label + icon only; same chrome as app tabs) */
+  isDevApp?: boolean;
+  /** When false and the strip is wide enough, tab stays fixed at ~180px (measured in AppsDesktop). */
+  tabStripCompresses?: boolean;
+  /** Mutable drag-lock shared from AppsDesktop to avoid rerenders during drag. */
+  tabInteractionLockedRef?: MutableRefObject<boolean>;
 };
 
 const TabComponent = ({
@@ -47,6 +68,9 @@ const TabComponent = ({
   isVisuallySelected = isSelected,
   onClose,
   onSelect,
+  isDevApp = false,
+  tabStripCompresses = true,
+  tabInteractionLockedRef,
 }: TabComponentProps) => {
   const theme = useTheme();
   const {
@@ -63,8 +87,16 @@ const TabComponent = ({
     left: number;
     top: number;
   } | null>(null);
-  const label =
-    app?.privateAppProperties?.name || app?.metadata?.title || app?.name || '';
+  const localInteractionLockRef = useRef(false);
+  const interactionLockRef = tabInteractionLockedRef ?? localInteractionLockRef;
+
+  const treatAsDevApp = Boolean(isDevApp);
+  const label = treatAsDevApp
+    ? devTabLabel(app)
+    : app?.privateAppProperties?.name ||
+      app?.metadata?.title ||
+      app?.name ||
+      '';
   const selectedTabSurface = getBlueTier1PillSurface(theme);
   const selectedTabTextColor = APP_BLUE_SURFACE_TEXT;
   const dndStyle = {
@@ -87,19 +119,40 @@ const TabComponent = ({
       disableRipple
       {...attributes}
       {...listeners}
-      onClick={onSelect}
+      onClick={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        onSelect();
+      }}
       onMouseDown={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          return;
+        }
         if (event.button === 1) {
           event.preventDefault();
         }
       }}
       onAuxClick={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         if (event.button !== 1) return;
         event.preventDefault();
         event.stopPropagation();
         onClose();
       }}
       onContextMenu={(event) => {
+        if (interactionLockRef.current) {
+          event.preventDefault();
+          setMenuPosition(null);
+          return;
+        }
         event.preventDefault();
         onSelect();
         setMenuPosition({
@@ -122,7 +175,7 @@ const TabComponent = ({
         color: isVisuallySelected
           ? selectedTabTextColor
           : theme.palette.text.secondary,
-        cursor: isDragging ? 'grabbing' : 'grab',
+        cursor: interactionLockRef.current || isDragging ? 'grabbing' : 'grab',
         opacity: isEntering ? 0 : 1,
         ...dndStyle,
         transform: `${dndStyle.transform || ''}${isEntering ? ' scale(0.96)' : ''}`.trim(),
@@ -157,6 +210,13 @@ const TabComponent = ({
             transform: `${dndStyle.transform || ''} scale(1)`.trim(),
           },
         },
+        ...(!tabStripCompresses && {
+          flex: '0 0 180px',
+          flexShrink: 0,
+          maxWidth: '180px',
+          minWidth: '180px',
+          width: '180px',
+        }),
       }}
     >
       {app?.isPrivate && !app?.privateAppProperties?.logo ? (
@@ -175,6 +235,29 @@ const TabComponent = ({
         >
           <LockIcon sx={{ fontSize: 16 }} />
         </Box>
+      ) : treatAsDevApp ? (
+        <Avatar
+          sx={{
+            flexShrink: 0,
+            height: '22px',
+            width: '22px',
+          }}
+          alt={label}
+          src=""
+        >
+          <img
+            style={{
+              width: '22px',
+              height: 'auto',
+            }}
+            src={
+              app?.customIcon
+                ? app.customIcon
+                : LogoSelected
+            }
+            alt=""
+          />
+        </Avatar>
       ) : (
         <Avatar
           sx={{
@@ -217,9 +300,18 @@ const TabComponent = ({
         disableRipple
         onClick={(event) => {
           event.stopPropagation();
+          if (interactionLockRef.current) {
+            event.preventDefault();
+            return;
+          }
           onClose();
         }}
         onAuxClick={(event) => {
+          if (interactionLockRef.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           if (event.button !== 1) return;
           event.preventDefault();
           event.stopPropagation();

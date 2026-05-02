@@ -197,6 +197,10 @@ const formatRuntimeFaultMessage = (
   return fallbackMessage;
 };
 
+/** Chromium reports this when resize work spans the same frame; not an app fault. */
+const RESIZE_OBSERVER_LOOP_MESSAGE =
+  /ResizeObserver loop completed with undelivered notifications/i;
+
 const isIgnorableRuntimeFault = (value: unknown): boolean => {
   const extractMessage = (): string => {
     if (typeof value === 'string') return value;
@@ -213,6 +217,10 @@ const isIgnorableRuntimeFault = (value: unknown): boolean => {
   };
 
   const message = extractMessage().trim();
+  if (RESIZE_OBSERVER_LOOP_MESSAGE.test(message)) {
+    return true;
+  }
+
   const errorCode =
     value &&
     typeof value === 'object' &&
@@ -427,7 +435,7 @@ function App() {
     const handleWindowError = (event: ErrorEvent) => {
       if (isIgnorableRuntimeFault(event.error ?? event.message)) {
         console.warn(
-          'Ignoring non-fatal runtime timeout',
+          'Ignoring non-fatal runtime fault',
           event.error || event.message,
           event
         );
@@ -450,7 +458,7 @@ function App() {
     const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason;
       if (isIgnorableRuntimeFault(reason)) {
-        console.warn('Ignoring non-fatal runtime timeout', reason, event);
+        console.warn('Ignoring non-fatal runtime fault', reason, event);
         return;
       }
       console.error('Unhandled promise rejection', reason, event);

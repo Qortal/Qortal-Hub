@@ -47,7 +47,6 @@ import { useMessageQueue } from '../../messaging/MessageQueueContext';
 import { HomeDesktop } from './HomeDesktop';
 import { DesktopHeader } from '../Desktop/DesktopHeader';
 import { AppsDesktop } from '../Apps/AppsDesktop';
-import { AppsDevMode } from '../Apps/AppsDevMode';
 import { DesktopSideBar } from '../Desktop/DesktopLeftSideBar';
 import { AdminSpace } from '../Chat/AdminSpace';
 import {
@@ -2157,6 +2156,7 @@ export const Group = ({
           isDirects={isOpenSideViewDirects}
           setDesktopViewMode={setDesktopViewMode}
           lastQappViewMode={lastQappViewMode}
+          setAppsModeDev={setAppsModeDev}
         />
 
         <MainContentBox>
@@ -2175,7 +2175,12 @@ export const Group = ({
             renderQChatTabContent({ isSelected: true })}
 
           <AppsDesktop
+            desktopViewMode={desktopViewMode}
+            setDesktopViewMode={setDesktopViewMode}
+            devMode={appsModeDev}
+            setDevMode={setAppsModeDev}
             mode={appsMode}
+            setMode={setAppsMode}
             onInternalTabVisibilityChange={({ isVisible, tab }) => {
               setIsQChatTabActive(
                 isVisible && tab?.internal === QCHAT_INTERNAL_TAB_ID
@@ -2186,24 +2191,7 @@ export const Group = ({
                 ? renderQChatTabContent({ hide, isSelected })
                 : null
             }
-            setMode={setAppsMode}
-            show={desktopViewMode === 'apps'}
-          />
-
-          <AppsDevMode
-            toggleSideViewGroups={toggleSideViewGroups}
-            toggleSideViewDirects={toggleSideViewDirects}
-            goToHome={goToHome}
-            mode={appsModeDev}
-            setMode={setAppsModeDev}
-            setDesktopSideView={setDesktopSideView}
-            hasUnreadDirects={directChatHasUnread}
-            show={desktopViewMode === 'dev'}
-            isGroups={isOpenSideViewGroups}
-            isDirects={isOpenSideViewDirects}
-            setDesktopViewMode={setDesktopViewMode}
-            desktopViewMode={desktopViewMode}
-            isApps={desktopViewMode === 'apps'}
+            show={desktopViewMode === 'apps' || desktopViewMode === 'dev'}
           />
 
           <HomeDesktop

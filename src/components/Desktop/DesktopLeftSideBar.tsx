@@ -6,14 +6,18 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { useAtomValue } from 'jotai';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qortalLogoOfficial from '../../assets/sidebar/qortal-logo-official.png';
-import { enabledDevModeAtom, hasUnreadGroupsAtom } from '../../atoms/global';
+import {
+  enabledDevModeAtom,
+  hasUnreadGroupsAtom,
+  isNewTabWindowAtom,
+} from '../../atoms/global';
 import { keyframes } from '@mui/material/styles';
 import {
   executeEvent,
@@ -24,6 +28,23 @@ import { openQChatTab, QCHAT_INTERNAL_TAB_ID } from '../../utils/openQChatTab';
 import { CoreSyncStatus } from '../CoreSyncStatus';
 import LanguageSelector from '../Language/LanguageSelector';
 import ThemeSelector from '../Theme/ThemeSelector';
+
+type DesktopSideBarProps = {
+  desktopViewMode: string;
+  goToHome: any;
+  hasUnreadDirects: any;
+  isApps: boolean;
+  setAppsModeDev: Dispatch<SetStateAction<string>>;
+  setDesktopViewMode: (mode: string) => void;
+  isDirects?: any;
+  isGroups?: any;
+  lastQappViewMode?: any;
+  mode?: any;
+  setDesktopSideView?: any;
+  setMode?: any;
+  toggleSideViewDirects?: any;
+  toggleSideViewGroups?: any;
+};
 
 const SIDEBAR_WIDTH_PX = 72;
 const EDGE_SENSOR_WIDTH_PX = 8;
@@ -209,8 +230,10 @@ export const DesktopSideBar = ({
   isApps,
   setDesktopViewMode,
   desktopViewMode,
-}) => {
+  setAppsModeDev,
+}: DesktopSideBarProps) => {
   const isEnabledDevMode = useAtomValue(enabledDevModeAtom);
+  const setIsNewTabWindow = useSetAtom(isNewTabWindowAtom);
   const hasUnreadGroups = useAtomValue(hasUnreadGroupsAtom);
   const theme = useTheme();
   const { t } = useTranslation(['core']);
@@ -524,7 +547,11 @@ export const DesktopSideBar = ({
                     postProcess: 'capitalizeFirstChar',
                   })}
                   onClick={() =>
-                    runSidebarAction(() => setDesktopViewMode('dev'))
+                    runSidebarAction(() => {
+                      setDesktopViewMode('dev');
+                      setAppsModeDev('home');
+                      setIsNewTabWindow(false);
+                    })
                   }
                 >
                   <DevModeIcon height={24} width={24} color="currentColor" />
