@@ -161,6 +161,7 @@ const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
+const POST_FAILOVER_ROOT_RECEIVE_PROTECTION_MS = 12_000;
 const GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS = 1_000;
 const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
@@ -438,6 +439,7 @@ export class GroupCallAudioEngineRuntime {
           void this.syncSenderState();
           void this.receiveEngine.configure({
             outputDeviceId: this.outputDeviceId,
+            postFailoverRootHoldUntilMs: 0,
           });
           return { ok: true };
         case 'join-group-call':
@@ -1105,6 +1107,9 @@ export class GroupCallAudioEngineRuntime {
     traceGcallAudioSurface('engine.joinGroupCall: step after syncDecryptPoolRoomKey', {});
     traceGcallAudioSurface('engine.joinGroupCall: step before receiveEngine.reset', {});
     await this.receiveEngine.reset();
+    await this.receiveEngine.configure({
+      postFailoverRootHoldUntilMs: 0,
+    });
     traceGcallAudioSurface('engine.joinGroupCall: step after receiveEngine.reset', {});
     this.snapshot = buildJoiningSnapshot({
       current: this.snapshot,
@@ -1287,6 +1292,9 @@ export class GroupCallAudioEngineRuntime {
     await this.senderEngine.stop();
     await this.syncDecryptPoolRoomKey(null);
     await this.receiveEngine.reset();
+    await this.receiveEngine.configure({
+      postFailoverRootHoldUntilMs: 0,
+    });
     this.memberGateGroupId = null;
     this.activeSpeakerLastSeenAt.clear();
     this.connectionHintBadSince = null;
@@ -2339,6 +2347,10 @@ export class GroupCallAudioEngineRuntime {
       deadRoot: currentRoot,
       topologyEpoch,
       heartbeatSilentMs,
+    });
+    await this.receiveEngine.configure({
+      postFailoverRootHoldUntilMs:
+        nowMs + POST_FAILOVER_ROOT_RECEIVE_PROTECTION_MS,
     });
     this.removeParticipantFromRuntimeEvent(currentRoot);
     const applied = await this.applyTopology(failoverTopology, 'local-election');

@@ -1737,6 +1737,10 @@ describe('GroupCallAudioEngineRuntime', () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
     vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue(['Qlocal']);
+    const receiveConfigureSpy = vi.spyOn(
+      (runtime as any).receiveEngine,
+      'configure'
+    );
 
     await runtime.handleCommand({
       type: 'set-user',
@@ -1760,6 +1764,11 @@ describe('GroupCallAudioEngineRuntime', () => {
       expect.any(String),
       'pub-local',
       expect.any(Number)
+    );
+    expect(receiveConfigureSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postFailoverRootHoldUntilMs: expect.any(Number),
+      })
     );
     vi.useRealTimers();
   });
