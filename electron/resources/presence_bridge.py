@@ -3338,27 +3338,6 @@ def handle_forward_presence(req_id: str, payload: Dict[str, Any]) -> None:
         emit_resp(req_id, False, error=str(exc))
 
 
-def handle_rns_announce(req_id: str, payload: Dict[str, Any]) -> None:
-    """Explicit RNS Destination.announce (e.g. after GC_JOIN / voice call join)."""
-    global _last_no_verified_peers_announce_at
-    reason_raw = payload.get("reason")
-    reason = str(reason_raw).strip() if isinstance(reason_raw, str) else "unspecified"
-    if not reason:
-        reason = "unspecified"
-    if _destination is None:
-        emit_resp(req_id, False, error="Bridge not started")
-        return
-    if not _rns_auth_announced:
-        emit_resp(req_id, False, error="Presence not authenticated")
-        return
-    try:
-        announce_local_destination(reason)
-        _last_no_verified_peers_announce_at = time.time()
-        emit_resp(req_id, True)
-    except Exception as exc:
-        emit_resp(req_id, False, error=str(exc))
-
-
 def handle_overlay_sync_state(req_id: str, payload: Dict[str, Any]) -> None:
     verified_raw = payload.get("verifiedPeers")
     active_raw = payload.get("activeNeighborHashes")
@@ -4222,8 +4201,6 @@ def handle_command(message: Dict[str, Any]) -> None:
         handle_forward_presence(req_id, payload)
     elif action == "overlay_sync_state":
         handle_overlay_sync_state(req_id, payload)
-    elif action == "rns_announce":
-        handle_rns_announce(req_id, payload)
     elif action == "overlay_note_candidate_failure":
         handle_overlay_note_candidate_failure(req_id, payload)
     elif action == "stop":

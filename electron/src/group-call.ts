@@ -3525,9 +3525,6 @@ export class GroupCallManager extends EventEmitter {
     this.scheduleQortalGroupCallActivityEmit(true);
     this.flushReticulumGroupActivityHeartbeats(roomId);
     this.syncReticulumAudioLinks();
-    void Promise.resolve(this.reticulumBridge?.rnsAnnounce?.('gc_join')).catch(
-      () => {}
-    );
     return {
       callSessionId: room.callSessionId,
       mediaSessionGeneration: room.mediaSessionGeneration,

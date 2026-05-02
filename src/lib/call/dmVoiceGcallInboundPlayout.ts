@@ -83,6 +83,34 @@ export interface DmVoiceGcallInboundOptions {
   getActiveSourceCount?: () => number;
 }
 
+const GCALL_STARTUP_FORCE_PRIME_BUFFERED_FRAMES_MIN = 8;
+const GCALL_STARTUP_FORCE_PRIME_STALL_MS = 250;
+
+export function decideStartupForcePrime(opts: {
+  hasObservedPlayoutStart: boolean;
+  activeSourceCount: number;
+  hasReadyFrame: boolean;
+  bufferedFrames: number;
+  stallSinceMs: number | null;
+  nowMs: number;
+}): { shouldForcePrime: boolean; nextStallSinceMs: number | null } {
+  if (
+    opts.hasObservedPlayoutStart ||
+    opts.activeSourceCount !== 1 ||
+    opts.hasReadyFrame ||
+    opts.bufferedFrames < GCALL_STARTUP_FORCE_PRIME_BUFFERED_FRAMES_MIN
+  ) {
+    return { shouldForcePrime: false, nextStallSinceMs: null };
+  }
+  if (opts.stallSinceMs === null) {
+    return { shouldForcePrime: false, nextStallSinceMs: opts.nowMs };
+  }
+  if (opts.nowMs - opts.stallSinceMs < GCALL_STARTUP_FORCE_PRIME_STALL_MS) {
+    return { shouldForcePrime: false, nextStallSinceMs: opts.stallSinceMs };
+  }
+  return { shouldForcePrime: true, nextStallSinceMs: null };
+}
+
 function disconnectSafe(node: AudioNode | null | undefined): void {
   if (!node) return;
   try {
@@ -118,6 +146,8 @@ export class DmVoiceGcallInboundPlayout {
   private lastPostedTargetPlayoutMs: number | null = null;
   private pendingDecodedIngressAtMs: Array<number | null> = [];
   private lastDrainMetricSampleAtMs = 0;
+  private startupReadyStallSinceMs: number | null = null;
+  private hasObservedPlayoutStart = false;
 
   private resolveActiveSourceCount(): number {
     const n = this.callbacks?.getActiveSourceCount?.() ?? 1;
@@ -287,6 +317,8 @@ export class DmVoiceGcallInboundPlayout {
 
     this.callbacks = options ?? null;
     this.lastJitterAdaptiveMode = null;
+    this.startupReadyStallSinceMs = null;
+    this.hasObservedPlayoutStart = false;
     this.peerAddress = peerAddress;
     const tuning = getGroupCallAudioTuning(
       options?.profile ?? readGroupCallAudioProfile()
@@ -334,6 +366,10 @@ export class DmVoiceGcallInboundPlayout {
     playNode.port.onmessage = (e: MessageEvent) => {
       const d = e.data as DmVoiceGcallPlayoutWorkletMessage;
       if (d?.type !== 'gcallPlayoutMetrics') return;
+      if (d.playoutStarted) {
+        this.hasObservedPlayoutStart = true;
+        this.startupReadyStallSinceMs = null;
+      }
       this.callbacks?.onPlayoutWorkletMessage?.(d);
     };
 
@@ -424,8 +460,25 @@ export class DmVoiceGcallInboundPlayout {
         this.callbacks?.afterDrain?.({ missedFramesThisTick: 0 });
         return;
       }
-      const hasReadyFrame = jb.hasReadyFrame();
+      let hasReadyFrame = jb.hasReadyFrame();
       const bufferedFrames = jb.getBufferedFrames();
+      if (!hasReadyFrame) {
+        const startupForcePrime = decideStartupForcePrime({
+          hasObservedPlayoutStart: this.hasObservedPlayoutStart,
+          activeSourceCount: this.resolveActiveSourceCount(),
+          hasReadyFrame,
+          bufferedFrames,
+          stallSinceMs: this.startupReadyStallSinceMs,
+          nowMs: tickStartedAt,
+        });
+        this.startupReadyStallSinceMs = startupForcePrime.nextStallSinceMs;
+        if (startupForcePrime.shouldForcePrime) {
+          jb.forcePrimeForRecoveryEscape();
+          hasReadyFrame = jb.hasReadyFrame();
+        }
+      } else {
+        this.startupReadyStallSinceMs = null;
+      }
       if (!hasReadyFrame) {
         missedFramesThisTick = 0;
       } else {
@@ -618,6 +671,8 @@ export class DmVoiceGcallInboundPlayout {
     this.lastPostedTargetPlayoutMs = null;
     this.pendingDecodedIngressAtMs = [];
     this.lastDrainMetricSampleAtMs = 0;
+    this.startupReadyStallSinceMs = null;
+    this.hasObservedPlayoutStart = false;
 
     pcmRing?.reset();
     disconnectSafe(playNode);

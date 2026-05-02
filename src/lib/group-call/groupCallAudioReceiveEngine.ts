@@ -59,14 +59,19 @@ const GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS = 34;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS = 48;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS = 48;
-const GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS = 88;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS = 96;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_COLLAPSE_MS = 80;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS = 56;
-const GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS = 60;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS = 72;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_SILENT_LEAN_MS = 84;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_POST_FAILOVER_ROOT_MS = 64;
 const GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
 const GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS = 160;
 const GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS = 176;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS = 168;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_TARGET_FLOOR_MS = 172;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_FLOOR_MS = 176;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS = 176;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_FLOOR_MS = 192;
 const GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_FLOOR_MS = 172;
 const GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_BUFFERED_MS_MAX = 96;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_HOLD_MS = 2_500;
@@ -78,6 +83,7 @@ const GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS = -35;
 const GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX = 36;
 const GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN = 56;
+const GCALL_SINGLE_SOURCE_PRESSURE_LINGERING_PREBUFFER_FRAMES_MAX = 1;
 const GCALL_SINGLE_SOURCE_PRESSURE_RATE_EMA_MAX = 0.992;
 const GCALL_SINGLE_SOURCE_PRESSURE_RATE_BUFFERED_MS_MAX = 72;
 const GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN = 0.02;
@@ -85,27 +91,45 @@ const GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_BUFFERED_MS_MAX = 56;
 const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX = 72;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN = 0.18;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN = 0.045;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX = 0.998;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX = 96;
-const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HOLD_MS = 3_500;
-const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_BUFFERED_MS_MIN = 92;
-const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_DELTA_MIN_MS = -14;
-const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN = 0.999;
-const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX = 0.05;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_HOLD_MS = 4_500;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX = 18;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX = 1;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS = -60;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN = 40;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HOLD_MS = 5_000;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_HOLD_MS = 5_500;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN = 0.2;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_BUFFERED_MS_MAX = 20;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_DELTA_MAX_MS = -70;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN = 52;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS = -24;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_CONCEALMENT_EMA_MAX = 0.06;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_BUFFERED_MS_MIN = 108;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_DELTA_MIN_MS = -8;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN = 0.9995;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX = 0.04;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX = 0.015;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_HOLD_MS = 6_000;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX = 24;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX = 2;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS = -48;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_INGRESS_AGE_MIN_MS = 220;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN = 28;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN = 3;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_DELTA_MIN_MS = -24;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_RATE_EMA_MIN = 0.999;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_INGRESS_AGE_MAX_MS = 200;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_HOLD_MS = 8_000;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX = 20;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_PREBUFFER_FRAMES_MAX = 1;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_DELTA_MAX_MS = -120;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_RATE_EMA_MIN = 0.998;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_CONCEALMENT_EMA_MAX = 0.02;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN = 32;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN = 3;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS = -24;
 const GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX = 12;
 const GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS = -80;
 const GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS = 900;
-const GCALL_SINGLE_SOURCE_SEVERE_LATCH_MS = 9_000;
-const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_BUFFERED_MS_MIN = 120;
-const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_DELTA_MIN_MS = -12;
+const GCALL_SINGLE_SOURCE_SEVERE_LATCH_MS = 11_000;
+const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_BUFFERED_MS_MIN = 132;
+const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_DELTA_MIN_MS = -8;
 
 interface LiveMultiSourceState {
   sampleCount: number;
@@ -114,15 +138,136 @@ interface LiveMultiSourceState {
   underTargetEma: number;
   concealmentEma: number;
   rateEma: number;
+  oldestFrameAgeEma: number;
   targetPlayoutMs: number;
   preProcessBufferedFrames: number;
   starvationSeverity: PlayoutStarvationSeverity;
   strongCStreak: number;
   protectedMode: boolean;
   severeSingleSourceHoldUntilMs: number;
+  repairCollapseHoldUntilMs: number;
   repairHeavyHoldUntilMs: number;
   persistentLeanHoldUntilMs: number;
+  silentLeanHoldUntilMs: number;
   postRecoveryHoldUntilMs: number;
+  currentSingleSourceProfile: SingleSourceReceiveProfile;
+}
+
+type SingleSourceReceiveProfile =
+  | 'clean-low-latency'
+  | 'steady-weak-listener'
+  | 'repair-heavy-connected'
+  | 'repair-collapse'
+  | 'persistent-lean'
+  | 'silent-lean'
+  | 'post-failover-stabilization'
+  | 'collapse-recovery';
+
+type SingleSourceProfileContext = {
+  recoveryModeActive: boolean;
+  postFailoverRootProfileActive: boolean;
+  severeSingleSourceHold: boolean;
+  repairCollapseHold: boolean;
+  repairCollapsePressure: boolean;
+  repairHeavyHold: boolean;
+  repairHeavyPressure: boolean;
+  persistentLeanHold: boolean;
+  persistentLeanPressure: boolean;
+  silentLeanHold: boolean;
+  silentLeanPressure: boolean;
+  postRecoveryHold: boolean;
+  singleSourcePressure: boolean;
+  mildSteadyAssist: boolean;
+};
+
+function selectSingleSourceReceiveProfile(
+  ctx: SingleSourceProfileContext
+): SingleSourceReceiveProfile {
+  if (ctx.severeSingleSourceHold) {
+    return 'collapse-recovery';
+  }
+  if (ctx.repairCollapsePressure) {
+    return 'repair-collapse';
+  }
+  if (ctx.repairCollapseHold) {
+    return 'steady-weak-listener';
+  }
+  if (ctx.silentLeanHold || ctx.silentLeanPressure) {
+    return 'silent-lean';
+  }
+  if (ctx.persistentLeanHold || ctx.persistentLeanPressure) {
+    return 'persistent-lean';
+  }
+  if (ctx.postFailoverRootProfileActive) {
+    return 'post-failover-stabilization';
+  }
+  if (ctx.repairHeavyHold || ctx.repairHeavyPressure) {
+    return 'repair-heavy-connected';
+  }
+  if (
+    ctx.recoveryModeActive ||
+    ctx.postRecoveryHold ||
+    ctx.singleSourcePressure ||
+    ctx.mildSteadyAssist
+  ) {
+    return 'steady-weak-listener';
+  }
+  return 'clean-low-latency';
+}
+
+function singleSourceReceiveProfileTargetBoostMs(
+  profile: SingleSourceReceiveProfile,
+  state: LiveMultiSourceState
+): number {
+  switch (profile) {
+    case 'collapse-recovery':
+      return GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS;
+    case 'repair-collapse':
+      return GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_COLLAPSE_MS;
+    case 'silent-lean':
+      return GCALL_SINGLE_SOURCE_TARGET_BOOST_SILENT_LEAN_MS;
+    case 'persistent-lean':
+      return GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS;
+    case 'post-failover-stabilization':
+      return GCALL_SINGLE_SOURCE_TARGET_BOOST_POST_FAILOVER_ROOT_MS;
+    case 'repair-heavy-connected':
+      return GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS;
+    case 'steady-weak-listener':
+      return ((state.protectedMode || state.starvationSeverity === 'strong') &&
+        state.bufferedMsEma <=
+          GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN)
+        ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
+        : state.underTargetEma >=
+              GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN ||
+            state.concealmentEma >= GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN
+          ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS
+          : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS;
+    case 'clean-low-latency':
+      return 0;
+  }
+}
+
+function singleSourceReceiveProfileFloorMs(
+  profile: SingleSourceReceiveProfile
+): number | null {
+  switch (profile) {
+    case 'collapse-recovery':
+      return GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS;
+    case 'repair-collapse':
+      return GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_FLOOR_MS;
+    case 'silent-lean':
+      return GCALL_SINGLE_SOURCE_SILENT_LEAN_FLOOR_MS;
+    case 'persistent-lean':
+      return GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS;
+    case 'post-failover-stabilization':
+      return GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_FLOOR_MS;
+    case 'steady-weak-listener':
+      return GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS;
+    case 'repair-heavy-connected':
+      return GCALL_SINGLE_SOURCE_REPAIR_HEAVY_TARGET_FLOOR_MS;
+    case 'clean-low-latency':
+      return null;
+  }
 }
 
 function disconnectNodeSafe(node: AudioNode | null): void {
@@ -235,6 +380,10 @@ export class GroupCallAudioReceiveEngine {
     playoutCount: number;
     outputNodeCount: number;
     sourceAddrs: string[];
+    livePolicyProfilesBySource: Array<{
+      peerAddress: string;
+      profile: SingleSourceReceiveProfile;
+    }>;
     playouts: Array<{
       peerAddress: string;
       decodePath: 'wasm-fec' | 'webcodecs' | 'uninitialized';
@@ -255,6 +404,14 @@ export class GroupCallAudioReceiveEngine {
     const playouts = [...this.playouts.values()].map((playout) =>
       playout.getDiagnosticsSnapshot()
     );
+    const livePolicyProfilesBySource = [...this.playouts.keys()].map(
+      (sourceAddr) => ({
+        peerAddress: sourceAddr,
+        profile:
+          this.liveMultiSourceStateBySource.get(sourceAddr)
+            ?.currentSingleSourceProfile ?? 'clean-low-latency',
+      })
+    );
     return {
       audioContextState: this.audioContext?.state ?? null,
       hasMasterGain: this.masterGain !== null,
@@ -264,6 +421,7 @@ export class GroupCallAudioReceiveEngine {
       playoutCount: this.playouts.size,
       outputNodeCount: this.outputNodeBySource.size,
       sourceAddrs: [...this.playouts.keys()],
+      livePolicyProfilesBySource,
       playouts,
     };
   }
@@ -474,15 +632,19 @@ export class GroupCallAudioReceiveEngine {
         underTargetEma: 0,
         concealmentEma: 0,
         rateEma: 1,
+        oldestFrameAgeEma: 0,
         targetPlayoutMs: Math.max(40, targetPlayoutMs),
         preProcessBufferedFrames: 0,
         starvationSeverity: 'none',
         strongCStreak: 0,
         protectedMode: false,
         severeSingleSourceHoldUntilMs: 0,
+        repairCollapseHoldUntilMs: 0,
         repairHeavyHoldUntilMs: 0,
         persistentLeanHoldUntilMs: 0,
+        silentLeanHoldUntilMs: 0,
         postRecoveryHoldUntilMs: 0,
+        currentSingleSourceProfile: 'clean-low-latency',
       };
       this.liveMultiSourceStateBySource.set(sourceAddr, state);
     }
@@ -558,6 +720,10 @@ export class GroupCallAudioReceiveEngine {
       state.sampleCount === 1
         ? rateSample
         : state.rateEma * (1 - alpha) + rateSample * alpha;
+    state.oldestFrameAgeEma =
+      state.sampleCount === 1
+        ? oldestFrameAgeMs
+        : state.oldestFrameAgeEma * (1 - alpha) + oldestFrameAgeMs * alpha;
 
     const bufferAdequacy = computeBufferAdequacy({
       avgPcmBufferedMs: state.bufferedMsEma,
@@ -654,11 +820,21 @@ export class GroupCallAudioReceiveEngine {
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
         const lingeringPressure =
           (state.underTargetEma >= GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN ||
-            state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS) &&
+            (state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
+              (state.preProcessBufferedFrames <=
+                GCALL_SINGLE_SOURCE_PRESSURE_LINGERING_PREBUFFER_FRAMES_MAX ||
+                state.oldestFrameAgeEma >=
+                  GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_INGRESS_AGE_MIN_MS ||
+                state.rateEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_EMA_MAX ||
+                state.concealmentEma >=
+                  GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN))) &&
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN;
         const ratePressure =
           state.rateEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_EMA_MAX &&
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_BUFFERED_MS_MAX;
+        const starvationPressure =
+          (state.protectedMode || state.starvationSeverity !== 'none') &&
+          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
         const artifactPressure =
           (state.underTargetEma >=
             GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN &&
@@ -669,12 +845,51 @@ export class GroupCallAudioReceiveEngine {
             state.bufferedMsEma <=
               GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX);
         const repairHeavyPressure =
-          state.concealmentEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN &&
+          ((state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN) ||
+            (state.underTargetEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN &&
+              state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS)) &&
           state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX &&
           !severeSingleSourceHold;
+        const repairCollapsePressure =
+          state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_BUFFERED_MS_MAX &&
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_DELTA_MAX_MS &&
+          !severeSingleSourceHold;
+        if (repairCollapsePressure) {
+          state.repairCollapseHoldUntilMs = Math.max(
+            state.repairCollapseHoldUntilMs,
+            nowMs + GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_HOLD_MS
+          );
+        }
+        const repairCollapseHold =
+          state.repairCollapseHoldUntilMs > nowMs &&
+          !(
+            !repairCollapsePressure &&
+            state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN &&
+            state.deltaMsEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS &&
+            state.concealmentEma <=
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_CONCEALMENT_EMA_MAX
+          );
+        if (
+          state.repairCollapseHoldUntilMs > 0 &&
+          !repairCollapsePressure &&
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN &&
+          state.deltaMsEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_CONCEALMENT_EMA_MAX
+        ) {
+          state.repairCollapseHoldUntilMs = 0;
+        }
         if (repairHeavyPressure) {
           state.repairHeavyHoldUntilMs = Math.max(
             state.repairHeavyHoldUntilMs,
@@ -692,7 +907,9 @@ export class GroupCallAudioReceiveEngine {
             state.rateEma >=
               GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN &&
             state.concealmentEma <=
-              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX &&
+            state.underTargetEma <=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX
           );
         if (
           state.repairHeavyHoldUntilMs > 0 &&
@@ -704,15 +921,19 @@ export class GroupCallAudioReceiveEngine {
           state.rateEma >=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN &&
           state.concealmentEma <=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX &&
+          state.underTargetEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX
         ) {
           state.repairHeavyHoldUntilMs = 0;
         }
         const persistentLeanPressure =
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX &&
-          state.preProcessBufferedFrames <=
-            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX &&
+          (state.preProcessBufferedFrames <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX ||
+            state.oldestFrameAgeEma >=
+              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_INGRESS_AGE_MIN_MS) &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS &&
           !severeSingleSourceHold;
         if (persistentLeanPressure) {
@@ -729,10 +950,8 @@ export class GroupCallAudioReceiveEngine {
               GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
             state.preProcessBufferedFrames >=
               GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
-            state.deltaMsEma >=
-              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_DELTA_MIN_MS &&
-            state.rateEma >=
-              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_RATE_EMA_MIN
+            state.oldestFrameAgeEma <=
+              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_INGRESS_AGE_MAX_MS
           );
         if (
           state.persistentLeanHoldUntilMs > 0 &&
@@ -741,12 +960,48 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           state.preProcessBufferedFrames >=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
-          state.deltaMsEma >=
-            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_DELTA_MIN_MS &&
-          state.rateEma >=
-            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_RATE_EMA_MIN
+          state.oldestFrameAgeEma <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_INGRESS_AGE_MAX_MS
         ) {
           state.persistentLeanHoldUntilMs = 0;
+        }
+        const silentLeanPressure =
+          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
+          state.preProcessBufferedFrames <=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_PREBUFFER_FRAMES_MAX &&
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_DELTA_MAX_MS &&
+          state.rateEma >= GCALL_SINGLE_SOURCE_SILENT_LEAN_RATE_EMA_MIN &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_CONCEALMENT_EMA_MAX &&
+          !severeSingleSourceHold;
+        if (silentLeanPressure) {
+          state.silentLeanHoldUntilMs = Math.max(
+            state.silentLeanHoldUntilMs,
+            nowMs + GCALL_SINGLE_SOURCE_SILENT_LEAN_HOLD_MS
+          );
+        }
+        const silentLeanHold =
+          state.silentLeanHoldUntilMs > nowMs &&
+          !(
+            !silentLeanPressure &&
+            state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
+            state.preProcessBufferedFrames >=
+              GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
+            state.deltaMsEma >=
+              GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS
+          );
+        if (
+          state.silentLeanHoldUntilMs > 0 &&
+          !silentLeanPressure &&
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
+          state.preProcessBufferedFrames >=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
+          state.deltaMsEma >=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS
+        ) {
+          state.silentLeanHoldUntilMs = 0;
         }
         const mildSteadyAssist =
           (ratePressure || artifactPressure) &&
@@ -756,15 +1011,18 @@ export class GroupCallAudioReceiveEngine {
         if (
           recoveryModeActive ||
           severeSingleSourceHold ||
-          state.protectedMode ||
-          state.starvationSeverity !== 'none' ||
+          starvationPressure ||
           bufferedPressure ||
           lingeringPressure ||
           ratePressure ||
           mildSteadyAssist ||
+          repairCollapseHold ||
+          repairCollapsePressure ||
           repairHeavyHold ||
           persistentLeanHold ||
           persistentLeanPressure ||
+          silentLeanHold ||
+          silentLeanPressure ||
           repairHeavyPressure
         ) {
           state.postRecoveryHoldUntilMs = Math.max(
@@ -777,8 +1035,7 @@ export class GroupCallAudioReceiveEngine {
           !(
             !recoveryModeActive &&
             !severeSingleSourceHold &&
-            !state.protectedMode &&
-            state.starvationSeverity === 'none' &&
+            !starvationPressure &&
             !bufferedPressure &&
             !lingeringPressure &&
             !ratePressure &&
@@ -795,8 +1052,7 @@ export class GroupCallAudioReceiveEngine {
           state.postRecoveryHoldUntilMs > 0 &&
           !recoveryModeActive &&
           !severeSingleSourceHold &&
-          !state.protectedMode &&
-          state.starvationSeverity === 'none' &&
+          !starvationPressure &&
           !bufferedPressure &&
           !lingeringPressure &&
           !ratePressure &&
@@ -813,22 +1069,28 @@ export class GroupCallAudioReceiveEngine {
         }
         const singleSourcePressure =
           severeSingleSourceHold ||
-          state.protectedMode ||
-          state.starvationSeverity !== 'none' ||
+          starvationPressure ||
           bufferedPressure ||
           lingeringPressure ||
           ratePressure;
-        const weakSingleSource =
-          recoveryModeActive ||
-          postFailoverRootProfileActive ||
-          postRecoveryHold ||
-          singleSourcePressure ||
-          mildSteadyAssist ||
-          repairHeavyHold ||
-          persistentLeanHold ||
-          persistentLeanPressure ||
-          repairHeavyPressure;
-        if (!weakSingleSource) {
+        const profile = selectSingleSourceReceiveProfile({
+          recoveryModeActive,
+          postFailoverRootProfileActive,
+          severeSingleSourceHold,
+          repairCollapseHold,
+          repairCollapsePressure,
+          repairHeavyHold,
+          repairHeavyPressure,
+          persistentLeanHold,
+          persistentLeanPressure,
+          silentLeanHold,
+          silentLeanPressure,
+          postRecoveryHold,
+          singleSourcePressure,
+          mildSteadyAssist,
+        });
+        state.currentSingleSourceProfile = profile;
+        if (profile === 'clean-low-latency') {
           playout.setBurstRecoveryExtraHoldFrames(0);
           playout.resetDynamicTargetPlayoutMs();
           continue;
@@ -836,35 +1098,10 @@ export class GroupCallAudioReceiveEngine {
 
         let targetMs =
           staticTargetMs +
-          (severeSingleSourceHold
-            ? GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS
-            : state.protectedMode || state.starvationSeverity === 'strong'
-              ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
-            : persistentLeanHold || persistentLeanPressure
-              ? GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS
-            : postFailoverRootProfileActive
-                ? GCALL_SINGLE_SOURCE_TARGET_BOOST_POST_FAILOVER_ROOT_MS
-              : repairHeavyHold || repairHeavyPressure
-                ? GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS
-              : mildSteadyAssist
-                ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS
-                : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS);
-        if (
-          singleSourcePressure ||
-          persistentLeanHold ||
-          persistentLeanPressure ||
-          postFailoverRootProfileActive
-        ) {
-          targetMs = Math.max(
-            targetMs,
-            severeSingleSourceHold
-              ? GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS
-              : persistentLeanHold || persistentLeanPressure
-                ? GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS
-              : postFailoverRootProfileActive
-                ? GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_FLOOR_MS
-              : GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS
-          );
+          singleSourceReceiveProfileTargetBoostMs(profile, state);
+        const floorMs = singleSourceReceiveProfileFloorMs(profile);
+        if (floorMs !== null) {
+          targetMs = Math.max(targetMs, floorMs);
         }
         const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs({
           currentAdaptiveMaxTargetMs: targetMs,
@@ -895,6 +1132,8 @@ export class GroupCallAudioReceiveEngine {
         playout.setDynamicTargetPlayoutMs(targetMs);
         continue;
       }
+
+      state.currentSingleSourceProfile = 'clean-low-latency';
 
       if (mode !== 'recovery') {
         playout.setBurstRecoveryExtraHoldFrames(0);
