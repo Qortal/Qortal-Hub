@@ -516,6 +516,18 @@ export interface GroupCallMetricsSnapshot {
   reticulumAudioOutboundPacketSamples: number;
   /** Most recent outbound `transport` from main-process send diagnostics; null if none yet. */
   reticulumAudioOutboundTransportLast: 'link' | 'packet' | null;
+  /**
+   * Inbound group-audio transport observed from main-process `gcall:audio` events.
+   * Incremented once per received packet that reported a `link` transport.
+   */
+  reticulumAudioInboundLinkSamples: number;
+  /**
+   * Inbound group-audio transport observed from main-process `gcall:audio` events.
+   * Incremented once per received packet that reported a `packet` transport.
+   */
+  reticulumAudioInboundPacketSamples: number;
+  /** Most recent inbound `transport` from main-process `gcall:audio`; null if none yet. */
+  reticulumAudioInboundTransportLast: 'link' | 'packet' | null;
   mixerActiveSpeakerEstimate: number;
   mixerMasterGain: number;
   mixerCurrentReductionDb: number;
@@ -621,6 +633,10 @@ export interface GroupCallWindowMetrics {
   reticulumAudioOutboundLinkSamples: number;
   /** Send IPC completions in this window that reported `transport: packet`. */
   reticulumAudioOutboundPacketSamples: number;
+  /** Received `gcall:audio` events in this window that reported `transport: link`. */
+  reticulumAudioInboundLinkSamples: number;
+  /** Received `gcall:audio` events in this window that reported `transport: packet`. */
+  reticulumAudioInboundPacketSamples: number;
   reticulumAudioQueuePressureDropRatePerSec: number;
   reticulumAudioStaleDropRatePerSec: number;
   reticulumAudioPacketSendFailureRatePerSec: number;
@@ -1133,6 +1149,8 @@ interface WindowCounterSet {
   reticulumAudioPacketUnknownSends: number;
   reticulumAudioOutboundLinkSamples: number;
   reticulumAudioOutboundPacketSamples: number;
+  reticulumAudioInboundLinkSamples: number;
+  reticulumAudioInboundPacketSamples: number;
 }
 
 interface SourceWindowAccumulator {
@@ -1202,6 +1220,8 @@ function emptyWindowCounters(): WindowCounterSet {
     reticulumAudioPacketUnknownSends: 0,
     reticulumAudioOutboundLinkSamples: 0,
     reticulumAudioOutboundPacketSamples: 0,
+    reticulumAudioInboundLinkSamples: 0,
+    reticulumAudioInboundPacketSamples: 0,
   };
 }
 
@@ -1296,6 +1316,9 @@ export class GroupCallPerformanceTracker {
     reticulumAudioOutboundLinkSamples: 0,
     reticulumAudioOutboundPacketSamples: 0,
     reticulumAudioOutboundTransportLast: null,
+    reticulumAudioInboundLinkSamples: 0,
+    reticulumAudioInboundPacketSamples: 0,
+    reticulumAudioInboundTransportLast: null,
     mixerActiveSpeakerEstimate: 0,
     mixerMasterGain: 1,
     mixerCurrentReductionDb: 0,
@@ -1783,6 +1806,22 @@ export class GroupCallPerformanceTracker {
     } else {
       this.snapshot.reticulumAudioOutboundPacketSamples++;
       this.windowCounters.reticulumAudioOutboundPacketSamples++;
+    }
+    this.snapshot.lastUpdatedAt = Date.now();
+  }
+
+  /**
+   * From main-process `gcall:audio` diagnostics' `transport` field
+   * (inbound group audio: `link` vs `packet`).
+   */
+  recordReticulumAudioInboundTransport(transport: 'link' | 'packet'): void {
+    this.snapshot.reticulumAudioInboundTransportLast = transport;
+    if (transport === 'link') {
+      this.snapshot.reticulumAudioInboundLinkSamples++;
+      this.windowCounters.reticulumAudioInboundLinkSamples++;
+    } else {
+      this.snapshot.reticulumAudioInboundPacketSamples++;
+      this.windowCounters.reticulumAudioInboundPacketSamples++;
     }
     this.snapshot.lastUpdatedAt = Date.now();
   }
@@ -2566,6 +2605,9 @@ export class GroupCallPerformanceTracker {
       reticulumAudioOutboundLinkSamples: 0,
       reticulumAudioOutboundPacketSamples: 0,
       reticulumAudioOutboundTransportLast: null,
+      reticulumAudioInboundLinkSamples: 0,
+      reticulumAudioInboundPacketSamples: 0,
+      reticulumAudioInboundTransportLast: null,
       mixerActiveSpeakerEstimate: 0,
       mixerMasterGain: 1,
       mixerCurrentReductionDb: 0,
@@ -2785,6 +2827,10 @@ export class GroupCallPerformanceTracker {
         this.windowCounters.reticulumAudioOutboundLinkSamples,
       reticulumAudioOutboundPacketSamples:
         this.windowCounters.reticulumAudioOutboundPacketSamples,
+      reticulumAudioInboundLinkSamples:
+        this.windowCounters.reticulumAudioInboundLinkSamples,
+      reticulumAudioInboundPacketSamples:
+        this.windowCounters.reticulumAudioInboundPacketSamples,
       reticulumAudioQueuePressureDropRatePerSec: roundMetric(
         this.windowCounters.reticulumAudioQueuePressureDrops / (durationMs / 1000)
       ),

@@ -70,6 +70,7 @@ import {
   collectActiveSpeakers,
   reconcileParticipantSpeaking,
   sameAddressList,
+  type GroupCallMetricsSnapshot,
 } from './router';
 import {
   hasOccupiedRoomEvidenceForJoin,
@@ -136,6 +137,26 @@ type HeldIncomingAudioPayload = {
   heldAtMs: number;
 };
 
+type RuntimeRecentWindowTrend = {
+  atMs: number;
+  reason: string[] | null;
+  role: AudioEngineRole;
+  topologyEpoch: number;
+  adaptiveNetworkMode: GroupCallMetricsSnapshot['adaptiveNetworkMode'];
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  playoutRateFractionBelow097: number;
+  missingFrames: number;
+  concealmentTicks: number;
+  packetsDroppedPendingDecrypt: number;
+  packetsDroppedDecodeFailure: number;
+  reticulumAudioPacketPathTimeouts: number;
+  reticulumAudioOutboundLinkSamples: number;
+  reticulumAudioOutboundPacketSamples: number;
+  reticulumAudioInboundLinkSamples: number;
+  reticulumAudioInboundPacketSamples: number;
+};
+
 const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
@@ -145,9 +166,16 @@ const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const AUTHORITATIVE_KEY_RECOVERY_RETRY_MS = 1_500;
 const AUTHORITATIVE_KEY_RECOVERY_FAILURE_LOG_COOLDOWN_MS = 1_000;
+const WORKER_DECODE_FAILURE_RECOVERY_WINDOW_MS = 2_000;
+const WORKER_DECODE_FAILURE_RECOVERY_THRESHOLD = 8;
+const WORKER_DECODE_FAILURE_RECOVERY_COOLDOWN_MS = 5_000;
 const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS = 48;
 const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_AGE_MS = 4_000;
 const MAX_AUDIO_SURFACE_DIAG_EVENTS = 120;
+const MAX_RECENT_WINDOW_TRENDS = 12;
+const GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN = 0.05;
+const GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN = 300;
+const GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN = 80;
 const MAX_ACTIVE_SPEAKERS_GLOBAL = 3;
 const ACTIVE_SPEAKER_WINDOW_MS = 2_000;
 const GCALL_CONNECTION_HINT_BAD_MS = 2_800;
@@ -306,6 +334,7 @@ export class GroupCallAudioEngineRuntime {
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
+  private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
   private connectionHintBadSince: number | null = null;
   private connectionHintGoodSince: number | null = null;
   private connectionHintSevereSince: number | null = null;
@@ -317,10 +346,14 @@ export class GroupCallAudioEngineRuntime {
   private heldIncomingAudio: HeldIncomingAudioPayload[] = [];
   private lastAwaitingAuthoritativeKeyFailureLogAt = 0;
   private rootHeartbeatLastSeenAt = 0;
+  private workerDecodeFailureWindowStartedAt = 0;
+  private workerDecodeFailureCount = 0;
+  private workerDecodeFailureRecoveryLastAt = 0;
 
   constructor() {
     this.receiveEngine = new GroupCallAudioReceiveEngine(
       (metrics) => {
+        this.recordRecentWindowTrend(metrics);
         this.snapshot = {
           ...this.snapshot,
           metrics,
@@ -554,6 +587,102 @@ export class GroupCallAudioEngineRuntime {
         0,
         this.diagEvents.length - MAX_AUDIO_SURFACE_DIAG_EVENTS
       );
+    }
+  }
+
+  private clearRecentWindowTrends(): void {
+    this.recentWindowTrends.splice(0, this.recentWindowTrends.length);
+  }
+
+  private recordRecentWindowTrend(metrics: GroupCallMetricsSnapshot): void {
+    const previous = this.recentWindowTrends[this.recentWindowTrends.length - 1] ?? null;
+    const reasons: string[] = [];
+    if (
+      previous &&
+      previous.adaptiveNetworkMode !== 'recovery' &&
+      metrics.adaptiveNetworkMode === 'recovery'
+    ) {
+      reasons.push('entered-recovery');
+    }
+    if (
+      previous &&
+      metrics.playoutUnderTargetFraction - previous.playoutUnderTargetFraction >=
+        GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN
+    ) {
+      reasons.push('under-target-spike');
+    }
+    if (
+      previous &&
+      metrics.missingFrames - previous.missingFrames >=
+        GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN
+    ) {
+      reasons.push('missing-frames-spike');
+    }
+    if (
+      previous &&
+      metrics.concealmentTicks - previous.concealmentTicks >=
+        GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN
+    ) {
+      reasons.push('concealment-spike');
+    }
+    if (
+      previous &&
+      previous.packetsDroppedDecodeFailure === 0 &&
+      metrics.packetsDroppedDecodeFailure > 0
+    ) {
+      reasons.push('decode-failures-started');
+    }
+    if (
+      previous &&
+      previous.packetsDroppedPendingDecrypt === 0 &&
+      metrics.packetsDroppedPendingDecrypt > 0
+    ) {
+      reasons.push('pending-decrypt-started');
+    }
+    if (
+      previous &&
+      previous.reticulumAudioPacketPathTimeouts === 0 &&
+      metrics.reticulumAudioPacketPathTimeouts > 0
+    ) {
+      reasons.push('packet-path-timeouts-started');
+    }
+
+    this.recentWindowTrends.push({
+      atMs: Date.now(),
+      reason: reasons.length > 0 ? reasons : null,
+      role: this.deriveTopologyRoleForAddress(this.userInfo?.address ?? ''),
+      topologyEpoch: this.topology?.topologyEpoch ?? 0,
+      adaptiveNetworkMode: metrics.adaptiveNetworkMode,
+      avgPcmBufferedMs: metrics.avgPcmBufferedMs,
+      playoutUnderTargetFraction: metrics.playoutUnderTargetFraction,
+      playoutRateFractionBelow097: metrics.playoutRateFractionBelow097,
+      missingFrames: metrics.missingFrames,
+      concealmentTicks: metrics.concealmentTicks,
+      packetsDroppedPendingDecrypt: metrics.packetsDroppedPendingDecrypt,
+      packetsDroppedDecodeFailure: metrics.packetsDroppedDecodeFailure,
+      reticulumAudioPacketPathTimeouts: metrics.reticulumAudioPacketPathTimeouts,
+      reticulumAudioOutboundLinkSamples: metrics.reticulumAudioOutboundLinkSamples,
+      reticulumAudioOutboundPacketSamples: metrics.reticulumAudioOutboundPacketSamples,
+      reticulumAudioInboundLinkSamples: metrics.reticulumAudioInboundLinkSamples,
+      reticulumAudioInboundPacketSamples: metrics.reticulumAudioInboundPacketSamples,
+    });
+    if (this.recentWindowTrends.length > MAX_RECENT_WINDOW_TRENDS) {
+      this.recentWindowTrends.splice(
+        0,
+        this.recentWindowTrends.length - MAX_RECENT_WINDOW_TRENDS
+      );
+    }
+    if (reasons.length > 0) {
+      this.recordDiagEvent('call-quality-worsened', {
+        reasons,
+        adaptiveNetworkMode: metrics.adaptiveNetworkMode,
+        playoutUnderTargetFraction: metrics.playoutUnderTargetFraction,
+        missingFrames: metrics.missingFrames,
+        concealmentTicks: metrics.concealmentTicks,
+        packetsDroppedPendingDecrypt: metrics.packetsDroppedPendingDecrypt,
+        packetsDroppedDecodeFailure: metrics.packetsDroppedDecodeFailure,
+        reticulumAudioPacketPathTimeouts: metrics.reticulumAudioPacketPathTimeouts,
+      });
     }
   }
 
@@ -855,6 +984,7 @@ export class GroupCallAudioEngineRuntime {
       context,
       liveMetricsSnapshot,
       exportWindowMetrics: liveMetricsSnapshot,
+      recentWindowTrends: [...this.recentWindowTrends],
       audioSurfaceRuntimeDiagnostics:
         this.buildAudioSurfaceRuntimeDiagnosticsSnapshot(),
     });
@@ -925,6 +1055,7 @@ export class GroupCallAudioEngineRuntime {
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
     this.awaitingAuthoritativeKey = false;
+    this.resetWorkerDecodeFailureRecoveryState();
     this.callSessionId = '';
     this.mediaSessionGeneration = 1;
     this.topology = null;
@@ -946,6 +1077,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
     this.clearHeldIncomingAudio();
+    this.clearRecentWindowTrends();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.activeSpeakerLastSeenAt.clear();
     this.connectionHintBadSince = null;
@@ -1132,6 +1264,7 @@ export class GroupCallAudioEngineRuntime {
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
     this.awaitingAuthoritativeKey = false;
+    this.resetWorkerDecodeFailureRecoveryState();
     this.callSessionId = '';
     this.mediaSessionGeneration = 1;
     this.topology = null;
@@ -1149,6 +1282,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
     this.clearHeldIncomingAudio();
+    this.clearRecentWindowTrends();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     await this.senderEngine.stop();
     await this.syncDecryptPoolRoomKey(null);
@@ -1203,6 +1337,10 @@ export class GroupCallAudioEngineRuntime {
             | null
             | undefined;
           this.upsertParticipantFromRuntimeEvent(
+            joining?.address,
+            joining?.publicKey
+          );
+          await this.maybeSendRoomKeyToJoiningParticipant(
             joining?.address,
             joining?.publicKey
           );
@@ -1315,6 +1453,7 @@ export class GroupCallAudioEngineRuntime {
       this.ownsRoomKey = false;
       this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = false;
+      this.resetWorkerDecodeFailureRecoveryState();
       this.seq = 0;
       this.callEpochMs = Date.now();
       this.clearHeldIncomingAudio();
@@ -1479,6 +1618,7 @@ export class GroupCallAudioEngineRuntime {
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
     this.awaitingAuthoritativeKey = false;
+    this.resetWorkerDecodeFailureRecoveryState();
     this.clearKeyRecoveryRetryTimer();
     this.callEpochMs = Date.now();
     this.seq = 0;
@@ -1511,6 +1651,7 @@ export class GroupCallAudioEngineRuntime {
       this.ownsRoomKey = true;
       this.selfMintedRoomKey = true;
       this.awaitingAuthoritativeKey = false;
+      this.resetWorkerDecodeFailureRecoveryState();
       this.clearKeyRecoveryRetryTimer();
       this.callEpochMs = Date.now();
       this.seq = 0;
@@ -1952,6 +2093,61 @@ export class GroupCallAudioEngineRuntime {
     });
   }
 
+  private resetWorkerDecodeFailureRecoveryState(): void {
+    this.workerDecodeFailureWindowStartedAt = 0;
+    this.workerDecodeFailureCount = 0;
+    this.workerDecodeFailureRecoveryLastAt = 0;
+  }
+
+  private noteWorkerDecodeFailureForKeyRecovery(): void {
+    const root = this.topology?.rootForwarder?.trim() ?? '';
+    const myAddress = this.userInfo?.address ?? '';
+    if (!root || !myAddress || root === myAddress || !this.snapshot.roomId) {
+      return;
+    }
+    const now = Date.now();
+    if (
+      this.workerDecodeFailureWindowStartedAt <= 0 ||
+      now - this.workerDecodeFailureWindowStartedAt >
+        WORKER_DECODE_FAILURE_RECOVERY_WINDOW_MS
+    ) {
+      this.workerDecodeFailureWindowStartedAt = now;
+      this.workerDecodeFailureCount = 0;
+    }
+    this.workerDecodeFailureCount += 1;
+    if (
+      this.workerDecodeFailureCount <
+      WORKER_DECODE_FAILURE_RECOVERY_THRESHOLD
+    ) {
+      return;
+    }
+    if (
+      this.workerDecodeFailureRecoveryLastAt > 0 &&
+      now - this.workerDecodeFailureRecoveryLastAt <
+        WORKER_DECODE_FAILURE_RECOVERY_COOLDOWN_MS
+    ) {
+      return;
+    }
+    this.workerDecodeFailureRecoveryLastAt = now;
+    this.awaitingAuthoritativeKey = true;
+    traceGcallAudioSurface(
+      'pipeline: repeated decrypt worker decode-failed triggered authoritative key recovery',
+      {
+        roomId: this.snapshot.roomId,
+        rootForwarder: root,
+        decodeFailedCount: this.workerDecodeFailureCount,
+      }
+    );
+    this.recordDiagEvent('worker-decode-failure-key-recovery', {
+      roomId: this.snapshot.roomId,
+      rootForwarder: root,
+      decodeFailedCount: this.workerDecodeFailureCount,
+    });
+    void this.requestRoomKeyFrom(root, 'topology');
+    this.requestRetainedKeyReplay('worker-decode-failure');
+    this.scheduleAuthoritativeKeyRecovery('worker-decode-failure');
+  }
+
   private scheduleAuthoritativeKeyRecovery(reason: string): void {
     const root = this.topology?.rootForwarder?.trim() ?? '';
     const myAddress = this.userInfo?.address ?? '';
@@ -2161,13 +2357,22 @@ export class GroupCallAudioEngineRuntime {
     if (root === myAddress) {
       const previousRoomKey = this.roomKey;
       const hadOwnRoomKey = this.ownsRoomKey && previousRoomKey !== null;
-      const nextRoomKey = hadOwnRoomKey ? previousRoomKey : naclApi.randomBytes(32);
+      const adoptingExistingRoomKey =
+        !hadOwnRoomKey &&
+        previousRoomKey !== null &&
+        previousRoot.length > 0 &&
+        previousRoot !== myAddress;
+      const nextRoomKey =
+        hadOwnRoomKey || adoptingExistingRoomKey
+          ? previousRoomKey
+          : naclApi.randomBytes(32);
       this.roomKey = nextRoomKey;
       this.ownsRoomKey = true;
-      this.selfMintedRoomKey = true;
+      this.selfMintedRoomKey = !adoptingExistingRoomKey;
       this.awaitingAuthoritativeKey = false;
+      this.resetWorkerDecodeFailureRecoveryState();
       this.clearKeyRecoveryRetryTimer();
-      if (!hadOwnRoomKey) {
+      if (!hadOwnRoomKey && !adoptingExistingRoomKey) {
         this.callEpochMs = Date.now();
         this.seq = 0;
         await this.syncDecryptPoolRoomKey(nextRoomKey);
@@ -2177,13 +2382,30 @@ export class GroupCallAudioEngineRuntime {
       traceGcallAudioSurface('pipeline: root authority ensured room key', {
         roomId: this.snapshot.roomId,
         topologyEpoch: nextTopology.topologyEpoch,
-        rotated: !hadOwnRoomKey || previousRoot !== myAddress,
+        rotated: !hadOwnRoomKey && !adoptingExistingRoomKey,
+        adoptedExistingRoomKey: adoptingExistingRoomKey,
       });
       this.recordDiagEvent('root-authority-ensured-room-key', {
         roomId: this.snapshot.roomId,
         topologyEpoch: nextTopology.topologyEpoch,
-        rotated: !hadOwnRoomKey || previousRoot !== myAddress,
+        rotated: !hadOwnRoomKey && !adoptingExistingRoomKey,
+        adoptedExistingRoomKey: adoptingExistingRoomKey,
       });
+      return;
+    }
+    const remoteRootChanged =
+      previousRoot.length > 0 &&
+      previousRoot !== root &&
+      previousRoot !== myAddress;
+    if (remoteRootChanged) {
+      this.roomKey = null;
+      this.ownsRoomKey = false;
+      this.selfMintedRoomKey = false;
+      this.awaitingAuthoritativeKey = true;
+      await this.syncDecryptPoolRoomKey(null);
+      this.requestRetainedKeyReplay('topology-root-changed');
+      await this.requestRoomKeyFrom(root, 'topology');
+      this.scheduleAuthoritativeKeyRecovery('topology-root-changed');
       return;
     }
     if (previousRoot === myAddress) {
@@ -2521,6 +2743,32 @@ export class GroupCallAudioEngineRuntime {
     return recipients;
   }
 
+  private async maybeSendRoomKeyToJoiningParticipant(
+    address: string | null | undefined,
+    publicKey: string | null | undefined
+  ): Promise<void> {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const root = this.topology?.rootForwarder?.trim() ?? '';
+    const nextAddress = address?.trim() ?? '';
+    const nextPublicKey = publicKey?.trim() ?? '';
+    if (
+      !myAddress ||
+      !this.roomKey ||
+      !nextAddress ||
+      !nextPublicKey ||
+      nextAddress === myAddress ||
+      root !== myAddress
+    ) {
+      return;
+    }
+    await this.sendTargetedRoomKey(
+      this.roomKey,
+      nextAddress,
+      nextPublicKey,
+      'participant-joined'
+    );
+  }
+
   private async distributeRoomKey(roomKey: Uint8Array): Promise<void> {
     if (!this.userInfo?.address || !this.snapshot.roomId || !this.callSessionId) return;
     const recipients = await this.getAuthoritativeRecipients();
@@ -2812,6 +3060,7 @@ export class GroupCallAudioEngineRuntime {
       traceGcallAudioSurface('pipeline: decrypt worker reported decode-failed', {
         id: entry.id,
       });
+      this.noteWorkerDecodeFailureForKeyRecovery();
       return;
     }
     if (entry.status !== 'ok') {

@@ -749,6 +749,34 @@ const GCALL_CONNECTION_HINT_GOOD_MS = 4500;
 const SEND_PATH_DIAGNOSTIC_LOG_MIN_INTERVAL_MS = 5_000;
 const RELAY_INGRESS_PEER = '__relay__';
 type GcallAudioIngressTransport = 'packet' | 'link' | 'unknown';
+
+type GcallRecentWindowTrend = {
+  atMs: number;
+  reason: 'interval' | 'manual';
+  role: MyRole;
+  topologyEpoch: number | null;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  pathQualityScoreV1: number;
+  pathQualityScoreEmaV1: number;
+  avgPcmBufferedMs: number;
+  playoutUnderTargetFraction: number;
+  playoutRateFractionBelow097: number;
+  missingFrames: number;
+  concealmentTicks: number;
+  packetsDroppedPendingDecrypt: number;
+  packetsDroppedDecodeFailure: number;
+  reticulumAudioPacketPathTimeouts: number;
+  reticulumAudioOutboundLinkSamples: number;
+  reticulumAudioOutboundPacketSamples: number;
+  reticulumAudioInboundLinkSamples: number;
+  reticulumAudioInboundPacketSamples: number;
+};
+
+const GCALL_RECENT_WINDOW_TRENDS_MAX = 12;
+const GCALL_CALL_QUALITY_WORSENED_SCORE_DROP_MIN = 0.12;
+const GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN = 0.05;
+const GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN = 300;
+const GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN = 80;
 /**
  * Root has warmed outbound (relayPacketsSent) but packet-mode ingress from peers can still be
  * cold. Mirror `topology-startup-warm` (non-root → root) by requesting path recovery toward
@@ -1697,6 +1725,12 @@ export function useGroupVoiceCall(uiActive = false) {
   >([]);
   const pathQualityScoreEmaV1Ref = useRef<number | null>(null);
   const lastPeerRouteKeyRef = useRef<Map<string, string>>(new Map());
+  const lastOutboundTransportByPeerRef = useRef<Map<string, 'link' | 'packet'>>(
+    new Map()
+  );
+  const lastInboundTransportByPeerRef = useRef<
+    Map<string, 'link' | 'packet' | 'unknown'>
+  >(new Map());
   const lastReticulumLinkFallbackDiagAtPeerRef = useRef<Map<string, number>>(
     new Map()
   );
@@ -2147,6 +2181,7 @@ export function useGroupVoiceCall(uiActive = false) {
     null
   );
   const lastWindowMetricsRef = useRef<GroupCallWindowMetrics | null>(null);
+  const recentWindowTrendsRef = useRef<GcallRecentWindowTrend[]>([]);
 
   useEffect(() => {
     audioTuningRef.current = getGroupCallAudioTuning(audioQualityProfile);
@@ -3474,6 +3509,123 @@ export function useGroupVoiceCall(uiActive = false) {
         pathQualityScoreEmaV1Ref.current
       );
       pathQualityScoreEmaV1Ref.current = pathQuality.pathQualityScoreEmaV1;
+      const nextWindowTrend: GcallRecentWindowTrend = {
+        atMs: Date.now(),
+        reason,
+        role: myRoleRef.current,
+        topologyEpoch: topologyRef.current?.topologyEpoch ?? null,
+        adaptiveNetworkMode: windowMetrics.adaptiveNetworkMode,
+        pathQualityScoreV1: pathQuality.pathQualityScoreV1,
+        pathQualityScoreEmaV1: pathQuality.pathQualityScoreEmaV1,
+        avgPcmBufferedMs: windowMetrics.avgPcmBufferedMs,
+        playoutUnderTargetFraction: windowMetrics.playoutUnderTargetFraction,
+        playoutRateFractionBelow097: windowMetrics.playoutRateFractionBelow097,
+        missingFrames: windowMetrics.missingFrames,
+        concealmentTicks: windowMetrics.concealmentTicks,
+        packetsDroppedPendingDecrypt:
+          windowMetrics.packetsDroppedPendingDecrypt,
+        packetsDroppedDecodeFailure: windowMetrics.packetsDroppedDecodeFailure,
+        reticulumAudioPacketPathTimeouts:
+          windowMetrics.reticulumAudioPacketPathTimeouts,
+        reticulumAudioOutboundLinkSamples:
+          windowMetrics.reticulumAudioOutboundLinkSamples,
+        reticulumAudioOutboundPacketSamples:
+          windowMetrics.reticulumAudioOutboundPacketSamples,
+        reticulumAudioInboundLinkSamples:
+          windowMetrics.reticulumAudioInboundLinkSamples,
+        reticulumAudioInboundPacketSamples:
+          windowMetrics.reticulumAudioInboundPacketSamples,
+      };
+      const prevWindowTrend =
+        recentWindowTrendsRef.current[recentWindowTrendsRef.current.length - 1] ??
+        null;
+      const worsenedReasons: string[] = [];
+      if (prevWindowTrend) {
+        if (
+          prevWindowTrend.adaptiveNetworkMode !== 'recovery' &&
+          nextWindowTrend.adaptiveNetworkMode === 'recovery'
+        ) {
+          worsenedReasons.push('entered-recovery');
+        }
+        if (
+          prevWindowTrend.pathQualityScoreV1 - nextWindowTrend.pathQualityScoreV1 >=
+          GCALL_CALL_QUALITY_WORSENED_SCORE_DROP_MIN
+        ) {
+          worsenedReasons.push('path-quality-drop');
+        }
+        if (
+          nextWindowTrend.playoutUnderTargetFraction -
+            prevWindowTrend.playoutUnderTargetFraction >=
+          GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN
+        ) {
+          worsenedReasons.push('under-target-spike');
+        }
+        if (
+          nextWindowTrend.missingFrames - prevWindowTrend.missingFrames >=
+          GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN
+        ) {
+          worsenedReasons.push('missing-frames-spike');
+        }
+        if (
+          nextWindowTrend.concealmentTicks - prevWindowTrend.concealmentTicks >=
+          GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN
+        ) {
+          worsenedReasons.push('concealment-spike');
+        }
+        if (
+          prevWindowTrend.packetsDroppedDecodeFailure === 0 &&
+          nextWindowTrend.packetsDroppedDecodeFailure > 0
+        ) {
+          worsenedReasons.push('decode-failures-started');
+        }
+        if (
+          prevWindowTrend.packetsDroppedPendingDecrypt === 0 &&
+          nextWindowTrend.packetsDroppedPendingDecrypt > 0
+        ) {
+          worsenedReasons.push('pending-decrypt-started');
+        }
+        if (
+          prevWindowTrend.reticulumAudioPacketPathTimeouts === 0 &&
+          nextWindowTrend.reticulumAudioPacketPathTimeouts > 0
+        ) {
+          worsenedReasons.push('packet-path-timeouts-started');
+        }
+      }
+      recentWindowTrendsRef.current.push(nextWindowTrend);
+      if (recentWindowTrendsRef.current.length > GCALL_RECENT_WINDOW_TRENDS_MAX) {
+        recentWindowTrendsRef.current.splice(
+          0,
+          recentWindowTrendsRef.current.length - GCALL_RECENT_WINDOW_TRENDS_MAX
+        );
+      }
+      if (worsenedReasons.length > 0) {
+        const worsenedDetail = {
+          reasons: worsenedReasons,
+          prevAdaptiveNetworkMode: prevWindowTrend?.adaptiveNetworkMode ?? null,
+          nextAdaptiveNetworkMode: nextWindowTrend.adaptiveNetworkMode,
+          prevPathQualityScoreV1: prevWindowTrend?.pathQualityScoreV1 ?? null,
+          nextPathQualityScoreV1: nextWindowTrend.pathQualityScoreV1,
+          prevUnderTargetFraction:
+            prevWindowTrend?.playoutUnderTargetFraction ?? null,
+          nextUnderTargetFraction:
+            nextWindowTrend.playoutUnderTargetFraction,
+          prevMissingFrames: prevWindowTrend?.missingFrames ?? null,
+          nextMissingFrames: nextWindowTrend.missingFrames,
+          prevConcealmentTicks: prevWindowTrend?.concealmentTicks ?? null,
+          nextConcealmentTicks: nextWindowTrend.concealmentTicks,
+          nextDecodeFailures: nextWindowTrend.packetsDroppedDecodeFailure,
+          nextPendingDecryptDrops:
+            nextWindowTrend.packetsDroppedPendingDecrypt,
+          nextPacketPathTimeouts:
+            nextWindowTrend.reticulumAudioPacketPathTimeouts,
+        };
+        gcallWindowDiagnosticTagsRef.current.push({
+          ts: nextWindowTrend.atMs,
+          type: 'call-quality-worsened',
+          detail: worsenedDetail,
+        });
+        gcallDiagnosticsPush('warn', '[GCall] callQualityWorsened', worsenedDetail);
+      }
       const tagBuf = gcallWindowDiagnosticTagsRef.current;
       const tags = tagBuf.splice(0, tagBuf.length);
       const remoteParticipants = [...participantsRef.current.keys()].filter(
@@ -4480,6 +4632,7 @@ export function useGroupVoiceCall(uiActive = false) {
         liveMetricsSnapshot: live,
         exportWindowMetrics: windowMetrics,
         gcallPerfSnapshot: snapshotGcallPerfStats(),
+        recentWindowTrends: recentWindowTrendsRef.current,
         v2DiagnosticEvents: v2SessionRef.current?.getDiagnosticEvents(),
         v2ManagedSourceAddrs: v2SessionRef.current?.getActiveSources() ?? [],
       });
@@ -4612,6 +4765,33 @@ export function useGroupVoiceCall(uiActive = false) {
         const outboundTransport = diagnostics.transport;
         if (outboundTransport === 'link' || outboundTransport === 'packet') {
           metricsRef.current.recordReticulumAudioOutboundTransport(
+            outboundTransport
+          );
+          const outboundPeerKey =
+            diagnostics.targetAddress ?? peerAddress ?? 'unknown';
+          const prevOutboundTransport =
+            lastOutboundTransportByPeerRef.current.get(outboundPeerKey);
+          if (
+            prevOutboundTransport !== undefined &&
+            prevOutboundTransport !== outboundTransport
+          ) {
+            gcallWindowDiagnosticTagsRef.current.push({
+              ts: Date.now(),
+              type: 'audio-send-transport-changed',
+              detail: {
+                peer: truncateGcallDiagAddress(outboundPeerKey),
+                prevTransport: prevOutboundTransport,
+                nextTransport: outboundTransport,
+              },
+            });
+            gcallDiagnosticsPush('info', '[GCall] reticulumAudioSendTransportChanged', {
+              peerAddress: truncateGcallDiagAddress(outboundPeerKey),
+              prevTransport: prevOutboundTransport,
+              nextTransport: outboundTransport,
+            });
+          }
+          lastOutboundTransportByPeerRef.current.set(
+            outboundPeerKey,
             outboundTransport
           );
         }
@@ -13396,6 +13576,8 @@ export function useGroupVoiceCall(uiActive = false) {
       gcallWindowDiagnosticTagsRef.current.length = 0;
       pathQualityScoreEmaV1Ref.current = null;
       lastPeerRouteKeyRef.current.clear();
+      lastOutboundTransportByPeerRef.current.clear();
+      lastInboundTransportByPeerRef.current.clear();
       lastReticulumLinkFallbackDiagAtPeerRef.current.clear();
       lastReticulumLinkFallbackExitCountPeerRef.current.clear();
       predictiveWarmHistoryRef.current = [];
@@ -13432,6 +13614,7 @@ export function useGroupVoiceCall(uiActive = false) {
       keyDistributionBufferedFramesRef.current = [];
       lastTuningSnapshotJsonRef.current = '';
       lastWindowMetricsRef.current = null;
+      recentWindowTrendsRef.current = [];
       lastReticulumAudioTotalsRef.current = {
         queuePressureDrops: 0,
         staleDrops: 0,
@@ -14705,6 +14888,47 @@ export function useGroupVoiceCall(uiActive = false) {
         };
         metricsRef.current.recordRelayReceived();
         scheduleRelayMetricsFlush();
+        const normalizedIngressTransport =
+          normalizeGcallAudioIngressTransport(transport);
+        if (
+          normalizedIngressTransport === 'link' ||
+          normalizedIngressTransport === 'packet'
+        ) {
+          metricsRef.current.recordReticulumAudioInboundTransport(
+            normalizedIngressTransport
+          );
+        }
+        const inboundPeerKey =
+          (typeof fromAddress === 'string' && fromAddress) ||
+          (typeof resolvedFromAddress === 'string' && resolvedFromAddress) ||
+          (typeof routeKey === 'string' && routeKey) ||
+          (typeof peerPresenceHash === 'string' && peerPresenceHash) ||
+          'unmapped';
+        const prevInboundTransport =
+          lastInboundTransportByPeerRef.current.get(inboundPeerKey);
+        if (
+          prevInboundTransport !== undefined &&
+          prevInboundTransport !== normalizedIngressTransport
+        ) {
+          gcallWindowDiagnosticTagsRef.current.push({
+            ts: Date.now(),
+            type: 'audio-recv-transport-changed',
+            detail: {
+              peer: truncateGcallDiagAddress(inboundPeerKey),
+              prevTransport: prevInboundTransport,
+              nextTransport: normalizedIngressTransport,
+            },
+          });
+          gcallDiagnosticsPush('info', '[GCall] reticulumAudioRecvTransportChanged', {
+            peerAddress: truncateGcallDiagAddress(inboundPeerKey),
+            prevTransport: prevInboundTransport,
+            nextTransport: normalizedIngressTransport,
+          });
+        }
+        lastInboundTransportByPeerRef.current.set(
+          inboundPeerKey,
+          normalizedIngressTransport
+        );
         const inboundRouteKey =
           (typeof transport === 'string' ? transport : 'unknown') +
           ':' +
@@ -14748,7 +14972,7 @@ export function useGroupVoiceCall(uiActive = false) {
         handleIncomingAudioPacket(
           relayBuffer as ArrayBuffer,
           typeof fromAddress === 'string' ? fromAddress : '',
-          normalizeGcallAudioIngressTransport(transport),
+          normalizedIngressTransport,
           typeof bridgeReceivedAtWallMs === 'number'
             ? bridgeReceivedAtWallMs
             : undefined

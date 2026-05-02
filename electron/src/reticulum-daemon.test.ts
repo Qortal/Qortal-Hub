@@ -29,6 +29,8 @@ import {
   planReticulumAppQuit,
   recoverReticulumStateForAppLaunch,
   registerReticulumAppInstance,
+  resolveReticulumDaemonStartupAction,
+  setReticulumInstanceIndex,
   stopSharedReticulumDaemon,
 } from './reticulum-daemon';
 import type { ReticulumMeshConfigSlice } from './reticulum-mesh-store';
@@ -43,6 +45,8 @@ function sectionBody(config: string, header: string): string {
 describe('reticulum-daemon managed config', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    setReticulumInstanceIndex(0);
+    delete process.env.QORTAL_RETICULUM_SYSTEM;
     for (const filePath of [
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
@@ -63,6 +67,8 @@ describe('reticulum-daemon managed config', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    setReticulumInstanceIndex(0);
+    delete process.env.QORTAL_RETICULUM_SYSTEM;
     for (const filePath of [
       getReticulumAppInstanceRegistryPath(),
       getReticulumSharedDaemonStatePath(),
@@ -470,5 +476,11 @@ describe('reticulum-daemon managed config', () => {
       reachability: 'unknown',
     });
     expect(killSpy).toHaveBeenCalledWith(999, 0);
+  });
+
+  it('lets a secondary instance take daemon ownership when no shared daemon is alive', () => {
+    setReticulumInstanceIndex(1);
+
+    expect(resolveReticulumDaemonStartupAction()).toBe('spawn');
   });
 });

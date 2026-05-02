@@ -1005,6 +1005,25 @@ describe('group-call router helpers', () => {
     expect(tracker.getSnapshot().reticulumAudioOutboundPacketSamples).toBe(3);
   });
 
+  it('records inbound Reticulum link vs packet samples (session + window)', () => {
+    const tracker = new GroupCallPerformanceTracker();
+    tracker.recordReticulumAudioInboundTransport('link');
+    tracker.recordReticulumAudioInboundTransport('packet');
+    tracker.recordReticulumAudioInboundTransport('packet');
+    const snap = tracker.getSnapshot();
+    expect(snap.reticulumAudioInboundLinkSamples).toBe(1);
+    expect(snap.reticulumAudioInboundPacketSamples).toBe(2);
+    expect(snap.reticulumAudioInboundTransportLast).toBe('packet');
+    const w = tracker.captureWindowMetrics('me');
+    expect(w.reticulumAudioInboundLinkSamples).toBe(1);
+    expect(w.reticulumAudioInboundPacketSamples).toBe(2);
+    tracker.recordReticulumAudioInboundTransport('link');
+    const w2 = tracker.captureWindowMetrics('me');
+    expect(w2.reticulumAudioInboundLinkSamples).toBe(1);
+    expect(w2.reticulumAudioInboundPacketSamples).toBe(0);
+    expect(tracker.getSnapshot().reticulumAudioInboundLinkSamples).toBe(2);
+  });
+
   it('assesses reticulum queue-pressure windows separately from transport failure', () => {
     expect(
       assessReticulumAudioPressureWindow({

@@ -74,6 +74,7 @@ export interface GcallDiagExportPayload {
    * Group-call perf is off in production by default; opt in via `qortal:gcall-perf`.
    */
   gcallPerfSnapshot?: unknown;
+  recentWindowTrends?: unknown[];
   audioSurfaceRuntimeDiagnostics?: unknown;
   v2Diagnostics?: {
     eventCount: number;
@@ -403,6 +404,7 @@ export function buildGcallDiagnosticsExportJson(params: {
   liveMetricsSnapshot: unknown;
   exportWindowMetrics: unknown;
   gcallPerfSnapshot?: unknown;
+  recentWindowTrends?: unknown[];
   audioSurfaceRuntimeDiagnostics?: unknown;
   v2DiagnosticEvents?: readonly AnyGcallV2Event[];
   v2ManagedSourceAddrs?: readonly string[];
@@ -430,6 +432,10 @@ export function buildGcallDiagnosticsExportJson(params: {
     gcallPerfSnapshot:
       params.gcallPerfSnapshot !== undefined
         ? redactDeep(params.gcallPerfSnapshot)
+        : undefined,
+    recentWindowTrends:
+      params.recentWindowTrends !== undefined
+        ? (redactDeep(params.recentWindowTrends) as GcallDiagExportPayload['recentWindowTrends'])
         : undefined,
     audioSurfaceRuntimeDiagnostics:
       params.audioSurfaceRuntimeDiagnostics !== undefined

@@ -151,6 +151,46 @@ describe('gcall-diagnostics', () => {
     ).toBe('QcrJnv…Prc3');
   });
 
+  it('export JSON includes recent window trends when provided', () => {
+    const json = buildGcallDiagnosticsExportJson({
+      context: {
+        buildMode: 'test',
+        appVersionLabel: '0.0.0',
+        userAgent: 'vitest',
+        roomId: 'room-x',
+        chatId: 'chat-y',
+        roomState: 'connected',
+        myAddressTruncated: 'QcrJnv…Prc3',
+      },
+      liveMetricsSnapshot: { packetsReceived: 1 },
+      exportWindowMetrics: { durationMs: 1000 },
+      recentWindowTrends: [
+        {
+          atMs: 123,
+          adaptiveNetworkMode: 'recovery',
+          pathQualityScoreV1: 0.72,
+          packetsDroppedDecodeFailure: 2,
+        },
+      ],
+    });
+    const parsed = JSON.parse(json) as {
+      recentWindowTrends?: Array<{
+        atMs: number;
+        adaptiveNetworkMode: string;
+        pathQualityScoreV1: number;
+        packetsDroppedDecodeFailure: number;
+      }>;
+    };
+    expect(parsed.recentWindowTrends).toEqual([
+      {
+        atMs: 123,
+        adaptiveNetworkMode: 'recovery',
+        pathQualityScoreV1: 0.72,
+        packetsDroppedDecodeFailure: 2,
+      },
+    ]);
+  });
+
   it('export JSON includes transport triad interpretation and snapshot when live metrics have fields', () => {
     const json = buildGcallDiagnosticsExportJson({
       context: {

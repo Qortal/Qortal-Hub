@@ -1336,6 +1336,25 @@ export function getReticulumDaemonStatus(): ReticulumDaemonStatus {
   };
 }
 
+export function resolveReticulumDaemonStartupAction():
+  | 'reuse-local'
+  | 'reuse-shared'
+  | 'spawn' {
+  if (child && child.exitCode === null) {
+    return 'reuse-local';
+  }
+
+  const sharedState = readReticulumSharedDaemonState();
+  if (sharedState) {
+    if (isPidAlive(sharedState.pid)) {
+      return 'reuse-shared';
+    }
+    clearReticulumSharedDaemonState(sharedState.pid);
+  }
+
+  return 'spawn';
+}
+
 export function stopBundledReticulumDaemon(): void {
   if (!child) return;
   if (child.exitCode !== null || child.killed) {
@@ -1501,14 +1520,24 @@ export function startBundledReticulumDaemon(): void {
   fs.mkdirSync(getReticulumConfigDir(), { recursive: true });
   ensureManagedReticulumConfig();
 
-  if (reticulumInstanceIndex > 0) {
-    loggerLog(
-      `[Reticulum] Secondary instance detected (index=${reticulumInstanceIndex}); reusing shared daemon instead of spawning a second rnsd.`
-    );
+  const startupAction = resolveReticulumDaemonStartupAction();
+  if (startupAction === 'reuse-local') {
     return;
   }
-  if (child && child.exitCode === null) {
+  if (startupAction === 'reuse-shared') {
+    const sharedState = readReticulumSharedDaemonState();
+    if (reticulumInstanceIndex > 0 && sharedState) {
+      loggerLog(
+        `[Reticulum] Secondary instance detected (index=${reticulumInstanceIndex}); reusing shared daemon pid=${sharedState.pid} instead of spawning a second rnsd.`
+      );
+    }
     return;
+  }
+
+  if (reticulumInstanceIndex > 0) {
+    loggerLog(
+      `[Reticulum] Secondary instance detected (index=${reticulumInstanceIndex}); no shared daemon is running, so this instance will start rnsd.`
+    );
   }
   child = null;
 

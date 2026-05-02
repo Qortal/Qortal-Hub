@@ -56,33 +56,53 @@ const GCALL_AUDIO_SURFACE_STABLE_STRONG_DELTA_MIN_MS = -20;
 const GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS = 20;
 const GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS = 40;
 const GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
-const GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS = 28;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS = 34;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS = 48;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS = 48;
-const GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS = 72;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS = 88;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS = 56;
 const GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
-const GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS = 156;
+const GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS = 160;
+const GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS = 176;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_HOLD_MS = 2_500;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_BUFFERED_MS_MIN = 84;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_DELTA_MIN_MS = -16;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_RATE_EMA_MIN = 0.998;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_CONCEALMENT_EMA_MAX = 0.02;
 const GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS = -35;
 const GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX = 36;
-const GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN = 48;
+const GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN = 56;
+const GCALL_SINGLE_SOURCE_PRESSURE_RATE_EMA_MAX = 0.992;
+const GCALL_SINGLE_SOURCE_PRESSURE_RATE_BUFFERED_MS_MAX = 72;
+const GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN = 0.02;
+const GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_BUFFERED_MS_MAX = 56;
+const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN = 0.08;
+const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX = 72;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN = 0.18;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX = 0.998;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX = 96;
 const GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX = 12;
 const GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS = -80;
 const GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS = 900;
-const GCALL_SINGLE_SOURCE_SEVERE_LATCH_MS = 7_000;
-const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_BUFFERED_MS_MIN = 96;
-const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_DELTA_MIN_MS = -20;
+const GCALL_SINGLE_SOURCE_SEVERE_LATCH_MS = 9_000;
+const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_BUFFERED_MS_MIN = 120;
+const GCALL_SINGLE_SOURCE_SEVERE_CLEAR_DELTA_MIN_MS = -12;
 
 interface LiveMultiSourceState {
   sampleCount: number;
   bufferedMsEma: number;
   deltaMsEma: number;
   underTargetEma: number;
+  concealmentEma: number;
+  rateEma: number;
   targetPlayoutMs: number;
   preProcessBufferedFrames: number;
   starvationSeverity: PlayoutStarvationSeverity;
   strongCStreak: number;
   protectedMode: boolean;
   severeSingleSourceHoldUntilMs: number;
+  postRecoveryHoldUntilMs: number;
 }
 
 function disconnectNodeSafe(node: AudioNode | null): void {
@@ -430,12 +450,15 @@ export class GroupCallAudioReceiveEngine {
         bufferedMsEma: Math.max(0, targetPlayoutMs),
         deltaMsEma: 0,
         underTargetEma: 0,
+        concealmentEma: 0,
+        rateEma: 1,
         targetPlayoutMs: Math.max(40, targetPlayoutMs),
         preProcessBufferedFrames: 0,
         starvationSeverity: 'none',
         strongCStreak: 0,
         protectedMode: false,
         severeSingleSourceHoldUntilMs: 0,
+        postRecoveryHoldUntilMs: 0,
       };
       this.liveMultiSourceStateBySource.set(sourceAddr, state);
     }
@@ -498,6 +521,19 @@ export class GroupCallAudioReceiveEngine {
       state.sampleCount === 1
         ? underTargetSample
         : state.underTargetEma * (1 - alpha) + underTargetSample * alpha;
+    const concealmentSample = message.concealmentUsed ? 1 : 0;
+    state.concealmentEma =
+      state.sampleCount === 1
+        ? concealmentSample
+        : state.concealmentEma * (1 - alpha) + concealmentSample * alpha;
+    const rateSample =
+      typeof message.rate === 'number' && Number.isFinite(message.rate)
+        ? Math.max(0.9, Math.min(1.1, message.rate))
+        : 1;
+    state.rateEma =
+      state.sampleCount === 1
+        ? rateSample
+        : state.rateEma * (1 - alpha) + rateSample * alpha;
 
     const bufferAdequacy = computeBufferAdequacy({
       avgPcmBufferedMs: state.bufferedMsEma,
@@ -585,20 +621,105 @@ export class GroupCallAudioReceiveEngine {
       if (activeSourceCount < 2) {
         const severeSingleSourceHold =
           state.severeSingleSourceHoldUntilMs > nowMs;
+        const recoveryModeActive = mode === 'recovery';
         const bufferedPressure =
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
         const lingeringPressure =
           (state.underTargetEma >= GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN ||
             state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS) &&
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN;
+        const ratePressure =
+          state.rateEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_EMA_MAX &&
+          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_BUFFERED_MS_MAX;
+        const artifactPressure =
+          (state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN &&
+            state.bufferedMsEma <=
+              GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_BUFFERED_MS_MAX) ||
+          (state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN &&
+            state.bufferedMsEma <=
+              GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX);
+        const repairHeavyPressure =
+          state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN &&
+          state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX &&
+          !severeSingleSourceHold;
+        const mildSteadyAssist =
+          (ratePressure || artifactPressure) &&
+          !severeSingleSourceHold &&
+          !state.protectedMode &&
+          state.starvationSeverity === 'none';
+        if (
+          recoveryModeActive ||
+          severeSingleSourceHold ||
+          state.protectedMode ||
+          state.starvationSeverity !== 'none' ||
+          bufferedPressure ||
+          lingeringPressure ||
+          ratePressure ||
+          mildSteadyAssist ||
+          repairHeavyPressure
+        ) {
+          state.postRecoveryHoldUntilMs = Math.max(
+            state.postRecoveryHoldUntilMs,
+            nowMs + GCALL_SINGLE_SOURCE_POST_RECOVERY_HOLD_MS
+          );
+        }
+        const postRecoveryHold =
+          state.postRecoveryHoldUntilMs > nowMs &&
+          !(
+            !recoveryModeActive &&
+            !severeSingleSourceHold &&
+            !state.protectedMode &&
+            state.starvationSeverity === 'none' &&
+            !bufferedPressure &&
+            !lingeringPressure &&
+            !ratePressure &&
+            state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_BUFFERED_MS_MIN &&
+            state.deltaMsEma >=
+              GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_DELTA_MIN_MS &&
+            state.rateEma >=
+              GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_RATE_EMA_MIN &&
+            state.concealmentEma <=
+              GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_CONCEALMENT_EMA_MAX
+          );
+        if (
+          state.postRecoveryHoldUntilMs > 0 &&
+          !recoveryModeActive &&
+          !severeSingleSourceHold &&
+          !state.protectedMode &&
+          state.starvationSeverity === 'none' &&
+          !bufferedPressure &&
+          !lingeringPressure &&
+          !ratePressure &&
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_BUFFERED_MS_MIN &&
+          state.deltaMsEma >=
+            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_DELTA_MIN_MS &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_RATE_EMA_MIN &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_CONCEALMENT_EMA_MAX
+        ) {
+          state.postRecoveryHoldUntilMs = 0;
+        }
         const singleSourcePressure =
           severeSingleSourceHold ||
           state.protectedMode ||
           state.starvationSeverity !== 'none' ||
           bufferedPressure ||
-          lingeringPressure;
+          lingeringPressure ||
+          ratePressure;
         const weakSingleSource =
-          mode === 'recovery' || singleSourcePressure;
+          recoveryModeActive ||
+          postRecoveryHold ||
+          singleSourcePressure ||
+          mildSteadyAssist ||
+          repairHeavyPressure;
         if (!weakSingleSource) {
           playout.setBurstRecoveryExtraHoldFrames(0);
           playout.resetDynamicTargetPlayoutMs();
@@ -611,9 +732,18 @@ export class GroupCallAudioReceiveEngine {
             ? GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS
             : state.protectedMode || state.starvationSeverity === 'strong'
               ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
-              : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS);
+              : repairHeavyPressure
+                ? GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS
+              : mildSteadyAssist
+                ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS
+                : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS);
         if (singleSourcePressure) {
-          targetMs = Math.max(targetMs, GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS);
+          targetMs = Math.max(
+            targetMs,
+            severeSingleSourceHold
+              ? GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS
+              : GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS
+          );
         }
         const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs({
           currentAdaptiveMaxTargetMs: targetMs,

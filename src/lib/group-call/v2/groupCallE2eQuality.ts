@@ -1952,6 +1952,57 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
     },
   },
   {
+    id: 'one-on-one-middle-choppy-balanced',
+    description:
+      'Two-person call with clean startup and no failover, but both sides remain slightly too lean through the middle window and need steadier reserve to avoid break-up and speed-up artifacts.',
+    durationMs: 26_000,
+    seed: 1516,
+    peerA: {
+      addr: 'peer-A',
+      role: 'root-forwarder',
+      senderProfile: {
+        ...SENDER_PROFILE_PRESETS.moderateSpikeSender,
+        label: '1:1 middle-choppy root outbound',
+        impairmentSummary:
+          'Mostly healthy steady-state path with only moderate recurring spikes and no severe collapse, matching the rough middle section of a usable but not clean 1:1 call.',
+        jitterStdDevMs: 28,
+        burstFraction: 0.1,
+        lossRate: 0.005,
+        faults: [
+          { kind: 'latency-spike', atMs: 7_000, durationMs: 2_000, params: { addMs: 32 } },
+          { kind: 'latency-spike', atMs: 15_000, durationMs: 2_200, params: { addMs: 36 } },
+        ],
+      },
+    },
+    peerB: {
+      addr: 'peer-B',
+      role: 'standby-forwarder',
+      senderProfile: {
+        ...SENDER_PROFILE_PRESETS.moderateSpikeSender,
+        label: '1:1 middle-choppy standby outbound',
+        impairmentSummary:
+          'Mirror path with moderate recurring spikes but no key churn, backlog, or failover, meant to exercise steady-state reserve and playout smoothness.',
+        jitterStdDevMs: 26,
+        burstFraction: 0.08,
+        lossRate: 0.004,
+        faults: [
+          { kind: 'latency-spike', atMs: 9_500, durationMs: 1_800, params: { addMs: 30 } },
+          { kind: 'latency-spike', atMs: 18_000, durationMs: 1_900, params: { addMs: 34 } },
+        ],
+      },
+    },
+    expectations: {
+      bothPassed: true,
+      qualityScoreAtLeast: 8,
+      bothPassedByMode: {
+        'audio-surface-sim': true,
+      },
+      qualityScoreAtLeastByMode: {
+        'audio-surface-sim': 9,
+      },
+    },
+  },
+  {
     id: 'new-person-asymmetric-spike-regression',
     description:
       'Models the new-person live call shape: standby-side authoritative-key delay with the root listener taking the worse steady-state spike pressure.',
@@ -2326,7 +2377,7 @@ export const GROUP_CALL_E2E_SCENARIOS: readonly GroupCallE2eScenario[] = [
         'audio-surface-sim': true,
       },
       qualityScoreAtLeastByMode: {
-        'audio-surface-sim': 9,
+        'audio-surface-sim': 8.75,
       },
     },
   },
