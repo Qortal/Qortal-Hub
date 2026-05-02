@@ -1317,6 +1317,130 @@ describe('GroupCallAudioReceiveEngine', () => {
     expect(engine.getSnapshot().adaptiveNetworkMode).toBe('low-latency');
   });
 
+  it('adds sustained headroom for a persistent lean single-source listener even before severe collapse signals trip', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    const targetSpy = vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    const resetTargetSpy = vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 0,
+        jitterHasReadyFrame: false,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: null,
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    for (let i = 0; i < 4; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 10,
+        preProcessBufferedMs: 10,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 140,
+        rate: 0.999,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -66,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    const leanTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
+    expect(leanTargetMs).toBeGreaterThanOrEqual(168);
+
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 24,
+      preProcessBufferedMs: 24,
+      targetPlayoutMs: 124,
+      oldestFrameAgeMs: 130,
+      rate: 0.999,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -40,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    const heldTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
+    expect(heldTargetMs).toBeGreaterThanOrEqual(168);
+
+    vi.setSystemTime(Date.now() + 5_000);
+    for (let i = 0; i < 2; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 56,
+        preProcessBufferedMs: 56,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 120,
+        rate: 1,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -12,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    expect(resetTargetSpy).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('holds repair-heavy single-source headroom briefly after concealment pressure eases so rough calls do not oscillate', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(

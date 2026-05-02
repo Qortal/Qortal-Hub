@@ -61,10 +61,12 @@ const GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS = 48;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS = 48;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS = 88;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS = 56;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS = 60;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_POST_FAILOVER_ROOT_MS = 64;
 const GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
 const GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS = 160;
 const GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS = 176;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS = 168;
 const GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_FLOOR_MS = 172;
 const GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_BUFFERED_MS_MAX = 96;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_HOLD_MS = 2_500;
@@ -90,6 +92,14 @@ const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_BUFFERED_MS_MIN = 92;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_DELTA_MIN_MS = -14;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN = 0.999;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX = 0.05;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_HOLD_MS = 4_500;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX = 18;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX = 1;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS = -60;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN = 40;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN = 3;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_DELTA_MIN_MS = -24;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_RATE_EMA_MIN = 0.999;
 const GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX = 12;
 const GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS = -80;
 const GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS = 900;
@@ -111,6 +121,7 @@ interface LiveMultiSourceState {
   protectedMode: boolean;
   severeSingleSourceHoldUntilMs: number;
   repairHeavyHoldUntilMs: number;
+  persistentLeanHoldUntilMs: number;
   postRecoveryHoldUntilMs: number;
 }
 
@@ -470,6 +481,7 @@ export class GroupCallAudioReceiveEngine {
         protectedMode: false,
         severeSingleSourceHoldUntilMs: 0,
         repairHeavyHoldUntilMs: 0,
+        persistentLeanHoldUntilMs: 0,
         postRecoveryHoldUntilMs: 0,
       };
       this.liveMultiSourceStateBySource.set(sourceAddr, state);
@@ -696,6 +708,46 @@ export class GroupCallAudioReceiveEngine {
         ) {
           state.repairHeavyHoldUntilMs = 0;
         }
+        const persistentLeanPressure =
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX &&
+          state.preProcessBufferedFrames <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX &&
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS &&
+          !severeSingleSourceHold;
+        if (persistentLeanPressure) {
+          state.persistentLeanHoldUntilMs = Math.max(
+            state.persistentLeanHoldUntilMs,
+            nowMs + GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_HOLD_MS
+          );
+        }
+        const persistentLeanHold =
+          state.persistentLeanHoldUntilMs > nowMs &&
+          !(
+            !persistentLeanPressure &&
+            state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
+            state.preProcessBufferedFrames >=
+              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
+            state.deltaMsEma >=
+              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_DELTA_MIN_MS &&
+            state.rateEma >=
+              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_RATE_EMA_MIN
+          );
+        if (
+          state.persistentLeanHoldUntilMs > 0 &&
+          !persistentLeanPressure &&
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
+          state.preProcessBufferedFrames >=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
+          state.deltaMsEma >=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_DELTA_MIN_MS &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_RATE_EMA_MIN
+        ) {
+          state.persistentLeanHoldUntilMs = 0;
+        }
         const mildSteadyAssist =
           (ratePressure || artifactPressure) &&
           !severeSingleSourceHold &&
@@ -711,6 +763,8 @@ export class GroupCallAudioReceiveEngine {
           ratePressure ||
           mildSteadyAssist ||
           repairHeavyHold ||
+          persistentLeanHold ||
+          persistentLeanPressure ||
           repairHeavyPressure
         ) {
           state.postRecoveryHoldUntilMs = Math.max(
@@ -771,6 +825,8 @@ export class GroupCallAudioReceiveEngine {
           singleSourcePressure ||
           mildSteadyAssist ||
           repairHeavyHold ||
+          persistentLeanHold ||
+          persistentLeanPressure ||
           repairHeavyPressure;
         if (!weakSingleSource) {
           playout.setBurstRecoveryExtraHoldFrames(0);
@@ -782,20 +838,29 @@ export class GroupCallAudioReceiveEngine {
           staticTargetMs +
           (severeSingleSourceHold
             ? GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS
-              : state.protectedMode || state.starvationSeverity === 'strong'
-                ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
-              : postFailoverRootProfileActive
+            : state.protectedMode || state.starvationSeverity === 'strong'
+              ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
+            : persistentLeanHold || persistentLeanPressure
+              ? GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS
+            : postFailoverRootProfileActive
                 ? GCALL_SINGLE_SOURCE_TARGET_BOOST_POST_FAILOVER_ROOT_MS
               : repairHeavyHold || repairHeavyPressure
                 ? GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS
               : mildSteadyAssist
                 ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS
                 : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS);
-        if (singleSourcePressure || postFailoverRootProfileActive) {
+        if (
+          singleSourcePressure ||
+          persistentLeanHold ||
+          persistentLeanPressure ||
+          postFailoverRootProfileActive
+        ) {
           targetMs = Math.max(
             targetMs,
             severeSingleSourceHold
               ? GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS
+              : persistentLeanHold || persistentLeanPressure
+                ? GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS
               : postFailoverRootProfileActive
                 ? GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_FLOOR_MS
               : GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS
