@@ -201,12 +201,8 @@ export const HomeProfileCard = ({
     useState<HTMLElement | null>(null);
   const [accountStatusOverride, setAccountStatusOverride] =
     useState<AccountStatus | null>(null);
-  const {
-    carryOverBlockedUsersEnabled,
-    refreshBlockedUsers,
-    removeBlockFromList,
-    setCarryOverBlockedUsersEnabled,
-  } = useBlockedAddresses(true);
+  const { refreshBlockedUsers, removeBlockFromList } =
+    useBlockedAddresses(true);
   const panelRef = useDashboardPanelMouseLight<HTMLDivElement>();
   const prefersReducedMotion = useReducedMotion();
   const isDarkMode = theme.palette.mode === 'dark';
@@ -2734,60 +2730,6 @@ export const HomeProfileCard = ({
                     overflow: 'hidden',
                   }}
                 >
-                  <Box
-                    sx={{
-                      alignItems: 'center',
-                      display: 'flex',
-                      gap: 1.2,
-                      justifyContent: 'space-between',
-                      px: 1.35,
-                      py: 1.2,
-                    }}
-                  >
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.primary,
-                          fontSize: '0.82rem',
-                          fontWeight: 700,
-                          letterSpacing: '0.01em',
-                        }}
-                      >
-                        {td(
-                          'blocked_scope_toggle',
-                          'Carry blocked accounts across all accounts on this device'
-                        )}
-                      </Typography>
-                      <Typography
-                        sx={{
-                          color: theme.palette.text.secondary,
-                          fontSize: '0.75rem',
-                          lineHeight: 1.45,
-                          mt: 0.4,
-                        }}
-                      >
-                        {td(
-                          'blocked_scope_toggle_desc',
-                          'Turn on to reuse one shared block list everywhere on this device. Leave it off to keep blocks tied to the current wallet.'
-                        )}
-                      </Typography>
-                    </Box>
-                    <Switch
-                      checked={carryOverBlockedUsersEnabled}
-                      onChange={async (_, checked) => {
-                        await setCarryOverBlockedUsersEnabled(checked);
-                      }}
-                      sx={settingsSwitchSx}
-                    />
-                  </Box>
-
-                  <Box
-                    sx={{
-                      borderTop: `1px solid ${avatarSectionDivider}`,
-                      mx: 1.35,
-                    }}
-                  />
-
                   <Box
                     sx={{
                       display: 'flex',

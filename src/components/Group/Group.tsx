@@ -2092,11 +2092,9 @@ export const Group = ({
             )}
           </SelectedGroupWrapper>
 
-          {isOpenBlockedModal && (
-            <Suspense fallback={null}>
-              <LazyBlockedUsersModal />
-            </Suspense>
-          )}
+          <Suspense fallback={null}>
+            <LazyBlockedUsersModal />
+          </Suspense>
 
           {selectedDirect && !newChat && (
             <SelectedDirectOverlay isChatMode={isVisible}>

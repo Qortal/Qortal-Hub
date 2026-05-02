@@ -92,44 +92,44 @@ export const dashboardPanelSx = (
   const surface = resolvePanelVariant(theme, variant);
 
   return {
-  position: 'relative',
-  overflow: 'visible',
-  isolation: 'isolate',
-  backgroundColor: surface.backgroundColor,
-  border: `1px solid ${surface.borderColor}`,
-  boxShadow: surface.boxShadow,
-  backgroundImage: surface.backgroundImage,
-  transition:
-    'border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, background-image 180ms ease',
-  '&::before': {
-    content: '""',
-    position: 'absolute',
-    left: '12px',
-    right: '12px',
-    top: 0,
-    height: '1px',
-    pointerEvents: 'none',
-    zIndex: 0,
-    background: `linear-gradient(90deg, transparent 0%, ${surface.topEdge} 16%, ${surface.topEdge} 84%, transparent 100%)`,
-    opacity: 0.95,
-  },
-  '&::after': {
-    content: '""',
-    position: 'absolute',
-    left: '18%',
-    right: '18%',
-    top: '-10px',
-    height: '26px',
-    pointerEvents: 'none',
-    zIndex: -1,
-    background: surface.topGlow,
-    filter: 'blur(12px)',
-    opacity: surface.topGlowOpacity,
-  },
-  '& > :not(.dashboard-panel-decoration)': {
     position: 'relative',
-    zIndex: 1,
-  },
+    overflow: 'visible',
+    isolation: 'isolate',
+    backgroundColor: surface.backgroundColor,
+    border: `1px solid ${surface.borderColor}`,
+    boxShadow: surface.boxShadow,
+    backgroundImage: surface.backgroundImage,
+    transition:
+      'border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease, background-image 180ms ease',
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      left: '12px',
+      right: '12px',
+      top: 0,
+      height: '1px',
+      pointerEvents: 'none',
+      zIndex: 0,
+      background: `linear-gradient(90deg, transparent 0%, ${surface.topEdge} 16%, ${surface.topEdge} 84%, transparent 100%)`,
+      opacity: 0.95,
+    },
+    '&::after': {
+      content: '""',
+      position: 'absolute',
+      left: '18%',
+      right: '18%',
+      top: '-10px',
+      height: '26px',
+      pointerEvents: 'none',
+      zIndex: -1,
+      background: surface.topGlow,
+      filter: 'blur(12px)',
+      opacity: surface.topGlowOpacity,
+    },
+    '& > :not(.dashboard-panel-decoration)': {
+      position: 'relative',
+      zIndex: 1,
+    },
   };
 };
 
@@ -172,8 +172,14 @@ export const useDashboardPanelMouseLight = <T extends HTMLElement>() => {
 
       registeredDashboardPanels.forEach((node) => {
         const rect = node.getBoundingClientRect();
-        const clampedX = Math.min(Math.max(event.clientX, rect.left), rect.right);
-        const clampedY = Math.min(Math.max(event.clientY, rect.top), rect.bottom);
+        const clampedX = Math.min(
+          Math.max(event.clientX, rect.left),
+          rect.right
+        );
+        const clampedY = Math.min(
+          Math.max(event.clientY, rect.top),
+          rect.bottom
+        );
         const offsetX = event.clientX - clampedX;
         const offsetY = event.clientY - clampedY;
         const distance = Math.hypot(offsetX, offsetY);
@@ -196,7 +202,10 @@ export const useDashboardPanelMouseLight = <T extends HTMLElement>() => {
 
         node.style.setProperty('--panel-mx', `${relativeX}px`);
         node.style.setProperty('--panel-my', `${relativeY}px`);
-        node.style.setProperty('--panel-edge-opacity', resolvedOpacity.toFixed(3));
+        node.style.setProperty(
+          '--panel-edge-opacity',
+          resolvedOpacity.toFixed(3)
+        );
       });
     };
 

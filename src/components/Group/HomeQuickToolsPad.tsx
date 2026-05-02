@@ -7,12 +7,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Box,
-  ButtonBase,
-  Tooltip,
-  useTheme,
-} from '@mui/material';
+import { Box, ButtonBase, Tooltip, useTheme } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import AccountBalanceWalletRoundedIcon from '@mui/icons-material/AccountBalanceWalletRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -199,7 +194,9 @@ export const HomeQuickToolsPad = ({
         onAction: () => {
           executeEvent('openUserLookupDrawer', {});
         },
-        renderIcon: () => <SearchRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />,
+        renderIcon: () => (
+          <SearchRoundedIcon sx={{ fontSize: QUICK_TOOL_ICON_SIZE }} />
+        ),
       },
       {
         accent: QUICK_TOOL_LED_COLOR,
@@ -269,11 +266,7 @@ export const HomeQuickToolsPad = ({
           onOpenChat?.();
         },
         renderIcon: () => (
-          <MessagingIconFilled
-            height={20}
-            width={20}
-            color="currentColor"
-          />
+          <MessagingIconFilled height={20} width={20} color="currentColor" />
         ),
       },
       {
@@ -321,12 +314,7 @@ export const HomeQuickToolsPad = ({
         ),
       },
     ],
-    [
-      notificationsMuted,
-      onOpenApps,
-      onOpenChat,
-      t,
-    ]
+    [notificationsMuted, onOpenApps, onOpenChat, t]
   );
 
   return (
@@ -412,7 +400,10 @@ export const HomeQuickToolsPad = ({
                   : `inset 0 1px 0 rgba(255,255,255,0.86), inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -1px 0 rgba(104,116,140,0.22), inset -1px -1px 0 rgba(146,158,182,0.14), 0 4px 8px rgba(94,108,132,0.11)`,
                 color: isDarkMode
                   ? alpha('#F6F8FB', item.isActive ? 0.96 : 0.88)
-                  : alpha(theme.palette.text.primary, item.isActive ? 0.92 : 0.84),
+                  : alpha(
+                      theme.palette.text.primary,
+                      item.isActive ? 0.92 : 0.84
+                    ),
                 display: 'flex',
                 height: '100%',
                 justifyContent: 'center',
@@ -433,7 +424,10 @@ export const HomeQuickToolsPad = ({
                   opacity: item.isActive ? 1 : 0.92,
                 },
                 '&::after': {
-                  backgroundColor: alpha(item.accent, item.isActive ? 0.96 : 0.56),
+                  backgroundColor: alpha(
+                    item.accent,
+                    item.isActive ? 0.96 : 0.56
+                  ),
                   borderRadius: '50%',
                   boxShadow: isDarkMode
                     ? `0 0 0 1px rgba(8,10,14,0.24), 0 0 4px ${alpha(item.accent, item.isActive ? 0.18 : 0.1)}`

@@ -251,13 +251,13 @@ const fetchText = async (url: string, signal?: AbortSignal) => {
 const buildQuitterFeedSearchUrl = (searchLimit: number, offset: number) => {
   const params = new URLSearchParams({
     identifier: QUITTER_PUBLIC_POST_PREFIX,
-    includemetadata: 'true',
     limit: String(searchLimit),
     mode: 'ALL',
     offset: String(offset),
     prefix: 'true',
     reverse: 'true',
     service: 'DOCUMENT',
+    excludeblocked: 'true',
   });
 
   return `${getBaseApiReact()}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;
@@ -270,13 +270,13 @@ const buildQuitterUserResourceSearchUrl = (
 ) => {
   const params = new URLSearchParams({
     exactmatchnames: 'true',
-    includemetadata: 'true',
     limit: String(searchLimit),
     mode: 'ALL',
     name: userName,
     offset: String(offset),
     reverse: 'true',
     service: 'DOCUMENT',
+    excludeblocked: 'true',
   });
 
   return `${getBaseApiReact()}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;

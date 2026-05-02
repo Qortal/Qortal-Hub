@@ -83,12 +83,10 @@ export function GlobalQortalNavBar({
   const [inputValue, setInputValue] = useState('');
   const [isInputHovered, setIsInputHovered] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [sidebarOffsetPx, setSidebarOffsetPx] = useState(0);
   const isInputFocusedRef = useRef(false);
   const lastTabsTokenRef = useRef(0);
   const navClearLockUntilRef = useRef(0);
   const inputElementRef = useRef<HTMLInputElement | null>(null);
-  const SIDEBAR_CHROME_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 
   const setTabsToNav = useCallback((e: CustomEvent) => {
     const nextToken = Number(e.detail?.data?.tabsToken || 0);
@@ -153,26 +151,6 @@ export function GlobalQortalNavBar({
 
     return () => {
       unsubscribeFromEvent('forceNavClear', handleForceNavClear);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleSidebarOverlayVisibility = (e: CustomEvent) => {
-      const isVisible = !!e.detail?.data?.isVisible;
-      const width = Number(e.detail?.data?.width || 0);
-      setSidebarOffsetPx(isVisible ? width : 0);
-    };
-
-    subscribeToEvent(
-      'sidebarOverlayVisibility',
-      handleSidebarOverlayVisibility
-    );
-
-    return () => {
-      unsubscribeFromEvent(
-        'sidebarOverlayVisibility',
-        handleSidebarOverlayVisibility
-      );
     };
   }, []);
 
@@ -393,13 +371,8 @@ export function GlobalQortalNavBar({
             gap: 1.25,
             height: '100%',
             maxWidth: '100%',
-            pl: {
-              xs: `calc(12px + ${sidebarOffsetPx}px)`,
-              sm: `calc(16px + ${sidebarOffsetPx}px)`,
-              md: `calc(20px + ${sidebarOffsetPx}px)`,
-            },
+            pl: { xs: '12px', sm: '16px', md: '20px' },
             pr: { xs: 1.5, sm: 2, md: 2.25 },
-            transition: `padding-left ${SIDEBAR_CHROME_TRANSITION}`,
             width: '100%',
           }}
         >

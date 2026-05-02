@@ -263,9 +263,11 @@ const buildSearchParams = (
   return params;
 };
 
-export const fetchEarbumpRecentTracks = async (
-  options?: { limit?: number; offset?: number; signal?: AbortSignal }
-) =>
+export const fetchEarbumpRecentTracks = async (options?: {
+  limit?: number;
+  offset?: number;
+  signal?: AbortSignal;
+}) =>
   fetchTrackSearch(
     buildSearchParams('', {
       limit: options?.limit,

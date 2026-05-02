@@ -41,7 +41,10 @@ import AppViewerContainer from './AppViewerContainer';
 import TabComponent from './TabComponent';
 import ShortUniqueId from 'short-unique-id';
 import { AppPublish } from './AppPublish';
-import { RatingsCacheInitializer, useAppRatings } from '../../hooks/useAppRatings';
+import {
+  RatingsCacheInitializer,
+  useAppRatings,
+} from '../../hooks/useAppRatings';
 import { AppsLibraryDesktop } from './AppsLibraryDesktop';
 import { AppsCategoryDesktop } from './AppsCategoryDesktop';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -269,12 +272,7 @@ export const AppsDesktop = ({
         selectedTab?.internal === QCHAT_INTERNAL_TAB_ID,
       tab: selectedTab,
     });
-  }, [
-    isNewTabWindow,
-    onInternalTabVisibilityChange,
-    selectedTab,
-    show,
-  ]);
+  }, [isNewTabWindow, onInternalTabVisibilityChange, selectedTab, show]);
 
   useEffect(() => {
     const trackPointer = (event: PointerEvent) => {
@@ -772,10 +770,7 @@ export const AppsDesktop = ({
     subscribeToEvent('openAppsLibrarySearch', openAppsLibrarySearchFunc);
 
     return () => {
-      unsubscribeFromEvent(
-        'openAppsLibrarySearch',
-        openAppsLibrarySearchFunc
-      );
+      unsubscribeFromEvent('openAppsLibrarySearch', openAppsLibrarySearchFunc);
     };
   }, [openAppsLibrarySearchFunc]);
 
@@ -868,7 +863,9 @@ export const AppsDesktop = ({
         tabsToken: tabsTokenRef.current,
       },
     });
-    executeEvent('forceNavClear', { data: { tabsToken: tabsTokenRef.current } });
+    executeEvent('forceNavClear', {
+      data: { tabsToken: tabsTokenRef.current },
+    });
     returnFromAppsMode();
     window.setTimeout(() => {
       setMode('home');

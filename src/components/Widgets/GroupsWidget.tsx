@@ -1043,8 +1043,7 @@ export const GroupsWidget = ({
     setActionFeedback(null);
     void fetchInvites(false);
     void fetchJoinRequests(false);
-    void fetchPromotions();
-  }, [fetchInvites, fetchJoinRequests, fetchPromotions, myAddress]);
+  }, [fetchInvites, fetchJoinRequests, myAddress]);
 
   useEffect(() => {
     if (refreshToken === 0) {
@@ -1056,8 +1055,14 @@ export const GroupsWidget = ({
     setActionFeedback(null);
     void fetchInvites(true);
     void fetchJoinRequests(true);
+  }, [fetchInvites, fetchJoinRequests, refreshToken]);
+
+  useEffect(() => {
+    if (activeTab !== 'promoted') {
+      return;
+    }
     void fetchPromotions();
-  }, [fetchInvites, fetchJoinRequests, fetchPromotions, refreshToken]);
+  }, [activeTab, fetchPromotions, refreshToken]);
 
   const visibleInvites = useMemo(
     () => invites.filter((invite) => !dismissedInviteIds.includes(invite.id)),

@@ -60,6 +60,7 @@ import {
   subscribeToEvent,
   unsubscribeFromEvent,
 } from './utils/events';
+import { stopSharedEarbumpPlayback } from './components/Group/earbumpSharedAudio';
 import { Settings } from './components/Group/Settings';
 import { useRetrieveDataLocalStorage } from './hooks/useRetrieveDataLocalStorage.tsx';
 import { useQortalGetSaveSettings } from './hooks/useQortalGetSaveSettings.tsx';
@@ -939,6 +940,7 @@ function App() {
         .sendMessage('logout', {})
         .then((response) => {
           if (response) {
+            stopSharedEarbumpPlayback();
             executeEvent('logout-event', {});
             resetAllStates();
           }

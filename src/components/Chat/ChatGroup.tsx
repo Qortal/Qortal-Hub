@@ -7,8 +7,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useAtomValue } from 'jotai';
-import { userInfoAtom, balanceAtom } from '../../atoms/global';
+import { useAtomValue, useStore } from 'jotai';
+import { userInfoAtom, balanceAtom, blockedAddressesAtom } from '../../atoms/global';
 import {
   decodeBase64ForUIChatMessages,
   objectToBase64,
@@ -55,7 +55,6 @@ import { ExitIcon } from '../../assets/Icons/ExitIcon';
 import { RESOURCE_TYPE_NUMBER_GROUP_CHAT_REACTIONS } from '../../constants/constants';
 import { getFee, isExtMsg } from '../../background/background.ts';
 import { appHeighOffsetPx } from '../Desktop/CustomTitleBar';
-import { useBlockedAddresses } from '../../hooks/useBlockUsers';
 import AppViewerContainer from '../Apps/AppViewerContainer';
 import CloseIcon from '@mui/icons-material/Close';
 import { throttle } from 'lodash';
@@ -84,7 +83,15 @@ export const ChatGroup = ({
   const balance = useAtomValue(balanceAtom);
   const myName = userInfo?.name;
   const { show } = useContext(QORTAL_APP_CONTEXT);
-  const { isUserBlocked } = useBlockedAddresses(true);
+  const jotaiStore = useStore();
+  const isChatSenderBlocked = useCallback(
+    (item?: { sender?: string }) => {
+      const addresses = jotaiStore.get(blockedAddressesAtom);
+      const sender = item?.sender;
+      return !!(sender && addresses[sender]);
+    },
+    [jotaiStore]
+  );
   const [messages, setMessages] = useState([]);
   const [chatReferences, setChatReferences] = useState({});
   const [isSending, setIsSending] = useState(false);
@@ -222,15 +229,13 @@ export const ChatGroup = ({
     });
   };
 
-  const updateChatMessagesWithBlocksFunc = (e) => {
+  const updateChatMessagesWithBlocksFunc = useCallback((e) => {
     if (e.detail) {
       setMessages((prev) =>
-        prev?.filter((item) => {
-          return !isUserBlocked(item?.sender, item?.senderName);
-        })
+        prev?.filter((item) => !isChatSenderBlocked(item))
       );
     }
-  };
+  }, [isChatSenderBlocked]);
 
   useEffect(() => {
     subscribeToEvent(
@@ -244,13 +249,13 @@ export const ChatGroup = ({
         updateChatMessagesWithBlocksFunc
       );
     };
-  }, []);
+  }, [updateChatMessagesWithBlocksFunc]);
 
   const middletierFunc = async (data: any, groupId: string) => {
     try {
       if (hasInitialized.current) {
         const dataRemovedBlock = data?.filter(
-          (item) => !isUserBlocked(item?.sender, item?.senderName)
+          (item) => !isChatSenderBlocked(item)
         );
 
         decryptMessages(dataRemovedBlock, true);
@@ -266,7 +271,7 @@ export const ChatGroup = ({
       });
       const responseData = await response.json();
       const dataRemovedBlock = responseData?.filter((item) => {
-        return !isUserBlocked(item?.sender, item?.senderName);
+        return !isChatSenderBlocked(item);
       });
       decryptMessages(dataRemovedBlock, false);
     } catch (error) {

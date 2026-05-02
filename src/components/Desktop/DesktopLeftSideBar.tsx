@@ -14,6 +14,7 @@ import { AppsIcon } from '../../assets/Icons/AppsIcon';
 import { MessagingIconFilled } from '../../assets/Icons/MessagingIconFilled';
 import qortalLogoOfficial from '../../assets/sidebar/qortal-logo-official.png';
 import { enabledDevModeAtom, hasUnreadGroupsAtom } from '../../atoms/global';
+import { keyframes } from '@mui/material/styles';
 import {
   executeEvent,
   subscribeToEvent,
@@ -38,6 +39,17 @@ const ITEM_PADDING_Y = 1;
 const OVERLAY_TRANSITION = '200ms cubic-bezier(0.2, 0, 0, 1)';
 const SIDEBAR_OPEN_DELAY_MS = 0;
 const SIDEBAR_CLOSE_DELAY_MS = 140;
+
+const pulse = keyframes`
+  0%, 100% {
+    transform: translateY(-50%) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-50%) scale(1.3);
+    opacity: 0.6;
+  }
+`;
 
 const DevModeIcon = ({
   color = 'currentColor',
@@ -359,35 +371,26 @@ export const DesktopSideBar = ({
               : '0 0 0 1px rgba(17,24,39,0.08)',
           opacity: isVisible ? 0 : 1,
           pointerEvents: isVisible ? 'none' : 'auto',
-            transition: isVisible
-              ? 'opacity 100ms ease, transform 100ms ease, background 200ms ease, box-shadow 200ms ease'
-              : 'opacity 120ms ease 110ms, transform 120ms ease 110ms, background 200ms ease, box-shadow 200ms ease',
+          transition: isVisible
+            ? 'opacity 100ms ease, transform 100ms ease, background 200ms ease, box-shadow 200ms ease'
+            : 'opacity 120ms ease 110ms, transform 120ms ease 110ms, background 200ms ease, box-shadow 200ms ease',
           zIndex: 9997,
-          '&::after': effectiveUnreadChat && !isVisible
-            ? {
-                content: '""',
-                position: 'absolute',
-                top: '50%',
-                right: 2,
-                transform: 'translateY(-50%)',
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: unreadAccent,
-                boxShadow: `0 0 0 2px ${alpha(unreadAccent, 0.14)}`,
-                animation: 'sidebarUnreadDotPulse 1.75s ease-in-out infinite',
-              }
-            : undefined,
-          '@keyframes sidebarUnreadDotPulse': {
-            '0%, 100%': {
-              boxShadow: `0 0 0 2px ${alpha(unreadAccent, 0.14)}`,
-              transform: 'translateY(-50%) scale(1)',
-            },
-            '50%': {
-              boxShadow: `0 0 0 5px ${alpha(unreadAccent, 0.2)}`,
-              transform: 'translateY(-50%) scale(1.08)',
-            },
-          },
+          '&::after':
+            effectiveUnreadChat && !isVisible
+              ? {
+                  content: '""',
+                  position: 'absolute',
+                  top: '50%',
+                  right: 2,
+                  transform: 'translateY(-50%)',
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: unreadAccent,
+                  boxShadow: `0 0 0 2px ${alpha(unreadAccent, 0.14)}`,
+                  animation: `${pulse} 1.2s ease-out 2`,
+                }
+              : undefined,
         }}
       />
 
@@ -424,10 +427,11 @@ export const DesktopSideBar = ({
             justifyContent: 'center',
             overflow: 'visible',
             pointerEvents: isVisible ? 'auto' : 'none',
-            '& .sidebarItem:hover .sidebarInfoLogo, & .sidebarItem:focus-visible .sidebarInfoLogo, & .sidebarItem.isOpen .sidebarInfoLogo': {
-              filter: 'grayscale(0) saturate(1) brightness(1) contrast(1)',
-              opacity: 1,
-            },
+            '& .sidebarItem:hover .sidebarInfoLogo, & .sidebarItem:focus-visible .sidebarInfoLogo, & .sidebarItem.isOpen .sidebarInfoLogo':
+              {
+                filter: 'grayscale(0) saturate(1) brightness(1) contrast(1)',
+                opacity: 1,
+              },
           }}
         >
           <Box
@@ -474,7 +478,9 @@ export const DesktopSideBar = ({
 
               <SidebarItem
                 active={isApps && !isQChatActive}
-                label={t('core:app_other', { postProcess: 'capitalizeFirstChar' })}
+                label={t('core:app_other', {
+                  postProcess: 'capitalizeFirstChar',
+                })}
                 onClick={() =>
                   runSidebarAction(() => {
                     executeEvent('newTabWindow', {});
@@ -482,19 +488,14 @@ export const DesktopSideBar = ({
                   })
                 }
               >
-                <AppsIcon
-                  height={24}
-                  color="currentColor"
-                />
+                <AppsIcon height={24} color="currentColor" />
               </SidebarItem>
 
               <Box sx={{ position: 'relative' }}>
                 <SidebarItem
                   active={desktopViewMode === 'chat' || isQChatActive}
                   label="Q-Chat"
-                  onClick={() =>
-                    runSidebarAction(() => openQChatTab())
-                  }
+                  onClick={() => runSidebarAction(() => openQChatTab())}
                 >
                   <MessagingIconFilled height={24} color="currentColor" />
                 </SidebarItem>
@@ -519,7 +520,9 @@ export const DesktopSideBar = ({
               {isEnabledDevMode ? (
                 <SidebarItem
                   active={desktopViewMode === 'dev'}
-                  label={t('core:dev_mode', { postProcess: 'capitalizeFirstChar' })}
+                  label={t('core:dev_mode', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                   onClick={() =>
                     runSidebarAction(() => setDesktopViewMode('dev'))
                   }
@@ -592,7 +595,6 @@ export const DesktopSideBar = ({
           </Box>
         </Box>
       </Box>
-
     </>
   );
 };

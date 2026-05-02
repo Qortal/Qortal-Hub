@@ -1,9 +1,4 @@
-import {
-  Box,
-  Typography,
-  useMediaQuery,
-  useTheme,
-} from '@mui/material';
+import { Box, Typography, useMediaQuery, useTheme } from '@mui/material';
 import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import { alpha, darken } from '@mui/material/styles';
@@ -14,8 +9,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { useAtomValue } from 'jotai';
-import { userInfoAtom } from '../../../atoms/global';
 import ErrorBoundary from '../../../common/ErrorBoundary';
 import { Spacer } from '../../../common/Spacer';
 import { HomeProfileCard } from '../HomeProfileCard';
@@ -97,7 +90,6 @@ export const HomeDesktop = ({
   const walletActivityDebugRef = useRef<HTMLDivElement | null>(null);
   const rightRailRef = useRef<HTMLDivElement | null>(null);
   const layoutStabilizeFrameRef = useRef<number | null>(null);
-  const userInfo = useAtomValue(userInfoAtom);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [walletActivityTargetHeightPx, setWalletActivityTargetHeightPx] =
     useState<number | null>(null);
@@ -145,14 +137,13 @@ export const HomeDesktop = ({
         resolvedWalletActivityHeightPx +
         2
       : null;
-  const userAddress = userInfo?.address;
   const handleOpenReceiveQort = useCallback(
     (target: HTMLElement | null) => {
       if (!target) return;
       const rect = target.getBoundingClientRect();
       const rightRailRect = rightRailRef.current?.getBoundingClientRect();
       executeEvent('openReceiveQortInternal', {
-        address: userAddress ?? myAddress ?? '',
+        address: myAddress ?? '',
         anchorRect: {
           height: rect.height,
           left: rect.left,
@@ -169,7 +160,7 @@ export const HomeDesktop = ({
           : null,
       });
     },
-    [myAddress, userAddress]
+    [myAddress]
   );
   const assignGroupActivityPanelNode = useCallback(
     (node: HTMLDivElement | null) => {
@@ -218,79 +209,6 @@ export const HomeDesktop = ({
       };
     });
   }, []);
-
-  const getCurrentCustomizableCardHeight = useCallback(
-    (cardId: HomeCustomizableCardId) => {
-      const storedHeight = customizableCardsLayout.heights[cardId];
-      if (storedHeight != null) return storedHeight;
-
-      const sourceNode =
-        cardId === 'groupActivity'
-          ? groupActivityCardHeightRef.current
-          : quitterCardHeightRef.current;
-      const measuredHeight = sourceNode?.getBoundingClientRect().height;
-
-      if (measuredHeight && Number.isFinite(measuredHeight)) {
-        return Math.round(measuredHeight);
-      }
-
-      return cardId === 'groupActivity'
-        ? HOME_GROUP_ACTIVITY_CARD_DEFAULT_HEIGHT_PX
-        : HOME_EMBEDDED_QAPP_PANEL_HEIGHT_PX;
-    },
-    [customizableCardsLayout.heights]
-  );
-
-  const moveCustomizableCard = useCallback(
-    (cardId: HomeCustomizableCardId, direction: 'up' | 'down') => {
-      setCustomizableCardsLayout((currentLayout) => {
-        const currentIndex = currentLayout.order.indexOf(cardId);
-        if (currentIndex === -1) return currentLayout;
-
-        const targetIndex =
-          direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-        if (targetIndex < 0 || targetIndex >= currentLayout.order.length) {
-          return currentLayout;
-        }
-
-        const nextOrder = [...currentLayout.order];
-        const [movedCard] = nextOrder.splice(currentIndex, 1);
-        nextOrder.splice(targetIndex, 0, movedCard);
-
-        return {
-          ...currentLayout,
-          order: nextOrder,
-        };
-      });
-    },
-    []
-  );
-
-  const resizeCustomizableCard = useCallback(
-    (cardId: HomeCustomizableCardId, direction: 'grow' | 'shrink') => {
-      const currentHeight = getCurrentCustomizableCardHeight(cardId);
-      const delta =
-        direction === 'grow'
-          ? HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX
-          : -HOME_CUSTOMIZABLE_CARD_RESIZE_STEP_PX;
-      const nextHeight = Math.max(
-        HOME_CUSTOMIZABLE_CARD_MIN_HEIGHTS[cardId],
-        Math.min(
-          HOME_CUSTOMIZABLE_CARD_MAX_HEIGHTS[cardId],
-          currentHeight + delta
-        )
-      );
-
-      setCustomizableCardsLayout((currentLayout) => ({
-        ...currentLayout,
-        heights: {
-          ...currentLayout.heights,
-          [cardId]: nextHeight,
-        },
-      }));
-    },
-    [getCurrentCustomizableCardHeight]
-  );
 
   useLayoutEffect(() => {
     const rootNode = homeLayoutDebugRootRef.current;
@@ -492,16 +410,20 @@ export const HomeDesktop = ({
   }, [desktopViewMode, isOnboardingComplete, isWideDashboardLayout]);
 
   useEffect(() => {
-    if (!userAddress) {
+    if (!myAddress) {
       setIsOnboardingComplete(false);
       return;
     }
 
     const isComplete =
-      localStorage.getItem(`${GETTING_STARTED_LS_KEY}_${userAddress}`) ===
+      localStorage.getItem(`${GETTING_STARTED_LS_KEY}_${myAddress}`) ===
       'completed';
     setIsOnboardingComplete(isComplete);
-  }, [userAddress]);
+  }, [myAddress]);
+
+  const handleGettingStartedComplete = useCallback(() => {
+    setIsOnboardingComplete(true);
+  }, []);
 
   const handleRefreshGroupActivity = useCallback(() => {
     setGroupWidgetRefreshToken((value) => value + 1);
@@ -708,9 +630,9 @@ export const HomeDesktop = ({
                               fallback={qortinoWorkspaceShellFallback}
                             >
                               <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={() => {
-                                  setIsOnboardingComplete(true);
-                                }}
+                                onGettingStartedComplete={
+                                  handleGettingStartedComplete
+                                }
                                 onOpenAppsPanel={handleOpenAppsPanel}
                               />
                             </ErrorBoundary>
@@ -808,9 +730,9 @@ export const HomeDesktop = ({
                               fallback={qortinoWorkspaceShellFallback}
                             >
                               <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={() => {
-                                  setIsOnboardingComplete(true);
-                                }}
+                                onGettingStartedComplete={
+                                  handleGettingStartedComplete
+                                }
                                 onOpenAppsPanel={handleOpenAppsPanel}
                               />
                             </ErrorBoundary>
