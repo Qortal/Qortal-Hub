@@ -80,6 +80,80 @@ const defaultDomains = [
 const domainHolder = {
   allowedDomains: [...defaultDomains],
 };
+
+/** Same path layout as `getSharedSettingsFilePath('wallet-storage.json')` (preload `walletStorage`). */
+function getWalletStorageJsonPathSync(): string {
+  return path.join(app.getPath('appData'), 'qortal-hub', 'wallet-storage.json');
+}
+
+function readCustomNodeUrlsFromWalletStorageFile(): string[] {
+  try {
+    const filePath = getWalletStorageJsonPathSync();
+    if (!fs.existsSync(filePath)) return [];
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(raw) as { customNodes?: unknown };
+    const nodes = data?.customNodes;
+    if (!Array.isArray(nodes)) return [];
+    return nodes
+      .map((n: { url?: unknown }) =>
+        typeof n?.url === 'string' ? n.url.trim() : ''
+      )
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function mergeUserDomainsIntoAllowlist(domains: string[]): string[] {
+  const validatedUserDomains = domains
+    .flatMap((domain) => {
+      try {
+        const url = new URL(domain);
+        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
+        return [url.origin, socketUrl];
+      } catch {
+        return [];
+      }
+    })
+    .filter(Boolean) as string[];
+
+  return [...new Set([...defaultDomains, ...validatedUserDomains])];
+}
+
+function applyAllowedDomainsFromUserUrls(
+  domains: string[],
+  options: { reloadWindow: boolean }
+): void {
+  if (!Array.isArray(domains)) {
+    return;
+  }
+  const newAllowedDomains = mergeUserDomainsIntoAllowlist(domains);
+  const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
+  const sortedNewDomains = [...newAllowedDomains].sort();
+  const hasChanged =
+    sortedCurrentDomains.length !== sortedNewDomains.length ||
+    sortedCurrentDomains.some(
+      (domain, index) => domain !== sortedNewDomains[index]
+    );
+
+  if (hasChanged) {
+    domainHolder.allowedDomains = newAllowedDomains;
+
+    if (options.reloadWindow) {
+      const mainWindow = myCapacitorApp.getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.reload();
+      }
+    }
+  }
+}
+
+/** Apply custom node URLs from wallet storage before the web app loads (no window reload). */
+export function loadPersistedAllowedDomainsAtStartup(): void {
+  const urls = readCustomNodeUrlsFromWalletStorageFile();
+  applyAllowedDomainsFromUserUrls(urls, { reloadWindow: false });
+}
 // Define components for a watcher to detect when the webapp is changed so we can reload in Dev mode.
 const reloadWatcher = {
   debouncer: null,
@@ -487,45 +561,7 @@ ipcMain.on('set-allowed-domains', (event, domains: string[]) => {
   if (!Array.isArray(domains)) {
     return;
   }
-  // Validate and transform user-provided domains
-  const validatedUserDomains = domains
-    .flatMap((domain) => {
-      try {
-        const url = new URL(domain);
-        const protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-        const socketUrl = `${protocol}//${url.hostname}${url.port ? ':' + url.port : ''}`;
-        return [url.origin, socketUrl];
-      } catch {
-        return [];
-      }
-    })
-    .filter(Boolean) as string[];
-
-  // Combine default and validated user domains
-  const newAllowedDomains = [
-    ...new Set([...defaultDomains, ...validatedUserDomains]),
-  ];
-
-  // Sort both current allowed domains and new domains for comparison
-  const sortedCurrentDomains = [...domainHolder.allowedDomains].sort();
-  const sortedNewDomains = [...newAllowedDomains].sort();
-
-  // Check if the lists are different
-  const hasChanged =
-    sortedCurrentDomains.length !== sortedNewDomains.length ||
-    sortedCurrentDomains.some(
-      (domain, index) => domain !== sortedNewDomains[index]
-    );
-
-  // If there's a change, update allowedDomains and reload the window
-  if (hasChanged) {
-    domainHolder.allowedDomains = newAllowedDomains;
-
-    const mainWindow = myCapacitorApp.getMainWindow();
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.reload();
-    }
-  }
+  applyAllowedDomainsFromUserUrls(domains, { reloadWindow: true });
 });
 
 // Custom title bar: window controls (minimize, maximize, close)

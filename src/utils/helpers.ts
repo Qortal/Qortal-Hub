@@ -35,6 +35,42 @@ export function isLocalPrivateHttpsUrl(url: string | undefined): boolean {
   }
 }
 
+/**
+ * In Electron, fetches and registers the node's CA for private/loopback HTTPS URLs
+ * before the renderer talks to that base over TLS (avoids Chromium rejecting self-signed).
+ * No-ops on web or when the URL is not HTTPS to a private host.
+ */
+export async function ensureElectronCertIfLocalPrivateHttps(
+  url: string | undefined,
+  apiKey = ''
+): Promise<{ success: boolean; error?: string }> {
+  if (!url || !isLocalPrivateHttpsUrl(url)) {
+    return { success: true };
+  }
+  const ensure = window.electronAPI?.ensureCertForBase;
+  if (!ensure) {
+    return { success: true };
+  }
+  const base = url.trim().replace(/\/+$/, '');
+  try {
+    const result = await ensure(base, apiKey);
+    if (result?.success) {
+      return { success: true };
+    }
+    return {
+      success: false,
+      error:
+        result?.error || 'Unable to prepare local HTTPS certificate',
+    };
+  } catch (e) {
+    return {
+      success: false,
+      error:
+        e instanceof Error ? e.message : 'Unable to prepare local HTTPS certificate',
+    };
+  }
+}
+
 export const delay = (time: number) =>
   new Promise((_, reject) =>
     setTimeout(() => reject(new Error('Request timed out')), time)

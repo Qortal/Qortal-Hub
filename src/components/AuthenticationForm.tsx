@@ -143,6 +143,8 @@ export const AuthenticationForm = ({
     ? addressLabel || unnamedAccountLabel
     : displayLabel;
   const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
+  const customNodeStatusLabel =
+    selectedNode?.name?.trim() || selectedNode?.url?.trim() || '';
   const connectionLabel = usingLocalNode
     ? t('auth:authentication_form.using_local_node', {
         postProcess: 'capitalizeFirstChar',
@@ -151,9 +153,15 @@ export const AuthenticationForm = ({
       ? t('auth:authentication_form.using_public_node', {
           postProcess: 'capitalizeFirstChar',
         })
-      : t('auth:authentication_form.using_custom_node', {
-          postProcess: 'capitalizeFirstChar',
-        });
+      : customNodeStatusLabel
+        ? t('auth:authentication_form.using_custom_node_named', {
+            label: customNodeStatusLabel,
+            defaultValue: 'Using {{label}}',
+            postProcess: 'capitalizeFirstChar',
+          })
+        : t('auth:authentication_form.using_custom_node', {
+            postProcess: 'capitalizeFirstChar',
+          });
   const isSharedTransitionActive = Boolean(sharedTransition);
   const storedAnimationPreference =
     typeof window !== 'undefined'

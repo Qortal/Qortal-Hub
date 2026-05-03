@@ -7,7 +7,7 @@ import {
   TIME_MINUTES_2_IN_MILLISECONDS,
   TIME_SECONDS_40_IN_MILLISECONDS,
 } from '../constants/constants';
-import { isLocalPrivateHttpsUrl } from '../utils/helpers';
+import { isLocalPrivateHttpsUrl, ensureElectronCertIfLocalPrivateHttps } from '../utils/helpers';
 import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import {
   authenticatePasswordAtom,
@@ -42,8 +42,7 @@ const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
 function isLocalCoreStatusSynced(status: any) {
   const syncPercent = Number(status?.syncPercent);
   return (
-    Number.isFinite(syncPercent) &&
-    syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT
+    Number.isFinite(syncPercent) && syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT
   );
 }
 
@@ -214,17 +213,13 @@ export const useAuth = () => {
           setLocalApiKeyNotElectronCase(validatedNodeInfo.apikey);
         }
 
-        if (isValid && isElectron && isLocalPrivateHttps) {
-          try {
-            const result = await window.electronAPI?.ensureCertForBase?.(
-              validatedNodeInfo?.url,
-              validatedNodeInfo?.apikey ?? ''
-            );
-            if (!result?.success) {
-              throw new Error('Failed to ensure cert for base');
-            }
-          } catch (err) {
-            throw new Error('Failed to ensure cert for base');
+        if (isValid && isElectron) {
+          const cert = await ensureElectronCertIfLocalPrivateHttps(
+            validatedNodeInfo?.url,
+            validatedNodeInfo?.apikey ?? ''
+          );
+          if (!cert.success) {
+            throw new Error(cert.error || 'Failed to ensure cert for base');
           }
         }
 
@@ -383,11 +378,7 @@ export const useAuth = () => {
     } catch (error) {
       return false;
     }
-  }, [
-    useLocalNode,
-    setIsOpenCoreSetup,
-    enableAuthWhenSyncing,
-  ]);
+  }, [useLocalNode, setIsOpenCoreSetup, enableAuthWhenSyncing]);
 
   const authenticate = useCallback(
     async (skipToPublic?: boolean, skipLocalCheck?: boolean) => {

@@ -24,6 +24,7 @@ import { CoreSyncing } from './CoreSyncing';
 import { CoreUrlInvalid } from './CoreUrlInvalid';
 import { CoreSettingUp } from './CoreSettingUp';
 import { useAuth } from '../hooks/useAuth';
+import { ensureElectronCertIfLocalPrivateHttps } from '../utils/helpers';
 
 export const CoreSetup = () => {
   const theme = useTheme();
@@ -319,59 +320,58 @@ export const CoreSetup = () => {
     };
   }, [open]);
 
-  const switchToLocalNode = useCallback(async (options?: {
-    authenticateAfterSwitch?: boolean;
-  }) => {
-    if (switchingToLocalRef.current) return;
-    switchingToLocalRef.current = true;
+  const switchToLocalNode = useCallback(
+    async (options?: { authenticateAfterSwitch?: boolean }) => {
+      if (switchingToLocalRef.current) return;
+      switchingToLocalRef.current = true;
 
-    try {
-      setLocalReadySwitchError('');
-      const apiKey = window?.coreSetup?.getApiKey
-        ? await window.coreSetup.getApiKey()
-        : '';
-      const localNodeUrl = getDefaultLocalNodeUrl();
+      try {
+        setLocalReadySwitchError('');
+        const apiKey = window?.coreSetup?.getApiKey
+          ? await window.coreSetup.getApiKey()
+          : '';
+        const localNodeUrl = getDefaultLocalNodeUrl();
 
-      if (localNodeUrl.startsWith('https://')) {
-        const certResult = await window.electronAPI?.ensureCertForBase?.(
+        const certResult = await ensureElectronCertIfLocalPrivateHttps(
           localNodeUrl,
           apiKey || ''
         );
 
-        if (!certResult?.success) {
+        if (!certResult.success) {
           throw new Error(
-            certResult?.error || 'Unable to prepare local HTTPS certificate'
+            certResult.error || 'Unable to prepare local HTTPS certificate'
           );
         }
+
+        await handleSaveNodeInfo({
+          url: localNodeUrl,
+          apikey: apiKey || '',
+        });
+
+        if (options?.authenticateAfterSwitch) {
+          await authenticate(true);
+        } else if (extState === 'authenticated') {
+          await getBalanceFunc();
+        }
+
+        dismissLocalReadyNotice();
+      } catch (error) {
+        console.error('Failed to switch to local node:', error);
+        setLocalReadySwitchError(
+          'Switch failed. You can log out and unlock again to use the local node.'
+        );
+      } finally {
+        switchingToLocalRef.current = false;
       }
-
-      await handleSaveNodeInfo({
-        url: localNodeUrl,
-        apikey: apiKey || '',
-      });
-
-      if (options?.authenticateAfterSwitch) {
-        await authenticate(true);
-      } else if (extState === 'authenticated') {
-        await getBalanceFunc();
-      }
-
-      dismissLocalReadyNotice();
-    } catch (error) {
-      console.error('Failed to switch to local node:', error);
-      setLocalReadySwitchError(
-        'Switch failed. You can log out and unlock again to use the local node.'
-      );
-    } finally {
-      switchingToLocalRef.current = false;
-    }
-  }, [
-    authenticate,
-    dismissLocalReadyNotice,
-    extState,
-    getBalanceFunc,
-    handleSaveNodeInfo,
-  ]);
+    },
+    [
+      authenticate,
+      dismissLocalReadyNotice,
+      extState,
+      getBalanceFunc,
+      handleSaveNodeInfo,
+    ]
+  );
 
   const isPublicNodeReachable = useCallback(async () => {
     try {
@@ -454,8 +454,7 @@ export const CoreSetup = () => {
         ? 'Use Local'
         : 'Local not ready'
       : undefined;
-  const contextualActionDisabled =
-    shouldOfferLocalFallback && !localCoreSynced;
+  const contextualActionDisabled = shouldOfferLocalFallback && !localCoreSynced;
   const contextualAction = shouldOfferPublicLobby
     ? usePublicNodeWhileSyncing
     : shouldOfferLocalFallback
@@ -547,7 +546,7 @@ export const CoreSetup = () => {
       };
     }
 
-    if (runningState?.status === 'done' || localNodeRuntimeStatus?.running) {
+    if (localNodeRuntimeStatus?.running) {
       return {
         description:
           typeof syncPercent === 'number'
@@ -752,9 +751,7 @@ export const CoreSetup = () => {
 
 const LOCAL_CORE_READY_SYNC_PERCENT = 99.95;
 
-function isLocalCoreStatusSynced(
-  syncPercent?: number
-) {
+function isLocalCoreStatusSynced(syncPercent?: number) {
   return (
     typeof syncPercent === 'number' &&
     syncPercent >= LOCAL_CORE_READY_SYNC_PERCENT

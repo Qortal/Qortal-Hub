@@ -18,13 +18,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getBaseApiReact } from '../../App';
-import {
-  blockedAddressesAtom,
-  blockedNamesAtom,
-  userInfoAtom,
-} from '../../atoms/global';
-import { useBlockedAddresses } from '../../hooks/useBlockUsers';
+import { userInfoAtom } from '../../atoms/global';
 import { executeEvent } from '../../utils/events';
 import type { WidgetDisplayMode } from './DashboardWidgetFrame';
 import {
@@ -54,30 +48,34 @@ type InitialFeedState = 'error' | 'loading' | 'success';
 type QuitterFeedMode = 'following' | 'general';
 type FollowingEmptyReason = 'no-following' | 'no-name' | 'no-posts' | null;
 
+const QUITTER_FEED_MODE_STORAGE_PREFIX = 'quitter_dashboard_feed_mode:';
+
+const parseStoredQuitterFeedMode = (
+  raw: string | null
+): QuitterFeedMode | null =>
+  raw === 'general' || raw === 'following' ? raw : null;
+
+const readQuitterFeedMode = (storageKey: string): QuitterFeedMode => {
+  if (typeof localStorage === 'undefined') return 'following';
+  try {
+    return parseStoredQuitterFeedMode(localStorage.getItem(storageKey)) ?? 'following';
+  } catch {
+    return 'following';
+  }
+};
+
+const writeQuitterFeedMode = (storageKey: string, mode: QuitterFeedMode) => {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(storageKey, mode);
+  } catch {
+    // ignore quota / private mode
+  }
+};
+
 const FOLLOWING_LOAD_TIMEOUT_MS = 40_000;
 const FEED_POLL_INTERVAL_MS = 90_000;
 const NEW_POST_REVEAL_DURATION_MS = 420;
-
-const normalizeAuthorName = (value: string) => value.trim().toLowerCase();
-
-const fetchNamesForAddress = async (address: string, signal?: AbortSignal) => {
-  const normalizedAddress = address.trim();
-  if (!normalizedAddress) return [];
-
-  const response = await fetch(
-    `${getBaseApiReact()}/names/address/${encodeURIComponent(normalizedAddress)}?limit=0`,
-    { signal }
-  );
-
-  if (!response.ok) return [];
-
-  const data = await response.json();
-  return Array.isArray(data)
-    ? data
-        .map((item) => (typeof item?.name === 'string' ? item.name.trim() : ''))
-        .filter(Boolean)
-    : [];
-};
 
 class FeedLoadTimeoutError extends Error {
   constructor(message: string) {
@@ -163,16 +161,21 @@ export const QuitterFeedWidget = ({
   const theme = useTheme();
   const { t } = useTranslation('core');
   const userInfo = useAtomValue(userInfoAtom);
-  const blockedAddresses = useAtomValue(blockedAddressesAtom);
-  const blockedNames = useAtomValue(blockedNamesAtom);
-  const { refreshBlockedUsers } = useBlockedAddresses(true);
   const isCompact = displayMode === 'compact';
   const currentUserName =
     typeof userInfo?.name === 'string' && userInfo.name.trim().length > 0
       ? userInfo.name.trim()
       : null;
+  const feedModeStorageKey = useMemo(() => {
+    const addr =
+      typeof userInfo?.address === 'string' &&
+      userInfo.address.trim().length > 0
+        ? userInfo.address.trim()
+        : 'anonymous';
+    return `${QUITTER_FEED_MODE_STORAGE_PREFIX}${addr}`;
+  }, [userInfo?.address]);
   const [error, setError] = useState<string | null>(null);
-  const [feedMode, setFeedMode] = useState<QuitterFeedMode>('general');
+  const [feedMode, setFeedMode] = useState<QuitterFeedMode>('following');
   const [followingEmptyReason, setFollowingEmptyReason] =
     useState<FollowingEmptyReason>(null);
   const [initialFeedState, setInitialFeedState] =
@@ -181,10 +184,6 @@ export const QuitterFeedWidget = ({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [items, setItems] = useState<QuitterFeedItem[]>([]);
   const [pendingItems, setPendingItems] = useState<QuitterFeedItem[]>([]);
-  const [
-    blockedNamesResolvedFromAddresses,
-    setBlockedNamesResolvedFromAddresses,
-  ] = useState<string[]>([]);
   const [revealedItemIds, setRevealedItemIds] = useState<string[]>([]);
   const [reloadToken, setReloadToken] = useState(0);
   const itemsRef = useRef<QuitterFeedItem[]>([]);
@@ -195,29 +194,6 @@ export const QuitterFeedWidget = ({
   const activeUpdateRequestIdRef = useRef(0);
   const isUpdateCheckInFlightRef = useRef(false);
   const isFollowingFeed = feedMode === 'following';
-  const blockedAddressList = useMemo(
-    () => Object.keys(blockedAddresses || {}).filter(Boolean),
-    [blockedAddresses]
-  );
-  const blockedNameList = useMemo(
-    () => Object.keys(blockedNames || {}).filter(Boolean),
-    [blockedNames]
-  );
-  const blockedAuthorNames = useMemo(
-    () =>
-      [...blockedNameList, ...blockedNamesResolvedFromAddresses]
-        .map(normalizeAuthorName)
-        .filter(Boolean),
-    [blockedNameList, blockedNamesResolvedFromAddresses]
-  );
-  const blockedAuthorNameSet = useMemo(
-    () => new Set(blockedAuthorNames),
-    [blockedAuthorNames]
-  );
-  const blockedAuthorKey = useMemo(
-    () => blockedAuthorNames.slice().sort().join('|'),
-    [blockedAuthorNames]
-  );
   const loadedPostLabel = useMemo(
     () => t('quitter_feed.posts_showing', { count: items.length }),
     [items.length, t]
@@ -245,69 +221,21 @@ export const QuitterFeedWidget = ({
     overscan: 6,
   });
 
-  const feedKey = `${feedMode}:${currentUserName ?? ''}:${blockedAuthorKey}`;
+  const feedKey = `${feedMode}:${currentUserName ?? ''}`;
 
   useEffect(() => {
-    refreshBlockedUsers().catch((error) => {
-      console.error('Failed to refresh Quitter block list.', error);
-    });
-  }, [refreshBlockedUsers, refreshToken, reloadToken]);
+    setFeedMode(readQuitterFeedMode(feedModeStorageKey));
+  }, [feedModeStorageKey]);
 
-  useEffect(() => {
-    if (blockedAddressList.length === 0) {
-      setBlockedNamesResolvedFromAddresses([]);
-      return undefined;
-    }
+  const commitVisibleItems = useCallback((nextItems: QuitterFeedItem[]) => {
+    itemsRef.current = nextItems;
+    setItems(nextItems);
+  }, []);
 
-    const controller = new AbortController();
-
-    void Promise.all(
-      blockedAddressList.map((address) =>
-        fetchNamesForAddress(address, controller.signal).catch((error) => {
-          if (!controller.signal.aborted) {
-            console.error('Failed to resolve blocked address names.', error);
-          }
-          return [];
-        })
-      )
-    ).then((resolvedNames) => {
-      if (controller.signal.aborted) return;
-      setBlockedNamesResolvedFromAddresses([...new Set(resolvedNames.flat())]);
-    });
-
-    return () => {
-      controller.abort();
-    };
-  }, [blockedAddressList]);
-
-  const filterBlockedFeedItems = useCallback(
-    (nextItems: QuitterFeedItem[]) => {
-      if (blockedAuthorNameSet.size === 0) return nextItems;
-
-      return nextItems.filter(
-        (item) => !blockedAuthorNameSet.has(normalizeAuthorName(item.author))
-      );
-    },
-    [blockedAuthorNameSet]
-  );
-
-  const commitVisibleItems = useCallback(
-    (nextItems: QuitterFeedItem[]) => {
-      const filteredItems = filterBlockedFeedItems(nextItems);
-      itemsRef.current = filteredItems;
-      setItems(filteredItems);
-    },
-    [filterBlockedFeedItems]
-  );
-
-  const commitPendingItems = useCallback(
-    (nextItems: QuitterFeedItem[]) => {
-      const filteredItems = filterBlockedFeedItems(nextItems);
-      pendingItemsRef.current = filteredItems;
-      setPendingItems(filteredItems);
-    },
-    [filterBlockedFeedItems]
-  );
+  const commitPendingItems = useCallback((nextItems: QuitterFeedItem[]) => {
+    pendingItemsRef.current = nextItems;
+    setPendingItems(nextItems);
+  }, []);
 
   useEffect(() => {
     itemsRef.current = items;
@@ -373,7 +301,6 @@ export const QuitterFeedWidget = ({
 
             return fetchQuitterFeedPage({
               allowedAuthors: followedNames,
-              blockedAuthors: blockedAuthorNames,
               itemLimit: requestedItemLimit,
               offset: 0,
               searchLimit,
@@ -393,7 +320,6 @@ export const QuitterFeedWidget = ({
       }
 
       return fetchQuitterFeedPage({
-        blockedAuthors: blockedAuthorNames,
         itemLimit: requestedItemLimit,
         offset: 0,
         searchLimit,
@@ -456,7 +382,6 @@ export const QuitterFeedWidget = ({
 
                 const page = await fetchQuitterFeedPage({
                   allowedAuthors: followedNames,
-                  blockedAuthors: blockedAuthorNames,
                   itemLimit: initialBatchSize,
                   offset: 0,
                   searchLimit,
@@ -769,11 +694,13 @@ export const QuitterFeedWidget = ({
     }
 
     setFeedMode('following');
-  }, [feedMode]);
+    writeQuitterFeedMode(feedModeStorageKey, 'following');
+  }, [feedMode, feedModeStorageKey]);
 
   const handleSelectGeneralFeed = useCallback(() => {
     setFeedMode('general');
-  }, []);
+    writeQuitterFeedMode(feedModeStorageKey, 'general');
+  }, [feedModeStorageKey]);
 
   const loadingLabel = useMemo(
     () =>

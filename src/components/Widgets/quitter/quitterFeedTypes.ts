@@ -49,7 +49,6 @@ export type QuitterFeedItem = {
 
 export type FetchQuitterFeedOptions = {
   allowedAuthors?: string[];
-  blockedAuthors?: string[];
   excludeIds?: string[];
   itemLimit?: number;
   offset?: number;

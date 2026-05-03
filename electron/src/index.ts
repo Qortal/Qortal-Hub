@@ -17,6 +17,7 @@ import {
 import { log as loggerLog, error as loggerError } from './logger';
 import {
   ElectronCapacitorApp,
+  loadPersistedAllowedDomainsAtStartup,
   setupContentSecurityPolicy,
   setupReloadWatcher,
 } from './setup';
@@ -164,6 +165,8 @@ async function setupMultiInstanceUserData(basePort = 55000, maxInstances = 10) {
   await setupMultiInstanceUserData();
 
   await app.whenReady();
+
+  loadPersistedAllowedDomainsAtStartup();
 
   // Set Content Security Policy
   setupContentSecurityPolicy(myCapacitorApp.getCustomURLScheme());

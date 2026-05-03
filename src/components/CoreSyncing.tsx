@@ -14,7 +14,10 @@ import { useAtom } from 'jotai';
 import { isOpenSyncingDialogAtom } from '../atoms/global';
 
 import { useTranslation } from 'react-i18next';
-import { getDefaultLocalNodeUrl } from '../constants/constants';
+import {
+  getDefaultLocalNodeUrl,
+  HTTP_LOCALHOST_12391,
+} from '../constants/constants';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   dialogActionsSx,

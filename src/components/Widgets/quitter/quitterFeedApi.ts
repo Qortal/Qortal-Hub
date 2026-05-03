@@ -26,7 +26,7 @@ const QUITTER_DOCUMENT_PAYLOAD_CACHE_MAX_ENTRIES = 250;
 // Verified against the public node on April 19, 2026.
 // This is Quitter's qapp-core-derived POST + ROOT search prefix.
 const QUITTER_PUBLIC_POST_PREFIX = 'MhNiRYdzkaP9dz-kX47dT-XrFXaYetyErMdF-';
-
+const QUITTER_FOLLOWING_PREFIX = 'gY.TWOeB25Co.7';
 const followedNamesCache = new Map<
   string,
   { fetchedAt: number; names: string[] }
@@ -248,7 +248,23 @@ const fetchText = async (url: string, signal?: AbortSignal) => {
   return response.text();
 };
 
-const buildQuitterFeedSearchUrl = (searchLimit: number, offset: number) => {
+const fetchJSON = async (url: string, signal?: AbortSignal) => {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+
+  return response.json();
+};
+const buildQuitterFeedSearchUrl = (
+  searchLimit: number,
+  offset: number,
+  names: string[] = []
+) => {
   const params = new URLSearchParams({
     identifier: QUITTER_PUBLIC_POST_PREFIX,
     limit: String(searchLimit),
@@ -258,6 +274,10 @@ const buildQuitterFeedSearchUrl = (searchLimit: number, offset: number) => {
     reverse: 'true',
     service: 'DOCUMENT',
     excludeblocked: 'true',
+  });
+
+  names.forEach((name) => {
+    params.append('name', name);
   });
 
   return `${getBaseApiReact()}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;
@@ -277,6 +297,8 @@ const buildQuitterUserResourceSearchUrl = (
     reverse: 'true',
     service: 'DOCUMENT',
     excludeblocked: 'true',
+    identifier: QUITTER_FOLLOWING_PREFIX,
+    prefix: 'true',
   });
 
   return `${getBaseApiReact()}${QUITTER_PUBLIC_FEED_SEARCH_ENDPOINT}?${params.toString()}`;
@@ -291,13 +313,13 @@ export const getQuitterAvatarUrl = (author: string) =>
 const fetchQuitterSearchResources = async (
   searchLimit: number,
   offset = 0,
+  names: string[] = [],
   signal?: AbortSignal
 ) => {
-  const text = await fetchText(
-    buildQuitterFeedSearchUrl(searchLimit, offset),
+  const parsed = await fetchJSON(
+    buildQuitterFeedSearchUrl(searchLimit, offset, names),
     signal
   );
-  const parsed = JSON.parse(text);
 
   if (!Array.isArray(parsed)) {
     throw new Error('Unexpected Quitter feed response shape');
@@ -316,11 +338,12 @@ const fetchQuitterUserResources = async (
   offset = 0,
   signal?: AbortSignal
 ) => {
-  const text = await fetchText(
+  const text = await fetchJSON(
     buildQuitterUserResourceSearchUrl(userName, searchLimit, offset),
     signal
   );
-  const parsed = JSON.parse(text);
+  console.log('fetchQuitterUserResources text', text);
+  const parsed = text;
 
   if (!Array.isArray(parsed)) {
     throw new Error('Unexpected Quitter user resource response shape');
@@ -359,8 +382,48 @@ const fetchQuitterDocumentPayload = async (
   return parsed;
 };
 
+const fetchFollowedNames = async (
+  resources: QuitterFeedSearchResource[],
+  signal?: AbortSignal
+) => {
+  const response = await fetch(
+    `${getBaseApiReact()}/arbitrary/resources/onchain/data`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        resources.map((resource) => ({
+          service: resource.service,
+          name: resource.name,
+          identifier: resource.identifier,
+        }))
+      ),
+    }
+  );
+  const followedNames = new Set<string>();
+  const results = await response.json();
+  console.log('fetchFollowedNames results', results);
+  if (response.ok) {
+    for (const result of results) {
+      if (!result.data || result.error) continue;
+
+      try {
+        const json = JSON.parse(atob(result.data));
+        if (!json.followedName) continue;
+        followedNames.add(json.followedName);
+      } catch {
+        console.warn(
+          'Failed to decode follow data for identifier:',
+          result.identifier
+        );
+      }
+    }
+  }
+
+  return Array.from(followedNames);
+};
+
 export const fetchQuitterFeed = async ({
-  blockedAuthors,
   excludeIds = [],
   itemLimit = QUITTER_WIDGET_ITEM_LIMIT,
   offset = 0,
@@ -368,7 +431,6 @@ export const fetchQuitterFeed = async ({
   signal,
 }: FetchQuitterFeedOptions = {}): Promise<QuitterFeedItem[]> => {
   const page = await fetchQuitterFeedPage({
-    blockedAuthors,
     excludeIds,
     itemLimit,
     offset,
@@ -381,13 +443,13 @@ export const fetchQuitterFeed = async ({
 
 export const fetchQuitterFeedPage = async ({
   allowedAuthors,
-  blockedAuthors,
   excludeIds = [],
   itemLimit = QUITTER_WIDGET_ITEM_LIMIT,
   offset = 0,
   searchLimit = QUITTER_PUBLIC_FEED_SEARCH_LIMIT,
   signal,
 }: FetchQuitterFeedOptions = {}): Promise<QuitterFeedPage> => {
+  console.log('fetchQuitterFeedPage allowedAuthors', allowedAuthors);
   const seenIds = new Set(excludeIds);
   const normalizedAllowedAuthors =
     allowedAuthors
@@ -395,13 +457,6 @@ export const fetchQuitterFeedPage = async ({
       .filter(Boolean) ?? null;
   const allowedAuthorsSet =
     normalizedAllowedAuthors != null ? new Set(normalizedAllowedAuthors) : null;
-  const blockedAuthorsSet = new Set(
-    blockedAuthors
-      ?.map((author) => author.trim().toLowerCase())
-      .filter(Boolean) ?? []
-  );
-  const isBlockedAuthor = (author: string) =>
-    blockedAuthorsSet.has(author.trim().toLowerCase());
 
   if (allowedAuthorsSet && allowedAuthorsSet.size === 0) {
     return {
@@ -432,6 +487,7 @@ export const fetchQuitterFeedPage = async ({
     const resources = await fetchQuitterSearchResources(
       requestLimit,
       requestedOffset,
+      allowedAuthors || [],
       signal
     );
     const filteredResources = resources
@@ -441,7 +497,6 @@ export const fetchQuitterFeedPage = async ({
       }))
       .filter(({ resource }) => {
         const normalizedName = resource.name.trim().toLowerCase();
-        if (isBlockedAuthor(normalizedName)) return false;
         return allowedAuthorsSet ? allowedAuthorsSet.has(normalizedName) : true;
       });
 
@@ -511,6 +566,7 @@ export const fetchQuitterFollowedNames = async (
   userName: string,
   signal?: AbortSignal
 ) => {
+  console.log('fetchQuitterFollowedNames', userName);
   const normalizedUserName = userName.trim();
 
   if (!normalizedUserName) {
@@ -522,6 +578,7 @@ export const fetchQuitterFollowedNames = async (
     cached &&
     Date.now() - cached.fetchedAt < QUITTER_FOLLOWING_CACHE_TTL_MS
   ) {
+    console.log('fetchQuitterFollowedNames cached', cached.names);
     return cached.names;
   }
 
@@ -532,34 +589,34 @@ export const fetchQuitterFollowedNames = async (
     0,
     signal
   );
+  console.log('fetchQuitterFollowedNames resources', resources);
   const candidateResources = resources
-    .filter((resource) => resource.size <= QUITTER_FOLLOW_CANDIDATE_MAX_SIZE)
+    .filter(
+      (resource) =>
+        resource.size <= QUITTER_FOLLOW_CANDIDATE_MAX_SIZE &&
+        resource.size !== 32
+    )
     .sort((left, right) => left.size - right.size)
     .slice(0, QUITTER_FOLLOW_CANDIDATE_LIMIT);
-
-  const settled = await Promise.allSettled(
-    candidateResources.map(async (resource) => {
-      const payload = await fetchQuitterDocumentPayload(resource, signal);
-      return getFollowedNameFromDocument(payload);
-    })
+  console.log(
+    'fetchQuitterFollowedNames candidateResources',
+    candidateResources
   );
-
+  const settled = await fetchFollowedNames(candidateResources, signal);
+  // const settled = await Promise.allSettled(
+  //   candidateResources.map(async (resource) => {
+  //     const payload = await fetchQuitterDocumentPayload(resource, signal);
+  //     console.log('fetchQuitterFollowedNames payload', payload);
+  //     return getFollowedNameFromDocument(payload);
+  //   })
+  // );
+  console.log('settled', settled);
   for (const result of settled) {
-    if (result.status !== 'fulfilled') {
-      if (!isAbortError(result.reason)) {
-        console.error(
-          'Failed to inspect Quitter follow resource',
-          result.reason
-        );
-      }
+    if (!result || result === normalizedUserName) {
       continue;
     }
 
-    if (!result.value || result.value === normalizedUserName) {
-      continue;
-    }
-
-    followedNames.add(result.value);
+    followedNames.add(result);
   }
 
   const names = [...followedNames];

@@ -7,7 +7,14 @@ import {
   useTheme,
 } from '@mui/material';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { HomeIcon } from '../../assets/Icons/HomeIcon';
 import { AppsIcon } from '../../assets/Icons/AppsIcon';

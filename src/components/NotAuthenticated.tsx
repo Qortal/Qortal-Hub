@@ -125,11 +125,25 @@ export const NotAuthenticated = ({
   const [introMetrics, setIntroMetrics] = useState<IntroLogoMetrics | null>(null);
   const [introStage, setIntroStage] = useState<IntroStage>('pending');
   const usingLocalNode = isLocalNodeUrl(selectedNode?.url);
+  const customNodeStatusLabel =
+    selectedNode?.name?.trim() || selectedNode?.url?.trim() || '';
   const connectionLabel = usingLocalNode
-    ? 'Using local node'
+    ? t('auth:authentication_form.using_local_node', {
+        postProcess: 'capitalizeFirstChar',
+      })
     : selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
-      ? 'Using public node'
-      : 'Using custom node';
+      ? t('auth:authentication_form.using_public_node', {
+          postProcess: 'capitalizeFirstChar',
+        })
+      : customNodeStatusLabel
+        ? t('auth:authentication_form.using_custom_node_named', {
+            label: customNodeStatusLabel,
+            defaultValue: 'Using {{label}}',
+            postProcess: 'capitalizeFirstChar',
+          })
+        : t('auth:authentication_form.using_custom_node', {
+            postProcess: 'capitalizeFirstChar',
+          });
   const featureItems = [
     {
       icon: <SecurityRoundedIcon sx={{ fontSize: 34 }} />,

@@ -19,13 +19,11 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import DnsRoundedIcon from '@mui/icons-material/DnsRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import SaveRoundedIcon from '@mui/icons-material/SaveRounded';
+import { NewNodeReloadRequiredDialog } from './NewNodeReloadRequiredDialog';
 import { AuthButton, AuthInput } from './AuthShell';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
-import {
-  isOpenCoreSetup,
-  selectedNodeInfoAtom,
-} from '../../atoms/global';
+import { isOpenCoreSetup, selectedNodeInfoAtom } from '../../atoms/global';
 import {
   getDefaultLocalNodeUrl,
   HTTPS_EXT_NODE_QORTAL_LINK,
@@ -33,6 +31,7 @@ import {
 } from '../../constants/constants';
 import { useAuth } from '../../hooks/useAuth';
 import type { ApiKey } from '../../types/auth';
+import { ensureElectronCertIfLocalPrivateHttps } from '../../utils/helpers';
 
 type ConnectionModeModalProps = {
   open: boolean;
@@ -88,6 +87,8 @@ export function ConnectionModeModal({
     number | null
   >(null);
   const isDraggingCustomNodeRef = useRef(false);
+  const pendingReloadNodesRef = useRef<ApiKey[] | null>(null);
+  const [reloadAfterNewNodeOpen, setReloadAfterNewNodeOpen] = useState(false);
 
   const syncAllowedDomains = useCallback((nodes: ApiKey[]) => {
     if (window?.electronAPI?.setAllowedDomains) {
@@ -105,16 +106,12 @@ export function ConnectionModeModal({
     };
   }, [selectedNode?.apikey, selectedNode?.name, selectedNode?.url]);
 
-  const persistCustomNodes = useCallback(
-    async (nodes: ApiKey[]) => {
-      const normalizedNodes = normalizeCustomNodes(nodes);
-      await window.sendMessage('setCustomNodes', normalizedNodes);
-      setCustomNodes(normalizedNodes);
-      syncAllowedDomains(normalizedNodes);
-      return normalizedNodes;
-    },
-    [syncAllowedDomains]
-  );
+  const persistCustomNodes = useCallback(async (nodes: ApiKey[]) => {
+    const normalizedNodes = normalizeCustomNodes(nodes);
+    await window.sendMessage('setCustomNodes', normalizedNodes);
+    setCustomNodes(normalizedNodes);
+    return normalizedNodes;
+  }, []);
 
   const loadCustomNodes = useCallback(async () => {
     try {
@@ -128,16 +125,15 @@ export function ConnectionModeModal({
         !nodes.some((node) => node.url === selectedCustomNode.url)
       ) {
         nodes = [...nodes, selectedCustomNode];
-        await window.sendMessage('setCustomNodes', nodes);
       }
 
       setCustomNodes(nodes);
-      syncAllowedDomains(nodes);
+      // syncAllowedDomains(nodes);
     } catch (error) {
       console.error(error);
       setCustomNodes([]);
     }
-  }, [getSelectedCustomNode, syncAllowedDomains]);
+  }, [getSelectedCustomNode]);
 
   useEffect(() => {
     if (!open) return;
@@ -177,7 +173,9 @@ export function ConnectionModeModal({
           return;
         }
 
-        const response = await fetch(`${getDefaultLocalNodeUrl()}/admin/status`);
+        const response = await fetch(
+          `${getDefaultLocalNodeUrl()}/admin/status`
+        );
         if (!canceled) {
           setLocalCoreStatus(response.ok ? 'running' : 'missing');
         }
@@ -209,37 +207,67 @@ export function ConnectionModeModal({
     if (localCoreStatus === 'running') return theme.palette.other.positive;
     if (localCoreStatus === 'missing') return theme.palette.other.warning;
     return theme.palette.text.secondary;
-  }, [localCoreStatus, theme.palette.other.positive, theme.palette.other.warning, theme.palette.text.secondary]);
+  }, [
+    localCoreStatus,
+    theme.palette.other.positive,
+    theme.palette.other.warning,
+    theme.palette.text.secondary,
+  ]);
 
   const saveMode = async () => {
-    if (selectedMode === 'local') {
-      if (localCoreStatus === 'missing') {
-        onClose();
-        setOpenCoreSetup(true);
-        return;
-      }
-      await handleSaveNodeInfo({
-        url: getDefaultLocalNodeUrl(),
-        apikey: '',
-      });
-    } else if (selectedMode === 'public') {
-      await handleSaveNodeInfo({
-        url: HTTPS_EXT_NODE_QORTAL_LINK,
-        apikey: '',
-      });
-    } else {
-      const selectedCustomNode =
-        customNodes.find((node) => node.url === selectedCustomNodeUrl) ||
-        getSelectedCustomNode();
+    try {
+      if (selectedMode === 'local') {
+        if (localCoreStatus === 'missing') {
+          onClose();
+          setOpenCoreSetup(true);
+          return;
+        }
+        const localUrl = getDefaultLocalNodeUrl();
+        const apiKey = window?.coreSetup?.getApiKey
+          ? await window.coreSetup.getApiKey()
+          : '';
+        const certOk = await ensureElectronCertIfLocalPrivateHttps(
+          localUrl,
+          apiKey || ''
+        );
+        if (!certOk.success) {
+          console.error(certOk.error || 'HTTPS certificate preparation failed');
+          return;
+        }
+        await handleSaveNodeInfo({
+          url: localUrl,
+          apikey: apiKey || '',
+        });
+      } else if (selectedMode === 'public') {
+        await handleSaveNodeInfo({
+          url: HTTPS_EXT_NODE_QORTAL_LINK,
+          apikey: '',
+        });
+      } else {
+        const selectedCustomNode =
+          customNodes.find((node) => node.url === selectedCustomNodeUrl) ||
+          getSelectedCustomNode();
 
-      if (!selectedCustomNode?.url) {
-        setShowManual(true);
-        return;
-      }
+        if (!selectedCustomNode?.url) {
+          setShowManual(true);
+          return;
+        }
 
-      await handleSaveNodeInfo(selectedCustomNode);
+        const certOk = await ensureElectronCertIfLocalPrivateHttps(
+          selectedCustomNode.url,
+          selectedCustomNode.apikey || ''
+        );
+        if (!certOk.success) {
+          console.error(certOk.error || 'HTTPS certificate preparation failed');
+          return;
+        }
+
+        await handleSaveNodeInfo(selectedCustomNode);
+      }
+      onClose();
+    } catch (error) {
+      console.error(error);
     }
-    onClose();
   };
 
   const saveManualNode = async () => {
@@ -250,6 +278,16 @@ export function ConnectionModeModal({
       apikey: manualApiKey.trim(),
       name: manualNodeName.trim(),
     };
+
+    const certOk = await ensureElectronCertIfLocalPrivateHttps(
+      payload.url,
+      payload.apikey || ''
+    );
+    if (!certOk.success) {
+      console.error(certOk.error || 'HTTPS certificate preparation failed');
+      return;
+    }
+
     await handleSaveNodeInfo(payload);
 
     try {
@@ -281,7 +319,18 @@ export function ConnectionModeModal({
         nextNodes.push(payload);
       }
 
-      await persistCustomNodes(nextNodes);
+      const urlsBefore = new Set(
+        existingNodes.map((n) => normalizeNodeUrl(n.url))
+      );
+      const hasNewUrl = nextNodes.some(
+        (n) => !urlsBefore.has(normalizeNodeUrl(n.url))
+      );
+
+      const persisted = await persistCustomNodes(nextNodes);
+      if (hasNewUrl) {
+        pendingReloadNodesRef.current = persisted;
+        setReloadAfterNewNodeOpen(true);
+      }
     } catch (error) {
       console.error(error);
     }
@@ -292,6 +341,15 @@ export function ConnectionModeModal({
     setShowManual(false);
     onClose();
   };
+
+  const handleReloadAfterNewNode = useCallback(() => {
+    const nodes = pendingReloadNodesRef.current;
+    pendingReloadNodesRef.current = null;
+    setReloadAfterNewNodeOpen(false);
+    if (nodes?.length) {
+      syncAllowedDomains(nodes);
+    }
+  }, [syncAllowedDomains]);
 
   const openAddCustomNode = () => {
     setEditingNodeUrl(null);
@@ -341,9 +399,21 @@ export function ConnectionModeModal({
         setSelectedMode('local');
       }
       if (selectedNode?.url === nodeToRemove.url) {
+        const localUrl = getDefaultLocalNodeUrl();
+        const apiKey = window?.coreSetup?.getApiKey
+          ? await window.coreSetup.getApiKey()
+          : '';
+        const certOk = await ensureElectronCertIfLocalPrivateHttps(
+          localUrl,
+          apiKey || ''
+        );
+        if (!certOk.success) {
+          console.error(certOk.error || 'HTTPS certificate preparation failed');
+          return;
+        }
         await handleSaveNodeInfo({
-          url: getDefaultLocalNodeUrl(),
-          apikey: '',
+          url: localUrl,
+          apikey: apiKey || '',
         });
       }
     } catch (error) {
@@ -353,6 +423,10 @@ export function ConnectionModeModal({
 
   return (
     <>
+      <NewNodeReloadRequiredDialog
+        open={reloadAfterNewNodeOpen}
+        onReload={handleReloadAfterNewNode}
+      />
       <Dialog
         open={open}
         onClose={onClose}
@@ -403,20 +477,38 @@ export function ConnectionModeModal({
               {t('auth:connection_mode.subtitle')}
             </Typography>
           </Box>
-          <IconButton onClick={onClose} sx={{ color: theme.palette.text.secondary }}>
+          <IconButton
+            onClick={onClose}
+            sx={{ color: theme.palette.text.secondary }}
+          >
             <CloseRoundedIcon />
           </IconButton>
         </Box>
 
         <Box sx={{ px: 3, pb: 3, pt: 3 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <ButtonBase onClick={() => setSelectedMode('local')} sx={modeRowSx(selectedMode === 'local')}>
+            <ButtonBase
+              onClick={() => setSelectedMode('local')}
+              sx={modeRowSx(selectedMode === 'local')}
+            >
               <Box sx={modeRadioSx(selectedMode === 'local')}>
-                <Box component="span" sx={modeRadioDotSx(selectedMode === 'local')} />
+                <Box
+                  component="span"
+                  sx={modeRadioDotSx(selectedMode === 'local')}
+                />
               </Box>
-              <ComputerRoundedIcon sx={{ color: '#62A1FF', fontSize: 29, flexShrink: 0 }} />
+              <ComputerRoundedIcon
+                sx={{ color: '#62A1FF', fontSize: 29, flexShrink: 0 }}
+              />
               <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <Box sx={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 0.8 }}>
+                <Box
+                  sx={{
+                    alignItems: 'center',
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 0.8,
+                  }}
+                >
                   <Typography sx={modeTitleSx}>
                     {t('auth:connection_mode.local_title')}
                   </Typography>
@@ -439,15 +531,25 @@ export function ConnectionModeModal({
                 <Typography sx={statusTextSx(localStatusColor)}>
                   {localStatusLabel}
                 </Typography>
-                <ChevronRightRoundedIcon sx={{ color: 'rgba(214,221,233,0.7)', fontSize: 25 }} />
+                <ChevronRightRoundedIcon
+                  sx={{ color: 'rgba(214,221,233,0.7)', fontSize: 25 }}
+                />
               </Box>
             </ButtonBase>
 
-            <ButtonBase onClick={() => setSelectedMode('public')} sx={modeRowSx(selectedMode === 'public')}>
+            <ButtonBase
+              onClick={() => setSelectedMode('public')}
+              sx={modeRowSx(selectedMode === 'public')}
+            >
               <Box sx={modeRadioSx(selectedMode === 'public')}>
-                <Box component="span" sx={modeRadioDotSx(selectedMode === 'public')} />
+                <Box
+                  component="span"
+                  sx={modeRadioDotSx(selectedMode === 'public')}
+                />
               </Box>
-              <CloudRoundedIcon sx={{ color: '#9f75ff', fontSize: 30, flexShrink: 0 }} />
+              <CloudRoundedIcon
+                sx={{ color: '#9f75ff', fontSize: 30, flexShrink: 0 }}
+              />
               <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                 <Typography sx={modeTitleSx}>
                   {t('auth:connection_mode.public_title')}
@@ -462,7 +564,13 @@ export function ConnectionModeModal({
                   {t('auth:connection_mode.public_shared_infrastructure')}
                 </Typography>
               </Box>
-              <ChevronRightRoundedIcon sx={{ color: 'rgba(214,221,233,0.7)', fontSize: 25, flexShrink: 0 }} />
+              <ChevronRightRoundedIcon
+                sx={{
+                  color: 'rgba(214,221,233,0.7)',
+                  fontSize: 25,
+                  flexShrink: 0,
+                }}
+              />
             </ButtonBase>
 
             <Box sx={{ mt: 1.5 }}>
@@ -479,10 +587,7 @@ export function ConnectionModeModal({
                 <Typography sx={sectionTitleSx}>
                   {t('auth:connection_mode.section_custom_nodes')}
                 </Typography>
-                <ButtonBase
-                  onClick={openAddCustomNode}
-                  sx={addCustomNodeSx}
-                >
+                <ButtonBase onClick={openAddCustomNode} sx={addCustomNodeSx}>
                   <AddRoundedIcon sx={{ fontSize: 18 }} />
                   {t('auth:connection_mode.add_custom_node')}
                 </ButtonBase>
@@ -700,7 +805,14 @@ export function ConnectionModeModal({
           >
             <ArrowBackRoundedIcon />
           </IconButton>
-          <Typography sx={{ flex: 1, fontSize: '1.06rem', fontWeight: 700, textAlign: 'center' }}>
+          <Typography
+            sx={{
+              flex: 1,
+              fontSize: '1.06rem',
+              fontWeight: 700,
+              textAlign: 'center',
+            }}
+          >
             {editingNodeUrl
               ? t('auth:connection_mode.manual_edit_title')
               : t('auth:connection_mode.manual_add_title')}
@@ -708,7 +820,15 @@ export function ConnectionModeModal({
           <Box sx={{ width: 40 }} />
         </Box>
 
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.3, px: 2.4, pb: 2.4 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.3,
+            px: 2.4,
+            pb: 2.4,
+          }}
+        >
           <Box>
             <Typography sx={fieldLabelSx}>
               {t('auth:connection_mode.field_name')}
@@ -953,7 +1073,8 @@ const manualNodeLinkSx = {
 
 const saveSettingsButtonSx = {
   alignItems: 'center',
-  background: 'linear-gradient(180deg, rgba(62,107,214,0.98), rgba(39,83,184,0.98))',
+  background:
+    'linear-gradient(180deg, rgba(62,107,214,0.98), rgba(39,83,184,0.98))',
   border: '1px solid rgba(92,145,255,0.24)',
   borderRadius: '6px',
   color: '#f6f8fc',
@@ -966,12 +1087,14 @@ const saveSettingsButtonSx = {
   minWidth: 174,
   px: 2.4,
   textTransform: 'none',
-  transition: 'background 160ms ease, border-color 160ms ease, transform 160ms ease',
+  transition:
+    'background 160ms ease, border-color 160ms ease, transform 160ms ease',
   '& .MuiButton-startIcon': {
     mr: 0.8,
   },
   '&:hover': {
-    background: 'linear-gradient(180deg, rgba(69,115,224,1), rgba(44,90,193,1))',
+    background:
+      'linear-gradient(180deg, rgba(69,115,224,1), rgba(44,90,193,1))',
     borderColor: 'rgba(118,165,255,0.3)',
     transform: 'translateY(-1px)',
   },

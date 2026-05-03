@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type MouseEvent,
+} from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useTranslation } from 'react-i18next';
 import { nodeInfosAtom, selectedNodeInfoAtom } from '../../../atoms/global';
@@ -16,6 +22,7 @@ import {
   normalizeDashboardCustomNodes,
   normalizeDashboardNodeUrl,
 } from './utils';
+import { ensureElectronCertIfLocalPrivateHttps } from '../../../utils/helpers';
 
 export function useDashboardNodeMenu() {
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
@@ -48,7 +55,6 @@ export function useDashboardNodeMenu() {
         await window.sendMessage('getCustomNodesFromStorage')
       );
       setDashboardCustomNodes(nodes);
-      window.electronAPI?.setAllowedDomains?.(nodes.map((node) => node.url));
     } catch (error) {
       console.error(error);
       setDashboardCustomNodes([]);
@@ -152,19 +158,16 @@ export function useDashboardNodeMenu() {
             ? await window.coreSetup.getApiKey()
             : '';
           nodeToSave = { ...option.node, apikey: apiKey || '' };
+        }
 
-          if (nextUrl.startsWith('https://')) {
-            const certResult = await window.electronAPI?.ensureCertForBase?.(
-              nextUrl,
-              apiKey || ''
-            );
-
-            if (!certResult?.success) {
-              throw new Error(
-                certResult?.error || 'Unable to prepare local HTTPS certificate'
-              );
-            }
-          }
+        const certResult = await ensureElectronCertIfLocalPrivateHttps(
+          nextUrl,
+          nodeToSave.apikey ?? ''
+        );
+        if (!certResult.success) {
+          throw new Error(
+            certResult.error || 'Unable to prepare local HTTPS certificate'
+          );
         }
 
         await handleSaveNodeInfo(nodeToSave);

@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import {
   balanceAtom,
   nodeInfosAtom,
+  selectedNodeInfoAtom,
   userInfoAtom,
 } from '../../../atoms/global';
 import { getBaseApiReact } from '../../../App';
@@ -56,6 +57,7 @@ export function useDashboardInfoPreviewRows({
   const theme = useTheme();
   const balance = useAtomValue(balanceAtom);
   const nodeInfos = useAtomValue(nodeInfosAtom);
+  const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const userInfo = useAtomValue(userInfoAtom);
   const userAddress = userInfo?.address;
   const { t } = useTranslation(['core', 'group', 'tutorial', 'auth']);
@@ -238,11 +240,14 @@ export function useDashboardInfoPreviewRows({
       return nodeDisplay(nodeBase);
     }
   })();
+  const customNodeDashboardLabel =
+    selectedNode?.name?.trim() || selectedNode?.url?.trim() || '';
   const nodeTypeLabel = isLocalNodeUrl(nodeBase)
     ? td('local_node', 'Local node')
     : nodeBase.includes('ext-node.qortal.link')
       ? td('public_node', 'Public node')
-      : td('custom_node', 'Custom node');
+      : customNodeDashboardLabel ||
+        td('custom_node', 'Custom node');
   const isSystemOperational =
     hasLiveNodeConnection &&
     !(nodeInfos?.isSynchronizing && nodeInfos?.syncPercent !== 100);
