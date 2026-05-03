@@ -58,7 +58,10 @@ const parseStoredQuitterFeedMode = (
 const readQuitterFeedMode = (storageKey: string): QuitterFeedMode => {
   if (typeof localStorage === 'undefined') return 'following';
   try {
-    return parseStoredQuitterFeedMode(localStorage.getItem(storageKey)) ?? 'following';
+    return (
+      parseStoredQuitterFeedMode(localStorage.getItem(storageKey)) ??
+      'following'
+    );
   } catch {
     return 'following';
   }
