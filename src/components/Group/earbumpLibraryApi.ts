@@ -16,6 +16,8 @@ export type EarbumpTrack = {
 
 const EARBUMP_SEARCH_ENDPOINT = '/arbitrary/resources/search';
 const EARBUMP_SONG_IDENTIFIER_PREFIX = 'earbump_song_';
+/** Parallel music catalog (searched and merged with EarBump results). */
+const ENJOYMUSIC_SONG_IDENTIFIER_PREFIX = 'enjoymusic_song';
 
 type SearchResponseItem = {
   created?: number;
@@ -41,6 +43,24 @@ const toSafeString = (value: unknown) =>
 
 const toSafeNumber = (value: unknown) =>
   typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+/** Matches percent-encoded bytes (e.g. %20) in metadata or description fields. */
+const PERCENT_ENCODED_BYTE_PATTERN = /%[0-9A-Fa-f]{2}/;
+
+const decodeDisplayStringIfEncoded = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed || !PERCENT_ENCODED_BYTE_PATTERN.test(trimmed)) {
+    return trimmed;
+  }
+
+  try {
+    const decoded = decodeURIComponent(trimmed.replace(/\+/g, ' '));
+    const normalized = decoded.trim();
+    return normalized.length > 0 ? normalized : trimmed;
+  } catch {
+    return trimmed;
+  }
+};
 
 const slugifySearchQuery = (value: string) =>
   value
@@ -154,7 +174,7 @@ const parseDescriptionFields = (description: string) => {
 
     const key = rawKey.trim().toLowerCase();
     if (key !== 'title' && key !== 'author') continue;
-    parsed[key] = rawValue.trim();
+    parsed[key] = decodeDisplayStringIfEncoded(rawValue.trim());
   }
 
   return parsed;
@@ -175,12 +195,20 @@ const mapSearchResponseItem = (value: unknown): EarbumpTrack | null => {
     return null;
   }
 
-  const metadataTitle = toSafeString(resource.metadata?.title).trim();
-  const metadataAuthor = toSafeString(resource.metadata?.author).trim();
+  const metadataTitle = decodeDisplayStringIfEncoded(
+    toSafeString(resource.metadata?.title).trim()
+  );
+  const metadataAuthor = decodeDisplayStringIfEncoded(
+    toSafeString(resource.metadata?.author).trim()
+  );
   const description = toSafeString(resource.metadata?.description).trim();
   const parsedDescription = parseDescriptionFields(description);
-  const title = parsedDescription.title || metadataTitle || identifier;
-  const artist = parsedDescription.author || metadataAuthor || name;
+  const title = decodeDisplayStringIfEncoded(
+    parsedDescription.title || metadataTitle || identifier
+  );
+  const artist = decodeDisplayStringIfEncoded(
+    parsedDescription.author || metadataAuthor || name
+  );
 
   return {
     artist,
@@ -208,6 +236,73 @@ const dedupeTracks = (tracks: EarbumpTrack[]) => {
     seenIds.add(track.id);
     return true;
   });
+};
+
+const shuffleTracksDeterministic = (
+  tracks: EarbumpTrack[],
+  seed: number
+): EarbumpTrack[] => {
+  const copy = tracks.slice();
+  let state = seed >>> 0;
+  const random = () => {
+    state = (1664525 * state + 1013904223) >>> 0;
+    return state / 0xffffffff;
+  };
+
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    const tmp = copy[i];
+    copy[i] = copy[j]!;
+    copy[j] = tmp!;
+  }
+
+  return copy;
+};
+
+const mergeAndShuffleTrackResults = (
+  earbumpTracks: EarbumpTrack[],
+  enjoyTracks: EarbumpTrack[],
+  shuffleSeed: number
+): EarbumpTrack[] => {
+  const merged = dedupeTracks([...earbumpTracks, ...enjoyTracks]);
+  return shuffleTracksDeterministic(merged, shuffleSeed);
+};
+
+const fetchDualIdentifierSearch = async (
+  query: string,
+  perSourceLimit: number,
+  options?: { offset?: number; signal?: AbortSignal }
+) => {
+  const paramsEarbump = buildSearchParams(query, {
+    limit: perSourceLimit,
+    offset: options?.offset,
+    identifierPrefix: EARBUMP_SONG_IDENTIFIER_PREFIX,
+  });
+  const paramsEnjoy = buildSearchParams(query, {
+    limit: perSourceLimit,
+    offset: options?.offset,
+    identifierPrefix: ENJOYMUSIC_SONG_IDENTIFIER_PREFIX,
+  });
+
+  const [earbumpResult, enjoyResult] = await Promise.allSettled([
+    fetchTrackSearch(paramsEarbump, options?.signal),
+    fetchTrackSearch(paramsEnjoy, options?.signal),
+  ]);
+
+  const earbumpTracks =
+    earbumpResult.status === 'fulfilled' ? earbumpResult.value : [];
+  const enjoyTracks =
+    enjoyResult.status === 'fulfilled' ? enjoyResult.value : [];
+
+  if (earbumpResult.status === 'rejected' && enjoyResult.status === 'rejected') {
+    throw earbumpResult.reason;
+  }
+
+  return mergeAndShuffleTrackResults(
+    earbumpTracks,
+    enjoyTracks,
+    hashSeed(query)
+  );
 };
 
 const fetchTrackSearch = async (
@@ -240,8 +335,16 @@ const fetchTrackSearch = async (
 
 const buildSearchParams = (
   query: string,
-  options?: { limit?: number; offset?: number; useIdentifierQuery?: boolean }
+  options?: {
+    limit?: number;
+    offset?: number;
+    useIdentifierQuery?: boolean;
+    identifierPrefix?: string;
+  }
 ) => {
+  const identifierPrefix =
+    options?.identifierPrefix ?? EARBUMP_SONG_IDENTIFIER_PREFIX;
+
   const params = new URLSearchParams({
     excludeblocked: 'true',
     includemetadata: 'true',
@@ -254,9 +357,9 @@ const buildSearchParams = (
   });
 
   if (options?.useIdentifierQuery === true) {
-    params.set('query', EARBUMP_SONG_IDENTIFIER_PREFIX);
+    params.set('query', identifierPrefix);
   } else {
-    params.set('identifier', EARBUMP_SONG_IDENTIFIER_PREFIX);
+    params.set('identifier', identifierPrefix);
     params.set('query', query);
   }
 
@@ -281,17 +384,17 @@ export const searchEarbumpTracks = async (
   query: string,
   options?: { limit?: number; offset?: number; signal?: AbortSignal }
 ) => {
+  const perSourceLimit = options?.limit ?? 8;
+
   const normalizedQuery = slugifySearchQuery(query);
   if (!normalizedQuery) {
     return fetchEarbumpRecentTracks(options);
   }
 
-  const primaryResults = await fetchTrackSearch(
-    buildSearchParams(normalizedQuery, {
-      limit: options?.limit,
-      offset: options?.offset,
-    }),
-    options?.signal
+  const primaryResults = await fetchDualIdentifierSearch(
+    normalizedQuery,
+    perSourceLimit,
+    options
   );
 
   if (primaryResults.length > 0) {
@@ -303,13 +406,7 @@ export const searchEarbumpTracks = async (
     return primaryResults;
   }
 
-  return fetchTrackSearch(
-    buildSearchParams(rawQuery, {
-      limit: options?.limit,
-      offset: options?.offset,
-    }),
-    options?.signal
-  );
+  return fetchDualIdentifierSearch(rawQuery, perSourceLimit, options);
 };
 
 export const fetchEarbumpTrackById = async (

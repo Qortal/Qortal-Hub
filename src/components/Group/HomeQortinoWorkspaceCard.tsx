@@ -2859,7 +2859,7 @@ export const HomeQortinoWorkspaceCard = ({
       setIsEarbumpSearchLoading(true);
 
       void searchEarbumpTracks(musicSearchQuery, {
-        limit: 12,
+        limit: 8,
         signal: controller.signal,
       })
         .then((tracks) => {
