@@ -5,6 +5,7 @@ import {
   TextFieldProps,
   styled,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { forwardRef, useState } from 'react';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -43,14 +44,20 @@ export const CustomInput = styled(TextField)(({ theme }) => ({
   },
   '& .MuiInputAdornment-root .MuiButtonBase-root': {
     borderRadius: 6,
-    color: 'rgba(214,221,233,0.42)',
+    color:
+      theme.palette.mode === 'dark'
+        ? 'rgba(214,221,233,0.42)'
+        : alpha(theme.palette.text.secondary, 0.82),
     minWidth: 0,
     opacity: 0.88,
     padding: 4,
     transition: 'color 160ms ease, opacity 160ms ease, background-color 160ms ease',
   },
   '& .MuiInputAdornment-root .MuiButtonBase-root:hover': {
-    backgroundColor: 'rgba(255,255,255,0.035)',
+    backgroundColor:
+      theme.palette.mode === 'dark'
+        ? 'rgba(255,255,255,0.035)'
+        : alpha(theme.palette.common.black, 0.06),
     color: theme.palette.text.primary,
     opacity: 1,
   },

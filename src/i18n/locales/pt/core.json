@@ -484,7 +484,9 @@
   },
   "aria": {
     "apps_library_tabs": "abas de navegação da biblioteca de apps",
-    "core_controls": "Controles do Core"
+    "core_controls": "Controles do Core",
+    "switch_theme_dark": "Mudar para modo escuro",
+    "switch_theme_light": "Mudar para modo claro"
   },
   "supply": "fornecer",
   "tags": "tags",

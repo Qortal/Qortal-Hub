@@ -2,6 +2,7 @@ import { Box, IconButton, Tooltip } from '@mui/material';
 import SettingsRoundedIcon from '@mui/icons-material/SettingsRounded';
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from '../Language/LanguageSelector';
+import ThemeSelector from '../Theme/ThemeSelector';
 
 type NotAuthenticatedFooterProps = {
   showCoreSetup: boolean;
@@ -38,6 +39,7 @@ export function NotAuthenticatedFooter({
           </Tooltip>
         </Box>
       )}
+      <ThemeSelector footer />
       <Box>
         <LanguageSelector />
       </Box>

@@ -1,5 +1,12 @@
 import { useThemeContext } from './ThemeContext';
-import { Box, ButtonBase, IconButton, Typography, useTheme } from '@mui/material';
+import {
+  Box,
+  ButtonBase,
+  IconButton,
+  Tooltip,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
@@ -8,9 +15,11 @@ import { useRef } from 'react';
 
 type ThemeSelectorProps = {
   sidebar?: boolean;
+  /** Compact icon for footers (e.g. login screen chrome next to language). */
+  footer?: boolean;
 };
 
-const ThemeSelector = ({ sidebar = false }: ThemeSelectorProps) => {
+const ThemeSelector = ({ sidebar = false, footer = false }: ThemeSelectorProps) => {
   const { t } = useTranslation([
     'auth',
     'core',
@@ -63,6 +72,26 @@ const ThemeSelector = ({ sidebar = false }: ThemeSelectorProps) => {
     },
   } as const;
 
+  if (footer) {
+    const ariaLabel =
+      themeMode === 'dark'
+        ? t('core:aria.switch_theme_light')
+        : t('core:aria.switch_theme_dark');
+    return (
+      <Box ref={selectorRef}>
+        <Tooltip title={ariaLabel}>
+          <IconButton onClick={toggleTheme} aria-label={ariaLabel}>
+            {themeMode === 'light' ? (
+              <LightModeIcon sx={{ fontSize: 18 }} />
+            ) : (
+              <DarkModeIcon sx={{ fontSize: 18 }} />
+            )}
+          </IconButton>
+        </Tooltip>
+      </Box>
+    );
+  }
+
   if (sidebar) {
     return (
       <Box ref={selectorRef}>
@@ -81,7 +110,7 @@ const ThemeSelector = ({ sidebar = false }: ThemeSelectorProps) => {
               width: '40px',
             }}
           >
-            {themeMode === 'dark' ? (
+            {themeMode === 'light' ? (
               <LightModeIcon sx={{ fontSize: '1.45rem' }} />
             ) : (
               <DarkModeIcon sx={{ fontSize: '1.45rem' }} />
@@ -96,7 +125,7 @@ const ThemeSelector = ({ sidebar = false }: ThemeSelectorProps) => {
               lineHeight: 1,
             }}
           >
-            {themeMode === 'dark' ? 'Light' : 'Dark'}
+            {themeMode === 'light' ? 'Light' : 'Dark'}
           </Typography>
         </ButtonBase>
       </Box>
@@ -112,7 +141,7 @@ const ThemeSelector = ({ sidebar = false }: ThemeSelectorProps) => {
           color: theme.palette.text.primary,
         }}
       >
-        {themeMode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
+        {themeMode === 'light' ? <LightModeIcon /> : <DarkModeIcon />}
       </IconButton>
     </Box>
   );

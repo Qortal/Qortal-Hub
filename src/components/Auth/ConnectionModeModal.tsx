@@ -9,6 +9,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha, type Theme } from '@mui/material/styles';
 import ComputerRoundedIcon from '@mui/icons-material/ComputerRounded';
 import CloudRoundedIcon from '@mui/icons-material/CloudRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
@@ -434,14 +435,7 @@ export function ConnectionModeModal({
         fullWidth
         slotProps={{
           paper: {
-            sx: {
-              background: '#0d1117',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '10px',
-              boxShadow: '0 24px 50px rgba(0,0,0,0.32)',
-              maxHeight: 'calc(100vh - 48px)',
-              maxWidth: '712px',
-            },
+            sx: connectionModeMainPaperSx(theme),
           },
         }}
       >
@@ -469,7 +463,10 @@ export function ConnectionModeModal({
             </Typography>
             <Typography
               sx={{
-                color: 'rgba(214,221,233,0.68)',
+                color:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(214,221,233,0.68)'
+                    : theme.palette.text.secondary,
                 fontSize: '0.88rem',
                 mt: 1,
               }}
@@ -489,12 +486,12 @@ export function ConnectionModeModal({
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <ButtonBase
               onClick={() => setSelectedMode('local')}
-              sx={modeRowSx(selectedMode === 'local')}
+              sx={modeRowSx(theme, selectedMode === 'local')}
             >
-              <Box sx={modeRadioSx(selectedMode === 'local')}>
+              <Box sx={modeRadioSx(theme, selectedMode === 'local')}>
                 <Box
                   component="span"
-                  sx={modeRadioDotSx(selectedMode === 'local')}
+                  sx={modeRadioDotSx(theme, selectedMode === 'local')}
                 />
               </Box>
               <ComputerRoundedIcon
@@ -509,20 +506,20 @@ export function ConnectionModeModal({
                     gap: 0.8,
                   }}
                 >
-                  <Typography sx={modeTitleSx}>
+                  <Typography sx={modeTitleSx(theme)}>
                     {t('auth:connection_mode.local_title')}
                   </Typography>
-                  <Box sx={recommendedPillSx}>
+                  <Box sx={recommendedPillSx(theme)}>
                     {t('auth:connection_mode.recommended')}
                   </Box>
                 </Box>
-                <Typography sx={{ ...modeCopySx, mt: 0.75 }}>
+                <Typography sx={{ ...modeCopySx(theme), mt: 0.75 }}>
                   {t('auth:connection_mode.local_full_decentralized')}
                 </Typography>
-                <Typography sx={modeCopySx}>
+                <Typography sx={modeCopySx(theme)}>
                   {t('auth:connection_mode.local_faster')}
                 </Typography>
-                <Typography sx={modeCopySx}>
+                <Typography sx={modeCopySx(theme)}>
                   {t('auth:connection_mode.local_data_local')}
                 </Typography>
               </Box>
@@ -532,41 +529,50 @@ export function ConnectionModeModal({
                   {localStatusLabel}
                 </Typography>
                 <ChevronRightRoundedIcon
-                  sx={{ color: 'rgba(214,221,233,0.7)', fontSize: 25 }}
+                  sx={{
+                    color:
+                      theme.palette.mode === 'dark'
+                        ? 'rgba(214,221,233,0.7)'
+                        : alpha(theme.palette.text.primary, 0.45),
+                    fontSize: 25,
+                  }}
                 />
               </Box>
             </ButtonBase>
 
             <ButtonBase
               onClick={() => setSelectedMode('public')}
-              sx={modeRowSx(selectedMode === 'public')}
+              sx={modeRowSx(theme, selectedMode === 'public')}
             >
-              <Box sx={modeRadioSx(selectedMode === 'public')}>
+              <Box sx={modeRadioSx(theme, selectedMode === 'public')}>
                 <Box
                   component="span"
-                  sx={modeRadioDotSx(selectedMode === 'public')}
+                  sx={modeRadioDotSx(theme, selectedMode === 'public')}
                 />
               </Box>
               <CloudRoundedIcon
                 sx={{ color: '#9f75ff', fontSize: 30, flexShrink: 0 }}
               />
               <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                <Typography sx={modeTitleSx}>
+                <Typography sx={modeTitleSx(theme)}>
                   {t('auth:connection_mode.public_title')}
                 </Typography>
-                <Typography sx={{ ...modeCopySx, mt: 0.75 }}>
+                <Typography sx={{ ...modeCopySx(theme), mt: 0.75 }}>
                   {t('auth:connection_mode.public_quick')}
                 </Typography>
-                <Typography sx={modeCopySx}>
+                <Typography sx={modeCopySx(theme)}>
                   {t('auth:connection_mode.public_limited_decentralization')}
                 </Typography>
-                <Typography sx={modeCopySx}>
+                <Typography sx={modeCopySx(theme)}>
                   {t('auth:connection_mode.public_shared_infrastructure')}
                 </Typography>
               </Box>
               <ChevronRightRoundedIcon
                 sx={{
-                  color: 'rgba(214,221,233,0.7)',
+                  color:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(214,221,233,0.7)'
+                      : alpha(theme.palette.text.primary, 0.45),
                   fontSize: 25,
                   flexShrink: 0,
                 }}
@@ -574,7 +580,7 @@ export function ConnectionModeModal({
             </ButtonBase>
 
             <Box sx={{ mt: 1.5 }}>
-              <Box sx={sectionDividerSx} />
+              <Box sx={sectionDividerSx(theme)} />
               <Box
                 sx={{
                   alignItems: 'center',
@@ -584,10 +590,10 @@ export function ConnectionModeModal({
                   pt: 2.5,
                 }}
               >
-                <Typography sx={sectionTitleSx}>
+                <Typography sx={sectionTitleSx(theme)}>
                   {t('auth:connection_mode.section_custom_nodes')}
                 </Typography>
-                <ButtonBase onClick={openAddCustomNode} sx={addCustomNodeSx}>
+                <ButtonBase onClick={openAddCustomNode} sx={addCustomNodeSx(theme)}>
                   <AddRoundedIcon sx={{ fontSize: 18 }} />
                   {t('auth:connection_mode.add_custom_node')}
                 </ButtonBase>
@@ -606,9 +612,15 @@ export function ConnectionModeModal({
                 {customNodes.length === 0 && (
                   <Box
                     sx={{
-                      border: '1px dashed rgba(255,255,255,0.1)',
+                      border:
+                        theme.palette.mode === 'dark'
+                          ? '1px dashed rgba(255,255,255,0.1)'
+                          : `1px dashed ${theme.palette.border.main}`,
                       borderRadius: '8px',
-                      color: 'rgba(214,221,233,0.48)',
+                      color:
+                        theme.palette.mode === 'dark'
+                          ? 'rgba(214,221,233,0.48)'
+                          : theme.palette.text.secondary,
                       fontSize: '0.82rem',
                       px: 1.35,
                       py: 1.1,
@@ -680,6 +692,7 @@ export function ConnectionModeModal({
                         }
                       }}
                       sx={customNodeRowSx(
+                        theme,
                         isSelected,
                         dragOverCustomNodeIndex === index
                       )}
@@ -696,7 +709,9 @@ export function ConnectionModeModal({
                           sx={{
                             color: isSelected
                               ? theme.palette.primary.main
-                              : 'rgba(214,221,233,0.52)',
+                              : theme.palette.mode === 'dark'
+                                ? 'rgba(214,221,233,0.52)'
+                                : alpha(theme.palette.text.primary, 0.42),
                             fontSize: 20,
                             flexShrink: 0,
                           }}
@@ -713,7 +728,7 @@ export function ConnectionModeModal({
                           >
                             {displayName}
                           </Typography>
-                          <Typography sx={modeCopySx}>{node.url}</Typography>
+                          <Typography sx={modeCopySx(theme)}>{node.url}</Typography>
                         </Box>
                       </Box>
 
@@ -726,7 +741,12 @@ export function ConnectionModeModal({
                             event.stopPropagation();
                             openEditCustomNode(node);
                           }}
-                          sx={{ color: 'rgba(214,221,233,0.54)' }}
+                          sx={{
+                            color:
+                              theme.palette.mode === 'dark'
+                                ? 'rgba(214,221,233,0.54)'
+                                : alpha(theme.palette.text.primary, 0.5),
+                          }}
                         >
                           <EditRoundedIcon sx={{ fontSize: 18 }} />
                         </IconButton>
@@ -735,7 +755,12 @@ export function ConnectionModeModal({
                             event.stopPropagation();
                             removeCustomNode(node);
                           }}
-                          sx={{ color: 'rgba(214,221,233,0.54)' }}
+                          sx={{
+                            color:
+                              theme.palette.mode === 'dark'
+                                ? 'rgba(214,221,233,0.54)'
+                                : alpha(theme.palette.text.primary, 0.5),
+                          }}
                         >
                           <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
                         </IconButton>
@@ -747,18 +772,18 @@ export function ConnectionModeModal({
             </Box>
           </Box>
 
-          <Box sx={modalFooterSx}>
+          <Box sx={modalFooterSx(theme)}>
             <Link
               component="button"
               onClick={openAddCustomNode}
-              sx={manualNodeLinkSx}
+              sx={manualNodeLinkSx(theme)}
             >
               {t('auth:connection_mode.manual_setup_link')}
             </Link>
             <Button
               onClick={saveMode}
               startIcon={<SaveRoundedIcon sx={{ fontSize: 18 }} />}
-              sx={saveSettingsButtonSx}
+              sx={saveSettingsButtonSx(theme)}
               variant="contained"
             >
               {t('auth:connection_mode.save_settings')}
@@ -777,13 +802,7 @@ export function ConnectionModeModal({
         fullWidth
         slotProps={{
           paper: {
-            sx: {
-              background: '#0d1117',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: '10px',
-              boxShadow: '0 24px 50px rgba(0,0,0,0.32)',
-              maxWidth: '460px',
-            },
+            sx: connectionModeManualPaperSx(theme),
           },
         }}
       >
@@ -830,7 +849,7 @@ export function ConnectionModeModal({
           }}
         >
           <Box>
-            <Typography sx={fieldLabelSx}>
+            <Typography sx={fieldLabelSx(theme)}>
               {t('auth:connection_mode.field_name')}
             </Typography>
             <AuthInput
@@ -840,7 +859,7 @@ export function ConnectionModeModal({
             />
           </Box>
           <Box>
-            <Typography sx={fieldLabelSx}>
+            <Typography sx={fieldLabelSx(theme)}>
               {t('auth:connection_mode.field_node_url')}
             </Typography>
             <AuthInput
@@ -850,7 +869,7 @@ export function ConnectionModeModal({
             />
           </Box>
           <Box>
-            <Typography sx={fieldLabelSx}>
+            <Typography sx={fieldLabelSx(theme)}>
               {t('auth:connection_mode.field_api_key_optional')}
             </Typography>
             <AuthInput
@@ -896,74 +915,214 @@ export function ConnectionModeModal({
   );
 }
 
-const modeRowSx = (active: boolean) => ({
-  alignItems: 'center',
-  background: active
-    ? 'linear-gradient(180deg, rgba(13,22,37,0.82), rgba(12,19,29,0.82))'
-    : 'rgba(255,255,255,0.012)',
-  border: active
-    ? '1px solid rgba(69, 132, 255, 0.95)'
-    : '1px solid rgba(255,255,255,0.075)',
-  borderRadius: '8px',
-  boxShadow: active ? '0 0 0 1px rgba(69,132,255,0.08)' : 'none',
-  display: 'flex',
-  gap: { xs: 2, sm: 2.5 },
-  justifyContent: 'space-between',
-  minHeight: { xs: 116, sm: 118 },
-  px: { xs: 1.75, sm: 2.5 },
-  py: { xs: 2, sm: 2.15 },
-  textAlign: 'left',
-  transition:
-    'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
-  width: '100%',
-  '&:hover': {
-    backgroundColor: active ? undefined : 'rgba(255,255,255,0.025)',
-    borderColor: active ? 'rgba(69,132,255,0.95)' : 'rgba(255,255,255,0.12)',
-  },
-});
+function connectionModeMainPaperSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      background: '#0d1117',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: '10px',
+      boxShadow: '0 24px 50px rgba(0,0,0,0.32)',
+      maxHeight: 'calc(100vh - 48px)',
+      maxWidth: '712px',
+    };
+  }
+  return {
+    background: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.border.subtle}`,
+    borderRadius: '10px',
+    boxShadow:
+      '0 22px 50px rgba(15, 23, 42, 0.075), 0 0 0 1px rgba(28, 36, 52, 0.045)',
+    maxHeight: 'calc(100vh - 48px)',
+    maxWidth: '712px',
+    color: theme.palette.text.primary,
+  };
+}
 
-const modeRadioSx = (active: boolean) => ({
-  alignItems: 'center',
-  border: `2px solid ${active ? '#3E82FF' : 'rgba(214,221,233,0.22)'}`,
-  borderRadius: '999px',
-  display: 'inline-flex',
-  flexShrink: 0,
-  height: 24,
-  justifyContent: 'center',
-  width: 24,
-});
+function connectionModeManualPaperSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      background: '#0d1117',
+      border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: '10px',
+      boxShadow: '0 24px 50px rgba(0,0,0,0.32)',
+      maxWidth: '460px',
+    };
+  }
+  return {
+    background: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.border.subtle}`,
+    borderRadius: '10px',
+    boxShadow:
+      '0 22px 50px rgba(15, 23, 42, 0.075), 0 0 0 1px rgba(28, 36, 52, 0.045)',
+    maxWidth: '460px',
+    color: theme.palette.text.primary,
+  };
+}
 
-const modeRadioDotSx = (active: boolean) => ({
-  backgroundColor: active ? '#3E82FF' : 'transparent',
-  borderRadius: '999px',
-  display: 'block',
-  height: 12,
-  width: 12,
-});
+function modeRowSx(theme: Theme, active: boolean) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      alignItems: 'center',
+      background: active
+        ? 'linear-gradient(180deg, rgba(13,22,37,0.82), rgba(12,19,29,0.82))'
+        : 'rgba(255,255,255,0.012)',
+      border: active
+        ? '1px solid rgba(69, 132, 255, 0.95)'
+        : '1px solid rgba(255,255,255,0.075)',
+      borderRadius: '8px',
+      boxShadow: active ? '0 0 0 1px rgba(69,132,255,0.08)' : 'none',
+      display: 'flex',
+      gap: { xs: 2, sm: 2.5 },
+      justifyContent: 'space-between',
+      minHeight: { xs: 116, sm: 118 },
+      px: { xs: 1.75, sm: 2.5 },
+      py: { xs: 2, sm: 2.15 },
+      textAlign: 'left',
+      transition:
+        'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+      width: '100%',
+      '&:hover': {
+        backgroundColor: active ? undefined : 'rgba(255,255,255,0.025)',
+        borderColor: active ? 'rgba(69,132,255,0.95)' : 'rgba(255,255,255,0.12)',
+      },
+    };
+  }
 
-const modeTitleSx = {
-  color: 'rgba(246,248,252,0.96)',
-  fontSize: '0.98rem',
-  fontWeight: 800,
-  lineHeight: 1.25,
-};
+  const pm = theme.palette.primary.main;
+  return {
+    alignItems: 'center',
+    background: active
+      ? `linear-gradient(180deg, ${alpha(pm, 0.14)}, ${alpha(pm, 0.06)})`
+      : theme.palette.background.surface,
+    border: active
+      ? `1px solid ${alpha(pm, 0.72)}`
+      : `1px solid ${theme.palette.border.subtle}`,
+    borderRadius: '8px',
+    boxShadow: active ? `0 0 0 1px ${alpha(pm, 0.12)}` : 'none',
+    display: 'flex',
+    gap: { xs: 2, sm: 2.5 },
+    justifyContent: 'space-between',
+    minHeight: { xs: 116, sm: 118 },
+    px: { xs: 1.75, sm: 2.5 },
+    py: { xs: 2, sm: 2.15 },
+    textAlign: 'left',
+    transition:
+      'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+    width: '100%',
+    '&:hover': {
+      backgroundColor: active ? undefined : theme.palette.action.hover,
+      borderColor: active ? alpha(pm, 0.85) : theme.palette.border.main,
+    },
+  };
+}
 
-const recommendedPillSx = {
-  backgroundColor: 'rgba(62,130,255,0.18)',
-  borderRadius: '999px',
-  color: '#5390FF',
-  fontSize: '0.72rem',
-  fontWeight: 700,
-  lineHeight: 1,
-  px: 1,
-  py: 0.52,
-};
+function modeRadioSx(theme: Theme, active: boolean) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      alignItems: 'center',
+      border: `2px solid ${active ? '#3E82FF' : 'rgba(214,221,233,0.22)'}`,
+      borderRadius: '999px',
+      display: 'inline-flex',
+      flexShrink: 0,
+      height: 24,
+      justifyContent: 'center',
+      width: 24,
+    };
+  }
 
-const modeCopySx = {
-  color: 'rgba(214,221,233,0.72)',
-  fontSize: '0.82rem',
-  lineHeight: 1.62,
-};
+  const pm = theme.palette.primary.main;
+  return {
+    alignItems: 'center',
+    border: `2px solid ${
+      active ? pm : alpha(theme.palette.text.primary, 0.22)
+    }`,
+    borderRadius: '999px',
+    display: 'inline-flex',
+    flexShrink: 0,
+    height: 24,
+    justifyContent: 'center',
+    width: 24,
+  };
+}
+
+function modeRadioDotSx(theme: Theme, active: boolean) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      backgroundColor: active ? '#3E82FF' : 'transparent',
+      borderRadius: '999px',
+      display: 'block',
+      height: 12,
+      width: 12,
+    };
+  }
+
+  return {
+    backgroundColor: active ? theme.palette.primary.main : 'transparent',
+    borderRadius: '999px',
+    display: 'block',
+    height: 12,
+    width: 12,
+  };
+}
+
+function modeTitleSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      color: 'rgba(246,248,252,0.96)',
+      fontSize: '0.98rem',
+      fontWeight: 800,
+      lineHeight: 1.25,
+    };
+  }
+  return {
+    color: theme.palette.text.primary,
+    fontSize: '0.98rem',
+    fontWeight: 800,
+    lineHeight: 1.25,
+  };
+}
+
+function recommendedPillSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      backgroundColor: 'rgba(62,130,255,0.18)',
+      borderRadius: '999px',
+      color: '#5390FF',
+      fontSize: '0.72rem',
+      fontWeight: 700,
+      lineHeight: 1,
+      px: 1,
+      py: 0.52,
+    };
+  }
+
+  const pm = theme.palette.primary.main;
+  return {
+    backgroundColor: alpha(pm, 0.14),
+    borderRadius: '999px',
+    color: theme.palette.primary.dark,
+    fontSize: '0.72rem',
+    fontWeight: 700,
+    lineHeight: 1,
+    px: 1,
+    py: 0.52,
+  };
+}
+
+function modeCopySx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      color: 'rgba(214,221,233,0.72)',
+      fontSize: '0.82rem',
+      lineHeight: 1.62,
+    };
+  }
+  return {
+    color: theme.palette.text.secondary,
+    fontSize: '0.82rem',
+    lineHeight: 1.62,
+  };
+}
 
 const modeTrailingSx = {
   alignItems: 'center',
@@ -988,123 +1147,231 @@ const statusTextSx = (color: string) => ({
   whiteSpace: 'nowrap',
 });
 
-const sectionDividerSx = {
-  borderTop: '1px solid rgba(255,255,255,0.055)',
-};
+function sectionDividerSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return { borderTop: '1px solid rgba(255,255,255,0.055)' };
+  }
+  return { borderTop: `1px solid ${theme.palette.divider}` };
+}
 
-const sectionTitleSx = {
-  color: 'rgba(246,248,252,0.96)',
-  fontSize: '0.98rem',
-  fontWeight: 800,
-};
+function sectionTitleSx(theme: Theme) {
+  return modeTitleSx(theme);
+}
 
-const addCustomNodeSx = {
-  alignItems: 'center',
-  alignSelf: 'center',
-  color: '#5390FF',
-  display: 'inline-flex',
-  fontSize: '0.86rem',
-  fontWeight: 600,
-  gap: 0.45,
-  lineHeight: 1,
-  minHeight: 26,
-  p: 0,
-  '&:hover': {
-    color: '#7FAAFF',
-  },
-};
+function addCustomNodeSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      alignItems: 'center',
+      alignSelf: 'center',
+      color: '#5390FF',
+      display: 'inline-flex',
+      fontSize: '0.86rem',
+      fontWeight: 600,
+      gap: 0.45,
+      lineHeight: 1,
+      minHeight: 26,
+      p: 0,
+      '&:hover': {
+        color: '#7FAAFF',
+      },
+    };
+  }
 
-const customNodeRowSx = (active: boolean, isDragOver = false) => ({
-  alignItems: 'center',
-  backgroundColor: isDragOver
-    ? 'rgba(118,165,255,0.08)'
-    : active
-      ? 'rgba(255,255,255,0.032)'
-      : 'rgba(255,255,255,0.012)',
-  border: `1px solid ${
-    isDragOver
-      ? 'rgba(118,165,255,0.4)'
+  return {
+    alignItems: 'center',
+    alignSelf: 'center',
+    color: theme.palette.primary.main,
+    display: 'inline-flex',
+    fontSize: '0.86rem',
+    fontWeight: 600,
+    gap: 0.45,
+    lineHeight: 1,
+    minHeight: 26,
+    p: 0,
+    '&:hover': {
+      color: theme.palette.primary.dark,
+    },
+  };
+}
+
+function customNodeRowSx(
+  theme: Theme,
+  active: boolean,
+  isDragOver = false
+) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      alignItems: 'center',
+      backgroundColor: isDragOver
+        ? 'rgba(118,165,255,0.08)'
+        : active
+          ? 'rgba(255,255,255,0.032)'
+          : 'rgba(255,255,255,0.012)',
+      border: `1px solid ${
+        isDragOver
+          ? 'rgba(118,165,255,0.4)'
+          : active
+            ? 'rgba(92,145,255,0.3)'
+            : 'rgba(255,255,255,0.075)'
+      }`,
+      borderRadius: '8px',
+      cursor: 'grab',
+      display: 'flex',
+      gap: 1.5,
+      justifyContent: 'space-between',
+      minHeight: 84,
+      outline: 'none',
+      opacity: isDragOver ? 0.78 : 1,
+      px: 2,
+      py: 2,
+      transition:
+        'background-color 160ms ease, border-color 160ms ease, opacity 140ms ease',
+      '&:active': {
+        cursor: 'grabbing',
+      },
+      '&:hover': {
+        backgroundColor: 'rgba(255,255,255,0.032)',
+        borderColor: active ? 'rgba(92,145,255,0.34)' : 'rgba(255,255,255,0.12)',
+      },
+      '&:focus-visible': {
+        borderColor: 'rgba(118,165,255,0.42)',
+      },
+    };
+  }
+
+  const pm = theme.palette.primary.main;
+  return {
+    alignItems: 'center',
+    backgroundColor: isDragOver
+      ? alpha(pm, 0.12)
       : active
-        ? 'rgba(92,145,255,0.3)'
-        : 'rgba(255,255,255,0.075)'
-  }`,
-  borderRadius: '8px',
-  cursor: 'grab',
-  display: 'flex',
-  gap: 1.5,
-  justifyContent: 'space-between',
-  minHeight: 84,
-  outline: 'none',
-  opacity: isDragOver ? 0.78 : 1,
-  px: 2,
-  py: 2,
-  transition:
-    'background-color 160ms ease, border-color 160ms ease, opacity 140ms ease',
-  '&:active': {
-    cursor: 'grabbing',
-  },
-  '&:hover': {
-    backgroundColor: 'rgba(255,255,255,0.032)',
-    borderColor: active ? 'rgba(92,145,255,0.34)' : 'rgba(255,255,255,0.12)',
-  },
-  '&:focus-visible': {
-    borderColor: 'rgba(118,165,255,0.42)',
-  },
-});
+        ? alpha(pm, 0.06)
+        : theme.palette.background.surface,
+    border: `1px solid ${
+      isDragOver
+        ? alpha(pm, 0.38)
+        : active
+          ? alpha(pm, 0.32)
+          : theme.palette.border.subtle
+    }`,
+    borderRadius: '8px',
+    cursor: 'grab',
+    display: 'flex',
+    gap: 1.5,
+    justifyContent: 'space-between',
+    minHeight: 84,
+    outline: 'none',
+    opacity: isDragOver ? 0.78 : 1,
+    px: 2,
+    py: 2,
+    transition:
+      'background-color 160ms ease, border-color 160ms ease, opacity 140ms ease',
+    '&:active': {
+      cursor: 'grabbing',
+    },
+    '&:hover': {
+      backgroundColor: theme.palette.action.hover,
+      borderColor: active ? alpha(pm, 0.42) : theme.palette.border.main,
+    },
+    '&:focus-visible': {
+      borderColor: alpha(pm, 0.45),
+    },
+  };
+}
 
-const modalFooterSx = {
-  alignItems: 'center',
-  borderTop: '1px solid rgba(255,255,255,0.055)',
-  display: 'flex',
-  justifyContent: 'space-between',
-  mt: 2.75,
-  pt: 3,
-};
+function modalFooterSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      alignItems: 'center',
+      borderTop: '1px solid rgba(255,255,255,0.055)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      mt: 2.75,
+      pt: 3,
+    };
+  }
+  return {
+    alignItems: 'center',
+    borderTop: `1px solid ${theme.palette.divider}`,
+    display: 'flex',
+    justifyContent: 'space-between',
+    mt: 2.75,
+    pt: 3,
+  };
+}
 
-const manualNodeLinkSx = {
-  color: '#5390FF',
-  fontSize: '0.86rem',
-  fontWeight: 500,
-  textDecoration: 'none',
-  '&:hover': {
-    color: '#7FAAFF',
-  },
-};
+function manualNodeLinkSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      color: '#5390FF',
+      fontSize: '0.86rem',
+      fontWeight: 500,
+      textDecoration: 'none',
+      '&:hover': {
+        color: '#7FAAFF',
+      },
+    };
+  }
 
-const saveSettingsButtonSx = {
-  alignItems: 'center',
-  background:
-    'linear-gradient(180deg, rgba(62,107,214,0.98), rgba(39,83,184,0.98))',
-  border: '1px solid rgba(92,145,255,0.24)',
-  borderRadius: '6px',
-  color: '#f6f8fc',
-  display: 'inline-flex',
-  fontSize: '0.86rem',
-  fontWeight: 600,
-  letterSpacing: 0,
-  lineHeight: 1.75,
-  minHeight: 40,
-  minWidth: 174,
-  px: 2.4,
-  textTransform: 'none',
-  transition:
-    'background 160ms ease, border-color 160ms ease, transform 160ms ease',
-  '& .MuiButton-startIcon': {
-    mr: 0.8,
-  },
-  '&:hover': {
+  return {
+    color: theme.palette.primary.main,
+    fontSize: '0.86rem',
+    fontWeight: 500,
+    textDecoration: 'none',
+    '&:hover': {
+      color: theme.palette.primary.dark,
+    },
+  };
+}
+
+function saveSettingsButtonSx(_theme: Theme) {
+  return {
+    alignItems: 'center',
     background:
-      'linear-gradient(180deg, rgba(69,115,224,1), rgba(44,90,193,1))',
-    borderColor: 'rgba(118,165,255,0.3)',
-    transform: 'translateY(-1px)',
-  },
-};
+      'linear-gradient(180deg, rgba(62,107,214,0.98), rgba(39,83,184,0.98))',
+    border: '1px solid rgba(92,145,255,0.24)',
+    borderRadius: '6px',
+    color: '#f6f8fc',
+    display: 'inline-flex',
+    fontSize: '0.86rem',
+    fontWeight: 600,
+    letterSpacing: 0,
+    lineHeight: 1.75,
+    minHeight: 40,
+    minWidth: 174,
+    px: 2.4,
+    textTransform: 'none',
+    transition:
+      'background 160ms ease, border-color 160ms ease, transform 160ms ease',
+    '& .MuiButton-startIcon': {
+      mr: 0.8,
+    },
+    '&:hover': {
+      background:
+        'linear-gradient(180deg, rgba(69,115,224,1), rgba(44,90,193,1))',
+      borderColor: 'rgba(118,165,255,0.3)',
+      transform: 'translateY(-1px)',
+    },
+  };
+}
 
-const fieldLabelSx = {
-  color: 'rgba(214,221,233,0.62)',
-  fontSize: '0.74rem',
-  fontWeight: 700,
-  letterSpacing: '0.08em',
-  mb: 0.75,
-  textTransform: 'uppercase',
-};
+function fieldLabelSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      color: 'rgba(214,221,233,0.62)',
+      fontSize: '0.74rem',
+      fontWeight: 700,
+      letterSpacing: '0.08em',
+      mb: 0.75,
+      textTransform: 'uppercase',
+    };
+  }
+  return {
+    color: theme.palette.text.secondary,
+    fontSize: '0.74rem',
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    mb: 0.75,
+    textTransform: 'uppercase',
+  };
+}

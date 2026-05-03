@@ -484,7 +484,9 @@
   },
   "aria": {
     "apps_library_tabs": "onglets de navigation de la bibliothèque d'apps",
-    "core_controls": "Contrôles du Core"
+    "core_controls": "Contrôles du Core",
+    "switch_theme_dark": "Passer en mode sombre",
+    "switch_theme_light": "Passer en mode clair"
   },
   "supply": "fournir",
   "tags": "balises",

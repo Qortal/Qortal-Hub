@@ -109,6 +109,7 @@ export const NotAuthenticated = ({
   onWalletUnlockStart,
 }) => {
   const theme = useTheme();
+  const isLight = theme.palette.mode === 'light';
   const { t } = useTranslation(['auth']);
   const selectedNode = useAtomValue(selectedNodeInfoAtom);
   const [isConnectionModeOpen, setIsConnectionModeOpen] = useState(false);
@@ -585,8 +586,9 @@ export const NotAuthenticated = ({
           <Box
             aria-hidden
             sx={{
-              background:
-                'radial-gradient(ellipse 430px 280px at 50% 22%, rgba(39,125,255,0.24), rgba(22,78,170,0.13) 34%, rgba(8,34,88,0.045) 62%, transparent 86%), radial-gradient(ellipse 610px 820px at 27% 52%, rgba(25,82,175,0.16), rgba(12,42,96,0.085) 38%, rgba(5,20,52,0.035) 64%, transparent 91%), radial-gradient(ellipse 610px 820px at 73% 52%, rgba(25,82,175,0.16), rgba(12,42,96,0.085) 38%, rgba(5,20,52,0.035) 64%, transparent 91%)',
+              background: isLight
+                ? 'radial-gradient(ellipse 430px 280px at 50% 22%, rgba(62,130,255,0.2), rgba(120,165,235,0.11) 34%, rgba(195,212,245,0.07) 62%, transparent 86%), radial-gradient(ellipse 610px 820px at 27% 52%, rgba(90,140,225,0.12), rgba(170,195,235,0.07) 38%, rgba(225,232,248,0.05) 64%, transparent 91%), radial-gradient(ellipse 610px 820px at 73% 52%, rgba(90,140,225,0.12), rgba(170,195,235,0.07) 38%, rgba(225,232,248,0.05) 64%, transparent 91%)'
+                : 'radial-gradient(ellipse 430px 280px at 50% 22%, rgba(39,125,255,0.24), rgba(22,78,170,0.13) 34%, rgba(8,34,88,0.045) 62%, transparent 86%), radial-gradient(ellipse 610px 820px at 27% 52%, rgba(25,82,175,0.16), rgba(12,42,96,0.085) 38%, rgba(5,20,52,0.035) 64%, transparent 91%), radial-gradient(ellipse 610px 820px at 73% 52%, rgba(25,82,175,0.16), rgba(12,42,96,0.085) 38%, rgba(5,20,52,0.035) 64%, transparent 91%)',
               filter: 'blur(24px)',
               height: { xs: 880, md: 980 },
               left: '50%',
@@ -603,12 +605,16 @@ export const NotAuthenticated = ({
             sx={{
               ...cardRevealSx(820),
               alignItems: 'center',
-              background:
-                'linear-gradient(180deg, rgba(8,15,27,0.985) 0%, rgba(5,8,14,0.992) 54%, rgba(3,5,9,0.995) 100%)',
-              border: '1px solid rgba(142,164,196,0.2)',
+              background: isLight
+                ? 'linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(249,251,255,0.97) 48%, rgba(242,246,252,0.99) 100%)'
+                : 'linear-gradient(180deg, rgba(8,15,27,0.985) 0%, rgba(5,8,14,0.992) 54%, rgba(3,5,9,0.995) 100%)',
+              border: isLight
+                ? `1px solid ${theme.palette.border.subtle}`
+                : '1px solid rgba(142,164,196,0.2)',
               borderRadius: '16px',
-              boxShadow:
-                '0 28px 70px rgba(0,0,0,0.5), 0 0 46px rgba(28,86,178,0.1), inset 0 1px 0 rgba(255,255,255,0.04)',
+              boxShadow: isLight
+                ? '0 22px 56px rgba(45, 72, 112, 0.09), 0 0 0 1px rgba(62,130,255,0.05), inset 0 1px 0 rgba(255,255,255,0.9)'
+                : '0 28px 70px rgba(0,0,0,0.5), 0 0 46px rgba(28,86,178,0.1), inset 0 1px 0 rgba(255,255,255,0.04)',
               display: 'flex',
               flexDirection: 'column',
               maxWidth: 640,
@@ -620,8 +626,9 @@ export const NotAuthenticated = ({
               width: '100%',
               zIndex: 1,
               '&::before': {
-                background:
-                  'radial-gradient(ellipse 560px 310px at 50% -9%, rgba(37,126,255,0.32), rgba(27,82,170,0.16) 35%, rgba(12,35,84,0.055) 62%, transparent 90%)',
+                background: isLight
+                  ? 'radial-gradient(ellipse 560px 310px at 50% -9%, rgba(62,130,255,0.2), rgba(130,170,235,0.12) 35%, rgba(200,218,248,0.08) 62%, transparent 90%)'
+                  : 'radial-gradient(ellipse 560px 310px at 50% -9%, rgba(37,126,255,0.32), rgba(27,82,170,0.16) 35%, rgba(12,35,84,0.055) 62%, transparent 90%)',
                 borderRadius: '16px',
                 content: '""',
                 inset: 0,
@@ -631,10 +638,13 @@ export const NotAuthenticated = ({
                 transition: 'opacity 620ms cubic-bezier(0.4, 0, 0.2, 1)',
               },
               '&::after': {
-                background:
-                  'linear-gradient(180deg, rgba(224,238,255,0.54) 0%, rgba(158,188,231,0.3) 38%, rgba(123,145,174,0.2) 100%)',
+                background: isLight
+                  ? 'linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(228,238,252,0.48) 38%, rgba(210,228,252,0.32) 100%)'
+                  : 'linear-gradient(180deg, rgba(224,238,255,0.54) 0%, rgba(158,188,231,0.3) 38%, rgba(123,145,174,0.2) 100%)',
                 borderRadius: '16px',
-                boxShadow: '0 0 20px rgba(81,137,239,0.12)',
+                boxShadow: isLight
+                  ? '0 0 28px rgba(62,130,255,0.1)'
+                  : '0 0 20px rgba(81,137,239,0.12)',
                 content: '""',
                 inset: 0,
                 maskComposite: 'exclude',
@@ -659,8 +669,9 @@ export const NotAuthenticated = ({
                 width: { xs: 94, md: 108 },
                 zIndex: 1,
                 '&::before': {
-                  background:
-                    'radial-gradient(circle at 50% 40%, rgba(42,142,255,0.5), rgba(42,142,255,0.2) 34%, rgba(19,82,184,0.075) 62%, transparent 88%)',
+                  background: isLight
+                    ? 'radial-gradient(circle at 50% 40%, rgba(62,140,255,0.35), rgba(100,160,245,0.18) 34%, rgba(180,205,245,0.1) 62%, transparent 88%)'
+                    : 'radial-gradient(circle at 50% 40%, rgba(42,142,255,0.5), rgba(42,142,255,0.2) 34%, rgba(19,82,184,0.075) 62%, transparent 88%)',
                   content: '""',
                   filter: 'blur(15px)',
                   inset: '-46px',
@@ -676,8 +687,9 @@ export const NotAuthenticated = ({
                       : 'none',
                 },
                 '&::after': {
-                  background:
-                    'radial-gradient(ellipse 430px 260px at 50% 30%, rgba(39,124,255,0.22), rgba(28,88,190,0.12) 38%, rgba(10,40,105,0.045) 66%, transparent 92%)',
+                  background: isLight
+                    ? 'radial-gradient(ellipse 430px 260px at 50% 30%, rgba(62,130,255,0.16), rgba(120,165,230,0.1) 38%, rgba(200,218,248,0.06) 66%, transparent 92%)'
+                    : 'radial-gradient(ellipse 430px 260px at 50% 30%, rgba(39,124,255,0.22), rgba(28,88,190,0.12) 38%, rgba(10,40,105,0.045) 66%, transparent 92%)',
                   content: '""',
                   filter: 'blur(14px)',
                   height: 320,
@@ -727,12 +739,14 @@ export const NotAuthenticated = ({
             >
               <Typography
                 sx={{
-                  color: '#F8FBFF',
+                  color: theme.palette.text.primary,
                   fontSize: { xs: '1.88rem', md: '2.2rem' },
                   fontWeight: 800,
                   letterSpacing: '-0.03em',
                   lineHeight: 1.05,
-                  textShadow: '0 2px 18px rgba(0,0,0,0.28)',
+                  textShadow: isLight
+                    ? '0 1px 0 rgba(255,255,255,0.85)'
+                    : '0 2px 18px rgba(0,0,0,0.28)',
                 }}
               >
                 Enter Qortal
@@ -740,7 +754,7 @@ export const NotAuthenticated = ({
 
               <Typography
                 sx={{
-                  color: 'rgba(214,221,233,0.64)',
+                  color: theme.palette.text.secondary,
                   fontSize: '0.95rem',
                   lineHeight: 1.55,
                   mt: 0.8,
@@ -810,7 +824,9 @@ export const NotAuthenticated = ({
                 }}
                 sx={{
                   alignItems: 'center',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: isLight
+                    ? `1px solid ${theme.palette.border.main}`
+                    : '1px solid rgba(255,255,255,0.1)',
                   borderRadius: '8px',
                   color: theme.palette.text.primary,
                   display: 'inline-flex',
@@ -821,8 +837,12 @@ export const NotAuthenticated = ({
                     'background-color 160ms ease, border-color 160ms ease',
                   width: '100%',
                   '&:hover': {
-                    backgroundColor: 'rgba(255,255,255,0.035)',
-                    borderColor: 'rgba(255,255,255,0.15)',
+                    backgroundColor: isLight
+                      ? theme.palette.action.hover
+                      : 'rgba(255,255,255,0.035)',
+                    borderColor: isLight
+                      ? theme.palette.border.main
+                      : 'rgba(255,255,255,0.15)',
                   },
                 }}
               >
@@ -847,7 +867,7 @@ export const NotAuthenticated = ({
               sx={{
                 ...revealSx(1230),
                 alignItems: 'center',
-                color: 'rgba(214,221,233,0.68)',
+                color: theme.palette.text.secondary,
                 display: 'flex',
                 flexDirection: { xs: 'column', sm: 'row' },
                 gap: { xs: 0.7, sm: 3.1 },
@@ -886,7 +906,9 @@ export const NotAuthenticated = ({
               </Box>
               <Box
                 sx={{
-                  backgroundColor: 'rgba(255,255,255,0.14)',
+                  backgroundColor: isLight
+                    ? theme.palette.divider
+                    : 'rgba(255,255,255,0.14)',
                   display: { xs: 'none', sm: 'block' },
                   height: 22,
                   width: '1px',
@@ -896,13 +918,13 @@ export const NotAuthenticated = ({
                 onClick={() => setIsConnectionModeOpen(true)}
                 sx={{
                   alignItems: 'center',
-                  color: 'rgba(214,221,233,0.66)',
+                  color: theme.palette.text.secondary,
                   display: 'inline-flex',
                   gap: 0.8,
                   minWidth: 0,
                   p: 0,
                   '&:hover': {
-                    color: 'rgba(214,221,233,0.86)',
+                    color: theme.palette.text.primary,
                   },
                 }}
               >
@@ -942,13 +964,13 @@ export const NotAuthenticated = ({
                   textAlign: 'left',
                 }}
               >
-                <Box sx={{ color: '#3E82FF', pt: 0.1 }}>
+                <Box sx={{ color: theme.palette.primary.main, pt: 0.1 }}>
                   {item.icon}
                 </Box>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography
                     sx={{
-                      color: 'rgba(198,219,255,0.84)',
+                      color: theme.palette.text.primary,
                       fontSize: '1rem',
                       fontWeight: 800,
                       lineHeight: 1.25,
@@ -958,7 +980,7 @@ export const NotAuthenticated = ({
                   </Typography>
                   <Typography
                     sx={{
-                      color: 'rgba(214,221,233,0.56)',
+                      color: theme.palette.text.secondary,
                       fontSize: '0.9rem',
                       lineHeight: 1.45,
                       mt: 0.45,
@@ -978,8 +1000,10 @@ export const NotAuthenticated = ({
           aria-hidden
           sx={{
             backgroundColor: isIntroOverlayAtRest
-              ? 'rgba(6,8,13,0)'
-              : 'rgba(6,8,13,1)',
+              ? 'transparent'
+              : isLight
+                ? 'rgba(247,249,252,1)'
+                : 'rgba(6,8,13,1)',
             inset: 0,
             pointerEvents: 'none',
             position: 'fixed',

@@ -484,7 +484,9 @@
   },
   "aria": {
     "apps_library_tabs": "علامات تبويب التنقل في مكتبة التطبيقات",
-    "core_controls": "عناصر التحكم Core"
+    "core_controls": "عناصر التحكم Core",
+    "switch_theme_dark": "التبديل إلى الوضع الداكن",
+    "switch_theme_light": "التبديل إلى الوضع الفاتح"
   },
   "supply": "العرض",
   "tags": "الوسوم",

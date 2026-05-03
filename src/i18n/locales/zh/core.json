@@ -484,7 +484,9 @@
   },
   "aria": {
     "apps_library_tabs": "应用库导航标签",
-    "core_controls": "Core 控制"
+    "core_controls": "Core 控制",
+    "switch_theme_dark": "切换到深色模式",
+    "switch_theme_light": "切换到浅色模式"
   },
   "supply": "供应",
   "tags": "标签",

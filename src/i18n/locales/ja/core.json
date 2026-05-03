@@ -484,7 +484,9 @@
   },
   "aria": {
     "apps_library_tabs": "アプリライブラリナビゲーションタブ",
-    "core_controls": "Core の操作"
+    "core_controls": "Core の操作",
+    "switch_theme_dark": "ダークモードに切り替え",
+    "switch_theme_light": "ライトモードに切り替え"
   },
   "supply": "供給",
   "tags": "タグ",

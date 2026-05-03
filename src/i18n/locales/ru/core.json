@@ -486,7 +486,9 @@
   },
   "aria": {
     "apps_library_tabs": "вкладки навигации библиотеки приложений",
-    "core_controls": "управление Core"
+    "core_controls": "управление Core",
+    "switch_theme_dark": "Переключить на тёмный режим",
+    "switch_theme_light": "Переключить на светлый режим"
   },
   "supply": "поставлять",
   "tags": "теги",

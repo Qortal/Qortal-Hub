@@ -9,6 +9,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { useDropzone } from 'react-dropzone';
 import EditIcon from '@mui/icons-material/Edit';
 import PersonIcon from '@mui/icons-material/Person';
@@ -747,11 +748,16 @@ const WalletRow = ({
     if (isEdit || isDraggingRef.current) return;
     setSelectedWallet(wallet, getTransitionSnapshot());
   };
-  const isEntryRow = mode === 'entry';
-  const entryRowBackground =
-    'linear-gradient(180deg, rgba(7,12,21,0.9), rgba(4,7,12,0.94))';
-  const entryRowHoverBackground =
-    'linear-gradient(180deg, rgba(8,14,24,0.93), rgba(5,8,14,0.96))';
+  const isLight = theme.palette.mode === 'light';
+  const entryRowBackground = isLight
+    ? 'linear-gradient(180deg, rgba(255,255,255,0.94), rgba(246,249,253,0.98))'
+    : 'linear-gradient(180deg, rgba(7,12,21,0.9), rgba(4,7,12,0.94))';
+  const entryRowHoverBackground = isLight
+    ? 'linear-gradient(180deg, rgba(255,255,255,0.99), rgba(239,245,252,0.99))'
+    : 'linear-gradient(180deg, rgba(8,14,24,0.93), rgba(5,8,14,0.96))';
+  const entryEditBackground = isLight
+    ? 'linear-gradient(180deg, rgba(252,253,255,0.98), rgba(244,248,252,0.99))'
+    : 'linear-gradient(180deg, rgba(13,19,31,0.92), rgba(7,11,18,0.94))';
 
   return (
     <Box
@@ -813,13 +819,17 @@ const WalletRow = ({
           background:
             mode === 'entry'
               ? isEdit
-                ? 'linear-gradient(180deg, rgba(13,19,31,0.92), rgba(7,11,18,0.94))'
+                ? entryEditBackground
                 : entryRowBackground
               : isEdit
                 ? 'rgba(255,255,255,0.03)'
                 : 'transparent',
           border:
-            mode === 'entry' ? '1px solid rgba(123,145,174,0.2)' : 'none',
+            mode === 'entry'
+              ? isLight
+                ? `1px solid ${theme.palette.border.subtle}`
+                : '1px solid rgba(123,145,174,0.2)'
+              : 'none',
           borderRadius: mode === 'entry' ? '8px' : '7px',
           cursor: isEdit ? 'default' : 'grab',
           display: 'grid',
@@ -836,16 +846,22 @@ const WalletRow = ({
           '&:hover': {
             background: isEdit
               ? mode === 'entry'
-                ? 'linear-gradient(180deg, rgba(13,19,31,0.92), rgba(7,11,18,0.94))'
+                ? entryEditBackground
                 : 'rgba(255,255,255,0.03)'
               : mode === 'entry'
                 ? entryRowHoverBackground
                 : 'rgba(255,255,255,0.03)',
             borderColor:
-              mode === 'entry' ? 'rgba(188,213,246,0.34)' : undefined,
+              mode === 'entry'
+                ? isLight
+                  ? theme.palette.border.main
+                  : 'rgba(188,213,246,0.34)'
+                : undefined,
             boxShadow:
               mode === 'entry' && !isEdit
-                ? '0 0 0 1px rgba(70,120,210,0.04)'
+                ? isLight
+                  ? '0 2px 12px rgba(45, 72, 112, 0.06)'
+                  : '0 0 0 1px rgba(70,120,210,0.04)'
                 : 'none',
           },
           '&:active': {
@@ -872,7 +888,9 @@ const WalletRow = ({
             <Box
               sx={{
                 backgroundColor: '#62D26F',
-                border: '2px solid #111722',
+                border: isLight
+                  ? `2px solid ${theme.palette.background.paper}`
+                  : '2px solid #111722',
                 borderRadius: '999px',
                 bottom: -1,
                 height: 12,
@@ -889,6 +907,7 @@ const WalletRow = ({
             <Typography
               ref={nameRef}
               sx={{
+                color: theme.palette.text.primary,
                 fontSize: mode === 'entry' ? '1rem' : '0.95rem',
                 fontWeight: 700,
                 overflow: 'hidden',
@@ -901,7 +920,10 @@ const WalletRow = ({
             <IconButton
               ref={editButtonRef}
               sx={{
-                color: 'rgba(214,221,233,0.48)',
+                color:
+                  mode === 'entry'
+                    ? alpha(theme.palette.text.secondary, 0.62)
+                    : 'rgba(214,221,233,0.48)',
                 ml: 0.1,
                 p: 0.35,
               }}
@@ -915,7 +937,10 @@ const WalletRow = ({
             {wallet?.note && (
               <Typography
                 sx={{
-                  color: 'rgba(214,221,233,0.42)',
+                  color:
+                    mode === 'entry'
+                      ? alpha(theme.palette.text.secondary, 0.72)
+                      : 'rgba(214,221,233,0.42)',
                   fontSize: '0.72rem',
                   fontStyle: 'italic',
                   fontWeight: 400,
@@ -933,7 +958,10 @@ const WalletRow = ({
           <Typography
             ref={addressRef}
             sx={{
-              color: 'rgba(214,221,233,0.56)',
+              color:
+                mode === 'entry'
+                  ? theme.palette.text.secondary
+                  : 'rgba(214,221,233,0.56)',
               fontSize: mode === 'entry' ? '0.84rem' : '0.79rem',
               lineHeight: 1.35,
               mt: 0.05,
@@ -955,7 +983,10 @@ const WalletRow = ({
         {mode === 'entry' && (
           <ChevronRightRoundedIcon
             sx={{
-              color: 'rgba(214,221,233,0.42)',
+              color:
+                mode === 'entry'
+                  ? alpha(theme.palette.text.secondary, 0.65)
+                  : 'rgba(214,221,233,0.42)',
               fontSize: 24,
               opacity: 0.82,
             }}

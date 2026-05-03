@@ -487,7 +487,9 @@
   },
   "aria": {
     "apps_library_tabs": "apps library navigation tabs",
-    "core_controls": "Core controls"
+    "core_controls": "Core controls",
+    "switch_theme_dark": "Switch to dark mode",
+    "switch_theme_light": "Switch to light mode"
   },
   "supply": "supply",
   "tags": "tags",

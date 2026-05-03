@@ -53,7 +53,6 @@ import { useAppModals } from './hooks/useAppModals';
 import { useAppReset } from './hooks/useAppReset';
 import { useAppMessageHandler } from './hooks/useAppMessageHandler';
 import { QortinoNotificationHost } from './components/Snackbar/QortinoNotificationHost';
-import HelpIcon from '@mui/icons-material/Help';
 import { getWallets, storeWallets } from './background/background.ts';
 import {
   executeEvent,
@@ -1389,11 +1388,6 @@ function App() {
     () => setOpenCoreSetup(true),
     [setOpenCoreSetup]
   );
-  const onShowTutorialImportantInfo = useCallback(
-    () => showTutorial('important-information', true),
-    [showTutorial]
-  );
-
   const isElectron =
     typeof window !== 'undefined' &&
     typeof (
@@ -1794,23 +1788,6 @@ function App() {
         <BuyQortInformation balance={balance} />
         {isMainWindow && <NotificationPermissionSlideDown />}
       </QORTAL_APP_CONTEXT.Provider>
-
-      {extState === 'create-wallet' && walletToBeDownloaded && (
-        <ButtonBase
-          onClick={onShowTutorialImportantInfo}
-          sx={{
-            bottom: '25px',
-            position: 'fixed',
-            right: '25px',
-          }}
-        >
-          <HelpIcon
-            sx={{
-              color: theme.palette.other.unread,
-            }}
-          />
-        </ButtonBase>
-      )}
 
       {isOpenMinting && (
         <Minting

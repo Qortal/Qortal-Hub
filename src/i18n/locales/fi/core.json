@@ -415,7 +415,9 @@
   },
   "aria": {
     "apps_library_tabs": "sovelluskirjaston navigointivälilehdet",
-    "core_controls": "Core-hallinta"
+    "core_controls": "Core-hallinta",
+    "switch_theme_dark": "Vaihda tummaan tilaan",
+    "switch_theme_light": "Vaihda vaaleaan tilaan"
   },
   "supply": "tarjonta",
   "tags": "tunnisteet",

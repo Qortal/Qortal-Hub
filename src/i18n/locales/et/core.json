@@ -484,7 +484,9 @@
   },
   "aria": {
     "apps_library_tabs": "rakenduste teegi navigeerimise vahelehed",
-    "core_controls": "Core juhtimine"
+    "core_controls": "Core juhtimine",
+    "switch_theme_dark": "Lülitu tumedasse režiimi",
+    "switch_theme_light": "Lülitu heledasse režiimi"
   },
   "supply": "Üldine QORT varu",
   "tags": "sildid",

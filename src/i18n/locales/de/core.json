@@ -483,7 +483,9 @@
   },
   "aria": {
     "apps_library_tabs": "Apps-Bibliothek Navigationsreiter",
-    "core_controls": "Core-Steuerung"
+    "core_controls": "Core-Steuerung",
+    "switch_theme_dark": "Zum Dunkelmodus wechseln",
+    "switch_theme_light": "Zum Hellmodus wechseln"
   },
   "supply": "liefern",
   "tags": "Tags",

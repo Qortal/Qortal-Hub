@@ -5,14 +5,14 @@ import {
   FormControlLabel,
   Typography,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { RefObject, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import { PasswordField, ErrorText } from '../index';
-import { AuthButton, AuthScreen, AuthSectionLabel } from '../Auth/AuthShell';
+import { AuthButton, AuthScreen, AuthSectionLabel, authPasswordFieldSx } from '../Auth/AuthShell';
 
 type CreateWalletViewProps = {
   creationStep: number;
@@ -58,6 +58,7 @@ export function CreateWalletView({
 }: CreateWalletViewProps) {
   const { t } = useTranslation(['auth']);
   const theme = useTheme();
+  const isLight = theme.palette.mode === 'light';
   const [backupDownloaded, setBackupDownloaded] = useState(false);
   const [seedphraseCopied, setSeedphraseCopied] = useState(false);
   const [seedphraseRevealed, setSeedphraseRevealed] = useState(false);
@@ -176,7 +177,9 @@ export function CreateWalletView({
             </Typography>
             <Typography
               sx={{
-                color: 'rgba(214,221,233,0.58)',
+                color: isLight
+                  ? theme.palette.text.secondary
+                  : 'rgba(214,221,233,0.58)',
                 fontSize: '0.92rem',
                 lineHeight: 1.6,
                 mt: 0.9,
@@ -219,7 +222,9 @@ export function CreateWalletView({
 
           <Typography
             sx={{
-              color: 'rgba(214,221,233,0.5)',
+              color: isLight
+                ? theme.palette.text.secondary
+                : 'rgba(214,221,233,0.5)',
               fontSize: '0.78rem',
               lineHeight: 1.5,
             }}
@@ -248,7 +253,9 @@ export function CreateWalletView({
           <ButtonBase
             onClick={onReturnBack}
             sx={{
-              color: 'rgba(214,221,233,0.62)',
+              color: isLight
+                ? alpha(theme.palette.text.primary, 0.55)
+                : 'rgba(214,221,233,0.62)',
               minWidth: 0,
               p: 0,
               '&:hover': { color: theme.palette.text.primary },
@@ -260,8 +267,12 @@ export function CreateWalletView({
 
         <Box
           sx={{
-            backgroundColor: 'rgba(255,255,255,0.03)',
-            border: '1px solid rgba(255,255,255,0.08)',
+            backgroundColor: isLight
+              ? theme.palette.background.surface
+              : 'rgba(255,255,255,0.03)',
+            border: isLight
+              ? `1px solid ${theme.palette.border.main}`
+              : '1px solid rgba(255,255,255,0.08)',
             borderRadius: '8px',
             px: 2,
             py: 1.8,
@@ -297,10 +308,16 @@ export function CreateWalletView({
         <Box
           sx={{
             alignItems: 'flex-start',
-            backgroundColor: 'rgba(217,165,58,0.08)',
-            border: '1px solid rgba(217,165,58,0.16)',
+            backgroundColor: isLight
+              ? alpha('#d97706', 0.1)
+              : 'rgba(217,165,58,0.08)',
+            border: isLight
+              ? `1px solid ${alpha('#d97706', 0.35)}`
+              : '1px solid rgba(217,165,58,0.16)',
             borderRadius: '8px',
-            color: 'rgba(239,228,202,0.92)',
+            color: isLight
+              ? theme.palette.text.primary
+              : 'rgba(239,228,202,0.92)',
             display: 'flex',
             gap: 1,
             px: 1.2,
@@ -338,7 +355,9 @@ export function CreateWalletView({
         <ButtonBase
           onClick={onReturnBack}
           sx={{
-            color: 'rgba(214,221,233,0.62)',
+            color: isLight
+              ? alpha(theme.palette.text.primary, 0.55)
+              : 'rgba(214,221,233,0.62)',
             minWidth: 0,
             p: 0,
             '&:hover': { color: theme.palette.text.primary },
@@ -357,7 +376,7 @@ export function CreateWalletView({
           onChange={(e) => setWalletToBeDownloadedPassword(e.target.value)}
           name="create-wallet-password"
           suppressAutofill
-          sx={{ width: '100%' }}
+          sx={authPasswordFieldSx(theme)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') confirmRef.current?.focus();
           }}
@@ -376,7 +395,7 @@ export function CreateWalletView({
           }
           name="create-wallet-password-confirmation"
           suppressAutofill
-          sx={{ width: '100%' }}
+          sx={authPasswordFieldSx(theme)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleNextFromPassword();
           }}
@@ -389,13 +408,20 @@ export function CreateWalletView({
           <Checkbox
             checked={storeAccount}
             onChange={(event) => setStoredAccount(event.target.checked)}
-            sx={{ color: theme.palette.text.secondary }}
+            sx={{
+              color: theme.palette.text.secondary,
+              '&.Mui-checked': {
+                color: theme.palette.primary.main,
+              },
+            }}
           />
         }
         label={
           <Typography
             sx={{
-              color: 'rgba(214,221,233,0.62)',
+              color: isLight
+                ? theme.palette.text.primary
+                : 'rgba(214,221,233,0.62)',
               fontSize: '0.86rem',
               lineHeight: 1.55,
             }}

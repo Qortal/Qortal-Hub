@@ -1,6 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Avatar, Box, ButtonBase, Divider, Typography, useTheme } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  ButtonBase,
+  Divider,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import { alpha, type Theme } from '@mui/material/styles';
 import PersonIcon from '@mui/icons-material/Person';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
@@ -13,7 +21,7 @@ import { PasswordField, ErrorText } from './index';
 import type { ApiKey } from '../types/auth';
 import { getBaseApiReactForAvatar } from '../App';
 import { getPrimaryNameForAvatar } from './Group/groupApi';
-import { AuthButton, AuthFrame } from './Auth/AuthShell';
+import { AuthButton, AuthFrame, authPasswordFieldSx } from './Auth/AuthShell';
 import {
   HTTPS_EXT_NODE_QORTAL_LINK,
   isLocalNodeUrl,
@@ -69,6 +77,7 @@ export const AuthenticationForm = ({
   onUnlockTransitionComplete,
 }: AuthenticationFormProps) => {
   const theme = useTheme();
+  const isLight = theme.palette.mode === 'light';
   const { t } = useTranslation(['auth']);
   const [authenticatePassword, setAuthenticatePassword] = useAtom(
     authenticatePasswordAtom
@@ -253,7 +262,9 @@ export const AuthenticationForm = ({
               onClick={onBack}
               sx={{
                 alignItems: 'center',
-                color: 'rgba(214,221,233,0.7)',
+                color: isLight
+                  ? alpha(theme.palette.text.primary, 0.55)
+                  : 'rgba(214,221,233,0.7)',
                 display: 'inline-flex',
                 height: 32,
                 justifyContent: 'center',
@@ -288,6 +299,7 @@ export const AuthenticationForm = ({
             </Avatar>
             <Typography
               sx={{
+                color: theme.palette.text.primary,
                 fontSize: '1.95rem',
                 fontWeight: 700,
                 letterSpacing: '-0.04em',
@@ -296,7 +308,9 @@ export const AuthenticationForm = ({
                 mt: 1.25,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                textShadow: '0 1px 8px rgba(0,0,0,0.16)',
+                textShadow: isLight
+                  ? 'none'
+                  : '0 1px 8px rgba(0,0,0,0.16)',
                 whiteSpace: 'nowrap',
               }}
             >
@@ -305,7 +319,9 @@ export const AuthenticationForm = ({
             <Box
               sx={{
                 alignItems: 'center',
-                color: 'rgba(214,221,233,0.5)',
+                color: isLight
+                  ? theme.palette.text.secondary
+                  : 'rgba(214,221,233,0.5)',
                 display: 'inline-flex',
                 gap: 0.58,
                 mt: 0.05,
@@ -313,7 +329,9 @@ export const AuthenticationForm = ({
             >
               <Typography
                 sx={{
-                  color: 'rgba(214,221,233,0.42)',
+                  color: isLight
+                    ? theme.palette.text.secondary
+                    : 'rgba(214,221,233,0.42)',
                   fontSize: '0.72rem',
                   fontWeight: 500,
                   lineHeight: 1.2,
@@ -328,11 +346,15 @@ export const AuthenticationForm = ({
                   }
                 }}
                 sx={{
-                  color: 'rgba(214,221,233,0.34)',
+                  color: isLight
+                    ? alpha(theme.palette.text.secondary, 0.85)
+                    : 'rgba(214,221,233,0.34)',
                   minWidth: 0,
                   p: 0,
                   '&:hover': {
-                    color: 'rgba(214,221,233,0.7)',
+                    color: isLight
+                      ? theme.palette.primary.main
+                      : 'rgba(214,221,233,0.7)',
                   },
                 }}
               >
@@ -343,7 +365,9 @@ export const AuthenticationForm = ({
 
           <Divider
             sx={{
-              borderColor: 'rgba(128,143,173,0.14)',
+              borderColor: isLight
+                ? theme.palette.divider
+                : 'rgba(128,143,173,0.14)',
               mt: 2.15,
             }}
           />
@@ -360,7 +384,9 @@ export const AuthenticationForm = ({
             <Box>
               <Typography
                 sx={{
-                  color: 'rgba(214,221,233,0.62)',
+                  color: isLight
+                    ? theme.palette.text.secondary
+                    : 'rgba(214,221,233,0.62)',
                   fontSize: '0.74rem',
                   fontWeight: 700,
                   letterSpacing: '0.08em',
@@ -383,50 +409,7 @@ export const AuthenticationForm = ({
                 placeholder={t('auth:authentication_form.password_placeholder', {
                   postProcess: 'capitalizeFirstChar',
                 })}
-                sx={{
-                  width: '100%',
-                  '& .MuiOutlinedInput-root': {
-                    background:
-                      'linear-gradient(180deg, rgba(18,24,35,0.96) 0%, rgba(15,21,31,0.98) 100%)',
-                    borderRadius: '10px',
-                    minHeight: 50,
-                    transition:
-                      'background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
-                    '& fieldset': {
-                      border: '1px solid rgba(118,132,163,0.18)',
-                    },
-                    '&:hover': {
-                      backgroundColor: 'rgba(20,27,39,0.98)',
-                    },
-                    '&:hover fieldset': {
-                      border: '1px solid rgba(126,143,177,0.24)',
-                    },
-                    '&.Mui-focused': {
-                      backgroundColor: 'rgba(21,29,41,0.99)',
-                      boxShadow: '0 0 0 2px rgba(63,103,191,0.1)',
-                    },
-                    '&.Mui-focused fieldset': {
-                      border: '1px solid rgba(108,144,229,0.28)',
-                    },
-                  },
-                  '& input': {
-                    fontSize: '0.88rem',
-                    fontWeight: 500,
-                    padding: '12px 14px',
-                  },
-                  '& input::placeholder': {
-                    color: 'rgba(214,221,233,0.36)',
-                    fontSize: '0.84rem',
-                    fontWeight: 400,
-                  },
-                  '& .MuiInputAdornment-root .MuiButtonBase-root': {
-                    color: 'rgba(214,221,233,0.46)',
-                  },
-                  '& .MuiOutlinedInput-root:hover .MuiInputAdornment-root .MuiButtonBase-root, & .MuiOutlinedInput-root.Mui-focused .MuiInputAdornment-root .MuiButtonBase-root':
-                    {
-                      color: 'rgba(214,221,233,0.74)',
-                    },
-                }}
+                sx={authPasswordFieldSx(theme)}
               />
             </Box>
 
@@ -437,21 +420,7 @@ export const AuthenticationForm = ({
             <AuthButton
               onClick={onAuthenticate}
               disabled={!authenticatePassword}
-              sx={{
-                border: '1px solid rgba(105,139,225,0.34)',
-                borderRadius: '10px',
-                boxShadow: '0 12px 30px rgba(10,18,36,0.24)',
-                fontSize: '0.92rem',
-                fontWeight: 600,
-                height: 52,
-                '&:disabled': {
-                  background:
-                    'linear-gradient(180deg, rgba(51,83,151,0.84) 0%, rgba(35,62,120,0.84) 100%)',
-                  borderColor: 'rgba(105,139,225,0.22)',
-                  color: 'rgba(230,236,247,0.58)',
-                  opacity: 1,
-                },
-              }}
+              sx={walletUnlockSubmitButtonSx(theme)}
             >
               {t('auth:authentication_form.unlock', {
                 postProcess: 'capitalizeFirstChar',
@@ -473,7 +442,9 @@ export const AuthenticationForm = ({
               onClick={onBack}
               sx={{
                 alignItems: 'center',
-                color: 'rgba(126,170,248,0.88)',
+                color: isLight
+                  ? theme.palette.primary.main
+                  : 'rgba(126,170,248,0.88)',
                 display: 'inline-flex',
                 fontSize: '0.79rem',
                 fontWeight: 500,
@@ -483,7 +454,9 @@ export const AuthenticationForm = ({
                 minHeight: 26,
                 width: '100%',
                 '&:hover': {
-                  color: 'rgba(148,186,255,0.96)',
+                  color: isLight
+                    ? theme.palette.primary.dark
+                    : 'rgba(148,186,255,0.96)',
                 },
               }}
               >
@@ -496,14 +469,18 @@ export const AuthenticationForm = ({
             <Divider
               sx={{
                 alignSelf: 'stretch',
-                borderColor: 'rgba(128,143,173,0.14)',
+                borderColor: isLight
+                  ? theme.palette.divider
+                  : 'rgba(128,143,173,0.14)',
               }}
             />
 
             <Box
               sx={{
                 alignItems: 'center',
-                color: 'rgba(214,221,233,0.42)',
+                color: isLight
+                  ? theme.palette.text.secondary
+                  : 'rgba(214,221,233,0.42)',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 0.52,
@@ -525,18 +502,20 @@ export const AuthenticationForm = ({
                 <CheckCircleRoundedIcon
                   sx={{
                     color: usingLocalNode
-                      ? 'rgba(116,208,138,0.62)'
-                      : 'rgba(118,164,255,0.66)',
+                      ? isLight
+                        ? theme.palette.other.positive
+                        : 'rgba(116,208,138,0.62)'
+                      : isLight
+                        ? theme.palette.primary.main
+                        : 'rgba(118,164,255,0.66)',
                     fontSize: 11,
                   }}
                 />
                 <Typography
                   sx={{
-                    color: usingLocalNode
-                      ? 'rgba(214,221,233,0.5)'
-                      : selectedNode?.url === HTTPS_EXT_NODE_QORTAL_LINK
-                        ? 'rgba(214,221,233,0.5)'
-                        : 'rgba(214,221,233,0.5)',
+                    color: isLight
+                      ? theme.palette.text.secondary
+                      : 'rgba(214,221,233,0.5)',
                     fontSize: '0.76rem',
                     fontWeight: 400,
                     lineHeight: 1,
@@ -549,7 +528,9 @@ export const AuthenticationForm = ({
                 onClick={() => setIsConnectionModeOpen(true)}
                 sx={{
                   alignItems: 'center',
-                  color: 'rgba(214,221,233,0.62)',
+                  color: isLight
+                    ? theme.palette.text.secondary
+                    : 'rgba(214,221,233,0.62)',
                   display: 'inline-flex',
                   fontSize: '0.76rem',
                   fontWeight: 500,
@@ -559,7 +540,9 @@ export const AuthenticationForm = ({
                   p: 0,
                   width: '100%',
                   '&:hover': {
-                    color: 'rgba(214,221,233,0.78)',
+                    color: isLight
+                      ? theme.palette.text.primary
+                      : 'rgba(214,221,233,0.78)',
                   },
                 }}
               >
@@ -583,6 +566,41 @@ export const AuthenticationForm = ({
     </>
   );
 };
+
+function walletUnlockSubmitButtonSx(theme: Theme) {
+  if (theme.palette.mode === 'dark') {
+    return {
+      border: '1px solid rgba(105,139,225,0.34)',
+      borderRadius: '10px',
+      boxShadow: '0 12px 30px rgba(10,18,36,0.24)',
+      fontSize: '0.92rem',
+      fontWeight: 600,
+      height: 52,
+      '&:disabled': {
+        background:
+          'linear-gradient(180deg, rgba(51,83,151,0.84) 0%, rgba(35,62,120,0.84) 100%)',
+        borderColor: 'rgba(105,139,225,0.22)',
+        color: 'rgba(230,236,247,0.58)',
+        opacity: 1,
+      },
+    };
+  }
+
+  return {
+    border: `1px solid ${alpha(theme.palette.primary.main, 0.34)}`,
+    borderRadius: '10px',
+    boxShadow: '0 10px 28px rgba(45, 72, 112, 0.11)',
+    fontSize: '0.92rem',
+    fontWeight: 600,
+    height: 52,
+    '&:disabled': {
+      background: `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.28)}, ${alpha(theme.palette.primary.dark, 0.32)})`,
+      borderColor: alpha(theme.palette.primary.main, 0.22),
+      color: alpha(theme.palette.text.secondary, 0.82),
+      opacity: 1,
+    },
+  };
+}
 
 const buildSharedTransform = (
   originRect: SharedElementRect,

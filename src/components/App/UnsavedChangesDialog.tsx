@@ -24,6 +24,7 @@ export function UnsavedChangesDialog({
   onConfirm,
 }: UnsavedChangesDialogProps) {
   const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const { t } = useTranslation(['core']);
 
   return (
@@ -33,15 +34,26 @@ export function UnsavedChangesDialog({
       aria-labelledby="alert-dialog-title"
       aria-describedby="alert-dialog-description"
       PaperProps={{
-        sx: {
-          bgcolor: '#111820',
-          backgroundImage: 'none',
-          border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
-          borderRadius: '18px',
-          boxShadow: `0 24px 58px ${alpha('#000', 0.42)}`,
-          maxWidth: 360,
-          width: 'calc(100% - 40px)',
-        },
+        sx: isDark
+          ? {
+              bgcolor: '#111820',
+              backgroundImage: 'none',
+              border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+              borderRadius: '18px',
+              boxShadow: `0 24px 58px ${alpha('#000', 0.42)}`,
+              maxWidth: 360,
+              width: 'calc(100% - 40px)',
+            }
+          : {
+              bgcolor: theme.palette.background.paper,
+              backgroundImage: 'none',
+              border: `1px solid ${theme.palette.border.subtle}`,
+              borderRadius: '18px',
+              boxShadow: `0 22px 48px ${alpha('#000', 0.09)}, 0 0 0 1px ${alpha(theme.palette.divider, 0.45)}`,
+              maxWidth: 360,
+              width: 'calc(100% - 40px)',
+              color: theme.palette.text.primary,
+            },
       }}
     >
       <DialogTitle
@@ -61,7 +73,9 @@ export function UnsavedChangesDialog({
         <DialogContentText
           id="alert-dialog-description"
           sx={{
-            color: alpha(theme.palette.text.secondary, 0.9),
+            color: isDark
+              ? alpha(theme.palette.text.secondary, 0.9)
+              : theme.palette.text.secondary,
             fontSize: '0.88rem',
             lineHeight: 1.48,
             textAlign: 'center',
@@ -75,17 +89,32 @@ export function UnsavedChangesDialog({
       >
         <Button
           onClick={onCancel}
-          sx={{
-            border: `1px solid ${alpha('#A9BCD8', 0.16)}`,
-            borderRadius: '10px',
-            color: theme.palette.text.secondary,
-            fontWeight: 600,
-            minWidth: 116,
-            textTransform: 'none',
-            '&:hover': {
-              bgcolor: alpha('#FFFFFF', 0.045),
-            },
-          }}
+          sx={
+            isDark
+              ? {
+                  border: `1px solid ${alpha('#A9BCD8', 0.16)}`,
+                  borderRadius: '10px',
+                  color: theme.palette.text.secondary,
+                  fontWeight: 600,
+                  minWidth: 116,
+                  textTransform: 'none',
+                  '&:hover': {
+                    bgcolor: alpha('#FFFFFF', 0.045),
+                  },
+                }
+              : {
+                  border: `1px solid ${theme.palette.border.main}`,
+                  borderRadius: '10px',
+                  color: theme.palette.text.primary,
+                  fontWeight: 600,
+                  minWidth: 116,
+                  textTransform: 'none',
+                  '&:hover': {
+                    bgcolor: theme.palette.action.hover,
+                    borderColor: theme.palette.border.main,
+                  },
+                }
+          }
         >
           {t('core:action.cancel', { postProcess: 'capitalizeFirstChar' })}
         </Button>

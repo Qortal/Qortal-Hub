@@ -483,7 +483,9 @@
   },
   "aria": {
     "apps_library_tabs": "schede di navigazione della libreria app",
-    "core_controls": "Controlli Core"
+    "core_controls": "Controlli Core",
+    "switch_theme_dark": "Passa alla modalità scura",
+    "switch_theme_light": "Passa alla modalità chiara"
   },
   "supply": "offerta monetaria",
   "tags": "tag",
