@@ -55,6 +55,8 @@ export class JitterBuffer {
   private emptySinceMs: number | null = null;
   /** Phase D: scaled via `setSoftUnprimeMs` (tier-2 multi-source). */
   private softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
+  /** Optional sticky-primed window after an explicit recovery escape prime. */
+  private forcePrimedUntilMs = 0;
   /** Exact-1-remote steady-state floor after priming; keeps the Opus side off the 1-frame edge. */
   private steadyPrimedHoldFrames = 0;
   /**
@@ -128,10 +130,16 @@ export class JitterBuffer {
    * unprimed threshold. Mark the buffer primed so a live one-frame trickle can
    * actually drain on the next tick instead of remaining stuck below threshold.
    */
-  forcePrimeForRecoveryEscape(): void {
+  forcePrimeForRecoveryEscape(holdPrimedMs = 0): void {
     if (this.entries.length <= 0) return;
     this.primed = true;
     this.emptySinceMs = null;
+    if (holdPrimedMs > 0 && Number.isFinite(holdPrimedMs)) {
+      this.forcePrimedUntilMs = Math.max(
+        this.forcePrimedUntilMs,
+        performance.now() + holdPrimedMs
+      );
+    }
   }
 
   private checkSoftUnprime(): void {
@@ -142,6 +150,7 @@ export class JitterBuffer {
     }
     if (
       this.primed &&
+      performance.now() >= this.forcePrimedUntilMs &&
       performance.now() - this.emptySinceMs >= this.softUnprimeMs
     ) {
       this.primed = false;
@@ -259,5 +268,6 @@ export class JitterBuffer {
     this.softUnprimeMs = GCALL_JITTER_SOFT_UNPRIME_MS;
     this.steadyPrimedHoldFrames = 0;
     this.burstRecoveryExtraHoldFrames = 0;
+    this.forcePrimedUntilMs = 0;
   }
 }

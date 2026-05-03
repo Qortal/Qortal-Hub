@@ -85,8 +85,11 @@ export interface DmVoiceGcallInboundOptions {
 
 const GCALL_STARTUP_FORCE_PRIME_BUFFERED_FRAMES_MIN = 8;
 const GCALL_STARTUP_FORCE_PRIME_STALL_MS = 250;
+const GCALL_STEADY_READY_STALL_FORCE_PRIME_BUFFERED_FRAMES_MIN = 4;
+const GCALL_STEADY_READY_STALL_FORCE_PRIME_MS = 200;
+const GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS = 5_000;
 
-export function decideStartupForcePrime(opts: {
+export function decideReadyStallForcePrime(opts: {
   hasObservedPlayoutStart: boolean;
   activeSourceCount: number;
   hasReadyFrame: boolean;
@@ -94,18 +97,23 @@ export function decideStartupForcePrime(opts: {
   stallSinceMs: number | null;
   nowMs: number;
 }): { shouldForcePrime: boolean; nextStallSinceMs: number | null } {
+  const bufferedFramesMin = opts.hasObservedPlayoutStart
+    ? GCALL_STEADY_READY_STALL_FORCE_PRIME_BUFFERED_FRAMES_MIN
+    : GCALL_STARTUP_FORCE_PRIME_BUFFERED_FRAMES_MIN;
   if (
-    opts.hasObservedPlayoutStart ||
     opts.activeSourceCount !== 1 ||
     opts.hasReadyFrame ||
-    opts.bufferedFrames < GCALL_STARTUP_FORCE_PRIME_BUFFERED_FRAMES_MIN
+    opts.bufferedFrames < bufferedFramesMin
   ) {
     return { shouldForcePrime: false, nextStallSinceMs: null };
   }
   if (opts.stallSinceMs === null) {
     return { shouldForcePrime: false, nextStallSinceMs: opts.nowMs };
   }
-  if (opts.nowMs - opts.stallSinceMs < GCALL_STARTUP_FORCE_PRIME_STALL_MS) {
+  const stallThresholdMs = opts.hasObservedPlayoutStart
+    ? GCALL_STEADY_READY_STALL_FORCE_PRIME_MS
+    : GCALL_STARTUP_FORCE_PRIME_STALL_MS;
+  if (opts.nowMs - opts.stallSinceMs < stallThresholdMs) {
     return { shouldForcePrime: false, nextStallSinceMs: opts.stallSinceMs };
   }
   return { shouldForcePrime: true, nextStallSinceMs: null };
@@ -463,7 +471,7 @@ export class DmVoiceGcallInboundPlayout {
       let hasReadyFrame = jb.hasReadyFrame();
       const bufferedFrames = jb.getBufferedFrames();
       if (!hasReadyFrame) {
-        const startupForcePrime = decideStartupForcePrime({
+        const readyStallForcePrime = decideReadyStallForcePrime({
           hasObservedPlayoutStart: this.hasObservedPlayoutStart,
           activeSourceCount: this.resolveActiveSourceCount(),
           hasReadyFrame,
@@ -471,9 +479,9 @@ export class DmVoiceGcallInboundPlayout {
           stallSinceMs: this.startupReadyStallSinceMs,
           nowMs: tickStartedAt,
         });
-        this.startupReadyStallSinceMs = startupForcePrime.nextStallSinceMs;
-        if (startupForcePrime.shouldForcePrime) {
-          jb.forcePrimeForRecoveryEscape();
+        this.startupReadyStallSinceMs = readyStallForcePrime.nextStallSinceMs;
+        if (readyStallForcePrime.shouldForcePrime) {
+          jb.forcePrimeForRecoveryEscape(GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS);
           hasReadyFrame = jb.hasReadyFrame();
         }
       } else {

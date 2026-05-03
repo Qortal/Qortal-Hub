@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { JitterBuffer } from './gcallJitterBuffer';
 
 describe('gcallJitterBuffer', () => {
@@ -133,5 +133,24 @@ describe('gcallJitterBuffer', () => {
     expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(4);
     jb.clear();
     expect(jb.getBurstRecoveryExtraHoldFrames()).toBe(0);
+  });
+
+  it('keeps a recovery-escape prime sticky for a short window so a one-source path does not immediately fall back to the full startup threshold', () => {
+    vi.useFakeTimers();
+    const jb = new JitterBuffer();
+    jb.push(1, new Uint8Array([1]));
+    jb.forcePrimeForRecoveryEscape(5000);
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([1]));
+
+    vi.advanceTimersByTime(2000);
+    jb.push(2, new Uint8Array([2]));
+    expect(jb.hasReadyFrame()).toBe(true);
+    expect(jb.pop()).toEqual(new Uint8Array([2]));
+
+    vi.advanceTimersByTime(3500);
+    jb.push(3, new Uint8Array([3]));
+    expect(jb.hasReadyFrame()).toBe(false);
+    vi.useRealTimers();
   });
 });
