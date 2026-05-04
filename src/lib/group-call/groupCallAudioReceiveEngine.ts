@@ -117,7 +117,8 @@ const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN = 0.9996;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX = 0.04;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX = 0.01;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_HOLD_MS = 9_000;
-const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN = 28;
+const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN = 24;
+const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_NOT_READY_BUFFERED_MS_MAX = 32;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_PREBUFFER_FRAMES_MAX = 1;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_INGRESS_AGE_MIN_MS = 220;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_UNDERTARGET_EMA_MIN = 0.06;
@@ -160,6 +161,8 @@ interface LiveMultiSourceState {
   concealmentEma: number;
   rateEma: number;
   oldestFrameAgeEma: number;
+  lastJitterHasReadyFrame: boolean;
+  lastConcealmentUsed: boolean;
   targetPlayoutMs: number;
   preProcessBufferedFrames: number;
   recentOpusBufferedMs: number[];
@@ -191,6 +194,7 @@ type SingleSourceReceiveProfile =
 type SingleSourceProfileContext = {
   recoveryModeActive: boolean;
   postFailoverRootProfileActive: boolean;
+  severeSingleSourcePressure: boolean;
   severeSingleSourceHold: boolean;
   repairCollapseHold: boolean;
   repairCollapsePressure: boolean;
@@ -210,7 +214,10 @@ type SingleSourceProfileContext = {
 function selectSingleSourceReceiveProfile(
   ctx: SingleSourceProfileContext
 ): SingleSourceReceiveProfile {
-  if (ctx.severeSingleSourceHold) {
+  if (
+    ctx.severeSingleSourceHold &&
+    !ctx.bufferedNotReadyPressure
+  ) {
     return 'collapse-recovery';
   }
   if (ctx.bufferedNotReadyHold || ctx.bufferedNotReadyPressure) {
@@ -667,6 +674,8 @@ export class GroupCallAudioReceiveEngine {
         concealmentEma: 0,
         rateEma: 1,
         oldestFrameAgeEma: 0,
+        lastJitterHasReadyFrame: false,
+        lastConcealmentUsed: false,
         targetPlayoutMs: Math.max(40, targetPlayoutMs),
         preProcessBufferedFrames: 0,
         recentOpusBufferedMs: [],
@@ -760,6 +769,7 @@ export class GroupCallAudioReceiveEngine {
       state.sampleCount === 1
         ? concealmentSample
         : state.concealmentEma * (1 - alpha) + concealmentSample * alpha;
+    state.lastConcealmentUsed = !!message.concealmentUsed;
     const rateSample =
       typeof message.rate === 'number' && Number.isFinite(message.rate)
         ? Math.max(0.9, Math.min(1.1, message.rate))
@@ -894,6 +904,7 @@ export class GroupCallAudioReceiveEngine {
         playout.resetDynamicTargetPlayoutMs();
         continue;
       }
+      state.lastJitterHasReadyFrame = playout.getDiagnosticsSnapshot().jitterHasReadyFrame;
 
       if (activeSourceCount < 2) {
         const postFailoverRootProfileActive =
@@ -902,6 +913,12 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_BUFFERED_MS_MAX;
         const severeSingleSourceHold =
           state.severeSingleSourceHoldUntilMs > nowMs;
+        const severeSingleSourcePressure =
+          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX &&
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS &&
+          (state.underTargetEma >= 0.5 || state.concealmentEma >= 0.2) &&
+          (state.oldestFrameAgeEma >= GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS ||
+            state.preProcessBufferedFrames <= 0);
         const recoveryModeActive = mode === 'recovery';
         const bufferedPressure =
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
@@ -1090,19 +1107,38 @@ export class GroupCallAudioReceiveEngine {
         ) {
           state.silentLeanHoldUntilMs = 0;
         }
-        const bufferedNotReadyPressure =
-          state.bufferedMsEma >=
+        const latestBufferedMs =
+          state.recentOpusBufferedMs.at(-1) ?? state.bufferedMsEma;
+        const bufferedNotReadyReadyGapPressure =
+          !state.lastJitterHasReadyFrame &&
+          !state.lastConcealmentUsed &&
+          latestBufferedMs >=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN &&
-          (state.preProcessBufferedFrames <=
-            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_PREBUFFER_FRAMES_MAX ||
+          latestBufferedMs <=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_NOT_READY_BUFFERED_MS_MAX &&
+          state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_UNDERTARGET_EMA_MIN &&
+          state.deltaMsEma <=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_DELTA_MAX_MS &&
+          state.rateEma <= GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_RATE_EMA_MAX;
+        const bufferedNotReadyConcealmentOk =
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CONCEALMENT_EMA_MAX ||
+          bufferedNotReadyReadyGapPressure;
+        const bufferedNotReadyPressure =
+          bufferedNotReadyConcealmentOk &&
+          (bufferedNotReadyReadyGapPressure ||
+            state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN) &&
+          (bufferedNotReadyReadyGapPressure ||
+            state.preProcessBufferedFrames <=
+              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_PREBUFFER_FRAMES_MAX ||
             state.oldestFrameAgeEma >=
               GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_INGRESS_AGE_MIN_MS) &&
           state.underTargetEma >=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_UNDERTARGET_EMA_MIN &&
           state.deltaMsEma <=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_DELTA_MAX_MS &&
-          state.concealmentEma <=
-            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CONCEALMENT_EMA_MAX &&
           state.rateEma <= GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_RATE_EMA_MAX &&
           !repairCollapsePressure &&
           !silentLeanPressure &&
@@ -1221,6 +1257,7 @@ export class GroupCallAudioReceiveEngine {
         const profile = selectSingleSourceReceiveProfile({
           recoveryModeActive,
           postFailoverRootProfileActive,
+          severeSingleSourcePressure,
           severeSingleSourceHold,
           repairCollapseHold,
           repairCollapsePressure,
