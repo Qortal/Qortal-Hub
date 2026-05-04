@@ -24,12 +24,16 @@ import {
   type PlayoutStarvationSeverity,
 } from './gcallPlayoutStarvation';
 import {
+  GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS,
+  GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS,
   computeMultiSourceAccumulationTargetFrames,
   isCollapsedForStarvation,
   isNearCollapsedForStarvation,
   shouldEnterProtectedMode,
+  shouldExitProtectedMode,
   shouldHoldMultiSourceAccumulation,
   shouldPrioritizeWeakMultiSourceLeg,
+  starvationRecoveryBarSatisfied,
 } from './gcallJitterDrainPhaseD';
 import {
   computeFeasibleMultiSourceRecoveryTargetMaxMs,
@@ -81,6 +85,9 @@ const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_BUFFERED_MS_MIN = 84;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_DELTA_MIN_MS = -16;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_RATE_EMA_MIN = 0.998;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_CONCEALMENT_EMA_MAX = 0.02;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_BUFFERED_MS_MAX = 108;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_DELTA_MAX_MS = -10;
+const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_RATE_EMA_MAX = 0.999;
 const GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS = -35;
 const GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX = 36;
@@ -155,9 +162,11 @@ interface LiveMultiSourceState {
   oldestFrameAgeEma: number;
   targetPlayoutMs: number;
   preProcessBufferedFrames: number;
+  recentOpusBufferedMs: number[];
   starvationSeverity: PlayoutStarvationSeverity;
   strongCStreak: number;
   protectedMode: boolean;
+  protectedExitSatisfiedTicks: number;
   severeSingleSourceHoldUntilMs: number;
   repairCollapseHoldUntilMs: number;
   repairHeavyHoldUntilMs: number;
@@ -201,17 +210,17 @@ type SingleSourceProfileContext = {
 function selectSingleSourceReceiveProfile(
   ctx: SingleSourceProfileContext
 ): SingleSourceReceiveProfile {
-  if (ctx.bufferedNotReadyHold || ctx.bufferedNotReadyPressure) {
-    return 'buffered-not-ready';
-  }
   if (ctx.severeSingleSourceHold) {
     return 'collapse-recovery';
+  }
+  if (ctx.bufferedNotReadyHold || ctx.bufferedNotReadyPressure) {
+    return 'buffered-not-ready';
   }
   if (ctx.repairCollapsePressure) {
     return 'repair-collapse';
   }
   if (ctx.repairCollapseHold) {
-    return 'steady-weak-listener';
+    return 'repair-collapse';
   }
   if (ctx.silentLeanHold || ctx.silentLeanPressure) {
     return 'silent-lean';
@@ -660,9 +669,11 @@ export class GroupCallAudioReceiveEngine {
         oldestFrameAgeEma: 0,
         targetPlayoutMs: Math.max(40, targetPlayoutMs),
         preProcessBufferedFrames: 0,
+        recentOpusBufferedMs: [],
         starvationSeverity: 'none',
         strongCStreak: 0,
         protectedMode: false,
+        protectedExitSatisfiedTicks: 0,
         severeSingleSourceHoldUntilMs: 0,
         repairCollapseHoldUntilMs: 0,
         repairHeavyHoldUntilMs: 0,
@@ -719,6 +730,17 @@ export class GroupCallAudioReceiveEngine {
     state.sampleCount += 1;
     state.targetPlayoutMs = targetPlayoutMs;
     state.preProcessBufferedFrames = preProcessBufferedFrames;
+    state.recentOpusBufferedMs.push(bufferedMs);
+    if (
+      state.recentOpusBufferedMs.length >
+      GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS
+    ) {
+      state.recentOpusBufferedMs.splice(
+        0,
+        state.recentOpusBufferedMs.length -
+          GCALL_JITTER_STARVATION_RECOVERY_TRACE_TICKS
+      );
+    }
     state.bufferedMsEma =
       state.sampleCount === 1
         ? bufferedMs
@@ -777,19 +799,58 @@ export class GroupCallAudioReceiveEngine {
       strongMeta,
       mildCandidate,
     }).next;
-    state.protectedMode = shouldEnterProtectedMode({
-      collapsed: isCollapsedForStarvation({
-        bufferedFrames: preProcessBufferedFrames,
-        opusBufferedMs: state.bufferedMsEma,
-        adaptiveTargetMedianMs: targetPlayoutMs,
-      }),
-      nearCollapsed: isNearCollapsedForStarvation({
-        bufferedFrames: preProcessBufferedFrames,
-        opusBufferedMs: state.bufferedMsEma,
-        adaptiveTargetMedianMs: targetPlayoutMs,
-      }),
+    const collapsedForStarvation = isCollapsedForStarvation({
+      bufferedFrames: preProcessBufferedFrames,
+      opusBufferedMs: state.bufferedMsEma,
+      adaptiveTargetMedianMs: targetPlayoutMs,
+    });
+    const nearCollapsedForStarvation = isNearCollapsedForStarvation({
+      bufferedFrames: preProcessBufferedFrames,
+      opusBufferedMs: state.bufferedMsEma,
+      adaptiveTargetMedianMs: targetPlayoutMs,
+    });
+    const shouldEnterProtected = shouldEnterProtectedMode({
+      collapsed: collapsedForStarvation,
+      nearCollapsed: nearCollapsedForStarvation,
       starvationSeverity: state.starvationSeverity,
     });
+    if (shouldEnterProtected) {
+      state.protectedMode = true;
+      state.protectedExitSatisfiedTicks = 0;
+    } else if (state.protectedMode) {
+      const troughBufferedMs = Math.min(...state.recentOpusBufferedMs);
+      const recoveryBarSatisfied = starvationRecoveryBarSatisfied({
+        bufferedFrames: preProcessBufferedFrames,
+        opusBufferedMs: state.bufferedMsEma,
+        minOpusLastMTicks: Number.isFinite(troughBufferedMs)
+          ? troughBufferedMs
+          : state.bufferedMsEma,
+        adaptiveTargetMedianMs: targetPlayoutMs,
+        playoutStarvationSeverity: state.starvationSeverity,
+      });
+      if (
+        shouldExitProtectedMode({
+          bufferedFrames: preProcessBufferedFrames,
+          opusBufferedMs: state.bufferedMsEma,
+          adaptiveTargetMedianMs: targetPlayoutMs,
+          recoveryBarSatisfied,
+          playoutStarvationSeverity: state.starvationSeverity,
+        })
+      ) {
+        state.protectedExitSatisfiedTicks += 1;
+        if (
+          state.protectedExitSatisfiedTicks >=
+          GCALL_JITTER_STARVATION_PROTECTED_EXIT_CONSEC_TICKS
+        ) {
+          state.protectedMode = false;
+          state.protectedExitSatisfiedTicks = 0;
+        }
+      } else {
+        state.protectedExitSatisfiedTicks = 0;
+      }
+    } else {
+      state.protectedExitSatisfiedTicks = 0;
+    }
 
     const severeSingleSourcePressure =
       (!!message.outsideBandUnder || !!message.concealmentUsed) &&
@@ -1110,6 +1171,12 @@ export class GroupCallAudioReceiveEngine {
         }
         const postRecoveryHold =
           state.postRecoveryHoldUntilMs > nowMs &&
+          (state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_BUFFERED_MS_MAX ||
+            state.deltaMsEma <=
+              GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_DELTA_MAX_MS ||
+            state.rateEma <=
+              GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_RATE_EMA_MAX) &&
           !(
             !recoveryModeActive &&
             !severeSingleSourceHold &&

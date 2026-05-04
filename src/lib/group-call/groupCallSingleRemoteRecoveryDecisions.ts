@@ -78,7 +78,7 @@ function computeN1SevereRebuildLowPcmHoldMaxMs(targetMs?: number): number {
   );
 }
 
-export function computeN1SevereReadyEscapeMinFrames(targetMs: number): number {
+function computeN1SevereReadyEscapeMinFrames(targetMs: number): number {
   const normalizedTargetMs = Math.max(
     OPUS_FRAME_DURATION_MS,
     Number.isFinite(targetMs) ? targetMs : ADAPTIVE_BASE_TARGET_MS
@@ -89,7 +89,7 @@ export function computeN1SevereReadyEscapeMinFrames(targetMs: number): number {
   );
 }
 
-export function computeN1AccumulationDecodeCap(opts: {
+function computeN1AccumulationDecodeCap(opts: {
   accumulationActive: boolean;
   recoverySingleRemote: boolean;
   forcedReleaseRebuildActive?: boolean;
@@ -117,7 +117,7 @@ export function computeN1AccumulationDecodeCap(opts: {
   return 1;
 }
 
-export function computeN1SevereRebuildAccumulationHoldOpusMs(
+function computeN1SevereRebuildAccumulationHoldOpusMs(
   targetMs?: number
 ): number {
   const normalizedTargetMs =
@@ -133,7 +133,7 @@ export function computeN1SevereRebuildAccumulationHoldOpusMs(
   );
 }
 
-export function computeEffectiveN1AccumulationDecodeCap(opts: {
+function computeEffectiveN1AccumulationDecodeCap(opts: {
   accumulationDecodeCap: number;
   n1PcmRebuildActive: boolean;
   n1ReceivePriorityModeActive: boolean;
@@ -154,7 +154,7 @@ export function computeEffectiveN1AccumulationDecodeCap(opts: {
   return opts.accumulationDecodeCap;
 }
 
-export function shouldPreserveN1SevereSingleRemoteTarget(opts: {
+function shouldPreserveN1SevereSingleRemoteTarget(opts: {
   activeSourceCount: number;
   adaptiveNetworkMode: 'low-latency' | 'recovery';
   severeWindowSource: boolean;
@@ -173,7 +173,7 @@ export function shouldPreserveN1SevereSingleRemoteTarget(opts: {
   );
 }
 
-export function shouldUseN1SevereSingleRemoteCeiling(opts: {
+function shouldUseN1SevereSingleRemoteCeiling(opts: {
   activeSourceCount: number;
   adaptiveNetworkMode: 'low-latency' | 'recovery';
   severeWindowSource: boolean;
@@ -190,7 +190,7 @@ export function shouldUseN1SevereSingleRemoteCeiling(opts: {
   );
 }
 
-export function shouldExtendN1SevereRebuildAccumulation(opts: {
+function shouldExtendN1SevereRebuildAccumulation(opts: {
   recoverySingleRemote: boolean;
   prerollActive: boolean;
   severeForcedReleaseRebuildActive: boolean;
@@ -236,7 +236,7 @@ export function shouldExtendN1SevereRebuildAccumulation(opts: {
   return opts.playoutStarvationSeverity === 'strong';
 }
 
-export function shouldPromoteLiveN1PlayoutDeadzoneToStrong(opts: {
+function shouldPromoteLiveN1PlayoutDeadzoneToStrong(opts: {
   activeSourceCount: number;
   lastRecvAgeMs: number;
   recentStability: RecentRecoveryStabilitySummary;
@@ -254,7 +254,7 @@ export function shouldPromoteLiveN1PlayoutDeadzoneToStrong(opts: {
   );
 }
 
-export function shouldRetainN1RecoveryPrerollSatisfied(opts: {
+function shouldRetainN1RecoveryPrerollSatisfied(opts: {
   bufferedFrames: number;
   activeSourceCount: number;
   adaptiveNetworkMode: 'low-latency' | 'recovery';
@@ -271,7 +271,7 @@ export function shouldRetainN1RecoveryPrerollSatisfied(opts: {
   );
 }
 
-export function shouldRelaxSingleRemoteWindowRecovery(opts: {
+function shouldRelaxSingleRemoteWindowRecovery(opts: {
   activeSourceCount: number;
   shouldTightenRecovery: boolean;
   avgOpusBufferedMs: number;
@@ -299,7 +299,7 @@ export function shouldRelaxSingleRemoteWindowRecovery(opts: {
   );
 }
 
-export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
+function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
   activeSourceCount: number;
   lastRecvAgeMs: number;
   avgOpusBufferedMs: number;
@@ -345,7 +345,7 @@ export function shouldKeepSingleRemoteWindowRecoveryLocal(opts: {
   );
 }
 
-export function shouldForceSingleRemoteFullRecovery(opts: {
+function shouldForceSingleRemoteFullRecovery(opts: {
   activeSourceCount: number;
   avgPcmBufferedMs: number;
   playoutUnderTargetFraction: number;
@@ -379,7 +379,7 @@ export function shouldForceSingleRemoteFullRecovery(opts: {
   );
 }
 
-export function shouldKeepSingleRemoteSevereRebuildDeadzoneLocal(opts: {
+function shouldKeepSingleRemoteSevereRebuildDeadzoneLocal(opts: {
   activeSourceCount: number;
   lastRecvAgeMs: number;
   avgOpusBufferedMs: number;
@@ -598,7 +598,7 @@ export function shouldForceN1SustainedSevereRebuildReceiveRelief(opts: {
   );
 }
 
-export function shouldForceN1SevereRebuildReadyEscape(opts: {
+function shouldForceN1SevereRebuildReadyEscape(opts: {
   recoverySingleRemote: boolean;
   prerollActive: boolean;
   severeForcedReleaseRebuildActive: boolean;
@@ -649,7 +649,7 @@ export function shouldForceN1SevereRebuildReadyEscape(opts: {
   return opts.playoutStarvationSeverity === 'strong';
 }
 
-export function shouldResetN1SevereRebuildDeadzone(opts: {
+function shouldResetN1SevereRebuildDeadzone(opts: {
   recoverySingleRemote: boolean;
   prerollActive: boolean;
   severeForcedReleaseRebuildActive: boolean;
@@ -687,7 +687,7 @@ export function shouldResetN1SevereRebuildDeadzone(opts: {
   );
 }
 
-export function shouldBlockN1RecoveryExitForCurrentJitter(opts: {
+function shouldBlockN1RecoveryExitForCurrentJitter(opts: {
   activeSourceCount: number;
   bufferedFrames: number;
   hasReadyFrame: boolean;

@@ -32,7 +32,7 @@ export interface RecentRecoveryStabilitySummary {
   severeInstability: boolean;
 }
 
-export function shouldDropActiveJitterSource(opts: {
+function shouldDropActiveJitterSource(opts: {
   emptyTicks: number;
   playoutActive: boolean;
   hysteresisTicks?: number;
@@ -41,7 +41,7 @@ export function shouldDropActiveJitterSource(opts: {
   return opts.emptyTicks >= hysteresisTicks && !opts.playoutActive;
 }
 
-export function shouldDropNonParticipantRemoteAudioSource(opts: {
+function shouldDropNonParticipantRemoteAudioSource(opts: {
   sourceAddr: string;
   localAddress: string;
   participantAddresses: Iterable<string>;
@@ -70,7 +70,7 @@ export function shouldDropNonParticipantRemoteAudioSource(opts: {
   return opts.nowMs >= graceUntilMs;
 }
 
-export function shouldHoldN1SteadyStarvedAccumulation(opts: {
+function shouldHoldN1SteadyStarvedAccumulation(opts: {
   steadySingleRemote: boolean;
   sourceRecentlyPushed: boolean;
   hasReadyFrame: boolean;
@@ -102,7 +102,7 @@ export function shouldHoldN1SteadyStarvedAccumulation(opts: {
   );
 }
 
-export function computeN1SteadyThinDeadzoneHoldMs(targetMs: number): number {
+function computeN1SteadyThinDeadzoneHoldMs(targetMs: number): number {
   const normalizedTargetMs = Math.max(
     RECEIVE_DECISIONS_ADAPTIVE_BASE_TARGET_MS,
     Number.isFinite(targetMs)
@@ -120,7 +120,7 @@ export function computeN1SteadyThinDeadzoneHoldMs(targetMs: number): number {
   );
 }
 
-export function shouldHoldN1SteadyThinDeadzoneAccumulation(opts: {
+function shouldHoldN1SteadyThinDeadzoneAccumulation(opts: {
   steadySingleRemote: boolean;
   sourceRecentlyPushed: boolean;
   hasReadyFrame: boolean;
@@ -160,7 +160,7 @@ export function shouldHoldN1SteadyThinDeadzoneAccumulation(opts: {
   return opts.playoutStarvationSeverity === 'strong';
 }
 
-export function shouldEnableN1DrainReceivePriorityMode(opts: {
+function shouldEnableN1DrainReceivePriorityMode(opts: {
   recoverySingleRemote: boolean;
   prerollActive: boolean;
   forceReceivePriorityModeActive: boolean;
@@ -183,7 +183,7 @@ export function shouldEnableN1DrainReceivePriorityMode(opts: {
   return opts.recentStability !== null && !opts.recentStability.stable;
 }
 
-export function shouldTriggerN1InboundMediaWatchdog(opts: {
+function shouldTriggerN1InboundMediaWatchdog(opts: {
   roomConnected: boolean;
   hasRoomKey: boolean;
   remotePeerCount: number;
@@ -217,7 +217,7 @@ export function shouldTriggerN1InboundMediaWatchdog(opts: {
   );
 }
 
-export function shouldTriggerN1InboundMediaReannounce(opts: {
+function shouldTriggerN1InboundMediaReannounce(opts: {
   roomConnected: boolean;
   hasRoomKey: boolean;
   remotePeerCount: number;
@@ -248,7 +248,7 @@ export function shouldTriggerN1InboundMediaReannounce(opts: {
   );
 }
 
-export function shouldSuppressStartupDecodeFailure(opts: {
+function shouldSuppressStartupDecodeFailure(opts: {
   nowMs: number;
   startupMediaGateUntilMs: number;
 }): boolean {

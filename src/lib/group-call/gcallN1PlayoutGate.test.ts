@@ -10,6 +10,7 @@ import {
   computeN1BufferRatio,
   computeN1MinStartMs,
   isSevereN1RecoveryPrerollRelease,
+  shouldForceN1PostStartReprime,
   shouldForceN1RecoveryPrerollSatisfied,
   shouldBoostN1PcmRebuild,
   shouldKeepN1SevereForcedReleaseRebuild,
@@ -147,6 +148,36 @@ describe('gcallN1PlayoutGate', () => {
     expect(GCALL_N1_SEVERE_EARLY_RELEASE_ACCUMULATION_MS).toBeGreaterThan(
       GCALL_N1_EARLY_RELEASE_ACCUMULATION_MS
     );
+  });
+
+  it('allows post-start N=1 re-prime from the steady reserve, with a severe one-frame escape later', () => {
+    expect(
+      shouldForceN1PostStartReprime({
+        blockedForMs: 200,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 40,
+        sourceActive: true,
+        targetMs: 145,
+      })
+    ).toBe(true);
+    expect(
+      shouldForceN1PostStartReprime({
+        blockedForMs: 200,
+        lastPushAgeMs: 180,
+        opusBufferedMs: 40,
+        sourceActive: true,
+        targetMs: 145,
+      })
+    ).toBe(false);
+    expect(
+      shouldForceN1PostStartReprime({
+        blockedForMs: 500,
+        lastPushAgeMs: 40,
+        opusBufferedMs: 20,
+        sourceActive: true,
+        targetMs: 145,
+      })
+    ).toBe(true);
   });
 
   it('computeN1BufferRatio uses max target floor', () => {

@@ -2348,13 +2348,13 @@ export class GroupCallAudioEngineRuntime {
       topologyEpoch,
       heartbeatSilentMs,
     });
-    await this.receiveEngine.configure({
-      postFailoverRootHoldUntilMs:
-        nowMs + POST_FAILOVER_ROOT_RECEIVE_PROTECTION_MS,
-    });
     this.removeParticipantFromRuntimeEvent(currentRoot);
     const applied = await this.applyTopology(failoverTopology, 'local-election');
     if (applied) {
+      await this.receiveEngine.configure({
+        postFailoverRootHoldUntilMs:
+          nowMs + POST_FAILOVER_ROOT_RECEIVE_PROTECTION_MS,
+      });
       await this.broadcastTopology(failoverTopology, 'root-heartbeat-timeout');
     }
   }

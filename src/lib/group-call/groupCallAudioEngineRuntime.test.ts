@@ -1773,6 +1773,72 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('does not arm post-failover receive protection when failover topology application fails', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue(['Qlocal']);
+    vi.spyOn(runtime as any, 'applyTopology').mockResolvedValue(false);
+    const receiveConfigureSpy = vi.spyOn(
+      (runtime as any).receiveEngine,
+      'configure'
+    );
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    receiveConfigureSpy.mockClear();
+    broadcastTopology.mockClear();
+    await vi.advanceTimersByTimeAsync(17_000);
+
+    expect(broadcastTopology).not.toHaveBeenCalled();
+    expect(receiveConfigureSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        postFailoverRootHoldUntilMs: expect.any(Number),
+      })
+    );
+    vi.useRealTimers();
+  });
+
   it('adopts the existing room key on standby failover instead of rotating immediately', async () => {
     vi.useFakeTimers();
     try {

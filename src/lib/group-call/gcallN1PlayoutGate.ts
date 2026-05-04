@@ -208,6 +208,25 @@ export function shouldForceN1RecoveryPrerollSatisfied(input: {
   );
 }
 
+export function shouldForceN1PostStartReprime(input: {
+  blockedForMs: number;
+  lastPushAgeMs: number;
+  opusBufferedMs: number;
+  sourceActive: boolean;
+  targetMs?: number;
+}): boolean {
+  const steadyReserveMs = computeN1SteadyReserveMs(
+    input.targetMs ?? GCALL_N1_MIN_TARGET_MS_FLOOR
+  );
+  return (
+    isSevereN1RecoveryPrerollRelease(input) ||
+    (input.sourceActive &&
+      input.blockedForMs >= GCALL_N1_PREROLL_DEADLOCK_ESCAPE_MS &&
+      input.lastPushAgeMs <= GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS &&
+      input.opusBufferedMs >= steadyReserveMs)
+  );
+}
+
 export function isSevereN1RecoveryPrerollRelease(input: {
   blockedForMs: number;
   lastPushAgeMs: number;

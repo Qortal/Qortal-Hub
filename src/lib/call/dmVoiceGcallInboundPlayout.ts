@@ -13,6 +13,13 @@ import { createGcallJitterBufferForIngress } from '../group-call/gcallInboundJit
 import {
   GcallOpusFecPlayoutPipeline,
 } from '../group-call/gcallOpusFecPlayoutPipeline';
+import {
+  GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS,
+  computeN1SteadyReserveMs,
+  shouldHoldN1SteadyReserve,
+  shouldForceN1PostStartReprime,
+  shouldForceN1RecoveryPrerollSatisfied,
+} from '../group-call/gcallN1PlayoutGate';
 import { GCALL_GLOBAL_PLAYOUT_CAP_MS } from '../group-call/gcallPlayoutPolicy';
 import { configureWebCodecsOpusDecoderForGcall } from '../group-call/configureWebCodecsOpusDecoderForGcall';
 import {
@@ -83,10 +90,6 @@ export interface DmVoiceGcallInboundOptions {
   getActiveSourceCount?: () => number;
 }
 
-const GCALL_STARTUP_FORCE_PRIME_BUFFERED_FRAMES_MIN = 8;
-const GCALL_STARTUP_FORCE_PRIME_STALL_MS = 250;
-const GCALL_STEADY_READY_STALL_FORCE_PRIME_BUFFERED_FRAMES_MIN = 4;
-const GCALL_STEADY_READY_STALL_FORCE_PRIME_MS = 200;
 const GCALL_READY_STALL_FORCE_PRIMED_HOLD_MS = 5_000;
 
 export function decideReadyStallForcePrime(opts: {
@@ -96,27 +99,67 @@ export function decideReadyStallForcePrime(opts: {
   bufferedFrames: number;
   stallSinceMs: number | null;
   nowMs: number;
+  lastPushAgeMs: number;
+  targetPlayoutMs: number;
 }): { shouldForcePrime: boolean; nextStallSinceMs: number | null } {
-  const bufferedFramesMin = opts.hasObservedPlayoutStart
-    ? GCALL_STEADY_READY_STALL_FORCE_PRIME_BUFFERED_FRAMES_MIN
-    : GCALL_STARTUP_FORCE_PRIME_BUFFERED_FRAMES_MIN;
   if (
     opts.activeSourceCount !== 1 ||
     opts.hasReadyFrame ||
-    opts.bufferedFrames < bufferedFramesMin
+    opts.bufferedFrames <= 0
   ) {
     return { shouldForcePrime: false, nextStallSinceMs: null };
   }
   if (opts.stallSinceMs === null) {
     return { shouldForcePrime: false, nextStallSinceMs: opts.nowMs };
   }
-  const stallThresholdMs = opts.hasObservedPlayoutStart
-    ? GCALL_STEADY_READY_STALL_FORCE_PRIME_MS
-    : GCALL_STARTUP_FORCE_PRIME_STALL_MS;
-  if (opts.nowMs - opts.stallSinceMs < stallThresholdMs) {
-    return { shouldForcePrime: false, nextStallSinceMs: opts.stallSinceMs };
-  }
-  return { shouldForcePrime: true, nextStallSinceMs: null };
+  const blockedForMs = Math.max(0, opts.nowMs - opts.stallSinceMs);
+  const opusBufferedMs = opts.bufferedFrames * 20;
+  const shouldForcePrime = opts.hasObservedPlayoutStart
+    ? shouldForceN1PostStartReprime({
+        blockedForMs,
+        lastPushAgeMs: opts.lastPushAgeMs,
+        opusBufferedMs,
+        sourceActive: true,
+        targetMs: opts.targetPlayoutMs,
+      })
+    : shouldForceN1RecoveryPrerollSatisfied({
+        blockedForMs,
+        lastPushAgeMs: opts.lastPushAgeMs,
+        opusBufferedMs,
+        sourceActive: true,
+        targetMs: opts.targetPlayoutMs,
+      });
+  return {
+    shouldForcePrime,
+    nextStallSinceMs: shouldForcePrime ? null : opts.stallSinceMs,
+  };
+}
+
+export function computeN1SteadyPrimedHoldFrames(opts: {
+  activeSourceCount: number;
+  adaptiveNetworkMode: 'low-latency' | 'recovery';
+  hasObservedPlayoutStart: boolean;
+  hasReadyFrame: boolean;
+  bufferedFrames: number;
+  lastPushAgeMs: number;
+  targetPlayoutMs: number;
+}): number {
+  if (opts.activeSourceCount !== 1) return 0;
+  if (opts.adaptiveNetworkMode !== 'recovery') return 1;
+  if (!opts.hasObservedPlayoutStart) return 0;
+  const reserveMs = computeN1SteadyReserveMs(opts.targetPlayoutMs);
+  const sourceRecentlyPushed =
+    Number.isFinite(opts.lastPushAgeMs) &&
+    opts.lastPushAgeMs <= GCALL_N1_PREROLL_RECENT_PUSH_MAX_MS;
+  return shouldHoldN1SteadyReserve({
+    steadySingleRemote: true,
+    sourceRecentlyPushed,
+    hasReadyFrame: opts.hasReadyFrame,
+    opusBufferedMs: opts.bufferedFrames * 20,
+    reserveMs,
+  })
+    ? 1
+    : 0;
 }
 
 function disconnectSafe(node: AudioNode | null | undefined): void {
@@ -156,6 +199,7 @@ export class DmVoiceGcallInboundPlayout {
   private lastDrainMetricSampleAtMs = 0;
   private startupReadyStallSinceMs: number | null = null;
   private hasObservedPlayoutStart = false;
+  private lastPushAtPerfMs: number | null = null;
 
   private resolveActiveSourceCount(): number {
     const n = this.callbacks?.getActiveSourceCount?.() ?? 1;
@@ -327,6 +371,7 @@ export class DmVoiceGcallInboundPlayout {
     this.lastJitterAdaptiveMode = null;
     this.startupReadyStallSinceMs = null;
     this.hasObservedPlayoutStart = false;
+    this.lastPushAtPerfMs = null;
     this.peerAddress = peerAddress;
     const tuning = getGroupCallAudioTuning(
       options?.profile ?? readGroupCallAudioProfile()
@@ -468,16 +513,37 @@ export class DmVoiceGcallInboundPlayout {
         this.callbacks?.afterDrain?.({ missedFramesThisTick: 0 });
         return;
       }
-      let hasReadyFrame = jb.hasReadyFrame();
+      const activeSourceCount = this.resolveActiveSourceCount();
+      const targetPlayoutMs =
+        this.lastPostedTargetPlayoutMs ??
+        computeStaticPlayoutTargetMsForTuning(tuning);
+      const lastPushAgeMs =
+        this.lastPushAtPerfMs === null
+          ? Number.POSITIVE_INFINITY
+          : Math.max(0, tickStartedAt - this.lastPushAtPerfMs);
       const bufferedFrames = jb.getBufferedFrames();
+      jb.setSteadyPrimedHoldFrames(
+        computeN1SteadyPrimedHoldFrames({
+          activeSourceCount,
+          adaptiveNetworkMode: this.lastJitterAdaptiveMode ?? 'low-latency',
+          hasObservedPlayoutStart: this.hasObservedPlayoutStart,
+          hasReadyFrame: jb.hasReadyFrame(),
+          bufferedFrames,
+          lastPushAgeMs,
+          targetPlayoutMs,
+        })
+      );
+      let hasReadyFrame = jb.hasReadyFrame();
       if (!hasReadyFrame) {
         const readyStallForcePrime = decideReadyStallForcePrime({
           hasObservedPlayoutStart: this.hasObservedPlayoutStart,
-          activeSourceCount: this.resolveActiveSourceCount(),
+          activeSourceCount,
           hasReadyFrame,
           bufferedFrames,
           stallSinceMs: this.startupReadyStallSinceMs,
           nowMs: tickStartedAt,
+          lastPushAgeMs,
+          targetPlayoutMs,
         });
         this.startupReadyStallSinceMs = readyStallForcePrime.nextStallSinceMs;
         if (readyStallForcePrime.shouldForcePrime) {
@@ -648,9 +714,14 @@ export class DmVoiceGcallInboundPlayout {
   pushDecoded(packets: DecodedAudioPacket[]): void {
     const jb = this.jitter;
     if (!jb) return;
+    let pushedAny = false;
     for (const p of packets) {
-      if (p.opusFrame?.length) jb.push(p.seq, p.opusFrame);
+      if (p.opusFrame?.length) {
+        const result = jb.push(p.seq, p.opusFrame);
+        if (result.status === 'accepted') pushedAny = true;
+      }
     }
+    if (pushedAny) this.lastPushAtPerfMs = performance.now();
   }
 
   async stop(): Promise<void> {
@@ -681,6 +752,7 @@ export class DmVoiceGcallInboundPlayout {
     this.lastDrainMetricSampleAtMs = 0;
     this.startupReadyStallSinceMs = null;
     this.hasObservedPlayoutStart = false;
+    this.lastPushAtPerfMs = null;
 
     pcmRing?.reset();
     disconnectSafe(playNode);
