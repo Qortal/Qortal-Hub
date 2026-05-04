@@ -53,7 +53,7 @@ export function deriveGroupCallStartupStatus(params: {
     return {
       stage: 'syncing-participants',
       headline: 'Waiting for participants...',
-      detail: 'The call is connected. Waiting for the other side to appear.',
+      detail: 'Waiting for the other side to appear.',
       tone: 'info',
       showProgress: true,
       delayed,
@@ -78,7 +78,7 @@ export function deriveGroupCallStartupStatus(params: {
   if (snapshot.localConnectionHint) {
     return {
       stage: 'degraded',
-      headline: 'Connected, but audio is unstable',
+      headline: 'Audio is unstable',
       detail: snapshot.localConnectionHint.detail,
       tone: 'warning',
       showProgress: false,

@@ -1034,14 +1034,20 @@ export class GroupCallAudioReceiveEngine {
         }
         const latestBufferedMs =
           state.recentOpusBufferedMs.at(-1) ?? state.bufferedMsEma;
+        const bufferedNotReadyReserveCandidate =
+          latestBufferedMs >=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN ||
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN;
         const persistentLeanPressure =
           !(
             !state.lastJitterHasReadyFrame &&
-            latestBufferedMs >=
-              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN
+            bufferedNotReadyReserveCandidate
           ) &&
           latestBufferedMs <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           (state.preProcessBufferedFrames <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX ||
             state.oldestFrameAgeEma >=
@@ -1060,12 +1066,13 @@ export class GroupCallAudioReceiveEngine {
           state.persistentLeanHoldUntilMs > nowMs &&
           !(
             !state.lastJitterHasReadyFrame &&
-            latestBufferedMs >=
-              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN
+            bufferedNotReadyReserveCandidate
           ) &&
           state.concealmentEma <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CONCEALMENT_EMA_MAX &&
           latestBufferedMs <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           !(
             !persistentLeanPressure &&
             state.bufferedMsEma >=
