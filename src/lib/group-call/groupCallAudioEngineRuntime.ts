@@ -202,6 +202,7 @@ const GROUP_CALL_SENDER_SYNC_RETRY_MS = 1_500;
 const RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS = 5_000;
 const PARTICIPANT_ROSTER_REFRESH_INTERVAL_MS = TOPOLOGY_HEARTBEAT_MS;
 const PARTICIPANT_ROSTER_MISSING_EVICT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 500;
+const PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS = PARTICIPANT_ROSTER_MISSING_EVICT_MS;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
   TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS + TOPOLOGY_HEARTBEAT_MS;
@@ -379,6 +380,7 @@ export class GroupCallAudioEngineRuntime {
   private topologyElectionDelayUntilMs = 0;
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
+  private readonly participantDecodedMediaLastSeenAt = new Map<string, number>();
   private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
@@ -904,6 +906,7 @@ export class GroupCallAudioEngineRuntime {
     for (const participant of participants) {
       const address = participant.address?.trim() ?? '';
       if (!address) continue;
+      if (this.shouldSuppressRecentlyLeftParticipant(address)) continue;
       nextByAddress.set(address, participant);
     }
     const myAddress = this.userInfo?.address?.trim() ?? '';
@@ -968,6 +971,7 @@ export class GroupCallAudioEngineRuntime {
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!address || address === myAddress) return;
     this.markParticipantRecentlyLeft(address);
+    this.participantDecodedMediaLastSeenAt.delete(address);
     const nextParticipants = this.snapshot.participants.filter(
       (participant) => participant.address !== address
     );
@@ -1178,6 +1182,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearRecentWindowTrends();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.activeSpeakerLastSeenAt.clear();
+    this.participantDecodedMediaLastSeenAt.clear();
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -1397,6 +1402,7 @@ export class GroupCallAudioEngineRuntime {
     });
     this.memberGateGroupId = null;
     this.activeSpeakerLastSeenAt.clear();
+    this.participantDecodedMediaLastSeenAt.clear();
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -1600,6 +1606,7 @@ export class GroupCallAudioEngineRuntime {
       this.clearHeldIncomingAudio();
       this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
       this.activeSpeakerLastSeenAt.clear();
+      this.participantDecodedMediaLastSeenAt.clear();
       this.clearActiveSpeakerRefreshTimer();
       await this.senderEngine.stop();
       await this.syncDecryptPoolRoomKey(null);
@@ -3194,6 +3201,10 @@ export class GroupCallAudioEngineRuntime {
       const address = participant.address?.trim() ?? '';
       if (!address || address === myAddress) continue;
       if (rosterByAddress.has(address)) continue;
+      if (this.hasRecentParticipantActivityEvidence(address, now)) {
+        this.participantRosterMissingSinceMs.delete(address);
+        continue;
+      }
       const missingSince = this.participantRosterMissingSinceMs.get(address) ?? now;
       this.participantRosterMissingSinceMs.set(address, missingSince);
       if (now - missingSince < PARTICIPANT_ROSTER_MISSING_EVICT_MS) continue;
@@ -3226,6 +3237,7 @@ export class GroupCallAudioEngineRuntime {
 
     for (const address of removedAddresses) {
       this.activeSpeakerLastSeenAt.delete(address);
+      this.participantDecodedMediaLastSeenAt.delete(address);
       await this.receiveEngine.removeSource(address);
       this.markParticipantRecentlyLeft(address);
       if ((this.topology?.rootForwarder?.trim() ?? '') === address) {
@@ -3268,6 +3280,7 @@ export class GroupCallAudioEngineRuntime {
     for (const packet of packets) {
       if (packet.sourceAddr) {
         this.upsertParticipantFromRuntimeEvent(packet.sourceAddr);
+        this.noteParticipantDecodedMedia(packet.sourceAddr, now);
         this.noteRootDecodedMedia(packet.sourceAddr, now);
       }
       if (!packet.vad || !packet.sourceAddr) continue;
@@ -3278,6 +3291,52 @@ export class GroupCallAudioEngineRuntime {
     if (!sawVad) return;
     this.refreshActiveSpeakerState(now);
     this.scheduleActiveSpeakerRefresh(now);
+  }
+
+  private noteParticipantDecodedMedia(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    const address = addressValue?.trim() ?? '';
+    if (!address) return;
+    const effectiveSeenAt =
+      seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+    this.participantDecodedMediaLastSeenAt.set(
+      address,
+      Math.max(
+        this.participantDecodedMediaLastSeenAt.get(address) ?? 0,
+        effectiveSeenAt
+      )
+    );
+  }
+
+  private hasRecentParticipantActivityEvidence(
+    addressValue: string | null | undefined,
+    nowMs: number
+  ): boolean {
+    const address = addressValue?.trim() ?? '';
+    if (!address) return false;
+    const lastDecodedMediaAt = this.participantDecodedMediaLastSeenAt.get(address) ?? 0;
+    if (
+      lastDecodedMediaAt > 0 &&
+      nowMs - lastDecodedMediaAt <= PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
+    ) {
+      return true;
+    }
+    const lastSpeakerAt = this.activeSpeakerLastSeenAt.get(address) ?? 0;
+    if (
+      lastSpeakerAt > 0 &&
+      nowMs - lastSpeakerAt <= PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
+    ) {
+      return true;
+    }
+    const rootLiveness = this.getRootPeerLivenessSnapshot(nowMs);
+    return (
+      rootLiveness.currentRoot === address &&
+      rootLiveness.lastAnyRootEvidenceAt > 0 &&
+      nowMs - rootLiveness.lastAnyRootEvidenceAt <=
+        PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
+    );
   }
 
   private noteLocalVadActivity(vad: boolean): void {

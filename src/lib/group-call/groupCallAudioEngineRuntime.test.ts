@@ -474,6 +474,76 @@ describe('GroupCallAudioEngineRuntime', () => {
     }
   });
 
+  it('does not evict an authoritatively absent root while recent root media is still arriving', async () => {
+    vi.useFakeTimers();
+    try {
+      let roster = [
+        { address: 'Qlocal', publicKey: 'pub-local' },
+        { address: 'Qpeer', publicKey: 'pub-peer' },
+      ];
+      getRoomParticipants.mockImplementation(async () => roster);
+
+      const runtime = new GroupCallAudioEngineRuntime();
+      runtimes.add(runtime);
+      const events: Array<{ type: string; snapshot?: { participants: Array<{ address: string }> } }> = [];
+      runtime.onEvent((event) => {
+        events.push(event as never);
+      });
+
+      await runtime.handleCommand({
+        type: 'set-user',
+        userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+        myStatus: 'online',
+      });
+      await runtime.handleCommand({
+        type: 'join-group-call',
+        roomId: 'room-1',
+        chatId: 'chat-1',
+      });
+
+      groupCallEventHandler?.('gcall:participant-joined', {
+        roomId: 'room-1',
+        address: 'Qpeer',
+        publicKey: 'pub-peer',
+      });
+      groupCallEventHandler?.('gcall:topology', {
+        roomId: 'room-1',
+        topologyEpoch: 1,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' }],
+      });
+      await vi.runAllTicks();
+
+      roster = [{ address: 'Qlocal', publicKey: 'pub-local' }];
+      broadcastTopology.mockClear();
+
+      (runtime as any).noteDecodedPacketActivity([
+        { sourceAddr: 'Qpeer', seq: 1, vad: false, timestampMs: 0 },
+      ]);
+      await vi.advanceTimersByTimeAsync(5_000);
+      (runtime as any).noteDecodedPacketActivity([
+        { sourceAddr: 'Qpeer', seq: 2, vad: false, timestampMs: 20 },
+      ]);
+      await vi.advanceTimersByTimeAsync(5_000);
+      (runtime as any).noteDecodedPacketActivity([
+        { sourceAddr: 'Qpeer', seq: 3, vad: false, timestampMs: 40 },
+      ]);
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      const lastSnapshot = [...events]
+        .reverse()
+        .find((event) => event.type === 'snapshot');
+      expect(lastSnapshot?.snapshot?.participants.map((participant) => participant.address)).toEqual([
+        'Qlocal',
+        'Qpeer',
+      ]);
+      expect((runtime as any).topology?.rootForwarder).toBe('Qpeer');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('surfaces diagnostics export through the command interface', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
