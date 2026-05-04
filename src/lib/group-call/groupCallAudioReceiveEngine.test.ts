@@ -2591,6 +2591,122 @@ describe('GroupCallAudioReceiveEngine', () => {
     vi.useRealTimers();
   });
 
+  it('does not keep a ready moderate-reserve listener in buffered-not-ready once actual readiness failure has cleared', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    let jitterHasReadyFrame = false;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: jitterHasReadyFrame ? 12 : 7,
+        jitterHasReadyFrame,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'low-latency',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    for (let i = 0; i < 5; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 58,
+        preProcessBufferedMs: 14,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 260,
+        rate: 0.998,
+        outsideBand: true,
+        outsideBandUnder: true,
+        outsideBandOver: false,
+        deltaMs: -56,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
+      {
+        peerAddress: 'alice',
+        profile: 'buffered-not-ready',
+      },
+    ]);
+
+    jitterHasReadyFrame = true;
+    for (let i = 0; i < 6; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 46,
+        preProcessBufferedMs: 46,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 150,
+        rate: 0.998,
+        outsideBand: true,
+        outsideBandUnder: true,
+        outsideBandOver: false,
+        deltaMs: -88,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+      {
+        peerAddress: 'alice',
+        profile: 'buffered-not-ready',
+      },
+    ]);
+    vi.useRealTimers();
+  });
+
   it('escalates from buffered-not-ready into collapse-recovery when a true severe collapse begins', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(

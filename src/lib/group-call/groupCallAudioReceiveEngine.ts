@@ -1126,6 +1126,7 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CONCEALMENT_EMA_MAX ||
           bufferedNotReadyReadyGapPressure;
         const bufferedNotReadyPressure =
+          !state.lastJitterHasReadyFrame &&
           bufferedNotReadyConcealmentOk &&
           (bufferedNotReadyReadyGapPressure ||
             state.bufferedMsEma >=
@@ -1151,6 +1152,7 @@ export class GroupCallAudioReceiveEngine {
         }
         const bufferedNotReadyHold =
           state.bufferedNotReadyHoldUntilMs > nowMs &&
+          !state.lastJitterHasReadyFrame &&
           !(
             !bufferedNotReadyPressure &&
             state.preProcessBufferedFrames >=
