@@ -193,6 +193,7 @@ type SingleSourceReceiveProfile =
   | 'collapse-recovery';
 
 type SingleSourceProfileContext = {
+  currentReady: boolean;
   recoveryModeActive: boolean;
   postFailoverRootProfileActive: boolean;
   severeSingleSourcePressure: boolean;
@@ -221,7 +222,7 @@ function selectSingleSourceReceiveProfile(
   ) {
     return 'collapse-recovery';
   }
-  if (ctx.bufferedNotReadyHold || ctx.bufferedNotReadyPressure) {
+  if (ctx.bufferedNotReadyPressure || (ctx.bufferedNotReadyHold && !ctx.currentReady)) {
     return 'buffered-not-ready';
   }
   if (ctx.repairCollapsePressure) {
@@ -1040,6 +1041,7 @@ export class GroupCallAudioReceiveEngine {
           state.bufferedMsEma >=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN;
         const persistentLeanPressure =
+          !state.lastConcealmentUsed &&
           !(
             !state.lastJitterHasReadyFrame &&
             bufferedNotReadyReserveCandidate
@@ -1064,6 +1066,7 @@ export class GroupCallAudioReceiveEngine {
         }
         const persistentLeanHold =
           state.persistentLeanHoldUntilMs > nowMs &&
+          !state.lastConcealmentUsed &&
           !(
             !state.lastJitterHasReadyFrame &&
             bufferedNotReadyReserveCandidate
@@ -1283,6 +1286,7 @@ export class GroupCallAudioReceiveEngine {
           lingeringPressure ||
           ratePressure;
         const profile = selectSingleSourceReceiveProfile({
+          currentReady: state.lastJitterHasReadyFrame,
           recoveryModeActive,
           postFailoverRootProfileActive,
           severeSingleSourcePressure,
