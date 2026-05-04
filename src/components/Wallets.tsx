@@ -1,11 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+} from 'react';
 import {
   Avatar,
+  Badge,
   Box,
   ButtonBase,
   IconButton,
   Input,
+  InputAdornment,
   TextField,
+  Tooltip,
   Typography,
   useTheme,
 } from '@mui/material';
@@ -21,6 +32,8 @@ import DescriptionRoundedIcon from '@mui/icons-material/DescriptionRounded';
 import VpnKeyRoundedIcon from '@mui/icons-material/VpnKeyRounded';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import ChevronRightRoundedIcon from '@mui/icons-material/ChevronRightRounded';
+import ClearRoundedIcon from '@mui/icons-material/ClearRounded';
+import ManageSearchRoundedIcon from '@mui/icons-material/ManageSearchRounded';
 import { getWallets, storeWallets, walletVersion } from '../background/background.ts';
 import { getPrimaryNameForAvatar } from './Group/groupApi';
 import { getBaseApiReactForAvatar } from '../App';
@@ -40,6 +53,9 @@ const shortenAddress = (address?: string) => {
   if (address.length <= 18) return address;
   return `${address.slice(0, 8)}...${address.slice(-8)}`;
 };
+
+/** Keeps Enter Qortal list height stable while filtering/scrolling */
+const ENTRY_WALLET_SCROLL_HEIGHT_PX = 292;
 
 type WalletsProps = {
   setExtState: (state: any) => void;
@@ -71,18 +87,111 @@ export const Wallets = ({
     'choice'
   );
   const [backupImportHint, setBackupImportHint] = useState('');
-  const [dragOverWalletIndex, setDragOverWalletIndex] = useState<number | null>(
-    null
-  );
+  /** Insertion slot index in the wallet list — line appears before wallets[idx] when idx < length */
+  const [walletDropGapBeforeIndex, setWalletDropGapBeforeIndex] = useState<
+    number | null
+  >(null);
+  /** Row being dragged — dim original while reordering */
+  const [walletReorderDragSourceIndex, setWalletReorderDragSourceIndex] =
+    useState<number | null>(null);
   const [editingWalletIndex, setEditingWalletIndex] = useState<number | null>(
     null
   );
   const [primaryNamesByAddress, setPrimaryNamesByAddress] = useState<
     Record<string, string>
   >({});
+  const [walletEntrySearchOpen, setWalletEntrySearchOpen] = useState(false);
+  const [walletEntryFilterQuery, setWalletEntryFilterQuery] = useState('');
   const fetchingAddressesRef = useRef<Set<string>>(new Set());
   const observerRef = useRef<IntersectionObserver | null>(null);
+  const accountsScrollRef = useRef<HTMLDivElement | null>(null);
+  /** True while reordering wallets; dragover hits header/footer/etc. unless we listen on document */
+  const walletReorderDragActiveRef = useRef(false);
+  const entryModeRef = useRef(mode);
+  const editingWalletIndexRef = useRef(editingWalletIndex);
+  entryModeRef.current = mode;
+  editingWalletIndexRef.current = editingWalletIndex;
   const theme = useTheme();
+
+  /** HTML5 drag: scroll only when cursor is above/below the list clip (header/footer overlap), never from inside */
+  useEffect(() => {
+    const onDocumentDragOver = (event: globalThis.DragEvent) => {
+      if (!walletReorderDragActiveRef.current) return;
+      if (entryModeRef.current !== 'entry' || editingWalletIndexRef.current !== null)
+        return;
+      const el = accountsScrollRef.current;
+      if (!el || el.scrollHeight <= el.clientHeight) return;
+
+      const rect = el.getBoundingClientRect();
+      const x = event.clientX;
+      const y = event.clientY;
+      const horizontalPad = 80;
+      if (x < rect.left - horizontalPad || x > rect.right + horizontalPad) return;
+
+      /** Only past the clipped top/bottom — no scrolling from the interior of the list */
+      const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
+      let delta = 0;
+
+      if (el.scrollTop > 0 && y < rect.top) {
+        const depthPx = rect.top - y;
+        const t = Math.min(1, depthPx / 100);
+        delta -= Math.round((8 + 28) * (0.25 + 0.75 * t));
+      }
+      if (el.scrollTop < maxScroll && y > rect.bottom) {
+        const depthPx = y - rect.bottom;
+        const t = Math.min(1, depthPx / 100);
+        delta += Math.round((8 + 28) * (0.25 + 0.75 * t));
+      }
+
+      if (delta !== 0) {
+        event.preventDefault();
+        el.scrollTop = Math.min(maxScroll, Math.max(0, el.scrollTop + delta));
+      }
+    };
+
+    document.addEventListener('dragover', onDocumentDragOver);
+    return () => document.removeEventListener('dragover', onDocumentDragOver);
+  }, []);
+
+  const registerReorderDragActive = useCallback(
+    (active: boolean) => {
+      walletReorderDragActiveRef.current = active;
+    },
+    []
+  );
+
+  const handleWalletReorderDragStart = useCallback((sourceIdx: number) => {
+    setWalletReorderDragSourceIndex(sourceIdx);
+  }, []);
+
+  const handleWalletReorderDragEnd = useCallback(() => {
+    setWalletReorderDragSourceIndex(null);
+    setWalletDropGapBeforeIndex(null);
+  }, []);
+
+  const handleWalletReorderHover = useCallback(
+    (rowIdx: number, event: ReactDragEvent<HTMLElement>) => {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const gapBeforeIdx =
+        event.clientY < bounds.top + bounds.height / 2 ? rowIdx : rowIdx + 1;
+      setWalletDropGapBeforeIndex(gapBeforeIdx);
+    },
+    []
+  );
+
+  const handleWalletReorderHoverLeave = useCallback(
+    (event: ReactDragEvent<HTMLElement>) => {
+      const nextTarget = event.relatedTarget as Node | null;
+      if (
+        nextTarget instanceof Node &&
+        event.currentTarget.contains(nextTarget)
+      ) {
+        return;
+      }
+      setWalletDropGapBeforeIndex(null);
+    },
+    []
+  );
 
   const changeImportView = useCallback(
     (view: 'choice' | 'backup' | 'seedphrase') => {
@@ -167,6 +276,13 @@ export const Wallets = ({
     }
   }, [isLoading, onReady]);
 
+  useEffect(() => {
+    if (wallets.length <= 8) {
+      setWalletEntrySearchOpen(false);
+      setWalletEntryFilterQuery('');
+    }
+  }, [wallets.length]);
+
   const selectedWalletFunc = (
     wallet,
     transitionSnapshot?: AuthUnlockTransitionSnapshot
@@ -199,17 +315,39 @@ export const Wallets = ({
     void persistWallets(nextWallets).catch(console.error);
   };
 
-  const moveWalletItem = useCallback((fromIndex: number, toIndex: number) => {
-    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+  /** `gapBeforeIndex` is visual slot index in the pre-move ordering (0..wallets.length) */
+  const finalizeWalletReorder = useCallback(
+    (fromIndex: number, gapBeforeIndex: number) => {
+      const n = wallets.length;
+      if (
+        !Number.isInteger(fromIndex) ||
+        !Number.isInteger(gapBeforeIndex) ||
+        fromIndex < 0 ||
+        fromIndex >= n ||
+        gapBeforeIndex < 0 ||
+        gapBeforeIndex > n
+      )
+        return;
 
-    if (fromIndex >= wallets.length || toIndex >= wallets.length) return;
+      const nextWallets = [...wallets];
+      const [movedWallet] = nextWallets.splice(fromIndex, 1);
+      const rawInsert =
+        gapBeforeIndex > fromIndex ? gapBeforeIndex - 1 : gapBeforeIndex;
+      const insertAt = Math.max(0, Math.min(rawInsert, nextWallets.length));
+      nextWallets.splice(insertAt, 0, movedWallet);
 
-    const nextWallets = [...wallets];
-    const [movedWallet] = nextWallets.splice(fromIndex, 1);
-    nextWallets.splice(toIndex, 0, movedWallet);
+      const unchanged =
+        wallets.length === nextWallets.length &&
+        wallets.every(
+          (walletItem, walletIdx) =>
+            walletItem?.address0 === nextWallets[walletIdx]?.address0
+        );
+      if (unchanged) return;
 
-    void persistWallets(nextWallets).catch(console.error);
-  }, [persistWallets, wallets]);
+      void persistWallets(nextWallets).catch(console.error);
+    },
+    [persistWallets, wallets]
+  );
 
   const importSeedphrase = async () => {
     try {
@@ -326,48 +464,257 @@ export const Wallets = ({
     },
   });
 
+  const displayedWallets = useMemo(() => {
+    const base =
+      editingWalletIndex === null
+        ? wallets.map((wallet, idx) => ({ wallet, idx }))
+        : wallets
+            .map((wallet, idx) => ({ wallet, idx }))
+            .filter(({ idx: rowIdx }) => rowIdx === editingWalletIndex);
+
+    if (
+      mode !== 'entry' ||
+      editingWalletIndex !== null ||
+      wallets.length <= 8
+    ) {
+      return base;
+    }
+
+    const q = walletEntryFilterQuery.trim().toLowerCase();
+    if (!q) return base;
+
+    return base.filter(({ wallet }) => {
+      const address = String(wallet?.address0 || '').toLowerCase();
+      const primary = String(
+        wallet?.address0 ? primaryNamesByAddress[wallet.address0] || '' : ''
+      ).toLowerCase();
+      const name = String(wallet?.name || '').toLowerCase();
+      const note = String(wallet?.note || '').toLowerCase();
+      const fileLabel =
+        wallet?.filename != null
+          ? String(parsefilenameQortal(wallet.filename)).toLowerCase()
+          : '';
+      return (
+        address.includes(q) ||
+        primary.includes(q) ||
+        name.includes(q) ||
+        note.includes(q) ||
+        fileLabel.includes(q)
+      );
+    });
+  }, [
+    editingWalletIndex,
+    mode,
+    primaryNamesByAddress,
+    walletEntryFilterQuery,
+    wallets,
+  ]);
+
   if (isLoading) return null;
 
-  const displayedWallets =
-    editingWalletIndex === null
-      ? wallets.map((wallet, idx) => ({ wallet, idx }))
-      : wallets
-          .map((wallet, idx) => ({ wallet, idx }))
-          .filter(({ idx }) => idx === editingWalletIndex);
+  const showsEntryWalletFilter =
+    mode === 'entry' && editingWalletIndex === null && wallets.length > 8;
+
+  const entryFilteredNoMatches =
+    showsEntryWalletFilter &&
+    walletEntryFilterQuery.trim().length > 0 &&
+    displayedWallets.length === 0;
+
+  const entryListFixedViewport =
+    mode === 'entry' && editingWalletIndex === null;
 
   const accountsList = (
     <Box
+      ref={accountsScrollRef}
       sx={{
         display: 'flex',
         flexDirection: 'column',
         gap: mode === 'entry' ? 1.4 : 0,
-        maxHeight:
-          mode === 'entry' && editingWalletIndex === null ? 292 : 'none',
-        overflowY:
-          mode === 'entry' && editingWalletIndex === null ? 'auto' : 'visible',
-        pr: mode === 'entry' && editingWalletIndex === null ? 0.35 : 0,
+        ...(entryListFixedViewport
+          ? {
+              maxHeight: ENTRY_WALLET_SCROLL_HEIGHT_PX,
+              minHeight: ENTRY_WALLET_SCROLL_HEIGHT_PX,
+              overflowY: 'auto',
+              pr: 0.35,
+            }
+          : {
+              maxHeight: 'none',
+              overflowY: 'visible',
+              pr: 0,
+            }),
         width: '100%',
       }}
     >
-      {displayedWallets.map(({ wallet, idx }) => (
-        <WalletRow
-          key={wallet?.address0}
-          idx={idx}
-          editingWalletIndex={editingWalletIndex}
-          primaryName={
-            wallet?.address0 ? primaryNamesByAddress[wallet.address0] : undefined
-          }
-          registerCardRef={registerCardRef}
-          dragOverWalletIndex={dragOverWalletIndex}
-          moveWalletItem={moveWalletItem}
-          mode={mode}
-          setDragOverWalletIndex={setDragOverWalletIndex}
-          setEditingWalletIndex={setEditingWalletIndex}
-          setSelectedWallet={selectedWalletFunc}
-          updateWalletItem={updateWalletItem}
-          wallet={wallet}
-        />
+      {entryFilteredNoMatches ? (
+        <Box
+          sx={{
+            alignItems: 'center',
+            alignSelf: 'stretch',
+            display: 'flex',
+            flexGrow: 1,
+            justifyContent: 'center',
+            minHeight: 0,
+            px: 1,
+          }}
+        >
+          <Typography
+            sx={{
+              color: 'rgba(214,221,233,0.56)',
+              fontSize: '0.9rem',
+              lineHeight: 1.55,
+              textAlign: 'center',
+            }}
+          >
+            {t('auth:entry.filter_no_results')}
+          </Typography>
+        </Box>
+      ) : (
+        <>
+          {displayedWallets.map(({ wallet, idx }) => (
+        <Fragment key={wallet?.address0}>
+          {walletDropGapBeforeIndex !== null &&
+            walletReorderDragSourceIndex !== null &&
+            walletDropGapBeforeIndex === idx && (
+              <Box
+                aria-hidden
+                sx={{
+                  alignSelf: 'stretch',
+                  backgroundColor: theme.palette.primary.main,
+                  borderRadius: '999px',
+                  boxShadow:
+                    theme.palette.mode === 'light'
+                      ? `0 0 0 1px ${alpha(theme.palette.primary.dark, 0.12)}, 0 3px 16px ${alpha(theme.palette.primary.main, 0.38)}`
+                      : `0 0 0 1px ${alpha(theme.palette.primary.light, 0.28)}, 0 0 20px ${alpha(theme.palette.primary.main, 0.45)}`,
+                  flexShrink: 0,
+                  height: mode === 'entry' ? 5 : 4,
+                  mx: mode === 'entry' ? 0.85 : 0,
+                }}
+              />
+            )}
+          <WalletRow
+            idx={idx}
+            editingWalletIndex={editingWalletIndex}
+            finalizeWalletReorder={finalizeWalletReorder}
+            mode={mode}
+            onReorderDragEnd={handleWalletReorderDragEnd}
+            onReorderDragStart={handleWalletReorderDragStart}
+            primaryName={
+              wallet?.address0 ? primaryNamesByAddress[wallet.address0] : undefined
+            }
+            registerCardRef={registerCardRef}
+            registerReorderDragActive={
+              mode === 'entry' && editingWalletIndex === null
+                ? registerReorderDragActive
+                : undefined
+            }
+            reorderDragHover={handleWalletReorderHover}
+            reorderDragHoverLeave={handleWalletReorderHoverLeave}
+            reorderDragSourceIndex={walletReorderDragSourceIndex}
+            setEditingWalletIndex={setEditingWalletIndex}
+            setSelectedWallet={selectedWalletFunc}
+            updateWalletItem={updateWalletItem}
+            wallet={wallet}
+          />
+        </Fragment>
       ))}
+      {walletDropGapBeforeIndex !== null &&
+        walletReorderDragSourceIndex !== null &&
+        walletDropGapBeforeIndex === wallets.length && (
+          <Box
+            aria-hidden
+            sx={{
+              alignSelf: 'stretch',
+              backgroundColor: theme.palette.primary.main,
+              borderRadius: '999px',
+              boxShadow:
+                theme.palette.mode === 'light'
+                  ? `0 0 0 1px ${alpha(theme.palette.primary.dark, 0.12)}, 0 3px 16px ${alpha(theme.palette.primary.main, 0.38)}`
+                  : `0 0 0 1px ${alpha(theme.palette.primary.light, 0.28)}, 0 0 20px ${alpha(theme.palette.primary.main, 0.45)}`,
+              flexShrink: 0,
+              height: mode === 'entry' ? 5 : 4,
+              mx: mode === 'entry' ? 0.85 : 0,
+            }}
+          />
+        )}
+        </>
+      )}
+    </Box>
+  );
+
+  const entryAccountListColumn = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, width: '100%' }}>
+      {showsEntryWalletFilter && (
+        <Box sx={{ alignItems: 'center', display: 'flex', gap: 0.75, width: '100%' }}>
+          <Tooltip placement="top" title={t('auth:entry.filter_accounts_aria')}>
+            <IconButton
+              aria-expanded={walletEntrySearchOpen}
+              aria-label={t('auth:entry.filter_accounts_aria')}
+              size="small"
+              tabIndex={walletEntrySearchOpen ? 0 : -1}
+              onClick={() => setWalletEntrySearchOpen((open) => !open)}
+              sx={{
+                '&:hover': {
+                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
+                },
+                border: `1px solid ${
+                  walletEntrySearchOpen || walletEntryFilterQuery.trim()
+                    ? alpha(theme.palette.primary.main, 0.45)
+                    : alpha(theme.palette.text.primary, 0.12)
+                }`,
+                borderRadius: '9px',
+                color: theme.palette.text.secondary,
+                flexShrink: 0,
+                height: 34,
+                width: 34,
+              }}
+            >
+              <Badge
+                color="primary"
+                invisible={!walletEntryFilterQuery.trim()}
+                variant="dot"
+              >
+                <ManageSearchRoundedIcon sx={{ fontSize: 21 }} />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+          {walletEntrySearchOpen && (
+            <TextField
+              autoFocus
+              fullWidth
+              placeholder={t('auth:entry.filter_placeholder')}
+              size="small"
+              value={walletEntryFilterQuery}
+              variant="outlined"
+              InputProps={{
+                endAdornment: walletEntryFilterQuery ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      aria-label={t('auth:entry.filter_clear')}
+                      edge="end"
+                      size="small"
+                      sx={{ color: theme.palette.text.secondary }}
+                      onClick={() => setWalletEntryFilterQuery('')}
+                    >
+                      <ClearRoundedIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : undefined,
+              }}
+              onChange={(e) => setWalletEntryFilterQuery(e.target.value)}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  backgroundColor: alpha(theme.palette.background.paper, 0.45),
+                  borderRadius: '9px',
+                  fontSize: '0.875rem',
+                  minHeight: 36,
+                },
+                minWidth: 0,
+              }}
+            />
+          )}
+        </Box>
+      )}
+      {accountsList}
     </Box>
   );
 
@@ -384,7 +731,7 @@ export const Wallets = ({
         {t('auth:entry.no_accounts')}
       </Typography>
     ) : (
-      accountsList
+      entryAccountListColumn
     );
   }
 
@@ -640,11 +987,15 @@ const WalletRow = ({
   setSelectedWallet,
   primaryName,
   registerCardRef,
-  dragOverWalletIndex,
+  finalizeWalletReorder,
+  registerReorderDragActive,
+  reorderDragSourceIndex,
+  reorderDragHover,
+  reorderDragHoverLeave,
+  onReorderDragStart,
+  onReorderDragEnd,
   editingWalletIndex,
-  moveWalletItem,
   mode,
-  setDragOverWalletIndex,
   setEditingWalletIndex,
 }) => {
   const { t } = useTranslation(['auth']);
@@ -786,6 +1137,8 @@ const WalletRow = ({
         }
 
         isDraggingRef.current = true;
+        registerReorderDragActive?.(true);
+        onReorderDragStart?.(idx);
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', String(idx));
       }}
@@ -793,35 +1146,41 @@ const WalletRow = ({
         if (isEdit) return;
         event.preventDefault();
         event.dataTransfer.dropEffect = 'move';
-        setDragOverWalletIndex(idx);
+        reorderDragHover?.(idx, event);
       }}
-      onDragLeave={() => {
-        setDragOverWalletIndex((currentIndex) =>
-          currentIndex === idx ? null : currentIndex
-        );
+      onDragLeave={(event) => {
+        reorderDragHoverLeave?.(event);
       }}
       onDrop={(event) => {
         event.preventDefault();
         const fromIndex = Number(event.dataTransfer.getData('text/plain'));
-        setDragOverWalletIndex(null);
+
+        const bounds = (
+          event.currentTarget as HTMLElement
+        ).getBoundingClientRect();
+        const gapBeforeIndex =
+          event.clientY < bounds.top + bounds.height / 2 ? idx : idx + 1;
 
         if (Number.isInteger(fromIndex)) {
-          moveWalletItem(fromIndex, idx);
+          finalizeWalletReorder(fromIndex, gapBeforeIndex);
         }
+        onReorderDragEnd?.();
       }}
       onDragEnd={() => {
+        registerReorderDragActive?.(false);
+        onReorderDragEnd?.();
         window.setTimeout(() => {
           isDraggingRef.current = false;
         }, 0);
-        setDragOverWalletIndex(null);
       }}
       sx={{
         borderBottom:
           mode === 'entry' ? 'none' : '1px solid rgba(255,255,255,0.06)',
-        opacity: dragOverWalletIndex === idx ? 0.74 : 1,
+        opacity:
+          reorderDragSourceIndex !== null && reorderDragSourceIndex === idx ? 0.46 : 1,
         pb: mode === 'entry' ? 0 : isEdit ? 1.2 : 0,
         pt: mode === 'entry' ? 0 : 0.2,
-        transition: 'opacity 140ms ease',
+        transition: 'opacity 160ms ease',
       }}
     >
       <Box
