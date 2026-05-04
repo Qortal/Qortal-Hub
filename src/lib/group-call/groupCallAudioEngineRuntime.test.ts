@@ -1541,6 +1541,48 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('retries sender sync after a transient startup failure', async () => {
+    vi.useFakeTimers();
+    try {
+      const runtime = new GroupCallAudioEngineRuntime();
+      runtimes.add(runtime);
+
+      await runtime.handleCommand({
+        type: 'set-user',
+        userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+        myStatus: 'online',
+      });
+      await runtime.handleCommand({
+        type: 'join-group-call',
+        roomId: 'room-1',
+        chatId: 'chat-1',
+      });
+
+      const startOrUpdate = vi
+        .spyOn((runtime as any).senderEngine, 'startOrUpdate')
+        .mockRejectedValueOnce(new Error('mic-init-failed'))
+        .mockResolvedValue(undefined);
+
+      (runtime as any).roomKey = new Uint8Array(32).fill(3);
+      groupCallEventHandler?.('gcall:topology', {
+        roomId: 'room-1',
+        topologyEpoch: 1,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: 'Qpeer',
+        clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+      });
+
+      await (runtime as any).syncSenderState();
+      const beforeRetry = startOrUpdate.mock.calls.length;
+      expect(beforeRetry).toBeGreaterThanOrEqual(1);
+
+      await vi.advanceTimersByTimeAsync(1_500);
+      expect(startOrUpdate.mock.calls.length).toBeGreaterThan(beforeRetry);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('elects and broadcasts a topology after join when bootstrap has no authority', async () => {
     getRoomParticipants.mockResolvedValue([
       { address: 'Qlocal', publicKey: 'pub-local' },

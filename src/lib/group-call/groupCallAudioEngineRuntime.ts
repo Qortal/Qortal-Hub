@@ -198,6 +198,7 @@ function buildEmptyRootPeerLivenessRecord(): RootPeerLivenessRecord {
 }
 const GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS = 1_000;
 const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
+const GROUP_CALL_SENDER_SYNC_RETRY_MS = 1_500;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
   TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS + TOPOLOGY_HEARTBEAT_MS;
@@ -358,6 +359,7 @@ export class GroupCallAudioEngineRuntime {
   private selfMintedRoomKey = false;
   private awaitingAuthoritativeKey = false;
   private keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private senderSyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private topologyHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private rootFailoverTimer: ReturnType<typeof setTimeout> | null = null;
   private topologyElectionTimer: ReturnType<typeof setTimeout> | null = null;
@@ -424,6 +426,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
+    this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
     void this.senderEngine.stop();
@@ -1128,6 +1131,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
+    this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
     this.clearHeldIncomingAudio();
@@ -2029,6 +2033,13 @@ export class GroupCallAudioEngineRuntime {
     }
   }
 
+  private clearSenderSyncRetryTimer(): void {
+    if (this.senderSyncRetryTimer) {
+      clearTimeout(this.senderSyncRetryTimer);
+      this.senderSyncRetryTimer = null;
+    }
+  }
+
   private clearRootFailoverTimer(): void {
     if (this.rootFailoverTimer) {
       clearTimeout(this.rootFailoverTimer);
@@ -2067,6 +2078,29 @@ export class GroupCallAudioEngineRuntime {
       const generation = ++this.topologyAsyncGeneration;
       void this.runTopologyElection(generation, reason);
     }, delayMs);
+  }
+
+  private shouldMaintainActiveSender(): boolean {
+    return (
+      this.snapshot.roomState === 'connected' &&
+      this.roomKey !== null &&
+      this.topology !== null &&
+      Boolean(this.userInfo?.address)
+    );
+  }
+
+  private scheduleSenderSyncRetry(reason: string): void {
+    if (!this.shouldMaintainActiveSender()) return;
+    if (this.senderSyncRetryTimer) return;
+    this.senderSyncRetryTimer = setTimeout(() => {
+      this.senderSyncRetryTimer = null;
+      void this.syncSenderState();
+    }, GROUP_CALL_SENDER_SYNC_RETRY_MS);
+    this.recordDiagEvent('sender-sync-retry-scheduled', {
+      roomId: this.snapshot.roomId,
+      reason,
+      delayMs: GROUP_CALL_SENDER_SYNC_RETRY_MS,
+    });
   }
 
   private async runTopologyElection(
@@ -3421,15 +3455,12 @@ export class GroupCallAudioEngineRuntime {
 
   private async syncSenderState(): Promise<void> {
     try {
-      if (
-        this.snapshot.roomState !== 'connected' ||
-        !this.roomKey ||
-        !this.topology ||
-        !this.userInfo?.address
-      ) {
+      if (!this.shouldMaintainActiveSender()) {
+        this.clearSenderSyncRetryTimer();
         await this.senderEngine.stop();
         return;
       }
+      this.clearSenderSyncRetryTimer();
       await this.senderEngine.startOrUpdate({
         inputDeviceId: this.inputDeviceId,
         outputDeviceId: this.outputDeviceId,
@@ -3443,11 +3474,17 @@ export class GroupCallAudioEngineRuntime {
         },
       });
     } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'audio-sender-sync-failed';
+      this.recordDiagEvent('sender-sync-failed', {
+        roomId: this.snapshot.roomId,
+        message,
+      });
       this.emit({
         type: 'engine-error',
-        message:
-          error instanceof Error ? error.message : 'audio-sender-sync-failed',
+        message,
       });
+      this.scheduleSenderSyncRetry('sync-failed');
     }
   }
 
