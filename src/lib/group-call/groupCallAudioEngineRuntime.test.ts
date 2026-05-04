@@ -1174,6 +1174,74 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('clears stale remote-root authority state when bootstrap topology already makes us root', async () => {
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: 'Qpeer',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qlocal',
+            standby: 'Qpeer',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    (runtime as any).trustedRemoteRoot = 'Qold';
+    (runtime as any).trustedRemoteRootLastSeenAt = nowMs - 5_000;
+    (runtime as any).conflictingRemoteRoot = 'Qconflict';
+    (runtime as any).conflictingRemoteRootLastSeenAt = nowMs - 1_000;
+    (runtime as any).authoritySettleUntilMs = nowMs + 5_000;
+    (runtime as any).rootPeerLiveness = {
+      currentRoot: 'Qold',
+      lastHeartbeatAt: nowMs - 2_000,
+      lastDecodedMediaAt: 0,
+      lastVerifiedControlAt: nowMs - 2_000,
+      lastVerifiedKeyAt: 0,
+      lastSpeakerActivityAt: 0,
+      lastAnyRootEvidenceAt: nowMs - 2_000,
+    };
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    expect((runtime as any).trustedRemoteRoot).toBe('');
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs)).toBeNull();
+    expect((runtime as any).authoritySettleUntilMs).toBe(0);
+    const liveness = (runtime as any).getRootPeerLivenessSnapshot(nowMs);
+    expect(liveness.currentRoot).toBe('Qlocal');
+    expect(liveness.lastAnyRootEvidenceAt).toBe(0);
+  });
+
   it('hydrates member gate names from the hidden runtime roster sync', async () => {
     getGroupMembers.mockResolvedValue({
       members: [
@@ -1770,7 +1838,840 @@ describe('GroupCallAudioEngineRuntime', () => {
         postFailoverRootHoldUntilMs: expect.any(Number),
       })
     );
+    expect(
+      ((runtime as any).snapshot.participants as Array<{ address: string }>).some(
+        (participant) => participant.address === 'Qpeer'
+      )
+    ).toBe(true);
     vi.useRealTimers();
+  });
+
+  it('does not promote standby to root on heartbeat timeout while recent root activity still exists', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue(['Qlocal']);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    broadcastTopology.mockClear();
+    await vi.advanceTimersByTimeAsync(16_000);
+    (runtime as any).noteRootVerifiedControl('Qpeer', Date.now());
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect(broadcastTopology).not.toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    expect((runtime as any).topology?.rootForwarder).toBe('Qpeer');
+    vi.useRealTimers();
+  });
+
+  it('does not promote standby to root on heartbeat timeout while conflicting remote root authority is still settling', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+      { address: 'Qother', publicKey: 'pub-other' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+        { address: 'Qother', publicKey: 'pub-other', joinedAt: 3 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer', 'Qother'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue(['Qlocal', 'Qother']);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    await vi.advanceTimersByTimeAsync(16_000);
+    groupCallEventHandler?.('gcall:heartbeat', {
+      roomId: 'room-1',
+      rootForwarder: 'Qother',
+      lastSeen: Date.now(),
+    });
+    broadcastTopology.mockClear();
+    await vi.advanceTimersByTimeAsync(1_500);
+
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(Date.now())).toBe(
+      'Qother'
+    );
+    expect(broadcastTopology).not.toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    expect((runtime as any).topology?.rootForwarder).toBe('Qpeer');
+    vi.useRealTimers();
+  });
+
+  it('treats accepted topology from the current root as heartbeat freshness for liveness', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' },
+      ],
+      lastSeen: nowMs,
+    });
+
+    const rootLiveness = (runtime as any).getRootPeerLivenessSnapshot(nowMs);
+    expect(rootLiveness.currentRoot).toBe('Qpeer');
+    expect(rootLiveness.lastHeartbeatAt).toBe(nowMs);
+    expect(rootLiveness.lastVerifiedControlAt).toBe(nowMs);
+  });
+
+  it('treats accepted duplicate topology heartbeat from the current root as freshness for liveness', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' },
+      ],
+      lastSeen: nowMs,
+    });
+
+    const firstLiveness = (runtime as any).getRootPeerLivenessSnapshot(nowMs);
+    expect(firstLiveness.lastHeartbeatAt).toBe(nowMs);
+    expect(firstLiveness.lastVerifiedControlAt).toBe(nowMs);
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' },
+      ],
+      lastSeen: nowMs + 4_000,
+    });
+
+    const secondLiveness = (runtime as any).getRootPeerLivenessSnapshot(nowMs + 4_000);
+    expect(secondLiveness.lastHeartbeatAt).toBe(nowMs + 4_000);
+    expect(secondLiveness.lastVerifiedControlAt).toBe(nowMs + 4_000);
+  });
+
+  it('does not update root-key liveness or conflict state from a verified key for the wrong room or wrong version', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer', 'Qother'], forwarder: 'Qpeer', standby: 'Qlocal' },
+      ],
+      lastSeen: nowMs,
+    });
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qother',
+      publicKey: 'pub-other',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:key', {
+      roomId: 'room-2',
+      fromAddress: 'Qpeer',
+      verified: true,
+      keyMessageVersion: 1,
+      encryptedKey: 'abcd',
+    });
+    groupCallEventHandler?.('gcall:key', {
+      roomId: 'room-1',
+      fromAddress: 'Qother',
+      verified: true,
+      keyMessageVersion: 999,
+      encryptedKey: 'abcd',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const rootLiveness = (runtime as any).getRootPeerLivenessSnapshot(nowMs + 1_000);
+    expect(rootLiveness.lastVerifiedKeyAt).toBe(0);
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 1_000)).toBe(
+      null
+    );
+  });
+
+  it('records conflicting-root authority from a validated in-room untrusted verified key', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer', 'Qother'], forwarder: 'Qpeer', standby: 'Qlocal' },
+      ],
+      lastSeen: nowMs,
+    });
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qother',
+      publicKey: 'pub-other',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:key', {
+      roomId: 'room-1',
+      fromAddress: 'Qother',
+      verified: true,
+      keyMessageVersion: 3,
+      encryptedKey: 'abcd',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 1_000)).toBe(
+      'Qother'
+    );
+    expect((runtime as any).authoritySettleUntilMs).toBeGreaterThan(nowMs);
+  });
+
+  it('clears conflicting-root authority state when accepted topology adopts that competing root', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer', 'Qother'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs,
+    });
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qother',
+      publicKey: 'pub-other',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:heartbeat', {
+      roomId: 'room-1',
+      rootForwarder: 'Qother',
+      lastSeen: nowMs + 1_000,
+    });
+
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 1_000)).toBe(
+      'Qother'
+    );
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 2,
+      rootForwarder: 'Qother',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer', 'Qother'],
+          forwarder: 'Qother',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs + 2_000,
+    });
+
+    expect((runtime as any).topology?.rootForwarder).toBe('Qother');
+    expect((runtime as any).trustedRemoteRoot).toBe('Qother');
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 2_000)).toBe(
+      null
+    );
+    expect((runtime as any).authoritySettleUntilMs).toBe(0);
+  });
+
+  it('clears stale remote-root authority state when accepted remote topology makes us root', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs,
+    });
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qother',
+      publicKey: 'pub-other',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    groupCallEventHandler?.('gcall:heartbeat', {
+      roomId: 'room-1',
+      rootForwarder: 'Qother',
+      lastSeen: nowMs + 1_000,
+    });
+
+    expect((runtime as any).trustedRemoteRoot).toBe('Qpeer');
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 1_000)).toBe(
+      'Qother'
+    );
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 2,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qlocal',
+          standby: 'Qpeer',
+        },
+      ],
+      lastSeen: nowMs + 2_000,
+    });
+
+    expect((runtime as any).trustedRemoteRoot).toBe('');
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 2_000)).toBe(
+      null
+    );
+    expect((runtime as any).authoritySettleUntilMs).toBe(0);
+    const liveness = (runtime as any).getRootPeerLivenessSnapshot(nowMs + 2_000);
+    expect(liveness.currentRoot).toBe('Qlocal');
+    expect(liveness.lastAnyRootEvidenceAt).toBe(0);
+  });
+
+  it('arms a short authority settle window after an accepted topology transition', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer', 'Qother'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs,
+    });
+    const firstDelay = (runtime as any).topologyElectionDelayUntilMs;
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 2,
+      rootForwarder: 'Qother',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer', 'Qother'],
+          forwarder: 'Qother',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs + 1_000,
+    });
+
+    expect((runtime as any).topologyElectionDelayUntilMs).toBeGreaterThan(firstDelay);
+    expect((runtime as any).topologyElectionDelayUntilMs).toBeGreaterThan(nowMs);
+    vi.useRealTimers();
+  });
+
+  it('preserves conflicting-root authority state when the current root leaves', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer', 'Qother'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs,
+    });
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qother',
+      publicKey: 'pub-other',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    groupCallEventHandler?.('gcall:heartbeat', {
+      roomId: 'room-1',
+      rootForwarder: 'Qother',
+      lastSeen: nowMs + 1_000,
+    });
+
+    expect((runtime as any).trustedRemoteRoot).toBe('Qpeer');
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 1_000)).toBe(
+      'Qother'
+    );
+
+    groupCallEventHandler?.('gcall:participant-left', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect((runtime as any).trustedRemoteRoot).toBe('');
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(nowMs + 1_000)).toBe(
+      'Qother'
+    );
+    expect((runtime as any).authoritySettleUntilMs).toBeGreaterThan(nowMs + 1_000);
+  });
+
+  it('defers local topology election while conflicting remote root authority is still settling', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const applyTopologySpy = vi.spyOn(runtime as any, 'applyTopology');
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    (runtime as any).snapshot = {
+      ...(runtime as any).snapshot,
+      roomState: 'connected',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+        { address: 'Qother', publicKey: 'pub-other', joinedAt: 3 },
+      ],
+    };
+    (runtime as any).topology = {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer', 'Qother'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: nowMs,
+    };
+    (runtime as any).topologyAsyncGeneration = 1;
+    (runtime as any).noteConflictingRemoteRoot('Qother', nowMs + 500, 'heartbeat');
+    applyTopologySpy.mockClear();
+
+    await (runtime as any).runTopologyElection(1, 'test-conflict');
+
+    expect(applyTopologySpy).not.toHaveBeenCalled();
+    expect((runtime as any).topologyElectionDelayUntilMs).toBeGreaterThan(nowMs + 500);
+    vi.useRealTimers();
+  });
+
+  it('clears stale authority-settle delay when the conflicting root is resolved by departure', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+      { address: 'Qother', publicKey: 'pub-other' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+        { address: 'Qother', publicKey: 'pub-other', joinedAt: 3 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer', 'Qother'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue(['Qlocal', 'Qother']);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    await vi.advanceTimersByTimeAsync(16_000);
+    groupCallEventHandler?.('gcall:heartbeat', {
+      roomId: 'room-1',
+      rootForwarder: 'Qother',
+      lastSeen: Date.now(),
+    });
+    expect((runtime as any).authoritySettleUntilMs).toBeGreaterThan(Date.now());
+
+    groupCallEventHandler?.('gcall:participant-left', {
+      roomId: 'room-1',
+      address: 'Qother',
+    });
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect((runtime as any).getConflictingRemoteRootForAuthorityWait(Date.now())).toBeNull();
+    expect((runtime as any).authoritySettleUntilMs).toBe(0);
+
+    broadcastTopology.mockClear();
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(broadcastTopology).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    vi.useRealTimers();
+  });
+
+  it('reschedules suppressed failover from fresh root evidence instead of the stale heartbeat baseline', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue(['Qlocal']);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    await vi.advanceTimersByTimeAsync(16_000);
+    (runtime as any).noteRootVerifiedControl('Qpeer', Date.now());
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(broadcastTopology).not.toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+
+    broadcastTopology.mockClear();
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(broadcastTopology).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('clears root liveness and trusted-root state when the current root leaves', async () => {
+    const nowMs = Date.now();
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        { members: ['Qlocal', 'Qpeer'], forwarder: 'Qpeer', standby: 'Qlocal' },
+      ],
+      lastSeen: nowMs,
+    });
+
+    expect((runtime as any).trustedRemoteRoot).toBe('Qpeer');
+    expect((runtime as any).getRootPeerLivenessSnapshot(nowMs).currentRoot).toBe(
+      'Qpeer'
+    );
+
+    groupCallEventHandler?.('gcall:participant-left', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect((runtime as any).trustedRemoteRoot).toBe('');
+    expect((runtime as any).getRootPeerLivenessSnapshot(nowMs).currentRoot).toBe(
+      'Qpeer'
+    );
+    expect(
+      (runtime as any).getRootPeerLivenessSnapshot(nowMs).lastAnyRootEvidenceAt
+    ).toBe(0);
   });
 
   it('does not arm post-failover receive protection when failover topology application fails', async () => {

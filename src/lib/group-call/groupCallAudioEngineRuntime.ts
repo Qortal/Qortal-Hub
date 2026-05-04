@@ -78,7 +78,10 @@ import {
   shouldDeferLocalTopologyElection,
   shouldDelayPostJoinRosterElection,
 } from './groupCallJoinLifecycleDecisions';
-import { getTrustedRootForRejoinElection } from './groupCallSessionKeyPolicy';
+import {
+  getConflictingRootForAuthorityWait,
+  getTrustedRootForRejoinElection,
+} from './groupCallSessionKeyPolicy';
 import { buildStandbyRootFailoverTopology } from './groupCallTopologyLifecycle';
 import AudioDecryptWorker from '../../workers/audio-decrypt.worker?worker';
 import nacl from '../../encryption/nacl-fast';
@@ -161,10 +164,43 @@ const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
+const ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS = ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
 const POST_FAILOVER_ROOT_RECEIVE_PROTECTION_MS = 12_000;
+
+type RootPeerLivenessState =
+  | 'unknown'
+  | 'healthy'
+  | 'heartbeat-stale-but-media-alive'
+  | 'heartbeat-stale-but-control-alive'
+  | 'suspect'
+  | 'reconnect-required';
+
+type RootPeerLivenessRecord = {
+  currentRoot: string;
+  lastHeartbeatAt: number;
+  lastDecodedMediaAt: number;
+  lastVerifiedControlAt: number;
+  lastVerifiedKeyAt: number;
+  lastSpeakerActivityAt: number;
+  lastAnyRootEvidenceAt: number;
+};
+
+function buildEmptyRootPeerLivenessRecord(): RootPeerLivenessRecord {
+  return {
+    currentRoot: '',
+    lastHeartbeatAt: 0,
+    lastDecodedMediaAt: 0,
+    lastVerifiedControlAt: 0,
+    lastVerifiedKeyAt: 0,
+    lastSpeakerActivityAt: 0,
+    lastAnyRootEvidenceAt: 0,
+  };
+}
 const GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS = 1_000;
 const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
+const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
+  TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS + TOPOLOGY_HEARTBEAT_MS;
 const AUTHORITATIVE_KEY_RECOVERY_RETRY_MS = 1_500;
 const AUTHORITATIVE_KEY_RECOVERY_FAILURE_LOG_COOLDOWN_MS = 1_000;
 const WORKER_DECODE_FAILURE_RECOVERY_WINDOW_MS = 2_000;
@@ -331,6 +367,9 @@ export class GroupCallAudioEngineRuntime {
   private lastObservedTopologyEpoch = 0;
   private trustedRemoteRoot = '';
   private trustedRemoteRootLastSeenAt = 0;
+  private conflictingRemoteRoot = '';
+  private conflictingRemoteRootLastSeenAt = 0;
+  private authoritySettleUntilMs = 0;
   private topologyElectionDelayUntilMs = 0;
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
@@ -346,7 +385,7 @@ export class GroupCallAudioEngineRuntime {
   private shouldReplayRetainedKeysAfterNextTopology = false;
   private heldIncomingAudio: HeldIncomingAudioPayload[] = [];
   private lastAwaitingAuthoritativeKeyFailureLogAt = 0;
-  private rootHeartbeatLastSeenAt = 0;
+  private rootPeerLiveness = buildEmptyRootPeerLivenessRecord();
   private workerDecodeFailureWindowStartedAt = 0;
   private workerDecodeFailureCount = 0;
   private workerDecodeFailureRecoveryLastAt = 0;
@@ -693,6 +732,7 @@ export class GroupCallAudioEngineRuntime {
     const myAddress = this.userInfo?.address ?? '';
     const role = topology ? computeGroupCallRole(myAddress, topology) : 'listener';
     const receiveEngine = this.receiveEngine.getDiagnosticsSnapshot();
+    const rootPeerLiveness = this.getRootPeerLivenessSnapshot();
     const decodePaths = [...new Set(receiveEngine.playouts.map((playout) => playout.decodePath))];
     const sharedRingEnabled = receiveEngine.playouts.some(
       (playout) => playout.sharedRingEnabled
@@ -736,6 +776,19 @@ export class GroupCallAudioEngineRuntime {
             })),
           }
         : null,
+      rootPeerLiveness,
+      rootAuthorityState: {
+        trustedRemoteRoot: this.trustedRemoteRoot || null,
+        trustedRemoteRootLastSeenAtMs: this.trustedRemoteRootLastSeenAt,
+        conflictingRemoteRoot:
+          this.getConflictingRemoteRootForAuthorityWait() ?? null,
+        conflictingRemoteRootLastSeenAtMs: this.conflictingRemoteRootLastSeenAt,
+        authoritySettleUntilMs: this.authoritySettleUntilMs,
+        authoritySettleRemainingMs:
+          this.authoritySettleUntilMs > 0
+            ? Math.max(0, this.authoritySettleUntilMs - Date.now())
+            : 0,
+      },
       receiveEngine,
       decryptPool: this.decryptPool?.stats() ?? {
         enabled: false,
@@ -1062,9 +1115,8 @@ export class GroupCallAudioEngineRuntime {
     this.mediaSessionGeneration = 1;
     this.topology = null;
     this.lastObservedTopologyEpoch = 0;
-    this.trustedRemoteRoot = '';
-    this.trustedRemoteRootLastSeenAt = 0;
-    this.rootHeartbeatLastSeenAt = 0;
+    this.resetRootAuthorityTracking();
+    this.resetRootPeerLiveness();
     this.topologyElectionDelayUntilMs = 0;
     this.memberGateGroupId =
       options?.memberGateGroupId != null &&
@@ -1274,9 +1326,8 @@ export class GroupCallAudioEngineRuntime {
     this.mediaSessionGeneration = 1;
     this.topology = null;
     this.lastObservedTopologyEpoch = 0;
-    this.trustedRemoteRoot = '';
-    this.trustedRemoteRootLastSeenAt = 0;
-    this.rootHeartbeatLastSeenAt = 0;
+    this.resetRootAuthorityTracking();
+    this.resetRootPeerLiveness();
     this.topologyElectionDelayUntilMs = 0;
     this.seq = 0;
     this.shouldReplayRetainedKeysAfterNextTopology = false;
@@ -1322,10 +1373,36 @@ export class GroupCallAudioEngineRuntime {
         | null
         | undefined;
       if (heartbeat?.roomId !== this.snapshot.roomId) return;
-      this.noteRootLiveness(
-        heartbeat?.rootForwarder,
-        heartbeat?.lastSeen ?? Date.now()
+      const seenAtMs =
+        typeof heartbeat?.lastSeen === 'number' && Number.isFinite(heartbeat.lastSeen)
+          ? heartbeat.lastSeen
+          : Date.now();
+      const rootForwarder = heartbeat?.rootForwarder?.trim() ?? '';
+      const myAddress = this.userInfo?.address?.trim() ?? '';
+      const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
+      const participantSet = new Set(
+        this.snapshot.participants
+          .map((participant) => participant.address?.trim() ?? '')
+          .filter(Boolean)
       );
+      if (
+        rootForwarder &&
+        rootForwarder !== myAddress &&
+        participantSet.has(rootForwarder)
+      ) {
+        if (!currentRoot || currentRoot === rootForwarder) {
+          this.updateTrustedRemoteRoot(rootForwarder, seenAtMs);
+          this.clearConflictingRemoteRootIfMatches(rootForwarder);
+        } else {
+          this.noteConflictingRemoteRoot(rootForwarder, seenAtMs, 'heartbeat');
+        }
+      } else if (this.trustedRemoteRoot) {
+        this.trustedRemoteRootLastSeenAt = Math.max(
+          this.trustedRemoteRootLastSeenAt,
+          seenAtMs
+        );
+      }
+      this.noteRootHeartbeat(rootForwarder, seenAtMs);
       return;
     }
     if (event === 'gcall:participant-joined' || event === 'gcall:participant-left') {
@@ -1337,6 +1414,14 @@ export class GroupCallAudioEngineRuntime {
             this.activeSpeakerLastSeenAt.delete(leavingAddress);
             this.refreshActiveSpeakerState();
             await this.receiveEngine.removeSource(leavingAddress);
+            if ((this.topology?.rootForwarder?.trim() ?? '') === leavingAddress.trim()) {
+              if (this.trustedRemoteRoot === leavingAddress.trim()) {
+                this.clearTrustedRemoteRootIfMatches(leavingAddress);
+              }
+              this.resetRootPeerLiveness();
+            } else if (this.conflictingRemoteRoot === leavingAddress.trim()) {
+              this.clearConflictingRemoteRootIfMatches(leavingAddress);
+            }
           }
           this.removeParticipantFromRuntimeEvent(leavingAddress);
         } else {
@@ -1371,9 +1456,6 @@ export class GroupCallAudioEngineRuntime {
         verified: keyP?.verified === true,
         keyMessageVersion: keyP?.keyMessageVersion,
       });
-      if (keyP?.verified === true) {
-        this.noteRootLiveness(keyP.fromAddress, Date.now());
-      }
       await this.handleIncomingRoomKey(keyP);
       return;
     }
@@ -1578,6 +1660,16 @@ export class GroupCallAudioEngineRuntime {
       typeof (window as Window & { electronAPI?: { gcallProxyDecryptBoxWithMyKey?: unknown } })
         .electronAPI?.gcallProxyDecryptBoxWithMyKey === 'function';
     if (!trustedSender) {
+      const myAddress = this.userInfo?.address?.trim() ?? '';
+      const fromAddress = payload.fromAddress?.trim() ?? '';
+      if (
+        fromAddress &&
+        fromAddress !== myAddress &&
+        fromAddress !== currentRoot &&
+        senderInRoster
+      ) {
+        this.noteConflictingRemoteRoot(fromAddress, Date.now(), 'verified-key');
+      }
       traceGcallAudioSurface('pipeline: gcall:key dropped (untrusted sender for topology)', {
         from: payload.fromAddress,
         currentRoot: currentRoot || null,
@@ -1622,6 +1714,7 @@ export class GroupCallAudioEngineRuntime {
       });
       return;
     }
+    this.noteRootVerifiedKey(payload.fromAddress, Date.now());
     this.roomKey = roomKey;
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
@@ -1765,14 +1858,19 @@ export class GroupCallAudioEngineRuntime {
         ...this.snapshot,
         myRole: computeGroupCallRole(myAddress, this.topology),
       };
-      this.updateTrustedRemoteRoot(
-        bootstrapTopology.rootForwarder,
-        bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs
-      );
-      this.noteRootLiveness(
-        bootstrapTopology.rootForwarder,
-        bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs
-      );
+      if (bootstrapTopology.rootForwarder.trim() === myAddress) {
+        this.resetRootAuthorityTracking();
+        this.resetRootPeerLiveness();
+      } else {
+        this.updateTrustedRemoteRoot(
+          bootstrapTopology.rootForwarder,
+          bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs
+        );
+        this.noteRootVerifiedControl(
+          bootstrapTopology.rootForwarder,
+          bootstrapTopology.lastSeen ?? bootstrapUpdatedAtMs
+        );
+      }
       this.topologyElectionDelayUntilMs = 0;
       this.lastObservedTopologyEpoch = Math.max(
         this.lastObservedTopologyEpoch,
@@ -1986,6 +2084,25 @@ export class GroupCallAudioEngineRuntime {
     participantSet.add(myAddress);
     const addresses = [...participantSet];
     if (addresses.length === 0) return;
+    const nowMs = Date.now();
+    const conflictingRoot = this.getConflictingRemoteRootForAuthorityWait(
+      nowMs,
+      addresses
+    );
+    if (conflictingRoot && nowMs < this.authoritySettleUntilMs) {
+      this.topologyElectionDelayUntilMs = Math.max(
+        this.topologyElectionDelayUntilMs,
+        this.authoritySettleUntilMs
+      );
+      this.recordDiagEvent('local-topology-election-deferred-authority-conflict', {
+        roomId,
+        reason,
+        conflictingRemoteRoot: conflictingRoot,
+        authoritySettleUntilMs: this.authoritySettleUntilMs,
+      });
+      this.scheduleTopologyElection('authority-conflict');
+      return;
+    }
     const sorted = await this.computeElectionOrder(addresses, roomId);
     if (generation !== this.topologyAsyncGeneration || roomId !== this.snapshot.roomId) {
       return;
@@ -1994,7 +2111,7 @@ export class GroupCallAudioEngineRuntime {
       currentRoot: this.topology?.rootForwarder,
       trustedRemoteRoot: this.trustedRemoteRoot,
       trustedRemoteRootLastSeenAtMs: this.trustedRemoteRootLastSeenAt,
-      nowMs: Date.now(),
+      nowMs,
       staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
       rosterAddresses: addresses,
     });
@@ -2006,7 +2123,7 @@ export class GroupCallAudioEngineRuntime {
     const topology = normalizeGroupCallTopology({
       ...buildTopologyWithTrustedRoot(sorted, topologyEpoch, trustedElectionRoot),
       roomId,
-      lastSeen: Date.now(),
+      lastSeen: nowMs,
     });
     traceGcallAudioSurface('pipeline: local topology election result', {
       roomId,
@@ -2255,16 +2372,192 @@ export class GroupCallAudioEngineRuntime {
     }, TOPOLOGY_HEARTBEAT_MS);
   }
 
-  private noteRootLiveness(
+  private resetRootPeerLiveness(currentRoot = ''): void {
+    this.rootPeerLiveness = {
+      ...buildEmptyRootPeerLivenessRecord(),
+      currentRoot: currentRoot.trim(),
+    };
+  }
+
+  private markRootPeerEvidence(
     addressValue: string | null | undefined,
-    seenAtMs: number
+    seenAtMs: number,
+    kind: 'heartbeat' | 'decoded-media' | 'verified-control' | 'verified-key' | 'speaker'
   ): void {
     const address = addressValue?.trim() ?? '';
     const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
     if (!address || !currentRoot || address !== currentRoot) return;
-    this.rootHeartbeatLastSeenAt =
+    const effectiveSeenAt =
       seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+    if (this.rootPeerLiveness.currentRoot !== currentRoot) {
+      this.resetRootPeerLiveness(currentRoot);
+    }
+    this.rootPeerLiveness.currentRoot = currentRoot;
+    this.rootPeerLiveness.lastAnyRootEvidenceAt = Math.max(
+      this.rootPeerLiveness.lastAnyRootEvidenceAt,
+      effectiveSeenAt
+    );
+    switch (kind) {
+      case 'heartbeat':
+        this.rootPeerLiveness.lastHeartbeatAt = Math.max(
+          this.rootPeerLiveness.lastHeartbeatAt,
+          effectiveSeenAt
+        );
+        break;
+      case 'decoded-media':
+        this.rootPeerLiveness.lastDecodedMediaAt = Math.max(
+          this.rootPeerLiveness.lastDecodedMediaAt,
+          effectiveSeenAt
+        );
+        break;
+      case 'verified-control':
+        this.rootPeerLiveness.lastVerifiedControlAt = Math.max(
+          this.rootPeerLiveness.lastVerifiedControlAt,
+          effectiveSeenAt
+        );
+        break;
+      case 'verified-key':
+        this.rootPeerLiveness.lastVerifiedKeyAt = Math.max(
+          this.rootPeerLiveness.lastVerifiedKeyAt,
+          effectiveSeenAt
+        );
+        break;
+      case 'speaker':
+        this.rootPeerLiveness.lastSpeakerActivityAt = Math.max(
+          this.rootPeerLiveness.lastSpeakerActivityAt,
+          effectiveSeenAt
+        );
+        break;
+    }
+  }
+
+  private noteRootHeartbeat(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    this.markRootPeerEvidence(addressValue, seenAtMs, 'heartbeat');
     this.scheduleRootFailoverWatch();
+  }
+
+  private noteRootVerifiedControl(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    this.markRootPeerEvidence(addressValue, seenAtMs, 'verified-control');
+    this.scheduleRootFailoverWatch();
+  }
+
+  private noteRootVerifiedKey(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    this.markRootPeerEvidence(addressValue, seenAtMs, 'verified-key');
+    this.scheduleRootFailoverWatch();
+  }
+
+  private noteRootDecodedMedia(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    this.markRootPeerEvidence(addressValue, seenAtMs, 'decoded-media');
+    this.scheduleRootFailoverWatch();
+  }
+
+  private noteRootSpeakerActivity(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    this.markRootPeerEvidence(addressValue, seenAtMs, 'speaker');
+    this.scheduleRootFailoverWatch();
+  }
+
+  private getRootPeerLivenessSnapshot(nowMs = Date.now()): {
+    currentRoot: string;
+    lastHeartbeatAt: number;
+    lastDecodedMediaAt: number;
+    lastVerifiedControlAt: number;
+    lastVerifiedKeyAt: number;
+    lastSpeakerActivityAt: number;
+    lastAnyRootEvidenceAt: number;
+    heartbeatSilentMs: number | null;
+    state: RootPeerLivenessState;
+    rootPeerRequiresReconnect: boolean;
+  } {
+    const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
+    const record =
+      this.rootPeerLiveness.currentRoot === currentRoot
+        ? this.rootPeerLiveness
+        : buildEmptyRootPeerLivenessRecord();
+    const heartbeatSilentMs =
+      record.lastHeartbeatAt > 0 ? Math.max(0, nowMs - record.lastHeartbeatAt) : null;
+    const heartbeatHealthy =
+      heartbeatSilentMs !== null &&
+      heartbeatSilentMs < ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
+    const recentMediaAlive =
+      (record.lastDecodedMediaAt > 0 &&
+        nowMs - record.lastDecodedMediaAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS) ||
+      (record.lastSpeakerActivityAt > 0 &&
+        nowMs - record.lastSpeakerActivityAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS);
+    const recentControlAlive =
+      (record.lastVerifiedControlAt > 0 &&
+        nowMs - record.lastVerifiedControlAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS) ||
+      (record.lastVerifiedKeyAt > 0 &&
+        nowMs - record.lastVerifiedKeyAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS);
+    const recentAnyAlive =
+      record.lastAnyRootEvidenceAt > 0 &&
+      nowMs - record.lastAnyRootEvidenceAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS;
+
+    let state: RootPeerLivenessState = 'unknown';
+    if (!currentRoot) {
+      state = 'unknown';
+    } else if (heartbeatHealthy) {
+      state = 'healthy';
+    } else if (recentMediaAlive) {
+      state = 'heartbeat-stale-but-media-alive';
+    } else if (recentControlAlive) {
+      state = 'heartbeat-stale-but-control-alive';
+    } else if (recentAnyAlive) {
+      state = 'suspect';
+    } else if (heartbeatSilentMs !== null || record.lastAnyRootEvidenceAt > 0) {
+      state = 'reconnect-required';
+    }
+
+    return {
+      currentRoot,
+      lastHeartbeatAt: record.lastHeartbeatAt,
+      lastDecodedMediaAt: record.lastDecodedMediaAt,
+      lastVerifiedControlAt: record.lastVerifiedControlAt,
+      lastVerifiedKeyAt: record.lastVerifiedKeyAt,
+      lastSpeakerActivityAt: record.lastSpeakerActivityAt,
+      lastAnyRootEvidenceAt: record.lastAnyRootEvidenceAt,
+      heartbeatSilentMs,
+      state,
+      rootPeerRequiresReconnect: state === 'reconnect-required',
+    };
+  }
+
+  private getRootFailoverDeadlineAnchorMs(topology: GroupCallTopology): number {
+    const currentRoot = topology.rootForwarder?.trim() ?? '';
+    if (!currentRoot) return Date.now();
+    if (this.rootPeerLiveness.currentRoot !== currentRoot) {
+      return typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
+        ? topology.lastSeen
+        : Date.now();
+    }
+    const candidates = [
+      this.rootPeerLiveness.lastHeartbeatAt,
+      this.rootPeerLiveness.lastVerifiedControlAt,
+      this.rootPeerLiveness.lastVerifiedKeyAt,
+      this.rootPeerLiveness.lastDecodedMediaAt,
+      this.rootPeerLiveness.lastSpeakerActivityAt,
+      this.rootPeerLiveness.lastAnyRootEvidenceAt,
+    ].filter((value) => value > 0 && Number.isFinite(value));
+    if (candidates.length > 0) {
+      return Math.max(...candidates);
+    }
+    return typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
+      ? topology.lastSeen
+      : Date.now();
   }
 
   private scheduleRootFailoverWatch(): void {
@@ -2275,15 +2568,16 @@ export class GroupCallAudioEngineRuntime {
     const currentRoot = topology.rootForwarder?.trim() ?? '';
     if (!currentRoot || currentRoot === myAddress) return;
     if ((topology.standbyForwarder?.trim() ?? '') !== myAddress) return;
-    const lastSeenAt =
-      this.rootHeartbeatLastSeenAt > 0
-        ? this.rootHeartbeatLastSeenAt
-        : typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
-          ? topology.lastSeen
-          : Date.now();
+    if (this.rootPeerLiveness.currentRoot !== currentRoot) {
+      this.resetRootPeerLiveness(currentRoot);
+    }
+    const lastSeenAt = this.getRootFailoverDeadlineAnchorMs(topology);
+    const authorityConflictDelayMs =
+      this.authoritySettleUntilMs > Date.now() ? this.authoritySettleUntilMs : 0;
     const delayMs = Math.max(
       250,
-      lastSeenAt + ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS - Date.now()
+      Math.max(lastSeenAt + ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS, authorityConflictDelayMs) -
+        Date.now()
     );
     this.rootFailoverTimer = setTimeout(() => {
       this.rootFailoverTimer = null;
@@ -2299,22 +2593,42 @@ export class GroupCallAudioEngineRuntime {
     const currentRoot = topology.rootForwarder?.trim() ?? '';
     const standby = topology.standbyForwarder?.trim() ?? '';
     if (!currentRoot || currentRoot === myAddress || standby !== myAddress) return;
-    const lastSeenAt =
-      this.rootHeartbeatLastSeenAt > 0
-        ? this.rootHeartbeatLastSeenAt
-        : typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
-          ? topology.lastSeen
-          : 0;
+    if (this.rootPeerLiveness.currentRoot !== currentRoot) {
+      this.resetRootPeerLiveness(currentRoot);
+    }
+    const lastSeenAt = this.getRootFailoverDeadlineAnchorMs(topology);
     const nowMs = Date.now();
     const heartbeatSilentMs =
       lastSeenAt > 0 ? Math.max(0, nowMs - lastSeenAt) : ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
+    const conflictingRoot = this.getConflictingRemoteRootForAuthorityWait(nowMs);
+    if (conflictingRoot && nowMs < this.authoritySettleUntilMs) {
+      this.recordDiagEvent('root-heartbeat-timeout-suppressed-authority-conflict', {
+        roomId,
+        currentRoot,
+        conflictingRemoteRoot: conflictingRoot,
+        heartbeatSilentMs,
+        authoritySettleUntilMs: this.authoritySettleUntilMs,
+      });
+      this.scheduleRootFailoverWatch();
+      return;
+    }
+    const rootLiveness = this.getRootPeerLivenessSnapshot(nowMs);
+    const rootPeerRequiresReconnect = rootLiveness.rootPeerRequiresReconnect;
     if (
       !shouldPromoteStandbyRootAfterHeartbeatTimeout({
         heartbeatSilentMs,
         heartbeatTimeoutMs: ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS,
-        rootPeerRequiresReconnect: true,
+        rootPeerRequiresReconnect,
       })
     ) {
+      if (!rootPeerRequiresReconnect) {
+        this.recordDiagEvent('root-heartbeat-timeout-suppressed-recent-root-activity', {
+          roomId,
+          currentRoot,
+          heartbeatSilentMs,
+          rootLivenessState: rootLiveness.state,
+        });
+      }
       this.scheduleRootFailoverWatch();
       return;
     }
@@ -2348,7 +2662,6 @@ export class GroupCallAudioEngineRuntime {
       topologyEpoch,
       heartbeatSilentMs,
     });
-    this.removeParticipantFromRuntimeEvent(currentRoot);
     const applied = await this.applyTopology(failoverTopology, 'local-election');
     if (applied) {
       await this.receiveEngine.configure({
@@ -2472,6 +2785,11 @@ export class GroupCallAudioEngineRuntime {
         this.electionDigestCache
       );
       if (!winner.acceptIncoming) {
+        this.noteConflictingRemoteRoot(
+          normalized.rootForwarder,
+          normalized.lastSeen ?? Date.now(),
+          'same-epoch-topology'
+        );
         traceGcallAudioSurface('pipeline: topology rejected by same-epoch authority', {
           roomId: normalized.roomId,
           source,
@@ -2493,12 +2811,11 @@ export class GroupCallAudioEngineRuntime {
         normalized.rootForwarder,
         normalized.lastSeen ?? Date.now()
       );
-      this.noteRootLiveness(normalized.rootForwarder, normalized.lastSeen ?? Date.now());
+      this.clearConflictingRemoteRootIfMatches(normalized.rootForwarder);
       this.topologyElectionDelayUntilMs = 0;
-    } else if (source === 'local-election') {
-      this.trustedRemoteRoot = '';
-      this.trustedRemoteRootLastSeenAt = 0;
-      this.rootHeartbeatLastSeenAt = 0;
+    } else if (normalized.rootForwarder?.trim() === myAddress || source === 'local-election') {
+      this.resetRootAuthorityTracking();
+      this.resetRootPeerLiveness();
       this.topologyElectionDelayUntilMs = 0;
     }
     if (this.isSameTopologyStructure(current, normalized)) {
@@ -2506,16 +2823,46 @@ export class GroupCallAudioEngineRuntime {
         ...normalized,
         roomId: this.snapshot.roomId,
       };
+      if (this.topology.rootForwarder?.trim() && this.topology.rootForwarder !== myAddress) {
+        this.noteRootHeartbeat(
+          this.topology.rootForwarder,
+          this.topology.lastSeen ?? Date.now()
+        );
+        this.noteRootVerifiedControl(
+          this.topology.rootForwarder,
+          this.topology.lastSeen ?? Date.now()
+        );
+      }
       await this.maybeReplayRetainedKeysAfterTopology(this.topology);
       await this.syncTopologyHeartbeat();
       return false;
     }
 
     const previousRoot = current?.rootForwarder?.trim() ?? '';
+    const topologyTransitionChanged =
+      Boolean(current) &&
+      (current?.rootForwarder !== normalized.rootForwarder ||
+        current?.topologyEpoch !== normalized.topologyEpoch);
     this.topology = {
       ...normalized,
       roomId: this.snapshot.roomId,
     };
+    if (topologyTransitionChanged) {
+      this.topologyElectionDelayUntilMs = Math.max(
+        this.topologyElectionDelayUntilMs,
+        Date.now() + OCCUPIED_JOIN_AUTHORITY_WAIT_MS
+      );
+    }
+    if (this.topology.rootForwarder?.trim() && this.topology.rootForwarder !== myAddress) {
+      this.noteRootHeartbeat(
+        this.topology.rootForwarder,
+        this.topology.lastSeen ?? Date.now()
+      );
+      this.noteRootVerifiedControl(
+        this.topology.rootForwarder,
+        this.topology.lastSeen ?? Date.now()
+      );
+    }
     this.snapshot = {
       ...this.snapshot,
       participants: this.mergeParticipantsFromTopology(
@@ -2552,13 +2899,99 @@ export class GroupCallAudioEngineRuntime {
     const nextRoot = rootForwarder.trim();
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!nextRoot || nextRoot === myAddress) {
-      this.trustedRemoteRoot = '';
-      this.trustedRemoteRootLastSeenAt = 0;
+      this.resetRootAuthorityTracking();
       return;
     }
     this.trustedRemoteRoot = nextRoot;
     this.trustedRemoteRootLastSeenAt =
       seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+  }
+
+  private resetRootAuthorityTracking(): void {
+    this.trustedRemoteRoot = '';
+    this.trustedRemoteRootLastSeenAt = 0;
+    this.conflictingRemoteRoot = '';
+    this.conflictingRemoteRootLastSeenAt = 0;
+    this.authoritySettleUntilMs = 0;
+  }
+
+  private clearTrustedRemoteRootIfMatches(rootForwarder: string | null | undefined): void {
+    const root = rootForwarder?.trim() ?? '';
+    if (!root || this.trustedRemoteRoot !== root) return;
+    this.trustedRemoteRoot = '';
+    this.trustedRemoteRootLastSeenAt = 0;
+  }
+
+  private clearConflictingRemoteRootIfMatches(rootForwarder: string | null | undefined): void {
+    const root = rootForwarder?.trim() ?? '';
+    if (!root || this.conflictingRemoteRoot !== root) return;
+    this.conflictingRemoteRoot = '';
+    this.conflictingRemoteRootLastSeenAt = 0;
+    this.authoritySettleUntilMs = 0;
+    this.topologyElectionDelayUntilMs = Math.min(
+      this.topologyElectionDelayUntilMs,
+      Date.now()
+    );
+    this.scheduleRootFailoverWatch();
+  }
+
+  private noteConflictingRemoteRoot(
+    rootForwarder: string | null | undefined,
+    seenAtMs: number,
+    reason: 'heartbeat' | 'same-epoch-topology' | 'verified-key'
+  ): void {
+    const nextRoot = rootForwarder?.trim() ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
+    if (!nextRoot || nextRoot === myAddress || nextRoot === currentRoot) return;
+    const effectiveSeenAt =
+      seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+    this.conflictingRemoteRoot = nextRoot;
+    this.conflictingRemoteRootLastSeenAt = Math.max(
+      this.conflictingRemoteRootLastSeenAt,
+      effectiveSeenAt
+    );
+    this.authoritySettleUntilMs = Math.max(
+      this.authoritySettleUntilMs,
+      effectiveSeenAt + CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS
+    );
+    this.topologyElectionDelayUntilMs = Math.max(
+      this.topologyElectionDelayUntilMs,
+      this.authoritySettleUntilMs
+    );
+    this.recordDiagEvent('conflicting-remote-root-observed', {
+      roomId: this.snapshot.roomId,
+      currentRoot,
+      conflictingRemoteRoot: nextRoot,
+      reason,
+      authoritySettleUntilMs: this.authoritySettleUntilMs,
+    });
+    this.scheduleTopologyElection('authority-conflict');
+    this.scheduleRootFailoverWatch();
+  }
+
+  private getConflictingRemoteRootForAuthorityWait(
+    nowMs = Date.now(),
+    rosterAddresses?: Iterable<string>
+  ): string | null {
+    const addresses =
+      rosterAddresses ??
+      new Set<string>([
+        ...this.snapshot.participants
+          .map((participant) => participant.address?.trim() ?? '')
+          .filter(Boolean),
+        this.userInfo?.address?.trim() ?? '',
+        this.topology?.rootForwarder?.trim() ?? '',
+        this.topology?.standbyForwarder?.trim() ?? '',
+      ]);
+    return getConflictingRootForAuthorityWait({
+      currentRoot: this.topology?.rootForwarder,
+      conflictingRemoteRoot: this.conflictingRemoteRoot,
+      conflictingRemoteRootLastSeenAtMs: this.conflictingRemoteRootLastSeenAt,
+      nowMs,
+      staleAfterMs: TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS,
+      rosterAddresses: addresses,
+    });
   }
 
   private async syncQortalGroupReticulumTargets(
@@ -2646,9 +3079,10 @@ export class GroupCallAudioEngineRuntime {
     for (const packet of packets) {
       if (packet.sourceAddr) {
         this.upsertParticipantFromRuntimeEvent(packet.sourceAddr);
-        this.noteRootLiveness(packet.sourceAddr, now);
+        this.noteRootDecodedMedia(packet.sourceAddr, now);
       }
       if (!packet.vad || !packet.sourceAddr) continue;
+      this.noteRootSpeakerActivity(packet.sourceAddr, now);
       this.activeSpeakerLastSeenAt.set(packet.sourceAddr, now);
       sawVad = true;
     }
