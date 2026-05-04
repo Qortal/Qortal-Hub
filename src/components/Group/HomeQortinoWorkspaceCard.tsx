@@ -1116,13 +1116,9 @@ const QortinoMascot = ({
             >
               <Box
                 sx={{
-                  background: `radial-gradient(ellipse at center, ${alpha(
-                    '#02050B',
-                    isDarkMode ? 0.56 : 0.3
-                  )} 0%, ${alpha('#02050B', isDarkMode ? 0.3 : 0.16)} 48%, ${alpha(
-                    '#02050B',
-                    0
-                  )} 78%)`,
+                  background: isDarkMode
+                    ? `radial-gradient(ellipse at center, ${alpha('#02050B', 0.56)} 0%, ${alpha('#02050B', 0.3)} 48%, ${alpha('#02050B', 0)} 78%)`
+                    : `radial-gradient(ellipse at center, ${alpha('#2A3F5C', 0.42)} 0%, ${alpha('#2A3F5C', 0.14)} 52%, ${alpha('#2A3F5C', 0)} 78%)`,
                   bottom: '4px',
                   filter: 'blur(9px)',
                   height: '20px',
@@ -1134,10 +1130,9 @@ const QortinoMascot = ({
               />
               <Box
                 sx={{
-                  background: `radial-gradient(ellipse at center, ${alpha(
-                    '#010307',
-                    isDarkMode ? 0.5 : 0.28
-                  )} 0%, ${alpha('#010307', 0)} 72%)`,
+                  background: isDarkMode
+                    ? `radial-gradient(ellipse at center, ${alpha('#010307', 0.5)} 0%, ${alpha('#010307', 0)} 72%)`
+                    : `radial-gradient(ellipse at center, ${alpha('#344B6B', 0.34)} 0%, ${alpha('#344B6B', 0)} 72%)`,
                   bottom: '7px',
                   filter: 'blur(4px)',
                   height: '10px',
@@ -1151,32 +1146,26 @@ const QortinoMascot = ({
                 sx={{
                   background: `radial-gradient(circle, ${alpha(
                     '#0A1220',
-                    0.22
+                    isDarkMode ? 0.22 : 0.09
                   )} 0%, ${alpha('#0A1220', 0)} 72%)`,
                   filter: 'blur(10px)',
                   inset: 0,
-                  opacity: 0.44,
+                  opacity: isDarkMode ? 0.44 : 0.28,
                   position: 'absolute',
                 }}
               />
               <Box
                 sx={{
-                  background: `radial-gradient(circle at 34% 22%, ${alpha(
-                    '#A0B8DD',
-                    isDarkMode ? 0.14 : 0.1
-                  )} 0%, ${alpha('#6B88B5', isDarkMode ? 0.08 : 0.05)} 18%, ${alpha(
-                    '#0D1524',
-                    0
-                  )} 42%), linear-gradient(180deg, ${alpha('#232C3A', 0.98)} 0%, ${alpha(
-                    '#161B24',
-                    0.98
-                  )} 58%, ${alpha('#10141C', 1)} 100%)`,
-                  border: `1px solid ${alpha('#B3D0FF', isDarkMode ? 0.16 : 0.12)}`,
+                  background: isDarkMode
+                    ? `radial-gradient(circle at 34% 22%, ${alpha('#A0B8DD', 0.14)} 0%, ${alpha('#6B88B5', 0.08)} 18%, ${alpha('#0D1524', 0)} 42%), linear-gradient(180deg, ${alpha('#232C3A', 0.98)} 0%, ${alpha('#161B24', 0.98)} 58%, ${alpha('#10141C', 1)} 100%)`
+                    : `radial-gradient(circle at 32% 20%, ${alpha('#E8F0FF', 0.7)} 0%, ${alpha('#B8CDE8', 0.35)} 18%, ${alpha('#7E93B3', 0)} 44%), linear-gradient(180deg, ${alpha('#5E7390', 0.98)} 0%, ${alpha('#4B5F7A', 0.99)} 52%, ${alpha('#3F526B', 1)} 100%)`,
+                  border: isDarkMode
+                    ? `1px solid ${alpha('#B3D0FF', 0.16)}`
+                    : `1px solid ${alpha('#8FA9CC', 0.45)}`,
                   borderRadius: '46% 46% 42% 42%',
-                  boxShadow: `0 18px 32px ${alpha('#000', 0.3)}, inset 0 1px 0 ${alpha(
-                    '#fff',
-                    0.03
-                  )}, inset 0 -1px 0 ${alpha('#000', 0.22)}`,
+                  boxShadow: isDarkMode
+                    ? `0 18px 32px ${alpha('#000', 0.3)}, inset 0 1px 0 ${alpha('#fff', 0.03)}, inset 0 -1px 0 ${alpha('#000', 0.22)}`
+                    : `0 16px 28px ${alpha('#1E3248', 0.2)}, inset 0 1px 0 ${alpha('#fff', 0.22)}, inset 0 -1px 0 ${alpha('#1E2A3D', 0.14)}`,
                   inset: 0,
                   position: 'absolute',
                 }}
@@ -1196,13 +1185,16 @@ const QortinoMascot = ({
               <Box
                 sx={{
                   backdropFilter: 'blur(10px)',
-                  background: `linear-gradient(180deg, ${alpha('#121A26', 0.7)} 0%, ${alpha(
-                    '#0B1119',
-                    0.84
-                  )} 100%)`,
-                  border: `1px solid ${alpha('#B3D0FF', 0.12)}`,
+                  background: isDarkMode
+                    ? `linear-gradient(180deg, ${alpha('#121A26', 0.7)} 0%, ${alpha('#0B1119', 0.84)} 100%)`
+                    : `linear-gradient(180deg, ${alpha('#2F3F56', 0.9)} 0%, ${alpha('#1E2B3F', 0.94)} 100%)`,
+                  border: isDarkMode
+                    ? `1px solid ${alpha('#B3D0FF', 0.12)}`
+                    : `1px solid ${alpha('#C8DCF8', 0.42)}`,
                   borderRadius: '28px',
-                  boxShadow: `inset 0 1px 0 ${alpha('#fff', 0.06)}`,
+                  boxShadow: isDarkMode
+                    ? `inset 0 1px 0 ${alpha('#fff', 0.06)}`
+                    : `inset 0 1px 0 ${alpha('#fff', 0.14)}`,
                   inset: 0,
                   position: 'absolute',
                 }}
@@ -1214,7 +1206,7 @@ const QortinoMascot = ({
                     : 'qortinoBlink 6.2s ease-in-out infinite',
                   bgcolor: '#DDEBFF',
                   borderRadius: '999px',
-                  boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
+                  boxShadow: `0 0 12px ${alpha('#7FB5FF', isDarkMode ? 0.2 : 0.34)}`,
                   height: eyeStyle.height,
                   left: faceLeftEyeLeft,
                   position: 'absolute',
@@ -1233,7 +1225,7 @@ const QortinoMascot = ({
                     : 'qortinoBlink 6.2s ease-in-out infinite 120ms',
                   bgcolor: '#DDEBFF',
                   borderRadius: '999px',
-                  boxShadow: `0 0 12px ${alpha('#7FB5FF', 0.2)}`,
+                  boxShadow: `0 0 12px ${alpha('#7FB5FF', isDarkMode ? 0.2 : 0.34)}`,
                   height: eyeStyle.height,
                   left: faceRightEyeLeft,
                   position: 'absolute',
@@ -1247,7 +1239,7 @@ const QortinoMascot = ({
               />
               <Box
                 sx={{
-                  borderBottom: `2px solid ${alpha('#DDEBFF', 0.78)}`,
+                  borderBottom: `2px solid ${alpha('#DDEBFF', isDarkMode ? 0.78 : 0.9)}`,
                   borderRadius: '0 0 999px 999px',
                   height: '8px',
                   left: faceMouthLeft,
@@ -1277,7 +1269,7 @@ const QortinoMascot = ({
               >
                 <Box
                   sx={{
-                    background: `linear-gradient(180deg, ${alpha('#D2E3FF', 0.38)} 0%, ${alpha(
+                    background: `linear-gradient(180deg, ${alpha('#D2E3FF', isDarkMode ? 0.38 : 0.52)} 0%, ${alpha(
                       '#D2E3FF',
                       0
                     )} 100%)`,
@@ -1293,6 +1285,9 @@ const QortinoMascot = ({
                   size={antennaBubbleSize}
                   logoScale={lookDebug.logoScale}
                   sx={{
+                    filter: isDarkMode
+                      ? 'drop-shadow(0 4px 10px rgba(0, 0, 0, 0.18))'
+                      : 'drop-shadow(0 3px 10px rgba(46, 74, 108, 0.32))',
                     left: '2px',
                     position: 'absolute',
                     top: 0,

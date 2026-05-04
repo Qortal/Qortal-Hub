@@ -40,7 +40,8 @@
     "invalidKey": "clave API inválida",
     "failed_stop": "no se puede detener el Core",
     "failed_bootstrap": "no se puede hacer bootstrap",
-    "failed_delete": "no se puede eliminar la base de datos"
+    "failed_delete": "no se puede eliminar la base de datos",
+    "failed_bootstrap_or_clear": "no se puede hacer bootstrap, borrar datos de cadena ni iniciar Core"
   },
   "status": {
     "complete": "completo",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "¿estás seguro de que quieres detener el Core?",
     "bootstrap": "¿estás seguro de que quieres hacer bootstrap?",
-    "delete": "¿estás seguro de que quieres eliminar la base de datos?"
+    "delete": "¿estás seguro de que quieres eliminar la base de datos?",
+    "bootstrapOrClearChain": "Ejecuta el bootstrap por instantánea si Core está en ejecución localmente. Si no es posible o falla bootstrap, puede eliminarse la base de datos de cadena local y reiniciarse Core; los archivos del monedero no se tocan. ¿Continuar?"
+  },
+  "bootstrapChainHelp": {
+    "title": "Cadena bootstrap",
+    "body": "Una sola acción: bootstrap por instantánea cuando Core está arriba, o borrar la base de datos de cadena local y volver a iniciar Core cuando el bootstrap no es posible. El monedero se guarda por separado."
   },
   "stop": "detener Core",
   "bootstrap": "bootstrap",
@@ -89,6 +95,53 @@
   "more": "más opciones",
   "less": "menos opciones",
   "enableAuthWhenSyncing": "activar autenticación al sincronizar",
+  "coreSetupDialog": {
+    "title": "Configurar Qortal Core",
+    "introTitle": "Ejecuta tu propio nodo localmente.",
+    "introSubtitle": "Puedes usar un nodo público mientras Core arranca y se sincroniza.",
+    "publicNodeUnavailable": "Los nodos públicos no están disponibles ahora. Mantén esta pantalla abierta mientras el Core local arranca y se sincroniza.",
+    "steps": {
+      "downloadDone": "Core descargado",
+      "downloadActive": "Descargando Core",
+      "downloadIdle": "Descargar Core",
+      "runningDone": "Core en ejecución",
+      "runningActive": "Iniciando Core",
+      "runningIdle": "Iniciar Core"
+    },
+    "readyToDownload": "Listo para descargar",
+    "readyToStart": "Listo para iniciar",
+    "syncing": "Sincronizando",
+    "helpers": {
+      "downloadDone": "Los archivos de Core están instalados y listos.",
+      "downloadActive": "Descargando y preparando Qortal Core.",
+      "downloadIdle": "Descarga Qortal Core para ejecutar tu propio nodo.",
+      "runningDoneSyncing": "Core se está ejecutando y sincronizando la cadena de bloques.",
+      "runningDone": "Core se está ejecutando localmente.",
+      "runningWaiting": "Core arrancará y comenzará a sincronizarse en segundo plano.",
+      "runningBlocked": "Disponible después de descargar Core."
+    },
+    "nextStepPill": "Siguiente paso",
+    "locationTitle": "Ubicación de Core",
+    "locationCustom": "Qortal Core se ejecutará desde esta carpeta.",
+    "locationDefault": "Qortal Core usará la carpeta predeterminada de este sistema.",
+    "locationPathDefault": "Ubicación predeterminada de Qortal Core",
+    "change": "Cambiar",
+    "choose": "Elegir",
+    "clear": "Borrar",
+    "advancedTitle": "Avanzado",
+    "advancedSubtitle": "Herramientas y opciones avanzadas para Core.",
+    "maintenanceUnavailable": "Las herramientas de mantenimiento de Core no están disponibles mientras Core arranca o se sincroniza.",
+    "stopCoreTitle": "Detener Core",
+    "stopCoreBody": "Detiene el proceso local de Core.",
+    "stopButton": "Detener",
+    "cancel": "Cancelar",
+    "actionDownload": "Descargar Core",
+    "actionStart": "Iniciar Core",
+    "actionDone": "Hecho",
+    "confirmTitle": "Confirmar acción",
+    "folderCopied": "Carpeta de Core copiada",
+    "progressAriaLabel": "Progreso de {{label}}"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core no se ha iniciado completamente",
     "descNotReady": "Qortal Core aún no se ha iniciado por completo. Por favor, espera.",

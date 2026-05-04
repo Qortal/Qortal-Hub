@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useDropzone } from 'react-dropzone';
+import { useTranslation } from 'react-i18next';
 import EditIcon from '@mui/icons-material/Edit';
 import PersonIcon from '@mui/icons-material/Person';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
@@ -58,6 +59,7 @@ export const Wallets = ({
   onReady,
   onWalletUnlockStart,
 }: WalletsProps) => {
+  const { t } = useTranslation(['auth']);
   const [wallets, setWallets] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [seedValue, setSeedValue] = useState('');
@@ -244,17 +246,17 @@ export const Wallets = ({
         changeImportView('choice');
         setBackupImportHint(
           existsAlready
-            ? 'This account is already stored on this device.'
-            : 'Account imported successfully.'
+            ? t('auth:entry.seed_import_duplicate')
+            : t('auth:entry.seed_import_success')
         );
         if (!existsAlready) {
           setExtState('not-authenticated');
         }
       } else {
-        setSeedError('Unable to import this seedphrase.');
+        setSeedError(t('auth:entry.seed_import_error'));
       }
     } catch (error: any) {
-      setSeedError(error?.message || 'Unable to import this seedphrase.');
+      setSeedError(error?.message || t('auth:entry.seed_import_error'));
     } finally {
       setIsLoadingEncryptSeed(false);
     }
@@ -271,8 +273,10 @@ export const Wallets = ({
         try {
           const fileContents = await new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onabort = () => reject(new Error('File reading was aborted'));
-            reader.onerror = () => reject(new Error('File reading has failed'));
+            reader.onabort = () =>
+              reject(new Error(t('auth:entry.import_file_read_aborted')));
+            reader.onerror = () =>
+              reject(new Error(t('auth:entry.import_file_read_failed')));
             reader.onload = () => resolve(reader.result);
             reader.readAsText(file);
           });
@@ -310,10 +314,10 @@ export const Wallets = ({
 
       setBackupImportHint(
         uniqueNewWallets.length > 0
-          ? `${uniqueNewWallets.length} account${
-              uniqueNewWallets.length === 1 ? '' : 's'
-            } imported successfully.`
-          : 'These accounts are already stored on this device.'
+          ? t('auth:entry.import_backup_success', {
+              count: uniqueNewWallets.length,
+            })
+          : t('auth:entry.import_backup_duplicate')
       );
       changeImportView('choice');
       if (uniqueNewWallets.length > 0) {
@@ -377,7 +381,7 @@ export const Wallets = ({
           textAlign: 'center',
         }}
       >
-        No accounts found on this device.
+        {t('auth:entry.no_accounts')}
       </Typography>
     ) : (
       accountsList
@@ -396,16 +400,16 @@ export const Wallets = ({
       {importView === 'choice' && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <ChoiceRow
-            description="Import a saved Hub backup."
+            description={t('auth:entry.import_choice_backup_description')}
             icon={<DescriptionRoundedIcon sx={{ fontSize: 22 }} />}
             onClick={() => changeImportView('backup')}
-            title="Backup file"
+            title={t('auth:entry.import_choice_backup_title')}
           />
           <ChoiceRow
-            description="Restore using your seedphrase."
+            description={t('auth:entry.import_choice_seed_description')}
             icon={<VpnKeyRoundedIcon sx={{ fontSize: 22 }} />}
             onClick={() => changeImportView('seedphrase')}
-            title="Seedphrase"
+            title={t('auth:entry.import_choice_seed_title')}
           />
           {backupImportHint && (
             <Typography
@@ -448,7 +452,7 @@ export const Wallets = ({
           >
             <input {...getInputProps()} />
             <Typography sx={{ fontSize: '1rem', fontWeight: 700 }}>
-              Import from backup file
+              {t('auth:entry.import_backup_heading')}
             </Typography>
             <Typography
               sx={{
@@ -458,7 +462,7 @@ export const Wallets = ({
                 maxWidth: 300,
               }}
             >
-              Drop backup file or click to select.
+              {t('auth:entry.import_backup_drop_hint')}
             </Typography>
           </Box>
           {backupImportHint && (
@@ -479,14 +483,16 @@ export const Wallets = ({
           <InlineReturn onClick={() => changeImportView('choice')} />
 
           <Box>
-            <AuthSectionLabel>Seedphrase</AuthSectionLabel>
+            <AuthSectionLabel>
+              {t('auth:entry.import_seed_label')}
+            </AuthSectionLabel>
             <TextField
               fullWidth
               multiline
               minRows={4}
               value={seedValue}
               onChange={(event) => setSeedValue(event.target.value)}
-              placeholder="Enter your seedphrase"
+              placeholder={t('auth:entry.import_seed_placeholder')}
               sx={seedTextFieldSx(theme, isSeedVisible)}
               InputProps={{
                 endAdornment: (
@@ -506,7 +512,9 @@ export const Wallets = ({
           </Box>
 
           <Box>
-            <AuthSectionLabel>Wallet password</AuthSectionLabel>
+            <AuthSectionLabel>
+              {t('auth:entry.import_wallet_password')}
+            </AuthSectionLabel>
             <PasswordField
               id="wallet-import-password"
               name="wallet-import-password"
@@ -532,7 +540,9 @@ export const Wallets = ({
             disabled={!seedValue.trim() || !password.trim() || isLoadingEncryptSeed}
             onClick={importSeedphrase}
           >
-            {isLoadingEncryptSeed ? 'Importing account...' : 'Import account'}
+            {isLoadingEncryptSeed
+              ? t('auth:entry.importing_account')
+              : t('auth:entry.import_account')}
           </AuthButton>
         </Box>
       )}
@@ -637,6 +647,7 @@ const WalletRow = ({
   setDragOverWalletIndex,
   setEditingWalletIndex,
 }) => {
+  const { t } = useTranslation(['auth']);
   const [accountName, setAccountName] = useState('');
   const [note, setNote] = useState('');
   const isEdit = editingWalletIndex === idx;
@@ -701,7 +712,7 @@ const WalletRow = ({
     primaryName ||
     wallet?.name ||
     (wallet?.filename ? parsefilenameQortal(wallet.filename) : null) ||
-    'Unnamed account';
+    t('auth:authentication_form.unnamed_account');
   const addressLabel = shortenAddress(wallet?.address0);
   const canEditAccountName =
     !primaryName && !wallet?.filename;
@@ -872,7 +883,7 @@ const WalletRow = ({
           handleSelectWallet();
         }}
       >
-        <Box sx={{ position: 'relative', width: mode === 'entry' ? 46 : 34 }}>
+        <Box sx={{ width: mode === 'entry' ? 46 : 34 }}>
           <Avatar
             ref={avatarRef}
             alt={displayName}
@@ -884,22 +895,6 @@ const WalletRow = ({
           >
             <PersonIcon sx={{ fontSize: mode === 'entry' ? 27 : 22 }} />
           </Avatar>
-          {mode === 'entry' && (
-            <Box
-              sx={{
-                backgroundColor: '#62D26F',
-                border: isLight
-                  ? `2px solid ${theme.palette.background.paper}`
-                  : '2px solid #111722',
-                borderRadius: '999px',
-                bottom: -1,
-                height: 12,
-                position: 'absolute',
-                right: -1,
-                width: 12,
-              }}
-            />
-          )}
         </Box>
 
         <Box sx={{ minWidth: 0 }}>
@@ -977,7 +972,7 @@ const WalletRow = ({
             prominence="subtle"
             onClick={handleSelectWallet}
           >
-            Unlock
+            {t('auth:authentication_form.unlock')}
           </AuthButton>
         </Box>
         {mode === 'entry' && (

@@ -2184,6 +2184,28 @@ export async function bootstrap(): Promise<boolean> {
   }
 }
 
+/** When Core can reach `/admin/bootstrap`, runs existing {@link bootstrap}. Otherwise deletes chain `db` (if needed) and {@link startCore}. */
+export async function bootstrapOrClearChainAndStart(): Promise<boolean> {
+  try {
+    const isInstalled = await isCoreInstalled();
+    if (!isInstalled) return false;
+
+    const running = await isCoreRunning();
+    if (running) {
+      const bootOk = await bootstrap();
+      if (bootOk) return true;
+    }
+
+    const delOk = await deleteDB();
+    if (!delOk && (await dbExists())) return false;
+
+    await startCore();
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 const rmAsync = promisify(fs.rm ?? fs.rmdir); // Node 14+ supports fs.rm
 
 async function readJsonIfExists<T = any>(file: string): Promise<T | null> {

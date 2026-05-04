@@ -21,6 +21,7 @@ import {
   isOpenSettingUpLocalCoreAtom,
   isOpenUrlInvalidAtom,
   isPublicNodeUnavailableAtom,
+  isRunningPublicNodeAtom,
   qortBalanceLoadingAtom,
   rawWalletAtom,
   selectedNodeInfoAtom,
@@ -33,6 +34,7 @@ import {
   setLocalApiKeyNotElectronCase,
 } from '../background/background-cases';
 import { ApiKey } from '../types/auth';
+import { isRunningGateway } from '../qortal/qortal-requests';
 import { useModalGlobal } from './useModalGlobal';
 import { getWalletErrorMessage } from '../utils/walletErrorMessages';
 
@@ -60,6 +62,7 @@ export const useAuth = () => {
   const setWalletToBeDecryptedError = useSetAtom(walletToBeDecryptedErrorAtom);
   const setIsUrlInvalid = useSetAtom(isOpenUrlInvalidAtom);
   const setPublicNodeUnavailable = useSetAtom(isPublicNodeUnavailableAtom);
+  const setIsRunningPublicNode = useSetAtom(isRunningPublicNodeAtom);
 
   const setIsLoading = useSetAtom(isLoadingAuthenticateAtom);
   const setExtstate = useSetAtom(extStateAtom);
@@ -269,8 +272,14 @@ export const useAuth = () => {
         });
       }
       handleSetGlobalApikey(nodeInfo);
+      try {
+        const onGateway = await isRunningGateway();
+        setIsRunningPublicNode(onGateway);
+      } catch (error) {
+        console.error(error);
+      }
     },
-    [setSelectedNode]
+    [setIsRunningPublicNode, setSelectedNode]
   );
 
   const isNodeValid = useCallback(async (): Promise<boolean> => {

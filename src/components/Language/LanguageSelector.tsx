@@ -80,7 +80,7 @@ const LanguageSelector = ({ sidebar = false }: LanguageSelectorProps) => {
     supportedLanguages[currentBase as keyof typeof supportedLanguages] ||
     supportedLanguages.en;
   const currentLangCode = currentBase.startsWith('en')
-    ? 'US'
+    ? 'EN'
     : currentBase.slice(0, 2).toUpperCase();
 
   return (

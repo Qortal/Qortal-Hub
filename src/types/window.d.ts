@@ -1,6 +1,24 @@
 declare global {
   interface Window {
-    coreSetup?: unknown;
+    coreSetup?: {
+      isCoreRunning?: () => Promise<boolean>;
+      isCoreRunningOnSystem?: () => Promise<boolean>;
+      isCoreInstalledOnSystem?: () => Promise<boolean>;
+      isCoreInstalled?: () => Promise<boolean>;
+      verifySteps?: () => Promise<void>;
+      deleteDB?: () => Promise<boolean>;
+      dbExists?: () => Promise<boolean>;
+      installCore?: () => Promise<unknown>;
+      startCore?: () => Promise<unknown>;
+      getApiKey?: () => Promise<string>;
+      resetApikey?: () => Promise<boolean>;
+      pickQortalDirectory?: () => Promise<unknown>;
+      removeCustomPath?: () => Promise<void>;
+      stopCore?: () => Promise<boolean>;
+      bootstrap?: () => Promise<boolean>;
+      bootstrapOrClearChainAndStart?: () => Promise<boolean>;
+      onProgress?: (cb: (p: unknown) => void) => () => void;
+    };
     electronAPI?: {
       openExternal?: (url: string) => void;
       setAllowedDomains?: (domains: string[]) => void;

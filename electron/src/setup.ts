@@ -25,6 +25,7 @@ import { log as loggerLog, error as loggerError } from './logger';
 import { myCapacitorApp, isQuitting, setIsQuitting } from '.';
 import {
   bootstrap,
+  bootstrapOrClearChainAndStart,
   customQortalInstalledDir,
   dbExists,
   deleteDB,
@@ -1127,6 +1128,14 @@ ipcMain.handle('coreSetup:stopCore', async () => {
 ipcMain.handle('coreSetup:bootstrap', async () => {
   try {
     return await bootstrap();
+  } catch (error) {
+    loggerError('error', error);
+  }
+});
+
+ipcMain.handle('coreSetup:bootstrapOrClearChainAndStart', async () => {
+  try {
+    return await bootstrapOrClearChainAndStart();
   } catch (error) {
     loggerError('error', error);
   }

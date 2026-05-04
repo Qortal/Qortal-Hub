@@ -40,7 +40,8 @@
     "invalidKey": "ungültiger API-Schlüssel",
     "failed_stop": "Core konnte nicht gestoppt werden",
     "failed_bootstrap": "Bootstrap konnte nicht ausgeführt werden",
-    "failed_delete": "Datenbank konnte nicht gelöscht werden"
+    "failed_delete": "Datenbank konnte nicht gelöscht werden",
+    "failed_bootstrap_or_clear": "Bootstrap, Ketten­daten löschen oder Core neu starten war nicht möglich"
   },
   "status": {
     "complete": "abgeschlossen",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "Bist du sicher, dass du den Core stoppen möchtest?",
     "bootstrap": "Bist du sicher, dass du den Bootstrap starten möchtest?",
-    "delete": "Bist du sicher, dass du die Datenbank löschen möchtest?"
+    "delete": "Bist du sicher, dass du die Datenbank löschen möchtest?",
+    "bootstrapOrClearChain": "Führt Bootstrap von einem Snapshot durch, wenn Core lokal läuft. Ist das nicht möglich oder schlägt Bootstrap fehl, kann die lokale Ketten‑DB entfernt und Core wieder gestartet werden; Wallet‑Dateien bleiben unverändert. Fortfahren?"
+  },
+  "bootstrapChainHelp": {
+    "title": "Chain bootstrappen",
+    "body": "Ein gemeinsamer Schritt: Snapshot‑Bootstrap, wenn Core erreichbar ist, oder lokale Ketten‑DB löschen und Core neu starten, wenn Bootstrap nicht möglich ist. Das Wallet liegt getrennt und wird nicht entfernt."
   },
   "stop": "Core stoppen",
   "bootstrap": "Bootstrap",
@@ -89,6 +95,53 @@
   "more": "mehr Optionen",
   "less": "weniger Optionen",
   "enableAuthWhenSyncing": "Authentifizierung beim Synchronisieren aktivieren",
+  "coreSetupDialog": {
+    "title": "Qortal Core einrichten",
+    "introTitle": "Führen Sie Ihren eigenen Node lokal aus.",
+    "introSubtitle": "Sie können einen öffentlichen Node nutzen, während Core startet und synchronisiert.",
+    "publicNodeUnavailable": "Öffentliche Nodes sind derzeit nicht verfügbar. Lassen Sie dieses Fenster offen, während der lokale Core startet und synchronisiert.",
+    "steps": {
+      "downloadDone": "Core heruntergeladen",
+      "downloadActive": "Core wird heruntergeladen",
+      "downloadIdle": "Core herunterladen",
+      "runningDone": "Core läuft",
+      "runningActive": "Core wird gestartet",
+      "runningIdle": "Core starten"
+    },
+    "readyToDownload": "Bereit zum Herunterladen",
+    "readyToStart": "Bereit zum Starten",
+    "syncing": "Synchronisiert",
+    "helpers": {
+      "downloadDone": "Core-Dateien sind installiert und bereit.",
+      "downloadActive": "Qortal Core wird heruntergeladen und vorbereitet.",
+      "downloadIdle": "Laden Sie Qortal Core herunter, um Ihren eigenen Node zu betreiben.",
+      "runningDoneSyncing": "Core läuft und synchronisiert Blockchain-Daten.",
+      "runningDone": "Core läuft lokal.",
+      "runningWaiting": "Core startet und synchronisiert im Hintergrund.",
+      "runningBlocked": "Verfügbar, nachdem Core heruntergeladen wurde."
+    },
+    "nextStepPill": "Nächster Schritt",
+    "locationTitle": "Core-Speicherort",
+    "locationCustom": "Qortal Core wird aus diesem Ordner ausgeführt.",
+    "locationDefault": "Qortal Core verwendet den Standardordner dieses Systems.",
+    "locationPathDefault": "Standard-Speicherort für Qortal Core",
+    "change": "Ändern",
+    "choose": "Auswählen",
+    "clear": "Leeren",
+    "advancedTitle": "Erweitert",
+    "advancedSubtitle": "Erweiterte Tools und Optionen für Core.",
+    "maintenanceUnavailable": "Core-Wartungstools sind nicht verfügbar, während Core startet oder synchronisiert.",
+    "stopCoreTitle": "Core stoppen",
+    "stopCoreBody": "Beendet den lokalen Core-Prozess.",
+    "stopButton": "Stoppen",
+    "cancel": "Abbrechen",
+    "actionDownload": "Core herunterladen",
+    "actionStart": "Core starten",
+    "actionDone": "Fertig",
+    "confirmTitle": "Aktion bestätigen",
+    "folderCopied": "Core-Ordner kopiert",
+    "progressAriaLabel": "Fortschritt: {{label}}"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core ist noch nicht vollständig gestartet",
     "descNotReady": "Qortal Core wurde noch nicht vollständig gestartet. Bitte warten.",

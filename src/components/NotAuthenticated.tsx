@@ -17,7 +17,14 @@ import {
 import { Wallets } from './Wallets';
 import { AuthButton, AuthFrame } from './Auth/AuthShell';
 import { ConnectionModeModal } from './Auth/ConnectionModeModal';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import type { AuthUnlockTransitionSnapshot } from '../types/authTransition';
 
@@ -145,28 +152,39 @@ export const NotAuthenticated = ({
         : t('auth:authentication_form.using_custom_node', {
             postProcess: 'capitalizeFirstChar',
           });
-  const featureItems = [
-    {
-      icon: <SecurityRoundedIcon sx={{ fontSize: 34 }} />,
-      title: 'Secure & Private',
-      text: 'Your keys, your data, always in your control.',
-    },
-    {
-      icon: <BoltRoundedIcon sx={{ fontSize: 34 }} />,
-      title: 'Fast Access',
-      text: 'Unlock and get to your Qortal experience instantly.',
-    },
-    {
-      icon: <HubRoundedIcon sx={{ fontSize: 34 }} />,
-      title: 'Decentralized',
-      text: 'Connect to the network on your terms.',
-    },
-    {
-      icon: <AccountCircleRoundedIcon sx={{ fontSize: 34 }} />,
-      title: 'Built for You',
-      text: 'One account. Endless possibilities.',
-    },
-  ];
+  const featureItems = useMemo(
+    () => [
+      {
+        id: 'secure',
+        icon: <SecurityRoundedIcon sx={{ fontSize: 34 }} />,
+
+        title: t('auth:intro_features.secure_title'),
+        text: t('auth:intro_features.secure_text'),
+      },
+      {
+        id: 'fast',
+        icon: <BoltRoundedIcon sx={{ fontSize: 34 }} />,
+
+        title: t('auth:intro_features.fast_title'),
+        text: t('auth:intro_features.fast_text'),
+      },
+      {
+        id: 'decentralized',
+        icon: <HubRoundedIcon sx={{ fontSize: 34 }} />,
+
+        title: t('auth:intro_features.decentralized_title'),
+        text: t('auth:intro_features.decentralized_text'),
+      },
+      {
+        id: 'built',
+        icon: <AccountCircleRoundedIcon sx={{ fontSize: 34 }} />,
+
+        title: t('auth:intro_features.built_title'),
+        text: t('auth:intro_features.built_text'),
+      },
+    ],
+    [t]
+  );
   const handleEntryAccountsReady = useCallback(() => {
     setIsEntryAccountsReady(true);
   }, []);
@@ -749,7 +767,7 @@ export const NotAuthenticated = ({
                     : '0 2px 18px rgba(0,0,0,0.28)',
                 }}
               >
-                Enter Qortal
+                {t('auth:entry.title')}
               </Typography>
 
               <Typography
@@ -760,7 +778,7 @@ export const NotAuthenticated = ({
                   mt: 0.8,
                 }}
               >
-                Access or create your account.
+                {t('auth:entry.subtitle')}
               </Typography>
             </Box>
 
@@ -812,7 +830,7 @@ export const NotAuthenticated = ({
                   }}
                 >
                   <AddRoundedIcon sx={{ fontSize: 18 }} />
-                  <span>Create account</span>
+                  <span>{t('auth:entry.create_account')}</span>
                 </Box>
               </AuthButton>
 
@@ -858,7 +876,7 @@ export const NotAuthenticated = ({
                     WebkitFontSmoothing: 'antialiased',
                   }}
                 >
-                  Import account
+                  {t('auth:entry.import_account')}
                 </Typography>
               </ButtonBase>
             </Box>
@@ -955,7 +973,7 @@ export const NotAuthenticated = ({
           >
             {featureItems.map((item) => (
               <Box
-                key={item.title}
+                key={item.id}
                 sx={{
                   alignItems: 'flex-start',
                   display: 'grid',

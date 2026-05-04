@@ -40,7 +40,8 @@
     "invalidKey": "virheellinen apikey",
     "failed_stop": "Coren pysäyttäminen epäonnistui",
     "failed_bootstrap": "bootstrap epäonnistui",
-    "failed_delete": "tietokannan poistaminen epäonnistui"
+    "failed_delete": "tietokannan poistaminen epäonnistui",
+    "failed_bootstrap_or_clear": "bootstrap, ketjun tietojen tyhjennys tai Coren käynnistys epäonnistui"
   },
   "status": {
     "complete": "valmis",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "oletko varma, että haluat pysäyttää Coren?",
     "bootstrap": "oletko varma, että haluat käynnistää bootstrapin?",
-    "delete": "oletko varma, että haluat poistaa tietokannan?"
+    "delete": "oletko varma, että haluat poistaa tietokannan?",
+    "bootstrapOrClearChain": "Suorittaa bootstrapin tilannevedoksesta, kun Core käynnissä paikallisesti. Ellei onnistu tai bootstrap epäonnistuu, paikallinen ketjutietokanta voidaan poistaa ja Core käynnistää uudelleen; lompakkotiedostoja ei kosketa. Jatketaanko?"
+  },
+  "bootstrapChainHelp": {
+    "title": "Ketjun bootstrap",
+    "body": "Yksi työkalu: tilannevedoksen bootstrap kun Core käynnissä; tai paikallisen ketjutietokannan tyhjennys ja Core uudelleen kun bootstrap ei onnistu. Lompakko tallennetaan erilleen."
   },
   "stop": "pysäytä Core",
   "bootstrap": "bootstrap",
@@ -89,6 +95,53 @@
   "more": "lisää vaihtoehtoja",
   "less": "vähemmän vaihtoehtoja",
   "enableAuthWhenSyncing": "ota todennus käyttöön synkronoinnin aikana",
+  "coreSetupDialog": {
+    "title": "Määritä Qortal Core",
+    "introTitle": "Suorita oma solmu paikallisesti.",
+    "introSubtitle": "Voit käyttää julkista solmua Core käynnistyksen ja synkronoinnin aikana.",
+    "publicNodeUnavailable": "Julkiset solmut eivät ole juuri nyt käytettävissä. Pidä tämä näyttö auki paikallisen Core käynnistyksen ja synkronoinnin ajan.",
+    "steps": {
+      "downloadDone": "Core ladattu",
+      "downloadActive": "Ladataan Core",
+      "downloadIdle": "Lataa Core",
+      "runningDone": "Core käynnissä",
+      "runningActive": "Käynnistetään Core",
+      "runningIdle": "Käynnistä Core"
+    },
+    "readyToDownload": "Valmis lataamaan",
+    "readyToStart": "Valmis käynnistymään",
+    "syncing": "Synkronoidaan",
+    "helpers": {
+      "downloadDone": "Core-tiedostot on asennettu ja valmiit.",
+      "downloadActive": "Ladataan ja valmistellaan Qortal Core.",
+      "downloadIdle": "Lataa Qortal Core omalle solmullasi.",
+      "runningDoneSyncing": "Core on käynnissä ja synkronoi lohkoketjutietoja.",
+      "runningDone": "Core on käynnissä paikallisesti.",
+      "runningWaiting": "Core käynnistyy ja aloittaa synkronoinnin taustalla.",
+      "runningBlocked": "Käytettävissä Core-latauksen jälkeen."
+    },
+    "nextStepPill": "Seuraava vaihe",
+    "locationTitle": "Core-sijainti",
+    "locationCustom": "Qortal Core suoritetaan tästä kansiosta.",
+    "locationDefault": "Qortal Core käyttää järjestelmän oletuskansiota.",
+    "locationPathDefault": "Oletus Qortal Core -sijainti",
+    "change": "Vaihda",
+    "choose": "Valitse",
+    "clear": "Tyhjennä",
+    "advancedTitle": "Lisäasetukset",
+    "advancedSubtitle": "Edistyneet Core-työokalut ja -asetukset.",
+    "maintenanceUnavailable": "Core-huoltotyökalut eivät ole käytettävissä Core käynnistyksen tai synkronoinnin aikana.",
+    "stopCoreTitle": "Pysäytä Core",
+    "stopCoreBody": "Pysäyttää paikallisen Core-prosessin.",
+    "stopButton": "Pysäytä",
+    "cancel": "Peruuta",
+    "actionDownload": "Lataa Core",
+    "actionStart": "Käynnistä Core",
+    "actionDone": "Valmis",
+    "confirmTitle": "Vahvista toiminto",
+    "folderCopied": "Core-kansio kopioitu",
+    "progressAriaLabel": "Edistyminen: {{label}}"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core ei ole täysin käynnistynyt",
     "descNotReady": "Qortal Core ei ole vielä täysin käynnistynyt. Odota hetki.",

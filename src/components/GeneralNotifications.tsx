@@ -105,6 +105,7 @@ export const GeneralNotifications = ({
   const seenKeys = useAtomValue(notificationSeenInAppKeysAtom);
   const setSeenKeys = useSetAtom(notificationSeenInAppKeysAtom);
   const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
   const { t, i18n } = useTranslation(['core']);
 
   useEffect(() => {
@@ -242,15 +243,25 @@ export const GeneralNotifications = ({
         open={!!anchorEl}
         slotProps={{
           paper: {
-            sx: {
-              background: '#111820',
-              backgroundImage: 'none',
-              border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
-              borderRadius: '16px',
-              boxShadow: `0 22px 46px ${alpha('#000', 0.44)}`,
-              mt: 1,
-              overflow: 'hidden',
-            },
+            sx: isDarkMode
+              ? {
+                  background: '#111820',
+                  backgroundImage: 'none',
+                  border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 22px 46px ${alpha('#000', 0.44)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                }
+              : {
+                  background: theme.palette.background.paper,
+                  backgroundImage: 'none',
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 16px 40px ${alpha('#1E3248', 0.1)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                },
           },
         }}
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
@@ -354,19 +365,29 @@ export const GeneralNotifications = ({
                   display: 'block',
                   p: 0,
                   whiteSpace: 'normal',
-                  '&:hover': { bgcolor: alpha('#FFFFFF', 0.045) },
+                  '&:hover': {
+                    bgcolor: isDarkMode
+                      ? alpha('#FFFFFF', 0.045)
+                      : alpha(theme.palette.primary.main, 0.06),
+                  },
                 }}
               >
                 <Card
                   elevation={0}
                   sx={{
                     bgcolor: unseen
-                      ? alpha(theme.palette.other.unread, 0.11)
-                      : alpha('#FFFFFF', 0.025),
+                      ? isDarkMode
+                        ? alpha(theme.palette.other.unread, 0.11)
+                        : alpha(theme.palette.other.unread, 0.12)
+                      : isDarkMode
+                        ? alpha('#FFFFFF', 0.025)
+                        : theme.palette.action.hover,
                     border: `1px solid ${
                       unseen
                         ? alpha(theme.palette.other.unread, 0.36)
-                        : alpha('#A9BCD8', 0.12)
+                        : isDarkMode
+                          ? alpha('#A9BCD8', 0.12)
+                          : alpha(theme.palette.divider, 0.95)
                     }`,
                     borderRadius: '12px',
                     display: 'flex',
@@ -381,14 +402,21 @@ export const GeneralNotifications = ({
                       `/arbitrary/THUMBNAIL/${notification?.appName || 'Q-Mail'}/qortal_avatar?async=true`
                     }`}
                     sx={{
-                      bgcolor: alpha('#FFFFFF', 0.06),
+                      bgcolor: isDarkMode
+                        ? alpha('#FFFFFF', 0.06)
+                        : alpha(theme.palette.primary.main, 0.08),
                       height: 34,
                       width: 34,
                       '& img': { objectFit: 'contain' },
                     }}
                   >
                     {isQMail ? (
-                      <MailOutlineIcon sx={{ fontSize: 18 }} />
+                      <MailOutlineIcon
+                        sx={{
+                          color: theme.palette.primary.main,
+                          fontSize: 18,
+                        }}
+                      />
                     ) : (
                       <img
                         alt="app-icon"
@@ -407,7 +435,11 @@ export const GeneralNotifications = ({
                       }}
                     >
                       <Typography
-                        sx={{ fontSize: '0.86rem', fontWeight: 650 }}
+                        sx={{
+                          color: theme.palette.text.primary,
+                          fontSize: '0.86rem',
+                          fontWeight: 650,
+                        }}
                       >
                         {notification?.appName || 'Q-App'}
                       </Typography>
@@ -454,20 +486,31 @@ export const GeneralNotifications = ({
         onClose={() => setSettingsOpen(false)}
         open={settingsOpen}
         PaperProps={{
-          sx: {
-            background: '#121821',
-            backgroundImage: 'none',
-            border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
-            borderRadius: '18px',
-            boxShadow: `0 26px 56px ${alpha('#000', 0.46)}`,
-            overflow: 'hidden',
-          },
+          sx: isDarkMode
+            ? {
+                background: '#121821',
+                backgroundImage: 'none',
+                border: `1px solid ${alpha('#A9BCD8', 0.18)}`,
+                borderRadius: '18px',
+                boxShadow: `0 26px 56px ${alpha('#000', 0.46)}`,
+                overflow: 'hidden',
+              }
+            : {
+                background: theme.palette.background.paper,
+                backgroundImage: 'none',
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: '18px',
+                boxShadow: `0 20px 48px ${alpha('#1E3248', 0.12)}`,
+                overflow: 'hidden',
+              },
         }}
       >
         <DialogTitle
           sx={{
             alignItems: 'center',
-            borderBottom: `1px solid ${alpha('#A9BCD8', 0.1)}`,
+            borderBottom: `1px solid ${
+              isDarkMode ? alpha('#A9BCD8', 0.1) : theme.palette.divider
+            }`,
             color: theme.palette.text.primary,
             display: 'flex',
             fontSize: '1.08rem',
@@ -486,7 +529,9 @@ export const GeneralNotifications = ({
             sx={{
               color: alpha(theme.palette.text.secondary, 0.92),
               '&:hover': {
-                backgroundColor: alpha('#FFFFFF', 0.05),
+                backgroundColor: isDarkMode
+                  ? alpha('#FFFFFF', 0.05)
+                  : alpha(theme.palette.action.active, 0.06),
                 color: theme.palette.text.primary,
               },
             }}
@@ -541,8 +586,14 @@ export const GeneralNotifications = ({
                   key={appName}
                   sx={{
                     alignItems: 'center',
-                    backgroundColor: alpha('#FFFFFF', 0.026),
-                    border: `1px solid ${alpha('#A9BCD8', 0.12)}`,
+                    backgroundColor: isDarkMode
+                      ? alpha('#FFFFFF', 0.026)
+                      : theme.palette.action.hover,
+                    border: `1px solid ${
+                      isDarkMode
+                        ? alpha('#A9BCD8', 0.12)
+                        : theme.palette.divider
+                    }`,
                     borderRadius: '14px',
                     display: 'flex',
                     gap: 2,

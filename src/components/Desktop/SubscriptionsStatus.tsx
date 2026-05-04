@@ -40,6 +40,7 @@ export function SubscriptionsStatus({
   useInitializeMySubscriptions();
 
   const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
   const { t } = useTranslation(['group']);
 
   const formatTimeUntil = useCallback(
@@ -150,10 +151,32 @@ export function SubscriptionsStatus({
         })
       : subscriptionsTitle;
 
-  const panelBorderColor = alpha('#A9BCD8', 0.18);
-  const itemBorderColor = alpha('#A9BCD8', 0.13);
-  const itemBackground = alpha('#FFFFFF', 0.032);
-  const itemHoverBackground = alpha('#FFFFFF', 0.055);
+  const panelBorderColor = isDarkMode
+    ? alpha('#A9BCD8', 0.18)
+    : theme.palette.divider;
+  const itemBorderColor = isDarkMode
+    ? alpha('#A9BCD8', 0.13)
+    : alpha(theme.palette.divider, 0.92);
+  const itemBackground = isDarkMode
+    ? alpha('#FFFFFF', 0.032)
+    : theme.palette.action.hover;
+  const itemHoverBackground = isDarkMode
+    ? alpha('#FFFFFF', 0.055)
+    : alpha(theme.palette.primary.main, 0.07);
+  const itemHoverBorderColor = isDarkMode
+    ? alpha('#A9BCD8', 0.22)
+    : alpha(theme.palette.divider, 1);
+
+  const panelLinkColor = isDarkMode
+    ? theme.palette.primary.light
+    : theme.palette.primary.main;
+  const panelLinkHoverColor = isDarkMode
+    ? theme.palette.primary.main
+    : theme.palette.primary.dark;
+
+  const headerIconColor = isDarkMode
+    ? theme.palette.primary.light
+    : theme.palette.primary.main;
 
   const sectionTitleSx = {
     color: theme.palette.text.primary,
@@ -187,7 +210,7 @@ export function SubscriptionsStatus({
           width: '100%',
           '&:hover': {
             backgroundColor: itemHoverBackground,
-            borderColor: alpha('#A9BCD8', 0.22),
+            borderColor: itemHoverBorderColor,
           },
         }}
       >
@@ -294,7 +317,7 @@ export function SubscriptionsStatus({
           width: '100%',
           '&:hover': {
             backgroundColor: itemHoverBackground,
-            borderColor: alpha('#A9BCD8', 0.22),
+            borderColor: itemHoverBorderColor,
           },
         }}
       >
@@ -467,15 +490,25 @@ export function SubscriptionsStatus({
         open={!!anchorEl}
         slotProps={{
           paper: {
-            sx: {
-              background: '#111820',
-              backgroundImage: 'none',
-              border: `1px solid ${panelBorderColor}`,
-              borderRadius: '16px',
-              boxShadow: `0 22px 46px ${alpha('#000', 0.44)}`,
-              mt: 1,
-              overflow: 'hidden',
-            },
+            sx: isDarkMode
+              ? {
+                  background: '#111820',
+                  backgroundImage: 'none',
+                  border: `1px solid ${panelBorderColor}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 22px 46px ${alpha('#000', 0.44)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                }
+              : {
+                  background: theme.palette.background.paper,
+                  backgroundImage: 'none',
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 16px 40px ${alpha('#1E3248', 0.1)}`,
+                  mt: 1,
+                  overflow: 'hidden',
+                },
           },
         }}
         transformOrigin={{ horizontal: 'right', vertical: 'top' }}
@@ -493,7 +526,7 @@ export function SubscriptionsStatus({
         >
           <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
             <ListAltRoundedIcon
-              sx={{ color: theme.palette.primary.light, fontSize: 18 }}
+              sx={{ color: headerIconColor, fontSize: 18 }}
             />
             <Typography
               sx={{
@@ -574,14 +607,14 @@ export function SubscriptionsStatus({
                 sx={{
                   alignItems: 'center',
                   alignSelf: 'flex-start',
-                  color: theme.palette.primary.light,
+                  color: panelLinkColor,
                   display: 'inline-flex',
                   fontSize: '0.78rem',
                   fontWeight: 700,
                   gap: 0.45,
                   px: 0.2,
                   py: 0.35,
-                  '&:hover': { color: theme.palette.primary.main },
+                  '&:hover': { color: panelLinkHoverColor },
                 }}
               >
                 {t('group:subscription.open_subscriptions', {
@@ -629,13 +662,13 @@ export function SubscriptionsStatus({
                 }}
                 sx={{
                   alignItems: 'center',
-                  color: theme.palette.primary.light,
+                  color: panelLinkColor,
                   display: 'inline-flex',
                   fontSize: '0.78rem',
                   fontWeight: 700,
                   gap: 0.25,
                   mt: 1.35,
-                  '&:hover': { color: theme.palette.primary.main },
+                  '&:hover': { color: panelLinkHoverColor },
                 }}
               >
                 {t('group:subscription.open_subwire', {

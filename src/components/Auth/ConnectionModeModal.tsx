@@ -227,14 +227,7 @@ export function ConnectionModeModal({
         const apiKey = window?.coreSetup?.getApiKey
           ? await window.coreSetup.getApiKey()
           : '';
-        const certOk = await ensureElectronCertIfLocalPrivateHttps(
-          localUrl,
-          apiKey || ''
-        );
-        if (!certOk.success) {
-          console.error(certOk.error || 'HTTPS certificate preparation failed');
-          return;
-        }
+
         await handleSaveNodeInfo({
           url: localUrl,
           apikey: apiKey || '',
@@ -593,7 +586,10 @@ export function ConnectionModeModal({
                 <Typography sx={sectionTitleSx(theme)}>
                   {t('auth:connection_mode.section_custom_nodes')}
                 </Typography>
-                <ButtonBase onClick={openAddCustomNode} sx={addCustomNodeSx(theme)}>
+                <ButtonBase
+                  onClick={openAddCustomNode}
+                  sx={addCustomNodeSx(theme)}
+                >
                   <AddRoundedIcon sx={{ fontSize: 18 }} />
                   {t('auth:connection_mode.add_custom_node')}
                 </ButtonBase>
@@ -728,7 +724,9 @@ export function ConnectionModeModal({
                           >
                             {displayName}
                           </Typography>
-                          <Typography sx={modeCopySx(theme)}>{node.url}</Typography>
+                          <Typography sx={modeCopySx(theme)}>
+                            {node.url}
+                          </Typography>
                         </Box>
                       </Box>
 
@@ -983,7 +981,9 @@ function modeRowSx(theme: Theme, active: boolean) {
       width: '100%',
       '&:hover': {
         backgroundColor: active ? undefined : 'rgba(255,255,255,0.025)',
-        borderColor: active ? 'rgba(69,132,255,0.95)' : 'rgba(255,255,255,0.12)',
+        borderColor: active
+          ? 'rgba(69,132,255,0.95)'
+          : 'rgba(255,255,255,0.12)',
       },
     };
   }
@@ -1194,11 +1194,7 @@ function addCustomNodeSx(theme: Theme) {
   };
 }
 
-function customNodeRowSx(
-  theme: Theme,
-  active: boolean,
-  isDragOver = false
-) {
+function customNodeRowSx(theme: Theme, active: boolean, isDragOver = false) {
   if (theme.palette.mode === 'dark') {
     return {
       alignItems: 'center',
@@ -1231,7 +1227,9 @@ function customNodeRowSx(
       },
       '&:hover': {
         backgroundColor: 'rgba(255,255,255,0.032)',
-        borderColor: active ? 'rgba(92,145,255,0.34)' : 'rgba(255,255,255,0.12)',
+        borderColor: active
+          ? 'rgba(92,145,255,0.34)'
+          : 'rgba(255,255,255,0.12)',
       },
       '&:focus-visible': {
         borderColor: 'rgba(118,165,255,0.42)',

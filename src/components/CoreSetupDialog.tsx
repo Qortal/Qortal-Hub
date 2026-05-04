@@ -13,6 +13,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
+import { alpha, type Theme } from '@mui/material/styles';
 
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
@@ -56,6 +57,439 @@ export interface Steps {
   downloadedCore: StepState;
   coreRunning: StepState;
 }
+
+/** Theme-aware styles for the Core setup shell; dark branch preserves existing pixel-perfect values. */
+export function getCoreSetupStyles(theme: Theme) {
+  const isLight = theme.palette.mode === 'light';
+  const { palette } = theme;
+
+  const dividerSoft = isLight
+    ? palette.divider
+    : 'rgba(255,255,255,0.07)';
+  const dividerStrong = isLight
+    ? palette.divider
+    : 'rgba(255,255,255,0.08)';
+  const dividerRow = isLight
+    ? palette.divider
+    : 'rgba(255,255,255,0.06)';
+
+  const dialogPaperSx = {
+    background: isLight ? palette.background.paper : '#0d1117',
+    border: isLight
+      ? `1px solid ${palette.divider}`
+      : '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '10px',
+    boxShadow: isLight
+      ? `0 24px 50px ${alpha('#000000', 0.12)}`
+      : '0 24px 50px rgba(0,0,0,0.36)',
+    maxHeight: 'calc(100vh - 48px)',
+    maxWidth: '740px',
+  };
+
+  const coreHeaderSx = {
+    alignItems: 'center',
+    borderBottom: isLight
+      ? `1px solid ${palette.divider}`
+      : '1px solid rgba(255,255,255,0.06)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    minHeight: 64,
+    px: { xs: 2.5, sm: 3 },
+  };
+
+  const coreTitleSx = {
+    borderBottom: 'none',
+    color: isLight ? palette.text.primary : 'rgba(246,248,252,0.96)',
+    fontSize: '1.04rem',
+    fontWeight: 650,
+    lineHeight: 1.3,
+    px: 0,
+    py: 0,
+    textAlign: 'left' as const,
+  };
+
+  const closeButtonSx = {
+    color: isLight
+      ? alpha(palette.text.primary, 0.62)
+      : 'rgba(214,221,233,0.68)',
+    mr: -0.75,
+    '&:hover': {
+      backgroundColor: isLight
+        ? alpha(palette.action.active, 0.06)
+        : 'rgba(255,255,255,0.04)',
+      color: isLight ? palette.text.primary : '#F6F8FC',
+    },
+  };
+
+  const coreContentSx = {
+    px: { xs: 2.5, sm: 3.4 },
+    py: { xs: 2.4, sm: 3 },
+  };
+
+  const advancedCopySx = {
+    color: isLight
+      ? palette.text.secondary
+      : 'rgba(214,221,233,0.64)',
+    fontSize: '0.84rem',
+    lineHeight: 1.55,
+  };
+
+  const introSx = {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 1.6,
+    mb: 2.2,
+    px: { xs: 0, sm: 0.8 },
+  };
+
+  const introIconSx = {
+    alignItems: 'center',
+    background: isLight
+      ? `linear-gradient(135deg, ${alpha(palette.primary.main, 0.95)}, ${alpha(palette.primary.main, 0.22)})`
+      : 'linear-gradient(135deg, rgba(51,107,222,0.92), rgba(91,132,201,0.3))',
+    border: isLight
+      ? `1px solid ${alpha(palette.primary.main, 0.35)}`
+      : '1px solid rgba(118,165,255,0.42)',
+    borderRadius: '999px',
+    boxShadow: isLight
+      ? `0 0 20px ${alpha(palette.primary.main, 0.2)}`
+      : '0 0 24px rgba(74,132,255,0.24)',
+    color: isLight ? palette.primary.contrastText : '#D5E4FF',
+    display: 'flex',
+    flexShrink: 0,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  };
+
+  const introTitleSx = {
+    color: isLight ? palette.text.primary : 'rgba(246,248,252,0.96)',
+    fontSize: '0.96rem',
+    fontWeight: 800,
+    lineHeight: 1.25,
+  };
+
+  const publicNodeWarningSx = {
+    alignItems: 'center',
+    backgroundColor: isLight
+      ? alpha(palette.warning.main, 0.08)
+      : 'rgba(216,186,138,0.08)',
+    border: isLight
+      ? `1px solid ${alpha(palette.warning.main, 0.28)}`
+      : '1px solid rgba(216,186,138,0.18)',
+    borderRadius: '8px',
+    display: 'flex',
+    gap: 1.1,
+    mb: 2.2,
+    px: 1.35,
+    py: 1.1,
+  };
+
+  const publicNodeWarningTextSx = {
+    color: isLight
+      ? alpha(palette.text.primary, 0.82)
+      : 'rgba(239,228,202,0.9)',
+    fontSize: '0.82rem',
+    lineHeight: 1.5,
+  };
+
+  const stepsListSx = {
+    borderBottom: `1px solid ${dividerSoft}`,
+    display: 'grid',
+  };
+
+  const coreStepSx = (active: boolean) => ({
+    borderTop: `1px solid ${dividerSoft}`,
+    display: 'grid',
+    gap: active ? 1.5 : 1.25,
+    px: { xs: 0, sm: 2 },
+    py: { xs: 2.2, sm: 2.35 },
+  });
+
+  const stepHeaderSx = {
+    alignItems: 'flex-start',
+    display: 'grid',
+    gap: { xs: 1.35, sm: 1.6 },
+    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+  };
+
+  const stepIconSlotSx = {
+    alignItems: 'center',
+    display: 'flex',
+    justifyContent: 'center',
+    pt: 0.1,
+    width: 32,
+  };
+
+  const stepTitleSx = {
+    color: isLight ? palette.text.primary : 'rgba(246,248,252,0.96)',
+    fontSize: '0.96rem',
+    fontWeight: 800,
+    lineHeight: 1.25,
+  };
+
+  const progressRowSx = {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 1.5,
+    ml: { xs: 0, sm: 6 },
+  };
+
+  const stepMessageSx = {
+    ...advancedCopySx,
+    ml: { xs: 0, sm: 6 },
+  };
+
+  const activeStatusSx = {
+    color: isLight ? palette.primary.main : '#83B3FF',
+    fontSize: '0.84rem',
+    fontWeight: 700,
+    lineHeight: 1.55,
+  };
+
+  const nextPillSx = {
+    alignSelf: 'flex-start',
+    backgroundColor: isLight
+      ? alpha(palette.primary.main, 0.12)
+      : 'rgba(77,139,255,0.16)',
+    borderRadius: '7px',
+    color: isLight ? palette.primary.dark : '#9FC0FF',
+    fontSize: '0.74rem',
+    fontWeight: 700,
+    lineHeight: 1,
+    px: 1,
+    py: 0.68,
+  };
+
+  const locationCardSx = {
+    borderBottom: `1px solid ${dividerSoft}`,
+    display: 'grid',
+    gap: 1.5,
+    px: { xs: 0, sm: 2 },
+    py: { xs: 2.15, sm: 2.35 },
+  };
+
+  const locationHeaderSx = {
+    alignItems: 'center',
+    display: 'grid',
+    gap: { xs: 1.35, sm: 1.6 },
+    gridTemplateColumns: 'auto minmax(0,1fr) auto',
+  };
+
+  const pathStripSx = {
+    alignItems: 'center',
+    backgroundColor: isLight
+      ? alpha(palette.text.primary, 0.04)
+      : 'rgba(255,255,255,0.045)',
+    borderRadius: '7px',
+    display: 'flex',
+    gap: 1,
+    minHeight: 44,
+    ml: { xs: 0, sm: 5.6 },
+    px: 1.35,
+  };
+
+  const toolRowSx = {
+    alignItems: 'center',
+    borderBottom: `1px solid ${dividerRow}`,
+    display: 'grid',
+    gap: 1.5,
+    gridTemplateColumns: 'minmax(0, 1fr) auto',
+    py: 1.35,
+    '&:last-child': {
+      borderBottom: 0,
+    },
+  };
+
+  const toolTitleSx = {
+    color: isLight ? palette.text.primary : 'rgba(246,248,252,0.96)',
+    fontSize: '0.9rem',
+    fontWeight: 800,
+    lineHeight: 1.25,
+  };
+
+  const toolErrorSx = {
+    color: isLight ? palette.warning.dark : '#D8BA8A',
+    fontSize: '0.8rem',
+    lineHeight: 1.45,
+  };
+
+  const pathValueSx = {
+    color: isLight
+      ? palette.text.secondary
+      : 'rgba(214,221,233,0.78)',
+    fontSize: '0.8rem',
+    lineHeight: 1.45,
+    overflowWrap: 'anywhere' as const,
+  };
+
+  const copyButtonSx = {
+    alignItems: 'center',
+    color: isLight
+      ? alpha(palette.text.primary, 0.48)
+      : 'rgba(214,221,233,0.56)',
+    display: 'flex',
+    flex: '0 0 auto',
+    p: 0.35,
+    '&:hover': {
+      color: isLight ? palette.primary.main : '#D6E5FF',
+    },
+  };
+
+  const toolButtonSx = {
+    borderColor: isLight
+      ? alpha(palette.primary.main, 0.4)
+      : 'rgba(141,180,242,0.45)',
+    color: isLight ? palette.text.primary : 'rgba(214,228,252,0.96)',
+    fontSize: '0.8rem',
+    fontWeight: 600,
+    letterSpacing: 0,
+    minHeight: 34,
+    minWidth: 82,
+    textTransform: 'none' as const,
+    '&:hover': {
+      borderColor: isLight
+        ? palette.primary.main
+        : 'rgba(170,202,255,0.7)',
+      backgroundColor: isLight
+        ? alpha(palette.primary.main, 0.06)
+        : 'rgba(141,180,242,0.08)',
+    },
+  };
+
+  const advancedCardSx = {
+    display: 'grid',
+  };
+
+  const advancedToggleSx = {
+    alignItems: 'center',
+    display: 'grid',
+    gap: { xs: 1.35, sm: 1.6 },
+    gridTemplateColumns: 'auto minmax(0,1fr) auto',
+    px: { xs: 0, sm: 2 },
+    py: { xs: 2.15, sm: 2.35 },
+    width: '100%',
+    '&:hover': {
+      backgroundColor: isLight
+        ? alpha(palette.action.active, 0.04)
+        : 'rgba(255,255,255,0.018)',
+    },
+  };
+
+  const advancedToolsSx = {
+    borderTop: `1px solid ${dividerSoft}`,
+    display: 'grid',
+    px: { xs: 0, sm: 2 },
+  };
+
+  const footerSx = {
+    borderTop: `1px solid ${dividerStrong}`,
+    justifyContent: 'flex-end',
+    px: { xs: 2.5, sm: 3.4 },
+    py: 2,
+  };
+
+  const footerInnerSx = {
+    alignItems: 'center',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 1.5,
+    justifyContent: 'flex-end',
+    width: '100%',
+  };
+
+  const secondaryActionSx = {
+    color: isLight
+      ? palette.text.secondary
+      : 'rgba(214,221,233,0.72)',
+    fontSize: '0.86rem',
+    fontWeight: 600,
+    letterSpacing: 0,
+    minHeight: 38,
+    px: 1.6,
+    textTransform: 'none' as const,
+    '&:hover': {
+      backgroundColor: isLight
+        ? alpha(palette.action.active, 0.06)
+        : 'rgba(255,255,255,0.035)',
+      color: isLight ? palette.text.primary : '#F6F8FC',
+    },
+  };
+
+  const primaryActionSx = {
+    fontSize: '0.86rem',
+    fontWeight: 600,
+    letterSpacing: 0,
+    minHeight: 40,
+    minWidth: 136,
+    px: 2.4,
+    textTransform: 'none' as const,
+  };
+
+  const progressPercentSx = {
+    color: isLight
+      ? palette.text.secondary
+      : 'rgba(214,221,233,0.58)',
+    fontSize: '0.82rem',
+    minWidth: 38,
+    textAlign: 'right' as const,
+  };
+
+  const mutedDecorIconSx = {
+    color: isLight
+      ? palette.text.secondary
+      : 'rgba(214,221,233,0.72)',
+    fontSize: 24,
+  };
+
+  const chevronIconSx = {
+    color: isLight ? palette.text.secondary : 'rgba(214,221,233,0.65)',
+    fontSize: 28,
+  };
+
+  return {
+    activeStatusSx,
+    advancedCardSx,
+    advancedCopySx,
+    advancedToggleSx,
+    advancedToolsSx,
+    chevronIconSx,
+    closeButtonSx,
+    coreContentSx,
+    coreHeaderSx,
+    coreStepSx,
+    coreTitleSx,
+    copyButtonSx,
+    dialogPaperSx,
+    footerInnerSx,
+    footerSx,
+    introIconSx,
+    introSx,
+    introTitleSx,
+    locationCardSx,
+    locationHeaderSx,
+    mutedDecorIconSx,
+    nextPillSx,
+    pathStripSx,
+    pathValueSx,
+    primaryActionSx,
+    progressPercentSx,
+    progressRowSx,
+    publicNodeWarningSx,
+    publicNodeWarningTextSx,
+    secondaryActionSx,
+    stepHeaderSx,
+    stepIconSlotSx,
+    stepMessageSx,
+    stepTitleSx,
+    stepsListSx,
+    toolButtonSx,
+    toolErrorSx,
+    toolRowSx,
+    toolTitleSx,
+  };
+}
+
 export interface CoreSetupDialogProps {
   open: boolean;
   onClose?: () => void;
@@ -82,24 +516,6 @@ export interface CoreSetupDialogProps {
   contextualActionLoading?: boolean;
   onContextualAction?: () => void;
 }
-
-const statusIcon = (status: StepStatus) => {
-  switch (status) {
-    case 'done':
-      return <CheckCircleIcon sx={{ color: '#62D26F', fontSize: 29 }} />;
-    case 'error':
-      return <ErrorOutlineIcon sx={{ color: '#FF7070', fontSize: 29 }} />;
-    case 'active':
-      return <HourglassEmptyIcon sx={{ color: '#83B3FF', fontSize: 29 }} />;
-    case 'idle':
-    default:
-      return (
-        <RadioButtonUncheckedIcon
-          sx={{ color: 'rgba(214,221,233,0.32)', fontSize: 29 }}
-        />
-      );
-  }
-};
 
 function resolveProgress({ status, progress }: StepState) {
   if (typeof progress === 'number') return Math.min(100, Math.max(0, progress));
@@ -132,24 +548,50 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
   const setInfoSnackCustom = useSetAtom(infoSnackGlobalAtom);
   const [isExtended, setIsExtended] = useState(false);
   const [errorStop, setErrorStop] = useState('');
-  const [errorDeleteDB, setErrorDeleteDB] = useState('');
-  const [errorBootstrap, setErrorBootstrap] = useState('');
+  const [errorBootstrapChain, setErrorBootstrapChain] = useState('');
   const { t } = useTranslation(['node', 'core']);
   const [mode, setMode] = useState(startAtIntro ? 1 : 2);
   const [stopCoreLoading, setStopCoreLoading] = useState(false);
-  const [bootstrapLoading, setBootstrapLoading] = useState(false);
-  const [dbExists, setDbExists] = useState(false);
-  const [deleteDBLoading, setDeleteDBLoading] = useState(false);
+  const [bootstrapChainLoading, setBootstrapChainLoading] = useState(false);
   const [coreRunningOnSystem, setCoreRunningOnSystem] = useState(false);
   const [coreInstalledOnSystem, setCoreInstalledOnSystem] = useState(false);
   const isActiveRef = useRef(false);
   const startPause = useRef(false);
-  const bootstrapLoadingRef = useRef(false);
-  const deleteDBLoadingRef = useRef(false);
+  const bootstrapChainLoadingRef = useRef(false);
   const stopCoreLoadingRef = useRef(false);
   const { isShow, onCancel, onOk, message, show } = useModal();
 
   const theme = useTheme();
+  const s = useMemo(() => getCoreSetupStyles(theme), [theme]);
+  const renderStepStatusIcon = useCallback(
+    (status: StepStatus) => {
+      const isLight = theme.palette.mode === 'light';
+      const idleColor = isLight
+        ? alpha(theme.palette.text.primary, 0.32)
+        : 'rgba(214,221,233,0.32)';
+      const activeColor = isLight
+        ? theme.palette.primary.main
+        : '#83B3FF';
+      switch (status) {
+        case 'done':
+          return <CheckCircleIcon sx={{ color: '#62D26F', fontSize: 29 }} />;
+        case 'error':
+          return <ErrorOutlineIcon sx={{ color: '#FF7070', fontSize: 29 }} />;
+        case 'active':
+          return (
+            <HourglassEmptyIcon sx={{ color: activeColor, fontSize: 29 }} />
+          );
+        case 'idle':
+        default:
+          return (
+            <RadioButtonUncheckedIcon
+              sx={{ color: idleColor, fontSize: 29 }}
+            />
+          );
+      }
+    },
+    [theme]
+  );
   const statusText = useCallback(
     (status: StepStatus) => {
       switch (status) {
@@ -179,21 +621,37 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       {
         key: 'downloadedCore' as const,
         getLabel: (state: StepState) => {
-          if (state.status === 'done') return 'Downloaded Core';
-          if (state.status === 'active') return 'Downloading Core';
-          return 'Download Core';
+          if (state.status === 'done')
+            return t('node:coreSetupDialog.steps.downloadDone', {
+              postProcess: 'capitalizeFirstChar',
+            });
+          if (state.status === 'active')
+            return t('node:coreSetupDialog.steps.downloadActive', {
+              postProcess: 'capitalizeFirstChar',
+            });
+          return t('node:coreSetupDialog.steps.downloadIdle', {
+            postProcess: 'capitalizeFirstChar',
+          });
         },
       },
       {
         key: 'coreRunning' as const,
         getLabel: (state: StepState) => {
-          if (state.status === 'done') return 'Core running';
-          if (state.status === 'active') return 'Starting Core';
-          return 'Start Core';
+          if (state.status === 'done')
+            return t('node:coreSetupDialog.steps.runningDone', {
+              postProcess: 'capitalizeFirstChar',
+            });
+          if (state.status === 'active')
+            return t('node:coreSetupDialog.steps.runningActive', {
+              postProcess: 'capitalizeFirstChar',
+            });
+          return t('node:coreSetupDialog.steps.runningIdle', {
+            postProcess: 'capitalizeFirstChar',
+          });
         },
       },
     ],
-    []
+    [t]
   );
 
   const stepStates = stepDefs.map((def) => {
@@ -220,15 +678,25 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
   useEffect(() => {
     isActiveRef.current = isActive;
-    bootstrapLoadingRef.current = bootstrapLoading;
-    deleteDBLoadingRef.current = deleteDBLoading;
+    bootstrapChainLoadingRef.current = bootstrapChainLoading;
     stopCoreLoadingRef.current = stopCoreLoading;
-  }, [isActive, deleteDBLoading, stopCoreLoading, bootstrapLoading]);
+  }, [isActive, stopCoreLoading, bootstrapChainLoading]);
 
-  const computedActionLabel = useMemo(
-    () => (running ? 'Done' : downloaded ? 'Start Core' : 'Download Core'),
-    [running, downloaded]
-  );
+  const computedActionLabel = useMemo(() => {
+    if (running) {
+      return t('node:coreSetupDialog.actionDone', {
+        postProcess: 'capitalizeFirstChar',
+      });
+    }
+    if (downloaded) {
+      return t('node:coreSetupDialog.actionStart', {
+        postProcess: 'capitalizeFirstChar',
+      });
+    }
+    return t('node:coreSetupDialog.actionDownload', {
+      postProcess: 'capitalizeFirstChar',
+    });
+  }, [running, downloaded, t]);
 
   const actionLabel = actionLabelOverride ?? computedActionLabel;
   const hasContextualAction =
@@ -241,10 +709,25 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     : downloaded
       ? 'coreRunning'
       : 'downloadedCore';
-  const coreLocationLabel = customQortalPath || 'Default Qortal Core location';
-  const coreLocationDescription = customQortalPath
-    ? 'Qortal Core will run from this folder.'
-    : 'Qortal Core will use the default folder for this system.';
+  const coreLocationDescription = useMemo(
+    () =>
+      customQortalPath
+        ? t('node:coreSetupDialog.locationCustom', {
+            postProcess: 'capitalizeFirstChar',
+          })
+        : t('node:coreSetupDialog.locationDefault', {
+            postProcess: 'capitalizeFirstChar',
+          }),
+    [customQortalPath, t]
+  );
+  const coreLocationLabel = useMemo(
+    () =>
+      customQortalPath ||
+      t('node:coreSetupDialog.locationPathDefault', {
+        postProcess: 'capitalizeFirstChar',
+      }),
+    [customQortalPath, t]
+  );
   const advancedCoreToolsDisabled = isActive || isCoreSyncing;
 
   const copyCoreLocation = async () => {
@@ -254,7 +737,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       setOpenSnackGlobal(true);
       setInfoSnackCustom({
         type: 'success',
-        message: 'Core folder copied',
+        message: t('node:coreSetupDialog.folderCopied', {
+          postProcess: 'capitalizeFirstChar',
+        }),
       });
     } catch (error) {
       console.error(error);
@@ -263,7 +748,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
   const pickPath = async () => {
     try {
-      const res = await window.coreSetup.pickQortalDirectory();
+      const res = await window.coreSetup?.pickQortalDirectory?.();
 
       if (res === false) {
         setOpenSnackGlobal(true);
@@ -283,7 +768,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
 
   const removePath = async () => {
     try {
-      await window.coreSetup.removeCustomPath();
+      await window.coreSetup?.removeCustomPath?.();
       verifyCoreNotRunningFunc();
     } catch (error) {
       console.error(error);
@@ -301,8 +786,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       setMode(startAtIntro ? 1 : 2);
       verifyCoreNotRunningFunc();
       setErrorStop('');
-      setErrorDeleteDB('');
-      setErrorBootstrap('');
+      setErrorBootstrapChain('');
     }
   }, [open, startAtIntro, verifyCoreNotRunningFunc]);
 
@@ -310,8 +794,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     try {
       if (
         isActiveRef.current ||
-        bootstrapLoadingRef.current ||
-        deleteDBLoadingRef.current ||
+        bootstrapChainLoadingRef.current ||
         stopCoreLoadingRef.current ||
         startPause.current
       )
@@ -319,8 +802,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       const response = await window?.coreSetup?.isCoreRunningOnSystem();
       if (
         isActiveRef.current ||
-        bootstrapLoadingRef.current ||
-        deleteDBLoadingRef.current ||
+        bootstrapChainLoadingRef.current ||
         stopCoreLoadingRef.current
       )
         return;
@@ -335,29 +817,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       const response = await window?.coreSetup?.isCoreInstalledOnSystem();
       if (
         isActiveRef.current ||
-        bootstrapLoadingRef.current ||
-        deleteDBLoadingRef.current
+        bootstrapChainLoadingRef.current ||
+        stopCoreLoadingRef.current
       )
         return;
       setCoreInstalledOnSystem(response);
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const getDbExists = async () => {
-    try {
-      if (
-        isActiveRef.current ||
-        bootstrapLoadingRef.current ||
-        deleteDBLoadingRef.current ||
-        stopCoreLoadingRef.current ||
-        startPause.current
-      )
-        return;
-      const response = await window?.coreSetup?.dbExists();
-
-      setDbExists(response);
     } catch (error) {
       console.error(error);
     }
@@ -368,26 +832,23 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       !open ||
       !window?.coreSetup ||
       isActive ||
-      bootstrapLoading ||
-      deleteDBLoading
+      bootstrapChainLoading
     )
       return; // only start when modal is open
     if (window?.coreSetup?.isCoreRunningOnSystem) {
       getIsCoreRunningOnSystem();
       getIsCoreInstalledOnSystem();
-      getDbExists();
     }
     const intervalId = setInterval(() => {
       window?.coreSetup?.verifySteps();
       if (window?.coreSetup?.isCoreRunningOnSystem) {
         getIsCoreRunningOnSystem();
         getIsCoreInstalledOnSystem();
-        getDbExists();
       }
     }, 5000); // every 5s
 
     return () => clearInterval(intervalId); // cleanup on close/unmount
-  }, [open, isActive, bootstrapLoading, deleteDBLoading]);
+  }, [open, isActive, bootstrapChainLoading]);
 
   const stopCore = async () => {
     if (advancedCoreToolsDisabled) return;
@@ -419,21 +880,24 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       stopCoreLoadingRef.current = false;
     }
   };
-  const bootstrap = async () => {
+  const bootstrapOrClearChainAndStart = async () => {
     if (advancedCoreToolsDisabled) return;
 
     try {
-      setErrorBootstrap('');
-      setBootstrapLoading(true);
+      setErrorBootstrapChain('');
+      setBootstrapChainLoading(true);
+      bootstrapChainLoadingRef.current = true;
       await show({
-        message: t('node:confirmations.bootstrap', {
+        message: t('node:confirmations.bootstrapOrClearChain', {
           postProcess: 'capitalizeFirstChar',
         }),
       });
-      const response = await window?.coreSetup?.bootstrap();
+      const response =
+        (await window?.coreSetup?.bootstrapOrClearChainAndStart?.()) ??
+        false;
       if (response !== true) {
-        setErrorBootstrap(
-          t('node:error.failed_bootstrap', {
+        setErrorBootstrapChain(
+          t('node:error.failed_bootstrap_or_clear', {
             postProcess: 'capitalizeFirstChar',
           })
         );
@@ -441,35 +905,8 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     } catch (error) {
       console.error(error);
     } finally {
-      setBootstrapLoading(false);
-      bootstrapLoadingRef.current = false;
-    }
-  };
-
-  const deleteDB = async () => {
-    if (advancedCoreToolsDisabled) return;
-
-    try {
-      setErrorDeleteDB('');
-      setDeleteDBLoading(true);
-      await show({
-        message: t('node:confirmations.delete', {
-          postProcess: 'capitalizeFirstChar',
-        }),
-      });
-      const response = await window?.coreSetup?.deleteDB();
-      if (response !== true) {
-        setErrorDeleteDB(
-          t('node:error.failed_delete', {
-            postProcess: 'capitalizeFirstChar',
-          })
-        );
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setDeleteDBLoading(false);
-      deleteDBLoadingRef.current = false;
+      setBootstrapChainLoading(false);
+      bootstrapChainLoadingRef.current = false;
     }
   };
   const handleDialogClose = (
@@ -489,14 +926,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       aria-labelledby="core-setup-title"
       slotProps={{
         paper: {
-          sx: {
-            background: '#0d1117',
-            border: '1px solid rgba(255,255,255,0.08)',
-            borderRadius: '10px',
-            boxShadow: '0 24px 50px rgba(0,0,0,0.36)',
-            maxHeight: 'calc(100vh - 48px)',
-            maxWidth: '740px',
-          },
+          sx: s.dialogPaperSx,
         },
       }}
     >
@@ -599,46 +1029,61 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
       )}
       {mode === 2 && (
         <>
-          <Box sx={coreHeaderSx}>
-            <Typography id="core-setup-title" sx={dialogTitleSx}>
-              Set up Qortal Core
-            </Typography>
+          <Box sx={s.coreHeaderSx}>
+                <Typography id="core-setup-title" sx={s.coreTitleSx}>
+                  {t('node:coreSetupDialog.title', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
+                </Typography>
             {onClose && (
               <IconButton
                 onClick={onClose}
                 disabled={disableClose}
-                sx={closeButtonSx}
+                sx={s.closeButtonSx}
               >
                 <CloseRoundedIcon />
               </IconButton>
             )}
           </Box>
-          <DialogContent sx={coreContentSx}>
-            <Box sx={introSx}>
-              <Box sx={introIconSx}>
+          <DialogContent sx={s.coreContentSx}>
+            <Box sx={s.introSx}>
+              <Box sx={s.introIconSx}>
                 <ViewInArRoundedIcon sx={{ fontSize: 20 }} />
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={introTitleSx}>
-                  Run your own node locally.
+                <Typography sx={s.introTitleSx}>
+                  {t('node:coreSetupDialog.introTitle', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Typography>
-                <Typography sx={advancedCopySx}>
-                  You can use a public node while Core starts and syncs.
+                <Typography sx={s.advancedCopySx}>
+                  {t('node:coreSetupDialog.introSubtitle', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Typography>
               </Box>
             </Box>
 
             {publicNodeUnavailable && (
-              <Box sx={publicNodeWarningSx}>
-                <ErrorOutlineIcon sx={{ color: '#D8BA8A', fontSize: 20 }} />
-                <Typography sx={publicNodeWarningTextSx}>
-                  Public nodes are currently unavailable. Keep this screen open
-                  while local Core starts and syncs.
+              <Box sx={s.publicNodeWarningSx}>
+                <ErrorOutlineIcon
+                  sx={{
+                    color:
+                      theme.palette.mode === 'light'
+                        ? theme.palette.warning.main
+                        : '#D8BA8A',
+                    fontSize: 20,
+                  }}
+                />
+                <Typography sx={s.publicNodeWarningTextSx}>
+                  {t('node:coreSetupDialog.publicNodeUnavailable', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Typography>
               </Box>
             )}
 
-            <Box sx={stepsListSx}>
+            <Box sx={s.stepsListSx}>
               {stepStates.map(({ key, label, state }) => {
                 const prog = resolveProgress(state);
                 const isIndeterminate =
@@ -648,50 +1093,78 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 const statusLabel =
                   isNextStep && state.status === 'idle'
                     ? key === 'downloadedCore'
-                      ? 'Ready to download'
-                      : 'Ready to start'
+                      ? t('node:coreSetupDialog.readyToDownload', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : t('node:coreSetupDialog.readyToStart', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
                     : key === 'coreRunning' &&
                         state.status === 'done' &&
                         isCoreSyncing
-                      ? 'Syncing'
+                      ? t('node:coreSetupDialog.syncing', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
                       : statusText(state.status);
                 const helperText =
                   key === 'downloadedCore'
                     ? state.status === 'done'
-                      ? 'Core files are installed and ready.'
+                      ? t('node:coreSetupDialog.helpers.downloadDone', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
                       : state.status === 'active'
-                        ? 'Downloading and preparing Qortal Core.'
-                        : 'Download Qortal Core to run your own node.'
+                        ? t('node:coreSetupDialog.helpers.downloadActive', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('node:coreSetupDialog.helpers.downloadIdle', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
                     : state.status === 'done'
                       ? isCoreSyncing
-                        ? 'Core is running and syncing blockchain data.'
-                        : 'Core is running locally.'
+                        ? t('node:coreSetupDialog.helpers.runningDoneSyncing', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('node:coreSetupDialog.helpers.runningDone', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
                       : downloaded
-                        ? 'Core will start and begin syncing in the background.'
-                        : 'Available after Core is downloaded.';
+                        ? t('node:coreSetupDialog.helpers.runningWaiting', {
+                            postProcess: 'capitalizeFirstChar',
+                          })
+                        : t('node:coreSetupDialog.helpers.runningBlocked', {
+                            postProcess: 'capitalizeFirstChar',
+                          });
 
                 return (
-                  <Box key={key} sx={coreStepSx(isNextStep)}>
-                    <Box sx={stepHeaderSx}>
-                      <Box sx={stepIconSlotSx}>{statusIcon(state.status)}</Box>
+                  <Box key={key} sx={s.coreStepSx(isNextStep)}>
+                    <Box sx={s.stepHeaderSx}>
+                      <Box sx={s.stepIconSlotSx}>
+                        {renderStepStatusIcon(state.status)}
+                      </Box>
                       <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography sx={stepTitleSx}>{label}</Typography>
+                        <Typography sx={s.stepTitleSx}>{label}</Typography>
                         <Typography
-                          sx={isNextStep ? activeStatusSx : advancedCopySx}
+                          sx={
+                            isNextStep ? s.activeStatusSx : s.advancedCopySx
+                          }
                         >
                           {statusLabel}
                         </Typography>
                         {isNextStep && (
-                          <Typography sx={{ ...advancedCopySx, mt: 1.2 }}>
+                          <Typography sx={{ ...s.advancedCopySx, mt: 1.2 }}>
                             {helperText}
                           </Typography>
                         )}
                       </Box>
                       {isNextStep && (
-                        <Typography sx={nextPillSx}>Next step</Typography>
+                        <Typography sx={s.nextPillSx}>
+                          {t('node:coreSetupDialog.nextStepPill', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
                       )}
                     </Box>
-                    <Box sx={progressRowSx}>
+                    <Box sx={s.progressRowSx}>
                       <Box sx={{ flex: 1 }}>
                         <LinearProgress
                           variant={
@@ -699,21 +1172,16 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                           }
                           value={prog}
                           color={state.status === 'error' ? 'error' : 'primary'}
-                          aria-label={`${label} progress`}
+                          aria-label={t('node:coreSetupDialog.progressAriaLabel', {
+                            label,
+                          })}
                           sx={{
                             height: 7,
                             borderRadius: 2,
                           }}
                         />
                       </Box>
-                      <Typography
-                        sx={{
-                          color: 'rgba(214,221,233,0.58)',
-                          fontSize: '0.82rem',
-                          minWidth: 38,
-                          textAlign: 'right',
-                        }}
-                      >
+                      <Typography sx={s.progressPercentSx}>
                         {prog !== undefined
                           ? `${prog}%`
                           : isIndeterminate
@@ -723,7 +1191,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                     </Box>
 
                     {state.message && !isNextStep ? (
-                      <Typography sx={stepMessageSx}>
+                      <Typography sx={s.stepMessageSx}>
                         {t(`node:messages.${state.message}`, {
                           postProcess: 'capitalizeFirstChar',
                         })}
@@ -733,14 +1201,16 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 );
               })}
             </Box>
-            <Box sx={locationCardSx}>
-              <Box sx={locationHeaderSx}>
-                <FolderOpenRoundedIcon
-                  sx={{ color: 'rgba(214,221,233,0.72)', fontSize: 24 }}
-                />
+            <Box sx={s.locationCardSx}>
+              <Box sx={s.locationHeaderSx}>
+                <FolderOpenRoundedIcon sx={s.mutedDecorIconSx} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={toolTitleSx}>Core location</Typography>
-                  <Typography sx={advancedCopySx}>
+                  <Typography sx={s.toolTitleSx}>
+                    {t('node:coreSetupDialog.locationTitle', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                  <Typography sx={s.advancedCopySx}>
                     {coreLocationDescription}
                   </Typography>
                 </Box>
@@ -748,69 +1218,88 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                   <Button
                     onClick={pickPath}
                     size="small"
-                    sx={toolButtonSx}
+                    sx={s.toolButtonSx}
                     variant="outlined"
                   >
-                    {customQortalPath ? 'Change' : 'Choose'}
+                    {customQortalPath
+                      ? t('node:coreSetupDialog.change', {
+                          postProcess: 'capitalizeFirstChar',
+                        })
+                      : t('node:coreSetupDialog.choose', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                   </Button>
                   {customQortalPath && (
                     <Button
                       onClick={removePath}
                       size="small"
-                      sx={toolButtonSx}
+                      sx={s.toolButtonSx}
                       variant="outlined"
                     >
-                      Clear
+                      {t('node:coreSetupDialog.clear', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Button>
                   )}
                 </Box>
               </Box>
-              <Box sx={pathStripSx}>
-                <Typography sx={pathValueSx}>{coreLocationLabel}</Typography>
+              <Box sx={s.pathStripSx}>
+                <Typography sx={s.pathValueSx}>{coreLocationLabel}</Typography>
                 {customQortalPath && (
-                  <ButtonBase onClick={copyCoreLocation} sx={copyButtonSx}>
+                  <ButtonBase onClick={copyCoreLocation} sx={s.copyButtonSx}>
                     <ContentCopyIcon sx={{ fontSize: 17 }} />
                   </ButtonBase>
                 )}
               </Box>
             </Box>
 
-            <Box sx={advancedCardSx}>
+            <Box sx={s.advancedCardSx}>
               <ButtonBase
                 onClick={() => setIsExtended((prev) => !prev)}
-                sx={advancedToggleSx}
+                sx={s.advancedToggleSx}
               >
-                <SettingsRoundedIcon
-                  sx={{ color: 'rgba(214,221,233,0.7)', fontSize: 24 }}
-                />
+                <SettingsRoundedIcon sx={s.mutedDecorIconSx} />
                 <Box sx={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                  <Typography sx={toolTitleSx}>Advanced</Typography>
-                  <Typography sx={advancedCopySx}>
-                    Advanced tools and options for Core.
+                  <Typography sx={s.toolTitleSx}>
+                    {t('node:coreSetupDialog.advancedTitle', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
+                  </Typography>
+                  <Typography sx={s.advancedCopySx}>
+                    {t('node:coreSetupDialog.advancedSubtitle', {
+                      postProcess: 'capitalizeFirstChar',
+                    })}
                   </Typography>
                 </Box>
                 {isExtended ? (
-                  <KeyboardArrowUpRoundedIcon />
+                  <KeyboardArrowUpRoundedIcon sx={s.chevronIconSx} />
                 ) : (
-                  <KeyboardArrowRightRoundedIcon />
+                  <KeyboardArrowRightRoundedIcon sx={s.chevronIconSx} />
                 )}
               </ButtonBase>
               <Collapse in={isExtended} timeout="auto" unmountOnExit>
-                <Box sx={advancedToolsSx}>
+                <Box sx={s.advancedToolsSx}>
                   {advancedCoreToolsDisabled && (
-                    <Typography sx={{ ...advancedCopySx, py: 1.1 }}>
-                      Core maintenance tools are unavailable while Core is
-                      starting or syncing.
+                    <Typography sx={{ ...s.advancedCopySx, py: 1.1 }}>
+                      {t('node:coreSetupDialog.maintenanceUnavailable', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Typography>
                   )}
-                  <Box sx={toolRowSx}>
+                  <Box sx={s.toolRowSx}>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={toolTitleSx}>Stop Core</Typography>
-                      <Typography sx={advancedCopySx}>
-                        Stops the local Core process.
+                      <Typography sx={s.toolTitleSx}>
+                        {t('node:coreSetupDialog.stopCoreTitle', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                      <Typography sx={s.advancedCopySx}>
+                        {t('node:coreSetupDialog.stopCoreBody', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </Typography>
                       {errorStop && (
-                        <Typography sx={toolErrorSx}>{errorStop}</Typography>
+                        <Typography sx={s.toolErrorSx}>{errorStop}</Typography>
                       )}
                     </Box>
                     <Button
@@ -822,79 +1311,51 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                         stopCoreLoading ||
                         !running ||
                         !coreRunningOnSystem ||
-                        deleteDBLoading ||
-                        bootstrapLoading
+                        bootstrapChainLoading
                       }
                       loading={stopCoreLoading}
-                      sx={toolButtonSx}
+                      sx={s.toolButtonSx}
                     >
-                      Stop
+                      {t('node:coreSetupDialog.stopButton', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Button>
                   </Box>
 
-                  <Box sx={toolRowSx}>
+                  <Box sx={s.toolRowSx}>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={toolTitleSx}>Bootstrap</Typography>
-                      <Typography sx={advancedCopySx}>
-                        Downloads and applies the latest public blockchain
-                        snapshot.
+                      <Typography sx={s.toolTitleSx}>
+                        {t('node:bootstrapChainHelp.title', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
                       </Typography>
-                      {errorBootstrap && (
-                        <Typography sx={toolErrorSx}>
-                          {errorBootstrap}
+                      <Typography sx={s.advancedCopySx}>
+                        {t('node:bootstrapChainHelp.body', {
+                          postProcess: 'capitalizeFirstChar',
+                        })}
+                      </Typography>
+                      {errorBootstrapChain && (
+                        <Typography sx={s.toolErrorSx}>
+                          {errorBootstrapChain}
                         </Typography>
                       )}
                     </Box>
                     <Button
-                      onClick={bootstrap}
+                      onClick={bootstrapOrClearChainAndStart}
                       size="small"
                       variant="outlined"
                       disabled={
                         advancedCoreToolsDisabled ||
-                        bootstrapLoading ||
+                        bootstrapChainLoading ||
                         !coreInstalledOnSystem ||
-                        isActive ||
-                        !coreRunningOnSystem ||
-                        stopCoreLoading ||
-                        deleteDBLoading
+                        stopCoreLoading
                       }
-                      loading={bootstrapLoading}
-                      sx={toolButtonSx}
+                      loading={bootstrapChainLoading}
+                      sx={s.toolButtonSx}
                     >
-                      Bootstrap
-                    </Button>
-                  </Box>
-
-                  <Box sx={toolRowSx}>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={toolTitleSx}>Reset Chain Data</Typography>
-                      <Typography sx={advancedCopySx}>
-                        Removes local blockchain data so Core can rebuild it.
-                        Your wallet is not deleted.
-                      </Typography>
-                      {errorDeleteDB && (
-                        <Typography sx={toolErrorSx}>
-                          {errorDeleteDB}
-                        </Typography>
-                      )}
-                    </Box>
-                    <Button
-                      onClick={deleteDB}
-                      size="small"
-                      variant="outlined"
-                      disabled={
-                        advancedCoreToolsDisabled ||
-                        !dbExists ||
-                        deleteDBLoading ||
-                        !coreInstalledOnSystem ||
-                        isActive ||
-                        stopCoreLoading ||
-                        bootstrapLoading
-                      }
-                      loading={deleteDBLoading}
-                      sx={toolButtonSx}
-                    >
-                      Reset
+                      {t('node:bootstrapChainHelp.title', {
+                        postProcess: 'capitalizeFirstChar',
+                      })}
                     </Button>
                   </Box>
                 </Box>
@@ -902,8 +1363,8 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
             </Box>
           </DialogContent>
 
-          <DialogActions sx={footerSx}>
-            <Box sx={footerInnerSx}>
+          <DialogActions sx={s.footerSx}>
+            <Box sx={s.footerInnerSx}>
               {onClose && (
                 <Button
                   onClick={onClose}
@@ -911,12 +1372,14 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                     disableClose ||
                     stopCoreLoading ||
                     actionLoading ||
-                    bootstrapLoading
+                    bootstrapChainLoading
                   }
-                  sx={secondaryActionSx}
+                  sx={s.secondaryActionSx}
                   variant="text"
                 >
-                  Cancel
+                  {t('node:coreSetupDialog.cancel', {
+                    postProcess: 'capitalizeFirstChar',
+                  })}
                 </Button>
               )}
 
@@ -929,10 +1392,10 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                     contextualActionDisabled ||
                     contextualActionLoading ||
                     stopCoreLoading ||
-                    bootstrapLoading
+                    bootstrapChainLoading
                   }
                   loading={contextualActionLoading as unknown as undefined}
-                  sx={primaryActionSx}
+                  sx={s.primaryActionSx}
                 >
                   {contextualActionLabel}
                 </Button>
@@ -940,8 +1403,7 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                 <Button
                   onClick={() => {
                     setErrorStop('');
-                    setErrorBootstrap('');
-                    setErrorDeleteDB('');
+                    setErrorBootstrapChain('');
                     if (onAction) {
                       startPause.current = true;
                       onAction();
@@ -952,9 +1414,11 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
                   }}
                   color="success"
                   variant="contained"
-                  disabled={!canAction || stopCoreLoading || bootstrapLoading}
+                  disabled={
+                    !canAction || stopCoreLoading || bootstrapChainLoading
+                  }
                   loading={actionLoading as unknown as undefined} // if using @mui/lab LoadingButton, swap below
-                  sx={primaryActionSx}
+                  sx={s.primaryActionSx}
                   startIcon={
                     !running ? (
                       <PlayArrowRoundedIcon sx={{ fontSize: 18 }} />
@@ -979,7 +1443,9 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
         }}
       >
         <DialogTitle id="alert-dialog-title" sx={dialogTitleSx}>
-          Confirm action
+          {t('node:coreSetupDialog.confirmTitle', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </DialogTitle>
 
         <DialogContent sx={dialogContentSx}>
@@ -1017,293 +1483,3 @@ export function CoreSetupDialog(props: CoreSetupDialogProps) {
     </Dialog>
   );
 }
-
-const coreHeaderSx = {
-  alignItems: 'center',
-  borderBottom: '1px solid rgba(255,255,255,0.06)',
-  display: 'flex',
-  justifyContent: 'space-between',
-  minHeight: 64,
-  px: { xs: 2.5, sm: 3 },
-};
-
-const closeButtonSx = {
-  color: 'rgba(214,221,233,0.68)',
-  mr: -0.75,
-  '&:hover': {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    color: '#F6F8FC',
-  },
-};
-
-const coreContentSx = {
-  px: { xs: 2.5, sm: 3.4 },
-  py: { xs: 2.4, sm: 3 },
-};
-
-const advancedCopySx = {
-  color: 'rgba(214,221,233,0.64)',
-  fontSize: '0.84rem',
-  lineHeight: 1.55,
-};
-
-const introSx = {
-  alignItems: 'center',
-  display: 'flex',
-  gap: 1.6,
-  mb: 2.2,
-  px: { xs: 0, sm: 0.8 },
-};
-
-const introIconSx = {
-  alignItems: 'center',
-  background:
-    'linear-gradient(135deg, rgba(51,107,222,0.92), rgba(91,132,201,0.3))',
-  border: '1px solid rgba(118,165,255,0.42)',
-  borderRadius: '999px',
-  boxShadow: '0 0 24px rgba(74,132,255,0.24)',
-  color: '#D5E4FF',
-  display: 'flex',
-  flexShrink: 0,
-  height: 48,
-  justifyContent: 'center',
-  width: 48,
-};
-
-const introTitleSx = {
-  color: 'rgba(246,248,252,0.96)',
-  fontSize: '0.96rem',
-  fontWeight: 800,
-  lineHeight: 1.25,
-};
-
-const publicNodeWarningSx = {
-  alignItems: 'center',
-  backgroundColor: 'rgba(216,186,138,0.08)',
-  border: '1px solid rgba(216,186,138,0.18)',
-  borderRadius: '8px',
-  display: 'flex',
-  gap: 1.1,
-  mb: 2.2,
-  px: 1.35,
-  py: 1.1,
-};
-
-const publicNodeWarningTextSx = {
-  color: 'rgba(239,228,202,0.9)',
-  fontSize: '0.82rem',
-  lineHeight: 1.5,
-};
-
-const stepsListSx = {
-  borderBottom: '1px solid rgba(255,255,255,0.07)',
-  display: 'grid',
-};
-
-const coreStepSx = (active: boolean) => ({
-  borderTop: '1px solid rgba(255,255,255,0.07)',
-  display: 'grid',
-  gap: active ? 1.5 : 1.25,
-  px: { xs: 0, sm: 2 },
-  py: { xs: 2.2, sm: 2.35 },
-});
-
-const stepHeaderSx = {
-  alignItems: 'flex-start',
-  display: 'grid',
-  gap: { xs: 1.35, sm: 1.6 },
-  gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-};
-
-const stepIconSlotSx = {
-  alignItems: 'center',
-  display: 'flex',
-  justifyContent: 'center',
-  pt: 0.1,
-  width: 32,
-};
-
-const stepTitleSx = {
-  color: 'rgba(246,248,252,0.96)',
-  fontSize: '0.96rem',
-  fontWeight: 800,
-  lineHeight: 1.25,
-};
-
-const progressRowSx = {
-  alignItems: 'center',
-  display: 'flex',
-  gap: 1.5,
-  ml: { xs: 0, sm: 6 },
-};
-
-const stepMessageSx = {
-  ...advancedCopySx,
-  ml: { xs: 0, sm: 6 },
-};
-
-const activeStatusSx = {
-  color: '#83B3FF',
-  fontSize: '0.84rem',
-  fontWeight: 700,
-  lineHeight: 1.55,
-};
-
-const nextPillSx = {
-  alignSelf: 'flex-start',
-  backgroundColor: 'rgba(77,139,255,0.16)',
-  borderRadius: '7px',
-  color: '#9FC0FF',
-  fontSize: '0.74rem',
-  fontWeight: 700,
-  lineHeight: 1,
-  px: 1,
-  py: 0.68,
-};
-
-const locationCardSx = {
-  borderBottom: '1px solid rgba(255,255,255,0.07)',
-  display: 'grid',
-  gap: 1.5,
-  px: { xs: 0, sm: 2 },
-  py: { xs: 2.15, sm: 2.35 },
-};
-
-const locationHeaderSx = {
-  alignItems: 'center',
-  display: 'grid',
-  gap: { xs: 1.35, sm: 1.6 },
-  gridTemplateColumns: 'auto minmax(0,1fr) auto',
-};
-
-const pathStripSx = {
-  alignItems: 'center',
-  backgroundColor: 'rgba(255,255,255,0.045)',
-  borderRadius: '7px',
-  display: 'flex',
-  gap: 1,
-  minHeight: 44,
-  ml: { xs: 0, sm: 5.6 },
-  px: 1.35,
-};
-
-const toolRowSx = {
-  alignItems: 'center',
-  borderBottom: '1px solid rgba(255,255,255,0.06)',
-  display: 'grid',
-  gap: 1.5,
-  gridTemplateColumns: 'minmax(0, 1fr) auto',
-  py: 1.35,
-  '&:last-child': {
-    borderBottom: 0,
-  },
-};
-
-const toolTitleSx = {
-  color: 'rgba(246,248,252,0.96)',
-  fontSize: '0.9rem',
-  fontWeight: 800,
-  lineHeight: 1.25,
-};
-
-const toolErrorSx = {
-  color: '#D8BA8A',
-  fontSize: '0.8rem',
-  lineHeight: 1.45,
-};
-
-const pathValueSx = {
-  color: 'rgba(214,221,233,0.78)',
-  fontSize: '0.8rem',
-  lineHeight: 1.45,
-  overflowWrap: 'anywhere',
-};
-
-const copyButtonSx = {
-  alignItems: 'center',
-  color: 'rgba(214,221,233,0.56)',
-  display: 'flex',
-  flex: '0 0 auto',
-  p: 0.35,
-  '&:hover': {
-    color: '#D6E5FF',
-  },
-};
-
-const toolButtonSx = {
-  borderColor: 'rgba(141,180,242,0.45)',
-  color: 'rgba(214,228,252,0.96)',
-  fontSize: '0.8rem',
-  fontWeight: 600,
-  letterSpacing: 0,
-  minHeight: 34,
-  minWidth: 82,
-  textTransform: 'none',
-  '&:hover': {
-    borderColor: 'rgba(170,202,255,0.7)',
-    backgroundColor: 'rgba(141,180,242,0.08)',
-  },
-};
-
-const advancedCardSx = {
-  display: 'grid',
-};
-
-const advancedToggleSx = {
-  alignItems: 'center',
-  display: 'grid',
-  gap: { xs: 1.35, sm: 1.6 },
-  gridTemplateColumns: 'auto minmax(0,1fr) auto',
-  px: { xs: 0, sm: 2 },
-  py: { xs: 2.15, sm: 2.35 },
-  width: '100%',
-  '&:hover': {
-    backgroundColor: 'rgba(255,255,255,0.018)',
-  },
-};
-
-const advancedToolsSx = {
-  borderTop: '1px solid rgba(255,255,255,0.07)',
-  display: 'grid',
-  px: { xs: 0, sm: 2 },
-};
-
-const footerSx = {
-  borderTop: '1px solid rgba(255,255,255,0.08)',
-  justifyContent: 'flex-end',
-  px: { xs: 2.5, sm: 3.4 },
-  py: 2,
-};
-
-const footerInnerSx = {
-  alignItems: 'center',
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 1.5,
-  justifyContent: 'flex-end',
-  width: '100%',
-};
-
-const secondaryActionSx = {
-  color: 'rgba(214,221,233,0.72)',
-  fontSize: '0.86rem',
-  fontWeight: 600,
-  letterSpacing: 0,
-  minHeight: 38,
-  px: 1.6,
-  textTransform: 'none',
-  '&:hover': {
-    backgroundColor: 'rgba(255,255,255,0.035)',
-    color: '#F6F8FC',
-  },
-};
-
-const primaryActionSx = {
-  fontSize: '0.86rem',
-  fontWeight: 600,
-  letterSpacing: 0,
-  minHeight: 40,
-  minWidth: 136,
-  px: 2.4,
-  textTransform: 'none',
-};

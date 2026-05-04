@@ -199,10 +199,9 @@ const QortinoNotificationHead = ({
       >
         <Box
           sx={{
-            background: `radial-gradient(ellipse at center, ${alpha(
-              '#02050A',
-              isDarkMode ? 0.52 : 0.2
-            )} 0%, ${alpha('#02050A', 0)} 72%)`,
+            background: isDarkMode
+              ? `radial-gradient(ellipse at center, ${alpha('#02050A', 0.52)} 0%, ${alpha('#02050A', 0)} 72%)`
+              : `radial-gradient(ellipse at center, ${alpha('#3A5370', 0.35)} 0%, ${alpha('#3A5370', 0)} 72%)`,
             bottom: 2,
             filter: 'blur(7px)',
             height: '9px',
@@ -214,22 +213,16 @@ const QortinoNotificationHead = ({
         />
         <Box
           sx={{
-            background: `radial-gradient(circle at 28% 18%, ${alpha(
-              '#D6E5FF',
-              isDarkMode ? 0.11 : 0.06
-            )} 0%, ${alpha('#D6E5FF', 0)} 34%), linear-gradient(180deg, ${alpha(
-              '#262E3D',
-              0.98
-            )} 0%, ${alpha('#151A24', 0.99)} 60%, ${alpha('#0E131B', 1)} 100%)`,
-            border: `1px solid ${alpha('#CDDCFF', isDarkMode ? 0.08 : 0.12)}`,
+            background: isDarkMode
+              ? `radial-gradient(circle at 28% 18%, ${alpha('#D6E5FF', 0.11)} 0%, ${alpha('#D6E5FF', 0)} 34%), linear-gradient(180deg, ${alpha('#262E3D', 0.98)} 0%, ${alpha('#151A24', 0.99)} 60%, ${alpha('#0E131B', 1)} 100%)`
+              : `radial-gradient(circle at 28% 18%, ${alpha('#E8F0FF', 0.65)} 0%, ${alpha('#B9CDE8', 0.2)} 28%, ${alpha('#6B7F9E', 0)} 42%), linear-gradient(180deg, ${alpha('#5F7390', 0.98)} 0%, ${alpha('#4D617A', 0.99)} 55%, ${alpha('#415368', 1)} 100%)`,
+            border: isDarkMode
+              ? `1px solid ${alpha('#CDDCFF', 0.08)}`
+              : `1px solid ${alpha('#8FA9CC', 0.42)}`,
             borderRadius: geometry.shellBorderRadius,
-            boxShadow: `0 16px 24px ${alpha(
-              '#000000',
-              isDarkMode ? 0.34 : 0.16
-            )}, inset 0 1px 0 ${alpha('#FFFFFF', 0.03)}, inset 0 -1px 0 ${alpha(
-              '#000000',
-              0.26
-            )}`,
+            boxShadow: isDarkMode
+              ? `0 16px 24px ${alpha('#000000', 0.34)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.03)}, inset 0 -1px 0 ${alpha('#000000', 0.26)}`
+              : `0 12px 22px ${alpha('#1E3248', 0.2)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.22)}, inset 0 -1px 0 ${alpha('#1A2433', 0.12)}`,
             height: `${geometry.headHeight}px`,
             left: '2px',
             position: 'absolute',
@@ -248,7 +241,7 @@ const QortinoNotificationHead = ({
             '&::after': {
               background: `linear-gradient(180deg, transparent 0%, ${alpha(
                 '#E9F1FF',
-                0.025
+                isDarkMode ? 0.025 : 0.06
               )} 100%)`,
               borderRadius: '0 0 16px 16px',
               bottom: '4px',
@@ -264,16 +257,16 @@ const QortinoNotificationHead = ({
         <Box
           sx={{
             backdropFilter: 'blur(10px)',
-            background: `linear-gradient(180deg, ${alpha('#101824', 0.76)} 0%, ${alpha(
-              '#090D13',
-              0.9
-            )} 100%)`,
-            border: `1px solid ${alpha(accent, 0.09)}`,
+            background: isDarkMode
+              ? `linear-gradient(180deg, ${alpha('#101824', 0.76)} 0%, ${alpha('#090D13', 0.9)} 100%)`
+              : `linear-gradient(180deg, ${alpha('#2F3F56', 0.9)} 0%, ${alpha('#1E2B3F', 0.94)} 100%)`,
+            border: isDarkMode
+              ? `1px solid ${alpha(accent, 0.09)}`
+              : `1px solid ${alpha('#C8DCF8', 0.38)}`,
             borderRadius: '17px',
-            boxShadow: `inset 0 1px 0 ${alpha('#FFFFFF', 0.04)}, inset 0 -8px 14px ${alpha(
-              '#000000',
-              0.18
-            )}`,
+            boxShadow: isDarkMode
+              ? `inset 0 1px 0 ${alpha('#FFFFFF', 0.04)}, inset 0 -8px 14px ${alpha('#000000', 0.18)}`
+              : `inset 0 1px 0 ${alpha('#FFFFFF', 0.12)}`,
             height: `${geometry.faceHeight}px`,
             left: `${geometry.faceLeft + 2}px`,
             position: 'absolute',
@@ -286,7 +279,7 @@ const QortinoNotificationHead = ({
           sx={{
             backgroundColor: '#EAF4FF',
             borderRadius: '999px',
-            boxShadow: `0 0 6px ${alpha(accent, 0.08)}`,
+            boxShadow: `0 0 6px ${alpha(accent, isDarkMode ? 0.08 : 0.14)}`,
             height: `${eyeSize}px`,
             left: `${geometry.faceLeft + 2 + Math.round(geometry.faceWidth / 2) - eyeOffset - Math.round(eyeSize / 2)}px`,
             position: 'absolute',
@@ -299,7 +292,7 @@ const QortinoNotificationHead = ({
           sx={{
             backgroundColor: '#EAF4FF',
             borderRadius: '999px',
-            boxShadow: `0 0 6px ${alpha(accent, 0.08)}`,
+            boxShadow: `0 0 6px ${alpha(accent, isDarkMode ? 0.08 : 0.14)}`,
             height: `${eyeSize}px`,
             left: `${geometry.faceLeft + 2 + Math.round(geometry.faceWidth / 2) + eyeOffset - Math.round(eyeSize / 2)}px`,
             position: 'absolute',
@@ -310,7 +303,7 @@ const QortinoNotificationHead = ({
         />
         <Box
           sx={{
-            borderBottom: `2px solid ${alpha('#EAF4FF', 0.72)}`,
+            borderBottom: `2px solid ${alpha('#EAF4FF', isDarkMode ? 0.72 : 0.88)}`,
             borderRadius: '0 0 999px 999px',
             height: '6px',
             left: `${geometry.faceLeft + 2 + Math.round(geometry.faceWidth / 2) - 11}px`,
@@ -490,10 +483,9 @@ export const QortinoNotificationHost = ({
           >
             <Box
               sx={{
-                background: `radial-gradient(ellipse at center, ${alpha(
-                  '#05070C',
-                  isDarkMode ? 0.28 : 0.12
-                )} 0%, ${alpha('#05070C', 0)} 72%)`,
+                background: isDarkMode
+                  ? `radial-gradient(ellipse at center, ${alpha('#05070C', 0.28)} 0%, ${alpha('#05070C', 0)} 72%)`
+                  : `radial-gradient(ellipse at center, ${alpha('#3A5370', 0.14)} 0%, ${alpha('#3A5370', 0)} 72%)`,
                 bottom: -7,
                 filter: 'blur(14px)',
                 height: '13px',
@@ -506,10 +498,9 @@ export const QortinoNotificationHost = ({
             />
             <Box
               sx={{
-                background: `linear-gradient(90deg, ${alpha('#F3F8FF', 0.7)} 0%, ${alpha(
-                  '#D9E7FF',
-                  0.28
-                )} 36%, ${alpha('#FFFFFF', 0.12)} 74%, ${alpha('#FFFFFF', 0)} 100%)`,
+                background: isDarkMode
+                  ? `linear-gradient(90deg, ${alpha('#F3F8FF', 0.7)} 0%, ${alpha('#D9E7FF', 0.28)} 36%, ${alpha('#FFFFFF', 0.12)} 74%, ${alpha('#FFFFFF', 0)} 100%)`
+                  : `linear-gradient(90deg, ${alpha('#FFFFFF', 0.92)} 0%, ${alpha('#C5D5EB', 0.42)} 38%, ${alpha('#FFFFFF', 0.2)} 72%, ${alpha('#FFFFFF', 0)} 100%)`,
                 borderRadius: '999px',
                 height: '1px',
                 left: `${QORTINO_INLET_BAR_START_PX + 10}px`,
@@ -522,10 +513,9 @@ export const QortinoNotificationHost = ({
             />
             <Box
               sx={{
-                background: `radial-gradient(ellipse at center, ${alpha(
-                  '#05070C',
-                  isDarkMode ? 0.34 : 0.15
-                )} 0%, ${alpha('#05070C', 0)} 74%)`,
+                background: isDarkMode
+                  ? `radial-gradient(ellipse at center, ${alpha('#05070C', 0.34)} 0%, ${alpha('#05070C', 0)} 74%)`
+                  : `radial-gradient(ellipse at center, ${alpha('#5A7394', 0.2)} 0%, ${alpha('#5A7394', 0)} 74%)`,
                 filter: 'blur(6px)',
                 height: '12px',
                 left: `${QORTINO_INLET_BAR_START_PX + 7 + inletGeometry.headOffsetX}px`,
@@ -537,12 +527,13 @@ export const QortinoNotificationHost = ({
             />
             <Box
               sx={{
-                background: `linear-gradient(90deg, ${alpha(
-                  '#05070C',
-                  isDarkMode ? 0.34 : 0.14
-                )} 0%, ${alpha('#05070C', 0.08)} 72%, transparent 100%)`,
+                background: isDarkMode
+                  ? `linear-gradient(90deg, ${alpha('#05070C', 0.34)} 0%, ${alpha('#05070C', 0.08)} 72%, transparent 100%)`
+                  : `linear-gradient(90deg, ${alpha('#8FA9CC', 0.28)} 0%, ${alpha('#8FA9CC', 0.06)} 72%, transparent 100%)`,
                 borderRadius: '9px',
-                boxShadow: `inset 12px 0 18px ${alpha('#000000', 0.22)}`,
+                boxShadow: isDarkMode
+                  ? `inset 12px 0 18px ${alpha('#000000', 0.22)}`
+                  : `inset 10px 0 14px ${alpha('#2A405C', 0.07)}`,
                 height: '25px',
                 left: `${QORTINO_INLET_BAR_START_PX + 6 + inletGeometry.headOffsetX}px`,
                 pointerEvents: 'none',
@@ -554,13 +545,16 @@ export const QortinoNotificationHost = ({
             />
             <Box
               sx={{
-                background: `linear-gradient(180deg, ${alpha(
-                  '#252D3C',
-                  0.66
-                )} 0%, ${alpha('#171C26', 0.86)} 100%)`,
-                border: `1px solid ${alpha('#D6E5FF', isDarkMode ? 0.05 : 0.08)}`,
+                background: isDarkMode
+                  ? `linear-gradient(180deg, ${alpha('#252D3C', 0.66)} 0%, ${alpha('#171C26', 0.86)} 100%)`
+                  : `linear-gradient(180deg, ${alpha('#D8E3F2', 0.88)} 0%, ${alpha('#C4D3E8', 0.94)} 100%)`,
+                border: isDarkMode
+                  ? `1px solid ${alpha('#D6E5FF', 0.05)}`
+                  : `1px solid ${alpha('#9DB2D4', 0.45)}`,
                 borderRadius: '10px',
-                boxShadow: `0 8px 16px ${alpha('#000000', isDarkMode ? 0.18 : 0.1)}`,
+                boxShadow: isDarkMode
+                  ? `0 8px 16px ${alpha('#000000', 0.18)}`
+                  : `0 6px 14px ${alpha('#2A405C', 0.12)}`,
                 height: '29px',
                 left: `${QORTINO_INLET_BAR_START_PX + 6 + inletGeometry.headOffsetX}px`,
                 pointerEvents: 'none',
@@ -572,17 +566,17 @@ export const QortinoNotificationHost = ({
             />
             <Box
               sx={{
-                background: `linear-gradient(180deg, ${alpha(
-                  '#262E3D',
-                  0.82
-                )} 0%, ${alpha('#171C26', 0.94)} 58%, ${alpha('#121823', 0.96)} 100%)`,
+                background: isDarkMode
+                  ? `linear-gradient(180deg, ${alpha('#262E3D', 0.82)} 0%, ${alpha('#171C26', 0.94)} 58%, ${alpha('#121823', 0.96)} 100%)`
+                  : `linear-gradient(180deg, ${alpha('#FBFCFE', 0.98)} 0%, ${alpha('#EEF3FA', 0.99)} 48%, ${alpha('#E3EBF5', 1)} 100%)`,
                 backdropFilter: 'blur(16px)',
-                border: `1px solid ${alpha('#D6E5FF', isDarkMode ? 0.1 : 0.14)}`,
+                border: isDarkMode
+                  ? `1px solid ${alpha('#D6E5FF', 0.1)}`
+                  : `1px solid ${alpha('#9DB2D4', 0.52)}`,
                 borderRadius: '13px',
-                boxShadow: `0 14px 26px ${alpha(
-                  '#000000',
-                  isDarkMode ? 0.24 : 0.1
-                )}, inset 0 1px 0 ${alpha('#FFFFFF', 0.03)}`,
+                boxShadow: isDarkMode
+                  ? `0 14px 26px ${alpha('#000000', 0.24)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.03)}`
+                  : `0 14px 28px ${alpha('#2A405C', 0.11)}, inset 0 1px 0 ${alpha('#FFFFFF', 0.92)}`,
                 display: 'flex',
                 marginLeft: `${QORTINO_INLET_BAR_START_PX}px`,
                 maxWidth: 'min(500px, calc(100vw - 20px))',
@@ -596,16 +590,17 @@ export const QortinoNotificationHost = ({
                 position: 'relative',
                 width: 'fit-content',
                 '&::before': {
-                  background: `linear-gradient(180deg, ${alpha('#FFFFFF', 0.02)} 0%, transparent 100%)`,
+                  background: isDarkMode
+                    ? `linear-gradient(180deg, ${alpha('#FFFFFF', 0.02)} 0%, transparent 100%)`
+                    : `linear-gradient(180deg, ${alpha('#FFFFFF', 0.72)} 0%, transparent 55%)`,
                   content: '""',
                   inset: 0,
                   position: 'absolute',
                 },
                 '&::after': {
-                  background: `radial-gradient(circle at 0% 50%, ${alpha(
-                    palette.accent,
-                    0.12
-                  )} 0%, ${palette.tint} 26%, transparent 66%)`,
+                  background: isDarkMode
+                    ? `radial-gradient(circle at 0% 50%, ${alpha(palette.accent, 0.12)} 0%, ${palette.tint} 26%, transparent 66%)`
+                    : `radial-gradient(circle at 0% 50%, ${alpha(palette.accent, 0.16)} 0%, ${alpha(palette.accent, 0.06)} 28%, transparent 62%)`,
                   content: '""',
                   inset: 0,
                   pointerEvents: 'none',
@@ -616,7 +611,9 @@ export const QortinoNotificationHost = ({
               <Typography
                 sx={{
                   alignItems: 'center',
-                  color: alpha('#FBFDFF', 0.98),
+                  color: isDarkMode
+                    ? alpha('#FBFDFF', 0.98)
+                    : alpha(theme.palette.text.primary, 0.94),
                   display: 'flex',
                   fontFamily: 'Inter',
                   fontSize: '0.82rem',
@@ -638,15 +635,21 @@ export const QortinoNotificationHost = ({
                   onClick={closeNotification}
                   size="small"
                   sx={{
-                    color: alpha('#F1F5FF', 0.72),
+                    color: isDarkMode
+                      ? alpha('#F1F5FF', 0.72)
+                      : alpha(theme.palette.text.secondary, 0.88),
                     position: 'absolute',
                     right: 2,
                     top: '50%',
                     transform: 'translateY(-50%)',
                     zIndex: 1,
                     '&:hover': {
-                      backgroundColor: alpha('#FFFFFF', 0.04),
-                      color: alpha('#F1F5FF', 0.86),
+                      backgroundColor: isDarkMode
+                        ? alpha('#FFFFFF', 0.04)
+                        : alpha(theme.palette.primary.main, 0.08),
+                      color: isDarkMode
+                        ? alpha('#F1F5FF', 0.86)
+                        : alpha(theme.palette.text.primary, 0.92),
                     },
                   }}
                 >

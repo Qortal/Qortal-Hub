@@ -40,7 +40,8 @@
     "invalidKey": "недействительный API-ключ",
     "failed_stop": "не удалось остановить Core",
     "failed_bootstrap": "не удалось выполнить bootstrap",
-    "failed_delete": "не удалось удалить базу данных"
+    "failed_delete": "не удалось удалить базу данных",
+    "failed_bootstrap_or_clear": "не удалось выполнить bootstrap, очистить данные цепи или запустить Core"
   },
   "status": {
     "complete": "завершено",
@@ -81,7 +82,12 @@
   "confirmations": {
     "stop": "вы уверены, что хотите остановить Core?",
     "bootstrap": "вы уверены, что хотите выполнить bootstrap?",
-    "delete": "вы уверены, что хотите удалить базу данных?"
+    "delete": "вы уверены, что хотите удалить базу данных?",
+    "bootstrapOrClearChain": "Запускает bootstrap из снимка, если Core работает локально. Если это невозможно или bootstrap завершается с ошибкой, локальная база цепочки может быть удалена и Core перезапущен; файлы кошелька не затрагиваются. Продолжить?"
+  },
+  "bootstrapChainHelp": {
+    "title": "Bootstrap цепочки",
+    "body": "Одно действие: bootstrap из снимка, когда Core доступен, или очистка локальной БД цепочки и повторный запуск Core, если bootstrap невозможен. Кошелёк хранится отдельно."
   },
   "stop": "остановить Core",
   "bootstrap": "bootstrap",
@@ -89,6 +95,53 @@
   "more": "больше параметров",
   "less": "меньше параметров",
   "enableAuthWhenSyncing": "включить аутентификацию при синхронизации",
+  "coreSetupDialog": {
+    "title": "Настроить Qortal Core",
+    "introTitle": "Запускайте свой узел локально.",
+    "introSubtitle": "Можно использовать публичный узел, пока Core запускается и синхронизируется.",
+    "publicNodeUnavailable": "Публичные узлы сейчас недоступны. Не закрывайте этот экран, пока локальный Core запускается и синхронизируется.",
+    "steps": {
+      "downloadDone": "Core загружен",
+      "downloadActive": "Загрузка Core",
+      "downloadIdle": "Скачать Core",
+      "runningDone": "Core запущен",
+      "runningActive": "Запуск Core",
+      "runningIdle": "Запустить Core"
+    },
+    "readyToDownload": "Готово к загрузке",
+    "readyToStart": "Готово к запуску",
+    "syncing": "Синхронизация",
+    "helpers": {
+      "downloadDone": "Файлы Core установлены и готовы.",
+      "downloadActive": "Загрузка и подготовка Qortal Core.",
+      "downloadIdle": "Скачайте Qortal Core для собственного узла.",
+      "runningDoneSyncing": "Core работает и синхронизирует данные блокчейна.",
+      "runningDone": "Core запущен локально.",
+      "runningWaiting": "Core запустится и начнёт синхронизацию в фоне.",
+      "runningBlocked": "Доступно после загрузки Core."
+    },
+    "nextStepPill": "Следующий шаг",
+    "locationTitle": "Расположение Core",
+    "locationCustom": "Qortal Core будет запускаться из этой папки.",
+    "locationDefault": "Qortal Core будет использовать стандартную папку системы.",
+    "locationPathDefault": "Расположение Qortal Core по умолчанию",
+    "change": "Изменить",
+    "choose": "Выбрать",
+    "clear": "Очистить",
+    "advancedTitle": "Дополнительно",
+    "advancedSubtitle": "Расширенные инструменты и параметры Core.",
+    "maintenanceUnavailable": "Инструменты обслуживания Core недоступны во время запуска или синхронизации Core.",
+    "stopCoreTitle": "Остановить Core",
+    "stopCoreBody": "Останавливает локальный процесс Core.",
+    "stopButton": "Стоп",
+    "cancel": "Отмена",
+    "actionDownload": "Скачать Core",
+    "actionStart": "Запустить Core",
+    "actionDone": "Готово",
+    "confirmTitle": "Подтвердить действие",
+    "folderCopied": "Папка Core скопирована",
+    "progressAriaLabel": "Прогресс: {{label}}"
+  },
   "NotFullyStarted": {
     "titleNotReady": "Core ещё не полностью запущено",
     "descNotReady": "Qortal Core ещё не полностью запущено. Пожалуйста, подождите.",
