@@ -1031,8 +1031,10 @@ export class GroupCallAudioReceiveEngine {
         ) {
           state.repairHeavyHoldUntilMs = 0;
         }
+        const latestBufferedMs =
+          state.recentOpusBufferedMs.at(-1) ?? state.bufferedMsEma;
         const persistentLeanPressure =
-          state.bufferedMsEma <=
+          latestBufferedMs <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX &&
           (state.preProcessBufferedFrames <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX ||
@@ -1048,6 +1050,7 @@ export class GroupCallAudioReceiveEngine {
         }
         const persistentLeanHold =
           state.persistentLeanHoldUntilMs > nowMs &&
+          latestBufferedMs <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           !(
             !persistentLeanPressure &&
             state.bufferedMsEma >=
@@ -1060,7 +1063,7 @@ export class GroupCallAudioReceiveEngine {
         if (
           state.persistentLeanHoldUntilMs > 0 &&
           !persistentLeanPressure &&
-          state.bufferedMsEma >=
+          latestBufferedMs >=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           state.preProcessBufferedFrames >=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
@@ -1109,8 +1112,6 @@ export class GroupCallAudioReceiveEngine {
         ) {
           state.silentLeanHoldUntilMs = 0;
         }
-        const latestBufferedMs =
-          state.recentOpusBufferedMs.at(-1) ?? state.bufferedMsEma;
         const bufferedNotReadyReadyGapPressure =
           !state.lastJitterHasReadyFrame &&
           !state.lastConcealmentUsed &&
@@ -1143,6 +1144,7 @@ export class GroupCallAudioReceiveEngine {
           state.deltaMsEma <=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_DELTA_MAX_MS &&
           state.rateEma <= GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_RATE_EMA_MAX &&
+          !repairCollapseHold &&
           !repairCollapsePressure &&
           !silentLeanPressure &&
           !persistentLeanPressure;
