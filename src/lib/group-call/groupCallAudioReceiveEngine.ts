@@ -1070,6 +1070,7 @@ export class GroupCallAudioReceiveEngine {
           state.persistentLeanHoldUntilMs = 0;
         }
         const silentLeanPressure =
+          !state.lastJitterHasReadyFrame &&
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
           state.preProcessBufferedFrames <=
             GCALL_SINGLE_SOURCE_SILENT_LEAN_PREBUFFER_FRAMES_MAX &&
@@ -1086,6 +1087,7 @@ export class GroupCallAudioReceiveEngine {
         }
         const silentLeanHold =
           state.silentLeanHoldUntilMs > nowMs &&
+          !state.lastJitterHasReadyFrame &&
           !(
             !silentLeanPressure &&
             state.bufferedMsEma >=
