@@ -30,6 +30,24 @@ export interface AudioEngineJoinOptions {
   memberGateGroupName?: string;
 }
 
+export type GroupCallStartupStage =
+  | 'idle'
+  | 'joining-call'
+  | 'syncing-participants'
+  | 'securing-audio'
+  | 'starting-audio'
+  | 'connected'
+  | 'degraded';
+
+export interface GroupCallStartupStatus {
+  stage: GroupCallStartupStage;
+  headline: string;
+  detail: string | null;
+  tone: 'neutral' | 'info' | 'warning';
+  showProgress: boolean;
+  delayed: boolean;
+}
+
 export interface AudioEngineUserIdentity {
   address: string;
   publicKey: string;
@@ -52,6 +70,7 @@ export interface GroupCallControllerSnapshot {
   memberPrimaryNames: Record<string, string>;
   memberGateGroupName: string;
   audioQualityProfile: GroupCallAudioQualityProfile;
+  startupStatus: GroupCallStartupStatus;
 }
 
 export interface GroupCallControllerApi extends GroupCallControllerSnapshot {

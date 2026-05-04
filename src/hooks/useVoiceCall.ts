@@ -130,9 +130,19 @@ export interface IncomingCall {
   chatId: string;
 }
 
+export interface DirectVoiceCallStartupStatus {
+  stage: 'idle' | 'calling' | 'starting-audio' | 'connected';
+  headline: string;
+  detail: string | null;
+  tone: 'neutral' | 'info' | 'warning';
+  showProgress: boolean;
+  delayed: boolean;
+}
+
 export interface UseVoiceCallReturn {
   callState: CallState;
   audioMode: AudioMode;
+  startupStatus: DirectVoiceCallStartupStatus;
   isMuted: boolean;
   hearCall: boolean;
   callDuration: number;
@@ -181,6 +191,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [activeCallChatId, setActiveCallChatId] = useState<string | null>(null);
   const [callAudioWireNonce, setCallAudioWireNonce] = useState(0);
+  const [startupClock, setStartupClock] = useState(0);
 
   const callAudioDevices = useAtomValue(callAudioDevicesAtom);
   const setCallAudioDevices = useSetAtom(callAudioDevicesAtom);
@@ -212,6 +223,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const roomKeyRef = useRef<Uint8Array | null>(null);
   const audioSeqRef = useRef(0);
   const durationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startupStageSinceRef = useRef(Date.now());
 
   const micStreamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -2036,9 +2048,81 @@ export function useVoiceCall(): UseVoiceCallReturn {
     };
   }, [clearDurationTimer, enqueueTeardownReticulumMedia]);
 
+  const startupStageKey =
+    callState === 'connected'
+      ? `${callState}:${audioMode ?? 'none'}:${callDuration > 0 ? 'live' : 'startup'}`
+      : `${callState}:${audioMode ?? 'none'}`;
+
+  useEffect(() => {
+    startupStageSinceRef.current = Date.now();
+    setStartupClock((tick) => tick + 1);
+  }, [startupStageKey]);
+
+  useEffect(() => {
+    if (
+      callState !== 'calling' &&
+      !(callState === 'connected' && callDuration === 0)
+    ) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      setStartupClock((tick) => tick + 1);
+    }, 1_000);
+    return () => window.clearInterval(id);
+  }, [callDuration, callState]);
+
+  void startupClock;
+
+  const startupStatus: DirectVoiceCallStartupStatus = (() => {
+    const delayed = Date.now() - startupStageSinceRef.current >= 4_000;
+    if (callState === 'calling') {
+      return {
+        stage: 'calling',
+        headline: 'Calling...',
+        detail: delayed
+          ? 'Still waiting for the other side to answer.'
+          : 'Waiting for the other side to answer.',
+        tone: delayed ? 'warning' : 'info',
+        showProgress: true,
+        delayed,
+      };
+    }
+    if (callState === 'connected' && callDuration === 0) {
+      return {
+        stage: 'starting-audio',
+        headline: 'Starting secure audio...',
+        detail: delayed
+          ? 'This call is taking longer than usual to start.'
+          : 'Finalizing secure audio so you can hear each other.',
+        tone: delayed ? 'warning' : 'info',
+        showProgress: true,
+        delayed,
+      };
+    }
+    if (callState === 'connected') {
+      return {
+        stage: 'connected',
+        headline: 'Connected',
+        detail: null,
+        tone: 'neutral',
+        showProgress: false,
+        delayed: false,
+      };
+    }
+    return {
+      stage: 'idle',
+      headline: '',
+      detail: null,
+      tone: 'neutral',
+      showProgress: false,
+      delayed: false,
+    };
+  })();
+
   return {
     callState,
     audioMode,
+    startupStatus,
     isMuted,
     hearCall,
     callDuration,

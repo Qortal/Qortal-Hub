@@ -6,6 +6,7 @@ import {
   buildDefaultAudioSurfaceBridgeState,
   isAudioSurfaceSnapshotEvent,
 } from '../lib/group-call/audioSurfaceBridge';
+import { deriveGroupCallStartupStatus } from '../lib/group-call/groupCallStartupUx';
 import { traceGcallAudioSurface } from '../lib/group-call/gcallAudioSurfaceTrace';
 import type {
   AudioEngineJoinOptions,
@@ -21,11 +22,13 @@ export function useAudioSurfaceGroupCallController(
   const [bridgeState, setBridgeState] = useState(
     buildDefaultAudioSurfaceBridgeState()
   );
+  const [startupClock, setStartupClock] = useState(0);
   const lastSnapshotLogRef = useRef<{
     roomState: string;
     gcallJoinError: string | null;
     roomId: string;
   } | null>(null);
+  const startupStageSinceRef = useRef<number>(Date.now());
 
   useEffect(() => {
     if (!window.audioSurface) {
@@ -110,6 +113,47 @@ export function useAudioSurfaceGroupCallController(
     });
   }, [uiActive]);
 
+  const snapshot = bridgeState.snapshot;
+
+  const startupStageKey = useMemo(() => {
+    const remoteCount = Math.max(0, snapshot.participants.length - 1);
+    const hasInboundAudio =
+      (snapshot.metrics.packetsReceived ?? 0) > 0 ||
+      (snapshot.metrics.packetsDecoded ?? 0) > 0;
+    return [
+      snapshot.roomState,
+      remoteCount > 0 ? 'remote' : 'solo',
+      snapshot.mediaViable ? 'viable' : 'unready',
+      hasInboundAudio ? 'inbound' : 'silent',
+      snapshot.localConnectionHint ? 'hint' : 'stable',
+    ].join(':');
+  }, [
+    snapshot.localConnectionHint,
+    snapshot.mediaViable,
+    snapshot.metrics.packetsDecoded,
+    snapshot.metrics.packetsReceived,
+    snapshot.participants.length,
+    snapshot.roomState,
+  ]);
+
+  useEffect(() => {
+    startupStageSinceRef.current = Date.now();
+    setStartupClock((tick) => tick + 1);
+  }, [startupStageKey]);
+
+  useEffect(() => {
+    if (
+      snapshot.roomState !== 'joining' &&
+      !(snapshot.roomState === 'connected' && !snapshot.mediaViable)
+    ) {
+      return;
+    }
+    const id = window.setInterval(() => {
+      setStartupClock((tick) => tick + 1);
+    }, 1_000);
+    return () => window.clearInterval(id);
+  }, [snapshot.mediaViable, snapshot.roomState]);
+
   const sendCommand = useCallback(
     async (
       command: Parameters<NonNullable<Window['audioSurface']>['sendCommand']>[0]
@@ -140,8 +184,16 @@ export function useAudioSurfaceGroupCallController(
     },
     []
   );
+  void startupClock;
 
-  const snapshot = bridgeState.snapshot;
+  const startupStatus = useMemo(
+    () =>
+      deriveGroupCallStartupStatus({
+        snapshot,
+        elapsedStageMs: Math.max(0, Date.now() - startupStageSinceRef.current),
+      }),
+    [snapshot, startupClock]
+  );
 
   const joinGroupCall = useCallback(
     async (roomId: string, chatId: string, options?: AudioEngineJoinOptions) => {
@@ -222,6 +274,7 @@ export function useAudioSurfaceGroupCallController(
       memberPrimaryNames: snapshot.memberPrimaryNames,
       memberGateGroupName: snapshot.memberGateGroupName,
       audioQualityProfile: snapshot.audioQualityProfile,
+      startupStatus,
     }),
     [
       clearGcallJoinError,
@@ -244,6 +297,7 @@ export function useAudioSurfaceGroupCallController(
       snapshot.participants,
       snapshot.roomId,
       snapshot.roomState,
+      startupStatus,
       snapshot.topologyLabel,
       toggleHearCall,
     ]

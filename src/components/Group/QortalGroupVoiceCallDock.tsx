@@ -60,6 +60,7 @@ export function QortalGroupVoiceCallDock() {
     participants,
     activeSpeakers,
     metrics,
+    startupStatus,
     leaveGroupCall,
     setMuted,
     muted,
@@ -240,6 +241,53 @@ export function QortalGroupVoiceCallDock() {
           }}
         />
       </Tooltip>
+
+      {startupStatus.headline && startupStatus.stage !== 'connected' ? (
+        <Box
+          sx={{
+            width: '100%',
+            px: 0.75,
+            py: 0.75,
+            borderRadius: 1.5,
+            bgcolor:
+              startupStatus.tone === 'warning'
+                ? alpha('#f59e0b', 0.16)
+                : alpha('#38bdf8', 0.14),
+            border: `1px solid ${
+              startupStatus.tone === 'warning'
+                ? alpha('#f59e0b', 0.32)
+                : alpha('#38bdf8', 0.28)
+            }`,
+          }}
+        >
+          <Typography
+            variant="caption"
+            component="div"
+            sx={{
+              fontSize: 10,
+              fontWeight: 700,
+              lineHeight: 1.2,
+              color: '#e5e7eb',
+            }}
+          >
+            {startupStatus.headline}
+          </Typography>
+          {startupStatus.detail ? (
+            <Typography
+              variant="caption"
+              component="div"
+              sx={{
+                mt: 0.4,
+                fontSize: 9,
+                lineHeight: 1.25,
+                color: TEXT_MUTED,
+              }}
+            >
+              {startupStatus.detail}
+            </Typography>
+          ) : null}
+        </Box>
+      ) : null}
 
       <Box
         sx={{

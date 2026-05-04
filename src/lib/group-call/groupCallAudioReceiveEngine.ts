@@ -134,6 +134,7 @@ const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX = 24;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX = 2;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS = -48;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_INGRESS_AGE_MIN_MS = 220;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CONCEALMENT_EMA_MAX = 0.04;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN = 28;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN = 3;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_INGRESS_AGE_MAX_MS = 200;
@@ -215,8 +216,8 @@ function selectSingleSourceReceiveProfile(
   ctx: SingleSourceProfileContext
 ): SingleSourceReceiveProfile {
   if (
-    ctx.severeSingleSourceHold &&
-    !ctx.bufferedNotReadyPressure
+    ctx.severeSingleSourcePressure ||
+    (ctx.severeSingleSourceHold && !ctx.bufferedNotReadyPressure)
   ) {
     return 'collapse-recovery';
   }
@@ -1034,6 +1035,11 @@ export class GroupCallAudioReceiveEngine {
         const latestBufferedMs =
           state.recentOpusBufferedMs.at(-1) ?? state.bufferedMsEma;
         const persistentLeanPressure =
+          !(
+            !state.lastJitterHasReadyFrame &&
+            latestBufferedMs >=
+              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN
+          ) &&
           latestBufferedMs <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX &&
           (state.preProcessBufferedFrames <=
@@ -1041,6 +1047,8 @@ export class GroupCallAudioReceiveEngine {
             state.oldestFrameAgeEma >=
               GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_INGRESS_AGE_MIN_MS) &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CONCEALMENT_EMA_MAX &&
           !severeSingleSourceHold;
         if (persistentLeanPressure) {
           state.persistentLeanHoldUntilMs = Math.max(
@@ -1050,6 +1058,13 @@ export class GroupCallAudioReceiveEngine {
         }
         const persistentLeanHold =
           state.persistentLeanHoldUntilMs > nowMs &&
+          !(
+            !state.lastJitterHasReadyFrame &&
+            latestBufferedMs >=
+              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN
+          ) &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CONCEALMENT_EMA_MAX &&
           latestBufferedMs <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           !(
             !persistentLeanPressure &&

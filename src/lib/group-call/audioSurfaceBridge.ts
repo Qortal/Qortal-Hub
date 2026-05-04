@@ -109,6 +109,14 @@ export function buildDefaultGroupCallControllerSnapshot(): GroupCallControllerSn
     memberPrimaryNames: {},
     memberGateGroupName: '',
     audioQualityProfile: 'low-latency',
+    startupStatus: {
+      stage: 'idle',
+      headline: '',
+      detail: null,
+      tone: 'neutral',
+      showProgress: false,
+      delayed: false,
+    },
   };
 }
 

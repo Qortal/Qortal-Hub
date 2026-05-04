@@ -47,6 +47,7 @@ import {
   shortAddr,
 } from './qortalGroupCallParticipantUi';
 import { CallAudioSettingsButton } from '../Chat/CallAudioDeviceSelectors';
+import { GroupCallStartupBanner } from '../Chat/GroupCallStartupBanner';
 
 const BG_MAIN = '#313338';
 const BG_HEADER = '#2b2d31';
@@ -71,6 +72,7 @@ export function QortalGroupVoiceCallStage() {
     activeSpeakers,
     metrics,
     localConnectionHint,
+    startupStatus,
     leaveGroupCall,
     setMuted,
     muted,
@@ -204,7 +206,10 @@ export function QortalGroupVoiceCallStage() {
         ? 'repeat(2, 1fr)'
         : 'repeat(2, 1fr)';
 
-  const hintText = localConnectionHint?.message?.trim?.() ?? '';
+  const hintText =
+    startupStatus.headline && startupStatus.stage !== 'connected'
+      ? startupStatus.headline
+      : localConnectionHint?.message?.trim?.() ?? '';
 
   const node = (
     <Box
@@ -331,9 +336,11 @@ export function QortalGroupVoiceCallStage() {
               {hintText}
             </Typography>
           ) : null}
-        </Box>
+      </Box>
 
-        <Box
+      <GroupCallStartupBanner status={startupStatus} />
+
+      <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
