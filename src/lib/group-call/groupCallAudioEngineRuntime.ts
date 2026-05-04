@@ -199,6 +199,9 @@ function buildEmptyRootPeerLivenessRecord(): RootPeerLivenessRecord {
 const GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS = 1_000;
 const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
 const GROUP_CALL_SENDER_SYNC_RETRY_MS = 1_500;
+const RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS = 5_000;
+const PARTICIPANT_ROSTER_REFRESH_INTERVAL_MS = TOPOLOGY_HEARTBEAT_MS;
+const PARTICIPANT_ROSTER_MISSING_EVICT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 500;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
   TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS + TOPOLOGY_HEARTBEAT_MS;
@@ -365,6 +368,7 @@ export class GroupCallAudioEngineRuntime {
   private topologyElectionTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSpeakerRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private memberGateRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  private participantRosterRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private topologyAsyncGeneration = 0;
   private lastObservedTopologyEpoch = 0;
   private trustedRemoteRoot = '';
@@ -375,6 +379,8 @@ export class GroupCallAudioEngineRuntime {
   private topologyElectionDelayUntilMs = 0;
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
+  private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
+  private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
   private readonly recentWindowTrends: RuntimeRecentWindowTrend[] = [];
   private connectionHintBadSince: number | null = null;
@@ -429,6 +435,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
+    this.clearParticipantRosterRefreshTimer();
     void this.senderEngine.stop();
     void this.receiveEngine.dispose();
     void this.decryptPool?.terminate();
@@ -850,6 +857,34 @@ export class GroupCallAudioEngineRuntime {
     }));
   }
 
+  private markParticipantRecentlyLeft(addressValue: string | null | undefined): void {
+    const address = addressValue?.trim() ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!address || address === myAddress) return;
+    this.recentlyLeftParticipantsUntilMs.set(
+      address,
+      Date.now() + RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS
+    );
+  }
+
+  private clearRecentLeftParticipant(addressValue: string | null | undefined): void {
+    const address = addressValue?.trim() ?? '';
+    if (!address) return;
+    this.recentlyLeftParticipantsUntilMs.delete(address);
+  }
+
+  private shouldSuppressRecentlyLeftParticipant(addressValue: string): boolean {
+    const address = addressValue.trim();
+    if (!address) return false;
+    const untilMs = this.recentlyLeftParticipantsUntilMs.get(address) ?? 0;
+    if (untilMs <= 0) return false;
+    if (Date.now() >= untilMs) {
+      this.recentlyLeftParticipantsUntilMs.delete(address);
+      return false;
+    }
+    return true;
+  }
+
   private mergeParticipantsFromTopology(
     participants: AudioEngineParticipant[],
     topology: GroupCallTopology
@@ -858,6 +893,7 @@ export class GroupCallAudioEngineRuntime {
     const ensureParticipant = (address: string, publicKey = ''): void => {
       const normalizedAddress = address.trim();
       if (!normalizedAddress || nextByAddress.has(normalizedAddress)) return;
+      if (this.shouldSuppressRecentlyLeftParticipant(normalizedAddress)) return;
       nextByAddress.set(normalizedAddress, {
         address: normalizedAddress,
         publicKey,
@@ -896,6 +932,7 @@ export class GroupCallAudioEngineRuntime {
     );
     const publicKey = publicKeyValue?.trim() ?? '';
     if (existing) {
+      this.clearRecentLeftParticipant(address);
       if (!publicKey || existing.publicKey === publicKey) return;
       this.snapshot = {
         ...this.snapshot,
@@ -920,6 +957,7 @@ export class GroupCallAudioEngineRuntime {
         },
       ]),
     };
+    this.clearRecentLeftParticipant(address);
     this.emitSnapshot();
   }
 
@@ -929,6 +967,7 @@ export class GroupCallAudioEngineRuntime {
     const address = addressValue?.trim() ?? '';
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!address || address === myAddress) return;
+    this.markParticipantRecentlyLeft(address);
     const nextParticipants = this.snapshot.participants.filter(
       (participant) => participant.address !== address
     );
@@ -1134,10 +1173,13 @@ export class GroupCallAudioEngineRuntime {
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
+    this.clearParticipantRosterRefreshTimer();
     this.clearHeldIncomingAudio();
     this.clearRecentWindowTrends();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.activeSpeakerLastSeenAt.clear();
+    this.recentlyLeftParticipantsUntilMs.clear();
+    this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
     this.connectionHintGoodSince = null;
     this.connectionHintSevereSince = null;
@@ -1183,6 +1225,7 @@ export class GroupCallAudioEngineRuntime {
     traceGcallAudioSurface('engine.joinGroupCall: step after setLocalAddresses', {});
     await this.syncQortalGroupReticulumTargets(roomId, options);
     this.startMemberGateRefresh(roomId);
+    this.startParticipantRosterRefresh(roomId);
     const joinGeneration = (crypto.getRandomValues(new Uint32Array(1))[0] ??
       0) >>> 0;
     traceGcallAudioSurface('engine.joinGroupCall: step before fetchLocalReticulumDestinationHash', {});
@@ -1339,8 +1382,10 @@ export class GroupCallAudioEngineRuntime {
     this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
+    this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
+    this.clearParticipantRosterRefreshTimer();
     this.clearHeldIncomingAudio();
     this.clearRecentWindowTrends();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
@@ -1352,6 +1397,8 @@ export class GroupCallAudioEngineRuntime {
     });
     this.memberGateGroupId = null;
     this.activeSpeakerLastSeenAt.clear();
+    this.recentlyLeftParticipantsUntilMs.clear();
+    this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
     this.connectionHintGoodSince = null;
     this.connectionHintSevereSince = null;
@@ -2355,7 +2402,9 @@ export class GroupCallAudioEngineRuntime {
       timestamp,
     }).catch(() => '');
     if (!signature) return;
-    await window.groupCall.broadcastTopology(
+    const broadcastTopology = window.groupCall?.broadcastTopology;
+    if (typeof broadcastTopology !== 'function') return;
+    await broadcastTopology(
       this.snapshot.roomId,
       {
         topologyEpoch: topology.topologyEpoch,
@@ -2922,6 +2971,7 @@ export class GroupCallAudioEngineRuntime {
       standbyForwarder: this.topology.standbyForwarder,
       participantCount: this.snapshot.participants.length,
     });
+    await this.refreshAuthoritativeParticipantRoster('topology-applied');
     await this.maybeReplayRetainedKeysAfterTopology(this.topology);
     await this.syncTopologyHeartbeat();
     await this.ensureRoomKeyAuthorityForTopology(previousRoot, this.topology);
@@ -3097,6 +3147,111 @@ export class GroupCallAudioEngineRuntime {
     if (this.memberGateRefreshTimer) {
       clearInterval(this.memberGateRefreshTimer);
       this.memberGateRefreshTimer = null;
+    }
+  }
+
+  private startParticipantRosterRefresh(roomId: string): void {
+    this.clearParticipantRosterRefreshTimer();
+    this.participantRosterRefreshTimer = setInterval(() => {
+      if (this.snapshot.roomId !== roomId) return;
+      void this.refreshAuthoritativeParticipantRoster('periodic');
+    }, PARTICIPANT_ROSTER_REFRESH_INTERVAL_MS);
+  }
+
+  private clearParticipantRosterRefreshTimer(): void {
+    if (this.participantRosterRefreshTimer) {
+      clearInterval(this.participantRosterRefreshTimer);
+      this.participantRosterRefreshTimer = null;
+    }
+  }
+
+  private async refreshAuthoritativeParticipantRoster(
+    reason: 'periodic' | 'topology-applied'
+  ): Promise<void> {
+    const roomId = this.snapshot.roomId;
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const api = window.groupCall?.getRoomParticipants;
+    if (!roomId || !myAddress || typeof api !== 'function') return;
+    const roster = await api(roomId).catch(() => null);
+    if (roomId !== this.snapshot.roomId || !Array.isArray(roster)) return;
+
+    const rosterByAddress = new Map<string, { publicKey: string }>();
+    for (const participant of roster) {
+      const address = participant?.address?.trim?.() ?? '';
+      if (!address) continue;
+      rosterByAddress.set(address, {
+        publicKey: participant?.publicKey?.trim?.() ?? '',
+      });
+      this.participantRosterMissingSinceMs.delete(address);
+      this.clearRecentLeftParticipant(address);
+    }
+    this.participantRosterMissingSinceMs.delete(myAddress);
+
+    let nextParticipants = this.snapshot.participants;
+    const removedAddresses: string[] = [];
+    const now = Date.now();
+    for (const participant of this.snapshot.participants) {
+      const address = participant.address?.trim() ?? '';
+      if (!address || address === myAddress) continue;
+      if (rosterByAddress.has(address)) continue;
+      const missingSince = this.participantRosterMissingSinceMs.get(address) ?? now;
+      this.participantRosterMissingSinceMs.set(address, missingSince);
+      if (now - missingSince < PARTICIPANT_ROSTER_MISSING_EVICT_MS) continue;
+      removedAddresses.push(address);
+      nextParticipants = nextParticipants.filter((current) => current.address !== address);
+    }
+
+    let addedAny = false;
+    for (const [address, { publicKey }] of rosterByAddress) {
+      if (address === myAddress) continue;
+      const existing = nextParticipants.find((participant) => participant.address === address);
+      if (existing) {
+        if (publicKey && existing.publicKey !== publicKey) {
+          nextParticipants = nextParticipants.map((participant) =>
+            participant.address === address ? { ...participant, publicKey } : participant
+          );
+        }
+        continue;
+      }
+      addedAny = true;
+      nextParticipants = this.withTopologyRoles([
+        ...nextParticipants,
+        { address, publicKey, speaking: false, role: 'participant' },
+      ]);
+    }
+
+    if (removedAddresses.length === 0 && !addedAny && nextParticipants === this.snapshot.participants) {
+      return;
+    }
+
+    for (const address of removedAddresses) {
+      this.activeSpeakerLastSeenAt.delete(address);
+      await this.receiveEngine.removeSource(address);
+      this.markParticipantRecentlyLeft(address);
+      if ((this.topology?.rootForwarder?.trim() ?? '') === address) {
+        if (this.trustedRemoteRoot === address) {
+          this.clearTrustedRemoteRootIfMatches(address);
+        }
+        this.resetRootPeerLiveness();
+      } else if (this.conflictingRemoteRoot === address) {
+        this.clearConflictingRemoteRootIfMatches(address);
+      }
+    }
+
+    this.snapshot = {
+      ...this.snapshot,
+      participants: this.withTopologyRoles(nextParticipants),
+    };
+    this.refreshActiveSpeakerState();
+    this.recordDiagEvent('authoritative-roster-refreshed', {
+      roomId,
+      reason,
+      participantCount: this.snapshot.participants.length,
+      removedCount: removedAddresses.length,
+      addedCount: addedAny ? 1 : 0,
+    });
+    if (removedAddresses.length > 0) {
+      this.scheduleTopologyElection('authoritative-roster-refresh');
     }
   }
 

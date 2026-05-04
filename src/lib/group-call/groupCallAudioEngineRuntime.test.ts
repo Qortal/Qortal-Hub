@@ -35,6 +35,8 @@ describe('GroupCallAudioEngineRuntime', () => {
         postMessage: ReturnType<typeof vi.fn>;
       }
     | null = null;
+  let nextAudioContextInitialState: 'running' | 'suspended' = 'running';
+  let latestAudioContextResume: ReturnType<typeof vi.fn> | null = null;
 
   beforeEach(() => {
     join.mockReset();
@@ -52,6 +54,8 @@ describe('GroupCallAudioEngineRuntime', () => {
     getGroupMembers.mockReset();
     groupCallEventHandler = null;
     latestCapturePort = null;
+    nextAudioContextInitialState = 'running';
+    latestAudioContextResume = null;
     join.mockResolvedValue({ success: true, callSessionId: 'csid-1' });
     leave.mockResolvedValue({ success: true });
     setLocalAddresses.mockResolvedValue({ success: true });
@@ -94,9 +98,12 @@ describe('GroupCallAudioEngineRuntime', () => {
       'AudioContext',
       class {
         sampleRate = 48_000;
-        state = 'running';
+        state = nextAudioContextInitialState;
         destination = { connect: vi.fn(), disconnect: vi.fn() };
         audioWorklet = { addModule: vi.fn().mockResolvedValue(undefined) };
+        resume = vi.fn().mockImplementation(async () => {
+          this.state = 'running';
+        });
         createMediaStreamSource() {
           return { connect: vi.fn(), disconnect: vi.fn() };
         }
@@ -108,6 +115,9 @@ describe('GroupCallAudioEngineRuntime', () => {
           };
         }
         close = vi.fn().mockResolvedValue(undefined);
+        constructor() {
+          latestAudioContextResume = this.resume;
+        }
       }
     );
     vi.stubGlobal(
@@ -336,6 +346,132 @@ describe('GroupCallAudioEngineRuntime', () => {
     const leaveResult = await runtime.handleCommand({ type: 'leave-group-call' });
     expect(leaveResult.ok).toBe(true);
     expect(leave).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not re-add a recently left participant from stale topology', async () => {
+    vi.useFakeTimers();
+    try {
+      const runtime = new GroupCallAudioEngineRuntime();
+      runtimes.add(runtime);
+      const events: Array<{ type: string; snapshot?: { participants: Array<{ address: string }> } }> = [];
+      runtime.onEvent((event) => {
+        events.push(event as never);
+      });
+
+      await runtime.handleCommand({
+        type: 'set-user',
+        userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+        myStatus: 'online',
+      });
+      await runtime.handleCommand({
+        type: 'join-group-call',
+        roomId: 'room-1',
+        chatId: 'chat-1',
+      });
+
+      groupCallEventHandler?.('gcall:participant-joined', {
+        roomId: 'room-1',
+        address: 'Qpeer',
+        publicKey: 'pub-peer',
+      });
+      groupCallEventHandler?.('gcall:topology', {
+        roomId: 'room-1',
+        topologyEpoch: 1,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: 'Qpeer',
+        clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+      });
+      await vi.runAllTicks();
+
+      groupCallEventHandler?.('gcall:participant-left', {
+        roomId: 'room-1',
+        address: 'Qpeer',
+      });
+      groupCallEventHandler?.('gcall:topology', {
+        roomId: 'room-1',
+        topologyEpoch: 1,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: 'Qpeer',
+        clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+      });
+      await vi.runAllTicks();
+
+      const lastSnapshot = [...events]
+        .reverse()
+        .find((event) => event.type === 'snapshot');
+      expect(lastSnapshot?.snapshot?.participants).toEqual([
+        expect.objectContaining({ address: 'Qlocal' }),
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('evicts a crashed peer after repeated authoritative roster absence and re-elects topology', async () => {
+    vi.useFakeTimers();
+    try {
+      let roster = [
+        { address: 'Qlocal', publicKey: 'pub-local' },
+        { address: 'Qpeer', publicKey: 'pub-peer' },
+      ];
+      getRoomParticipants.mockImplementation(async () => roster);
+
+      const runtime = new GroupCallAudioEngineRuntime();
+      runtimes.add(runtime);
+      const events: Array<{ type: string; snapshot?: { participants: Array<{ address: string }> } }> = [];
+      runtime.onEvent((event) => {
+        events.push(event as never);
+      });
+
+      await runtime.handleCommand({
+        type: 'set-user',
+        userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+        myStatus: 'online',
+      });
+      await runtime.handleCommand({
+        type: 'join-group-call',
+        roomId: 'room-1',
+        chatId: 'chat-1',
+      });
+
+      groupCallEventHandler?.('gcall:participant-joined', {
+        roomId: 'room-1',
+        address: 'Qpeer',
+        publicKey: 'pub-peer',
+      });
+      groupCallEventHandler?.('gcall:topology', {
+        roomId: 'room-1',
+        topologyEpoch: 1,
+        rootForwarder: 'Qlocal',
+        standbyForwarder: 'Qpeer',
+        clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+      });
+      await vi.runAllTicks();
+
+      roster = [{ address: 'Qlocal', publicKey: 'pub-local' }];
+      broadcastTopology.mockClear();
+
+      await vi.advanceTimersByTimeAsync(16_000);
+
+      const lastSnapshot = [...events]
+        .reverse()
+        .find((event) => event.type === 'snapshot');
+      expect(lastSnapshot?.snapshot?.participants).toEqual([
+        expect.objectContaining({ address: 'Qlocal' }),
+      ]);
+      expect(broadcastTopology).toHaveBeenCalledWith(
+        'room-1',
+        expect.objectContaining({
+          topologyEpoch: expect.any(Number),
+          rootForwarder: 'Qlocal',
+        }),
+        expect.any(String),
+        'pub-local',
+        expect.any(Number)
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('surfaces diagnostics export through the command interface', async () => {
@@ -1581,6 +1717,36 @@ describe('GroupCallAudioEngineRuntime', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('resumes a suspended sender audio context before capture runs', async () => {
+    nextAudioContextInitialState = 'suspended';
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    (runtime as any).roomKey = new Uint8Array(32).fill(3);
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+    });
+    await (runtime as any).syncSenderState();
+
+    expect(latestAudioContextResume).not.toBeNull();
+    expect(latestAudioContextResume).toHaveBeenCalled();
   });
 
   it('elects and broadcasts a topology after join when bootstrap has no authority', async () => {

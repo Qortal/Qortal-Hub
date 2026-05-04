@@ -40,6 +40,12 @@ function stopStreamSafe(stream: MediaStream | null): void {
   stream.getTracks().forEach((track) => track.stop());
 }
 
+async function ensureAudioContextRunning(ctx: AudioContext): Promise<void> {
+  const resumable = ctx as AudioContext & { resume?: () => Promise<void> };
+  if (ctx.state === 'running' || typeof resumable.resume !== 'function') return;
+  await resumable.resume();
+}
+
 export interface GroupCallAudioSenderFrame {
   opusFrame: Uint8Array;
   vad: boolean;
@@ -84,6 +90,7 @@ export class GroupCallAudioSenderEngine {
       currentShape.profile === nextShape.profile;
     if (sameShape && this.audioContext && this.captureNode && this.encoder) {
       this.onVadChanged = config.onVadChanged ?? null;
+      await ensureAudioContextRunning(this.audioContext);
       this.captureNode.port.postMessage({ type: 'mute', muted: nextShape.muted });
       if (nextShape.muted) this.updateVad(false);
       return;
@@ -173,6 +180,7 @@ export class GroupCallAudioSenderEngine {
     source.connect(keepAliveGain);
     keepAliveGain.connect(ctx.destination);
     await applyCallAudioOutput(nextShape.outputDeviceId, { audioContext: ctx });
+    await ensureAudioContextRunning(ctx);
     this.audioContext = ctx;
     this.micStream = stream;
     this.micSource = source;
