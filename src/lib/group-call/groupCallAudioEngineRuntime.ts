@@ -426,6 +426,20 @@ function encryptRoomKeyForRecipients(
   return { encryptedKeys, omittedAddresses, failedAddresses };
 }
 
+function setRosterPublicKey(
+  roster: Map<string, { publicKey: string }>,
+  addressValue: string | null | undefined,
+  publicKeyValue: string | null | undefined
+): void {
+  const address = addressValue?.trim() ?? '';
+  if (!address) return;
+  const publicKey = publicKeyValue?.trim() ?? '';
+  const existing = roster.get(address);
+  if (!existing || (publicKey && !existing.publicKey)) {
+    roster.set(address, { publicKey });
+  }
+}
+
 const ROOM_KEY_DISTRIBUTION_RETRY_MS = 750;
 
 export class GroupCallAudioEngineRuntime {
@@ -2112,26 +2126,32 @@ export class GroupCallAudioEngineRuntime {
     const participantMap = new Map<string, { address: string; publicKey: string }>();
     for (const participant of this.snapshot.participants) {
       if (participant.address) {
-        participantMap.set(participant.address, {
-          address: participant.address,
-          publicKey: participant.publicKey ?? '',
-        });
+        const address = participant.address.trim();
+        const publicKey = participant.publicKey?.trim() ?? '';
+        const existing = participantMap.get(address);
+        if (!existing || (publicKey && !existing.publicKey)) {
+          participantMap.set(address, { address, publicKey });
+        }
       }
     }
     for (const participant of bootstrap?.participants ?? []) {
       if (participant?.address) {
-        participantMap.set(participant.address, {
-          address: participant.address,
-          publicKey: participant.publicKey ?? '',
-        });
+        const address = participant.address.trim();
+        const publicKey = participant.publicKey?.trim() ?? '';
+        const existing = participantMap.get(address);
+        if (!existing || (publicKey && !existing.publicKey)) {
+          participantMap.set(address, { address, publicKey });
+        }
       }
     }
     for (const participant of roster ?? []) {
       if (participant?.address) {
-        participantMap.set(participant.address, {
-          address: participant.address,
-          publicKey: participant.publicKey ?? '',
-        });
+        const address = participant.address.trim();
+        const publicKey = participant.publicKey?.trim() ?? '';
+        const existing = participantMap.get(address);
+        if (!existing || (publicKey && !existing.publicKey)) {
+          participantMap.set(address, { address, publicKey });
+        }
       }
     }
     this.snapshot = {
@@ -3844,19 +3864,11 @@ export class GroupCallAudioEngineRuntime {
   private async getAuthoritativeRecipients(): Promise<Map<string, { publicKey: string }>> {
     const recipients = new Map<string, { publicKey: string }>();
     for (const participant of this.snapshot.participants) {
-      if (participant.address) {
-        recipients.set(participant.address, {
-          publicKey: participant.publicKey ?? '',
-        });
-      }
+      setRosterPublicKey(recipients, participant.address, participant.publicKey);
     }
     const mainRoster = await window.groupCall?.getRoomParticipants?.(this.snapshot.roomId);
     for (const participant of mainRoster ?? []) {
-      if (participant?.address) {
-        recipients.set(participant.address, {
-          publicKey: participant.publicKey ?? '',
-        });
-      }
+      setRosterPublicKey(recipients, participant?.address, participant?.publicKey);
     }
     return recipients;
   }
@@ -3900,6 +3912,13 @@ export class GroupCallAudioEngineRuntime {
     );
     const recipientAddrs = Object.keys(encryptedKeys);
     if (recipientAddrs.length === 0) {
+      this.recordDiagEvent('room-key-distribution-skipped', {
+        roomId: this.snapshot.roomId,
+        recipientCount: recipients.size,
+        omittedCount: omittedAddresses.length,
+        failedCount: failedAddresses.length,
+        hasRemoteParticipantEvidence: this.hasRemoteParticipantEvidence(),
+      });
       if (
         omittedAddresses.length > 0 ||
         failedAddresses.length > 0 ||
@@ -3944,6 +3963,13 @@ export class GroupCallAudioEngineRuntime {
         encryptedKeysDigest,
       }
     );
+    this.recordDiagEvent('room-key-rotate-sent', {
+      roomId: this.snapshot.roomId,
+      recipientCount: recipientAddrs.length,
+      omittedCount: omittedAddresses.length,
+      failedCount: failedAddresses.length,
+      mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+    });
     if (omittedAddresses.length > 0 || failedAddresses.length > 0) {
       this.scheduleRoomKeyDistributionRetry('partial-recipient-set');
     }
@@ -4019,7 +4045,14 @@ export class GroupCallAudioEngineRuntime {
       this.userInfo.address
     );
     const encryptedKey = encryptedKeys[toAddress];
-    if (!encryptedKey) return;
+    if (!encryptedKey) {
+      this.recordDiagEvent('targeted-room-key-skipped', {
+        roomId: this.snapshot.roomId,
+        toAddress,
+        reason: publicKey.trim() ? 'encrypt-failed' : 'missing-public-key',
+      });
+      return;
+    }
     const keyCommitment = await buildMediaKeyCommitmentHex(
       roomKey,
       this.callSessionId,

@@ -756,3 +756,99 @@ Current patched target:
 - Primary fix: make active high concealment with near-empty reserve outrank `persistent-lean`, even when `jitterHasReadyFrame=true`; this should classify as `repair-collapse` or `collapse-recovery`.
 - Keep `buffered-not-ready`, global baseline, and profile strength unchanged for the next patch.
 - Watch the Mac ingress-burst metrics after classification is corrected; if the side still collapses under the correct heavy profile, then inspect transport/ingress pacing as a separate subsystem.
+
+## Call: 2026-05-05 17:49Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T17-49-47-712Z.json`
+- Side B: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T17-49-54-656Z.json`
+
+User symptom:
+- The call was left running for minutes, but neither side could hear the other.
+
+High-level verdict:
+- Catastrophic media-path/key-establishment failure.
+- This call never reached receive-profile territory: both sides exported `packetsReceived=0`, `packetsDecoded=0`, no playouts, no jitter buffers, and no live policy profiles.
+
+Not the problem:
+- Receive selector/profile strength/baseline: no side received any audio to classify.
+- Decode: `packetsDroppedDecodeFailure=0` on both sides because no inbound audio reached decode.
+- Jitter/playout policy: no playout nodes or source profiles existed on either side.
+- Linux sender capture: Linux had a running sender, `15195` encoded frames, `15195` send attempts, and `15195` send successes.
+
+Primary next target:
+- Another subsystem: room-key distribution / media-path establishment.
+- Mac stayed `awaitingAuthoritativeKey=true`, `roomKeyPresent=false`, sender engine stopped, and outbound counters remained zero. It repeatedly requested the room key from Linux (`60` recent `room-key-requested` events) but never applied a key.
+- Linux owned and minted the room key and sent thousands of encrypted packets to Mac, but the root diagnostics did not show `targeted-room-key-sent`; this points at root-side key distribution/encryption/recipient roster handling rather than receive policy.
+- Fix applied after this review: preserve known non-empty participant public keys when hydrating/merging rosters and when building root key recipients, so a stale main roster with an empty public key cannot erase the usable key learned from participant events. Added `room-key-rotate-sent`, `room-key-distribution-skipped`, and `targeted-room-key-skipped` diagnostics.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QP9Jj4...i6rP` | none / no receive source | yes | 0 | 0 | 0 | 0 | 0 | low-latency | Sender was alive and sent `15195` frames to Mac; inbound audio stayed at zero. Root owned the key, but no key-send success was visible in diagnostics. |
+| B | standby-forwarder / Mac / `QaU2XU...Jh91` | none / no receive source | yes | 0 | 0 | 0 | 0 | 0 | low-latency | No room key, no mic sender, no outbound packets, no inbound packets. It repeatedly requested the root key and stayed `awaitingAuthoritativeKey=true`. |
+
+### Side A
+
+Expected profile from symptom:
+- No receive profile; media/key path did not establish.
+
+Actual exported profile:
+- None.
+
+Did classification match?
+- Yes, in the sense that absence of a profile matches the symptom better than any receive-profile classification.
+
+If no:
+- Not applicable. The failure happened before receive classification.
+
+### Side B
+
+Expected profile from symptom:
+- No receive profile; waiting for authoritative key.
+
+Actual exported profile:
+- None.
+
+Did classification match?
+- Yes.
+
+Notes:
+- `pipelineMode.roomKeyPresent=false`, `awaitingAuthoritativeKey=true`, `senderEngine.hasMicStream=false`, `encodedFrameCallbacks=0`, and repeated `room-key-requested` events explain why Mac never sent or decoded audio.
+- This is a correctness/path setup failure, not a weak listener.
+
+## Trend Read
+
+Side A:
+- Flat zero-inbound with active outbound sender.
+- Reasons seen:
+  - `reticulumAudioPacketPathTimeouts=55`.
+  - outbound packet sends continued, but inbound samples stayed `0`.
+  - recent events were dominated by topology heartbeats.
+
+Side B:
+- Flat key-wait state.
+- Reasons seen:
+  - recent events were dominated by repeated `retained-key-replay-requested` and `room-key-requested`.
+  - metrics were stale because no receive-engine updates occurred in the zero-media state.
+  - no sender startup occurred because no room key was applied.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T16:48Z group-812` | A / Mac standby | `steady-weak-listener` | yes | no/partly | selector / readiness priority | Done: not-ready buffered state now promotes correctly. |
+| `2026-05-05T16:48Z group-812` | B / Linux root | `collapse-recovery` | yes/partly | partly/no | selector / collapse priority | Done: ready-buffered low-concealment escape added. |
+| `2026-05-05T17:10Z group-812` | A / Mac standby | `persistent-lean` | yes | no | selector / repair escalation | Done: near-empty high-concealment paths latch out of persistent lean. |
+| `2026-05-05T17:10Z group-812` | B / Linux root | `buffered-not-ready` | yes | yes | selector / readiness | Keep current readiness selector. |
+| `2026-05-05T17:49Z group-812` | A / Linux root | none / no receive source | yes | yes | key/media-path establishment | Done: preserve non-empty public keys during roster merge and root recipient selection; add key distribution diagnostics. |
+| `2026-05-05T17:49Z group-812` | B / Mac standby | none / no receive source | yes | yes | key/media-path establishment | Done: same root key-distribution fix; next export should show `room-key-rotate-sent` or explicit skip reasons. |
+
+## Next Fix Target
+
+Current patched target:
+- Room-key distribution / media-path establishment.
+- This batch is not evidence for selector, profile strength, or baseline changes. The key symptom is that the standby never got an authoritative room key, so it never started sending and never decoded the root.
+- The next diagnostic checkpoint is explicit: if this recurs, inspect the new `room-key-distribution-skipped`, `targeted-room-key-skipped`, and `room-key-rotate-sent` events before touching receive policy again.

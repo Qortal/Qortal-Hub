@@ -1372,6 +1372,59 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('preserves a participant event public key when the main roster is missing it during root key distribution', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const peerPublicKey = Base58.encode(nacl.sign.keyPair().publicKey);
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: '' },
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+      publicKey: peerPublicKey,
+    });
+    sendKeyRotate.mockClear();
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sendKeyRotate).toHaveBeenCalledTimes(1);
+    expect(sendKeyRotate).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({ Qpeer: expect.any(String) }),
+      'Qlocal',
+      expect.any(String),
+      'pub-local',
+      expect.any(Number),
+      expect.objectContaining({
+        keyMessageVersion: 3,
+        callSessionId: 'csid-1',
+        mediaSessionGeneration: 1,
+      })
+    );
+  });
+
   it('drops the old room key and requests a new one when the remote root changes', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
