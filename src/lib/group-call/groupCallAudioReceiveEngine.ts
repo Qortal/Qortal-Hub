@@ -916,6 +916,15 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_BUFFERED_MS_MAX;
         const severeSingleSourceHold =
           state.severeSingleSourceHoldUntilMs > nowMs;
+        const severeSingleSourceHoldEscaped =
+          severeSingleSourceHold &&
+          state.lastJitterHasReadyFrame &&
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CONCEALMENT_EMA_MAX;
+        const effectiveSevereSingleSourceHold =
+          severeSingleSourceHold && !severeSingleSourceHoldEscaped;
         const severeSingleSourcePressure =
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS &&
@@ -960,14 +969,14 @@ export class GroupCallAudioReceiveEngine {
           state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX &&
-          !severeSingleSourceHold;
+          !effectiveSevereSingleSourceHold;
         const repairCollapsePressure =
           state.concealmentEma >=
             GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_BUFFERED_MS_MAX &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_DELTA_MAX_MS &&
-          !severeSingleSourceHold;
+          !effectiveSevereSingleSourceHold;
         if (repairCollapsePressure) {
           state.repairCollapseHoldUntilMs = Math.max(
             state.repairCollapseHoldUntilMs,
@@ -1297,7 +1306,7 @@ export class GroupCallAudioReceiveEngine {
           state.postRecoveryHoldUntilMs = 0;
         }
         const singleSourcePressure =
-          severeSingleSourceHold ||
+          effectiveSevereSingleSourceHold ||
           starvationPressure ||
           bufferedPressure ||
           lingeringPressure ||
@@ -1307,7 +1316,7 @@ export class GroupCallAudioReceiveEngine {
           recoveryModeActive,
           postFailoverRootProfileActive,
           severeSingleSourcePressure,
-          severeSingleSourceHold,
+          severeSingleSourceHold: effectiveSevereSingleSourceHold,
           repairCollapseHold,
           repairCollapsePressure,
           repairHeavyHold,
