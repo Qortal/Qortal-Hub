@@ -1259,3 +1259,106 @@ Current patched target:
 - Primary fix: instrument and fix why Mac skipped `571` outbound frames for no target and why Linux received only `678` packets while Mac received `3395`. Capture recipient roster/target availability, selected transport, path warm/fallback state, and per-peer send eligibility at each no-target skip.
 - Secondary diagnostics: keep decode/session instrumentation because both sides report decode failures, but the clarified audible symptom says decode count alone is not the primary selector for this batch.
 - Keep `repair-collapse` strength and global baseline unchanged for the next patch. Linux’s bad receive profile matches the symptom, but the larger asymmetry points upstream of receive policy.
+
+## Call: 2026-05-05 21:27Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T21-27-34-330Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T21-27-31-309Z.json`
+
+User symptom:
+- New paired call after the media sender/targeting diagnostics change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and correctness counters.
+
+High-level verdict:
+- Mixed, and improved versus 20:47Z.
+- Both sides now have room keys, live senders, inbound packets, decoded frames, active playouts, ready jitter frames, and low-latency playout mode. The previous catastrophic Mac-to-Linux imbalance is reduced, but Mac now has a hard decode correctness signal while Linux still looks like a moderate weak-listener path.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Key/media establishment: both sides have `roomKeyPresent=true`, live mic senders, inbound packets, decoded frames, playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Queue/backpressure: bridge/binary high-water values are low (`3`/`3` on Mac, `2`/`1` on Linux), with no queue-pressure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Global baseline: Mac has a healthy `69.597 ms` receive reserve, so this is not a broad low baseline problem.
+
+Primary next target:
+- Another subsystem: decode/session correctness first, then continue watching Mac-to-Linux media delivery.
+- Mac exports `packetsDroppedDecodeFailure=241` while still classifying the receive source as `clean-low-latency`. Per the triage rules, decode failures are a correctness/path signal and should be explained before selector, profile strength, or baseline tuning.
+- Linux's `steady-weak-listener` classification mostly matches its metrics (`avgPcmBufferedMs=33.369`, `concealmentTicks=212`, `playoutUnderTargetFraction=0.083`, `playoutRateFractionBelow097=0.071`), but it is not enough by itself to justify baseline or profile-strength changes while a decode failure is present on the paired side.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `clean-low-latency` | partly/unknown | 69.597 | 341 | 0 | 0.024 | 0.000 | low-latency | Reserve/playout profile looks clean, but `packetsDroppedDecodeFailure=241` is a correctness blocker that the receive profile does not represent. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `steady-weak-listener` | partly | 33.369 | 339 | 212 | 0.083 | 0.071 | low-latency | Classification matches a moderate weak-listener/repair path; not collapse, not startup, and decode is clean on this side. |
+
+### Side A
+
+Expected profile from symptom:
+- `clean-low-latency` by receive reserve/playout metrics, but no receive profile can account for the decode failures.
+
+Actual exported profile:
+- `clean-low-latency`
+
+Did classification match?
+- Partly/unknown.
+
+If no:
+- The profile matches the healthy live receive metrics: `avgPcmBufferedMs=69.597`, `jitterBufferDepthFramesMean=3.547`, `jitterHasReadyFrame=true`, `concealmentTicks=0`, and `playoutRateFractionBelow097=0`.
+- It does not match the correctness signal: `packetsDroppedDecodeFailure=241` and `packetsDropped=241`.
+- Do not tune `clean-low-latency`; inspect decode/session/FEC failure causes and keep the new decode diagnostics active.
+
+### Side B
+
+Expected profile from symptom:
+- `steady-weak-listener`
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- `avgPcmBufferedMs=33.369`, `jitterBufferDepthFramesMean=1.694`, `avgPlayoutDeltaMs=-100.605`, `concealmentTicks=212`, `playoutUnderTargetFraction=0.083`, and `playoutRateFractionBelow097=0.071` fit an understandable-but-not-clean weak listener.
+- This is not a collapse profile: playout is ready with `jitterBufferedFrames=12`, reserve is not near empty, and decode/key counters are clean.
+- Revisit weak-listener target/floor only after decode correctness is clean in a paired call.
+
+## Trend Read
+
+Side A:
+- Flat healthy-buffer receive path with a persistent decode-failure correctness counter.
+- Reasons seen:
+  - `packetsDroppedDecodeFailure` is `241` in every trend sample.
+  - `avgPcmBufferedMs` stays around `69.5` to `69.7 ms`.
+  - `concealmentTicks` stays `0`.
+  - `missingFrames` grows mildly from `303` to `341`.
+
+Side B:
+- Gradual moderate weak-listener path.
+- Reasons seen:
+  - `missingFrames` grows from `292` to `339`.
+  - `concealmentTicks` stays flat at `212`.
+  - `playoutUnderTargetFraction` improves slightly from `0.092` to `0.083`.
+  - `playoutRateFractionBelow097` improves from `0.081` to `0.071`.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T20:21Z group-812` | A / Mac standby | `repair-collapse` | yes | yes | profile strength | Done: raised `repair-collapse` target/floor and allowed collapse-level extra hold. |
+| `2026-05-05T20:21Z group-812` | B / Linux root | `repair-collapse` | yes | yes | profile strength | Done: same `repair-collapse` strength patch. |
+| `2026-05-05T20:47Z group-812` | A / Mac standby | `repair-collapse` | partly/no | no | selector / secondary decode diagnostics | Improved in 21:27Z: Mac now has healthy reserve and `clean-low-latency`, but decode failures still need investigation. |
+| `2026-05-05T20:47Z group-812` | B / Linux root | `repair-collapse` | yes | yes | Mac-to-Linux media delivery / sender targeting | Improved in 21:27Z: Linux now receives `3512` packets, but remains `steady-weak-listener`. |
+| `2026-05-05T21:27Z group-812` | A / Mac standby | `clean-low-latency` | partly/unknown | partly/unknown | decode/session correctness | Investigate `packetsDroppedDecodeFailure=241`; do not tune receive profiles from this side. |
+| `2026-05-05T21:27Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | weak-listener / secondary | Keep as evidence, but wait for a decode-clean paired call before tuning weak-listener strength or baseline. |
+
+## Next Fix Target
+
+Current patched target:
+- Decode/session correctness.
+- Primary fix: explain and instrument the Mac-side `packetsDroppedDecodeFailure=241` path in a call where reserve/playout otherwise look clean. This is the strongest template triage signal in the new export.
+- Secondary watch item: Linux still has a valid `steady-weak-listener` receive profile with moderate under-target and concealment pressure. If the next decode-clean call still sounds weak in this shape, tune `steady-weak-listener` target/floor or application hold.
+- Do not change selector, `repair-collapse` strength, or global baseline from this batch. Classification is mostly aligned on Linux, Mac's receive profile is not the audible policy problem, and the remaining hard signal is outside receive policy.

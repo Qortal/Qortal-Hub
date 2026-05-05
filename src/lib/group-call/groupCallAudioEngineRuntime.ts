@@ -1882,14 +1882,23 @@ export class GroupCallAudioEngineRuntime {
             | { address?: string; publicKey?: string }
             | null
             | undefined;
+          const joiningAddress = joining?.address?.trim() ?? '';
+          const myAddress = this.userInfo?.address?.trim() ?? '';
           this.upsertParticipantFromRuntimeEvent(
-            joining?.address,
+            joiningAddress,
             joining?.publicKey
           );
           await this.maybeSendRoomKeyToJoiningParticipant(
-            joining?.address,
+            joiningAddress,
             joining?.publicKey
           );
+          if (
+            joiningAddress &&
+            joiningAddress !== myAddress &&
+            !this.topology?.rootForwarder
+          ) {
+            this.topologyElectionDelayUntilMs = 0;
+          }
         }
         this.scheduleTopologyElection(event);
       }
@@ -2183,8 +2192,10 @@ export class GroupCallAudioEngineRuntime {
     this.awaitingAuthoritativeKey = false;
     this.resetWorkerDecodeFailureRecoveryState();
     this.clearKeyRecoveryRetryTimer();
+    this.clearRecentWindowTrends();
     this.callEpochMs = Date.now();
     this.seq = 0;
+    await this.receiveEngine.reset();
     await this.syncDecryptPoolRoomKey(roomKey);
     traceGcallAudioSurface('pipeline: room key applied, decrypt path enabled', {
       keyBytes: roomKey.length,
