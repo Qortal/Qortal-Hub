@@ -4790,4 +4790,111 @@ describe('GroupCallAudioReceiveEngine', () => {
     );
     vi.useRealTimers();
   });
+
+  it('keeps high-concealment near-empty ready paths out of persistent-lean', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 19,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    for (let i = 0; i < 3; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 1.877,
+        preProcessBufferedMs: 380,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 640,
+        rate: 0.999,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -118.673,
+        playoutStarted: true,
+        concealmentUsed: true,
+      });
+    }
+
+    for (let i = 0; i < 8; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 1.877,
+        preProcessBufferedMs: 380,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 640,
+        rate: 0.999,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -118.673,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
+      {
+        peerAddress: 'alice',
+        profile: 'repair-collapse',
+      },
+    ]);
+    vi.useRealTimers();
+  });
 });

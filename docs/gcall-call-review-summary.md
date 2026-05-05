@@ -643,3 +643,116 @@ Current patched target:
 - Primary fix: make `buffered-not-ready` / `silent-lean` entry win when `jitterHasReadyFrame=false` with buffered jitter frames and shallow reserve, even if damage counters are modest and live mode has fallen back to `low-latency`.
 - Secondary fix: keep the ready-buffered escape from `collapse-recovery` strict enough that Linux-style `jitterHasReadyFrame=true`, many buffered frames, low concealment, and modest rate pressure lands in lean/weak recovery instead of full collapse.
 - Keep global baseline and profile strength unchanged for the next patch; this batch is dominated by classification mismatches, not evidence that a correctly selected profile is too weak.
+
+## Call: 2026-05-05 17:10Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T17-10-08-202Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T17-10-06-530Z.json`
+
+User symptom:
+- New paired call after the selector/readiness patch; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and exported profiles.
+
+High-level verdict:
+- Bad, but diagnostically useful.
+- The previous 16:48Z selector misses improved: the not-ready side now lands in `buffered-not-ready`, and the ready-buffered side no longer lands in `collapse-recovery`. The remaining bad classification is Mac: it is catastrophically shallow and concealment-heavy, but only exported as `persistent-lean`.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Queue/backpressure: Reticulum bridge/binary high-water values are low (`4`/`1` on Mac, `2`/`0` on Linux) with no queue-pressure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Startup hidden playout nodes: both sides have active playback and scheduler nodes.
+
+Primary next target:
+- Selector.
+- Specifically, make high-concealment tiny-reserve paths beat `persistent-lean`: Mac has `avgPcmBufferedMs=1.877`, `jitterBufferDepthFramesMean=0.095`, `avgPlayoutDeltaMs=-118.673`, and `concealmentTicks=1847`, which fits `repair-collapse` or `collapse-recovery`, not ordinary `persistent-lean`.
+- Do not raise baseline yet. Linux’s current `buffered-not-ready` classification is correct for `jitterBufferedFrames=9` with `jitterHasReadyFrame=false`, and Mac is a wrong-profile problem before it is a profile-strength problem.
+- Secondary watch item: Mac also shows a bursty ingress shape (`maxIncomingPacketMs=2196.115`, `maxReticulumAudioBridgeToRendererIngressMs=2074`), but there are no decode/key/queue drops, so fix selector escalation first.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` | yes | 1.877 | 452 | 1847 | 0.028 | 0.027 | recovery | Classification is too weak: tiny reserve plus huge concealment should escalate to `repair-collapse` or `collapse-recovery`. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `buffered-not-ready` | yes | 27.560 | 1255 | 87 | 0.062 | 0.040 | recovery | Classification matches the not-ready buffered state: 9 jitter frames buffered, no ready frame, and ongoing under-target pressure. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`
+
+Actual exported profile:
+- `persistent-lean`
+
+Did classification match?
+- No.
+
+If no:
+- This is not just a quiet lean path. The side has `avgPcmBufferedMs=1.877`, `jitterBufferDepthFramesMean=0.095`, `avgPlayoutDeltaMs=-118.673`, and `concealmentTicks=1847`.
+- `jitterHasReadyFrame=true` with `jitterBufferedFrames=19` means this is not the buffered-not-ready state from the previous call.
+- The selector should let active concealment plus tiny reserve outrank `persistent-lean`; retune selector priority/entry before changing persistent-lean strength.
+
+### Side B
+
+Expected profile from symptom:
+- `buffered-not-ready`
+
+Actual exported profile:
+- `buffered-not-ready`
+
+Did classification match?
+- Yes.
+
+Notes:
+- `jitterBufferedFrames=9` with `jitterHasReadyFrame=false` is the exact readiness failure shape targeted after 16:48Z.
+- `avgPcmBufferedMs=27.560`, `avgPlayoutDeltaMs=-102.196`, `playoutUnderTargetFraction=0.062`, and `missingFrames=1255` support a protective profile.
+- This side is evidence that the readiness selector fix moved in the right direction; the next patch should not weaken `buffered-not-ready`.
+
+## Trend Read
+
+Side A:
+- Flat-bad collapse/repair path.
+- Reasons seen:
+  - `avgPcmBufferedMs` stays pinned around `1.88 ms`.
+  - `concealmentTicks` climbs steadily from `1581` to `1847`.
+  - `missingFrames` increases from `395` to `452`.
+  - adaptive mode stays in recovery throughout, but the exported profile remains `persistent-lean`.
+
+Side B:
+- Oscillating mode over a not-ready buffered path.
+- Reasons seen:
+  - `entered-recovery` appears three times.
+  - adaptive mode flips between low-latency and recovery.
+  - `missingFrames` increases from `1100` to `1255`.
+  - `jitterHasReadyFrame=false` with 9 buffered jitter frames supports `buffered-not-ready`.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T12:57Z group-812` | A / Mac standby | `persistent-lean` | yes | yes | receive policy strength | Keep as evidence, but do not tune first. |
+| `2026-05-05T12:57Z group-812` | B / Linux root | `collapse-recovery` | partly | no/partly | selector | Done: added stale severe-hold escape for ready buffered low-concealment paths. |
+| `2026-05-05T13:13Z group-812` | A / Mac standby | `collapse-recovery` | yes | yes | receive policy strength | Done: raised `collapse-recovery` target/floor and collapse-only hold headroom. |
+| `2026-05-05T13:13Z group-812` | B / Linux root | `collapse-recovery` | yes | partly/yes | receive policy strength | Done for strength; watch whether low-concealment shallow paths need a later selector split. |
+| `2026-05-05T13:34Z group-812` | A / Mac standby | `collapse-recovery` | yes | partly/no | startup/playout-ready | Buffered-but-not-ready state still recurs in later calls; keep readiness selector as active target. |
+| `2026-05-05T13:34Z group-812` | B / Linux root | `collapse-recovery` | yes | yes | decode/session | Decode failures are gone in later calls; keep watching but do not tune from this old blocker now. |
+| `2026-05-05T14:14Z group-812` | A / Mac standby | `repair-heavy-connected` | partly | partly | selector / repair hold | Keep as evidence for selector cleanup around healthy-buffer repair holds. |
+| `2026-05-05T14:14Z group-812` | B / Linux root | `repair-heavy-connected` | partly/no | partly/no | selector / repair hold | Keep as evidence for healthy-reserve escapes from over-protective repair profiles. |
+| `2026-05-05T14:53Z group-812` | A / Mac standby | `silent-lean` | yes | yes/partly | selector / playout-ready | Recurring bad-side pattern; readiness/mode should align with `silent-lean` or buffered-not-ready protection. |
+| `2026-05-05T14:53Z group-812` | B / Linux root | `steady-weak-listener` | no/partly | partly/no | selector | Keep as evidence for healthy-reserve weak-listener escape. |
+| `2026-05-05T15:56Z group-812` | A / Mac standby | `buffered-not-ready` | yes | partly/no | selector / readiness hold | Prior target was clear/escape after readiness returns; later calls show both entry and clear priority now improving. |
+| `2026-05-05T15:56Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | selector / weak-listener | Keep as evidence; not enough for baseline tuning. |
+| `2026-05-05T16:48Z group-812` | A / Mac standby | `steady-weak-listener` | yes | no/partly | selector / readiness priority | Improved in 17:10Z: the analogous not-ready buffered side now exports `buffered-not-ready`. |
+| `2026-05-05T16:48Z group-812` | B / Linux root | `collapse-recovery` | yes/partly | partly/no | selector / collapse priority | Improved in 17:10Z: ready-buffered low-concealment no longer exports as `collapse-recovery`. |
+| `2026-05-05T17:10Z group-812` | A / Mac standby | `persistent-lean` | yes | no | selector / repair escalation | Fix high-concealment tiny-reserve priority so this lands in `repair-collapse` or `collapse-recovery`. |
+| `2026-05-05T17:10Z group-812` | B / Linux root | `buffered-not-ready` | yes | yes | selector / readiness | Keep current readiness selector; do not weaken `buffered-not-ready`. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: make active high concealment with near-empty reserve outrank `persistent-lean`, even when `jitterHasReadyFrame=true`; this should classify as `repair-collapse` or `collapse-recovery`.
+- Keep `buffered-not-ready`, global baseline, and profile strength unchanged for the next patch.
+- Watch the Mac ingress-burst metrics after classification is corrected; if the side still collapses under the correct heavy profile, then inspect transport/ingress pacing as a separate subsystem.
