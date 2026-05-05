@@ -117,6 +117,7 @@ const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN = 0.9998;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX = 0.04;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX = 0.01;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_HOLD_MS = 9_000;
+const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_RECOVERY_BUFFERED_MS_MIN = 16;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN = 24;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_NOT_READY_BUFFERED_MS_MAX = 32;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_PREBUFFER_FRAMES_MAX = 1;
@@ -1040,11 +1041,23 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN ||
           state.bufferedMsEma >=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN;
+        const bufferedNotReadyRecoveryPressure =
+          !state.lastJitterHasReadyFrame &&
+          !state.lastConcealmentUsed &&
+          latestBufferedMs <=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_NOT_READY_BUFFERED_MS_MAX &&
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_RECOVERY_BUFFERED_MS_MIN &&
+          state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_UNDERTARGET_EMA_MIN * 2 &&
+          state.deltaMsEma <=
+            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_DELTA_MAX_MS &&
+          state.rateEma <= 0.995;
         const persistentLeanPressure =
           !state.lastConcealmentUsed &&
           !(
             !state.lastJitterHasReadyFrame &&
-            bufferedNotReadyReserveCandidate
+            (bufferedNotReadyReserveCandidate || bufferedNotReadyRecoveryPressure)
           ) &&
           latestBufferedMs <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_BUFFERED_MS_MAX &&
@@ -1069,7 +1082,7 @@ export class GroupCallAudioReceiveEngine {
           !state.lastConcealmentUsed &&
           !(
             !state.lastJitterHasReadyFrame &&
-            bufferedNotReadyReserveCandidate
+            (bufferedNotReadyReserveCandidate || bufferedNotReadyRecoveryPressure)
           ) &&
           state.concealmentEma <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CONCEALMENT_EMA_MAX &&
@@ -1152,15 +1165,18 @@ export class GroupCallAudioReceiveEngine {
         const bufferedNotReadyConcealmentOk =
           state.concealmentEma <=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CONCEALMENT_EMA_MAX ||
-          bufferedNotReadyReadyGapPressure;
+          bufferedNotReadyReadyGapPressure ||
+          bufferedNotReadyRecoveryPressure;
         const bufferedNotReadyPressure =
           !state.lastJitterHasReadyFrame &&
           !state.lastConcealmentUsed &&
           bufferedNotReadyConcealmentOk &&
           (bufferedNotReadyReadyGapPressure ||
+            bufferedNotReadyRecoveryPressure ||
             state.bufferedMsEma >=
               GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN) &&
           (bufferedNotReadyReadyGapPressure ||
+            bufferedNotReadyRecoveryPressure ||
             state.preProcessBufferedFrames <=
               GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_PREBUFFER_FRAMES_MAX ||
             state.oldestFrameAgeEma >=
