@@ -342,7 +342,7 @@ const fetchQuitterUserResources = async (
     buildQuitterUserResourceSearchUrl(userName, searchLimit, offset),
     signal
   );
-  console.log('fetchQuitterUserResources text', text);
+
   const parsed = text;
 
   if (!Array.isArray(parsed)) {
@@ -402,7 +402,7 @@ const fetchFollowedNames = async (
   );
   const followedNames = new Set<string>();
   const results = await response.json();
-  console.log('fetchFollowedNames results', results);
+
   if (response.ok) {
     for (const result of results) {
       if (!result.data || result.error) continue;
@@ -449,7 +449,6 @@ export const fetchQuitterFeedPage = async ({
   searchLimit = QUITTER_PUBLIC_FEED_SEARCH_LIMIT,
   signal,
 }: FetchQuitterFeedOptions = {}): Promise<QuitterFeedPage> => {
-  console.log('fetchQuitterFeedPage allowedAuthors', allowedAuthors);
   const seenIds = new Set(excludeIds);
   const normalizedAllowedAuthors =
     allowedAuthors
@@ -566,7 +565,6 @@ export const fetchQuitterFollowedNames = async (
   userName: string,
   signal?: AbortSignal
 ) => {
-  console.log('fetchQuitterFollowedNames', userName);
   const normalizedUserName = userName.trim();
 
   if (!normalizedUserName) {
@@ -578,7 +576,6 @@ export const fetchQuitterFollowedNames = async (
     cached &&
     Date.now() - cached.fetchedAt < QUITTER_FOLLOWING_CACHE_TTL_MS
   ) {
-    console.log('fetchQuitterFollowedNames cached', cached.names);
     return cached.names;
   }
 
@@ -589,7 +586,7 @@ export const fetchQuitterFollowedNames = async (
     0,
     signal
   );
-  console.log('fetchQuitterFollowedNames resources', resources);
+
   const candidateResources = resources
     .filter(
       (resource) =>
@@ -598,19 +595,9 @@ export const fetchQuitterFollowedNames = async (
     )
     .sort((left, right) => left.size - right.size)
     .slice(0, QUITTER_FOLLOW_CANDIDATE_LIMIT);
-  console.log(
-    'fetchQuitterFollowedNames candidateResources',
-    candidateResources
-  );
+
   const settled = await fetchFollowedNames(candidateResources, signal);
-  // const settled = await Promise.allSettled(
-  //   candidateResources.map(async (resource) => {
-  //     const payload = await fetchQuitterDocumentPayload(resource, signal);
-  //     console.log('fetchQuitterFollowedNames payload', payload);
-  //     return getFollowedNameFromDocument(payload);
-  //   })
-  // );
-  console.log('settled', settled);
+
   for (const result of settled) {
     if (!result || result === normalizedUserName) {
       continue;
