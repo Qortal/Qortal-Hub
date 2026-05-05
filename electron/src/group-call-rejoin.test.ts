@@ -2904,6 +2904,92 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
+  it('replays retained root join identity after first topology publish when a late join arrived before topology existed', async () => {
+    const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
+    const now = Date.now();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub(sent) as any
+    );
+
+    manager.start();
+    manager.setLocalAddresses(['Q-root']);
+    manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-root',
+      'sig-root',
+      'pk-root',
+      now,
+      TEST_D32
+    );
+    sent.length = 0;
+
+    (manager as any).applyVerifiedJoin({
+      type: 'GC_JOIN',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      fromAddress: 'Q-new',
+      fromPublicKey: 'pk-new',
+      signature: 'sig-new',
+      timestamp: now + 1,
+      reticulumDestinationHash: 'd:q-new',
+    });
+
+    expect(sent.filter((entry) => entry.hash === 'd:q-new')).toHaveLength(0);
+
+    manager.broadcastTopology(
+      'room-1',
+      {
+        fromAddress: 'Q-root',
+        topologyEpoch: 1,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-new',
+        clusters: [
+          {
+            members: ['Q-root', 'Q-new'],
+            forwarder: 'Q-root',
+            standby: 'Q-new',
+            standby2: '',
+          },
+        ],
+        lastSeen: now + 2,
+      },
+      'sig-topology',
+      'pk-root',
+      now + 3
+    );
+
+    const replayed = sent.filter((entry) => entry.hash === 'd:q-new');
+    expect(replayed.map((entry) => entry.msg.t)).toEqual(['GJ']);
+    expect(replayed[0]?.msg.a).toBe('Q-root');
+
+    manager.broadcastTopology(
+      'room-1',
+      {
+        fromAddress: 'Q-root',
+        topologyEpoch: 1,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-new',
+        clusters: [
+          {
+            members: ['Q-root', 'Q-new'],
+            forwarder: 'Q-root',
+            standby: 'Q-new',
+            standby2: '',
+          },
+        ],
+        lastSeen: now + 4,
+      },
+      'sig-topology',
+      'pk-root',
+      now + 5
+    );
+
+    expect(sent.filter((entry) => entry.hash === 'd:q-new')).toHaveLength(1);
+    manager.stop();
+  });
+
   it('resolves inbound link audio from peerDestinationHash when peerPresenceHash is empty', async () => {
     class ReticulumAudioBridgeStub extends EventEmitter {
       getState() {

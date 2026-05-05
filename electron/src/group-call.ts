@@ -1383,6 +1383,8 @@ export class GroupCallManager extends EventEmitter {
     string,
     GcJoinRkEnvelope
   >();
+  /** roomId:epoch:target → replayed retained GC_JOIN identities after authoritative topology publish. */
+  private retainedJoinIdentityReplayByTopology = new Set<string>();
   private pendingKeyFlushSuccess = 0;
   private pendingKeyExpired = 0;
   private unknownRoomKeyLogAt = new Map<string, number>();
@@ -1970,6 +1972,7 @@ export class GroupCallManager extends EventEmitter {
     this.pendingKeyByRoom.clear();
     this.pendingGcJoinBeforeJoinRoom.clear();
     this.retainedVerifiedKeyStateByRoomAndRecipient.clear();
+    this.retainedJoinIdentityReplayByTopology.clear();
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
     this.transportHealthByRoom.clear();
@@ -2382,6 +2385,11 @@ export class GroupCallManager extends EventEmitter {
         this.retainedVerifiedJoinRkByRoomAndAddress.delete(key);
       }
     }
+    for (const key of this.retainedJoinIdentityReplayByTopology) {
+      if (key.startsWith(`${roomId}:`)) {
+        this.retainedJoinIdentityReplayByTopology.delete(key);
+      }
+    }
   }
 
   private dropRetainedVerifiedJoinState(roomId: string, address: string): void {
@@ -2545,6 +2553,42 @@ export class GroupCallManager extends EventEmitter {
     }
     if (frames.length === 0) return;
     this.sendReticulumToAddress(targetAddress, frames, 'join_replay');
+  }
+
+  private replayRetainedJoinIdentitiesForPublishedTopology(
+    roomId: string,
+    topology: Pick<
+      GcTopologyEnvelope,
+      'topologyEpoch' | 'rootForwarder' | 'clusters'
+    >
+  ): void {
+    const rootForwarder = topology.rootForwarder.trim();
+    if (!rootForwarder || !this.localAddresses.has(rootForwarder)) return;
+    const targets = new Set<string>();
+    for (const cluster of topology.clusters) {
+      for (const member of cluster.members ?? []) {
+        const address = member.trim();
+        if (address && !this.localAddresses.has(address)) {
+          targets.add(address);
+        }
+      }
+    }
+    const room = this.rooms.get(roomId);
+    for (const address of room?.participants.keys() ?? []) {
+      if (address && !this.localAddresses.has(address)) {
+        targets.add(address);
+      }
+    }
+    for (const targetAddress of targets) {
+      const replayKey = `${roomId}:${topology.topologyEpoch}:${targetAddress}`;
+      if (this.retainedJoinIdentityReplayByTopology.has(replayKey)) continue;
+      this.retainedJoinIdentityReplayByTopology.add(replayKey);
+      this.replayRetainedJoinIdentityToAddress(
+        roomId,
+        targetAddress,
+        targetAddress
+      );
+    }
   }
 
   replayRetainedVerifiedKeyStatesTo(target: {
@@ -3707,6 +3751,7 @@ export class GroupCallManager extends EventEmitter {
       );
       return;
     }
+    this.replayRetainedJoinIdentitiesForPublishedTopology(roomId, topology);
     this.syncReticulumAudioLinks();
     const { sentLinks, skippedLinks } =
       this.sendReticulumLinkControlToEstablishedRoomLinks(
