@@ -3493,6 +3493,100 @@ describe('GroupCallAudioReceiveEngine', () => {
     vi.useRealTimers();
   });
 
+  it('gives true single-source collapse enough target and hold headroom to rebuild reserve', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    const targetSpy = vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    const holdSpy = vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 21,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    for (let i = 0; i < 8; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 7.3,
+        preProcessBufferedMs: 0,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 613,
+        rate: 0.998,
+        outsideBand: true,
+        outsideBandUnder: true,
+        outsideBandOver: false,
+        deltaMs: -115,
+        playoutStarted: true,
+        concealmentUsed: true,
+      });
+    }
+
+    const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
+    const extraHoldFrames = holdSpy.mock.calls.at(-1)?.[0] ?? 0;
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
+      {
+        peerAddress: 'alice',
+        profile: 'collapse-recovery',
+      },
+    ]);
+    expect(targetMs).toBeGreaterThanOrEqual(240);
+    expect(extraHoldFrames).toBeGreaterThan(8);
+    vi.useRealTimers();
+  });
+
   it('reclassifies a latched severe listener into buffered-not-ready once current symptoms are ready-false with decent reserve', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
