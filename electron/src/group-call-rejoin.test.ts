@@ -730,7 +730,7 @@ describe('recent room bootstrap state', () => {
     ]);
   });
 
-  it('does not revive stale cached remote topology or participants after leave without fresh off-call liveness', () => {
+  it('does not expose stale cached remote topology before rejoin without fresh off-call liveness', () => {
     const now = Date.now();
     const t0 = now - 10_000;
     const manager = new GroupCallManager(
@@ -801,7 +801,7 @@ describe('recent room bootstrap state', () => {
     });
     expect(bootstrap?.lastTopology).toBeUndefined();
 
-    const rejoin = manager.joinRoom(
+    manager.joinRoom(
       'gcall-qortal-812',
       'chat-812',
       'Q-root',
@@ -811,7 +811,17 @@ describe('recent room bootstrap state', () => {
       TEST_D32
     );
 
-    expect(rejoin.callSessionId).not.toBe(firstJoin.callSessionId);
+    const rejoinBootstrap = manager.getRoomBootstrapState('gcall-qortal-812');
+    expect(rejoinBootstrap).toMatchObject({
+      topologyEpoch: 9,
+      lastTopology: {
+        topologyEpoch: 9,
+        rootForwarder: 'Q-root',
+        standbyForwarder: 'Q-peer',
+      },
+      callSessionId: firstJoin.callSessionId,
+      mediaSessionGeneration: firstJoin.mediaSessionGeneration,
+    });
     expect(manager.getRoomParticipants('gcall-qortal-812')).toEqual([
       {
         address: 'Q-root',

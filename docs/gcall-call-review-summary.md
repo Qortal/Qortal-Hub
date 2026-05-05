@@ -1050,3 +1050,108 @@ Current patched target:
 - Primary fix: when the live source profile is `repair-collapse`, keep the jitter/playout adaptive mode in recovery protection and prevent a low-latency exit while reserve is near empty or `jitterHasReadyFrame=false`.
 - Secondary watch item: Linux’s `steady-weak-listener` path is still shallow, but classification is not obviously wrong. Revisit weak-listener target/floor only after the heavy-profile application mismatch is fixed.
 - Keep selector thresholds, global baseline, and profile target strength unchanged for the next patch unless code inspection shows that the only way to enforce the recovery hold is inside the `repair-collapse` profile configuration itself.
+
+## Call: 2026-05-05 20:21Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T20-21-01-644Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T20-20-58-248Z.json`
+
+User symptom:
+- New paired call after the profile application / adaptive-mode synchronization change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and heavy recovery profiles.
+
+High-level verdict:
+- Bad, but improved diagnostically.
+- The previous profile-to-playout mismatch is no longer the primary failure: both sides export `repair-collapse`, both playout snapshots are active and ready, and both `adaptiveNetworkMode` / `lastJitterAdaptiveMode` are `recovery`. The remaining problem is that recovery protection is not rebuilding enough reserve, especially on Linux.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have inbound packets, decoded frames, playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Selector/profile application: classification is plausible on both sides, and recovery mode is now actually applied.
+
+Primary next target:
+- `repair-collapse` profile strength.
+- Per the decision rules, classification is correct and the heavy profile is active, but immediate quality is still bad: Mac stays around `2 ms` buffered with `371` concealment ticks, and Linux stays around `6.7 ms` buffered with `0.172` under-target and `0.161` rate-below-0.97.
+- Do not tune selector first from this call. Do not raise global baseline first. The failure is concentrated in a correctly selected heavy profile that is now being applied but is still too weak to rebuild reserve.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `repair-collapse` | yes | 1.998 | 144 | 371 | 0.011 | 0.011 | recovery | Classification matches near-empty repair collapse; recovery is applied, but reserve remains pinned around `2 ms`. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `repair-collapse` | yes | 6.652 | 25 | 255 | 0.172 | 0.161 | recovery | Classification matches shallow reserve plus high concealment/under-target pressure; profile strength is not enough to stabilize playout. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`
+
+Actual exported profile:
+- `repair-collapse`
+
+Did classification match?
+- Yes.
+
+Notes:
+- `avgPcmBufferedMs=1.998`, `jitterBufferDepthFramesMean=0.101`, `avgPlayoutDeltaMs=-118.715`, and `concealmentTicks=371` fit the repair-collapse shape.
+- `jitterHasReadyFrame=true` with `jitterBufferedFrames=21` means this is not the previous buffered-not-ready selector/application problem.
+- `adaptiveNetworkMode=recovery` and `lastJitterAdaptiveMode=recovery` show the profile is reaching playout mode; the remaining miss is insufficient reserve rebuilding.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`
+
+Actual exported profile:
+- `repair-collapse`
+
+Did classification match?
+- Yes.
+
+Notes:
+- `avgPcmBufferedMs=6.652`, `jitterBufferDepthFramesMean=0.338`, `avgPlayoutDeltaMs=-126.306`, `concealmentTicks=255`, `playoutUnderTargetFraction=0.172`, and `playoutRateFractionBelow097=0.161` are a strong shallow repair-collapse signature.
+- `missingFrames=25` is low, but WASM PLC is doing work (`wasmFecPlcFrames=95`) and concealment/under-target pressure are high, so a heavy recovery profile is justified.
+- This side is the clearest evidence for strengthening `repair-collapse` target/floor behavior.
+
+## Trend Read
+
+Side A:
+- Flat-bad repair-collapse path.
+- Reasons seen:
+  - `avgPcmBufferedMs` stays pinned around `2.0 ms`.
+  - `concealmentTicks` climbs steadily from `283` to `371`.
+  - `missingFrames` increases from `109` to `144`.
+  - adaptive mode remains `recovery` throughout, so the issue is not a low-latency exit.
+
+Side B:
+- Gradual collapse/repair degradation under active recovery.
+- Reasons seen:
+  - `avgPcmBufferedMs` falls from about `7.5` to `5.6 ms`, then ends at `6.652 ms`.
+  - `concealmentTicks` increases from `176` to `255`.
+  - `playoutUnderTargetFraction` stays high around `0.17`.
+  - `playoutRateFractionBelow097` stays high around `0.16`.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T17:49Z group-812` | A / Linux root | none / no receive source | yes | yes | key/media-path establishment | Improved by 18:11Z: key rotate and targeted key send succeeded. |
+| `2026-05-05T17:49Z group-812` | B / Mac standby | none / no receive source | yes | yes | key/media-path establishment | Improved by 18:11Z: key was received/applied and sender started. |
+| `2026-05-05T18:11Z group-812` | A / Linux root | none / no receive source | yes | yes | one-way packet media delivery | Improved by 18:28Z: Linux now receives and decodes Mac audio. |
+| `2026-05-05T18:11Z group-812` | B / Mac standby | `silent-lean` | yes/partly | yes/partly | readiness / secondary | Still relevant historically, but the new call has ready playouts on both sides. |
+| `2026-05-05T18:28Z group-812` | A / Linux root | `steady-weak-listener` | partly | partly/yes | weak-listener / secondary | Superseded by 20:21Z as the primary target; Linux now correctly classifies as heavy recovery. |
+| `2026-05-05T18:28Z group-812` | B / Mac standby | `repair-collapse` | yes | yes | profile application / adaptive-mode sync | Improved by 20:21Z: recovery mode now stays applied when `repair-collapse` is selected. |
+| `2026-05-05T20:21Z group-812` | A / Mac standby | `repair-collapse` | yes | yes | profile strength | Tune `repair-collapse` target/floor so near-empty ready playout can rebuild above the collapse band. |
+| `2026-05-05T20:21Z group-812` | B / Linux root | `repair-collapse` | yes | yes | profile strength | Same target, stronger evidence because under-target and slow-rate fractions remain high under active recovery. |
+
+## Next Fix Target
+
+Current patched target:
+- `repair-collapse` profile strength.
+- Primary fix: increase `repair-collapse` target/floor behavior, or its recovery reserve headroom, so a correctly selected and applied profile can rebuild from the `2 ms` to `7 ms` collapse band instead of staying near empty.
+- Keep selector thresholds unchanged from this batch: both sides classified correctly.
+- Keep global baseline unchanged for the next patch: the evidence is profile-specific, not a broad clean-call baseline problem.

@@ -1642,6 +1642,80 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('hydrates participants from bootstrap topology when recent roster only has self', async () => {
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [{ address: 'Qlocal', publicKey: 'pub-local', joinedAt: 10 }],
+      topologyEpoch: 4,
+      lastTopology: {
+        topologyEpoch: 4,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qpeer', 'Qlocal'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: Date.now(),
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 7,
+      updatedAtMs: Date.now(),
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const events: Array<{
+      type: string;
+      snapshot?: {
+        participants?: Array<{ address: string; role: string }>;
+      };
+    }> = [];
+    runtime.onEvent((event) => {
+      events.push(event as never);
+    });
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    const lastSnapshot = [...events]
+      .reverse()
+      .find((event) => event.type === 'snapshot');
+    expect(lastSnapshot?.snapshot?.participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ address: 'Qpeer', role: 'root-forwarder' }),
+        expect.objectContaining({
+          address: 'Qlocal',
+          role: 'standby-forwarder',
+        }),
+      ])
+    );
+    expect(sendKeyRequest).toHaveBeenLastCalledWith(
+      'room-1',
+      'Qpeer',
+      'Qlocal',
+      expect.any(String),
+      'pub-local',
+      expect.any(Number),
+      'csid-bootstrap',
+      7
+    );
+  });
+
   it('clears stale remote-root authority state when bootstrap topology already makes us root', async () => {
     const nowMs = Date.now();
     getRoomParticipants.mockResolvedValue([

@@ -1753,7 +1753,7 @@ describe('GroupCallAudioReceiveEngine', () => {
       DmVoiceGcallInboundPlayout.prototype,
       'setDynamicTargetPlayoutMs'
     ).mockImplementation(() => {});
-    vi.spyOn(
+    const holdSpy = vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
     ).mockImplementation(() => {});
@@ -1786,7 +1786,7 @@ describe('GroupCallAudioReceiveEngine', () => {
       capturedOptions?.onPlayoutWorkletMessage?.({
         type: 'gcallPlayoutMetrics',
         bufferedMs: 6,
-        preProcessBufferedMs: 6,
+        preProcessBufferedMs: 1,
         targetPlayoutMs: 124,
         oldestFrameAgeMs: 220,
         rate: 0.995,
@@ -1800,7 +1800,8 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(176);
+    expect(targetMs).toBeGreaterThanOrEqual(224);
+    expect(holdSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThan(8);
   });
 
   it('keeps repair-collapse playout in recovery while reserve is still empty or not ready', async () => {
@@ -2923,7 +2924,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const collapseTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(collapseTargetMs).toBeGreaterThanOrEqual(176);
+    expect(collapseTargetMs).toBeGreaterThanOrEqual(224);
     expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
       {
         peerAddress: 'alice',
@@ -2949,7 +2950,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const heldTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(heldTargetMs).toBeGreaterThanOrEqual(176);
+    expect(heldTargetMs).toBeGreaterThanOrEqual(224);
     expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
       {
         peerAddress: 'alice',
@@ -4429,7 +4430,7 @@ describe('GroupCallAudioReceiveEngine', () => {
       },
     ]);
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(188);
+    expect(targetMs).toBeGreaterThanOrEqual(224);
     vi.useRealTimers();
   });
 

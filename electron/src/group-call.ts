@@ -3453,7 +3453,7 @@ export class GroupCallManager extends EventEmitter {
     const destNorm = reticulumDestinationHash.trim().toLowerCase();
     let room = this.rooms.get(roomId);
     if (!room) {
-      const recent = this.getUsableRecentRoomState(roomId);
+      const recent = this.getFreshRecentRoomState(roomId);
       room = {
         roomId,
         chatId,

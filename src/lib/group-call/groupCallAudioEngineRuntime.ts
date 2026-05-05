@@ -2251,6 +2251,10 @@ export class GroupCallAudioEngineRuntime {
       };
       this.snapshot = {
         ...this.snapshot,
+        participants: this.mergeParticipantsFromTopology(
+          this.snapshot.participants,
+          this.topology
+        ),
         myRole: computeGroupCallRole(myAddress, this.topology),
       };
       if (bootstrapTopology.rootForwarder.trim() === myAddress) {
