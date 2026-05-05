@@ -174,6 +174,55 @@ type OutboundMediaTargetDiagnostics = {
   lastSuccessAtMs: number;
   lastFailureAtMs: number;
   lastFailureMessage: string | null;
+  lastMainDiagnostics: GcallSendAudioDiagnostics | null;
+};
+
+type GcallSendAudioDiagnostics = {
+  transport?: 'link' | 'packet';
+  pendingFrames?: number;
+  pendingOldestAgeMs?: number;
+  queuePressureDrops?: number;
+  staleDrops?: number;
+  linkUnreadyDrops?: number;
+  packetSendFailures?: number;
+  targetAddress?: string;
+  peerPresenceHash?: string;
+  routeKey?: string;
+  lastInboundAtMs?: number;
+  recoveryReason?: string;
+  recoveryHoldUntilMs?: number;
+  linkFallbackActive?: boolean;
+  linkFallbackReason?: string;
+  linkFallbackDwellMs?: number;
+  linkFallbackProbeCount?: number;
+  linkFallbackExitCount?: number;
+  linkFallbackLastDwellMs?: number;
+  bridge?: {
+    bridgeQueuedFrames?: number;
+    bridgeQueuedOldestAgeMs?: number;
+    bridgeWaitingForDrain?: boolean;
+    decodedQueueDepth?: number;
+    decodedQueueOldestAgeMs?: number;
+    binaryOutQueueDepth?: number;
+    binaryOutQueueOldestAgeMs?: number;
+    queuePressureDropsLast5s?: number;
+    staleDropsLast5s?: number;
+    queuePressureDrops?: number;
+    staleDrops?: number;
+    packetSendFailures?: number;
+    packetPathRequests?: number;
+    packetPathResolutions?: number;
+    packetPathTimeouts?: number;
+    packetFreshSends?: number;
+    packetStaleSends?: number;
+    packetUnknownSends?: number;
+  };
+};
+
+type GcallSendAudioResult = {
+  success?: boolean;
+  error?: string;
+  diagnostics?: GcallSendAudioDiagnostics;
 };
 
 type OutboundMediaDiagnostics = {
@@ -196,6 +245,7 @@ type OutboundMediaDiagnostics = {
   lastSkipAtMs: number;
   lastSkipReason: string | null;
   lastSendFailureMessage: string | null;
+  lastMainDiagnostics: GcallSendAudioDiagnostics | null;
   lastTargets: string[];
   targets: OutboundMediaTargetDiagnostics[];
 };
@@ -466,6 +516,7 @@ export class GroupCallAudioEngineRuntime {
   private outboundLastSkipAtMs = 0;
   private outboundLastSkipReason: string | null = null;
   private outboundLastSendFailureMessage: string | null = null;
+  private outboundLastMainDiagnostics: GcallSendAudioDiagnostics | null = null;
   private outboundLastTargets: string[] = [];
   private readonly outboundTargetDiagnostics = new Map<
     string,
@@ -740,6 +791,7 @@ export class GroupCallAudioEngineRuntime {
     this.outboundLastSkipAtMs = 0;
     this.outboundLastSkipReason = null;
     this.outboundLastSendFailureMessage = null;
+    this.outboundLastMainDiagnostics = null;
     this.outboundLastTargets = [];
     this.outboundTargetDiagnostics.clear();
   }
@@ -769,6 +821,7 @@ export class GroupCallAudioEngineRuntime {
       lastSuccessAtMs: 0,
       lastFailureAtMs: 0,
       lastFailureMessage: null,
+      lastMainDiagnostics: null,
     };
     this.outboundTargetDiagnostics.set(target, next);
     return next;
@@ -795,9 +848,44 @@ export class GroupCallAudioEngineRuntime {
       lastSkipAtMs: this.outboundLastSkipAtMs,
       lastSkipReason: this.outboundLastSkipReason,
       lastSendFailureMessage: this.outboundLastSendFailureMessage,
+      lastMainDiagnostics: this.outboundLastMainDiagnostics,
       lastTargets: [...this.outboundLastTargets],
       targets: [...this.outboundTargetDiagnostics.values()],
     };
+  }
+
+  private recordOutboundMainDiagnostics(
+    diagnostics: GcallSendAudioDiagnostics | undefined | null
+  ): void {
+    if (!diagnostics) return;
+    this.outboundLastMainDiagnostics = diagnostics;
+    const target = diagnostics.targetAddress;
+    if (target) {
+      this.getOutboundTargetDiagnostics(target).lastMainDiagnostics = diagnostics;
+    }
+    const transport = diagnostics.transport;
+    if (transport === 'link' || transport === 'packet') {
+      this.receiveEngine.recordReticulumAudioOutboundTransport(transport);
+    }
+    this.receiveEngine.setReticulumAudioQueueDepths({
+      pendingFrames: diagnostics.pendingFrames,
+      pendingOldestAgeMs: diagnostics.pendingOldestAgeMs,
+      bridgeQueuedFrames: diagnostics.bridge?.bridgeQueuedFrames,
+      bridgeQueuedOldestAgeMs: diagnostics.bridge?.bridgeQueuedOldestAgeMs,
+      bridgeWaitingForDrain: diagnostics.bridge?.bridgeWaitingForDrain,
+      decodedQueueDepth: diagnostics.bridge?.decodedQueueDepth,
+      decodedQueueOldestAgeMs: diagnostics.bridge?.decodedQueueOldestAgeMs,
+      binaryOutQueueDepth: diagnostics.bridge?.binaryOutQueueDepth,
+      binaryOutQueueOldestAgeMs: diagnostics.bridge?.binaryOutQueueOldestAgeMs,
+      queuePressureDropsLast5s: diagnostics.bridge?.queuePressureDropsLast5s,
+      staleDropsLast5s: diagnostics.bridge?.staleDropsLast5s,
+      packetPathRequests: diagnostics.bridge?.packetPathRequests,
+      packetPathResolutions: diagnostics.bridge?.packetPathResolutions,
+      packetPathTimeouts: diagnostics.bridge?.packetPathTimeouts,
+      packetFreshSends: diagnostics.bridge?.packetFreshSends,
+      packetStaleSends: diagnostics.bridge?.packetStaleSends,
+      packetUnknownSends: diagnostics.bridge?.packetUnknownSends,
+    });
   }
 
   private recordRecentWindowTrend(metrics: GroupCallMetricsSnapshot): void {
@@ -4221,8 +4309,21 @@ export class GroupCallAudioEngineRuntime {
     ) {
       const diagnostics = targets.map(markAttempt);
       try {
-        await window.groupCall.sendAudioBatch(this.snapshot.roomId, targets, packet);
-        diagnostics.forEach(markSuccess);
+        const result = (await window.groupCall.sendAudioBatch(
+          this.snapshot.roomId,
+          targets,
+          packet
+        )) as GcallSendAudioResult | undefined;
+        this.recordOutboundMainDiagnostics(result?.diagnostics);
+        if (result?.success === false) {
+          throw new Error(result.error ?? 'sendAudioBatch returned failure');
+        }
+        diagnostics.forEach((diag) => {
+          if (result?.diagnostics && !result.diagnostics.targetAddress) {
+            diag.lastMainDiagnostics = result.diagnostics;
+          }
+          markSuccess(diag);
+        });
       } catch (error) {
         diagnostics.forEach((diag) => markFailure(diag, error));
       }
@@ -4235,7 +4336,18 @@ export class GroupCallAudioEngineRuntime {
           if (typeof window.groupCall?.sendAudio !== 'function') {
             throw new Error('window.groupCall.sendAudio unavailable');
           }
-          await window.groupCall.sendAudio(this.snapshot.roomId, address, packet);
+          const result = (await window.groupCall.sendAudio(
+            this.snapshot.roomId,
+            address,
+            packet
+          )) as GcallSendAudioResult | undefined;
+          this.recordOutboundMainDiagnostics(result?.diagnostics);
+          if (result?.diagnostics) {
+            diag.lastMainDiagnostics = result.diagnostics;
+          }
+          if (result?.success === false) {
+            throw new Error(result.error ?? 'sendAudio returned failure');
+          }
           markSuccess(diag);
         } catch (error) {
           markFailure(diag, error);

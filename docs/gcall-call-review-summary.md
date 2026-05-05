@@ -260,3 +260,106 @@ Current patched target:
 - `collapse-recovery` now has a stronger target/floor and collapse-only extra-hold headroom.
 - Keep the selector escape from the 12:57 review; the 13:13 call no longer showed the same healthy-buffer false positive.
 - The 13:34 logs shift the next fix away from receive-policy tuning: first inspect the Linux decode/session failure path, then the Mac buffered-but-not-ready playout readiness state.
+
+## Call: 2026-05-05 14:14Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T14-14-50-550Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T14-14-47-842Z.json`
+
+User symptom:
+- New paired call after the previous receive-policy changes; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and non-clean profiles.
+
+High-level verdict:
+- Mixed/improved.
+- Both sides moved out of `collapse-recovery` into `repair-heavy-connected`, with no decrypt/decode/queue/failover errors and much healthier reserve than the earlier collapse calls, but both are still accumulating missing frames and re-entering recovery.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Queue/backpressure: Reticulum bridge/binary high-water values are `0` on both sides.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Collapse profile strength: neither side is now classified as `collapse-recovery`.
+
+Primary next target:
+- Selector.
+- Specifically, tune the recovery/profile selector and hold behavior around `repair-heavy-connected`: this call has healthy reserve (`45.729 ms` Mac, `64.204 ms` Linux), low concealment (`85` / `20`), and only modest under-target/rate pressure, yet both sides remain non-clean and re-enter recovery.
+- Do not raise baseline or `collapse-recovery` strength from this call; the collapse target/floor change appears to have done its job by moving the call into a buffered repair profile.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `repair-heavy-connected` | partly | 45.729 | 1255 | 85 | 0.063 | 0.046 | recovery | Classification partly matches high missing-frame repair, but reserve is healthy and concealment is modest. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `repair-heavy-connected` | partly/no | 64.204 | 687 | 20 | 0.070 | 0.028 | recovery | Classification is more suspicious: very healthy reserve, very low concealment, and only modest rate pressure. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-heavy-connected` or `steady-weak-listener`
+
+Actual exported profile:
+- `repair-heavy-connected`
+
+Did classification match?
+- Partly.
+
+Notes:
+- `missingFrames` is high at `1255`, so a repair profile is defensible.
+- But `avgPcmBufferedMs` is `45.729`, `jitterBufferDepthFramesMean` is `2.318`, `jitterHasReadyFrame` is `true`, and `concealmentTicks` is only `85`.
+- This looks like buffered repair/missing-frame pressure, not collapse, startup, decode, or baseline starvation.
+
+### Side B
+
+Expected profile from symptom:
+- `steady-weak-listener` or `clean-low-latency` with repair counters watched.
+
+Actual exported profile:
+- `repair-heavy-connected`
+
+Did classification match?
+- Partly/no.
+
+If no:
+- `avgPcmBufferedMs` is `64.204`, `jitterBufferDepthFramesMean` is `3.252`, and `concealmentTicks` is only `20`.
+- `jitterBufferedFrames=9` with `jitterHasReadyFrame=false` is a small readiness mismatch, but the reserve metrics are otherwise healthy and decode is clean.
+- Tune selector entry/hold thresholds for `repair-heavy-connected` before changing profile strength or baseline policy.
+
+## Trend Read
+
+Side A:
+- Gradual repair-counter growth with oscillating recovery entry.
+- Reasons seen:
+  - `entered-recovery` appears twice.
+  - `missingFrames` increases from `1104` to `1255`.
+  - `concealmentTicks` only increases from `77` to `85`.
+  - buffer remains healthy around `44.4` to `45.7` ms.
+
+Side B:
+- Gradual repair-counter growth with oscillating recovery entry.
+- Reasons seen:
+  - `entered-recovery` appears twice.
+  - `missingFrames` increases from `571` to `687`.
+  - `concealmentTicks` only increases from `18` to `20`.
+  - buffer remains healthy around `64` to `65` ms.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T12:57Z group-812` | A / Mac standby | `persistent-lean` | yes | yes | receive policy strength | Keep as evidence, but do not tune first. |
+| `2026-05-05T12:57Z group-812` | B / Linux root | `collapse-recovery` | partly | no/partly | selector | Done: added stale severe-hold escape for ready buffered low-concealment paths. |
+| `2026-05-05T13:13Z group-812` | A / Mac standby | `collapse-recovery` | yes | yes | receive policy strength | Done: raised `collapse-recovery` target/floor and collapse-only hold headroom. |
+| `2026-05-05T13:13Z group-812` | B / Linux root | `collapse-recovery` | yes | partly/yes | receive policy strength | Done for strength; watch whether low-concealment shallow paths need a later selector split. |
+| `2026-05-05T13:34Z group-812` | A / Mac standby | `collapse-recovery` | yes | partly/no | startup/playout-ready | Investigate buffered-but-not-ready playout state and recovery/low-latency mode sync. |
+| `2026-05-05T13:34Z group-812` | B / Linux root | `collapse-recovery` | yes | yes | decode/session | Decode failures are gone in 14:14Z; keep watching but do not tune from this old blocker now. |
+| `2026-05-05T14:14Z group-812` | A / Mac standby | `repair-heavy-connected` | partly | partly | selector / repair hold | Tune `repair-heavy-connected` entry/hold/exit so high missing-frame counters do not keep a healthy-reserve low-concealment side over-protected. |
+| `2026-05-05T14:14Z group-812` | B / Linux root | `repair-heavy-connected` | partly/no | partly/no | selector / repair hold | Same selector target, with stronger evidence because reserve is `64.204 ms` and concealment is only `20`. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Add or tighten a healthy-reserve, low-concealment escape from `repair-heavy-connected` into `steady-weak-listener` or `clean-low-latency`, with enough hysteresis to avoid flapping.
+- Keep the existing `collapse-recovery` strength and baseline unchanged for the next patch; these logs show the severe-collapse path no longer dominates.

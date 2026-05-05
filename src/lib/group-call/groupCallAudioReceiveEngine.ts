@@ -102,9 +102,15 @@ const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX = 72;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN = 0.18;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN = 0.045;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX = 36;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX = 0.998;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX = 96;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HOLD_MS = 8_000;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_BUFFERED_MS_MIN = 40;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN = 2;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX = 0.08;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_UNDERTARGET_EMA_MAX = 0.08;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_RATE_EMA_MIN = 0.996;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_HOLD_MS = 5_500;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN = 0.2;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_BUFFERED_MS_MAX = 20;
@@ -427,6 +433,34 @@ export class GroupCallAudioReceiveEngine {
 
   recordSenderEncoderToPacketTimestampGap(gapMs: number): void {
     this.metrics.recordGcallSenderEncoderToPacketTimestampGap(gapMs);
+    this.scheduleMetricsEmit();
+  }
+
+  recordReticulumAudioOutboundTransport(transport: 'link' | 'packet'): void {
+    this.metrics.recordReticulumAudioOutboundTransport(transport);
+    this.scheduleMetricsEmit();
+  }
+
+  setReticulumAudioQueueDepths(depths: {
+    pendingFrames?: number;
+    pendingOldestAgeMs?: number;
+    bridgeQueuedFrames?: number;
+    bridgeQueuedOldestAgeMs?: number;
+    bridgeWaitingForDrain?: boolean;
+    decodedQueueDepth?: number;
+    decodedQueueOldestAgeMs?: number;
+    binaryOutQueueDepth?: number;
+    binaryOutQueueOldestAgeMs?: number;
+    queuePressureDropsLast5s?: number;
+    staleDropsLast5s?: number;
+    packetPathRequests?: number;
+    packetPathResolutions?: number;
+    packetPathTimeouts?: number;
+    packetFreshSends?: number;
+    packetStaleSends?: number;
+    packetUnknownSends?: number;
+  }): void {
+    this.metrics.setReticulumAudioQueueDepths(depths);
     this.scheduleMetricsEmit();
   }
 
@@ -975,15 +1009,29 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN &&
             state.bufferedMsEma <=
               GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX);
+        const repairHeavyHealthyReserveEscape =
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_BUFFERED_MS_MIN &&
+          state.preProcessBufferedFrames >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX &&
+          state.underTargetEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_UNDERTARGET_EMA_MAX &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_RATE_EMA_MIN;
         const repairHeavyPressure =
           ((state.concealmentEma >=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN) ||
             (state.underTargetEma >=
               GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN &&
-              state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS)) &&
+              state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
+              state.bufferedMsEma <=
+                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX)) &&
           state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX &&
+          !repairHeavyHealthyReserveEscape &&
           !effectiveSevereSingleSourceHold;
         const repairCollapsePressure =
           state.concealmentEma >=
@@ -1029,6 +1077,7 @@ export class GroupCallAudioReceiveEngine {
         }
         const repairHeavyHold =
           state.repairHeavyHoldUntilMs > nowMs &&
+          !repairHeavyHealthyReserveEscape &&
           !(
             !repairHeavyPressure &&
             state.bufferedMsEma >=
@@ -1045,16 +1094,17 @@ export class GroupCallAudioReceiveEngine {
         if (
           state.repairHeavyHoldUntilMs > 0 &&
           !repairHeavyPressure &&
-          state.bufferedMsEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_BUFFERED_MS_MIN &&
-          state.deltaMsEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_DELTA_MIN_MS &&
-          state.rateEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN &&
-          state.concealmentEma <=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX &&
-          state.underTargetEma <=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX
+          (repairHeavyHealthyReserveEscape ||
+            (state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_BUFFERED_MS_MIN &&
+              state.deltaMsEma >=
+                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_DELTA_MIN_MS &&
+              state.rateEma >=
+                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN &&
+              state.concealmentEma <=
+                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_CONCEALMENT_EMA_MAX &&
+              state.underTargetEma <=
+                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX))
         ) {
           state.repairHeavyHoldUntilMs = 0;
         }
