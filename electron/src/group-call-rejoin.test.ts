@@ -2047,6 +2047,21 @@ describe('Reticulum group audio transport', () => {
     });
     expect(recovered.success ? recovered.diagnostics.linkFallbackLastDwellMs : 0)
       .toBeGreaterThanOrEqual(3_000);
+
+    manager.requestPeerMediaRecovery('room-1', 'Q-peer', 'path-degraded-warm');
+    await Promise.resolve();
+    const forcedFallback = manager.sendAudio(
+      'room-1',
+      'Q-peer',
+      Buffer.from([13, 14, 15])
+    );
+    expect(forcedFallback).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+        linkFallbackActive: true,
+      }),
+    });
     manager.stop();
   });
 

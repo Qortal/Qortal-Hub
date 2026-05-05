@@ -317,6 +317,11 @@ const GCALL_CONNECTION_HINT_GOOD_MS = 4_500;
 const MEMBER_GATE_REFRESH_INTERVAL_MS = 90_000;
 const ZERO_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES = 100;
 const ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS = 3_000;
+const LOW_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES = 300;
+const LOW_INBOUND_MEDIA_RECOVERY_MAX_INBOUND_TO_OUTBOUND_RATIO = 0.35;
+const LOW_INBOUND_MEDIA_RECOVERY_UNDERTARGET_MIN = 0.12;
+const LOW_INBOUND_MEDIA_RECOVERY_RATE_BELOW_097_MIN = 0.1;
+const LOW_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 100;
 const naclApi = nacl as typeof nacl;
 
 function base64ToUint8(value: string): Uint8Array {
@@ -1002,9 +1007,27 @@ export class GroupCallAudioEngineRuntime {
       });
     }
     this.maybeRequestZeroInboundMediaRecovery(metrics);
+    this.maybeRequestLowInboundMediaRecovery(metrics);
   }
 
-  private maybeRequestZeroInboundMediaRecovery(metrics: GroupCallMetricsSnapshot): void {
+  private getMediaRecoveryTargets(): string[] {
+    if (!this.topology || !this.userInfo?.address) return [];
+    const myAddress = this.userInfo.address;
+    const transportTargets = getReticulumTransportTargets(myAddress, this.topology)
+      .map((address) => address.trim())
+      .filter((address) => address && address !== myAddress);
+    const targets =
+      transportTargets.length > 0
+        ? transportTargets
+        : this.snapshot.participants
+            .map((participant) => participant.address?.trim() ?? '')
+            .filter((address) => address && address !== myAddress);
+    return [...new Set(targets)];
+  }
+
+  private maybeRequestZeroInboundMediaRecovery(
+    metrics: GroupCallMetricsSnapshot
+  ): void {
     if (
       this.snapshot.roomState !== 'connected' ||
       !this.snapshot.roomId ||
@@ -1018,17 +1041,7 @@ export class GroupCallAudioEngineRuntime {
     }
     const requestPeerMediaRecovery = window.groupCall?.requestPeerMediaRecovery;
     if (typeof requestPeerMediaRecovery !== 'function') return;
-    const myAddress = this.userInfo.address;
-    const transportTargets = getReticulumTransportTargets(myAddress, this.topology)
-      .map((address) => address.trim())
-      .filter((address) => address && address !== myAddress);
-    const targets =
-      transportTargets.length > 0
-        ? transportTargets
-        : this.snapshot.participants
-            .map((participant) => participant.address?.trim() ?? '')
-            .filter((address) => address && address !== myAddress);
-    const uniqueTargets = [...new Set(targets)];
+    const uniqueTargets = this.getMediaRecoveryTargets();
     if (uniqueTargets.length === 0) return;
     const now = Date.now();
     for (const address of uniqueTargets) {
@@ -1042,6 +1055,66 @@ export class GroupCallAudioEngineRuntime {
         peerAddress: address,
         outboundSendSuccesses: this.outboundSendSuccesses,
         packetsReceived: metrics.packetsReceived,
+        reason: 'path-degraded-warm',
+      });
+      void requestPeerMediaRecovery(
+        this.snapshot.roomId,
+        address,
+        'path-degraded-warm'
+      ).catch(() => {});
+    }
+  }
+
+  private maybeRequestLowInboundMediaRecovery(
+    metrics: GroupCallMetricsSnapshot
+  ): void {
+    if (
+      this.snapshot.roomState !== 'connected' ||
+      !this.snapshot.roomId ||
+      !this.roomKey ||
+      !this.topology ||
+      !this.userInfo?.address ||
+      metrics.packetsReceived <= 0 ||
+      this.outboundSendSuccesses <
+        LOW_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES
+    ) {
+      return;
+    }
+    const inboundToOutboundRatio =
+      metrics.packetsReceived / Math.max(1, this.outboundSendSuccesses);
+    const receiveDamage =
+      metrics.playoutUnderTargetFraction >=
+        LOW_INBOUND_MEDIA_RECOVERY_UNDERTARGET_MIN ||
+      metrics.playoutRateFractionBelow097 >=
+        LOW_INBOUND_MEDIA_RECOVERY_RATE_BELOW_097_MIN ||
+      metrics.concealmentTicks >= LOW_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN;
+    if (
+      inboundToOutboundRatio >
+        LOW_INBOUND_MEDIA_RECOVERY_MAX_INBOUND_TO_OUTBOUND_RATIO ||
+      !receiveDamage
+    ) {
+      return;
+    }
+    const requestPeerMediaRecovery = window.groupCall?.requestPeerMediaRecovery;
+    if (typeof requestPeerMediaRecovery !== 'function') return;
+    const uniqueTargets = this.getMediaRecoveryTargets();
+    if (uniqueTargets.length === 0) return;
+    const now = Date.now();
+    for (const address of uniqueTargets) {
+      const lastAt = this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
+      if (lastAt > 0 && now - lastAt < ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS) {
+        continue;
+      }
+      this.zeroInboundMediaRecoveryLastAtByAddress.set(address, now);
+      this.recordDiagEvent('low-inbound-media-recovery-requested', {
+        roomId: this.snapshot.roomId,
+        peerAddress: address,
+        outboundSendSuccesses: this.outboundSendSuccesses,
+        packetsReceived: metrics.packetsReceived,
+        inboundToOutboundRatio,
+        playoutUnderTargetFraction: metrics.playoutUnderTargetFraction,
+        playoutRateFractionBelow097: metrics.playoutRateFractionBelow097,
+        concealmentTicks: metrics.concealmentTicks,
         reason: 'path-degraded-warm',
       });
       void requestPeerMediaRecovery(

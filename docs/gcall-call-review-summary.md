@@ -1155,3 +1155,107 @@ Current patched target:
 - Primary fix: increase `repair-collapse` target/floor behavior, or its recovery reserve headroom, so a correctly selected and applied profile can rebuild from the `2 ms` to `7 ms` collapse band instead of staying near empty.
 - Keep selector thresholds unchanged from this batch: both sides classified correctly.
 - Keep global baseline unchanged for the next patch: the evidence is profile-specific, not a broad clean-call baseline problem.
+
+## Call: 2026-05-05 20:47Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T20-47-21-373Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T20-47-18-388Z.json`
+
+User symptom:
+- New paired call after the `repair-collapse` strength change; user reported the call was horrible.
+- Clarification after initial review: Linux could almost hear nothing from the Mac side, while Mac hearing Linux was much better.
+
+High-level verdict:
+- Bad one-way/asymmetric media quality, with Mac-to-Linux delivery/sender targeting now the primary suspect.
+- Both sides export `repair-collapse` and both playouts are active/ready in recovery mode, but the user symptom is asymmetric: Linux barely hears Mac, while Mac hears Linux much better. That matches the packet imbalance better than generic profile strength: Linux received only `678` packets from Mac, while Mac received `3395` from Linux, and Mac had `571` outbound no-target skips.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Key/media establishment: both sides have inbound packets, decoded frames, playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Global baseline: Mac hearing Linux was much better and Mac is already heavily buffered, so a larger baseline would not explain the asymmetric symptom.
+
+Primary next target:
+- Another subsystem: Mac-to-Linux media send/targeting path, with decode/session diagnostics as a secondary check.
+- The best symptom match is not Mac’s large decode-failure counter, because Mac sounded much better despite `packetsDroppedDecodeFailure=776`. The worse side is Linux receiving Mac: only `678` packets received, `avgPcmBufferedMs=15.730`, `concealmentTicks=293`, `playoutUnderTargetFraction=0.271`, and `playoutRateFractionBelow097=0.253`.
+- Investigate why Mac skipped `571` outbound frames for no target and why Linux received so much less media from Mac than Mac received from Linux. Keep decode-failure instrumentation too, but do not make decode alone the next target from this clarified symptom.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `repair-collapse` | partly/no | 67.017 | 567 | 44 | 0.050 | 0.042 | recovery | User said this direction was much better; classification is too severe for a healthy-buffer, ready playout. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `repair-collapse` | yes | 15.730 | 35 | 293 | 0.271 | 0.253 | recovery | Classification matches the bad direction: Linux barely hears Mac, with shallow reserve and heavy under-target/rate pressure. |
+
+### Side A
+
+Expected profile from symptom:
+- `clean-low-latency` or at most `repair-heavy-connected`.
+
+Actual exported profile:
+- `repair-collapse`
+
+Did classification match?
+- No.
+
+If no:
+- `avgPcmBufferedMs=67.017`, `jitterBufferDepthFramesMean=3.390`, `jitterBufferedFrames=23`, and `jitterHasReadyFrame=true` do not fit a reserve-collapse profile.
+- The clarified symptom says this direction was much better, even with `packetsDroppedDecodeFailure=776`.
+- Treat this as evidence that decode failures need instrumentation, but not as the main audible blocker for this call. The profile selector is too pessimistic for Mac’s current receive state.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse`
+
+Actual exported profile:
+- `repair-collapse`
+
+Did classification match?
+- Yes.
+
+Notes:
+- `avgPcmBufferedMs=15.730`, `jitterBufferDepthFramesMean=0.798`, `avgPlayoutDeltaMs=-125.936`, `concealmentTicks=293`, `playoutUnderTargetFraction=0.271`, and `playoutRateFractionBelow097=0.253` fit a horrible repair-collapse call.
+- Linux only received `678` packets from Mac, while Mac received `3395` from Linux. That asymmetry matches “Linux almost heard nothing” better than a pure receive-profile strength failure.
+- `packetsDroppedDecodeFailure=66` may contribute, but it is smaller than Mac’s decode-failure count despite Linux being the much worse listener.
+
+## Trend Read
+
+Side A:
+- Better audible direction with over-severe receive classification and decode failures flat across the sampled window.
+- Reasons seen:
+  - `packetsDroppedDecodeFailure` is `776` in every trend sample.
+  - `missingFrames` increases from `385` to `567`.
+  - `avgPcmBufferedMs` stays healthy around `67` to `69 ms`.
+  - `entered-recovery` appears once and adaptive mode remains `recovery`.
+
+Side B:
+- Flat-bad Mac-to-Linux receive path under active recovery.
+- Reasons seen:
+  - `packetsDroppedDecodeFailure` is `66` in every trend sample.
+  - `concealmentTicks` increases from `257` to `293`.
+  - `playoutUnderTargetFraction` remains very high around `0.27` to `0.30`.
+  - `playoutRateFractionBelow097` remains very high around `0.25` to `0.28`.
+  - Linux received far fewer packets than Mac did in the opposite direction.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T18:28Z group-812` | A / Linux root | `steady-weak-listener` | partly | partly/yes | weak-listener / secondary | Superseded by later calls; not the current blocker. |
+| `2026-05-05T18:28Z group-812` | B / Mac standby | `repair-collapse` | yes | yes | profile application / adaptive-mode sync | Improved by 20:21Z: recovery mode stayed applied. |
+| `2026-05-05T20:21Z group-812` | A / Mac standby | `repair-collapse` | yes | yes | profile strength | Done: raised `repair-collapse` target/floor and allowed collapse-level extra hold. |
+| `2026-05-05T20:21Z group-812` | B / Linux root | `repair-collapse` | yes | yes | profile strength | Done: same `repair-collapse` strength patch. |
+| `2026-05-05T20:47Z group-812` | A / Mac standby | `repair-collapse` | partly/no | no | selector / secondary decode diagnostics | Mac heard Linux much better; do not use this side to justify more collapse strength. |
+| `2026-05-05T20:47Z group-812` | B / Linux root | `repair-collapse` | yes | yes | Mac-to-Linux media delivery / sender targeting | Investigate Mac outbound no-target skips and the packet imbalance before more receive-profile tuning. |
+
+## Next Fix Target
+
+Current patched target:
+- Mac-to-Linux media delivery / sender targeting.
+- Primary fix: instrument and fix why Mac skipped `571` outbound frames for no target and why Linux received only `678` packets while Mac received `3395`. Capture recipient roster/target availability, selected transport, path warm/fallback state, and per-peer send eligibility at each no-target skip.
+- Secondary diagnostics: keep decode/session instrumentation because both sides report decode failures, but the clarified audible symptom says decode count alone is not the primary selector for this batch.
+- Keep `repair-collapse` strength and global baseline unchanged for the next patch. Linux’s bad receive profile matches the symptom, but the larger asymmetry points upstream of receive policy.

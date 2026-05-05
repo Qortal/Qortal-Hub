@@ -1483,6 +1483,80 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('requests media recovery when inbound media is nonzero but badly underfed versus outbound sends', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+      publicKey: 'pub-peer',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qlocal',
+          standby: 'Qpeer',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const runtimeState = runtime as unknown as {
+      roomKey: Uint8Array | null;
+      outboundSendSuccesses: number;
+      snapshot: { metrics: Record<string, unknown> };
+      recordRecentWindowTrend: (metrics: Record<string, unknown>) => void;
+    };
+    runtimeState.roomKey = new Uint8Array(32).fill(9);
+    runtimeState.outboundSendSuccesses = 1_000;
+    requestPeerMediaRecovery.mockClear();
+
+    runtimeState.recordRecentWindowTrend({
+      ...runtimeState.snapshot.metrics,
+      packetsReceived: 200,
+      packetsDecoded: 190,
+      adaptiveNetworkMode: 'recovery',
+      playoutUnderTargetFraction: 0.25,
+      playoutRateFractionBelow097: 0.2,
+      concealmentTicks: 150,
+      reticulumAudioPacketPathTimeouts: 0,
+    });
+
+    expect(requestPeerMediaRecovery).toHaveBeenCalledTimes(1);
+    expect(requestPeerMediaRecovery).toHaveBeenCalledWith(
+      'room-1',
+      'Qpeer',
+      'path-degraded-warm'
+    );
+    expect((runtime as any).diagEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tag: 'low-inbound-media-recovery-requested',
+          payload: expect.objectContaining({
+            packetsReceived: 200,
+            outboundSendSuccesses: 1_000,
+          }),
+        }),
+      ])
+    );
+  });
+
   it('drops the old room key and requests a new one when the remote root changes', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);

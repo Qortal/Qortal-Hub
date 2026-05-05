@@ -3988,7 +3988,8 @@ export class GroupCallManager extends EventEmitter {
   private activateReticulumAudioLinkFallback(
     address: string,
     state: ReticulumAudioPeerState,
-    reason: string
+    reason: string,
+    opts?: { bypassReactivationCooldown?: boolean }
   ): void {
     if (this.getReticulumAudioTransportKind() !== 'packet') return;
     if (state.packetTransportFallback && state.transport === 'link') return;
@@ -3997,6 +3998,7 @@ export class GroupCallManager extends EventEmitter {
     // report. Without this, `maybeActivateReticulumFallbackFromPeerRxReport` re-fires every
     // ~2–3 s because peer heartbeats still say packetRxRecent=false until our next send.
     if (
+      !opts?.bypassReactivationCooldown &&
       isInReticulumFallbackReactivationCooldown({
         packetFallbackLastExitAtMs: state.packetFallbackLastExitAtMs,
         nowMs: Date.now(),
@@ -4044,7 +4046,8 @@ export class GroupCallManager extends EventEmitter {
   private requestReticulumPacketLinkFallback(
     address: string,
     state: ReticulumAudioPeerState,
-    reason: string
+    reason: string,
+    opts?: { bypassReactivationCooldown?: boolean }
   ): void {
     if (this.getReticulumAudioTransportKind() !== 'packet') return;
     const now = Date.now();
@@ -4058,7 +4061,7 @@ export class GroupCallManager extends EventEmitter {
       GC_RETICULUM_PACKET_LINK_FALLBACK_EVIDENCE_COUNT
     );
     if (state.established && state.linkId) {
-      this.activateReticulumAudioLinkFallback(address, state, reason);
+      this.activateReticulumAudioLinkFallback(address, state, reason, opts);
       return;
     }
     if (this.shouldMaintainReticulumAudioLink(state)) {
@@ -4806,7 +4809,8 @@ export class GroupCallManager extends EventEmitter {
         this.requestReticulumPacketLinkFallback(
           address,
           state,
-          `packet-fallback:${reason}`
+          `packet-fallback:${reason}`,
+          { bypassReactivationCooldown: true }
         );
       }
       return;
@@ -4827,7 +4831,8 @@ export class GroupCallManager extends EventEmitter {
         this.requestReticulumPacketLinkFallback(
           address,
           state,
-          `packet-fallback:${reason}`
+          `packet-fallback:${reason}`,
+          { bypassReactivationCooldown: true }
         );
       }
       return;
