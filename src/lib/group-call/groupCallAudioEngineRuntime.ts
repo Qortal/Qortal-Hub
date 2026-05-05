@@ -335,6 +335,8 @@ function encryptRoomKeyForRecipients(
   return { encryptedKeys, omittedAddresses, failedAddresses };
 }
 
+const ROOM_KEY_DISTRIBUTION_RETRY_MS = 750;
+
 export class GroupCallAudioEngineRuntime {
   private bootstrapRevisionApplied = 0;
   private readonly listeners = new Set<EventListener>();
@@ -363,6 +365,7 @@ export class GroupCallAudioEngineRuntime {
   private selfMintedRoomKey = false;
   private awaitingAuthoritativeKey = false;
   private keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private roomKeyDistributionRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private senderSyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private topologyHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private rootFailoverTimer: ReturnType<typeof setTimeout> | null = null;
@@ -434,6 +437,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
+    this.clearRoomKeyDistributionRetryTimer();
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
@@ -1174,6 +1178,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
+    this.clearRoomKeyDistributionRetryTimer();
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
@@ -1387,6 +1392,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
+    this.clearRoomKeyDistributionRetryTimer();
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
@@ -2085,6 +2091,49 @@ export class GroupCallAudioEngineRuntime {
       clearTimeout(this.keyRecoveryRetryTimer);
       this.keyRecoveryRetryTimer = null;
     }
+  }
+
+  private clearRoomKeyDistributionRetryTimer(): void {
+    if (this.roomKeyDistributionRetryTimer) {
+      clearTimeout(this.roomKeyDistributionRetryTimer);
+      this.roomKeyDistributionRetryTimer = null;
+    }
+  }
+
+  private hasRemoteParticipantEvidence(): boolean {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (
+      this.snapshot.participants.some(
+        (participant) => participant.address && participant.address !== myAddress
+      )
+    ) {
+      return true;
+    }
+    if ((this.topology?.participantCount ?? 0) > 1) {
+      return true;
+    }
+    return (this.snapshot.forwardRecipientCount ?? 0) > 0;
+  }
+
+  private scheduleRoomKeyDistributionRetry(reason: string): void {
+    if (
+      this.roomKeyDistributionRetryTimer ||
+      !this.roomKey ||
+      !this.ownsRoomKey
+    ) {
+      return;
+    }
+    this.recordDiagEvent('room-key-distribution-retry-scheduled', {
+      roomId: this.snapshot.roomId,
+      reason,
+    });
+    this.roomKeyDistributionRetryTimer = setTimeout(() => {
+      this.roomKeyDistributionRetryTimer = null;
+      if (!this.roomKey || !this.ownsRoomKey) {
+        return;
+      }
+      void this.distributeRoomKey(this.roomKey);
+    }, ROOM_KEY_DISTRIBUTION_RETRY_MS);
   }
 
   private clearSenderSyncRetryTimer(): void {
@@ -3449,10 +3498,13 @@ export class GroupCallAudioEngineRuntime {
       !myAddress ||
       !this.roomKey ||
       !nextAddress ||
-      !nextPublicKey ||
       nextAddress === myAddress ||
       root !== myAddress
     ) {
+      return;
+    }
+    if (!nextPublicKey) {
+      this.scheduleRoomKeyDistributionRetry('participant-joined-missing-public-key');
       return;
     }
     await this.sendTargetedRoomKey(
@@ -3466,13 +3518,22 @@ export class GroupCallAudioEngineRuntime {
   private async distributeRoomKey(roomKey: Uint8Array): Promise<void> {
     if (!this.userInfo?.address || !this.snapshot.roomId || !this.callSessionId) return;
     const recipients = await this.getAuthoritativeRecipients();
-    const { encryptedKeys } = encryptRoomKeyForRecipients(
+    const { encryptedKeys, omittedAddresses, failedAddresses } = encryptRoomKeyForRecipients(
       roomKey,
       recipients,
       this.userInfo.address
     );
     const recipientAddrs = Object.keys(encryptedKeys);
-    if (recipientAddrs.length === 0) return;
+    if (recipientAddrs.length === 0) {
+      if (
+        omittedAddresses.length > 0 ||
+        failedAddresses.length > 0 ||
+        this.hasRemoteParticipantEvidence()
+      ) {
+        this.scheduleRoomKeyDistributionRetry('no-encrypted-recipients');
+      }
+      return;
+    }
     const keyCommitment = await buildMediaKeyCommitmentHex(
       roomKey,
       this.callSessionId,
@@ -3508,6 +3569,9 @@ export class GroupCallAudioEngineRuntime {
         encryptedKeysDigest,
       }
     );
+    if (omittedAddresses.length > 0 || failedAddresses.length > 0) {
+      this.scheduleRoomKeyDistributionRetry('partial-recipient-set');
+    }
   }
 
   private async requestRoomKeyFrom(
