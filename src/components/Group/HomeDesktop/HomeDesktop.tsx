@@ -730,9 +730,9 @@ export const HomeDesktop = ({
                               fallback={qortinoWorkspaceShellFallback}
                             >
                               <HomeQortinoWorkspaceCard
-                                onGettingStartedComplete={
-                                  handleGettingStartedComplete
-                                }
+                                onGettingStartedComplete={() => {
+                                  setIsOnboardingComplete(true);
+                                }}
                                 onOpenAppsPanel={handleOpenAppsPanel}
                               />
                             </ErrorBoundary>

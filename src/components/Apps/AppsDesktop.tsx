@@ -327,9 +327,7 @@ export const AppsDesktop = ({
   }, [tabs]);
 
   const viewerTabs = useMemo(() => {
-    return viewerTabOrder
-      .map((tabId) => tabsById.get(tabId))
-      .filter(Boolean);
+    return viewerTabOrder.map((tabId) => tabsById.get(tabId)).filter(Boolean);
   }, [tabsById, viewerTabOrder]);
 
   useEffect(() => {
@@ -409,8 +407,7 @@ export const AppsDesktop = ({
     const padL = parseFloat(cs.paddingLeft) || 0;
     const padR = parseFloat(cs.paddingRight) || 0;
     const rowGap = parseFloat(cs.gap) || TAB_STRIP_INNER_GAP_PX;
-    const available =
-      scroller.clientWidth - padL - padR - addW - rowGap;
+    const available = scroller.clientWidth - padL - padR - addW - rowGap;
 
     const tabsNeed =
       tabs.length * TAB_STRIP_IDEAL_TAB_PX +
@@ -936,7 +933,9 @@ export const AppsDesktop = ({
     // Clear session permissions for this tab
     clearSessionPermissionsByTabId(tabId);
 
-    recentTabIdsRef.current = recentTabIdsRef.current.filter((id) => id !== tabId);
+    recentTabIdsRef.current = recentTabIdsRef.current.filter(
+      (id) => id !== tabId
+    );
 
     const wasClosingActive = selectedTab?.tabId === tabId;
     const copyTabs = [...tabs].filter((tab) => tab?.tabId !== tabId);
@@ -1083,18 +1082,21 @@ export const AppsDesktop = ({
     };
   }, []);
 
-  const openAppsLibrarySearchFunc = useCallback((e) => {
-    const query = e.detail?.data?.query || '';
-    setDesktopViewMode('apps');
-    setIsAddTabFocused(true);
-    setSelectedTab(null);
-    setIsNewTabWindow(false);
-    setLibrarySearchRequest({
-      nonce: Date.now(),
-      query,
-    });
-    setMode('library');
-  }, [setDesktopViewMode, setMode]);
+  const openAppsLibrarySearchFunc = useCallback(
+    (e) => {
+      const query = e.detail?.data?.query || '';
+      setDesktopViewMode('apps');
+      setIsAddTabFocused(true);
+      setSelectedTab(null);
+      setIsNewTabWindow(false);
+      setLibrarySearchRequest({
+        nonce: Date.now(),
+        query,
+      });
+      setMode('library');
+    },
+    [setDesktopViewMode, setMode]
+  );
 
   useEffect(() => {
     subscribeToEvent('openAppsLibrarySearch', openAppsLibrarySearchFunc);
@@ -1235,7 +1237,11 @@ export const AppsDesktop = ({
       setSelectedTab(null);
     }
 
-    if (tabs.length === 0 && !isNewTabWindow && (mode === 'viewer' || devMode === 'viewer')) {
+    if (
+      tabs.length === 0 &&
+      !isNewTabWindow &&
+      (mode === 'viewer' || devMode === 'viewer')
+    ) {
       returnFromAppsMode();
       window.setTimeout(() => {
         setMode('home');
@@ -1522,30 +1528,32 @@ export const AppsDesktop = ({
             </Box>
           )}
 
-          {desktopViewMode === 'dev' && devMode === 'home' && !isNewTabWindow && (
-            <Box
-              sx={{
-                boxSizing: 'border-box',
-                display: 'flex',
-                flexDirection: 'column',
-                height: appsContentHeight,
-                overflow: 'auto',
-                pl: `${DEV_MODE_SIDEBAR_SAFE_INSET_PX}px`,
-                pr: '24px',
-                width: '100%',
-              }}
-            >
-              <Spacer height="30px" />
+          {desktopViewMode === 'dev' &&
+            devMode === 'home' &&
+            !isNewTabWindow && (
+              <Box
+                sx={{
+                  boxSizing: 'border-box',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: appsContentHeight,
+                  overflow: 'auto',
+                  pl: `${DEV_MODE_SIDEBAR_SAFE_INSET_PX}px`,
+                  pr: '24px',
+                  width: '100%',
+                }}
+              >
+                <Spacer height="30px" />
 
-              <AppsDevModeHome
-                availableQapps={availableQapps}
-                myApp={null}
-                myName={myName}
-                myWebsite={null}
-                setMode={setDevMode}
-              />
-            </Box>
-          )}
+                <AppsDevModeHome
+                  availableQapps={availableQapps}
+                  myApp={null}
+                  myName={myName}
+                  myWebsite={null}
+                  setMode={setDevMode}
+                />
+              </Box>
+            )}
 
           <AppsLibraryDesktop
             availableQapps={availableQapps}
@@ -1580,24 +1588,22 @@ export const AppsDesktop = ({
           {desktopViewMode === 'apps' &&
             mode === 'appInfo-from-category' &&
             !selectedTab && (
-            <Box
-              sx={{
-                height: appsContentHeight,
-                overflow: 'auto',
-                width: '100%',
-              }}
-            >
-              <AppInfo app={selectedAppInfo} myName={myName} />
-            </Box>
-          )}
+              <Box
+                sx={{
+                  height: appsContentHeight,
+                  overflow: 'auto',
+                  width: '100%',
+                }}
+              >
+                <AppInfo app={selectedAppInfo} myName={myName} />
+              </Box>
+            )}
 
           <AppsCategoryDesktop
             availableQapps={availableQapps}
             contentHeight={appsContentHeight}
             isShow={
-              desktopViewMode === 'apps' &&
-              mode === 'category' &&
-              !selectedTab
+              desktopViewMode === 'apps' && mode === 'category' && !selectedTab
             }
             category={selectedCategory}
             myName={myName}
@@ -1683,51 +1689,51 @@ export const AppsDesktop = ({
           {isNewTabWindow &&
             desktopViewMode === 'apps' &&
             mode === 'viewer' && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                height: appsContentHeight,
-                overflow: 'auto',
-                width: '100%',
-              }}
-            >
-              <Spacer height="30px" />
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: appsContentHeight,
+                  overflow: 'auto',
+                  width: '100%',
+                }}
+              >
+                <Spacer height="30px" />
 
-              <AppsHomeDesktop
-                availableQapps={availableQapps}
-                myApp={myApp}
-                myName={myName}
-                myWebsite={myWebsite}
-                myAddress={myAddress}
-                setMode={setMode}
-              />
-            </Box>
-          )}
+                <AppsHomeDesktop
+                  availableQapps={availableQapps}
+                  myApp={myApp}
+                  myName={myName}
+                  myWebsite={myWebsite}
+                  myAddress={myAddress}
+                  setMode={setMode}
+                />
+              </Box>
+            )}
 
           {isNewTabWindow &&
             desktopViewMode === 'dev' &&
             devMode === 'viewer' && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                height: appsContentHeight,
-                overflow: 'auto',
-                width: '100%',
-              }}
-            >
-              <Spacer height="30px" />
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  height: appsContentHeight,
+                  overflow: 'auto',
+                  width: '100%',
+                }}
+              >
+                <Spacer height="30px" />
 
-              <AppsDevModeHome
-                availableQapps={availableQapps}
-                myApp={null}
-                myName={myName}
-                myWebsite={null}
-                setMode={setDevMode}
-              />
-            </Box>
-          )}
+                <AppsDevModeHome
+                  availableQapps={availableQapps}
+                  myApp={null}
+                  myName={myName}
+                  myWebsite={null}
+                  setMode={setDevMode}
+                />
+              </Box>
+            )}
         </Box>
       </Box>
 

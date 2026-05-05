@@ -1,35 +1,94 @@
-/* Animated via compositor — avoids JS requestAnimationFrame + style writes every frame */
+/* Keep sweep motion in CSS so React does not write styles every frame. */
 @property --cursor-angle {
   syntax: '<angle>';
   inherits: true;
   initial-value: 110deg;
 }
 
-@keyframes border-glow-sweep-angle {
+@property --edge-proximity {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@keyframes border-glow-sweep-rotate {
   from {
-    --cursor-angle: 110deg;
+    transform: rotate(110deg);
   }
 
   to {
-    --cursor-angle: 470deg;
+    transform: rotate(470deg);
   }
 }
 
-.border-glow-card.border-glow-css-sweep {
-  animation: border-glow-sweep-angle var(--sweep-duration, 4000ms) linear infinite;
+@keyframes border-glow-intro-rotate {
+  0% {
+    transform: rotate(110deg);
+    animation-timing-function: cubic-bezier(0.55, 0.055, 0.675, 0.19);
+  }
+
+  37.5% {
+    transform: rotate(287.5deg);
+    animation-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+  }
+
+  93.75%,
+  100% {
+    transform: rotate(465deg);
+  }
 }
 
-.border-glow-card.border-glow-css-sweep.border-glow-css-sweep-reverse {
+@keyframes border-glow-intro-opacity {
+  0% {
+    opacity: 0;
+  }
+
+  12.5%,
+  62.5% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+.border-glow-card.border-glow-css-sweep.border-glow-card--always-on {
+  --edge-proximity: 100;
+}
+
+/*
+ * Rotating `.edge-light` makes its paint extend past the card's axis-aligned
+ * bounds; clip at the root so the sweep cannot bleed into the grid gutters.
+ */
+.border-glow-card.border-glow-css-sweep {
+  overflow: hidden;
+  clip-path: inset(0 round var(--border-radius));
+}
+
+.border-glow-card.border-glow-css-sweep.border-glow-card--always-on > .edge-light {
+  opacity: 1;
+  animation: border-glow-sweep-rotate var(--sweep-duration, 4000ms) linear infinite;
+}
+
+.border-glow-card.border-glow-css-sweep.border-glow-css-sweep-intro > .edge-light {
+  animation:
+    border-glow-intro-rotate var(--sweep-duration, 4000ms) both,
+    border-glow-intro-opacity var(--sweep-duration, 4000ms) both;
+  animation-iteration-count: var(--sweep-iteration-count, 1);
+}
+
+.border-glow-card.border-glow-css-sweep.border-glow-css-sweep-reverse > .edge-light {
   animation-direction: reverse;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .border-glow-card.border-glow-css-sweep {
+  .border-glow-card.border-glow-css-sweep > .edge-light {
     animation: none;
   }
 
-  .border-glow-card.border-glow-css-sweep.border-glow-card--always-on {
-    --cursor-angle: 118deg;
+  .border-glow-card.border-glow-css-sweep.border-glow-card--always-on > .edge-light {
+    transform: rotate(118deg);
   }
 }
 
@@ -177,6 +236,52 @@
     0 0 15px 0 var(--glow-color-30, hsl(40deg 80% 80% / 30%)),
     0 0 25px 2px var(--glow-color-20, hsl(40deg 80% 80% / 20%)),
     0 0 50px 2px var(--glow-color-10, hsl(40deg 80% 80% / 10%));
+}
+
+.border-glow-card.border-glow-css-sweep::before,
+.border-glow-card.border-glow-css-sweep::after {
+  display: none;
+}
+
+.border-glow-card.border-glow-css-sweep > .edge-light {
+  inset: 0;
+  border-radius: inherit;
+  mask-image: none;
+  mix-blend-mode: normal;
+  opacity: 0;
+  overflow: hidden;
+  transform-origin: center;
+  will-change: transform, opacity;
+  z-index: 2;
+}
+
+.border-glow-card.border-glow-css-sweep > .edge-light::before {
+  background:
+    conic-gradient(
+      from -22deg at center,
+      transparent 0deg,
+      transparent 38deg,
+      var(--glow-color-10, hsl(40deg 80% 80% / 10%)) 54deg,
+      var(--glow-color-30, hsl(40deg 80% 80% / 30%)) 72deg,
+      var(--glow-color-10, hsl(40deg 80% 80% / 10%)) 96deg,
+      transparent 122deg,
+      transparent 360deg
+    );
+  border-radius: inherit;
+  bottom: 0;
+  box-shadow: none;
+  filter: blur(12px);
+  height: auto;
+  inset: 0;
+  opacity: 0.5;
+  right: 0;
+  top: 0;
+  transform: none;
+  width: auto;
+}
+
+.border-glow-card.border-glow-css-sweep > .edge-light::after {
+  content: none;
 }
 
 .border-glow-inner {

@@ -85,7 +85,6 @@ import {
   getBlueAmbientLineBackground,
   getBlueTier1ButtonSx,
   getBlueTier2BadgeSx,
-  getBlueTier3ProgressBackground,
 } from './groupActivityColorSystem';
 import { GETTING_STARTED_LS_KEY } from './gettingStartedStorage';
 import {
@@ -727,6 +726,55 @@ const EarbumpMusicProgressMeter = memo(function EarbumpMusicProgressMeter({
 
   const clampedProgress = Math.min(Math.max(progress01, 0), 1);
 
+  const isDarkMode = theme.palette.mode === 'dark';
+  /** Muted trough so elapsed blue reads clearly vs remaining track (both modes). */
+  const progressTrackSx = useMemo(() => {
+    const trackInset = alpha(
+      isDarkMode ? theme.palette.common.white : theme.palette.common.black,
+      isDarkMode ? 0.1 : 0.07
+    );
+    const trackMid = alpha(
+      isDarkMode ? theme.palette.common.white : theme.palette.text.primary,
+      isDarkMode ? 0.08 : 0.09
+    );
+    const trackOuter = alpha(theme.palette.divider, isDarkMode ? 0.35 : 0.65);
+    return {
+      background: `linear-gradient(180deg, ${trackMid} 0%, ${trackInset} 100%)`,
+      border: `1px solid ${trackOuter}`,
+      borderRadius: '999px',
+      boxSizing: 'border-box',
+      boxShadow:
+        theme.palette.mode === 'dark'
+          ? `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.06)}`
+          : `inset 0 1px 0 ${alpha(theme.palette.common.white, 0.72)}`,
+      height: '5px',
+      overflow: 'hidden',
+      position: 'relative',
+      width: '100%',
+    } as const;
+  }, [
+    isDarkMode,
+    theme.palette.common.black,
+    theme.palette.common.white,
+    theme.palette.divider,
+    theme.palette.mode,
+    theme.palette.text.primary,
+  ]);
+
+  const progressFillSx = useMemo(() => {
+    const glowStrength = isDarkMode ? 0.26 : 0.18;
+    return {
+      background: `linear-gradient(90deg, ${GROUP_ACTIVITY_BLUE.gradientTop} 0%, ${GROUP_ACTIVITY_BLUE.primary} 54%, ${GROUP_ACTIVITY_BLUE.hover} 100%)`,
+      borderRadius: 'inherit',
+      boxShadow: `0 0 10px ${alpha(GROUP_ACTIVITY_BLUE.primary, glowStrength)}`,
+      height: '100%',
+      transform: `scaleX(${clampedProgress})`,
+      transformOrigin: '0 50%',
+      width: '100%',
+      willChange: 'transform',
+    } as const;
+  }, [clampedProgress, isDarkMode]);
+
   return (
     <>
       <Typography
@@ -752,29 +800,8 @@ const EarbumpMusicProgressMeter = memo(function EarbumpMusicProgressMeter({
           touchAction: 'none',
         }}
       >
-        <Box
-          sx={{
-            background: getBlueTier3ProgressBackground(),
-            borderRadius: '999px',
-            height: '4px',
-            overflow: 'hidden',
-            position: 'relative',
-            width: '100%',
-          }}
-        >
-          <Box
-            sx={{
-              background:
-                'linear-gradient(90deg, rgba(144,186,255,0.96) 0%, rgba(111,166,255,0.9) 100%)',
-              borderRadius: '999px',
-              boxShadow: `0 0 14px ${alpha('#8DB8FF', 0.22)}`,
-              height: '100%',
-              transform: `scaleX(${clampedProgress})`,
-              transformOrigin: '0 50%',
-              width: '100%',
-              willChange: 'transform',
-            }}
-          />
+        <Box sx={progressTrackSx}>
+          <Box sx={progressFillSx} />
         </Box>
       </Box>
       <Typography
@@ -3833,10 +3860,7 @@ export const HomeQortinoWorkspaceCard = ({
               width: '100%',
             }}
           >
-            {t(
-              'core:qortino_workspace.section_recommended',
-              'Recommended'
-            )}
+            {t('core:qortino_workspace.section_recommended', 'Recommended')}
           </Typography>
         );
       }
@@ -3860,9 +3884,7 @@ export const HomeQortinoWorkspaceCard = ({
       return (
         <ButtonBase
           onClick={() =>
-            handleSetHotkey(
-              encodeHotkeySlotValue(app.service, app.appName)
-            )
+            handleSetHotkey(encodeHotkeySlotValue(app.service, app.appName))
           }
           sx={{
             alignItems: 'center',
