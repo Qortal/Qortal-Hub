@@ -49,6 +49,8 @@ async function ensureAudioContextRunning(ctx: AudioContext): Promise<void> {
 export interface GroupCallAudioSenderFrame {
   opusFrame: Uint8Array;
   vad: boolean;
+  capturePerfMs: number;
+  encoderInputPerfMs: number;
   encodeOutPerfMs: number;
 }
 
@@ -73,6 +75,24 @@ export class GroupCallAudioSenderEngine {
     null;
   private onVadChanged: ((vad: boolean) => void) | null = null;
   private lastReportedVad = false;
+  private lastCapturePerfMs = 0;
+  private lastEncoderInputPerfMs = 0;
+  private capturedFrameCount = 0;
+  private encodedFrameCount = 0;
+  private encoderErrorCount = 0;
+  private lastEncoderError: string | null = null;
+  private lastStartAtMs = 0;
+  private lastStopAtMs = 0;
+  private unsupportedReason: string | null = null;
+
+  private resetDiagnosticsCounters(): void {
+    this.lastCapturePerfMs = 0;
+    this.lastEncoderInputPerfMs = 0;
+    this.capturedFrameCount = 0;
+    this.encodedFrameCount = 0;
+    this.encoderErrorCount = 0;
+    this.lastEncoderError = null;
+  }
 
   async startOrUpdate(config: GroupCallAudioSenderEngineConfig): Promise<void> {
     const nextShape = {
@@ -104,10 +124,14 @@ export class GroupCallAudioSenderEngine {
       !navigator.mediaDevices?.getUserMedia
     ) {
       this.activeConfig = nextShape;
+      this.unsupportedReason = 'missing-audio-capture-or-webcodecs-api';
       return;
     }
     this.activeConfig = nextShape;
+    this.unsupportedReason = null;
     this.onVadChanged = config.onVadChanged ?? null;
+    this.resetDiagnosticsCounters();
+    this.lastStartAtMs = Date.now();
     const token = ++this.startToken;
     const gum = await getUserAudioStreamForCall(nextShape.inputDeviceId);
     const stream = gum.stream;
@@ -132,13 +156,19 @@ export class GroupCallAudioSenderEngine {
       output: (chunk) => {
         const frame = new Uint8Array(chunk.byteLength);
         chunk.copyTo(frame);
+        this.encodedFrameCount++;
         config.onEncodedFrame({
           opusFrame: frame,
           vad: this.lastVad,
+          capturePerfMs: this.lastCapturePerfMs,
+          encoderInputPerfMs: this.lastEncoderInputPerfMs,
           encodeOutPerfMs: performance.now(),
         });
       },
       error: (error) => {
+        this.encoderErrorCount++;
+        this.lastEncoderError =
+          error instanceof Error ? error.message : String(error);
         console.error('[AudioSurface] AudioEncoder error:', error);
       },
     });
@@ -157,18 +187,23 @@ export class GroupCallAudioSenderEngine {
       },
     } as unknown as AudioEncoderConfig);
     captureNode.port.onmessage = (event) => {
+      const capturedAtPerfMs = performance.now();
       const { frame, vad } = event.data as {
         frame?: Float32Array;
         vad?: boolean;
       };
       if (!(frame instanceof Float32Array) || encoder.state === 'closed') return;
+      this.capturedFrameCount++;
+      this.lastCapturePerfMs = capturedAtPerfMs;
       const pcm16 = float32ToInt16(frame);
+      const encoderInputPerfMs = performance.now();
+      this.lastEncoderInputPerfMs = encoderInputPerfMs;
       const audioData = new AudioData({
         format: 's16',
         sampleRate: OPUS_SAMPLE_RATE,
         numberOfFrames: OPUS_FRAME_SAMPLES,
         numberOfChannels: OPUS_CHANNELS,
-        timestamp: performance.now() * 1000,
+        timestamp: encoderInputPerfMs * 1000,
         data: pcm16,
       });
       this.lastVad = typeof vad === 'boolean' ? vad : false;
@@ -193,6 +228,33 @@ export class GroupCallAudioSenderEngine {
 
   getVad(): boolean {
     return this.lastVad;
+  }
+
+  getDiagnosticsSnapshot(): Record<string, unknown> {
+    const tracks = this.micStream?.getAudioTracks?.() ?? [];
+    return {
+      audioContextState: this.audioContext?.state ?? null,
+      hasMicStream: this.micStream !== null,
+      micTrackCount: tracks.length,
+      micTracks: tracks.map((track) => ({
+        enabled: track.enabled,
+        muted: track.muted,
+        readyState: track.readyState,
+      })),
+      hasCaptureNode: this.captureNode !== null,
+      encoderState: this.encoder?.state ?? null,
+      activeConfig: this.activeConfig,
+      lastVad: this.lastVad,
+      capturedFrameCount: this.capturedFrameCount,
+      encodedFrameCount: this.encodedFrameCount,
+      lastCapturePerfMs: this.lastCapturePerfMs,
+      lastEncoderInputPerfMs: this.lastEncoderInputPerfMs,
+      encoderErrorCount: this.encoderErrorCount,
+      lastEncoderError: this.lastEncoderError,
+      lastStartAtMs: this.lastStartAtMs,
+      lastStopAtMs: this.lastStopAtMs,
+      unsupportedReason: this.unsupportedReason,
+    };
   }
 
   setMuted(muted: boolean): void {
@@ -224,6 +286,7 @@ export class GroupCallAudioSenderEngine {
     this.audioContext = null;
     this.encoder = null;
     this.lastVad = false;
+    this.lastStopAtMs = Date.now();
     this.updateVad(false);
     this.onVadChanged = null;
     if (captureNode) {

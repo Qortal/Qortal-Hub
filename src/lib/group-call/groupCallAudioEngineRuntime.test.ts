@@ -1236,6 +1236,87 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(sendKeyRequest).toHaveBeenCalledTimes(1);
   });
 
+  it('replays a targeted room key when the root sees repeated worker decode failures from a peer', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const sendTargetedRoomKey = vi
+      .spyOn(runtime as any, 'sendTargetedRoomKey')
+      .mockResolvedValue(undefined);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+      publicKey: 'pub-peer',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+    });
+    groupCallEventHandler?.('gcall:session-updated', {
+      roomId: 'room-1',
+      callSessionId: 'csid-root',
+      mediaSessionGeneration: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const runtimeState = runtime as unknown as {
+      pendingDecryptIngressById: Map<number, string>;
+      roomKey: Uint8Array | null;
+      handleDecryptPoolEntry: (
+        entry: { id: number; status: 'decode-failed' }
+      ) => Promise<void>;
+    };
+    expect(runtimeState.roomKey).toBeInstanceOf(Uint8Array);
+
+    for (let id = 1; id <= 7; id++) {
+      runtimeState.pendingDecryptIngressById.set(id, 'Qpeer');
+      await runtimeState.handleDecryptPoolEntry({
+        id,
+        status: 'decode-failed',
+      });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sendTargetedRoomKey).not.toHaveBeenCalled();
+
+    runtimeState.pendingDecryptIngressById.set(8, 'Qpeer');
+    await runtimeState.handleDecryptPoolEntry({
+      id: 8,
+      status: 'decode-failed',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(sendTargetedRoomKey).toHaveBeenCalledTimes(1);
+    expect(sendTargetedRoomKey).toHaveBeenLastCalledWith(
+      expect.any(Uint8Array),
+      'Qpeer',
+      'pub-peer',
+      'root-worker-decode-failure'
+    );
+    expect(sendKeyRequest).not.toHaveBeenCalled();
+
+    runtimeState.pendingDecryptIngressById.set(9, 'Qpeer');
+    await runtimeState.handleDecryptPoolEntry({
+      id: 9,
+      status: 'decode-failed',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sendTargetedRoomKey).toHaveBeenCalledTimes(1);
+  });
+
   it('proactively sends the room key when a participant joins an active rooted room', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);

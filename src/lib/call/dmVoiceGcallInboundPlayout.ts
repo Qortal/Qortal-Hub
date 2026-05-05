@@ -277,6 +277,7 @@ export class DmVoiceGcallInboundPlayout {
     schedulerNodeActive: boolean;
     lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
   } {
+    this.syncJitterGeometryFromMetrics();
     return {
       peerAddress: this.peerAddress,
       decodePath: this.wasmFecActive

@@ -164,6 +164,85 @@ Side B:
   - `missingFrames` increases from `715` to `899`.
   - buffer only rebuilds from `18.1` to `18.9` ms, still below the low-reserve threshold.
 
+## Call: 2026-05-05 13:34Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T13-34-46-268Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T13-34-43-094Z.json`
+
+User symptom:
+- New paired call after the `collapse-recovery` strength change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and recovery profiles.
+
+High-level verdict:
+- Bad/mixed.
+- Receive policy still reports `collapse-recovery` on both sides, but this call introduces non-policy blockers: Linux/root has decode failures, and Mac/standby has a ready-state contradiction with buffered jitter frames but no ready frame.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Queue/backpressure: Reticulum bridge/binary high-water values are `0` on both sides.
+- Failover: root/cluster promotion counts are `0` on both sides.
+
+Primary next target:
+- Another subsystem: decode/session path first, then playout readiness/mode synchronization.
+- Do not tune receive profile strength or baseline from this call until `packetsDroppedDecodeFailure=33` on Linux/root and the Mac `jitterBufferedFrames=12` / `jitterHasReadyFrame=false` state are explained.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `collapse-recovery` | yes | 9.484 | 617 | 7 | 0.024 | 0.003 | recovery | Classification is suspicious: low reserve and very negative delta, but low concealment/under-target and `jitterHasReadyFrame=false` with 12 buffered frames points at readiness/mode sync. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `collapse-recovery` | yes | 13.914 | 370 | 425 | 0.113 | 0.101 | recovery | Classification matches collapse symptoms, but `packetsDroppedDecodeFailure=33` makes decode/session correctness the first target. |
+
+### Side A
+
+Expected profile from symptom:
+- `buffered-not-ready` or `silent-lean`
+
+Actual exported profile:
+- `collapse-recovery`
+
+Did classification match?
+- Partly/no.
+
+If no:
+- `avgPcmBufferedMs` is only `9.484` and `avgPlayoutDeltaMs` is `-132.257`, so a severe path is understandable.
+- But `concealmentTicks` is only `7`, `playoutUnderTargetFraction` is `0.024`, `playoutRateFractionBelow097` is `0.003`, and the playout snapshot says `jitterBufferedFrames=12` with `jitterHasReadyFrame=false`.
+- This should be treated as a playout readiness/mode synchronization issue before selector or strength tuning.
+
+### Side B
+
+Expected profile from symptom:
+- `collapse-recovery`
+
+Actual exported profile:
+- `collapse-recovery`
+
+Did classification match?
+- Yes for the receive symptom, but root cause is not cleanly receive-policy.
+
+Notes:
+- `avgPcmBufferedMs` is `13.914`, `avgPlayoutDeltaMs` is `-153.318`, `concealmentTicks` is `425`, and `playoutRateFractionBelow097` is `0.101`, so the collapse profile fits the audible damage.
+- `packetsDroppedDecodeFailure=33` is a quick-triage correctness signal and should be investigated before another receive-policy patch.
+
+## Trend Read
+
+Side A:
+- Oscillating mode with suspicious readiness state.
+- Reasons seen:
+  - adaptive mode flips low-latency to recovery near the end.
+  - `missingFrames` increases from `477` to `617`.
+  - `concealmentTicks` stays almost flat from `6` to `7`.
+  - buffer stays near `9 ms`, and playout snapshot has buffered frames but `jitterHasReadyFrame=false`.
+
+Side B:
+- Flat-bad/degrading with decode failures.
+- Reasons seen:
+  - `packetsDroppedDecodeFailure` is `33` for the entire sampled trend.
+  - `concealmentTicks` increases from `295` to `425`.
+  - `missingFrames` jumps from `135` to `370`.
+  - buffer falls from about `15.1` to `13.9` ms and remains shallow.
+
 ## Batch Scoreboard
 
 | Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
@@ -172,10 +251,12 @@ Side B:
 | `2026-05-05T12:57Z group-812` | B / Linux root | `collapse-recovery` | partly | no/partly | selector | Done: added stale severe-hold escape for ready buffered low-concealment paths. |
 | `2026-05-05T13:13Z group-812` | A / Mac standby | `collapse-recovery` | yes | yes | receive policy strength | Done: raised `collapse-recovery` target/floor and collapse-only hold headroom. |
 | `2026-05-05T13:13Z group-812` | B / Linux root | `collapse-recovery` | yes | partly/yes | receive policy strength | Done for strength; watch whether low-concealment shallow paths need a later selector split. |
+| `2026-05-05T13:34Z group-812` | A / Mac standby | `collapse-recovery` | yes | partly/no | startup/playout-ready | Investigate buffered-but-not-ready playout state and recovery/low-latency mode sync. |
+| `2026-05-05T13:34Z group-812` | B / Linux root | `collapse-recovery` | yes | yes | decode/session | Investigate `packetsDroppedDecodeFailure=33` before more receive-policy tuning. |
 
 ## Next Fix Target
 
 Current patched target:
 - `collapse-recovery` now has a stronger target/floor and collapse-only extra-hold headroom.
 - Keep the selector escape from the 12:57 review; the 13:13 call no longer showed the same healthy-buffer false positive.
-- Next logs should verify whether Mac-side reserve climbs out of the `7 ms` range and whether Linux low-concealment shallow paths remain appropriately classified.
+- The 13:34 logs shift the next fix away from receive-policy tuning: first inspect the Linux decode/session failure path, then the Mac buffered-but-not-ready playout readiness state.

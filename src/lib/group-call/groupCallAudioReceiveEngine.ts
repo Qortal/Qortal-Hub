@@ -416,6 +416,20 @@ export class GroupCallAudioReceiveEngine {
     return this.metrics.getSnapshot();
   }
 
+  recordSenderPreEncodePipeline(sample: {
+    workletToMainThreadMs: number;
+    mainThreadToEncoderOutputMs: number;
+    workletToEncoderOutputMs: number;
+  }): void {
+    this.metrics.recordGcallSenderPreEncodePipeline(sample);
+    this.scheduleMetricsEmit();
+  }
+
+  recordSenderEncoderToPacketTimestampGap(gapMs: number): void {
+    this.metrics.recordGcallSenderEncoderToPacketTimestampGap(gapMs);
+    this.scheduleMetricsEmit();
+  }
+
   getDiagnosticsSnapshot(): {
     audioContextState: string | null;
     hasMasterGain: boolean;

@@ -158,6 +158,46 @@ type RuntimeRecentWindowTrend = {
   reticulumAudioOutboundPacketSamples: number;
   reticulumAudioInboundLinkSamples: number;
   reticulumAudioInboundPacketSamples: number;
+  outboundEncodedFrames: number;
+  outboundSendAttempts: number;
+  outboundSendSuccesses: number;
+  outboundSendFailures: number;
+  outboundNoTargetSkips: number;
+};
+
+type OutboundMediaTargetDiagnostics = {
+  target: string;
+  attempts: number;
+  successes: number;
+  failures: number;
+  lastAttemptAtMs: number;
+  lastSuccessAtMs: number;
+  lastFailureAtMs: number;
+  lastFailureMessage: string | null;
+};
+
+type OutboundMediaDiagnostics = {
+  encodedFrameCallbacks: number;
+  packetBuildAttempts: number;
+  sendAttempts: number;
+  sendSuccesses: number;
+  sendFailures: number;
+  skippedNoRoomKey: number;
+  skippedNoTopology: number;
+  skippedNoUser: number;
+  skippedNoRoomId: number;
+  skippedMuted: number;
+  skippedNoTargets: number;
+  lastEncodedFrameAtMs: number;
+  lastPacketBuildAttemptAtMs: number;
+  lastSendAttemptAtMs: number;
+  lastSendSuccessAtMs: number;
+  lastSendFailureAtMs: number;
+  lastSkipAtMs: number;
+  lastSkipReason: string | null;
+  lastSendFailureMessage: string | null;
+  lastTargets: string[];
+  targets: OutboundMediaTargetDiagnostics[];
 };
 
 const GCALL_KEY_MESSAGE_VERSION = 3;
@@ -403,6 +443,34 @@ export class GroupCallAudioEngineRuntime {
   private workerDecodeFailureWindowStartedAt = 0;
   private workerDecodeFailureCount = 0;
   private workerDecodeFailureRecoveryLastAt = 0;
+  private readonly pendingDecryptIngressById = new Map<number, string>();
+  private readonly rootDecodeFailureWindowStartedAtBySource = new Map<string, number>();
+  private readonly rootDecodeFailureCountBySource = new Map<string, number>();
+  private readonly rootDecodeFailureKeyReplayLastAtBySource = new Map<string, number>();
+  private outboundEncodedFrameCallbacks = 0;
+  private outboundPacketBuildAttempts = 0;
+  private outboundSendAttempts = 0;
+  private outboundSendSuccesses = 0;
+  private outboundSendFailures = 0;
+  private outboundSkippedNoRoomKey = 0;
+  private outboundSkippedNoTopology = 0;
+  private outboundSkippedNoUser = 0;
+  private outboundSkippedNoRoomId = 0;
+  private outboundSkippedMuted = 0;
+  private outboundSkippedNoTargets = 0;
+  private outboundLastEncodedFrameAtMs = 0;
+  private outboundLastPacketBuildAttemptAtMs = 0;
+  private outboundLastSendAttemptAtMs = 0;
+  private outboundLastSendSuccessAtMs = 0;
+  private outboundLastSendFailureAtMs = 0;
+  private outboundLastSkipAtMs = 0;
+  private outboundLastSkipReason: string | null = null;
+  private outboundLastSendFailureMessage: string | null = null;
+  private outboundLastTargets: string[] = [];
+  private readonly outboundTargetDiagnostics = new Map<
+    string,
+    OutboundMediaTargetDiagnostics
+  >();
 
   constructor() {
     this.receiveEngine = new GroupCallAudioReceiveEngine(
@@ -652,6 +720,86 @@ export class GroupCallAudioEngineRuntime {
     this.recentWindowTrends.splice(0, this.recentWindowTrends.length);
   }
 
+  private resetOutboundMediaDiagnostics(): void {
+    this.outboundEncodedFrameCallbacks = 0;
+    this.outboundPacketBuildAttempts = 0;
+    this.outboundSendAttempts = 0;
+    this.outboundSendSuccesses = 0;
+    this.outboundSendFailures = 0;
+    this.outboundSkippedNoRoomKey = 0;
+    this.outboundSkippedNoTopology = 0;
+    this.outboundSkippedNoUser = 0;
+    this.outboundSkippedNoRoomId = 0;
+    this.outboundSkippedMuted = 0;
+    this.outboundSkippedNoTargets = 0;
+    this.outboundLastEncodedFrameAtMs = 0;
+    this.outboundLastPacketBuildAttemptAtMs = 0;
+    this.outboundLastSendAttemptAtMs = 0;
+    this.outboundLastSendSuccessAtMs = 0;
+    this.outboundLastSendFailureAtMs = 0;
+    this.outboundLastSkipAtMs = 0;
+    this.outboundLastSkipReason = null;
+    this.outboundLastSendFailureMessage = null;
+    this.outboundLastTargets = [];
+    this.outboundTargetDiagnostics.clear();
+  }
+
+  private recordOutboundSkip(reason: string): void {
+    if (reason === 'no-room-key') this.outboundSkippedNoRoomKey++;
+    else if (reason === 'no-topology') this.outboundSkippedNoTopology++;
+    else if (reason === 'no-user') this.outboundSkippedNoUser++;
+    else if (reason === 'no-room-id') this.outboundSkippedNoRoomId++;
+    else if (reason === 'muted') this.outboundSkippedMuted++;
+    else if (reason === 'no-targets') this.outboundSkippedNoTargets++;
+    this.outboundLastSkipAtMs = Date.now();
+    this.outboundLastSkipReason = reason;
+  }
+
+  private getOutboundTargetDiagnostics(
+    target: string
+  ): OutboundMediaTargetDiagnostics {
+    const existing = this.outboundTargetDiagnostics.get(target);
+    if (existing) return existing;
+    const next: OutboundMediaTargetDiagnostics = {
+      target,
+      attempts: 0,
+      successes: 0,
+      failures: 0,
+      lastAttemptAtMs: 0,
+      lastSuccessAtMs: 0,
+      lastFailureAtMs: 0,
+      lastFailureMessage: null,
+    };
+    this.outboundTargetDiagnostics.set(target, next);
+    return next;
+  }
+
+  private buildOutboundMediaDiagnosticsSnapshot(): OutboundMediaDiagnostics {
+    return {
+      encodedFrameCallbacks: this.outboundEncodedFrameCallbacks,
+      packetBuildAttempts: this.outboundPacketBuildAttempts,
+      sendAttempts: this.outboundSendAttempts,
+      sendSuccesses: this.outboundSendSuccesses,
+      sendFailures: this.outboundSendFailures,
+      skippedNoRoomKey: this.outboundSkippedNoRoomKey,
+      skippedNoTopology: this.outboundSkippedNoTopology,
+      skippedNoUser: this.outboundSkippedNoUser,
+      skippedNoRoomId: this.outboundSkippedNoRoomId,
+      skippedMuted: this.outboundSkippedMuted,
+      skippedNoTargets: this.outboundSkippedNoTargets,
+      lastEncodedFrameAtMs: this.outboundLastEncodedFrameAtMs,
+      lastPacketBuildAttemptAtMs: this.outboundLastPacketBuildAttemptAtMs,
+      lastSendAttemptAtMs: this.outboundLastSendAttemptAtMs,
+      lastSendSuccessAtMs: this.outboundLastSendSuccessAtMs,
+      lastSendFailureAtMs: this.outboundLastSendFailureAtMs,
+      lastSkipAtMs: this.outboundLastSkipAtMs,
+      lastSkipReason: this.outboundLastSkipReason,
+      lastSendFailureMessage: this.outboundLastSendFailureMessage,
+      lastTargets: [...this.outboundLastTargets],
+      targets: [...this.outboundTargetDiagnostics.values()],
+    };
+  }
+
   private recordRecentWindowTrend(metrics: GroupCallMetricsSnapshot): void {
     const previous = this.recentWindowTrends[this.recentWindowTrends.length - 1] ?? null;
     const reasons: string[] = [];
@@ -723,6 +871,11 @@ export class GroupCallAudioEngineRuntime {
       reticulumAudioOutboundPacketSamples: metrics.reticulumAudioOutboundPacketSamples,
       reticulumAudioInboundLinkSamples: metrics.reticulumAudioInboundLinkSamples,
       reticulumAudioInboundPacketSamples: metrics.reticulumAudioInboundPacketSamples,
+      outboundEncodedFrames: this.outboundEncodedFrameCallbacks,
+      outboundSendAttempts: this.outboundSendAttempts,
+      outboundSendSuccesses: this.outboundSendSuccesses,
+      outboundSendFailures: this.outboundSendFailures,
+      outboundNoTargetSkips: this.outboundSkippedNoTargets,
     });
     if (this.recentWindowTrends.length > MAX_RECENT_WINDOW_TRENDS) {
       this.recentWindowTrends.splice(
@@ -807,6 +960,8 @@ export class GroupCallAudioEngineRuntime {
             : 0,
       },
       receiveEngine,
+      senderEngine: this.senderEngine.getDiagnosticsSnapshot(),
+      outboundMedia: this.buildOutboundMediaDiagnosticsSnapshot(),
       decryptPool: this.decryptPool?.stats() ?? {
         enabled: false,
         currentKeyVersion: 0,
@@ -1187,6 +1342,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearParticipantRosterRefreshTimer();
     this.clearHeldIncomingAudio();
     this.clearRecentWindowTrends();
+    this.resetOutboundMediaDiagnostics();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
@@ -1402,6 +1558,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearParticipantRosterRefreshTimer();
     this.clearHeldIncomingAudio();
     this.clearRecentWindowTrends();
+    this.resetOutboundMediaDiagnostics();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     await this.senderEngine.stop();
     await this.syncDecryptPoolRoomKey(null);
@@ -1673,15 +1830,18 @@ export class GroupCallAudioEngineRuntime {
         audioPayload.fromAddress ??
         audioPayload.resolvedFromAddress ??
         'unknown';
+      const decryptId = this.decryptId++;
+      this.pendingDecryptIngressById.set(decryptId, ingressPeerAddress);
       const posted = this.decryptPool!.postDecrypt(
         ingressPeerAddress,
-        this.decryptId++,
+        decryptId,
         audioPayload.data.slice(0)
       );
       this.noteParticipantLiveEvidence(ingressPeerAddress, Date.now());
       if (posted) {
         return 1;
       }
+      this.pendingDecryptIngressById.delete(decryptId);
       traceGcallAudioSurface('pipeline: decrypt pool postDecrypt returned false, falling back', {
         from: ingressPeerAddress,
       });
@@ -2368,6 +2528,10 @@ export class GroupCallAudioEngineRuntime {
     this.workerDecodeFailureWindowStartedAt = 0;
     this.workerDecodeFailureCount = 0;
     this.workerDecodeFailureRecoveryLastAt = 0;
+    this.pendingDecryptIngressById.clear();
+    this.rootDecodeFailureWindowStartedAtBySource.clear();
+    this.rootDecodeFailureCountBySource.clear();
+    this.rootDecodeFailureKeyReplayLastAtBySource.clear();
   }
 
   private noteWorkerDecodeFailureForKeyRecovery(): void {
@@ -2417,6 +2581,84 @@ export class GroupCallAudioEngineRuntime {
     void this.requestRoomKeyFrom(root, 'topology');
     this.requestRetainedKeyReplay('worker-decode-failure');
     this.scheduleAuthoritativeKeyRecovery('worker-decode-failure');
+  }
+
+  private noteRootDecodeFailureForPeerKeyReplay(sourceAddress: string): boolean {
+    const root = this.topology?.rootForwarder?.trim() ?? '';
+    const myAddress = this.userInfo?.address ?? '';
+    const peerAddress = sourceAddress.trim();
+    if (
+      !root ||
+      !myAddress ||
+      root !== myAddress ||
+      !this.snapshot.roomId ||
+      !this.roomKey ||
+      !this.ownsRoomKey ||
+      !peerAddress ||
+      peerAddress === 'unknown' ||
+      peerAddress === myAddress
+    ) {
+      return false;
+    }
+    const participant = this.snapshot.participants.find(
+      (candidate) => candidate.address === peerAddress
+    );
+    const publicKey = participant?.publicKey?.trim() ?? '';
+    if (!publicKey) {
+      this.recordDiagEvent('root-worker-decode-failure-key-replay-skipped', {
+        roomId: this.snapshot.roomId,
+        sourceAddress: peerAddress,
+        reason: 'missing-public-key',
+      });
+      return true;
+    }
+
+    const now = Date.now();
+    const windowStartedAt =
+      this.rootDecodeFailureWindowStartedAtBySource.get(peerAddress) ?? 0;
+    if (
+      windowStartedAt <= 0 ||
+      now - windowStartedAt > WORKER_DECODE_FAILURE_RECOVERY_WINDOW_MS
+    ) {
+      this.rootDecodeFailureWindowStartedAtBySource.set(peerAddress, now);
+      this.rootDecodeFailureCountBySource.set(peerAddress, 0);
+    }
+    const count =
+      (this.rootDecodeFailureCountBySource.get(peerAddress) ?? 0) + 1;
+    this.rootDecodeFailureCountBySource.set(peerAddress, count);
+    if (count < WORKER_DECODE_FAILURE_RECOVERY_THRESHOLD) {
+      return true;
+    }
+
+    const lastReplayAt =
+      this.rootDecodeFailureKeyReplayLastAtBySource.get(peerAddress) ?? 0;
+    if (
+      lastReplayAt > 0 &&
+      now - lastReplayAt < WORKER_DECODE_FAILURE_RECOVERY_COOLDOWN_MS
+    ) {
+      return true;
+    }
+    this.rootDecodeFailureKeyReplayLastAtBySource.set(peerAddress, now);
+    traceGcallAudioSurface(
+      'pipeline: root decode-failed triggered targeted room-key replay',
+      {
+        roomId: this.snapshot.roomId,
+        sourceAddress: peerAddress,
+        decodeFailedCount: count,
+      }
+    );
+    this.recordDiagEvent('root-worker-decode-failure-key-replay', {
+      roomId: this.snapshot.roomId,
+      sourceAddress: peerAddress,
+      decodeFailedCount: count,
+    });
+    void this.sendTargetedRoomKey(
+      this.roomKey,
+      peerAddress,
+      publicKey,
+      'root-worker-decode-failure'
+    );
+    return true;
   }
 
   private scheduleAuthoritativeKeyRecovery(reason: string): void {
@@ -3784,7 +4026,22 @@ export class GroupCallAudioEngineRuntime {
         onVadChanged: (vad) => {
           this.noteLocalVadActivity(vad);
         },
-        onEncodedFrame: ({ opusFrame, encodeOutPerfMs }) => {
+        onEncodedFrame: ({
+          opusFrame,
+          capturePerfMs,
+          encoderInputPerfMs,
+          encodeOutPerfMs,
+        }) => {
+          this.outboundEncodedFrameCallbacks++;
+          this.outboundLastEncodedFrameAtMs = Date.now();
+          this.receiveEngine.recordSenderPreEncodePipeline({
+            workletToMainThreadMs: Math.max(0, encoderInputPerfMs - capturePerfMs),
+            mainThreadToEncoderOutputMs: Math.max(
+              0,
+              encodeOutPerfMs - encoderInputPerfMs
+            ),
+            workletToEncoderOutputMs: Math.max(0, encodeOutPerfMs - capturePerfMs),
+          });
           void this.dispatchEncodedFrame(opusFrame, encodeOutPerfMs);
         },
       });
@@ -3853,12 +4110,17 @@ export class GroupCallAudioEngineRuntime {
   private async handleDecryptPoolEntry(
     entry: DecryptPoolDecryptBatchHandlerInput
   ): Promise<void> {
+    const ingressPeerAddress = this.pendingDecryptIngressById.get(entry.id) ?? '';
+    this.pendingDecryptIngressById.delete(entry.id);
     if (entry.status === 'decode-failed') {
       this.receiveEngine.recordDecodeFailure();
       traceGcallAudioSurface('pipeline: decrypt worker reported decode-failed', {
         id: entry.id,
+        from: ingressPeerAddress,
       });
-      this.noteWorkerDecodeFailureForKeyRecovery();
+      if (!this.noteRootDecodeFailureForPeerKeyReplay(ingressPeerAddress)) {
+        this.noteWorkerDecodeFailureForKeyRecovery();
+      }
       return;
     }
     if (entry.status !== 'ok') {
@@ -3875,16 +4137,34 @@ export class GroupCallAudioEngineRuntime {
 
   private async dispatchEncodedFrame(
     opusFrame: Uint8Array,
-    _encodeOutPerfMs?: number
+    encodeOutPerfMs?: number
   ): Promise<void> {
-    if (
-      !this.roomKey ||
-      !this.topology ||
-      !this.userInfo?.address ||
-      !this.snapshot.roomId ||
-      this.snapshot.muted
-    ) {
+    if (!this.roomKey) {
+      this.recordOutboundSkip('no-room-key');
       return;
+    }
+    if (!this.topology) {
+      this.recordOutboundSkip('no-topology');
+      return;
+    }
+    if (!this.userInfo?.address) {
+      this.recordOutboundSkip('no-user');
+      return;
+    }
+    if (!this.snapshot.roomId) {
+      this.recordOutboundSkip('no-room-id');
+      return;
+    }
+    if (this.snapshot.muted) {
+      this.recordOutboundSkip('muted');
+      return;
+    }
+    this.outboundPacketBuildAttempts++;
+    this.outboundLastPacketBuildAttemptAtMs = Date.now();
+    if (typeof encodeOutPerfMs === 'number') {
+      this.receiveEngine.recordSenderEncoderToPacketTimestampGap(
+        Math.max(0, performance.now() - encodeOutPerfMs)
+      );
     }
     const seq = this.seq++ & 0xffff;
     const packet = encodeAudioPacketV2(
@@ -3899,22 +4179,68 @@ export class GroupCallAudioEngineRuntime {
       this.userInfo.address,
       this.topology
     );
-    if (targets.length === 0) return;
+    this.outboundLastTargets = [...targets];
+    if (targets.length === 0) {
+      this.recordOutboundSkip('no-targets');
+      return;
+    }
+    const markAttempt = (target: string): OutboundMediaTargetDiagnostics => {
+      const diag = this.getOutboundTargetDiagnostics(target);
+      diag.attempts++;
+      diag.lastAttemptAtMs = Date.now();
+      this.outboundSendAttempts++;
+      this.outboundLastSendAttemptAtMs = diag.lastAttemptAtMs;
+      return diag;
+    };
+    const markSuccess = (diag: OutboundMediaTargetDiagnostics): void => {
+      diag.successes++;
+      diag.lastSuccessAtMs = Date.now();
+      this.outboundSendSuccesses++;
+      this.outboundLastSendSuccessAtMs = diag.lastSuccessAtMs;
+    };
+    const markFailure = (
+      diag: OutboundMediaTargetDiagnostics,
+      error: unknown
+    ): void => {
+      const message = error instanceof Error ? error.message : String(error);
+      diag.failures++;
+      diag.lastFailureAtMs = Date.now();
+      diag.lastFailureMessage = message;
+      this.outboundSendFailures++;
+      this.outboundLastSendFailureAtMs = diag.lastFailureAtMs;
+      this.outboundLastSendFailureMessage = message;
+      this.recordDiagEvent('outbound-audio-send-failed', {
+        roomId: this.snapshot.roomId,
+        target: diag.target,
+        message,
+      });
+    };
     if (
       targets.length > 1 &&
       typeof window.groupCall?.sendAudioBatch === 'function'
     ) {
-      await window.groupCall.sendAudioBatch(
-        this.snapshot.roomId,
-        targets,
-        packet
-      );
+      const diagnostics = targets.map(markAttempt);
+      try {
+        await window.groupCall.sendAudioBatch(this.snapshot.roomId, targets, packet);
+        diagnostics.forEach(markSuccess);
+      } catch (error) {
+        diagnostics.forEach((diag) => markFailure(diag, error));
+      }
       return;
     }
     await Promise.all(
-      targets.map((address) =>
-        window.groupCall?.sendAudio(this.snapshot.roomId, address, packet)
-      )
+      targets.map(async (address) => {
+        const diag = markAttempt(address);
+        try {
+          if (typeof window.groupCall?.sendAudio !== 'function') {
+            throw new Error('window.groupCall.sendAudio unavailable');
+          }
+          await window.groupCall.sendAudio(this.snapshot.roomId, address, packet);
+          markSuccess(diag);
+        } catch (error) {
+          markFailure(diag, error);
+        }
+      })
     );
   }
 }
