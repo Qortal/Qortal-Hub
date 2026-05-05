@@ -384,6 +384,7 @@ export class GroupCallAudioEngineRuntime {
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
   private readonly participantDecodedMediaLastSeenAt = new Map<string, number>();
+  private readonly participantLiveEvidenceLastSeenAt = new Map<string, number>();
   private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
@@ -976,6 +977,7 @@ export class GroupCallAudioEngineRuntime {
     if (!address || address === myAddress) return;
     this.markParticipantRecentlyLeft(address);
     this.participantDecodedMediaLastSeenAt.delete(address);
+    this.participantLiveEvidenceLastSeenAt.delete(address);
     const nextParticipants = this.snapshot.participants.filter(
       (participant) => participant.address !== address
     );
@@ -1188,6 +1190,7 @@ export class GroupCallAudioEngineRuntime {
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
+    this.participantLiveEvidenceLastSeenAt.clear();
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -1409,6 +1412,7 @@ export class GroupCallAudioEngineRuntime {
     this.memberGateGroupId = null;
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
+    this.participantLiveEvidenceLastSeenAt.clear();
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -1552,6 +1556,7 @@ export class GroupCallAudioEngineRuntime {
         dataIsArrayBuffer: audioPayload.data instanceof ArrayBuffer,
       });
       if (this.awaitingAuthoritativeKey && this.roomKey === null) {
+        this.noteParticipantLiveEvidence(fromAddr, Date.now());
         this.enqueueIncomingAudioWhileAwaitingKey(audioPayload);
         this.scheduleAuthoritativeKeyRecovery('decode-failure');
         return;
@@ -1613,6 +1618,7 @@ export class GroupCallAudioEngineRuntime {
       this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
       this.activeSpeakerLastSeenAt.clear();
       this.participantDecodedMediaLastSeenAt.clear();
+      this.participantLiveEvidenceLastSeenAt.clear();
       this.clearActiveSpeakerRefreshTimer();
       await this.senderEngine.stop();
       await this.syncDecryptPoolRoomKey(null);
@@ -1672,6 +1678,7 @@ export class GroupCallAudioEngineRuntime {
         this.decryptId++,
         audioPayload.data.slice(0)
       );
+      this.noteParticipantLiveEvidence(ingressPeerAddress, Date.now());
       if (posted) {
         return 1;
       }
@@ -1679,6 +1686,7 @@ export class GroupCallAudioEngineRuntime {
         from: ingressPeerAddress,
       });
     }
+    this.noteParticipantLiveEvidence(fromAddr, Date.now());
     return this.receiveEngine.handleIncomingAudio(audioPayload, this.roomKey);
   }
 
@@ -1779,6 +1787,7 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     this.noteRootVerifiedKey(payload.fromAddress, Date.now());
+    this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
     this.roomKey = roomKey;
     this.ownsRoomKey = false;
     this.selfMintedRoomKey = false;
@@ -3287,6 +3296,7 @@ export class GroupCallAudioEngineRuntime {
     for (const address of removedAddresses) {
       this.activeSpeakerLastSeenAt.delete(address);
       this.participantDecodedMediaLastSeenAt.delete(address);
+      this.participantLiveEvidenceLastSeenAt.delete(address);
       await this.receiveEngine.removeSource(address);
       this.markParticipantRecentlyLeft(address);
       if ((this.topology?.rootForwarder?.trim() ?? '') === address) {
@@ -3357,6 +3367,25 @@ export class GroupCallAudioEngineRuntime {
         effectiveSeenAt
       )
     );
+    this.noteParticipantLiveEvidence(address, effectiveSeenAt);
+  }
+
+  private noteParticipantLiveEvidence(
+    addressValue: string | null | undefined,
+    seenAtMs: number
+  ): void {
+    const address = addressValue?.trim() ?? '';
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!address || address === myAddress) return;
+    const effectiveSeenAt =
+      seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+    this.participantLiveEvidenceLastSeenAt.set(
+      address,
+      Math.max(
+        this.participantLiveEvidenceLastSeenAt.get(address) ?? 0,
+        effectiveSeenAt
+      )
+    );
   }
 
   private hasRecentParticipantActivityEvidence(
@@ -3365,6 +3394,13 @@ export class GroupCallAudioEngineRuntime {
   ): boolean {
     const address = addressValue?.trim() ?? '';
     if (!address) return false;
+    const lastLiveEvidenceAt = this.participantLiveEvidenceLastSeenAt.get(address) ?? 0;
+    if (
+      lastLiveEvidenceAt > 0 &&
+      nowMs - lastLiveEvidenceAt <= PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
+    ) {
+      return true;
+    }
     const lastDecodedMediaAt = this.participantDecodedMediaLastSeenAt.get(address) ?? 0;
     if (
       lastDecodedMediaAt > 0 &&
@@ -3723,6 +3759,7 @@ export class GroupCallAudioEngineRuntime {
     ) {
       return;
     }
+    this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
     await this.sendTargetedRoomKey(
       this.roomKey,
       payload.fromAddress,
