@@ -429,5 +429,11 @@
       "user_joined": "пользователь успешно присоединился!"
     }
   },
+  "context_menu": {
+    "mark_as_read": "Отметить как прочитанное",
+    "mute_push_notifications": "Отключить push-уведомления",
+    "unmute_push_notifications": "Включить push-уведомления",
+    "mark_all_read": "Отметить все как прочитанные"
+  },
   "thread_posts": "новые сообщения темы"
 }

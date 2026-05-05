@@ -429,5 +429,11 @@
       "user_joined": "käyttäjä liittyi onnistuneesti!"
     }
   },
+  "context_menu": {
+    "mark_as_read": "Merkitse luetuksi",
+    "mute_push_notifications": "Mykistä push-ilmoitukset",
+    "unmute_push_notifications": "Poista push-ilmoitusten mykistys",
+    "mark_all_read": "Merkitse kaikki luetuksi"
+  },
   "thread_posts": "uudet ketjun julkaisut"
 }

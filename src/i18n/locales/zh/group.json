@@ -429,5 +429,11 @@
       "user_joined": "用户成功加入！"
     }
   },
+  "context_menu": {
+    "mark_as_read": "标记为已读",
+    "mute_push_notifications": "静音推送通知",
+    "unmute_push_notifications": "取消静音推送通知",
+    "mark_all_read": "全部标为已读"
+  },
   "thread_posts": "新主题消息"
 }

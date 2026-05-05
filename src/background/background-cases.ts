@@ -40,6 +40,7 @@ import {
   kickFromGroup,
   leaveGroup,
   makeAdmin,
+  markAllMemberGroupsRead,
   notifyAdminRegenerateSecretKey,
   pauseAllQueues,
   processTransactionVersion2,
@@ -969,6 +970,33 @@ export async function addTimestampEnterChatCase(request, event) {
       {
         requestId: request.requestId,
         action: 'addTimestampEnterChat',
+        error: error?.message,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  }
+}
+
+export async function markAllMemberGroupsReadCase(request, event) {
+  try {
+    const { groupIds } = request.payload;
+    const response = await markAllMemberGroupsRead(groupIds);
+
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'markAllMemberGroupsRead',
+        payload: response,
+        type: 'backgroundMessageResponse',
+      },
+      event.origin
+    );
+  } catch (error) {
+    event.source.postMessage(
+      {
+        requestId: request.requestId,
+        action: 'markAllMemberGroupsRead',
         error: error?.message,
         type: 'backgroundMessageResponse',
       },

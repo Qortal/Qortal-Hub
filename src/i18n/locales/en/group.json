@@ -430,5 +430,11 @@
       "user_joined": "user successfully joined!"
     }
   },
+  "context_menu": {
+    "mark_as_read": "Mark as read",
+    "mute_push_notifications": "Mute push notifications",
+    "unmute_push_notifications": "Unmute push notifications",
+    "mark_all_read": "Mark all as read"
+  },
   "thread_posts": "new thread posts"
 }

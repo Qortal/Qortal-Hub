@@ -80,6 +80,7 @@ import {
   listActionsCase,
   ltcBalanceCase,
   makeAdminCase,
+  markAllMemberGroupsReadCase,
   nameCase,
   notifyAdminRegenerateSecretKeyCase,
   pauseAllQueuesCase,
@@ -3102,6 +3103,45 @@ export async function addTimestampEnterChat({ groupId, timestamp }) {
   });
 }
 
+/** Marks every listed member group chat read (single read/write per store — avoids parallel races). */
+export async function markAllMemberGroupsRead(groupIds) {
+  if (!Array.isArray(groupIds) || groupIds.length === 0) {
+    return true;
+  }
+  const now = Date.now();
+  const wallet = await getSaveWallet();
+  const address = wallet.address0;
+  const enterData = (await getTimestampEnterChat()) || {};
+  const announcementData = (await getTimestampGroupAnnouncement()) || {};
+
+  for (const groupId of groupIds) {
+    if (groupId == null || groupId === '') continue;
+    enterData[groupId] = now;
+    announcementData[groupId] = {
+      notification: now,
+      seentimestamp: true,
+    };
+  }
+
+  await new Promise((resolve, reject) => {
+    storeData(`enter-chat-timestamp-${address}`, enterData)
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || 'Error saving data'));
+      });
+  });
+
+  await new Promise((resolve, reject) => {
+    storeData(`group-announcement-${address}`, announcementData)
+      .then(() => resolve(true))
+      .catch((error) => {
+        reject(new Error(error.message || 'Error saving data'));
+      });
+  });
+
+  return true;
+}
+
 export async function addTimestampMention({ groupId, timestamp }) {
   const wallet = await getSaveWallet();
   const address = wallet.address0;
@@ -3264,6 +3304,9 @@ function setupMessageListener() {
         break;
       case 'addTimestampEnterChat':
         addTimestampEnterChatCase(request, event);
+        break;
+      case 'markAllMemberGroupsRead':
+        markAllMemberGroupsReadCase(request, event);
         break;
       case 'setApiKey':
         setApiKeyCase(request, event);

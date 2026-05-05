@@ -1298,6 +1298,35 @@ export const Group = ({
     [getGroupAnnouncements, getTimestampEnterChat]
   );
 
+  const handleMarkAllMemberGroupsRead = useCallback(() => {
+    const ids = (memberGroupsRef.current || [])
+      .map((g) => g?.groupId)
+      .filter((id) => id != null && id !== '');
+    if (!ids.length) return;
+
+    window
+      .sendMessage('markAllMemberGroupsRead', { groupIds: ids })
+      .then((response) => {
+        if (response?.error) {
+          console.error(
+            'Failed to mark all groups read:',
+            response.error
+          );
+        }
+      })
+      .catch((error) => {
+        console.error(
+          'Failed to mark all groups read:',
+          error.message || 'An error occurred'
+        );
+      });
+
+    setTimeout(() => {
+      getGroupAnnouncements();
+      getTimestampEnterChat();
+    }, 200);
+  }, [getGroupAnnouncements, getTimestampEnterChat]);
+
   useEffect(() => {
     subscribeToEvent('markAsRead', handleMarkAsRead);
 
@@ -1305,6 +1334,17 @@ export const Group = ({
       unsubscribeFromEvent('markAsRead', handleMarkAsRead);
     };
   }, [handleMarkAsRead]);
+
+  useEffect(() => {
+    subscribeToEvent('markAllMemberGroupsRead', handleMarkAllMemberGroupsRead);
+
+    return () => {
+      unsubscribeFromEvent(
+        'markAllMemberGroupsRead',
+        handleMarkAllMemberGroupsRead
+      );
+    };
+  }, [handleMarkAllMemberGroupsRead]);
 
   const resetAllStatesAndRefs = useCallback(() => {
     // Reset all useState values to their initial states

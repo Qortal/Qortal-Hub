@@ -429,5 +429,11 @@
       "user_joined": "تم انضمام المستخدم بنجاح!"
     }
   },
+  "context_menu": {
+    "mark_as_read": "وضع علامة مقروء",
+    "mute_push_notifications": "كتم إشعارات الدفع",
+    "unmute_push_notifications": "إلغاء كتم إشعارات الدفع",
+    "mark_all_read": "وضع علامة مقروء على الكل"
+  },
   "thread_posts": "بُوستات جديدة في الموضوع"
 }

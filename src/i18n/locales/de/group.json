@@ -429,5 +429,11 @@
       "user_joined": "Benutzer ist erfolgreich beigetreten!"
     }
   },
+  "context_menu": {
+    "mark_as_read": "Als gelesen markieren",
+    "mute_push_notifications": "Push-Benachrichtigungen stummschalten",
+    "unmute_push_notifications": "Push-Benachrichtigungen aktivieren",
+    "mark_all_read": "Alle als gelesen markieren"
+  },
   "thread_posts": "Neue Thread-Beiträge"
 }

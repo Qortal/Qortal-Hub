@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from 'react';
 import {
+  Divider,
   ListItemIcon,
   Menu,
   MenuItem,
@@ -9,23 +10,23 @@ import {
 } from '@mui/material';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import NotificationsOffIcon from '@mui/icons-material/NotificationsOff';
+import DoneAllRoundedIcon from '@mui/icons-material/DoneAllRounded';
+import { useTranslation } from 'react-i18next';
 import { executeEvent } from '../utils/events';
 import { mutedGroupsAtom } from '../atoms/global';
 import { useAtom } from 'jotai';
 
 const CustomStyledMenu = styled(Menu)(({ theme }) => ({
   '& .MuiPaper-root': {
-    // backgroundColor: '#f9f9f9',
     borderRadius: '12px',
     padding: theme.spacing(1),
     boxShadow: '0 5px 15px rgba(0, 0, 0, 0.2)',
   },
   '& .MuiMenuItem-root': {
-    fontSize: '14px', // Smaller font size for the menu item text
-    // color: '#444',
+    fontSize: '14px',
     transition: '0.3s background-color',
     '&:hover': {
-      backgroundColor: theme.palette.action.hover, // Explicit hover state
+      backgroundColor: theme.palette.action.hover,
     },
   },
 }));
@@ -33,20 +34,19 @@ const CustomStyledMenu = styled(Menu)(({ theme }) => ({
 export const ContextMenu = ({ children, groupId, getUserSettings }) => {
   const [menuPosition, setMenuPosition] = useState(null);
   const longPressTimeout = useRef(null);
-  const preventClick = useRef(false); // Flag to prevent click after long-press or right-click
+  const preventClick = useRef(false);
   const theme = useTheme();
   const [mutedGroups] = useAtom(mutedGroupsAtom);
+  const { t } = useTranslation(['group']);
 
   const isMuted = useMemo(() => {
     return mutedGroups.includes(groupId);
   }, [mutedGroups, groupId]);
 
-  // Handle right-click (context menu) for desktop
   const handleContextMenu = (event) => {
     event.preventDefault();
-    event.stopPropagation(); // Prevent parent click
+    event.stopPropagation();
 
-    // Set flag to prevent any click event after right-click
     preventClick.current = true;
 
     setMenuPosition({
@@ -55,16 +55,15 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
     });
   };
 
-  // Handle long-press for mobile
   const handleTouchStart = (event) => {
     longPressTimeout.current = setTimeout(() => {
-      preventClick.current = true; // Prevent the next click after long-press
-      event.stopPropagation(); // Prevent parent click
+      preventClick.current = true;
+      event.stopPropagation();
       setMenuPosition({
         mouseX: event.touches[0].clientX,
         mouseY: event.touches[0].clientY,
       });
-    }, 500); // Long press duration
+    }, 500);
   };
 
   const handleTouchEnd = (event) => {
@@ -72,8 +71,8 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
 
     if (preventClick.current) {
       event.preventDefault();
-      event.stopPropagation(); // Prevent synthetic click after long-press
-      preventClick.current = false; // Reset the flag
+      event.stopPropagation();
+      preventClick.current = false;
     }
   };
 
@@ -118,9 +117,9 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
 
   return (
     <div
-      onContextMenu={handleContextMenu} // For desktop right-click
-      onTouchStart={handleTouchStart} // For mobile long-press start
-      onTouchEnd={handleTouchEnd} // For mobile long-press end
+      onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       style={{ width: '100%', height: '100%' }}
     >
       {children}
@@ -156,7 +155,7 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
             />
           </ListItemIcon>
           <Typography variant="inherit" sx={{ fontSize: '14px' }}>
-            Mark As Read
+            {t('group:context_menu.mark_as_read')}
           </Typography>
         </MenuItem>
         <MenuItem
@@ -177,10 +176,37 @@ export const ContextMenu = ({ children, groupId, getUserSettings }) => {
             variant="inherit"
             sx={{ fontSize: '14px', color: isMuted && 'red' }}
           >
-            {isMuted ? 'Unmute ' : 'Mute '}Push Notifications
+            {isMuted
+              ? t('group:context_menu.unmute_push_notifications')
+              : t('group:context_menu.mute_push_notifications')}
+          </Typography>
+        </MenuItem>
+        <Divider
+          sx={{
+            marginY: 1,
+            marginX: 0.75,
+            borderColor: theme.palette.divider,
+          }}
+        />
+        <MenuItem
+          onClick={(e) => {
+            handleClose(e);
+            executeEvent('markAllMemberGroupsRead', {});
+          }}
+        >
+          <ListItemIcon sx={{ minWidth: '32px' }}>
+            <DoneAllRoundedIcon
+              fontSize="small"
+              sx={{
+                color: theme.palette.text.primary,
+              }}
+            />
+          </ListItemIcon>
+          <Typography variant="inherit" sx={{ fontSize: '14px' }}>
+            {t('group:context_menu.mark_all_read')}
           </Typography>
         </MenuItem>
       </CustomStyledMenu>
     </div>
   );
-}; // TODO translate
+};

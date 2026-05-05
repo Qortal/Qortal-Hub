@@ -430,5 +430,11 @@
       "user_joined": "kasutaja liitumine õnnestus!"
     }
   },
+  "context_menu": {
+    "mark_as_read": "Märgi loetuks",
+    "mute_push_notifications": "Summuta tõuketeavitused",
+    "unmute_push_notifications": "Lõpeta tõuketeavituste summutamine",
+    "mark_all_read": "Märgi kõik loetuks"
+  },
   "thread_posts": "uued teemapostitused"
 }

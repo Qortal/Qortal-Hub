@@ -429,5 +429,11 @@
       "user_joined": "¡usuario unido con éxito!"
     }
   },
+  "context_menu": {
+    "mark_as_read": "Marcar como leído",
+    "mute_push_notifications": "Silenciar notificaciones push",
+    "unmute_push_notifications": "Activar notificaciones push",
+    "mark_all_read": "Marcar todo como leído"
+  },
   "thread_posts": "nuevas publicaciones del hilo"
 }

@@ -429,5 +429,11 @@
       "user_joined": "utilisateur ajouté avec succès !"
     }
   },
+  "context_menu": {
+    "mark_as_read": "Marquer comme lu",
+    "mute_push_notifications": "Couper les notifications push",
+    "unmute_push_notifications": "Réactiver les notifications push",
+    "mark_all_read": "Tout marquer comme lu"
+  },
   "thread_posts": "nouveaux messages du fil"
 }

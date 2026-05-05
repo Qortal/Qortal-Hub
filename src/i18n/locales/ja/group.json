@@ -429,5 +429,11 @@
       "user_joined": "ユーザーが正常に参加しました！"
     }
   },
+  "context_menu": {
+    "mark_as_read": "既読にする",
+    "mute_push_notifications": "プッシュ通知をオフ",
+    "unmute_push_notifications": "プッシュ通知をオン",
+    "mark_all_read": "すべて既読にする"
+  },
   "thread_posts": "新しいスレッド投稿"
 }
