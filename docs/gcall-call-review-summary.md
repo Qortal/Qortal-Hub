@@ -425,6 +425,89 @@ Side B:
   - `concealmentTicks` only increases from `18` to `20`.
   - buffer remains healthy around `64` to `65` ms.
 
+## Call: 2026-05-05 15:56Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T15-56-59-433Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T15-56-56-210Z.json`
+
+User symptom:
+- New paired call after the selector/playout-ready changes; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and non-clean profiles.
+
+High-level verdict:
+- Mixed/bad.
+- Correctness paths remain clean, and both playout snapshots are now ready, but both sides still show under-target pressure, negative playout delta, and missing-frame growth. Mac is misclassified as `buffered-not-ready` after readiness has returned; Linux is plausibly weak but not clean.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Startup hidden playout: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Collapse profile strength: neither side is in `collapse-recovery`.
+
+Primary next target:
+- Selector.
+- First fix the `buffered-not-ready` clear/escape path: Mac exports `buffered-not-ready` even though `jitterHasReadyFrame=true`, reserve is `37.192 ms`, and the live mode has already fallen back to low-latency.
+- Do not raise baseline yet. Linux’s `steady-weak-listener` classification is defensible, but Mac’s wrong ready-state profile means selector/hold cleanup should come before profile strength or baseline changes.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `buffered-not-ready` | yes | 37.192 | 729 | 72 | 0.105 | 0.081 | low-latency | Classification is wrong/partly: playout is ready with 5 buffered jitter frames, but the profile is still ready-failure shaped. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `steady-weak-listener` | partly | 48.970 | 431 | 26 | 0.063 | 0.028 | low-latency | Classification mostly matches a moderate weak-listener path: ready, buffered, but still under target with missing-frame growth. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-heavy-connected` or `steady-weak-listener`
+
+Actual exported profile:
+- `buffered-not-ready`
+
+Did classification match?
+- Partly/no.
+
+If no:
+- `jitterHasReadyFrame=true`, `jitterBufferedFrames=5`, `avgPcmBufferedMs=37.192`, and `jitterBufferDepthFramesMean=1.885`, so this no longer fits a not-ready profile.
+- The bad symptoms are real: `playoutUnderTargetFraction=0.105`, `playoutRateFractionBelow097=0.081`, `avgPlayoutDeltaMs=-96.983`, `missingFrames=729`, and `concealmentTicks=72`.
+- Tune selector clear/hold priority so ready buffered damage moves to `steady-weak-listener` or `repair-heavy-connected`, not `buffered-not-ready`.
+
+### Side B
+
+Expected profile from symptom:
+- `steady-weak-listener`, possibly bordering `repair-heavy-connected` if missing-frame pressure keeps growing.
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- `avgPcmBufferedMs=48.970`, `jitterHasReadyFrame=true`, and `concealmentTicks=26` keep this out of collapse or buffered-not-ready.
+- `playoutUnderTargetFraction=0.063`, `avgPlayoutDeltaMs=-84.554`, `missingFrames=431`, and a brief `entered-recovery` trend justify a weak-listener profile.
+- This side is not enough evidence for baseline tuning until the Mac selector error is fixed.
+
+## Trend Read
+
+Side A:
+- Gradual weak/repair damage with a late low-latency exit despite continuing pressure.
+- Reasons seen:
+  - `missingFrames` increases from `607` to `729`.
+  - `concealmentTicks` increases from `56` to `72`.
+  - `playoutUnderTargetFraction` stays around `0.10`.
+  - adaptive mode exits recovery to low-latency near the end while the exported profile remains `buffered-not-ready`.
+
+Side B:
+- Mostly steady weak-listener path with one brief recovery entry.
+- Reasons seen:
+  - `entered-recovery` appears once.
+  - `missingFrames` increases from `333` to `431`.
+  - `concealmentTicks` stays modest at `23` to `26`.
+  - buffer gradually improves from about `45.9` to `49.0 ms`.
+
 ## Batch Scoreboard
 
 | Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
@@ -439,11 +522,13 @@ Side B:
 | `2026-05-05T14:14Z group-812` | B / Linux root | `repair-heavy-connected` | partly/no | partly/no | selector / repair hold | Same selector target, with stronger evidence because reserve is `64.204 ms` and concealment is only `20`. |
 | `2026-05-05T14:53Z group-812` | A / Mac standby | `silent-lean` | yes | yes/partly | selector / playout-ready | Treat tiny-reserve buffered-but-not-ready as the next primary bad-side target; align low-latency/recovery mode with `silent-lean` readiness. |
 | `2026-05-05T14:53Z group-812` | B / Linux root | `steady-weak-listener` | no/partly | partly/no | selector | Add/tighten healthy-reserve weak-listener escape so this side can clear toward `clean-low-latency`. |
+| `2026-05-05T15:56Z group-812` | A / Mac standby | `buffered-not-ready` | yes | partly/no | selector / readiness hold | Tune `buffered-not-ready` clear/escape when `jitterHasReadyFrame=true`; ready buffered damage should classify as weak/repair, not not-ready. |
+| `2026-05-05T15:56Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | selector / weak-listener | Keep as evidence after Mac selector fix; do not tune baseline from this side alone. |
 
 ## Next Fix Target
 
 Current patched target:
-- Selector / playout-ready.
-- Primary bad-side fix: make `silent-lean` plus `jitterBufferedFrames > 0` and `jitterHasReadyFrame=false` hold or enter the protective receive mode instead of falling back to low-latency with only `2.366 ms` reserve.
-- Secondary selector fix: add a healthy-reserve escape from `steady-weak-listener` toward `clean-low-latency` when reserve is high, concealment/under-target pressure is low, and jitter has ready frames.
+- Selector.
+- Primary fix: make `buffered-not-ready` clear immediately, or lose priority, once `jitterHasReadyFrame=true`; ready buffered damage should fall through to `steady-weak-listener` or `repair-heavy-connected`.
+- Secondary watch item: after the Mac selector fix, decide whether `steady-weak-listener` needs more target/floor for the Linux-style moderate under-target path.
 - Keep `collapse-recovery` strength and global baseline unchanged for the next patch.

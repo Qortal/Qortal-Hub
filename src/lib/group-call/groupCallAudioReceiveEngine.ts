@@ -1305,15 +1305,16 @@ export class GroupCallAudioReceiveEngine {
           );
         if (
           state.bufferedNotReadyHoldUntilMs > 0 &&
-          !bufferedNotReadyPressure &&
-          state.preProcessBufferedFrames >=
-            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_PREBUFFER_FRAMES_MIN &&
-          state.oldestFrameAgeEma <=
-            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_INGRESS_AGE_MAX_MS &&
-          state.underTargetEma <=
-            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_UNDERTARGET_EMA_MAX &&
-          state.deltaMsEma >=
-            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_DELTA_MIN_MS
+          (state.lastJitterHasReadyFrame ||
+            (!bufferedNotReadyPressure &&
+              state.preProcessBufferedFrames >=
+                GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_PREBUFFER_FRAMES_MIN &&
+              state.oldestFrameAgeEma <=
+                GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_INGRESS_AGE_MAX_MS &&
+              state.underTargetEma <=
+                GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_UNDERTARGET_EMA_MAX &&
+              state.deltaMsEma >=
+                GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CLEAR_DELTA_MIN_MS))
         ) {
           state.bufferedNotReadyHoldUntilMs = 0;
         }
