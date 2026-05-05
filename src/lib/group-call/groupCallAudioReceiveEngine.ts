@@ -89,6 +89,11 @@ const GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_CONCEALMENT_EMA_MAX = 0.02;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_BUFFERED_MS_MAX = 108;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_DELTA_MAX_MS = -10;
 const GCALL_SINGLE_SOURCE_POST_RECOVERY_SMOOTH_RATE_EMA_MAX = 0.999;
+const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_BUFFERED_MS_MIN = 64;
+const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN = 3;
+const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX = 0.04;
+const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_UNDERTARGET_EMA_MAX = 0.02;
+const GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_RATE_EMA_MIN = 0.992;
 const GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS = -35;
 const GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX = 36;
@@ -219,6 +224,7 @@ type SingleSourceProfileContext = {
   postRecoveryHold: boolean;
   singleSourcePressure: boolean;
   mildSteadyAssist: boolean;
+  steadyHealthyEscape: boolean;
 };
 
 function selectSingleSourceReceiveProfile(
@@ -252,10 +258,11 @@ function selectSingleSourceReceiveProfile(
     return 'repair-heavy-connected';
   }
   if (
-    ctx.recoveryModeActive ||
-    ctx.postRecoveryHold ||
-    ctx.singleSourcePressure ||
-    ctx.mildSteadyAssist
+    !ctx.steadyHealthyEscape &&
+    (ctx.recoveryModeActive ||
+      ctx.postRecoveryHold ||
+      ctx.singleSourcePressure ||
+      ctx.mildSteadyAssist)
   ) {
     return 'steady-weak-listener';
   }
@@ -1000,6 +1007,18 @@ export class GroupCallAudioReceiveEngine {
         const starvationPressure =
           (state.protectedMode || state.starvationSeverity !== 'none') &&
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
+        const steadyHealthyEscape =
+          state.lastJitterHasReadyFrame &&
+          state.bufferedMsEma >=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_BUFFERED_MS_MIN &&
+          state.preProcessBufferedFrames >=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_PREBUFFER_FRAMES_MIN &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_CONCEALMENT_EMA_MAX &&
+          state.underTargetEma <=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_UNDERTARGET_EMA_MAX &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_STEADY_HEALTHY_ESCAPE_RATE_EMA_MIN;
         const artifactPressure =
           (state.underTargetEma >=
             GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN &&
@@ -1353,20 +1372,21 @@ export class GroupCallAudioReceiveEngine {
           );
         if (
           state.postRecoveryHoldUntilMs > 0 &&
-          !recoveryModeActive &&
-          !severeSingleSourceHold &&
-          !starvationPressure &&
-          !bufferedPressure &&
-          !lingeringPressure &&
-          !ratePressure &&
-          state.bufferedMsEma >=
-            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_BUFFERED_MS_MIN &&
-          state.deltaMsEma >=
-            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_DELTA_MIN_MS &&
-          state.rateEma >=
-            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_RATE_EMA_MIN &&
-          state.concealmentEma <=
-            GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_CONCEALMENT_EMA_MAX
+          (steadyHealthyEscape ||
+            (!recoveryModeActive &&
+              !severeSingleSourceHold &&
+              !starvationPressure &&
+              !bufferedPressure &&
+              !lingeringPressure &&
+              !ratePressure &&
+              state.bufferedMsEma >=
+                GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_BUFFERED_MS_MIN &&
+              state.deltaMsEma >=
+                GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_DELTA_MIN_MS &&
+              state.rateEma >=
+                GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_RATE_EMA_MIN &&
+              state.concealmentEma <=
+                GCALL_SINGLE_SOURCE_POST_RECOVERY_CLEAR_CONCEALMENT_EMA_MAX))
         ) {
           state.postRecoveryHoldUntilMs = 0;
         }
@@ -1392,9 +1412,10 @@ export class GroupCallAudioReceiveEngine {
           persistentLeanPressure,
           silentLeanHold,
           silentLeanPressure,
-          postRecoveryHold,
-          singleSourcePressure,
-          mildSteadyAssist,
+          postRecoveryHold: postRecoveryHold && !steadyHealthyEscape,
+          singleSourcePressure: singleSourcePressure && !steadyHealthyEscape,
+          mildSteadyAssist: mildSteadyAssist && !steadyHealthyEscape,
+          steadyHealthyEscape,
         });
         state.currentSingleSourceProfile = profile;
         if (profile === 'clean-low-latency') {
@@ -1517,7 +1538,11 @@ export class GroupCallAudioReceiveEngine {
 
   private updatePeerRecoveryFromPlayoutMetrics(
     sourceAddr: string,
-    message: DmVoiceGcallPlayoutWorkletMessage
+    message: DmVoiceGcallPlayoutWorkletMessage,
+    playoutDiagnostics?: {
+      jitterBufferedFrames: number;
+      jitterHasReadyFrame: boolean;
+    }
   ): void {
     if (message.playoutStarted === false) return;
     const bufferedMs =
@@ -1539,6 +1564,13 @@ export class GroupCallAudioReceiveEngine {
         ? message.preProcessBufferedMs
         : Number.POSITIVE_INFINITY;
     const underPressure = !!message.outsideBandUnder || !!message.concealmentUsed;
+    const bufferedButNotReadySilentLean =
+      !underPressure &&
+      playoutDiagnostics !== undefined &&
+      playoutDiagnostics.jitterBufferedFrames > 0 &&
+      !playoutDiagnostics.jitterHasReadyFrame &&
+      bufferedMs <= GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
+      deltaMs <= GCALL_SINGLE_SOURCE_SILENT_LEAN_DELTA_MAX_MS;
     const nowMs = Date.now();
 
     const severeCollapse =
@@ -1562,6 +1594,8 @@ export class GroupCallAudioReceiveEngine {
       deltaMs >= GCALL_AUDIO_SURFACE_STABLE_DELTA_MIN_MS;
 
     if (severeCollapse) {
+      dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 3, nowMs);
+    } else if (bufferedButNotReadySilentLean) {
       dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 3, nowMs);
     } else if (moderateCollapse) {
       dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 2, nowMs);
@@ -1611,9 +1645,13 @@ export class GroupCallAudioReceiveEngine {
         if (hasAudibleReadiness && this.audioContext?.state !== 'running') {
           void this.ensureAudioContextRunning();
         }
-        this.updatePeerRecoveryFromPlayoutMetrics(sourceAddr, message);
-        const sharedRingEnabled =
-          playout.getDiagnosticsSnapshot().sharedRingEnabled;
+        const playoutDiagnostics = playout.getDiagnosticsSnapshot();
+        this.updatePeerRecoveryFromPlayoutMetrics(
+          sourceAddr,
+          message,
+          playoutDiagnostics
+        );
+        const sharedRingEnabled = playoutDiagnostics.sharedRingEnabled;
         if (
           message.playoutStarted &&
           !this.loggedFirstPlayoutStartBySource.has(sourceAddr)
