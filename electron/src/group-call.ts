@@ -207,6 +207,8 @@ const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_TTL_MS = 30_000;
 const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_MAX = 8192;
 /** Full scan for expired logical-key entries at most this often (idle traffic still frees memory). */
 const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_SWEEP_MIN_MS = 30_000;
+/** Retry retained GC_JOIN identity replay across topology heartbeats; first direct send can be lost. */
+const GC_RETAINED_JOIN_IDENTITY_REPLAY_MAX_ATTEMPTS = 6;
 
 type GcReticulumRetryKind =
   | 'join'
@@ -1383,8 +1385,8 @@ export class GroupCallManager extends EventEmitter {
     string,
     GcJoinRkEnvelope
   >();
-  /** roomId:epoch:target → replayed retained GC_JOIN identities after authoritative topology publish. */
-  private retainedJoinIdentityReplayByTopology = new Set<string>();
+  /** roomId:epoch:target → retained GC_JOIN identity replay attempts after topology publish. */
+  private retainedJoinIdentityReplayAttemptsByTopology = new Map<string, number>();
   private pendingKeyFlushSuccess = 0;
   private pendingKeyExpired = 0;
   private unknownRoomKeyLogAt = new Map<string, number>();
@@ -1972,7 +1974,7 @@ export class GroupCallManager extends EventEmitter {
     this.pendingKeyByRoom.clear();
     this.pendingGcJoinBeforeJoinRoom.clear();
     this.retainedVerifiedKeyStateByRoomAndRecipient.clear();
-    this.retainedJoinIdentityReplayByTopology.clear();
+    this.retainedJoinIdentityReplayAttemptsByTopology.clear();
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
     this.transportHealthByRoom.clear();
@@ -2385,9 +2387,9 @@ export class GroupCallManager extends EventEmitter {
         this.retainedVerifiedJoinRkByRoomAndAddress.delete(key);
       }
     }
-    for (const key of this.retainedJoinIdentityReplayByTopology) {
+    for (const key of this.retainedJoinIdentityReplayAttemptsByTopology.keys()) {
       if (key.startsWith(`${roomId}:`)) {
-        this.retainedJoinIdentityReplayByTopology.delete(key);
+        this.retainedJoinIdentityReplayAttemptsByTopology.delete(key);
       }
     }
   }
@@ -2581,8 +2583,13 @@ export class GroupCallManager extends EventEmitter {
     }
     for (const targetAddress of targets) {
       const replayKey = `${roomId}:${topology.topologyEpoch}:${targetAddress}`;
-      if (this.retainedJoinIdentityReplayByTopology.has(replayKey)) continue;
-      this.retainedJoinIdentityReplayByTopology.add(replayKey);
+      const attempts =
+        this.retainedJoinIdentityReplayAttemptsByTopology.get(replayKey) ?? 0;
+      if (attempts >= GC_RETAINED_JOIN_IDENTITY_REPLAY_MAX_ATTEMPTS) continue;
+      this.retainedJoinIdentityReplayAttemptsByTopology.set(
+        replayKey,
+        attempts + 1
+      );
       this.replayRetainedJoinIdentityToAddress(
         roomId,
         targetAddress,

@@ -2904,7 +2904,7 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
-  it('replays retained root join identity after first topology publish when a late join arrived before topology existed', async () => {
+  it('retries retained root join identity after topology publish when a late join arrived before topology existed', async () => {
     const sent: Array<{ hash: string; msg: Record<string, unknown> }> = [];
     const now = Date.now();
     const manager = new GroupCallManager(
@@ -2986,7 +2986,33 @@ describe('Reticulum group audio transport', () => {
       now + 5
     );
 
-    expect(sent.filter((entry) => entry.hash === 'd:q-new')).toHaveLength(1);
+    expect(sent.filter((entry) => entry.hash === 'd:q-new')).toHaveLength(2);
+
+    for (let i = 0; i < 6; i += 1) {
+      manager.broadcastTopology(
+        'room-1',
+        {
+          fromAddress: 'Q-root',
+          topologyEpoch: 1,
+          rootForwarder: 'Q-root',
+          standbyForwarder: 'Q-new',
+          clusters: [
+            {
+              members: ['Q-root', 'Q-new'],
+              forwarder: 'Q-root',
+              standby: 'Q-new',
+              standby2: '',
+            },
+          ],
+          lastSeen: now + 6 + i,
+        },
+        'sig-topology',
+        'pk-root',
+        now + 7 + i
+      );
+    }
+
+    expect(sent.filter((entry) => entry.hash === 'd:q-new')).toHaveLength(6);
     manager.stop();
   });
 
