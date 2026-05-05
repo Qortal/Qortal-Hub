@@ -1469,6 +1469,18 @@ export class GroupCallAudioReceiveEngine {
           steadyHealthyEscape,
         });
         state.currentSingleSourceProfile = profile;
+        if (
+          profile === 'repair-collapse' &&
+          (state.bufferedMsEma <
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN ||
+            state.deltaMsEma <
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS ||
+            !state.lastJitterHasReadyFrame)
+        ) {
+          dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 3, nowMs);
+          this.recomputeAdaptiveNetworkMode(nowMs);
+          playout.syncAdaptiveJitterGeometry();
+        }
         if (profile === 'clean-low-latency') {
           playout.setBurstRecoveryExtraHoldFrames(0);
           playout.resetDynamicTargetPlayoutMs();

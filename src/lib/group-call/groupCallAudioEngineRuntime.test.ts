@@ -27,6 +27,7 @@ describe('GroupCallAudioEngineRuntime', () => {
   const getRoomParticipants = vi.fn();
   const getRoomBootstrapState = vi.fn();
   const setQortalGroupReticulumTargets = vi.fn();
+  const requestPeerMediaRecovery = vi.fn();
   let groupCallEventHandler: GroupCallEventHandler | null = null;
   const runtimes = new Set<GroupCallAudioEngineRuntime>();
   let latestCapturePort:
@@ -51,6 +52,7 @@ describe('GroupCallAudioEngineRuntime', () => {
     getRoomParticipants.mockReset();
     getRoomBootstrapState.mockReset();
     setQortalGroupReticulumTargets.mockReset();
+    requestPeerMediaRecovery.mockReset();
     getGroupMembers.mockReset();
     groupCallEventHandler = null;
     latestCapturePort = null;
@@ -66,6 +68,7 @@ describe('GroupCallAudioEngineRuntime', () => {
     sendKeyRotate.mockResolvedValue({ success: true });
     sendKeyRequest.mockResolvedValue({ success: true });
     setQortalGroupReticulumTargets.mockResolvedValue({ success: true });
+    requestPeerMediaRecovery.mockResolvedValue({ success: true });
     getRoomParticipants.mockResolvedValue([
       { address: 'Qlocal', publicKey: 'pub-local' },
       { address: 'Qpeer', publicKey: 'pub-peer' },
@@ -282,6 +285,7 @@ describe('GroupCallAudioEngineRuntime', () => {
       getRoomParticipants,
       getRoomBootstrapState,
       setQortalGroupReticulumTargets,
+      requestPeerMediaRecovery,
       onEvent: (cb) => {
         groupCallEventHandler = cb;
         return () => {
@@ -1422,6 +1426,60 @@ describe('GroupCallAudioEngineRuntime', () => {
         callSessionId: 'csid-1',
         mediaSessionGeneration: 1,
       })
+    );
+  });
+
+  it('requests media recovery when a connected sender has zero inbound media from its target', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+      publicKey: 'pub-peer',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [{ members: ['Qlocal', 'Qpeer'], forwarder: 'Qlocal', standby: 'Qpeer' }],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const runtimeState = runtime as unknown as {
+      roomKey: Uint8Array | null;
+      outboundSendSuccesses: number;
+      snapshot: { metrics: Record<string, unknown> };
+      recordRecentWindowTrend: (metrics: Record<string, unknown>) => void;
+    };
+    runtimeState.roomKey = new Uint8Array(32).fill(9);
+    runtimeState.outboundSendSuccesses = 100;
+    requestPeerMediaRecovery.mockClear();
+
+    runtimeState.recordRecentWindowTrend({
+      ...runtimeState.snapshot.metrics,
+      packetsReceived: 0,
+      packetsDecoded: 0,
+      adaptiveNetworkMode: 'low-latency',
+      reticulumAudioPacketPathTimeouts: 0,
+    });
+
+    expect(requestPeerMediaRecovery).toHaveBeenCalledTimes(1);
+    expect(requestPeerMediaRecovery).toHaveBeenCalledWith(
+      'room-1',
+      'Qpeer',
+      'path-degraded-warm'
     );
   });
 

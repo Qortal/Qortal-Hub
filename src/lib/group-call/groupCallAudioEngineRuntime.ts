@@ -315,6 +315,8 @@ const GCALL_CONNECTION_HINT_BAD_MS = 2_800;
 const GCALL_CONNECTION_HINT_SEVERE_MS = 1_200;
 const GCALL_CONNECTION_HINT_GOOD_MS = 4_500;
 const MEMBER_GATE_REFRESH_INTERVAL_MS = 90_000;
+const ZERO_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES = 100;
+const ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS = 3_000;
 const naclApi = nacl as typeof nacl;
 
 function base64ToUint8(value: string): Uint8Array {
@@ -533,6 +535,7 @@ export class GroupCallAudioEngineRuntime {
   private outboundLastSendFailureMessage: string | null = null;
   private outboundLastMainDiagnostics: GcallSendAudioDiagnostics | null = null;
   private outboundLastTargets: string[] = [];
+  private readonly zeroInboundMediaRecoveryLastAtByAddress = new Map<string, number>();
   private readonly outboundTargetDiagnostics = new Map<
     string,
     OutboundMediaTargetDiagnostics
@@ -998,6 +1001,55 @@ export class GroupCallAudioEngineRuntime {
         reticulumAudioPacketPathTimeouts: metrics.reticulumAudioPacketPathTimeouts,
       });
     }
+    this.maybeRequestZeroInboundMediaRecovery(metrics);
+  }
+
+  private maybeRequestZeroInboundMediaRecovery(metrics: GroupCallMetricsSnapshot): void {
+    if (
+      this.snapshot.roomState !== 'connected' ||
+      !this.snapshot.roomId ||
+      !this.roomKey ||
+      !this.topology ||
+      !this.userInfo?.address ||
+      metrics.packetsReceived > 0 ||
+      this.outboundSendSuccesses < ZERO_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES
+    ) {
+      return;
+    }
+    const requestPeerMediaRecovery = window.groupCall?.requestPeerMediaRecovery;
+    if (typeof requestPeerMediaRecovery !== 'function') return;
+    const myAddress = this.userInfo.address;
+    const transportTargets = getReticulumTransportTargets(myAddress, this.topology)
+      .map((address) => address.trim())
+      .filter((address) => address && address !== myAddress);
+    const targets =
+      transportTargets.length > 0
+        ? transportTargets
+        : this.snapshot.participants
+            .map((participant) => participant.address?.trim() ?? '')
+            .filter((address) => address && address !== myAddress);
+    const uniqueTargets = [...new Set(targets)];
+    if (uniqueTargets.length === 0) return;
+    const now = Date.now();
+    for (const address of uniqueTargets) {
+      const lastAt = this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
+      if (lastAt > 0 && now - lastAt < ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS) {
+        continue;
+      }
+      this.zeroInboundMediaRecoveryLastAtByAddress.set(address, now);
+      this.recordDiagEvent('zero-inbound-media-recovery-requested', {
+        roomId: this.snapshot.roomId,
+        peerAddress: address,
+        outboundSendSuccesses: this.outboundSendSuccesses,
+        packetsReceived: metrics.packetsReceived,
+        reason: 'path-degraded-warm',
+      });
+      void requestPeerMediaRecovery(
+        this.snapshot.roomId,
+        address,
+        'path-degraded-warm'
+      ).catch(() => {});
+    }
   }
 
   private buildAudioSurfaceRuntimeDiagnosticsSnapshot(): Record<string, unknown> {
@@ -1445,6 +1497,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearParticipantRosterRefreshTimer();
     this.clearHeldIncomingAudio();
     this.clearRecentWindowTrends();
+    this.zeroInboundMediaRecoveryLastAtByAddress.clear();
     this.resetOutboundMediaDiagnostics();
     this.lastAwaitingAuthoritativeKeyFailureLogAt = 0;
     this.activeSpeakerLastSeenAt.clear();

@@ -852,3 +852,201 @@ Current patched target:
 - Room-key distribution / media-path establishment.
 - This batch is not evidence for selector, profile strength, or baseline changes. The key symptom is that the standby never got an authoritative room key, so it never started sending and never decoded the root.
 - The next diagnostic checkpoint is explicit: if this recurs, inspect the new `room-key-distribution-skipped`, `targeted-room-key-skipped`, and `room-key-rotate-sent` events before touching receive policy again.
+
+## Call: 2026-05-05 18:11Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T18-11-27-779Z.json`
+- Side B: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T18-11-31-300Z.json`
+
+User symptom:
+- The same no-audio symptom recurred after the key-distribution fix.
+
+High-level verdict:
+- Bad one-way media delivery, but not the same failure as 17:49Z.
+- The key path recovered: Mac received and applied the root key, started its sender, and decoded Linux audio. Linux still received zero packets from Mac.
+
+Not the problem:
+- Room-key distribution: Linux logged `room-key-rotate-sent` twice and `targeted-room-key-sent` once; Mac logged `gcall-key-received` and `room-key-applied`.
+- Mac sender startup: Mac had `1361` encoded frames, `1361` send attempts, and `1361` send successes.
+- Linux sender startup: Linux had `1310` encoded frames, `1310` send attempts, and `1310` send successes.
+- Decode/key mismatch on Linux: Linux had no pending-decrypt or decode drops because no Mac audio reached it at all.
+
+Primary next target:
+- Another subsystem: one-way Reticulum packet media delivery / recovery.
+- Linux root had `packetsReceived=0`, no playouts, and no receive profiles while continuously sending to Mac.
+- Mac standby had `packetsReceived=1379`, `packetsDecoded=1379`, `roomKeyPresent=true`, and a live sender, but Linux inbound packet samples stayed zero.
+- Fix applied after this review: add an audio-surface zero-inbound watchdog. When connected with a room key and sustained outbound successes but zero inbound media, it calls `requestPeerMediaRecovery(roomId, peer, 'path-degraded-warm')`, which uses the existing main-process recovery path to warm the packet route and force link fallback for the peer.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QP9Jj4...i6rP` | none / no receive source | yes | 0 | 0 | 0 | 0 | 0 | low-latency | Sent successfully to Mac but received zero packets from Mac. No receive profile can activate without inbound media. |
+| B | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `silent-lean` | yes/partly | 11.926 | 294 | 0 | 0.005 | 0 | low-latency | Key applied and audio decoded, but playout stayed shallow/not-ready: `jitterBufferedFrames=10`, `jitterHasReadyFrame=false`. |
+
+### Side A
+
+Expected profile from symptom:
+- No receive profile; zero inbound packet delivery.
+
+Actual exported profile:
+- None.
+
+Did classification match?
+- Yes.
+
+Notes:
+- This side is the fix target. It needs media-path recovery before selector/profile tuning can matter.
+
+### Side B
+
+Expected profile from symptom:
+- `silent-lean` / readiness protection.
+
+Actual exported profile:
+- `silent-lean`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- The classification is plausible for shallow, not-ready playout with low visible damage counters.
+- This side is not the immediate fix target because it proved the key path and root-to-standby media path were alive.
+
+## Trend Read
+
+Side A:
+- Flat zero-inbound while outbound succeeded.
+- Reasons seen:
+  - `reticulumAudioOutboundPacketSamples` rose from `710` to `1267`.
+  - `reticulumAudioInboundPacketSamples` stayed `0`.
+  - `packetsReceived`, `packetsDecoded`, playouts, and profiles stayed `0` / empty.
+
+Side B:
+- One-way receive with shallow/not-ready playout.
+- Reasons seen:
+  - `packetsReceived=1379`, `packetsDecoded=1379`.
+  - `missingFrames` rose from `174` to `294`.
+  - `jitterHasReadyFrame=false` with 10 buffered jitter frames.
+  - outbound packet samples rose, but Linux still saw no inbound media.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T17:49Z group-812` | A / Linux root | none / no receive source | yes | yes | key/media-path establishment | Improved in 18:11Z: key rotate and targeted key send succeeded. |
+| `2026-05-05T17:49Z group-812` | B / Mac standby | none / no receive source | yes | yes | key/media-path establishment | Improved in 18:11Z: key was received/applied and sender started. |
+| `2026-05-05T18:11Z group-812` | A / Linux root | none / no receive source | yes | yes | one-way packet media delivery | Done: add zero-inbound media watchdog to request `path-degraded-warm` / link fallback. |
+| `2026-05-05T18:11Z group-812` | B / Mac standby | `silent-lean` | yes/partly | yes/partly | readiness / secondary | Watch after one-way media fix; do not tune selector first from this side. |
+
+## Next Fix Target
+
+Current patched target:
+- One-way Reticulum packet media delivery recovery.
+- The next export should show `zero-inbound-media-recovery-requested` on any side that is sending successfully but has no inbound media. If the fallback works, the main-process send diagnostics should move from packet-only toward link fallback for that peer.
+- Do not change baseline or receive profile strength from this call; Linux had no receive source, and Mac’s `silent-lean` classification was not the primary blocker.
+
+## Call: 2026-05-05 18:28Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-05T18-28-17-213Z.json`
+- Side B: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-05T18-28-21-202Z.json`
+
+User symptom:
+- New paired call after the zero-inbound media recovery change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics, not-ready state, and exported profiles.
+
+High-level verdict:
+- Bad/mixed, but improved versus 18:11Z.
+- The media path is now alive in both directions: both sides received and decoded packets. The remaining failure is receive-policy application, especially on Mac, where the exported profile correctly says `repair-collapse` but live playout has fallen back to `low-latency` while reserve is almost empty.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have inbound packets and decoded frames, unlike the 17:49Z and 18:11Z failures.
+- Queue/backpressure: Reticulum bridge/binary high-water values are low enough and there are no queue-pressure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Baseline: this is not broad evidence that every clean call needs a larger target; one side is correctly in a heavy collapse profile and the other is a shallow weak-listener path.
+
+Primary next target:
+- Another subsystem: profile-to-playout/adaptive-mode application.
+- Mac is correctly classified as `repair-collapse` (`avgPcmBufferedMs=1.339`, `jitterBufferDepthFramesMean=0.068`, `missingFrames=1478`, `concealmentTicks=339`), but `adaptiveNetworkMode` and `lastJitterAdaptiveMode` are both `low-latency`, and the trend exits recovery exactly as missing frames spike.
+- Do not tune selector first: the worst side selected the right family. Do not raise baseline first: the bad side is already in a heavy profile. The next fix should make `repair-collapse` hold/apply recovery-mode playout protection until reserve and readiness actually recover.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `steady-weak-listener` | partly | 16.605 | 170 | 82 | 0.032 | 0.026 | low-latency | Classification is acceptable/partly mild for a ready but shallow weak-listener path. |
+| B | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `repair-collapse` | yes | 1.339 | 1478 | 339 | 0.039 | 0.038 | low-latency | Classification matches severe repair collapse, but the selected protection is not reflected in live playout mode. |
+
+### Side A
+
+Expected profile from symptom:
+- `steady-weak-listener` or `persistent-lean`
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Partly/yes.
+
+Notes:
+- `avgPcmBufferedMs=16.605`, `jitterBufferDepthFramesMean=0.843`, `avgPlayoutDeltaMs=-106.123`, and `concealmentTicks=82` are not clean.
+- `jitterHasReadyFrame=true` with `jitterBufferedFrames=12`, low decode/key errors, and modest rate pressure keep this out of `buffered-not-ready` or full collapse.
+- This side is secondary evidence that weak/lean paths may still be too close to low-latency, but it is not the first fix target while Mac has a correctly classified heavy profile that is not being applied.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`
+
+Actual exported profile:
+- `repair-collapse`
+
+Did classification match?
+- Yes.
+
+Notes:
+- The side is nearly empty and repair-heavy: `avgPcmBufferedMs=1.339`, `jitterBufferDepthFramesMean=0.068`, `avgPlayoutDeltaMs=-137.913`, `missingFrames=1478`, and `concealmentTicks=339`.
+- The playout snapshot also reports `jitterBufferedFrames=10` with `jitterHasReadyFrame=false`, so readiness is still bad.
+- The mismatch is not profile classification; it is that `repair-collapse` ended the export with `adaptiveNetworkMode=low-latency` / `lastJitterAdaptiveMode=low-latency`.
+
+## Trend Read
+
+Side A:
+- Gradual weak-listener path with shallow but ready playout.
+- Reasons seen:
+  - `missingFrames` increases from `135` to `170`.
+  - `concealmentTicks` stays flat at `82`.
+  - buffer improves slightly from about `16.1` to `16.6 ms`.
+  - playout remains ready and low-latency throughout.
+
+Side B:
+- Discrete late collapse while recovery exits too early.
+- Reasons seen:
+  - adaptive mode stays in recovery early, then switches to `low-latency` near the end.
+  - `missingFrames` jumps from `271` to `1478` after the low-latency exit.
+  - `concealmentTicks` rises early from `313` to `339`, then stays flat while missing frames explode.
+  - buffer remains near-empty, only moving from about `0.6` to `1.3 ms`, and the final playout snapshot is not ready.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T17:49Z group-812` | A / Linux root | none / no receive source | yes | yes | key/media-path establishment | Improved by 18:11Z: key rotate and targeted key send succeeded. |
+| `2026-05-05T17:49Z group-812` | B / Mac standby | none / no receive source | yes | yes | key/media-path establishment | Improved by 18:11Z: key was received/applied and sender started. |
+| `2026-05-05T18:11Z group-812` | A / Linux root | none / no receive source | yes | yes | one-way packet media delivery | Improved by 18:28Z: Linux now receives and decodes Mac audio. |
+| `2026-05-05T18:11Z group-812` | B / Mac standby | `silent-lean` | yes/partly | yes/partly | readiness / secondary | Still relevant: Mac remains shallow/not-ready, but now classifies heavier as `repair-collapse`. |
+| `2026-05-05T18:28Z group-812` | A / Linux root | `steady-weak-listener` | partly | partly/yes | weak-listener / secondary | Watch after the Mac application fix; not enough to justify baseline tuning. |
+| `2026-05-05T18:28Z group-812` | B / Mac standby | `repair-collapse` | yes | yes | profile application / adaptive-mode sync | Fix `repair-collapse` application/hold so recovery-mode playout remains active until reserve/readiness recover. |
+
+## Next Fix Target
+
+Current patched target:
+- Profile application / adaptive-mode synchronization.
+- Primary fix: when the live source profile is `repair-collapse`, keep the jitter/playout adaptive mode in recovery protection and prevent a low-latency exit while reserve is near empty or `jitterHasReadyFrame=false`.
+- Secondary watch item: Linux’s `steady-weak-listener` path is still shallow, but classification is not obviously wrong. Revisit weak-listener target/floor only after the heavy-profile application mismatch is fixed.
+- Keep selector thresholds, global baseline, and profile target strength unchanged for the next patch unless code inspection shows that the only way to enforce the recovery hold is inside the `repair-collapse` profile configuration itself.
