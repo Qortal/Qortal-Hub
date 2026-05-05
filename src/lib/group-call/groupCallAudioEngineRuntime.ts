@@ -293,6 +293,7 @@ const RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS = 5_000;
 const PARTICIPANT_ROSTER_REFRESH_INTERVAL_MS = TOPOLOGY_HEARTBEAT_MS;
 const PARTICIPANT_ROSTER_MISSING_EVICT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 500;
 const PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS = PARTICIPANT_ROSTER_MISSING_EVICT_MS;
+const PARTICIPANT_RECENT_OUTBOUND_EVICT_VETO_MS = 45_000;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
   TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS + TOPOLOGY_HEARTBEAT_MS;
@@ -3742,6 +3743,14 @@ export class GroupCallAudioEngineRuntime {
     if (
       lastSpeakerAt > 0 &&
       nowMs - lastSpeakerAt <= PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
+    ) {
+      return true;
+    }
+    const outbound = this.outboundTargetDiagnostics.get(address);
+    const lastOutboundAttemptAt = outbound?.lastAttemptAtMs ?? 0;
+    if (
+      lastOutboundAttemptAt > 0 &&
+      nowMs - lastOutboundAttemptAt <= PARTICIPANT_RECENT_OUTBOUND_EVICT_VETO_MS
     ) {
       return true;
     }

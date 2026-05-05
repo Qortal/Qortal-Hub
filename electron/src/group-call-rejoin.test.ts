@@ -3610,6 +3610,61 @@ describe('presence eviction with recent call activity', () => {
     manager.stop();
   });
 
+  it('keeps retained Reticulum identity state for abrupt presence evictions', () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    (manager as any).localAddresses = new Set(['Q-local']);
+    (manager as any).rooms.set('room-1', {
+      roomId: 'room-1',
+      chatId: 'chat-1',
+      participants: new Map([
+        [
+          'Q-local',
+          {
+            publicKey: 'pk-local',
+            joinedAt: Date.now() - 30_000,
+            reticulumDestinationHash: TEST_D32,
+          },
+        ],
+        [
+          'Q-remote',
+          {
+            publicKey: 'pk-remote',
+            joinedAt: Date.now() - 30_000,
+            reticulumDestinationHash: TEST_D32,
+          },
+        ],
+      ]),
+      topologyEpoch: 1,
+      callSessionId: 'call-1',
+      mediaSessionGeneration: 1,
+    });
+    (manager as any).rememberReticulumPeerPresenceHash('Q-remote', TEST_D32);
+    (manager as any).reticulumAudioAwaitingRouteByAddress.set('Q-remote', {
+      address: 'Q-remote',
+      rooms: new Set(['room-1']),
+      pending: [{ roomId: 'room-1', data: Buffer.from([1]), enqueuedAtMs: Date.now() }],
+      recoveryReason: 'awaiting-reticulum-identity',
+      retryTimer: null,
+    });
+
+    (manager as any).handleLeave('room-1', 'Q-remote', true);
+
+    expect((manager as any).rooms.get('room-1')?.participants.has('Q-remote')).toBe(
+      false
+    );
+    expect((manager as any).reticulumPeerPresenceHashByAddress.get('Q-remote')).toBe(
+      TEST_D32
+    );
+    expect((manager as any).reticulumAudioAwaitingRouteByAddress.has('Q-remote')).toBe(
+      true
+    );
+
+    manager.stop();
+  });
+
   it('keeps a silent participant when incoming topology still names them as active', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-27T16:00:00.000Z'));

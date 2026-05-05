@@ -6304,13 +6304,17 @@ export class GroupCallManager extends EventEmitter {
     const hadLocalInterest = Boolean(room);
     if (room) {
       room.participants.delete(address);
-      this.dropRetainedVerifiedJoinState(roomId, address);
-      this.clearRecentCallActivityForAddress(roomId, address);
-      this.clearBootstrapParticipantActivityForAddress(roomId, address);
+      if (!isAbrupt) {
+        this.dropRetainedVerifiedJoinState(roomId, address);
+        this.clearRecentCallActivityForAddress(roomId, address);
+        this.clearBootstrapParticipantActivityForAddress(roomId, address);
+      }
       if (room.participants.size === 0) {
-        this.clearRetainedVerifiedJoinStatesForRoom(roomId);
-        this.clearRecentCallActivityForRoom(roomId);
-        this.clearBootstrapParticipantActivityForRoom(roomId);
+        if (!isAbrupt) {
+          this.clearRetainedVerifiedJoinStatesForRoom(roomId);
+          this.clearRecentCallActivityForRoom(roomId);
+          this.clearBootstrapParticipantActivityForRoom(roomId);
+        }
         this.rooms.delete(roomId);
         this.transportHealthByRoom.delete(roomId);
       }
@@ -6326,8 +6330,10 @@ export class GroupCallManager extends EventEmitter {
       }
     }
     this.participantNodeIds.delete(address);
-    this.forgetReticulumPeerPresenceHash(address);
-    this.clearAwaitingRouteReticulumAudio(address);
+    if (!isAbrupt) {
+      this.forgetReticulumPeerPresenceHash(address);
+      this.clearAwaitingRouteReticulumAudio(address);
+    }
     if (hadLocalInterest) {
       this.emit('gcall:participant-left', { roomId, address, isAbrupt });
     }

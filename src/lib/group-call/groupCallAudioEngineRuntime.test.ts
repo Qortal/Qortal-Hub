@@ -1599,6 +1599,40 @@ describe('GroupCallAudioEngineRuntime', () => {
     expect(liveness.lastAnyRootEvidenceAt).toBe(0);
   });
 
+  it('does not evict a missing roster peer while outbound media attempts are recent', async () => {
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+    ]);
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    (runtime as any).userInfo = { address: 'Qlocal', publicKey: 'pub-local' };
+    (runtime as any).snapshot = {
+      ...(runtime as any).snapshot,
+      roomId: 'room-1',
+      roomState: 'connected',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', speaking: false },
+        { address: 'Qpeer', publicKey: 'pub-peer', speaking: false },
+      ],
+    };
+    (runtime as any).participantRosterMissingSinceMs.set(
+      'Qpeer',
+      nowMs - 60_000
+    );
+    (runtime as any).getOutboundTargetDiagnostics('Qpeer').lastAttemptAtMs =
+      nowMs - 20_000;
+
+    await (runtime as any).refreshAuthoritativeParticipantRoster('periodic');
+
+    expect(
+      (runtime as any).snapshot.participants.some(
+        (participant: { address: string }) => participant.address === 'Qpeer'
+      )
+    ).toBe(true);
+  });
+
   it('hydrates member gate names from the hidden runtime roster sync', async () => {
     getGroupMembers.mockResolvedValue({
       members: [
