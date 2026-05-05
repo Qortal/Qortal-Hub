@@ -1341,6 +1341,17 @@ try {
         error?: string;
       }>,
 
+    getLinkStats: async (roomId: string) =>
+      ipcRenderer.invoke('gcall:getLinkStats', roomId) as Promise<{
+        success: boolean;
+        error?: string;
+        stats?: {
+          roomId: string;
+          establishedLinks: number;
+          participants: number;
+        };
+      }>,
+
     /** Send room media key (nacl.box encrypted) to a participant. */
     sendKey: async (
       roomId: string,

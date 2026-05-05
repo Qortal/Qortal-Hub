@@ -34,6 +34,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import PictureInPictureAltRoundedIcon from '@mui/icons-material/PictureInPictureAltRounded';
 import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
+import LinkRoundedIcon from '@mui/icons-material/LinkRounded';
 import {
   userInfoAtom,
   qortalGroupVoiceCallMinimizedAtom,
@@ -61,6 +62,11 @@ const DANGER = '#f23f42';
 
 type SidebarMode = 'none' | 'participants';
 
+type GroupCallLinkStats = {
+  establishedLinks: number;
+  participants: number;
+};
+
 export function QortalGroupVoiceCallStage() {
   const { t } = useTranslation(['core']);
   const userInfo = useAtomValue(userInfoAtom);
@@ -84,6 +90,7 @@ export function QortalGroupVoiceCallStage() {
   } = useGroupCallContext();
 
   const [diagExporting, setDiagExporting] = useState(false);
+  const [linkStats, setLinkStats] = useState<GroupCallLinkStats | null>(null);
 
   const handleDiagDownload = useCallback(async () => {
     setDiagExporting(true);
@@ -145,6 +152,41 @@ export function QortalGroupVoiceCallStage() {
       tooltip: 'Encrypted voice over Reticulum',
     };
   }, [roomState, mediaViable, metrics, transportTick, t]);
+
+  useEffect(() => {
+    if (!visible || !roomId || typeof window.groupCall?.getLinkStats !== 'function') {
+      setLinkStats(null);
+      return;
+    }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const response = await window.groupCall?.getLinkStats?.(roomId);
+        if (cancelled) return;
+        if (response?.success && response.stats) {
+          const localAddress = userInfo?.address ?? '';
+          const remoteParticipantCount = participants.filter(
+            (participant) => participant.address !== localAddress
+          ).length;
+          setLinkStats({
+            establishedLinks: Math.max(0, response.stats.establishedLinks),
+            participants: Math.max(
+              0,
+              remoteParticipantCount || Math.max(0, response.stats.participants - 1)
+            ),
+          });
+        }
+      } catch {
+        if (!cancelled) setLinkStats(null);
+      }
+    };
+    void refresh();
+    const id = window.setInterval(refresh, 1_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [visible, roomId, participants, userInfo?.address]);
 
   useEffect(() => {
     if (!visible) setSidebar('none');
@@ -320,6 +362,30 @@ export function QortalGroupVoiceCallStage() {
               }}
             />
           </Tooltip>
+          {linkStats ? (
+            <Tooltip title="Reticulum links / participants" placement="bottom">
+              <Chip
+                icon={<LinkRoundedIcon sx={{ fontSize: '14px !important' }} />}
+                label={`${linkStats.establishedLinks}/${linkStats.participants}`}
+                size="small"
+                sx={{
+                  height: 20,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  bgcolor: alpha('#60a5fa', 0.22),
+                  color: '#dbeafe',
+                  border: `1px solid ${alpha('#60a5fa', 0.35)}`,
+                  '& .MuiChip-icon': {
+                    color: '#93c5fd',
+                    ml: 0.6,
+                    mr: -0.25,
+                  },
+                  '& .MuiChip-label': { px: 0.75 },
+                }}
+              />
+            </Tooltip>
+          ) : null}
           {hintText ? (
             <Typography
               variant="caption"

@@ -631,6 +631,15 @@ declare global {
       reportGcallAudioEscalation?: (opts: {
         failSafeActive?: boolean;
       }) => Promise<{ success: boolean; error?: string }>;
+      getLinkStats?: (roomId: string) => Promise<{
+        success: boolean;
+        error?: string;
+        stats?: {
+          roomId: string;
+          establishedLinks: number;
+          participants: number;
+        };
+      }>;
       getRoomParticipants: (
         roomId: string
       ) => Promise<Array<{ address: string; publicKey: string }>>;

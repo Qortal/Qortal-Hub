@@ -372,9 +372,40 @@ const GC_KEY_MESSAGE_VERSION = 3;
 
 /** After base64 decode; rejects absurd blobs before IPC to renderer. */
 const GROUP_AUDIO_MAX_BINARY_WIRE_BYTES = 12_288;
+const GC_LINK_CONTROL_MAGIC = Buffer.from('QGCCTL1\0', 'ascii');
 
 function isValidGcAudioBuffer(data: Buffer): boolean {
   return data.length > 0 && data.length <= GROUP_AUDIO_MAX_BINARY_WIRE_BYTES;
+}
+
+function encodeGcLinkControlWire(wire: Record<string, unknown>): Buffer | null {
+  try {
+    const body = Buffer.from(JSON.stringify(wire), 'utf8');
+    const out = Buffer.concat([GC_LINK_CONTROL_MAGIC, body]);
+    return isValidGcAudioBuffer(out) ? out : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeGcLinkControlWire(data: Buffer): Record<string, unknown> | null {
+  if (
+    data.length <= GC_LINK_CONTROL_MAGIC.length ||
+    !data.subarray(0, GC_LINK_CONTROL_MAGIC.length).equals(GC_LINK_CONTROL_MAGIC)
+  ) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(
+      data.subarray(GC_LINK_CONTROL_MAGIC.length).toString('utf8')
+    ) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
 // ── Wire types ────────────────────────────────────────────────────────────────
@@ -677,6 +708,7 @@ interface ReticulumAudioPeerState {
   packetLinkFallbackReason: string;
   routeKey: string;
   linkId: string | null;
+  linkOpenedByOwner: boolean | null;
   established: boolean;
   opening: boolean;
   rooms: Set<string>;
@@ -768,6 +800,12 @@ function mergeGcReticulumAudioSendDiagnostics(
     ),
     bridge: (b.bridge ?? a.bridge) ?? a.bridge,
   };
+}
+
+export interface GcReticulumAudioLinkStats {
+  roomId: string;
+  establishedLinks: number;
+  participants: number;
 }
 
 export interface GroupRoomTopologySnapshot {
@@ -2042,6 +2080,26 @@ export class GroupCallManager extends EventEmitter {
   /** Renderer-reported staged escalation (fail-safe clamps aggressive flush in `getReticulumAudioFlushLimits`). */
   reportGcallAudioEscalation(opts: { failSafeActive?: boolean }): void {
     this.gcallAudioFailSafeActive = opts.failSafeActive === true;
+  }
+
+  getReticulumAudioLinkStats(roomId: string): GcReticulumAudioLinkStats {
+    const normalizedRoomId = roomId.trim();
+    const room = this.rooms.get(normalizedRoomId);
+    let establishedLinks = 0;
+    for (const state of this.reticulumAudioPeersByAddress.values()) {
+      if (
+        state.rooms.has(normalizedRoomId) &&
+        state.established &&
+        Boolean(state.linkId)
+      ) {
+        establishedLinks += 1;
+      }
+    }
+    return {
+      roomId: normalizedRoomId,
+      establishedLinks,
+      participants: room?.participants.size ?? 0,
+    };
   }
 
   private refreshReticulumAudioPressureDwell(): void {
@@ -3649,14 +3707,16 @@ export class GroupCallManager extends EventEmitter {
       );
       return;
     }
-    this.fanoutReticulumWire(
-      roomId,
-      frames,
-      new Set([topology.fromAddress]),
-      'topology'
-    );
+    this.syncReticulumAudioLinks();
+    const { sentLinks, skippedLinks } =
+      this.sendReticulumLinkControlToEstablishedRoomLinks(
+        roomId,
+        frames,
+        new Set([topology.fromAddress]),
+        'GC_TOPOLOGY'
+      );
     loggerLog(
-      `[GCall] Queued GC_TOPOLOGY (Reticulum) for room ${roomId} epoch ${topology.topologyEpoch}`
+      `[GCall] Queued GC_TOPOLOGY (Reticulum links) for room ${roomId} epoch ${topology.topologyEpoch} links=${sentLinks} skipped=${skippedLinks}`
     );
   }
 
@@ -3681,10 +3741,21 @@ export class GroupCallManager extends EventEmitter {
       );
       return;
     }
-    this.fanoutReticulumWire(
+    const room = this.rooms.get(roomId);
+    const cluster = room?.lastTopology?.clusters[payload.clusterIndex];
+    const targetAddresses =
+      cluster && cluster.forwarder === payload.clusterForwarder
+        ? cluster.members
+        : [];
+    const { sentLinks, skippedLinks } = this.sendReticulumLinkControlToAddresses(
       roomId,
       [ghWire],
-      new Set([payload.fromAddress])
+      targetAddresses,
+      new Set([payload.fromAddress]),
+      'GC_CLUSTER_HEARTBEAT'
+    );
+    loggerLog(
+      `[GCall] Queued GC_CLUSTER_HEARTBEAT (Reticulum links) for room ${roomId} cluster=${payload.clusterIndex} links=${sentLinks} skipped=${skippedLinks}`
     );
   }
 
@@ -3828,11 +3899,20 @@ export class GroupCallManager extends EventEmitter {
     roomId?: string
   ): string | null {
     const rk = routeKey?.trim();
+    const want = this.normalizePeerPresenceHashForAudio(peerPresenceHash);
     if (rk) {
       const byLinkId = this.reticulumAudioAddressByLinkId.get(rk);
-      if (byLinkId) return byLinkId;
+      if (
+        byLinkId &&
+        (!want ||
+          this.addressMatchesWirePeerPresenceHash(want, byLinkId) ||
+          this.normalizePeerPresenceHashForAudio(
+            this.reticulumAudioPeersByAddress.get(byLinkId)?.peerPresenceHash ?? ''
+          ) === want)
+      ) {
+        return byLinkId;
+      }
     }
-    const want = this.normalizePeerPresenceHashForAudio(peerPresenceHash);
     if (!want) {
       return this.resolveDmVoicePeerFromRoomId(roomId);
     }
@@ -4173,6 +4253,251 @@ export class GroupCallManager extends EventEmitter {
     state.linkHeartbeatLastRxAtMs = now;
   }
 
+  private closeReticulumAudioLinkQuietly(linkId: string, reason: string): void {
+    if (!linkId) return;
+    loggerLog(
+      `[GCall] Closing Reticulum audio link linkId=${linkId} reason=${reason}`
+    );
+    void this.reticulumBridge?.closeGroupAudioLink(linkId).catch(() => {});
+  }
+
+  private sendReticulumLinkControlToEstablishedRoomLinks(
+    roomId: string,
+    frames: Record<string, unknown>[],
+    excludeAddresses: Set<string>,
+    reason: string,
+    targetAddresses?: Set<string>
+  ): { sentLinks: number; skippedLinks: number } {
+    const bridge = this.reticulumBridge;
+    if (!bridge || bridge.getState() !== 'ready' || frames.length === 0) {
+      return { sentLinks: 0, skippedLinks: 0 };
+    }
+    let skippedLinks = 0;
+    const encodedFrames: Buffer[] = [];
+    for (const frame of frames) {
+      const encoded = encodeGcLinkControlWire(frame);
+      if (!encoded) {
+        skippedLinks++;
+        continue;
+      }
+      encodedFrames.push(encoded);
+    }
+    if (encodedFrames.length === 0) {
+      return { sentLinks: 0, skippedLinks };
+    }
+    let sentLinks = 0;
+    for (const [address, state] of this.reticulumAudioPeersByAddress) {
+      if (targetAddresses && !targetAddresses.has(address)) continue;
+      if (excludeAddresses.has(address)) continue;
+      if (!state.rooms.has(roomId) || !state.established || !state.linkId) {
+        skippedLinks++;
+        continue;
+      }
+      if (
+        !this.isReticulumAudioLinkVerifiedForAddress(
+          address,
+          state.peerPresenceHash,
+          state.peerDestinationHash
+        )
+      ) {
+        skippedLinks++;
+        continue;
+      }
+      let enqueuedForLink = 0;
+      for (const encoded of encodedFrames) {
+        const result = bridge.enqueueGroupAudio(state.linkId, roomId, encoded);
+        if (result.ok) {
+          enqueuedForLink++;
+        } else {
+          skippedLinks++;
+        }
+      }
+      if (enqueuedForLink > 0) sentLinks++;
+    }
+    if (sentLinks > 0) {
+      this.scheduleReticulumAudioFlush();
+    }
+    loggerLog(
+      `[GCall] Queued ${reason} over Reticulum group links room=${roomId} links=${sentLinks} skipped=${skippedLinks}`
+    );
+    return { sentLinks, skippedLinks };
+  }
+
+  private sendReticulumLinkControlToAddresses(
+    roomId: string,
+    frames: Record<string, unknown>[],
+    targetAddresses: Iterable<string>,
+    excludeAddresses: Set<string>,
+    reason: string
+  ): { sentLinks: number; skippedLinks: number } {
+    const targets = new Set<string>();
+    for (const raw of targetAddresses) {
+      const address = raw.trim();
+      if (!address || this.localAddresses.has(address)) continue;
+      targets.add(address);
+    }
+    if (targets.size === 0) return { sentLinks: 0, skippedLinks: 0 };
+    this.syncReticulumAudioLinks();
+    return this.sendReticulumLinkControlToEstablishedRoomLinks(
+      roomId,
+      frames,
+      excludeAddresses,
+      reason,
+      targets
+    );
+  }
+
+  private isReticulumAudioLinkVerifiedForAddress(
+    address: string,
+    peerPresenceHash: string,
+    peerDestinationHash?: string
+  ): boolean {
+    const hashes = [peerPresenceHash, peerDestinationHash ?? '']
+      .map((hash) => this.normalizePeerPresenceHashForAudio(hash))
+      .filter(Boolean);
+    if (hashes.length === 0) return false;
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    const expected = this.normalizePeerPresenceHashForAudio(
+      state?.peerPresenceHash ?? ''
+    );
+    return hashes.some(
+      (hash) =>
+        (expected && hash === expected) ||
+        this.addressMatchesWirePeerPresenceHash(hash, address)
+    );
+  }
+
+  private getReticulumAudioLocalAddressForState(
+    state: ReticulumAudioPeerState
+  ): string | null {
+    for (const roomId of state.rooms) {
+      const room = this.rooms.get(roomId);
+      if (!room) continue;
+      for (const localAddress of this.localAddresses) {
+        if (room.participants.has(localAddress)) return localAddress;
+      }
+    }
+    for (const localAddress of this.localAddresses) {
+      if (localAddress) return localAddress;
+    }
+    return null;
+  }
+
+  private isLocalAddressReticulumAudioLinkOwner(
+    localAddress: string,
+    peerAddress: string
+  ): boolean {
+    const left = localAddress.trim();
+    const right = peerAddress.trim();
+    if (!left || !right) return false;
+    return left.localeCompare(right) <= 0;
+  }
+
+  private isReticulumAudioLinkOpenedByOwner(
+    address: string,
+    state: ReticulumAudioPeerState,
+    incoming: boolean | null
+  ): boolean | null {
+    if (incoming === null) return null;
+    const localAddress = this.getReticulumAudioLocalAddressForState(state);
+    if (!localAddress) return null;
+    const localIsOwner = this.isLocalAddressReticulumAudioLinkOwner(
+      localAddress,
+      address
+    );
+    return incoming ? !localIsOwner : localIsOwner;
+  }
+
+  private adoptEstablishedReticulumAudioLink(
+    address: string,
+    state: ReticulumAudioPeerState,
+    linkId: string,
+    peerDestinationHash: string,
+    incoming: boolean | null,
+    reason: string
+  ): boolean {
+    if (!linkId) return false;
+    if (state.established && state.linkId && state.linkId !== linkId) {
+      const incomingOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
+        address,
+        state,
+        incoming
+      );
+      if (
+        incomingOpenedByOwner === true &&
+        state.linkOpenedByOwner !== true
+      ) {
+        const previousLinkId = state.linkId;
+        this.reticulumAudioAddressByLinkId.delete(previousLinkId);
+        this.closeReticulumAudioLinkQuietly(
+          previousLinkId,
+          `superseded-by-owner:${reason}`
+        );
+        state.linkId = null;
+        state.linkOpenedByOwner = null;
+        state.established = false;
+      } else {
+        this.reticulumAudioAddressByLinkId.delete(linkId);
+        this.closeReticulumAudioLinkQuietly(
+          linkId,
+          `duplicate-established:${reason}`
+        );
+        return false;
+      }
+    }
+
+    if (!state.established && state.linkId && state.linkId !== linkId) {
+      const currentOpenedByOwner = state.linkOpenedByOwner === true;
+      const incomingOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
+        address,
+        state,
+        incoming
+      );
+      if (currentOpenedByOwner && incomingOpenedByOwner !== true) {
+        this.reticulumAudioAddressByLinkId.delete(linkId);
+        this.closeReticulumAudioLinkQuietly(
+          linkId,
+          `duplicate-pending-owner:${reason}`
+        );
+        return false;
+      }
+    }
+
+    if (state.established && state.linkId && state.linkId !== linkId) {
+      this.reticulumAudioAddressByLinkId.delete(linkId);
+      this.closeReticulumAudioLinkQuietly(
+        linkId,
+        `duplicate-established:${reason}`
+      );
+      return false;
+    }
+
+    const previousLinkId = state.linkId;
+    if (previousLinkId && previousLinkId !== linkId) {
+      this.reticulumAudioAddressByLinkId.delete(previousLinkId);
+      this.closeReticulumAudioLinkQuietly(
+        previousLinkId,
+        `superseded-before-established:${reason}`
+      );
+    }
+
+    state.linkId = linkId;
+    state.linkOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
+      address,
+      state,
+      incoming
+    );
+    state.peerDestinationHash = peerDestinationHash || state.peerDestinationHash;
+    state.established = true;
+    state.opening = false;
+    this.reticulumAudioAddressByLinkId.set(linkId, address);
+    if (state.transport === 'link') {
+      this.setReticulumAudioRouteKey(address, state, linkId);
+    }
+    this.resetReticulumAudioLinkHeartbeat(state);
+    return true;
+  }
+
   private retryReticulumAudioLinkEstablishIfNeeded(
     address: string,
     state: ReticulumAudioPeerState,
@@ -4202,7 +4527,7 @@ export class GroupCallManager extends EventEmitter {
       `[GCall] Reticulum audio link establish retry address=${address} room=${roomId} staleLinkId=${staleLinkId || 'n/a'} nextDelayMs=${state.linkEstablishRetryDelayMs}`
     );
     if (staleLinkId) {
-      this.markReticulumAudioLinkUnready(address, staleLinkId);
+      this.markReticulumAudioLinkUnready(address);
       void this.reticulumBridge?.closeGroupAudioLink(staleLinkId).catch(() => {});
     }
     void this.openReticulumAudioLinkForAddress(address);
@@ -4520,6 +4845,7 @@ export class GroupCallManager extends EventEmitter {
       !bridge ||
       !state ||
       state.opening ||
+      Boolean(state.linkId) ||
       state.established ||
       !this.shouldMaintainReticulumAudioLink(state)
     ) {
@@ -4534,14 +4860,32 @@ export class GroupCallManager extends EventEmitter {
     if (!latest) return;
     latest.opening = false;
     if (result.ok) {
-      latest.linkId = result.linkId;
-      this.reticulumAudioAddressByLinkId.set(result.linkId, address);
-      if (latest.transport === 'link') {
-        this.setReticulumAudioRouteKey(address, latest, result.linkId);
-      }
       if (result.established) {
-        latest.established = true;
-        this.resetReticulumAudioLinkHeartbeat(latest);
+        if (
+          !this.isReticulumAudioLinkVerifiedForAddress(
+            address,
+            latest.peerPresenceHash,
+            latest.peerDestinationHash
+          )
+        ) {
+          this.closeReticulumAudioLinkQuietly(
+            result.linkId,
+            'open-result-unverified-address'
+          );
+          return;
+        }
+        if (
+          !this.adoptEstablishedReticulumAudioLink(
+            address,
+            latest,
+            result.linkId,
+            latest.peerDestinationHash,
+            false,
+            'open-result'
+          )
+        ) {
+          return;
+        }
         if (
           latest.packetLinkFallbackRequestedUntilMs > Date.now() &&
           latest.transport === 'packet' &&
@@ -4554,6 +4898,52 @@ export class GroupCallManager extends EventEmitter {
           );
         }
         this.scheduleReticulumAudioFlush();
+      } else if (
+        latest.established &&
+        latest.linkId &&
+        latest.linkId !== result.linkId
+      ) {
+        this.closeReticulumAudioLinkQuietly(
+          result.linkId,
+          'open-result-duplicate-pending'
+        );
+      } else if (
+        latest.linkId &&
+        latest.linkId !== result.linkId
+      ) {
+        const latestOpenedByOwner = latest.linkOpenedByOwner === true;
+        const resultOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
+          address,
+          latest,
+          false
+        );
+        if (resultOpenedByOwner === true && !latestOpenedByOwner) {
+          const previousLinkId = latest.linkId;
+          this.reticulumAudioAddressByLinkId.delete(previousLinkId);
+          this.closeReticulumAudioLinkQuietly(
+            previousLinkId,
+            'open-result-pending-superseded-by-owner'
+          );
+          latest.linkId = result.linkId;
+          latest.linkOpenedByOwner = true;
+          this.reticulumAudioAddressByLinkId.set(result.linkId, address);
+        } else {
+          this.closeReticulumAudioLinkQuietly(
+            result.linkId,
+            'open-result-extra-pending'
+          );
+        }
+      } else if (
+        !latest.established &&
+        !latest.linkId
+      ) {
+        latest.linkId = result.linkId;
+        latest.linkOpenedByOwner = this.isReticulumAudioLinkOpenedByOwner(
+          address,
+          latest,
+          false
+        );
+        this.reticulumAudioAddressByLinkId.set(result.linkId, address);
       } else if (
         latest.linkEstablishRetryDelayMs <
         GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS
@@ -4585,6 +4975,7 @@ export class GroupCallManager extends EventEmitter {
       state.linkId = null;
     }
     state.established = false;
+    state.linkOpenedByOwner = null;
     state.opening = false;
     state.linkHeartbeatAwaitingSeq = 0;
     state.linkHeartbeatMissedPongs = 0;
@@ -4632,6 +5023,7 @@ export class GroupCallManager extends EventEmitter {
         packetLinkFallbackReason: '',
         routeKey: this.computeReticulumAudioRouteKey(transport, peerPresenceHash),
         linkId: null,
+        linkOpenedByOwner: null,
         established: false,
         opening: false,
         rooms: new Set<string>(),
@@ -5481,6 +5873,7 @@ export class GroupCallManager extends EventEmitter {
             desired.peerPresenceHash
           ),
           linkId: null,
+          linkOpenedByOwner: null,
           established: false,
           opening: false,
           rooms: desired.rooms,
@@ -5765,7 +6158,16 @@ export class GroupCallManager extends EventEmitter {
       );
       return;
     }
-    this.sendReticulumToAddress(toAddress, keyFrames, 'key');
+    const { sentLinks, skippedLinks } = this.sendReticulumLinkControlToAddresses(
+      roomId,
+      keyFrames,
+      [toAddress],
+      new Set([fromAddress]),
+      'GC_KEY'
+    );
+    loggerLog(
+      `[GCall] Queued GC_KEY (Reticulum links) for room ${roomId} to=${toAddress} links=${sentLinks} skipped=${skippedLinks}`
+    );
   }
 
   sendKeyRotate(
@@ -5800,10 +6202,15 @@ export class GroupCallManager extends EventEmitter {
       );
       return;
     }
-    this.fanoutReticulumWire(
+    const { sentLinks, skippedLinks } = this.sendReticulumLinkControlToAddresses(
       roomId,
       keyRotateFrames,
-      new Set([fromAddress])
+      Object.keys(encryptedKeys),
+      new Set([fromAddress]),
+      'GC_KEY_ROTATE'
+    );
+    loggerLog(
+      `[GCall] Queued GC_KEY_ROTATE (Reticulum links) for room ${roomId} recipients=${Object.keys(encryptedKeys).length} links=${sentLinks} skipped=${skippedLinks}`
     );
   }
 
@@ -5836,7 +6243,16 @@ export class GroupCallManager extends EventEmitter {
       );
       return;
     }
-    this.sendReticulumToAddress(toAddress, gqFrames, 'key_request');
+    const { sentLinks, skippedLinks } = this.sendReticulumLinkControlToAddresses(
+      roomId,
+      gqFrames,
+      [toAddress],
+      new Set([fromAddress]),
+      'GC_KEY_REQUEST'
+    );
+    loggerLog(
+      `[GCall] Queued GC_KEY_REQUEST (Reticulum links) for room ${roomId} to=${toAddress} links=${sentLinks} skipped=${skippedLinks}`
+    );
   }
 
   // ── Inbound ───────────────────────────────────────────────────────────────
@@ -6524,7 +6940,26 @@ export class GroupCallManager extends EventEmitter {
       `[GCall] Reticulum audio link heartbeat rx command=${wire.c} room=${wire.R} linkId=${linkId || 'n/a'} peerPresenceHash=${peerPresenceHash || 'n/a'} senderDestinationHash=${senderDestinationHash || 'n/a'} address=${address ?? 'unresolved'} seq=${wire.p ?? 'n/a'} packetRxRecent=${wire.packetRxRecent === undefined ? 'n/a' : wire.packetRxRecent ? 'yes' : 'no'} packetRxAgeMs=${wire.packetRxAgeMs ?? 'n/a'} localInterest=${hasLocalInterest ? 'yes' : 'no'}`
     );
     if (!hasLocalInterest) return;
-    if (!address) return;
+    if (!address) {
+      this.closeReticulumAudioLinkQuietly(
+        linkId,
+        'heartbeat-unresolved-address'
+      );
+      return;
+    }
+    if (
+      !this.isReticulumAudioLinkVerifiedForAddress(
+        address,
+        peerPresenceHash || senderDestinationHash,
+        senderDestinationHash
+      )
+    ) {
+      this.closeReticulumAudioLinkQuietly(
+        linkId,
+        'heartbeat-unverified-address'
+      );
+      return;
+    }
     this.noteRecentCallActivity(wire.R, address);
     if (!this.reticulumAudioPeersByAddress.has(address)) {
       void this.ensureReticulumAudioPeerState(wire.R, address);
@@ -6534,8 +6969,26 @@ export class GroupCallManager extends EventEmitter {
     const now = Date.now();
     state.linkHeartbeatLastRxAtMs = now;
     if (linkId) {
-      state.linkId = linkId;
-      this.reticulumAudioAddressByLinkId.set(linkId, address);
+      if (
+        state.established &&
+        state.linkId &&
+        state.linkId !== linkId
+      ) {
+        this.closeReticulumAudioLinkQuietly(linkId, 'duplicate-heartbeat');
+        return;
+      }
+      if (!state.established) {
+        this.adoptEstablishedReticulumAudioLink(
+          address,
+          state,
+          linkId,
+          senderDestinationHash,
+          null,
+          'heartbeat'
+        );
+      } else {
+        this.reticulumAudioAddressByLinkId.set(linkId, address);
+      }
     }
     if (senderDestinationHash) {
       state.peerDestinationHash = senderDestinationHash;
@@ -6593,14 +7046,63 @@ export class GroupCallManager extends EventEmitter {
       audioPeerPresenceHash,
       payload.roomId
     );
+    const inboundLinkControlWire =
+      (payload.transport ?? 'link') === 'link' && payload.linkId
+        ? decodeGcLinkControlWire(raw)
+        : null;
+    if (inboundLinkControlWire && !fromAddress) {
+      this.closeReticulumAudioLinkQuietly(
+        payload.linkId,
+        'control-unresolved-address'
+      );
+      return;
+    }
     if (fromAddress && !this.reticulumAudioPeersByAddress.has(fromAddress)) {
       void this.ensureReticulumAudioPeerState(payload.roomId, fromAddress);
     }
     if (fromAddress) {
+      const isLinkPacket = (payload.transport ?? 'link') === 'link';
+      if (
+        isLinkPacket &&
+        !this.isReticulumAudioLinkVerifiedForAddress(
+          fromAddress,
+          audioPeerPresenceHash,
+          payload.peerDestinationHash
+        )
+      ) {
+        this.closeReticulumAudioLinkQuietly(
+          payload.linkId,
+          'audio-unverified-address'
+        );
+        return;
+      }
       this.noteRecentCallActivity(payload.roomId, fromAddress);
       this.noteBootstrapParticipantActivity(payload.roomId, fromAddress);
       const state = this.reticulumAudioPeersByAddress.get(fromAddress);
       if (state) {
+        if (isLinkPacket && payload.linkId) {
+          if (
+            state.established &&
+            state.linkId &&
+            state.linkId !== payload.linkId
+          ) {
+            this.closeReticulumAudioLinkQuietly(
+              payload.linkId,
+              'duplicate-audio'
+            );
+            return;
+          }
+          if (!state.established) {
+            this.adoptEstablishedReticulumAudioLink(
+              fromAddress,
+              state,
+              payload.linkId,
+              payload.peerDestinationHash,
+              payload.incoming,
+              'audio'
+            );
+          }
+        }
         state.peerDestinationHash =
           payload.peerDestinationHash || state.peerDestinationHash;
         const now = Date.now();
@@ -6610,6 +7112,15 @@ export class GroupCallManager extends EventEmitter {
         if ((payload.transport ?? 'link') === 'packet') {
           state.lastInboundPacketAtMs = now;
         }
+      }
+      if (inboundLinkControlWire) {
+        this.handleReticulumGroupCallWire(
+          inboundLinkControlWire,
+          payload.peerDestinationHash,
+          audioPeerPresenceHash,
+          payload.linkId
+        );
+        return;
       }
       this.forwardInboundReticulumGroupAudio(payload.roomId, fromAddress, raw);
     }
@@ -6706,7 +7217,26 @@ export class GroupCallManager extends EventEmitter {
       payload.linkId,
       peerPresenceHash
     );
-    if (!address) return;
+    if (!address) {
+      this.closeReticulumAudioLinkQuietly(
+        payload.linkId,
+        'established-unresolved-address'
+      );
+      return;
+    }
+    if (
+      !this.isReticulumAudioLinkVerifiedForAddress(
+        address,
+        peerPresenceHash,
+        payload.peerDestinationHash
+      )
+    ) {
+      this.closeReticulumAudioLinkQuietly(
+        payload.linkId,
+        'established-unverified-address'
+      );
+      return;
+    }
     if (!this.reticulumAudioPeersByAddress.has(address)) {
       const rid = this.findRoomIdContainingParticipant(address);
       if (rid) {
@@ -6715,16 +7245,18 @@ export class GroupCallManager extends EventEmitter {
     }
     const state = this.reticulumAudioPeersByAddress.get(address);
     if (!state) return;
-    state.linkId = payload.linkId;
-    state.peerDestinationHash =
-      payload.peerDestinationHash || state.peerDestinationHash;
-    state.established = true;
-    state.opening = false;
-    this.reticulumAudioAddressByLinkId.set(payload.linkId, address);
-    if (state.transport === 'link') {
-      this.setReticulumAudioRouteKey(address, state, payload.linkId);
+    if (
+      !this.adoptEstablishedReticulumAudioLink(
+        address,
+        state,
+        payload.linkId,
+        payload.peerDestinationHash,
+        payload.incoming,
+        payload.incoming ? 'incoming-established' : 'outgoing-established'
+      )
+    ) {
+      return;
     }
-    this.resetReticulumAudioLinkHeartbeat(state);
     this.scheduleReticulumAudioFlush();
   }
 

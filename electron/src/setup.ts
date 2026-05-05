@@ -2807,6 +2807,15 @@ ipcMain.handle(
   }
 );
 
+ipcMain.handle('gcall:getLinkStats', async (_event, roomId: string) => {
+  const mgr = getGroupCallManager();
+  if (!mgr) return { success: false, error: 'GroupCall manager not running' };
+  return {
+    success: true,
+    stats: mgr.getReticulumAudioLinkStats(roomId),
+  };
+});
+
 ipcMain.handle(
   'gcall:sendKey',
   async (

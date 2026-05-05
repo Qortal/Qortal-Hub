@@ -129,6 +129,8 @@ contextBridge.exposeInMainWorld('groupCall', {
     toAddresses: string[],
     data: Uint8Array
   ) => ipcRenderer.invoke('gcall:sendAudioBatch', roomId, toAddresses, data),
+  getLinkStats: async (roomId: string) =>
+    ipcRenderer.invoke('gcall:getLinkStats', roomId),
   sendKey: async (
     roomId: string,
     toAddress: string,
