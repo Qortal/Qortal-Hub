@@ -106,7 +106,11 @@ const GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN = 0.02;
 const GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_BUFFERED_MS_MAX = 56;
 const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX = 72;
+const GCALL_SINGLE_SOURCE_STEADY_MISSING_EMA_MIN = 0.18;
+const GCALL_SINGLE_SOURCE_STEADY_DAMAGE_BUFFERED_MS_MAX = 72;
+const GCALL_SINGLE_SOURCE_STEADY_DAMAGE_DELTA_MAX_MS = -32;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN = 0.18;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN = 0.25;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN = 0.045;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX = 36;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX = 0.998;
@@ -119,6 +123,7 @@ const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_UNDERTARGET_EMA_MAX = 0.08
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_RATE_EMA_MIN = 0.996;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_HOLD_MS = 5_500;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN = 0.2;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_MISSING_EMA_MIN = 0.4;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_LATCH_BUFFERED_MS_MAX = 6;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_BUFFERED_MS_MAX = 20;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_DELTA_MAX_MS = -70;
@@ -175,6 +180,8 @@ interface LiveMultiSourceState {
   deltaMsEma: number;
   underTargetEma: number;
   concealmentEma: number;
+  missingFrameEma: number;
+  pendingMissingFrames: number;
   rateEma: number;
   oldestFrameAgeEma: number;
   lastJitterHasReadyFrame: boolean;
@@ -734,6 +741,8 @@ export class GroupCallAudioReceiveEngine {
         deltaMsEma: 0,
         underTargetEma: 0,
         concealmentEma: 0,
+        missingFrameEma: 0,
+        pendingMissingFrames: 0,
         rateEma: 1,
         oldestFrameAgeEma: 0,
         lastJitterHasReadyFrame: false,
@@ -833,6 +842,12 @@ export class GroupCallAudioReceiveEngine {
         ? concealmentSample
         : state.concealmentEma * (1 - alpha) + concealmentSample * alpha;
     state.lastConcealmentUsed = !!message.concealmentUsed;
+    const missingFrameSample = state.pendingMissingFrames > 0 ? 1 : 0;
+    state.pendingMissingFrames = 0;
+    state.missingFrameEma =
+      state.sampleCount === 1
+        ? missingFrameSample
+        : state.missingFrameEma * (1 - alpha) + missingFrameSample * alpha;
     const rateSample =
       typeof message.rate === 'number' && Number.isFinite(message.rate)
         ? Math.max(0.9, Math.min(1.1, message.rate))
@@ -1060,6 +1075,19 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN &&
             state.bufferedMsEma <=
               GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX);
+        const sustainedDamagePressure =
+          state.lastJitterHasReadyFrame &&
+          state.missingFrameEma >=
+            GCALL_SINGLE_SOURCE_STEADY_MISSING_EMA_MIN &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_STEADY_DAMAGE_BUFFERED_MS_MAX &&
+          state.deltaMsEma <=
+            GCALL_SINGLE_SOURCE_STEADY_DAMAGE_DELTA_MAX_MS &&
+          (state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN ||
+            state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX ||
+            state.concealmentEma >=
+              GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN);
         const repairHeavyHealthyReserveEscape =
           state.bufferedMsEma >=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_BUFFERED_MS_MIN &&
@@ -1074,6 +1102,11 @@ export class GroupCallAudioReceiveEngine {
         const repairHeavyPressure =
           ((state.concealmentEma >=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN) ||
+            (state.missingFrameEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN &&
+              state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
+              state.bufferedMsEma <=
+                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX) ||
             (state.underTargetEma >=
               GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN &&
               state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
@@ -1085,8 +1118,10 @@ export class GroupCallAudioReceiveEngine {
           !repairHeavyHealthyReserveEscape &&
           !effectiveSevereSingleSourceHold;
         const repairCollapsePressure =
-          state.concealmentEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN &&
+          (state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN ||
+            state.missingFrameEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_MISSING_EMA_MIN) &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_BUFFERED_MS_MAX &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_DELTA_MAX_MS &&
@@ -1464,8 +1499,12 @@ export class GroupCallAudioReceiveEngine {
           silentLeanHold,
           silentLeanPressure,
           postRecoveryHold: postRecoveryHold && !steadyHealthyEscape,
-          singleSourcePressure: singleSourcePressure && !steadyHealthyEscape,
-          mildSteadyAssist: mildSteadyAssist && !steadyHealthyEscape,
+          singleSourcePressure:
+            (singleSourcePressure || sustainedDamagePressure) &&
+            !steadyHealthyEscape,
+          mildSteadyAssist:
+            (mildSteadyAssist || sustainedDamagePressure) &&
+            !steadyHealthyEscape,
           steadyHealthyEscape,
         });
         state.currentSingleSourceProfile = profile;
@@ -1689,6 +1728,10 @@ export class GroupCallAudioReceiveEngine {
       getActiveSourceCount: () => this.playouts.size,
       afterDrain: ({ missedFramesThisTick }) => {
         if (missedFramesThisTick > 0) {
+          const state = this.liveMultiSourceStateBySource.get(sourceAddr);
+          if (state) {
+            state.pendingMissingFrames += missedFramesThisTick;
+          }
           this.metrics.recordMissingFrames(missedFramesThisTick, sourceAddr);
           this.scheduleMetricsEmit();
         }

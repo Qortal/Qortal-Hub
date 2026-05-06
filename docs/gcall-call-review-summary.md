@@ -1362,3 +1362,107 @@ Current patched target:
 - Primary fix: explain and instrument the Mac-side `packetsDroppedDecodeFailure=241` path in a call where reserve/playout otherwise look clean. This is the strongest template triage signal in the new export.
 - Secondary watch item: Linux still has a valid `steady-weak-listener` receive profile with moderate under-target and concealment pressure. If the next decode-clean call still sounds weak in this shape, tune `steady-weak-listener` target/floor or application hold.
 - Do not change selector, `repair-collapse` strength, or global baseline from this batch. Classification is mostly aligned on Linux, Mac's receive profile is not the audible policy problem, and the remaining hard signal is outside receive policy.
+
+## Call: 2026-05-06 11:56Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-06T11-56-34-277Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-06T11-56-30-808Z.json`
+
+User symptom:
+- New paired call after the decode/session diagnostics change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and profile mismatch.
+
+High-level verdict:
+- Mixed/bad, but improved versus the previous decode-blocked batch.
+- Decode correctness is clean again on both sides, both media paths are alive, and both playouts are active/ready. The remaining issue is receive classification: Linux exports `clean-low-latency` despite moderate under-target/missing-frame pressure, while Mac exports only `persistent-lean` despite a shallow, concealment-heavy path.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have inbound packets, decoded frames, active playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Queue/backpressure: bridge/binary high-water values are low (`1`/`2` on Mac, `7`/`2` on Linux), with no queue-pressure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+
+Primary next target:
+- Selector.
+- Linux should not remain `clean-low-latency` with `missingFrames=608`, `concealmentTicks=83`, `playoutUnderTargetFraction=0.077`, `playoutRateFractionBelow097=0.053`, and `avgPlayoutDeltaMs=-92.208`.
+- Mac's `persistent-lean` classification is directionally right for shallow reserve, but likely too mild for `avgPcmBufferedMs=9.650`, `concealmentTicks=286`, `missingFrames=462`, and `avgPlayoutDeltaMs=-122.162`; this should be allowed to escalate toward a repair profile when concealment is active.
+- Do not tune baseline first: both sides are not clean, but the exported profiles do not yet match the symptoms. Do not tune profile strength first: at least one side is not entering a protective profile at all.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` | yes | 9.650 | 462 | 286 | 0.052 | 0.046 | low-latency | Classification partly matches shallow reserve, but is too mild for active concealment and a strongly negative delta. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `clean-low-latency` | partly/yes | 42.823 | 608 | 83 | 0.077 | 0.053 | low-latency | Classification is too optimistic: reserve is usable, but under-target, rate, missing-frame, and concealment pressure are not clean. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `repair-heavy-connected`, with `persistent-lean` as the weaker fallback.
+
+Actual exported profile:
+- `persistent-lean`
+
+Did classification match?
+- Partly/no.
+
+If no:
+- `avgPcmBufferedMs=9.650`, `jitterBufferDepthFramesMean=0.489`, and `avgPlayoutDeltaMs=-122.162` match a persistent shallow-listener shape.
+- But `concealmentTicks=286`, `missingFrames=462`, `playoutUnderTargetFraction=0.052`, and `playoutRateFractionBelow097=0.046` make this more repair-heavy than ordinary lean.
+- Retune selector escalation from `persistent-lean` when shallow reserve and active concealment coexist; do not only raise the persistent-lean target yet.
+
+### Side B
+
+Expected profile from symptom:
+- `steady-weak-listener` or `repair-heavy-connected`.
+
+Actual exported profile:
+- `clean-low-latency`
+
+Did classification match?
+- No/partly.
+
+If no:
+- `avgPcmBufferedMs=42.823`, `jitterBufferDepthFramesMean=2.170`, `jitterBufferedFrames=9`, and `jitterHasReadyFrame=true` explain why this avoided collapse/not-ready profiles.
+- But the side is not clean: `missingFrames=608`, `concealmentTicks=83`, `playoutUnderTargetFraction=0.077`, `playoutRateFractionBelow097=0.053`, and `avgPlayoutDeltaMs=-92.208`.
+- Tighten the clean escape/clear conditions so ready buffered paths with sustained damage land in `steady-weak-listener` or `repair-heavy-connected`.
+
+## Trend Read
+
+Side A:
+- Gradual shallow repair/lean path with early recovery exit.
+- Reasons seen:
+  - `avgPcmBufferedMs` improves only from about `7.5` to `9.65 ms`, still shallow.
+  - `missingFrames` increases from `332` to `462`.
+  - `concealmentTicks` stays high at `286`.
+  - adaptive mode exits `recovery` to `low-latency` halfway through while the profile remains `persistent-lean`.
+
+Side B:
+- Gradual moderate weak/repair pressure with early recovery exit.
+- Reasons seen:
+  - `avgPcmBufferedMs` improves from about `39.7` to `42.8 ms`.
+  - `missingFrames` increases from `507` to `608`.
+  - `concealmentTicks` stays at `83`.
+  - adaptive mode exits `recovery` to `low-latency` while under-target and rate-below-0.97 pressure remain elevated.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T20:47Z group-812` | A / Mac standby | `repair-collapse` | partly/no | no | selector / secondary decode diagnostics | Improved by 21:27Z and 11:56Z: Mac receive reserve recovered from the over-severe collapse classification, and decode failures are gone. |
+| `2026-05-05T20:47Z group-812` | B / Linux root | `repair-collapse` | yes | yes | Mac-to-Linux media delivery / sender targeting | Improved by 21:27Z and 11:56Z: Linux now receives thousands of packets, but classification is now too optimistic. |
+| `2026-05-05T21:27Z group-812` | A / Mac standby | `clean-low-latency` | partly/unknown | partly/unknown | decode/session correctness | Improved in 11:56Z: decode failures are now `0`, so decode/session is no longer the next target. |
+| `2026-05-05T21:27Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | weak-listener / secondary | Still relevant, but 11:56Z regressed to `clean-low-latency` under similar moderate pressure. |
+| `2026-05-06T11:56Z group-812` | A / Mac standby | `persistent-lean` | yes | partly/no | selector / repair escalation | Escalate shallow active-concealment paths out of ordinary `persistent-lean` toward repair-heavy/collapse protection. |
+| `2026-05-06T11:56Z group-812` | B / Linux root | `clean-low-latency` | partly/yes | no/partly | selector / clean escape | Tighten clean-low-latency clear/entry so sustained missing-frame, concealment, under-target, and slow-rate pressure cannot remain clean. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: make sustained damage counters and under-target/rate pressure disqualify `clean-low-latency`, even when the ready buffer is not collapsed.
+- Secondary fix: let `persistent-lean` escalate when shallow reserve is accompanied by meaningful concealment and missing-frame growth.
+- Keep decode/session, media-path, global baseline, and heavy-profile strength unchanged for the next patch. This export is clean on correctness and media establishment; the active failure is that profile classification is too mild for the symptoms.
