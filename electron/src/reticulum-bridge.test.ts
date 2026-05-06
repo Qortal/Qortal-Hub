@@ -61,6 +61,32 @@ describe('ReticulumBridge group audio support', () => {
     });
   });
 
+  it('reports no-route when the bridge cannot confirm a path for an audio link', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    internal.state = 'ready';
+    internal.start = vi.fn(async () => {});
+    internal.sendCommand = vi.fn(async () => ({
+      type: 'resp',
+      id: '1',
+      ok: false,
+      payload: {
+        code: 'no_route',
+        pathState: 'failing',
+        pathAwaitSeconds: 2,
+      },
+      error: 'No confirmed Reticulum path for group audio link',
+    }));
+
+    const result = await bridge.openGroupAudioLink('peer-hash');
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'no-route',
+      error: 'No confirmed Reticulum path for group audio link',
+    });
+  });
+
   it('warms packet audio paths through the bridge command channel', async () => {
     const bridge = new ReticulumBridge();
     const internal = bridge as any;

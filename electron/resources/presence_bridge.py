@@ -60,6 +60,7 @@ _CANDIDATE_PROOF_WINDOW_SECONDS = 45.0
 _CANDIDATE_FAILURE_LIMIT = 2
 _OVERLAY_DEFAULT_HOPS = 4
 _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS = 5.0
+_OVERLAY_LINK_PATH_AWAIT_SECONDS = 0.35
 # Inbound RNS.Link: classify overlay vs audio by first JSON packet; if none, default to overlay.
 _INBOUND_LINK_CLASSIFY_TIMEOUT_SEC = 5.0
 _pending_inbound_classify_link_ids: Set[int] = set()
@@ -161,6 +162,7 @@ _PACKET_PATH_FRESH_SECONDS = 3.0
 _PACKET_PATH_RECENT_FAILURE_SECONDS = 2.0
 _PACKET_PATH_AWAIT_SECONDS = 0.12
 _PACKET_PATH_IDLE_AWAIT_SECONDS = 0.02
+_AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS = 2.0
 _PACKET_PATH_WARMING_TIMEOUTS_BEFORE_FAILING = 2
 _PACKET_PATH_INBOUND_FRESH_SECONDS = 3.0
 _PACKET_PATH_POLL_INTERVAL_SECONDS = 0.01
@@ -1575,6 +1577,7 @@ def _ensure_call_media_path(
     active_call: bool = True,
     allow_wait: bool = True,
     reason: str = "send",
+    await_seconds_override: Optional[float] = None,
 ) -> tuple[str, bool]:
     global _audio_packet_path_requests, _audio_packet_path_resolutions, _audio_packet_path_timeouts
     state = _get_call_media_state(peer_hash)
@@ -1601,9 +1604,13 @@ def _ensure_call_media_path(
     )
     requested = False
     await_seconds = (
-        _PACKET_PATH_AWAIT_SECONDS
-        if active_call
-        else _PACKET_PATH_IDLE_AWAIT_SECONDS
+        float(await_seconds_override)
+        if await_seconds_override is not None
+        else (
+            _PACKET_PATH_AWAIT_SECONDS
+            if active_call
+            else _PACKET_PATH_IDLE_AWAIT_SECONDS
+        )
     )
     if should_request:
         current = str(state.get("path_state") or "unknown")
@@ -2232,6 +2239,15 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
                 return None
         if outbound is not None:
             _nudge_overlay_link_path(peer_key, outbound.hash)
+            if not _await_destination_path(
+                outbound.hash, _OVERLAY_LINK_PATH_AWAIT_SECONDS
+            ):
+                log(
+                    "[presence_bridge] target=presence-reticulum "
+                    "overlay_link_deferred_no_path "
+                    f"peer={peer_key} await={_OVERLAY_LINK_PATH_AWAIT_SECONDS}"
+                )
+                return None
         with _state_lock:
             existing_link_id = _active_overlay_link_id_by_peer_hash.get(peer_key)
             if existing_link_id:
@@ -3914,13 +3930,27 @@ def handle_open_group_audio_link(req_id: str, payload: Dict[str, Any]) -> None:
             return
 
     try:
-        _warm_call_media_path_if_possible(
+        outbound = build_outbound_destination(peer_identity)
+        path_state, path_ready = _ensure_call_media_path(
             peer_key,
+            outbound.hash,
             active_call=True,
             allow_wait=True,
             reason="open_link",
+            await_seconds_override=_AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS,
         )
-        outbound = build_outbound_destination(peer_identity)
+        if not path_ready:
+            emit_resp(
+                req_id,
+                False,
+                payload={
+                    "code": "no_route",
+                    "pathState": path_state,
+                    "pathAwaitSeconds": _AUDIO_LINK_OPEN_PATH_AWAIT_SECONDS,
+                },
+                error="No confirmed Reticulum path for group audio link",
+            )
+            return
         link_id = str(uuid.uuid4())
         link = RNS.Link(
             outbound,
