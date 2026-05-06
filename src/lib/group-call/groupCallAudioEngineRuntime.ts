@@ -448,6 +448,8 @@ function setRosterPublicKey(
 }
 
 const ROOM_KEY_DISTRIBUTION_RETRY_MS = 750;
+const TARGETED_ROOM_KEY_REPLAY_RETRY_MS = 2_000;
+const TARGETED_ROOM_KEY_REPLAY_MAX_ATTEMPTS = 6;
 
 export class GroupCallAudioEngineRuntime {
   private bootstrapRevisionApplied = 0;
@@ -478,6 +480,11 @@ export class GroupCallAudioEngineRuntime {
   private awaitingAuthoritativeKey = false;
   private keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private roomKeyDistributionRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly targetedRoomKeyReplayTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
+  private readonly targetedRoomKeyReplayAttempts = new Map<string, number>();
   private senderSyncRetryTimer: ReturnType<typeof setTimeout> | null = null;
   private topologyHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private rootFailoverTimer: ReturnType<typeof setTimeout> | null = null;
@@ -581,6 +588,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
     this.clearRoomKeyDistributionRetryTimer();
+    this.clearTargetedRoomKeyReplayRetries();
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
@@ -1564,6 +1572,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
     this.clearRoomKeyDistributionRetryTimer();
+    this.clearTargetedRoomKeyReplayRetries();
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
@@ -1781,6 +1790,7 @@ export class GroupCallAudioEngineRuntime {
     this.clearTopologyElectionTimer();
     this.clearKeyRecoveryRetryTimer();
     this.clearRoomKeyDistributionRetryTimer();
+    this.clearTargetedRoomKeyReplayRetries();
     this.clearSenderSyncRetryTimer();
     this.clearActiveSpeakerRefreshTimer();
     this.clearMemberGateRefreshTimer();
@@ -2516,6 +2526,115 @@ export class GroupCallAudioEngineRuntime {
     if (this.roomKeyDistributionRetryTimer) {
       clearTimeout(this.roomKeyDistributionRetryTimer);
       this.roomKeyDistributionRetryTimer = null;
+    }
+  }
+
+  private buildTargetedRoomKeyReplayKey(address: string): string {
+    return [
+      this.snapshot.roomId,
+      this.callSessionId,
+      this.mediaSessionGeneration >>> 0,
+      address,
+    ].join('|');
+  }
+
+  private clearTargetedRoomKeyReplayRetries(): void {
+    for (const timer of this.targetedRoomKeyReplayTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.targetedRoomKeyReplayTimers.clear();
+    this.targetedRoomKeyReplayAttempts.clear();
+  }
+
+  private scheduleTargetedRoomKeyReplayRetry(
+    toAddressValue: string | null | undefined,
+    publicKeyValue: string | null | undefined,
+    reason: string
+  ): void {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const root = this.topology?.rootForwarder?.trim() ?? '';
+    const toAddress = toAddressValue?.trim() ?? '';
+    const publicKey = publicKeyValue?.trim() ?? '';
+    if (
+      !myAddress ||
+      !this.snapshot.roomId ||
+      !this.callSessionId ||
+      !this.roomKey ||
+      !this.ownsRoomKey ||
+      root !== myAddress ||
+      !toAddress ||
+      toAddress === myAddress ||
+      !publicKey
+    ) {
+      return;
+    }
+
+    const retryKey = this.buildTargetedRoomKeyReplayKey(toAddress);
+    if (this.targetedRoomKeyReplayTimers.has(retryKey)) return;
+    if (
+      (this.targetedRoomKeyReplayAttempts.get(retryKey) ?? 0) >=
+      TARGETED_ROOM_KEY_REPLAY_MAX_ATTEMPTS
+    ) {
+      return;
+    }
+
+    this.recordDiagEvent('targeted-room-key-replay-retry-scheduled', {
+      roomId: this.snapshot.roomId,
+      toAddress,
+      reason,
+      mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+    });
+    const timer = setTimeout(() => {
+      this.targetedRoomKeyReplayTimers.delete(retryKey);
+      void this.runTargetedRoomKeyReplayRetry(toAddress, publicKey, retryKey, reason);
+    }, TARGETED_ROOM_KEY_REPLAY_RETRY_MS);
+    this.targetedRoomKeyReplayTimers.set(retryKey, timer);
+  }
+
+  private async runTargetedRoomKeyReplayRetry(
+    toAddress: string,
+    publicKey: string,
+    retryKey: string,
+    reason: string
+  ): Promise<void> {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const root = this.topology?.rootForwarder?.trim() ?? '';
+    if (
+      !myAddress ||
+      !this.snapshot.roomId ||
+      !this.callSessionId ||
+      !this.roomKey ||
+      !this.ownsRoomKey ||
+      root !== myAddress ||
+      toAddress === myAddress ||
+      retryKey !== this.buildTargetedRoomKeyReplayKey(toAddress)
+    ) {
+      return;
+    }
+
+    const nextAttempt =
+      (this.targetedRoomKeyReplayAttempts.get(retryKey) ?? 0) + 1;
+    this.targetedRoomKeyReplayAttempts.set(retryKey, nextAttempt);
+    this.recordDiagEvent('targeted-room-key-replay-retry-fired', {
+      roomId: this.snapshot.roomId,
+      toAddress,
+      reason,
+      attempt: nextAttempt,
+      mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
+    });
+    try {
+      await this.sendTargetedRoomKey(
+        this.roomKey,
+        toAddress,
+        publicKey,
+        `${reason}-retry`
+      );
+    } catch {
+      /* retry budget is bounded; later attempts may still succeed */
+    }
+
+    if (nextAttempt < TARGETED_ROOM_KEY_REPLAY_MAX_ATTEMPTS) {
+      this.scheduleTargetedRoomKeyReplayRetry(toAddress, publicKey, reason);
     }
   }
 
@@ -4041,6 +4160,11 @@ export class GroupCallAudioEngineRuntime {
       nextPublicKey,
       'participant-joined'
     );
+    this.scheduleTargetedRoomKeyReplayRetry(
+      nextAddress,
+      nextPublicKey,
+      'participant-joined'
+    );
   }
 
   private async distributeRoomKey(roomKey: Uint8Array): Promise<void> {
@@ -4111,6 +4235,13 @@ export class GroupCallAudioEngineRuntime {
       failedCount: failedAddresses.length,
       mediaSessionGeneration: this.mediaSessionGeneration >>> 0,
     });
+    for (const recipientAddress of recipientAddrs) {
+      this.scheduleTargetedRoomKeyReplayRetry(
+        recipientAddress,
+        recipients.get(recipientAddress)?.publicKey,
+        'room-key-rotate'
+      );
+    }
     if (omittedAddresses.length > 0 || failedAddresses.length > 0) {
       this.scheduleRoomKeyDistributionRetry('partial-recipient-set');
     }
@@ -4275,6 +4406,11 @@ export class GroupCallAudioEngineRuntime {
     this.noteParticipantLiveEvidence(payload.fromAddress, Date.now());
     await this.sendTargetedRoomKey(
       this.roomKey,
+      payload.fromAddress,
+      payload.fromPublicKey,
+      'key-request'
+    );
+    this.scheduleTargetedRoomKeyReplayRetry(
       payload.fromAddress,
       payload.fromPublicKey,
       'key-request'

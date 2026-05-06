@@ -1445,6 +1445,64 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('retries a targeted room key after a participant joins an active rooted room', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const peerPublicKey = Base58.encode(nacl.sign.keyPair().publicKey);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: '',
+      clusters: [{ members: ['Qlocal'], forwarder: 'Qlocal', standby: '' }],
+    });
+    groupCallEventHandler?.('gcall:session-updated', {
+      roomId: 'room-1',
+      callSessionId: 'csid-1',
+      mediaSessionGeneration: 1,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    sendKey.mockClear();
+
+    vi.useFakeTimers();
+    try {
+      groupCallEventHandler?.('gcall:participant-joined', {
+        roomId: 'room-1',
+        address: 'Qpeer',
+        publicKey: peerPublicKey,
+      });
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+
+      expect(sendKey).toHaveBeenCalledTimes(1);
+
+      for (let attempt = 1; attempt <= 6; attempt++) {
+        await vi.advanceTimersByTimeAsync(2_000);
+        await Promise.resolve();
+        expect(sendKey).toHaveBeenCalledTimes(1 + attempt);
+      }
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      await Promise.resolve();
+      expect(sendKey).toHaveBeenCalledTimes(7);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('preserves a participant event public key when the main roster is missing it during root key distribution', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);

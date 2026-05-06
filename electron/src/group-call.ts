@@ -5026,7 +5026,8 @@ export class GroupCallManager extends EventEmitter {
     if (!state) return;
     if (linkId) {
       this.reticulumAudioAddressByLinkId.delete(linkId);
-      if (state.linkId === linkId) state.linkId = null;
+      if (state.linkId !== linkId) return;
+      state.linkId = null;
     } else if (state.linkId) {
       this.reticulumAudioAddressByLinkId.delete(state.linkId);
       state.linkId = null;
@@ -7331,8 +7332,12 @@ export class GroupCallManager extends EventEmitter {
       peerPresenceHash
     );
     if (!address) return;
-    this.markReticulumAudioLinkUnready(address, payload.linkId);
     const state = this.reticulumAudioPeersByAddress.get(address);
+    if (state?.linkId && state.linkId !== payload.linkId) {
+      this.reticulumAudioAddressByLinkId.delete(payload.linkId);
+      return;
+    }
+    this.markReticulumAudioLinkUnready(address, payload.linkId);
     if (state && state.rooms.size > 0 && this.shouldMaintainReticulumAudioLink(state)) {
       const roomId = this.getReticulumAudioHeartbeatRoomId(state);
       if (roomId) {
