@@ -31,6 +31,7 @@ const CALL_SEND_MAX_ATTEMPTS = 40;
 const CALL_SEND_RETRY_MS = 50;
 const CALL_ACCEPT_REPEAT_ATTEMPTS = 5;
 const CALL_ACCEPT_REPEAT_MS = 350;
+let retainedCallLocalAddresses: string[] = [];
 
 export type CallNetworkType =
   | 'CALL_REQUEST'
@@ -362,6 +363,7 @@ export class CallManager extends EventEmitter {
 
   setLocalAddresses(addresses: string[]): void {
     this.localAddresses = new Set(addresses);
+    retainedCallLocalAddresses = [...this.localAddresses];
     this.flushPendingVerifiedIncomingRequests();
   }
 
@@ -1064,6 +1066,12 @@ export function startCallManager(
   }
   callManager = new CallManager(presence, reticulumBridge ?? null);
   callManager.start();
+  if (retainedCallLocalAddresses.length > 0) {
+    callManager.setLocalAddresses(retainedCallLocalAddresses);
+    loggerLog(
+      `[Call] Restored ${retainedCallLocalAddresses.length} local address(es) after manager start.`
+    );
+  }
   return callManager;
 }
 

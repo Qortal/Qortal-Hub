@@ -2104,3 +2104,109 @@ Current patched target:
 - Keep selector thresholds mostly unchanged from this batch: classification is no longer obviously wrong on either side.
 - Keep packet/link fallback and media-path delivery unchanged for the next patch: the new call shows packet recovery and balanced inbound media compared with the earlier underfed-link failures.
 - Keep global baseline unchanged for now. This batch is evidence for non-clean profile tuning, not clean-call baseline failure.
+
+## Call: 2026-05-06 23:26Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-06T23-26-32-953Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-06T23-26-28-059Z.json`
+
+User symptom:
+- New paired call after the weak/lean receive-policy changes; user reported the call was pretty bad.
+
+High-level verdict:
+- Bad.
+- Correctness, startup, and broad media establishment are clean, but both sides remain in ready stressed receive paths. The exported profiles are both `steady-weak-listener`; Mac is a plausible weak-listener, while Linux looks too damaged for ordinary weak-listener and should be promoted toward a repair profile.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have inbound packets, decoded frames, active playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Queue/backpressure: bridge/binary high-water values are low (`3`/`0` on Mac, `4`/`1` on Linux), with no queue-pressure or stale drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Baseline: neither side is `clean-low-latency`; this is not evidence that the global clean baseline is too low.
+
+Primary next target:
+- Selector.
+- Specifically, tune the boundary between `steady-weak-listener` and `repair-heavy-connected` for ready-buffered but audibly bad paths. Linux has usable reserve and ready playout, but `missingFrames=689`, `concealmentTicks=74`, `playoutUnderTargetFraction=0.086`, `playoutRateFractionBelow097=0.074`, and `avgPlayoutDeltaMs=-92.283`; that is closer to buffered repair pressure than ordinary weak-listener.
+- Do not tune baseline first. Do not jump to another transport subsystem first: packet arrival is reasonably balanced (`2526` packets on Mac, `2412` on Linux), both directions decode, and there are no send/decode/key drops. Keep Linux `reticulumAudioPacketPathTimeouts=98` as a secondary watch item, but the next receive-policy fix is classification strength/priority into repair-heavy.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `steady-weak-listener` | yes | 23.397 | 443 | 45 | 0.044 | 0.021 | recovery | Classification partly matches a weak/lean path: ready playout, low reserve, negative delta, and moderate damage. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `steady-weak-listener` | yes | 41.742 | 689 | 74 | 0.086 | 0.074 | recovery | Classification is too mild for the reported bad call and sustained under-target/slow-rate pressure; this should border `repair-heavy-connected`. |
+
+### Side A
+
+Expected profile from symptom:
+- `steady-weak-listener` or `repair-heavy-connected`.
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Partly/yes.
+
+Notes:
+- `avgPcmBufferedMs=23.397`, `jitterBufferDepthFramesMean=1.185`, and `avgPlayoutDeltaMs=-105.875` fit a persistent weak-listener shape.
+- `jitterHasReadyFrame=true` with `21` buffered jitter frames keeps this out of buffered-not-ready or collapse.
+- The damage is still real: `missingFrames=443`, `concealmentTicks=45`, and recovery mode is active. If this direction sounded bad, it is evidence for either a stronger weak-listener hold or promotion when damage persists.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-heavy-connected`, with `steady-weak-listener` only as the weaker fallback.
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Partly/no.
+
+If no:
+- The side is ready and not collapsed: `avgPcmBufferedMs=41.742`, `jitterBufferDepthFramesMean=2.113`, `jitterBufferedFrames=23`, and `jitterHasReadyFrame=true`.
+- But the bad-call symptom and damage counters are stronger than ordinary weak-listener: `missingFrames=689`, `concealmentTicks=74`, `playoutUnderTargetFraction=0.086`, `playoutRateFractionBelow097=0.074`, and `avgPlayoutDeltaMs=-92.283`.
+- Tune selector escalation into `repair-heavy-connected` before raising global baseline or making another broad profile-strength increase.
+
+## Trend Read
+
+Side A:
+- Gradual weak-listener path under recovery.
+- Reasons seen:
+  - `missingFrames` increases from `410` to `443`.
+  - `concealmentTicks` stays flat at `45`.
+  - `avgPcmBufferedMs` stays around `23.1` to `23.4 ms`.
+  - adaptive mode remains `recovery`, so this is not a low-latency exit problem.
+
+Side B:
+- Gradual buffered repair/weak path with oscillating recovery.
+- Reasons seen:
+  - `entered-recovery` appears twice.
+  - adaptive mode exits to `low-latency` for much of the middle of the window, then re-enters `recovery`.
+  - `missingFrames` increases from `552` to `689`.
+  - `concealmentTicks` rises from `69` to `74`.
+  - `playoutUnderTargetFraction` and `playoutRateFractionBelow097` remain elevated around `0.086` / `0.074` at the end.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-06T14:30Z group-812` | A / Mac standby | `silent-lean` | yes | yes/partly | profile application / adaptive-mode hold | Improved by 21:56Z and 23:26Z: Mac playout is ready and recovery mode is applied when non-clean. |
+| `2026-05-06T14:30Z group-812` | B / Linux root | `repair-collapse` | partly | no/partly | selector / repair-collapse escape | Improved in later calls: Linux no longer over-selects collapse for ready buffered paths. |
+| `2026-05-06T18:39Z group-812` | B / Linux root | `repair-collapse` | yes | yes | sender-side fallback exit / underfed receiver | Improved in later calls: Linux receives thousands of packets, so underfed-link is not the dominant 23:26Z issue. |
+| `2026-05-06T21:56Z group-812` | A / Mac standby | `persistent-lean` | partly | yes/partly | weak/lean profile strength | Improved/shifted in 23:26Z: Mac now selects `steady-weak-listener` and stays in recovery, but still has moderate damage. |
+| `2026-05-06T21:56Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | weak-listener hold/strength | Still relevant, but 23:26Z suggests the boundary should escalate worse ready-buffered damage into repair-heavy. |
+| `2026-05-06T23:26Z group-812` | A / Mac standby | `steady-weak-listener` | yes | partly/yes | weak-listener / secondary | Keep as evidence; do not tune baseline from this side alone. |
+| `2026-05-06T23:26Z group-812` | B / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Promote ready-buffered paths with sustained missing/concealment plus under-target/slow-rate pressure into `repair-heavy-connected`. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: strengthen the `steady-weak-listener` to `repair-heavy-connected` escalation when a ready buffered listener has sustained missing-frame growth, active concealment, elevated under-target fraction, elevated slow-rate fraction, and a user-bad symptom.
+- Secondary watch item: Linux has `reticulumAudioPacketPathTimeouts=98`, so keep packet-route diagnostics visible, but do not make transport the first patch from this call because both sides received and decoded comparable packet counts.
+- Keep global baseline unchanged. Keep collapse/repair-collapse strength unchanged. This batch is not a clean-call baseline failure and not a correctly selected heavy-profile weakness; the miss is that the worse side stayed in an ordinary weak-listener profile.

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'events';
-import { CallManager } from './call';
+import { CallManager, startCallManager, stopCallManager } from './call';
 import { GroupCallManager } from './group-call';
 import {
   RT_RETICULUM_MAX_WIRE_JSON_BYTES,
@@ -331,6 +331,26 @@ describe('Reticulum manager late bridge binding', () => {
       })
     );
     manager.stop();
+  });
+
+  it('restores registered call local addresses after CallManager restart', () => {
+    const presence = presenceStub();
+    const firstBridge = new CallBridgeStub();
+    const first = startCallManager(presence as any, firstBridge as any);
+    first.setLocalAddresses(['Q-local']);
+
+    stopCallManager();
+
+    const secondBridge = new CallBridgeStub();
+    const second = startCallManager(presence as any, secondBridge as any);
+
+    expect((second as any).localAddresses.has('Q-local')).toBe(true);
+
+    second.setLocalAddresses([]);
+    stopCallManager();
+
+    const third = startCallManager(presence as any, new CallBridgeStub() as any);
+    expect((third as any).localAddresses.size).toBe(0);
   });
 
   it('compacts realistic direct call requests to fit Reticulum wire limits', async () => {
