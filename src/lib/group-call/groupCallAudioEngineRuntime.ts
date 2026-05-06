@@ -197,6 +197,11 @@ type GcallSendAudioDiagnostics = {
   linkFallbackProbeCount?: number;
   linkFallbackExitCount?: number;
   linkFallbackLastDwellMs?: number;
+  pathDiversityActive?: boolean;
+  pathDiversityReason?: string;
+  pathDiversityMirrorAttempts?: number;
+  pathDiversityMirrorSuccesses?: number;
+  pathDiversityMirrorFailures?: number;
   bridge?: {
     bridgeQueuedFrames?: number;
     bridgeQueuedOldestAgeMs?: number;
@@ -1975,12 +1980,16 @@ export class GroupCallAudioEngineRuntime {
         this.decryptPoolAppliedKeyVersion === this.decryptPoolKeyVersion;
       const fromAddr =
         audioPayload.fromAddress ?? audioPayload.resolvedFromAddress ?? '';
+      const transport = audioPayload.transport;
+      if (transport === 'link' || transport === 'packet') {
+        this.receiveEngine.recordReticulumAudioInboundTransport(transport);
+      }
       tracePipelineGcallAudioIngress({
         from: fromAddr || undefined,
         bytes: byteLen,
         hasRoomKey: this.roomKey !== null,
         poolReady,
-        transport: audioPayload.transport ?? 'unknown',
+        transport: transport ?? 'unknown',
         dataIsArrayBuffer: audioPayload.data instanceof ArrayBuffer,
       });
       if (this.awaitingAuthoritativeKey && this.roomKey === null) {

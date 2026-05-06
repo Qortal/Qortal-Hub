@@ -1903,10 +1903,20 @@ describe('Reticulum group audio transport', () => {
       'room-1',
       Buffer.from([4, 5, 6])
     );
+    expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledWith(
+      'd:Q-peer',
+      'room-1',
+      Buffer.from([4, 5, 6]),
+      ''
+    );
     expect(fallback).toMatchObject({
       success: true,
       diagnostics: expect.objectContaining({
         transport: 'link',
+        pathDiversityActive: true,
+        pathDiversityMirrorAttempts: 1,
+        pathDiversityMirrorSuccesses: 1,
+        pathDiversityMirrorFailures: 0,
       }),
     });
     manager.stop();

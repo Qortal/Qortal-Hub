@@ -459,6 +459,11 @@ export class GroupCallAudioReceiveEngine {
     this.scheduleMetricsEmit();
   }
 
+  recordReticulumAudioInboundTransport(transport: 'link' | 'packet'): void {
+    this.metrics.recordReticulumAudioInboundTransport(transport);
+    this.scheduleMetricsEmit();
+  }
+
   setReticulumAudioQueueDepths(depths: {
     pendingFrames?: number;
     pendingOldestAgeMs?: number;

@@ -735,6 +735,8 @@ interface ReticulumAudioPeerState {
   linkHeartbeatLastRecoveryAtMs: number;
   linkEstablishLastAttemptAtMs: number;
   linkEstablishRetryDelayMs: number;
+  pathDiversityUntilMs: number;
+  pathDiversityReason: string;
 }
 
 interface GcReticulumAudioSendDiagnostics {
@@ -757,6 +759,11 @@ interface GcReticulumAudioSendDiagnostics {
   linkFallbackProbeCount?: number;
   linkFallbackExitCount?: number;
   linkFallbackLastDwellMs?: number;
+  pathDiversityActive?: boolean;
+  pathDiversityReason?: string;
+  pathDiversityMirrorAttempts?: number;
+  pathDiversityMirrorSuccesses?: number;
+  pathDiversityMirrorFailures?: number;
   bridge?: ReticulumAudioQueueSnapshot;
 }
 
@@ -792,6 +799,17 @@ function mergeGcReticulumAudioSendDiagnostics(
     packetSendFailures: a.packetSendFailures + b.packetSendFailures,
     linkFallbackActive:
       a.linkFallbackActive || b.linkFallbackActive || undefined,
+    pathDiversityActive:
+      a.pathDiversityActive || b.pathDiversityActive || undefined,
+    pathDiversityMirrorAttempts:
+      (a.pathDiversityMirrorAttempts ?? 0) +
+      (b.pathDiversityMirrorAttempts ?? 0),
+    pathDiversityMirrorSuccesses:
+      (a.pathDiversityMirrorSuccesses ?? 0) +
+      (b.pathDiversityMirrorSuccesses ?? 0),
+    pathDiversityMirrorFailures:
+      (a.pathDiversityMirrorFailures ?? 0) +
+      (b.pathDiversityMirrorFailures ?? 0),
     linkFallbackProbeCount: Math.max(
       a.linkFallbackProbeCount ?? 0,
       b.linkFallbackProbeCount ?? 0
@@ -4881,6 +4899,13 @@ export class GroupCallManager extends EventEmitter {
     const forceLinkFallback =
       opts?.forceLinkFallback === true &&
       this.getReticulumAudioTransportKind() === 'packet';
+    if (forceLinkFallback) {
+      state.pathDiversityUntilMs = Math.max(
+        state.pathDiversityUntilMs,
+        Date.now() + GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS
+      );
+      state.pathDiversityReason = reason;
+    }
     if (state.transport === 'packet') {
       this.requestReticulumPacketPathWarmup(address, state, reason, {
         force: opts?.force,
@@ -5136,6 +5161,8 @@ export class GroupCallManager extends EventEmitter {
         linkEstablishLastAttemptAtMs: -1,
         linkEstablishRetryDelayMs:
           GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
+        pathDiversityUntilMs: 0,
+        pathDiversityReason: '',
       };
       this.reticulumAudioPeersByAddress.set(address, state);
       this.reticulumAudioAddressByLinkId.set(state.routeKey, address);
@@ -5549,6 +5576,8 @@ export class GroupCallManager extends EventEmitter {
   ): GcReticulumAudioSendDiagnostics {
     const now = Date.now();
     const fallbackActive = state?.packetTransportFallback === true;
+    const pathDiversityActive =
+      !!state && state.pathDiversityUntilMs > now;
     return {
       transport: state?.transport ?? this.getReticulumAudioTransportKind(),
       pendingFrames: state?.pending.length ?? 0,
@@ -5587,6 +5616,21 @@ export class GroupCallManager extends EventEmitter {
       ...(state && state.packetFallbackLastDwellMs > 0
         ? { linkFallbackLastDwellMs: state.packetFallbackLastDwellMs }
         : {}),
+      ...(pathDiversityActive
+        ? {
+            pathDiversityActive: true,
+            pathDiversityReason: state.pathDiversityReason,
+          }
+        : {}),
+      ...(deltas?.pathDiversityMirrorAttempts != null
+        ? { pathDiversityMirrorAttempts: deltas.pathDiversityMirrorAttempts }
+        : {}),
+      ...(deltas?.pathDiversityMirrorSuccesses != null
+        ? { pathDiversityMirrorSuccesses: deltas.pathDiversityMirrorSuccesses }
+        : {}),
+      ...(deltas?.pathDiversityMirrorFailures != null
+        ? { pathDiversityMirrorFailures: deltas.pathDiversityMirrorFailures }
+        : {}),
       bridge:
         state && this.reticulumBridge
           ? this.reticulumBridge.getAudioQueueSnapshot(state.routeKey)
@@ -5611,6 +5655,9 @@ export class GroupCallManager extends EventEmitter {
     let staleDrops = 0;
     let linkUnreadyDrops = 0;
     let packetSendFailures = 0;
+    let pathDiversityMirrorAttempts = 0;
+    let pathDiversityMirrorSuccesses = 0;
+    let pathDiversityMirrorFailures = 0;
     let framesEnqueued = 0;
     let bridgePressured = false;
     let nextDelayMs = 0;
@@ -5633,6 +5680,9 @@ export class GroupCallManager extends EventEmitter {
           staleDrops,
           linkUnreadyDrops,
           packetSendFailures,
+          pathDiversityMirrorAttempts,
+          pathDiversityMirrorSuccesses,
+          pathDiversityMirrorFailures,
         }),
         framesEnqueued,
         bridgePressured,
@@ -5684,6 +5734,44 @@ export class GroupCallManager extends EventEmitter {
             'packet-fallback:path-unresolved'
           );
         }
+        if (state.pathDiversityUntilMs > Date.now()) {
+          const mirrorResult =
+            state.transport === 'packet'
+              ? state.established && state.linkId
+                ? bridge.enqueueGroupAudio(state.linkId, next.roomId, next.data)
+                : null
+              : bridge.enqueuePacketGroupAudio(
+                  state.peerPresenceHash,
+                  next.roomId,
+                  next.data,
+                  state.peerDestinationHash
+                );
+          if (mirrorResult) {
+            pathDiversityMirrorAttempts++;
+            if (mirrorResult.ok === true) {
+              pathDiversityMirrorSuccesses++;
+              queuePressureDrops += mirrorResult.queuePressureDrops;
+              staleDrops += mirrorResult.staleDrops;
+              packetSendFailures = Math.max(
+                packetSendFailures,
+                mirrorResult.snapshot.packetSendFailures
+              );
+              if (state.transport === 'link') {
+                state.lastOutboundPacketAtMs = Date.now();
+              }
+            } else {
+              const failure = mirrorResult as {
+                ok: false;
+                reason: ReticulumSendFailureReason;
+              };
+              pathDiversityMirrorFailures++;
+              this.logReticulumFailureThrottled(
+                `target-reticulum-audio-diversity-mirror:${address}:${failure.reason}`,
+                `[GCall] target=reticulum-audio diversity mirror failed address=${address} primary=${state.transport} reason=${failure.reason}`
+              );
+            }
+          }
+        }
         bridgePressured =
           bridgePressured ||
           (opts?.stopOnPressure === true &&
@@ -5718,6 +5806,9 @@ export class GroupCallManager extends EventEmitter {
           staleDrops,
           linkUnreadyDrops,
           packetSendFailures,
+          pathDiversityMirrorAttempts,
+          pathDiversityMirrorSuccesses,
+          pathDiversityMirrorFailures,
         }),
         framesEnqueued,
         bridgePressured,
@@ -5730,6 +5821,9 @@ export class GroupCallManager extends EventEmitter {
         staleDrops,
         linkUnreadyDrops,
         packetSendFailures,
+        pathDiversityMirrorAttempts,
+        pathDiversityMirrorSuccesses,
+        pathDiversityMirrorFailures,
       }),
       framesEnqueued,
       bridgePressured,
@@ -5796,6 +5890,19 @@ export class GroupCallManager extends EventEmitter {
           diagnostics.linkFallbackActive ||
           flushed.diagnostics.linkFallbackActive ||
           undefined,
+        pathDiversityActive:
+          diagnostics.pathDiversityActive ||
+          flushed.diagnostics.pathDiversityActive ||
+          undefined,
+        pathDiversityMirrorAttempts:
+          (diagnostics.pathDiversityMirrorAttempts ?? 0) +
+          (flushed.diagnostics.pathDiversityMirrorAttempts ?? 0),
+        pathDiversityMirrorSuccesses:
+          (diagnostics.pathDiversityMirrorSuccesses ?? 0) +
+          (flushed.diagnostics.pathDiversityMirrorSuccesses ?? 0),
+        pathDiversityMirrorFailures:
+          (diagnostics.pathDiversityMirrorFailures ?? 0) +
+          (flushed.diagnostics.pathDiversityMirrorFailures ?? 0),
         linkFallbackProbeCount: Math.max(
           diagnostics.linkFallbackProbeCount ?? 0,
           flushed.diagnostics.linkFallbackProbeCount ?? 0
@@ -5986,6 +6093,8 @@ export class GroupCallManager extends EventEmitter {
           linkEstablishLastAttemptAtMs: -1,
           linkEstablishRetryDelayMs:
             GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS,
+          pathDiversityUntilMs: 0,
+          pathDiversityReason: '',
         };
         this.reticulumAudioPeersByAddress.set(address, state);
         this.reticulumAudioAddressByLinkId.set(state.routeKey, address);

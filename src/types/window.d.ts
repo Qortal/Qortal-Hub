@@ -487,6 +487,11 @@ declare global {
           linkFallbackProbeCount?: number;
           linkFallbackExitCount?: number;
           linkFallbackLastDwellMs?: number;
+          pathDiversityActive?: boolean;
+          pathDiversityReason?: string;
+          pathDiversityMirrorAttempts?: number;
+          pathDiversityMirrorSuccesses?: number;
+          pathDiversityMirrorFailures?: number;
           bridge?: {
             bridgeQueuedFrames: number;
             bridgeQueuedBytes: number;
@@ -540,6 +545,11 @@ declare global {
           linkFallbackProbeCount?: number;
           linkFallbackExitCount?: number;
           linkFallbackLastDwellMs?: number;
+          pathDiversityActive?: boolean;
+          pathDiversityReason?: string;
+          pathDiversityMirrorAttempts?: number;
+          pathDiversityMirrorSuccesses?: number;
+          pathDiversityMirrorFailures?: number;
           bridge?: {
             bridgeQueuedFrames: number;
             bridgeQueuedBytes: number;

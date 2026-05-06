@@ -747,7 +747,17 @@ describe('GroupCallAudioEngineRuntime', () => {
   it('installs a room key and sends encoded audio through the hidden runtime', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
-    const events: Array<{ type: string; snapshot?: { metrics?: { packetsReceived: number; packetsDecoded: number } } }> = [];
+    const events: Array<{
+      type: string;
+      snapshot?: {
+        metrics?: {
+          packetsReceived: number;
+          packetsDecoded: number;
+          reticulumAudioInboundLinkSamples?: number;
+          reticulumAudioInboundTransportLast?: 'link' | 'packet' | null;
+        };
+      };
+    }> = [];
     runtime.onEvent((event) => {
       events.push(event as never);
     });
@@ -823,6 +833,8 @@ describe('GroupCallAudioEngineRuntime', () => {
       .find((event) => event.type === 'snapshot');
     expect(lastSnapshot?.snapshot?.metrics?.packetsReceived).toBe(1);
     expect(lastSnapshot?.snapshot?.metrics?.packetsDecoded).toBe(1);
+    expect(lastSnapshot?.snapshot?.metrics?.reticulumAudioInboundLinkSamples).toBe(1);
+    expect(lastSnapshot?.snapshot?.metrics?.reticulumAudioInboundTransportLast).toBe('link');
   });
 
   it('backfills a visible participant from successfully decoded remote audio', async () => {
