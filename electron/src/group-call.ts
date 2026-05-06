@@ -173,6 +173,12 @@ const GC_RETICULUM_PACKET_LINK_FALLBACK_REMOTE_RX_MISSING_MS = 6_000;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_LOCAL_SEND_RECENT_MS = 12_000;
 const GC_RETICULUM_PACKET_LINK_FALLBACK_PACKET_RX_AGE_CAP_MS = 60_000;
 /**
+ * When a just-joined client learns an older peer from retained/bootstrap GC_JOIN,
+ * let the peer that received the fresh GC_JOIN own the first audio-link open.
+ * This avoids both sides racing duplicate Reticulum links during first contact.
+ */
+const GC_RETICULUM_JOINER_AUDIO_OPEN_DEFER_MS = 3_000;
+/**
  * Hysteresis between consecutive fallback activations. After leaving link-fallback, we refuse
  * to re-enter for this window so a quiet listener (natural speech silences) does not
  * ping-pong between packet↔link every 5 s heartbeat. Set from field evidence: Kenny (root,
@@ -1265,6 +1271,11 @@ export class GroupCallManager extends EventEmitter {
   >();
   private reticulumAudioPeersByAddress = new Map<string, ReticulumAudioPeerState>();
   private reticulumAudioAddressByLinkId = new Map<string, string>();
+  private reticulumAudioOpenDeferUntilByAddress = new Map<string, number>();
+  private reticulumAudioOpenDeferTimersByAddress = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private reticulumAudioFlushScheduled = false;
   private reticulumAudioFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private reticulumLeaveLinkDrainTimers = new Set<ReturnType<typeof setTimeout>>();
@@ -4278,6 +4289,73 @@ export class GroupCallManager extends EventEmitter {
     return linkId ?? `link:${peerPresenceHash}`;
   }
 
+  private getLocalJoinTimestampForRoom(room: GroupRoom): number {
+    const timestamps: number[] = [];
+    for (const address of this.localAddresses) {
+      const joinedAt = room.participants.get(address)?.joinedAt;
+      if (typeof joinedAt === 'number' && Number.isFinite(joinedAt)) {
+        timestamps.push(joinedAt);
+      }
+    }
+    if (typeof room.joinTimestamp === 'number' && Number.isFinite(room.joinTimestamp)) {
+      timestamps.push(room.joinTimestamp);
+    }
+    return timestamps.length > 0 ? Math.min(...timestamps) : 0;
+  }
+
+  private shouldDeferInitialAudioOpenForVerifiedJoin(
+    room: GroupRoom,
+    env: GcJoinEnvelope
+  ): boolean {
+    if (!env.fromAddress || this.localAddresses.has(env.fromAddress)) return false;
+    const localJoinTimestamp = this.getLocalJoinTimestampForRoom(room);
+    if (localJoinTimestamp <= 0) return false;
+    // Older peer identity learned by the joiner: let that peer open first after
+    // receiving our fresher GC_JOIN. Fresh/newer joins are opened immediately here.
+    return env.timestamp < localJoinTimestamp;
+  }
+
+  private clearReticulumAudioOpenDefer(address: string): void {
+    this.reticulumAudioOpenDeferUntilByAddress.delete(address);
+    const timer = this.reticulumAudioOpenDeferTimersByAddress.get(address);
+    if (timer) {
+      clearTimeout(timer);
+      this.reticulumAudioOpenDeferTimersByAddress.delete(address);
+    }
+  }
+
+  private deferReticulumAudioOpenForAddress(address: string, delayMs: number): void {
+    if (!address || this.localAddresses.has(address)) return;
+    const state = this.reticulumAudioPeersByAddress.get(address);
+    if (state?.established || state?.linkId || state?.opening) return;
+    const until = Date.now() + Math.max(0, delayMs);
+    const existingUntil = this.reticulumAudioOpenDeferUntilByAddress.get(address) ?? 0;
+    if (existingUntil >= until) return;
+    this.reticulumAudioOpenDeferUntilByAddress.set(address, until);
+    const existingTimer = this.reticulumAudioOpenDeferTimersByAddress.get(address);
+    if (existingTimer) clearTimeout(existingTimer);
+    const timer = setTimeout(() => {
+      this.reticulumAudioOpenDeferTimersByAddress.delete(address);
+      const activeUntil =
+        this.reticulumAudioOpenDeferUntilByAddress.get(address) ?? 0;
+      if (activeUntil > Date.now()) return;
+      this.reticulumAudioOpenDeferUntilByAddress.delete(address);
+      this.syncReticulumAudioLinks();
+    }, Math.max(0, until - Date.now()));
+    timer.unref?.();
+    this.reticulumAudioOpenDeferTimersByAddress.set(address, timer);
+  }
+
+  private isReticulumAudioOpenDeferred(address: string): boolean {
+    const until = this.reticulumAudioOpenDeferUntilByAddress.get(address) ?? 0;
+    if (until <= 0) return false;
+    if (until <= Date.now()) {
+      this.clearReticulumAudioOpenDefer(address);
+      return false;
+    }
+    return true;
+  }
+
   private setReticulumAudioRouteKey(
     address: string,
     state: ReticulumAudioPeerState,
@@ -4666,6 +4744,7 @@ export class GroupCallManager extends EventEmitter {
     state.peerDestinationHash = peerDestinationHash || state.peerDestinationHash;
     state.established = true;
     state.opening = false;
+    this.clearReticulumAudioOpenDefer(address);
     this.reticulumAudioAddressByLinkId.set(linkId, address);
     if (state.transport === 'link') {
       this.setReticulumAudioRouteKey(address, state, linkId);
@@ -5031,6 +5110,9 @@ export class GroupCallManager extends EventEmitter {
   private async openReticulumAudioLinkForAddress(address: string): Promise<void> {
     const bridge = this.reticulumBridge;
     const state = this.reticulumAudioPeersByAddress.get(address);
+    if (this.isReticulumAudioOpenDeferred(address)) {
+      return;
+    }
     if (
       !bridge ||
       !state ||
@@ -6091,6 +6173,7 @@ export class GroupCallManager extends EventEmitter {
         const linkId = state.linkId;
         this.reticulumAudioAddressByLinkId.delete(state.routeKey);
         this.reticulumAudioPeersByAddress.delete(address);
+        this.clearReticulumAudioOpenDefer(address);
         if (linkId) {
           this.reticulumAudioAddressByLinkId.delete(linkId);
           void this.reticulumBridge?.closeGroupAudioLink(linkId).catch(() => {});
@@ -6906,6 +6989,17 @@ export class GroupCallManager extends EventEmitter {
 
     this.rememberRetainedVerifiedJoin(env);
     this.registerPeerIdentityFromJoinWire(env);
+    if (this.shouldDeferInitialAudioOpenForVerifiedJoin(room, env)) {
+      this.deferReticulumAudioOpenForAddress(
+        env.fromAddress,
+        GC_RETICULUM_JOINER_AUDIO_OPEN_DEFER_MS
+      );
+      loggerLog(
+        `[GCall] Deferring outbound Reticulum audio link open for older peer ${env.fromAddress} in ${env.roomId} by ${GC_RETICULUM_JOINER_AUDIO_OPEN_DEFER_MS}ms`
+      );
+    } else {
+      this.clearReticulumAudioOpenDefer(env.fromAddress);
+    }
     if (
       this.shouldReplayRetainedJoinIdentityForLateJoin(
         env.roomId,
