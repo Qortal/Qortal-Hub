@@ -61,23 +61,23 @@ const GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS = 20;
 const GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS = 40;
 const GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS = 34;
-const GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS = 48;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS = 56;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS = 48;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_SEVERE_MS = 160;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_COLLAPSE_MS = 120;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS = 56;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_BUFFERED_NOT_READY_MS = 72;
-const GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS = 72;
+const GCALL_SINGLE_SOURCE_TARGET_BOOST_PERSISTENT_LEAN_MS = 84;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_SILENT_LEAN_MS = 84;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_POST_FAILOVER_ROOT_MS = 64;
 const GCALL_SINGLE_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
 const GCALL_SINGLE_SOURCE_COLLAPSE_MAX_EXTRA_HOLD_FRAMES = 12;
-const GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS = 160;
+const GCALL_SINGLE_SOURCE_RECOVERY_TARGET_FLOOR_MS = 172;
 const GCALL_SINGLE_SOURCE_SEVERE_RECOVERY_TARGET_FLOOR_MS = 240;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_TARGET_FLOOR_MS = 172;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_FLOOR_MS = 224;
 const GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_FLOOR_MS = 176;
-const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS = 176;
+const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_FLOOR_MS = 192;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_FLOOR_MS = 192;
 const GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_FLOOR_MS = 172;
 const GCALL_SINGLE_SOURCE_POST_FAILOVER_ROOT_BUFFERED_MS_MAX = 96;
@@ -1575,6 +1575,22 @@ export class GroupCallAudioReceiveEngine {
           steadyHealthyEscape,
         });
         state.currentSingleSourceProfile = profile;
+        const shouldHoldWeakLeanRecoveryMode =
+          (profile === 'persistent-lean' &&
+            (state.bufferedMsEma <
+              GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN ||
+              state.deltaMsEma <
+                GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS ||
+              state.underTargetEma >=
+                GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN)) ||
+          (profile === 'steady-weak-listener' &&
+            !steadyHealthyEscape &&
+            (sustainedDamagePressure ||
+              state.underTargetEma >=
+                GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN ||
+              state.concealmentEma >=
+                GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN ||
+              state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX));
         const shouldHoldSingleSourceRecoveryMode =
           (profile === 'repair-collapse' &&
             (state.bufferedMsEma <
@@ -1587,9 +1603,15 @@ export class GroupCallAudioReceiveEngine {
               state.bufferedMsEma <
                 GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN ||
               state.deltaMsEma <
-                GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS));
+                GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS)) ||
+          shouldHoldWeakLeanRecoveryMode;
         if (shouldHoldSingleSourceRecoveryMode) {
-          dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 3, nowMs);
+          dmMarkPeerUnstable(
+            this.peerRecoveryState,
+            sourceAddr,
+            shouldHoldWeakLeanRecoveryMode ? 2 : 3,
+            nowMs
+          );
           this.recomputeAdaptiveNetworkMode(nowMs);
           playout.syncAdaptiveJitterGeometry();
         }

@@ -29,6 +29,8 @@ const CALL_WIRE_HANGUP = 'CH';
 /** If the bridge is briefly not `ready`, retry before dropping (bursty GC / transport flaps). */
 const CALL_SEND_MAX_ATTEMPTS = 40;
 const CALL_SEND_RETRY_MS = 50;
+const CALL_ACCEPT_REPEAT_ATTEMPTS = 5;
+const CALL_ACCEPT_REPEAT_MS = 350;
 
 export type CallNetworkType =
   | 'CALL_REQUEST'
@@ -241,6 +243,7 @@ interface CallRecord {
   state: CallState;
   startedAt: number;
   cleanupTimer?: ReturnType<typeof setTimeout>;
+  controlRepeatTimers?: Set<ReturnType<typeof setTimeout>>;
 }
 
 /**
@@ -349,6 +352,7 @@ export class CallManager extends EventEmitter {
     this.detachReticulumBridge();
     for (const call of this.activeCalls.values()) {
       if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
+      this.clearControlRepeatTimers(call);
     }
     this.activeCalls.clear();
     this.seenReticulumOverlayIds.clear();
@@ -382,6 +386,20 @@ export class CallManager extends EventEmitter {
           fromAddress: c.remoteAddress,
           chatId: c.chatId,
         });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Outbound calls already accepted by main — replay to the renderer when it sends
+   * `call:subscribe` after missing the original `call:accepted` broadcast.
+   */
+  getActiveOutboundAcceptedPayloads(): Array<{ callId: string }> {
+    const out: Array<{ callId: string }> = [];
+    for (const c of this.activeCalls.values()) {
+      if (c.direction === 'outbound' && c.state === 'active') {
+        out.push({ callId: c.callId });
       }
     }
     return out;
@@ -499,7 +517,12 @@ export class CallManager extends EventEmitter {
       timestamp,
       hopsRemaining: CALL_MAX_HOPS,
     };
-    this.sendToCall(call, env);
+    this.sendToCallRepeated(
+      call,
+      env,
+      CALL_ACCEPT_REPEAT_ATTEMPTS,
+      CALL_ACCEPT_REPEAT_MS
+    );
     loggerLog(`[Call] Accepted call ${callId.slice(0, 8)}…`);
   }
 
@@ -513,6 +536,7 @@ export class CallManager extends EventEmitter {
     const call = this.activeCalls.get(callId);
     if (!call) return;
     if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
+    this.clearControlRepeatTimers(call);
     call.state = 'ended';
     this.activeCalls.delete(callId);
 
@@ -538,6 +562,7 @@ export class CallManager extends EventEmitter {
     const call = this.activeCalls.get(callId);
     if (!call) return;
     if (call.cleanupTimer) clearTimeout(call.cleanupTimer);
+    this.clearControlRepeatTimers(call);
     call.state = 'ended';
     this.activeCalls.delete(callId);
 
@@ -703,6 +728,7 @@ export class CallManager extends EventEmitter {
         const c = this.activeCalls.get(env.callId);
         if (!c) return;
         if (c.cleanupTimer) clearTimeout(c.cleanupTimer);
+        this.clearControlRepeatTimers(c);
         c.state = 'ended';
         this.activeCalls.delete(env.callId);
         this.emit('call:rejected', { callId: env.callId, reason: env.reason });
@@ -742,6 +768,7 @@ export class CallManager extends EventEmitter {
         const c = this.activeCalls.get(env.callId);
         if (!c) return;
         if (c.cleanupTimer) clearTimeout(c.cleanupTimer);
+        this.clearControlRepeatTimers(c);
         c.state = 'ended';
         this.activeCalls.delete(env.callId);
         this.emit('call:hangup', { callId: env.callId });
@@ -767,7 +794,12 @@ export class CallManager extends EventEmitter {
           };
           this.broadcastReticulumOverlayWire(forwarded, [peerPresenceHash]);
         }
-        return;
+        if (this.localAddresses.size > 0) {
+          return;
+        }
+        loggerLog(
+          `[Call] Processing call wire while local addresses are not registered yet target=${overlayMeta.targetAddress.slice(0, 8)}…`
+        );
       }
     }
 
@@ -873,6 +905,44 @@ export class CallManager extends EventEmitter {
 
   private sendToCall(call: CallRecord, env: CallWireEnvelope): void {
     this.sendEnvelope(call.remoteAddress, env);
+  }
+
+  private clearControlRepeatTimers(call: CallRecord): void {
+    if (!call.controlRepeatTimers) return;
+    for (const timer of call.controlRepeatTimers) {
+      clearTimeout(timer);
+    }
+    call.controlRepeatTimers.clear();
+  }
+
+  private sendToCallRepeated(
+    call: CallRecord,
+    env: CallWireEnvelope,
+    attempts: number,
+    intervalMs: number
+  ): void {
+    this.clearControlRepeatTimers(call);
+    this.sendToCall(call, env);
+    const repeatCount = Math.max(0, Math.trunc(attempts) - 1);
+    if (repeatCount === 0) return;
+    call.controlRepeatTimers = new Set();
+    for (let i = 1; i <= repeatCount; i += 1) {
+      const timer = setTimeout(() => {
+        call.controlRepeatTimers?.delete(timer);
+        const latest = this.activeCalls.get(call.callId);
+        if (
+          !latest ||
+          latest !== call ||
+          latest.state !== 'active' ||
+          latest.direction !== call.direction
+        ) {
+          return;
+        }
+        this.sendToCall(latest, env);
+      }, intervalMs * i);
+      timer.unref?.();
+      call.controlRepeatTimers.add(timer);
+    }
   }
 
   private sendEnvelope(

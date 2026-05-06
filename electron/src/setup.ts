@@ -2523,6 +2523,9 @@ ipcMain.on('call:subscribe', (event) => {
   for (const p of mgr.getPendingInboundRingingPayloads()) {
     event.sender.send('call:incoming', p);
   }
+  for (const p of mgr.getActiveOutboundAcceptedPayloads()) {
+    event.sender.send('call:accepted', p);
+  }
 });
 ipcMain.on('call:unsubscribe', (event) => {
   callSubscribers.delete(event.sender);

@@ -1113,8 +1113,8 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(160);
-    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('low-latency');
+    expect(targetMs).toBeGreaterThanOrEqual(172);
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
   });
 
   it('adds steady single-source headroom for low-grade concealment/static before collapse', async () => {
@@ -2130,7 +2130,8 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(176);
+    expect(targetMs).toBeGreaterThanOrEqual(192);
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
     vi.useRealTimers();
   });
 
@@ -3280,7 +3281,8 @@ describe('GroupCallAudioReceiveEngine', () => {
         profile: 'steady-weak-listener',
       },
     ]);
-    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(160);
+    expect(targetSpy.mock.calls.at(-1)?.[0] ?? 0).toBeGreaterThanOrEqual(172);
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
   });
 
   it('escalates shallow persistent lean into repair protection when gaps keep accumulating', async () => {
@@ -5546,7 +5548,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     let capturedOptions:
       | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
       | undefined;
-    let jitterHasReadyFrame = true;
+    const jitterHasReadyFrame = true;
     vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
       async function (_ctx, _peerAddress, _connectTo, options) {
         capturedOptions = options;

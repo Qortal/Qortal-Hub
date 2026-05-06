@@ -233,6 +233,106 @@ describe('Reticulum manager late bridge binding', () => {
     manager.stop();
   });
 
+  it('repeats CALL_ACCEPT so the caller is not stuck waiting after one lost packet', async () => {
+    vi.useFakeTimers();
+    const bridge = new CallBridgeStub();
+    const manager = new CallManager(presenceStub() as any, bridge as any);
+
+    manager.start();
+    (manager as any).activeCalls.set('call-accept-repeat', {
+      callId: 'call-accept-repeat',
+      localAddress: 'Q-local',
+      remoteAddress: 'Q-peer',
+      reticulumPeerPresenceHash: 'peer-hash',
+      chatId: 'direct:Q-local:Q-peer',
+      direction: 'inbound',
+      state: 'pending',
+      startedAt: Date.now(),
+    });
+
+    manager.acceptCall('call-accept-repeat', 'sig', 'pub', Date.now());
+
+    expect(bridge.fanoutCallDetailed).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(350 * 4);
+    expect(bridge.fanoutCallDetailed).toHaveBeenCalledTimes(5);
+    manager.stop();
+  });
+
+  it('exposes accepted outbound calls for renderer subscribe replay', () => {
+    const manager = new CallManager(presenceStub() as any, null);
+
+    (manager as any).activeCalls.set('call-active-outbound', {
+      callId: 'call-active-outbound',
+      localAddress: 'Q-local',
+      remoteAddress: 'Q-peer',
+      reticulumPeerPresenceHash: 'peer-hash',
+      chatId: 'direct:Q-local:Q-peer',
+      direction: 'outbound',
+      state: 'active',
+      startedAt: Date.now(),
+    });
+    (manager as any).activeCalls.set('call-pending-outbound', {
+      callId: 'call-pending-outbound',
+      localAddress: 'Q-local',
+      remoteAddress: 'Q-peer',
+      reticulumPeerPresenceHash: 'peer-hash',
+      chatId: 'direct:Q-local:Q-peer',
+      direction: 'outbound',
+      state: 'pending',
+      startedAt: Date.now(),
+    });
+
+    expect(manager.getActiveOutboundAcceptedPayloads()).toEqual([
+      { callId: 'call-active-outbound' },
+    ]);
+  });
+
+  it('does not drop a compact inbound direct call before local addresses are registered', () => {
+    vi.useFakeTimers();
+    const bridge = new CallBridgeStub();
+    const manager = new CallManager(presenceStub() as any, bridge as any);
+    const callId = '123e4567-e89b-12d3-a456-426614174001';
+    const caller = `Q${'b'.repeat(33)}`;
+    const local = `Q${'a'.repeat(33)}`;
+    const publicKey = 'pub-caller';
+    const signature = 'sig-caller';
+    const timestamp = Date.now();
+    const handleRequestSpy = vi
+      .spyOn(manager as any, 'handleRequestReticulum')
+      .mockImplementation(() => {});
+
+    manager.start();
+
+    bridge.emit(
+      'call-message',
+      {
+        t: 'CR',
+        c: callId,
+        a: caller,
+        k: publicKey,
+        g: signature,
+        m: timestamp,
+        U: local,
+        L: 4,
+        X: 'overlay-cr-before-local-address',
+      },
+      'sender-hash',
+      'sender-hash'
+    );
+
+    expect(bridge.fanoutCallDetailed).toHaveBeenCalledTimes(1);
+    expect(handleRequestSpy).toHaveBeenCalledWith(
+      'sender-hash',
+      expect.objectContaining({
+        type: 'CALL_REQUEST',
+        callId,
+        fromAddress: caller,
+        chatId: `direct:${[local, caller].sort().join(':')}`,
+      })
+    );
+    manager.stop();
+  });
+
   it('compacts realistic direct call requests to fit Reticulum wire limits', async () => {
     const presence = presenceStub();
     presence.getRouteForAddress.mockReturnValue({

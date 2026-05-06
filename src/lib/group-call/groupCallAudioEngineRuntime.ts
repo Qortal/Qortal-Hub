@@ -2359,8 +2359,7 @@ export class GroupCallAudioEngineRuntime {
         : Date.now();
     const suppressCachedLocalRootAuthority =
       (bootstrap?.fromRecentCache ?? false) &&
-      (bootstrapTopology?.rootForwarder?.trim() ?? '') === myAddress &&
-      remoteParticipantCount > 0;
+      (bootstrapTopology?.rootForwarder?.trim() ?? '') === myAddress;
     if (bootstrapTopology?.rootForwarder && !suppressCachedLocalRootAuthority) {
       this.topology = {
         roomId,

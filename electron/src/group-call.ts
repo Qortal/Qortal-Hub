@@ -3773,6 +3773,12 @@ export class GroupCallManager extends EventEmitter {
   private scheduleReticulumAudioLinkTeardownAfterLeave(roomId: string): void {
     const timer = setTimeout(() => {
       this.reticulumLeaveLinkDrainTimers.delete(timer);
+      if (this.rooms.has(roomId)) {
+        loggerLog(
+          `[GCall] GC_LEAVE link drain skipped for room ${roomId}; room was rejoined before teardown`
+        );
+        return;
+      }
       loggerLog(
         `[GCall] GC_LEAVE link drain complete for room ${roomId}; syncing Reticulum audio links`
       );

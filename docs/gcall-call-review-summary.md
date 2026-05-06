@@ -1997,3 +1997,110 @@ After re-checking the transport logic, the stronger next target is narrower:
 - The important asymmetry is that Mac exited link fallback after a short local packet-path probe dwell even though Linux still reported low inbound media. In code, `requestReticulumPacketLinkFallback()` set a 15s fallback request window, but `activateReticulumAudioLinkFallback()` immediately cleared it; this allowed the fallback to leave after the 3s probe dwell.
 - Patch target: preserve `packetLinkFallbackRequestedUntilMs` / `packetLinkFallbackReason` when activating fallback, require the request window and peer-RX-missing hold to expire before leaving fallback, and let peer RX-missing heartbeats refresh the hold while fallback is active.
 - This remains “another subsystem,” not selector/profile strength/baseline. The Linux receive profile matched the symptom; the receiver was underfed because the sender did not stay on the working fallback path long enough.
+
+## Call: 2026-05-06 21:56Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-06T21-56-49-017Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-06T21-56-44-758Z.json`
+
+User symptom:
+- New paired call after the packet/link fallback policy changes; subjective symptom was not included with the export, so user-bad is inferred from receive metrics, profiles, and transport balance.
+
+High-level verdict:
+- Mixed/improved.
+- The earlier sender-side fallback/underfed-link problem is much improved: both directions received thousands of packets, both sides ended on `packet`, packet send failures are `0`, decode/key/queue paths are clean, and the packet/link sample mix is mostly packet. The remaining issue is moderate receive-policy quality: Mac is in `persistent-lean` under recovery, while Linux is in `steady-weak-listener` but exits back to low-latency despite sustained missing-frame and under-target pressure.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have room keys, live mic senders, inbound packets, decoded frames, active playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Queue/backpressure: bridge/binary high-water values are low (`2`/`2` on Mac, `4`/`2` on Linux), with no queue-pressure or stale drops.
+- Packet media path: packet send failures are `0`, packet fresh sends are high, and both sides ended with last transport `packet`.
+- Failover: root/cluster promotion counts are `0` on both sides.
+
+Primary next target:
+- Profile strength / hold for the moderate weak/lean receive profiles.
+- This is not primarily selector: Mac’s `persistent-lean` is directionally plausible for `avgPcmBufferedMs=20.437`, low jitter depth, negative playout delta, and persistent under-target pressure. Linux’s `steady-weak-listener` is also plausible for sustained missing-frame/concealment pressure with moderate under-target/rate pressure.
+- This is not another transport subsystem first: unlike 18:39Z, packet arrival is balanced enough for both sides to decode thousands of frames, and both sides ended on packet.
+- This is not a global baseline change yet: the evidence is concentrated in non-clean weak/lean profiles rather than clean-low-latency sounding bad.
+- Next patch should tune the weak/lean family first: make `persistent-lean` and `steady-weak-listener` hold recovery/protection a little longer, or give them slightly stronger target/floor behavior, so they do not oscillate back to low-latency while under-target/missing-frame pressure is still present.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` | partly | 20.437 | 274 | 5 | 0.089 | 0.008 | recovery | Classification mostly matches a persistent lean/under-target listener: ready playout and low concealment, but low reserve, negative delta, and recovery mode. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `steady-weak-listener` | partly | 49.016 | 647 | 63 | 0.048 | 0.035 | low-latency | Classification is plausible for buffered weak-listener pressure; reserve is healthy enough to avoid collapse, but missing/concealment counters keep it non-clean. |
+
+### Side A
+
+Expected profile from symptom:
+- `persistent-lean` or `steady-weak-listener`
+
+Actual exported profile:
+- `persistent-lean`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- `avgPcmBufferedMs=20.437`, `jitterBufferDepthFramesMean=1.040`, and `avgPlayoutDeltaMs=-118.118` fit a persistent shallow/lean listener more than a clean call.
+- `jitterHasReadyFrame=true` with `21` buffered jitter frames, `concealmentTicks=5`, and `playoutRateFractionBelow097=0.008` keep this out of repair-collapse or buffered-not-ready.
+- The profile family is plausible; if the side still sounded rough, tune `persistent-lean` strength/hold rather than selector priority.
+
+### Side B
+
+Expected profile from symptom:
+- `steady-weak-listener`
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- `avgPcmBufferedMs=49.016`, `jitterBufferDepthFramesMean=2.478`, `jitterBufferedFrames=12`, and `jitterHasReadyFrame=true` make this a ready buffered listener, not collapse or startup.
+- `missingFrames=647`, `concealmentTicks=63`, `playoutUnderTargetFraction=0.048`, `playoutRateFractionBelow097=0.035`, and `avgPlayoutDeltaMs=-81.571` justify keeping it out of `clean-low-latency`.
+- The final adaptive mode is `low-latency` despite repeated recovery entries and sustained missing-frame growth, so weak-listener hold/clear behavior is the likely tuning point.
+
+## Trend Read
+
+Side A:
+- Gradual moderate lean path with one recovery re-entry.
+- Reasons seen:
+  - `missingFrames` increases from `238` to `274`.
+  - `concealmentTicks` stays flat at `5`.
+  - `avgPcmBufferedMs` stays around `20.4` to `21.0 ms`, never rebuilding into a clearly healthy reserve.
+  - adaptive mode briefly exits to `low-latency`, then re-enters `recovery`.
+
+Side B:
+- Gradual buffered weak-listener path with oscillating recovery entries.
+- Reasons seen:
+  - `entered-recovery` appears twice.
+  - `missingFrames` increases from `545` to `647`.
+  - `concealmentTicks` increases from `58` to `63`.
+  - `avgPcmBufferedMs` improves from about `47.5` to `49.0 ms`, but under-target and rate-below-0.97 pressure persist.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-06T14:30Z group-812` | A / Mac standby | `silent-lean` | yes | yes/partly | profile application / adaptive-mode hold | Improved in 21:56Z: Mac now has ready playout and recovery mode applied under a lean profile. |
+| `2026-05-06T14:30Z group-812` | B / Linux root | `repair-collapse` | partly | no/partly | selector / repair-collapse escape | Improved in 21:56Z: Linux now selects `steady-weak-listener`, not collapse, for a ready buffered path. |
+| `2026-05-06T18:39Z group-812` | A / Mac standby | `steady-weak-listener` | partly | partly | readiness / secondary | Improved in 21:56Z: Mac playout is ready and receives thousands of frames. |
+| `2026-05-06T18:39Z group-812` | B / Linux root | `repair-collapse` | yes | yes | sender-side fallback exit / underfed receiver | Improved in 21:56Z: Linux receives `3956` packets and ends on packet transport; underfed-link failure is no longer dominant. |
+| `2026-05-06T21:56Z group-812` | A / Mac standby | `persistent-lean` | partly | yes/partly | weak/lean profile strength | Tune `persistent-lean` target/floor or hold so reserve can rebuild above the lean band. |
+| `2026-05-06T21:56Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | weak-listener hold/strength | Tune weak-listener hold/clear so recovery does not exit while missing-frame and under-target pressure persist. |
+
+## Next Fix Target
+
+Current patched target:
+- Profile strength / hold for moderate weak/lean receive profiles.
+- Primary fix: strengthen `persistent-lean` and/or `steady-weak-listener` protection modestly, especially hold/clear behavior after recovery entry, so ready-but-stressed listeners do not fall back to low-latency before missing-frame and under-target pressure quiet down.
+- Keep selector thresholds mostly unchanged from this batch: classification is no longer obviously wrong on either side.
+- Keep packet/link fallback and media-path delivery unchanged for the next patch: the new call shows packet recovery and balanced inbound media compared with the earlier underfed-link failures.
+- Keep global baseline unchanged for now. This batch is evidence for non-clean profile tuning, not clean-call baseline failure.
