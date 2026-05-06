@@ -715,6 +715,7 @@ interface ReticulumAudioPeerState {
   packetFallbackLastExitAtMs: number;
   packetLinkFallbackRequestedUntilMs: number;
   packetLinkFallbackReason: string;
+  peerPacketRxMissingUntilMs: number;
   routeKey: string;
   linkId: string | null;
   linkOpenedByOwner: boolean | null;
@@ -4134,8 +4135,6 @@ export class GroupCallManager extends EventEmitter {
     state.packetTransportFallback = true;
     state.packetFallbackActivatedAtMs = Date.now();
     state.packetFallbackLastProbeAtMs = 0;
-    state.packetLinkFallbackRequestedUntilMs = 0;
-    state.packetLinkFallbackReason = '';
     this.setReticulumAudioTransport(address, state, 'link', reason);
     loggerWarn(
       `[GCall] Reticulum audio switching to link fallback address=${address} reason=${reason}`
@@ -4213,14 +4212,18 @@ export class GroupCallManager extends EventEmitter {
     state.packetFallbackLastProbeAtMs = 0;
     state.packetLinkFallbackRequestedUntilMs = 0;
     state.packetLinkFallbackReason = '';
+    state.peerPacketRxMissingUntilMs = 0;
   }
 
   private canLeaveReticulumPacketFallback(state: ReticulumAudioPeerState): boolean {
+    const now = Date.now();
     return (
       !state.packetTransportFallback ||
       state.packetFallbackActivatedAtMs <= 0 ||
-      Date.now() - state.packetFallbackActivatedAtMs >=
-        GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DWELL_MS
+      (now - state.packetFallbackActivatedAtMs >=
+        GC_RETICULUM_PACKET_LINK_FALLBACK_MIN_DWELL_MS &&
+        state.packetLinkFallbackRequestedUntilMs <= now &&
+        state.peerPacketRxMissingUntilMs <= now)
     );
   }
 
@@ -4337,15 +4340,35 @@ export class GroupCallManager extends EventEmitter {
     wire: GcReticulumAudioLinkHeartbeatWire
   ): void {
     if (this.getReticulumAudioTransportKind() !== 'packet') return;
-    if (state.packetTransportFallback || state.transport !== 'packet') return;
+    if (!state.packetTransportFallback && state.transport !== 'packet') return;
     // Silence-aware decision: only flip to link-fallback when a recent outbound packet of
     // ours failed to arrive — not when we simply weren't sending. See pure helper for the
     // exact predicate + rationale (phil-kenny-one-on-one-61).
     const now = Date.now();
-    const outboundPacketAgeMs =
+    const outboundAudioAgeMs =
       state.lastOutboundPacketAtMs > 0
         ? now - state.lastOutboundPacketAtMs
         : Number.POSITIVE_INFINITY;
+    const fallbackProbeAgeMs =
+      state.packetTransportFallback && state.packetFallbackLastProbeAtMs > 0
+        ? now - state.packetFallbackLastProbeAtMs
+        : Number.POSITIVE_INFINITY;
+    const outboundPacketAgeMs = Math.min(outboundAudioAgeMs, fallbackProbeAgeMs);
+    const reason = `packet-fallback:peer-rx-missing:${wire.c.toLowerCase()}`;
+    if (
+      state.packetTransportFallback &&
+      wire.packetRxRecent === false &&
+      fallbackProbeAgeMs <= GC_RETICULUM_PACKET_LINK_FALLBACK_LOCAL_SEND_RECENT_MS
+    ) {
+      state.peerPacketRxMissingUntilMs = Math.max(
+        state.peerPacketRxMissingUntilMs,
+        now + GC_RETICULUM_PACKET_LINK_FALLBACK_REQUEST_WINDOW_MS
+      );
+      this.requestReticulumPacketLinkFallback(address, state, reason, {
+        bypassReactivationCooldown: true,
+      });
+      return;
+    }
     if (
       !shouldActivateReticulumPeerRxFallback({
         peerRxRecent: wire.packetRxRecent,
@@ -4361,11 +4384,13 @@ export class GroupCallManager extends EventEmitter {
     ) {
       return;
     }
-    this.requestReticulumPacketLinkFallback(
-      address,
-      state,
-      `packet-fallback:peer-rx-missing:${wire.c.toLowerCase()}`
+    state.peerPacketRxMissingUntilMs = Math.max(
+      state.peerPacketRxMissingUntilMs,
+      now + GC_RETICULUM_PACKET_LINK_FALLBACK_REQUEST_WINDOW_MS
     );
+    this.requestReticulumPacketLinkFallback(address, state, reason, {
+      bypassReactivationCooldown: true,
+    });
   }
 
   private resetReticulumAudioLinkHeartbeat(state: ReticulumAudioPeerState): void {
@@ -5187,6 +5212,7 @@ export class GroupCallManager extends EventEmitter {
         packetFallbackLastExitAtMs: 0,
         packetLinkFallbackRequestedUntilMs: 0,
         packetLinkFallbackReason: '',
+        peerPacketRxMissingUntilMs: 0,
         routeKey: this.computeReticulumAudioRouteKey(transport, peerPresenceHash),
         linkId: null,
         linkOpenedByOwner: null,
@@ -6116,6 +6142,7 @@ export class GroupCallManager extends EventEmitter {
           packetFallbackLastExitAtMs: 0,
           packetLinkFallbackRequestedUntilMs: 0,
           packetLinkFallbackReason: '',
+          peerPacketRxMissingUntilMs: 0,
           routeKey: this.computeReticulumAudioRouteKey(
             this.getEffectiveReticulumAudioTransport(null),
             desired.peerPresenceHash

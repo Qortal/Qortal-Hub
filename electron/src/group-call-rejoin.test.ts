@@ -2238,15 +2238,33 @@ describe('Reticulum group audio transport', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const recovered = manager.sendAudio(
+    const heldDuringRequestWindow = manager.sendAudio(
       'room-1',
       'Q-peer',
       Buffer.from([7, 8, 9])
     );
+    expect(heldDuringRequestWindow).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+        linkFallbackActive: true,
+      }),
+    });
+
+    await vi.advanceTimersByTimeAsync(12_100);
+    await Promise.resolve();
+    await Promise.resolve();
+    bridge.enqueuePacketGroupAudio.mockClear();
+
+    const recovered = manager.sendAudio(
+      'room-1',
+      'Q-peer',
+      Buffer.from([10, 11, 12])
+    );
     expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledWith(
       'd:Q-peer',
       'room-1',
-      Buffer.from([7, 8, 9]),
+      Buffer.from([10, 11, 12]),
       ''
     );
     expect(recovered).toMatchObject({
@@ -2392,6 +2410,148 @@ describe('Reticulum group audio transport', () => {
       success: true,
       diagnostics: expect.objectContaining({
         transport: 'link',
+      }),
+    });
+    manager.stop();
+  });
+
+  it('keeps link fallback while peer heartbeat still reports missing our packet audio', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(20_000);
+    let pathReady = false;
+
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      sendGroupAudioLinkHeartbeatDetailed = vi.fn(
+        async (_opts: {
+          roomId: string;
+          command: 'PING' | 'PONG';
+          seq?: number;
+          peerPresenceHash?: string;
+          linkId?: string;
+          packetRxAgeMs?: number;
+          packetRxRecent?: boolean;
+        }) => ({ ok: true as const })
+      );
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => ({
+        bridgeQueuedFrames: 0,
+        bridgeQueuedBytes: 0,
+        bridgeBinaryWritesQueued: 0,
+        bridgeWaitingForDrain: false,
+        perLinkQueuedFrames: 0,
+        queuePressureDrops: 0,
+        queuePressureDropsLast5s: 0,
+        staleDrops: 0,
+        staleDropsLast5s: 0,
+        decodedQueueDepth: 0,
+        decodedQueueMax: 48,
+        decodedQueueDrops: 0,
+        binaryOutQueueDepth: 0,
+        binaryOutQueueMax: 128,
+        binaryOutQueueDrops: 0,
+        jsonOutQueueDrops: 0,
+        packetSendFailures: 0,
+        packetPathRequests: 0,
+        packetPathResolutions: 0,
+        packetPathTimeouts: pathReady ? 0 : 2,
+        packetFreshSends: pathReady ? 2 : 1,
+        packetStaleSends: pathReady ? 0 : 1,
+        packetUnknownSends: 0,
+      }));
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      enqueuePacketGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () =>
+        pathReady
+          ? { ok: true as const, pathState: 'fresh', ready: true }
+          : { ok: true as const, pathState: 'stale', ready: false }
+      );
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    manager.start();
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100, TEST_D32);
+
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    manager.requestPeerMediaRecovery('room-1', 'Q-peer', 'path-degraded-warm');
+    await Promise.resolve();
+    const fallback = manager.sendAudio(
+      'room-1',
+      'Q-peer',
+      Buffer.from([4, 5, 6])
+    );
+    expect(fallback).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+        linkFallbackActive: true,
+      }),
+    });
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    bridge.emit(
+      'group-call-message',
+      { t: 'GAC', R: 'room-1', c: 'PING', p: 77, m: Date.now(), pr: 0, pa: -1 },
+      'd:Q-peer',
+      'd:Q-peer',
+      'link-1'
+    );
+    await Promise.resolve();
+
+    pathReady = true;
+    await vi.advanceTimersByTimeAsync(3_100);
+    await Promise.resolve();
+    await Promise.resolve();
+    bridge.enqueueGroupAudio.mockClear();
+    bridge.enqueuePacketGroupAudio.mockClear();
+
+    const held = manager.sendAudio('room-1', 'Q-peer', Buffer.from([7, 8, 9]));
+    expect(bridge.enqueueGroupAudio).toHaveBeenCalledWith(
+      'link-1',
+      'room-1',
+      Buffer.from([7, 8, 9])
+    );
+    expect(held).toMatchObject({
+      success: true,
+      diagnostics: expect.objectContaining({
+        transport: 'link',
+        linkFallbackActive: true,
       }),
     });
     manager.stop();
