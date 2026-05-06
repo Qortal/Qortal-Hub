@@ -100,9 +100,9 @@ const GC_JOIN_MAX_FUTURE_SKEW_MS = 30_000;
 /** Max age of GC_JOIN `timestamp` vs local `now` (for tests and diagnostics). */
 export const GC_JOIN_MAX_AGE_MS = GC_JOIN_TTL_MS + GC_JOIN_SKEW_ALLOWANCE_MS;
 
-const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 60_000;
+const GC_RETICULUM_ACTIVITY_HEARTBEAT_INTERVAL_MS = 5_000;
 /** Must exceed heartbeat interval so peers do not drop `GA` as stale between beats. */
-const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 120_000;
+const GC_RETICULUM_ACTIVITY_MAX_AGE_MS = 7_000;
 const GC_RETICULUM_ACTIVITY_MAX_FUTURE_SKEW_MS = 30_000;
 /** Inbound fragment reassembly buffers for Reticulum group-call control. */
 const GC_RETICULUM_REASM_TTL_MS = 45_000;
@@ -152,6 +152,8 @@ const GC_RETICULUM_AUDIO_FLUSH_RETRY_DELAY_MS = 5;
 const GC_RETICULUM_AUDIO_RECOVERY_HOLD_MS = 160;
 const GC_RETICULUM_AUDIO_RECOVERY_BUFFER_MAX_AGE_MS = 200;
 const GC_RETICULUM_AUDIO_RECOVERY_ACTION_COOLDOWN_MS = 1_000;
+/** Give GC_LEAVE link-control frames one short flush window before link teardown. */
+const GC_RETICULUM_LEAVE_LINK_DRAIN_MS = 350;
 /** Kept in sync with `RETICULUM_SEND_PRESSURE_*` in `src/lib/group-call/opusSendPressure.ts` (renderer ladder). */
 const GC_RETICULUM_AUDIO_PRESSURE_BRIDGE_QUEUE_FRAMES = 8;
 const GC_RETICULUM_AUDIO_PRESSURE_DECODED_QUEUE_DEPTH = 12;
@@ -217,6 +219,7 @@ const GC_RETAINED_JOIN_IDENTITY_REPLAY_MAX_ATTEMPTS = 6;
 type GcReticulumRetryKind =
   | 'join'
   | 'join_replay'
+  | 'leave'
   | 'topology'
   | 'key'
   | 'key_request';
@@ -1263,6 +1266,7 @@ export class GroupCallManager extends EventEmitter {
   private reticulumAudioAddressByLinkId = new Map<string, string>();
   private reticulumAudioFlushScheduled = false;
   private reticulumAudioFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private reticulumLeaveLinkDrainTimers = new Set<ReturnType<typeof setTimeout>>();
   private reticulumAudioFlushCursor = 0;
   /** Wall clock ms until which flush caps are scaled after media recovery (see GC_RETICULUM_MEDIA_RECOVERY_FLUSH_BOOST_MS). */
   private reticulumAudioFlushBoostUntilMs = 0;
@@ -1986,6 +1990,10 @@ export class GroupCallManager extends EventEmitter {
       clearTimeout(this.reticulumAudioFlushTimer);
       this.reticulumAudioFlushTimer = null;
     }
+    for (const timer of this.reticulumLeaveLinkDrainTimers) {
+      clearTimeout(timer);
+    }
+    this.reticulumLeaveLinkDrainTimers.clear();
     this.reticulumAudioFlushCursor = 0;
     this.rooms.clear();
     this.verifiedGcSignatures.clear();
@@ -3156,6 +3164,7 @@ export class GroupCallManager extends EventEmitter {
     if (groupId === null) return;
     const room = this.rooms.get(roomId);
     if (!room || room.participants.size === 0) return;
+    if (!this.shouldSendReticulumGroupActivity(room)) return;
     const targets = this.qortalReticulumTargetsByRoomId.get(roomId);
     if (!targets || targets.size === 0) return;
     const wire: GcReticulumActivityWire = {
@@ -3173,6 +3182,20 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     void this.broadcastReticulumFramesViaOverlay([overlayWire]).then(() => {});
+  }
+
+  private shouldSendReticulumGroupActivity(room: GroupRoom): boolean {
+    let localIsParticipant = false;
+    for (const address of this.localAddresses) {
+      if (room.participants.has(address)) {
+        localIsParticipant = true;
+        break;
+      }
+    }
+    if (!localIsParticipant) return false;
+    if (room.participants.size <= 1) return true;
+    const rootForwarder = room.lastTopology?.rootForwarder?.trim();
+    return Boolean(rootForwarder && this.localAddresses.has(rootForwarder));
   }
 
   private handleReticulumGroupCallWire(
@@ -3670,6 +3693,7 @@ export class GroupCallManager extends EventEmitter {
     timestamp: number
   ): void {
     const room = this.rooms.get(roomId);
+    let shouldDelayReticulumAudioTeardown = false;
     if (signature) {
       const env: GcLeaveEnvelope = {
         type: 'GC_LEAVE',
@@ -3686,10 +3710,20 @@ export class GroupCallManager extends EventEmitter {
             `[GCall] Skipping GC_LEAVE (Reticulum) for room ${roomId}: wire exceeds Reticulum limit`
           );
         } else {
+          const { sentLinks, skippedLinks } =
+            this.sendReticulumLinkControlToEstablishedRoomLinks(
+              roomId,
+              [leaveWire],
+              new Set([localAddress]),
+              'GC_LEAVE'
+            );
+          void skippedLinks;
+          shouldDelayReticulumAudioTeardown = sentLinks > 0;
           this.fanoutReticulumWire(
             roomId,
             [leaveWire],
-            new Set([localAddress])
+            new Set([localAddress]),
+            'leave'
           );
         }
       }
@@ -3711,13 +3745,29 @@ export class GroupCallManager extends EventEmitter {
     this.rooms.delete(roomId);
     this.qortalReticulumTargetsByRoomId.delete(roomId);
     this.transportHealthByRoom.delete(roomId);
-    this.syncReticulumAudioLinks();
+    if (shouldDelayReticulumAudioTeardown) {
+      this.scheduleReticulumAudioLinkTeardownAfterLeave(roomId);
+    } else {
+      this.syncReticulumAudioLinks();
+    }
     loggerLog(
       signature
         ? `[GCall] Sent GC_LEAVE for room ${roomId}`
         : `[GCall] Cleared local room state for ${roomId} without broadcasting GC_LEAVE`
     );
     this.scheduleQortalGroupCallActivityEmit(true);
+  }
+
+  private scheduleReticulumAudioLinkTeardownAfterLeave(roomId: string): void {
+    const timer = setTimeout(() => {
+      this.reticulumLeaveLinkDrainTimers.delete(timer);
+      loggerLog(
+        `[GCall] GC_LEAVE link drain complete for room ${roomId}; syncing Reticulum audio links`
+      );
+      this.syncReticulumAudioLinks();
+    }, GC_RETICULUM_LEAVE_LINK_DRAIN_MS);
+    timer.unref?.();
+    this.reticulumLeaveLinkDrainTimers.add(timer);
   }
 
   broadcastTopology(
@@ -6963,7 +7013,7 @@ export class GroupCallManager extends EventEmitter {
     env: GcTopologyEnvelope,
     peerPresenceHash?: string
   ): void {
-    if (!this.hasLocalRoomInterest(env.roomId) && !this.isWatchedQortalRoom(env.roomId)) {
+    if (!this.hasLocalRoomInterest(env.roomId)) {
       return;
     }
 
@@ -7058,9 +7108,6 @@ export class GroupCallManager extends EventEmitter {
         lastSeen: env.lastSeen,
         rootForwarder: env.rootForwarder,
       });
-    }
-    if (this.isWatchedQortalRoom(env.roomId)) {
-      this.noteSpectatorReticulumLiveness(env.roomId);
     }
     this.syncReticulumAudioLinks();
   }

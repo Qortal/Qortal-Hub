@@ -38,7 +38,7 @@ _last_transport_state: Optional[Dict[str, Any]] = None
 _transport_monitor_thread: Optional[threading.Thread] = None
 _MAX_ENCRYPTED_WIRE_BYTES = int(getattr(RNS.Packet, "ENCRYPTED_MDU", RNS.Packet.MDU))
 # Grep logs for this string to confirm the rebuilt script is running (sync with GC_RETICULUM_WIRE_BUILD_MARKER in group-call-wire-reticulum.ts).
-PRESENCE_BRIDGE_BUILD = "wire392-audio-link-heartbeat-rx-health-v1"
+PRESENCE_BRIDGE_BUILD = "wire393-reticulum-await-path-links-v1"
 
 # Peer cache: must match TS base58 in electron/src/presence.ts (Qortal alphabet).
 _BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -1603,6 +1603,8 @@ def _ensure_call_media_path(
         and (now - float(last_rp)) < request_cooldown
     )
     requested = False
+    used_request_await = False
+    resolved = False
     await_seconds = (
         float(await_seconds_override)
         if await_seconds_override is not None
@@ -1620,36 +1622,36 @@ def _ensure_call_media_path(
             _transition_call_media_path_state(peer_hash, "warming", f"{reason}:refresh_path")
         elif current == "failing":
             _transition_call_media_path_state(peer_hash, "recovering", f"{reason}:recover_path")
-        try:
-            RNS.Transport.request_path(destination_hash)
-            state["last_request_path_at"] = now
-            _audio_packet_path_requests += 1
-            _mark_audio_queue_state_dirty()
-            requested = True
-        except Exception as exc:
-            log(
-                "[presence_bridge] target=reticulum-audio-ipc packet_path_request_failed "
-                f"peer={peer_hash} err={exc}"
+        if allow_wait and await_seconds > 0:
+            used_request_await = True
+            resolved, requested = _request_and_await_destination_path(
+                destination_hash,
+                await_seconds,
+                log_context=f"call_media_path peer={peer_hash} reason={reason}",
             )
-    resolved = False
-    if allow_wait and await_seconds > 0:
-        deadline = time.time() + await_seconds
-        while True:
+        else:
+            try:
+                RNS.Transport.request_path(destination_hash)
+                requested = True
+            except Exception as exc:
+                log(
+                    "[presence_bridge] target=reticulum-audio-ipc packet_path_request_failed "
+                    f"peer={peer_hash} err={exc}"
+                )
+    if requested:
+        state["last_request_path_at"] = now
+        _audio_packet_path_requests += 1
+        _mark_audio_queue_state_dirty()
+    if not should_request:
+        resolved = False
+    if not resolved and not used_request_await:
+        if allow_wait and await_seconds > 0:
+            resolved = _await_destination_path(destination_hash, await_seconds)
+        else:
             try:
                 resolved = bool(RNS.Transport.has_path(destination_hash))
             except Exception:
                 resolved = False
-            if resolved:
-                break
-            remaining = deadline - time.time()
-            if remaining <= 0:
-                break
-            time.sleep(min(_PACKET_PATH_POLL_INTERVAL_SECONDS, remaining))
-    else:
-        try:
-            resolved = bool(RNS.Transport.has_path(destination_hash))
-        except Exception:
-            resolved = False
     if resolved:
         current = str(state.get("path_state") or "unknown")
         if current == "unknown":
@@ -1718,10 +1720,52 @@ def _await_destination_path(destination_hash: bytes, timeout_seconds: float) -> 
         time.sleep(min(_PACKET_PATH_POLL_INTERVAL_SECONDS, remaining))
 
 
-def _nudge_overlay_link_path(peer_key: str, destination_hash: bytes) -> None:
+def _request_and_await_destination_path(
+    destination_hash: bytes,
+    timeout_seconds: float,
+    *,
+    log_context: str,
+) -> tuple[bool, bool]:
     try:
         if RNS.Transport.has_path(destination_hash):
-            return
+            return True, False
+    except Exception:
+        pass
+
+    requested = False
+    try:
+        await_path = getattr(RNS.Transport, "await_path", None)
+        if callable(await_path) and timeout_seconds > 0:
+            requested = True
+            return bool(await_path(destination_hash, timeout_seconds)), requested
+    except Exception as exc:
+        log(
+            "[presence_bridge] target=presence-reticulum path_await_failed "
+            f"{log_context} err={exc}"
+        )
+
+    try:
+        RNS.Transport.request_path(destination_hash)
+        requested = True
+    except Exception as exc:
+        log(
+            "[presence_bridge] target=presence-reticulum path_request_failed "
+            f"{log_context} err={exc}"
+        )
+        return False, requested
+
+    return _await_destination_path(destination_hash, timeout_seconds), requested
+
+
+def _nudge_overlay_link_path(
+    peer_key: str,
+    destination_hash: bytes,
+    *,
+    await_seconds: float = 0.0,
+) -> bool:
+    try:
+        if RNS.Transport.has_path(destination_hash):
+            return True
     except Exception:
         pass
 
@@ -1733,25 +1777,50 @@ def _nudge_overlay_link_path(peer_key: str, destination_hash: bytes) -> None:
         and (now - float(last_rp)) < _OVERLAY_LINK_PATH_REQUEST_COOLDOWN_SECONDS
     )
     if should_request:
-        try:
-            RNS.Transport.request_path(destination_hash)
-            if peer_key not in _peer_lifecycle:
-                _peer_lifecycle[peer_key] = {
-                    "last_seen_inbound": None,
-                    "last_send_ok": None,
-                    "last_request_path_at": None,
-                    "ts_seed_until": None,
-                }
-            _peer_lifecycle[peer_key]["last_request_path_at"] = now
-            log(
-                "[presence_bridge] target=presence-reticulum overlay_link_path_request "
-                f"peer={peer_key}"
+        if await_seconds > 0:
+            resolved, requested = _request_and_await_destination_path(
+                destination_hash,
+                await_seconds,
+                log_context=f"overlay_link_path peer={peer_key}",
             )
-        except Exception as exc:
-            log(
-                "[presence_bridge] target=presence-reticulum overlay_link_path_request_failed "
-                f"peer={peer_key}: {exc}"
-            )
+            if requested:
+                if peer_key not in _peer_lifecycle:
+                    _peer_lifecycle[peer_key] = {
+                        "last_seen_inbound": None,
+                        "last_send_ok": None,
+                        "last_request_path_at": None,
+                        "ts_seed_until": None,
+                    }
+                _peer_lifecycle[peer_key]["last_request_path_at"] = now
+                log(
+                    "[presence_bridge] target=presence-reticulum overlay_link_path_request "
+                    f"peer={peer_key} await={await_seconds} resolved={str(resolved).lower()}"
+                )
+            if resolved:
+                return True
+        else:
+            try:
+                RNS.Transport.request_path(destination_hash)
+                if peer_key not in _peer_lifecycle:
+                    _peer_lifecycle[peer_key] = {
+                        "last_seen_inbound": None,
+                        "last_send_ok": None,
+                        "last_request_path_at": None,
+                        "ts_seed_until": None,
+                    }
+                _peer_lifecycle[peer_key]["last_request_path_at"] = now
+                log(
+                    "[presence_bridge] target=presence-reticulum overlay_link_path_request "
+                    f"peer={peer_key}"
+                )
+            except Exception as exc:
+                log(
+                    "[presence_bridge] target=presence-reticulum overlay_link_path_request_failed "
+                    f"peer={peer_key}: {exc}"
+                )
+    if await_seconds > 0:
+        return _await_destination_path(destination_hash, await_seconds)
+    return False
 
 
 def _note_call_media_inbound(peer_hash: str, sender_call_hash: str = "") -> None:
@@ -2238,9 +2307,10 @@ def _ensure_overlay_link(peer_hash: str) -> Optional[Dict[str, Any]]:
                 _peer_lifecycle.pop(peer_key, None)
                 return None
         if outbound is not None:
-            _nudge_overlay_link_path(peer_key, outbound.hash)
-            if not _await_destination_path(
-                outbound.hash, _OVERLAY_LINK_PATH_AWAIT_SECONDS
+            if not _nudge_overlay_link_path(
+                peer_key,
+                outbound.hash,
+                await_seconds=_OVERLAY_LINK_PATH_AWAIT_SECONDS,
             ):
                 log(
                     "[presence_bridge] target=presence-reticulum "
