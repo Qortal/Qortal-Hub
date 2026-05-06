@@ -1778,3 +1778,109 @@ Current patched target:
 - Primary fix: add delivery diagnostics around the successful enqueue path, link fallback dwell/probe exits, and peer receive evidence so we can distinguish “queued to bridge” from “arrived at peer”.
 - Secondary fix candidate: if diagnostics show link fallback is selected but not delivering, prefer packet path or reopen/reselect the canonical link faster for that peer.
 - Keep selector, profile strength, and baseline unchanged for the next patch. In this call, classification mostly matches the symptoms; the bad side is correctly classified but underfed.
+
+## Call: 2026-05-06 14:30Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-06T14-30-36-970Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-06T14-30-34-292Z.json`
+
+User symptom:
+- New paired call after the latest media delivery / link-fallback changes; subjective symptom was not included with the export, so user-bad is inferred from receive metrics, readiness state, and exported profiles.
+
+High-level verdict:
+- Mixed/bad, but improved versus 12:50Z delivery starvation.
+- Both directions now have inbound packets, decoded frames, live profiles, and active playouts. Correctness and queue paths are clean. The remaining failures are receive-side: Mac is correctly classified as `silent-lean` but the final playout mode has fallen back to `low-latency` while still not ready, and Linux is over-classified as `repair-collapse` despite usable reserve and a ready playout.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment in the broad sense: both sides have inbound packets, decoded frames, active playouts, and live policy profiles.
+- Queue/backpressure: bridge/binary high-water values are low (`2`/`1` on Mac, `4`/`1` on Linux), with no queue-pressure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Baseline: this is not evidence for a global target increase; the profiles/modes are not aligned enough to tune baseline first.
+
+Primary next target:
+- Another subsystem: profile-to-playout / adaptive-mode application, with selector cleanup as the secondary target.
+- Mac is the clearest bad-side signal: `silent-lean` matches `avgPcmBufferedMs=6.573`, `jitterBufferedFrames=10`, `jitterHasReadyFrame=false`, and `avgPlayoutDeltaMs=-128.184`, but both exported live mode and final jitter mode are `low-latency`. A correctly selected lean/not-ready profile is not holding recovery-mode protection.
+- Linux should also not be `repair-collapse` with `avgPcmBufferedMs=39.408`, `jitterBufferedFrames=21`, `jitterHasReadyFrame=true`, and only moderate concealment. That is a selector/escape issue, but it is secondary to the Mac application mismatch because the worst-looking side selected the right profile family and then exited protection.
+- Do not tune profile strength first. Do not tune baseline first. This call says the next fix is to make selected protective profiles actually drive/hold the playout mode, then tighten the ready-buffered escape from `repair-collapse`.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `silent-lean` | yes | 6.573 | 235 | 68 | 0.015 | 0.011 | low-latency | Classification matches the tiny-reserve not-ready shape, but protection is not applied/held: final playout has 10 buffered jitter frames, no ready frame, and low-latency mode. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `repair-collapse` | partly | 39.408 | 185 | 55 | 0.087 | 0.077 | recovery | Classification is too severe for a ready, usable-reserve path; this fits `steady-weak-listener` or `repair-heavy-connected` better than collapse. |
+
+### Side A
+
+Expected profile from symptom:
+- `silent-lean` or `buffered-not-ready`
+
+Actual exported profile:
+- `silent-lean`
+
+Did classification match?
+- Yes for profile family, no/partly for applied playout behavior.
+
+Notes:
+- `avgPcmBufferedMs=6.573`, `jitterBufferDepthFramesMean=0.333`, `avgPlayoutDeltaMs=-128.184`, and `jitterHasReadyFrame=false` with `10` buffered jitter frames match the silent-lean/readiness blind spot.
+- Damage counters are present but not explosive: `missingFrames=235`, `concealmentTicks=68`, `playoutUnderTargetFraction=0.015`, and `playoutRateFractionBelow097=0.011`.
+- The bad part is that the trend exits from `recovery` to `low-latency` at the end while the final playout snapshot is still not ready. That points at profile application/hold, not profile strength.
+
+### Side B
+
+Expected profile from symptom:
+- `steady-weak-listener` or `repair-heavy-connected`
+
+Actual exported profile:
+- `repair-collapse`
+
+Did classification match?
+- No/partly.
+
+If no:
+- `avgPcmBufferedMs=39.408`, `jitterBufferDepthFramesMean=1.996`, `jitterBufferedFrames=21`, and `jitterHasReadyFrame=true` do not fit a reserve-collapse profile.
+- The side is still not clean: `playoutUnderTargetFraction=0.087`, `playoutRateFractionBelow097=0.077`, `avgPlayoutDeltaMs=-94.443`, `missingFrames=185`, and `concealmentTicks=55`.
+- Tighten the ready-buffered escape from `repair-collapse` into weak/repair recovery, but do that after fixing the selected-profile-to-mode mismatch on Mac.
+
+## Trend Read
+
+Side A:
+- Gradual shallow/not-ready path with recovery exiting too early.
+- Reasons seen:
+  - `avgPcmBufferedMs` improves only from about `6.16` to `6.57 ms`, still very shallow.
+  - `missingFrames` increases from `204` to `235`.
+  - `concealmentTicks` stays at `68`.
+  - adaptive mode switches from `recovery` to `low-latency` in the final sample while `jitterHasReadyFrame=false`.
+
+Side B:
+- Gradual moderate weak/repair pressure under recovery, with over-severe collapse classification.
+- Reasons seen:
+  - `avgPcmBufferedMs` improves from about `38.26` to `39.41 ms`.
+  - `missingFrames` increases from `154` to `185`.
+  - `concealmentTicks` stays at `55`.
+  - `playoutUnderTargetFraction` and `playoutRateFractionBelow097` improve but remain elevated around `0.087` / `0.077`.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-06T12:19Z group-812` | A / Mac standby | `steady-weak-listener` | partly | yes/partly | weak-listener / secondary | Still acceptable for ready/moderate pressure; not the current blocker. |
+| `2026-05-06T12:19Z group-812` | B / Linux root | `collapse-recovery` | yes | yes | Mac-to-Linux media delivery / not-ready collapse | Packet imbalance made this an upstream delivery case; later calls show both directions alive again. |
+| `2026-05-06T12:34Z group-812` | A / Mac standby | `steady-weak-listener` | yes | no/partly | selector / readiness priority | Improved in 14:30Z: analogous Mac side now selects `silent-lean`, but mode still exits recovery too early. |
+| `2026-05-06T12:34Z group-812` | B / Linux root | `collapse-recovery` | partly | no/partly | selector / collapse escape | Still relevant: 14:30Z again over-classifies a ready buffered Linux side, now as `repair-collapse`. |
+| `2026-05-06T12:50Z group-812` | A / Mac standby | `repair-collapse` | yes | yes | Linux-to-Mac media delivery / receive starvation | Improved in 14:30Z: Mac received/decoded `1443` packets and the failure is no longer zero/low inbound delivery. |
+| `2026-05-06T12:50Z group-812` | B / Linux root | `clean-low-latency` | no/partly | yes/partly | secondary missing-frame watch | Superseded by 14:30Z: Linux now has moderate pressure but is over-classified as `repair-collapse`. |
+| `2026-05-06T14:30Z group-812` | A / Mac standby | `silent-lean` | yes | yes/partly | profile application / adaptive-mode hold | Make `silent-lean` / not-ready protection keep recovery mode until ready/reserve recovers; do not let final mode fall to `low-latency`. |
+| `2026-05-06T14:30Z group-812` | B / Linux root | `repair-collapse` | partly | no/partly | selector / repair-collapse escape | Tighten ready-buffered escape so this lands in `steady-weak-listener` or `repair-heavy-connected`, not collapse. |
+
+## Next Fix Target
+
+Current patched target:
+- Profile-to-playout / adaptive-mode application first; selector cleanup second.
+- Primary fix: when a live source profile is `silent-lean` or another not-ready lean protection profile, keep jitter/playout in recovery protection while `jitterHasReadyFrame=false` or reserve remains in the collapse band. The Mac side selected the right profile family but still ended in `low-latency`.
+- Secondary fix: tighten the ready-buffered escape from `repair-collapse` for Linux-style paths with `jitterHasReadyFrame=true`, many buffered frames, usable reserve, and only moderate concealment.
+- Keep baseline and profile strength unchanged for the next patch. The issue is not that a correctly applied profile is too weak; it is that one correctly selected profile is not being applied/held, and the other side is over-selected into a collapse profile.

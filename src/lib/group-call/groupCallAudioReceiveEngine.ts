@@ -130,6 +130,10 @@ const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_DELTA_MAX_MS = -70;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN = 52;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS = -24;
 const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_CONCEALMENT_EMA_MAX = 0.06;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_BUFFERED_MS_MIN = 32;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_CONCEALMENT_EMA_MAX = 0.18;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_UNDERTARGET_EMA_MAX = 0.1;
+const GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_RATE_EMA_MIN = 0.99;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_BUFFERED_MS_MIN = 136;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_DELTA_MIN_MS = -2;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN = 0.9998;
@@ -1142,6 +1146,20 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX &&
           !repairHeavyHealthyReserveEscape &&
           !effectiveSevereSingleSourceHold;
+        const repairCollapseReadyBufferedEscape =
+          state.lastJitterHasReadyFrame &&
+          state.lastJitterBufferedFrames >=
+            GCALL_SINGLE_SOURCE_DIAGNOSTIC_BUFFERED_FRAMES_MIN &&
+          (latestBufferedMs >=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_BUFFERED_MS_MIN ||
+            state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_BUFFERED_MS_MIN) &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_CONCEALMENT_EMA_MAX &&
+          state.underTargetEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_UNDERTARGET_EMA_MAX &&
+          state.rateEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_READY_ESCAPE_RATE_EMA_MIN;
         const repairCollapsePressure =
           (state.concealmentEma >=
             GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CONCEALMENT_EMA_MIN ||
@@ -1150,6 +1168,7 @@ export class GroupCallAudioReceiveEngine {
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_BUFFERED_MS_MAX &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_DELTA_MAX_MS &&
+          !repairCollapseReadyBufferedEscape &&
           !effectiveSevereSingleSourceHold;
         if (repairCollapsePressure) {
           state.repairCollapseHoldUntilMs = Math.max(
@@ -1159,6 +1178,7 @@ export class GroupCallAudioReceiveEngine {
         }
         const repairCollapseHold =
           state.repairCollapseHoldUntilMs > nowMs &&
+          !repairCollapseReadyBufferedEscape &&
           !(
             !repairCollapsePressure &&
             state.bufferedMsEma >=
@@ -1171,15 +1191,18 @@ export class GroupCallAudioReceiveEngine {
         if (
           state.repairCollapseHoldUntilMs > 0 &&
           !repairCollapsePressure &&
-          state.bufferedMsEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN &&
-          state.deltaMsEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS &&
-          state.concealmentEma <=
-            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_CONCEALMENT_EMA_MAX
+          (repairCollapseReadyBufferedEscape ||
+            (state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN &&
+              state.deltaMsEma >=
+                GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS &&
+              state.concealmentEma <=
+                GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_CONCEALMENT_EMA_MAX))
         ) {
           state.repairCollapseHoldUntilMs = 0;
         }
+        const effectiveRepairCollapseHold =
+          repairCollapseHold && state.repairCollapseHoldUntilMs > nowMs;
         if (repairHeavyPressure) {
           state.repairHeavyHoldUntilMs = Math.max(
             state.repairHeavyHoldUntilMs,
@@ -1460,7 +1483,7 @@ export class GroupCallAudioReceiveEngine {
           lingeringPressure ||
           ratePressure ||
           mildSteadyAssist ||
-          repairCollapseHold ||
+          effectiveRepairCollapseHold ||
           repairCollapsePressure ||
           repairHeavyHold ||
           bufferedNotReadyHold ||
@@ -1532,7 +1555,7 @@ export class GroupCallAudioReceiveEngine {
           postFailoverRootProfileActive,
           severeSingleSourcePressure,
           severeSingleSourceHold: effectiveSevereSingleSourceHold,
-          repairCollapseHold,
+          repairCollapseHold: effectiveRepairCollapseHold,
           repairCollapsePressure,
           repairHeavyHold,
           repairHeavyPressure,
@@ -1552,14 +1575,20 @@ export class GroupCallAudioReceiveEngine {
           steadyHealthyEscape,
         });
         state.currentSingleSourceProfile = profile;
-        if (
-          profile === 'repair-collapse' &&
-          (state.bufferedMsEma <
-            GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN ||
-            state.deltaMsEma <
-              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS ||
-            !state.lastJitterHasReadyFrame)
-        ) {
+        const shouldHoldSingleSourceRecoveryMode =
+          (profile === 'repair-collapse' &&
+            (state.bufferedMsEma <
+              GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_BUFFERED_MS_MIN ||
+              state.deltaMsEma <
+                GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS ||
+              !state.lastJitterHasReadyFrame)) ||
+          ((profile === 'silent-lean' || profile === 'buffered-not-ready') &&
+            (!state.lastJitterHasReadyFrame ||
+              state.bufferedMsEma <
+                GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN ||
+              state.deltaMsEma <
+                GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS));
+        if (shouldHoldSingleSourceRecoveryMode) {
           dmMarkPeerUnstable(this.peerRecoveryState, sourceAddr, 3, nowMs);
           this.recomputeAdaptiveNetworkMode(nowMs);
           playout.syncAdaptiveJitterGeometry();
