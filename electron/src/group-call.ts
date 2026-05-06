@@ -191,6 +191,10 @@ const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_WIRE_TYPE = 'GAC';
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_INTERVAL_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_TICK_MS = 1_000;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_MISSED_MAX = 2;
+const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_ACTIVITY_GRACE_MS =
+  GC_RETICULUM_AUDIO_LINK_HEARTBEAT_INTERVAL_MS *
+    GC_RETICULUM_AUDIO_LINK_HEARTBEAT_MISSED_MAX +
+  1_000;
 const GC_RETICULUM_AUDIO_LINK_HEARTBEAT_RECOVERY_COOLDOWN_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MIN_MS = 5_000;
 const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS = 30_000;
@@ -4308,6 +4312,30 @@ export class GroupCallManager extends EventEmitter {
     state.linkHeartbeatLastRxAtMs = now;
   }
 
+  private noteReticulumAudioLinkActivity(
+    state: ReticulumAudioPeerState,
+    now = Date.now()
+  ): void {
+    state.linkHeartbeatLastRxAtMs = Math.max(state.linkHeartbeatLastRxAtMs, now);
+    state.linkHeartbeatLastPongAtMs = Math.max(state.linkHeartbeatLastPongAtMs, now);
+    state.linkHeartbeatAwaitingSeq = 0;
+    state.linkHeartbeatMissedPongs = 0;
+  }
+
+  private hasRecentReticulumAudioLinkActivity(
+    state: ReticulumAudioPeerState,
+    now = Date.now()
+  ): boolean {
+    return (
+      (state.linkHeartbeatLastRxAtMs > 0 &&
+        now - state.linkHeartbeatLastRxAtMs <=
+          GC_RETICULUM_AUDIO_LINK_HEARTBEAT_ACTIVITY_GRACE_MS) ||
+      (state.lastInboundAtMs > 0 &&
+        now - state.lastInboundAtMs <=
+          GC_RETICULUM_AUDIO_LINK_HEARTBEAT_ACTIVITY_GRACE_MS)
+    );
+  }
+
   private closeReticulumAudioLinkQuietly(linkId: string, reason: string): void {
     if (!linkId) return;
     loggerLog(
@@ -4696,6 +4724,11 @@ export class GroupCallManager extends EventEmitter {
           state.linkHeartbeatMissedPongs >=
           GC_RETICULUM_AUDIO_LINK_HEARTBEAT_MISSED_MAX
         ) {
+          if (this.hasRecentReticulumAudioLinkActivity(state, now)) {
+            state.linkHeartbeatAwaitingSeq = 0;
+            state.linkHeartbeatMissedPongs = 0;
+            continue;
+          }
           if (
             now - state.linkHeartbeatLastRecoveryAtMs >=
             GC_RETICULUM_AUDIO_LINK_HEARTBEAT_RECOVERY_COOLDOWN_MS
@@ -7025,7 +7058,7 @@ export class GroupCallManager extends EventEmitter {
     const state = this.reticulumAudioPeersByAddress.get(address);
     if (!state) return;
     const now = Date.now();
-    state.linkHeartbeatLastRxAtMs = now;
+    this.noteReticulumAudioLinkActivity(state, now);
     if (linkId) {
       if (
         state.established &&
@@ -7052,12 +7085,7 @@ export class GroupCallManager extends EventEmitter {
       state.peerDestinationHash = senderDestinationHash;
     }
     this.maybeActivateReticulumFallbackFromPeerRxReport(address, state, wire);
-    if (wire.c === 'PONG') {
-      state.linkHeartbeatLastPongAtMs = now;
-      state.linkHeartbeatAwaitingSeq = 0;
-      state.linkHeartbeatMissedPongs = 0;
-      return;
-    }
+    if (wire.c === 'PONG') return;
     this.sendReticulumAudioLinkHeartbeat(
       address,
       state,
@@ -7165,6 +7193,9 @@ export class GroupCallManager extends EventEmitter {
           payload.peerDestinationHash || state.peerDestinationHash;
         const now = Date.now();
         state.lastInboundAtMs = now;
+        if ((payload.transport ?? 'link') === 'link' && payload.linkId === state.linkId) {
+          this.noteReticulumAudioLinkActivity(state, now);
+        }
         state.recoveryHoldUntilMs = 0;
         state.recoveryReason = '';
         if ((payload.transport ?? 'link') === 'packet') {
