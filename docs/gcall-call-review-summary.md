@@ -1466,3 +1466,107 @@ Current patched target:
 - Primary fix: make sustained damage counters and under-target/rate pressure disqualify `clean-low-latency`, even when the ready buffer is not collapsed.
 - Secondary fix: let `persistent-lean` escalate when shallow reserve is accompanied by meaningful concealment and missing-frame growth.
 - Keep decode/session, media-path, global baseline, and heavy-profile strength unchanged for the next patch. This export is clean on correctness and media establishment; the active failure is that profile classification is too mild for the symptoms.
+
+## Call: 2026-05-06 12:19Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-06T12-19-09-566Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-06T12-19-06-336Z.json`
+
+User symptom:
+- New paired call after the sustained-damage selector change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics, packet imbalance, and exported profiles.
+
+High-level verdict:
+- Bad/mixed, but selector classification improved versus 11:56Z.
+- The previous selector miss is mostly gone: Mac now exports `steady-weak-listener` instead of a clean/misleading profile, and Linux exports `collapse-recovery` for a truly shallow/not-ready path. The remaining blocker is asymmetric media delivery into Linux: Linux received only `330` packets from Mac while Mac received `2060` packets from Linux.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment in the broad sense: both sides have inbound packets, decoded frames, active playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes.
+- Queue/backpressure: bridge/binary high-water values are low (`2`/`1` on Mac, `7`/`0` on Linux), with no queue-pressure drops.
+- Failover: root/cluster promotion counts are `0` on both sides, although Mac trend advances from topology epoch `3` to `4` at the end.
+
+Primary next target:
+- Another subsystem: Mac-to-Linux media delivery / packet-route reliability.
+- Linux classification is correct and recovery is applied, but it is starving on very little inbound media: `packetsReceived=330`, `avgPcmBufferedMs=4.771`, `jitterHasReadyFrame=false`, `concealmentTicks=239`, `playoutUnderTargetFraction=0.145`, and `playoutRateFractionBelow097=0.136`.
+- Mac sent successfully with `outboundSendFailures=0` and `outboundNoTargetSkips=0`, yet Linux received far fewer packets than Mac received in the opposite direction. That points upstream of receive profile strength.
+- Do not tune baseline from this call. Do not raise `collapse-recovery` strength first; the bad side has an upstream delivery imbalance and not-ready playout.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `steady-weak-listener` | partly | 32.155 | 309 | 3 | 0.015 | 0.003 | low-latency | Classification is acceptable: ready playout, moderate reserve, sustained missing-frame growth, but low concealment/under-target pressure. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `collapse-recovery` | yes | 4.771 | 38 | 239 | 0.145 | 0.136 | recovery | Classification matches severe collapse/not-ready symptoms, but the packet imbalance points upstream of profile tuning. |
+
+### Side A
+
+Expected profile from symptom:
+- `steady-weak-listener`
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- This side matches the new selector intent: `missingFrames=309` prevents a clean profile, while `avgPcmBufferedMs=32.155`, `jitterHasReadyFrame=true`, `concealmentTicks=3`, and `playoutRateFractionBelow097=0.003` keep it out of heavy repair/collapse.
+- It is not clean, but it is not the primary blocker in this call.
+
+### Side B
+
+Expected profile from symptom:
+- `collapse-recovery` or `repair-collapse`
+
+Actual exported profile:
+- `collapse-recovery`
+
+Did classification match?
+- Yes.
+
+Notes:
+- The side is shallow and not ready: `avgPcmBufferedMs=4.771`, `jitterBufferDepthFramesMean=0.242`, `jitterBufferedFrames=9`, `jitterHasReadyFrame=false`, and `avgPlayoutDeltaMs=-126.022`.
+- `concealmentTicks=239`, `playoutUnderTargetFraction=0.145`, and `playoutRateFractionBelow097=0.136` justify the severe profile.
+- But Linux only received `330` packets from Mac, while Mac received `2060` from Linux. Treat that delivery asymmetry as the next root-cause target before profile strength.
+
+## Trend Read
+
+Side A:
+- Gradual moderate weak-listener path.
+- Reasons seen:
+  - `missingFrames` increases from `232` to `309`.
+  - `concealmentTicks` stays low at `3`.
+  - `avgPcmBufferedMs` improves from about `29.6` to `32.2 ms`.
+  - adaptive mode remains `low-latency`, with exported profile `steady-weak-listener`.
+
+Side B:
+- Flat-bad/degrading collapse path under active recovery.
+- Reasons seen:
+  - `avgPcmBufferedMs` falls from `6.790` to `4.771 ms`.
+  - `concealmentTicks` climbs steadily from `151` to `239`.
+  - `playoutUnderTargetFraction` rises from `0.136` to `0.145`.
+  - `playoutRateFractionBelow097` rises from `0.123` to `0.136`.
+  - final playout is not ready despite `9` buffered jitter frames.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-05T21:27Z group-812` | A / Mac standby | `clean-low-latency` | partly/unknown | partly/unknown | decode/session correctness | Improved by 11:56Z and 12:19Z: decode failures are now `0`. |
+| `2026-05-05T21:27Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | weak-listener / secondary | Still relevant historically, but not the current blocker. |
+| `2026-05-06T11:56Z group-812` | A / Mac standby | `persistent-lean` | yes | partly/no | selector / repair escalation | Improved in 12:19Z: analogous Mac side is now `steady-weak-listener`, not persistent lean. |
+| `2026-05-06T11:56Z group-812` | B / Linux root | `clean-low-latency` | partly/yes | no/partly | selector / clean escape | Improved in 12:19Z: Linux no longer stays clean under damage; it now selects `collapse-recovery`. |
+| `2026-05-06T12:19Z group-812` | A / Mac standby | `steady-weak-listener` | partly | yes/partly | weak-listener / secondary | Keep as acceptable selector result; do not tune first. |
+| `2026-05-06T12:19Z group-812` | B / Linux root | `collapse-recovery` | yes | yes | Mac-to-Linux media delivery / not-ready collapse | Investigate packet-route/delivery asymmetry before tuning `collapse-recovery` strength. |
+
+## Next Fix Target
+
+Current patched target:
+- Another subsystem: Mac-to-Linux media delivery / packet-route reliability.
+- Primary fix: instrument and recover the path where Mac reports successful outbound sends, but Linux receives a much smaller packet count and collapses into not-ready recovery.
+- Secondary watch item: if the next call has balanced inbound packet counts and Linux still stays near empty while correctly classified as `collapse-recovery`, then tune `collapse-recovery` or `repair-collapse` strength/hold.
+- Keep selector, baseline, decode/session, and global profile strength unchanged for the next patch. This batch says the selector fix worked; the remaining bad side is correctly classified but underfed.

@@ -129,6 +129,17 @@ contextBridge.exposeInMainWorld('groupCall', {
     toAddresses: string[],
     data: Uint8Array
   ) => ipcRenderer.invoke('gcall:sendAudioBatch', roomId, toAddresses, data),
+  requestPeerMediaRecovery: async (
+    roomId: string,
+    address: string,
+    reason: string
+  ) =>
+    ipcRenderer.invoke(
+      'gcall:requestPeerMediaRecovery',
+      roomId,
+      address,
+      reason
+    ) as Promise<{ success: boolean; error?: string }>,
   getLinkStats: async (roomId: string) =>
     ipcRenderer.invoke('gcall:getLinkStats', roomId),
   sendKey: async (

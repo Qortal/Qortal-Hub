@@ -547,6 +547,7 @@ export class GroupCallAudioEngineRuntime {
   private outboundLastSendFailureMessage: string | null = null;
   private outboundLastMainDiagnostics: GcallSendAudioDiagnostics | null = null;
   private outboundLastTargets: string[] = [];
+  private mediaRecoveryApiUnavailableLastAtMs = 0;
   private readonly zeroInboundMediaRecoveryLastAtByAddress = new Map<string, number>();
   private readonly outboundTargetDiagnostics = new Map<
     string,
@@ -1048,7 +1049,10 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     const requestPeerMediaRecovery = window.groupCall?.requestPeerMediaRecovery;
-    if (typeof requestPeerMediaRecovery !== 'function') return;
+    if (typeof requestPeerMediaRecovery !== 'function') {
+      this.recordMediaRecoveryApiUnavailable('zero-inbound-media-recovery');
+      return;
+    }
     const uniqueTargets = this.getMediaRecoveryTargets();
     if (uniqueTargets.length === 0) return;
     const now = Date.now();
@@ -1104,7 +1108,10 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     const requestPeerMediaRecovery = window.groupCall?.requestPeerMediaRecovery;
-    if (typeof requestPeerMediaRecovery !== 'function') return;
+    if (typeof requestPeerMediaRecovery !== 'function') {
+      this.recordMediaRecoveryApiUnavailable('low-inbound-media-recovery');
+      return;
+    }
     const uniqueTargets = this.getMediaRecoveryTargets();
     if (uniqueTargets.length === 0) return;
     const now = Date.now();
@@ -1131,6 +1138,22 @@ export class GroupCallAudioEngineRuntime {
         'path-degraded-warm'
       ).catch(() => {});
     }
+  }
+
+  private recordMediaRecoveryApiUnavailable(context: string): void {
+    const now = Date.now();
+    if (
+      this.mediaRecoveryApiUnavailableLastAtMs > 0 &&
+      now - this.mediaRecoveryApiUnavailableLastAtMs <
+        ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS
+    ) {
+      return;
+    }
+    this.mediaRecoveryApiUnavailableLastAtMs = now;
+    this.recordDiagEvent('media-recovery-api-unavailable', {
+      context,
+      hasGroupCallApi: !!window.groupCall,
+    });
   }
 
   private buildAudioSurfaceRuntimeDiagnosticsSnapshot(): Record<string, unknown> {
