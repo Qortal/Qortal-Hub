@@ -2420,3 +2420,109 @@ Current patched target:
 - Primary fix: strengthen `silent-lean` entry/priority over `persistent-lean` when reserve is extremely low and playout delta is strongly negative, even if concealment, under-target, and slow-rate counters are still mild.
 - Keep `repair-heavy-connected` strength/hold as a previous improvement, but pause further repair-heavy tuning until another call actually selects that profile and still sounds bad.
 - Keep global baseline, key/decode/session, startup readiness, and transport paths unchanged for the next patch. This batch points at an existing profile selector miss, not a new subsystem or baseline problem.
+
+## Call: 2026-05-07 18:57Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-07T18-57-26-268Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-07T18-57-31-301Z.json`
+
+User symptom:
+- New paired call after the ready `silent-lean` selector change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and profile mismatch.
+
+High-level verdict:
+- Mixed/bad.
+- Correctness, key/media establishment, startup playout nodes, queue/backpressure, and failover paths are clean. Mac remains a plausible lean recovery path, but Linux is a clear false-clean classification: it exported `clean-low-latency` while carrying sustained missing-frame, concealment, under-target, and slow-rate pressure.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have room keys, inbound packets, decoded frames, active playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Queue/backpressure: bridge/binary high-water values are low (`2`/`2` on Mac, `1`/`3` on Linux), with no queue-pressure, stale, link-unready, or send-failure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Transport: packet path is active in both directions with thousands of inbound packet samples and no send failures; packet path timeouts are present but not the dominant blocker in this export.
+
+Primary next target:
+- Selector.
+- Specifically, prevent `clean-low-latency` from winning on ready buffered repair-pressure paths. Linux has `avgPcmBufferedMs=47.367`, `jitterHasReadyFrame=true`, and `jitterBufferedFrames=10`, so it is not collapsed or startup-blocked, but it also has `missingFrames=278`, `concealmentTicks=90`, `playoutUnderTargetFraction=0.132`, `playoutRateFractionBelow097=0.082`, and `avgPlayoutDeltaMs=-88.342`.
+- That shape fits `repair-heavy-connected` or at least `steady-weak-listener`, not `clean-low-latency`.
+- Do not tune baseline first. This is not a clean healthy listener sounding bad; it is an exported clean profile despite non-clean metrics. Do not tune `silent-lean` first from this call: Mac did not cross the new tiny-reserve ready gate, and Linux is buffered/damaged rather than silent/tiny.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` | partly | 16.920 | 154 | 0 | 0.014 | 0.002 | recovery | Classification mostly matches: ready, low reserve, low jitter depth, strongly negative delta, and low damage counters. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `clean-low-latency` | yes | 47.367 | 278 | 90 | 0.132 | 0.082 | low-latency | Classification is wrong: ready/buffered but damaged and under-target; should promote to `repair-heavy-connected` or `steady-weak-listener`. |
+
+### Side A
+
+Expected profile from symptom:
+- `persistent-lean`, possibly bordering `silent-lean` only if reserve falls further.
+
+Actual exported profile:
+- `persistent-lean`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- `avgPcmBufferedMs=16.920`, `jitterBufferDepthFramesMean=0.858`, and `avgPlayoutDeltaMs=-129.074` fit a persistent lean path.
+- `concealmentTicks=0`, `playoutUnderTargetFraction=0.014`, and `playoutRateFractionBelow097=0.002` keep this out of repair-heavy.
+- The side is already in recovery and its reserve is slowly improving from `16.535` to `16.920 ms`, so it is not the first next-fix target.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-heavy-connected`, with `steady-weak-listener` as the weaker fallback.
+
+Actual exported profile:
+- `clean-low-latency`
+
+Did classification match?
+- No.
+
+If no:
+- The side is not shallow-collapse: `avgPcmBufferedMs=47.367`, `jitterBufferDepthFramesMean=2.406`, `jitterBufferedFrames=10`, and `jitterHasReadyFrame=true`.
+- But it is also not clean: `missingFrames=278`, `concealmentTicks=90`, `playoutUnderTargetFraction=0.132`, `playoutRateFractionBelow097=0.082`, and `avgPlayoutDeltaMs=-88.342`.
+- Tune selector entry/priority for ready buffered damage before changing profile strength or baseline.
+
+## Trend Read
+
+Side A:
+- Flat/slowly improving lean recovery.
+- Reasons seen:
+  - `avgPcmBufferedMs` improves slightly from `16.535` to `16.920 ms`.
+  - `missingFrames` increases from `120` to `154`.
+  - `concealmentTicks` remains `0`.
+  - adaptive mode remains `recovery`.
+
+Side B:
+- Oscillating false-clean buffered repair path.
+- Reasons seen:
+  - starts and ends in `low-latency` despite non-clean metrics.
+  - `entered-recovery` appears once, then the side exits back to `low-latency`.
+  - `missingFrames` increases from `181` to `278`.
+  - `concealmentTicks` rises from `86` to `90`.
+  - `playoutUnderTargetFraction` remains high at `0.132`, and `playoutRateFractionBelow097` remains high at `0.082`.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-07T14:07Z group-812` | A / Mac standby | `persistent-lean` | partly | yes/partly | lean profile / secondary | Still watch, but not the first target. |
+| `2026-05-07T14:07Z group-812` | B / Linux root | `repair-heavy-connected` | yes | yes/partly | repair-heavy profile strength / hold | Superseded as first target by the 18:57Z false-clean selector miss. |
+| `2026-05-07T17:25Z group-812` | A / Mac standby | `persistent-lean` | yes/partly | partly/no | selector / silent-lean escalation | Partly improved by the ready `silent-lean` selector change, but 18:57Z Mac is no longer tiny-reserve enough to be the primary miss. |
+| `2026-05-07T17:25Z group-812` | B / Linux root | `persistent-lean` | yes | partly | selector / silent-lean escalation | Current batch shifted: Linux is now buffered/damaged and incorrectly clean, not silent/tiny lean. |
+| `2026-05-07T18:57Z group-812` | A / Mac standby | `persistent-lean` | partly | yes/partly | persistent-lean / secondary | Keep as evidence; no selector change first from this side. |
+| `2026-05-07T18:57Z group-812` | B / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Promote ready buffered listeners with sustained missing/concealment plus under-target/slow-rate pressure into `repair-heavy-connected` or `steady-weak-listener`. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: add or strengthen a false-clean escape for ready buffered listeners with sustained damage and playout pressure: missing-frame growth, active concealment, high under-target fraction, slow-rate pressure, and strongly negative delta should not remain `clean-low-latency`.
+- Preferred destination is `repair-heavy-connected` when both damage and under-target/slow-rate pressure are present; otherwise `steady-weak-listener` is the weaker fallback.
+- Keep global baseline unchanged. Keep key/decode/session, startup readiness, transport, and `silent-lean` strength unchanged for the next patch. This batch points at a selector false negative, not baseline or another subsystem.

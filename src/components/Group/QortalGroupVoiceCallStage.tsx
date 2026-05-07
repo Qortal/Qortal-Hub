@@ -154,7 +154,11 @@ export function QortalGroupVoiceCallStage() {
   }, [roomState, mediaViable, metrics, transportTick, t]);
 
   useEffect(() => {
-    if (!visible || !roomId || typeof window.groupCall?.getLinkStats !== 'function') {
+    if (
+      !visible ||
+      !roomId ||
+      typeof window.groupCall?.getLinkStats !== 'function'
+    ) {
       setLinkStats(null);
       return;
     }
@@ -172,7 +176,8 @@ export function QortalGroupVoiceCallStage() {
             establishedLinks: Math.max(0, response.stats.establishedLinks),
             participants: Math.max(
               0,
-              remoteParticipantCount || Math.max(0, response.stats.participants - 1)
+              remoteParticipantCount ||
+                Math.max(0, response.stats.participants - 1)
             ),
           });
         }
@@ -251,7 +256,7 @@ export function QortalGroupVoiceCallStage() {
   const hintText =
     startupStatus.headline && startupStatus.stage !== 'connected'
       ? startupStatus.headline
-      : localConnectionHint?.message?.trim?.() ?? '';
+      : (localConnectionHint?.message?.trim?.() ?? '');
 
   const node = (
     <Box
@@ -402,11 +407,9 @@ export function QortalGroupVoiceCallStage() {
               {hintText}
             </Typography>
           ) : null}
-      </Box>
+        </Box>
 
-      <GroupCallStartupBanner status={startupStatus} />
-
-      <Box
+        <Box
           sx={{
             display: 'flex',
             alignItems: 'center',
@@ -556,7 +559,8 @@ export function QortalGroupVoiceCallStage() {
                       boxShadow: speaking
                         ? `0 0 16px ${alpha(SPEAKING, 0.35)}`
                         : 'none',
-                      transition: 'border-color 0.25s ease, box-shadow 0.25s ease',
+                      transition:
+                        'border-color 0.25s ease, box-shadow 0.25s ease',
                     }}
                   >
                     <Avatar
@@ -677,87 +681,87 @@ export function QortalGroupVoiceCallStage() {
             </Box>
 
             <Box sx={{ flex: 1, overflowY: 'auto', py: 1, px: 0.5 }}>
-                {sortedTiles.map((p) => {
-                  const self = p.address === userInfo?.address;
-                  const speaking =
-                    activeSpeakers.includes(p.address) || p.speaking;
-                  const displayName = participantDisplayLabel(p.address, self);
-                  const regName = registeredNameForAvatar(
-                    p.address,
-                    self,
-                    memberPrimaryNames,
-                    userInfo?.name
-                  );
-                  const rowAvatarSrc = qortalAvatarThumbnailSrc(regName);
-                  const hasFriendlyDisplayName =
-                    Boolean(memberPrimaryNames[p.address]?.trim()) ||
-                    (self && Boolean(userInfo?.name?.trim()));
-                  const rowInitials = hasFriendlyDisplayName
-                    ? initialsFromDisplayLabel(displayName, p.address)
-                    : p.address.slice(0, 2).toUpperCase();
-                  const voiceDotColor =
-                    self && muted
-                      ? DANGER
-                      : speaking
-                        ? SPEAKING
-                        : VOICE_CONNECTED;
-                  return (
-                    <Box
-                      key={p.address}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                        py: 1,
-                        px: 1,
-                        borderRadius: 1,
-                        '&:hover': { bgcolor: alpha('#fff', 0.04) },
-                      }}
-                    >
-                      <Box sx={{ position: 'relative' }}>
-                        <Avatar
-                          alt={displayName}
-                          src={rowAvatarSrc}
-                          sx={{
-                            width: 32,
-                            height: 32,
-                            bgcolor: addrHue(p.address),
-                            fontSize: 11,
-                            fontWeight: 700,
-                            color: '#fff',
-                          }}
-                        >
-                          {rowInitials}
-                        </Avatar>
-                        <Box
-                          sx={{
-                            position: 'absolute',
-                            bottom: 0,
-                            right: 0,
-                            width: 10,
-                            height: 10,
-                            borderRadius: '50%',
-                            border: `2px solid ${BG_HEADER}`,
-                            bgcolor: voiceDotColor,
-                          }}
-                        />
-                      </Box>
-                      <Typography
-                        variant="body2"
+              {sortedTiles.map((p) => {
+                const self = p.address === userInfo?.address;
+                const speaking =
+                  activeSpeakers.includes(p.address) || p.speaking;
+                const displayName = participantDisplayLabel(p.address, self);
+                const regName = registeredNameForAvatar(
+                  p.address,
+                  self,
+                  memberPrimaryNames,
+                  userInfo?.name
+                );
+                const rowAvatarSrc = qortalAvatarThumbnailSrc(regName);
+                const hasFriendlyDisplayName =
+                  Boolean(memberPrimaryNames[p.address]?.trim()) ||
+                  (self && Boolean(userInfo?.name?.trim()));
+                const rowInitials = hasFriendlyDisplayName
+                  ? initialsFromDisplayLabel(displayName, p.address)
+                  : p.address.slice(0, 2).toUpperCase();
+                const voiceDotColor =
+                  self && muted
+                    ? DANGER
+                    : speaking
+                      ? SPEAKING
+                      : VOICE_CONNECTED;
+                return (
+                  <Box
+                    key={p.address}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      py: 1,
+                      px: 1,
+                      borderRadius: 1,
+                      '&:hover': { bgcolor: alpha('#fff', 0.04) },
+                    }}
+                  >
+                    <Box sx={{ position: 'relative' }}>
+                      <Avatar
+                        alt={displayName}
+                        src={rowAvatarSrc}
                         sx={{
-                          flex: 1,
-                          fontWeight: 500,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          minWidth: 0,
+                          width: 32,
+                          height: 32,
+                          bgcolor: addrHue(p.address),
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: '#fff',
                         }}
                       >
-                        {displayName}
-                      </Typography>
+                        {rowInitials}
+                      </Avatar>
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          bottom: 0,
+                          right: 0,
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          border: `2px solid ${BG_HEADER}`,
+                          bgcolor: voiceDotColor,
+                        }}
+                      />
                     </Box>
-                  );
-                })}
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        flex: 1,
+                        fontWeight: 500,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        minWidth: 0,
+                      }}
+                    >
+                      {displayName}
+                    </Typography>
+                  </Box>
+                );
+              })}
             </Box>
           </Box>
         )}

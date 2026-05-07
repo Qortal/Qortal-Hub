@@ -118,6 +118,7 @@ const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX = 96;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_BUFFERED_MS_MAX = 56;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_DELTA_MAX_MS = -70;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_UNDERTARGET_EMA_MIN = 0.08;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_STRONG_UNDERTARGET_EMA_MIN = 0.12;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_RATE_EMA_MAX = 0.996;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HOLD_MS = 11_000;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MAX_EXTRA_HOLD_FRAMES = 10;
@@ -1140,16 +1141,18 @@ export class GroupCallAudioReceiveEngine {
           state.lastJitterHasReadyFrame &&
           state.lastJitterBufferedFrames >=
             GCALL_SINGLE_SOURCE_DIAGNOSTIC_BUFFERED_FRAMES_MIN &&
-          state.missingFrameEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_BUFFERED_MS_MAX &&
           state.deltaMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_DELTA_MAX_MS &&
-          state.underTargetEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_UNDERTARGET_EMA_MIN &&
           state.rateEma <=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_RATE_EMA_MAX;
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_RATE_EMA_MAX &&
+          ((state.missingFrameEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN &&
+            state.underTargetEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_UNDERTARGET_EMA_MIN) ||
+            state.underTargetEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_STRONG_UNDERTARGET_EMA_MIN);
         const repairHeavyPressure =
           ((state.concealmentEma >=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN) ||
@@ -1633,6 +1636,8 @@ export class GroupCallAudioReceiveEngine {
           profile === 'repair-heavy-connected' &&
           !repairHeavyHealthyReserveEscape &&
           (!state.lastJitterHasReadyFrame ||
+            state.underTargetEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_STRONG_UNDERTARGET_EMA_MIN ||
             (state.underTargetEma >=
               GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_UNDERTARGET_EMA_MIN &&
               state.rateEma <=
