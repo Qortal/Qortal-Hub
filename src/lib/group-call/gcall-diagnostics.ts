@@ -40,6 +40,12 @@ export interface GcallDiagExportPayload {
   schemaVersion: 1;
   exportedAtMs: number;
   context: GcallDiagExportContext;
+  /**
+   * Point-in-time root election / startup authority state. This is exported
+   * even when the event ring is disabled so split-brain investigations can
+   * reconstruct why a client did or did not run a local election.
+   */
+  authoritySnapshot?: unknown;
   /** Latest metrics snapshot at export (session totals + transport hints). */
   liveMetricsSnapshot: unknown;
   /** Last closed window from manual capture during export (may be empty if none). */
@@ -401,6 +407,7 @@ export function gcallDiagnosticsIngestConsoleArgs(
 
 export function buildGcallDiagnosticsExportJson(params: {
   context: GcallDiagExportContext;
+  authoritySnapshot?: unknown;
   liveMetricsSnapshot: unknown;
   exportWindowMetrics: unknown;
   gcallPerfSnapshot?: unknown;
@@ -418,6 +425,10 @@ export function buildGcallDiagnosticsExportJson(params: {
     schemaVersion: 1,
     exportedAtMs: Date.now(),
     context: { ...params.context },
+    authoritySnapshot:
+      params.authoritySnapshot !== undefined
+        ? redactDeep(params.authoritySnapshot)
+        : undefined,
     liveMetricsSnapshot: redactDeep(params.liveMetricsSnapshot),
     exportWindowMetrics: redactDeep(params.exportWindowMetrics),
     transportTriadInterpretation: GCALL_TRANSPORT_TRIAD_INTERPRETATION,

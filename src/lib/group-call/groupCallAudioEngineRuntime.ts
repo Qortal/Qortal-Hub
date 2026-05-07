@@ -302,6 +302,8 @@ const PARTICIPANT_RECENT_OUTBOUND_EVICT_VETO_MS = 45_000;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
   TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS + TOPOLOGY_HEARTBEAT_MS;
+const PROVISIONAL_LOCAL_ROOT_RECONCILE_MS =
+  CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS;
 const AUTHORITATIVE_KEY_RECOVERY_RETRY_MS = 1_500;
 const AUTHORITATIVE_KEY_RECOVERY_FAILURE_LOG_COOLDOWN_MS = 1_000;
 const WORKER_DECODE_FAILURE_RECOVERY_WINDOW_MS = 2_000;
@@ -505,6 +507,13 @@ export class GroupCallAudioEngineRuntime {
   private conflictingRemoteRootLastSeenAt = 0;
   private authoritySettleUntilMs = 0;
   private topologyElectionDelayUntilMs = 0;
+  private startupOccupiedRoomEvidence = false;
+  private startupHydratedRemoteCount = 0;
+  private startupBootstrapHasTopology = false;
+  private provisionalLocalRootUntilMs = 0;
+  private provisionalLocalRootElectionAtMs = 0;
+  private provisionalLocalRootReason = '';
+  private provisionalLocalRootRemoteCount = 0;
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
   private readonly participantDecodedMediaLastSeenAt = new Map<string, number>();
@@ -802,6 +811,176 @@ export class GroupCallAudioEngineRuntime {
         this.diagEvents.length - MAX_AUDIO_SURFACE_DIAG_EVENTS
       );
     }
+  }
+
+  private buildAuthoritySnapshot(): Record<string, unknown> {
+    const nowMs = Date.now();
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const participantAddresses = this.snapshot.participants
+      .map((participant) => participant.address?.trim() ?? '')
+      .filter(Boolean);
+    const remoteParticipantCount = participantAddresses.filter(
+      (address) => address !== myAddress
+    ).length;
+    return {
+      roomId: this.snapshot.roomId || null,
+      roomState: this.snapshot.roomState,
+      myRole: this.snapshot.myRole,
+      topologyEpoch: this.topology?.topologyEpoch ?? null,
+      topologyRootForwarder: this.topology?.rootForwarder
+        ? truncateGcallDiagAddress(this.topology.rootForwarder)
+        : null,
+      topologyStandbyForwarder: this.topology?.standbyForwarder
+        ? truncateGcallDiagAddress(this.topology.standbyForwarder)
+        : null,
+      lastObservedTopologyEpoch: this.lastObservedTopologyEpoch,
+      participantCount: participantAddresses.length,
+      remoteParticipantCount,
+      topologyElectionDelayRemainingMs:
+        this.topologyElectionDelayUntilMs > nowMs
+          ? this.topologyElectionDelayUntilMs - nowMs
+          : 0,
+      authoritySettleRemainingMs:
+        this.authoritySettleUntilMs > nowMs
+          ? this.authoritySettleUntilMs - nowMs
+          : 0,
+      startupOccupiedRoomEvidence: this.startupOccupiedRoomEvidence,
+      startupHydratedRemoteCount: this.startupHydratedRemoteCount,
+      startupBootstrapHasTopology: this.startupBootstrapHasTopology,
+      provisionalLocalRootActive: this.isProvisionalLocalRootActive(nowMs),
+      provisionalLocalRootRemainingMs:
+        this.provisionalLocalRootUntilMs > nowMs
+          ? this.provisionalLocalRootUntilMs - nowMs
+          : 0,
+      provisionalLocalRootElectionAgeMs:
+        this.provisionalLocalRootElectionAtMs > 0
+          ? nowMs - this.provisionalLocalRootElectionAtMs
+          : null,
+      provisionalLocalRootReason: this.provisionalLocalRootReason || null,
+      provisionalLocalRootRemoteCount: this.provisionalLocalRootRemoteCount,
+      callAgeMs: this.callEpochMs > 0 ? nowMs - this.callEpochMs : null,
+      trustedRemoteRoot: this.trustedRemoteRoot
+        ? truncateGcallDiagAddress(this.trustedRemoteRoot)
+        : null,
+      trustedRemoteRootAgeMs:
+        this.trustedRemoteRootLastSeenAt > 0
+          ? nowMs - this.trustedRemoteRootLastSeenAt
+          : null,
+      conflictingRemoteRoot: this.conflictingRemoteRoot
+        ? truncateGcallDiagAddress(this.conflictingRemoteRoot)
+        : null,
+      conflictingRemoteRootAgeMs:
+        this.conflictingRemoteRootLastSeenAt > 0
+          ? nowMs - this.conflictingRemoteRootLastSeenAt
+          : null,
+      hasRoomKey: this.roomKey !== null,
+      ownsRoomKey: this.ownsRoomKey,
+      selfMintedRoomKey: this.selfMintedRoomKey,
+      awaitingAuthoritativeKey: this.awaitingAuthoritativeKey,
+      callSessionIdPresent: this.callSessionId.trim() !== '',
+      mediaSessionGeneration: this.mediaSessionGeneration,
+    };
+  }
+
+  private clearProvisionalLocalRoot(): void {
+    this.provisionalLocalRootUntilMs = 0;
+    this.provisionalLocalRootElectionAtMs = 0;
+    this.provisionalLocalRootReason = '';
+    this.provisionalLocalRootRemoteCount = 0;
+  }
+
+  private isProvisionalLocalRootActive(nowMs = Date.now()): boolean {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    return (
+      Boolean(myAddress) &&
+      this.topology?.rootForwarder?.trim() === myAddress &&
+      this.provisionalLocalRootUntilMs > nowMs
+    );
+  }
+
+  private isAddressInCurrentRoster(address: string): boolean {
+    const target = address.trim();
+    if (!target) return false;
+    return this.snapshot.participants.some(
+      (participant) => participant.address?.trim() === target
+    );
+  }
+
+  private countRemoteParticipants(): number {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    return this.snapshot.participants
+      .map((participant) => participant.address?.trim() ?? '')
+      .filter((address) => address && address !== myAddress).length;
+  }
+
+  private shouldMarkLocalRootProvisional(): boolean {
+    if (!this.startupOccupiedRoomEvidence && this.startupHydratedRemoteCount <= 0) {
+      return false;
+    }
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!myAddress) return false;
+    return this.countRemoteParticipants() > 0 || this.startupHydratedRemoteCount > 0;
+  }
+
+  private markProvisionalLocalRoot(reason: string, nowMs = Date.now()): void {
+    const remoteParticipantCount = Math.max(
+      this.countRemoteParticipants(),
+      this.startupHydratedRemoteCount
+    );
+    this.provisionalLocalRootElectionAtMs = nowMs;
+    this.provisionalLocalRootUntilMs = nowMs + PROVISIONAL_LOCAL_ROOT_RECONCILE_MS;
+    this.provisionalLocalRootReason = reason;
+    this.provisionalLocalRootRemoteCount = remoteParticipantCount;
+    this.recordDiagEvent('provisional-local-root-armed', {
+      roomId: this.snapshot.roomId,
+      reason,
+      remoteParticipantCount,
+      reconcileMs: PROVISIONAL_LOCAL_ROOT_RECONCILE_MS,
+      startupOccupiedRoomEvidence: this.startupOccupiedRoomEvidence,
+      startupHydratedRemoteCount: this.startupHydratedRemoteCount,
+    });
+  }
+
+  private canReconcileProvisionalLocalRootWithRemote(
+    remoteRoot: string,
+    nowMs = Date.now()
+  ): boolean {
+    const root = remoteRoot.trim();
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    return (
+      Boolean(root) &&
+      root !== myAddress &&
+      this.isProvisionalLocalRootActive(nowMs) &&
+      this.isAddressInCurrentRoster(root)
+    );
+  }
+
+  private reconcileProvisionalLocalRootFromRemoteAuthority(
+    remoteRoot: string,
+    seenAtMs: number,
+    reason: 'heartbeat' | 'verified-key'
+  ): boolean {
+    const nowMs = Date.now();
+    const root = remoteRoot.trim();
+    if (!this.canReconcileProvisionalLocalRootWithRemote(root, nowMs)) {
+      return false;
+    }
+    const effectiveSeenAt =
+      seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : nowMs;
+    this.updateTrustedRemoteRoot(root, effectiveSeenAt);
+    this.clearConflictingRemoteRootIfMatches(root);
+    this.topologyElectionDelayUntilMs = Math.min(
+      this.topologyElectionDelayUntilMs,
+      nowMs
+    );
+    this.recordDiagEvent('provisional-local-root-reconcile-triggered', {
+      roomId: this.snapshot.roomId,
+      remoteRoot: truncateGcallDiagAddress(root),
+      reason,
+      provisionalRemainingMs: Math.max(0, this.provisionalLocalRootUntilMs - nowMs),
+    });
+    this.scheduleTopologyElection(`provisional-local-root-${reason}`);
+    return true;
   }
 
   private clearRecentWindowTrends(): void {
@@ -1508,6 +1687,7 @@ export class GroupCallAudioEngineRuntime {
     };
     const json = buildGcallDiagnosticsExportJson({
       context,
+      authoritySnapshot: this.buildAuthoritySnapshot(),
       liveMetricsSnapshot,
       exportWindowMetrics: liveMetricsSnapshot,
       recentWindowTrends: [...this.recentWindowTrends],
@@ -1589,6 +1769,10 @@ export class GroupCallAudioEngineRuntime {
     this.resetRootAuthorityTracking();
     this.resetRootPeerLiveness();
     this.topologyElectionDelayUntilMs = 0;
+    this.startupOccupiedRoomEvidence = false;
+    this.startupHydratedRemoteCount = 0;
+    this.startupBootstrapHasTopology = false;
+    this.clearProvisionalLocalRoot();
     this.memberGateGroupId =
       options?.memberGateGroupId != null &&
       Number.isFinite(options.memberGateGroupId)
@@ -1884,8 +2068,16 @@ export class GroupCallAudioEngineRuntime {
         if (!currentRoot || currentRoot === rootForwarder) {
           this.updateTrustedRemoteRoot(rootForwarder, seenAtMs);
           this.clearConflictingRemoteRootIfMatches(rootForwarder);
-        } else {
+        } else if (
+          !this.reconcileProvisionalLocalRootFromRemoteAuthority(
+            rootForwarder,
+            seenAtMs,
+            'heartbeat'
+          )
+        ) {
           this.noteConflictingRemoteRoot(rootForwarder, seenAtMs, 'heartbeat');
+        } else {
+          this.noteRootVerifiedControl(rootForwarder, seenAtMs);
         }
       } else if (this.trustedRemoteRoot) {
         this.trustedRemoteRootLastSeenAt = Math.max(
@@ -1917,7 +2109,7 @@ export class GroupCallAudioEngineRuntime {
           this.removeParticipantFromRuntimeEvent(leavingAddress);
         } else {
           const joining = payload as
-            | { address?: string; publicKey?: string }
+            | { address?: string; publicKey?: string; joinGeneration?: number }
             | null
             | undefined;
           const joiningAddress = joining?.address?.trim() ?? '';
@@ -1935,7 +2127,10 @@ export class GroupCallAudioEngineRuntime {
             joiningAddress !== myAddress &&
             !this.topology?.rootForwarder
           ) {
-            this.topologyElectionDelayUntilMs = 0;
+            this.armOccupiedRoomElectionWaitFromParticipantJoin(
+              joiningAddress,
+              joining?.joinGeneration
+            );
           }
         }
         this.scheduleTopologyElection(event);
@@ -2174,6 +2369,24 @@ export class GroupCallAudioEngineRuntime {
     if (!trustedSender) {
       const myAddress = this.userInfo?.address?.trim() ?? '';
       const fromAddress = payload.fromAddress?.trim() ?? '';
+      if (
+        fromAddress &&
+        this.reconcileProvisionalLocalRootFromRemoteAuthority(
+          fromAddress,
+          Date.now(),
+          'verified-key'
+        )
+      ) {
+        this.noteRootVerifiedControl(fromAddress, Date.now());
+        traceGcallAudioSurface(
+          'pipeline: gcall:key deferred to provisional-root reconciliation',
+          {
+            from: payload.fromAddress,
+            currentRoot: currentRoot || null,
+          }
+        );
+        return;
+      }
       if (
         fromAddress &&
         fromAddress !== myAddress &&
@@ -2466,6 +2679,15 @@ export class GroupCallAudioEngineRuntime {
         bootstrapCallSessionId: bootstrap?.callSessionId,
         bootstrapMediaSessionGeneration: bootstrap?.mediaSessionGeneration ?? 0,
       });
+      this.startupOccupiedRoomEvidence =
+        this.startupOccupiedRoomEvidence || occupiedRoomEvidence;
+      this.startupHydratedRemoteCount = Math.max(
+        this.startupHydratedRemoteCount,
+        remoteParticipantCount
+      );
+      this.startupBootstrapHasTopology =
+        this.startupBootstrapHasTopology ||
+        Boolean(bootstrapTopology?.rootForwarder);
       if (roomId.startsWith('gcall-qortal-') && remoteParticipantCount === 0) {
         const selfOnlyDelayMs = occupiedRoomEvidence
           ? ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS
@@ -2752,6 +2974,62 @@ export class GroupCallAudioEngineRuntime {
     }, delayMs);
   }
 
+  private armOccupiedRoomElectionWaitFromParticipantJoin(
+    address: string,
+    joinGeneration?: number
+  ): void {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const remoteAddress = address.trim();
+    if (!myAddress || !remoteAddress || remoteAddress === myAddress) return;
+    if ((this.topology?.rootForwarder?.trim() ?? '') !== '') return;
+    const participantAddresses = this.snapshot.participants
+      .map((participant) => participant.address?.trim() ?? '')
+      .filter(Boolean);
+    const remoteParticipantCount = participantAddresses.filter(
+      (participantAddress) => participantAddress !== myAddress
+    ).length;
+    if (remoteParticipantCount <= 0) return;
+
+    const nowMs = Date.now();
+    const delayUntil =
+      this.topologyElectionDelayUntilMs > nowMs
+        ? this.topologyElectionDelayUntilMs
+        : nowMs + OCCUPIED_JOIN_AUTHORITY_WAIT_MS;
+    this.topologyElectionDelayUntilMs = Math.max(
+      this.topologyElectionDelayUntilMs,
+      delayUntil
+    );
+    this.authoritySettleUntilMs = Math.max(
+      this.authoritySettleUntilMs,
+      this.topologyElectionDelayUntilMs
+    );
+    this.startupOccupiedRoomEvidence = true;
+    this.startupHydratedRemoteCount = Math.max(
+      this.startupHydratedRemoteCount,
+      remoteParticipantCount
+    );
+    this.recordDiagEvent('occupied-room-election-wait-from-participant-join', {
+      roomId: this.snapshot.roomId,
+      peer: truncateGcallDiagAddress(remoteAddress),
+      joinGeneration: joinGeneration ?? null,
+      remoteParticipantCount,
+      topologyElectionDelayRemainingMs: Math.max(
+        0,
+        this.topologyElectionDelayUntilMs - nowMs
+      ),
+      authoritySettleRemainingMs: Math.max(0, this.authoritySettleUntilMs - nowMs),
+    });
+    traceGcallAudioSurface(
+      'pipeline: occupied-room election wait armed from participant join',
+      {
+        roomId: this.snapshot.roomId,
+        peer: truncateGcallDiagAddress(remoteAddress),
+        remoteParticipantCount,
+        delayMs: Math.max(0, this.topologyElectionDelayUntilMs - nowMs),
+      }
+    );
+  }
+
   private shouldMaintainActiveSender(): boolean {
     return (
       this.snapshot.roomState === 'connected' &&
@@ -2814,7 +3092,9 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     const trustedElectionRoot = getTrustedRootForRejoinElection({
-      currentRoot: this.topology?.rootForwarder,
+      currentRoot: this.isProvisionalLocalRootActive(nowMs)
+        ? null
+        : this.topology?.rootForwarder,
       trustedRemoteRoot: this.trustedRemoteRoot,
       trustedRemoteRootLastSeenAtMs: this.trustedRemoteRootLastSeenAt,
       nowMs,
@@ -2849,6 +3129,14 @@ export class GroupCallAudioEngineRuntime {
     });
     const applied = await this.applyTopology(topology, 'local-election');
     if (applied) {
+      if (
+        topology.rootForwarder === myAddress &&
+        this.shouldMarkLocalRootProvisional()
+      ) {
+        this.markProvisionalLocalRoot(reason, nowMs);
+      } else if (topology.rootForwarder !== myAddress) {
+        this.clearProvisionalLocalRoot();
+      }
       await this.broadcastTopology(topology, reason);
     }
   }
@@ -3554,7 +3842,18 @@ export class GroupCallAudioEngineRuntime {
           : Date.now(),
     });
     const current = this.topology;
-    if (current && normalized.topologyEpoch < current.topologyEpoch) {
+    const nowMs = Date.now();
+    const incomingRoot = normalized.rootForwarder?.trim() ?? '';
+    const myAddress = this.userInfo?.address ?? '';
+    const acceptProvisionalIncumbentTopology =
+      source === 'remote-event' &&
+      current?.rootForwarder?.trim() === myAddress.trim() &&
+      this.canReconcileProvisionalLocalRootWithRemote(incomingRoot, nowMs);
+    if (
+      current &&
+      normalized.topologyEpoch < current.topologyEpoch &&
+      !acceptProvisionalIncumbentTopology
+    ) {
       traceGcallAudioSurface('pipeline: topology dropped as stale', {
         roomId: normalized.roomId,
         source,
@@ -3566,7 +3865,8 @@ export class GroupCallAudioEngineRuntime {
     if (
       current &&
       normalized.topologyEpoch === current.topologyEpoch &&
-      normalized.rootForwarder !== current.rootForwarder
+      normalized.rootForwarder !== current.rootForwarder &&
+      !acceptProvisionalIncumbentTopology
     ) {
       const winner = chooseSameEpochTopologyWinner(
         current,
@@ -3591,11 +3891,22 @@ export class GroupCallAudioEngineRuntime {
         return false;
       }
     }
+    if (acceptProvisionalIncumbentTopology) {
+      this.recordDiagEvent('provisional-local-root-demoted-by-topology', {
+        roomId: normalized.roomId,
+        incomingRoot: truncateGcallDiagAddress(incomingRoot),
+        incomingEpoch: normalized.topologyEpoch,
+        currentEpoch: current?.topologyEpoch ?? null,
+        provisionalRemainingMs: Math.max(
+          0,
+          this.provisionalLocalRootUntilMs - nowMs
+        ),
+      });
+    }
     this.lastObservedTopologyEpoch = Math.max(
       this.lastObservedTopologyEpoch,
       normalized.topologyEpoch >>> 0
     );
-    const myAddress = this.userInfo?.address ?? '';
     if (normalized.rootForwarder?.trim() && normalized.rootForwarder !== myAddress) {
       this.updateTrustedRemoteRoot(
         normalized.rootForwarder,
@@ -3603,6 +3914,7 @@ export class GroupCallAudioEngineRuntime {
       );
       this.clearConflictingRemoteRootIfMatches(normalized.rootForwarder);
       this.topologyElectionDelayUntilMs = 0;
+      this.clearProvisionalLocalRoot();
     } else if (normalized.rootForwarder?.trim() === myAddress || source === 'local-election') {
       this.resetRootAuthorityTracking();
       this.resetRootPeerLiveness();
