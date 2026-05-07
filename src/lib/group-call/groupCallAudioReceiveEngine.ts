@@ -120,6 +120,11 @@ const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_DELTA_MAX_MS = -70;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_UNDERTARGET_EMA_MIN = 0.08;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_STRONG_UNDERTARGET_EMA_MIN = 0.12;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_RATE_EMA_MAX = 0.996;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_SHALLOW_DAMAGE_BUFFERED_MS_MAX = 36;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_SHALLOW_DAMAGE_RATE_EMA_MAX = 0.9995;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_BUFFERED_MS_MAX = 72;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_UNDERTARGET_EMA_MIN = 0.075;
+const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_RATE_EMA_MAX = 0.999;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HOLD_MS = 11_000;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MAX_EXTRA_HOLD_FRAMES = 10;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_BUFFERED_MS_MIN = 40;
@@ -1153,8 +1158,36 @@ export class GroupCallAudioReceiveEngine {
               GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_UNDERTARGET_EMA_MIN) ||
             state.underTargetEma >=
               GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_STRONG_UNDERTARGET_EMA_MIN);
-        const repairHeavyPressure =
-          ((state.concealmentEma >=
+        const repairHeavyReadyShallowDamagePressure =
+          state.lastJitterHasReadyFrame &&
+          state.lastJitterBufferedFrames >=
+            GCALL_SINGLE_SOURCE_DIAGNOSTIC_BUFFERED_FRAMES_MIN &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_SHALLOW_DAMAGE_BUFFERED_MS_MAX &&
+          state.deltaMsEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_DELTA_MAX_MS &&
+          state.rateEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_SHALLOW_DAMAGE_RATE_EMA_MAX &&
+          (state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN ||
+            state.missingFrameEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN);
+        const repairHeavyReadyFalseCleanPressure =
+          state.lastJitterHasReadyFrame &&
+          state.lastJitterBufferedFrames >=
+            GCALL_SINGLE_SOURCE_DIAGNOSTIC_BUFFERED_FRAMES_MIN &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_BUFFERED_MS_MAX &&
+          state.deltaMsEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_DAMAGE_DELTA_MAX_MS &&
+          state.missingFrameEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN &&
+          state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_UNDERTARGET_EMA_MIN &&
+          state.rateEma <=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_RATE_EMA_MAX;
+        const repairHeavyStandardPressure =
+          (state.concealmentEma >=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN) ||
             (state.missingFrameEma >=
               GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN &&
@@ -1166,8 +1199,12 @@ export class GroupCallAudioReceiveEngine {
               state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
               state.bufferedMsEma <=
                 GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX) ||
-            repairHeavyReadyBufferedDamagePressure) &&
-          state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX &&
+            repairHeavyReadyBufferedDamagePressure;
+        const repairHeavyPressure =
+          ((repairHeavyStandardPressure &&
+            state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX) ||
+            repairHeavyReadyShallowDamagePressure ||
+            repairHeavyReadyFalseCleanPressure) &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_BUFFERED_MS_MAX &&
           !repairHeavyHealthyReserveEscape &&
@@ -1385,7 +1422,6 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_SILENT_LEAN_CONCEALMENT_EMA_MAX;
         const readySilentLeanPressure =
           state.lastJitterHasReadyFrame &&
-          !state.lastConcealmentUsed &&
           latestBufferedMs <=
             GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_BUFFERED_MS_MAX &&
           state.bufferedMsEma <=
@@ -1407,7 +1443,16 @@ export class GroupCallAudioReceiveEngine {
         }
         const silentLeanHold =
           state.silentLeanHoldUntilMs > nowMs &&
-          !state.lastJitterHasReadyFrame &&
+          (!state.lastJitterHasReadyFrame ||
+            (state.lastJitterHasReadyFrame &&
+              latestBufferedMs <=
+                GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_BUFFERED_MS_MAX &&
+              state.bufferedMsEma <=
+                GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_BUFFERED_MS_MAX &&
+              state.concealmentEma <=
+                GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_CONCEALMENT_EMA_MAX &&
+              state.underTargetEma <=
+                GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_UNDERTARGET_EMA_MAX)) &&
           !(
             !silentLeanPressure &&
             state.bufferedMsEma >=
