@@ -4415,6 +4415,89 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('does not use recent-cache participants or topology as media targets until live evidence arrives', async () => {
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 5,
+      lastTopology: {
+        topologyEpoch: 5,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: Date.now(),
+      },
+      callSessionId: 'csid-recent',
+      mediaSessionGeneration: 1,
+      updatedAtMs: Date.now(),
+      fromRecentCache: true,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-812',
+      chatId: 'group:812',
+    });
+
+    expect(sendKeyRequest).not.toHaveBeenCalled();
+
+    (runtime as any).roomKey = new Uint8Array(32).fill(3);
+    await (runtime as any).syncSenderState();
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array([0]), vad: true },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sendAudio).not.toHaveBeenCalled();
+    expect(sendAudioBatch).not.toHaveBeenCalled();
+
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'gcall-qortal-812',
+      topologyEpoch: 6,
+      rootForwarder: 'Qpeer',
+      standbyForwarder: 'Qlocal',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qpeer',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: Date.now(),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array([0]), vad: true },
+    } as MessageEvent);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sendAudio).toHaveBeenCalledWith(
+      'gcall-qortal-812',
+      'Qpeer',
+      expect.any(Uint8Array)
+    );
+  });
+
   it('does not restore cached local root authority on self-only rejoin from recent cache', async () => {
     vi.useFakeTimers();
     getRoomParticipants.mockResolvedValue([

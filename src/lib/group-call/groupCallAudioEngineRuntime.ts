@@ -518,6 +518,8 @@ export class GroupCallAudioEngineRuntime {
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
   private readonly participantDecodedMediaLastSeenAt = new Map<string, number>();
   private readonly participantLiveEvidenceLastSeenAt = new Map<string, number>();
+  private readonly bootstrapOnlyParticipantAddresses = new Set<string>();
+  private bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
   private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
@@ -1212,7 +1214,7 @@ export class GroupCallAudioEngineRuntime {
         : this.snapshot.participants
             .map((participant) => participant.address?.trim() ?? '')
             .filter((address) => address && address !== myAddress);
-    return [...new Set(targets)];
+    return this.filterBootstrapOnlyMediaTargets([...new Set(targets)]);
   }
 
   private maybeRequestZeroInboundMediaRecovery(
@@ -1530,6 +1532,7 @@ export class GroupCallAudioEngineRuntime {
   ): void {
     const address = addressValue?.trim() ?? '';
     if (!address) return;
+    this.bootstrapOnlyParticipantAddresses.delete(address);
     const existing = this.snapshot.participants.find(
       (participant) => participant.address === address
     );
@@ -1573,6 +1576,7 @@ export class GroupCallAudioEngineRuntime {
     this.markParticipantRecentlyLeft(address);
     this.participantDecodedMediaLastSeenAt.delete(address);
     this.participantLiveEvidenceLastSeenAt.delete(address);
+    this.bootstrapOnlyParticipantAddresses.delete(address);
     const nextParticipants = this.snapshot.participants.filter(
       (participant) => participant.address !== address
     );
@@ -1794,6 +1798,8 @@ export class GroupCallAudioEngineRuntime {
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
     this.participantLiveEvidenceLastSeenAt.clear();
+    this.bootstrapOnlyParticipantAddresses.clear();
+    this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -2018,6 +2024,8 @@ export class GroupCallAudioEngineRuntime {
     this.activeSpeakerLastSeenAt.clear();
     this.participantDecodedMediaLastSeenAt.clear();
     this.participantLiveEvidenceLastSeenAt.clear();
+    this.bootstrapOnlyParticipantAddresses.clear();
+    this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -2512,6 +2520,13 @@ export class GroupCallAudioEngineRuntime {
     );
     if (roomId !== this.snapshot.roomId) return;
 
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const rosterAddresses = new Set<string>();
+    for (const participant of roster ?? []) {
+      const address = participant?.address?.trim?.() ?? '';
+      if (address) rosterAddresses.add(address);
+    }
+
     const participantMap = new Map<string, { address: string; publicKey: string }>();
     for (const participant of this.snapshot.participants) {
       if (participant.address) {
@@ -2527,6 +2542,13 @@ export class GroupCallAudioEngineRuntime {
       if (participant?.address) {
         const address = participant.address.trim();
         const publicKey = participant.publicKey?.trim() ?? '';
+        if (
+          bootstrap?.fromRecentCache === true &&
+          address !== myAddress &&
+          !rosterAddresses.has(address)
+        ) {
+          this.bootstrapOnlyParticipantAddresses.add(address);
+        }
         const existing = participantMap.get(address);
         if (!existing || (publicKey && !existing.publicKey)) {
           participantMap.set(address, { address, publicKey });
@@ -2537,6 +2559,7 @@ export class GroupCallAudioEngineRuntime {
       if (participant?.address) {
         const address = participant.address.trim();
         const publicKey = participant.publicKey?.trim() ?? '';
+        this.bootstrapOnlyParticipantAddresses.delete(address);
         const existing = participantMap.get(address);
         if (!existing || (publicKey && !existing.publicKey)) {
           participantMap.set(address, { address, publicKey });
@@ -2558,7 +2581,6 @@ export class GroupCallAudioEngineRuntime {
         (bootstrap.mediaSessionGeneration ?? 1) >>> 0;
     }
 
-    const myAddress = this.userInfo?.address ?? '';
     const remoteParticipantCount = [...participantMap.keys()].filter(
       (address) => address !== myAddress
     ).length;
@@ -3981,6 +4003,9 @@ export class GroupCallAudioEngineRuntime {
         ),
       });
     }
+    if (source === 'remote-event') {
+      this.promoteBootstrapOnlyParticipantsFromTopology(normalized);
+    }
     this.lastObservedTopologyEpoch = Math.max(
       this.lastObservedTopologyEpoch,
       normalized.topologyEpoch >>> 0
@@ -4279,6 +4304,7 @@ export class GroupCallAudioEngineRuntime {
       rosterByAddress.set(address, {
         publicKey: participant?.publicKey?.trim?.() ?? '',
       });
+      this.bootstrapOnlyParticipantAddresses.delete(address);
       this.participantRosterMissingSinceMs.delete(address);
       this.clearRecentLeftParticipant(address);
     }
@@ -4329,6 +4355,7 @@ export class GroupCallAudioEngineRuntime {
       this.activeSpeakerLastSeenAt.delete(address);
       this.participantDecodedMediaLastSeenAt.delete(address);
       this.participantLiveEvidenceLastSeenAt.delete(address);
+      this.bootstrapOnlyParticipantAddresses.delete(address);
       await this.receiveEngine.removeSource(address);
       this.markParticipantRecentlyLeft(address);
       if ((this.topology?.rootForwarder?.trim() ?? '') === address) {
@@ -4411,6 +4438,7 @@ export class GroupCallAudioEngineRuntime {
     if (!address || address === myAddress) return;
     const effectiveSeenAt =
       seenAtMs > 0 && Number.isFinite(seenAtMs) ? seenAtMs : Date.now();
+    this.bootstrapOnlyParticipantAddresses.delete(address);
     this.participantLiveEvidenceLastSeenAt.set(
       address,
       Math.max(
@@ -4418,6 +4446,59 @@ export class GroupCallAudioEngineRuntime {
         effectiveSeenAt
       )
     );
+  }
+
+  private promoteBootstrapOnlyParticipantsFromTopology(
+    topology: GroupCallTopology
+  ): void {
+    const addresses = new Set<string>();
+    const add = (addressValue: string | null | undefined): void => {
+      const address = addressValue?.trim() ?? '';
+      if (address) addresses.add(address);
+    };
+    add(topology.rootForwarder);
+    add(topology.standbyForwarder);
+    for (const cluster of topology.clusters) {
+      add(cluster.forwarder);
+      add(cluster.standby);
+      add(cluster.standby2 ?? '');
+      for (const member of cluster.members) add(member);
+    }
+    for (const address of addresses) {
+      this.bootstrapOnlyParticipantAddresses.delete(address);
+    }
+  }
+
+  private isBootstrapOnlyParticipant(addressValue: string | null | undefined): boolean {
+    const address = addressValue?.trim() ?? '';
+    return Boolean(address && this.bootstrapOnlyParticipantAddresses.has(address));
+  }
+
+  private filterBootstrapOnlyMediaTargets(targets: string[]): string[] {
+    const filtered: string[] = [];
+    const skipped: string[] = [];
+    for (const target of targets) {
+      const address = target.trim();
+      if (!address) continue;
+      if (this.isBootstrapOnlyParticipant(address)) {
+        skipped.push(address);
+        continue;
+      }
+      filtered.push(address);
+    }
+    const nowMs = Date.now();
+    if (
+      skipped.length > 0 &&
+      nowMs - this.bootstrapOnlyMediaTargetSkipLastDiagAt > 1_000
+    ) {
+      this.bootstrapOnlyMediaTargetSkipLastDiagAt = nowMs;
+      this.recordDiagEvent('bootstrap-only-media-targets-skipped', {
+        roomId: this.snapshot.roomId,
+        skippedCount: skipped.length,
+        skipped: skipped.map((address) => truncateGcallDiagAddress(address)),
+      });
+    }
+    return filtered;
   }
 
   private hasRecentParticipantActivityEvidence(
@@ -4544,10 +4625,22 @@ export class GroupCallAudioEngineRuntime {
 
   private async getAuthoritativeRecipients(): Promise<Map<string, { publicKey: string }>> {
     const recipients = new Map<string, { publicKey: string }>();
+    const mainRoster = await window.groupCall?.getRoomParticipants?.(this.snapshot.roomId);
+    const mainRosterAddresses = new Set<string>();
+    for (const participant of mainRoster ?? []) {
+      const address = participant?.address?.trim?.() ?? '';
+      if (address) mainRosterAddresses.add(address);
+    }
     for (const participant of this.snapshot.participants) {
+      const address = participant.address?.trim() ?? '';
+      if (
+        this.isBootstrapOnlyParticipant(address) &&
+        !mainRosterAddresses.has(address)
+      ) {
+        continue;
+      }
       setRosterPublicKey(recipients, participant.address, participant.publicKey);
     }
-    const mainRoster = await window.groupCall?.getRoomParticipants?.(this.snapshot.roomId);
     for (const participant of mainRoster ?? []) {
       setRosterPublicKey(recipients, participant?.address, participant?.publicKey);
     }
@@ -4682,6 +4775,14 @@ export class GroupCallAudioEngineRuntime {
     ) {
       return;
     }
+    if (this.isBootstrapOnlyParticipant(toAddress)) {
+      this.recordDiagEvent('bootstrap-only-key-request-skipped', {
+        roomId: this.snapshot.roomId,
+        toAddress: truncateGcallDiagAddress(toAddress),
+        reason,
+      });
+      return;
+    }
     if (this.awaitingAuthoritativeKey || !this.ownsRoomKey) {
       await this.syncCallSessionFromMainForKeyRecovery();
     }
@@ -4729,6 +4830,14 @@ export class GroupCallAudioEngineRuntime {
     reason: string
   ): Promise<void> {
     if (!this.userInfo?.address || !this.snapshot.roomId || !this.callSessionId) return;
+    if (this.isBootstrapOnlyParticipant(toAddress)) {
+      this.recordDiagEvent('bootstrap-only-targeted-key-skipped', {
+        roomId: this.snapshot.roomId,
+        toAddress: truncateGcallDiagAddress(toAddress),
+        reason,
+      });
+      return;
+    }
     const recipients = new Map<string, { publicKey: string }>([
       [toAddress, { publicKey }],
     ]);
@@ -5003,9 +5112,8 @@ export class GroupCallAudioEngineRuntime {
       opusFrame,
       this.roomKey
     );
-    const targets = getReticulumTransportTargets(
-      this.userInfo.address,
-      this.topology
+    const targets = this.filterBootstrapOnlyMediaTargets(
+      getReticulumTransportTargets(this.userInfo.address, this.topology)
     );
     this.outboundLastTargets = [...targets];
     if (targets.length === 0) {
