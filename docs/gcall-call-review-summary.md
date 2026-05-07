@@ -2316,3 +2316,107 @@ Current patched target:
 - Primary fix: strengthen or lengthen `repair-heavy-connected` protection after escalation from weak-listener, especially while `jitterNotReadyFraction`, `playoutUnderTargetFraction`, and `playoutRateFractionBelow097` remain high.
 - Secondary watch item: Mac `persistent-lean` still has shallow reserve, but low concealment and improving reserve make it a lower-priority profile-strength signal.
 - Keep selector, baseline, key/media delivery, and decode/session unchanged for the next patch. This call says classification has mostly caught up; the correctly selected repair profile now needs to do more work.
+
+## Call: 2026-05-07 17:25Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-07T17-25-28-379Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-07T17-25-25-085Z.json`
+
+User symptom:
+- New paired call after the latest receive-policy changes; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and non-clean profiles.
+
+High-level verdict:
+- Mixed/bad.
+- Correctness, startup playout, queue/backpressure, and failover paths are clean. Both sides are ready and in recovery, but both are still near-empty with strongly negative playout delta. The exported profile is `persistent-lean` on both sides, while the metric shape now looks closer to the existing `silent-lean` blind spot.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have room keys, inbound packets, decoded frames, active playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and `jitterHasReadyFrame=true`.
+- Queue/backpressure: bridge/binary high-water values are low (`2`/`1` on Mac, `4`/`1` on Linux), with no queue-pressure, stale, link-unready, or send-failure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Baseline: neither side is `clean-low-latency`, so this is not a clean-call baseline failure.
+
+Primary next target:
+- Selector.
+- Specifically, tune the `persistent-lean` versus `silent-lean` boundary. Both sides have tiny reserve (`4.907 ms` Mac, `7.181 ms` Linux), very low jitter-depth mean (`0.249` / `0.366` frames), strongly negative playout delta (`-136.111 ms` / `-151.507 ms`), and low obvious damage pressure (`concealmentTicks=0` / `56`, `playoutRateFractionBelow097=0.001` / `0.012`).
+- Per `docs/gcall-receive-profiles.md`, that is the `silent-lean` blind spot more than ordinary `persistent-lean`: bad/fragile audibility can exist before concealment and slow-rate counters explode.
+- Do not tune `repair-heavy-connected` from this call. The latest repair-heavy target is not active here. Do not raise baseline or move to another subsystem first.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` | yes/partly | 4.907 | 152 | 0 | 0.005 | 0.001 | recovery | Classification is too mild/specific: this is ready but almost empty, with low damage counters, matching `silent-lean` better. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `persistent-lean` | yes | 7.181 | 135 | 56 | 0.022 | 0.012 | recovery | Classification partly matches lean behavior, but reserve and delta are severe enough to prefer `silent-lean` over ordinary persistent lean. |
+
+### Side A
+
+Expected profile from symptom:
+- `silent-lean`
+
+Actual exported profile:
+- `persistent-lean`
+
+Did classification match?
+- Partly/no.
+
+If no:
+- `avgPcmBufferedMs=4.907`, `jitterBufferDepthFramesMean=0.249`, and `avgPlayoutDeltaMs=-136.111` are more severe than ordinary persistent lean.
+- `concealmentTicks=0`, `playoutUnderTargetFraction=0.005`, and `playoutRateFractionBelow097=0.001` are exactly why this should use the `silent-lean` blind-spot profile instead of waiting for repair-heavy damage signals.
+- The playout snapshot is ready (`jitterBufferedFrames=24`, `jitterHasReadyFrame=true`), so this is not the buffered-not-ready/startup path.
+
+### Side B
+
+Expected profile from symptom:
+- `silent-lean`, possibly `persistent-lean` as the weaker fallback.
+
+Actual exported profile:
+- `persistent-lean`
+
+Did classification match?
+- Partly.
+
+If no:
+- This side has slightly more visible damage than Mac (`concealmentTicks=56`, `missingFrames=135`), but the dominant shape is still tiny reserve plus strongly negative delta: `avgPcmBufferedMs=7.181`, `jitterBufferDepthFramesMean=0.366`, and `avgPlayoutDeltaMs=-151.507`.
+- Final playout is ready with `23` buffered jitter frames, and decode/key paths are clean, so selector tuning should come before subsystem work.
+
+## Trend Read
+
+Side A:
+- Flat tiny-reserve lean path under recovery.
+- Reasons seen:
+  - `avgPcmBufferedMs` only improves from `4.755` to `4.907 ms`.
+  - `missingFrames` increases from `117` to `152`.
+  - `concealmentTicks` remains `0`, so the failure is hidden from repair-heavy/collapse damage counters.
+  - adaptive mode remains `recovery`; this is not an early low-latency exit.
+
+Side B:
+- Flat tiny-reserve lean path with mild damage.
+- Reasons seen:
+  - `avgPcmBufferedMs` only improves from `6.197` to `7.181 ms`.
+  - `missingFrames` increases from `100` to `135`.
+  - `concealmentTicks` stays flat at `56`.
+  - `playoutUnderTargetFraction` and `playoutRateFractionBelow097` ease slightly but remain non-clean.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-06T23:26Z group-812` | A / Mac standby | `steady-weak-listener` | yes | partly/yes | weak-listener / secondary | Superseded as first target by later calls. |
+| `2026-05-06T23:26Z group-812` | B / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Improved in 14:07Z: Linux escalated to `repair-heavy-connected`. |
+| `2026-05-07T14:07Z group-812` | A / Mac standby | `persistent-lean` | partly | yes/partly | lean profile / secondary | Still relevant; 17:25Z shows this lean/tiny-reserve shape recurring. |
+| `2026-05-07T14:07Z group-812` | B / Linux root | `repair-heavy-connected` | yes | yes/partly | repair-heavy profile strength / hold | Not active in 17:25Z, so do not continue repair-heavy tuning from the new call alone. |
+| `2026-05-07T17:25Z group-812` | A / Mac standby | `persistent-lean` | yes/partly | partly/no | selector / silent-lean escalation | Promote ready, near-empty, low-damage paths into `silent-lean`. |
+| `2026-05-07T17:25Z group-812` | B / Linux root | `persistent-lean` | yes | partly | selector / silent-lean escalation | Promote tiny-reserve, very negative-delta paths into `silent-lean` before profile-strength or baseline changes. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: strengthen `silent-lean` entry/priority over `persistent-lean` when reserve is extremely low and playout delta is strongly negative, even if concealment, under-target, and slow-rate counters are still mild.
+- Keep `repair-heavy-connected` strength/hold as a previous improvement, but pause further repair-heavy tuning until another call actually selects that profile and still sounds bad.
+- Keep global baseline, key/decode/session, startup readiness, and transport paths unchanged for the next patch. This batch points at an existing profile selector miss, not a new subsystem or baseline problem.

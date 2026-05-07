@@ -170,10 +170,13 @@ const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN = 3;
 const GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_INGRESS_AGE_MAX_MS = 200;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_HOLD_MS = 10_000;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX = 24;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_BUFFERED_MS_MAX = 12;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_PREBUFFER_FRAMES_MAX = 2;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_DELTA_MAX_MS = -110;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_RATE_EMA_MIN = 0.998;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_CONCEALMENT_EMA_MAX = 0.03;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_CONCEALMENT_EMA_MAX = 0.08;
+const GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_UNDERTARGET_EMA_MAX = 0.04;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN = 40;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN = 4;
 const GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS = -16;
@@ -1368,7 +1371,7 @@ export class GroupCallAudioReceiveEngine {
         ) {
           state.persistentLeanHoldUntilMs = 0;
         }
-        const silentLeanPressure =
+        const notReadySilentLeanPressure =
           !state.lastJitterHasReadyFrame &&
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
           state.preProcessBufferedFrames <=
@@ -1376,7 +1379,22 @@ export class GroupCallAudioReceiveEngine {
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_DELTA_MAX_MS &&
           state.rateEma >= GCALL_SINGLE_SOURCE_SILENT_LEAN_RATE_EMA_MIN &&
           state.concealmentEma <=
-            GCALL_SINGLE_SOURCE_SILENT_LEAN_CONCEALMENT_EMA_MAX &&
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_CONCEALMENT_EMA_MAX;
+        const readySilentLeanPressure =
+          state.lastJitterHasReadyFrame &&
+          !state.lastConcealmentUsed &&
+          latestBufferedMs <=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_BUFFERED_MS_MAX &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_BUFFERED_MS_MAX &&
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_DELTA_MAX_MS &&
+          state.rateEma >= GCALL_SINGLE_SOURCE_SILENT_LEAN_RATE_EMA_MIN &&
+          state.concealmentEma <=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_CONCEALMENT_EMA_MAX &&
+          state.underTargetEma <=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_READY_UNDERTARGET_EMA_MAX;
+        const silentLeanPressure =
+          (notReadySilentLeanPressure || readySilentLeanPressure) &&
           !severeSingleSourceHold;
         if (silentLeanPressure) {
           state.silentLeanHoldUntilMs = Math.max(
