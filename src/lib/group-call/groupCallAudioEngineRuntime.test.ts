@@ -2823,6 +2823,85 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('demotes a self-minted two-person root after repeated peer decode failures when the peer is deterministic root', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qaaaa', publicKey: 'pub-local' },
+      { address: 'Qbbbb', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qaaaa', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qbbbb', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 0,
+      callSessionId: 'existing-session',
+      mediaSessionGeneration: 1,
+      updatedAtMs: Date.now(),
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qaaaa', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    const joinPromise = runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    await vi.runAllTicks();
+    await joinPromise;
+
+    await (runtime as any).applyTopology(
+      {
+        roomId: 'room-1',
+        topologyEpoch: 1,
+        rootForwarder: 'Qaaaa',
+        standbyForwarder: 'Qbbbb',
+        clusters: [
+          {
+            members: ['Qaaaa', 'Qbbbb'],
+            forwarder: 'Qaaaa',
+            standby: 'Qbbbb',
+          },
+        ],
+        lastSeen: Date.now(),
+      },
+      'local-election'
+    );
+    expect((runtime as any).topology?.rootForwarder).toBe('Qaaaa');
+    expect((runtime as any).selfMintedRoomKey).toBe(true);
+
+    broadcastTopology.mockClear();
+    for (let index = 0; index < 8; index += 1) {
+      (runtime as any).noteRootDecodeFailureForPeerKeyReplay('Qbbbb');
+    }
+    await vi.runAllTicks();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.runAllTicks();
+
+    expect((runtime as any).topology?.rootForwarder).toBe('Qbbbb');
+    expect((runtime as any).trustedRemoteRoot).toBe('Qbbbb');
+    expect((runtime as any).selfMintedRoomKey).toBe(false);
+    expect(broadcastTopology).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qbbbb',
+        standbyForwarder: 'Qaaaa',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    vi.useRealTimers();
+  });
+
   it('re-elects locally once the trusted remote root is no longer in the roster', async () => {
     vi.useFakeTimers();
     getRoomParticipants.mockResolvedValue([

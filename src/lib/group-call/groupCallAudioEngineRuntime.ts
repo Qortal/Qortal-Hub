@@ -914,9 +914,6 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private shouldMarkLocalRootProvisional(): boolean {
-    if (!this.startupOccupiedRoomEvidence && this.startupHydratedRemoteCount <= 0) {
-      return false;
-    }
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!myAddress) return false;
     return this.countRemoteParticipants() > 0 || this.startupHydratedRemoteCount > 0;
@@ -3141,6 +3138,71 @@ export class GroupCallAudioEngineRuntime {
     }
   }
 
+  private async reconcileSelfMintedTwoPartyRootFromDecodeFailure(
+    peerAddress: string,
+    decodeFailedCount: number
+  ): Promise<void> {
+    const roomId = this.snapshot.roomId;
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const peer = peerAddress.trim();
+    if (
+      !roomId ||
+      !myAddress ||
+      !peer ||
+      peer === myAddress ||
+      this.topology?.rootForwarder?.trim() !== myAddress ||
+      !this.selfMintedRoomKey ||
+      !this.ownsRoomKey ||
+      this.countRemoteParticipants() !== 1 ||
+      !this.isAddressInCurrentRoster(peer)
+    ) {
+      return;
+    }
+    const nowMs = Date.now();
+    const sorted = await this.computeElectionOrder([myAddress, peer], roomId);
+    if (sorted[0] !== peer) {
+      this.recordDiagEvent('self-minted-root-decode-failure-kept-local-root', {
+        roomId,
+        peer: truncateGcallDiagAddress(peer),
+        decodeFailedCount,
+        deterministicRoot: truncateGcallDiagAddress(sorted[0] ?? ''),
+      });
+      return;
+    }
+    const topologyEpoch =
+      Math.max(
+        this.topology?.topologyEpoch ?? 0,
+        this.lastObservedTopologyEpoch ?? 0
+      ) + 1;
+    const topology = normalizeGroupCallTopology({
+      ...buildTopologyWithTrustedRoot(sorted, topologyEpoch, peer),
+      roomId,
+      lastSeen: nowMs,
+    });
+    this.recordDiagEvent('self-minted-root-demoted-by-decode-failure', {
+      roomId,
+      peer: truncateGcallDiagAddress(peer),
+      decodeFailedCount,
+      topologyEpoch,
+    });
+    traceGcallAudioSurface(
+      'pipeline: self-minted root demoting after repeated peer decode failures',
+      {
+        roomId,
+        peer: truncateGcallDiagAddress(peer),
+        decodeFailedCount,
+        topologyEpoch,
+      }
+    );
+    const applied = await this.applyTopology(topology, 'local-election');
+    if (applied) {
+      await this.broadcastTopology(
+        topology,
+        'self-minted-root-decode-failure'
+      );
+    }
+  }
+
   private async computeElectionOrder(
     addresses: string[],
     roomId: string
@@ -3327,6 +3389,21 @@ export class GroupCallAudioEngineRuntime {
       return true;
     }
     this.rootDecodeFailureKeyReplayLastAtBySource.set(peerAddress, now);
+    if (
+      this.selfMintedRoomKey &&
+      this.countRemoteParticipants() === 1 &&
+      this.isAddressInCurrentRoster(peerAddress)
+    ) {
+      this.recordDiagEvent('self-minted-root-decode-failure-reconcile-scheduled', {
+        roomId: this.snapshot.roomId,
+        sourceAddress: peerAddress,
+        decodeFailedCount: count,
+      });
+      void this.reconcileSelfMintedTwoPartyRootFromDecodeFailure(
+        peerAddress,
+        count
+      );
+    }
     traceGcallAudioSurface(
       'pipeline: root decode-failed triggered targeted room-key replay',
       {
@@ -3815,6 +3892,7 @@ export class GroupCallAudioEngineRuntime {
       this.ownsRoomKey = false;
     }
     if (previousRoot === myAddress && this.selfMintedRoomKey) {
+      this.selfMintedRoomKey = false;
       this.awaitingAuthoritativeKey = true;
       this.requestRetainedKeyReplay('topology-root-changed');
       await this.requestRoomKeyFrom(root, 'topology');

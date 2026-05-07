@@ -1033,7 +1033,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     });
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeLessThanOrEqual(176);
+    expect(targetMs).toBeLessThanOrEqual(208);
   });
 
   it('adds stronger steady single-source headroom when playout keeps rate-chasing with only mild reserve', async () => {
@@ -1195,7 +1195,7 @@ describe('GroupCallAudioReceiveEngine', () => {
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
     expect(targetMs).toBeGreaterThanOrEqual(156);
-    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('low-latency');
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
   });
 
   it('adds lighter steady single-source assist for artifact pressure even before heavier pressure gates trip', async () => {
@@ -1264,7 +1264,7 @@ describe('GroupCallAudioReceiveEngine', () => {
         preProcessBufferedMs: 44,
         targetPlayoutMs: 120,
         oldestFrameAgeMs: 140,
-        rate: 0.996,
+        rate: 0.985,
         outsideBand: true,
         outsideBandUnder: true,
         outsideBandOver: false,
@@ -1276,8 +1276,8 @@ describe('GroupCallAudioReceiveEngine', () => {
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
     expect(targetMs).toBeGreaterThanOrEqual(158);
-    expect(targetMs).toBeLessThanOrEqual(176);
-    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('low-latency');
+    expect(targetMs).toBeLessThanOrEqual(208);
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
   });
 
   it('adds steady single-source assist when concealment persists despite moderate reserve', async () => {
@@ -1358,7 +1358,7 @@ describe('GroupCallAudioReceiveEngine', () => {
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
     expect(targetMs).toBeGreaterThanOrEqual(162);
-    expect(targetMs).toBeLessThanOrEqual(176);
+    expect(targetMs).toBeLessThanOrEqual(208);
     expect(engine.getSnapshot().adaptiveNetworkMode).toBe('low-latency');
   });
 
@@ -1439,9 +1439,9 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(170);
-    expect(targetMs).toBeLessThanOrEqual(176);
-    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('low-latency');
+    expect(targetMs).toBeGreaterThanOrEqual(196);
+    expect(targetMs).toBeLessThanOrEqual(208);
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
   });
 
   it('adds repair-heavy assist when under-target and rate churn persist even if concealment stays relatively low', async () => {
@@ -1510,7 +1510,7 @@ describe('GroupCallAudioReceiveEngine', () => {
         preProcessBufferedMs: 18,
         targetPlayoutMs: 124,
         oldestFrameAgeMs: 140,
-        rate: 0.996,
+        rate: 0.985,
         outsideBand: true,
         outsideBandUnder: true,
         outsideBandOver: false,
@@ -1521,8 +1521,9 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const targetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(targetMs).toBeGreaterThanOrEqual(168);
-    expect(targetMs).toBeLessThanOrEqual(176);
+    expect(targetMs).toBeGreaterThanOrEqual(192);
+    expect(targetMs).toBeLessThanOrEqual(208);
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
   });
 
   it('keeps healthy-reserve under-target churn out of repair-heavy assist', async () => {
@@ -3061,7 +3062,7 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('low-latency');
+    expect(engine.getSnapshot().adaptiveNetworkMode).toBe('recovery');
     const heldTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
     expect(heldTargetMs).toBeGreaterThanOrEqual(158);
 

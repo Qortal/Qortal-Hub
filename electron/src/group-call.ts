@@ -4293,6 +4293,12 @@ export class GroupCallManager extends EventEmitter {
     );
   }
 
+  private hasEstablishedReticulumAudioLink(
+    state: Pick<ReticulumAudioPeerState, 'established' | 'linkId'> | null | undefined
+  ): boolean {
+    return state?.established === true && Boolean(state.linkId);
+  }
+
   private computeReticulumAudioRouteKey(
     transport: ReticulumMediaTransportKind,
     peerPresenceHash: string,
@@ -5186,7 +5192,10 @@ export class GroupCallManager extends EventEmitter {
             latest.packetLinkFallbackReason || 'packet-fallback:link-ready'
           );
         }
-        this.scheduleReticulumAudioFlush();
+        this.flushReticulumAudioQueuesFair(address);
+        if (this.hasPendingReticulumAudio()) {
+          this.scheduleReticulumAudioFlush();
+        }
       } else if (
         latest.established &&
         latest.linkId &&
@@ -5822,7 +5831,7 @@ export class GroupCallManager extends EventEmitter {
     if (
       !bridge ||
       !state ||
-      (state.transport === 'link' && (!state.established || !state.linkId))
+      !this.hasEstablishedReticulumAudioLink(state)
     ) {
       return null;
     }
@@ -5871,7 +5880,7 @@ export class GroupCallManager extends EventEmitter {
     }
     while (
       state.pending.length > 0 &&
-      (state.transport === 'packet' || (state.established && state.linkId)) &&
+      this.hasEstablishedReticulumAudioLink(state) &&
       framesEnqueued < maxFrames
     ) {
       const head = state.pending[0];
@@ -6015,7 +6024,7 @@ export class GroupCallManager extends EventEmitter {
       .filter(
         ([, state]) =>
           state.pending.length > 0 &&
-          (state.transport === 'packet' || (state.established && !!state.linkId))
+          this.hasEstablishedReticulumAudioLink(state)
       )
       .map(([address]) => address);
     if (addresses.length === 0) return null;
@@ -6349,7 +6358,7 @@ export class GroupCallManager extends EventEmitter {
     }
     const enqueueStats = this.enqueuePendingReticulumAudio(state, roomId, data);
     this.scheduleReticulumAudioFlush();
-    if (state.transport === 'packet' || state.established) {
+    if (this.hasEstablishedReticulumAudioLink(state)) {
       const flushed = this.flushReticulumAudioQueuesFair(toAddress);
       if (flushed) {
         return {
@@ -6446,7 +6455,7 @@ export class GroupCallManager extends EventEmitter {
       }
       const enqueueStats = this.enqueuePendingReticulumAudio(state, roomId, data);
       shouldScheduleFlush = true;
-      if (state.transport === 'packet' || state.established) {
+      if (this.hasEstablishedReticulumAudioLink(state)) {
         flushablePreferredAddress ??= toAddress;
         flushableEnqueueQueuePressureDrops += enqueueStats.queuePressureDrops;
         flushableEnqueueStaleDrops += enqueueStats.staleDrops;

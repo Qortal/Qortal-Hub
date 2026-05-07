@@ -2210,3 +2210,109 @@ Current patched target:
 - Primary fix: strengthen the `steady-weak-listener` to `repair-heavy-connected` escalation when a ready buffered listener has sustained missing-frame growth, active concealment, elevated under-target fraction, elevated slow-rate fraction, and a user-bad symptom.
 - Secondary watch item: Linux has `reticulumAudioPacketPathTimeouts=98`, so keep packet-route diagnostics visible, but do not make transport the first patch from this call because both sides received and decoded comparable packet counts.
 - Keep global baseline unchanged. Keep collapse/repair-collapse strength unchanged. This batch is not a clean-call baseline failure and not a correctly selected heavy-profile weakness; the miss is that the worse side stayed in an ordinary weak-listener profile.
+
+## Call: 2026-05-07 14:07Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-07T14-07-27-221Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-07T14-07-23-457Z.json`
+
+User symptom:
+- New paired call after the `steady-weak-listener` to `repair-heavy-connected` selector change; subjective symptom was not included with the export, so user-bad is inferred from receive metrics and non-clean profiles.
+
+High-level verdict:
+- Mixed/bad, but the selector moved in the intended direction.
+- Correctness, key/media establishment, startup playout nodes, and queue paths are clean. Mac is a plausible `persistent-lean` path that is slowly rebuilding reserve under recovery. Linux now escalates to `repair-heavy-connected`, matching the prior target, but still has high not-ready, under-target, and slow-rate pressure while recovery is active.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt` is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure` and `packetsDroppedDecoderThrow` are `0` on both sides.
+- Key/media establishment: both sides have room keys, live mic senders, inbound packets, decoded frames, active playouts, and live policy profiles.
+- Startup hidden playout nodes: both sides have active playback/scheduler nodes and final `jitterHasReadyFrame=true`.
+- Queue/backpressure: bridge/binary high-water values are low (`2`/`0` on Mac, `4`/`1` on Linux), with no queue-pressure, stale, link-unready, or send-failure drops.
+- Failover: root/cluster promotion counts are `0` on both sides.
+- Baseline: neither side is `clean-low-latency`, so this is not evidence for raising the global clean baseline.
+
+Primary next target:
+- `repair-heavy-connected` profile strength / hold.
+- The selector target from 23:26Z appears improved: Linux no longer stays in `steady-weak-listener`; it now exports `repair-heavy-connected`.
+- Per the decision rules, classification is mostly correct but immediate quality is still bad on Linux: `avgPcmBufferedMs=16.033`, `jitterNotReadyFraction=0.268`, `concealmentTicks=85`, `playoutUnderTargetFraction=0.268`, and `playoutRateFractionBelow097=0.245` while recovery mode is active.
+- Do not tune selector first from this call. Do not raise baseline first. The current evidence is profile-specific: a correctly selected buffered repair profile is not strong or sticky enough to stabilize playout.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` | partly | 14.193 | 45 | 3 | 0.023 | 0.009 | recovery | Classification is plausible: reserve is still shallow with strongly negative delta, but damage counters are low and reserve is improving. |
+| B | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `repair-heavy-connected` | yes | 16.033 | 43 | 85 | 0.268 | 0.245 | recovery | Classification matches the improved selector target, but recovery is not rebuilding enough reserve or readiness. |
+
+### Side A
+
+Expected profile from symptom:
+- `persistent-lean` or `steady-weak-listener`
+
+Actual exported profile:
+- `persistent-lean`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- `avgPcmBufferedMs=14.193`, `jitterBufferDepthFramesMean=0.720`, and `avgPlayoutDeltaMs=-120.868` fit a lean listener more than a clean call.
+- `jitterHasReadyFrame=true` with `21` buffered jitter frames, `concealmentTicks=3`, `missingFrames=45`, and `playoutRateFractionBelow097=0.009` keep it out of repair-heavy or collapse.
+- This side is secondary: its trend improves from about `6 ms` to `14 ms` reserve while staying in recovery.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-heavy-connected`, possibly bordering `repair-collapse` if not-ready pressure persists.
+
+Actual exported profile:
+- `repair-heavy-connected`
+
+Did classification match?
+- Yes/partly.
+
+Notes:
+- This is the shape the last selector patch was meant to catch: ready final playout, not full collapse, but sustained repair pressure and poor playout timing.
+- `jitterNotReadyFraction=0.268`, `concealmentTicks=85`, `playoutUnderTargetFraction=0.268`, `playoutRateFractionBelow097=0.245`, and `avgPlayoutDeltaMs=-124.907` make this a user-bad repair profile despite only `43` missing frames.
+- Since recovery mode is already active and the profile is plausible, the next patch should tune `repair-heavy-connected` target/floor/hold or clear conditions, not selector priority.
+
+## Trend Read
+
+Side A:
+- Gradual lean recovery.
+- Reasons seen:
+  - `entered-recovery` appears once with `packet-path-timeouts-started`.
+  - `avgPcmBufferedMs` improves from about `6.2` to `14.2 ms`.
+  - `missingFrames` only grows from `23` to `45` after topology epoch `3`.
+  - `concealmentTicks` stays low at `3`.
+
+Side B:
+- Early severe repair/not-ready pressure with partial reserve rebuild under recovery.
+- Reasons seen:
+  - `avgPcmBufferedMs` starts around `5.1 ms`, falls near `2.4 ms`, then rebuilds to `16.0 ms`.
+  - `concealmentTicks` rises from `34` to `85`.
+  - `playoutUnderTargetFraction` remains high at `0.268`.
+  - `playoutRateFractionBelow097` remains high at `0.245`.
+  - final playout is ready with `15` buffered jitter frames, so this is not a pure buffered-not-ready selector miss.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-06T21:56Z group-812` | A / Mac standby | `persistent-lean` | partly | yes/partly | weak/lean profile strength | Still relevant; 14:07Z Mac remains lean but is improving and not the primary bad side. |
+| `2026-05-06T21:56Z group-812` | B / Linux root | `steady-weak-listener` | partly | yes/partly | weak-listener hold/strength | Superseded by 23:26Z and 14:07Z: the worse Linux shape now escalates past weak-listener. |
+| `2026-05-06T23:26Z group-812` | A / Mac standby | `steady-weak-listener` | yes | partly/yes | weak-listener / secondary | Keep as evidence, but not the current first target. |
+| `2026-05-06T23:26Z group-812` | B / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Improved in 14:07Z: Linux now selects `repair-heavy-connected` for the worse ready-buffered repair path. |
+| `2026-05-07T14:07Z group-812` | A / Mac standby | `persistent-lean` | partly | yes/partly | lean profile / secondary | Watch; do not tune first because damage counters are low and reserve is rebuilding. |
+| `2026-05-07T14:07Z group-812` | B / Linux root | `repair-heavy-connected` | yes | yes/partly | repair-heavy profile strength / hold | Tune `repair-heavy-connected` target/floor/hold or stricter clear conditions so active recovery can rebuild reserve and reduce under-target/slow-rate pressure. |
+
+## Next Fix Target
+
+Current patched target:
+- `repair-heavy-connected` profile strength / hold.
+- Primary fix: strengthen or lengthen `repair-heavy-connected` protection after escalation from weak-listener, especially while `jitterNotReadyFraction`, `playoutUnderTargetFraction`, and `playoutRateFractionBelow097` remain high.
+- Secondary watch item: Mac `persistent-lean` still has shallow reserve, but low concealment and improving reserve make it a lower-priority profile-strength signal.
+- Keep selector, baseline, key/media delivery, and decode/session unchanged for the next patch. This call says classification has mostly caught up; the correctly selected repair profile now needs to do more work.

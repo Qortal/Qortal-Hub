@@ -128,12 +128,17 @@ User symptom:
 What to tune:
 - stronger hold duration
 - stricter clear conditions
-- profile-specific floor
+- profile-specific floor / target boost
+- recovery-mode hold while under-target and slow-rate pressure are still active
 - avoid relaxing back to low-latency too early
 
 When this profile is suspicious:
 - if a side clearly sounds like collapse rather than repair-heavy survival
 - if reserve is very low and concealment is still exploding
+
+Current tuning note:
+- This profile now uses stronger profile-specific target/floor behavior than `steady-weak-listener`, a longer hold window, and a slightly larger accumulation hold cap.
+- It should keep recovery-mode protection while the listener is still repair-heavy and rate-chasing, but it can stop forcing recovery once the current pressure has eased even if the profile hold is still carrying extra headroom.
 
 ### `repair-collapse`
 

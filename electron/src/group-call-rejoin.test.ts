@@ -169,7 +169,11 @@ describe('reticulum audio batching', () => {
       packetSendFailures: 0,
       ...(address ? { targetAddress: address } : {}),
     });
-    const fakeState = { transport: 'packet', established: true } as any;
+    const fakeState = {
+      transport: 'packet',
+      established: true,
+      linkId: 'link-1',
+    } as any;
 
     const sendAudioSpy = vi.spyOn(manager, 'sendAudio');
     vi.spyOn(manager as any, 'ensureReticulumAudioPeerState').mockReturnValue(fakeState);
@@ -235,8 +239,8 @@ describe('reticulum audio batching', () => {
     (manager as any).reticulumAudioPeersByAddress.set('Q-peer', {
       address: 'Q-peer',
       transport: 'packet',
-      established: false,
-      linkId: '',
+      established: true,
+      linkId: 'link-1',
       peerPresenceHash: 'peer-hash',
       peerDestinationHash: 'dest-hash',
       routeKey: 'packet:peer-hash',
@@ -1544,7 +1548,7 @@ describe('Reticulum group audio transport', () => {
       diagnostics: expect.objectContaining({
         transport: 'packet',
         targetAddress: 'Q-peer',
-        pendingFrames: 0,
+        pendingFrames: 1,
         queuePressureDrops: 0,
         staleDrops: 0,
         linkUnreadyDrops: 0,
@@ -4224,7 +4228,7 @@ describe('Reticulum group audio transport', () => {
     manager.stop();
   });
 
-  it('retries non-established kept audio links with backoff while packet audio remains primary', async () => {
+  it('retries non-established kept audio links with backoff while holding packet audio', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
 
@@ -4320,12 +4324,7 @@ describe('Reticulum group audio transport', () => {
     expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(1);
     (manager as any).syncReticulumAudioLinks();
     expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(1);
-    expect(bridge.enqueuePacketGroupAudio).toHaveBeenCalledWith(
-      'd:q-peer',
-      'room-1',
-      Buffer.from([1, 2, 3]),
-      ''
-    );
+    expect(bridge.enqueuePacketGroupAudio).not.toHaveBeenCalled();
     expect(bridge.enqueueGroupAudio).not.toHaveBeenCalled();
 
     await vi.advanceTimersByTimeAsync(5_000);
