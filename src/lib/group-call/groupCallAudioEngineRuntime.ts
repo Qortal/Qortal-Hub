@@ -131,6 +131,7 @@ type BootstrapRoomState = {
 
 type AudioSurfaceDiagEvent = {
   t: number;
+  timestampMs: number;
   tag: string;
   payload?: Record<string, unknown>;
 };
@@ -150,10 +151,15 @@ type RuntimeRecentWindowTrend = {
   playoutUnderTargetFraction: number;
   playoutRateFractionBelow097: number;
   missingFrames: number;
+  missingFramesDelta: number;
   concealmentTicks: number;
+  concealmentTicksDelta: number;
   packetsDroppedPendingDecrypt: number;
+  packetsDroppedPendingDecryptDelta: number;
   packetsDroppedDecodeFailure: number;
+  packetsDroppedDecodeFailureDelta: number;
   reticulumAudioPacketPathTimeouts: number;
+  reticulumAudioPacketPathTimeoutsDelta: number;
   reticulumAudioOutboundLinkSamples: number;
   reticulumAudioOutboundPacketSamples: number;
   reticulumAudioInboundLinkSamples: number;
@@ -162,7 +168,19 @@ type RuntimeRecentWindowTrend = {
   outboundSendAttempts: number;
   outboundSendSuccesses: number;
   outboundSendFailures: number;
+  outboundSendFailuresDelta: number;
   outboundNoTargetSkips: number;
+  outboundNoTargetSkipsDelta: number;
+  receiveProfiles: Array<{
+    peerAddress: string;
+    profile: string;
+  }>;
+  receivePlayouts: Array<{
+    peerAddress: string;
+    jitterBufferedFrames: number;
+    jitterHasReadyFrame: boolean;
+    lastJitterAdaptiveMode: 'low-latency' | 'recovery' | null;
+  }>;
 };
 
 type OutboundMediaTargetDiagnostics = {
@@ -260,6 +278,8 @@ const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
 const ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS = ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
+const ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS =
+  ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS + TOPOLOGY_HEARTBEAT_MS;
 const POST_FAILOVER_ROOT_RECEIVE_PROTECTION_MS = 12_000;
 
 type RootPeerLivenessState =
@@ -312,7 +332,7 @@ const WORKER_DECODE_FAILURE_RECOVERY_COOLDOWN_MS = 5_000;
 const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS = 48;
 const AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_AGE_MS = 4_000;
 const MAX_AUDIO_SURFACE_DIAG_EVENTS = 120;
-const MAX_RECENT_WINDOW_TRENDS = 12;
+const MAX_RECENT_WINDOW_TRENDS = 300;
 const GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN = 0.05;
 const GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN = 300;
 const GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN = 80;
@@ -802,8 +822,10 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private recordDiagEvent(tag: string, payload?: Record<string, unknown>): void {
+    const nowMs = Date.now();
     this.diagEvents.push({
-      t: Date.now(),
+      t: nowMs,
+      timestampMs: nowMs,
       tag,
       payload,
     });
@@ -1105,7 +1127,46 @@ export class GroupCallAudioEngineRuntime {
 
   private recordRecentWindowTrend(metrics: GroupCallMetricsSnapshot): void {
     const previous = this.recentWindowTrends[this.recentWindowTrends.length - 1] ?? null;
+    const receiveDiagnostics:
+      | ReturnType<GroupCallAudioReceiveEngine['getDiagnosticsSnapshot']>
+      | null =
+      this.receiveEngine instanceof GroupCallAudioReceiveEngine
+        ? this.receiveEngine.getDiagnosticsSnapshot()
+        : null;
     const reasons: string[] = [];
+    const missingFramesDelta = previous
+      ? Math.max(0, metrics.missingFrames - previous.missingFrames)
+      : 0;
+    const concealmentTicksDelta = previous
+      ? Math.max(0, metrics.concealmentTicks - previous.concealmentTicks)
+      : 0;
+    const packetsDroppedPendingDecryptDelta = previous
+      ? Math.max(
+          0,
+          metrics.packetsDroppedPendingDecrypt -
+            previous.packetsDroppedPendingDecrypt
+        )
+      : 0;
+    const packetsDroppedDecodeFailureDelta = previous
+      ? Math.max(
+          0,
+          metrics.packetsDroppedDecodeFailure -
+            previous.packetsDroppedDecodeFailure
+        )
+      : 0;
+    const reticulumAudioPacketPathTimeoutsDelta = previous
+      ? Math.max(
+          0,
+          metrics.reticulumAudioPacketPathTimeouts -
+            previous.reticulumAudioPacketPathTimeouts
+        )
+      : 0;
+    const outboundSendFailuresDelta = previous
+      ? Math.max(0, this.outboundSendFailures - previous.outboundSendFailures)
+      : 0;
+    const outboundNoTargetSkipsDelta = previous
+      ? Math.max(0, this.outboundSkippedNoTargets - previous.outboundNoTargetSkips)
+      : 0;
     if (
       previous &&
       previous.adaptiveNetworkMode !== 'recovery' &&
@@ -1122,15 +1183,13 @@ export class GroupCallAudioEngineRuntime {
     }
     if (
       previous &&
-      metrics.missingFrames - previous.missingFrames >=
-        GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN
+      missingFramesDelta >= GCALL_CALL_QUALITY_WORSENED_MISSING_DELTA_MIN
     ) {
       reasons.push('missing-frames-spike');
     }
     if (
       previous &&
-      metrics.concealmentTicks - previous.concealmentTicks >=
-        GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN
+      concealmentTicksDelta >= GCALL_CALL_QUALITY_WORSENED_CONCEALMENT_DELTA_MIN
     ) {
       reasons.push('concealment-spike');
     }
@@ -1166,10 +1225,15 @@ export class GroupCallAudioEngineRuntime {
       playoutUnderTargetFraction: metrics.playoutUnderTargetFraction,
       playoutRateFractionBelow097: metrics.playoutRateFractionBelow097,
       missingFrames: metrics.missingFrames,
+      missingFramesDelta,
       concealmentTicks: metrics.concealmentTicks,
+      concealmentTicksDelta,
       packetsDroppedPendingDecrypt: metrics.packetsDroppedPendingDecrypt,
+      packetsDroppedPendingDecryptDelta,
       packetsDroppedDecodeFailure: metrics.packetsDroppedDecodeFailure,
+      packetsDroppedDecodeFailureDelta,
       reticulumAudioPacketPathTimeouts: metrics.reticulumAudioPacketPathTimeouts,
+      reticulumAudioPacketPathTimeoutsDelta,
       reticulumAudioOutboundLinkSamples: metrics.reticulumAudioOutboundLinkSamples,
       reticulumAudioOutboundPacketSamples: metrics.reticulumAudioOutboundPacketSamples,
       reticulumAudioInboundLinkSamples: metrics.reticulumAudioInboundLinkSamples,
@@ -1178,7 +1242,21 @@ export class GroupCallAudioEngineRuntime {
       outboundSendAttempts: this.outboundSendAttempts,
       outboundSendSuccesses: this.outboundSendSuccesses,
       outboundSendFailures: this.outboundSendFailures,
+      outboundSendFailuresDelta,
       outboundNoTargetSkips: this.outboundSkippedNoTargets,
+      outboundNoTargetSkipsDelta,
+      receiveProfiles: (receiveDiagnostics?.livePolicyProfilesBySource ?? []).map(
+        ({ peerAddress, profile }) => ({
+          peerAddress,
+          profile,
+        })
+      ),
+      receivePlayouts: (receiveDiagnostics?.playouts ?? []).map((playout) => ({
+        peerAddress: playout.peerAddress,
+        jitterBufferedFrames: playout.jitterBufferedFrames,
+        jitterHasReadyFrame: playout.jitterHasReadyFrame,
+        lastJitterAdaptiveMode: playout.lastJitterAdaptiveMode,
+      })),
     });
     if (this.recentWindowTrends.length > MAX_RECENT_WINDOW_TRENDS) {
       this.recentWindowTrends.splice(
@@ -1192,14 +1270,81 @@ export class GroupCallAudioEngineRuntime {
         adaptiveNetworkMode: metrics.adaptiveNetworkMode,
         playoutUnderTargetFraction: metrics.playoutUnderTargetFraction,
         missingFrames: metrics.missingFrames,
+        missingFramesDelta,
         concealmentTicks: metrics.concealmentTicks,
+        concealmentTicksDelta,
         packetsDroppedPendingDecrypt: metrics.packetsDroppedPendingDecrypt,
+        packetsDroppedPendingDecryptDelta,
         packetsDroppedDecodeFailure: metrics.packetsDroppedDecodeFailure,
+        packetsDroppedDecodeFailureDelta,
         reticulumAudioPacketPathTimeouts: metrics.reticulumAudioPacketPathTimeouts,
+        reticulumAudioPacketPathTimeoutsDelta,
+        receiveProfiles: receiveDiagnostics?.livePolicyProfilesBySource ?? [],
       });
     }
     this.maybeRequestZeroInboundMediaRecovery(metrics);
     this.maybeRequestLowInboundMediaRecovery(metrics);
+  }
+
+  private buildRecentWindowSummary(): Record<string, unknown> {
+    const trends = this.recentWindowTrends;
+    if (trends.length === 0) {
+      return {
+        sampleCount: 0,
+        spanMs: 0,
+      };
+    }
+    const first = trends[0];
+    const last = trends[trends.length - 1];
+    const profileCounts = new Map<string, number>();
+    for (const trend of trends) {
+      for (const profile of trend.receiveProfiles) {
+        const key = `${profile.peerAddress}:${profile.profile}`;
+        profileCounts.set(key, (profileCounts.get(key) ?? 0) + 1);
+      }
+    }
+    return {
+      sampleCount: trends.length,
+      spanMs: Math.max(0, last.atMs - first.atMs),
+      firstAtMs: first.atMs,
+      lastAtMs: last.atMs,
+      totalMissingFramesDelta: Math.max(0, last.missingFrames - first.missingFrames),
+      totalConcealmentTicksDelta: Math.max(
+        0,
+        last.concealmentTicks - first.concealmentTicks
+      ),
+      totalPendingDecryptDelta: Math.max(
+        0,
+        last.packetsDroppedPendingDecrypt - first.packetsDroppedPendingDecrypt
+      ),
+      totalDecodeFailureDelta: Math.max(
+        0,
+        last.packetsDroppedDecodeFailure - first.packetsDroppedDecodeFailure
+      ),
+      totalNoTargetSkipsDelta: Math.max(
+        0,
+        last.outboundNoTargetSkips - first.outboundNoTargetSkips
+      ),
+      maxAvgPcmBufferedMs: Math.max(...trends.map((trend) => trend.avgPcmBufferedMs)),
+      minAvgPcmBufferedMs: Math.min(...trends.map((trend) => trend.avgPcmBufferedMs)),
+      maxPlayoutUnderTargetFraction: Math.max(
+        ...trends.map((trend) => trend.playoutUnderTargetFraction)
+      ),
+      maxPlayoutRateFractionBelow097: Math.max(
+        ...trends.map((trend) => trend.playoutRateFractionBelow097)
+      ),
+      recoverySamples: trends.filter(
+        (trend) => trend.adaptiveNetworkMode === 'recovery'
+      ).length,
+      profileSampleCounts: [...profileCounts.entries()].map(([key, count]) => {
+        const separatorIndex = key.lastIndexOf(':');
+        return {
+          peerAddress: key.slice(0, separatorIndex),
+          profile: key.slice(separatorIndex + 1),
+          count,
+        };
+      }),
+    };
   }
 
   private getMediaRecoveryTargets(): string[] {
@@ -1691,6 +1836,7 @@ export class GroupCallAudioEngineRuntime {
       authoritySnapshot: this.buildAuthoritySnapshot(),
       liveMetricsSnapshot,
       exportWindowMetrics: liveMetricsSnapshot,
+      recentWindowSummary: this.buildRecentWindowSummary(),
       recentWindowTrends: [...this.recentWindowTrends],
       audioSurfaceRuntimeDiagnostics:
         this.buildAudioSurfaceRuntimeDiagnosticsSnapshot(),
@@ -3079,15 +3225,10 @@ export class GroupCallAudioEngineRuntime {
     const roomId = this.snapshot.roomId;
     const myAddress = this.userInfo?.address ?? '';
     if (!roomId || !myAddress) return;
-    const participantSet = new Set<string>();
-    for (const participant of this.snapshot.participants) {
-      const address = participant.address?.trim() ?? '';
-      if (address) participantSet.add(address);
-    }
-    participantSet.add(myAddress);
+    const nowMs = Date.now();
+    const participantSet = this.collectTopologyElectionAddresses(nowMs);
     const addresses = [...participantSet];
     if (addresses.length === 0) return;
-    const nowMs = Date.now();
     const conflictingRoot = this.getConflictingRemoteRootForAuthorityWait(
       nowMs,
       addresses
@@ -3791,6 +3932,32 @@ export class GroupCallAudioEngineRuntime {
     }
     const rootLiveness = this.getRootPeerLivenessSnapshot(nowMs);
     const rootPeerRequiresReconnect = rootLiveness.rootPeerRequiresReconnect;
+    const lastNonHeartbeatRootEvidenceAt = Math.max(
+      0,
+      ...[
+        rootLiveness.lastDecodedMediaAt,
+        rootLiveness.lastSpeakerActivityAt,
+      ].filter((seenAtMs) => seenAtMs > rootLiveness.lastHeartbeatAt)
+    );
+    const rootNonHeartbeatEvidenceAgeMs =
+      lastNonHeartbeatRootEvidenceAt > 0
+        ? nowMs - lastNonHeartbeatRootEvidenceAt
+        : Number.POSITIVE_INFINITY;
+    if (
+      rootPeerRequiresReconnect &&
+      rootNonHeartbeatEvidenceAgeMs <= ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS
+    ) {
+      this.recordDiagEvent('root-heartbeat-timeout-suppressed-recent-root-evidence-grace', {
+        roomId,
+        currentRoot,
+        heartbeatSilentMs,
+        rootLivenessState: rootLiveness.state,
+        lastNonHeartbeatRootEvidenceAgeMs: rootNonHeartbeatEvidenceAgeMs,
+        graceMs: ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS,
+      });
+      this.scheduleRootFailoverWatch();
+      return;
+    }
     if (
       !shouldPromoteStandbyRootAfterHeartbeatTimeout({
         heartbeatSilentMs,
@@ -3809,12 +3976,9 @@ export class GroupCallAudioEngineRuntime {
       this.scheduleRootFailoverWatch();
       return;
     }
-    const survivingAddresses = new Set<string>();
-    for (const participant of this.snapshot.participants) {
-      const address = participant.address?.trim() ?? '';
-      if (!address || address === currentRoot) continue;
-      survivingAddresses.add(address);
-    }
+    const survivingAddresses = this.collectTopologyElectionAddresses(nowMs, {
+      excludeAddress: currentRoot,
+    });
     survivingAddresses.add(myAddress);
     const sorted = await this.computeElectionOrder([...survivingAddresses], roomId);
     const topologyEpoch =
@@ -4448,6 +4612,82 @@ export class GroupCallAudioEngineRuntime {
     );
   }
 
+  private collectTopologyAddresses(topology: GroupCallTopology | null): string[] {
+    if (!topology) return [];
+    const addresses = new Set<string>();
+    const add = (addressValue: string | null | undefined): void => {
+      const address = addressValue?.trim() ?? '';
+      if (address) addresses.add(address);
+    };
+    add(topology.rootForwarder);
+    add(topology.standbyForwarder);
+    for (const cluster of topology.clusters) {
+      add(cluster.forwarder);
+      add(cluster.standby);
+      add(cluster.standby2 ?? '');
+      for (const member of cluster.members) add(member);
+    }
+    return [...addresses];
+  }
+
+  private collectRecentLiveParticipantAddresses(nowMs: number): string[] {
+    const addresses = new Set<string>();
+    const addRecent = (address: string, seenAtMs: number): void => {
+      const normalized = address.trim();
+      if (
+        !normalized ||
+        this.shouldSuppressRecentlyLeftParticipant(normalized) ||
+        seenAtMs <= 0 ||
+        !Number.isFinite(seenAtMs) ||
+        nowMs - seenAtMs > PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
+      ) {
+        return;
+      }
+      addresses.add(normalized);
+    };
+    for (const [address, seenAtMs] of this.participantLiveEvidenceLastSeenAt) {
+      addRecent(address, seenAtMs);
+    }
+    for (const [address, seenAtMs] of this.participantDecodedMediaLastSeenAt) {
+      addRecent(address, seenAtMs);
+    }
+    for (const [address, seenAtMs] of this.activeSpeakerLastSeenAt) {
+      addRecent(address, seenAtMs);
+    }
+    return [...addresses];
+  }
+
+  private collectTopologyElectionAddresses(
+    nowMs: number,
+    opts?: { excludeAddress?: string | null }
+  ): Set<string> {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const excluded = opts?.excludeAddress?.trim() ?? '';
+    const addresses = new Set<string>();
+    const add = (addressValue: string | null | undefined): void => {
+      const address = addressValue?.trim() ?? '';
+      if (
+        !address ||
+        address === excluded ||
+        this.shouldSuppressRecentlyLeftParticipant(address)
+      ) {
+        return;
+      }
+      addresses.add(address);
+    };
+    for (const participant of this.snapshot.participants) {
+      add(participant.address);
+    }
+    for (const address of this.collectTopologyAddresses(this.topology)) {
+      add(address);
+    }
+    for (const address of this.collectRecentLiveParticipantAddresses(nowMs)) {
+      add(address);
+    }
+    add(myAddress);
+    return addresses;
+  }
+
   private promoteBootstrapOnlyParticipantsFromTopology(
     topology: GroupCallTopology
   ): void {
@@ -4499,6 +4739,26 @@ export class GroupCallAudioEngineRuntime {
       });
     }
     return filtered;
+  }
+
+  private getRecentLiveMediaFallbackTargets(nowMs: number): string[] {
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!myAddress) return [];
+    const candidates = new Set<string>();
+    for (const participant of this.snapshot.participants) {
+      const address = participant.address?.trim() ?? '';
+      if (address && address !== myAddress) candidates.add(address);
+    }
+    for (const address of this.collectTopologyAddresses(this.topology)) {
+      if (address && address !== myAddress) candidates.add(address);
+    }
+    for (const address of this.collectRecentLiveParticipantAddresses(nowMs)) {
+      if (address && address !== myAddress) candidates.add(address);
+    }
+    const targets = [...candidates].filter((address) =>
+      this.hasRecentParticipantActivityEvidence(address, nowMs)
+    );
+    return this.filterBootstrapOnlyMediaTargets(targets);
   }
 
   private hasRecentParticipantActivityEvidence(
@@ -5112,9 +5372,21 @@ export class GroupCallAudioEngineRuntime {
       opusFrame,
       this.roomKey
     );
-    const targets = this.filterBootstrapOnlyMediaTargets(
+    let targets = this.filterBootstrapOnlyMediaTargets(
       getReticulumTransportTargets(this.userInfo.address, this.topology)
     );
+    if (targets.length === 0) {
+      const fallbackTargets = this.getRecentLiveMediaFallbackTargets(Date.now());
+      if (fallbackTargets.length > 0) {
+        targets = fallbackTargets;
+        this.recordDiagEvent('outbound-media-targets-recovered-from-live-evidence', {
+          roomId: this.snapshot.roomId,
+          topologyEpoch: this.topology.topologyEpoch,
+          targetCount: targets.length,
+          targets: targets.map((address) => truncateGcallDiagAddress(address)),
+        });
+      }
+    }
     this.outboundLastTargets = [...targets];
     if (targets.length === 0) {
       this.recordOutboundSkip('no-targets');

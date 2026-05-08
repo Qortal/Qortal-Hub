@@ -2838,3 +2838,215 @@ Current patched target:
 - Primary fix: authority/topology convergence and outbound target selection after root/standby transition. The key evidence is the paired split-brain snapshot: both sides claim `root-forwarder`, they disagree on `topologyRootForwarder`, Side B has `topologyStandbyForwarder=null`, Side B has `forwardRecipientCount=0`, and Side B's `outboundNoTargetSkips` grows while `outboundSendAttempts` stays flat.
 - Secondary after that: selector priority around `buffered-not-ready` versus repair collapse, because Side B was currently ready but still labeled `buffered-not-ready`.
 - Do not tune baseline next. Do not tune profile strength first. The horrible symptom aligns better with topology/send-target failure plus severe receive collapse than with a too-weak receive profile.
+
+## Call: 2026-05-07 21:23Z / group 937
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-111.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-07T21-23-20-156Z.json`
+
+User symptom:
+- New call following the latest changes. No separate subjective symptom text was included with the export, so user-bad is inferred from the severe receive metrics and recovery profiles.
+
+High-level verdict:
+- Bad.
+- The previous authority/topology split is not reproduced here: both exports agree on epoch `3`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, and both sides have forward recipients. The remaining failure shape is receive-policy dominated: one side is correctly in `collapse-recovery`, while the other is still classified as `silent-lean` despite meaningful missing/concealment damage.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Key/media establishment: both sides have room keys, inbound packets, decoded frames, active playouts, playback nodes, scheduler nodes, and live policy profiles.
+- Startup hidden playout nodes: both sides currently have `jitterHasReadyFrame=true` with active playback and scheduler nodes.
+- Queue/backpressure: no bridge drain wait, no queue-pressure drops, no stale drops, no link-unready drops, and no packet send failures. Queue high waters are bounded (`48`/`8` on Side A, `2`/`14` on Side B).
+- Authority/topology convergence: unlike the 20:30Z call, both sides agree on root/standby at epoch `3`. Side B has `outboundNoTargetSkips=0`; Side A has historical `outboundNoTargetSkips=815`, but it is flat across the sampled window while sends continue succeeding.
+
+Primary next target:
+- Profile strength, with a secondary selector cleanup.
+- Side B says `collapse-recovery` classification is now correct, but the listener still lives around `7 ms` buffered with heavy missing/concealment and sustained recovery mode. That points at collapse/recovery target boost, floor, and hold strength before baseline changes.
+- Side A says the selector should still escalate high-damage near-empty `silent-lean` into a collapse-class profile when missing/concealment counters are no longer mild. This is secondary because the paired call already proves the collapse profile itself is active on the worse side and still not sufficient.
+- Do not return to baseline first. Do not prioritize authority/send-target first from this sample.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `silent-lean` | yes | 3.991 | 931 | 473 | 0.025 | 0.014 | recovery | Near-empty and very negative delta fit `silent-lean`, but the damage counters are too high for the low-damage blind-spot shape. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `collapse-recovery` | yes | 7.163 | 2628 | 1962 | 0.051 | 0.048 | recovery | Classification matches severe near-empty collapse, but quality remains bad under recovery protection. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`, with `silent-lean` only if damage counters are mild.
+
+Actual exported profile:
+- `silent-lean`
+
+Did classification match?
+- Partly/no.
+
+If no:
+- `avgPcmBufferedMs=3.991`, `jitterBufferDepthFramesMean=0.203`, and `avgPlayoutDeltaMs=-178.908` fit the near-empty `silent-lean` family.
+- However, `missingFrames=931`, `concealmentTicks=473`, and recovery mode mean this is no longer just a quiet low-damage lean blind spot.
+- Selector priority should promote near-empty ready paths out of `silent-lean` once repair damage is sustained.
+
+### Side B
+
+Expected profile from symptom:
+- `collapse-recovery`.
+
+Actual exported profile:
+- `collapse-recovery`.
+
+Did classification match?
+- Yes.
+
+Notes:
+- `avgPcmBufferedMs=7.163`, `jitterBufferDepthFramesMean=0.363`, `avgPlayoutDeltaMs=-149.232`, `missingFrames=2628`, `concealmentTicks=1962`, `playoutUnderTargetFraction=0.051`, and `playoutRateFractionBelow097=0.048` fit severe receive collapse.
+- Because classification matched but quality still appears bad, tune collapse/recovery strength before changing baseline policy.
+
+## Trend Read
+
+Side A:
+- Flat near-empty recovery with slow damage growth.
+- Reasons seen:
+  - `avgPcmBufferedMs` stays pinned around `4.0 ms`.
+  - `missingFrames` rises from `918` to `931`.
+  - `concealmentTicks` rises from `468` to `473`.
+  - `outboundNoTargetSkips` remains flat at `815` while outbound successes increase, so this is not the 20:30Z no-target failure shape.
+
+Side B:
+- Flat severe collapse under recovery.
+- Reasons seen:
+  - `avgPcmBufferedMs` stays around `7.15` to `7.16 ms`.
+  - `missingFrames` rises from `2619` to `2628`.
+  - `concealmentTicks` rises from `1930` to `1962`.
+  - `outboundNoTargetSkips` remains `0` and outbound sends continue succeeding.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-07T18:57Z group-812` | B / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by latest selector work; not the current post-change failure shape. |
+| `2026-05-07T19:25Z group-937` | A / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by latest selector work; not the current post-change failure shape. |
+| `2026-05-07T19:48Z group-937` | A / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Still a valid selector refinement, but no longer the strongest target after the 21:23Z call. |
+| `2026-05-07T19:48Z group-937` | B / Linux standby | `silent-lean` | yes | no | selector / repair-collapse escalation | Still valid as the secondary selector cleanup for high-damage lean paths. |
+| `2026-05-07T20:30Z group-937` | A / Linux root epoch 3 | `collapse-recovery` | yes | partly/yes | authority/topology plus receive collapse | Topology/send-target was the best target for that call, but the 21:23Z pair does not reproduce the split. |
+| `2026-05-07T20:30Z group-937` | B / Linux root epoch 4 | `buffered-not-ready` | yes | no/partly | authority/topology and send-target selection | Superseded as primary by the converged 21:23Z call; keep as a regression watch. |
+| `2026-05-07T21:23Z group-937` | A / Linux root epoch 3 | `silent-lean` | yes | partly/no | selector / high-damage lean escalation | Secondary: promote near-empty ready `silent-lean` into collapse when missing/concealment damage is sustained. |
+| `2026-05-07T21:23Z group-937` | B / Linux standby epoch 3 | `collapse-recovery` | yes | yes | receive profile strength / collapse recovery | Primary: strengthen collapse/recovery target, floor, and hold behavior. |
+
+## Next Fix Target
+
+Current patched target:
+- Profile strength.
+- Primary fix: strengthen `collapse-recovery` behavior. The new call has converged topology, clean decrypt/decode/queue counters, active ready playouts, and a correctly classified collapse side that still remains near-empty with heavy repair damage.
+- Secondary fix: selector escalation from `silent-lean` to collapse-class profiles when near-empty ready paths have sustained missing/concealment counters. This should be done after or alongside collapse strength only if the change is tightly scoped.
+- Keep baseline unchanged. The evidence is not that normal low-latency baseline is bad; both sides are already in recovery-class behavior. Keep authority/send-target as a regression watch, but it is not the next fix target from this call.
+
+## Call: 2026-05-07 21:50Z / group 937
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-07T21-50-46-095Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-07T21-50-42-339Z.json`
+
+User symptom:
+- New call following the latest changes. User reported the first ~2 minutes were bad, then the call became better.
+
+High-level verdict:
+- Mixed / improving, but not clean.
+- The paired exports agree on topology: root `QeJW96...j5W9`, standby `QP9Jj4...i6rP`, epoch `3`, both with forward recipients and no no-target growth. The final sampled window is structurally healthy but still receive-policy dominated. Side A looks like residual weak-listener recovery; Side B is the miss: it reports `clean-low-latency` while its receive metrics still look near-empty and heavily repaired.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Key/media establishment: both sides have room keys, inbound packets, decoded frames, active playouts, playback nodes, scheduler nodes, and live policy profiles.
+- Startup hidden playout nodes: both current playouts have `jitterHasReadyFrame=true` and active playback/scheduler nodes.
+- Queue/backpressure: no bridge drain wait, no queue-pressure drops, no stale drops, no link-unready drops, and no packet send failures. Queue high waters are bounded (`7`/`5` on Side A, `2`/`8` on Side B), though decoded-queue old-age high water shows historical bursts (`1685 ms` on Side A, `684 ms` on Side B).
+- Authority/topology/send-target: both sides agree on root/standby at epoch `3`; outbound sends continue increasing; `outboundNoTargetSkips=0` throughout the sampled window on both sides.
+
+Primary next target:
+- Selector.
+- Side B is a current false-clean classification: `clean-low-latency` does not match `avgPcmBufferedMs=5.636`, `jitterBufferDepthFramesMean=0.287`, `avgPlayoutDeltaMs=-147.227`, `missingFrames=3314`, `concealmentTicks=6499`, `playoutUnderTargetFraction=0.042`, and `playoutRateFractionBelow097=0.040`.
+- Because the bad first minutes later improved, do not tune baseline broadly. The next fix should ensure ready near-empty/high-damage recovery paths cannot be surfaced as `clean-low-latency`; they should remain in `repair-collapse`/`collapse-recovery` or at least `steady-weak-listener` until reserve and damage actually clear.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QeJW96...j5W9` receiving `QP9Jj4...i6rP` | `steady-weak-listener` | partly/early | 23.969 | 3396 | 220 | 0.008 | 0.006 | recovery | Classification is plausible for the later better phase: reserve is still shallow/moderate and missing grows slowly, but concealment and under-target pressure are low. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QeJW96...j5W9` | `clean-low-latency` | yes/early, partly current | 5.636 | 3314 | 6499 | 0.042 | 0.040 | recovery | Classification is wrong: live profile says clean, but the path is near-empty with heavy repair damage and still in recovery. |
+
+### Side A
+
+Expected profile from symptom:
+- `steady-weak-listener` or possibly `repair-heavy-connected` during the early bad phase; `steady-weak-listener` is reasonable for the later improved phase.
+
+Actual exported profile:
+- `steady-weak-listener`
+
+Did classification match?
+- Partly/yes.
+
+Notes:
+- The final sampled window is not clean, but it is much better than the previous collapse shape: `avgPcmBufferedMs=23.969`, `jitterBufferDepthFramesMean=1.215`, `concealmentTicks=220`, `playoutUnderTargetFraction=0.008`, and `playoutRateFractionBelow097=0.006`.
+- `missingFrames` is still high cumulatively and rises from `3360` to `3396` across the final ~11 seconds, so this is still weak/residual recovery rather than clean-low-latency.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`; `steady-weak-listener` would be the weakest acceptable fallback only after reserve rebuilds.
+
+Actual exported profile:
+- `clean-low-latency`
+
+Did classification match?
+- No.
+
+If no:
+- `avgPcmBufferedMs=5.636`, `jitterBufferDepthFramesMean=0.287`, and `avgPlayoutDeltaMs=-147.227` are near-empty collapse signals.
+- `missingFrames=3314`, `concealmentTicks=6499`, `playoutUnderTargetFraction=0.042`, and `playoutRateFractionBelow097=0.040` are not compatible with a clean profile.
+- Tune selector/clear logic so a ready but near-empty high-damage recovery path cannot clear to `clean-low-latency` until reserve and repair pressure have actually recovered.
+
+## Trend Read
+
+Side A:
+- Flat weak recovery in the sampled end window.
+- Reasons seen:
+  - `avgPcmBufferedMs` stays around `23.97 ms`.
+  - `concealmentTicks` stays flat at `220`.
+  - `missingFrames` rises slowly from `3360` to `3396`.
+  - `outboundNoTargetSkips` remains `0`.
+
+Side B:
+- Flat near-empty recovery despite clean profile.
+- Reasons seen:
+  - `avgPcmBufferedMs` stays pinned around `5.64 ms`.
+  - `missingFrames` rises from `3280` to `3314`.
+  - `concealmentTicks` rises from `6411` to `6499`.
+  - `playoutUnderTargetFraction` and `playoutRateFractionBelow097` remain elevated at `0.042` and `0.040`.
+  - `outboundNoTargetSkips` remains `0`.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-07T18:57Z group-812` | B / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:25Z group-937` | A / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:48Z group-937` | A / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Still a valid secondary selector refinement. |
+| `2026-05-07T19:48Z group-937` | B / Linux standby | `silent-lean` | yes | no | selector / repair-collapse escalation | Covered by the high-damage lean escalation target. |
+| `2026-05-07T20:30Z group-937` | A / Linux root epoch 3 | `collapse-recovery` | yes | partly/yes | authority/topology plus receive collapse | Keep as regression watch; not reproduced in later converged calls. |
+| `2026-05-07T20:30Z group-937` | B / Linux root epoch 4 | `buffered-not-ready` | yes | no/partly | authority/topology and send-target selection | Keep as regression watch; later calls have converged topology and no no-target growth. |
+| `2026-05-07T21:23Z group-937` | A / Linux root epoch 3 | `silent-lean` | yes | partly/no | selector / high-damage lean escalation | Addressed by promoting high-damage near-empty ready paths out of `silent-lean`. |
+| `2026-05-07T21:23Z group-937` | B / Linux standby epoch 3 | `collapse-recovery` | yes | yes | receive profile strength / collapse recovery | Addressed by strengthening collapse target/floor/hold; verify with later exports. |
+| `2026-05-07T21:50Z group-937` | A / Linux root epoch 3 | `steady-weak-listener` | partly/early | partly/yes | receive / residual weak recovery | Watch; no immediate profile-strength change from this side. |
+| `2026-05-07T21:50Z group-937` | B / Linux standby epoch 3 | `clean-low-latency` | yes/early, partly current | no | selector / false-clean near-empty repair collapse | Primary: prevent clean-low-latency while ready near-empty damage and recovery pressure remain active. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: tighten `clean-low-latency` clear/entry so it cannot win for ready near-empty listeners with strong negative delta, ongoing recovery mode, and sustained missing/concealment pressure. The 21:50Z standby export is the clearest signal: the call subjectively improved, but the profile exported as clean while the buffer and damage metrics still describe repair collapse.
+- Secondary: keep the recent collapse-strength patch and high-damage `silent-lean` escalation; this call does not argue for a broader baseline increase because one side improved to a plausible `steady-weak-listener` shape and the infrastructure/path counters are clean.
+- Do not prioritize authority/topology, key/decode, startup, or global baseline from this pair.

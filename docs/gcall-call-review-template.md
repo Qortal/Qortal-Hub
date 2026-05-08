@@ -8,7 +8,10 @@ Related docs:
 
 Primary runtime fields:
 - `audioSurfaceRuntimeDiagnostics.receiveEngine.livePolicyProfilesBySource`
+- `audioSurfaceRuntimeDiagnostics.receiveEngine.livePolicyStateBySource`
+- `audioSurfaceRuntimeDiagnostics.receiveEngine.profileTransitions`
 - `recentWindowTrends`
+- `recentWindowSummary`
 - `liveMetricsSnapshot`
 - `audioSurfaceRuntimeDiagnostics.receiveEngine.playouts`
 
@@ -119,6 +122,22 @@ Use `recentWindowTrends` to decide whether the call was:
 - gradually degrading
 - hit by a discrete event
 - oscillating between modes
+
+Prefer the windowed delta fields when judging whether the call is still bad now:
+- `missingFramesDelta`
+- `concealmentTicksDelta`
+- `packetsDroppedPendingDecryptDelta`
+- `packetsDroppedDecodeFailureDelta`
+- `outboundNoTargetSkipsDelta`
+
+Use `recentWindowSummary` for a quick whole-export-window read, then inspect the raw
+trend rows when a side improved or degraded during the call.
+
+Use `profileTransitions` and `livePolicyStateBySource` to answer:
+- when a profile changed
+- what metrics caused the transition
+- whether a profile is stuck because hold timers or clear conditions remain active
+- what target/floor/extra-hold values were actually applied
 
 Template:
 
