@@ -3526,6 +3526,24 @@ export class GroupCallAudioEngineRuntime {
       rootForwarder: topology.rootForwarder,
       standbyForwarder: topology.standbyForwarder,
     });
+    if (
+      this.isSameTopologyStructureIgnoringEpoch(this.topology, topology) &&
+      this.isTopologyRepresentedInSnapshotRoster(this.topology)
+    ) {
+      this.recordDiagEvent('local-topology-election-suppressed-unchanged', {
+        roomId,
+        reason,
+        currentEpoch: this.topology?.topologyEpoch ?? null,
+        proposedEpoch: topology.topologyEpoch,
+        rootForwarder: topology.rootForwarder,
+        standbyForwarder: topology.standbyForwarder,
+        participantCount: sorted.length,
+      });
+      await this.refreshAuthoritativeParticipantRoster(
+        'local-topology-election-suppressed-unchanged'
+      );
+      return;
+    }
     const applied = await this.applyTopology(topology, 'local-election');
     if (applied) {
       if (
@@ -3628,6 +3646,35 @@ export class GroupCallAudioEngineRuntime {
     if (!left) return false;
     if (
       left.topologyEpoch !== right.topologyEpoch ||
+      !this.isSameTopologyStructureIgnoringEpoch(left, right)
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private isTopologyRepresentedInSnapshotRoster(
+    topology: GroupCallTopology | null
+  ): boolean {
+    if (!topology) return false;
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    const roster = new Set(
+      this.snapshot.participants
+        .map((participant) => participant.address?.trim() ?? '')
+        .filter(Boolean)
+    );
+    if (myAddress) roster.add(myAddress);
+    return this.collectTopologyAddresses(topology).every((address) =>
+      roster.has(address)
+    );
+  }
+
+  private isSameTopologyStructureIgnoringEpoch(
+    left: GroupCallTopology | null,
+    right: GroupCallTopology
+  ): boolean {
+    if (!left) return false;
+    if (
       left.rootForwarder !== right.rootForwarder ||
       left.standbyForwarder !== right.standbyForwarder ||
       left.clusters.length !== right.clusters.length
