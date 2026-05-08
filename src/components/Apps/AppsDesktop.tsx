@@ -7,6 +7,9 @@ import {
   useRef,
   useState,
 } from 'react';
+
+import { flushSync } from 'react-dom';
+
 import type { ReactNode } from 'react';
 import {
   closestCenter,
@@ -742,6 +745,34 @@ export const AppsDesktop = ({
       });
       setOpenSnack(true);
       return;
+    }
+
+    if (data?.navigateIfAlreadyOpen) {
+      const { navigateIfAlreadyOpen, path, ...tabIdentity } = data;
+      const existingTab = tabs.find(
+        (tab) =>
+          tab.service === tabIdentity.service &&
+          tab.name?.toLowerCase() === tabIdentity.name?.toLowerCase() &&
+          (tabIdentity.identifier == null ||
+            tab.identifier === tabIdentity.identifier)
+      );
+
+      if (existingTab) {
+        flushSync(() => {
+          setDesktopViewMode('apps');
+          setSelectedTab(existingTab);
+          setMode('viewer');
+          setIsNewTabWindow(false);
+        });
+
+        setTimeout(() => {
+          executeEvent(`navigateToPath-${existingTab.tabId}`, {
+            path: path || '',
+          });
+        }, 200);
+
+        return;
+      }
     }
     const newTab = {
       ...data,

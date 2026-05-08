@@ -255,6 +255,7 @@
     "expires_suffix": " – läuft ab {{time}}",
     "status_due": "fällig",
     "status_active": "aktiv",
+    "status_owner": "eigentümer",
     "managed_fallback": "verwaltetes abonnement",
     "members_one": "{{count}} mitglied",
     "members_other": "{{count}} mitglieder",

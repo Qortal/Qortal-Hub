@@ -18,6 +18,7 @@ try {
     windowMinimize: () => ipcRenderer.invoke('window:minimize'),
     windowMaximize: () => ipcRenderer.invoke('window:maximize'),
     windowClose: () => ipcRenderer.invoke('window:close'),
+    focusWindow: () => ipcRenderer.invoke('window:focus'),
     getWindowState: () =>
       ipcRenderer.invoke('window:isMaximized').then((isMaximized: boolean) => ({ isMaximized })),
     onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => {
@@ -55,6 +56,19 @@ try {
       ipcRenderer.invoke('file:writeChunk', filePath, chunk, append),
     deleteFile: async (filePath: string) =>
       ipcRenderer.invoke('file:deleteFile', filePath),
+  });
+
+    // Generic persistent store (persistent-store.json, in-memory cache + debounced writes in main)
+  contextBridge.exposeInMainWorld('appStorage', {
+    get: async (key) => {
+      return ipcRenderer.invoke('persistentStore:get', key);
+    },
+    set: async (key, value) => {
+      return ipcRenderer.invoke('persistentStore:set', key, value);
+    },
+    delete: async (key) => {
+      return ipcRenderer.invoke('persistentStore:delete', key);
+    },
   });
 
   // Expose it

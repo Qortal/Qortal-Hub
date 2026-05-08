@@ -1482,13 +1482,17 @@ export async function encryptAndPublishSymmetricKeyGroupChatCase(
   event
 ) {
   try {
-    const { groupId, previousData } = request.payload;
+     const { groupId, previousData, isOwner, addKey } = request.payload;
+    let addKeyVar = false;
+    if (isOwner && addKey) {
+      addKeyVar = true;
+    }
     const { data, numberOfMembers } =
       await encryptAndPublishSymmetricKeyGroupChat({
         groupId,
         previousData,
+        addKey: addKeyVar,
       });
-
     event.source.postMessage(
       {
         requestId: request.requestId,

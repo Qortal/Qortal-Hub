@@ -12,6 +12,9 @@ import { Steps } from '../components/CoreSetupDialog';
 import { LOCALHOST } from '../constants/constants';
 import { GlobalDownloadEntry } from '../types/resources';
 import { defaultPinnedApps } from '../components/Apps/config/officialApps';
+import { getElectronPersistentStorage } from '../utils/electronPersistentStorage';
+
+
 
 export const sortablePinnedAppsAtom = atomWithReset(defaultPinnedApps);
 
@@ -43,21 +46,12 @@ export const isDisabledEditorEnterAtom = atomWithReset(false);
 export const isOpenBlockedModalAtom = atomWithReset(false);
 export const isRunningPublicNodeAtom = atomWithReset(false);
 export const isUsingImportExportSettingsAtom = atomWithReset(null);
-export const lastPaymentSeenTimestampAtom = atomWithReset(null);
-export const mailsAtom = atomWithReset([]);
+
 export const memberGroupsAtom = atomWithReset([]);
 export const mutedGroupsAtom = atomWithReset([]);
 export const myGroupsWhereIAmAdminAtom = atomWithReset([]);
-/** Groups the current user belongs to, refreshed for account-level subscription summaries. */
-export const myMemberGroupsAtom = atomWithReset<any[]>([]);
-/** Unix-ms timestamp for the last successful member-group refresh. */
-export const myMemberGroupsLastFetchedAtom = atomWithReset<number>(0);
-/** Subscriptions the current user has joined, derived from private member groups. */
-export const mySubscriptionsAtom = atomWithReset<any[]>([]);
-/** Subscription products the current user manages as group owner/admin. */
-export const managedSubscriptionsAtom = atomWithReset<any[]>([]);
-export const subscriptionsLoadingAtom = atomWithReset<boolean>(false);
-export const managedSubscriptionsLoadingAtom = atomWithReset<boolean>(false);
+
+
 export const navigationControllerAtom = atomWithReset({});
 export const oldPinnedAppsAtom = atomWithReset([]);
 export const promotionsAtom = atomWithReset([]);
@@ -109,128 +103,238 @@ export const globalChatWidgetBoundsAtom = atomWithStorage<{
   { getOnInit: true }
 );
 
-export const txListAtom = atomWithReset([]);
-export const isPublicNodeUnavailableAtom = atomWithReset(false);
-export const isLoadingAuthenticateAtom = atomWithReset(false);
-export const authenticatePasswordAtom = atomWithReset('');
-export const extStateAtom = atomWithReset<extStates>('not-authenticated');
-export const userInfoAtom = atomWithReset<any>(null);
-
+/** Persisted: custom websocket notification subscriptions. Sent as a second subscribe action when the notifications socket connects. */
 export type CustomWebsocketSubscription = {
-  event?: string;
-  resourceFilter?: Record<string, unknown>;
+  event: string;
+  resourceFilter?: {
+    service: string;
+    identifier: string;
+    name?: string;
+    excludeBlocked?: boolean;
+    mode?: string;
+  };
+  filters?: Record<string, string>;
   image?: string;
   link?: string;
   notificationId?: string;
   appName?: string;
   appService?: string;
   message?: Record<string, string>;
+  [key: string]: unknown;
 };
+// When in Electron, use appStorage-backed persistence; otherwise Jotai uses localStorage (undefined = default).
+const electronStorage = getElectronPersistentStorage();
 
-export const notificationsByAddressAtom = atomWithReset<Record<string, any[]>>(
-  {}
-);
+/** Persisted: custom WS subscriptions per user address (key: qortal_custom_ws_subscriptions). */
+export const CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY = 'qortal_custom_ws_subscriptions';
 export const customWebsocketSubscriptionsByAddressAtom = atomWithStorage<
   Record<string, CustomWebsocketSubscription[]>
->('qortal_custom_ws_subscriptions_by_address', {});
-export const notificationSeenInAppKeysByAddressAtom = atomWithStorage<
-  Record<string, Record<string, number>>
->('qortal_notification_seen_in_app_by_address', {});
-
-export const customWebsocketSubscriptionsAtom = atom(
-  (get) => {
-    const address = get(userInfoAtom)?.address;
-    if (!address) return [];
-    return get(customWebsocketSubscriptionsByAddressAtom)[address] ?? [];
-  },
-  (
-    get,
-    set,
-    update:
-      | CustomWebsocketSubscription[]
-      | ((
-          prev: CustomWebsocketSubscription[]
-        ) => CustomWebsocketSubscription[])
-  ) => {
-    const address = get(userInfoAtom)?.address;
-    if (!address) return;
-    const byAddress = get(customWebsocketSubscriptionsByAddressAtom);
-    const prev = byAddress[address] ?? [];
-    const next = typeof update === 'function' ? update(prev) : update;
-    set(customWebsocketSubscriptionsByAddressAtom, {
-      ...byAddress,
-      [address]: next,
-    });
-  }
+>(
+  CUSTOM_WS_SUBSCRIPTIONS_STORAGE_KEY,
+  {},
+  electronStorage as any
 );
 
-export const paymentNotificationsAtom = atom(
-  (get) => {
-    const address = get(userInfoAtom)?.address;
-    if (!address) return [];
-    return get(notificationsByAddressAtom)[address] ?? [];
-  },
-  (get, set, update: any[] | ((prev: any[]) => any[])) => {
-    const address = get(userInfoAtom)?.address;
-    if (!address) return;
-    const byAddress = get(notificationsByAddressAtom);
-    const prev = byAddress[address] ?? [];
-    const next = typeof update === 'function' ? update(prev) : update;
-    set(notificationsByAddressAtom, { ...byAddress, [address]: next });
+/** Persisted: keys of notifications already "seen in app" (excluded from unread count), by address then notification key. Keys older than this are pruned. */
+export const NOTIFICATION_SEEN_IN_APP_STORAGE_KEY =
+  'qortal_notification_seen_in_app';
+const NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+/** Per-address record of notificationKey -> mark time (ms). Pruned to last 3 days when read/set. */
+export type SeenInAppKeyRecord = Record<string, number>;
+/** Stored shape: address -> notificationKey -> timestamp. */
+export type SeenInAppRecordByAddress = Record<string, SeenInAppKeyRecord>;
+
+export function parseSeenInAppStored(
+  raw: string | null | unknown
+): SeenInAppRecordByAddress {
+  if (raw == null || raw === '') return {};
+  let parsed: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {};
+    }
   }
-);
+  if (Array.isArray(parsed)) return {};
+  if (!parsed || typeof parsed !== 'object') return {};
+  const obj = parsed as Record<string, unknown>;
+  const result: SeenInAppRecordByAddress = {};
+  for (const [addr, inner] of Object.entries(obj)) {
+    if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+      const keyRecord: SeenInAppKeyRecord = {};
+      for (const [k, t] of Object.entries(inner)) {
+        if (typeof t === 'number') keyRecord[k] = t;
+      }
+      result[addr] = keyRecord;
+    }
+  }
+  return result;
+}
 
-const NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
-
-function pruneSeenInAppRecord(record: Record<string, Record<string, number>>) {
+function filterSeenInAppKeyRecordByAge(
+  record: SeenInAppKeyRecord
+): SeenInAppKeyRecord {
   const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
   return Object.fromEntries(
-    Object.entries(record || {})
-      .map(([address, keys]) => [
-        address,
-        Object.fromEntries(
-          Object.entries(keys || {}).filter(([, seenAt]) => seenAt > cutoff)
-        ),
-      ])
-      .filter(([, keys]) => Object.keys(keys as Record<string, number>).length)
+    Object.entries(record).filter(([, t]) => typeof t === 'number' && t > cutoff)
   );
 }
 
-export const notificationSeenInAppKeysAtom = atom(
-  (get) => {
-    const address = get(userInfoAtom)?.address;
-    if (!address) return [];
-    const pruned = pruneSeenInAppRecord(get(notificationSeenInAppKeysByAddressAtom));
-    return Object.keys(pruned[address] ?? {});
+export function filterSeenInAppRecordByAge(
+  record: SeenInAppRecordByAddress
+): SeenInAppRecordByAddress {
+  const out: SeenInAppRecordByAddress = {};
+  for (const [addr, inner] of Object.entries(record)) {
+    const pruned = filterSeenInAppKeyRecordByAge(inner);
+    if (Object.keys(pruned).length > 0) out[addr] = pruned;
+  }
+  return out;
+}
+
+/** Keys for one address from the last 3 days. */
+function seenInAppRecordToKeysForAddress(
+  record: SeenInAppRecordByAddress,
+  address: string | null | undefined
+): string[] {
+  if (!address) return [];
+  const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
+  const byAddr = record[address] ?? {};
+  return Object.keys(byAddr).filter(
+    (k) => typeof byAddr[k] === 'number' && byAddr[k] > cutoff
+  );
+}
+
+const seenInAppStorage = {
+  getItem: (key: string): SeenInAppRecordByAddress => {
+    const raw: string | null | unknown =
+      electronStorage != null
+        ? (electronStorage as any).getItem(key, null)
+        : typeof localStorage !== 'undefined'
+          ? localStorage.getItem(key)
+          : null;
+    const record = parseSeenInAppStored(raw);
+    return filterSeenInAppRecordByAge(record);
   },
+  setItem: (
+    key: string,
+    value: string | SeenInAppRecordByAddress
+  ): void => {
+    const record =
+      typeof value === 'string' ? parseSeenInAppStored(value) : value;
+    const pruned = filterSeenInAppRecordByAge(record);
+    if (electronStorage != null) {
+      (electronStorage as any).setItem(key, pruned);
+    } else if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(pruned));
+    }
+  },
+  removeItem: (key: string): void => {
+    if (electronStorage != null) {
+      (electronStorage as any).removeItem?.(key);
+    } else if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(key);
+    }
+  },
+};
+
+export const notificationSeenInAppKeysRecordAtom =
+  atomWithStorage<SeenInAppRecordByAddress>(
+    NOTIFICATION_SEEN_IN_APP_STORAGE_KEY,
+    {},
+    seenInAppStorage as any
+  );
+
+/** Keys for current user (from last 3 days). Set with string[] for current address or { address, keys } to merge for an address. */
+export const notificationSeenInAppKeysAtom = atom(
+  (get) =>
+    seenInAppRecordToKeysForAddress(
+      get(notificationSeenInAppKeysRecordAtom) as SeenInAppRecordByAddress,
+      get(userInfoAtom)?.address
+    ),
   (get, set, update: string[] | { address: string; keys: string[] }) => {
+    const full =
+      get(notificationSeenInAppKeysRecordAtom) as SeenInAppRecordByAddress;
     const address =
       typeof update === 'object' && update !== null && 'address' in update
-        ? update.address
+        ? (update as { address: string; keys: string[] }).address
         : get(userInfoAtom)?.address;
     const keys =
       typeof update === 'object' && update !== null && 'keys' in update
-        ? update.keys
-        : update;
+        ? (update as { address: string; keys: string[] }).keys
+        : (update as string[]);
     if (!address || !Array.isArray(keys)) return;
-    const pruned = pruneSeenInAppRecord(get(notificationSeenInAppKeysByAddressAtom));
-    const current = pruned[address] ?? {};
+    const record = { ...full };
+    record[address] = { ...(record[address] ?? {}) };
     const now = Date.now();
-    for (const key of keys) current[key] = now;
-    set(notificationSeenInAppKeysByAddressAtom, {
-      ...pruned,
-      [address]: current,
-    });
+    for (const k of keys) record[address][k] = now;
+    const pruned = filterSeenInAppRecordByAge(record);
+    set(notificationSeenInAppKeysRecordAtom, pruned);
   }
 );
 
+/** Current user: seen-in-app key → mark time (ms). Same ageing as notificationSeenInAppKeysAtom. */
+export const notificationSeenInAppKeyTimesAtom = atom((get) => {
+  const byAddress =
+    get(notificationSeenInAppKeysRecordAtom) as SeenInAppRecordByAddress;
+  const address = get(userInfoAtom)?.address;
+  if (!address) return {} as SeenInAppKeyRecord;
+  return filterSeenInAppKeyRecordByAge(byAddress[address] ?? {});
+});
+
+/** Same field order as GeneralNotifications getNotificationTimestamp (for prefix cutoff). */
+export function getNotificationSeenComparableTimeMs(notification: {
+  data?: { created?: unknown; timestamp?: unknown };
+  timestamp?: unknown;
+}): number | null {
+  const raw =
+    notification?.data?.created ??
+    notification?.data?.timestamp ??
+    notification?.timestamp;
+  if (raw == null || typeof raw !== 'number') return null;
+  return raw < 1e12 ? raw * 1000 : raw;
+}
+
+/**
+ * Full key: that exact notification is seen. Prefix key: seen only if resource time ≤ persisted mark time
+ * (so new items after mark stay unread).
+ */
+export function isNotificationSeenInAppFromKeyTimes(
+  notification: {
+    event?: string;
+    data?: {
+      signature?: string;
+      identifier?: string;
+      created?: unknown;
+      timestamp?: unknown;
+    };
+    appName?: string;
+    appService?: string;
+    notificationId?: string;
+    timestamp?: unknown;
+  },
+  seenInAppByKey: SeenInAppKeyRecord | null | undefined
+): boolean {
+  if (!seenInAppByKey || Object.keys(seenInAppByKey).length === 0) return false;
+  const fullKey = getNotificationSeenKey(notification);
+  if (typeof seenInAppByKey[fullKey] === 'number') return true;
+  const prefixKey = getNotificationSeenPrefixKey(notification);
+  const markedAt = seenInAppByKey[prefixKey];
+  if (typeof markedAt !== 'number') return false;
+  const notifTs = getNotificationSeenComparableTimeMs(notification);
+  if (notifTs == null) return false;
+  return notifTs <= markedAt;
+}
+
+/** Stable key for a notification (for "seen in app" matching). */
 export function getNotificationSeenKey(notification: {
   event?: string;
   data?: { signature?: string; identifier?: string; created?: unknown };
   appName?: string;
   appService?: string;
   notificationId?: string;
-}) {
+}): string {
   if (notification?.event === 'PAYMENT_RECEIVED') {
     return `PAYMENT_RECEIVED-${notification?.data?.signature ?? ''}`;
   }
@@ -238,18 +342,22 @@ export function getNotificationSeenKey(notification: {
     const appName = (notification?.appName ?? '').toLowerCase();
     const appService = notification?.appService ?? 'APP';
     const notificationId = notification?.notificationId ?? '';
-    const id = notification?.data?.identifier ?? notification?.data?.created ?? '';
+    const id =
+      notification?.data?.identifier ??
+      notification?.data?.created ??
+      '';
     return `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}-${id}`;
   }
-  return `other-${notification?.event ?? ''}`;
+  return `other-${notification?.event ?? ''}-${Date.now()}`;
 }
 
+/** Prefix key (app + notificationId only); when app marks by notificationId, we add this. */
 export function getNotificationSeenPrefixKey(notification: {
   event?: string;
   appName?: string;
   appService?: string;
   notificationId?: string;
-}) {
+}): string {
   if (notification?.event === 'RESOURCE_PUBLISHED') {
     const appName = (notification?.appName ?? '').toLowerCase();
     const appService = notification?.appService ?? 'APP';
@@ -259,30 +367,134 @@ export function getNotificationSeenPrefixKey(notification: {
   return getNotificationSeenKey(notification as any);
 }
 
-function getSubscriptionSeenPrefix(sub: CustomWebsocketSubscription) {
-  const appName = (sub.appName ?? '').toLowerCase();
-  const appService = sub.appService ?? 'APP';
-  const notificationId = sub.notificationId ?? '';
+/** Build prefix for a subscription (same shape as getNotificationSeenPrefixKey). */
+function getSubscriptionSeenPrefix(sub: CustomWebsocketSubscription): string {
+  const appName = ((sub.appName as string) ?? '').toLowerCase();
+  const appService = (sub.appService as string) ?? 'APP';
+  const notificationId = (sub.notificationId as string) ?? '';
   return `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
 }
 
+/** Keep only seen-in-app keys that still match a rule in customWebsocketSubscriptions. */
 export function filterSeenInAppKeysByRules(
   seenKeys: string[],
   customSubscriptions: CustomWebsocketSubscription[]
-) {
-  if (!Array.isArray(seenKeys) || !seenKeys.length) return [];
+): string[] {
+  if (!Array.isArray(seenKeys) || seenKeys.length === 0) return [];
   const validPrefixes = new Set(
     (customSubscriptions ?? []).map(getSubscriptionSeenPrefix)
   );
-  if (!validPrefixes.size) return [];
+  if (validPrefixes.size === 0) return [];
   return seenKeys.filter((key) => {
     if (validPrefixes.has(key)) return true;
     for (const prefix of validPrefixes) {
-      if (key.startsWith(`${prefix}-`)) return true;
+      if (key.startsWith(prefix + '-')) return true;
     }
     return false;
   });
 }
+
+export const txListAtom = atomWithReset([]);
+
+
+/** Notifications per user address (in-memory only; repopulated from WebSocket). */
+export const notificationsByAddressAtom = atomWithReset<Record<string, any[]>>({});
+
+/** Persisted: timestamp when user last "saw all" notifications, per address (Electron: appStorage). */
+export const SEEN_ALL_NOTIFICATIONS_STORAGE_KEY = 'qortal_seen_all_notifications';
+export const seenAllNotificationsByAddressAtom = atomWithStorage<Record<string, number | null>>(
+  SEEN_ALL_NOTIFICATIONS_STORAGE_KEY,
+  {},
+  electronStorage as any
+);
+
+/** Groups the current user is a member of – refreshed every 5 minutes. */
+export const myMemberGroupsAtom = atomWithReset<any[]>([]);
+/** Unix-ms timestamp of the last successful fetch for myMemberGroupsAtom. */
+export const myMemberGroupsLastFetchedAtom = atomWithReset<number>(0);
+
+/** Subscriptions the current user is subscribed to (fetched globally in the title bar). */
+export const mySubscriptionsAtom = atomWithReset<any[]>([]);
+/** Subscriptions belonging to groups the current user manages as admin. */
+export const managedSubscriptionsAtom = atomWithReset<any[]>([]);
+/** Whether the global subscription fetch is currently in progress. */
+export const subscriptionsLoadingAtom = atomWithReset<boolean>(false);
+/** Whether the global managed subscription fetch is currently in progress. */
+export const managedSubscriptionsLoadingAtom = atomWithReset<boolean>(false);
+
+
+export const isPublicNodeUnavailableAtom = atomWithReset(false);
+export const isLoadingAuthenticateAtom = atomWithReset(false);
+export const authenticatePasswordAtom = atomWithReset('');
+export const extStateAtom = atomWithReset<extStates>('not-authenticated');
+export const userInfoAtom = atomWithReset<any>(null);
+
+
+
+
+
+/** Current user's custom WS subscriptions (derived from customWebsocketSubscriptionsByAddressAtom by address). */
+export const customWebsocketSubscriptionsAtom = atom(
+  (get) => {
+    const byAddress = get(customWebsocketSubscriptionsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return [];
+    return (byAddress[address] ?? []) as CustomWebsocketSubscription[];
+  },
+  (get, set, update: CustomWebsocketSubscription[] | ((prev: CustomWebsocketSubscription[]) => CustomWebsocketSubscription[])) => {
+    const byAddress = get(customWebsocketSubscriptionsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return;
+    const prev = (byAddress[address] ?? []) as CustomWebsocketSubscription[];
+    const next = typeof update === 'function' ? update(prev) : update;
+    set(customWebsocketSubscriptionsByAddressAtom, { ...byAddress, [address]: next });
+  }
+);
+
+/** Current user's notifications (derived from notificationsByAddressAtom by address). */
+export const paymentNotificationsAtom = atom(
+  (get) => {
+    const byAddress = get(notificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return [];
+    return (byAddress[address] ?? []) as any[];
+  },
+  (get, set, update: any[] | ((prev: any[]) => any[])) => {
+    const byAddress = get(notificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return;
+    const prev = (byAddress[address] ?? []) as any[];
+    const next = typeof update === 'function' ? update(prev) : update;
+    set(notificationsByAddressAtom, { ...byAddress, [address]: next });
+  }
+);
+
+/** Current user's "seen all notifications" timestamp (derived from seenAllNotificationsByAddressAtom by address). */
+export const lastPaymentSeenTimestampAtom = atom(
+  (get) => {
+    const byAddress = get(seenAllNotificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return null;
+    return (byAddress[address] ?? null) as number | null;
+  },
+  (get, set, value: number | null) => {
+    const byAddress = get(seenAllNotificationsByAddressAtom);
+    const address = get(userInfoAtom)?.address;
+    if (!address) return;
+    set(seenAllNotificationsByAddressAtom, { ...byAddress, [address]: value });
+  }
+);
+
+export const notificationSeenInAppKeysByAddressAtom = atomWithStorage<
+  Record<string, Record<string, number>>
+>('qortal_notification_seen_in_app_by_address', {});
+
+
+
+
+
+
+
 export const rawWalletAtom = atomWithReset<any>(null);
 export const walletToBeDecryptedErrorAtom = atomWithReset<string>('');
 export const balanceAtom = atomWithReset<any>(null);

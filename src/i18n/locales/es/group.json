@@ -255,6 +255,7 @@
     "expires_suffix": " - caduca {{time}}",
     "status_due": "pendiente",
     "status_active": "activa",
+    "status_owner": "dueño",
     "managed_fallback": "suscripción gestionada",
     "members_one": "{{count}} miembro",
     "members_other": "{{count}} miembros",

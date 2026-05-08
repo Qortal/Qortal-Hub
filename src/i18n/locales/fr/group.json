@@ -255,6 +255,7 @@
     "expires_suffix": " - expire {{time}}",
     "status_due": "à payer",
     "status_active": "actif",
+    "status_owner": "propriétaire",
     "managed_fallback": "abonnement géré",
     "members_one": "{{count}} membre",
     "members_other": "{{count}} membres",

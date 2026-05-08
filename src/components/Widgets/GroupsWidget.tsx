@@ -146,6 +146,8 @@ type PromotionActionState = 'connecting' | 'processing' | 'request_sent';
 const GROUP_PROMOTION_IDENTIFIER_PREFIX = 'group-promotions-ui24-';
 const GROUP_PROMOTION_MAX_ITEMS = 8;
 const GROUP_NOTIFICATION_PREVIEW_LIMIT = 20;
+/** Latest chat payload to omit from Group Activity list + unread count (system/meta). */
+const GROUP_ACTIVITY_EXCLUDED_MESSAGE_DATA = 'NDAwMQ==';
 const GROUP_WIDGET_CARD_RADIUS = '10px';
 
 const stripHtml = (value: string) =>
@@ -656,7 +658,11 @@ export const GroupsWidget = ({
 
   const notificationItems = useMemo<GroupNotificationItem[]>(() => {
     return [...(memberGroups ?? [])]
-      .filter((group: any) => group?.groupId != null)
+      .filter(
+        (group: any) =>
+          group?.groupId != null &&
+          group?.data !== GROUP_ACTIVITY_EXCLUDED_MESSAGE_DATA
+      )
       .map((group: any) => {
         const groupId = String(group.groupId);
         const timestamp =

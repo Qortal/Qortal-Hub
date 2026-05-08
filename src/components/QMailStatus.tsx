@@ -4,9 +4,8 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  getNotificationSeenKey,
-  getNotificationSeenPrefixKey,
-  notificationSeenInAppKeysAtom,
+  isNotificationSeenInAppFromKeyTimes,
+  notificationSeenInAppKeyTimesAtom,
   paymentNotificationsAtom,
   qMailLastEnteredTimestampAtom,
 } from '../atoms/global';
@@ -32,10 +31,9 @@ export const QMailStatus = ({
   const theme = useTheme();
   const [, setLastEnteredTimestamp] = useAtom(qMailLastEnteredTimestampAtom);
   const notifications = useAtomValue(paymentNotificationsAtom);
-  const seenKeys = useAtomValue(notificationSeenInAppKeysAtom);
+  const seenInAppKeyTimes = useAtomValue(notificationSeenInAppKeyTimesAtom);
 
   const hasNewMail = useMemo(() => {
-    const seen = new Set(Array.isArray(seenKeys) ? seenKeys : []);
     return (notifications ?? []).some((notification) => {
       const isQMail =
         notification?.event === 'RESOURCE_PUBLISHED' &&
@@ -48,11 +46,12 @@ export const QMailStatus = ({
           notification?.timestamp
       );
       if (timestamp == null) return false;
-      const key = getNotificationSeenKey(notification);
-      const prefixKey = getNotificationSeenPrefixKey(notification);
-      return !seen.has(key) && !seen.has(prefixKey);
+      return !isNotificationSeenInAppFromKeyTimes(
+        notification,
+        seenInAppKeyTimes
+      );
     });
-  }, [notifications, seenKeys]);
+  }, [notifications, seenInAppKeyTimes]);
 
   return (
     <ButtonBase

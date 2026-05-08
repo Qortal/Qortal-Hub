@@ -417,12 +417,17 @@ export const AdminSpaceInner = ({
         )}
 
         <Button
+          disabled={!isOwner}
           onClick={openGroupKeyPublishSelect}
           variant="contained"
         >
-          {t('auth:action.publish_group_secret_key', {
-            postProcess: 'capitalizeFirstChar',
-          })}
+          {isOwner
+            ? t('auth:action.publish_group_secret_key', {
+                postProcess: 'capitalizeFirstChar',
+              })
+            : t('auth:action.only_owner', {
+                postProcess: 'capitalizeFirstChar',
+              })}
         </Button>
 
         <Dialog

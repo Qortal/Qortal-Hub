@@ -297,6 +297,18 @@ export function SubscriptionsStatus({
     const pendingJoinRequests = entry?.actions?.pendingJoinRequests ?? 0;
     const needsReEncryption = !!entry?.actions?.needsReEncryption;
 
+    const badgeBoxSx = {
+      alignItems: 'center',
+      color: accentColor,
+      display: 'flex',
+      flexShrink: 0,
+      fontSize: '0.68rem',
+      fontWeight: 800,
+      gap: 0.55,
+      letterSpacing: '0.04em',
+      textTransform: 'uppercase',
+    } as const;
+
     return (
       <ButtonBase
         key={entry?.groupId}
@@ -372,31 +384,19 @@ export function SubscriptionsStatus({
               : ''}
           </Typography>
         </Box>
-        {hasAction ? (
+        <Box sx={badgeBoxSx}>
           <Box
             sx={{
-              alignItems: 'center',
-              color: accentColor,
-              display: 'flex',
-              flexShrink: 0,
-              fontSize: '0.68rem',
-              fontWeight: 800,
-              gap: 0.55,
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
+              bgcolor: accentColor,
+              borderRadius: '50%',
+              height: 7,
+              width: 7,
             }}
-          >
-            <Box
-              sx={{
-                bgcolor: accentColor,
-                borderRadius: '50%',
-                height: 7,
-                width: 7,
-              }}
-            />
-            {t('group:subscription.actions_badge', { count: actionCount })}
-          </Box>
-        ) : null}
+          />
+          {hasAction
+            ? t('group:subscription.actions_badge', { count: actionCount })
+            : t('group:subscription.status_owner')}
+        </Box>
       </ButtonBase>
     );
   };

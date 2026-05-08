@@ -255,6 +255,7 @@
     "expires_suffix": " - expira {{time}}",
     "status_due": "vencendo",
     "status_active": "ativa",
+    "status_owner": "proprietário",
     "managed_fallback": "assinatura gerenciada",
     "members_one": "{{count}} membro",
     "members_other": "{{count}} membros",

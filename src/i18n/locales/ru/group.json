@@ -255,6 +255,7 @@
     "expires_suffix": " — истекает {{time}}",
     "status_due": "к оплате",
     "status_active": "активна",
+    "status_owner": "владелец",
     "managed_fallback": "управляемая подписка",
     "members_one": "{{count}} участник",
     "members_other": "{{count}} участников",

@@ -121,6 +121,7 @@ import i18n from 'i18next';
 import aesjs from 'aes-js';
 import { roundUpToDecimals } from '../utils/numberFunctions.ts';
 import { normalizeFilename } from '../utils/downloadFromLocation.ts';
+import { getElectronPersistentStorage } from '../utils/electronPersistentStorage.ts';
 
 const uid = new ShortUniqueId({ length: 6 });
 
@@ -1624,6 +1625,18 @@ export const publishQDNResource = async (
       })
     );
   }
+
+   if (
+    typeof data.identifier === 'string' &&
+    data.identifier.trim().startsWith('symmetric-qchat-group-')
+  ) {
+    throw new Error(
+      i18n.t('group:message.generic.invalid_data', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
   // Use "default" if user hasn't specified an identifier
   const service = data.service;
   const appFee = data?.appFee ? +data.appFee : undefined;
@@ -1930,6 +1943,21 @@ export const publishMultipleQDNResources = async (
       })
     );
   }
+
+  const FORBIDDEN_IDENTIFIER_PREFIX = 'symmetric-qchat-group-';
+  const hasForbiddenIdentifier = resources.some(
+    (resource) =>
+      typeof resource?.identifier === 'string' &&
+      resource.identifier.trim().startsWith(FORBIDDEN_IDENTIFIER_PREFIX)
+  );
+  if (hasForbiddenIdentifier) {
+    throw new Error(
+      i18n.t('group:message.generic.invalid_data', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
+  }
+
   const isPublicNode = await isRunningGateway();
   if (isPublicNode) {
     const hasOversizedFilePublicNode = resources.some((resource) => {
@@ -2058,20 +2086,36 @@ export const publishMultipleQDNResources = async (
     hasAppFee = true;
   }
 
+
+  let paymentFeeAmount = 0;
   const handleDynamicValues = {};
   if (hasAppFee) {
     const feePayment = await getFee('PAYMENT');
+    paymentFeeAmount = +feePayment.fee;
 
-    (handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
+    ((handleDynamicValues['appFee'] = +appFee + +feePayment.fee),
       (handleDynamicValues['checkbox1'] = {
         value: true,
         label: i18n.t('question:accept_app_fee', {
           postProcess: 'capitalizeFirstChar',
         }),
-      });
+      }));
   }
   if (data?.encrypt) {
     handleDynamicValues['highlightedText'] = `isEncrypted: ${!!data.encrypt}`;
+  }
+
+  const totalRequiredQort =
+    resources.length * +fee.fee +
+    paymentFeeAmount +
+    (hasAppFee && appFee ? +appFee : 0);
+  const balance = await getBalanceInfo();
+  if (+balance < totalRequiredQort) {
+    throw new Error(
+      i18n.t('question:message.error.insufficient_balance_qort', {
+        postProcess: 'capitalizeFirstChar',
+      })
+    );
   }
 
   // Check for session permission
@@ -5101,57 +5145,92 @@ export const getArrrSyncStatus = async () => {
   }
 };
 
-const CUSTOM_WS_SUBSCRIPTIONS_KEY = 'qortal_custom_ws_subscriptions_by_address';
-const NOTIFICATION_SEEN_IN_APP_KEY = 'qortal_notification_seen_in_app_by_address';
-const NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+const CUSTOM_WS_SUBSCRIPTIONS_KEY = 'qortal_custom_ws_subscriptions';
 
-async function getCurrentAddressForNotifications(): Promise<string | null> {
-  try {
-    const wallet = await getSaveWallet();
-    return wallet?.address0 || null;
-  } catch {
-    return null;
-  }
+/** Current user address for address-scoped storage (set by app when user logs in). */
+function getCurrentAddress(): string | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as Window & { __qortalCurrentAddress?: string | null };
+  return w.__qortalCurrentAddress ?? null;
 }
 
-function parseAddressRecord(value: unknown): Record<string, any[]> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+function getAppStorage() {
+  if (typeof window === 'undefined') return undefined;
+  return (
+    window as {
+      appStorage?: {
+        get: (k: string) => Promise<unknown>;
+        set: (k: string, v: unknown) => Promise<void>;
+      };
+    }
+  ).appStorage;
+}
+
+function parseSubscriptionsRecord(value: unknown): Record<string, any[]> {
+  if (value != null && typeof value === 'object' && !Array.isArray(value))
     return value as Record<string, any[]>;
-  }
   if (Array.isArray(value)) return { __legacy: value };
   return {};
 }
 
-function readJsonFromLocalStorage<T>(key: string, fallback: T): T {
-  if (typeof localStorage === 'undefined') return fallback;
+async function getStoredCustomSubscriptions() {
+  const address = getCurrentAddress();
+  const appStorage = getAppStorage();
+  if (appStorage) {
+    try {
+      const value = await appStorage.get(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+      const record = parseSubscriptionsRecord(value);
+      if (!address) return [];
+      return Array.isArray(record[address]) ? record[address] : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  if (typeof localStorage === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
+    const raw = localStorage.getItem(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+    if (!raw) return [];
+    const value = JSON.parse(raw);
+    const record = parseSubscriptionsRecord(value);
+    if (!address) return [];
+    return Array.isArray(record[address]) ? record[address] : [];
+  } catch (_) {
+    return [];
   }
 }
 
-async function getStoredCustomSubscriptions() {
-  const address = await getCurrentAddressForNotifications();
-  if (!address) return [];
-  const record = parseAddressRecord(
-    readJsonFromLocalStorage(CUSTOM_WS_SUBSCRIPTIONS_KEY, {})
-  );
-  return Array.isArray(record[address]) ? record[address] : [];
-}
-
 async function setStoredCustomSubscriptions(list: any[]) {
-  const address = await getCurrentAddressForNotifications();
-  if (!address || typeof localStorage === 'undefined') return;
-  const record = parseAddressRecord(
-    readJsonFromLocalStorage(CUSTOM_WS_SUBSCRIPTIONS_KEY, {})
-  );
-  record[address] = list;
-  localStorage.setItem(CUSTOM_WS_SUBSCRIPTIONS_KEY, JSON.stringify(record));
+  const address = getCurrentAddress();
+  const appStorage = getAppStorage();
+  if (appStorage) {
+    try {
+      const value = await appStorage.get(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+      const record = parseSubscriptionsRecord(value);
+      if (address) record[address] = list;
+      await appStorage.set(CUSTOM_WS_SUBSCRIPTIONS_KEY, record);
+    } catch (err) {
+      console.error(
+        '[get.ts] setStoredCustomSubscriptions appStorage failed:',
+        err
+      );
+    }
+  } else if (typeof localStorage !== 'undefined' && address) {
+    try {
+      const raw = localStorage.getItem(CUSTOM_WS_SUBSCRIPTIONS_KEY);
+      const record = parseSubscriptionsRecord(raw ? JSON.parse(raw) : null);
+      record[address] = list;
+      localStorage.setItem(CUSTOM_WS_SUBSCRIPTIONS_KEY, JSON.stringify(record));
+    } catch (err) {
+      console.error(
+        '[get.ts] setStoredCustomSubscriptions localStorage failed:',
+        err
+      );
+    }
+  }
   executeEvent('custom-ws-subscriptions-updated', list);
 }
 
+/** Allowed filter keys and their types for notification subscription resourceFilter. */
 const NOTIFICATION_FILTER_SPEC = {
   service: 'string',
   query: 'string',
@@ -5166,33 +5245,44 @@ const NOTIFICATION_FILTER_SPEC = {
   excludeBlocked: 'boolean',
   after: 'long',
   before: 'long',
-  mode: 'string',
+  mode: 'string', // ALL | ANY, internal
 };
 
 function validateNotificationFilters(filters) {
-  if (!filters || typeof filters !== 'object') return;
+  if (filters == null || typeof filters !== 'object') return;
   for (const [key, value] of Object.entries(filters)) {
     if (!(key in NOTIFICATION_FILTER_SPEC)) {
       throw new Error(`Unknown filter key: "${key}"`);
     }
     if (value === undefined || value === null) continue;
     const type = NOTIFICATION_FILTER_SPEC[key];
-    if (type === 'string' && typeof value !== 'string') {
-      throw new Error(`Filter "${key}" must be a string`);
-    }
-    if (type === 'arrayOfString') {
-      if (!Array.isArray(value) || value.some((v) => typeof v !== 'string')) {
-        throw new Error(`Filter "${key}" must be an array of strings`);
-      }
-    }
-    if (type === 'boolean' && typeof value !== 'boolean') {
-      throw new Error(`Filter "${key}" must be a boolean`);
-    }
-    if (
-      (type === 'integer' || type === 'long') &&
-      (typeof value !== 'number' || !Number.isInteger(value))
-    ) {
-      throw new Error(`Filter "${key}" must be an integer`);
+    switch (type) {
+      case 'string':
+        if (typeof value !== 'string') {
+          throw new Error(`Filter "${key}" must be a string`);
+        }
+        break;
+      case 'arrayOfString':
+        if (!Array.isArray(value)) {
+          throw new Error(`Filter "${key}" must be an array of strings`);
+        }
+        if (value.some((v) => typeof v !== 'string')) {
+          throw new Error(`Filter "${key}" must be an array of strings`);
+        }
+        break;
+      case 'boolean':
+        if (typeof value !== 'boolean') {
+          throw new Error(`Filter "${key}" must be a boolean`);
+        }
+        break;
+      case 'integer':
+      case 'long':
+        if (typeof value !== 'number' || !Number.isInteger(value)) {
+          throw new Error(`Filter "${key}" must be an integer`);
+        }
+        break;
+      default:
+        break;
     }
   }
 }
@@ -5211,63 +5301,67 @@ export const addNotificationSubscriptions = async (payload, appInfo) => {
       'Notification permission required. Call NOTIFICATION_PERMISSION first.'
     );
   }
-
   const notifications = payload?.notifications;
   if (!Array.isArray(notifications) || notifications.length === 0) {
     throw new Error('notifications must be a non-empty array');
   }
-  const appName = (appInfo.name ?? '').toLowerCase();
+  const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
 
-  const transformed = notifications.map((item) => {
+  const toSubscription = (item) => {
     if (
       !item ||
       typeof item.notificationId !== 'string' ||
       !item.notificationId.trim()
     ) {
-      throw new Error('Each notification must have a notificationId');
+      throw new Error('Each item must have a non-empty notificationId');
     }
     if (typeof item.link !== 'string' || !item.link.trim()) {
-      throw new Error('Each notification must have a link');
+      throw new Error('Each item must have a non-empty link');
     }
-    if (!item.filters || typeof item.filters !== 'object') {
-      throw new Error('Each notification must have filters');
+    const filters = item.filters;
+    if (!filters || typeof filters !== 'object') {
+      throw new Error('Each item must have filters (object)');
     }
-    validateNotificationFilters(item.filters);
+    validateNotificationFilters(filters);
+    const message = item.message;
     if (
-      !item.message ||
-      typeof item.message !== 'object' ||
-      typeof item.message.en !== 'string' ||
-      !item.message.en.trim()
+      !message ||
+      typeof message !== 'object' ||
+      typeof message.en !== 'string' ||
+      !message.en.trim()
     ) {
-      throw new Error("Each notification must have message.en");
+      throw new Error("Each item must have message with at least 'en'");
     }
     return {
       event: 'RESOURCE_PUBLISHED',
-      resourceFilter: { ...item.filters, mode: item.filters.mode ?? 'ALL' },
+      resourceFilter: { ...filters, mode: filters.mode ?? 'ALL' },
       image: typeof item.image === 'string' ? item.image : undefined,
       link: item.link.trim(),
       notificationId: item.notificationId.trim(),
       appName,
       appService,
-      message: { ...item.message },
+      message: { ...message },
     };
-  });
+  };
 
+  const transformed = notifications.map(toSubscription);
   const key = (sub) => `${sub.notificationId}-${sub.appName}-${sub.appService}`;
   const current = await getStoredCustomSubscriptions();
-  const byKey = new Map(current.map((sub) => [key(sub), sub]));
-  transformed.forEach((sub) => byKey.set(key(sub), sub));
-  await setStoredCustomSubscriptions(Array.from(byKey.values()));
+  const byKey = new Map(current.map((s) => [key(s), s]));
+  transformed.forEach((s) => byKey.set(key(s), s));
+  const merged = Array.from(byKey.values());
+  await setStoredCustomSubscriptions(merged);
   return true;
 };
 
 export const removeNotificationSubscriptions = async (payload, appInfo) => {
   const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
-  const ids =
-    Array.isArray(payload?.notificationIds) && payload.notificationIds.length
-      ? new Set(payload.notificationIds.map((id) => String(id).trim()))
+  const notificationIds = payload?.notificationIds;
+  const idsSet =
+    Array.isArray(notificationIds) && notificationIds.length > 0
+      ? new Set(notificationIds.map((id) => String(id).trim()))
       : null;
 
   const current = await getStoredCustomSubscriptions();
@@ -5277,7 +5371,15 @@ export const removeNotificationSubscriptions = async (payload, appInfo) => {
       (sub.appName ?? '').toLowerCase() === appName &&
       (sub.appService ?? 'APP') === appService;
     if (!sameApp) return true;
-    if (ids == null || ids.has(sub.notificationId ?? '')) {
+    if (idsSet == null) {
+      toUnsubscribe.push({
+        notificationId: sub.notificationId ?? '',
+        appName: sub.appName ?? '',
+        appService: sub.appService ?? 'APP',
+      });
+      return false;
+    }
+    if (idsSet.has(sub.notificationId ?? '')) {
       toUnsubscribe.push({
         notificationId: sub.notificationId ?? '',
         appName: sub.appName ?? '',
@@ -5288,77 +5390,160 @@ export const removeNotificationSubscriptions = async (payload, appInfo) => {
     return true;
   });
   await setStoredCustomSubscriptions(filtered);
-  if (toUnsubscribe.length) executeEvent('custom-ws-unsubscribe', toUnsubscribe);
+  if (toUnsubscribe.length > 0) {
+    executeEvent('custom-ws-unsubscribe', toUnsubscribe);
+  }
   return true;
 };
 
-function parseSeenRecord(value: unknown): Record<string, Record<string, number>> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+const NOTIFICATION_SEEN_IN_APP_KEY = 'qortal_notification_seen_in_app';
+const NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+/** Stored shape: address -> notificationKey -> timestamp. Electron: appStorage (sync read from cache); else localStorage. */
+function getStoredSeenInAppRecord(): Record<string, Record<string, number>> {
+  const appStorage = getAppStorage();
+  const electronStorage = getElectronPersistentStorage();
+  let raw: string | null | unknown = null;
+  if (appStorage != null && electronStorage != null) {
+    raw = (electronStorage as any).getItem(NOTIFICATION_SEEN_IN_APP_KEY, null);
+  } else if (typeof localStorage !== 'undefined') {
+    raw = localStorage.getItem(NOTIFICATION_SEEN_IN_APP_KEY);
+  }
+  if (raw == null) return {};
+  try {
+    const parsed: unknown =
+      typeof raw === 'string' ? JSON.parse(raw) : raw;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    const obj = parsed as Record<string, unknown>;
+    const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
+    const result: Record<string, Record<string, number>> = {};
+    for (const [addr, inner] of Object.entries(obj)) {
+      if (inner && typeof inner === 'object' && !Array.isArray(inner)) {
+        const keyRecord: Record<string, number> = {};
+        for (const [k, t] of Object.entries(inner)) {
+          if (typeof t === 'number' && t > cutoff) keyRecord[k] = t;
+        }
+        if (Object.keys(keyRecord).length > 0) result[addr] = keyRecord;
+      }
+    }
+    return result;
+  } catch (_) {
+    return {};
+  }
+}
+
+function getStoredSeenInAppKeys(address: string | null): string[] {
+  if (!address) return [];
+  const record = getStoredSeenInAppRecord();
+  const byAddr = record[address] ?? {};
   const cutoff = Date.now() - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
-  return Object.fromEntries(
-    Object.entries(value as Record<string, Record<string, number>>)
-      .map(([address, keys]) => [
-        address,
-        Object.fromEntries(
-          Object.entries(keys || {}).filter(
-            ([, seenAt]) => typeof seenAt === 'number' && seenAt > cutoff
-          )
-        ),
-      ])
-      .filter(([, keys]) => Object.keys(keys as Record<string, number>).length)
+  return Object.keys(byAddr).filter(
+    (k) => typeof byAddr[k] === 'number' && byAddr[k] > cutoff
   );
 }
 
-export const markNotificationSeenInApp = async (payload, appInfo) => {
+function setStoredSeenInAppKeys(
+  address: string | null,
+  keys: string[]
+): string[] {
+  if (!address || keys.length === 0) return [];
+  const record = getStoredSeenInAppRecord();
+  const now = Date.now();
+  const cutoff = now - NOTIFICATION_SEEN_IN_APP_MAX_AGE_MS;
+  record[address] = record[address] ?? {};
+  for (const k of keys) record[address][k] = now;
+  const pruned: Record<string, Record<string, number>> = {};
+  for (const [addr, inner] of Object.entries(record)) {
+    const filtered = Object.fromEntries(
+      Object.entries(inner).filter(
+        ([, t]) => typeof t === 'number' && t > cutoff
+      )
+    );
+    if (Object.keys(filtered).length > 0) pruned[addr] = filtered;
+  }
+  const appStorage = getAppStorage();
+  const electronStorage = getElectronPersistentStorage();
+  if (appStorage != null && electronStorage != null) {
+    (electronStorage as any).setItem(NOTIFICATION_SEEN_IN_APP_KEY, pruned);
+    appStorage
+      .set(NOTIFICATION_SEEN_IN_APP_KEY, pruned)
+      .catch((err) =>
+        console.error('[get.ts] setStoredSeenInAppKeys appStorage failed:', err)
+      );
+  } else if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(NOTIFICATION_SEEN_IN_APP_KEY, JSON.stringify(pruned));
+  }
+  const keysList = Object.keys(record[address] ?? {}).filter(
+    (k) => typeof record[address][k] === 'number' && record[address][k] > cutoff
+  );
+  executeEvent('notification-seen-in-app-updated', { address, keys: keysList });
+  return keysList;
+}
+
+/**
+ * Mark notifications as "seen in app" for the current address.
+ * Payload: { notificationIds: (string | { notificationId: string, identifier?: string })[] }.
+ * App name/service from appInfo.
+ * - String: add prefix key only (all with that notificationId).
+ * - Object with optional identifier: add prefix key; if identifier present, also add full key for that item.
+ */
+export const markNotificationSeenInApp = (payload, appInfo) => {
   const notificationIds = payload?.notificationIds;
   if (!Array.isArray(notificationIds) || notificationIds.length === 0) {
     return [];
   }
-  const address = await getCurrentAddressForNotifications();
-  if (!address || typeof localStorage === 'undefined') return [];
-
+  const address = getCurrentAddress();
+  if (!address) return [];
   const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
-  const record = parseSeenRecord(
-    readJsonFromLocalStorage(NOTIFICATION_SEEN_IN_APP_KEY, {})
-  );
-  const current = record[address] ?? {};
-  const now = Date.now();
-
+  const current = getStoredSeenInAppKeys(address);
+  const set = new Set(current);
   notificationIds.forEach((item) => {
     const notificationId =
       typeof item === 'string'
-        ? item.trim()
+        ? String(item).trim()
         : item && typeof item === 'object' && item.notificationId != null
           ? String(item.notificationId).trim()
           : '';
     if (!notificationId) return;
-    const prefix = `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
+    const prefixKey = `RESOURCE_PUBLISHED-${appName}-${appService}-${notificationId}`;
     const identifier =
       item && typeof item === 'object' && item.identifier != null
         ? String(item.identifier).trim()
         : '';
-    current[identifier ? `${prefix}-${identifier}` : prefix] = now;
+    if (identifier) {
+      set.add(`${prefixKey}-${identifier}`);
+    } else {
+      set.add(prefixKey);
+    }
   });
-
-  const next = parseSeenRecord({ ...record, [address]: current });
-  localStorage.setItem(NOTIFICATION_SEEN_IN_APP_KEY, JSON.stringify(next));
-  const keys = Object.keys(next[address] ?? {});
-  executeEvent('notification-seen-in-app-updated', { address, keys });
-  return keys;
+  const merged = Array.from(set);
+  return setStoredSeenInAppKeys(address, merged);
 };
 
+/** Returns notification rules for the app in the same format as NOTIFICATION_ADD (image, link, notificationId, message, filters). */
 export const getNotificationSubscriptions = async (_payload, appInfo) => {
   const appName = (appInfo?.name ?? '').toLowerCase();
   const appService = appInfo?.service ?? 'APP';
   const current = await getStoredCustomSubscriptions();
-  return current
-    .filter(
-      (sub) =>
-        (sub.appName ?? '').toLowerCase() === appName &&
-        (sub.appService ?? 'APP') === appService
-    )
-    .map((sub) => ({
+  const forApp = current.filter(
+    (sub) =>
+      (sub.appName ?? '').toLowerCase() === appName &&
+      (sub.appService ?? 'APP') === appService
+  );
+  return forApp.map((sub) => {
+    const rf = sub.resourceFilter ?? {};
+    const filters = {
+      service: typeof rf.service === 'string' ? rf.service : '',
+      identifier: typeof rf.identifier === 'string' ? rf.identifier : '',
+    };
+    if (typeof rf.name === 'string') filters.name = rf.name;
+    if (rf.excludeBlocked !== undefined)
+      filters.excludeBlocked = !!rf.excludeBlocked;
+    if (typeof rf.mode === 'string') filters.mode = rf.mode;
+    return {
       image: typeof sub.image === 'string' ? sub.image : undefined,
       link: typeof sub.link === 'string' ? sub.link : '',
       notificationId:
@@ -5367,8 +5552,9 @@ export const getNotificationSubscriptions = async (_payload, appInfo) => {
         sub.message && typeof sub.message === 'object'
           ? { ...sub.message }
           : { en: '' },
-      filters: sub.resourceFilter ?? {},
-    }));
+      filters,
+    };
+  });
 };
 
 export const sendCoin = async (data, isFromExtension) => {
@@ -6452,7 +6638,15 @@ export const openNewTab = async (data, isFromExtension) => {
           postProcess: 'capitalizeFirstChar',
         })
       );
-    executeEvent('addTab', { data: { service, name, identifier, path } });
+      executeEvent('addTab', {
+      data: {
+        service,
+        name,
+        identifier,
+        path,
+        ...(data.navigateIfAlreadyOpen && { navigateIfAlreadyOpen: true }),
+      },
+    });
     executeEvent('open-apps-mode', {});
     return true;
   } else {

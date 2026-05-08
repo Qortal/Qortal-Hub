@@ -255,6 +255,7 @@
     "expires_suffix": " - 到期 {{time}}",
     "status_due": "待付",
     "status_active": "有效",
+    "status_owner": "所有者",
     "managed_fallback": "托管订阅",
     "members_one": "{{count}} 名成员",
     "members_other": "{{count}} 名成员",

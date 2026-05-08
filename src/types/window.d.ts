@@ -1,5 +1,10 @@
 declare global {
   interface Window {
+    appStorage?: {
+      get: (key: string) => Promise<unknown>;
+      set: (key: string, value: unknown) => Promise<void>;
+      delete: (key: string) => Promise<void>;
+    };
     coreSetup?: {
       isCoreRunning?: () => Promise<boolean>;
       isCoreRunningOnSystem?: () => Promise<boolean>;
@@ -29,6 +34,7 @@ declare global {
       windowMinimize?: () => void;
       windowMaximize?: () => Promise<void>;
       windowClose?: () => void;
+      focusWindow?: () => Promise<void>;
       getWindowState?: () => Promise<{ isMaximized: boolean }>;
       onWindowStateChange?: (
         callback: (state: { isMaximized: boolean }) => void

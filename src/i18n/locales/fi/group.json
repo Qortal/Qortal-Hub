@@ -255,6 +255,7 @@
     "expires_suffix": " – vanhenee {{time}}",
     "status_due": "erääntyy",
     "status_active": "aktiivinen",
+    "status_owner": "omistaja",
     "managed_fallback": "hallinnoitu tilaus",
     "members_one": "{{count}} jäsen",
     "members_other": "{{count}} jäsentä",

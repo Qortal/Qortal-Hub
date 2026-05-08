@@ -255,6 +255,7 @@
     "expires_suffix": " - scade {{time}}",
     "status_due": "in scadenza",
     "status_active": "attivo",
+    "status_owner": "proprietario",
     "managed_fallback": "abbonamento gestito",
     "members_one": "{{count}} membro",
     "members_other": "{{count}} membri",

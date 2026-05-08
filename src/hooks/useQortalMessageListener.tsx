@@ -278,6 +278,7 @@ export const listOfAllQortalRequests = [
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
+   'UPDATE_SUBSCRIPTIONS',
   'VOTE_ON_POLL',
   'WHICH_UI',
 ];
@@ -355,6 +356,7 @@ export const UIQortalRequests = [
   'UPDATE_FOREIGN_FEE',
   'UPDATE_GROUP',
   'UPDATE_NAME',
+   'UPDATE_SUBSCRIPTIONS',
   'VOTE_ON_POLL',
   'WHICH_UI',
 ];
@@ -656,6 +658,7 @@ export const useQortalMessageListener = (
       'GET_USER_WALLET',
       'GET_WALLET_BALANCE',
       'IS_USING_PUBLIC_NODE',
+       'NOTIFICATION_HAS_PERMISSION',
       'LIST_ATS',
       'LIST_GROUPS',
       'LIST_QDN_RESOURCES',

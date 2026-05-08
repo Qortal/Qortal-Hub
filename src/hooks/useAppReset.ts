@@ -21,7 +21,6 @@ import {
   lastPaymentSeenTimestampAtom,
   managedSubscriptionsAtom,
   managedSubscriptionsLoadingAtom,
-  mailsAtom,
   memberGroupsAtom,
   mutedGroupsAtom,
   myGroupsWhereIAmAdminAtom,
@@ -81,7 +80,6 @@ export function useAppReset() {
   const resetAtomQMailLastEnteredTimestampAtom = useResetAtom(
     qMailLastEnteredTimestampAtom
   );
-  const resetAtomMailsAtom = useResetAtom(mailsAtom);
   const resetGroupPropertiesAtom = useResetAtom(groupsPropertiesAtom);
   const resetLastPaymentSeenTimestampAtom = useResetAtom(
     lastPaymentSeenTimestampAtom
@@ -151,7 +149,6 @@ export function useAppReset() {
     resetAtomOldPinnedAppsAtom();
     resetAtomIsUsingImportExportSettingsAtom();
     resetAtomQMailLastEnteredTimestampAtom();
-    resetAtomMailsAtom();
     resetGroupPropertiesAtom();
     resetLastPaymentSeenTimestampAtom();
     resetGroupsOwnerNamesAtom();
@@ -201,7 +198,6 @@ export function useAppReset() {
     resetAtomOldPinnedAppsAtom,
     resetAtomIsUsingImportExportSettingsAtom,
     resetAtomQMailLastEnteredTimestampAtom,
-    resetAtomMailsAtom,
     resetGroupPropertiesAtom,
     resetLastPaymentSeenTimestampAtom,
     resetGroupsOwnerNamesAtom,

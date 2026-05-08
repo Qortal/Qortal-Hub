@@ -255,6 +255,7 @@
     "expires_suffix": " - ينتهي {{time}}",
     "status_due": "مستحق",
     "status_active": "نشط",
+    "status_owner": "مالك",
     "managed_fallback": "اشتراك مُدار",
     "members_one": "{{count}} عضو",
     "members_other": "{{count}} أعضاء",

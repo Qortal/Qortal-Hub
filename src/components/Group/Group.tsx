@@ -1,4 +1,4 @@
-import { Box, Typography } from '@mui/material';
+import { Box, Paper, Typography, useTheme } from '@mui/material';
 import {
   lazy,
   Profiler,
@@ -13,7 +13,8 @@ import { ChatGroup } from '../Chat/ChatGroup';
 import { CreateCommonSecret } from '../Chat/CreateCommonSecret';
 import { base64ToUint8Array } from '../../qdn/encryption/group-encryption';
 import { uint8ArrayToObject } from '../../encryption/encryption';
-import { Spacer } from '../../common/Spacer';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+
 import {
   clearAllQueues,
   getBaseApiReact,
@@ -78,7 +79,6 @@ import {
   TIME_DAYS_1_IN_MILLISECONDS,
 } from '../../constants/constants';
 import { useWebsocketStatus } from './useWebsocketStatus';
-import { useQMailFetch } from '../../hooks/useQMailFetch';
 import { WebSocketNotifications } from './WebsocketNotifications';
 import { DirectsSidebar } from './DirectsSidebar';
 import { GlobalChatWidget } from './GlobalChatWidget';
@@ -93,6 +93,7 @@ import {
   MainContentBox,
   NewChatOverlay,
   NoSelectionTypography,
+  NotPartAdminListBox,
   NotPartGroupDiv,
   RootBox,
   SelectedDirectOverlay,
@@ -232,6 +233,8 @@ export const Group = ({
   const [groupAnnouncements, setGroupAnnouncements] = useAtom(
     groupAnnouncementsAtom
   );
+  const theme = useTheme();
+
   const [defaultThread, setDefaultThread] = useState(null);
   const [, setIsOpenDrawer] = useState(false);
   const [isOpenBlockedModal, setIsOpenBlockedUserModal] = useAtom(
@@ -314,7 +317,6 @@ export const Group = ({
   const [groupsProperties, setGroupsProperties] = useAtom(groupsPropertiesAtom);
   const setGroupsOwnerNames = useSetAtom(groupsOwnerNamesAtom);
   const userInfo = useAtomValue(userInfoAtom);
-  useQMailFetch(userInfo?.name, userInfo?.address);
 
   const setUserInfoForLevels = useSetAtom(addressInfoControllerAtom);
   const setMyGroupsWhereIAmAdmin = useSetAtom(myGroupsWhereIAmAdminAtom);
@@ -704,7 +706,10 @@ export const Group = ({
           setTriedToFetchSecretKey(true);
         }
       } catch (error) {
-        if (error === 'Unable to decrypt data') {
+        if (
+          error === 'Unable to decrypt data' ||
+          error === 'Unable to decrypt'
+        ) {
           setTriedToFetchSecretKey(true);
           settimeoutForRefetchSecretKey.current = setTimeout(() => {
             getSecretKey();
@@ -1308,10 +1313,7 @@ export const Group = ({
       .sendMessage('markAllMemberGroupsRead', { groupIds: ids })
       .then((response) => {
         if (response?.error) {
-          console.error(
-            'Failed to mark all groups read:',
-            response.error
-          );
+          console.error('Failed to mark all groups read:', response.error);
         }
       })
       .catch((error) => {
@@ -1789,6 +1791,15 @@ export const Group = ({
     [t]
   );
 
+  const notPartOfKeys = useMemo(() => {
+    return (
+      isPrivate &&
+      !admins.includes(myAddress) &&
+      !secretKey &&
+      triedToFetchSecretKey
+    );
+  }, [isPrivate, admins, myAddress, secretKey, triedToFetchSecretKey]);
+
   const closeChatDirect = useCallback(() => {
     setSelectedDirect(null);
     setNewChat(false);
@@ -1990,58 +2001,97 @@ export const Group = ({
                   </EncryptionKeyMessageDiv>
                 )}
 
-              {isPrivate &&
-              !admins.includes(myAddress) &&
-              !secretKey &&
-              triedToFetchSecretKey ? (
+              {notPartOfKeys ? (
                 <>
                   {secretKeyPublishDate ||
                   (!secretKeyPublishDate && !firstSecretKeyInCreation) ? (
                     <NotPartGroupDiv>
-                      <Typography>
-                        {t('group:message.generic.not_part_group', {
-                          postProcess: 'capitalizeFirstChar',
-                        })}
-                      </Typography>
-
-                      <Spacer height="25px" />
-
-                      <Typography>
-                        <strong>
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          maxWidth: 480,
+                          p: 3,
+                          textAlign: 'center',
+                          border: `1px solid ${theme.palette.divider}`,
+                          borderRadius: 2,
+                          mb: 3,
+                        }}
+                      >
+                        <LockOutlinedIcon
+                          sx={{
+                            fontSize: 48,
+                            color: theme.palette.text.secondary,
+                            mb: 2,
+                          }}
+                        />
+                        <Typography
+                          variant="subtitle1"
+                          sx={{
+                            color: theme.palette.text.primary,
+                            fontWeight: 500,
+                            mb: 1.5,
+                          }}
+                        >
+                          {t('group:message.generic.not_part_group', {
+                            postProcess: 'capitalizeFirstChar',
+                          })}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            color: theme.palette.warning.main,
+                            fontWeight: 600,
+                            px: 1,
+                          }}
+                        >
                           {t('group:message.generic.only_encrypted', {
                             postProcess: 'capitalizeFirstChar',
                           })}
-                        </strong>
-                      </Typography>
-
-                      <Spacer height="25px" />
-
-                      <Typography>
-                        {t('group:message.generic.notify_admins', {
+                        </Typography>
+                      </Paper>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          mb: 2,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {t('group:message.error.notify_admins', {
                           postProcess: 'capitalizeFirstChar',
                         })}
                       </Typography>
-
-                      <Spacer height="25px" />
-
-                      {adminsWithNames.map((admin) => {
-                        return (
+                      <NotPartAdminListBox>
+                        {adminsWithNames.map((admin) => (
                           <AdminRowBox key={admin?.address}>
-                            <Typography>{admin?.name}</Typography>
+                            <Typography
+                              variant="body1"
+                              sx={{
+                                fontWeight: 500,
+                                color: theme.palette.text.primary,
+                              }}
+                            >
+                              {admin?.name}
+                            </Typography>
                             <LoadingButton
                               data-admin-address={admin?.address}
                               loading={isLoadingNotifyAdmin}
                               loadingPosition="start"
+                              size="small"
                               variant="contained"
                               onClick={handleNotifyAdminClick}
+                              sx={{
+                                textTransform: 'none',
+                                fontWeight: 600,
+                              }}
                             >
                               {t('core:action.notify', {
                                 postProcess: 'capitalizeFirstChar',
                               })}
                             </LoadingButton>
                           </AdminRowBox>
-                        );
-                      })}
+                        ))}
+                      </NotPartAdminListBox>
                     </NotPartGroupDiv>
                   ) : null}
                 </>

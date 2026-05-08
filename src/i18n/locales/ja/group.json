@@ -255,6 +255,7 @@
     "expires_suffix": " – 期限 {{time}}",
     "status_due": "支払い期限",
     "status_active": "有効",
+    "status_owner": "オーナー",
     "managed_fallback": "管理サブスクリプション",
     "members_one": "メンバー {{count}} 人",
     "members_other": "メンバー {{count}} 人",

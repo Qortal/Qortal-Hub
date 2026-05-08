@@ -255,6 +255,7 @@
     "expires_suffix": " – aegub {{time}}",
     "status_due": "tähtaeg",
     "status_active": "aktiivne",
+    "status_owner": "omanik",
     "managed_fallback": "hallatav tellimus",
     "members_one": "{{count}} liige",
     "members_other": "{{count}} liiget",

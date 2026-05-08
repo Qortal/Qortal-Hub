@@ -50,7 +50,7 @@ export function useInitializeMySubscriptions() {
       setGroups: setMyMemberGroups,
       setLastFetched,
     };
-  });
+  },[userInfo?.address, setMyMemberGroups, setLastFetched, lastFetched]);
 
   useEffect(() => {
     async function fetchMemberGroups() {

@@ -28,9 +28,9 @@ import { useTranslation } from 'react-i18next';
 import { getBaseApiReact } from '../App';
 import {
   customWebsocketSubscriptionsAtom,
-  getNotificationSeenKey,
-  getNotificationSeenPrefixKey,
+  isNotificationSeenInAppFromKeyTimes,
   lastPaymentSeenTimestampAtom,
+  notificationSeenInAppKeyTimesAtom,
   notificationSeenInAppKeysAtom,
   paymentNotificationsAtom,
 } from '../atoms/global';
@@ -76,14 +76,6 @@ function getNotificationMessage(messageObj, currentLang, fallback) {
   );
 }
 
-function isSeenInApp(notification, seenKeysSet) {
-  if (!seenKeysSet?.size) return false;
-  return (
-    seenKeysSet.has(getNotificationSeenKey(notification)) ||
-    seenKeysSet.has(getNotificationSeenPrefixKey(notification))
-  );
-}
-
 export const GeneralNotifications = ({
   tooltipPlacement = 'left',
   compact = false,
@@ -102,7 +94,7 @@ export const GeneralNotifications = ({
   const setCustomSubscriptions = useSetAtom(customWebsocketSubscriptionsAtom);
   const lastSeenTimestamp = useAtomValue(lastPaymentSeenTimestampAtom);
   const setLastSeenTimestamp = useSetAtom(lastPaymentSeenTimestampAtom);
-  const seenKeys = useAtomValue(notificationSeenInAppKeysAtom);
+  const seenInAppKeyTimes = useAtomValue(notificationSeenInAppKeyTimesAtom);
   const setSeenKeys = useSetAtom(notificationSeenInAppKeysAtom);
   const theme = useTheme();
   const isDarkMode = theme.palette.mode === 'dark';
@@ -120,24 +112,20 @@ export const GeneralNotifications = ({
       unsubscribeFromEvent('notification-seen-in-app-updated', handler);
   }, [setSeenKeys]);
 
-  const seenKeysSet = useMemo(
-    () => new Set(Array.isArray(seenKeys) ? seenKeys : []),
-    [seenKeys]
-  );
-
   const resourceNotifications = useMemo(
-    () => (notifications ?? []).filter((item) => item?.event === RESOURCE_EVENT),
+    () =>
+      (notifications ?? []).filter((item) => item?.event === RESOURCE_EVENT),
     [notifications]
   );
-
   const unseenCount = useMemo(() => {
     return resourceNotifications.filter((notification) => {
       const timestamp = getNotificationTimestamp(notification);
       if (timestamp == null) return false;
-      if (isSeenInApp(notification, seenKeysSet)) return false;
+      if (isNotificationSeenInAppFromKeyTimes(notification, seenInAppKeyTimes))
+        return false;
       return !lastSeenTimestamp || timestamp > lastSeenTimestamp;
     }).length;
-  }, [resourceNotifications, seenKeysSet, lastSeenTimestamp]);
+  }, [resourceNotifications, seenInAppKeyTimes, lastSeenTimestamp]);
 
   const hasNewNotifications = unseenCount > 0;
   const NotificationIcon = hasNewNotifications
@@ -274,20 +262,28 @@ export const GeneralNotifications = ({
             gap: resourceNotifications.length ? 1 : 1.2,
             maxHeight: '60vh',
             overflow: 'auto',
-            p: resourceNotifications.length ? 1 : '18px 20px',
+            ...(resourceNotifications.length
+              ? { pb: 1, pl: 1, pr: 1, pt: 5.5 }
+              : { p: '18px 20px' }),
             position: 'relative',
             width: 360,
           }}
         >
           <IconButton
             aria-label="Notification settings"
-            onClick={openSettings}
+            onClick={(event) => {
+              event.stopPropagation();
+              openSettings();
+            }}
+            onMouseDown={(event) => event.stopPropagation()}
             size="small"
             sx={{
               color: theme.palette.text.secondary,
+              pointerEvents: 'auto',
               position: 'absolute',
-              right: 8,
-              top: 8,
+              right: 4,
+              top: 4,
+              zIndex: 2,
             }}
           >
             <SettingsIcon fontSize="small" />
@@ -324,8 +320,7 @@ export const GeneralNotifications = ({
                 }}
               >
                 {t('message.generic.app_notifications_hint', {
-                  defaultValue:
-                    'Mentions, Q-Mail, and Q-App activity will appear here.',
+                  defaultValue: 'Q-App notifications will appear here',
                 })}
               </Typography>
             </>
@@ -339,7 +334,10 @@ export const GeneralNotifications = ({
             const unseen =
               timestamp != null &&
               (!lastSeenTimestamp || timestamp > lastSeenTimestamp) &&
-              !isSeenInApp(notification, seenKeysSet);
+              !isNotificationSeenInAppFromKeyTimes(
+                notification,
+                seenInAppKeyTimes
+              );
 
             return (
               <MenuItem
@@ -563,7 +561,9 @@ export const GeneralNotifications = ({
             })}
           </Box>
           {settingsLoading ? (
-            <Typography sx={{ color: alpha(theme.palette.text.secondary, 0.82) }}>
+            <Typography
+              sx={{ color: alpha(theme.palette.text.secondary, 0.82) }}
+            >
               {t('message.generic.loading', { defaultValue: 'Loading...' })}
             </Typography>
           ) : settingsApps.length === 0 ? (
@@ -606,7 +606,10 @@ export const GeneralNotifications = ({
                     <Box
                       sx={{
                         alignItems: 'center',
-                        backgroundColor: alpha(theme.palette.primary.main, 0.12),
+                        backgroundColor: alpha(
+                          theme.palette.primary.main,
+                          0.12
+                        ),
                         border: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`,
                         borderRadius: '10px',
                         color: alpha(theme.palette.primary.light, 0.96),
@@ -711,7 +714,10 @@ export const GeneralNotifications = ({
                         px: 1.1,
                         py: 0.6,
                         '&:hover': {
-                          backgroundColor: alpha(theme.palette.error.main, 0.08),
+                          backgroundColor: alpha(
+                            theme.palette.error.main,
+                            0.08
+                          ),
                         },
                       }}
                     >

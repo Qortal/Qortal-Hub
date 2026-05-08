@@ -32,6 +32,7 @@ import {
   ConnectionRequestScreen,
   CountdownOverlay,
   CreateWalletView,
+  ElectronPersistentStorageHydration,
   InfoDialog,
   NotAuthenticatedFooter,
   NotificationPermissionSlideDown,
@@ -295,6 +296,14 @@ function App() {
   const [hasSettingsChanged, setHasSettingsChanged] = useAtom(
     hasSettingsChangedAtom
   );
+
+   useEffect(() => {
+    const w = window as Window & { __qortalCurrentAddress?: string | null };
+    w.__qortalCurrentAddress = userInfo?.address ?? null;
+    return () => {
+      delete w.__qortalCurrentAddress;
+    };
+  }, [userInfo?.address]);
 
   const downloadResource = useFetchResources();
   const holdRefExtState = useRef<extStates>('not-authenticated');
@@ -1403,6 +1412,7 @@ function App() {
       <PdfViewer />
 
       <QORTAL_APP_CONTEXT.Provider value={contextValue as AppContextInterface}>
+        <ElectronPersistentStorageHydration />
         <CoreSetup />
         <Tutorials />
         {extState === 'not-authenticated' && (

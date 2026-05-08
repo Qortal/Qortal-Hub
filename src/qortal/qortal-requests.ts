@@ -85,60 +85,8 @@ import {
 } from './get.ts';
 import { getData, storeData } from '../utils/chromeStorage.ts';
 import { executeEvent } from '../utils/events.ts';
+import { triggerMemberGroupsFetch } from '../subscriptions/useInitializeMySubscriptions.ts';
 
-const NOTIFICATION_PERMISSION_PREFIX = 'qAPPNotification-';
-const QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY =
-  'qortalNotificationOsPushDisabled';
-
-function normalizeNotificationPermissionAppName(appName: unknown): string {
-  return String(appName ?? '').trim().toLowerCase();
-}
-
-export function getNotificationPermissionKey(appName: unknown): string {
-  return `${NOTIFICATION_PERMISSION_PREFIX}${normalizeNotificationPermissionAppName(
-    appName
-  )}`;
-}
-
-function isNotificationPermissionKey(key: unknown): key is string {
-  return (
-    typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX)
-  );
-}
-
-function normalizePermissionKey(key: unknown): string {
-  if (!isNotificationPermissionKey(key)) return String(key ?? '');
-  return getNotificationPermissionKey(
-    key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
-  );
-}
-
-function toPermissionRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function migrateNotificationPermissionKeys(
-  permissions: Record<string, unknown>,
-  normalizedKey: string
-): Record<string, unknown> {
-  if (!isNotificationPermissionKey(normalizedKey)) return permissions;
-  const normalizedAppName = normalizeNotificationPermissionAppName(
-    normalizedKey.slice(NOTIFICATION_PERMISSION_PREFIX.length)
-  );
-  const next = { ...permissions };
-  for (const key of Object.keys(next)) {
-    if (!isNotificationPermissionKey(key)) continue;
-    const keyAppName = normalizeNotificationPermissionAppName(
-      key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
-    );
-    if (keyAppName === normalizedAppName && key !== normalizedKey) {
-      delete next[key];
-    }
-  }
-  return next;
-}
 
 function getLocalStorage(key) {
   return getData(key).catch((error) => {
@@ -169,16 +117,85 @@ export const isRunningGateway = async () => {
   return isGateway;
 };
 
+const getAppStorage = () =>
+  typeof window !== 'undefined' &&
+  (window as { appStorage?: { get: (k: string) => Promise<unknown>; set: (k: string, v: unknown) => Promise<void> } }).appStorage;
+
+const NOTIFICATION_PERMISSION_PREFIX = 'qAPPNotification-';
+
+function normalizeNotificationPermissionAppName(appName: unknown): string {
+  return String(appName ?? '').trim().toLowerCase();
+}
+
+export function getNotificationPermissionKey(appName: unknown): string {
+  return `${NOTIFICATION_PERMISSION_PREFIX}${normalizeNotificationPermissionAppName(appName)}`;
+}
+
+function isNotificationPermissionKey(key: unknown): key is string {
+  return typeof key === 'string' && key.startsWith(NOTIFICATION_PERMISSION_PREFIX);
+}
+
+function normalizePermissionKey(key: unknown): string {
+  if (!isNotificationPermissionKey(key)) return String(key ?? '');
+  return getNotificationPermissionKey(
+    key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
+  );
+}
+
+function migrateNotificationPermissionKeys(
+  permissions: Record<string, unknown>,
+  normalizedKey: string
+): Record<string, unknown> {
+  if (!isNotificationPermissionKey(normalizedKey)) return permissions;
+  const normalizedAppName = normalizeNotificationPermissionAppName(
+    normalizedKey.slice(NOTIFICATION_PERMISSION_PREFIX.length)
+  );
+  const next = { ...permissions };
+  for (const key of Object.keys(next)) {
+    if (!isNotificationPermissionKey(key)) continue;
+    const keyAppName = normalizeNotificationPermissionAppName(
+      key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
+    );
+    if (keyAppName === normalizedAppName && key !== normalizedKey) {
+      delete next[key];
+    }
+  }
+  return next;
+}
+
+function toPermissionRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 export async function setPermission(key, value) {
   try {
     const normalizedKey = normalizePermissionKey(key);
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const rawPermissions = toPermissionRecord(
+        await appStorage.get('qortalRequestPermissions')
+      );
+      const qortalRequestPermissions = migrateNotificationPermissionKeys(
+        rawPermissions,
+        normalizedKey
+      );
+      qortalRequestPermissions[normalizedKey] = value;
+      await appStorage.set(
+        'qortalRequestPermissions',
+        qortalRequestPermissions
+      );
+      return;
+    }
+    const rawPermissions = toPermissionRecord(
+      await getLocalStorage('qortalRequestPermissions')
+    );
     const qortalRequestPermissions = migrateNotificationPermissionKeys(
-      toPermissionRecord(await getLocalStorage('qortalRequestPermissions')),
+      rawPermissions,
       normalizedKey
     );
-
     qortalRequestPermissions[normalizedKey] = value;
-
     await setLocalStorage('qortalRequestPermissions', qortalRequestPermissions);
   } catch (error) {
     console.error('Error setting permission:', error);
@@ -188,10 +205,16 @@ export async function setPermission(key, value) {
 export async function getPermission(key) {
   try {
     const normalizedKey = normalizePermissionKey(key);
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const qortalRequestPermissions = toPermissionRecord(
+        await appStorage.get('qortalRequestPermissions')
+      );
+      return qortalRequestPermissions[normalizedKey] ?? null;
+    }
     const qortalRequestPermissions = toPermissionRecord(
       await getLocalStorage('qortalRequestPermissions')
     );
-
     return qortalRequestPermissions[normalizedKey] ?? null;
   } catch (error) {
     console.error('Error getting permission:', error);
@@ -199,31 +222,50 @@ export async function getPermission(key) {
   }
 }
 
+/** Returns the full permissions object (for listing apps with notification permission). */
 export async function getQortalRequestPermissions() {
   try {
-    return toPermissionRecord(await getLocalStorage('qortalRequestPermissions'));
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      return (await appStorage.get('qortalRequestPermissions')) || {};
+    }
+    return (await getLocalStorage('qortalRequestPermissions')) || {};
   } catch (error) {
     console.error('Error getting permissions:', error);
     return {};
   }
 }
 
+/** App names that have qAPPNotification-<appName> === true. */
 export async function getAppsWithNotificationPermission() {
-  const permissions = await getQortalRequestPermissions();
-  return Object.keys(permissions)
-    .filter((key) => key.startsWith(NOTIFICATION_PERMISSION_PREFIX))
-    .filter((key) => permissions[key] === true)
-    .map((key) =>
-      normalizeNotificationPermissionAppName(
-        key.slice(NOTIFICATION_PERMISSION_PREFIX.length)
-      )
-    );
+  const perms = await getQortalRequestPermissions();
+  const apps = [];
+  for (const key of Object.keys(perms)) {
+    if (key.startsWith('qAPPNotification-') && perms[key] === true) {
+      apps.push(
+        normalizeNotificationPermissionAppName(
+          key.replace(/^qAPPNotification-/, '')
+        )
+      );
+    }
+  }
+  return apps;
 }
 
+const QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY =
+  'qortalNotificationOsPushDisabled';
+
+/** Map of appName -> true if OS push is disabled for that app. */
 export async function getNotificationOsPushDisabledMap() {
   try {
-    const map = await getData(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY);
-    return map && typeof map === 'object' && !Array.isArray(map) ? map : {};
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      const map =
+        (await appStorage.get(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY)) || {};
+      return typeof map === 'object' && !Array.isArray(map) ? map : {};
+    }
+    const raw = await getData(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY);
+    return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   } catch {
     return {};
   }
@@ -231,13 +273,18 @@ export async function getNotificationOsPushDisabledMap() {
 
 export async function getNotificationOsPushDisabled(appName) {
   const map = await getNotificationOsPushDisabledMap();
-  return map[normalizeNotificationPermissionAppName(appName)] === true;
+  return map[appName] === true;
 }
 
 export async function setNotificationOsPushDisabled(appName, disabled) {
   try {
     const map = await getNotificationOsPushDisabledMap();
-    map[normalizeNotificationPermissionAppName(appName)] = !!disabled;
+    map[appName] = !!disabled;
+    const appStorage = getAppStorage();
+    if (appStorage) {
+      await appStorage.set(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY, map);
+      return;
+    }
     await storeData(QORTAL_NOTIFICATION_OS_PUSH_DISABLED_KEY, map);
   } catch (error) {
     console.error('Error setting notification OS push disabled:', error);
@@ -280,6 +327,7 @@ export const VALID_SESSION_PERMISSIONS = [
   'SIGN_FOREIGN_FEES',
   'REENCRYPT_GROUP_KEYS',
   'START_CROSSCHAIN_SERVER',
+   'NOTIFICATION_PERMISSION',
 ];
 
 // Permissions automatically granted for the session when GET_USER_ACCOUNT is accepted
@@ -2276,6 +2324,35 @@ function setupMessageListenerQortalRequest() {
               requestId: request.requestId,
               action: request.action,
               error: error?.message,
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        }
+        break;
+      }
+
+      case 'UPDATE_SUBSCRIPTIONS': {
+        try {
+          if (appInfo?.name?.toLowerCase() !== 'subscriptions') {
+            throw new Error('UPDATE_SUBSCRIPTIONS is only available to the Subscriptions app');
+          }
+          triggerMemberGroupsFetch();
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              payload: { ok: true },
+              type: 'backgroundMessageResponse',
+            },
+            event.origin
+          );
+        } catch (error) {
+          event.source!.postMessage(
+            {
+              requestId: request.requestId,
+              action: request.action,
+              error: error?.message ?? 'Unable to update subscriptions',
               type: 'backgroundMessageResponse',
             },
             event.origin
