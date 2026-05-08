@@ -4257,6 +4257,85 @@ describe('GroupCallAudioEngineRuntime', () => {
     vi.useRealTimers();
   });
 
+  it('anchors one-to-one standby failover grace to a fresh rejoin', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qroot', publicKey: 'pub-root' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qroot', publicKey: 'pub-root', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qroot',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qroot', 'Qlocal'],
+            forwarder: 'Qroot',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs - 6_000,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: true,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    vi.spyOn(runtime as any, 'computeElectionOrder').mockResolvedValue([
+      'Qlocal',
+    ]);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    await vi.advanceTimersByTimeAsync(28_000);
+
+    expect(broadcastTopology).not.toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        topologyEpoch: 4,
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    expect((runtime as any).topology?.rootForwarder).toBe('Qroot');
+
+    await vi.advanceTimersByTimeAsync(5_500);
+
+    expect(broadcastTopology).toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        topologyEpoch: 4,
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    vi.useRealTimers();
+  });
+
   it('keeps non-root topology members in standby failover candidates even if the roster snapshot is incomplete', async () => {
     vi.useFakeTimers();
     try {

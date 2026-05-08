@@ -1964,7 +1964,7 @@ describe('GroupCallAudioReceiveEngine', () => {
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
     ).mockImplementation(() => {});
-    vi.spyOn(
+    const extraHoldSpy = vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
     ).mockImplementation(() => {});
@@ -2011,7 +2011,9 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     const leanTargetMs = targetSpy.mock.calls.at(-1)?.[0] ?? 0;
-    expect(leanTargetMs).toBeGreaterThanOrEqual(192);
+    const leanExtraHoldFrames = extraHoldSpy.mock.calls.at(-1)?.[0] ?? 0;
+    expect(leanTargetMs).toBeGreaterThanOrEqual(224);
+    expect(leanExtraHoldFrames).toBeGreaterThanOrEqual(11);
 
     capturedOptions?.onPlayoutWorkletMessage?.({
       type: 'gcallPlayoutMetrics',

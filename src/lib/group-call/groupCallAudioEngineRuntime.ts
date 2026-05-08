@@ -549,6 +549,7 @@ export class GroupCallAudioEngineRuntime {
   private startupOccupiedRoomEvidence = false;
   private startupHydratedRemoteCount = 0;
   private startupBootstrapHasTopology = false;
+  private lastJoinSuccessAtMs = 0;
   private provisionalLocalRootUntilMs = 0;
   private provisionalLocalRootElectionAtMs = 0;
   private provisionalLocalRootReason = '';
@@ -2029,6 +2030,7 @@ export class GroupCallAudioEngineRuntime {
     this.startupOccupiedRoomEvidence = false;
     this.startupHydratedRemoteCount = 0;
     this.startupBootstrapHasTopology = false;
+    this.lastJoinSuccessAtMs = 0;
     this.clearProvisionalLocalRoot();
     this.memberGateGroupId =
       options?.memberGateGroupId != null &&
@@ -2267,7 +2269,9 @@ export class GroupCallAudioEngineRuntime {
       return { ok: false, error: err };
     }
     traceGcallAudioSurface('engine.joinGroupCall: success', { roomId });
-    this.recordDiagEvent('join-success', { roomId });
+    const joinSuccessAtMs = Date.now();
+    this.lastJoinSuccessAtMs = joinSuccessAtMs;
+    this.recordDiagEvent('join-success', { roomId, joinSuccessAtMs });
     this.snapshot = buildConnectedSnapshot(this.snapshot, roomId);
     this.emitSnapshot();
     this.callSessionId = result.callSessionId ?? '';
@@ -2321,6 +2325,7 @@ export class GroupCallAudioEngineRuntime {
     this.topologyElectionDelayUntilMs = 0;
     this.seq = 0;
     this.shouldReplayRetainedKeysAfterNextTopology = false;
+    this.lastJoinSuccessAtMs = 0;
     this.stopTopologyHeartbeat();
     this.clearRootFailoverTimer();
     this.clearTopologyElectionTimer();
@@ -4303,26 +4308,39 @@ export class GroupCallAudioEngineRuntime {
         .map((address) => address?.trim() ?? '')
         .filter(Boolean)
     ).size;
-    if (
-      rootPeerRequiresReconnect &&
-      topologyMemberCount <= 2 &&
-      heartbeatSilentMs < ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS
-    ) {
-      this.recordDiagEvent(
-        'root-heartbeat-timeout-suppressed-one-to-one-grace',
-        {
-          roomId,
-          currentRoot,
-          heartbeatSilentMs,
-          heartbeatTimeoutMs: ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS,
-          oneToOneTimeoutMs: ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS,
-          rootLivenessState: rootLiveness.state,
-        }
-      );
-      this.scheduleRootFailoverWatchForDeadline(
-        lastSeenAt + ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS
-      );
-      return;
+    if (rootPeerRequiresReconnect && topologyMemberCount <= 2) {
+      const oneToOneGraceAnchorMs =
+        this.lastJoinSuccessAtMs > lastSeenAt &&
+        this.lastJoinSuccessAtMs <= nowMs
+          ? this.lastJoinSuccessAtMs
+          : lastSeenAt;
+      const oneToOneSilentMs =
+        oneToOneGraceAnchorMs > 0
+          ? Math.max(0, nowMs - oneToOneGraceAnchorMs)
+          : heartbeatSilentMs;
+      if (oneToOneSilentMs < ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS) {
+        this.recordDiagEvent(
+          'root-heartbeat-timeout-suppressed-one-to-one-grace',
+          {
+            roomId,
+            currentRoot,
+            heartbeatSilentMs,
+            heartbeatTimeoutMs: ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS,
+            oneToOneSilentMs,
+            oneToOneGraceAnchorMs,
+            oneToOneGraceAnchor:
+              oneToOneGraceAnchorMs === this.lastJoinSuccessAtMs
+                ? 'join-success'
+                : 'root-evidence',
+            oneToOneTimeoutMs: ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS,
+            rootLivenessState: rootLiveness.state,
+          }
+        );
+        this.scheduleRootFailoverWatchForDeadline(
+          oneToOneGraceAnchorMs + ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS
+        );
+        return;
+      }
     }
     if (
       !shouldPromoteStandbyRootAfterHeartbeatTimeout({
