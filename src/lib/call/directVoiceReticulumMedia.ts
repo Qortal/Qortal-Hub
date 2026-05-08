@@ -346,3 +346,41 @@ export async function sendDirectVoiceRoomKey(opts: {
   );
   return true;
 }
+
+export async function sendDirectVoiceRoomKeyRequest(opts: {
+  roomId: string;
+  toAddress: string;
+  fromAddress: string;
+  fromPublicKey: string;
+  callSessionId: string;
+  mediaSessionGeneration: number;
+}): Promise<boolean> {
+  const gc = (window as any).groupCall;
+  if (!gc?.sendKeyRequest) return false;
+
+  const ts = Date.now();
+  const sig = await signGroupCallFields({
+    type: 'GC_KEY_REQUEST',
+    roomId: opts.roomId,
+    toAddress: opts.toAddress,
+    fromAddress: opts.fromAddress,
+    fromPublicKey: opts.fromPublicKey,
+    callSessionId: opts.callSessionId,
+    mediaSessionGeneration: opts.mediaSessionGeneration,
+    keyMessageVersion: GCALL_KEY_MESSAGE_VERSION,
+    timestamp: ts,
+  }).catch(() => '');
+  if (!sig) return false;
+
+  await gc.sendKeyRequest(
+    opts.roomId,
+    opts.toAddress,
+    opts.fromAddress,
+    sig,
+    opts.fromPublicKey,
+    ts,
+    opts.callSessionId,
+    opts.mediaSessionGeneration
+  );
+  return true;
+}

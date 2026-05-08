@@ -215,7 +215,7 @@ type ReticulumMediaTransportKind = 'link' | 'packet';
 
 const GC_RETICULUM_PACKET_MEDIA_ENABLED = true;
 const GC_RETICULUM_PACKET_MEDIA_KEEP_AUDIO_LINKS = true;
-const GC_RETICULUM_OVERLAY_HOPS = 3;
+const GC_RETICULUM_OVERLAY_HOPS = 4;
 const GC_RETICULUM_OVERLAY_SEEN_TTL_MS = 120_000;
 /** Short-lived logical-message dedupe: suppress same authored message while allowing retries to recover soon. */
 const GC_RETICULUM_OVERLAY_LOGICAL_DEDUP_TTL_MS = 30_000;

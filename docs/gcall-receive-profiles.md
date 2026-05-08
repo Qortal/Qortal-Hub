@@ -55,6 +55,11 @@ Internal smoothed state includes:
 
 ## Profiles
 
+The receive engine exports one profile per active source. One-remote calls use
+the single-source profiles below. Multi-source calls use the `multi-*` profiles
+so 3+ diagnostics no longer appear as `clean-low-latency` while multi-source
+recovery controls are active.
+
 ### `clean-low-latency`
 
 What it means:
@@ -80,6 +85,66 @@ If this profile sounds bad anyway:
 What to tune:
 - usually do not tune this profile first
 - only revisit if many healthy-looking calls still sound bad
+
+### `multi-clean-low-latency`
+
+What it means:
+- Multi-source listener is not in recovery mode.
+- No multi-source target boost or extra hold is being applied for this source.
+
+What to tune:
+- usually do not tune this profile first
+- if a 3+ call sounds bad here, verify that recovery mode is being entered when
+  the live metrics justify it
+
+### `multi-recovery`
+
+What it means:
+- Multi-source listener is in recovery mode, but this source is not currently
+  the isolated weak leg.
+- The source still follows the multi-source feasible-target path.
+
+What to tune:
+- multi-source recovery target/floor behavior
+- recovery exit timing if the call falls back too early
+
+### `multi-weak-leg-recovery`
+
+What it means:
+- Multi-source recovery is active and this source has mild starvation or weak-leg
+  priority.
+
+Typical signals:
+- low source reserve relative to target
+- mild starvation classification
+- weak-leg prioritization selected for this source
+
+What to tune:
+- weak-leg target boost
+- weak-leg accumulation target
+- extra hold frame cap
+
+### `multi-protected-recovery`
+
+What it means:
+- Multi-source protected mode is active for this source.
+- This is the strongest multi-source profile before hard collapse.
+
+What to tune:
+- protected-mode entry/exit streaks
+- protected-mode target tightening
+- extra hold frame cap if the weak leg still drains too quickly
+
+### `multi-collapse-recovery`
+
+What it means:
+- Multi-source recovery is active and this source has strong starvation without
+  protected mode currently latched.
+
+What to tune:
+- strong-starvation classification
+- collapse recovery target/hold behavior
+- whether protected mode should enter sooner
 
 ### `steady-weak-listener`
 

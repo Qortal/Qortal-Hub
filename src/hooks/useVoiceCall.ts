@@ -27,6 +27,7 @@ import {
   joinDirectVoiceReticulumRoom,
   leaveDirectVoiceReticulumRoom,
   sendDirectVoiceRoomKey,
+  sendDirectVoiceRoomKeyRequest,
   isDmVoiceRoomId,
 } from '../lib/call/directVoiceReticulumMedia';
 import {
@@ -81,6 +82,8 @@ import AudioDecryptWorker from '../workers/audio-decrypt.worker?worker';
 const DM_MEDIA_RECOVERY_REQUEST_COOLDOWN_MS = 4_000;
 const DM_ROOM_KEY_REPLAY_RETRY_MS = 750;
 const DM_ROOM_KEY_REPLAY_MAX_ATTEMPTS = 6;
+const DM_ROOM_KEY_REQUEST_RETRY_MS = 1_000;
+const DM_ROOM_KEY_REQUEST_MAX_ATTEMPTS = 30;
 const CALL_LOCAL_ADDRESS_REASSERT_MS = 2_500;
 
 type DmDecryptWorkerDecoded = {
@@ -102,6 +105,17 @@ type GcallKeyEventPayload = {
   mediaSessionGeneration?: number;
   keyCommitment?: string;
   fromAddress?: string;
+};
+
+type GcallKeyRequestEventPayload = {
+  roomId?: string;
+  toAddress?: string;
+  fromAddress?: string;
+  fromPublicKey?: string;
+  callSessionId?: string;
+  mediaSessionGeneration?: number;
+  keyMessageVersion?: number;
+  verified?: boolean;
 };
 
 /** Float32 PCM → Int16 for WebCodecs AudioData (matches group call). */
@@ -313,6 +327,9 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const dmRoomKeyReplayTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(
     new Set()
   );
+  const dmRoomKeyRequestTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(
+    new Set()
+  );
 
   const updateCallState = useCallback((nextState: CallState) => {
     callStateRef.current = nextState;
@@ -435,6 +452,13 @@ export function useVoiceCall(): UseVoiceCallReturn {
     dmRoomKeyReplayTimersRef.current.clear();
   }, []);
 
+  const clearDmRoomKeyRequestTimers = useCallback(() => {
+    for (const timer of dmRoomKeyRequestTimersRef.current) {
+      clearTimeout(timer);
+    }
+    dmRoomKeyRequestTimersRef.current.clear();
+  }, []);
+
   const sendCurrentDmRoomKey = useCallback(
     async (reason: string): Promise<boolean> => {
       if (!isOutboundCallRef.current || !reticulumSessionActiveRef.current) {
@@ -490,6 +514,63 @@ export function useVoiceCall(): UseVoiceCallReturn {
     [clearDmRoomKeyReplayTimers, sendCurrentDmRoomKey]
   );
 
+  const sendCurrentDmRoomKeyRequest = useCallback(
+    async (reason: string): Promise<boolean> => {
+      if (isOutboundCallRef.current || !reticulumSessionActiveRef.current) {
+        return false;
+      }
+      if (roomKeyRef.current) return true;
+      const roomId = dmRoomIdRef.current;
+      const peer = peerAddressRef.current;
+      const callSessionId = callSessionIdRef.current;
+      const myAddr = userInfo?.address;
+      const myPk = userInfo?.publicKey ?? '';
+      if (!roomId || !peer || !callSessionId || !myAddr || !myPk) {
+        return false;
+      }
+      const ok = await sendDirectVoiceRoomKeyRequest({
+        roomId,
+        toAddress: peer,
+        fromAddress: myAddr,
+        fromPublicKey: myPk,
+        callSessionId,
+        mediaSessionGeneration: mediaGenRef.current,
+      });
+      pushDirectVoiceUiLog(
+        ok ? 'log' : 'warn',
+        ok ? 'GC_KEY_REQUEST sent to peer' : 'GC_KEY_REQUEST send failed',
+        {
+          peerTrunc: peer.slice(0, 8),
+          reason,
+        }
+      );
+      return ok;
+    },
+    [userInfo?.address, userInfo?.publicKey]
+  );
+
+  const scheduleDmRoomKeyRequests = useCallback(
+    (reason: string) => {
+      clearDmRoomKeyRequestTimers();
+      void sendCurrentDmRoomKeyRequest(reason).catch(() => {});
+      for (
+        let attempt = 1;
+        attempt <= DM_ROOM_KEY_REQUEST_MAX_ATTEMPTS;
+        attempt++
+      ) {
+        const timer = setTimeout(() => {
+          dmRoomKeyRequestTimersRef.current.delete(timer);
+          if (roomKeyRef.current || callStateRef.current !== 'connected') return;
+          void sendCurrentDmRoomKeyRequest(`${reason}:retry-${attempt}`).catch(
+            () => {}
+          );
+        }, attempt * DM_ROOM_KEY_REQUEST_RETRY_MS);
+        dmRoomKeyRequestTimersRef.current.add(timer);
+      }
+    },
+    [clearDmRoomKeyRequestTimers, sendCurrentDmRoomKeyRequest]
+  );
+
   const clearDurationTimer = useCallback(() => {
     if (durationTimerRef.current) {
       clearInterval(durationTimerRef.current);
@@ -535,6 +616,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
 
   const teardownReticulumMediaInner = useCallback(async () => {
     clearDmRoomKeyReplayTimers();
+    clearDmRoomKeyRequestTimers();
     await dmReceiveEngineRef.current?.dispose();
     dmReceiveEngineRef.current = new GroupCallAudioReceiveEngine(() => {});
     stopCapturePipeline();
@@ -582,6 +664,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   }, [
     clearPendingWorkerJobs,
     clearDmRoomKeyReplayTimers,
+    clearDmRoomKeyRequestTimers,
     resetDmVoiceMediaSession,
     stopCapturePipeline,
     syncDecryptWorkerRoomKey,
@@ -750,7 +833,15 @@ export function useVoiceCall(): UseVoiceCallReturn {
   const setupDecryptWorker = useCallback(() => {
     if (decryptWorkerRef.current) return;
     lastWorkerRoomKeyRef.current = null;
-    const worker = new AudioDecryptWorker();
+    let worker: Worker;
+    try {
+      worker = new AudioDecryptWorker();
+    } catch (e) {
+      pushDirectVoiceUiLog('warn', 'AudioDecryptWorker unavailable; using inline audio crypto', {
+        err: String(e),
+      });
+      return;
+    }
     decryptWorkerRef.current = worker;
     decryptIdRef.current = 0;
     encryptIdRef.current = 0;
@@ -897,13 +988,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
       mediaGenRef.current = payload.mediaSessionGeneration >>> 0;
       syncDecryptWorkerRoomKey(keyBytes);
       setAudioMode('reticulum');
+      clearDmRoomKeyRequestTimers();
       setCallAudioWireNonce((n) => n + 1);
       pushDirectVoiceUiLog('log', 'room key applied', {
         sessionTrunc: String(payload.callSessionId).slice(0, 8),
         mediaGen: payload.mediaSessionGeneration ?? 1,
       });
     },
-    [resetDmVoiceMediaSession, syncDecryptWorkerRoomKey]
+    [clearDmRoomKeyRequestTimers, resetDmVoiceMediaSession, syncDecryptWorkerRoomKey]
   );
   applyDecryptedRoomKeyRef.current = applyDecryptedRoomKey;
 
@@ -1307,6 +1399,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     callSessionIdRef.current = joinRes.callSessionId;
     mediaGenRef.current = (joinRes.mediaSessionGeneration ?? 1) >>> 0;
     reticulumSessionActiveRef.current = true;
+    setAudioMode('reticulum');
     requestDmPeerMediaWarmup(roomId, 'dm-call-start', {
       ignoreCooldown: true,
     });
@@ -1325,14 +1418,14 @@ export function useVoiceCall(): UseVoiceCallReturn {
         return;
       }
       scheduleDmRoomKeyReplays('dm-call-start');
-      setAudioMode('reticulum');
       await startReticulumCapture();
     } else {
-      /* Callee: wait for gcall:key — if key already received, capture may start from handler */
-      pushDirectVoiceUiLog('log', 'callee: waiting for gcall:key (or capture if key ready)');
+      /* Callee: request the room key until caller/link timing delivers it. */
+      pushDirectVoiceUiLog('log', 'callee: requesting gcall:key (or capture if key ready)');
       if (roomKeyRef.current) {
-        setAudioMode('reticulum');
         await startReticulumCapture();
+      } else {
+        scheduleDmRoomKeyRequests('dm-call-start');
       }
     }
   }, [
@@ -1340,6 +1433,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
     flushPendingDmVoiceGcallKey,
     requestDmPeerMediaWarmup,
     scheduleDmRoomKeyReplays,
+    scheduleDmRoomKeyRequests,
     sendCurrentDmRoomKey,
     setInfoSnackGlobal,
     setOpenSnackGlobal,
@@ -1372,7 +1466,35 @@ export function useVoiceCall(): UseVoiceCallReturn {
         if (isOutboundCallRef.current) {
           void sendCurrentDmRoomKey('dm-peer-joined').catch(() => {});
           scheduleDmRoomKeyReplays('dm-peer-joined');
+        } else if (!roomKeyRef.current) {
+          scheduleDmRoomKeyRequests('dm-peer-joined');
         }
+      }
+      return;
+    }
+
+    if (event === 'gcall:key-request') {
+      const p = payload as GcallKeyRequestEventPayload;
+      const curRoom = dmRoomIdRef.current;
+      const peer = peerAddressRef.current;
+      if (
+        !isDmVoiceRoomId(p.roomId) ||
+        !curRoom ||
+        p.roomId !== curRoom ||
+        p.toAddress !== userInfo?.address ||
+        p.fromAddress !== peer ||
+        p.verified !== true ||
+        p.keyMessageVersion !== GCALL_KEY_MESSAGE_VERSION
+      ) {
+        return;
+      }
+      pushDirectVoiceUiLog('log', 'gcall:key-request rx', {
+        fromTrunc: String(p.fromAddress ?? '').slice(0, 8),
+        sessionTrunc: String(p.callSessionId ?? '').slice(0, 8),
+      });
+      if (isOutboundCallRef.current) {
+        void sendCurrentDmRoomKey('dm-key-request').catch(() => {});
+        scheduleDmRoomKeyReplays('dm-key-request');
       }
       return;
     }

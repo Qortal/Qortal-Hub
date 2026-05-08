@@ -229,7 +229,7 @@ interface LiveMultiSourceState {
   persistentLeanHoldUntilMs: number;
   silentLeanHoldUntilMs: number;
   postRecoveryHoldUntilMs: number;
-  currentSingleSourceProfile: SingleSourceReceiveProfile;
+  currentReceiveProfile: ReceiveProfile;
   lastAppliedTargetMs: number | null;
   lastAppliedFloorMs: number | null;
   lastAppliedTargetBoostMs: number;
@@ -240,8 +240,8 @@ interface LiveMultiSourceState {
 type ReceiveProfileTransition = {
   atMs: number;
   peerAddress: string;
-  fromProfile: SingleSourceReceiveProfile;
-  toProfile: SingleSourceReceiveProfile;
+  fromProfile: ReceiveProfile;
+  toProfile: ReceiveProfile;
   bufferedMsEma: number;
   deltaMsEma: number;
   underTargetEma: number;
@@ -264,6 +264,15 @@ type SingleSourceReceiveProfile =
   | 'silent-lean'
   | 'post-failover-stabilization'
   | 'collapse-recovery';
+
+type MultiSourceReceiveProfile =
+  | 'multi-clean-low-latency'
+  | 'multi-recovery'
+  | 'multi-weak-leg-recovery'
+  | 'multi-protected-recovery'
+  | 'multi-collapse-recovery';
+
+type ReceiveProfile = SingleSourceReceiveProfile | MultiSourceReceiveProfile;
 
 type SingleSourceProfileContext = {
   currentReady: boolean;
@@ -330,6 +339,21 @@ function selectSingleSourceReceiveProfile(
     return 'steady-weak-listener';
   }
   return 'clean-low-latency';
+}
+
+function selectMultiSourceReceiveProfile(ctx: {
+  recoveryModeActive: boolean;
+  prioritizeWeakLeg: boolean;
+  protectedMode: boolean;
+  starvationSeverity: PlayoutStarvationSeverity;
+}): MultiSourceReceiveProfile {
+  if (!ctx.recoveryModeActive) return 'multi-clean-low-latency';
+  if (ctx.protectedMode) return 'multi-protected-recovery';
+  if (ctx.starvationSeverity === 'strong') return 'multi-collapse-recovery';
+  if (ctx.prioritizeWeakLeg || ctx.starvationSeverity === 'mild') {
+    return 'multi-weak-leg-recovery';
+  }
+  return 'multi-recovery';
 }
 
 function singleSourceReceiveProfileTargetBoostMs(
@@ -454,6 +478,44 @@ export class GroupCallAudioReceiveEngine {
     postFailoverRootHoldUntilMs: 0,
   };
 
+  private setReceiveProfile(
+    sourceAddr: string,
+    state: LiveMultiSourceState,
+    profile: ReceiveProfile,
+    nowMs: number
+  ): void {
+    const previousProfile = state.currentReceiveProfile;
+    state.currentReceiveProfile = profile;
+    if (previousProfile === profile) return;
+    state.lastProfileChangedAtMs = nowMs;
+    this.receiveProfileTransitions.push({
+      atMs: nowMs,
+      peerAddress: sourceAddr,
+      fromProfile: previousProfile,
+      toProfile: profile,
+      bufferedMsEma: state.bufferedMsEma,
+      deltaMsEma: state.deltaMsEma,
+      underTargetEma: state.underTargetEma,
+      concealmentEma: state.concealmentEma,
+      missingFrameEma: state.missingFrameEma,
+      rateEma: state.rateEma,
+      preProcessBufferedFrames: state.preProcessBufferedFrames,
+      lastJitterBufferedFrames: state.lastJitterBufferedFrames,
+      lastJitterHasReadyFrame: state.lastJitterHasReadyFrame,
+      targetPlayoutMs: state.targetPlayoutMs,
+    });
+    if (
+      this.receiveProfileTransitions.length >
+      GCALL_RECEIVE_PROFILE_TRANSITION_HISTORY_MAX
+    ) {
+      this.receiveProfileTransitions.splice(
+        0,
+        this.receiveProfileTransitions.length -
+          GCALL_RECEIVE_PROFILE_TRANSITION_HISTORY_MAX
+      );
+    }
+  }
+
   constructor(
     onMetricsChanged: (snapshot: GroupCallMetricsSnapshot) => void,
     onPlayedSeqAdvanced?: (sourceAddr: string, playedSeq: number) => void,
@@ -551,11 +613,11 @@ export class GroupCallAudioReceiveEngine {
     sourceAddrs: string[];
     livePolicyProfilesBySource: Array<{
       peerAddress: string;
-      profile: SingleSourceReceiveProfile;
+      profile: ReceiveProfile;
     }>;
     livePolicyStateBySource: Array<{
       peerAddress: string;
-      profile: SingleSourceReceiveProfile;
+      profile: ReceiveProfile;
       profileAgeMs: number | null;
       bufferedMsEma: number;
       deltaMsEma: number;
@@ -608,7 +670,7 @@ export class GroupCallAudioReceiveEngine {
         peerAddress: sourceAddr,
         profile:
           this.liveMultiSourceStateBySource.get(sourceAddr)
-            ?.currentSingleSourceProfile ?? 'clean-low-latency',
+            ?.currentReceiveProfile ?? 'clean-low-latency',
       })
     );
     const nowMs = Date.now();
@@ -616,7 +678,7 @@ export class GroupCallAudioReceiveEngine {
       const state = this.liveMultiSourceStateBySource.get(sourceAddr);
       return {
         peerAddress: sourceAddr,
-        profile: state?.currentSingleSourceProfile ?? 'clean-low-latency',
+        profile: state?.currentReceiveProfile ?? 'clean-low-latency',
         profileAgeMs:
           state && state.lastProfileChangedAtMs > 0
             ? Math.max(0, nowMs - state.lastProfileChangedAtMs)
@@ -907,7 +969,7 @@ export class GroupCallAudioReceiveEngine {
         persistentLeanHoldUntilMs: 0,
         silentLeanHoldUntilMs: 0,
         postRecoveryHoldUntilMs: 0,
-        currentSingleSourceProfile: 'clean-low-latency',
+        currentReceiveProfile: 'clean-low-latency',
         lastAppliedTargetMs: null,
         lastAppliedFloorMs: null,
         lastAppliedTargetBoostMs: 0,
@@ -1849,37 +1911,7 @@ export class GroupCallAudioReceiveEngine {
             !steadyHealthyEscape,
           steadyHealthyEscape,
         });
-        const previousProfile = state.currentSingleSourceProfile;
-        state.currentSingleSourceProfile = profile;
-        if (previousProfile !== profile) {
-          state.lastProfileChangedAtMs = nowMs;
-          this.receiveProfileTransitions.push({
-            atMs: nowMs,
-            peerAddress: sourceAddr,
-            fromProfile: previousProfile,
-            toProfile: profile,
-            bufferedMsEma: state.bufferedMsEma,
-            deltaMsEma: state.deltaMsEma,
-            underTargetEma: state.underTargetEma,
-            concealmentEma: state.concealmentEma,
-            missingFrameEma: state.missingFrameEma,
-            rateEma: state.rateEma,
-            preProcessBufferedFrames: state.preProcessBufferedFrames,
-            lastJitterBufferedFrames: state.lastJitterBufferedFrames,
-            lastJitterHasReadyFrame: state.lastJitterHasReadyFrame,
-            targetPlayoutMs: state.targetPlayoutMs,
-          });
-          if (
-            this.receiveProfileTransitions.length >
-            GCALL_RECEIVE_PROFILE_TRANSITION_HISTORY_MAX
-          ) {
-            this.receiveProfileTransitions.splice(
-              0,
-              this.receiveProfileTransitions.length -
-                GCALL_RECEIVE_PROFILE_TRANSITION_HISTORY_MAX
-            );
-          }
-        }
+        this.setReceiveProfile(sourceAddr, state, profile, nowMs);
         const shouldHoldWeakLeanRecoveryMode =
           (profile === 'persistent-lean' &&
             (state.bufferedMsEma <
@@ -1997,9 +2029,13 @@ export class GroupCallAudioReceiveEngine {
         continue;
       }
 
-      state.currentSingleSourceProfile = 'clean-low-latency';
-
       if (mode !== 'recovery') {
+        this.setReceiveProfile(
+          sourceAddr,
+          state,
+          'multi-clean-low-latency',
+          nowMs
+        );
         playout.setBurstRecoveryExtraHoldFrames(0);
         playout.resetDynamicTargetPlayoutMs();
         continue;
@@ -2013,6 +2049,17 @@ export class GroupCallAudioReceiveEngine {
         protectedMode: state.protectedMode,
         playoutStarvationSeverity: state.starvationSeverity,
       });
+      this.setReceiveProfile(
+        sourceAddr,
+        state,
+        selectMultiSourceReceiveProfile({
+          recoveryModeActive: true,
+          prioritizeWeakLeg,
+          protectedMode: state.protectedMode,
+          starvationSeverity: state.starvationSeverity,
+        }),
+        nowMs
+      );
 
       let targetMs = staticTargetMs;
       if (prioritizeWeakLeg) {

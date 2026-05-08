@@ -325,6 +325,7 @@ describe('useVoiceCall', () => {
       hangup: vi.fn(async () => ({ success: true })),
     };
     const requestPeerMediaRecovery = vi.fn(async () => ({ success: true }));
+    const sendKeyRequest = vi.fn(async () => ({ success: true }));
     const join = vi.fn(async () => ({
       success: true,
       callSessionId: 'call-session',
@@ -351,6 +352,7 @@ describe('useVoiceCall', () => {
         join,
         setLocalAddresses: vi.fn(async () => {}),
         requestPeerMediaRecovery,
+        sendKeyRequest,
       },
       electronAPI: {
         reticulumGetLocalDestinationHash: vi.fn(async () => ({
@@ -393,6 +395,17 @@ describe('useVoiceCall', () => {
     });
 
     expect(join).toHaveBeenCalled();
+    expect(result.current.audioMode).toBe('reticulum');
+    expect(sendKeyRequest).toHaveBeenCalledWith(
+      roomId,
+      peerAddr,
+      myAddr,
+      'sig',
+      'pub',
+      expect.any(Number),
+      'call-session',
+      1
+    );
     expect(requestPeerMediaRecovery).toHaveBeenCalledWith(
       roomId,
       peerAddr,

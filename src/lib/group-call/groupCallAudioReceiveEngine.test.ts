@@ -541,6 +541,18 @@ describe('GroupCallAudioReceiveEngine', () => {
     expect(targetSpy).toHaveBeenCalled();
     expect(holdSpy).toHaveBeenCalled();
     expect(resetTargetSpy).toHaveBeenCalled();
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual(
+      expect.arrayContaining([
+        {
+          peerAddress: 'alice',
+          profile: 'multi-protected-recovery',
+        },
+        {
+          peerAddress: 'bob',
+          profile: 'multi-recovery',
+        },
+      ])
+    );
   });
 
   it('holds multi-source protected mode until the modeled recovery exit streak is satisfied', async () => {
@@ -632,6 +644,16 @@ describe('GroupCallAudioReceiveEngine', () => {
 
     const aliceState = (engine as any).liveMultiSourceStateBySource.get('alice');
     expect(aliceState?.protectedMode).toBe(true);
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          peerAddress: 'alice',
+          profile: 'multi-protected-recovery',
+        },
+      ])
+    );
 
     alice?.onPlayoutWorkletMessage?.({
       type: 'gcallPlayoutMetrics',
@@ -668,6 +690,16 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     expect(aliceState?.protectedMode).toBe(false);
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          peerAddress: 'alice',
+          profile: 'multi-clean-low-latency',
+        },
+      ])
+    );
   });
 
   it('raises target and extra hold for weak single-source recovery', async () => {
