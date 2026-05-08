@@ -31,6 +31,24 @@ import { base58Decode, getPresenceManager } from './presence';
 import type { PresenceEnvelope } from './presence';
 import { ReticulumBridge } from './reticulum-bridge';
 
+describe('ReticulumBridge presence subscriptions', () => {
+  it('notifies late subscribers when the bridge is already ready', async () => {
+    const bridge = new ReticulumBridge();
+    const internal = bridge as any;
+    const onReady = vi.fn();
+
+    internal.state = 'ready';
+    const unsubscribe = bridge.subscribe({
+      onEnvelope: vi.fn(),
+      onReady,
+    });
+    await Promise.resolve();
+    unsubscribe();
+
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ReticulumBridge group audio support', () => {
   it('opens group audio links through the bridge command channel', async () => {
     const bridge = new ReticulumBridge();

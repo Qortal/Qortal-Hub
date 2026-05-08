@@ -596,6 +596,10 @@ export class ReticulumBridge
     this.on('candidate-peer-discovered', onCandidatePeerDiscovered);
     this.on('overlay-link-closed', onOverlayLinkClosed);
 
+    if (this.state === 'ready') {
+      queueMicrotask(onReady);
+    }
+
     return () => {
       this.off('ready', onReady);
       this.off('degraded', onDegraded);

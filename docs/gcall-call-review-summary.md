@@ -3050,3 +3050,113 @@ Current patched target:
 - Primary fix: tighten `clean-low-latency` clear/entry so it cannot win for ready near-empty listeners with strong negative delta, ongoing recovery mode, and sustained missing/concealment pressure. The 21:50Z standby export is the clearest signal: the call subjectively improved, but the profile exported as clean while the buffer and damage metrics still describe repair collapse.
 - Secondary: keep the recent collapse-strength patch and high-damage `silent-lean` escalation; this call does not argue for a broader baseline increase because one side improved to a plausible `steady-weak-listener` shape and the infrastructure/path counters are clean.
 - Do not prioritize authority/topology, key/decode, startup, or global baseline from this pair.
+
+## Call: 2026-05-08 10:48Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-08T10-48-20-638Z.json`
+- Side B: `/home/qortal/Downloads/Telegram Desktop/qortal-gcall-diagnostics-2026-05-08T10-48-23-113Z.json`
+
+User symptom:
+- New call following the latest changes. No separate subjective symptom text was included with the export, so user-bad is inferred from the receive metrics, recovery mode, and profile churn.
+
+High-level verdict:
+- Mixed / still not clean.
+- The previous topology and no-target failures are not present: both exports agree on room `gcall-qortal-812`, root `QP9Jj4...i6rP`, standby `QaU2XU...Jh91`, and epoch `3`; both sides have active ready playouts, decoded packets, room keys, forward recipients, and no outbound no-target growth. The remaining shape is receive-policy instability: the Linux root is mostly weak/recovery but briefly clears to low-latency while still under target, and the Mac standby lives in lean profiles with recovery still active.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Key/media establishment: both sides have room keys, inbound packets, decoded frames, active playback nodes, active scheduler nodes, and live receive-policy profiles.
+- Startup hidden playout nodes: current playouts are active and ready on both sides; Side A has `jitterHasReadyFrame=true`, and Side B exports `jitterHasReadyFrame=true` with only one recent not-ready trend sample.
+- Queue/backpressure: no bridge drain wait, queue-pressure drops, stale drops, link-unready drops, or packet send failures. Queue high waters are bounded (`7`/`2` on Side A, `2`/`44` on Side B).
+- Authority/topology/send-target: both sides agree on root/standby at epoch `3`; outbound sends keep succeeding; `outboundNoTargetSkips=0` throughout the sampled window on both sides.
+
+Primary next target:
+- Selector.
+- More specifically, profile stability / clean-clear gating. Side A oscillates between `steady-weak-listener`, `repair-heavy-connected`, `persistent-lean`, `buffered-not-ready`, and even `clean-low-latency` while `playoutUnderTargetFraction=0.115`, `playoutRateFractionBelow097=0.075`, recovery keeps re-entering, and missing frames continue growing. Side B is dominated by lean profiles with a very shallow buffer (`11.542 ms`) and recovery mode still active.
+- Do not tune baseline next. This is not evidence that ordinary low-latency baseline is too small; the receive engine is already detecting weak/lean/recovery conditions most of the time. Do not return to authority/topology or key/decode from this pair.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QP9Jj4...i6rP` receiving `QaU2XU...Jh91` | `steady-weak-listener` | partly/inferred | 35.493 | 689 | 131 | 0.115 | 0.075 | recovery | Dominant profile is plausible for weak recovery, but recent trends show premature low-latency clears and rapid profile oscillation while under-target pressure remains high. |
+| B | standby-forwarder / Mac / `QaU2XU...Jh91` receiving `QP9Jj4...i6rP` | `persistent-lean` | partly/inferred | 11.542 | 535 | 47 | 0.011 | 0.007 | recovery | Lean classification is mostly plausible: buffer is shallow, delta is strongly negative, and recovery remains active; damage is moderate rather than collapse-heavy. |
+
+### Side A
+
+Expected profile from symptom:
+- `steady-weak-listener` or `repair-heavy-connected`, with no `clean-low-latency` until under-target and recovery pressure clear.
+
+Actual exported profile:
+- Dominant sampled profile: `steady-weak-listener`.
+- Current exported profile: `persistent-lean`.
+- Recent trends also include `buffered-not-ready`, `repair-heavy-connected`, and one `clean-low-latency` sample.
+
+Did classification match?
+- Partly.
+
+If no:
+- The dominant profile is directionally right: `avgPcmBufferedMs=35.493`, `missingFrames=689`, `concealmentTicks=131`, and recovery mode fit weak/repaired audio rather than a clean path.
+- The miss is selector stability and clear logic. A side with `playoutUnderTargetFraction=0.115`, `playoutRateFractionBelow097=0.075`, repeated `entered-recovery`, and growing missing frames should not briefly clear to `clean-low-latency`, and it should not flip between weak/repair/lean profiles every few dozen milliseconds.
+
+### Side B
+
+Expected profile from symptom:
+- `persistent-lean` or `silent-lean`; possibly `repair-collapse` only during short near-empty damage bursts.
+
+Actual exported profile:
+- Dominant sampled profile: `persistent-lean`.
+- Current exported profile: `silent-lean`.
+
+Did classification match?
+- Mostly/partly.
+
+Notes:
+- `avgPcmBufferedMs=11.542`, `jitterBufferDepthFramesMean=0.584`, `avgPlayoutDeltaMs=-119.279`, and recovery mode fit lean-listener behavior.
+- `missingFrames=535` is no longer a completely quiet blind-spot shape, but `concealmentTicks=47`, `playoutUnderTargetFraction=0.011`, and `playoutRateFractionBelow097=0.007` are milder than the earlier collapse samples. This does not justify a new profile or a broad baseline change.
+
+## Trend Read
+
+Side A:
+- Oscillating weak recovery.
+- Reasons seen:
+  - Profile samples include `clean-low-latency`, `collapse-recovery`, `steady-weak-listener`, `repair-heavy-connected`, `repair-collapse`, `persistent-lean`, and `buffered-not-ready`.
+  - Recent window flips from `buffered-not-ready` to `steady-weak-listener`, briefly to `clean-low-latency`, then back through `repair-heavy-connected` / `steady-weak-listener`.
+  - `missingFrames` rises from `599` to `689` in the final sampled window, with `entered-recovery` appearing twice.
+  - `outboundNoTargetSkips` remains `0`, so this is not a send-target failure.
+
+Side B:
+- Gradual/flat lean recovery with a late not-ready blip.
+- Reasons seen:
+  - `avgPcmBufferedMs` stays around `11.35` to `11.58 ms`.
+  - `missingFrames` rises from `492` to `535`; `concealmentTicks` is nearly flat from `46` to `47`.
+  - Profile stays mostly `persistent-lean`, then flips to `silent-lean` near the end.
+  - One recent trend has `jitterHasReadyFrame=false`, but the export currently has ready playout and no startup/path failure.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-07T18:57Z group-812` | B / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:25Z group-937` | A / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:48Z group-937` | A / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Still a valid secondary selector refinement. |
+| `2026-05-07T19:48Z group-937` | B / Linux standby | `silent-lean` | yes | no | selector / repair-collapse escalation | Covered by the high-damage lean escalation target. |
+| `2026-05-07T20:30Z group-937` | A / Linux root epoch 3 | `collapse-recovery` | yes | partly/yes | authority/topology plus receive collapse | Keep as regression watch; not reproduced in later converged calls. |
+| `2026-05-07T20:30Z group-937` | B / Linux root epoch 4 | `buffered-not-ready` | yes | no/partly | authority/topology and send-target selection | Keep as regression watch; later calls have converged topology and no no-target growth. |
+| `2026-05-07T21:23Z group-937` | A / Linux root epoch 3 | `silent-lean` | yes | partly/no | selector / high-damage lean escalation | Addressed by promoting high-damage near-empty ready paths out of `silent-lean`. |
+| `2026-05-07T21:23Z group-937` | B / Linux standby epoch 3 | `collapse-recovery` | yes | yes | receive profile strength / collapse recovery | Addressed by strengthening collapse target/floor/hold; verify with later exports. |
+| `2026-05-07T21:50Z group-937` | A / Linux root epoch 3 | `steady-weak-listener` | partly/early | partly/yes | receive / residual weak recovery | Watch; no immediate profile-strength change from this side. |
+| `2026-05-07T21:50Z group-937` | B / Linux standby epoch 3 | `clean-low-latency` | yes/early, partly current | no | selector / false-clean near-empty repair collapse | Primary: prevent clean-low-latency while ready near-empty damage and recovery pressure remain active. |
+| `2026-05-08T10:48Z group-812` | A / Linux root epoch 3 | `steady-weak-listener` | partly/inferred | partly | selector / profile oscillation and premature clean clear | Primary: add hysteresis/clear gating so weak or repair-heavy recovery cannot briefly clear to clean while under-target/rate pressure remains high. |
+| `2026-05-08T10:48Z group-812` | B / Mac standby epoch 3 | `persistent-lean` | partly/inferred | mostly/partly | receive / lean recovery | Watch; no baseline or new-profile change from this side. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: stabilize receive-profile selection and clean-clear gating. The latest pair no longer shows dominant false-clean collapse, topology split, key/decode failure, or startup failure. It shows the selector still bouncing between profiles and occasionally allowing `clean-low-latency` during active under-target/recovery pressure.
+- Target the clear/hold logic around `steady-weak-listener`, `repair-heavy-connected`, `persistent-lean`, and `clean-low-latency`: once recovery is active and under-target/rate pressure remains elevated, require a sustained quiet window before clearing to clean, and avoid per-tick oscillation between weak/repair/lean profiles.
+- Keep profile strength and baseline unchanged from this call. Side B's lean classification mostly matches its metrics, and Side A's problem is not that one profile is too weak; it is that the selector does not stay in the appropriate recovery class long enough.

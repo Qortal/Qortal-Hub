@@ -2170,12 +2170,24 @@ def _dedup_age_ts(state: Dict[str, Any], both_established: bool) -> float:
 
 
 def _dedup_pick_keep_link(
+    peer_key: str,
     link_id_a: str,
     state_a: Dict[str, Any],
     link_id_b: str,
     state_b: Dict[str, Any],
 ) -> tuple[str, str]:
     """Return (keep_link_id, teardown_link_id) for two links to the same peer."""
+    incoming_a = state_a.get("incoming") is True
+    incoming_b = state_b.get("incoming") is True
+    if incoming_a != incoming_b:
+        local_hex = _local_presence_hash_hex()
+        if local_hex and _valid_presence_destination_hash_hex(peer_key):
+            # Deterministic duplicate resolution for simultaneous dials:
+            # lower hash keeps the outbound link, higher hash keeps the incoming link.
+            prefer_incoming = local_hex > peer_key
+            if incoming_a == prefer_incoming:
+                return link_id_a, link_id_b
+            return link_id_b, link_id_a
     est_a = state_a.get("established") is True
     est_b = state_b.get("established") is True
     if est_a and not est_b:
@@ -2228,6 +2240,7 @@ def _register_active_overlay_for_peer(peer_key: str, link_id: str) -> Optional[D
             _active_overlay_link_id_by_peer_hash[peer_key] = link_id
             return st_new
         keep_id, lose_id = _dedup_pick_keep_link(
+            peer_key,
             existing_link_id, st_old, link_id, st_new
         )
         _active_overlay_link_id_by_peer_hash[peer_key] = keep_id

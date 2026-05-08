@@ -206,6 +206,15 @@ type GcallSendAudioDiagnostics = {
   targetAddress?: string;
   peerPresenceHash?: string;
   routeKey?: string;
+  linkId?: string;
+  linkEstablished?: boolean;
+  linkOpenedByOwner?: boolean | null;
+  lastLinkCloseReason?: string;
+  lastLinkCloseAtMs?: number;
+  lastLinkCloseLinkId?: string;
+  lastLinkUnreadyReason?: string;
+  lastLinkUnreadyAtMs?: number;
+  lastLinkUnreadyLinkId?: string;
   lastInboundAtMs?: number;
   recoveryReason?: string;
   recoveryHoldUntilMs?: number;
@@ -277,7 +286,10 @@ const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
-const ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS = ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
+const ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS =
+  ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS * 2;
+const ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS =
+  ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
 const ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS =
   ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS + TOPOLOGY_HEARTBEAT_MS;
 const POST_FAILOVER_ROOT_RECEIVE_PROTECTION_MS = 12_000;
@@ -317,7 +329,8 @@ const GROUP_CALL_SENDER_SYNC_RETRY_MS = 1_500;
 const RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS = 5_000;
 const PARTICIPANT_ROSTER_REFRESH_INTERVAL_MS = TOPOLOGY_HEARTBEAT_MS;
 const PARTICIPANT_ROSTER_MISSING_EVICT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 500;
-const PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS = PARTICIPANT_ROSTER_MISSING_EVICT_MS;
+const PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS =
+  PARTICIPANT_ROSTER_MISSING_EVICT_MS;
 const PARTICIPANT_RECENT_OUTBOUND_EVICT_VETO_MS = 45_000;
 const TRUSTED_REMOTE_ROOT_STICKY_REJOIN_MS = 7_500;
 const CONFLICTING_REMOTE_ROOT_AUTHORITY_SETTLE_MS =
@@ -357,7 +370,8 @@ function base64ToUint8(value: string): Uint8Array {
 
 function uint8ToBase64(value: Uint8Array): string {
   let binary = '';
-  for (let i = 0; i < value.length; i++) binary += String.fromCharCode(value[i]!);
+  for (let i = 0; i < value.length; i++)
+    binary += String.fromCharCode(value[i]!);
   return btoa(binary);
 }
 
@@ -375,7 +389,9 @@ function canonicalizeStringMap(value: Record<string, string>): string {
 async function sha256Hex(input: string): Promise<string> {
   const bytes = new TextEncoder().encode(input);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, '0')
+  ).join('');
 }
 
 async function buildGcKeyDigest(
@@ -506,7 +522,8 @@ export class GroupCallAudioEngineRuntime {
   private selfMintedRoomKey = false;
   private awaitingAuthoritativeKey = false;
   private keyRecoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
-  private roomKeyDistributionRetryTimer: ReturnType<typeof setTimeout> | null = null;
+  private roomKeyDistributionRetryTimer: ReturnType<typeof setTimeout> | null =
+    null;
   private readonly targetedRoomKeyReplayTimers = new Map<
     string,
     ReturnType<typeof setTimeout>
@@ -516,9 +533,11 @@ export class GroupCallAudioEngineRuntime {
   private topologyHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private rootFailoverTimer: ReturnType<typeof setTimeout> | null = null;
   private topologyElectionTimer: ReturnType<typeof setTimeout> | null = null;
-  private activeSpeakerRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private activeSpeakerRefreshTimer: ReturnType<typeof setTimeout> | null =
+    null;
   private memberGateRefreshTimer: ReturnType<typeof setInterval> | null = null;
-  private participantRosterRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  private participantRosterRefreshTimer: ReturnType<typeof setInterval> | null =
+    null;
   private topologyAsyncGeneration = 0;
   private lastObservedTopologyEpoch = 0;
   private trustedRemoteRoot = '';
@@ -536,8 +555,14 @@ export class GroupCallAudioEngineRuntime {
   private provisionalLocalRootRemoteCount = 0;
   private readonly electionDigestCache = new Map<string, string>();
   private readonly activeSpeakerLastSeenAt = new Map<string, number>();
-  private readonly participantDecodedMediaLastSeenAt = new Map<string, number>();
-  private readonly participantLiveEvidenceLastSeenAt = new Map<string, number>();
+  private readonly participantDecodedMediaLastSeenAt = new Map<
+    string,
+    number
+  >();
+  private readonly participantLiveEvidenceLastSeenAt = new Map<
+    string,
+    number
+  >();
   private readonly bootstrapOnlyParticipantAddresses = new Set<string>();
   private bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
   private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
@@ -559,9 +584,15 @@ export class GroupCallAudioEngineRuntime {
   private workerDecodeFailureCount = 0;
   private workerDecodeFailureRecoveryLastAt = 0;
   private readonly pendingDecryptIngressById = new Map<number, string>();
-  private readonly rootDecodeFailureWindowStartedAtBySource = new Map<string, number>();
+  private readonly rootDecodeFailureWindowStartedAtBySource = new Map<
+    string,
+    number
+  >();
   private readonly rootDecodeFailureCountBySource = new Map<string, number>();
-  private readonly rootDecodeFailureKeyReplayLastAtBySource = new Map<string, number>();
+  private readonly rootDecodeFailureKeyReplayLastAtBySource = new Map<
+    string,
+    number
+  >();
   private outboundEncodedFrameCallbacks = 0;
   private outboundPacketBuildAttempts = 0;
   private outboundSendAttempts = 0;
@@ -584,7 +615,10 @@ export class GroupCallAudioEngineRuntime {
   private outboundLastMainDiagnostics: GcallSendAudioDiagnostics | null = null;
   private outboundLastTargets: string[] = [];
   private mediaRecoveryApiUnavailableLastAtMs = 0;
-  private readonly zeroInboundMediaRecoveryLastAtByAddress = new Map<string, number>();
+  private readonly zeroInboundMediaRecoveryLastAtByAddress = new Map<
+    string,
+    number
+  >();
   private readonly outboundTargetDiagnostics = new Map<
     string,
     OutboundMediaTargetDiagnostics
@@ -658,7 +692,9 @@ export class GroupCallAudioEngineRuntime {
     this.emitSnapshot();
   }
 
-  async handleCommand(command: AudioSurfaceCommand): Promise<AudioSurfaceResponse> {
+  async handleCommand(
+    command: AudioSurfaceCommand
+  ): Promise<AudioSurfaceResponse> {
     try {
       if (command.type === 'join-group-call') {
         traceGcallAudioSurface('engine.handleCommand: join-group-call', {
@@ -700,7 +736,10 @@ export class GroupCallAudioEngineRuntime {
           this.emitSnapshot();
           return { ok: true };
         case 'set-hear-call':
-          this.snapshot = { ...this.snapshot, hearCall: command.hearCall === true };
+          this.snapshot = {
+            ...this.snapshot,
+            hearCall: command.hearCall === true,
+          };
           void this.receiveEngine.configure({
             hearCall: command.hearCall === true,
           });
@@ -759,12 +798,17 @@ export class GroupCallAudioEngineRuntime {
 
   private pruneHeldIncomingAudio(nowMs: number): void {
     this.heldIncomingAudio = this.heldIncomingAudio.filter(
-      (entry) => nowMs - entry.heldAtMs <= AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_AGE_MS
+      (entry) =>
+        nowMs - entry.heldAtMs <= AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_AGE_MS
     );
-    if (this.heldIncomingAudio.length > AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS) {
+    if (
+      this.heldIncomingAudio.length >
+      AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS
+    ) {
       this.heldIncomingAudio.splice(
         0,
-        this.heldIncomingAudio.length - AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS
+        this.heldIncomingAudio.length -
+          AWAITING_AUTHORITATIVE_KEY_HOLD_MAX_PACKETS
       );
     }
   }
@@ -805,7 +849,9 @@ export class GroupCallAudioEngineRuntime {
     }
   }
 
-  private shouldLogAwaitingAuthoritativeKeyFailure(nowMs = Date.now()): boolean {
+  private shouldLogAwaitingAuthoritativeKeyFailure(
+    nowMs = Date.now()
+  ): boolean {
     if (
       nowMs - this.lastAwaitingAuthoritativeKeyFailureLogAt <
       AUTHORITATIVE_KEY_RECOVERY_FAILURE_LOG_COOLDOWN_MS
@@ -821,7 +867,10 @@ export class GroupCallAudioEngineRuntime {
     this.emit({ type: 'snapshot', snapshot: this.snapshot });
   }
 
-  private recordDiagEvent(tag: string, payload?: Record<string, unknown>): void {
+  private recordDiagEvent(
+    tag: string,
+    payload?: Record<string, unknown>
+  ): void {
     const nowMs = Date.now();
     this.diagEvents.push({
       t: nowMs,
@@ -940,7 +989,9 @@ export class GroupCallAudioEngineRuntime {
   private shouldMarkLocalRootProvisional(): boolean {
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!myAddress) return false;
-    return this.countRemoteParticipants() > 0 || this.startupHydratedRemoteCount > 0;
+    return (
+      this.countRemoteParticipants() > 0 || this.startupHydratedRemoteCount > 0
+    );
   }
 
   private markProvisionalLocalRoot(reason: string, nowMs = Date.now()): void {
@@ -949,7 +1000,8 @@ export class GroupCallAudioEngineRuntime {
       this.startupHydratedRemoteCount
     );
     this.provisionalLocalRootElectionAtMs = nowMs;
-    this.provisionalLocalRootUntilMs = nowMs + PROVISIONAL_LOCAL_ROOT_RECONCILE_MS;
+    this.provisionalLocalRootUntilMs =
+      nowMs + PROVISIONAL_LOCAL_ROOT_RECONCILE_MS;
     this.provisionalLocalRootReason = reason;
     this.provisionalLocalRootRemoteCount = remoteParticipantCount;
     this.recordDiagEvent('provisional-local-root-armed', {
@@ -998,7 +1050,10 @@ export class GroupCallAudioEngineRuntime {
       roomId: this.snapshot.roomId,
       remoteRoot: truncateGcallDiagAddress(root),
       reason,
-      provisionalRemainingMs: Math.max(0, this.provisionalLocalRootUntilMs - nowMs),
+      provisionalRemainingMs: Math.max(
+        0,
+        this.provisionalLocalRootUntilMs - nowMs
+      ),
     });
     this.scheduleTopologyElection(`provisional-local-root-${reason}`);
     return true;
@@ -1098,7 +1153,8 @@ export class GroupCallAudioEngineRuntime {
     this.outboundLastMainDiagnostics = diagnostics;
     const target = diagnostics.targetAddress;
     if (target) {
-      this.getOutboundTargetDiagnostics(target).lastMainDiagnostics = diagnostics;
+      this.getOutboundTargetDiagnostics(target).lastMainDiagnostics =
+        diagnostics;
     }
     const transport = diagnostics.transport;
     if (transport === 'link' || transport === 'packet') {
@@ -1126,10 +1182,11 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private recordRecentWindowTrend(metrics: GroupCallMetricsSnapshot): void {
-    const previous = this.recentWindowTrends[this.recentWindowTrends.length - 1] ?? null;
-    const receiveDiagnostics:
-      | ReturnType<GroupCallAudioReceiveEngine['getDiagnosticsSnapshot']>
-      | null =
+    const previous =
+      this.recentWindowTrends[this.recentWindowTrends.length - 1] ?? null;
+    const receiveDiagnostics: ReturnType<
+      GroupCallAudioReceiveEngine['getDiagnosticsSnapshot']
+    > | null =
       this.receiveEngine instanceof GroupCallAudioReceiveEngine
         ? this.receiveEngine.getDiagnosticsSnapshot()
         : null;
@@ -1165,7 +1222,10 @@ export class GroupCallAudioEngineRuntime {
       ? Math.max(0, this.outboundSendFailures - previous.outboundSendFailures)
       : 0;
     const outboundNoTargetSkipsDelta = previous
-      ? Math.max(0, this.outboundSkippedNoTargets - previous.outboundNoTargetSkips)
+      ? Math.max(
+          0,
+          this.outboundSkippedNoTargets - previous.outboundNoTargetSkips
+        )
       : 0;
     if (
       previous &&
@@ -1176,7 +1236,8 @@ export class GroupCallAudioEngineRuntime {
     }
     if (
       previous &&
-      metrics.playoutUnderTargetFraction - previous.playoutUnderTargetFraction >=
+      metrics.playoutUnderTargetFraction -
+        previous.playoutUnderTargetFraction >=
         GCALL_CALL_QUALITY_WORSENED_UNDERTARGET_DELTA_MIN
     ) {
       reasons.push('under-target-spike');
@@ -1232,12 +1293,17 @@ export class GroupCallAudioEngineRuntime {
       packetsDroppedPendingDecryptDelta,
       packetsDroppedDecodeFailure: metrics.packetsDroppedDecodeFailure,
       packetsDroppedDecodeFailureDelta,
-      reticulumAudioPacketPathTimeouts: metrics.reticulumAudioPacketPathTimeouts,
+      reticulumAudioPacketPathTimeouts:
+        metrics.reticulumAudioPacketPathTimeouts,
       reticulumAudioPacketPathTimeoutsDelta,
-      reticulumAudioOutboundLinkSamples: metrics.reticulumAudioOutboundLinkSamples,
-      reticulumAudioOutboundPacketSamples: metrics.reticulumAudioOutboundPacketSamples,
-      reticulumAudioInboundLinkSamples: metrics.reticulumAudioInboundLinkSamples,
-      reticulumAudioInboundPacketSamples: metrics.reticulumAudioInboundPacketSamples,
+      reticulumAudioOutboundLinkSamples:
+        metrics.reticulumAudioOutboundLinkSamples,
+      reticulumAudioOutboundPacketSamples:
+        metrics.reticulumAudioOutboundPacketSamples,
+      reticulumAudioInboundLinkSamples:
+        metrics.reticulumAudioInboundLinkSamples,
+      reticulumAudioInboundPacketSamples:
+        metrics.reticulumAudioInboundPacketSamples,
       outboundEncodedFrames: this.outboundEncodedFrameCallbacks,
       outboundSendAttempts: this.outboundSendAttempts,
       outboundSendSuccesses: this.outboundSendSuccesses,
@@ -1245,12 +1311,12 @@ export class GroupCallAudioEngineRuntime {
       outboundSendFailuresDelta,
       outboundNoTargetSkips: this.outboundSkippedNoTargets,
       outboundNoTargetSkipsDelta,
-      receiveProfiles: (receiveDiagnostics?.livePolicyProfilesBySource ?? []).map(
-        ({ peerAddress, profile }) => ({
-          peerAddress,
-          profile,
-        })
-      ),
+      receiveProfiles: (
+        receiveDiagnostics?.livePolicyProfilesBySource ?? []
+      ).map(({ peerAddress, profile }) => ({
+        peerAddress,
+        profile,
+      })),
       receivePlayouts: (receiveDiagnostics?.playouts ?? []).map((playout) => ({
         peerAddress: playout.peerAddress,
         jitterBufferedFrames: playout.jitterBufferedFrames,
@@ -1277,7 +1343,8 @@ export class GroupCallAudioEngineRuntime {
         packetsDroppedPendingDecryptDelta,
         packetsDroppedDecodeFailure: metrics.packetsDroppedDecodeFailure,
         packetsDroppedDecodeFailureDelta,
-        reticulumAudioPacketPathTimeouts: metrics.reticulumAudioPacketPathTimeouts,
+        reticulumAudioPacketPathTimeouts:
+          metrics.reticulumAudioPacketPathTimeouts,
         reticulumAudioPacketPathTimeoutsDelta,
         receiveProfiles: receiveDiagnostics?.livePolicyProfilesBySource ?? [],
       });
@@ -1308,7 +1375,10 @@ export class GroupCallAudioEngineRuntime {
       spanMs: Math.max(0, last.atMs - first.atMs),
       firstAtMs: first.atMs,
       lastAtMs: last.atMs,
-      totalMissingFramesDelta: Math.max(0, last.missingFrames - first.missingFrames),
+      totalMissingFramesDelta: Math.max(
+        0,
+        last.missingFrames - first.missingFrames
+      ),
       totalConcealmentTicksDelta: Math.max(
         0,
         last.concealmentTicks - first.concealmentTicks
@@ -1325,8 +1395,12 @@ export class GroupCallAudioEngineRuntime {
         0,
         last.outboundNoTargetSkips - first.outboundNoTargetSkips
       ),
-      maxAvgPcmBufferedMs: Math.max(...trends.map((trend) => trend.avgPcmBufferedMs)),
-      minAvgPcmBufferedMs: Math.min(...trends.map((trend) => trend.avgPcmBufferedMs)),
+      maxAvgPcmBufferedMs: Math.max(
+        ...trends.map((trend) => trend.avgPcmBufferedMs)
+      ),
+      minAvgPcmBufferedMs: Math.min(
+        ...trends.map((trend) => trend.avgPcmBufferedMs)
+      ),
       maxPlayoutUnderTargetFraction: Math.max(
         ...trends.map((trend) => trend.playoutUnderTargetFraction)
       ),
@@ -1350,7 +1424,10 @@ export class GroupCallAudioEngineRuntime {
   private getMediaRecoveryTargets(): string[] {
     if (!this.topology || !this.userInfo?.address) return [];
     const myAddress = this.userInfo.address;
-    const transportTargets = getReticulumTransportTargets(myAddress, this.topology)
+    const transportTargets = getReticulumTransportTargets(
+      myAddress,
+      this.topology
+    )
       .map((address) => address.trim())
       .filter((address) => address && address !== myAddress);
     const targets =
@@ -1372,7 +1449,8 @@ export class GroupCallAudioEngineRuntime {
       !this.topology ||
       !this.userInfo?.address ||
       metrics.packetsReceived > 0 ||
-      this.outboundSendSuccesses < ZERO_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES
+      this.outboundSendSuccesses <
+        ZERO_INBOUND_MEDIA_RECOVERY_MIN_OUTBOUND_FRAMES
     ) {
       return;
     }
@@ -1385,8 +1463,12 @@ export class GroupCallAudioEngineRuntime {
     if (uniqueTargets.length === 0) return;
     const now = Date.now();
     for (const address of uniqueTargets) {
-      const lastAt = this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
-      if (lastAt > 0 && now - lastAt < ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS) {
+      const lastAt =
+        this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
+      if (
+        lastAt > 0 &&
+        now - lastAt < ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS
+      ) {
         continue;
       }
       this.zeroInboundMediaRecoveryLastAtByAddress.set(address, now);
@@ -1444,8 +1526,12 @@ export class GroupCallAudioEngineRuntime {
     if (uniqueTargets.length === 0) return;
     const now = Date.now();
     for (const address of uniqueTargets) {
-      const lastAt = this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
-      if (lastAt > 0 && now - lastAt < ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS) {
+      const lastAt =
+        this.zeroInboundMediaRecoveryLastAtByAddress.get(address) ?? 0;
+      if (
+        lastAt > 0 &&
+        now - lastAt < ZERO_INBOUND_MEDIA_RECOVERY_COOLDOWN_MS
+      ) {
         continue;
       }
       this.zeroInboundMediaRecoveryLastAtByAddress.set(address, now);
@@ -1484,20 +1570,29 @@ export class GroupCallAudioEngineRuntime {
     });
   }
 
-  private buildAudioSurfaceRuntimeDiagnosticsSnapshot(): Record<string, unknown> {
+  private buildAudioSurfaceRuntimeDiagnosticsSnapshot(): Record<
+    string,
+    unknown
+  > {
     const topology = this.topology;
     const myAddress = this.userInfo?.address ?? '';
-    const role = topology ? computeGroupCallRole(myAddress, topology) : 'listener';
+    const role = topology
+      ? computeGroupCallRole(myAddress, topology)
+      : 'listener';
     const receiveEngine = this.receiveEngine.getDiagnosticsSnapshot();
     const rootPeerLiveness = this.getRootPeerLivenessSnapshot();
-    const decodePaths = [...new Set(receiveEngine.playouts.map((playout) => playout.decodePath))];
+    const decodePaths = [
+      ...new Set(receiveEngine.playouts.map((playout) => playout.decodePath)),
+    ];
     const sharedRingEnabled = receiveEngine.playouts.some(
       (playout) => playout.sharedRingEnabled
     );
     return {
       pipelineMode: {
         crossOriginIsolated:
-          typeof window !== 'undefined' ? window.crossOriginIsolated === true : false,
+          typeof window !== 'undefined'
+            ? window.crossOriginIsolated === true
+            : false,
         sharedArrayBufferDefined: typeof SharedArrayBuffer !== 'undefined',
         workerDefined: typeof Worker !== 'undefined',
         roomKeyPresent: this.roomKey !== null,
@@ -1561,7 +1656,9 @@ export class GroupCallAudioEngineRuntime {
   private withDerivedSnapshotState(
     snapshot: GroupCallControllerSnapshot
   ): GroupCallControllerSnapshot {
-    const myRole = this.deriveTopologyRoleForAddress(this.userInfo?.address ?? '');
+    const myRole = this.deriveTopologyRoleForAddress(
+      this.userInfo?.address ?? ''
+    );
     const participants = this.withTopologyRoles(snapshot.participants);
     const metrics = this.withTopologyMetrics(snapshot.metrics, myRole);
     const myAddress = this.userInfo?.address ?? '';
@@ -1606,7 +1703,9 @@ export class GroupCallAudioEngineRuntime {
     }));
   }
 
-  private markParticipantRecentlyLeft(addressValue: string | null | undefined): void {
+  private markParticipantRecentlyLeft(
+    addressValue: string | null | undefined
+  ): void {
     const address = addressValue?.trim() ?? '';
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!address || address === myAddress) return;
@@ -1616,7 +1715,9 @@ export class GroupCallAudioEngineRuntime {
     );
   }
 
-  private clearRecentLeftParticipant(addressValue: string | null | undefined): void {
+  private clearRecentLeftParticipant(
+    addressValue: string | null | undefined
+  ): void {
     const address = addressValue?.trim() ?? '';
     if (!address) return;
     this.recentlyLeftParticipantsUntilMs.delete(address);
@@ -1735,10 +1836,8 @@ export class GroupCallAudioEngineRuntime {
 
   private getForwardRecipientCount(): number {
     if (!this.topology || !this.userInfo?.address) return 0;
-    return getReticulumTransportTargets(
-      this.userInfo.address,
-      this.topology
-    ).length;
+    return getReticulumTransportTargets(this.userInfo.address, this.topology)
+      .length;
   }
 
   private withTopologyMetrics(
@@ -1862,19 +1961,24 @@ export class GroupCallAudioEngineRuntime {
       );
       return;
     }
-    traceGcallAudioSurface('pipeline: subscribing groupCall.onEvent (gcall:audio, gcall:key, …)', {});
-    this.unsubscribeGroupCallEvents = window.groupCall.onEvent((event, payload) => {
-      const nextSnapshot = projectGroupCallEvent({
-        snapshot: this.snapshot,
-        event,
-        payload,
-      });
-      if (nextSnapshot) {
-        this.snapshot = nextSnapshot;
-        this.emitSnapshot();
+    traceGcallAudioSurface(
+      'pipeline: subscribing groupCall.onEvent (gcall:audio, gcall:key, …)',
+      {}
+    );
+    this.unsubscribeGroupCallEvents = window.groupCall.onEvent(
+      (event, payload) => {
+        const nextSnapshot = projectGroupCallEvent({
+          snapshot: this.snapshot,
+          event,
+          payload,
+        });
+        if (nextSnapshot) {
+          this.snapshot = nextSnapshot;
+          this.emitSnapshot();
+        }
+        void this.handleGroupCallRuntimeEvent(event, payload);
       }
-      void this.handleGroupCallRuntimeEvent(event, payload);
-    });
+    );
   }
 
   private async joinGroupCall(
@@ -1890,14 +1994,20 @@ export class GroupCallAudioEngineRuntime {
     });
     const userInfo = this.userInfo;
     if (!userInfo?.address || !userInfo?.publicKey) {
-      traceGcallAudioSurface('engine.joinGroupCall: fail missing user in engine', {});
+      traceGcallAudioSurface(
+        'engine.joinGroupCall: fail missing user in engine',
+        {}
+      );
       this.snapshot = buildJoinFailureSnapshot(this.snapshot, 'not_ready');
       this.emitSnapshot();
       return { ok: false, error: 'missing-user' };
     }
     if (roomId.startsWith('gcall-qortal-') && this.myStatus === 'offline') {
       traceGcallAudioSurface('engine.joinGroupCall: fail presence_offline', {});
-      this.snapshot = buildJoinFailureSnapshot(this.snapshot, 'presence_offline');
+      this.snapshot = buildJoinFailureSnapshot(
+        this.snapshot,
+        'presence_offline'
+      );
       this.emitSnapshot();
       return { ok: false, error: 'presence_offline' };
     }
@@ -1964,19 +2074,40 @@ export class GroupCallAudioEngineRuntime {
       gcallJoinError: null,
     };
     this.ensureGroupCallSubscription();
-    traceGcallAudioSurface('engine.joinGroupCall: step ensureGroupCallSubscription done', {});
-    traceGcallAudioSurface('engine.joinGroupCall: step before senderEngine.stop', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step ensureGroupCallSubscription done',
+      {}
+    );
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before senderEngine.stop',
+      {}
+    );
     await this.senderEngine.stop();
-    traceGcallAudioSurface('engine.joinGroupCall: step after senderEngine.stop', {});
-    traceGcallAudioSurface('engine.joinGroupCall: step before syncDecryptPoolRoomKey', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after senderEngine.stop',
+      {}
+    );
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before syncDecryptPoolRoomKey',
+      {}
+    );
     await this.syncDecryptPoolRoomKey(null);
-    traceGcallAudioSurface('engine.joinGroupCall: step after syncDecryptPoolRoomKey', {});
-    traceGcallAudioSurface('engine.joinGroupCall: step before receiveEngine.reset', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after syncDecryptPoolRoomKey',
+      {}
+    );
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before receiveEngine.reset',
+      {}
+    );
     await this.receiveEngine.reset();
     await this.receiveEngine.configure({
       postFailoverRootHoldUntilMs: 0,
     });
-    traceGcallAudioSurface('engine.joinGroupCall: step after receiveEngine.reset', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after receiveEngine.reset',
+      {}
+    );
     this.snapshot = buildJoiningSnapshot({
       current: this.snapshot,
       roomId,
@@ -1984,26 +2115,43 @@ export class GroupCallAudioEngineRuntime {
       options,
     });
     this.emitSnapshot();
-    traceGcallAudioSurface('engine.joinGroupCall: step after buildJoiningSnapshot + emitSnapshot', {
-      roomState: this.snapshot.roomState,
-    });
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after buildJoiningSnapshot + emitSnapshot',
+      {
+        roomState: this.snapshot.roomState,
+      }
+    );
 
-    traceGcallAudioSurface('engine.joinGroupCall: step before setLocalAddresses', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before setLocalAddresses',
+      {}
+    );
     await window.groupCall?.setLocalAddresses?.([userInfo.address], 'group');
-    traceGcallAudioSurface('engine.joinGroupCall: step after setLocalAddresses', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after setLocalAddresses',
+      {}
+    );
     await this.syncQortalGroupReticulumTargets(roomId, options);
     this.startMemberGateRefresh(roomId);
     this.startParticipantRosterRefresh(roomId);
-    const joinGeneration = (crypto.getRandomValues(new Uint32Array(1))[0] ??
-      0) >>> 0;
-    traceGcallAudioSurface('engine.joinGroupCall: step before fetchLocalReticulumDestinationHash', {});
-    const reticulumDestinationHash =
-      await fetchLocalReticulumDestinationHash();
-    traceGcallAudioSurface('engine.joinGroupCall: step after fetchLocalReticulumDestinationHash', {
-      hasHash: Boolean(reticulumDestinationHash),
-    });
+    const joinGeneration =
+      (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) >>> 0;
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before fetchLocalReticulumDestinationHash',
+      {}
+    );
+    const reticulumDestinationHash = await fetchLocalReticulumDestinationHash();
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after fetchLocalReticulumDestinationHash',
+      {
+        hasHash: Boolean(reticulumDestinationHash),
+      }
+    );
     if (!reticulumDestinationHash) {
-      traceGcallAudioSurface('engine.joinGroupCall: fail reticulum_not_ready (no local destination hash)', {});
+      traceGcallAudioSurface(
+        'engine.joinGroupCall: fail reticulum_not_ready (no local destination hash)',
+        {}
+      );
       this.snapshot = buildJoinFailureSnapshot(
         this.snapshot,
         'reticulum_not_ready'
@@ -2011,14 +2159,23 @@ export class GroupCallAudioEngineRuntime {
       this.emitSnapshot();
       return { ok: false, error: 'reticulum_not_ready' };
     }
-    traceGcallAudioSurface('engine.joinGroupCall: step before fetchLocalReticulumIdentityPublicKeyBase64', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before fetchLocalReticulumIdentityPublicKeyBase64',
+      {}
+    );
     const reticulumIdentityPublicKeyBase64 =
       await fetchLocalReticulumIdentityPublicKeyBase64();
-    traceGcallAudioSurface('engine.joinGroupCall: step after fetchLocalReticulumIdentityPublicKeyBase64', {
-      hasKey: Boolean(reticulumIdentityPublicKeyBase64),
-    });
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after fetchLocalReticulumIdentityPublicKeyBase64',
+      {
+        hasKey: Boolean(reticulumIdentityPublicKeyBase64),
+      }
+    );
     const timestamp = Date.now();
-    traceGcallAudioSurface('engine.joinGroupCall: step before signReticulumJoinSplit', {});
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before signReticulumJoinSplit',
+      {}
+    );
     const signed = await signReticulumJoinSplit({
       roomId,
       chatId,
@@ -2029,18 +2186,30 @@ export class GroupCallAudioEngineRuntime {
       reticulumDestinationHash,
       reticulumIdentityPublicKeyBase64,
     });
-    traceGcallAudioSurface('engine.joinGroupCall: step after signReticulumJoinSplit', {
-      hasJoinSig: Boolean(signed?.joinSig),
-    });
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step after signReticulumJoinSplit',
+      {
+        hasJoinSig: Boolean(signed?.joinSig),
+      }
+    );
     if (!signed?.joinSig) {
-      this.snapshot = buildJoinFailureSnapshot(this.snapshot, 'join_sign_failed');
+      this.snapshot = buildJoinFailureSnapshot(
+        this.snapshot,
+        'join_sign_failed'
+      );
       this.emitSnapshot();
       return { ok: false, error: 'join_sign_failed' };
     }
     const joinFn = window.groupCall?.join;
     if (typeof joinFn !== 'function') {
-      traceGcallAudioSurface('engine.joinGroupCall: window.groupCall.join missing', {});
-      this.snapshot = buildJoinFailureSnapshot(this.snapshot, 'groupcall_api_missing');
+      traceGcallAudioSurface(
+        'engine.joinGroupCall: window.groupCall.join missing',
+        {}
+      );
+      this.snapshot = buildJoinFailureSnapshot(
+        this.snapshot,
+        'groupcall_api_missing'
+      );
       this.emitSnapshot();
       return { ok: false, error: 'groupcall_api_missing' };
     }
@@ -2058,9 +2227,12 @@ export class GroupCallAudioEngineRuntime {
       signed.joinRkSig
     );
     const GCALL_JOIN_IPC_TIMEOUT_MS = 25_000;
-    traceGcallAudioSurface('engine.joinGroupCall: step before gcall:join (Promise.race)', {
-      joinGeneration,
-    });
+    traceGcallAudioSurface(
+      'engine.joinGroupCall: step before gcall:join (Promise.race)',
+      {
+        joinGeneration,
+      }
+    );
     let result: Awaited<typeof joinPromise>;
     try {
       result = await Promise.race([
@@ -2071,9 +2243,12 @@ export class GroupCallAudioEngineRuntime {
           }, GCALL_JOIN_IPC_TIMEOUT_MS);
         }),
       ]);
-      traceGcallAudioSurface('engine.joinGroupCall: step after gcall:join (Promise.race settled)', {
-        success: result?.success,
-      });
+      traceGcallAudioSurface(
+        'engine.joinGroupCall: step after gcall:join (Promise.race settled)',
+        {
+          success: result?.success,
+        }
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'gcall-join-failed';
       traceGcallAudioSurface('engine.joinGroupCall: join race failed', { msg });
@@ -2083,11 +2258,11 @@ export class GroupCallAudioEngineRuntime {
     }
     if (!result?.success) {
       const err = result?.error ?? 'join_failed';
-      traceGcallAudioSurface('engine.joinGroupCall: main join returned failure', { error: err });
-      this.snapshot = buildJoinFailureSnapshot(
-        this.snapshot,
-        err
+      traceGcallAudioSurface(
+        'engine.joinGroupCall: main join returned failure',
+        { error: err }
       );
+      this.snapshot = buildJoinFailureSnapshot(this.snapshot, err);
       this.emitSnapshot();
       return { ok: false, error: err };
     }
@@ -2200,7 +2375,8 @@ export class GroupCallAudioEngineRuntime {
         | undefined;
       if (heartbeat?.roomId !== this.snapshot.roomId) return;
       const seenAtMs =
-        typeof heartbeat?.lastSeen === 'number' && Number.isFinite(heartbeat.lastSeen)
+        typeof heartbeat?.lastSeen === 'number' &&
+        Number.isFinite(heartbeat.lastSeen)
           ? heartbeat.lastSeen
           : Date.now();
       const rootForwarder = heartbeat?.rootForwarder?.trim() ?? '';
@@ -2239,16 +2415,25 @@ export class GroupCallAudioEngineRuntime {
       this.noteRootHeartbeat(rootForwarder, seenAtMs);
       return;
     }
-    if (event === 'gcall:participant-joined' || event === 'gcall:participant-left') {
-      const roomId = (payload as { roomId?: string } | null | undefined)?.roomId;
+    if (
+      event === 'gcall:participant-joined' ||
+      event === 'gcall:participant-left'
+    ) {
+      const roomId = (payload as { roomId?: string } | null | undefined)
+        ?.roomId;
       if (roomId === this.snapshot.roomId) {
         if (event === 'gcall:participant-left') {
-          const leavingAddress = (payload as { address?: string } | null | undefined)?.address;
+          const leavingAddress = (
+            payload as { address?: string } | null | undefined
+          )?.address;
           if (leavingAddress) {
             this.activeSpeakerLastSeenAt.delete(leavingAddress);
             this.refreshActiveSpeakerState();
             await this.receiveEngine.removeSource(leavingAddress);
-            if ((this.topology?.rootForwarder?.trim() ?? '') === leavingAddress.trim()) {
+            if (
+              (this.topology?.rootForwarder?.trim() ?? '') ===
+              leavingAddress.trim()
+            ) {
               if (this.trustedRemoteRoot === leavingAddress.trim()) {
                 this.clearTrustedRemoteRootIfMatches(leavingAddress);
               }
@@ -2308,10 +2493,13 @@ export class GroupCallAudioEngineRuntime {
     if (event === 'gcall:audio') {
       const audioPayload = payload as GroupCallAudioReceivePayload;
       if (audioPayload?.roomId !== this.snapshot.roomId) {
-        traceGcallAudioSurface('pipeline: gcall:audio dropped (room mismatch)', {
-          expectedRoomId: this.snapshot.roomId,
-          payloadRoomId: audioPayload?.roomId,
-        });
+        traceGcallAudioSurface(
+          'pipeline: gcall:audio dropped (room mismatch)',
+          {
+            expectedRoomId: this.snapshot.roomId,
+            payloadRoomId: audioPayload?.roomId,
+          }
+        );
         return;
       }
       const dataBuf = audioPayload.data;
@@ -2468,9 +2656,12 @@ export class GroupCallAudioEngineRuntime {
         return 1;
       }
       this.pendingDecryptIngressById.delete(decryptId);
-      traceGcallAudioSurface('pipeline: decrypt pool postDecrypt returned false, falling back', {
-        from: ingressPeerAddress,
-      });
+      traceGcallAudioSurface(
+        'pipeline: decrypt pool postDecrypt returned false, falling back',
+        {
+          from: ingressPeerAddress,
+        }
+      );
     }
     this.noteParticipantLiveEvidence(fromAddr, Date.now());
     return this.receiveEngine.handleIncomingAudio(audioPayload, this.roomKey);
@@ -2494,16 +2685,22 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     if (payload?.keyMessageVersion !== GCALL_KEY_MESSAGE_VERSION) {
-      traceGcallAudioSurface('pipeline: gcall:key dropped (wrong key message version)', {
-        want: GCALL_KEY_MESSAGE_VERSION,
-        got: payload?.keyMessageVersion,
-      });
+      traceGcallAudioSurface(
+        'pipeline: gcall:key dropped (wrong key message version)',
+        {
+          want: GCALL_KEY_MESSAGE_VERSION,
+          got: payload?.keyMessageVersion,
+        }
+      );
       return;
     }
     if (!payload?.encryptedKey) {
-      traceGcallAudioSurface('pipeline: gcall:key dropped (missing encryptedKey)', {
-        from: payload?.fromAddress,
-      });
+      traceGcallAudioSurface(
+        'pipeline: gcall:key dropped (missing encryptedKey)',
+        {
+          from: payload?.fromAddress,
+        }
+      );
       return;
     }
     const senderInRoster = this.snapshot.participants.some(
@@ -2515,8 +2712,11 @@ export class GroupCallAudioEngineRuntime {
       : senderInRoster || this.snapshot.participants.length <= 2;
     const canDecryptBox =
       typeof window.sendMessage === 'function' ||
-      typeof (window as Window & { electronAPI?: { gcallProxyDecryptBoxWithMyKey?: unknown } })
-        .electronAPI?.gcallProxyDecryptBoxWithMyKey === 'function';
+      typeof (
+        window as Window & {
+          electronAPI?: { gcallProxyDecryptBoxWithMyKey?: unknown };
+        }
+      ).electronAPI?.gcallProxyDecryptBoxWithMyKey === 'function';
     if (!trustedSender) {
       const myAddress = this.userInfo?.address?.trim() ?? '';
       const fromAddress = payload.fromAddress?.trim() ?? '';
@@ -2546,12 +2746,15 @@ export class GroupCallAudioEngineRuntime {
       ) {
         this.noteConflictingRemoteRoot(fromAddress, Date.now(), 'verified-key');
       }
-      traceGcallAudioSurface('pipeline: gcall:key dropped (untrusted sender for topology)', {
-        from: payload.fromAddress,
-        currentRoot: currentRoot || null,
-        senderInRoster,
-        participants: this.snapshot.participants.length,
-      });
+      traceGcallAudioSurface(
+        'pipeline: gcall:key dropped (untrusted sender for topology)',
+        {
+          from: payload.fromAddress,
+          currentRoot: currentRoot || null,
+          senderInRoster,
+          participants: this.snapshot.participants.length,
+        }
+      );
       return;
     }
     if (!canDecryptBox) {
@@ -2573,9 +2776,12 @@ export class GroupCallAudioEngineRuntime {
       ciphertext,
     });
     if (!result?.decryptedKey) {
-      traceGcallAudioSurface('pipeline: gcall:key decrypt failed (decryptBox empty)', {
-        from: payload.fromAddress,
-      });
+      traceGcallAudioSurface(
+        'pipeline: gcall:key decrypt failed (decryptBox empty)',
+        {
+          from: payload.fromAddress,
+        }
+      );
       return;
     }
     const roomKey = base64ToUint8(result.decryptedKey);
@@ -2585,9 +2791,12 @@ export class GroupCallAudioEngineRuntime {
       payload.mediaSessionGeneration >>> 0
     );
     if (expectedCommitment !== payload.keyCommitment) {
-      traceGcallAudioSurface('pipeline: gcall:key dropped (keyCommitment mismatch)', {
-        from: payload.fromAddress,
-      });
+      traceGcallAudioSurface(
+        'pipeline: gcall:key dropped (keyCommitment mismatch)',
+        {
+          from: payload.fromAddress,
+        }
+      );
       return;
     }
     this.noteRootVerifiedKey(payload.fromAddress, Date.now());
@@ -2638,10 +2847,13 @@ export class GroupCallAudioEngineRuntime {
       await this.syncDecryptPoolRoomKey(roomKey);
       await this.distributeRoomKey(roomKey);
       await this.syncSenderState();
-      traceGcallAudioSurface('pipeline: session-updated minted and distributed room key', {
-        roomId: this.snapshot.roomId,
-        mediaSessionGeneration: this.mediaSessionGeneration,
-      });
+      traceGcallAudioSurface(
+        'pipeline: session-updated minted and distributed room key',
+        {
+          roomId: this.snapshot.roomId,
+          mediaSessionGeneration: this.mediaSessionGeneration,
+        }
+      );
       this.recordDiagEvent('session-updated-room-key-distributed', {
         roomId: this.snapshot.roomId,
         mediaSessionGeneration: this.mediaSessionGeneration,
@@ -2658,12 +2870,12 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private async hydrateBootstrapState(roomId: string): Promise<void> {
-    const bootstrap = await window.groupCall?.getRoomBootstrapState?.(roomId).catch(
-      () => null
-    );
-    const roster = await window.groupCall?.getRoomParticipants?.(roomId).catch(
-      () => []
-    );
+    const bootstrap = await window.groupCall
+      ?.getRoomBootstrapState?.(roomId)
+      .catch(() => null);
+    const roster = await window.groupCall
+      ?.getRoomParticipants?.(roomId)
+      .catch(() => []);
     if (roomId !== this.snapshot.roomId) return;
 
     const myAddress = this.userInfo?.address?.trim() ?? '';
@@ -2673,7 +2885,10 @@ export class GroupCallAudioEngineRuntime {
       if (address) rosterAddresses.add(address);
     }
 
-    const participantMap = new Map<string, { address: string; publicKey: string }>();
+    const participantMap = new Map<
+      string,
+      { address: string; publicKey: string }
+    >();
     for (const participant of this.snapshot.participants) {
       if (participant.address) {
         const address = participant.address.trim();
@@ -2837,7 +3052,8 @@ export class GroupCallAudioEngineRuntime {
         sameRoomRejoin: true,
         hydratedRemoteParticipantCount: remoteParticipantCount,
         bootstrapParticipantCount: bootstrap?.participants?.length ?? 0,
-        bootstrapTopologyEpoch: bootstrapTopology?.topologyEpoch ?? bootstrap?.topologyEpoch ?? 0,
+        bootstrapTopologyEpoch:
+          bootstrapTopology?.topologyEpoch ?? bootstrap?.topologyEpoch ?? 0,
         bootstrapHasTopology: Boolean(bootstrapTopology?.rootForwarder),
         lastObservedEpoch: this.lastObservedTopologyEpoch,
         trustedRemoteRoot: trustedElectionRoot,
@@ -2908,7 +3124,10 @@ export class GroupCallAudioEngineRuntime {
         });
         return;
       }
-      if (mainGeneration === localGeneration && mainCallSessionId !== localCallSessionId) {
+      if (
+        mainGeneration === localGeneration &&
+        mainCallSessionId !== localCallSessionId
+      ) {
         this.callSessionId = mainCallSessionId;
         traceGcallAudioSurface('pipeline: session identity synced from main', {
           roomId,
@@ -3004,7 +3223,12 @@ export class GroupCallAudioEngineRuntime {
     });
     const timer = setTimeout(() => {
       this.targetedRoomKeyReplayTimers.delete(retryKey);
-      void this.runTargetedRoomKeyReplayRetry(toAddress, publicKey, retryKey, reason);
+      void this.runTargetedRoomKeyReplayRetry(
+        toAddress,
+        publicKey,
+        retryKey,
+        reason
+      );
     }, TARGETED_ROOM_KEY_REPLAY_RETRY_MS);
     this.targetedRoomKeyReplayTimers.set(retryKey, timer);
   }
@@ -3060,7 +3284,8 @@ export class GroupCallAudioEngineRuntime {
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (
       this.snapshot.participants.some(
-        (participant) => participant.address && participant.address !== myAddress
+        (participant) =>
+          participant.address && participant.address !== myAddress
       )
     ) {
       return true;
@@ -3117,7 +3342,8 @@ export class GroupCallAudioEngineRuntime {
     if (
       !this.snapshot.roomId ||
       !this.userInfo?.address ||
-      (this.snapshot.roomState !== 'joining' && this.snapshot.roomState !== 'connected')
+      (this.snapshot.roomState !== 'joining' &&
+        this.snapshot.roomState !== 'connected')
     ) {
       return;
     }
@@ -3182,7 +3408,10 @@ export class GroupCallAudioEngineRuntime {
         0,
         this.topologyElectionDelayUntilMs - nowMs
       ),
-      authoritySettleRemainingMs: Math.max(0, this.authoritySettleUntilMs - nowMs),
+      authoritySettleRemainingMs: Math.max(
+        0,
+        this.authoritySettleUntilMs - nowMs
+      ),
     });
     traceGcallAudioSurface(
       'pipeline: occupied-room election wait armed from participant join',
@@ -3238,17 +3467,23 @@ export class GroupCallAudioEngineRuntime {
         this.topologyElectionDelayUntilMs,
         this.authoritySettleUntilMs
       );
-      this.recordDiagEvent('local-topology-election-deferred-authority-conflict', {
-        roomId,
-        reason,
-        conflictingRemoteRoot: conflictingRoot,
-        authoritySettleUntilMs: this.authoritySettleUntilMs,
-      });
+      this.recordDiagEvent(
+        'local-topology-election-deferred-authority-conflict',
+        {
+          roomId,
+          reason,
+          conflictingRemoteRoot: conflictingRoot,
+          authoritySettleUntilMs: this.authoritySettleUntilMs,
+        }
+      );
       this.scheduleTopologyElection('authority-conflict');
       return;
     }
     const sorted = await this.computeElectionOrder(addresses, roomId);
-    if (generation !== this.topologyAsyncGeneration || roomId !== this.snapshot.roomId) {
+    if (
+      generation !== this.topologyAsyncGeneration ||
+      roomId !== this.snapshot.roomId
+    ) {
       return;
     }
     const trustedElectionRoot = getTrustedRootForRejoinElection({
@@ -3267,7 +3502,11 @@ export class GroupCallAudioEngineRuntime {
         this.lastObservedTopologyEpoch ?? 0
       ) + 1;
     const topology = normalizeGroupCallTopology({
-      ...buildTopologyWithTrustedRoot(sorted, topologyEpoch, trustedElectionRoot),
+      ...buildTopologyWithTrustedRoot(
+        sorted,
+        topologyEpoch,
+        trustedElectionRoot
+      ),
       roomId,
       lastSeen: nowMs,
     });
@@ -3359,10 +3598,7 @@ export class GroupCallAudioEngineRuntime {
     );
     const applied = await this.applyTopology(topology, 'local-election');
     if (applied) {
-      await this.broadcastTopology(
-        topology,
-        'self-minted-root-decode-failure'
-      );
+      await this.broadcastTopology(topology, 'self-minted-root-decode-failure');
     }
   }
 
@@ -3406,7 +3642,9 @@ export class GroupCallAudioEngineRuntime {
         cluster.standby === next.standby &&
         (cluster.standby2 ?? '') === (next.standby2 ?? '') &&
         cluster.members.length === next.members.length &&
-        cluster.members.every((member, memberIndex) => member === next.members[memberIndex])
+        cluster.members.every(
+          (member, memberIndex) => member === next.members[memberIndex]
+        )
       );
     });
   }
@@ -3416,7 +3654,8 @@ export class GroupCallAudioEngineRuntime {
   ): Promise<void> {
     if (!this.shouldReplayRetainedKeysAfterNextTopology) return;
     this.shouldReplayRetainedKeysAfterNextTopology = false;
-    if (typeof window.groupCall?.requestRetainedKeyReplay !== 'function') return;
+    if (typeof window.groupCall?.requestRetainedKeyReplay !== 'function')
+      return;
     window.groupCall.requestRetainedKeyReplay();
     traceGcallAudioSurface(
       'pipeline: gcall:topology — retained key replay (keys may only be storable after root is known)',
@@ -3425,7 +3664,8 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private requestRetainedKeyReplay(reason: string): void {
-    if (typeof window.groupCall?.requestRetainedKeyReplay !== 'function') return;
+    if (typeof window.groupCall?.requestRetainedKeyReplay !== 'function')
+      return;
     window.groupCall.requestRetainedKeyReplay();
     traceGcallAudioSurface('pipeline: requested retained key replay', {
       roomId: this.snapshot.roomId,
@@ -3464,8 +3704,7 @@ export class GroupCallAudioEngineRuntime {
     }
     this.workerDecodeFailureCount += 1;
     if (
-      this.workerDecodeFailureCount <
-      WORKER_DECODE_FAILURE_RECOVERY_THRESHOLD
+      this.workerDecodeFailureCount < WORKER_DECODE_FAILURE_RECOVERY_THRESHOLD
     ) {
       return;
     }
@@ -3496,7 +3735,9 @@ export class GroupCallAudioEngineRuntime {
     this.scheduleAuthoritativeKeyRecovery('worker-decode-failure');
   }
 
-  private noteRootDecodeFailureForPeerKeyReplay(sourceAddress: string): boolean {
+  private noteRootDecodeFailureForPeerKeyReplay(
+    sourceAddress: string
+  ): boolean {
     const root = this.topology?.rootForwarder?.trim() ?? '';
     const myAddress = this.userInfo?.address ?? '';
     const peerAddress = sourceAddress.trim();
@@ -3557,11 +3798,14 @@ export class GroupCallAudioEngineRuntime {
       this.countRemoteParticipants() === 1 &&
       this.isAddressInCurrentRoster(peerAddress)
     ) {
-      this.recordDiagEvent('self-minted-root-decode-failure-reconcile-scheduled', {
-        roomId: this.snapshot.roomId,
-        sourceAddress: peerAddress,
-        decodeFailedCount: count,
-      });
+      this.recordDiagEvent(
+        'self-minted-root-decode-failure-reconcile-scheduled',
+        {
+          roomId: this.snapshot.roomId,
+          sourceAddress: peerAddress,
+          decodeFailedCount: count,
+        }
+      );
       void this.reconcileSelfMintedTwoPartyRootFromDecodeFailure(
         peerAddress,
         count
@@ -3682,7 +3926,10 @@ export class GroupCallAudioEngineRuntime {
     await this.broadcastTopology(topology, 'initial-heartbeat');
     this.topologyHeartbeatTimer = setInterval(() => {
       const current = this.topology;
-      if (!current || current.rootForwarder !== (this.userInfo?.address ?? '')) {
+      if (
+        !current ||
+        current.rootForwarder !== (this.userInfo?.address ?? '')
+      ) {
         this.stopTopologyHeartbeat();
         return;
       }
@@ -3700,7 +3947,12 @@ export class GroupCallAudioEngineRuntime {
   private markRootPeerEvidence(
     addressValue: string | null | undefined,
     seenAtMs: number,
-    kind: 'heartbeat' | 'decoded-media' | 'verified-control' | 'verified-key' | 'speaker'
+    kind:
+      | 'heartbeat'
+      | 'decoded-media'
+      | 'verified-control'
+      | 'verified-key'
+      | 'speaker'
   ): void {
     const address = addressValue?.trim() ?? '';
     const currentRoot = this.topology?.rootForwarder?.trim() ?? '';
@@ -3807,23 +4059,30 @@ export class GroupCallAudioEngineRuntime {
         ? this.rootPeerLiveness
         : buildEmptyRootPeerLivenessRecord();
     const heartbeatSilentMs =
-      record.lastHeartbeatAt > 0 ? Math.max(0, nowMs - record.lastHeartbeatAt) : null;
+      record.lastHeartbeatAt > 0
+        ? Math.max(0, nowMs - record.lastHeartbeatAt)
+        : null;
     const heartbeatHealthy =
       heartbeatSilentMs !== null &&
       heartbeatSilentMs < ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
     const recentMediaAlive =
       (record.lastDecodedMediaAt > 0 &&
-        nowMs - record.lastDecodedMediaAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS) ||
+        nowMs - record.lastDecodedMediaAt <=
+          ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS) ||
       (record.lastSpeakerActivityAt > 0 &&
-        nowMs - record.lastSpeakerActivityAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS);
+        nowMs - record.lastSpeakerActivityAt <=
+          ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS);
     const recentControlAlive =
       (record.lastVerifiedControlAt > 0 &&
-        nowMs - record.lastVerifiedControlAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS) ||
+        nowMs - record.lastVerifiedControlAt <=
+          ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS) ||
       (record.lastVerifiedKeyAt > 0 &&
-        nowMs - record.lastVerifiedKeyAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS);
+        nowMs - record.lastVerifiedKeyAt <=
+          ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS);
     const recentAnyAlive =
       record.lastAnyRootEvidenceAt > 0 &&
-      nowMs - record.lastAnyRootEvidenceAt <= ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS;
+      nowMs - record.lastAnyRootEvidenceAt <=
+        ROOT_RECENT_ACTIVITY_FAILOVER_VETO_MS;
 
     let state: RootPeerLivenessState = 'unknown';
     if (!currentRoot) {
@@ -3858,7 +4117,8 @@ export class GroupCallAudioEngineRuntime {
     const currentRoot = topology.rootForwarder?.trim() ?? '';
     if (!currentRoot) return Date.now();
     if (this.rootPeerLiveness.currentRoot !== currentRoot) {
-      return typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
+      return typeof topology.lastSeen === 'number' &&
+        Number.isFinite(topology.lastSeen)
         ? topology.lastSeen
         : Date.now();
     }
@@ -3873,7 +4133,8 @@ export class GroupCallAudioEngineRuntime {
     if (candidates.length > 0) {
       return Math.max(...candidates);
     }
-    return typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
+    return typeof topology.lastSeen === 'number' &&
+      Number.isFinite(topology.lastSeen)
       ? topology.lastSeen
       : Date.now();
   }
@@ -3891,12 +4152,25 @@ export class GroupCallAudioEngineRuntime {
     }
     const lastSeenAt = this.getRootFailoverDeadlineAnchorMs(topology);
     const authorityConflictDelayMs =
-      this.authoritySettleUntilMs > Date.now() ? this.authoritySettleUntilMs : 0;
+      this.authoritySettleUntilMs > Date.now()
+        ? this.authoritySettleUntilMs
+        : 0;
     const delayMs = Math.max(
       250,
-      Math.max(lastSeenAt + ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS, authorityConflictDelayMs) -
-        Date.now()
+      Math.max(
+        lastSeenAt + ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS,
+        authorityConflictDelayMs
+      ) - Date.now()
     );
+    this.rootFailoverTimer = setTimeout(() => {
+      this.rootFailoverTimer = null;
+      void this.maybePromoteStandbyAfterRootHeartbeatTimeout();
+    }, delayMs);
+  }
+
+  private scheduleRootFailoverWatchForDeadline(deadlineMs: number): void {
+    this.clearRootFailoverTimer();
+    const delayMs = Math.max(250, deadlineMs - Date.now());
     this.rootFailoverTimer = setTimeout(() => {
       this.rootFailoverTimer = null;
       void this.maybePromoteStandbyAfterRootHeartbeatTimeout();
@@ -3910,23 +4184,30 @@ export class GroupCallAudioEngineRuntime {
     if (!topology || !roomId || !myAddress) return;
     const currentRoot = topology.rootForwarder?.trim() ?? '';
     const standby = topology.standbyForwarder?.trim() ?? '';
-    if (!currentRoot || currentRoot === myAddress || standby !== myAddress) return;
+    if (!currentRoot || currentRoot === myAddress || standby !== myAddress)
+      return;
     if (this.rootPeerLiveness.currentRoot !== currentRoot) {
       this.resetRootPeerLiveness(currentRoot);
     }
     const lastSeenAt = this.getRootFailoverDeadlineAnchorMs(topology);
     const nowMs = Date.now();
     const heartbeatSilentMs =
-      lastSeenAt > 0 ? Math.max(0, nowMs - lastSeenAt) : ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
-    const conflictingRoot = this.getConflictingRemoteRootForAuthorityWait(nowMs);
+      lastSeenAt > 0
+        ? Math.max(0, nowMs - lastSeenAt)
+        : ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS;
+    const conflictingRoot =
+      this.getConflictingRemoteRootForAuthorityWait(nowMs);
     if (conflictingRoot && nowMs < this.authoritySettleUntilMs) {
-      this.recordDiagEvent('root-heartbeat-timeout-suppressed-authority-conflict', {
-        roomId,
-        currentRoot,
-        conflictingRemoteRoot: conflictingRoot,
-        heartbeatSilentMs,
-        authoritySettleUntilMs: this.authoritySettleUntilMs,
-      });
+      this.recordDiagEvent(
+        'root-heartbeat-timeout-suppressed-authority-conflict',
+        {
+          roomId,
+          currentRoot,
+          conflictingRemoteRoot: conflictingRoot,
+          heartbeatSilentMs,
+          authoritySettleUntilMs: this.authoritySettleUntilMs,
+        }
+      );
       this.scheduleRootFailoverWatch();
       return;
     }
@@ -3947,15 +4228,53 @@ export class GroupCallAudioEngineRuntime {
       rootPeerRequiresReconnect &&
       rootNonHeartbeatEvidenceAgeMs <= ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS
     ) {
-      this.recordDiagEvent('root-heartbeat-timeout-suppressed-recent-root-evidence-grace', {
-        roomId,
-        currentRoot,
-        heartbeatSilentMs,
-        rootLivenessState: rootLiveness.state,
-        lastNonHeartbeatRootEvidenceAgeMs: rootNonHeartbeatEvidenceAgeMs,
-        graceMs: ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS,
-      });
+      this.recordDiagEvent(
+        'root-heartbeat-timeout-suppressed-recent-root-evidence-grace',
+        {
+          roomId,
+          currentRoot,
+          heartbeatSilentMs,
+          rootLivenessState: rootLiveness.state,
+          lastNonHeartbeatRootEvidenceAgeMs: rootNonHeartbeatEvidenceAgeMs,
+          graceMs: ROOT_RECENT_EVIDENCE_FAILOVER_GRACE_MS,
+        }
+      );
       this.scheduleRootFailoverWatch();
+      return;
+    }
+    const topologyMemberCount = new Set(
+      [
+        topology.rootForwarder,
+        topology.standbyForwarder,
+        ...topology.clusters.flatMap((cluster) => [
+          cluster.forwarder,
+          cluster.standby,
+          cluster.standby2,
+          ...cluster.members,
+        ]),
+      ]
+        .map((address) => address?.trim() ?? '')
+        .filter(Boolean)
+    ).size;
+    if (
+      rootPeerRequiresReconnect &&
+      topologyMemberCount <= 2 &&
+      heartbeatSilentMs < ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS
+    ) {
+      this.recordDiagEvent(
+        'root-heartbeat-timeout-suppressed-one-to-one-grace',
+        {
+          roomId,
+          currentRoot,
+          heartbeatSilentMs,
+          heartbeatTimeoutMs: ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS,
+          oneToOneTimeoutMs: ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS,
+          rootLivenessState: rootLiveness.state,
+        }
+      );
+      this.scheduleRootFailoverWatchForDeadline(
+        lastSeenAt + ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS
+      );
       return;
     }
     if (
@@ -3966,12 +4285,15 @@ export class GroupCallAudioEngineRuntime {
       })
     ) {
       if (!rootPeerRequiresReconnect) {
-        this.recordDiagEvent('root-heartbeat-timeout-suppressed-recent-root-activity', {
-          roomId,
-          currentRoot,
-          heartbeatSilentMs,
-          rootLivenessState: rootLiveness.state,
-        });
+        this.recordDiagEvent(
+          'root-heartbeat-timeout-suppressed-recent-root-activity',
+          {
+            roomId,
+            currentRoot,
+            heartbeatSilentMs,
+            rootLivenessState: rootLiveness.state,
+          }
+        );
       }
       this.scheduleRootFailoverWatch();
       return;
@@ -3980,9 +4302,15 @@ export class GroupCallAudioEngineRuntime {
       excludeAddress: currentRoot,
     });
     survivingAddresses.add(myAddress);
-    const sorted = await this.computeElectionOrder([...survivingAddresses], roomId);
+    const sorted = await this.computeElectionOrder(
+      [...survivingAddresses],
+      roomId
+    );
     const topologyEpoch =
-      Math.max(this.topology?.topologyEpoch ?? 0, this.lastObservedTopologyEpoch ?? 0) + 1;
+      Math.max(
+        this.topology?.topologyEpoch ?? 0,
+        this.lastObservedTopologyEpoch ?? 0
+      ) + 1;
     const promoted = normalizeGroupCallTopology({
       ...buildTopologyWithTrustedRoot(sorted, topologyEpoch, myAddress),
       roomId,
@@ -4003,7 +4331,10 @@ export class GroupCallAudioEngineRuntime {
       topologyEpoch,
       heartbeatSilentMs,
     });
-    const applied = await this.applyTopology(failoverTopology, 'local-election');
+    const applied = await this.applyTopology(
+      failoverTopology,
+      'local-election'
+    );
     if (applied) {
       await this.receiveEngine.configure({
         postFailoverRootHoldUntilMs:
@@ -4101,7 +4432,8 @@ export class GroupCallAudioEngineRuntime {
       ...topology,
       roomId: topology.roomId ?? this.snapshot.roomId,
       lastSeen:
-        typeof topology.lastSeen === 'number' && Number.isFinite(topology.lastSeen)
+        typeof topology.lastSeen === 'number' &&
+        Number.isFinite(topology.lastSeen)
           ? topology.lastSeen
           : Date.now(),
     });
@@ -4144,14 +4476,17 @@ export class GroupCallAudioEngineRuntime {
           normalized.lastSeen ?? Date.now(),
           'same-epoch-topology'
         );
-        traceGcallAudioSurface('pipeline: topology rejected by same-epoch authority', {
-          roomId: normalized.roomId,
-          source,
-          epoch: normalized.topologyEpoch,
-          incomingRoot: normalized.rootForwarder,
-          currentRoot: current.rootForwarder,
-          reason: winner.reason,
-        });
+        traceGcallAudioSurface(
+          'pipeline: topology rejected by same-epoch authority',
+          {
+            roomId: normalized.roomId,
+            source,
+            epoch: normalized.topologyEpoch,
+            incomingRoot: normalized.rootForwarder,
+            currentRoot: current.rootForwarder,
+            reason: winner.reason,
+          }
+        );
         return false;
       }
     }
@@ -4174,7 +4509,10 @@ export class GroupCallAudioEngineRuntime {
       this.lastObservedTopologyEpoch,
       normalized.topologyEpoch >>> 0
     );
-    if (normalized.rootForwarder?.trim() && normalized.rootForwarder !== myAddress) {
+    if (
+      normalized.rootForwarder?.trim() &&
+      normalized.rootForwarder !== myAddress
+    ) {
       this.updateTrustedRemoteRoot(
         normalized.rootForwarder,
         normalized.lastSeen ?? Date.now()
@@ -4182,7 +4520,10 @@ export class GroupCallAudioEngineRuntime {
       this.clearConflictingRemoteRootIfMatches(normalized.rootForwarder);
       this.topologyElectionDelayUntilMs = 0;
       this.clearProvisionalLocalRoot();
-    } else if (normalized.rootForwarder?.trim() === myAddress || source === 'local-election') {
+    } else if (
+      normalized.rootForwarder?.trim() === myAddress ||
+      source === 'local-election'
+    ) {
       this.resetRootAuthorityTracking();
       this.resetRootPeerLiveness();
       this.topologyElectionDelayUntilMs = 0;
@@ -4192,7 +4533,10 @@ export class GroupCallAudioEngineRuntime {
         ...normalized,
         roomId: this.snapshot.roomId,
       };
-      if (this.topology.rootForwarder?.trim() && this.topology.rootForwarder !== myAddress) {
+      if (
+        this.topology.rootForwarder?.trim() &&
+        this.topology.rootForwarder !== myAddress
+      ) {
         this.noteRootHeartbeat(
           this.topology.rootForwarder,
           this.topology.lastSeen ?? Date.now()
@@ -4222,7 +4566,10 @@ export class GroupCallAudioEngineRuntime {
         Date.now() + OCCUPIED_JOIN_AUTHORITY_WAIT_MS
       );
     }
-    if (this.topology.rootForwarder?.trim() && this.topology.rootForwarder !== myAddress) {
+    if (
+      this.topology.rootForwarder?.trim() &&
+      this.topology.rootForwarder !== myAddress
+    ) {
       this.noteRootHeartbeat(
         this.topology.rootForwarder,
         this.topology.lastSeen ?? Date.now()
@@ -4265,7 +4612,10 @@ export class GroupCallAudioEngineRuntime {
     return true;
   }
 
-  private updateTrustedRemoteRoot(rootForwarder: string, seenAtMs: number): void {
+  private updateTrustedRemoteRoot(
+    rootForwarder: string,
+    seenAtMs: number
+  ): void {
     const nextRoot = rootForwarder.trim();
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!nextRoot || nextRoot === myAddress) {
@@ -4285,14 +4635,18 @@ export class GroupCallAudioEngineRuntime {
     this.authoritySettleUntilMs = 0;
   }
 
-  private clearTrustedRemoteRootIfMatches(rootForwarder: string | null | undefined): void {
+  private clearTrustedRemoteRootIfMatches(
+    rootForwarder: string | null | undefined
+  ): void {
     const root = rootForwarder?.trim() ?? '';
     if (!root || this.trustedRemoteRoot !== root) return;
     this.trustedRemoteRoot = '';
     this.trustedRemoteRootLastSeenAt = 0;
   }
 
-  private clearConflictingRemoteRootIfMatches(rootForwarder: string | null | undefined): void {
+  private clearConflictingRemoteRootIfMatches(
+    rootForwarder: string | null | undefined
+  ): void {
     const root = rootForwarder?.trim() ?? '';
     if (!root || this.conflictingRemoteRoot !== root) return;
     this.conflictingRemoteRoot = '';
@@ -4409,11 +4763,14 @@ export class GroupCallAudioEngineRuntime {
         targetCount: addresses.length,
       });
     } catch (error) {
-      traceGcallAudioSurface('pipeline: failed to sync qortal reticulum targets', {
-        roomId,
-        groupId,
-        message: error instanceof Error ? error.message : 'unknown',
-      });
+      traceGcallAudioSurface(
+        'pipeline: failed to sync qortal reticulum targets',
+        {
+          roomId,
+          groupId,
+          message: error instanceof Error ? error.message : 'unknown',
+        }
+      );
     }
   }
 
@@ -4485,21 +4842,28 @@ export class GroupCallAudioEngineRuntime {
         this.participantRosterMissingSinceMs.delete(address);
         continue;
       }
-      const missingSince = this.participantRosterMissingSinceMs.get(address) ?? now;
+      const missingSince =
+        this.participantRosterMissingSinceMs.get(address) ?? now;
       this.participantRosterMissingSinceMs.set(address, missingSince);
       if (now - missingSince < PARTICIPANT_ROSTER_MISSING_EVICT_MS) continue;
       removedAddresses.push(address);
-      nextParticipants = nextParticipants.filter((current) => current.address !== address);
+      nextParticipants = nextParticipants.filter(
+        (current) => current.address !== address
+      );
     }
 
     let addedAny = false;
     for (const [address, { publicKey }] of rosterByAddress) {
       if (address === myAddress) continue;
-      const existing = nextParticipants.find((participant) => participant.address === address);
+      const existing = nextParticipants.find(
+        (participant) => participant.address === address
+      );
       if (existing) {
         if (publicKey && existing.publicKey !== publicKey) {
           nextParticipants = nextParticipants.map((participant) =>
-            participant.address === address ? { ...participant, publicKey } : participant
+            participant.address === address
+              ? { ...participant, publicKey }
+              : participant
           );
         }
         continue;
@@ -4511,7 +4875,11 @@ export class GroupCallAudioEngineRuntime {
       ]);
     }
 
-    if (removedAddresses.length === 0 && !addedAny && nextParticipants === this.snapshot.participants) {
+    if (
+      removedAddresses.length === 0 &&
+      !addedAny &&
+      nextParticipants === this.snapshot.participants
+    ) {
       return;
     }
 
@@ -4612,7 +4980,9 @@ export class GroupCallAudioEngineRuntime {
     );
   }
 
-  private collectTopologyAddresses(topology: GroupCallTopology | null): string[] {
+  private collectTopologyAddresses(
+    topology: GroupCallTopology | null
+  ): string[] {
     if (!topology) return [];
     const addresses = new Set<string>();
     const add = (addressValue: string | null | undefined): void => {
@@ -4709,9 +5079,13 @@ export class GroupCallAudioEngineRuntime {
     }
   }
 
-  private isBootstrapOnlyParticipant(addressValue: string | null | undefined): boolean {
+  private isBootstrapOnlyParticipant(
+    addressValue: string | null | undefined
+  ): boolean {
     const address = addressValue?.trim() ?? '';
-    return Boolean(address && this.bootstrapOnlyParticipantAddresses.has(address));
+    return Boolean(
+      address && this.bootstrapOnlyParticipantAddresses.has(address)
+    );
   }
 
   private filterBootstrapOnlyMediaTargets(targets: string[]): string[] {
@@ -4767,14 +5141,16 @@ export class GroupCallAudioEngineRuntime {
   ): boolean {
     const address = addressValue?.trim() ?? '';
     if (!address) return false;
-    const lastLiveEvidenceAt = this.participantLiveEvidenceLastSeenAt.get(address) ?? 0;
+    const lastLiveEvidenceAt =
+      this.participantLiveEvidenceLastSeenAt.get(address) ?? 0;
     if (
       lastLiveEvidenceAt > 0 &&
       nowMs - lastLiveEvidenceAt <= PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
     ) {
       return true;
     }
-    const lastDecodedMediaAt = this.participantDecodedMediaLastSeenAt.get(address) ?? 0;
+    const lastDecodedMediaAt =
+      this.participantDecodedMediaLastSeenAt.get(address) ?? 0;
     if (
       lastDecodedMediaAt > 0 &&
       nowMs - lastDecodedMediaAt <= PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS
@@ -4854,13 +5230,16 @@ export class GroupCallAudioEngineRuntime {
         nextDelay = Math.min(nextDelay, remaining + 50);
       }
     }
-    this.activeSpeakerRefreshTimer = setTimeout(() => {
-      this.activeSpeakerRefreshTimer = null;
-      this.refreshActiveSpeakerState();
-      if (this.snapshot.activeSpeakers.length > 0) {
-        this.scheduleActiveSpeakerRefresh();
-      }
-    }, Math.max(50, nextDelay));
+    this.activeSpeakerRefreshTimer = setTimeout(
+      () => {
+        this.activeSpeakerRefreshTimer = null;
+        this.refreshActiveSpeakerState();
+        if (this.snapshot.activeSpeakers.length > 0) {
+          this.scheduleActiveSpeakerRefresh();
+        }
+      },
+      Math.max(50, nextDelay)
+    );
   }
 
   private clearActiveSpeakerRefreshTimer(): void {
@@ -4883,9 +5262,13 @@ export class GroupCallAudioEngineRuntime {
     return true;
   }
 
-  private async getAuthoritativeRecipients(): Promise<Map<string, { publicKey: string }>> {
+  private async getAuthoritativeRecipients(): Promise<
+    Map<string, { publicKey: string }>
+  > {
     const recipients = new Map<string, { publicKey: string }>();
-    const mainRoster = await window.groupCall?.getRoomParticipants?.(this.snapshot.roomId);
+    const mainRoster = await window.groupCall?.getRoomParticipants?.(
+      this.snapshot.roomId
+    );
     const mainRosterAddresses = new Set<string>();
     for (const participant of mainRoster ?? []) {
       const address = participant?.address?.trim?.() ?? '';
@@ -4899,10 +5282,18 @@ export class GroupCallAudioEngineRuntime {
       ) {
         continue;
       }
-      setRosterPublicKey(recipients, participant.address, participant.publicKey);
+      setRosterPublicKey(
+        recipients,
+        participant.address,
+        participant.publicKey
+      );
     }
     for (const participant of mainRoster ?? []) {
-      setRosterPublicKey(recipients, participant?.address, participant?.publicKey);
+      setRosterPublicKey(
+        recipients,
+        participant?.address,
+        participant?.publicKey
+      );
     }
     return recipients;
   }
@@ -4925,7 +5316,9 @@ export class GroupCallAudioEngineRuntime {
       return;
     }
     if (!nextPublicKey) {
-      this.scheduleRoomKeyDistributionRetry('participant-joined-missing-public-key');
+      this.scheduleRoomKeyDistributionRetry(
+        'participant-joined-missing-public-key'
+      );
       return;
     }
     await this.sendTargetedRoomKey(
@@ -4942,13 +5335,11 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private async distributeRoomKey(roomKey: Uint8Array): Promise<void> {
-    if (!this.userInfo?.address || !this.snapshot.roomId || !this.callSessionId) return;
+    if (!this.userInfo?.address || !this.snapshot.roomId || !this.callSessionId)
+      return;
     const recipients = await this.getAuthoritativeRecipients();
-    const { encryptedKeys, omittedAddresses, failedAddresses } = encryptRoomKeyForRecipients(
-      roomKey,
-      recipients,
-      this.userInfo.address
-    );
+    const { encryptedKeys, omittedAddresses, failedAddresses } =
+      encryptRoomKeyForRecipients(roomKey, recipients, this.userInfo.address);
     const recipientAddrs = Object.keys(encryptedKeys);
     if (recipientAddrs.length === 0) {
       this.recordDiagEvent('room-key-distribution-skipped', {
@@ -5089,7 +5480,8 @@ export class GroupCallAudioEngineRuntime {
     publicKey: string,
     reason: string
   ): Promise<void> {
-    if (!this.userInfo?.address || !this.snapshot.roomId || !this.callSessionId) return;
+    if (!this.userInfo?.address || !this.snapshot.roomId || !this.callSessionId)
+      return;
     if (this.isBootstrapOnlyParticipant(toAddress)) {
       this.recordDiagEvent('bootstrap-only-targeted-key-skipped', {
         roomId: this.snapshot.roomId,
@@ -5189,7 +5581,7 @@ export class GroupCallAudioEngineRuntime {
     // authoritative key recovery is meant to repair.
     if (
       typeof payload.mediaSessionGeneration === 'number' &&
-      (payload.mediaSessionGeneration >>> 0) !== (this.mediaSessionGeneration >>> 0)
+      payload.mediaSessionGeneration >>> 0 !== this.mediaSessionGeneration >>> 0
     ) {
       return;
     }
@@ -5232,12 +5624,18 @@ export class GroupCallAudioEngineRuntime {
           this.outboundEncodedFrameCallbacks++;
           this.outboundLastEncodedFrameAtMs = Date.now();
           this.receiveEngine.recordSenderPreEncodePipeline({
-            workletToMainThreadMs: Math.max(0, encoderInputPerfMs - capturePerfMs),
+            workletToMainThreadMs: Math.max(
+              0,
+              encoderInputPerfMs - capturePerfMs
+            ),
             mainThreadToEncoderOutputMs: Math.max(
               0,
               encodeOutPerfMs - encoderInputPerfMs
             ),
-            workletToEncoderOutputMs: Math.max(0, encodeOutPerfMs - capturePerfMs),
+            workletToEncoderOutputMs: Math.max(
+              0,
+              encodeOutPerfMs - capturePerfMs
+            ),
           });
           void this.dispatchEncodedFrame(opusFrame, encodeOutPerfMs);
         },
@@ -5260,15 +5658,15 @@ export class GroupCallAudioEngineRuntime {
   private ensureDecryptPool(): DecryptWorkerPool | null {
     if (this.decryptPool) return this.decryptPool;
     if (typeof Worker === 'undefined') {
-      traceGcallAudioSurface('pipeline: Worker API missing; decrypt pool disabled', {});
+      traceGcallAudioSurface(
+        'pipeline: Worker API missing; decrypt pool disabled',
+        {}
+      );
       return null;
     }
     const hardware = Math.max(
       1,
-      Math.min(
-        4,
-        Math.floor((navigator.hardwareConcurrency || 2) - 1) || 1
-      )
+      Math.min(4, Math.floor((navigator.hardwareConcurrency || 2) - 1) || 1)
     );
     this.decryptPool = new DecryptWorkerPool({
       initialSize: Math.max(1, Math.min(2, hardware)),
@@ -5290,7 +5688,9 @@ export class GroupCallAudioEngineRuntime {
     return this.decryptPool;
   }
 
-  private async syncDecryptPoolRoomKey(roomKey: Uint8Array | null): Promise<void> {
+  private async syncDecryptPoolRoomKey(
+    roomKey: Uint8Array | null
+  ): Promise<void> {
     const pool = this.ensureDecryptPool();
     if (!pool) return;
     const nextVersion = (this.decryptPoolKeyVersion + 1) >>> 0;
@@ -5307,14 +5707,18 @@ export class GroupCallAudioEngineRuntime {
   private async handleDecryptPoolEntry(
     entry: DecryptPoolDecryptBatchHandlerInput
   ): Promise<void> {
-    const ingressPeerAddress = this.pendingDecryptIngressById.get(entry.id) ?? '';
+    const ingressPeerAddress =
+      this.pendingDecryptIngressById.get(entry.id) ?? '';
     this.pendingDecryptIngressById.delete(entry.id);
     if (entry.status === 'decode-failed') {
       this.receiveEngine.recordDecodeFailure();
-      traceGcallAudioSurface('pipeline: decrypt worker reported decode-failed', {
-        id: entry.id,
-        from: ingressPeerAddress,
-      });
+      traceGcallAudioSurface(
+        'pipeline: decrypt worker reported decode-failed',
+        {
+          id: entry.id,
+          from: ingressPeerAddress,
+        }
+      );
       if (!this.noteRootDecodeFailureForPeerKeyReplay(ingressPeerAddress)) {
         this.noteWorkerDecodeFailureForKeyRecovery();
       }
@@ -5328,7 +5732,7 @@ export class GroupCallAudioEngineRuntime {
     }
     const decodedPackets = entry.decoded
       ? [entry.decoded]
-      : entry.decodedMulti ?? [];
+      : (entry.decodedMulti ?? []);
     await this.receiveEngine.handleDecodedPackets(decodedPackets);
   }
 
@@ -5376,15 +5780,22 @@ export class GroupCallAudioEngineRuntime {
       getReticulumTransportTargets(this.userInfo.address, this.topology)
     );
     if (targets.length === 0) {
-      const fallbackTargets = this.getRecentLiveMediaFallbackTargets(Date.now());
+      const fallbackTargets = this.getRecentLiveMediaFallbackTargets(
+        Date.now()
+      );
       if (fallbackTargets.length > 0) {
         targets = fallbackTargets;
-        this.recordDiagEvent('outbound-media-targets-recovered-from-live-evidence', {
-          roomId: this.snapshot.roomId,
-          topologyEpoch: this.topology.topologyEpoch,
-          targetCount: targets.length,
-          targets: targets.map((address) => truncateGcallDiagAddress(address)),
-        });
+        this.recordDiagEvent(
+          'outbound-media-targets-recovered-from-live-evidence',
+          {
+            roomId: this.snapshot.roomId,
+            topologyEpoch: this.topology.topologyEpoch,
+            targetCount: targets.length,
+            targets: targets.map((address) =>
+              truncateGcallDiagAddress(address)
+            ),
+          }
+        );
       }
     }
     this.outboundLastTargets = [...targets];

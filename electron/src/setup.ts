@@ -1771,7 +1771,14 @@ export async function startDecentralizedStunAfterP2P(
 
 export async function ensureReticulumManagersStarted(): Promise<void> {
   let bridgeTransport = getReticulumBridge();
-  if (!bridgeTransport) {
+  if (bridgeTransport) {
+    try {
+      await bridgeTransport.start();
+    } catch (err) {
+      loggerError('[ReticulumBridge] Failed to finish startup:', err);
+      registerLateReticulumBridgeRecovery();
+    }
+  } else {
     try {
       bridgeTransport = await startReticulumBridge();
     } catch (err) {

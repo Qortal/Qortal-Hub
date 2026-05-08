@@ -302,6 +302,9 @@ function selectSingleSourceReceiveProfile(
   if (ctx.repairCollapseHold) {
     return 'repair-collapse';
   }
+  if (ctx.repairHeavyPressure) {
+    return 'repair-heavy-connected';
+  }
   if (ctx.silentLeanHold || ctx.silentLeanPressure) {
     return 'silent-lean';
   }
@@ -311,7 +314,7 @@ function selectSingleSourceReceiveProfile(
   if (ctx.postFailoverRootProfileActive) {
     return 'post-failover-stabilization';
   }
-  if (ctx.repairHeavyHold || ctx.repairHeavyPressure) {
+  if (ctx.repairHeavyHold) {
     return 'repair-heavy-connected';
   }
   if (
@@ -1496,6 +1499,12 @@ export class GroupCallAudioReceiveEngine {
             state.underTargetEma >=
               GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN ||
             state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX);
+        const startupBufferedNotReadyPressure =
+          !state.lastJitterHasReadyFrame &&
+          state.sampleCount === 0 &&
+          playoutDiagnostics.jitterActive &&
+          playoutDiagnostics.playbackNodeActive &&
+          playoutDiagnostics.schedulerNodeActive;
         const persistentLeanPressure =
           !state.lastConcealmentUsed &&
           !(
@@ -1503,6 +1512,7 @@ export class GroupCallAudioReceiveEngine {
             (bufferedNotReadyReserveCandidate ||
               bufferedNotReadyRecoveryPressure ||
               bufferedNotReadyDamagedLeanPressure ||
+              startupBufferedNotReadyPressure ||
               diagnosticBufferedNotReadyPressure)
           ) &&
           latestBufferedMs <=
@@ -1638,6 +1648,7 @@ export class GroupCallAudioReceiveEngine {
         const bufferedNotReadyConcealmentOk =
           state.concealmentEma <=
             GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_CONCEALMENT_EMA_MAX ||
+          startupBufferedNotReadyPressure ||
           bufferedNotReadyReadyGapPressure ||
           bufferedNotReadyRecoveryPressure ||
           bufferedNotReadyDamagedLeanPressure ||
@@ -1645,13 +1656,15 @@ export class GroupCallAudioReceiveEngine {
         const bufferedNotReadyPressure =
           !state.lastJitterHasReadyFrame &&
           bufferedNotReadyConcealmentOk &&
-          (diagnosticBufferedNotReadyPressure ||
+          (startupBufferedNotReadyPressure ||
+            diagnosticBufferedNotReadyPressure ||
             bufferedNotReadyReadyGapPressure ||
             bufferedNotReadyRecoveryPressure ||
             bufferedNotReadyDamagedLeanPressure ||
             state.bufferedMsEma >=
               GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_BUFFERED_MS_MIN) &&
-          (diagnosticBufferedNotReadyPressure ||
+          (startupBufferedNotReadyPressure ||
+            diagnosticBufferedNotReadyPressure ||
             bufferedNotReadyReadyGapPressure ||
             bufferedNotReadyRecoveryPressure ||
             bufferedNotReadyDamagedLeanPressure ||
@@ -1659,18 +1672,22 @@ export class GroupCallAudioReceiveEngine {
               GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_PREBUFFER_FRAMES_MAX ||
             state.oldestFrameAgeEma >=
               GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_INGRESS_AGE_MIN_MS) &&
-          (diagnosticBufferedNotReadyPressure ||
+          (startupBufferedNotReadyPressure ||
+            diagnosticBufferedNotReadyPressure ||
             bufferedNotReadyDamagedLeanPressure ||
             state.underTargetEma >=
               GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_UNDERTARGET_EMA_MIN) &&
-          state.deltaMsEma <=
-            GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_DELTA_MAX_MS &&
-          state.rateEma <= GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_RATE_EMA_MAX &&
+          (startupBufferedNotReadyPressure ||
+            state.deltaMsEma <=
+              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_DELTA_MAX_MS) &&
+          (startupBufferedNotReadyPressure ||
+            state.rateEma <=
+              GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_RATE_EMA_MAX) &&
           !repairCollapseHold &&
           !repairCollapsePressure &&
           !silentLeanPressure &&
           !persistentLeanPressure;
-        if (bufferedNotReadyPressure) {
+        if (bufferedNotReadyPressure && !startupBufferedNotReadyPressure) {
           state.bufferedNotReadyHoldUntilMs = Math.max(
             state.bufferedNotReadyHoldUntilMs,
             nowMs + GCALL_SINGLE_SOURCE_BUFFERED_NOT_READY_HOLD_MS
@@ -1874,7 +1891,9 @@ export class GroupCallAudioReceiveEngine {
               state.deltaMsEma <
                 GCALL_SINGLE_SOURCE_REPAIR_COLLAPSE_CLEAR_DELTA_MIN_MS ||
               !state.lastJitterHasReadyFrame)) ||
-          ((profile === 'silent-lean' || profile === 'buffered-not-ready') &&
+          ((profile === 'silent-lean' ||
+            (profile === 'buffered-not-ready' &&
+              !startupBufferedNotReadyPressure)) &&
             (!state.lastJitterHasReadyFrame ||
               state.bufferedMsEma <
                 GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN ||
@@ -2227,6 +2246,12 @@ export class GroupCallAudioReceiveEngine {
     });
     this.playouts.set(sourceAddr, playout);
     this.outputNodeBySource.set(sourceAddr, output);
+    this.getOrCreateLiveMultiSourceState(
+      sourceAddr,
+      computeStaticPlayoutTargetMsForTuning(
+        getGroupCallAudioTuning(this.config.profile)
+      )
+    );
     this.syncAllPlayoutAdaptiveGeometry();
     this.syncLiveMultiSourceControls();
     this.updateResourceCounts();
