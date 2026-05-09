@@ -3632,3 +3632,694 @@ Current patched target:
 - Primary fix: explain and eliminate the same-room call-session mismatch and the root-side startup no-target run. This pair has different `callSessionId` values on the two sides and `totalNoTargetSkipsDelta=601` on Side A before receive playouts exist. That is outside receive profile tuning and should be handled first.
 - Secondary fix: selector damage-hold still needs attention after the state/session issue is cleared. Side B repeatedly reports large missing-frame bursts under `steady-weak-listener`; the current end state is correctly `collapse-recovery`, but the dominant profile is too weak for the call.
 - Keep baseline unchanged and do not add a new receive profile from this pair.
+
+## Call: 2026-05-09 19:30Z / group 937
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-116.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T19-30-19-007Z.json`
+
+User symptom:
+- New post-change call. Subjectively good for roughly the first 1-2 minutes, then progressively worse.
+
+High-level verdict:
+- Bad, but more narrowly policy-dominated than the previous pair.
+- The retained 300-sample trend window starts after the likely good opening. Inside that window both sides are already in recovery and keep accumulating repair damage. The prior call-session mismatch is gone: both sides agree on room `gcall-qortal-937`, topology epoch `2`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, and call session `5c236dbf-31a0-4256-9194-92bd825527b2`.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Link collapse: both sides use link transport for inbound and outbound audio, with `reticulumAudioPacketSendFailures=0`.
+- Queue/backpressure: `reticulumAudioBridgeWaitingForDrain=false`, no queue-pressure drops, no stale drops, no link-unready drops, and binary queue high water is only `2` on both sides. Side A bridge high water reaches `17`, but without drain wait or drops.
+- Startup/send-target: unlike the previous pair, `totalNoTargetSkipsDelta=0` on both sides during the sampled window. Side A has historical cumulative no-target skips, but none are growing in this review window.
+- Authority/topology/session: both sides agree on epoch `2`, root/standby, room key state, participant count, media session generation `1`, and call session.
+
+Primary next target:
+- Selector.
+- The previous session/send-target target should move to regression watch for this pair. The current failure is receive-policy classification and damage hold: Side B spends `218/300` samples in `silent-lean` despite `missingFrames=4277`, `concealmentTicks=386`, `avgPcmBufferedMs=5.243`, and repeated large missing-frame bursts. Side A is less collapsed but still lets `clean-low-latency` appear `29/300` samples while damage keeps accumulating.
+- This is not a baseline fix yet. Baseline is not dominating the bad side, and both sides are already in recovery mode. It is also not primarily profile strength: the strong `collapse-recovery` target/floor exists and is correct when selected, but the selector keeps falling back to `silent-lean`, `steady-weak-listener`, or even `clean-low-latency` between bursts.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `steady-weak-listener` | yes | 37.219 | 2457 | 193 | 0.114 | 0.031 | recovery | Current profile is `steady-weak-listener`; window includes `repair-collapse` and `repair-heavy-connected`, but also `29` false-clean samples while missing frames continue. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `silent-lean` | yes | 5.243 | 4277 | 386 | 0.005 | 0.004 | recovery | Current profile is correctly `collapse-recovery`, but dominant window profile is far too weak for near-empty reserve plus repeated missing-frame and concealment bursts. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-heavy-connected` or `repair-collapse` during ready missing-frame bursts, and `collapse-recovery` during not-ready concealment runs. `steady-weak-listener` is acceptable only for quieter recovery intervals. `clean-low-latency` should not appear while recent repair damage is still active.
+
+Actual exported profile:
+- Dominant sampled profile: `steady-weak-listener` (`131` samples).
+- Other significant samples: `repair-collapse` (`71`), `repair-heavy-connected` (`50`), `clean-low-latency` (`29`), `collapse-recovery` (`15`), `persistent-lean` (`3`), `buffered-not-ready` (`1`).
+- Current exported profile: `steady-weak-listener`.
+
+Did classification match?
+- Partly/no.
+
+Notes:
+- Side A has enough buffered reserve on paper (`avgPcmBufferedMs=37.219`) that it does not look like the near-empty Side B collapse, but it still accumulates `totalMissingFramesDelta=2108` and `totalConcealmentTicksDelta=81` in the sampled window.
+- The strongest mismatch is the reappearance of `clean-low-latency` while damage is still ongoing: examples include `missingFramesDelta=14`, `11`, `8`, later `8`, `16`, and then `70` under `clean-low-latency`.
+- Current live state is weaker than the damage history suggests: `bufferedMsEma=50.430`, `deltaMsEma=-132.084`, `missingFrameEma=0.172`, target/floor `172`/`172`, and only `postRecovery` hold remains.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery` should dominate after the call becomes bad. `silent-lean` can explain shallow reserve with low current concealment, but it should not dominate a window with thousands of missing frames, hundreds of concealment ticks, and repeated large missing-frame bursts.
+
+Actual exported profile:
+- Dominant sampled profile: `silent-lean` (`218` samples).
+- Other significant samples: `collapse-recovery` (`36`), `repair-collapse` (`34`), `persistent-lean` (`7`), `buffered-not-ready` (`5`).
+- Current exported profile: `collapse-recovery`.
+
+Did classification match?
+- No for the sampled bad window; yes for the final current state.
+
+Notes:
+- Current state is correctly severe: `collapse-recovery`, `bufferedMsEma=0.00009`, `deltaMsEma=-185.000`, `lastJitterHasReadyFrame=false`, target/floor `304`/`280`, with severe/repair/buffered/lean holds all active.
+- The dominant sampled profile is wrong for the symptom and metrics. Side B reaches `missingFrames=4277`, `concealmentTicks=386`, `totalMissingFramesDelta=3228`, and `totalConcealmentTicksDelta=311` while `silent-lean` owns most samples.
+- Large bursts still happen under weak classes, including `missingFramesDelta=175`, `125`, `98`, `88`, `86`, `80`, `49`, and many smaller ongoing deltas under `silent-lean`.
+
+## Trend Read
+
+Side A:
+- Oscillating repair recovery with false-clean dips.
+- Reasons seen:
+  - `recoverySamples=230`, so this is not a fully baseline call.
+  - Repeated repair/collapse stretches are followed by `steady-weak-listener` or `clean-low-latency` before damage is quiet.
+  - Late burst sequence includes `collapse-recovery` concealment, then `missingFramesDelta=98`, then `missingFramesDelta=70` under `clean-low-latency`.
+
+Side B:
+- Progressive/flat-bad after the retained window begins, with near-empty reserve and repeated burst recovery.
+- Reasons seen:
+  - `recoverySamples=300`; no clean-low-latency samples.
+  - `silent-lean` dominates `218/300` samples despite near-empty `avgPcmBufferedMs` around `5.2-5.7 ms`.
+  - Repeated not-ready concealment runs under `collapse-recovery` are followed by large ready bursts that often fall back to `silent-lean`.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-09T19:30Z group-937` | A / Linux root epoch 2 | `steady-weak-listener` | yes | partly/no | selector / false-clean and weak clear during repair damage | Primary: prevent `clean-low-latency` and weak-listener fallback until recent missing-frame/concealment bursts are quiet for a sustained window. |
+| `2026-05-09T19:30Z group-937` | B / Linux standby epoch 2 | `silent-lean` | yes | no/current partly yes | selector / high-damage silent-lean under-classification | Primary: promote or hold `repair-collapse`/`collapse-recovery` after large missing-frame bursts and not-ready concealment, even when current under-target/rate fractions look modest. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: strengthen the damage latch between `silent-lean` / `steady-weak-listener` / `clean-low-latency` and the repair/collapse profiles. Recent large `missingFramesDelta` or repeated not-ready concealment should keep a source in `repair-collapse` or `collapse-recovery` until both missing-frame and concealment deltas are quiet for a sustained clear window.
+- Keep session/send-target startup as regression watch only. This pair no longer reproduces the mismatched session or growing no-target skip symptom.
+- Keep baseline unchanged. Do not add a new profile from this call; the existing repair/collapse profiles match the bad window when selected, but selection and clear timing are still wrong.
+
+## Call: 2026-05-09 19:45Z / group 812 / 3 participants
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Receiver A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T19-45-19-515Z.json`
+- Receiver B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T19-45-10-385Z.json`
+- Receiver C: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T19-45-24-187Z.json`
+
+User symptom:
+- New 3+ participant call. No separate subjective per-listener symptom was included; infer badness from each receiver's window damage and multi-source receive profiles.
+
+High-level verdict:
+- Bad / mixed, policy-dominated.
+- All three exports agree on room `gcall-qortal-812`, topology epoch `3`, root `QMe6E7...6VFZ`, standby `QeJW96...j5W9`, participant count `3`, media session generation `1`, and call session `61e0a042-3a76-4825-a5ae-dfb6bb41e3d4`. The previous session mismatch and no-target startup failure are not reproduced.
+- The new 3+ profile family is too coarse: each receiver applies the same `multi-clean-low-latency` / `multi-protected-recovery` class to both remote sources, then clears both sources together even while missing-frame damage continues.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on all three exports.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on all three exports.
+- Link transport: all exports use link transport for inbound and outbound audio, with `reticulumAudioPacketSendFailures=0`.
+- Queue/backpressure: `reticulumAudioBridgeWaitingForDrain=false`, no queue-pressure drops, no stale drops, and no link-unready drops. Queue high-water values are modest (`3/2`, `15/3`, `3/4` for bridge/binary).
+- Startup/send-target: `totalNoTargetSkipsDelta=0` on all three retained windows. Root has historical cumulative `outboundNoTargetSkips=218`, but it is not growing in this review window.
+- Authority/session: all three agree on epoch, root/standby, participant count, room key presence, media session generation, and call session.
+
+Primary next target:
+- Selector / multi-source profile granularity and clear hysteresis.
+- Do not tune the global baseline from this call. The main failure is that `multi-clean-low-latency` becomes dominant while the receivers still accumulate large missing-frame deltas. Do not treat this as single-source profile strength either: the new multi profiles are hiding source-specific damage by clearing both sources as a group.
+- The next fix should make 3+ receive classification source-sensitive: near-empty or not-ready damaged sources need a protected/repair class even if another source is buffered, and `multi-clean-low-latency` should not clear while recent missing-frame or concealment bursts remain active for any source.
+
+| Receiver | Role | Remote Sources | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QMe6E7...6VFZ` | `QP9Jj4...i6rP`, `QeJW96...j5W9` | `multi-clean-low-latency` | yes/inferred | 60.926 | 6456 | 553 | 0.134 | 0.075 | low-latency | Both sources split `154` clean / `146` protected samples; final clean clear happens despite late missing-frame deltas `35` and `43`. |
+| B | standby-forwarder / Linux / `QeJW96...j5W9` | `QMe6E7...6VFZ`, `QP9Jj4...i6rP` | `multi-clean-low-latency` | yes/inferred | 11.290 | 6060 | 383 | 0.021 | 0.011 | low-latency | Both sources split `153` clean / `147` protected samples; `QP9Jj4` is not-ready in `51/300` samples, but clears with the healthier root source. |
+| C | participant / Linux / `QP9Jj4...i6rP` | `QMe6E7...6VFZ`, `QeJW96...j5W9` | `multi-clean-low-latency` | yes/inferred | 5.200 | 4288 | 296 | 0.003 | 0.002 | low-latency | Both sources are clean for `285/300` samples despite near-empty aggregate reserve and large bursts, including `missingFramesDelta=524`. |
+
+### Receiver A / Root `QMe6E7...6VFZ`
+
+Expected profile from symptom:
+- Mixed per-source classification: `multi-protected-recovery` or a source-specific repair/collapse class for the damaged source, with `multi-clean-low-latency` only after recent missing-frame and not-ready/concealment bursts are quiet.
+
+Actual exported profile:
+- `QP9Jj4...i6rP`: `multi-clean-low-latency` (`154` samples), `multi-protected-recovery` (`146` samples).
+- `QeJW96...j5W9`: `multi-clean-low-latency` (`154` samples), `multi-protected-recovery` (`146` samples).
+- Current live profile: `multi-clean-low-latency` for both sources.
+
+Did classification match?
+- Partly/no.
+
+Notes:
+- This receiver has plenty of aggregate reserve (`avgPcmBufferedMs=60.926`) but still has bad playout pressure (`playoutUnderTargetFraction=0.134`, `playoutRateFractionBelow097=0.075`) and high damage (`totalMissingFramesDelta=4250`, `totalConcealmentTicksDelta=252`).
+- The final trend rows show `multi-clean-low-latency` clearing while `missingFramesDelta` is still `35` then `43`.
+- One source has a live repair hold (`QP9Jj4...i6rP` has `lastAppliedTargetMs=196`, `lastAppliedFloorMs=196`, `repairCollapse=973 ms` remaining), but the exported profile is still `multi-clean-low-latency`.
+
+### Receiver B / Standby `QeJW96...j5W9`
+
+Expected profile from symptom:
+- Mixed per-source classification: `multi-protected-recovery` for not-ready or near-empty damaged sources, with clean allowed only for genuinely quiet ready sources.
+
+Actual exported profile:
+- `QMe6E7...6VFZ`: `multi-clean-low-latency` (`153` samples), `multi-protected-recovery` (`147` samples).
+- `QP9Jj4...i6rP`: `multi-clean-low-latency` (`153` samples), `multi-protected-recovery` (`147` samples).
+- Current live profile: `multi-clean-low-latency` for both sources.
+
+Did classification match?
+- Partly/no.
+
+Notes:
+- This receiver is the clearest source-specific mismatch: `QP9Jj4...i6rP` is not-ready in `51/300` trend samples, while `QMe6E7...6VFZ` is not-ready only once.
+- Despite that asymmetry, both sources receive identical profile counts and clear together.
+- The aggregate window is still bad: `totalMissingFramesDelta=4146`, `totalConcealmentTicksDelta=260`, and top missing-frame bursts include `107`, `94`, `83`, `72`, and `67`.
+
+### Receiver C / Participant `QP9Jj4...i6rP`
+
+Expected profile from symptom:
+- `multi-protected-recovery` or source-specific repair/collapse should dominate because the receiver is near-empty for the whole retained window and still accumulating missing frames.
+
+Actual exported profile:
+- `QMe6E7...6VFZ`: `multi-clean-low-latency` (`285` samples), `multi-protected-recovery` (`15` samples).
+- `QeJW96...j5W9`: `multi-clean-low-latency` (`285` samples), `multi-protected-recovery` (`15` samples).
+- Current live profile: `multi-clean-low-latency` for both sources.
+
+Did classification match?
+- No.
+
+Notes:
+- This side has `avgPcmBufferedMs=5.200`, `jitterBufferDepthFramesMean=0.135`, `avgPlayoutDeltaMs=-176.299`, `missingFrames=4288`, and `concealmentTicks=296`.
+- The window includes a discrete severe burst: top `missingFramesDelta` values are `524`, `142`, and `29`; top concealment deltas are `17`, `17`, `16`, `16`, and `16`.
+- `multi-clean-low-latency` dominating `285/300` samples is not compatible with near-empty reserve plus a `524` missing-frame spike.
+
+## Trend Read
+
+Receiver A:
+- Oscillating grouped multi-profile with late false-clean clear.
+- Reasons seen:
+  - `entered-recovery` appears `36` times.
+  - both sources alternate together between `multi-clean-low-latency` and `multi-protected-recovery`.
+  - late damage continues under clean: final rows include `missingFramesDelta=35` and `43` after clearing back to `multi-clean-low-latency`.
+
+Receiver B:
+- Oscillating grouped multi-profile with source asymmetry hidden by the profile.
+- Reasons seen:
+  - `entered-recovery` appears `40` times.
+  - `QP9Jj4...i6rP` is not-ready in `51/300` samples, but both sources have identical profile counts.
+  - late clean rows still accumulate `missingFramesDelta=31`, then smaller `6`, `4`, `11`, `12`, `10`, `10`, and `14` deltas.
+
+Receiver C:
+- Mostly false-clean near-empty receive, with a discrete severe burst.
+- Reasons seen:
+  - only `15/300` protected samples despite near-empty aggregate reserve.
+  - top missing-frame deltas include `524` and `142`.
+  - both sources remain `multi-clean-low-latency` through the final rows while missing frames continue rising by `3-9` frames per second.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-09T19:45Z group-812` | A / Linux root epoch 3 / 3-way | `multi-clean-low-latency` | yes/inferred | partly/no | selector / grouped multi clear during repair damage | Make multi clean-clear source-sensitive and block clean while recent missing-frame/concealment bursts remain active on any source. |
+| `2026-05-09T19:45Z group-812` | B / Linux standby epoch 3 / 3-way | `multi-clean-low-latency` | yes/inferred | partly/no | selector / source asymmetry hidden by multi profile | Separate per-source readiness/damage classification; `QP9Jj4` not-ready samples should not clear with the healthier source. |
+| `2026-05-09T19:45Z group-812` | C / Linux participant epoch 3 / 3-way | `multi-clean-low-latency` | yes/inferred | no | selector / false-clean near-empty multi receive | Promote/hold protected recovery for near-empty multi receive after large missing-frame bursts; this is the strongest regression target. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: introduce stronger source-sensitive multi-party receive classification and clean-clear hysteresis. `multi-clean-low-latency` must not dominate when one source is near-empty/not-ready or when recent missing-frame/concealment bursts are still active.
+- Keep session/send-target startup as regression watch only. This 3-way call has consistent session/topology and no growing no-target skips.
+- Keep baseline unchanged and do not add a new profile yet. The existing multi classes are probably enough as names, but their selector/clear logic is currently too coarse for mixed-source 3+ calls.
+
+## Call: 2026-05-09 20:28Z / group 937
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-117.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T20-28-24-337Z.json`
+
+User symptom:
+- New post-change two-person group call. No separate subjective quality note was included with the exports; infer badness from the retained-window damage and recovery profiles.
+
+High-level verdict:
+- Bad / mixed, with both receive-policy and startup/send-target evidence.
+- Both final exports agree on room `gcall-qortal-937`, topology epoch `2`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, participant count `2`, media session generation `1`, and final call session `a47821bf-f52c-4e84-92cf-cb22d6ef7b41`.
+- Unlike the previous clean two-person review, Side A again has growing outbound no-target skips during the retained window: `totalNoTargetSkipsDelta=1421`. Side B also bootstrapped from a one-participant cached session `9b4ccfff-6006-497b-8873-043b0996f14c` before settling on the final session.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, pending-decrypt depth/high-water `0`, and `totalPendingDecryptDelta=0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Link transport: both sides use link transport for inbound and outbound audio, with `reticulumAudioPacketSendFailures=0`.
+- Authority steady state: final topology/session/root/standby state matches on both sides.
+- Baseline: neither side is living in ordinary `clean-low-latency`; both sides are in recovery for almost the whole sampled bad window.
+
+Primary next target:
+- Another subsystem first: startup/send-target correctness, then selector/profile-strength follow-up.
+- The revived root-side no-target run is outside receive profile tuning and should be fixed before using this pair as clean evidence for receive-only tuning. Side A reports `1421` no-target skips during the retained window while Side B has repeated early `zero-inbound-media-recovery-requested` events before packets arrive.
+- After that is cleared, this same pair still supports receive tuning: Side B is under-classified as `persistent-lean`/`silent-lean` while accumulating large missing-frame bursts, and Side A remains audibly bad by metrics even under `collapse-recovery`/`repair-collapse`, which may require stronger collapse profile target/floor behavior.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `collapse-recovery` | yes/inferred | 4.367 | 1211 | 4580 | 0.057 | 0.055 | recovery | Strong profiles dominate (`138` collapse, `86` repair-collapse), but the side still has severe concealment and `1421` outbound no-target skips early in the retained window. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `persistent-lean` | yes/inferred | 5.909 | 1758 | 132 | 0.006 | 0.004 | recovery | Dominant profile is too weak for repeated missing-frame bursts; final/current state is correctly `collapse-recovery`. |
+
+### Side A
+
+Expected profile from symptom:
+- `collapse-recovery` or `repair-collapse`, because the listener is near-empty (`avgPcmBufferedMs=4.367`, `avgPlayoutDeltaMs=-177.350`) and has severe concealment (`concealmentTicks=4580`).
+
+Actual exported profile:
+- Dominant sampled profile: `collapse-recovery` (`138` samples).
+- Other significant samples: `repair-collapse` (`86`), `silent-lean` (`13`), `repair-heavy-connected` (`4`), `persistent-lean` (`4`), `steady-weak-listener` (`2`), `buffered-not-ready` (`1`).
+- Current exported profile: `collapse-recovery`.
+
+Did classification match?
+- Mostly yes for receive classification, but the call still fails.
+
+Notes:
+- This is not the same under-classification shape as the 19:30Z Side B case. Side A spends most profile-tagged samples in strong collapse/repair classes, and those classes carry most damage (`collapse-recovery`: `2381` concealment delta; `repair-collapse`: `1667` concealment delta).
+- The mismatch is more profile strength or non-receive-path than selector: the strong class is selected, but the buffer stays near empty and concealment remains high.
+- The first `29` trend samples have no receive profile and account for `1421` outbound no-target skips. That startup/send-target signal must be separated from receive profile judgment.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery` after the missing-frame bursts begin. `persistent-lean` can explain low reserve only if current damage is mild, which is not true for this window.
+
+Actual exported profile:
+- Dominant sampled profile: `persistent-lean` (`99` samples).
+- Other significant samples: `silent-lean` (`53`), `repair-collapse` (`22`), `collapse-recovery` (`17`), `steady-weak-listener` (`3`), `buffered-not-ready` (`3`).
+- Current exported profile: `collapse-recovery`.
+
+Did classification match?
+- No for the sampled bad window; yes for the final current state.
+
+Notes:
+- Side B reaches `missingFrames=1758` with `totalMissingFramesDelta=1758`, while `persistent-lean` owns `686` missing-frame delta and `silent-lean` owns another `317`.
+- Large bursts include `missingFramesDelta=261`, `175`, `68`, `65`, `48`, `36`, `35`, `34`, and `33`.
+- The low under-target/rate fractions are misleading here. They do not justify weak profile dominance when reserve is near empty and missing frames are accumulating.
+
+## Trend Read
+
+Side A:
+- Mixed startup gap followed by flat-bad collapse recovery.
+- Reasons seen:
+  - `totalNoTargetSkipsDelta=1421` occurs before receive profiles exist in the retained window.
+  - After receive begins, the side is mostly in `collapse-recovery`/`repair-collapse`.
+  - Damage continues under strong profiles, especially concealment spikes up to `86`, `73`, `67`, `66`, and `62`.
+
+Side B:
+- Startup/zero-inbound recovery, then persistent under-classified missing-frame damage.
+- Reasons seen:
+  - Early events include repeated `zero-inbound-media-recovery-requested` with `packetsReceived=0`.
+  - `persistent-lean`/`silent-lean` dominate `152/198` samples despite near-empty reserve.
+  - Current live state finally reaches `collapse-recovery` with severe, repair, buffered, lean, and recent-damage holds active.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-09T20:28Z group-937` | A / Linux root epoch 2 | `collapse-recovery` | yes/inferred | mostly yes | startup/send-target plus possible profile strength | Primary: fix renewed root-side no-target startup/send-target path; then test whether `collapse-recovery`/`repair-collapse` need stronger target/floor when correctly selected but still near-empty. |
+| `2026-05-09T20:28Z group-937` | B / Linux standby epoch 2 | `persistent-lean` | yes/inferred | no/current yes | selector / lean under-classification after missing-frame bursts | After startup is clean, promote/hold `repair-collapse`/`collapse-recovery` after large missing-frame bursts even when under-target/rate fractions remain low. |
+
+## Next Fix Target
+
+Current patched target:
+- Another subsystem: startup/send-target correctness.
+- Primary fix: eliminate the revived root-side outbound no-target run and the standby-side early zero-inbound warm recovery. This pair is not clean receive-only evidence while Side A grows `totalNoTargetSkipsDelta=1421` in the retained window.
+- Secondary fix: selector damage-hold remains valid after startup is clean. Side B repeats the prior under-classification pattern, with `persistent-lean`/`silent-lean` dominant while missing frames accumulate.
+- Tertiary fix: profile strength for `collapse-recovery`/`repair-collapse` may need review, but only after the no-target/startup path is quiet. Side A selected the severe profiles correctly and still stayed near-empty with heavy concealment.
+- Keep baseline unchanged and do not add a new profile from this call.
+
+## Call: 2026-05-09 20:41Z / group 812
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T20-41-07-067Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T20-41-02-373Z.json`
+- Side C: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T20-40-55-844Z.json`
+
+User symptom:
+- New post-change 3+ group call. No separate subjective per-listener symptom was included; infer user-bad status from retained-window damage and receive profiles.
+
+High-level verdict:
+- Bad, but improved classification shape versus the previous false-clean multi-source batch.
+- All three exports agree on room `gcall-qortal-812`, topology epoch `3`, root `QeJW96...j5W9`, standby `QP9Jj4...i6rP`, participant count `3`, room key presence, and media session generation `1`.
+- The strongest remaining failure is not startup/key/queue correctness. The participant side is correctly pinned in `multi-protected-recovery` for both sources for all `300/300` trend samples, but still accumulates `9665` concealment ticks and `2484` missing-frame delta in the retained window.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and retained-window pending decrypt delta is `0` on all three exports.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on all three exports.
+- Queue/backpressure: no queue-pressure drops, stale drops, link-unready drops, or bridge drain wait on any side.
+- Startup/send-target: retained-window `totalNoTargetSkipsDelta=0` on all three exports.
+- Authority/session: topology, root/standby, room key, and media generation are consistent across the batch.
+
+Primary next target:
+- Profile strength / application for `multi-protected-recovery`.
+- The selector is no longer the sole failure. The worst side's classification matches the damage profile, but the applied protection is not strong enough to stop ongoing concealment. Also inspect why some live `multi-protected-recovery` states report `lastAppliedTargetMs=null`, `lastAppliedFloorMs=null`, and `lastAppliedTargetBoostMs=0`; that looks like a protection-application gap, not a baseline issue.
+- Secondary target: selector clear hysteresis for mixed-source sides. Root and standby still show one source protected for the whole retained window while the other source spends most samples in `multi-clean-low-latency`; that may be valid per-source asymmetry, but clean should not survive recent not-ready/missing-frame bursts.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | participant / Linux / `QMe6E7...6VFZ` | `multi-protected-recovery` | yes/inferred | 7.654 | 3206 | 12215 | 0.097 | 0.095 | recovery | Both remotes are protected for `300/300` samples; classification matches, but concealment continues at roughly `32-40` ticks/sec late in the window. |
+| B | root-forwarder / Linux / `QeJW96...j5W9` | mixed: `QMe6E7` protected, `QP9Jj4` clean-dominant | yes/inferred | 93.255 | 5349 | 498 | 0.113 | 0.066 | recovery | `QMe6E7` is protected `300/300`; `QP9Jj4` is clean `227/300`, protected `68/300`, recovery `5/300`, with `38` not-ready samples. |
+| C | standby-forwarder / Linux / `QP9Jj4...i6rP` | mixed: `QeJW96` protected, `QMe6E7` clean-dominant | yes/inferred | 5.872 | 5234 | 428 | 0.003 | 0.002 | low-latency | `QeJW96` is protected `300/300`; `QMe6E7` is clean `292/300`. Aggregate reserve is near-empty, but the protected source appears to be the likely damaged leg. |
+
+### Side A / Participant `QMe6E7...6VFZ`
+
+Expected profile from symptom:
+- `multi-protected-recovery` for both sources. This side is shallow-buffered, under target, rate-chasing, and heavily concealed.
+
+Actual exported profile:
+- `QeJW96...j5W9`: `multi-protected-recovery` (`300` samples).
+- `QP9Jj4...i6rP`: `multi-protected-recovery` (`300` samples).
+
+Did classification match?
+- Yes.
+
+Notes:
+- This is the strongest evidence in the batch. The selector did the right thing for the whole retained window, but the side is still bad: `totalConcealmentTicksDelta=9665`, `totalMissingFramesDelta=2484`, `avgPcmBufferedMs=7.654`, and `avgPlayoutDeltaMs=-130.486`.
+- Live state shows `QeJW96` receiving target/floor/boost (`192/176/+72`, extra hold `8`), while `QP9Jj4` is also labeled protected but has no applied target/floor/boost. That per-source mismatch should be inspected before changing baseline.
+
+### Side B / Root `QeJW96...j5W9`
+
+Expected profile from symptom:
+- Mixed source-sensitive classification: protected for the damaged/slow leg, clean only for a genuinely stable source.
+
+Actual exported profile:
+- `QMe6E7...6VFZ`: `multi-protected-recovery` (`300` samples).
+- `QP9Jj4...i6rP`: `multi-clean-low-latency` (`227`), `multi-protected-recovery` (`68`), `multi-recovery` (`5`).
+- Current live profile: `multi-protected-recovery` for both sources.
+
+Did classification match?
+- Partly.
+
+Notes:
+- Aggregate damage is still material: `totalMissingFramesDelta=3191`, `totalConcealmentTicksDelta=120`, `playoutUnderTargetFraction=0.113`, and `playoutRateFractionBelow097=0.066`.
+- `QP9Jj4` has `38` not-ready samples and top missing-frame deltas of `103`, `92`, `68`, and `59`; clean-dominant classification for that source is suspicious unless those bursts all belong to the other source.
+- The live state has both sources protected at export time, but both show no applied target/floor/boost. That points back to protected-profile application/strength rather than baseline.
+
+### Side C / Standby `QP9Jj4...i6rP`
+
+Expected profile from symptom:
+- At least one source should stay protected because the receiver is near-empty and still accumulating missing frames. Clean is plausible only for the source with healthy per-source reserve.
+
+Actual exported profile:
+- `QeJW96...j5W9`: `multi-protected-recovery` (`300` samples).
+- `QMe6E7...6VFZ`: `multi-clean-low-latency` (`292`), `multi-protected-recovery` (`7`), `multi-recovery` (`1`).
+
+Did classification match?
+- Mostly/partly.
+
+Notes:
+- The protected `QeJW96` leg looks correctly classified and has active applied protection at export (`240/224/+120`, extra hold `11`).
+- The side still has near-empty aggregate reserve (`avgPcmBufferedMs=5.872`) and `totalMissingFramesDelta=2578`, including a single `669` frame burst.
+- `QMe6E7` clean-dominant may be valid if it is genuinely the buffered leg (`bufferedMsEma=109.775`), but the large aggregate burst means per-source attribution should be verified before relaxing selector rules.
+
+## Trend Read
+
+Side A:
+- Flat-bad protected recovery.
+- Reasons seen:
+  - `multi-protected-recovery` for both remotes in all `300` samples.
+  - no decrypt/decode/startup deltas.
+  - late concealment continues steadily with top deltas `40, 40, 40, 40, 40, 39, 39, 38`.
+
+Side B:
+- Mixed-source recovery with late protection but suspicious clean dominance on one leg.
+- Reasons seen:
+  - `entered-recovery` appears `20` times.
+  - `QP9Jj4` has `38` not-ready samples.
+  - top missing-frame deltas are `103, 92, 68, 59, 43, 43, 35, 35`.
+
+Side C:
+- Source-specific protected leg plus mostly clean second leg; one severe discrete missing-frame burst.
+- Reasons seen:
+  - `QeJW96` protected for all `300` samples.
+  - `QMe6E7` clean for `292/300` samples.
+  - top missing-frame delta is `669`, followed by much smaller `32, 17, 13, 12, 12, 11, 11`.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-09T20:41Z group-812` | A / Linux participant epoch 3 | `multi-protected-recovery` | yes/inferred | yes | receive profile strength/application | Strengthen or fix application of `multi-protected-recovery`; investigate protected states with no applied target/floor/boost. |
+| `2026-05-09T20:41Z group-812` | B / Linux root epoch 3 | mixed protected/clean | yes/inferred | partly | profile application plus selector hysteresis | Keep source-sensitive classification, but block/shorten clean when recent not-ready or missing-frame bursts remain active; inspect missing applied boosts under protected live state. |
+| `2026-05-09T20:41Z group-812` | C / Linux standby epoch 3 | mixed protected/clean | yes/inferred | mostly/partly | profile strength with per-source attribution check | Treat `QeJW96` protected classification as correct; verify the `669` missing-frame burst source before changing clean selector for `QMe6E7`. |
+
+## Next Fix Target
+
+Current patched target:
+- Profile strength / protection application, specifically `multi-protected-recovery`.
+- Primary fix: make protected multi-source policy actually provide enough target/floor/hold on every protected source, and audit cases where the exported profile is `multi-protected-recovery` but `lastAppliedTargetMs`, `lastAppliedFloorMs`, and `lastAppliedTargetBoostMs` are `null`/`0`.
+- Secondary fix: selector clear hysteresis for mixed-source legs after not-ready or missing-frame bursts. This is secondary because the worst side in this batch is already correctly protected.
+- Keep baseline unchanged and do not add a new profile from this call.
+
+## Call: 2026-05-09 21:43Z / group 937 follow-up two-person
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-118.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T21-43-16-440Z.json`
+
+User symptom:
+- New post-change two-person group call. No separate subjective per-side quality note was included; infer badness from retained-window damage and recovery state.
+
+High-level verdict:
+- Bad, receive-policy dominated.
+- Both exports agree on room `gcall-qortal-937`, topology epoch `2`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, participant count `2`, room key presence, and media session generation `1`.
+- This is cleaner than the prior 20:28Z two-person export for subsystem triage: retained-window `totalNoTargetSkipsDelta=0` on both sides, no decrypt/decode drops, and no queue/backpressure signal.
+- Both sides still spend the entire retained window in recovery and accumulate large missing-frame deltas (`2619` on Side A, `3835` on Side B). The dominant profiles are too weak for that symptom shape.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, pending-decrypt high-water `0`, and retained-window pending-decrypt delta `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Startup/send-target in the retained window: `totalNoTargetSkipsDelta=0` on both sides.
+- Queue/backpressure: bridge waiting-for-drain is `false`; bridge queued-frame high-water is `11` on Side A and `3` on Side B.
+- Failover/authority: no promotion/demotion counts, settled matching root/standby/topology/session state.
+
+Primary next target:
+- Selector, specifically single-source damage escalation and hold hysteresis.
+- Baseline is not the next target: both sides are already in recovery for all `300/300` retained samples.
+- Profile strength is secondary. The collapse/repair profiles are selected for bursts, but the selector lets `steady-weak-listener`, `persistent-lean`, and `silent-lean` dominate while missing frames continue. Fix classification/holding before raising the baseline.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `persistent-lean` | yes/inferred | 28.490 | 3668 | 467 | 0.033 | 0.021 | recovery | Dominant retained profile is `persistent-lean` (`166/300`) despite `totalMissingFramesDelta=2619`; late live state is only `steady-weak-listener`. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `steady-weak-listener` | yes/inferred | 5.921 | 5603 | 518 | 0.007 | 0.005 | recovery | Dominant retained profile is `steady-weak-listener` (`103/300`) while reserve is near empty and `totalMissingFramesDelta=3835`; late live state is `silent-lean`. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery` during and after missing-frame bursts. `persistent-lean` can explain sustained low reserve only if damage is mild, which is not true here.
+
+Actual exported profile:
+- Dominant sampled profile: `persistent-lean` (`166` samples).
+- Other sampled profiles: `steady-weak-listener` (`44`), `collapse-recovery` (`43`), `repair-collapse` (`27`), `repair-heavy-connected` (`14`), `buffered-not-ready` (`4`), `silent-lean` (`2`).
+- Current exported profile: `steady-weak-listener`.
+
+Did classification match?
+- No.
+
+Notes:
+- Side A accumulates `2619` missing frames and `322` concealment ticks during the retained window. The largest missing-frame bursts are `369`, `231`, `219`, and `212`.
+- The burst samples do enter repair profiles, but the side quickly falls back to weak/lean profiles while recovery remains active.
+- `collapse-recovery` owns most concealment (`268` ticks) and looks appropriate when concealment is active. The main miss is insufficient damage hold after missing-frame spikes.
+- Live state shows `lastAppliedTargetMs=172`, `lastAppliedFloorMs=172`, and boost `+48`, which is light for a side still carrying thousands of missing frames.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery`. This side is near-empty (`avgPcmBufferedMs=5.921`, jitter depth mean `0.300`) and has the worse missing-frame count.
+
+Actual exported profile:
+- Dominant sampled profile: `steady-weak-listener` (`103` samples).
+- Other sampled profiles: `silent-lean` (`56`), `collapse-recovery` (`56`), `repair-collapse` (`48`), `persistent-lean` (`25`), `buffered-not-ready` (`6`), `repair-heavy-connected` (`6`).
+- Current exported profile: `silent-lean`.
+
+Did classification match?
+- No.
+
+Notes:
+- Side B accumulates `3835` missing frames and `381` concealment ticks during the retained window. The largest missing-frame bursts are `376`, `251`, `238`, and `127`.
+- `steady-weak-listener` owns `1277` missing-frame delta, more than any stronger class. That is the clearest selector mismatch in this pair.
+- Under-target and slow-rate fractions are low (`0.007` and `0.005`), so the selector is still relying too much on those calm rate signals while missing frames and near-empty reserve say the listener is bad.
+- Live state is `silent-lean` with target/floor/boost `204/192/+84`; this is stronger than Side A but still not the correct damage class for ongoing missing-frame failure.
+
+## Trend Read
+
+Side A:
+- Oscillating between weak/lean and repair/collapse, with discrete missing-frame bursts.
+- Reasons seen:
+  - one explicit `missing-frames-spike`.
+  - top missing-frame deltas: `369`, `231`, `219`, `212`, `111`, `76`, `75`, `70`.
+  - `37` retained samples report `jitterHasReadyFrame=false`.
+  - no retained-window decrypt/decode/no-target deltas.
+
+Side B:
+- Flat weak reserve with repeated discrete missing-frame bursts; stronger classes do not hold long enough.
+- Reasons seen:
+  - one explicit `missing-frames-spike`.
+  - top missing-frame deltas: `376`, `251`, `238`, `127`, `114`, `101`, `88`, `81`.
+  - `69` retained samples report `jitterHasReadyFrame=false`.
+  - no retained-window decrypt/decode/no-target deltas.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-09T21:43Z group-937` | A / Linux root epoch 2 | `persistent-lean` | yes/inferred | no | selector / damage hold | Promote and hold `repair-collapse`/`collapse-recovery` after large missing-frame bursts; do not let `persistent-lean` or `steady-weak-listener` dominate while recovery damage is still accumulating. |
+| `2026-05-09T21:43Z group-937` | B / Linux standby epoch 2 | `steady-weak-listener` | yes/inferred | no | selector / damage hold | Escalate near-empty single-source listeners with repeated missing-frame bursts even when under-target and rate fractions are low; hold the stronger class through recovery. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: single-source missing-frame/recent-damage escalation should latch `repair-collapse` or `collapse-recovery` longer, especially when `avgPcmBufferedMs` is near-empty or `jitterHasReadyFrame=false` recurs.
+- Secondary fix: profile strength for `repair-collapse`/`collapse-recovery` can be revisited after classification stays correct; Side A's applied `172/172/+48` is likely too light if that remains the live policy after selector fixes.
+- Keep baseline unchanged. Do not add a new profile from this call.
+## Call: 2026-05-09 21:25Z / group 812 good 3-person follow-up
+
+Room:
+- `gcall-qortal-812`
+
+Files:
+- Side A: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T21-25-22-493Z.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T21-24-53-757Z.json`
+- Side C: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-09T21-24-46-348Z.json`
+
+User symptom:
+- New post-change 3+ group call. User reported the call was good.
+
+High-level verdict:
+- Good, with noisy retained-window receive diagnostics.
+- All three exports agree on room `gcall-qortal-812`, topology epoch `3`, root `QeJW96...j5W9`, standby `QP9Jj4...i6rP`, participant count `3`, room key presence, and media session generation `1`.
+- This is not a correctness/startup failure. It is a tuning signal: the call sounded good while one side stayed fully protected and the other two sides spent most samples low-latency with continuing missing-frame deltas.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and retained-window pending-decrypt delta `0` on all three exports.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on all three exports.
+- Queue/backpressure: no queue-pressure drops, stale drops, link-unready drops, or bridge drain wait on any side.
+- Startup/send-target: retained-window `totalNoTargetSkipsDelta=0` on all three exports.
+- Authority/session: topology, root/standby, room key, and media generation are consistent across the batch.
+
+Primary next target:
+- Selector, specifically multi-source protected/clean exit stability and damage attribution.
+- Do not strengthen `multi-protected-recovery` from this batch: the subjective result was good, and the fully protected participant already applied `240/224/+120` with extra hold `8` on both sources.
+- Do not change baseline: root and standby were mostly low-latency and still sounded good. The interesting problem is classification/diagnostic alignment, not global target size.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QeJW96...j5W9` | mixed, clean-dominant | no | 79.940 | 4481 | 132 | 0.058 | 0.014 | low-latency | Retained window has `1964` missing-frame delta but only `1` concealment tick; `QP9Jj4` clean `189/300`, protected `111/300`; `QMe6E7` clean `259/300`, protected `41/300`. |
+| B | participant / Linux / `QMe6E7...6VFZ` | `multi-protected-recovery` | no | 10.558 | 3545 | 18016 | 0.115 | 0.114 | recovery | Both sources protected `300/300`; retained window still has `9567` concealment ticks, but user symptom was good. Protection may be doing useful work, but diagnostics read harsher than the reported experience. |
+| C | standby-forwarder / Linux / `QP9Jj4...i6rP` | mixed, one protected leg | no | 19.037 | 5053 | 74 | 0.012 | 0.003 | low-latency | `QeJW96` protected `300/300`; `QMe6E7` clean `230/300`, protected `70/300`; retained window has `2481` missing-frame delta with only `5` concealment ticks. |
+
+### Side A / Root `QeJW96...j5W9`
+
+Expected profile from symptom:
+- Mostly `multi-clean-low-latency`, with brief protected recovery only around real weak-leg events.
+
+Actual exported profile:
+- `QP9Jj4...i6rP`: `multi-clean-low-latency` (`189`), `multi-protected-recovery` (`111`).
+- `QMe6E7...6VFZ`: `multi-clean-low-latency` (`259`), `multi-protected-recovery` (`41`).
+- Current live profile: `QP9Jj4` clean, `QMe6E7` protected.
+
+Did classification match?
+- Mostly, but noisy.
+
+Notes:
+- Good symptom matches clean-dominant classification and low concealment.
+- The retained `1964` missing-frame delta did not become an audible bad call, so missing frames alone should not force stronger protection here.
+- The `QP9Jj4` leg flips rapidly between clean and protected near export time, often with `preProcessBufferedFrames` bouncing between `0` and `8-10`. That points to selector exit/entry stability rather than profile strength.
+
+### Side B / Participant `QMe6E7...6VFZ`
+
+Expected profile from symptom:
+- Good-user symptom would normally suggest clean or brief recovery, but the metrics support protection because reserve is shallow and concealment remains active.
+
+Actual exported profile:
+- `QeJW96...j5W9`: `multi-protected-recovery` (`300`).
+- `QP9Jj4...i6rP`: `multi-protected-recovery` (`300`).
+
+Did classification match?
+- Partly.
+
+Notes:
+- Metrics justify protection: `avgPcmBufferedMs=10.558`, `jitterBufferDepthFramesMean=0.268`, `totalConcealmentTicksDelta=9567`, under-target `0.115`, and rate-below-0.97 `0.114`.
+- Symptom does not justify calling this a failed profile. The previous concern that protected recovery was too weak is not supported by this good-call report.
+- Both sources applied strong protection at export (`240/224/+120`, extra hold `8`), so this is a case where strong protection may be preserving acceptable audio despite harsh retained-window counters.
+
+### Side C / Standby `QP9Jj4...i6rP`
+
+Expected profile from symptom:
+- One protected source can be valid if source-specific reserve is weak; the healthy leg should remain clean.
+
+Actual exported profile:
+- `QeJW96...j5W9`: `multi-protected-recovery` (`300`).
+- `QMe6E7...6VFZ`: `multi-clean-low-latency` (`230`), `multi-protected-recovery` (`70`).
+
+Did classification match?
+- Mostly.
+
+Notes:
+- The protected `QeJW96` leg has low source reserve (`bufferedMsEma=5.806`) and applied protection (`192/176/+72`, extra hold `6`), while `QMe6E7` has healthy source reserve (`bufferedMsEma=133.139`) and clean classification.
+- This is the best evidence that per-source multi classification is directionally useful.
+- The retained `2481` missing-frame delta with only `5` concealment ticks suggests missing-frame severity should be interpreted with concealment/user symptom, not as an automatic escalation input.
+
+## Trend Read
+
+Side A:
+- Mostly low-latency, with selector oscillation on one source.
+- Reasons seen:
+  - only `7/300` retained samples in recovery mode.
+  - top missing-frame delta is `30`, with low concealment.
+  - late `QP9Jj4` transitions flip clean/protected repeatedly within milliseconds.
+
+Side B:
+- Flat protected recovery.
+- Reasons seen:
+  - recovery mode for `300/300` samples.
+  - both sources protected for `300/300` samples.
+  - concealment ticks continue steadily around `31-33` on top samples, yet the call was reported good.
+
+Side C:
+- Source-specific protected leg plus clean healthy leg.
+- Reasons seen:
+  - `QeJW96` protected for `300/300` samples.
+  - `QMe6E7` clean for `230/300` samples.
+  - recovery mode only `36/300` samples, with low concealment.
+
+## Batch Scoreboard Update
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-09T21:25Z group-812 good` | A / Linux root epoch 3 | mixed clean-dominant | no | mostly | selector stability | Smooth multi-source clean/protected flipping; avoid using missing frames alone as proof of user-bad quality when concealment is near zero. |
+| `2026-05-09T21:25Z group-812 good` | B / Linux participant epoch 3 | `multi-protected-recovery` | no | partly | selector/profile interpretation | Keep strong protection available, but do not strengthen it from this call; investigate whether retained concealment counters overstate audible damage during successful protected recovery. |
+| `2026-05-09T21:25Z group-812 good` | C / Linux standby epoch 3 | mixed protected/clean | no | mostly | selector attribution | Preserve per-source asymmetry; verify missing-frame attribution before tightening clean exit rules. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: multi-source selector stability and attribution. The root side shows rapid clean/protected flipping, while the standby side shows a plausible protected/clean split. Tune entry/exit hysteresis around `preProcessBufferedFrames`, source reserve, and recent missing-frame deltas so good calls do not look like failed protected recovery.
+- Secondary fix: diagnostics/profile interpretation for protected recovery. A fully protected participant can still be a good call; scoreboard logic should treat user symptom plus concealment audibility, not just high retained counters.
+- Leave baseline unchanged. Do not add a new profile from this call.

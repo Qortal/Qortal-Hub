@@ -1847,6 +1847,84 @@ describe('GroupCallAudioEngineRuntime', () => {
     );
   });
 
+  it('requests media recovery when inbound media is bursty despite normal packet ratio', async () => {
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+
+    groupCallEventHandler?.('gcall:participant-joined', {
+      roomId: 'room-1',
+      address: 'Qpeer',
+      publicKey: 'pub-peer',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'room-1',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: 'Qpeer',
+      clusters: [
+        {
+          members: ['Qlocal', 'Qpeer'],
+          forwarder: 'Qlocal',
+          standby: 'Qpeer',
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const runtimeState = runtime as unknown as {
+      roomKey: Uint8Array | null;
+      outboundSendSuccesses: number;
+      snapshot: { metrics: Record<string, unknown> };
+      recordRecentWindowTrend: (metrics: Record<string, unknown>) => void;
+    };
+    runtimeState.roomKey = new Uint8Array(32).fill(9);
+    runtimeState.outboundSendSuccesses = 1_000;
+    requestPeerMediaRecovery.mockClear();
+
+    runtimeState.recordRecentWindowTrend({
+      ...runtimeState.snapshot.metrics,
+      packetsReceived: 980,
+      packetsDecoded: 980,
+      adaptiveNetworkMode: 'recovery',
+      playoutUnderTargetFraction: 0.04,
+      playoutRateFractionBelow097: 0.03,
+      concealmentTicks: 180,
+      missingFrames: 320,
+      maxIncomingPacketMs: 3_364,
+      maxReticulumAudioBridgeToRendererIngressMs: 1_081,
+      reticulumAudioPacketPathTimeouts: 0,
+    });
+
+    expect(requestPeerMediaRecovery).toHaveBeenCalledTimes(1);
+    expect(requestPeerMediaRecovery).toHaveBeenCalledWith(
+      'room-1',
+      'Qpeer',
+      'path-degraded-warm'
+    );
+    expect((runtime as any).diagEvents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tag: 'low-inbound-media-recovery-requested',
+          payload: expect.objectContaining({
+            burstyInboundDamage: true,
+            maxIncomingPacketMs: 3_364,
+            maxReticulumAudioBridgeToRendererIngressMs: 1_081,
+          }),
+        }),
+      ])
+    );
+  });
+
   it('records a diagnostic if low-inbound recovery cannot call the preload IPC', async () => {
     const runtime = new GroupCallAudioEngineRuntime();
     runtimes.add(runtime);
@@ -5256,6 +5334,70 @@ describe('GroupCallAudioEngineRuntime', () => {
       'Qpeer',
       expect.any(Uint8Array)
     );
+  });
+
+  it('waits during self-only startup instead of counting no-target skips before a remote appears', async () => {
+    vi.useFakeTimers();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+    ]);
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'gcall-qortal-937',
+      chatId: 'group:937',
+    });
+    groupCallEventHandler?.('gcall:topology', {
+      roomId: 'gcall-qortal-937',
+      topologyEpoch: 1,
+      rootForwarder: 'Qlocal',
+      standbyForwarder: '',
+      clusters: [
+        {
+          members: ['Qlocal'],
+          forwarder: 'Qlocal',
+          standby: 'Qlocal',
+        },
+      ],
+      lastSeen: Date.now(),
+    });
+    await vi.runOnlyPendingTimersAsync();
+
+    (runtime as any).roomKey = new Uint8Array(32).fill(3);
+    await (runtime as any).syncSenderState();
+    vi.advanceTimersByTime(30_000);
+    latestCapturePort?.onmessage?.({
+      data: { frame: new Float32Array([0]), vad: true },
+    } as MessageEvent);
+    await vi.runOnlyPendingTimersAsync();
+
+    const result = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const parsed = JSON.parse(String(result.ok ? result.payload : '{}')) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        outboundMedia?: {
+          skippedNoTargets?: number;
+          lastSkipReason?: string;
+        };
+      };
+    };
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.outboundMedia?.skippedNoTargets
+    ).toBe(0);
+    expect(
+      parsed.audioSurfaceRuntimeDiagnostics?.outboundMedia?.lastSkipReason
+    ).toBe('startup-target-wait');
+    expect(sendAudio).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('does not restore cached local root authority on self-only rejoin from recent cache', async () => {

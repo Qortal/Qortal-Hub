@@ -59,7 +59,28 @@ const GCALL_AUDIO_SURFACE_STABLE_DELTA_MIN_MS = -35;
 const GCALL_AUDIO_SURFACE_STABLE_STRONG_DELTA_MIN_MS = -20;
 const GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS = 20;
 const GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS = 40;
+const GCALL_MULTI_SOURCE_TARGET_BOOST_PROTECTED_MS = 72;
+const GCALL_MULTI_SOURCE_TARGET_BOOST_COLLAPSE_MS = 120;
+const GCALL_MULTI_SOURCE_RECOVERY_TARGET_FLOOR_MS = 144;
+const GCALL_MULTI_SOURCE_PROTECTED_TARGET_FLOOR_MS = 176;
+const GCALL_MULTI_SOURCE_COLLAPSE_TARGET_FLOOR_MS = 224;
 const GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES = 8;
+const GCALL_MULTI_SOURCE_PROTECTED_MAX_EXTRA_HOLD_FRAMES = 12;
+const GCALL_MULTI_SOURCE_COLLAPSE_MAX_EXTRA_HOLD_FRAMES = 14;
+const GCALL_MULTI_SOURCE_NEAR_EMPTY_BUFFERED_MS_MAX = 12;
+const GCALL_MULTI_SOURCE_DAMAGE_BUFFERED_MS_MAX = 72;
+const GCALL_MULTI_SOURCE_DAMAGE_DELTA_MAX_MS = -48;
+const GCALL_MULTI_SOURCE_COLLAPSE_DELTA_MAX_MS = -96;
+const GCALL_MULTI_SOURCE_DAMAGE_MISSING_EMA_MIN = 0.08;
+const GCALL_MULTI_SOURCE_DAMAGE_CONCEALMENT_EMA_MIN = 0.06;
+const GCALL_MULTI_SOURCE_DAMAGE_UNDERTARGET_EMA_MIN = 0.04;
+const GCALL_MULTI_SOURCE_DAMAGE_RATE_EMA_MAX = 0.998;
+const GCALL_MULTI_SOURCE_CLEAN_BUFFERED_MS_MIN = 84;
+const GCALL_MULTI_SOURCE_CLEAN_DELTA_MIN_MS = -18;
+const GCALL_MULTI_SOURCE_CLEAN_CONCEALMENT_EMA_MAX = 0.03;
+const GCALL_MULTI_SOURCE_CLEAN_MISSING_EMA_MAX = 0.04;
+const GCALL_MULTI_SOURCE_CLEAN_UNDERTARGET_EMA_MAX = 0.01;
+const GCALL_MULTI_SOURCE_CLEAN_RATE_EMA_MIN = 0.999;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS = 34;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS = 56;
 const GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS = 48;
@@ -149,11 +170,26 @@ const GCALL_SINGLE_SOURCE_DAMAGE_BURST_MISSING_FRAMES_MIN = 24;
 const GCALL_SINGLE_SOURCE_DAMAGE_BURST_HOLD_MS = 6_500;
 const GCALL_SINGLE_SOURCE_DAMAGE_BURST_BUFFERED_MS_MAX = 72;
 const GCALL_SINGLE_SOURCE_DAMAGE_BURST_DELTA_MAX_MS = -48;
-const GCALL_SINGLE_SOURCE_DAMAGE_BURST_REPAIR_COLLAPSE_BUFFERED_MS_MAX = 24;
+const GCALL_SINGLE_SOURCE_DAMAGE_BURST_REPAIR_COLLAPSE_BUFFERED_MS_MAX = 32;
 const GCALL_SINGLE_SOURCE_DAMAGE_BURST_REPAIR_COLLAPSE_DELTA_MAX_MS = -96;
 const GCALL_SINGLE_SOURCE_DAMAGE_BURST_CLEAR_BUFFERED_MS_MIN = 84;
 const GCALL_SINGLE_SOURCE_DAMAGE_BURST_CLEAR_DELTA_MIN_MS = -18;
 const GCALL_SINGLE_SOURCE_DAMAGE_BURST_CLEAR_CONCEALMENT_EMA_MAX = 0.035;
+const GCALL_SINGLE_SOURCE_DAMAGE_HOLD_HEALTHY_ESCAPE_DELTA_MIN_MS = -70;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_MISSING_FRAMES_MIN = 3;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_HOLD_MS = 7_500;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_BUFFERED_MS_MAX = 72;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_DELTA_MAX_MS = -48;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_REPAIR_HEAVY_BUFFERED_MS_MAX = 72;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN = 0.04;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_REPAIR_HEAVY_MISSING_EMA_MIN = 0.08;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_COLLAPSE_BUFFERED_MS_MAX = 6;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_COLLAPSE_DELTA_MAX_MS = -96;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_NOT_READY_BUFFERED_MS_MAX = 24;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_BUFFERED_MS_MIN = 84;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_DELTA_MIN_MS = -18;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_CONCEALMENT_EMA_MAX = 0.03;
+const GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_MISSING_EMA_MAX = 0.04;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_BUFFERED_MS_MIN = 136;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_DELTA_MIN_MS = -2;
 const GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_RATE_EMA_MIN = 0.9998;
@@ -236,6 +272,7 @@ interface LiveMultiSourceState {
   repairCollapseHoldUntilMs: number;
   repairHeavyHoldUntilMs: number;
   damageBurstHoldUntilMs: number;
+  recentDamageHoldUntilMs: number;
   bufferedNotReadyHoldUntilMs: number;
   persistentLeanHoldUntilMs: number;
   silentLeanHoldUntilMs: number;
@@ -319,7 +356,10 @@ function selectSingleSourceReceiveProfile(
   ) {
     return 'collapse-recovery';
   }
-  if (ctx.bufferedNotReadyPressure || (ctx.bufferedNotReadyHold && !ctx.currentReady)) {
+  if (
+    ctx.bufferedNotReadyPressure ||
+    (ctx.bufferedNotReadyHold && !ctx.currentReady)
+  ) {
     return 'buffered-not-ready';
   }
   if (ctx.repairCollapsePressure) {
@@ -366,14 +406,83 @@ function selectMultiSourceReceiveProfile(ctx: {
   prioritizeWeakLeg: boolean;
   protectedMode: boolean;
   starvationSeverity: PlayoutStarvationSeverity;
+  sourceRecoveryPressure: boolean;
+  sourceCollapsePressure: boolean;
 }): MultiSourceReceiveProfile {
-  if (!ctx.recoveryModeActive) return 'multi-clean-low-latency';
-  if (ctx.protectedMode) return 'multi-protected-recovery';
-  if (ctx.starvationSeverity === 'strong') return 'multi-collapse-recovery';
+  if (!ctx.recoveryModeActive && !ctx.sourceRecoveryPressure) {
+    return 'multi-clean-low-latency';
+  }
+  if (ctx.protectedMode) {
+    return 'multi-protected-recovery';
+  }
+  if (ctx.sourceCollapsePressure || ctx.starvationSeverity === 'strong') {
+    return 'multi-collapse-recovery';
+  }
+  if (ctx.sourceRecoveryPressure) {
+    return 'multi-protected-recovery';
+  }
   if (ctx.prioritizeWeakLeg || ctx.starvationSeverity === 'mild') {
     return 'multi-weak-leg-recovery';
   }
   return 'multi-recovery';
+}
+
+function multiSourceReceiveProfileTargetBoostMs(
+  profile: MultiSourceReceiveProfile,
+  sourceCollapsePressure: boolean
+): number {
+  switch (profile) {
+    case 'multi-collapse-recovery':
+      return GCALL_MULTI_SOURCE_TARGET_BOOST_COLLAPSE_MS;
+    case 'multi-protected-recovery':
+      return sourceCollapsePressure
+        ? GCALL_MULTI_SOURCE_TARGET_BOOST_COLLAPSE_MS
+        : GCALL_MULTI_SOURCE_TARGET_BOOST_PROTECTED_MS;
+    case 'multi-weak-leg-recovery':
+      return sourceCollapsePressure
+        ? GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS
+        : GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS;
+    case 'multi-recovery':
+      return sourceCollapsePressure ? GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS : 0;
+    case 'multi-clean-low-latency':
+      return 0;
+  }
+}
+
+function multiSourceReceiveProfileFloorMs(
+  profile: MultiSourceReceiveProfile,
+  sourceCollapsePressure: boolean
+): number | null {
+  switch (profile) {
+    case 'multi-collapse-recovery':
+      return GCALL_MULTI_SOURCE_COLLAPSE_TARGET_FLOOR_MS;
+    case 'multi-protected-recovery':
+      return sourceCollapsePressure
+        ? GCALL_MULTI_SOURCE_COLLAPSE_TARGET_FLOOR_MS
+        : GCALL_MULTI_SOURCE_PROTECTED_TARGET_FLOOR_MS;
+    case 'multi-weak-leg-recovery':
+    case 'multi-recovery':
+      return sourceCollapsePressure
+        ? GCALL_MULTI_SOURCE_COLLAPSE_TARGET_FLOOR_MS
+        : GCALL_MULTI_SOURCE_RECOVERY_TARGET_FLOOR_MS;
+    case 'multi-clean-low-latency':
+      return null;
+  }
+}
+
+function multiSourceReceiveProfileMaxExtraHoldFrames(
+  profile: MultiSourceReceiveProfile
+): number {
+  switch (profile) {
+    case 'multi-collapse-recovery':
+      return GCALL_MULTI_SOURCE_COLLAPSE_MAX_EXTRA_HOLD_FRAMES;
+    case 'multi-protected-recovery':
+      return GCALL_MULTI_SOURCE_PROTECTED_MAX_EXTRA_HOLD_FRAMES;
+    case 'multi-weak-leg-recovery':
+    case 'multi-recovery':
+    case 'multi-clean-low-latency':
+      return GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES;
+  }
 }
 
 function singleSourceReceiveProfileTargetBoostMs(
@@ -396,13 +505,14 @@ function singleSourceReceiveProfileTargetBoostMs(
     case 'repair-heavy-connected':
       return GCALL_SINGLE_SOURCE_TARGET_BOOST_REPAIR_HEAVY_MS;
     case 'steady-weak-listener':
-      return ((state.protectedMode || state.starvationSeverity === 'strong') &&
+      return (state.protectedMode || state.starvationSeverity === 'strong') &&
         state.bufferedMsEma <=
-          GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN)
+          GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN
         ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STRONG_MS
         : state.underTargetEma >=
               GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN ||
-            state.concealmentEma >= GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN
+            state.concealmentEma >=
+              GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN
           ? GCALL_SINGLE_SOURCE_TARGET_BOOST_STEADY_ASSIST_MS
           : GCALL_SINGLE_SOURCE_TARGET_BOOST_MILD_MS;
     case 'clean-low-latency':
@@ -488,7 +598,10 @@ export class GroupCallAudioReceiveEngine {
   private loggedFirstDecodedPacket = false;
   private loggedFirstPlayoutStartBySource = new Set<string>();
   private peerRecoveryState: DmPeerRecoveryState = createDmPeerRecoveryState();
-  private liveMultiSourceStateBySource = new Map<string, LiveMultiSourceState>();
+  private liveMultiSourceStateBySource = new Map<
+    string,
+    LiveMultiSourceState
+  >();
   private readonly receiveProfileTransitions: ReceiveProfileTransition[] = [];
   private resumeAudioContextPromise: Promise<void> | null = null;
   private config: GroupCallAudioReceiveEngineConfig = {
@@ -658,6 +771,7 @@ export class GroupCallAudioReceiveEngine {
         severeSingleSource: number;
         repairCollapse: number;
         repairHeavy: number;
+        recentDamage: number;
         bufferedNotReady: number;
         persistentLean: number;
         silentLean: number;
@@ -694,56 +808,68 @@ export class GroupCallAudioReceiveEngine {
       })
     );
     const nowMs = Date.now();
-    const livePolicyStateBySource = [...this.playouts.keys()].map((sourceAddr) => {
-      const state = this.liveMultiSourceStateBySource.get(sourceAddr);
-      return {
-        peerAddress: sourceAddr,
-        profile: state?.currentReceiveProfile ?? 'clean-low-latency',
-        profileAgeMs:
-          state && state.lastProfileChangedAtMs > 0
-            ? Math.max(0, nowMs - state.lastProfileChangedAtMs)
-            : null,
-        bufferedMsEma: state?.bufferedMsEma ?? 0,
-        deltaMsEma: state?.deltaMsEma ?? 0,
-        underTargetEma: state?.underTargetEma ?? 0,
-        concealmentEma: state?.concealmentEma ?? 0,
-        missingFrameEma: state?.missingFrameEma ?? 0,
-        rateEma: state?.rateEma ?? 1,
-        oldestFrameAgeEma: state?.oldestFrameAgeEma ?? 0,
-        preProcessBufferedFrames: state?.preProcessBufferedFrames ?? 0,
-        lastJitterBufferedFrames: state?.lastJitterBufferedFrames ?? 0,
-        lastJitterHasReadyFrame: state?.lastJitterHasReadyFrame ?? false,
-        targetPlayoutMs: state?.targetPlayoutMs ?? 0,
-        lastAppliedTargetMs: state?.lastAppliedTargetMs ?? null,
-        lastAppliedFloorMs: state?.lastAppliedFloorMs ?? null,
-        lastAppliedTargetBoostMs: state?.lastAppliedTargetBoostMs ?? 0,
-        lastAppliedExtraHoldFrames: state?.lastAppliedExtraHoldFrames ?? 0,
-        holdsRemainingMs: {
-          severeSingleSource: Math.max(
-            0,
-            (state?.severeSingleSourceHoldUntilMs ?? 0) - nowMs
-          ),
-          repairCollapse: Math.max(
-            0,
-            (state?.repairCollapseHoldUntilMs ?? 0) - nowMs
-          ),
-          repairHeavy: Math.max(0, (state?.repairHeavyHoldUntilMs ?? 0) - nowMs),
-          bufferedNotReady: Math.max(
-            0,
-            (state?.bufferedNotReadyHoldUntilMs ?? 0) - nowMs
-          ),
-          persistentLean: Math.max(
-            0,
-            (state?.persistentLeanHoldUntilMs ?? 0) - nowMs
-          ),
-          silentLean: Math.max(0, (state?.silentLeanHoldUntilMs ?? 0) - nowMs),
-          postRecovery: Math.max(
-            0,
-            (state?.postRecoveryHoldUntilMs ?? 0) - nowMs
-          ),
-        },
-      };
-    });
+    const livePolicyStateBySource = [...this.playouts.keys()].map(
+      (sourceAddr) => {
+        const state = this.liveMultiSourceStateBySource.get(sourceAddr);
+        return {
+          peerAddress: sourceAddr,
+          profile: state?.currentReceiveProfile ?? 'clean-low-latency',
+          profileAgeMs:
+            state && state.lastProfileChangedAtMs > 0
+              ? Math.max(0, nowMs - state.lastProfileChangedAtMs)
+              : null,
+          bufferedMsEma: state?.bufferedMsEma ?? 0,
+          deltaMsEma: state?.deltaMsEma ?? 0,
+          underTargetEma: state?.underTargetEma ?? 0,
+          concealmentEma: state?.concealmentEma ?? 0,
+          missingFrameEma: state?.missingFrameEma ?? 0,
+          rateEma: state?.rateEma ?? 1,
+          oldestFrameAgeEma: state?.oldestFrameAgeEma ?? 0,
+          preProcessBufferedFrames: state?.preProcessBufferedFrames ?? 0,
+          lastJitterBufferedFrames: state?.lastJitterBufferedFrames ?? 0,
+          lastJitterHasReadyFrame: state?.lastJitterHasReadyFrame ?? false,
+          targetPlayoutMs: state?.targetPlayoutMs ?? 0,
+          lastAppliedTargetMs: state?.lastAppliedTargetMs ?? null,
+          lastAppliedFloorMs: state?.lastAppliedFloorMs ?? null,
+          lastAppliedTargetBoostMs: state?.lastAppliedTargetBoostMs ?? 0,
+          lastAppliedExtraHoldFrames: state?.lastAppliedExtraHoldFrames ?? 0,
+          holdsRemainingMs: {
+            severeSingleSource: Math.max(
+              0,
+              (state?.severeSingleSourceHoldUntilMs ?? 0) - nowMs
+            ),
+            repairCollapse: Math.max(
+              0,
+              (state?.repairCollapseHoldUntilMs ?? 0) - nowMs
+            ),
+            repairHeavy: Math.max(
+              0,
+              (state?.repairHeavyHoldUntilMs ?? 0) - nowMs
+            ),
+            recentDamage: Math.max(
+              0,
+              (state?.recentDamageHoldUntilMs ?? 0) - nowMs
+            ),
+            bufferedNotReady: Math.max(
+              0,
+              (state?.bufferedNotReadyHoldUntilMs ?? 0) - nowMs
+            ),
+            persistentLean: Math.max(
+              0,
+              (state?.persistentLeanHoldUntilMs ?? 0) - nowMs
+            ),
+            silentLean: Math.max(
+              0,
+              (state?.silentLeanHoldUntilMs ?? 0) - nowMs
+            ),
+            postRecovery: Math.max(
+              0,
+              (state?.postRecoveryHoldUntilMs ?? 0) - nowMs
+            ),
+          },
+        };
+      }
+    );
     return {
       audioContextState: this.audioContext?.state ?? null,
       hasMasterGain: this.masterGain !== null,
@@ -878,7 +1004,10 @@ export class GroupCallAudioReceiveEngine {
     this.loggedFirstPlayoutStartBySource.clear();
     this.peerRecoveryState = createDmPeerRecoveryState();
     this.liveMultiSourceStateBySource.clear();
-    this.receiveProfileTransitions.splice(0, this.receiveProfileTransitions.length);
+    this.receiveProfileTransitions.splice(
+      0,
+      this.receiveProfileTransitions.length
+    );
     this.resumeAudioContextPromise = null;
     this.clearMetricsEmitTimer();
     this.metrics = new GroupCallPerformanceTracker();
@@ -986,6 +1115,7 @@ export class GroupCallAudioReceiveEngine {
         repairCollapseHoldUntilMs: 0,
         repairHeavyHoldUntilMs: 0,
         damageBurstHoldUntilMs: 0,
+        recentDamageHoldUntilMs: 0,
         bufferedNotReadyHoldUntilMs: 0,
         persistentLeanHoldUntilMs: 0,
         silentLeanHoldUntilMs: 0,
@@ -1016,7 +1146,8 @@ export class GroupCallAudioReceiveEngine {
         ? Math.max(40, message.targetPlayoutMs)
         : staticTargetMs;
     const bufferedMs =
-      typeof message.bufferedMs === 'number' && Number.isFinite(message.bufferedMs)
+      typeof message.bufferedMs === 'number' &&
+      Number.isFinite(message.bufferedMs)
         ? Math.max(0, message.bufferedMs)
         : 0;
     const deltaMs =
@@ -1227,6 +1358,33 @@ export class GroupCallAudioReceiveEngine {
     ) {
       state.damageBurstHoldUntilMs = 0;
     }
+    if (
+      (missingFramesThisTick >=
+        GCALL_SINGLE_SOURCE_RECENT_DAMAGE_MISSING_FRAMES_MIN &&
+        bufferedMs <= GCALL_SINGLE_SOURCE_RECENT_DAMAGE_BUFFERED_MS_MAX &&
+        deltaMs <= GCALL_SINGLE_SOURCE_RECENT_DAMAGE_DELTA_MAX_MS) ||
+      (message.concealmentUsed &&
+        bufferedMs <=
+          GCALL_SINGLE_SOURCE_RECENT_DAMAGE_NOT_READY_BUFFERED_MS_MAX &&
+        deltaMs <= GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS)
+    ) {
+      state.recentDamageHoldUntilMs = Math.max(
+        state.recentDamageHoldUntilMs,
+        nowMs + GCALL_SINGLE_SOURCE_RECENT_DAMAGE_HOLD_MS
+      );
+    } else if (
+      state.recentDamageHoldUntilMs > 0 &&
+      !message.concealmentUsed &&
+      missingFramesThisTick === 0 &&
+      bufferedMs >= GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_BUFFERED_MS_MIN &&
+      deltaMs >= GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_DELTA_MIN_MS &&
+      state.concealmentEma <=
+        GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_CONCEALMENT_EMA_MAX &&
+      state.missingFrameEma <=
+        GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_MISSING_EMA_MAX
+    ) {
+      state.recentDamageHoldUntilMs = 0;
+    }
   }
 
   private syncLiveMultiSourceControls(): void {
@@ -1308,7 +1466,8 @@ export class GroupCallAudioReceiveEngine {
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_SEVERE_BUFFERED_MS_MAX &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS &&
           (state.underTargetEma >= 0.5 || state.concealmentEma >= 0.2) &&
-          (state.oldestFrameAgeEma >= GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS ||
+          (state.oldestFrameAgeEma >=
+            GCALL_SINGLE_SOURCE_SEVERE_INGRESS_AGE_MIN_MS ||
             state.preProcessBufferedFrames <= 0);
         const recoveryModeActive = mode === 'recovery';
         const readyNearEmptyDamageCollapsePressure =
@@ -1357,7 +1516,8 @@ export class GroupCallAudioReceiveEngine {
         const bufferedPressure =
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
         const lingeringPressure =
-          (state.underTargetEma >= GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN ||
+          (state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_PRESSURE_UNDERTARGET_EMA_MIN ||
             (state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
               (state.preProcessBufferedFrames <=
                 GCALL_SINGLE_SOURCE_PRESSURE_LINGERING_PREBUFFER_FRAMES_MAX ||
@@ -1366,10 +1526,12 @@ export class GroupCallAudioReceiveEngine {
                 state.rateEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_EMA_MAX ||
                 state.concealmentEma >=
                   GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_EMA_MIN))) &&
-          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN;
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_PRESSURE_RELIEF_BUFFERED_MS_MIN;
         const ratePressure =
           state.rateEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_EMA_MAX &&
-          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_RATE_BUFFERED_MS_MAX;
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_PRESSURE_RATE_BUFFERED_MS_MAX;
         const starvationPressure =
           (state.protectedMode || state.starvationSeverity !== 'none') &&
           state.bufferedMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_BUFFERED_MS_MAX;
@@ -1407,12 +1569,10 @@ export class GroupCallAudioReceiveEngine {
               GCALL_SINGLE_SOURCE_STEADY_CONCEALMENT_BUFFERED_MS_MAX);
         const sustainedDamagePressure =
           state.lastJitterHasReadyFrame &&
-          state.missingFrameEma >=
-            GCALL_SINGLE_SOURCE_STEADY_MISSING_EMA_MIN &&
+          state.missingFrameEma >= GCALL_SINGLE_SOURCE_STEADY_MISSING_EMA_MIN &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_STEADY_DAMAGE_BUFFERED_MS_MAX &&
-          state.deltaMsEma <=
-            GCALL_SINGLE_SOURCE_STEADY_DAMAGE_DELTA_MAX_MS &&
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_STEADY_DAMAGE_DELTA_MAX_MS &&
           (state.underTargetEma >=
             GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN ||
             state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX ||
@@ -1474,19 +1634,19 @@ export class GroupCallAudioReceiveEngine {
           state.rateEma <=
             GCALL_SINGLE_SOURCE_REPAIR_HEAVY_READY_FALSE_CLEAN_RATE_EMA_MAX;
         const repairHeavyStandardPressure =
-          (state.concealmentEma >=
-            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN) ||
-            (state.missingFrameEma >=
-              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN &&
-              state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
-              state.bufferedMsEma <=
-                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX) ||
-            (state.underTargetEma >=
-              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN &&
-              state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
-              state.bufferedMsEma <=
-                GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX) ||
-            repairHeavyReadyBufferedDamagePressure;
+          state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CONCEALMENT_EMA_MIN ||
+          (state.missingFrameEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_MISSING_EMA_MIN &&
+            state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
+            state.bufferedMsEma <=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX) ||
+          (state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN &&
+            state.deltaMsEma <= GCALL_SINGLE_SOURCE_PRESSURE_DELTA_MAX_MS &&
+            state.bufferedMsEma <=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_UNDERTARGET_BUFFERED_MS_MAX) ||
+          repairHeavyReadyBufferedDamagePressure;
         const repairHeavyPressure =
           ((repairHeavyStandardPressure &&
             state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX) ||
@@ -1596,8 +1756,14 @@ export class GroupCallAudioReceiveEngine {
         ) {
           state.repairHeavyHoldUntilMs = 0;
         }
+        const damageHoldHealthyEscape =
+          steadyHealthyEscape &&
+          state.deltaMsEma >=
+            GCALL_SINGLE_SOURCE_DAMAGE_HOLD_HEALTHY_ESCAPE_DELTA_MIN_MS &&
+          state.missingFrameEma <=
+            GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_MISSING_EMA_MAX;
         const damageBurstClear =
-          steadyHealthyEscape ||
+          damageHoldHealthyEscape ||
           (!repairCollapsePressure &&
             !repairHeavyPressure &&
             state.bufferedMsEma >=
@@ -1625,6 +1791,58 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_DAMAGE_BURST_REPAIR_COLLAPSE_DELTA_MAX_MS;
         const damageBurstRepairPressure =
           damageBurstHold && !damageBurstCollapsePressure;
+        const recentDamageClear =
+          damageHoldHealthyEscape ||
+          (state.lastJitterHasReadyFrame &&
+            !state.lastConcealmentUsed &&
+            state.preProcessBufferedFrames >=
+              GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
+            state.concealmentEma <=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_CONCEALMENT_EMA_MAX &&
+            state.missingFrameEma <=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_MISSING_EMA_MAX &&
+            state.underTargetEma <=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_CLEAR_UNDERTARGET_EMA_MAX &&
+            state.rateEma >=
+              GCALL_SINGLE_SOURCE_REPAIR_HEAVY_HEALTHY_ESCAPE_RATE_EMA_MIN) ||
+          (!repairCollapsePressure &&
+            !repairHeavyPressure &&
+            state.bufferedMsEma >=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_BUFFERED_MS_MIN &&
+            state.deltaMsEma >=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_DELTA_MIN_MS &&
+            state.concealmentEma <=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_CONCEALMENT_EMA_MAX &&
+            state.missingFrameEma <=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_CLEAR_MISSING_EMA_MAX);
+        if (state.recentDamageHoldUntilMs > 0 && recentDamageClear) {
+          state.recentDamageHoldUntilMs = 0;
+        }
+        const recentDamageHold =
+          state.recentDamageHoldUntilMs > nowMs &&
+          !recentDamageClear &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_RECENT_DAMAGE_BUFFERED_MS_MAX &&
+          state.deltaMsEma <= GCALL_SINGLE_SOURCE_RECENT_DAMAGE_DELTA_MAX_MS;
+        const recentDamageCollapsePressure =
+          recentDamageHold &&
+          ((state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_RECENT_DAMAGE_COLLAPSE_BUFFERED_MS_MAX &&
+            state.deltaMsEma <=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_COLLAPSE_DELTA_MAX_MS) ||
+            (!state.lastJitterHasReadyFrame &&
+              state.bufferedMsEma <=
+                GCALL_SINGLE_SOURCE_RECENT_DAMAGE_NOT_READY_BUFFERED_MS_MAX));
+        const recentDamageRepairPressure =
+          recentDamageHold &&
+          !recentDamageCollapsePressure &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_RECENT_DAMAGE_REPAIR_HEAVY_BUFFERED_MS_MAX &&
+          (state.underTargetEma >=
+            GCALL_SINGLE_SOURCE_RECENT_DAMAGE_REPAIR_HEAVY_UNDERTARGET_EMA_MIN ||
+            state.missingFrameEma >=
+              GCALL_SINGLE_SOURCE_RECENT_DAMAGE_REPAIR_HEAVY_MISSING_EMA_MIN ||
+            state.rateEma <= GCALL_SINGLE_SOURCE_REPAIR_HEAVY_RATE_EMA_MAX);
         const diagnosticBufferedNotReadyPressure =
           !state.lastJitterHasReadyFrame &&
           !state.lastConcealmentUsed &&
@@ -1656,8 +1874,7 @@ export class GroupCallAudioReceiveEngine {
           !state.lastJitterHasReadyFrame &&
           state.lastJitterBufferedFrames >=
             GCALL_SINGLE_SOURCE_DIAGNOSTIC_BUFFERED_FRAMES_MIN &&
-          latestBufferedMs <=
-            GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
+          latestBufferedMs <= GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS &&
@@ -1692,7 +1909,8 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_PREBUFFER_FRAMES_MAX ||
             state.oldestFrameAgeEma >=
               GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_INGRESS_AGE_MIN_MS) &&
-          state.deltaMsEma <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS &&
+          state.deltaMsEma <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_DELTA_MAX_MS &&
           state.concealmentEma <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CONCEALMENT_EMA_MAX &&
           !severeSingleSourceHold;
@@ -1714,7 +1932,8 @@ export class GroupCallAudioReceiveEngine {
           ) &&
           state.concealmentEma <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CONCEALMENT_EMA_MAX &&
-          latestBufferedMs <= GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
+          latestBufferedMs <=
+            GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           state.bufferedMsEma <=
             GCALL_SINGLE_SOURCE_PERSISTENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           !(
@@ -1740,7 +1959,8 @@ export class GroupCallAudioReceiveEngine {
         }
         const notReadySilentLeanPressure =
           !state.lastJitterHasReadyFrame &&
-          state.bufferedMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
+          state.bufferedMsEma <=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_BUFFERED_MS_MAX &&
           state.preProcessBufferedFrames <=
             GCALL_SINGLE_SOURCE_SILENT_LEAN_PREBUFFER_FRAMES_MAX &&
           state.deltaMsEma <= GCALL_SINGLE_SOURCE_SILENT_LEAN_DELTA_MAX_MS &&
@@ -1798,8 +2018,7 @@ export class GroupCallAudioReceiveEngine {
             GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_BUFFERED_MS_MIN &&
           state.preProcessBufferedFrames >=
             GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
-          state.deltaMsEma >=
-            GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS
+          state.deltaMsEma >= GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_DELTA_MIN_MS
         ) {
           state.silentLeanHoldUntilMs = 0;
         }
@@ -1906,6 +2125,7 @@ export class GroupCallAudioReceiveEngine {
           ratePressure ||
           mildSteadyAssist ||
           damageBurstHold ||
+          recentDamageHold ||
           effectiveRepairCollapseHold ||
           repairCollapsePressure ||
           repairHeavyHold ||
@@ -1985,8 +2205,10 @@ export class GroupCallAudioReceiveEngine {
           repairHeavyHold,
           repairHeavyPressure,
           damageBurstHold,
-          damageBurstCollapsePressure,
-          damageBurstRepairPressure,
+          damageBurstCollapsePressure:
+            damageBurstCollapsePressure || recentDamageCollapsePressure,
+          damageBurstRepairPressure:
+            damageBurstRepairPressure || recentDamageRepairPressure,
           bufferedNotReadyHold,
           bufferedNotReadyPressure,
           persistentLeanHold,
@@ -2000,6 +2222,7 @@ export class GroupCallAudioReceiveEngine {
           mildSteadyAssist:
             (mildSteadyAssist ||
               sustainedDamagePressure ||
+              recentDamageRepairPressure ||
               currentUnderTargetPressure ||
               currentSlowRatePressure) &&
             !steadyHealthyEscape,
@@ -2017,6 +2240,7 @@ export class GroupCallAudioReceiveEngine {
           (profile === 'steady-weak-listener' &&
             !steadyHealthyEscape &&
             (sustainedDamagePressure ||
+              recentDamageRepairPressure ||
               state.underTargetEma >=
                 GCALL_SINGLE_SOURCE_STEADY_ARTIFACT_UNDERTARGET_EMA_MIN ||
               state.concealmentEma >=
@@ -2081,17 +2305,19 @@ export class GroupCallAudioReceiveEngine {
         if (floorMs !== null) {
           targetMs = Math.max(targetMs, floorMs);
         }
-        const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs({
-          currentAdaptiveMaxTargetMs: targetMs,
-          activeSourceCount,
-          adaptiveNetworkMode: 'recovery',
-          starvationSeverity: state.starvationSeverity,
-          previousStarvationSeverity: state.starvationSeverity,
-          playoutUnderTargetFraction: state.underTargetEma,
-          avgPlayoutDeltaMs: state.deltaMsEma,
-          avgOpusBufferedMs: state.bufferedMsEma,
-          observedTargetMs: state.targetPlayoutMs,
-        });
+        const feasibleTargetMs = computeFeasibleSingleRemoteRecoveryTargetMaxMs(
+          {
+            currentAdaptiveMaxTargetMs: targetMs,
+            activeSourceCount,
+            adaptiveNetworkMode: 'recovery',
+            starvationSeverity: state.starvationSeverity,
+            previousStarvationSeverity: state.starvationSeverity,
+            playoutUnderTargetFraction: state.underTargetEma,
+            avgPlayoutDeltaMs: state.deltaMsEma,
+            avgOpusBufferedMs: state.bufferedMsEma,
+            observedTargetMs: state.targetPlayoutMs,
+          }
+        );
         if (feasibleTargetMs !== null) {
           targetMs = Math.max(targetMs, feasibleTargetMs);
         }
@@ -2123,13 +2349,101 @@ export class GroupCallAudioReceiveEngine {
         continue;
       }
 
-      if (mode !== 'recovery') {
+      const latestMultiSourceBufferedMs =
+        state.recentOpusBufferedMs.at(-1) ?? state.bufferedMsEma;
+      const multiSourceDamageHold =
+        state.damageBurstHoldUntilMs > nowMs &&
+        state.bufferedMsEma <= GCALL_MULTI_SOURCE_DAMAGE_BUFFERED_MS_MAX &&
+        state.deltaMsEma <= GCALL_MULTI_SOURCE_DAMAGE_DELTA_MAX_MS;
+      const multiSourceRecentDamageHold =
+        state.recentDamageHoldUntilMs > nowMs &&
+        state.bufferedMsEma <= GCALL_MULTI_SOURCE_DAMAGE_BUFFERED_MS_MAX &&
+        state.deltaMsEma <= GCALL_MULTI_SOURCE_DAMAGE_DELTA_MAX_MS;
+      const multiSourceRepairHold =
+        state.repairCollapseHoldUntilMs > nowMs ||
+        state.repairHeavyHoldUntilMs > nowMs;
+      const multiSourceLatchedDamage =
+        state.protectedMode ||
+        state.starvationSeverity !== 'none' ||
+        multiSourceDamageHold ||
+        multiSourceRecentDamageHold ||
+        multiSourceRepairHold;
+      const multiSourceCurrentCleanSample =
+        latestMultiSourceBufferedMs >= GCALL_MULTI_SOURCE_CLEAN_BUFFERED_MS_MIN &&
+        state.preProcessBufferedFrames >=
+          GCALL_SINGLE_SOURCE_SILENT_LEAN_CLEAR_PREBUFFER_FRAMES_MIN &&
+        !state.lastOutsideBandUnder &&
+        !state.lastConcealmentUsed &&
+        state.lastRateSample >= GCALL_MULTI_SOURCE_CLEAN_RATE_EMA_MIN;
+      const multiSourceCleanMetrics =
+        !state.lastConcealmentUsed &&
+        ((state.bufferedMsEma >= GCALL_MULTI_SOURCE_CLEAN_BUFFERED_MS_MIN &&
+          state.deltaMsEma >= GCALL_MULTI_SOURCE_CLEAN_DELTA_MIN_MS &&
+          state.concealmentEma <=
+            GCALL_MULTI_SOURCE_CLEAN_CONCEALMENT_EMA_MAX &&
+          state.missingFrameEma <= GCALL_MULTI_SOURCE_CLEAN_MISSING_EMA_MAX &&
+          state.underTargetEma <=
+            GCALL_MULTI_SOURCE_CLEAN_UNDERTARGET_EMA_MAX &&
+          state.rateEma >= GCALL_MULTI_SOURCE_CLEAN_RATE_EMA_MIN) ||
+          (!multiSourceLatchedDamage &&
+            state.currentReceiveProfile === 'multi-clean-low-latency' &&
+            multiSourceCurrentCleanSample));
+      const multiSourceNearEmptyDamage =
+        state.bufferedMsEma <= GCALL_MULTI_SOURCE_NEAR_EMPTY_BUFFERED_MS_MAX &&
+        state.deltaMsEma <= GCALL_SINGLE_SOURCE_SEVERE_DELTA_MAX_MS &&
+        (multiSourceDamageHold ||
+          multiSourceRecentDamageHold ||
+          !state.lastJitterHasReadyFrame ||
+          state.concealmentEma >=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_DAMAGE_CONCEALMENT_EMA_MIN ||
+          state.missingFrameEma >=
+            GCALL_SINGLE_SOURCE_SILENT_LEAN_DAMAGE_MISSING_EMA_HOLD_MIN);
+      const multiSourceRepairDamage =
+        state.bufferedMsEma <= GCALL_MULTI_SOURCE_DAMAGE_BUFFERED_MS_MAX &&
+        state.deltaMsEma <= GCALL_MULTI_SOURCE_DAMAGE_DELTA_MAX_MS &&
+        (multiSourceDamageHold ||
+          multiSourceRecentDamageHold ||
+          multiSourceRepairHold ||
+          state.concealmentEma >=
+            GCALL_MULTI_SOURCE_DAMAGE_CONCEALMENT_EMA_MIN ||
+          state.missingFrameEma >= GCALL_MULTI_SOURCE_DAMAGE_MISSING_EMA_MIN ||
+          state.underTargetEma >=
+            GCALL_MULTI_SOURCE_DAMAGE_UNDERTARGET_EMA_MIN ||
+          state.rateEma <= GCALL_MULTI_SOURCE_DAMAGE_RATE_EMA_MAX);
+      const multiSourceNotReadyDamage =
+        !state.lastJitterHasReadyFrame &&
+        (state.bufferedMsEma <= GCALL_MULTI_SOURCE_DAMAGE_BUFFERED_MS_MAX ||
+          state.deltaMsEma <= GCALL_MULTI_SOURCE_DAMAGE_DELTA_MAX_MS ||
+          multiSourceRecentDamageHold);
+      const multiSourceSourceRecoveryPressure =
+        !multiSourceCleanMetrics &&
+        (state.protectedMode ||
+          state.starvationSeverity !== 'none' ||
+          multiSourceRepairHold ||
+          multiSourceDamageHold ||
+          multiSourceRecentDamageHold ||
+          multiSourceNearEmptyDamage ||
+          multiSourceRepairDamage ||
+          multiSourceNotReadyDamage);
+      const multiSourceSourceCollapsePressure =
+        !multiSourceCleanMetrics &&
+        (multiSourceNearEmptyDamage ||
+          (multiSourceDamageHold &&
+            state.bufferedMsEma <=
+              GCALL_SINGLE_SOURCE_DAMAGE_BURST_REPAIR_COLLAPSE_BUFFERED_MS_MAX &&
+            state.deltaMsEma <= GCALL_MULTI_SOURCE_COLLAPSE_DELTA_MAX_MS));
+
+      if (mode !== 'recovery' && !multiSourceSourceRecoveryPressure) {
         this.setReceiveProfile(
           sourceAddr,
           state,
           'multi-clean-low-latency',
           nowMs
         );
+        state.lastAppliedTargetMs = null;
+        state.lastAppliedFloorMs = null;
+        state.lastAppliedTargetBoostMs = 0;
+        state.lastAppliedExtraHoldFrames = 0;
         playout.setBurstRecoveryExtraHoldFrames(0);
         playout.resetDynamicTargetPlayoutMs();
         continue;
@@ -2143,32 +2457,56 @@ export class GroupCallAudioReceiveEngine {
         protectedMode: state.protectedMode,
         playoutStarvationSeverity: state.starvationSeverity,
       });
+      const profile = selectMultiSourceReceiveProfile({
+        recoveryModeActive: mode === 'recovery',
+        prioritizeWeakLeg,
+        protectedMode: state.protectedMode,
+        starvationSeverity: state.starvationSeverity,
+        sourceRecoveryPressure: multiSourceSourceRecoveryPressure,
+        sourceCollapsePressure: multiSourceSourceCollapsePressure,
+      });
       this.setReceiveProfile(
         sourceAddr,
         state,
-        selectMultiSourceReceiveProfile({
-          recoveryModeActive: true,
-          prioritizeWeakLeg,
-          protectedMode: state.protectedMode,
-          starvationSeverity: state.starvationSeverity,
-        }),
+        profile,
         nowMs
       );
 
-      let targetMs = staticTargetMs;
-      if (prioritizeWeakLeg) {
+      const targetBoostMs = multiSourceReceiveProfileTargetBoostMs(
+        profile,
+        multiSourceSourceCollapsePressure
+      );
+      const floorMs = multiSourceReceiveProfileFloorMs(
+        profile,
+        multiSourceSourceCollapsePressure
+      );
+      let targetMs = staticTargetMs + targetBoostMs;
+      if (floorMs !== null) {
+        targetMs = Math.max(targetMs, floorMs);
+      }
+      if (
+        (prioritizeWeakLeg || multiSourceSourceRecoveryPressure) &&
+        targetBoostMs === 0
+      ) {
         targetMs +=
-          state.starvationSeverity === 'strong'
+          state.starvationSeverity === 'strong' ||
+          multiSourceSourceCollapsePressure
             ? GCALL_MULTI_SOURCE_TARGET_BOOST_STRONG_MS
             : GCALL_MULTI_SOURCE_TARGET_BOOST_MILD_MS;
       }
       const feasibleTargetMs = computeFeasibleMultiSourceRecoveryTargetMaxMs({
         currentAdaptiveMaxTargetMs: targetMs,
         activeSourceCount,
-        adaptiveNetworkMode: mode,
+        adaptiveNetworkMode:
+          mode === 'recovery' || multiSourceSourceRecoveryPressure
+            ? 'recovery'
+            : mode,
         starvationSeverity: state.starvationSeverity,
-        isolatedSource: prioritizeWeakLeg,
-        shouldTightenRecovery: state.protectedMode || weakLegPresent,
+        isolatedSource: prioritizeWeakLeg || multiSourceSourceRecoveryPressure,
+        shouldTightenRecovery:
+          state.protectedMode ||
+          weakLegPresent ||
+          multiSourceSourceRecoveryPressure,
         previousStarvationSeverity: state.starvationSeverity,
         playoutUnderTargetFraction: state.underTargetEma,
         avgPlayoutDeltaMs: state.deltaMsEma,
@@ -2176,34 +2514,49 @@ export class GroupCallAudioReceiveEngine {
         observedTargetMs: state.targetPlayoutMs,
       });
       if (feasibleTargetMs !== null) {
-        targetMs = feasibleTargetMs;
+        targetMs = floorMs !== null
+          ? Math.max(floorMs, feasibleTargetMs)
+          : feasibleTargetMs;
       }
 
       const shouldHold = shouldHoldMultiSourceAccumulation({
         bufferedFrames: state.preProcessBufferedFrames,
         opusBufferedMs: state.bufferedMsEma,
         adaptiveTargetMedianMs: targetMs,
-        protectedMode: state.protectedMode,
+        protectedMode:
+          state.protectedMode || multiSourceSourceRecoveryPressure,
         playoutStarvationSeverity: state.starvationSeverity,
       });
       const accumulationTargetFrames =
         computeMultiSourceAccumulationTargetFrames({
           adaptiveTargetMedianMs: targetMs,
-          protectedMode: state.protectedMode,
+          protectedMode:
+            state.protectedMode || multiSourceSourceRecoveryPressure,
           playoutStarvationSeverity: state.starvationSeverity,
         });
+      const shouldForceSourcePressureHold =
+        multiSourceSourceRecoveryPressure &&
+        state.preProcessBufferedFrames <
+          Math.max(2, Math.round(targetMs / OPUS_FRAME_DURATION_MS));
+      const maxExtraHoldFrames =
+        multiSourceReceiveProfileMaxExtraHoldFrames(profile);
       const extraHoldFrames =
-        shouldHold && accumulationTargetFrames !== null
+        (shouldHold || shouldForceSourcePressureHold) &&
+        accumulationTargetFrames !== null
           ? Math.max(
               0,
               Math.min(
-                GCALL_MULTI_SOURCE_MAX_EXTRA_HOLD_FRAMES,
+                maxExtraHoldFrames,
                 accumulationTargetFrames -
                   Math.max(1, state.preProcessBufferedFrames)
               )
             )
           : 0;
 
+      state.lastAppliedTargetMs = targetMs;
+      state.lastAppliedFloorMs = floorMs;
+      state.lastAppliedTargetBoostMs = targetBoostMs;
+      state.lastAppliedExtraHoldFrames = extraHoldFrames;
       playout.setBurstRecoveryExtraHoldFrames(extraHoldFrames);
       playout.setDynamicTargetPlayoutMs(targetMs);
     }
@@ -2219,7 +2572,8 @@ export class GroupCallAudioReceiveEngine {
   ): void {
     if (message.playoutStarted === false) return;
     const bufferedMs =
-      typeof message.bufferedMs === 'number' && Number.isFinite(message.bufferedMs)
+      typeof message.bufferedMs === 'number' &&
+      Number.isFinite(message.bufferedMs)
         ? message.bufferedMs
         : Number.POSITIVE_INFINITY;
     const deltaMs =
@@ -2236,7 +2590,8 @@ export class GroupCallAudioReceiveEngine {
       Number.isFinite(message.preProcessBufferedMs)
         ? message.preProcessBufferedMs
         : Number.POSITIVE_INFINITY;
-    const underPressure = !!message.outsideBandUnder || !!message.concealmentUsed;
+    const underPressure =
+      !!message.outsideBandUnder || !!message.concealmentUsed;
     const bufferedButNotReadySilentLean =
       !underPressure &&
       playoutDiagnostics !== undefined &&
@@ -2250,7 +2605,8 @@ export class GroupCallAudioReceiveEngine {
       underPressure &&
       bufferedMs <= GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_PCM_MAX_MS &&
       deltaMs <= GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_DELTA_MAX_MS &&
-      (oldestFrameAgeMs >= GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_INGRESS_AGE_MIN_MS ||
+      (oldestFrameAgeMs >=
+        GCALL_AUDIO_SURFACE_RECOVERY_SEVERE_INGRESS_AGE_MIN_MS ||
         bufferedMs <= 8 ||
         preProcessBufferedMs <= OPUS_FRAME_DURATION_MS);
     const moderateCollapse =

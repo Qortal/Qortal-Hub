@@ -44,7 +44,12 @@ describe('GroupCallAudioReceiveEngine', () => {
           this.state = 'running';
         });
         constructor() {
-          contexts.push(this as unknown as { state: string; resume: ReturnType<typeof vi.fn> });
+          contexts.push(
+            this as unknown as {
+              state: string;
+              resume: ReturnType<typeof vi.fn>;
+            }
+          );
         }
         createGain() {
           return {
@@ -396,10 +401,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions.set(peerAddress, options);
       }
     );
-    const syncSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'syncAdaptiveJitterGeometry'
-    ).mockImplementation(() => {});
+    const syncSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'syncAdaptiveJitterGeometry')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -460,22 +464,24 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions.set(peerAddress, options);
       }
     );
-    const syncSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'syncAdaptiveJitterGeometry'
-    ).mockImplementation(() => {});
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const holdSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setBurstRecoveryExtraHoldFrames'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const syncSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'syncAdaptiveJitterGeometry')
+      .mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -555,7 +561,7 @@ describe('GroupCallAudioReceiveEngine', () => {
     );
   });
 
-  it('holds multi-source protected mode until the modeled recovery exit streak is satisfied', async () => {
+  it('holds multi-source protected mode until the modeled recovery exit streak is satisfied without clearing damage latches', async () => {
     vi.stubGlobal(
       'AudioContext',
       class {
@@ -642,11 +648,11 @@ describe('GroupCallAudioReceiveEngine', () => {
       concealmentUsed: false,
     });
 
-    const aliceState = (engine as any).liveMultiSourceStateBySource.get('alice');
+    const aliceState = (engine as any).liveMultiSourceStateBySource.get(
+      'alice'
+    );
     expect(aliceState?.protectedMode).toBe(true);
-    expect(
-      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
-    ).toEqual(
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual(
       expect.arrayContaining([
         {
           peerAddress: 'alice',
@@ -690,16 +696,170 @@ describe('GroupCallAudioReceiveEngine', () => {
     }
 
     expect(aliceState?.protectedMode).toBe(false);
-    expect(
-      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
-    ).toEqual(
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual(
       expect.arrayContaining([
         {
           peerAddress: 'alice',
+          profile: 'multi-protected-recovery',
+        },
+      ])
+    );
+  });
+
+  it('keeps a damaged 3-way source out of multi-clean without flattening healthy sources', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    const capturedOptions = new Map<
+      string,
+      Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+    >();
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, peerAddress, _connectTo, options) {
+        capturedOptions.set(peerAddress, options);
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      const peerAddress = (this as any).peerAddress ?? '';
+      return {
+        peerAddress,
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: peerAddress === 'alice' ? 9 : 12,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'low-latency',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+    await (engine as any).getOrCreatePlayout('bob');
+
+    const alice = capturedOptions.get('alice');
+    const bob = capturedOptions.get('bob');
+    expect(alice).toBeDefined();
+    expect(bob).toBeDefined();
+
+    bob?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 120,
+      preProcessBufferedMs: 120,
+      targetPlayoutMs: 100,
+      oldestFrameAgeMs: 80,
+      rate: 1,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -5,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    alice?.afterDrain?.({ missedFramesThisTick: 524 });
+    alice?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 5.2,
+      preProcessBufferedMs: 5,
+      targetPlayoutMs: 120,
+      oldestFrameAgeMs: 560,
+      rate: 1,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -176,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    const diagnostics = engine.getDiagnosticsSnapshot();
+    expect(diagnostics.livePolicyProfilesBySource).toEqual(
+      expect.arrayContaining([
+        {
+          peerAddress: 'alice',
+          profile: 'multi-protected-recovery',
+        },
+        {
+          peerAddress: 'bob',
           profile: 'multi-clean-low-latency',
         },
       ])
     );
+    const aliceState = diagnostics.livePolicyStateBySource.find(
+      (state) => state.peerAddress === 'alice'
+    );
+    expect(aliceState?.lastAppliedTargetMs).toBeGreaterThanOrEqual(224);
+    expect(aliceState?.lastAppliedFloorMs).toBe(224);
+    expect(aliceState?.lastAppliedTargetBoostMs).toBe(120);
+    expect(aliceState?.lastAppliedExtraHoldFrames).toBeGreaterThan(0);
+
+    vi.advanceTimersByTime(128);
+    alice?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 96,
+      preProcessBufferedMs: 180,
+      targetPlayoutMs: 185,
+      oldestFrameAgeMs: 120,
+      rate: 1,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -89,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    const postCleanSampleDiagnostics = engine.getDiagnosticsSnapshot();
+    expect(postCleanSampleDiagnostics.livePolicyProfilesBySource).toEqual(
+      expect.arrayContaining([
+        {
+          peerAddress: 'alice',
+          profile: 'multi-protected-recovery',
+        },
+        {
+          peerAddress: 'bob',
+          profile: 'multi-clean-low-latency',
+        },
+      ])
+    );
+    vi.useRealTimers();
   });
 
   it('raises target and extra hold for weak single-source recovery', async () => {
@@ -728,18 +888,21 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const holdSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setBurstRecoveryExtraHoldFrames'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -840,18 +1003,21 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const holdSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setBurstRecoveryExtraHoldFrames'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -986,10 +1152,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -1094,10 +1259,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -1175,10 +1339,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -1256,10 +1419,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -1338,10 +1500,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -1420,10 +1581,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -1502,10 +1662,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -1634,7 +1793,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'repair-heavy-connected',
@@ -1747,7 +1908,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'repair-heavy-connected',
@@ -1782,14 +1945,15 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const holdSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setBurstRecoveryExtraHoldFrames'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -1876,10 +2040,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
     ).mockImplementation(() => {});
-    const syncSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'syncAdaptiveJitterGeometry'
-    ).mockImplementation(() => {});
+    const syncSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'syncAdaptiveJitterGeometry')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -1988,18 +2151,21 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const extraHoldSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setBurstRecoveryExtraHoldFrames'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
+    const extraHoldSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -2114,10 +2280,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -2275,7 +2440,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'persistent-lean',
@@ -2545,14 +2712,15 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -2731,7 +2899,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'silent-lean',
@@ -2767,14 +2937,15 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -2905,10 +3076,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
@@ -3024,10 +3194,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
@@ -3112,6 +3281,117 @@ describe('GroupCallAudioReceiveEngine', () => {
     vi.useRealTimers();
   });
 
+  it('does not clear recent missing-frame damage just because a ready sample has buffered reserve', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 22,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    capturedOptions?.afterDrain?.({ missedFramesThisTick: 240 });
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 28,
+      preProcessBufferedMs: 14,
+      targetPlayoutMs: 124,
+      oldestFrameAgeMs: 160,
+      rate: 1,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -160,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
+      {
+        peerAddress: 'alice',
+        profile: 'repair-collapse',
+      },
+    ]);
+
+    for (let i = 0; i < 4; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 70,
+        preProcessBufferedMs: 14,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 80,
+        rate: 1,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -112,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource[0]?.profile
+    ).toBe('repair-heavy-connected');
+
+    vi.useRealTimers();
+  });
+
   it('holds repair-heavy after a large burst on a ready moderate-reserve path and clears on healthy reserve', async () => {
     vi.useFakeTimers();
     vi.stubGlobal(
@@ -3143,10 +3423,12 @@ describe('GroupCallAudioReceiveEngine', () => {
       DmVoiceGcallInboundPlayout.prototype,
       'setDynamicTargetPlayoutMs'
     ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3251,14 +3533,15 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3396,10 +3679,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3486,10 +3768,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3574,10 +3855,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3662,10 +3942,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3750,10 +4029,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3862,10 +4140,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -3986,14 +4263,15 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -4080,10 +4358,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -4163,10 +4440,9 @@ describe('GroupCallAudioReceiveEngine', () => {
     vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
       async () => {}
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -4314,7 +4590,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'buffered-not-ready',
@@ -4404,7 +4682,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'buffered-not-ready',
@@ -4520,7 +4800,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       concealmentUsed: false,
     });
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'buffered-not-ready',
@@ -4556,10 +4838,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
@@ -4672,18 +4953,19 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
     ).mockImplementation(() => {});
-    const holdSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setBurstRecoveryExtraHoldFrames'
-    ).mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -4766,14 +5048,15 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
-    const holdSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setBurstRecoveryExtraHoldFrames'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
+    const holdSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'setBurstRecoveryExtraHoldFrames'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
@@ -4859,10 +5142,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
@@ -5142,7 +5424,9 @@ describe('GroupCallAudioReceiveEngine', () => {
     const profile =
       engine.getDiagnosticsSnapshot().livePolicyProfilesBySource[0]?.profile;
     expect(profile).not.toBe('buffered-not-ready');
-    expect(['steady-weak-listener', 'repair-heavy-connected']).toContain(profile);
+    expect(['steady-weak-listener', 'repair-heavy-connected']).toContain(
+      profile
+    );
     vi.useRealTimers();
   });
 
@@ -5290,10 +5574,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
@@ -5436,7 +5719,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       });
     }
 
-    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).not.toEqual([
+    expect(
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource
+    ).not.toEqual([
       {
         peerAddress: 'alice',
         profile: 'persistent-lean',
@@ -5472,10 +5757,9 @@ describe('GroupCallAudioReceiveEngine', () => {
         capturedOptions = options;
       }
     );
-    const targetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'setDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const targetSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'setDynamicTargetPlayoutMs')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'resetDynamicTargetPlayoutMs'
@@ -5845,10 +6129,9 @@ describe('GroupCallAudioReceiveEngine', () => {
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
     ).mockImplementation(() => {});
-    const syncSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'syncAdaptiveJitterGeometry'
-    ).mockImplementation(() => {});
+    const syncSpy = vi
+      .spyOn(DmVoiceGcallInboundPlayout.prototype, 'syncAdaptiveJitterGeometry')
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'getDiagnosticsSnapshot'
@@ -5959,10 +6242,12 @@ describe('GroupCallAudioReceiveEngine', () => {
       DmVoiceGcallInboundPlayout.prototype,
       'setDynamicTargetPlayoutMs'
     ).mockImplementation(() => {});
-    const resetTargetSpy = vi.spyOn(
-      DmVoiceGcallInboundPlayout.prototype,
-      'resetDynamicTargetPlayoutMs'
-    ).mockImplementation(() => {});
+    const resetTargetSpy = vi
+      .spyOn(
+        DmVoiceGcallInboundPlayout.prototype,
+        'resetDynamicTargetPlayoutMs'
+      )
+      .mockImplementation(() => {});
     vi.spyOn(
       DmVoiceGcallInboundPlayout.prototype,
       'setBurstRecoveryExtraHoldFrames'
@@ -6538,7 +6823,9 @@ describe('GroupCallAudioReceiveEngine', () => {
     const profile =
       engine.getDiagnosticsSnapshot().livePolicyProfilesBySource[0]?.profile;
     expect(profile).not.toBe('collapse-recovery');
-    expect(['steady-weak-listener', 'repair-heavy-connected']).toContain(profile);
+    expect(['steady-weak-listener', 'repair-heavy-connected']).toContain(
+      profile
+    );
     vi.useRealTimers();
   });
 
@@ -6808,6 +7095,218 @@ describe('GroupCallAudioReceiveEngine', () => {
       {
         peerAddress: 'alice',
         profile: 'repair-heavy-connected',
+      },
+    ]);
+    vi.useRealTimers();
+  });
+
+  it('keeps recent moderate-reserve gap damage out of clean-low-latency while deltas remain bad', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 18,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    capturedOptions?.afterDrain?.({ missedFramesThisTick: 4 });
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 37,
+      preProcessBufferedMs: 220,
+      targetPlayoutMs: 124,
+      oldestFrameAgeMs: 180,
+      rate: 1,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -132,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    for (let i = 0; i < 4; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 37,
+        preProcessBufferedMs: 220,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 180,
+        rate: 1,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -132,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    const profile =
+      engine.getDiagnosticsSnapshot().livePolicyProfilesBySource[0]?.profile;
+    expect(profile).not.toBe('clean-low-latency');
+    expect(['repair-heavy-connected', 'steady-weak-listener']).toContain(
+      profile
+    );
+    vi.useRealTimers();
+  });
+
+  it('keeps recent near-empty damage out of silent-lean until damage is quiet', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        sampleRate = 48_000;
+        state = 'running';
+        destination = {};
+        async resume() {}
+        createGain() {
+          return {
+            gain: { value: 0 },
+            connect: vi.fn(),
+            disconnect: vi.fn(),
+          };
+        }
+      }
+    );
+
+    let capturedOptions:
+      | Parameters<DmVoiceGcallInboundPlayout['start']>[3]
+      | undefined;
+    vi.spyOn(DmVoiceGcallInboundPlayout.prototype, 'start').mockImplementation(
+      async function (_ctx, _peerAddress, _connectTo, options) {
+        capturedOptions = options;
+      }
+    );
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'resetDynamicTargetPlayoutMs'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'setBurstRecoveryExtraHoldFrames'
+    ).mockImplementation(() => {});
+    vi.spyOn(
+      DmVoiceGcallInboundPlayout.prototype,
+      'getDiagnosticsSnapshot'
+    ).mockImplementation(function (this: DmVoiceGcallInboundPlayout) {
+      return {
+        peerAddress: (this as any).peerAddress ?? '',
+        decodePath: 'wasm-fec',
+        wasmFecActive: true,
+        hasOpusFecWorker: true,
+        hasWebCodecsDecoder: false,
+        decoderState: null,
+        hasSharedPcmRing: true,
+        sharedRingEnabled: true,
+        jitterActive: true,
+        jitterBufferedFrames: 21,
+        jitterHasReadyFrame: true,
+        playbackNodeActive: true,
+        schedulerNodeActive: true,
+        lastJitterAdaptiveMode: 'recovery',
+      };
+    });
+
+    const engine = new GroupCallAudioReceiveEngine(() => {});
+    await (engine as any).getOrCreatePlayout('alice');
+
+    capturedOptions?.afterDrain?.({ missedFramesThisTick: 4 });
+    capturedOptions?.onPlayoutWorkletMessage?.({
+      type: 'gcallPlayoutMetrics',
+      bufferedMs: 5,
+      preProcessBufferedMs: 5,
+      targetPlayoutMs: 124,
+      oldestFrameAgeMs: 160,
+      rate: 1,
+      outsideBand: false,
+      outsideBandUnder: false,
+      outsideBandOver: false,
+      deltaMs: -180,
+      playoutStarted: true,
+      concealmentUsed: false,
+    });
+
+    for (let i = 0; i < 4; i += 1) {
+      capturedOptions?.onPlayoutWorkletMessage?.({
+        type: 'gcallPlayoutMetrics',
+        bufferedMs: 5,
+        preProcessBufferedMs: 5,
+        targetPlayoutMs: 124,
+        oldestFrameAgeMs: 160,
+        rate: 1,
+        outsideBand: false,
+        outsideBandUnder: false,
+        outsideBandOver: false,
+        deltaMs: -180,
+        playoutStarted: true,
+        concealmentUsed: false,
+      });
+    }
+
+    expect(engine.getDiagnosticsSnapshot().livePolicyProfilesBySource).toEqual([
+      {
+        peerAddress: 'alice',
+        profile: 'repair-collapse',
       },
     ]);
     vi.useRealTimers();

@@ -286,6 +286,7 @@ const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
 const STARTUP_MEDIA_TARGET_SETTLE_MS = 15_000;
+const STARTUP_EMPTY_TARGET_SETTLE_MS = 60_000;
 const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
 const ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS =
   ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS * 2;
@@ -363,6 +364,10 @@ const LOW_INBOUND_MEDIA_RECOVERY_MAX_INBOUND_TO_OUTBOUND_RATIO = 0.35;
 const LOW_INBOUND_MEDIA_RECOVERY_UNDERTARGET_MIN = 0.12;
 const LOW_INBOUND_MEDIA_RECOVERY_RATE_BELOW_097_MIN = 0.1;
 const LOW_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 100;
+const BURSTY_INBOUND_MEDIA_RECOVERY_MAX_INCOMING_PACKET_MS = 1_000;
+const BURSTY_INBOUND_MEDIA_RECOVERY_MAX_BRIDGE_TO_RENDERER_MS = 750;
+const BURSTY_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN = 80;
+const BURSTY_INBOUND_MEDIA_RECOVERY_MISSING_FRAMES_MIN = 300;
 const naclApi = nacl as typeof nacl;
 
 function base64ToUint8(value: string): Uint8Array {
@@ -1514,10 +1519,20 @@ export class GroupCallAudioEngineRuntime {
       metrics.playoutRateFractionBelow097 >=
         LOW_INBOUND_MEDIA_RECOVERY_RATE_BELOW_097_MIN ||
       metrics.concealmentTicks >= LOW_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN;
+    const burstyInboundDamage =
+      (metrics.maxIncomingPacketMs >=
+        BURSTY_INBOUND_MEDIA_RECOVERY_MAX_INCOMING_PACKET_MS ||
+        metrics.maxReticulumAudioBridgeToRendererIngressMs >=
+          BURSTY_INBOUND_MEDIA_RECOVERY_MAX_BRIDGE_TO_RENDERER_MS) &&
+      (metrics.concealmentTicks >=
+        BURSTY_INBOUND_MEDIA_RECOVERY_CONCEALMENT_MIN ||
+        metrics.missingFrames >=
+          BURSTY_INBOUND_MEDIA_RECOVERY_MISSING_FRAMES_MIN);
     if (
-      inboundToOutboundRatio >
+      !burstyInboundDamage &&
+      (inboundToOutboundRatio >
         LOW_INBOUND_MEDIA_RECOVERY_MAX_INBOUND_TO_OUTBOUND_RATIO ||
-      !receiveDamage
+        !receiveDamage)
     ) {
       return;
     }
@@ -1548,6 +1563,11 @@ export class GroupCallAudioEngineRuntime {
         playoutUnderTargetFraction: metrics.playoutUnderTargetFraction,
         playoutRateFractionBelow097: metrics.playoutRateFractionBelow097,
         concealmentTicks: metrics.concealmentTicks,
+        missingFrames: metrics.missingFrames,
+        maxIncomingPacketMs: metrics.maxIncomingPacketMs,
+        maxReticulumAudioBridgeToRendererIngressMs:
+          metrics.maxReticulumAudioBridgeToRendererIngressMs,
+        burstyInboundDamage,
         reason: 'path-degraded-warm',
       });
       void requestPeerMediaRecovery(
@@ -5230,9 +5250,6 @@ export class GroupCallAudioEngineRuntime {
     ) {
       return false;
     }
-    if (nowMs - this.lastJoinSuccessAtMs > STARTUP_MEDIA_TARGET_SETTLE_MS) {
-      return false;
-    }
     const myAddress = this.userInfo?.address?.trim() ?? '';
     if (!myAddress) return false;
     const remoteCandidates = new Set<string>();
@@ -5243,7 +5260,11 @@ export class GroupCallAudioEngineRuntime {
     for (const address of this.collectTopologyAddresses(this.topology)) {
       if (address && address !== myAddress) remoteCandidates.add(address);
     }
-    return remoteCandidates.size > 0;
+    const settleMs =
+      remoteCandidates.size > 0
+        ? STARTUP_MEDIA_TARGET_SETTLE_MS
+        : STARTUP_EMPTY_TARGET_SETTLE_MS;
+    return nowMs - this.lastJoinSuccessAtMs <= settleMs;
   }
 
   private recordStartupMediaTargetWait(nowMs: number): void {
