@@ -331,6 +331,8 @@
     "generic": {
       "avatar_publish_fee": "la publication d’un avatar coûte {{ fee }}",
       "avatar_registered_name": "un nom enregistré est requis pour définir un avatar",
+      "add_new_key_option": "Ajouter une nouvelle clé",
+      "add_new_key_sparingly": "Ajoutez une nouvelle clé avec parcimonie pour éviter d'augmenter la taille des clés du groupe.",
       "admin_only": "seuls les groupes dont vous êtes admin seront affichés",
       "already_in_group": "vous êtes déjà dans ce groupe !",
       "block_delay_minimum": "délai minimum de bloc pour les validations de transactions de groupe",

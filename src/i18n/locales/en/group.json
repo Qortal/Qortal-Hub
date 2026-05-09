@@ -332,6 +332,8 @@
     "generic": {
       "avatar_publish_fee": "publishing an Avatar requires {{ fee }}",
       "avatar_registered_name": "a registered name is required to set an avatar",
+      "add_new_key_option": "Add a new key",
+      "add_new_key_sparingly": "Adding a new key should be done sparingly to avoid increasing the size of the group keys.",
       "admin_only": "only groups where you are an admin will be shown",
       "already_in_group": "you are already in this group!",
       "block_delay_minimum": "minimum Block delay for Group Transaction Approvals",

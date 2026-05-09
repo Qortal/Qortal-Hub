@@ -296,10 +296,13 @@ export const AdminSpaceInner = ({
                   group_id: selectedGroup,
                   postProcess: 'capitalizeFirstChar',
                 }),
-                labelDone: t('group:message.success.published_secret_key_label', {
-                  group_id: selectedGroup,
-                  postProcess: 'capitalizeFirstChar',
-                }),
+                labelDone: t(
+                  'group:message.success.published_secret_key_label',
+                  {
+                    group_id: selectedGroup,
+                    postProcess: 'capitalizeFirstChar',
+                  }
+                ),
                 done: false,
                 groupId: selectedGroup,
               },
@@ -416,18 +419,10 @@ export const AdminSpaceInner = ({
           </Typography>
         )}
 
-        <Button
-          disabled={!isOwner}
-          onClick={openGroupKeyPublishSelect}
-          variant="contained"
-        >
-          {isOwner
-            ? t('auth:action.publish_group_secret_key', {
-                postProcess: 'capitalizeFirstChar',
-              })
-            : t('auth:action.only_owner', {
-                postProcess: 'capitalizeFirstChar',
-              })}
+        <Button onClick={openGroupKeyPublishSelect} variant="contained">
+          {t('auth:action.publish_group_secret_key', {
+            postProcess: 'capitalizeFirstChar',
+          })}
         </Button>
 
         <Dialog
@@ -462,8 +457,7 @@ export const AdminSpaceInner = ({
             ) : (
               <List dense>
                 {groupKeyPublishList.map((publish) => {
-                  const ts =
-                    publish?.updated ?? publish?.created ?? 0;
+                  const ts = publish?.updated ?? publish?.created ?? 0;
                   const dateNum =
                     typeof ts === 'number' ? ts : new Date(ts).getTime();
                   const label = `${formatTimestampForum(dateNum)} by ${publish?.name ?? ''}`;
@@ -511,7 +505,9 @@ export const AdminSpaceInner = ({
 
         <Dialog
           open={groupKeyPublishConfirmOpen}
-          onClose={() => !isPublishingGroupKey && setGroupKeyPublishConfirmOpen(false)}
+          onClose={() =>
+            !isPublishingGroupKey && setGroupKeyPublishConfirmOpen(false)
+          }
         >
           <DialogTitle>
             {t('auth:message.generic.confirm_publish_group_secret_key', {

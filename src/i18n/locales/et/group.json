@@ -332,6 +332,8 @@
     "generic": {
       "avatar_publish_fee": "avatari avaldamine nõuab tasu {{ fee }}",
       "avatar_registered_name": "avatari seadistamiseks on vajalik registreeritud nimi",
+      "add_new_key_option": "Lisa uus võti",
+      "add_new_key_sparingly": "Uusi võtit tasub lisada säästlikult, et grupi võtmete maht ei kasvaks liiga suureks.",
       "admin_only": "kuvatakse ainult need rühmad, kus sina oled administraator",
       "already_in_group": "sa oled juba selles rühmas!",
       "block_delay_minimum": "minimaalne ploki viivitus rühma tehingute kinnitamiseks",

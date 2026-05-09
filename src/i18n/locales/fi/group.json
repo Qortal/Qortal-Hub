@@ -331,6 +331,8 @@
     "generic": {
       "avatar_publish_fee": "profiilikuvan julkaisu vaatii {{ fee }}",
       "avatar_registered_name": "profiilikuvan asettamiseen tarvitaan rekisteröity nimi",
+      "add_new_key_option": "Lisää uusi avain",
+      "add_new_key_sparingly": "Uusia avaimia kannattaa lisätä vain harvoin, jotta ryhmän avainten koko ei kasva.",
       "admin_only": "vain ryhmät, joissa olet ylläpitäjä, näytetään",
       "already_in_group": "olet jo tässä ryhmässä!",
       "block_delay_minimum": "vähimmäislohkon viive ryhmätapahtumien hyväksyntään",

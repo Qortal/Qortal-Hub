@@ -331,6 +331,8 @@
     "generic": {
       "avatar_publish_fee": "Das Veröffentlichen eines Avatars kostet {{ fee }}",
       "avatar_registered_name": "Ein registrierter Name ist erforderlich, um einen Avatar zu setzen",
+      "add_new_key_option": "Einen neuen Schlüssel hinzufügen",
+      "add_new_key_sparingly": "Neue Schlüssel sollten nur sparsam hinzugefügt werden, um das Anwachsen der Gruppenschlüssel zu vermeiden.",
       "admin_only": "Nur Gruppen, in denen du Admin bist, werden angezeigt",
       "already_in_group": "Du bist bereits in dieser Gruppe!",
       "block_delay_minimum": "Minimale Blockverzögerung für Gruppen-Transaktionsfreigaben",

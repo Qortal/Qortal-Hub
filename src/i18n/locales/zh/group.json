@@ -331,6 +331,8 @@
     "generic": {
       "avatar_publish_fee": "发布头像需支付 {{ fee }}",
       "avatar_registered_name": "设置头像需先注册名称",
+      "add_new_key_option": "添加新密钥",
+      "add_new_key_sparingly": "请谨慎添加新密钥，以免增大群组密钥规模。",
       "admin_only": "仅显示你为管理员的群组",
       "already_in_group": "你已经在这个群组中！",
       "block_delay_minimum": "群组交易批准的最小区块延迟",

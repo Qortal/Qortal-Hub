@@ -331,6 +331,8 @@
     "generic": {
       "avatar_publish_fee": "アバターの公開には {{ fee }} が必要です",
       "avatar_registered_name": "アバターを設定するには登録済みの名前が必要です",
+      "add_new_key_option": "新しい鍵を追加",
+      "add_new_key_sparingly": "グループ鍵が大きくなりすぎないよう、新しい鍵は必要なときに限って追加してください。",
       "admin_only": "あなたが管理者のグループのみ表示されます",
       "already_in_group": "すでにこのグループに参加しています！",
       "block_delay_minimum": "グループ取引承認の最小ブロック遅延",
