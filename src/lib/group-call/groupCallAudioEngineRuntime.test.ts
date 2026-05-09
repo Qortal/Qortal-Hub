@@ -3346,6 +3346,7 @@ describe('GroupCallAudioEngineRuntime', () => {
       roomId: 'room-1',
       chatId: 'chat-1',
     });
+    (runtime as any).awaitingAuthoritativeKey = false;
 
     broadcastTopology.mockClear();
     await vi.advanceTimersByTimeAsync(34_000);
@@ -3368,6 +3369,81 @@ describe('GroupCallAudioEngineRuntime', () => {
       (
         (runtime as any).snapshot.participants as Array<{ address: string }>
       ).some((participant) => participant.address === 'Qpeer')
+    ).toBe(true);
+    vi.useRealTimers();
+  });
+
+  it('does not promote one-to-one standby to root while awaiting the authoritative room key', async () => {
+    vi.useFakeTimers();
+    const nowMs = Date.now();
+    getRoomParticipants.mockResolvedValue([
+      { address: 'Qlocal', publicKey: 'pub-local' },
+      { address: 'Qpeer', publicKey: 'pub-peer' },
+    ]);
+    getRoomBootstrapState.mockResolvedValue({
+      roomId: 'room-1',
+      participants: [
+        { address: 'Qlocal', publicKey: 'pub-local', joinedAt: 1 },
+        { address: 'Qpeer', publicKey: 'pub-peer', joinedAt: 2 },
+      ],
+      topologyEpoch: 3,
+      lastTopology: {
+        topologyEpoch: 3,
+        rootForwarder: 'Qpeer',
+        standbyForwarder: 'Qlocal',
+        clusters: [
+          {
+            members: ['Qlocal', 'Qpeer'],
+            forwarder: 'Qpeer',
+            standby: 'Qlocal',
+          },
+        ],
+        lastSeen: nowMs,
+      },
+      callSessionId: 'csid-bootstrap',
+      mediaSessionGeneration: 2,
+      updatedAtMs: nowMs,
+      fromRecentCache: false,
+    });
+
+    const runtime = new GroupCallAudioEngineRuntime();
+    runtimes.add(runtime);
+    const computeElectionOrderSpy = vi
+      .spyOn(runtime as any, 'computeElectionOrder')
+      .mockResolvedValue(['Qlocal']);
+
+    await runtime.handleCommand({
+      type: 'set-user',
+      userInfo: { address: 'Qlocal', publicKey: 'pub-local' },
+      myStatus: 'online',
+    });
+    await runtime.handleCommand({
+      type: 'join-group-call',
+      roomId: 'room-1',
+      chatId: 'chat-1',
+    });
+    (runtime as any).awaitingAuthoritativeKey = true;
+
+    broadcastTopology.mockClear();
+    await vi.advanceTimersByTimeAsync(34_000);
+
+    expect(computeElectionOrderSpy).not.toHaveBeenCalled();
+    expect(broadcastTopology).not.toHaveBeenCalledWith(
+      'room-1',
+      expect.objectContaining({
+        rootForwarder: 'Qlocal',
+      }),
+      expect.any(String),
+      'pub-local',
+      expect.any(Number)
+    );
+    expect((runtime as any).topology?.rootForwarder).toBe('Qpeer');
+    expect(
+      ((runtime as any).diagEvents as Array<{ tag: string }>).some(
+        (event) =>
+          event.tag ===
+          'root-heartbeat-timeout-suppressed-awaiting-authoritative-key'
+      )
     ).toBe(true);
     vi.useRealTimers();
   });

@@ -4347,6 +4347,21 @@ export class GroupCallAudioEngineRuntime {
         return;
       }
     }
+    if (this.awaitingAuthoritativeKey) {
+      this.recordDiagEvent(
+        'root-heartbeat-timeout-suppressed-awaiting-authoritative-key',
+        {
+          roomId,
+          currentRoot,
+          heartbeatSilentMs,
+          rootLivenessState: rootLiveness.state,
+        }
+      );
+      this.scheduleRootFailoverWatchForDeadline(
+        nowMs + ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS
+      );
+      return;
+    }
     if (
       !shouldPromoteStandbyRootAfterHeartbeatTimeout({
         heartbeatSilentMs,
