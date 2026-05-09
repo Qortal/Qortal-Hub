@@ -5121,6 +5121,39 @@ describe('GroupCallAudioEngineRuntime', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(sendAudio).not.toHaveBeenCalled();
     expect(sendAudioBatch).not.toHaveBeenCalled();
+    const startupDiag = await runtime.handleCommand({
+      type: 'export-diagnostics',
+      options: { download: false, clipboard: false },
+    });
+    const startupParsed = JSON.parse(
+      startupDiag.ok ? (startupDiag.payload as string) : '{}'
+    ) as {
+      audioSurfaceRuntimeDiagnostics?: {
+        outboundMedia?: {
+          packetBuildAttempts?: number;
+          skippedNoTargets?: number;
+          lastSkipReason?: string;
+        };
+        recentEvents?: Array<{ tag: string }>;
+      };
+    };
+    expect(
+      startupParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia
+        ?.packetBuildAttempts
+    ).toBe(0);
+    expect(
+      startupParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia
+        ?.skippedNoTargets
+    ).toBe(0);
+    expect(
+      startupParsed.audioSurfaceRuntimeDiagnostics?.outboundMedia
+        ?.lastSkipReason
+    ).toBe('startup-target-wait');
+    expect(
+      startupParsed.audioSurfaceRuntimeDiagnostics?.recentEvents?.some(
+        (event) => event.tag === 'outbound-media-startup-target-wait'
+      )
+    ).toBe(true);
 
     groupCallEventHandler?.('gcall:topology', {
       roomId: 'gcall-qortal-812',

@@ -285,6 +285,7 @@ type OutboundMediaDiagnostics = {
 const GCALL_KEY_MESSAGE_VERSION = 3;
 const TOPOLOGY_HEARTBEAT_MS = 5_000;
 const TOPOLOGY_ELECTION_DEBOUNCE_MS = 120;
+const STARTUP_MEDIA_TARGET_SETTLE_MS = 15_000;
 const ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS = TOPOLOGY_HEARTBEAT_MS * 3 + 1_500;
 const ROOT_ONE_TO_ONE_FAILOVER_TIMEOUT_MS =
   ROOT_HEARTBEAT_FAILOVER_TIMEOUT_MS * 2;
@@ -566,6 +567,7 @@ export class GroupCallAudioEngineRuntime {
   >();
   private readonly bootstrapOnlyParticipantAddresses = new Set<string>();
   private bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
+  private startupMediaTargetWaitLastDiagAt = 0;
   private readonly recentlyLeftParticipantsUntilMs = new Map<string, number>();
   private readonly participantRosterMissingSinceMs = new Map<string, number>();
   private readonly diagEvents: AudioSurfaceDiagEvent[] = [];
@@ -1087,6 +1089,7 @@ export class GroupCallAudioEngineRuntime {
     this.outboundLastMainDiagnostics = null;
     this.outboundLastTargets = [];
     this.outboundTargetDiagnostics.clear();
+    this.startupMediaTargetWaitLastDiagAt = 0;
   }
 
   private recordOutboundSkip(reason: string): void {
@@ -2058,6 +2061,7 @@ export class GroupCallAudioEngineRuntime {
     this.participantLiveEvidenceLastSeenAt.clear();
     this.bootstrapOnlyParticipantAddresses.clear();
     this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
+    this.startupMediaTargetWaitLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -2352,6 +2356,7 @@ export class GroupCallAudioEngineRuntime {
     this.participantLiveEvidenceLastSeenAt.clear();
     this.bootstrapOnlyParticipantAddresses.clear();
     this.bootstrapOnlyMediaTargetSkipLastDiagAt = 0;
+    this.startupMediaTargetWaitLastDiagAt = 0;
     this.recentlyLeftParticipantsUntilMs.clear();
     this.participantRosterMissingSinceMs.clear();
     this.connectionHintBadSince = null;
@@ -5200,6 +5205,38 @@ export class GroupCallAudioEngineRuntime {
     return this.filterBootstrapOnlyMediaTargets(targets);
   }
 
+  private shouldWaitForStartupMediaTargets(nowMs: number): boolean {
+    if (!this.snapshot.roomId || !this.topology || this.lastJoinSuccessAtMs <= 0) {
+      return false;
+    }
+    if (nowMs - this.lastJoinSuccessAtMs > STARTUP_MEDIA_TARGET_SETTLE_MS) {
+      return false;
+    }
+    const myAddress = this.userInfo?.address?.trim() ?? '';
+    if (!myAddress) return false;
+    const remoteCandidates = new Set<string>();
+    for (const participant of this.snapshot.participants) {
+      const address = participant.address?.trim() ?? '';
+      if (address && address !== myAddress) remoteCandidates.add(address);
+    }
+    for (const address of this.collectTopologyAddresses(this.topology)) {
+      if (address && address !== myAddress) remoteCandidates.add(address);
+    }
+    return remoteCandidates.size > 0;
+  }
+
+  private recordStartupMediaTargetWait(nowMs: number): void {
+    this.outboundLastSkipAtMs = nowMs;
+    this.outboundLastSkipReason = 'startup-target-wait';
+    if (nowMs - this.startupMediaTargetWaitLastDiagAt <= 1_000) return;
+    this.startupMediaTargetWaitLastDiagAt = nowMs;
+    this.recordDiagEvent('outbound-media-startup-target-wait', {
+      roomId: this.snapshot.roomId,
+      topologyEpoch: this.topology?.topologyEpoch ?? 0,
+      sinceJoinMs: Math.max(0, nowMs - this.lastJoinSuccessAtMs),
+    });
+  }
+
   private hasRecentParticipantActivityEvidence(
     addressValue: string | null | undefined,
     nowMs: number
@@ -5825,22 +5862,7 @@ export class GroupCallAudioEngineRuntime {
       this.recordOutboundSkip('muted');
       return;
     }
-    this.outboundPacketBuildAttempts++;
-    this.outboundLastPacketBuildAttemptAtMs = Date.now();
-    if (typeof encodeOutPerfMs === 'number') {
-      this.receiveEngine.recordSenderEncoderToPacketTimestampGap(
-        Math.max(0, performance.now() - encodeOutPerfMs)
-      );
-    }
-    const seq = this.seq++ & 0xffff;
-    const packet = encodeAudioPacketV2(
-      this.userInfo.address,
-      this.senderEngine.getVad(),
-      seq,
-      Math.max(0, Date.now() - this.callEpochMs),
-      opusFrame,
-      this.roomKey
-    );
+    const nowMs = Date.now();
     let targets = this.filterBootstrapOnlyMediaTargets(
       getReticulumTransportTargets(this.userInfo.address, this.topology)
     );
@@ -5865,9 +5887,29 @@ export class GroupCallAudioEngineRuntime {
     }
     this.outboundLastTargets = [...targets];
     if (targets.length === 0) {
+      if (this.shouldWaitForStartupMediaTargets(nowMs)) {
+        this.recordStartupMediaTargetWait(nowMs);
+        return;
+      }
       this.recordOutboundSkip('no-targets');
       return;
     }
+    this.outboundPacketBuildAttempts++;
+    this.outboundLastPacketBuildAttemptAtMs = Date.now();
+    if (typeof encodeOutPerfMs === 'number') {
+      this.receiveEngine.recordSenderEncoderToPacketTimestampGap(
+        Math.max(0, performance.now() - encodeOutPerfMs)
+      );
+    }
+    const seq = this.seq++ & 0xffff;
+    const packet = encodeAudioPacketV2(
+      this.userInfo.address,
+      this.senderEngine.getVad(),
+      seq,
+      Math.max(0, Date.now() - this.callEpochMs),
+      opusFrame,
+      this.roomKey
+    );
     const markAttempt = (target: string): OutboundMediaTargetDiagnostics => {
       const diag = this.getOutboundTargetDiagnostics(target);
       diag.attempts++;

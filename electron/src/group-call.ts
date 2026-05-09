@@ -151,6 +151,13 @@ const GC_RETICULUM_RECOVERY_HOLD_AUDIO_FALSE_REASONS = new Set<string>([
 const GC_RETICULUM_RECOVERY_PACKET_PROTECTION_REASONS = new Set<string>([
   'path-degraded-warm',
 ]);
+/**
+ * Renderer media-quality warmups are soft evidence. They may happen during
+ * join/key/topology settle, so they must not tear down an already-open link.
+ */
+const GC_RETICULUM_RECOVERY_PRESERVE_LINK_REASONS = new Set<string>([
+  'path-degraded-warm',
+]);
 /** Matches send-side pressure backoff: fair flush reschedules with this delay when bridge is pressured. */
 const GC_RETICULUM_AUDIO_FLUSH_RETRY_DELAY_MS = 5;
 const GC_RETICULUM_AUDIO_RECOVERY_HOLD_MS = 160;
@@ -213,7 +220,7 @@ const GC_RETICULUM_AUDIO_LINK_ESTABLISH_RETRY_MAX_MS = 30_000;
 
 type ReticulumMediaTransportKind = 'link' | 'packet';
 
-const GC_RETICULUM_PACKET_MEDIA_ENABLED = true;
+const GC_RETICULUM_PACKET_MEDIA_ENABLED = false;
 const GC_RETICULUM_PACKET_MEDIA_KEEP_AUDIO_LINKS = true;
 const GC_RETICULUM_OVERLAY_HOPS = 4;
 const GC_RETICULUM_OVERLAY_SEEN_TTL_MS = 120_000;
@@ -1511,6 +1518,11 @@ export class GroupCallManager extends EventEmitter {
   private retainedJoinIdentityReplayAttemptsByTopology = new Map<
     string,
     number
+  >();
+  /** roomId → verified key/rotate still needs renderer session reconciliation. */
+  private pendingVerifiedSessionUpdateByRoom = new Map<
+    string,
+    { callSessionId: string; mediaSessionGeneration: number }
   >();
   private pendingKeyFlushSuccess = 0;
   private pendingKeyExpired = 0;
@@ -3879,6 +3891,7 @@ export class GroupCallManager extends EventEmitter {
     if (room) this.rememberRecentRoomState(room, timestamp);
     this.pendingKeyByRoom.delete(roomId);
     this.pendingGcJoinBeforeJoinRoom.delete(roomId);
+    this.pendingVerifiedSessionUpdateByRoom.delete(roomId);
     this.clearRetainedVerifiedKeyStatesForRoom(roomId);
     this.clearRetainedVerifiedJoinStatesForRoom(roomId);
     this.clearRecentCallActivityForRoom(roomId);
@@ -5342,7 +5355,10 @@ export class GroupCallManager extends EventEmitter {
       }
       return;
     }
-    if (state.linkId) {
+    if (
+      state.linkId &&
+      !GC_RETICULUM_RECOVERY_PRESERVE_LINK_REASONS.has(reason)
+    ) {
       this.markReticulumAudioLinkUnready(
         address,
         state.linkId,
@@ -8065,11 +8081,13 @@ export class GroupCallManager extends EventEmitter {
     // Each Electron process allocates its own callSessionId UUID on first joinRoom.
     // The root's UUID is the authoritative session identity; non-root peers adopt it
     // from the first verified key message rather than from their own local UUID.
+    let sessionAdopted = false;
     if (env.mediaSessionGeneration !== room.mediaSessionGeneration) {
       if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
         // Root has advanced the generation (session-break). Adopt the new session.
         room.callSessionId = env.callSessionId;
         room.mediaSessionGeneration = env.mediaSessionGeneration;
+        sessionAdopted = true;
         loggerLog(
           `[GCall] GC_KEY: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`
         );
@@ -8082,6 +8100,13 @@ export class GroupCallManager extends EventEmitter {
     } else if (env.callSessionId !== room.callSessionId) {
       // Same generation, different callSessionId — root's UUID wins; adopt it.
       room.callSessionId = env.callSessionId;
+      sessionAdopted = true;
+    }
+    if (sessionAdopted) {
+      this.pendingVerifiedSessionUpdateByRoom.set(env.roomId, {
+        callSessionId: env.callSessionId,
+        mediaSessionGeneration: env.mediaSessionGeneration,
+      });
     }
     const fields = buildGcKeySignedFields(env);
     if (!fields) return;
@@ -8129,10 +8154,12 @@ export class GroupCallManager extends EventEmitter {
       return;
     }
     // Same cross-process session adoption as handleKey: root's callSessionId wins.
+    let sessionAdopted = false;
     if (env.mediaSessionGeneration !== room.mediaSessionGeneration) {
       if (env.mediaSessionGeneration > room.mediaSessionGeneration) {
         room.callSessionId = env.callSessionId;
         room.mediaSessionGeneration = env.mediaSessionGeneration;
+        sessionAdopted = true;
         loggerLog(
           `[GCall] GC_KEY_ROTATE: adopted session gen ${env.mediaSessionGeneration} from ${env.fromAddress}`
         );
@@ -8144,6 +8171,13 @@ export class GroupCallManager extends EventEmitter {
       }
     } else if (env.callSessionId !== room.callSessionId) {
       room.callSessionId = env.callSessionId;
+      sessionAdopted = true;
+    }
+    if (sessionAdopted) {
+      this.pendingVerifiedSessionUpdateByRoom.set(env.roomId, {
+        callSessionId: env.callSessionId,
+        mediaSessionGeneration: env.mediaSessionGeneration,
+      });
     }
     const fields = buildGcKeyRotateSignedFields(env);
     if (!fields) return;
@@ -8223,6 +8257,7 @@ export class GroupCallManager extends EventEmitter {
       env.fromAddress,
       env.timestamp
     );
+    this.emitPendingVerifiedSessionUpdate(env.roomId, env);
     const payload: RetainedVerifiedKeyState = {
       roomId: env.roomId,
       recipientAddress: env.toAddress,
@@ -8248,6 +8283,7 @@ export class GroupCallManager extends EventEmitter {
       env.fromAddress,
       env.timestamp
     );
+    this.emitPendingVerifiedSessionUpdate(env.roomId, env);
     for (const localAddr of this.localAddresses) {
       const encryptedKey = env.encryptedKeys[localAddr];
       if (!encryptedKey) continue;
@@ -8292,6 +8328,26 @@ export class GroupCallManager extends EventEmitter {
 
   getKeyMessageVersion(): number {
     return GC_KEY_MESSAGE_VERSION;
+  }
+
+  private emitPendingVerifiedSessionUpdate(
+    roomId: string,
+    env: { callSessionId: string; mediaSessionGeneration: number }
+  ): void {
+    const pending = this.pendingVerifiedSessionUpdateByRoom.get(roomId);
+    if (
+      !pending ||
+      pending.callSessionId !== env.callSessionId ||
+      pending.mediaSessionGeneration !== env.mediaSessionGeneration
+    ) {
+      return;
+    }
+    this.pendingVerifiedSessionUpdateByRoom.delete(roomId);
+    this.emit('gcall:session-updated', {
+      roomId,
+      callSessionId: env.callSessionId,
+      mediaSessionGeneration: env.mediaSessionGeneration,
+    });
   }
 
   getKeyDigestForTarget(toAddress: string, encryptedKey: string): string {

@@ -1391,6 +1391,66 @@ describe('recent room bootstrap state', () => {
     ]);
     manager.stop();
   });
+
+  it('emits session-updated after a verified same-generation key adopts the root session id', async () => {
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      reticulumBridgeReadyStub([]) as any
+    );
+    const sessionUpdates: Array<Record<string, unknown>> = [];
+
+    manager.start();
+    (manager as any).verifyPool.verify = vi.fn(async () => true);
+    manager.on('gcall:session-updated', (payload) => {
+      sessionUpdates.push(payload as Record<string, unknown>);
+    });
+
+    manager.setLocalAddresses(['Q-self']);
+    const join = manager.joinRoom(
+      'room-1',
+      'chat-1',
+      'Q-self',
+      'sig',
+      'pk-self',
+      100,
+      TEST_D32
+    );
+    expect(join.callSessionId).not.toBe('root-session');
+
+    const encryptedKey = 'ciphertext-root';
+    (manager as any).handleKey({
+      type: 'GC_KEY',
+      roomId: 'room-1',
+      toAddress: 'Q-self',
+      fromAddress: 'Q-root',
+      fromPublicKey: 'pk-root',
+      encryptedKey,
+      signature: 'sig-root',
+      timestamp: 101,
+      keyMessageVersion: 3,
+      callSessionId: 'root-session',
+      mediaSessionGeneration: 1,
+      keyCommitment: 'commitment-root',
+      encryptedKeyDigest: manager.getKeyDigestForTarget(
+        'Q-self',
+        encryptedKey
+      ),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sessionUpdates).toEqual([
+      {
+        roomId: 'room-1',
+        callSessionId: 'root-session',
+        mediaSessionGeneration: 1,
+      },
+    ]);
+    expect(manager.getRoomBootstrapState('room-1')?.callSessionId).toBe(
+      'root-session'
+    );
+    manager.stop();
+  });
 });
 
 describe('retained verified key replay', () => {
@@ -1629,6 +1689,74 @@ describe('Reticulum group audio transport', () => {
       Buffer.from([1, 2, 3]),
       ''
     );
+  });
+
+  it('keeps an established audio link during warm media-quality recovery', async () => {
+    class ReticulumAudioBridgeStub extends EventEmitter {
+      getState() {
+        return 'ready' as const;
+      }
+      fanoutGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCallDetailed() {
+        return Promise.resolve({ ok: true as const });
+      }
+      sendGroupCall() {
+        return Promise.resolve(true);
+      }
+      openGroupAudioLink = vi.fn(async () => ({
+        ok: true as const,
+        linkId: 'link-1',
+        established: true,
+      }));
+      getAudioQueueSnapshot = vi.fn(() => makeAudioQueueSnapshot());
+      enqueueGroupAudio = vi.fn(() => ({
+        ok: true as const,
+        dropped: false,
+        queuePressureDrops: 0,
+        staleDrops: 0,
+        snapshot: this.getAudioQueueSnapshot(),
+      }));
+      warmGroupAudioPath = vi.fn(async () => ({ ok: true as const }));
+      closeGroupAudioLink = vi.fn(async () => ({ ok: true as const }));
+    }
+
+    const bridge = new ReticulumAudioBridgeStub();
+    const manager = new GroupCallManager(
+      reticulumAwarePresenceStub() as any,
+      bridge as any
+    );
+    (manager as any).getReticulumAudioTransportKind = () => 'link';
+
+    manager.setLocalAddresses(['Q-self']);
+    manager.joinRoom('room-1', 'chat-1', 'Q-self', 'sig', 'pk', 100, TEST_D32);
+
+    manager.sendAudio('room-1', 'Q-peer', Buffer.from([1, 2, 3]));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(manager.getReticulumAudioLinkStats('room-1').establishedLinks).toBe(
+      1
+    );
+
+    manager.requestPeerMediaRecovery('room-1', 'Q-peer', 'path-degraded-warm');
+    await Promise.resolve();
+
+    const state = (manager as any).reticulumAudioPeersByAddress.get('Q-peer');
+    const diagnostics = (manager as any).buildReticulumAudioSendDiagnostics(
+      state,
+      'Q-peer'
+    );
+    expect(diagnostics.linkEstablished).toBe(true);
+    expect(diagnostics.linkId).toBe('link-1');
+    expect(diagnostics.lastLinkUnreadyReason).toBeUndefined();
+    expect(state.lastLinkUnreadyReason).toBe('');
+    expect(manager.getReticulumAudioLinkStats('room-1').establishedLinks).toBe(
+      1
+    );
+    expect(bridge.openGroupAudioLink).toHaveBeenCalledTimes(1);
+    expect(bridge.closeGroupAudioLink).not.toHaveBeenCalled();
   });
 
   it('does not let a stale leave-drain timer tear down a cached-peer link after rejoin', async () => {

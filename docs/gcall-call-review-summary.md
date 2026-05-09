@@ -3275,3 +3275,360 @@ Current patched target:
 - Secondary fix: keep tightening selector hysteresis/clean-clear gating. The Linux root still briefly clears to `clean-low-latency` while under-target and missing-frame pressure remain active, but the dominant new failure is not a false-clean side.
 - Keep baseline unchanged. This is not evidence that ordinary low-latency baseline is too small; both sides are in recovery/weak/lean logic most of the time.
 - Do not prioritize key/decode, startup, authority/topology, send-target, or a new profile from this pair.
+
+## Call: 2026-05-08 21:17Z / group 937
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-113.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-08T21-17-05-597Z.json`
+
+User symptom:
+- Call was good at times, but choppy at other times.
+
+High-level verdict:
+- Mixed / intermittently choppy, but structurally cleaner than the previous broken-link sample.
+- Both exports agree on room `gcall-qortal-937`, call session `04ea73fc-6b3c-40b2-8d0b-e5492139a0bc`, topology epoch `4`, root `QTSzRS...9jMn`, and standby `QP9Jj4...i6rP`. Both sides are on established Reticulum `link` transport at export. The call had good stretches, but recurring missing-frame and concealment bursts caused audible chop; the remaining failure is receive-policy behavior after those bursts.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Link collapse: both sides export `reticulumAudioOutboundTransportLast=link`, `reticulumAudioInboundTransportLast=link`, `linkEstablished=true`, and `packetSendFailures=0`.
+- Queue/backpressure: no bridge drain wait, no queue-pressure drops, no link-unready drops, and small binary high waters (`2` on both sides). Root bridge high water reaches `14`, but without drain wait or drops.
+- Startup hidden playout: both sides have active playback/scheduler nodes, shared rings, active jitter, and current `jitterHasReadyFrame=true`.
+- Authority/topology: both sides agree on epoch `4`, root/standby, room key state, and participant count.
+- Baseline: neither side is spending meaningful time in `clean-low-latency`; both are already in recovery/weak/lean/collapse logic.
+
+Primary next target:
+- Selector, specifically damage-hold / escalation hysteresis between `steady-weak-listener`, `silent-lean`, `repair-collapse`, and `collapse-recovery`.
+- The previous `persistent-lean` strength target is less supported by this pair: neither side is the near-empty `2 ms` reserve shape from the prior Mac sample. Instead, both sides have moderate current reserve (`16.353 ms` and `12.397 ms`) but suffer repeated large missing-frame/concealment bursts while the dominant profile drops back to `silent-lean` or `steady-weak-listener`.
+- Do not change the global baseline from this call. Do not add a new profile yet; this still fits existing repair/collapse/lean classes, but the selector is not latching the damage class consistently after bursts.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `silent-lean` | yes/inferred | 16.353 | 1833 | 454 | 0.035 | 0.029 | recovery | Current profile is `silent-lean`, but the window includes heavy collapse/repair evidence and large late missing-frame bursts. Classification is only partly correct. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `steady-weak-listener` | yes/inferred | 12.397 | 2840 | 344 | 0.030 | 0.024 | recovery | Current profile is `repair-collapse`, but dominant window profile is `steady-weak-listener`; that under-holds the damage class after repeated spikes. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery` during concealment runs; `repair-heavy-connected` or `steady-weak-listener` only after a sustained quiet window. `silent-lean` fits some current low-damage/lean windows, but not the whole sampled symptom.
+
+Actual exported profile:
+- Dominant sampled profile: `silent-lean` (`87` samples).
+- Other significant samples: `steady-weak-listener` (`61`), `collapse-recovery` (`56`), `buffered-not-ready` (`11`), `repair-collapse` (`9`).
+- Current exported profile: `silent-lean`.
+
+Did classification match?
+- Partly/no.
+
+Notes:
+- The side is no longer false-clean, which is good.
+- But `missingFrames=1833`, `concealmentTicks=454`, and a late burst from `1112` to `1762` missing frames over about three seconds are too damaged to let `silent-lean` dominate without a stronger damage hold.
+- Final ready state is healthy enough to avoid startup classification: `jitterBufferedFrames=22`, `jitterHasReadyFrame=true`, playback and scheduler active.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` during the worst missing-frame spikes, with a held repair/collapse class until the damage quiets. `steady-weak-listener` is reasonable only for the quieter intervals.
+
+Actual exported profile:
+- Dominant sampled profile: `steady-weak-listener` (`110` samples).
+- Other significant samples: `collapse-recovery` (`51`), `repair-heavy-connected` (`9`), `repair-collapse` (`8`).
+- Current exported profile: `repair-collapse`.
+
+Did classification match?
+- Partly.
+
+Notes:
+- Current classification is right: live state is `repair-collapse`, with `bufferedMsEma=1.390`, `deltaMsEma=-183.610`, and repair/collapse holds active.
+- Dominant classification is too weak for the whole call: the side reaches `missingFrames=2840`, `concealmentTicks=344`, and has a major final-window spike of `385` missing frames followed by `249`, `29`, and `49`.
+- This argues for selector/hold behavior, not a new profile: the existing repair/collapse labels are appearing, but not winning consistently enough across burst aftermath.
+
+## Trend Read
+
+Side A:
+- Oscillating damage recovery with late burst.
+- Reasons seen:
+  - The window moves through `collapse-recovery`, `silent-lean`, and `steady-weak-listener`.
+  - Concealment climbs steadily by about `8` ticks per second during a collapse run from `1778274988989` to `1778275001112`.
+  - Immediately afterward, missing frames jump `126`, then `294`, then `230` while profiles are `silent-lean` / `steady-weak-listener`.
+  - Final seconds look quieter but still add small missing-frame deltas while current profile remains `silent-lean`.
+
+Side B:
+- Oscillating weak/collapse recovery with repeated missing-frame bursts.
+- Reasons seen:
+  - `steady-weak-listener` dominates, but `collapse-recovery` repeatedly appears around concealment runs.
+  - The largest late spike is `385` missing frames, followed by `249`, then smaller bursts.
+  - Current profile ends at `repair-collapse`, which matches the live damaged state, but it arrived late relative to the dominant sampled behavior.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-07T18:57Z group-812` | B / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:25Z group-937` | A / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:48Z group-937` | A / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Still a valid secondary selector refinement. |
+| `2026-05-07T19:48Z group-937` | B / Linux standby | `silent-lean` | yes | no | selector / repair-collapse escalation | Covered by the high-damage lean escalation target. |
+| `2026-05-07T20:30Z group-937` | A / Linux root epoch 3 | `collapse-recovery` | yes | partly/yes | authority/topology plus receive collapse | Keep as regression watch; not reproduced in later converged calls. |
+| `2026-05-07T20:30Z group-937` | B / Linux root epoch 4 | `buffered-not-ready` | yes | no/partly | authority/topology and send-target selection | Keep as regression watch; later calls have converged topology and no no-target growth. |
+| `2026-05-07T21:23Z group-937` | A / Linux root epoch 3 | `silent-lean` | yes | partly/no | selector / high-damage lean escalation | Addressed by promoting high-damage near-empty ready paths out of `silent-lean`. |
+| `2026-05-07T21:23Z group-937` | B / Linux standby epoch 3 | `collapse-recovery` | yes | yes | receive profile strength / collapse recovery | Addressed by strengthening collapse target/floor/hold; verify with later exports. |
+| `2026-05-07T21:50Z group-937` | A / Linux root epoch 3 | `steady-weak-listener` | partly/early | partly/yes | receive / residual weak recovery | Watch; no immediate profile-strength change from this side. |
+| `2026-05-07T21:50Z group-937` | B / Linux standby epoch 3 | `clean-low-latency` | yes/early, partly current | no | selector / false-clean near-empty repair collapse | Primary: prevent clean-low-latency while ready near-empty damage and recovery pressure remain active. |
+| `2026-05-08T10:48Z group-812` | A / Linux root epoch 3 | `steady-weak-listener` | partly/inferred | partly | selector / profile oscillation and premature clean clear | Primary: add hysteresis/clear gating so weak or repair-heavy recovery cannot briefly clear to clean while under-target/rate pressure remains high. |
+| `2026-05-08T10:48Z group-812` | B / Mac standby epoch 3 | `persistent-lean` | partly/inferred | mostly/partly | receive / lean recovery | Watch; no baseline or new-profile change from this side. |
+| `2026-05-08T12:06Z group-812` | A / Linux root epoch 1 | `steady-weak-listener` | partly/inferred | partly | selector / profile oscillation and premature clean clear | Secondary: keep clean-clear gating and profile hysteresis work, but do not make this the primary target from this pair. |
+| `2026-05-08T12:06Z group-812` | B / Mac standby epoch 1 | `persistent-lean` | yes/inferred | mostly/yes | receive profile strength / persistent lean | Prior primary target; this new call weakens it as the next single fix because the latest failure is not near-empty persistent lean. |
+| `2026-05-08T21:17Z group-937` | A / Linux root epoch 4 | `silent-lean` | yes/inferred | partly/no | selector / damage hold after collapse burst | Primary: keep repair/collapse damage latched after concealment and large missing-frame bursts; do not let `silent-lean` dominate until quiet. |
+| `2026-05-08T21:17Z group-937` | B / Linux standby epoch 4 | `steady-weak-listener` | yes/inferred | partly | selector / repair-collapse escalation hold | Primary: hold `repair-collapse` or `collapse-recovery` through burst aftermath instead of falling back to `steady-weak-listener` too quickly. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: add damage hysteresis so recent large `missingFramesDelta` bursts keep the side in `repair-collapse` or `repair-heavy-connected` for a sustained quiet window before allowing `steady-weak-listener` or `silent-lean`. Keep relying on the existing concealment/collapse gates for concealment-only runs.
+- This is not the old false-clean problem: `clean-low-latency` is essentially gone from this pair. It is the neighboring-profile problem: the engine recognizes damage briefly, then lets weaker lean/steady profiles win too soon.
+- Keep profile strength as secondary. If the selector holds repair/collapse correctly and the call still sounds bad with those profiles dominant, then tune target/floor/hold strength next.
+- Keep baseline unchanged and do not prioritize key/decode/startup/authority/link transport from this pair.
+
+## Call: 2026-05-08 22:10Z / group 937
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-114.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-08T22-09-59-546Z.json`
+
+User symptom:
+- New post-change call for validation. No explicit subjective symptom was included with the export; classify as residual badness if profiles and window deltas still show choppy/repaired audio.
+
+High-level verdict:
+- Mixed / still policy-damaged, but cleaner than the previous burst-heavy export.
+- Both exports agree on room `gcall-qortal-937`, call session `805e2ff1-6b01-4ec1-9d96-b8919b2005d6`, topology epoch `10`, root `QTSzRS...9jMn`, and standby `QP9Jj4...i6rP`. There is no false-clean profile and no correctness/startup failure, but both sides remain in recovery for all 300 recent samples while missing frames continue to accumulate.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Link collapse: both sides export link transport for inbound and outbound audio, with `reticulumAudioPacketSendFailures=0`.
+- Queue/backpressure: `reticulumAudioBridgeWaitingForDrain=false`, no queue-pressure drops, no stale drops, no link-unready drops, and binary queue high water is only `2` on both sides. Side A bridge high water reaches `15`, but without drain wait or drops.
+- Startup hidden playout: both sides have active playback/scheduler nodes, shared rings, active jitter, and current `jitterHasReadyFrame=true`.
+- Authority/topology: both sides agree on epoch `10`, root/standby, room key state, participant count, and call session.
+- Baseline: neither side is classified as `clean-low-latency`; both are already in recovery/lean/repair logic.
+
+Primary next target:
+- Selector, specifically lean/repair damage classification and hold behavior.
+- This call reinforces the previous selector target rather than shifting to baseline or generic profile strength. Side A ends in `repair-collapse` and has many repair/collapse samples, but `silent-lean` is still the dominant window profile. Side B is more clearly under-classified: `silent-lean` dominates 224 of 300 samples despite `missingFrames=3940`, `concealmentTicks=220`, `totalMissingFramesDelta=1187`, and several recent missing-frame bursts.
+- The correct profiles are present, so this is not a new-profile case. The issue is that `silent-lean` and `persistent-lean` still win too often between damage bursts, especially when concealment is low but missing-frame damage keeps rising.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `silent-lean` | yes/inferred | 9.274 | 2340 | 267 | 0.013 | 0.005 | recovery | Current profile is `repair-collapse`; dominant window profile is still too lean for sustained repair damage. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `silent-lean` | yes/inferred | 13.345 | 3940 | 220 | 0.006 | 0.004 | recovery | `silent-lean` dominates even though missing-frame damage remains high and recent bursts continue. |
+
+### Side A
+
+Expected profile from symptom:
+- `repair-collapse` or `collapse-recovery` during shallow/damaged windows, with `repair-heavy-connected` acceptable when buffered but still repaired. `silent-lean` should only dominate after a sustained quiet window.
+
+Actual exported profile:
+- Dominant sampled profile: `silent-lean` (`103` samples).
+- Other significant samples: `repair-collapse` (`64`), `persistent-lean` (`60`), `steady-weak-listener` (`48`), `collapse-recovery` (`17`), `repair-heavy-connected` (`7`).
+- Current exported profile: `repair-collapse`.
+
+Did classification match?
+- Partly.
+
+Notes:
+- Current classification is right: live state is `repair-collapse`, with `bufferedMsEma=4.621`, `deltaMsEma=-180.379`, `lastAppliedTargetMs=240`, and repair/collapse holds still active.
+- The dominant profile is still too weak for the whole window. The side has `missingFrames=2340`, `concealmentTicks=267`, `totalMissingFramesDelta=987`, and `totalConcealmentTicksDelta=85`.
+- Final trend is less explosive than the prior call, but it is not clean: missing frames continue to climb by small deltas almost every second, with a final `missingFramesDelta=10`, while recovery remains active.
+
+### Side B
+
+Expected profile from symptom:
+- `repair-collapse` during missing-frame bursts, or `persistent-lean` only as a secondary lean state once damage is quiet. `silent-lean` should not dominate a window with this much accumulated and ongoing missing-frame damage.
+
+Actual exported profile:
+- Dominant sampled profile: `silent-lean` (`224` samples).
+- Other samples: `repair-collapse` (`61`), `persistent-lean` (`13`), `collapse-recovery` (`2`).
+- Current exported profile: `silent-lean`.
+
+Did classification match?
+- No/partly.
+
+Notes:
+- The side is not false-clean, but `silent-lean` is too soft for `missingFrames=3940`, `concealmentTicks=220`, and `totalMissingFramesDelta=1187`.
+- Several bad one-second windows are still classified below the damage class: `missingFramesDelta=32` under `silent-lean`, `54` under `persistent-lean`, then later `21` and `27` under `repair-collapse`.
+- Current state has `lastAppliedTargetMs=204` and `lastAppliedFloorMs=192`, which is weaker than Side A's `repair-collapse` target/floor even though Side B's accumulated missing-frame damage is larger.
+
+## Trend Read
+
+Side A:
+- Oscillating lean/repair recovery, now with smaller late deltas.
+- Reasons seen:
+  - `recoverySamples=300`; no clean-low-latency samples.
+  - Profiles rotate through `silent-lean`, `persistent-lean`, `steady-weak-listener`, `repair-collapse`, and `collapse-recovery`.
+  - Three sampled concealment spikes remain (`concealmentTicksDelta=7`, `9`, `8`), while final seconds mostly add small missing-frame deltas.
+  - Current state ends correctly in `repair-collapse`, but the whole sampled window still lets weaker lean profiles dominate.
+
+Side B:
+- Flat-ish but still damaged, with intermittent missing-frame bursts.
+- Reasons seen:
+  - `silent-lean` dominates 224 of 300 samples while `totalMissingFramesDelta=1187`.
+  - Significant bursts include `missingFramesDelta=32` under `silent-lean`, `54` under `persistent-lean`, and later `21`/`27` under `repair-collapse`.
+  - Final window settles into smaller `3-4` missing-frame deltas, but never leaves recovery and remains on `silent-lean`.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-07T18:57Z group-812` | B / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:25Z group-937` | A / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:48Z group-937` | A / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Still a valid secondary selector refinement. |
+| `2026-05-07T19:48Z group-937` | B / Linux standby | `silent-lean` | yes | no | selector / repair-collapse escalation | Covered by the high-damage lean escalation target. |
+| `2026-05-07T20:30Z group-937` | A / Linux root epoch 3 | `collapse-recovery` | yes | partly/yes | authority/topology plus receive collapse | Keep as regression watch; not reproduced in later converged calls. |
+| `2026-05-07T20:30Z group-937` | B / Linux root epoch 4 | `buffered-not-ready` | yes | no/partly | authority/topology and send-target selection | Keep as regression watch; later calls have converged topology and no no-target growth. |
+| `2026-05-07T21:23Z group-937` | A / Linux root epoch 3 | `silent-lean` | yes | partly/no | selector / high-damage lean escalation | Addressed by promoting high-damage near-empty ready paths out of `silent-lean`. |
+| `2026-05-07T21:23Z group-937` | B / Linux standby epoch 3 | `collapse-recovery` | yes | yes | receive profile strength / collapse recovery | Addressed by strengthening collapse target/floor/hold; verify with later exports. |
+| `2026-05-07T21:50Z group-937` | A / Linux root epoch 3 | `steady-weak-listener` | partly/early | partly/yes | receive / residual weak recovery | Watch; no immediate profile-strength change from this side. |
+| `2026-05-07T21:50Z group-937` | B / Linux standby epoch 3 | `clean-low-latency` | yes/early, partly current | no | selector / false-clean near-empty repair collapse | Primary: prevent clean-low-latency while ready near-empty damage and recovery pressure remain active. |
+| `2026-05-08T10:48Z group-812` | A / Linux root epoch 3 | `steady-weak-listener` | partly/inferred | partly | selector / profile oscillation and premature clean clear | Primary: add hysteresis/clear gating so weak or repair-heavy recovery cannot briefly clear to clean while under-target/rate pressure remains high. |
+| `2026-05-08T10:48Z group-812` | B / Mac standby epoch 3 | `persistent-lean` | partly/inferred | mostly/partly | receive / lean recovery | Watch; no baseline or new-profile change from this side. |
+| `2026-05-08T12:06Z group-812` | A / Linux root epoch 1 | `steady-weak-listener` | partly/inferred | partly | selector / profile oscillation and premature clean clear | Secondary: keep clean-clear gating and profile hysteresis work, but do not make this the primary target from this pair. |
+| `2026-05-08T12:06Z group-812` | B / Mac standby epoch 1 | `persistent-lean` | yes/inferred | mostly/yes | receive profile strength / persistent lean | Prior primary target; this new call weakens it as the next single fix because the latest failure is not near-empty persistent lean. |
+| `2026-05-08T21:17Z group-937` | A / Linux root epoch 4 | `silent-lean` | yes/inferred | partly/no | selector / damage hold after collapse burst | Primary: keep repair/collapse damage latched after concealment and large missing-frame bursts; do not let `silent-lean` dominate until quiet. |
+| `2026-05-08T21:17Z group-937` | B / Linux standby epoch 4 | `steady-weak-listener` | yes/inferred | partly | selector / repair-collapse escalation hold | Primary: hold `repair-collapse` or `collapse-recovery` through burst aftermath instead of falling back to `steady-weak-listener` too quickly. |
+| `2026-05-08T22:10Z group-937` | A / Linux root epoch 10 | `silent-lean` | yes/inferred | partly | selector / lean-vs-repair oscillation | Keep the selector target: hold `repair-collapse`/`collapse-recovery` until missing-frame and concealment deltas are quiet for a sustained window. |
+| `2026-05-08T22:10Z group-937` | B / Linux standby epoch 10 | `silent-lean` | yes/inferred | no/partly | selector / missing-frame damage under-classified as silent lean | Primary: promote/hold repair-collapse when large recent missing-frame deltas occur, even with low current concealment and modest under-target fractions. |
+
+## Next Fix Target
+
+Current patched target:
+- Selector.
+- Primary fix: strengthen the damage selector and hold gates between `silent-lean` / `persistent-lean` and `repair-collapse` / `collapse-recovery`. Recent large `missingFramesDelta` bursts should latch a repair/collapse class until both missing-frame and concealment deltas stay quiet for a sustained window.
+- This call is not evidence for a baseline change: no side is spending time in `clean-low-latency`, and both sides already use recovery mode.
+- This call is not primarily profile strength either. Side A's current `repair-collapse` target/floor is strong (`240`/`224`) and active; the remaining miss is that weaker lean profiles still dominate the sampled window. Tune profile strength only after repair/collapse classification stays dominant during damaged windows.
+- Do not prioritize key/decode/startup/authority/link transport, and do not add a new profile from this pair.
+
+## Call: 2026-05-08 23:55Z / group 937
+
+Room:
+- `gcall-qortal-937`
+
+Files:
+- Side A: `/home/qortal/Downloads/phil-kenny-one-on-one-115.json`
+- Side B: `/home/qortal/Downloads/qortal-gcall-diagnostics-2026-05-08T23-55-02-779Z.json`
+
+User symptom:
+- New post-change call for validation. No explicit subjective symptom was included; infer residual badness from the diagnostic damage and startup/session signals.
+
+High-level verdict:
+- Bad / mixed, with a new correctness-startup signal on top of remaining receive-policy damage.
+- Both exports agree on room `gcall-qortal-937`, topology epoch `2`, root `QTSzRS...9jMn`, standby `QP9Jj4...i6rP`, room key presence, and participant count. They do not agree on call session: Side A exports `7cb2512a-b5fa-4509-98dd-e24a862290ed`, while Side B exports `cdd764cb-a011-4fe9-a441-6d4b42394d99`. Side A also records `totalNoTargetSkipsDelta=601` early in the sampled window before any receive playout exists.
+
+Not the problem:
+- Decrypt: `packetsDroppedPendingDecrypt=0`, `pendingDecryptDepth=0`, and pending-decrypt high water is `0` on both sides.
+- Decode: `packetsDroppedDecodeFailure=0` and `packetsDroppedDecoderThrow=0` on both sides.
+- Link transport once active: both sides export link inbound/outbound transport and `reticulumAudioPacketSendFailures=0`.
+- Queue/backpressure: no bridge drain wait, no queue-pressure drops, no stale drops, and no link-unready drops. Side A bridge high water reaches `24`, but binary high water is `1` and there are no drops.
+- Room authority/topology: both sides agree on root/standby and epoch `2`.
+- Baseline: this is not a clean-low-latency tuning problem; both sides spend nearly all active sampled time in recovery or repair/lean profiles.
+
+Primary next target:
+- Another subsystem: session/send-target startup correctness.
+- The new pair has two red flags outside receive-profile tuning: mismatched call session IDs across the same room/topology and a root-side startup run of `outboundNoTargetSkipsDelta=601` while no receive playouts exist. Per the review rules, this should be fixed or explained before further profile strength or selector tuning.
+- Secondary target remains selector damage-hold. Side B is still under-classified for much of the bad window: `steady-weak-listener` dominates despite `missingFrames=2786`, `concealmentTicks=324`, and repeated `missingFramesDelta` spikes up to `139`.
+
+| Side | Role | Dominant Profile | User-Bad? | avgPcmBufferedMs | missingFrames | concealmentTicks | UnderTarget | Rate<0.97 | Adaptive Mode | Notes |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| A | root-forwarder / Linux / `QTSzRS...9jMn` receiving `QP9Jj4...i6rP` | `steady-weak-listener` | yes/inferred | 16.218 | 621 | 167 | 0.026 | 0.016 | recovery | Early `outboundNoTargetSkipsDelta=601`; active receive later oscillates across weak/lean/repair/collapse. Current profile is `silent-lean`. |
+| B | standby-forwarder / Linux / `QP9Jj4...i6rP` receiving `QTSzRS...9jMn` | `steady-weak-listener` | yes/inferred | 5.125 | 2786 | 324 | 0.015 | 0.013 | recovery | Current profile is `collapse-recovery`, but dominant window profile is too weak for repeated large missing-frame bursts and near-empty reserve. |
+
+### Side A
+
+Expected profile from symptom:
+- During active receive damage: `repair-collapse`, `repair-heavy-connected`, or `collapse-recovery` for bursts; `steady-weak-listener` only for quieter recovery intervals. During the opening no-target window, no receive profile can explain the send failure.
+
+Actual exported profile:
+- Dominant sampled profile: `steady-weak-listener` (`45` samples).
+- Other significant samples: `silent-lean` (`33`), `persistent-lean` (`29`), `collapse-recovery` (`25`), `repair-collapse` (`14`), `repair-heavy-connected` (`6`), `buffered-not-ready` (`4`).
+- Current exported profile: `silent-lean`.
+
+Did classification match?
+- Partly for receive symptoms; no for the opening no-target/session symptom.
+
+Notes:
+- Side A's active receive damage is lighter than Side B's but still not clean: `missingFrames=621`, `concealmentTicks=167`, `avgPlayoutDeltaMs=-168.759`, and recovery is active.
+- The first sampled no-target period is not a receive-profile issue. It has `outboundNoTargetSkipsDelta` of `52`, `51`, `50`, etc. while `receivePlayouts=[]`, then receive profiles appear only after that startup window.
+- Later classification is mixed: some repair/collapse classifications appear at burst points, but the profile still oscillates quickly back into lean/weak classes.
+
+### Side B
+
+Expected profile from symptom:
+- `collapse-recovery` while `jitterHasReadyFrame=false` with continuing concealment, and `repair-collapse` or `repair-heavy-connected` during large missing-frame bursts once ready returns. `steady-weak-listener` should only cover quieter intervals.
+
+Actual exported profile:
+- Dominant sampled profile: `steady-weak-listener` (`64` samples).
+- Other significant samples: `collapse-recovery` (`45`), `persistent-lean` (`17`), `repair-heavy-connected` (`5`), `silent-lean` (`3`), `repair-collapse` (`1`).
+- Current exported profile: `collapse-recovery`.
+
+Did classification match?
+- Partly/no.
+
+Notes:
+- Current classification is right: live state is `collapse-recovery`, with `bufferedMsEma=0.002`, `deltaMsEma=-184.998`, `lastJitterHasReadyFrame=false`, target/floor `304`/`280`, and severe/repair/buffered holds active.
+- Dominant classification is too weak for the sampled call: `steady-weak-listener` wins 64 samples while the side reaches `missingFrames=2786`, `concealmentTicks=324`, `avgPcmBufferedMs=5.125`, and repeated large missing-frame bursts (`116`, `89`, `104`, `139`, `95`, `92`).
+- This still supports selector damage-hold as a secondary issue, but the call-session mismatch and root no-target startup should be handled first.
+
+## Trend Read
+
+Side A:
+- Discrete startup no-target window followed by oscillating receive recovery.
+- Reasons seen:
+  - From `1778284339146` through `1778284350825`, Side A accumulates `outboundNoTargetSkipsDelta=601` while `receivePlayouts=[]`.
+  - After receive starts, it enters recovery and cycles through `repair-collapse`, `repair-heavy-connected`, `collapse-recovery`, `persistent-lean`, `silent-lean`, and `steady-weak-listener`.
+  - Later final-window damage is lower-grade but persistent: small missing-frame deltas continue while `avgPcmBufferedMs` sits around `16 ms`.
+
+Side B:
+- Flat-bad oscillation between ready missing-frame bursts and not-ready concealment/collapse.
+- Reasons seen:
+  - Large missing-frame deltas repeatedly occur under `steady-weak-listener`, including `116`, `89`, `104`, `139`, `95`, and `92`.
+  - Concealment runs occur under `collapse-recovery` while `jitterHasReadyFrame=false`, often at `6-8` ticks per second.
+  - The side ends in `collapse-recovery` with `jitterHasReadyFrame=false`, which matches the current live collapse.
+
+## Batch Scoreboard
+
+| Call | Side | Dominant Profile | User-Bad? | Classification Correct? | Main Issue Class | Next Action |
+| --- | --- | --- | --- | --- | --- | --- |
+| `2026-05-07T18:57Z group-812` | B / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:25Z group-937` | A / Linux root | `clean-low-latency` | yes | no | selector / false-clean repair pressure | Covered by earlier selector work; keep as historical false-clean baseline. |
+| `2026-05-07T19:48Z group-937` | A / Linux root | `steady-weak-listener` | yes | partly/no | selector / repair-heavy escalation | Still a valid secondary selector refinement. |
+| `2026-05-07T19:48Z group-937` | B / Linux standby | `silent-lean` | yes | no | selector / repair-collapse escalation | Covered by the high-damage lean escalation target. |
+| `2026-05-07T20:30Z group-937` | A / Linux root epoch 3 | `collapse-recovery` | yes | partly/yes | authority/topology plus receive collapse | Keep as regression watch; not reproduced in later converged calls. |
+| `2026-05-07T20:30Z group-937` | B / Linux root epoch 4 | `buffered-not-ready` | yes | no/partly | authority/topology and send-target selection | Keep as regression watch; later calls have converged topology and no no-target growth. |
+| `2026-05-07T21:23Z group-937` | A / Linux root epoch 3 | `silent-lean` | yes | partly/no | selector / high-damage lean escalation | Addressed by promoting high-damage near-empty ready paths out of `silent-lean`. |
+| `2026-05-07T21:23Z group-937` | B / Linux standby epoch 3 | `collapse-recovery` | yes | yes | receive profile strength / collapse recovery | Addressed by strengthening collapse target/floor/hold; verify with later exports. |
+| `2026-05-07T21:50Z group-937` | A / Linux root epoch 3 | `steady-weak-listener` | partly/early | partly/yes | receive / residual weak recovery | Watch; no immediate profile-strength change from this side. |
+| `2026-05-07T21:50Z group-937` | B / Linux standby epoch 3 | `clean-low-latency` | yes/early, partly current | no | selector / false-clean near-empty repair collapse | Primary: prevent clean-low-latency while ready near-empty damage and recovery pressure remain active. |
+| `2026-05-08T10:48Z group-812` | A / Linux root epoch 3 | `steady-weak-listener` | partly/inferred | partly | selector / profile oscillation and premature clean clear | Primary: add hysteresis/clear gating so weak or repair-heavy recovery cannot briefly clear to clean while under-target/rate pressure remains high. |
+| `2026-05-08T10:48Z group-812` | B / Mac standby epoch 3 | `persistent-lean` | partly/inferred | mostly/partly | receive / lean recovery | Watch; no baseline or new-profile change from this side. |
+| `2026-05-08T12:06Z group-812` | A / Linux root epoch 1 | `steady-weak-listener` | partly/inferred | partly | selector / profile oscillation and premature clean clear | Secondary: keep clean-clear gating and profile hysteresis work, but do not make this the primary target from this pair. |
+| `2026-05-08T12:06Z group-812` | B / Mac standby epoch 1 | `persistent-lean` | yes/inferred | mostly/yes | receive profile strength / persistent lean | Prior primary target; this new call weakens it as the next single fix because the latest failure is not near-empty persistent lean. |
+| `2026-05-08T21:17Z group-937` | A / Linux root epoch 4 | `silent-lean` | yes/inferred | partly/no | selector / damage hold after collapse burst | Primary: keep repair/collapse damage latched after concealment and large missing-frame bursts; do not let `silent-lean` dominate until quiet. |
+| `2026-05-08T21:17Z group-937` | B / Linux standby epoch 4 | `steady-weak-listener` | yes/inferred | partly | selector / repair-collapse escalation hold | Primary: hold `repair-collapse` or `collapse-recovery` through burst aftermath instead of falling back to `steady-weak-listener` too quickly. |
+| `2026-05-08T22:10Z group-937` | A / Linux root epoch 10 | `silent-lean` | yes/inferred | partly | selector / lean-vs-repair oscillation | Keep the selector target: hold `repair-collapse`/`collapse-recovery` until missing-frame and concealment deltas are quiet for a sustained window. |
+| `2026-05-08T22:10Z group-937` | B / Linux standby epoch 10 | `silent-lean` | yes/inferred | no/partly | selector / missing-frame damage under-classified as silent lean | Primary: promote/hold repair-collapse when large recent missing-frame deltas occur, even with low current concealment and modest under-target fractions. |
+| `2026-05-08T23:55Z group-937` | A / Linux root epoch 2 | `steady-weak-listener` | yes/inferred | partly/no | session/send-target startup plus receive oscillation | Primary: investigate call-session mismatch and root no-target skips before more receive tuning. |
+| `2026-05-08T23:55Z group-937` | B / Linux standby epoch 2 | `steady-weak-listener` | yes/inferred | partly/no | selector / under-held damage, plus session mismatch | Secondary after state fix: hold `collapse-recovery`/repair classes through ready/not-ready damage cycles. |
+
+## Next Fix Target
+
+Current patched target:
+- Another subsystem: session/send-target startup correctness.
+- Primary fix: explain and eliminate the same-room call-session mismatch and the root-side startup no-target run. This pair has different `callSessionId` values on the two sides and `totalNoTargetSkipsDelta=601` on Side A before receive playouts exist. That is outside receive profile tuning and should be handled first.
+- Secondary fix: selector damage-hold still needs attention after the state/session issue is cleared. Side B repeatedly reports large missing-frame bursts under `steady-weak-listener`; the current end state is correctly `collapse-recovery`, but the dominant profile is too weak for the call.
+- Keep baseline unchanged and do not add a new receive profile from this pair.
