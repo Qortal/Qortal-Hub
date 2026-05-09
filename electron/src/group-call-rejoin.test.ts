@@ -1431,10 +1431,7 @@ describe('recent room bootstrap state', () => {
       callSessionId: 'root-session',
       mediaSessionGeneration: 1,
       keyCommitment: 'commitment-root',
-      encryptedKeyDigest: manager.getKeyDigestForTarget(
-        'Q-self',
-        encryptedKey
-      ),
+      encryptedKeyDigest: manager.getKeyDigestForTarget('Q-self', encryptedKey),
     });
     await Promise.resolve();
     await Promise.resolve();
@@ -5445,6 +5442,26 @@ describe('shouldRefreshParticipantFromVerifiedJoin', () => {
         incomingJoinTimestamp: 100,
       })
     ).toBe(false);
+  });
+
+  it('rejects delayed joins from before a verified leave', () => {
+    expect(
+      shouldRefreshParticipantFromVerifiedJoin({
+        currentJoinedAt: undefined,
+        incomingJoinTimestamp: 100,
+        lastLeaveTimestamp: 150,
+      })
+    ).toBe(false);
+  });
+
+  it('accepts a true rejoin after a verified leave', () => {
+    expect(
+      shouldRefreshParticipantFromVerifiedJoin({
+        currentJoinedAt: undefined,
+        incomingJoinTimestamp: 200,
+        lastLeaveTimestamp: 150,
+      })
+    ).toBe(true);
   });
 });
 

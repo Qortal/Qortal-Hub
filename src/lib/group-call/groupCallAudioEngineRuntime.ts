@@ -327,7 +327,7 @@ function buildEmptyRootPeerLivenessRecord(): RootPeerLivenessRecord {
 const GROUP_CALL_SELF_ONLY_JOIN_ELECTION_WAIT_MS = 1_000;
 const OCCUPIED_JOIN_AUTHORITY_WAIT_MS = TOPOLOGY_HEARTBEAT_MS + 250;
 const GROUP_CALL_SENDER_SYNC_RETRY_MS = 1_500;
-const RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS = 5_000;
+const RECENTLY_LEFT_PARTICIPANT_SUPPRESS_MS = 10 * 60_000;
 const PARTICIPANT_ROSTER_REFRESH_INTERVAL_MS = TOPOLOGY_HEARTBEAT_MS;
 const PARTICIPANT_ROSTER_MISSING_EVICT_MS = TOPOLOGY_HEARTBEAT_MS * 2 + 500;
 const PARTICIPANT_RECENT_ACTIVITY_EVICT_VETO_MS =
@@ -4907,12 +4907,14 @@ export class GroupCallAudioEngineRuntime {
     for (const participant of roster) {
       const address = participant?.address?.trim?.() ?? '';
       if (!address) continue;
+      if (this.shouldSuppressRecentlyLeftParticipant(address)) {
+        continue;
+      }
       rosterByAddress.set(address, {
         publicKey: participant?.publicKey?.trim?.() ?? '',
       });
       this.bootstrapOnlyParticipantAddresses.delete(address);
       this.participantRosterMissingSinceMs.delete(address);
-      this.clearRecentLeftParticipant(address);
     }
     this.participantRosterMissingSinceMs.delete(myAddress);
 
@@ -5221,7 +5223,11 @@ export class GroupCallAudioEngineRuntime {
   }
 
   private shouldWaitForStartupMediaTargets(nowMs: number): boolean {
-    if (!this.snapshot.roomId || !this.topology || this.lastJoinSuccessAtMs <= 0) {
+    if (
+      !this.snapshot.roomId ||
+      !this.topology ||
+      this.lastJoinSuccessAtMs <= 0
+    ) {
       return false;
     }
     if (nowMs - this.lastJoinSuccessAtMs > STARTUP_MEDIA_TARGET_SETTLE_MS) {

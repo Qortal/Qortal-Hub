@@ -324,7 +324,15 @@ export function shouldIgnoreLeaveForLocalAddress(
 export function shouldRefreshParticipantFromVerifiedJoin(opts: {
   currentJoinedAt: number | undefined;
   incomingJoinTimestamp: number;
+  lastLeaveTimestamp?: number | undefined;
 }): boolean {
+  if (
+    typeof opts.lastLeaveTimestamp === 'number' &&
+    Number.isFinite(opts.lastLeaveTimestamp) &&
+    opts.incomingJoinTimestamp <= opts.lastLeaveTimestamp
+  ) {
+    return false;
+  }
   if (
     typeof opts.currentJoinedAt !== 'number' ||
     !Number.isFinite(opts.currentJoinedAt)
@@ -1538,6 +1546,8 @@ export class GroupCallManager extends EventEmitter {
     string,
     GcJoinRkEnvelope
   >();
+  /** roomId:address -> last verified leave timestamp; blocks stale delayed joins from resurrecting peers. */
+  private leftParticipantTimestampByRoomAndAddress = new Map<string, number>();
   /** roomId:epoch:target → retained GC_JOIN identity replay attempts after topology publish. */
   private retainedJoinIdentityReplayAttemptsByTopology = new Map<
     string,
@@ -2157,6 +2167,9 @@ export class GroupCallManager extends EventEmitter {
     this.pendingKeyByRoom.clear();
     this.pendingGcJoinBeforeJoinRoom.clear();
     this.retainedVerifiedKeyStateByRoomAndRecipient.clear();
+    this.retainedVerifiedJoinByRoomAndAddress.clear();
+    this.retainedVerifiedJoinRkByRoomAndAddress.clear();
+    this.leftParticipantTimestampByRoomAndAddress.clear();
     this.retainedJoinIdentityReplayAttemptsByTopology.clear();
     this.unknownRoomKeyLogAt.clear();
     this.pendingKeyExpiredLogAt.clear();
@@ -2561,6 +2574,35 @@ export class GroupCallManager extends EventEmitter {
     return `${roomId}:${address}`;
   }
 
+  private noteParticipantLeft(
+    roomId: string,
+    address: string,
+    timestamp: number
+  ): void {
+    if (!roomId || !address || !Number.isFinite(timestamp)) return;
+    const key = this.retainedJoinStateKey(roomId, address);
+    const previous =
+      this.leftParticipantTimestampByRoomAndAddress.get(key) ?? 0;
+    if (timestamp >= previous) {
+      this.leftParticipantTimestampByRoomAndAddress.set(key, timestamp);
+    }
+  }
+
+  private clearParticipantLeftTombstone(roomId: string, address: string): void {
+    this.leftParticipantTimestampByRoomAndAddress.delete(
+      this.retainedJoinStateKey(roomId, address)
+    );
+  }
+
+  private getParticipantLeftTimestamp(
+    roomId: string,
+    address: string
+  ): number | undefined {
+    return this.leftParticipantTimestampByRoomAndAddress.get(
+      this.retainedJoinStateKey(roomId, address)
+    );
+  }
+
   private clearRetainedVerifiedKeyStatesForRoom(roomId: string): void {
     for (const key of this.retainedVerifiedKeyStateByRoomAndRecipient.keys()) {
       if (key.startsWith(`${roomId}:`)) {
@@ -2583,6 +2625,11 @@ export class GroupCallManager extends EventEmitter {
     for (const key of this.retainedJoinIdentityReplayAttemptsByTopology.keys()) {
       if (key.startsWith(`${roomId}:`)) {
         this.retainedJoinIdentityReplayAttemptsByTopology.delete(key);
+      }
+    }
+    for (const key of this.leftParticipantTimestampByRoomAndAddress.keys()) {
+      if (key.startsWith(`${roomId}:`)) {
+        this.leftParticipantTimestampByRoomAndAddress.delete(key);
       }
     }
   }
@@ -7390,6 +7437,10 @@ export class GroupCallManager extends EventEmitter {
       shouldRefreshParticipantFromVerifiedJoin({
         currentJoinedAt: existing?.joinedAt,
         incomingJoinTimestamp: env.timestamp,
+        lastLeaveTimestamp: this.getParticipantLeftTimestamp(
+          env.roomId,
+          env.fromAddress
+        ),
       })
     ) {
       room.participants.set(env.fromAddress, {
@@ -7406,6 +7457,7 @@ export class GroupCallManager extends EventEmitter {
             }
           : {}),
       });
+      this.clearParticipantLeftTombstone(env.roomId, env.fromAddress);
       this.noteBootstrapParticipantActivity(
         env.roomId,
         env.fromAddress,
@@ -7509,13 +7561,14 @@ export class GroupCallManager extends EventEmitter {
       );
       return;
     }
-    this.handleLeave(env.roomId, env.fromAddress, false);
+    this.handleLeave(env.roomId, env.fromAddress, false, env.timestamp);
   }
 
   private handleLeave(
     roomId: string,
     address: string,
-    isAbrupt: boolean
+    isAbrupt: boolean,
+    leaveTimestamp = Date.now()
   ): void {
     if (shouldIgnoreLeaveForLocalAddress(this.localAddresses, address)) {
       loggerLog(
@@ -7528,6 +7581,7 @@ export class GroupCallManager extends EventEmitter {
     if (room) {
       room.participants.delete(address);
       if (!isAbrupt) {
+        this.noteParticipantLeft(roomId, address, leaveTimestamp);
         this.dropRetainedVerifiedJoinState(roomId, address);
         this.clearRecentCallActivityForAddress(roomId, address);
         this.clearBootstrapParticipantActivityForAddress(roomId, address);
@@ -8482,6 +8536,9 @@ export class GroupCallManager extends EventEmitter {
       recent.participants.length > live.participants.length
     ) {
       for (const participant of recent.participants) {
+        if (this.getParticipantLeftTimestamp(roomId, participant.address)) {
+          continue;
+        }
         if (!participantsByAddress.has(participant.address)) {
           participantsByAddress.set(participant.address, participant);
         }
